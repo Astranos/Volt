@@ -184,10 +184,14 @@ function TopOfferCalculator() {
 
   const openSettings = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.openOptionsPage) {
+    if (
+      typeof chrome !== "undefined" &&
+      chrome.runtime &&
+      chrome.runtime.openOptionsPage
+    ) {
       chrome.runtime.openOptionsPage();
     } else {
-       window.open(chrome.runtime.getURL("/options.html"));
+      window.open(chrome.runtime.getURL("/options.html"));
     }
   };
 

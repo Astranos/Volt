@@ -552,9 +552,9 @@ export function CMDKPalette({
   const filteredTabs =
     activeProvider || !enabledSources.tabs
       ? []
-      : TabManager.filterTabs(tabs, search).filter(
-          (tab) => !showLastActionHint || tab.id !== previousTabId
-        );
+      : TabManager.filterTabs(tabs, search)
+          .filter((tab) => !tab.active) // Exclude currently opened tabs
+          .filter((tab) => !showLastActionHint || tab.id !== previousTabId);
   const filteredCSVLinks =
     activeProvider || !enabledSources.quickLinks
       ? []

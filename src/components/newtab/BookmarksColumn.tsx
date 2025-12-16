@@ -5,6 +5,7 @@ import {
   Bookmark,
 } from "@/src/utils/bookmarks";
 import { Skeleton } from "@/src/components/ui/skeleton";
+import { ScrollArea } from "@/src/components/ui/scroll-area";
 import { Search as SearchIcon } from "lucide-react";
 import "./column-styles.css";
 
@@ -63,45 +64,47 @@ export function BookmarksColumn() {
         />
       </div>
 
-      <div className="newtab-column-list">
-        {loading ? (
-          <div className="newtab-column-loading">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="newtab-column-item-skeleton">
-                <Skeleton className="w-4 h-4" />
-                <Skeleton className="flex-1 h-4" />
-              </div>
-            ))}
-          </div>
-        ) : filteredBookmarks.length === 0 ? (
-          <div className="newtab-column-empty">
-            <p>No bookmarks found</p>
-          </div>
-        ) : (
-          filteredBookmarks.map((bookmark) => (
-            <button
-              key={bookmark.id}
-              onClick={() => {
-                chrome.tabs.query(
-                  { active: true, currentWindow: true },
-                  (tabs) => {
-                    if (tabs[0]) {
-                      chrome.tabs.update(tabs[0].id, { url: bookmark.url });
+      <ScrollArea className="flex-1">
+        <div className="newtab-column-list">
+          {loading ? (
+            <div className="newtab-column-loading">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="newtab-column-item-skeleton">
+                  <Skeleton className="w-4 h-4" />
+                  <Skeleton className="flex-1 h-4" />
+                </div>
+              ))}
+            </div>
+          ) : filteredBookmarks.length === 0 ? (
+            <div className="newtab-column-empty">
+              <p>No bookmarks found</p>
+            </div>
+          ) : (
+            filteredBookmarks.map((bookmark) => (
+              <button
+                key={bookmark.id}
+                onClick={() => {
+                  chrome.tabs.query(
+                    { active: true, currentWindow: true },
+                    (tabs) => {
+                      if (tabs[0]) {
+                        chrome.tabs.update(tabs[0].id, { url: bookmark.url });
+                      }
                     }
-                  }
-                );
-              }}
-              onKeyDown={(e) => handleKeyDown(e, bookmark)}
-              className="newtab-column-item"
-              title={bookmark.title}
-            >
-              <span className="newtab-column-item-text">
-                {bookmark.title}
-              </span>
-            </button>
-          ))
-        )}
-      </div>
+                  );
+                }}
+                onKeyDown={(e) => handleKeyDown(e, bookmark)}
+                className="newtab-column-item"
+                title={bookmark.title}
+              >
+                <span className="newtab-column-item-text">
+                  {bookmark.title}
+                </span>
+              </button>
+            ))
+          )}
+        </div>
+      </ScrollArea>
     </div>
   );
 }

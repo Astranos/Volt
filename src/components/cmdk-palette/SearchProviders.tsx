@@ -71,7 +71,7 @@ export const searchProviders: SearchProvider[] = [
   },
   {
     id: "ebay",
-    name: "eBay",
+    name: "eBay (Sold Prices)",
     trigger: ["ebay", "eb"],
     searchUrl:
       "https://www.ebay.com/sch/i.html?_nkw={query}&LH_Sold=1&LH_Complete=1&_dmd=2&rt=nc",
@@ -86,6 +86,14 @@ export const searchProviders: SearchProvider[] = [
       "https://www.pricecharting.com/search-products?q={query}&type=videogames",
     icon: TrendingUp,
     color: "bg-blue-600",
+  },
+  {
+    id: "barcodelookup",
+    name: "BarcodeLookup (UPC)",
+    trigger: ["barcodelookup", "barcode"],
+    searchUrl: "https://www.barcodelookup.com/{query}",
+    icon: Barcode,
+    color: "bg-gray-700",
   },
   {
     id: "upcitemdb",

@@ -49,7 +49,7 @@ export default defineConfig({
       },
     ],
     name: "Volt",
-    version: "1.0.4",
+    version: "1.0.5",
     description:
       "A versatile Chrome extension with command palette, controller testing, and multi-provider search capabilities.",
     permissions: [
@@ -68,6 +68,8 @@ export default defineConfig({
       "history",
       // Needed for Save As button in context menu
       "downloads",
+      // Needed for accessing recently closed tabs
+      "sessions",
     ],
     host_permissions: ["<all_urls>"],
     icons: {

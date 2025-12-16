@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { CSVLink, fetchCSVLinks, filterCSVLinks } from "@/src/utils/csv-links";
 import { Skeleton } from "@/src/components/ui/skeleton";
+import { ScrollArea } from "@/src/components/ui/scroll-area";
 import { Search as SearchIcon } from "lucide-react";
 import "./column-styles.css";
 
@@ -72,52 +73,55 @@ export function QuickLinksColumn() {
         />
       </div>
 
-      <div className="newtab-column-list">
-        {loading ? (
-          <div className="newtab-column-loading">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="newtab-column-item-skeleton">
-                <Skeleton className="w-4 h-4" />
-                <Skeleton className="flex-1 h-4" />
-              </div>
-            ))}
-          </div>
-        ) : filteredLinks.length === 0 ? (
-          <div className="newtab-column-empty">
-            <p>No quick links found</p>
-          </div>
-        ) : (
-          sortedCategories.map((category) => (
-            <div key={category} className="newtab-column-category">
-              <div className="newtab-column-category-header">
-                {category}
-              </div>
-              {linksByCategory[category].map((link) => (
-                <button
-                  key={link.id}
-                  onClick={() => {
-                    chrome.tabs.query(
-                      { active: true, currentWindow: true },
-                      (tabs) => {
-                        if (tabs[0]) {
-                          chrome.tabs.update(tabs[0].id, { url: link.url });
-                        }
-                      }
-                    );
-                  }}
-                  onKeyDown={(e) => handleKeyDown(e, link)}
-                  className="newtab-column-item"
-                  title={link.title}
-                >
-                  <span className="newtab-column-item-text">
-                    {link.title}
-                  </span>
-                </button>
+      <ScrollArea className="flex-1">
+        <div className="newtab-column-list">
+          {loading ? (
+            <div className="newtab-column-loading">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="newtab-column-item-skeleton">
+                  <Skeleton className="w-4 h-4" />
+                  <Skeleton className="flex-1 h-4" />
+                </div>
               ))}
             </div>
-          ))
-        )}
-      </div>
+          ) : filteredLinks.length === 0 ? (
+            <div className="newtab-column-empty">
+              <p>No quick links found</p>
+            </div>
+          ) : (
+            sortedCategories.map((category) => (
+              <div key={category} className="newtab-column-category">
+                <div className="newtab-column-category-header">
+                  {category}
+                </div>
+                <div className="newtab-column-category-divider" />
+                {linksByCategory[category].map((link) => (
+                  <button
+                    key={link.id}
+                    onClick={() => {
+                      chrome.tabs.query(
+                        { active: true, currentWindow: true },
+                        (tabs) => {
+                          if (tabs[0]) {
+                            chrome.tabs.update(tabs[0].id, { url: link.url });
+                          }
+                        }
+                      );
+                    }}
+                    onKeyDown={(e) => handleKeyDown(e, link)}
+                    className="newtab-column-item"
+                    title={link.title}
+                  >
+                    <span className="newtab-column-item-text">
+                      {link.title}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ))
+          )}
+        </div>
+      </ScrollArea>
     </div>
   );
 }

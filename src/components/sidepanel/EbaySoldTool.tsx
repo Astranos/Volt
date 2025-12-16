@@ -51,7 +51,10 @@ export default function EbaySoldTool() {
       }
     }
 
-    const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const [activeTab] = await chrome.tabs.query({
+      active: true,
+      currentWindow: true,
+    });
 
     // If active tab is already eBay, use it
     if (activeTab?.id && activeTab.url?.includes("ebay.")) {
@@ -69,7 +72,10 @@ export default function EbaySoldTool() {
     return newTab.id;
   };
 
-  const buildEbayUrl = (searchQuery: string, searchCondition: ConditionType) => {
+  const buildEbayUrl = (
+    searchQuery: string,
+    searchCondition: ConditionType
+  ) => {
     const baseUrl = "https://www.ebay.com/sch/i.html";
     const params = new URLSearchParams();
 
@@ -132,7 +138,10 @@ export default function EbaySoldTool() {
 
       const updatedHistory = [newHistory, ...searchHistory.slice(0, 19)]; // Keep last 20
       setSearchHistory(updatedHistory);
-      localStorage.setItem("scout_ebay_search_history", JSON.stringify(updatedHistory));
+      localStorage.setItem(
+        "scout_ebay_search_history",
+        JSON.stringify(updatedHistory)
+      );
 
       // Navigate or create tab
       await findOrCreateEbayTab(url);
@@ -160,9 +169,12 @@ export default function EbaySoldTool() {
   };
 
   const removeHistoryItem = (id: string) => {
-    const updatedHistory = searchHistory.filter(item => item.id !== id);
+    const updatedHistory = searchHistory.filter((item) => item.id !== id);
     setSearchHistory(updatedHistory);
-    localStorage.setItem("scout_ebay_search_history", JSON.stringify(updatedHistory));
+    localStorage.setItem(
+      "scout_ebay_search_history",
+      JSON.stringify(updatedHistory)
+    );
   };
 
   const formatTimestamp = (timestamp: number) => {
@@ -241,7 +253,11 @@ export default function EbaySoldTool() {
           </Badge>
         </div>
 
-        {error && <div className="text-xs text-destructive bg-destructive/10 p-2 rounded">{error}</div>}
+        {error && (
+          <div className="text-xs text-destructive bg-destructive/10 p-2 rounded">
+            {error}
+          </div>
+        )}
       </div>
 
       {/* Search History */}
@@ -260,10 +276,13 @@ export default function EbaySoldTool() {
                 Clear All
               </Button>
             </div>
-            
+
             <div className="space-y-2">
               {searchHistory.map((item) => (
-                <Card key={item.id} className="group hover:border-primary transition-colors">
+                <Card
+                  key={item.id}
+                  className="group hover:border-primary transition-colors"
+                >
                   <button
                     onClick={() => loadSearchFromHistory(item)}
                     className="w-full p-3 text-left"
@@ -281,13 +300,19 @@ export default function EbaySoldTool() {
                         </div>
                         {item.condition && (
                           <div className="flex gap-1 mt-2">
-                            <span className={cn(
-                              "text-xs px-2 py-0.5 rounded",
-                              item.condition === "new" && "bg-green-100 text-green-700",
-                              item.condition === "used" && "bg-blue-100 text-blue-700",
-                              item.condition === "broken" && "bg-orange-100 text-orange-700"
-                            )}>
-                              {item.condition.charAt(0).toUpperCase() + item.condition.slice(1)}
+                            <span
+                              className={cn(
+                                "text-xs px-2 py-0.5 rounded",
+                                item.condition === "new" &&
+                                  "bg-green-100 text-green-700",
+                                item.condition === "used" &&
+                                  "bg-blue-100 text-blue-700",
+                                item.condition === "broken" &&
+                                  "bg-orange-100 text-orange-700"
+                              )}
+                            >
+                              {item.condition.charAt(0).toUpperCase() +
+                                item.condition.slice(1)}
                             </span>
                           </div>
                         )}
@@ -326,4 +351,3 @@ export default function EbaySoldTool() {
     </SidepanelLayout>
   );
 }
-

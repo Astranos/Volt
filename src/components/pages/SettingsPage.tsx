@@ -47,6 +47,9 @@ interface CMDKSettings {
   shopifyButtons?: {
     enabled?: boolean;
   };
+  newTabOverride?: {
+    enabled?: boolean;
+  };
   controllerTesting?: {
     lightThreshold?: number;
     mediumThreshold?: number;
@@ -119,6 +122,9 @@ const DEFAULT_SETTINGS: CMDKSettings = {
   },
   customSearchProviders: [],
   shopifyButtons: {
+    enabled: true,
+  },
+  newTabOverride: {
     enabled: true,
   },
   controllerTesting: {
@@ -201,6 +207,11 @@ const mergeSettings = (stored?: Partial<CMDKSettings>): CMDKSettings => {
     ...(stored.shopifyButtons || {}),
   };
 
+  const mergedNewTabOverride = {
+    ...(DEFAULT_SETTINGS.newTabOverride || {}),
+    ...(stored.newTabOverride || {}),
+  };
+
   const mergedControllerTesting = {
     ...(DEFAULT_SETTINGS.controllerTesting || {}),
     ...(stored.controllerTesting || {}),
@@ -236,6 +247,7 @@ const mergeSettings = (stored?: Partial<CMDKSettings>): CMDKSettings => {
       ? [...stored.customSearchProviders]
       : [...DEFAULT_SETTINGS.customSearchProviders],
     shopifyButtons: mergedShopifyButtons,
+    newTabOverride: mergedNewTabOverride,
     controllerTesting: mergedControllerTesting,
     bookmarkFolderIds: stored.bookmarkFolderIds
       ? [...stored.bookmarkFolderIds]
@@ -657,6 +669,25 @@ export default function SettingsPage() {
     });
   };
 
+  const handleToggleNewTabOverride = () => {
+    const newNewTabOverride = {
+      ...settings.newTabOverride,
+      enabled: !settings.newTabOverride?.enabled,
+    };
+
+    const newSettings = {
+      ...settings,
+      newTabOverride: newNewTabOverride,
+    };
+    setSettings(newSettings);
+
+    // Auto-save
+    chrome.storage.sync.set({ cmdkSettings: newSettings }, () => {
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 2000);
+    });
+  };
+
   const handleToggleToolbar = () => {
     const newToolbar = {
       ...settings.toolbar,
@@ -1025,6 +1056,13 @@ export default function SettingsPage() {
               Global Toolbar
             </a>
             <a
+              href="#newtab"
+              className="flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg hover:bg-muted/50 transition-colors text-foreground"
+            >
+              <ScanLine className="w-4 h-4" />
+              New Tab Override
+            </a>
+            <a
               href="#sources"
               className="flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg hover:bg-muted/50 transition-colors text-foreground"
             >
@@ -1148,6 +1186,57 @@ export default function SettingsPage() {
                     <span
                       className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform ${
                         settings.toolbar?.enabled ?? true
+                          ? "translate-x-6"
+                          : "translate-x-1"
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* New Tab Override Section */}
+          <section id="newtab" className="scroll-mt-20">
+            <div className="mb-6">
+              <h2 className="text-2xl font-bold mb-2">New Tab Override</h2>
+              <p className="text-muted-foreground">
+                Control whether Volt replaces Chrome&apos;s default New Tab page.
+              </p>
+            </div>
+
+            <div className="bg-card rounded-xl border border-border shadow-lg overflow-hidden">
+              <div className="divide-y divide-border">
+                <div className="p-6 flex items-start gap-4">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <h3 className="font-semibold text-base">
+                        Use Volt New Tab
+                      </h3>
+                      {(settings.newTabOverride?.enabled ?? true) && (
+                        <span className="text-xs px-2.5 py-1 rounded-full bg-green-100 text-green-700 font-medium">
+                          Active
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-muted-foreground leading-relaxed">
+                      When enabled, new tabs open Volt&apos;s custom layout with
+                      closed tabs, quick links, and bookmarks. When disabled,
+                      new tabs will redirect back to Chrome&apos;s default New Tab
+                      page as much as the browser allows.
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleToggleNewTabOverride}
+                    className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${
+                      settings.newTabOverride?.enabled ?? true
+                        ? "bg-primary"
+                        : "bg-muted-foreground/30"
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform ${
+                        settings.newTabOverride?.enabled ?? true
                           ? "translate-x-6"
                           : "translate-x-1"
                       }`}

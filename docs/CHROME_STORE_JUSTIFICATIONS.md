@@ -26,6 +26,10 @@
 
 **Justification:** The history permission enables the extension to search through browser history in the command palette, helping users quickly find and revisit previously viewed pages without disrupting their workflow.
 
+### sessions
+
+**Justification:** The sessions permission allows the extension to access recently closed tabs, enabling users to restore accidentally closed tabs through the extension's interface. This provides a convenient way to recover browsing sessions without disrupting workflow.
+
 ### host permissions
 
 **Justification:** Host permissions are required for the extension to interact with specific websites as needed for its core functionality. This includes reading page content for context-aware features and providing enhanced functionality on supported sites.
