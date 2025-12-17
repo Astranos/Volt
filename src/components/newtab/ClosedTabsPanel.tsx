@@ -60,8 +60,9 @@ export function ClosedTabsPanel({
     }
   };
 
-  // Filter out currently open tabs (only show closed tabs)
-  const closedTabs = tabs.filter((tab) => !tab.active);
+  // Filter out all currently open tabs (only show closed tabs)
+  // Since getAllTabs() returns all open tabs, we exclude them all
+  const closedTabs: TabInfo[] = [];
   const filteredTabs = TabManager.filterTabs(closedTabs, search);
   const filteredHistory = filterHistory(history, search);
 
@@ -94,15 +95,15 @@ export function ClosedTabsPanel({
   const getSearchPlaceholder = () => {
     switch (activeMode) {
       case "google":
-        return "Search tabs, history, or Google...";
+        return "Search on Google";
       case "ebay":
-        return "Search tabs, history, or eBay...";
+        return "Search on eBay (sold prices)";
       case "pricecharting":
-        return "Search tabs, history, or PriceCharting...";
+        return "Search on PriceCharting";
       case "barcodelookup":
-        return "Search tabs, history, or lookup UPC...";
+        return "Search on BarcodeLookup (UPC)";
       case "shopify":
-        return "Search tabs, history, or Shopify inventory...";
+        return "Search on Shopify (inventory search)";
       default:
         return "Search tabs and history...";
     }

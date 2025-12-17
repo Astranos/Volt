@@ -259,6 +259,26 @@ export default defineBackground({
             log("open-quick-links: no active tab id");
           }
         });
+      } else if (command === "reopen-last-closed-tab") {
+        log("Reopen last closed tab shortcut triggered");
+        try {
+          if (!chrome.sessions || !chrome.sessions.restore) {
+            log("chrome.sessions.restore is not available");
+            return;
+          }
+          chrome.sessions.restore(undefined, (session) => {
+            if (chrome.runtime.lastError) {
+              log(
+                "Error restoring last closed session",
+                chrome.runtime.lastError.message
+              );
+              return;
+            }
+            log("Restored session from shortcut", session);
+          });
+        } catch (e) {
+          log("Unexpected error in reopen-last-closed-tab handler", e);
+        }
       }
     });
 

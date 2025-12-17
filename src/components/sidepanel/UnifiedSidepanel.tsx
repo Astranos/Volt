@@ -8,7 +8,6 @@ import PriceChartingTool from "./PriceChartingTool";
 import EbayTaxonomyTool from "./EbayTaxonomyTool";
 import BuyingGuide from "./BuyingGuide";
 import ShopifyHelp from "./ShopifyHelp";
-import ShopifySearch from "./ShopifySearch";
 import TabsManager from "./TabsManager";
 import { ChevronDown } from "lucide-react";
 import {
@@ -119,7 +118,6 @@ export default function UnifiedSidepanel() {
     "ebay-taxonomy-tool": EbayTaxonomyTool,
     "buying-guide": BuyingGuide,
     "shopify-help": ShopifyHelp,
-    "shopify-product-search": ShopifySearch,
     "tabs-manager": TabsManager,
   };
 

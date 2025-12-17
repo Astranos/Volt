@@ -24,7 +24,6 @@ export type SidepanelToolId =
   | "buying-guide"
   | "shopify-help"
   | "price-charting-tool"
-  | "shopify-product-search"
   | "tabs-manager";
 
 export interface SidepanelToolMetadata {
@@ -89,12 +88,6 @@ export const SIDEPANEL_TOOLS: SidepanelToolMetadata[] = [
     label: "Shopify Help",
     description: "View Shopify tags and sales channels guide",
     icon: HelpCircle,
-  },
-  {
-    id: "shopify-product-search",
-    label: "Shopify Search",
-    description: "Search Shopify products and inventory",
-    icon: Search,
   },
   {
     id: "tabs-manager",

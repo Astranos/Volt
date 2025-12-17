@@ -138,15 +138,25 @@ export default defineContentScript({
     // State
     let mainCard = null;
     let mpnValue = null;
+    let mpnSource = null; // Track whether we're using MPN or Model
     let upcValue = null;
     let overlay = null;
     let activePopup = null;
+    let hasLoggedMissingCard = false;
 
     // Find the main product card
     const findMainCard = () => {
       // Strategy: Look for the title input and go up to the card
       const titleInput = document.querySelector('input[name="title"]');
       if (titleInput) {
+        // Newer Shopify layouts wrap the product editor in a single form;
+        // use that as the main card container when available.
+        const form = titleInput.closest("form");
+        if (form) {
+          log("Found main product form for Shopify quick actions");
+          return form;
+        }
+
         let current = titleInput.parentElement;
         while (current && current !== document.body) {
           const classes = (current.className || "").toString();
@@ -209,6 +219,25 @@ export default defineContentScript({
         );
 
       mpnValue = extractMetafieldValue(mpnContainer);
+      mpnSource = mpnValue ? "MPN" : null;
+
+      // Fallback to Model if MPN not found
+      if (!mpnValue) {
+        const modelContainer =
+          document.querySelector('[id*="metafields.custom.model"]') ||
+          Array.from(document.querySelectorAll('[id*="metafields"]')).find(
+            (el) => {
+              const label = el.querySelector("label");
+              return label && label.textContent.includes("Model");
+            }
+          );
+
+        const modelValue = extractMetafieldValue(modelContainer);
+        if (modelValue) {
+          mpnValue = modelValue;
+          mpnSource = "Model";
+        }
+      }
 
       // Find UPC
       const upcContainer =
@@ -254,6 +283,7 @@ export default defineContentScript({
       overlay = document.createElement("div");
       overlay.id = "scout-quick-actions-overlay";
       overlay.className = "scout-quick-actions-overlay";
+      overlay.style.opacity = "0"; // Start hidden until page is loaded
 
       // PriceCharting Tab (Blue, Top)
       const pcTab = document.createElement("div");
@@ -291,7 +321,7 @@ export default defineContentScript({
           )}&LH_Sold=1&LH_Complete=1&_dmd=2&rt=nc`;
           openSearchPopup(url);
         } else {
-          alert("No MPN found");
+          alert("No MPN or Model found");
         }
       };
 
@@ -304,16 +334,35 @@ export default defineContentScript({
     const updateOverlay = () => {
       if (!mainCard) {
         mainCard = findMainCard();
+        if (!mainCard && !hasLoggedMissingCard) {
+          hasLoggedMissingCard = true;
+          log(
+            "Could not find main product card, showing Shopify quick actions in fallback position."
+          );
+        }
       }
 
-      if (!mainCard || !overlay) {
-        if (overlay) overlay.style.opacity = "0";
+      if (!overlay) {
         return;
       }
 
-      // Check if card is visible
+      // If we couldn't find the main card, hide the toolbar
+      if (!mainCard) {
+        overlay.style.opacity = "0";
+        return;
+      }
+
+      // Check if card is visible and has reasonable dimensions
       const rect = mainCard.getBoundingClientRect();
-      if (rect.width === 0 || rect.height === 0) {
+      const minWidth = 300; // Minimum width to consider card as "loaded"
+      const minHeight = 200; // Minimum height to consider card as "loaded"
+
+      if (
+        rect.width === 0 ||
+        rect.height === 0 ||
+        rect.width < minWidth ||
+        rect.height < minHeight
+      ) {
         overlay.style.opacity = "0";
         return;
       }
@@ -347,13 +396,14 @@ export default defineContentScript({
       if (ebayTab) {
         if (mpnValue) {
           ebayTab.classList.remove("disabled");
+          const sourceLabel = mpnSource === "Model" ? "Model" : "MPN";
           ebayTab.setAttribute(
             "data-tooltip",
-            `Search eBay(sold prices) with MPN: ${mpnValue}`
+            `Search eBay(sold prices) with ${sourceLabel}: ${mpnValue}`
           );
         } else {
           ebayTab.classList.add("disabled");
-          ebayTab.setAttribute("data-tooltip", "No MPN found");
+          ebayTab.setAttribute("data-tooltip", "No MPN or Model found");
         }
       }
     };
@@ -366,6 +416,7 @@ export default defineContentScript({
 
     // Initialize
     const init = () => {
+      log("Initializing Shopify Quick Actions content script");
       injectStyles();
 
       // Listen for window focus to close popup

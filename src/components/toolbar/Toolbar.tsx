@@ -26,7 +26,6 @@ const buttonIdMap: Record<SidepanelToolId, string> = {
   "buying-guide": "scout-tb-buying-guide",
   "shopify-help": "scout-tb-shopify-help",
   "price-charting-tool": "scout-tb-price-charting",
-  "shopify-product-search": "scout-tb-shopify-search",
   "tabs-manager": "scout-tb-tabs-manager",
 };
 
@@ -158,11 +157,7 @@ export default function Toolbar() {
   if (dismissed) return null;
 
   return (
-    <div
-      id="scout-toolbar"
-      aria-hidden="true"
-      className="scout-hidden"
-    >
+    <div id="scout-toolbar" aria-hidden="true" className="scout-hidden">
       <style
         // Inline CSS keeps the toolbar self-contained and avoids touching host page styles.
         dangerouslySetInnerHTML={{
@@ -384,5 +379,3 @@ export default function Toolbar() {
     </div>
   );
 }
-
-

@@ -34,6 +34,7 @@ export default defineConfig({
           "https://*.myshopify.com/admin/*",
         ],
         js: ["shopify-buttons.js", "shopify-product-search.js"],
+
         run_at: "document_idle",
       },
       {
@@ -49,7 +50,7 @@ export default defineConfig({
       },
     ],
     name: "Volt",
-    version: "1.0.6",
+    version: "1.0.7",
     description:
       "A versatile Chrome extension with command palette, controller testing, and multi-provider search capabilities.",
     permissions: [
