@@ -1,4 +1,4 @@
-Scout Chrome Extension
+Volt Chrome Extension
 
 Scout is a powerful browser extension designed to enhance productivity with quick navigation, search capabilities, and intelligent price tracking. Built with efficiency in mind, Scout provides a powerful command palette interface for instant access to bookmarks, browsing history, open tabs, and multi-platform search. The extension integrates with multiple popular platforms and includes advanced features like eBay price analysis, Shopify Buttons, and UPC highlighting for comprehensive workflow optimization.
 

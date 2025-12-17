@@ -1,5 +1,5 @@
 /**
- * Scout Chrome Extension Background Service Worker
+ * Volt Chrome Extension Background Service Worker
  * Migrated to WXT background entrypoint.
  */
 // @ts-nocheck
@@ -10,7 +10,7 @@ import { defineBackground } from "wxt/utils/define-background";
 export default defineBackground({
   main() {
     /**
-     * @fileoverview Scout Chrome Extension Background Service Worker
+     * @fileoverview Volt Chrome Extension Background Service Worker
      * @description Manages extension lifecycle, message handling, and core functionality
      * @version 1.0.0
      * @author PayMore Team
@@ -79,11 +79,16 @@ export default defineBackground({
 
     function configurePanelForTab(tabId) {
       try {
-        // Configure globally instead of per-tab to keep sidepanel open/persistent across tab switches
-        chrome.sidePanel.setOptions({
+        const options: any = {
           enabled: true,
           path: PANEL_PAGE_PATH,
-        });
+        };
+        // When we know the tabId, configure options for that tab explicitly so
+        // chrome.sidePanel.open({ tabId }) is allowed to show the panel there.
+        if (typeof tabId === "number") {
+          options.tabId = tabId;
+        }
+        chrome.sidePanel.setOptions(options);
       } catch (setErr) {
         log("sidePanel setOptions error", setErr?.message || setErr);
       }
@@ -165,7 +170,7 @@ export default defineBackground({
      * @param {...any} args - Arguments to log
      */
     function log(...args) {
-      if (DEBUG) console.log("[Paymore SW]", ...args);
+      if (DEBUG) console.log("[Volt Service Wroker]", ...args);
     }
 
     log("Service worker booted", { time: new Date().toISOString() });
@@ -608,6 +613,65 @@ export default defineBackground({
         sender: { id: sender?.tab?.id, url: sender?.tab?.url },
       });
 
+      // Handle PC_ITEM_SELECTED from PriceCharting game page content script
+      if (message.type === "PC_ITEM_SELECTED" && message.data) {
+        log("PC_ITEM_SELECTED received", message.data);
+
+        // Save item to localStorage via storage.local (will be synced to sidepanel)
+        chrome.storage.local.get(
+          { scout_pricecharting_pending_items: [] },
+          (result) => {
+            const pendingItems = result.scout_pricecharting_pending_items || [];
+            pendingItems.push(message.data);
+            chrome.storage.local.set(
+              { scout_pricecharting_pending_items: pendingItems },
+              () => {
+                log("Item saved to pending queue");
+
+                // Open sidepanel with price-charting-tool
+                chrome.tabs.query(
+                  { active: true, currentWindow: true },
+                  (tabs) => {
+                    const active = tabs && tabs[0];
+                    const tabId = sender?.tab?.id || active?.id;
+                    if (tabId) {
+                      // Set the tool preference and open sidepanel
+                      updatePreferredTool("price-charting-tool");
+
+                      // We want to ENSURE it's open, not toggle it.
+                      // planSidePanelAction is for toggling.
+                      configurePanelForTab(tabId);
+                      try {
+                        chrome.sidePanel.open({ tabId }, () => {
+                          const err = chrome.runtime.lastError;
+                          if (err) {
+                            log("sidePanel open lastError", err.message);
+                          } else {
+                            setSidePanelState(tabId, {
+                              open: true,
+                              tool: "price-charting-tool",
+                            });
+                            log("Sidepanel opened for price-charting-tool");
+                          }
+                        });
+                      } catch (openErr) {
+                        log(
+                          "sidePanel open error",
+                          openErr?.message || openErr
+                        );
+                      }
+                    }
+                  }
+                );
+              }
+            );
+          }
+        );
+
+        sendResponse({ success: true });
+        return true;
+      }
+
       switch (message.action) {
         case "csReady":
           log("content script ready", message?.url);
@@ -966,7 +1030,10 @@ export default defineBackground({
               sendResponse({ success: true, tabId: tab?.id });
             });
           } else {
-            sendResponse({ success: false, error: "No URL or tab ID provided" });
+            sendResponse({
+              success: false,
+              error: "No URL or tab ID provided",
+            });
           }
           return true;
         case "FETCH_CSV_LINKS":
@@ -1491,7 +1558,7 @@ export default defineBackground({
       switch (tool) {
         case "controller-testing":
           return "/tools/controller-testing";
-        case "price-charting":
+        case "price-charting-tool":
           return "/tools/price-charting";
         case "upc-search":
           return "/tools/upc-search";

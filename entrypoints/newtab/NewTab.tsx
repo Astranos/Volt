@@ -35,6 +35,10 @@ export default function NewTab() {
   const [overrideEnabled, setOverrideEnabled] = useState<boolean | null>(null);
 
   useEffect(() => {
+    document.title = "Volt";
+  }, []);
+
+  useEffect(() => {
     if (
       typeof chrome === "undefined" ||
       !chrome.storage?.sync ||

@@ -132,7 +132,7 @@ export default function UnifiedSidepanel() {
   return (
     <div className="h-full w-full flex flex-col bg-background">
       {/* Fixed Header */}
-      <div className="flex-none p-2 pb-2 border-b bg-background z-10">
+      <div className="flex-none p-2 pb-2 bg-background z-10">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button

@@ -31,23 +31,23 @@ Users should be able to type a keyword in Chrome’s address bar, then a short c
 
 Use a single omnibox keyword (Chrome limitation: 1 keyword per extension).
 
-Recommendation: **`scout`**
+Recommendation: **`volt`**
 
 Alternative: **`volt`** (matches extension name in `wxt.config.ts`)
 
 ### Command grammar (after the keyword)
 
-Examples assume keyword `scout`:
+Examples assume keyword `volt`:
 
 - **PriceCharting**:
-  - `scout pc <query>`
-  - `scout pricecharting <query>`
+  - `volt pc <query>`
+  - `volt pricecharting <query>`
 - **eBay**:
-  - `scout eb <query>`
-  - `scout ebay <query>`
+  - `volt eb <query>`
+  - `volt ebay <query>`
 - **Shopify inventory**:
-  - `scout inv <query>`
-  - `scout shopify <query>`
+  - `volt inv <query>`
+  - `volt shopify <query>`
 
 ### Quality-of-life
 

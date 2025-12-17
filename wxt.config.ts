@@ -43,6 +43,11 @@ export default defineConfig({
         run_at: "document_idle",
       },
       {
+        matches: ["https://www.pricecharting.com/game/*"],
+        js: ["pricecharting-game.js"],
+        run_at: "document_idle",
+      },
+      {
         matches: ["<all_urls>"],
         js: ["toolbar-mount.js"],
         run_at: "document_idle",
@@ -50,7 +55,7 @@ export default defineConfig({
       },
     ],
     name: "Volt",
-    version: "1.0.8",
+    version: "1.0.9",
     description:
       "A versatile Chrome extension with command palette, controller testing, and multi-provider search capabilities.",
     permissions: [
