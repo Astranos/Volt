@@ -3,7 +3,6 @@ import ControllerTesting from "./ControllerTesting";
 import TopOffersPage from "./TopOffers";
 import QuickLinks from "./QuickLinks";
 import CostBreakdown from "./CostBreakdown";
-import EbaySoldTool from "./EbaySoldTool";
 import PriceChartingTool from "./PriceChartingTool";
 import EbayTaxonomyTool from "./EbayTaxonomyTool";
 import BuyingGuide from "./BuyingGuide";
@@ -113,7 +112,6 @@ export default function UnifiedSidepanel() {
     "top-offers": TopOffersPage,
     "quick-links": QuickLinks,
     "pc-cost-breakdown": CostBreakdown,
-    "ebay-sold-tool": EbaySoldTool,
     "price-charting-tool": PriceChartingTool,
     "ebay-taxonomy-tool": EbayTaxonomyTool,
     "buying-guide": BuyingGuide,

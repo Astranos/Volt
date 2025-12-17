@@ -3,7 +3,6 @@ import {
   Calculator,
   Link as LinkIcon,
   Boxes,
-  Tag,
   Layers,
   ShoppingBag,
   LucideIcon,
@@ -19,7 +18,6 @@ export type SidepanelToolId =
   | "top-offers"
   | "quick-links"
   | "pc-cost-breakdown"
-  | "ebay-sold-tool"
   | "ebay-taxonomy-tool"
   | "buying-guide"
   | "shopify-help"
@@ -58,12 +56,6 @@ export const SIDEPANEL_TOOLS: SidepanelToolMetadata[] = [
     label: "Breakdown Listing",
     description: "Open cost breakdown in the sidepanel",
     icon: Shapes,
-  },
-  {
-    id: "ebay-sold-tool",
-    label: "eBay Pricing",
-    description: "Open eBay sold listings tool in the sidepanel",
-    icon: Tag,
   },
   {
     id: "price-charting-tool",

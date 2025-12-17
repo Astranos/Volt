@@ -21,7 +21,6 @@ const buttonIdMap: Record<SidepanelToolId, string> = {
   "top-offers": "scout-tb-top-offers",
   "quick-links": "scout-tb-quick-links",
   "pc-cost-breakdown": "scout-tb-pc-costs",
-  "ebay-sold-tool": "scout-tb-ebay-sold",
   "ebay-taxonomy-tool": "scout-tb-ebay-taxonomy",
   "buying-guide": "scout-tb-buying-guide",
   "shopify-help": "scout-tb-shopify-help",

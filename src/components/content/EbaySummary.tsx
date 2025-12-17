@@ -1,9 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { FileText, Settings, X } from "lucide-react";
-import {
-  triggerSidepanelToolFromContentScript,
-  isSidePanelApiAvailable,
-} from "../../lib/sidepanel-gesture";
+import { Settings, X } from "lucide-react";
 
 type ListingState = "sold" | "completed" | "active" | "unknown";
 
@@ -138,43 +134,6 @@ const EbaySummary: React.FC<EbaySummaryProps> = ({ onDismiss }) => {
       console.error("[Volt eBay Summary] Failed to get icon URL", err);
     }
   }, []);
-
-  const openSidepanelTool = useCallback((tool: string) => {
-    if (!isSidePanelApiAvailable()) {
-      try {
-        chrome.runtime.sendMessage({
-          action: "openInSidebar",
-          tool,
-        });
-      } catch (_) {}
-      return;
-    }
-    try {
-      triggerSidepanelToolFromContentScript(tool, {
-        source: "ebay-summary",
-      }).catch((err) => {
-        console.error("[Volt eBay Summary] sidepanel trigger failed", err);
-        try {
-          chrome.runtime.sendMessage({
-            action: "openInSidebar",
-            tool,
-          });
-        } catch (_) {}
-      });
-    } catch (err) {
-      console.error("[Volt eBay Summary] sidepanel trigger threw", err);
-      try {
-        chrome.runtime.sendMessage({
-          action: "openInSidebar",
-          tool,
-        });
-      } catch (_) {}
-    }
-  }, []);
-
-  const handleOpenSidepanel = useCallback(() => {
-    openSidepanelTool("ebay-sold-tool");
-  }, [openSidepanelTool]);
 
   const handleSettings = useCallback(() => {
     chrome.runtime.sendMessage({
@@ -349,13 +308,6 @@ const EbaySummary: React.FC<EbaySummaryProps> = ({ onDismiss }) => {
           </span>
         )}
       </div>
-      <button
-        className="volt-ebay-summary__sidepanel"
-        onClick={handleOpenSidepanel}
-        title="Open eBay Tool"
-      >
-        <FileText size={14} />
-      </button>
       <button
         className="volt-ebay-summary__settings"
         onClick={handleSettings}

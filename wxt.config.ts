@@ -50,7 +50,7 @@ export default defineConfig({
       },
     ],
     name: "Volt",
-    version: "1.0.7",
+    version: "1.0.8",
     description:
       "A versatile Chrome extension with command palette, controller testing, and multi-provider search capabilities.",
     permissions: [
@@ -124,19 +124,14 @@ export default defineConfig({
         },
         description: "Open extension options",
       },
-      "open-controller-testing": {
+      "reopen-last-closed-tab": {
         suggested_key: {
-          default: "Ctrl+J",
-          mac: "Command+J",
+          // Note: Chrome may not allow overriding the browser's native Undo shortcut
+          // with Ctrl/Cmd+Z. Users can adjust this in chrome://extensions/shortcuts.
+          default: "Ctrl+Z",
+          mac: "Command+Z",
         },
-        description: "Open Sidepanel (Controller Testing Tab)",
-      },
-      "open-quick-links": {
-        suggested_key: {
-          default: "Ctrl+Shift+L",
-          mac: "Command+Shift+L",
-        },
-        description: "Open Sidepanel (Quick Links Tab)",
+        description: "Reopen last closed tab",
       },
     },
     chrome_url_overrides: {

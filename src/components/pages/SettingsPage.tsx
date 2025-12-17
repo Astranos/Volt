@@ -1201,7 +1201,8 @@ export default function SettingsPage() {
             <div className="mb-6">
               <h2 className="text-2xl font-bold mb-2">New Tab Override</h2>
               <p className="text-muted-foreground">
-                Control whether Volt replaces Chrome&apos;s default New Tab page.
+                Control whether Volt replaces Chrome&apos;s default New Tab
+                page.
               </p>
             </div>
 
@@ -1222,8 +1223,8 @@ export default function SettingsPage() {
                     <p className="text-sm text-muted-foreground leading-relaxed">
                       When enabled, new tabs open Volt&apos;s custom layout with
                       closed tabs, quick links, and bookmarks. When disabled,
-                      new tabs will redirect back to Chrome&apos;s default New Tab
-                      page as much as the browser allows.
+                      new tabs will redirect back to Chrome&apos;s default New
+                      Tab page as much as the browser allows.
                     </p>
                   </div>
                   <button
@@ -1841,8 +1842,7 @@ export default function SettingsPage() {
                     <p className="text-sm text-muted-foreground leading-relaxed mb-3">
                       Displays a summary banner showing your current search
                       context (Active vs Sold listings, item condition) at the
-                      top of eBay search results. Includes quick filter links
-                      and easy access to the eBay sold listings tool.
+                      top of eBay search results. Includes quick filter links.
                     </p>
                     <div className="text-xs text-muted-foreground space-y-1">
                       <p>
