@@ -9,7 +9,7 @@ export interface CSVLink {
 }
 
 const DEFAULT_CSV_URL =
-  "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ8y5eHw3bj0MA0pyMS81o9AbAKrYQL_-a04P_hjoNrkYrrT9VyfsFZk8GE_RM_GRBKJG2J2r3OsZQj/pub?gid=808603945&single=true&output=csv";
+  "https://docs.google.com/spreadsheets/d/e/2PACX-1vSCj4wc4-d9BJO03Asa0FiHm3vYY2MOW7XcmKXM42kdBEoaCDxQNoqaIYBl5PSO_deooc1VnYl18bVo/pub?gid=9974464&single=true&output=csv";
 
 const CACHE_KEY = "csvLinksCache";
 

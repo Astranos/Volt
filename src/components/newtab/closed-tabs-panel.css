@@ -58,6 +58,14 @@
   background: #15803d;
 }
 
+.closed-tabs-search-toggle button {
+  cursor: pointer;
+}
+
+.closed-tabs-search-toggle button[data-state="off"]:hover {
+  background: #f3f4f6;
+}
+
 /* Command */
 .closed-tabs-command {
   display: flex;

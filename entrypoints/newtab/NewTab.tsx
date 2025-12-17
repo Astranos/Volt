@@ -46,32 +46,31 @@ export default function NewTab() {
     }
 
     chrome.storage.sync.get(["cmdkSettings"], (result) => {
-      const enabled =
-        result?.cmdkSettings?.newTabOverride?.enabled ?? true;
+      const enabled = result?.cmdkSettings?.newTabOverride?.enabled ?? true;
 
       if (!enabled) {
         setOverrideEnabled(false);
 
         try {
-          chrome.tabs.query(
-            { active: true, currentWindow: true },
-            (tabs) => {
-              const currentTab = tabs[0];
-              if (!currentTab?.id) {
-                return;
-              }
-
-              // When the new tab override is disabled in settings, we can't
-              // restore Chrome's real `chrome://newtab` while this extension
-              // still owns the override. Redirect to Google instead and avoid
-              // an infinite loop caused by re-loading this override page.
-              chrome.tabs.update(currentTab.id, {
-                url: "https://www.google.com",
-              });
+          chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            const currentTab = tabs[0];
+            if (!currentTab?.id) {
+              return;
             }
-          );
+
+            // When the new tab override is disabled in settings, we can't
+            // restore Chrome's real `chrome://newtab` while this extension
+            // still owns the override. Redirect to Google instead and avoid
+            // an infinite loop caused by re-loading this override page.
+            chrome.tabs.update(currentTab.id, {
+              url: "https://www.google.com",
+            });
+          });
         } catch (e) {
-          console.error("[NewTab] Failed to redirect after disabling override:", e);
+          console.error(
+            "[NewTab] Failed to redirect after disabling override:",
+            e
+          );
         }
       } else {
         setOverrideEnabled(true);
@@ -81,15 +80,27 @@ export default function NewTab() {
 
   useEffect(() => {
     if (typeof chrome === "undefined" || !chrome.storage?.local) return;
-    chrome.storage.local.get(["scout_shopify_store"], (result) => {
-      if (result?.scout_shopify_store) {
-        setShopifyStore(result.scout_shopify_store);
+    chrome.storage.local.get(
+      ["scout_shopify_store", "scout_search_mode"],
+      (result) => {
+        if (result?.scout_shopify_store) {
+          setShopifyStore(result.scout_shopify_store);
+        }
+        if (result?.scout_search_mode) {
+          setActiveMode(result.scout_search_mode as SearchMode);
+        }
       }
-    });
+    );
   }, []);
 
   const toggleSearchMode = (mode: SearchMode) => {
-    setActiveMode((current) => (current === mode ? "google" : mode));
+    setActiveMode((current) => {
+      const newMode = current === mode ? "google" : mode;
+      if (typeof chrome !== "undefined" && chrome.storage?.local) {
+        chrome.storage.local.set({ scout_search_mode: newMode });
+      }
+      return newMode;
+    });
   };
 
   const handleSidepanelToolClick = (toolId: SidepanelToolId) => {
@@ -346,9 +357,9 @@ export default function NewTab() {
                       <TooltipTrigger asChild>
                         <Button
                           variant="ghost"
-                          size="icon"
                           onClick={() => handleSidepanelToolClick(tool.id)}
-                          className="newtab-toolbar-button cursor-pointer"
+                          className="newtab-toolbar-button cursor-pointer flex items-center justify-center"
+                          aria-label={tool.label}
                         >
                           <Icon className="h-4 w-4" />
                         </Button>

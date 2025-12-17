@@ -91,6 +91,23 @@ export function ClosedTabsPanel({
     return provider?.name || "Google";
   };
 
+  const getSearchPlaceholder = () => {
+    switch (activeMode) {
+      case "google":
+        return "Search tabs, history, or Google...";
+      case "ebay":
+        return "Search tabs, history, or eBay...";
+      case "pricecharting":
+        return "Search tabs, history, or PriceCharting...";
+      case "barcodelookup":
+        return "Search tabs, history, or lookup UPC...";
+      case "shopify":
+        return "Search tabs, history, or Shopify inventory...";
+      default:
+        return "Search tabs and history...";
+    }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       // Arrow key navigation is handled by CMDK
@@ -122,7 +139,7 @@ export function ClosedTabsPanel({
           <SearchIcon className="w-4 h-4 text-gray-400" />
           <input
             type="text"
-            placeholder="Search tabs and history..."
+            placeholder={getSearchPlaceholder()}
             value={search}
             onChange={(e) => {
               setSearch(e.target.value);
