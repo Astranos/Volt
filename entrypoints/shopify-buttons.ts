@@ -13,13 +13,13 @@ import { defineContentScript } from "wxt/utils/define-content-script";
  * 2. PriceCharting (via UPC) - Blue Tab
  */
 export default defineContentScript({
-  matches: ["https://admin.shopify.com/*", "https://*.myshopify.com/admin/*"],
+  matches: ["https://admin.shopify.com/*", "https://*.myshopify.com/*"],
   runAt: "document_idle",
   allFrames: false,
   main() {
     const log = (...args) => {
       try {
-        console.log("[Scout Quick Actions]", ...args);
+        console.log("[Volt - Shopify Buttons]", ...args);
       } catch (_) {}
     };
 
@@ -143,6 +143,8 @@ export default defineContentScript({
     let overlay = null;
     let activePopup = null;
     let hasLoggedMissingCard = false;
+    let lastUrl = location.href;
+    let isInitialized = false;
 
     // Find the main product card
     const findMainCard = () => {
@@ -300,8 +302,6 @@ export default defineContentScript({
             upcValue
           )}&type=videogames`;
           openSearchPopup(url);
-        } else {
-          alert("No UPC found");
         }
       };
 
@@ -320,8 +320,6 @@ export default defineContentScript({
             mpnValue
           )}&LH_Sold=1&LH_Complete=1&_dmd=2&rt=nc`;
           openSearchPopup(url);
-        } else {
-          alert("No MPN or Model found");
         }
       };
 
@@ -414,8 +412,43 @@ export default defineContentScript({
       requestAnimationFrame(loop);
     };
 
+    // Reset state for new page navigation
+    const resetState = () => {
+      mainCard = null;
+      mpnValue = null;
+      mpnSource = null;
+      upcValue = null;
+      hasLoggedMissingCard = false;
+      log("State reset for new page navigation");
+    };
+
+    // Check if current URL is a product page
+    const isProductPage = () => {
+      const url = location.href;
+      // Match product pages like /products/123 or /products/123/variants
+      return /\/products\/\d+/.test(url);
+    };
+
+    // Handle URL changes (for SPA navigation)
+    const handleUrlChange = () => {
+      const currentUrl = location.href;
+      if (currentUrl !== lastUrl) {
+        log("URL changed:", lastUrl, "->", currentUrl);
+        lastUrl = currentUrl;
+        resetState();
+        // Re-find fields after a short delay to let the DOM update
+        setTimeout(findFields, 500);
+        setTimeout(findFields, 1500); // Check again after more DOM updates
+      }
+    };
+
     // Initialize
     const init = () => {
+      if (isInitialized) {
+        log("Already initialized, skipping");
+        return;
+      }
+      isInitialized = true;
       log("Initializing Shopify Quick Actions content script");
       injectStyles();
 
@@ -427,9 +460,28 @@ export default defineContentScript({
         }
       });
 
+      // Listen for SPA navigation events
+      window.addEventListener("popstate", handleUrlChange);
+
+      // Intercept pushState and replaceState for SPA navigation detection
+      const originalPushState = history.pushState;
+      const originalReplaceState = history.replaceState;
+
+      history.pushState = function (...args) {
+        originalPushState.apply(this, args);
+        handleUrlChange();
+      };
+
+      history.replaceState = function (...args) {
+        originalReplaceState.apply(this, args);
+        handleUrlChange();
+      };
+
       // Observe for DOM changes
       const observer = new MutationObserver(() => {
         findFields();
+        // Also check for URL changes in case they weren't caught by history API
+        handleUrlChange();
       });
 
       observer.observe(document.body, {
@@ -443,8 +495,11 @@ export default defineContentScript({
       createOverlay();
       requestAnimationFrame(loop);
 
-      // Periodic check for fields
-      setInterval(findFields, 2000);
+      // Periodic check for fields and URL changes
+      setInterval(() => {
+        findFields();
+        handleUrlChange();
+      }, 2000);
     };
 
     const checkSettingsAndInit = () => {
