@@ -437,6 +437,15 @@ export default defineBackground({
         debugLogs: true,
       });
 
+      // Set side panel behavior to open on action click
+      try {
+        if (chrome.sidePanel && chrome.sidePanel.setPanelBehavior) {
+          chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
+        }
+      } catch (e) {
+        log("Failed to set side panel behavior:", e);
+      }
+
       // Open install page on first installation
       if (details.reason === "install") {
         log("First installation detected, opening install page");
@@ -1586,169 +1595,13 @@ export default defineBackground({
     }
 
     function openInActionPopup(tool) {
-      chrome.storage.local.get(
-        {
-          toolsPassword: "",
-        },
-        (cfg) => {
-          const baseUrl = "https://scout-extension.vercel.app";
-          const path = toolToPath(tool);
-          let url = `${baseUrl}${path}`;
-
-          // Add password to all tool URLs if configured
-          if (cfg?.toolsPassword) {
-            try {
-              const u = new URL(url);
-              u.searchParams.set("password", cfg.toolsPassword);
-              url = u.href;
-            } catch (_) {
-              url = `${url}${
-                url.includes("?") ? "&" : "?"
-              }password=${encodeURIComponent(cfg.toolsPassword)}`;
-            }
-          }
-
-          // Size Next.js help tool nicely inside the action popup
-          if (tool === "help") {
-            try {
-              const u = new URL(url);
-              u.searchParams.set("pm_w", "460");
-              u.searchParams.set("pm_h", "560");
-              url = u.href;
-            } catch (_) {
-              url = `${url}${url.includes("?") ? "&" : "?"}pm_w=460&pm_h=560`;
-            }
-          }
-          // If pm_window=1 is present, open as chromeless popup window with optional sizing/position
-          try {
-            const u = new URL(url);
-            const windowMode = u.searchParams.get("pm_window") === "1";
-            if (windowMode) {
-              const wp = parseFloat(u.searchParams.get("pm_wp") || "0") || null;
-              const hp = parseFloat(u.searchParams.get("pm_hp") || "0") || null;
-              const margin =
-                parseInt(u.searchParams.get("pm_margin") || "0", 10) || 0;
-              const wFixed =
-                parseInt(u.searchParams.get("pm_w") || "0", 10) || null;
-              const hFixed =
-                parseInt(u.searchParams.get("pm_h") || "0", 10) || null;
-              const leftParam = parseInt(
-                u.searchParams.get("pm_left") || "",
-                10
-              );
-              const topParam = parseInt(u.searchParams.get("pm_top") || "", 10);
-              try {
-                chrome.system.display.getInfo((displays) => {
-                  const d = (displays &&
-                    displays[0] &&
-                    displays[0].workArea) || {
-                    left: 0,
-                    top: 0,
-                    width: 1280,
-                    height: 800,
-                  };
-                  const w = Math.max(
-                    400,
-                    wFixed || (wp ? Math.floor(d.width * wp) : 900)
-                  );
-                  const h = Math.max(
-                    300,
-                    hFixed || (hp ? Math.floor(d.height * hp) : 820)
-                  );
-                  const maxW = d.width - margin * 2;
-                  const maxH = d.height - margin * 2;
-                  const finalW = Math.min(w, maxW);
-                  const finalH = Math.min(h, maxH);
-                  const left = Number.isFinite(leftParam)
-                    ? Math.max(
-                        d.left + margin,
-                        Math.min(d.left + d.width - finalW - margin, leftParam)
-                      )
-                    : Math.max(
-                        d.left + margin,
-                        d.left + Math.floor((d.width - finalW) / 2)
-                      );
-                  const top = Number.isFinite(topParam)
-                    ? Math.max(
-                        d.top + margin,
-                        Math.min(d.top + d.height - finalH - margin, topParam)
-                      )
-                    : Math.max(
-                        d.top + margin,
-                        d.top + Math.floor((d.height - finalH) / 2)
-                      );
-                  // Ensure only one popup at a time: reuse/resize existing popup if present
-                  const createWindow = () =>
-                    chrome.windows.create(
-                      {
-                        url: u.href,
-                        type: "popup",
-                        state: "normal",
-                        width: finalW,
-                        height: finalH,
-                        left,
-                        top,
-                        focused: true,
-                      },
-                      (win) => {
-                        CURRENT_TOOL_POPUP_ID = win?.id || null;
-                        ensureAutoCloseListener();
-                      }
-                    );
-
-                  if (CURRENT_TOOL_POPUP_ID) {
-                    try {
-                      chrome.windows.update(
-                        CURRENT_TOOL_POPUP_ID,
-                        {
-                          state: "normal",
-                          width: finalW,
-                          height: finalH,
-                          left,
-                          top,
-                          focused: true,
-                        },
-                        (win) => {
-                          const err = chrome.runtime.lastError;
-                          if (err || !win) {
-                            CURRENT_TOOL_POPUP_ID = null;
-                            createWindow();
-                          }
-                        }
-                      );
-                    } catch (_) {
-                      CURRENT_TOOL_POPUP_ID = null;
-                      createWindow();
-                    }
-                  } else {
-                    createWindow();
-                  }
-                });
-              } catch (e) {
-                log("windowMode error", e?.message || e);
-                chrome.windows.create({
-                  url: u.href,
-                  type: "popup",
-                  focused: true,
-                });
-              }
-              return;
-            }
-            url = u.href;
-          } catch (_) {}
-          log("openInActionPopup", { tool, url });
-          chrome.storage.local.set({ actionPopupUrl: url }, () => {
-            try {
-              chrome.action.openPopup(() => {
-                const err = chrome.runtime.lastError;
-                if (err) log("openPopup error", err.message);
-              });
-            } catch (e) {
-              log("openPopup threw", e?.message || e);
-            }
-          });
+      log("openInActionPopup redirecting to sidepanel", { tool });
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        const active = tabs && tabs[0];
+        if (active?.id) {
+          toggleSidePanelForTab(active.id, tool);
         }
-      );
+      });
     }
 
     let CURRENT_TOOL_POPUP_ID = null;

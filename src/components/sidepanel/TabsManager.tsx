@@ -200,7 +200,7 @@ export default function TabsManager() {
 
   return (
     <div className="h-full flex flex-col bg-background">
-      <div className="p-4 border-b space-y-3">
+      <div className="p-4 border-b border-border/50 space-y-3">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input

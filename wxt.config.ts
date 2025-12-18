@@ -55,7 +55,7 @@ export default defineConfig({
       },
     ],
     name: "Volt",
-    version: "1.0.9",
+    version: "1.0.10",
     description:
       "A versatile Chrome extension with command palette, controller testing, and multi-provider search capabilities.",
     permissions: [
@@ -120,7 +120,7 @@ export default defineConfig({
           default: "Ctrl+Shift+K",
           mac: "Command+Shift+K",
         },
-        description: "Open Command Menu Popup",
+        description: "Toggle Side Panel",
       },
       "open-options": {
         suggested_key: {
