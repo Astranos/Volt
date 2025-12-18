@@ -105,7 +105,9 @@ export default defineContentScript({
 
       // Extract UPC from the details table
       let upc = "";
-      const upcElements = document.querySelectorAll(".scout-upc-highlight[data-upc]");
+      const upcElements = document.querySelectorAll(
+        ".scout-upc-highlight[data-upc]"
+      );
       if (upcElements.length > 0) {
         // Get the first UPC
         upc = upcElements[0].getAttribute("data-upc") || "";
@@ -137,13 +139,17 @@ export default defineContentScript({
         return;
       }
 
-      const salesTables = document.querySelectorAll("table.hoverable-rows.sortable");
+      const salesTables = document.querySelectorAll(
+        "table.hoverable-rows.sortable"
+      );
       salesTables.forEach((table) => {
         // Find condition from parent container
         let condition = "Loose"; // Default
         const container = table.closest("div[class*='completed-auctions-']");
         if (container) {
-          for (const [className, cond] of Object.entries(CONTAINER_CONDITION_MAP)) {
+          for (const [className, cond] of Object.entries(
+            CONTAINER_CONDITION_MAP
+          )) {
             if (container.classList.contains(className)) {
               condition = cond;
               break;
@@ -182,7 +188,7 @@ export default defineContentScript({
           // Create button cell
           const buttonCell = document.createElement("td");
           buttonCell.className = "numeric";
-          
+
           const button = document.createElement("button");
           button.className = "scout-add-to-lot-btn";
           button.textContent = "Add To Game Lot";
@@ -216,10 +222,10 @@ export default defineContentScript({
               // Try to open/switch the sidepanel to the PriceCharting tool
               try {
                 if (isSidePanelApiAvailable()) {
-                  triggerSidepanelToolFromContentScript(
-                    "price-charting-tool",
-                    { source: "pricecharting-game" }
-                  ).catch((err) => {
+                  triggerSidepanelToolFromContentScript("price-charting-tool", {
+                    source: "pricecharting-game",
+                    mode: "open",
+                  }).catch((err) => {
                     log(
                       "Sidepanel trigger error from PriceCharting game:",
                       err
@@ -230,6 +236,7 @@ export default defineContentScript({
                   chrome.runtime.sendMessage({
                     action: "openInSidebar",
                     tool: "price-charting-tool",
+                    mode: "open",
                   });
                 }
               } catch (panelErr) {
@@ -250,7 +257,7 @@ export default defineContentScript({
           });
 
           buttonCell.appendChild(button);
-          
+
           // Insert before the last cell
           const lastCell = row.cells[row.cells.length - 1];
           if (lastCell) {

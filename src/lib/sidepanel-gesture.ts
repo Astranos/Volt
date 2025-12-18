@@ -200,7 +200,7 @@ export function initializeSidePanelContext() {
 
 export function triggerSidepanelToolFromContentScript(
   toolId: string,
-  options?: { source?: string }
+  options?: { source?: string; mode?: "toggle" | "open" }
 ): Promise<SidePanelTriggerResult> {
   if (!isSidePanelApiAvailable()) {
     return Promise.reject(new Error("sidePanel API unavailable"));
@@ -212,7 +212,8 @@ export function triggerSidepanelToolFromContentScript(
   
   const tabId = ctx.tabId;
   const currentState = ctx.state || { open: false, tool: null };
-  const shouldClose = currentState.open && currentState.tool === toolId;
+  const mode = options?.mode ?? "toggle";
+  const shouldClose = mode === "toggle" && currentState.open && currentState.tool === toolId;
 
   return new Promise<SidePanelTriggerResult>((resolve, reject) => {
     if (shouldClose) {

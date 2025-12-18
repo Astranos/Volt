@@ -133,3 +133,4 @@ If we want to avoid duplicating strings/logic across UI + background:
 
 - **Separate keywords per provider**: not possible with a single extension (Chrome omnibox supports one keyword).
 - **Use `chrome.commands` instead**: could map hotkeys to “Search eBay / Search PriceCharting / Search Inventory” and prompt for input via a small popup UI; still keep omnibox as the primary fast-path.
+

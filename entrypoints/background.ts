@@ -108,13 +108,21 @@ export default defineBackground({
       }
     }
 
-    function planSidePanelAction(tabId, desiredTool) {
+    function planSidePanelAction(tabId, desiredTool, mode = "toggle") {
       if (typeof tabId !== "number" || !desiredTool) return null;
       const prev = getSidePanelState(tabId);
 
-      if (prev.open && prev.tool === desiredTool) {
+      if (mode === "toggle" && prev.open && prev.tool === desiredTool) {
         return {
           mode: "close",
+          tabId,
+          tool: desiredTool,
+        };
+      }
+
+      if (mode === "open" && prev.open && prev.tool === desiredTool) {
+        return {
+          mode: "noop",
           tabId,
           tool: desiredTool,
         };
@@ -636,42 +644,6 @@ export default defineBackground({
               { scout_pricecharting_pending_items: pendingItems },
               () => {
                 log("Item saved to pending queue");
-
-                // Open sidepanel with price-charting-tool
-                chrome.tabs.query(
-                  { active: true, currentWindow: true },
-                  (tabs) => {
-                    const active = tabs && tabs[0];
-                    const tabId = sender?.tab?.id || active?.id;
-                    if (tabId) {
-                      // Set the tool preference and open sidepanel
-                      updatePreferredTool("price-charting-tool");
-
-                      // We want to ENSURE it's open, not toggle it.
-                      // planSidePanelAction is for toggling.
-                      configurePanelForTab(tabId);
-                      try {
-                        chrome.sidePanel.open({ tabId }, () => {
-                          const err = chrome.runtime.lastError;
-                          if (err) {
-                            log("sidePanel open lastError", err.message);
-                          } else {
-                            setSidePanelState(tabId, {
-                              open: true,
-                              tool: "price-charting-tool",
-                            });
-                            log("Sidepanel opened for price-charting-tool");
-                          }
-                        });
-                      } catch (openErr) {
-                        log(
-                          "sidePanel open error",
-                          openErr?.message || openErr
-                        );
-                      }
-                    }
-                  }
-                );
               }
             );
           }
@@ -698,6 +670,7 @@ export default defineBackground({
         }
         case "openInSidebar": {
           const tool = message?.tool;
+          const mode = message?.mode || "toggle";
           if (!tool) {
             sendResponse({ success: false, error: "missing_tool" });
             break;
@@ -712,13 +685,13 @@ export default defineBackground({
             currentActiveTabId ??
             lastActiveTabId;
           if (candidateId) {
-            toggleSidePanelForTab(candidateId, tool);
+            toggleSidePanelForTab(candidateId, tool, mode);
             sendResponse({ success: true, tabId: candidateId });
           } else {
             chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
               const active = tabs && tabs[0];
               if (active?.id) {
-                toggleSidePanelForTab(active.id, tool);
+                toggleSidePanelForTab(active.id, tool, mode);
                 sendResponse({ success: true, tabId: active.id });
               } else {
                 sendResponse({ success: false, error: "no_active_tab" });
@@ -1456,14 +1429,15 @@ export default defineBackground({
       });
     }
 
-    function toggleSidePanelForTab(tabId, tool) {
+    function toggleSidePanelForTab(tabId, tool, mode = "toggle") {
       if (!tool) {
         chrome.storage.local.get(
           { sidePanelTool: "controller-testing" },
           (res) => {
             toggleSidePanelForTab(
               tabId,
-              res.sidePanelTool || "controller-testing"
+              res.sidePanelTool || "controller-testing",
+              mode
             );
           }
         );
@@ -1483,8 +1457,13 @@ export default defineBackground({
 
       try {
         const openForTab = (id) => {
-          const plan = planSidePanelAction(id, desiredTool);
+          const plan = planSidePanelAction(id, desiredTool, mode);
           if (!plan) return;
+
+          if (plan.mode === "noop") {
+            log(`Sidepanel already open for tool: ${desiredTool} (open mode)`);
+            return;
+          }
 
           if (plan.mode === "close") {
             try {
