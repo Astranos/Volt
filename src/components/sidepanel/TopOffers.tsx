@@ -17,6 +17,13 @@ interface RateRule {
   percentage: number;
 }
 
+interface CustomOffer {
+  id: string;
+  name: string;
+  rules: RateRule[];
+  defaultPercentage: number;
+}
+
 interface CustomRates {
   standard: {
     rules: RateRule[];
@@ -31,6 +38,11 @@ interface CustomRates {
   };
 }
 
+interface TopOffersSettings {
+  customRates?: CustomRates;
+  customOffers?: CustomOffer[];
+}
+
 // Helper function to implement FLOOR functionality
 function floorToMultiple(value: number, multiple: number): number {
   return Math.floor(value / multiple) * multiple;
@@ -42,6 +54,88 @@ function formatCurrency(value: number): string {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   });
+}
+
+// Default rate definitions
+const DEFAULT_STANDARD_RULES: RateRule[] = [
+  { threshold: 50, percentage: 0.2 },
+  { threshold: 100, percentage: 0.3 },
+  { threshold: 250, percentage: 0.35 },
+  { threshold: 500, percentage: 0.45 },
+  { threshold: 750, percentage: 0.5 },
+];
+const DEFAULT_STANDARD_DEFAULT_PERCENTAGE = 0.6;
+
+const DEFAULT_PREMIUM_RULES: RateRule[] = [
+  { threshold: 50, percentage: 0.2 },
+  { threshold: 100, percentage: 0.3 },
+  { threshold: 200, percentage: 0.35 },
+  { threshold: 250, percentage: 0.45 },
+  { threshold: 500, percentage: 0.55 },
+  { threshold: 750, percentage: 0.6 },
+];
+const DEFAULT_PREMIUM_DEFAULT_PERCENTAGE = 0.7;
+const DEFAULT_CHECKOUT_PERCENTAGE = 0.8;
+
+// Helper function to check if a standard rate is custom
+function isStandardRateCustom(
+  threshold: number | undefined,
+  percentage: number,
+  customRates?: CustomRates
+): boolean {
+  if (!customRates) return false;
+
+  if (threshold === undefined) {
+    // This is the default percentage
+    return (
+      Math.abs(
+        customRates.standard.defaultPercentage -
+          DEFAULT_STANDARD_DEFAULT_PERCENTAGE
+      ) > 0.001
+    );
+  }
+
+  const defaultRule = DEFAULT_STANDARD_RULES.find(
+    (r) => r.threshold === threshold
+  );
+  if (!defaultRule) return true; // New threshold, must be custom
+
+  return Math.abs(defaultRule.percentage - percentage) > 0.001;
+}
+
+// Helper function to check if a premium rate is custom
+function isPremiumRateCustom(
+  threshold: number | undefined,
+  percentage: number,
+  customRates?: CustomRates
+): boolean {
+  if (!customRates) return false;
+
+  if (threshold === undefined) {
+    // This is the default percentage
+    return (
+      Math.abs(
+        customRates.premium.defaultPercentage -
+          DEFAULT_PREMIUM_DEFAULT_PERCENTAGE
+      ) > 0.001
+    );
+  }
+
+  const defaultRule = DEFAULT_PREMIUM_RULES.find(
+    (r) => r.threshold === threshold
+  );
+  if (!defaultRule) return true; // New threshold, must be custom
+
+  return Math.abs(defaultRule.percentage - percentage) > 0.001;
+}
+
+// Helper function to check if checkout rate is custom
+function isCheckoutRateCustom(customRates?: CustomRates): boolean {
+  if (!customRates?.checkout) return false;
+  return (
+    Math.abs(customRates.checkout.percentage - DEFAULT_CHECKOUT_PERCENTAGE) >
+    0.001
+  );
 }
 
 // Top Offer calculation logic
@@ -112,17 +206,30 @@ function calculateTopOfferPremium(
   }
 }
 
+// Helper function to calculate custom offer value
+function calculateCustomOffer(projection: number, offer: CustomOffer): number {
+  for (const rule of offer.rules) {
+    if (projection < rule.threshold) {
+      return floorToMultiple(projection * rule.percentage, 5);
+    }
+  }
+  return floorToMultiple(projection * offer.defaultPercentage, 5);
+}
+
 // Top Offer Calculator Component
 function TopOfferCalculator() {
   const [projectionAmount, setProjectionAmount] = useState("");
-  const [customRates, setCustomRates] = useState<CustomRates | undefined>(
-    undefined
+  const [topOffersSettings, setTopOffersSettings] = useState<TopOffersSettings>(
+    {}
   );
   const [results, setResults] = useState({
     topOffer: 0,
     topOfferPremium: 0,
     topOfferCheckout: 0,
   });
+  const [customOfferResults, setCustomOfferResults] = useState<
+    { id: string; name: string; value: number }[]
+  >([]);
   const [copied, setCopied] = useState<string | null>(null);
 
   // Load settings from storage on mount
@@ -130,8 +237,8 @@ function TopOfferCalculator() {
     if (typeof chrome !== "undefined" && chrome.storage) {
       // Load settings
       chrome.storage.sync.get(["cmdkSettings"], (result) => {
-        if (result.cmdkSettings?.topOffers?.customRates) {
-          setCustomRates(result.cmdkSettings.topOffers.customRates);
+        if (result.cmdkSettings?.topOffers) {
+          setTopOffersSettings(result.cmdkSettings.topOffers);
         }
       });
 
@@ -142,8 +249,8 @@ function TopOfferCalculator() {
       ) => {
         if (areaName === "sync" && changes.cmdkSettings) {
           const newSettings = changes.cmdkSettings.newValue;
-          if (newSettings?.topOffers?.customRates) {
-            setCustomRates(newSettings.topOffers.customRates);
+          if (newSettings?.topOffers) {
+            setTopOffersSettings(newSettings.topOffers);
           }
         }
       };
@@ -155,12 +262,12 @@ function TopOfferCalculator() {
     }
   }, []);
 
-  // Recalculate when custom rates changes
+  // Recalculate when settings change
   useEffect(() => {
     if (projectionAmount) {
       handleProjectionChange(projectionAmount);
     }
-  }, [customRates]);
+  }, [topOffersSettings]);
 
   const handleCopy = (amount: number, id: string) => {
     navigator.clipboard.writeText(amount.toString());
@@ -174,6 +281,7 @@ function TopOfferCalculator() {
 
     // Auto-calculate when input changes
     const projection = parseFloat(numericValue) || 0;
+    const customRates = topOffersSettings.customRates;
     const topOffer = calculateTopOffer(projection, customRates);
     const topOfferPremium = calculateTopOfferPremium(projection, customRates);
     const checkoutRate = customRates?.checkout?.percentage ?? 0.8;
@@ -184,6 +292,15 @@ function TopOfferCalculator() {
       topOfferPremium,
       topOfferCheckout,
     });
+
+    // Calculate custom offers
+    const customOffers = topOffersSettings.customOffers || [];
+    const customResults = customOffers.map((offer) => ({
+      id: offer.id,
+      name: offer.name,
+      value: calculateCustomOffer(projection, offer),
+    }));
+    setCustomOfferResults(customResults);
   };
 
   const openSettings = (e: React.MouseEvent) => {
@@ -200,29 +317,14 @@ function TopOfferCalculator() {
     <SidepanelLayout>
       <div className="p-4 space-y-4">
         <div className="space-y-4">
-          <div className="relative">
+          <div>
             <Input
               type="text"
               value={projectionAmount}
               onChange={(e) => handleProjectionChange(e.target.value)}
-              className="text-lg h-12 bg-slate-50 focus:bg-white pr-12"
+              className="text-lg h-12 bg-slate-50 focus:bg-white"
               placeholder="Enter Projection"
             />
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={openSettings}
-                    className="absolute right-1.5 top-1/2 -translate-y-1/2 h-9 w-9 text-muted-foreground hover:text-foreground hover:bg-muted/80 rounded-md transition-colors flex items-center justify-center"
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent className="border-border bg-popover text-popover-foreground">
-                  <p>Change Rates</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
           </div>
 
           <div className="grid grid-cols-1 gap-3">
@@ -282,165 +384,54 @@ function TopOfferCalculator() {
                 )}
               </div>
             </div>
+
+            {/* Custom Offers */}
+            {(topOffersSettings.customOffers || []).map((offer) => {
+              const result = customOfferResults.find((r) => r.id === offer.id);
+              const value = result?.value ?? 0;
+              return (
+                <div
+                  key={offer.id}
+                  onClick={() => handleCopy(value, offer.id)}
+                  className="text-center p-4 bg-secondary/50 rounded-lg border border-border/50 cursor-pointer hover:bg-secondary transition-colors select-none"
+                >
+                  <div className="text-3xl font-bold text-primary">
+                    ${formatCurrency(value)}
+                  </div>
+                  <div className="text-sm text-muted-foreground mt-1 flex items-center justify-center gap-1.5">
+                    {copied === offer.id ? (
+                      <>
+                        <Check className="h-3.5 w-3.5 text-green-500" />
+                        <span className="text-green-500 font-medium">
+                          Copied!
+                        </span>
+                      </>
+                    ) : (
+                      offer.name
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
 
-          {/* Current Rates Display */}
-          <div className="pt-2 border-t border-border/50 space-y-4">
-            {/* Standard Rates */}
-            <div>
-              <div className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground mb-2 px-1">
-                Standard Rates
-              </div>
-              <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 px-1">
-                {customRates ? (
-                  <>
-                    {customRates.standard.rules.map((rule, i) => (
-                      <div key={i} className="flex justify-between text-xs">
-                        <span className="text-muted-foreground">
-                          Under ${rule.threshold}
-                        </span>
-                        <span className="font-semibold text-foreground">
-                          {Math.round(rule.percentage * 100)}%
-                        </span>
-                      </div>
-                    ))}
-                    <div className="flex justify-between text-xs">
-                      <span className="text-muted-foreground">
-                        $
-                        {
-                          customRates.standard.rules[
-                            customRates.standard.rules.length - 1
-                          ]?.threshold
-                        }
-                        +
-                      </span>
-                      <span className="font-semibold text-foreground">
-                        {Math.round(
-                          customRates.standard.defaultPercentage * 100
-                        )}
-                        %
-                      </span>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-muted-foreground">Under $50</span>
-                      <span className="font-semibold text-foreground">20%</span>
-                    </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-muted-foreground">$50–$99</span>
-                      <span className="font-semibold text-foreground">30%</span>
-                    </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-muted-foreground">$100–$249</span>
-                      <span className="font-semibold text-foreground">35%</span>
-                    </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-muted-foreground">$250–$499</span>
-                      <span className="font-semibold text-foreground">45%</span>
-                    </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-muted-foreground">$500–$749</span>
-                      <span className="font-semibold text-foreground">50%</span>
-                    </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-muted-foreground">$750+</span>
-                      <span className="font-semibold text-foreground">60%</span>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-
-            {/* Premium Rates */}
-            <div>
-              <div className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground mb-2 px-1">
-                Premium Rates
-              </div>
-              <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 px-1">
-                {customRates ? (
-                  <>
-                    {customRates.premium.rules.map((rule, i) => (
-                      <div key={i} className="flex justify-between text-xs">
-                        <span className="text-muted-foreground">
-                          Under ${rule.threshold}
-                        </span>
-                        <span className="font-semibold text-foreground">
-                          {Math.round(rule.percentage * 100)}%
-                        </span>
-                      </div>
-                    ))}
-                    <div className="flex justify-between text-xs">
-                      <span className="text-muted-foreground">
-                        $
-                        {
-                          customRates.premium.rules[
-                            customRates.premium.rules.length - 1
-                          ]?.threshold
-                        }
-                        +
-                      </span>
-                      <span className="font-semibold text-foreground">
-                        {Math.round(
-                          customRates.premium.defaultPercentage * 100
-                        )}
-                        %
-                      </span>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-muted-foreground">Under $50</span>
-                      <span className="font-semibold text-foreground">20%</span>
-                    </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-muted-foreground">$50–$99</span>
-                      <span className="font-semibold text-foreground">30%</span>
-                    </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-muted-foreground">$100–$199</span>
-                      <span className="font-semibold text-foreground">35%</span>
-                    </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-muted-foreground">$200–$249</span>
-                      <span className="font-semibold text-foreground">45%</span>
-                    </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-muted-foreground">$250–$499</span>
-                      <span className="font-semibold text-foreground">55%</span>
-                    </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-muted-foreground">$500–$749</span>
-                      <span className="font-semibold text-foreground">60%</span>
-                    </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-muted-foreground">$750+</span>
-                      <span className="font-semibold text-foreground">70%</span>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-
-            {/* Checkout Rate */}
-            <div>
-              <div className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground mb-2 px-1">
-                Checkout Rate
-              </div>
-              <div className="px-1">
-                <div className="flex justify-between text-xs">
-                  <span className="text-muted-foreground">All amounts</span>
-                  <span className="font-semibold text-foreground">
-                    {Math.round(
-                      (customRates?.checkout?.percentage ?? 0.8) * 100
-                    )}
-                    %
-                  </span>
-                </div>
-              </div>
-            </div>
+          {/* Customize Button */}
+          <div className="pt-2 border-t border-border/50">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={openSettings}
+                    className="w-full h-9 px-2 text-muted-foreground hover:text-foreground hover:bg-muted/80 rounded-md transition-colors flex items-center justify-center gap-1.5 text-sm"
+                  >
+                    <span>Customize</span>
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent className="border-border bg-popover text-popover-foreground">
+                  <p>Customize</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
         </div>
       </div>

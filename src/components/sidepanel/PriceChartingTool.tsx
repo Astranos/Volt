@@ -276,9 +276,6 @@ export default function PriceChartingTool() {
     <TooltipProvider>
       <SidepanelLayout className="h-full flex flex-col">
         <div className="p-4 space-y-3 border-b border-border/40 bg-background z-10">
-          <div className="text-sm text-muted-foreground">
-            Enter a UPC code or game name to search PriceCharting.
-          </div>
           <div className="flex gap-2">
             <input
               ref={searchInputRef}
@@ -336,6 +333,13 @@ export default function PriceChartingTool() {
                 </p>
               </TooltipContent>
             </Tooltip>
+          </div>
+          <div className="text-sm text-muted-foreground">
+            Click on the{" "}
+            <span className="inline-block bg-[#22c55e] text-white px-2 py-0.5 rounded text-[11px] font-semibold leading-tight whitespace-nowrap">
+              Add To Game Lot
+            </span>{" "}
+            button for the price of the game to add to your lot.
           </div>
         </div>
 

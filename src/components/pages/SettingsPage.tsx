@@ -19,6 +19,7 @@ import {
   MousePointerClick,
   MapPin,
   Plus,
+  Pencil,
 } from "lucide-react";
 import { getBookmarkFolders, BookmarkFolder } from "@/src/utils/bookmarks";
 
@@ -84,6 +85,12 @@ interface CMDKSettings {
         percentage: number;
       };
     };
+    customOffers?: Array<{
+      id: string;
+      name: string;
+      rules: { threshold: number; percentage: number }[];
+      defaultPercentage: number;
+    }>;
   };
 }
 
@@ -177,6 +184,7 @@ const DEFAULT_SETTINGS: CMDKSettings = {
         percentage: 0.8,
       },
     },
+    customOffers: [],
   },
 };
 
@@ -288,6 +296,8 @@ export default function SettingsPage() {
   const [csvCacheCleared, setCsvCacheCleared] = useState(false);
   const [csvRefreshing, setCsvRefreshing] = useState(false);
   const [csvDownloading, setCsvDownloading] = useState(false);
+  const [editingCustomOffer, setEditingCustomOffer] = useState<string | null>(null);
+  const [newCustomOfferName, setNewCustomOfferName] = useState("");
 
   useEffect(() => {
     // Load settings from chrome storage
@@ -740,6 +750,35 @@ export default function SettingsPage() {
     const newRules = [...currentRates.rules];
     newRules[index] = { ...newRules[index], [field]: value };
 
+    const newSettings = {
+      ...settings,
+      topOffers: {
+        ...settings.topOffers,
+        customRates: {
+          ...(settings.topOffers?.customRates ||
+            DEFAULT_SETTINGS.topOffers!.customRates!),
+          [type]: {
+            ...currentRates,
+            rules: newRules,
+          },
+        },
+      },
+    };
+    setSettings(newSettings);
+
+    // Auto-save
+    chrome.storage.sync.set({ cmdkSettings: newSettings }, () => {
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 2000);
+    });
+  };
+
+  const handleSortRules = (type: "standard" | "premium") => {
+    const currentRates =
+      settings.topOffers?.customRates?.[type] ||
+      DEFAULT_SETTINGS.topOffers!.customRates![type];
+    const newRules = [...currentRates.rules];
+    
     // Sort rules by threshold to ensure correct logic
     newRules.sort((a, b) => a.threshold - b.threshold);
 
@@ -778,6 +817,9 @@ export default function SettingsPage() {
       : { threshold: 100, percentage: 0.2 };
 
     const newRules = [...currentRates.rules, newRule];
+    
+    // Sort rules by threshold to ensure correct logic
+    newRules.sort((a, b) => a.threshold - b.threshold);
 
     const newSettings = {
       ...settings,
@@ -878,6 +920,232 @@ export default function SettingsPage() {
             percentage: value,
           },
         },
+      },
+    };
+    setSettings(newSettings);
+
+    // Auto-save
+    chrome.storage.sync.set({ cmdkSettings: newSettings }, () => {
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 2000);
+    });
+  };
+
+  const handleAddCustomOffer = () => {
+    const id = `custom-${Date.now()}`;
+    const defaultRules = [
+      { threshold: 50, percentage: 0.2 },
+      { threshold: 100, percentage: 0.3 },
+      { threshold: 250, percentage: 0.35 },
+      { threshold: 500, percentage: 0.45 },
+      { threshold: 750, percentage: 0.5 },
+    ];
+
+    const newCustomOffer = {
+      id,
+      name: "Custom Offer",
+      rules: defaultRules,
+      defaultPercentage: 0.6,
+    };
+
+    const currentOffers = settings.topOffers?.customOffers || [];
+    const newSettings = {
+      ...settings,
+      topOffers: {
+        ...settings.topOffers,
+        customOffers: [...currentOffers, newCustomOffer],
+      },
+    };
+    setSettings(newSettings);
+
+    // Auto-save
+    chrome.storage.sync.set({ cmdkSettings: newSettings }, () => {
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 2000);
+    });
+
+    // Start editing the name
+    setEditingCustomOffer(id);
+    setNewCustomOfferName("Custom Offer");
+  };
+
+  const handleUpdateCustomOfferName = (offerId: string, name: string) => {
+    const currentOffers = settings.topOffers?.customOffers || [];
+    const updatedOffers = currentOffers.map((offer) =>
+      offer.id === offerId ? { ...offer, name } : offer
+    );
+
+    const newSettings = {
+      ...settings,
+      topOffers: {
+        ...settings.topOffers,
+        customOffers: updatedOffers,
+      },
+    };
+    setSettings(newSettings);
+
+    // Auto-save
+    chrome.storage.sync.set({ cmdkSettings: newSettings }, () => {
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 2000);
+    });
+
+    setEditingCustomOffer(null);
+  };
+
+  const handleDeleteCustomOffer = (offerId: string) => {
+    const currentOffers = settings.topOffers?.customOffers || [];
+    const updatedOffers = currentOffers.filter((offer) => offer.id !== offerId);
+
+    const newSettings = {
+      ...settings,
+      topOffers: {
+        ...settings.topOffers,
+        customOffers: updatedOffers,
+      },
+    };
+    setSettings(newSettings);
+
+    // Auto-save
+    chrome.storage.sync.set({ cmdkSettings: newSettings }, () => {
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 2000);
+    });
+  };
+
+  const handleUpdateCustomOfferRule = (
+    offerId: string,
+    ruleIndex: number,
+    field: "threshold" | "percentage",
+    value: number
+  ) => {
+    const currentOffers = settings.topOffers?.customOffers || [];
+    const updatedOffers = currentOffers.map((offer) => {
+      if (offer.id === offerId) {
+        const newRules = [...offer.rules];
+        newRules[ruleIndex] = { ...newRules[ruleIndex], [field]: value };
+        return { ...offer, rules: newRules };
+      }
+      return offer;
+    });
+
+    const newSettings = {
+      ...settings,
+      topOffers: {
+        ...settings.topOffers,
+        customOffers: updatedOffers,
+      },
+    };
+    setSettings(newSettings);
+
+    // Auto-save
+    chrome.storage.sync.set({ cmdkSettings: newSettings }, () => {
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 2000);
+    });
+  };
+
+  const handleSortCustomOfferRules = (offerId: string) => {
+    const currentOffers = settings.topOffers?.customOffers || [];
+    const updatedOffers = currentOffers.map((offer) => {
+      if (offer.id === offerId) {
+        const sortedRules = [...offer.rules].sort(
+          (a, b) => a.threshold - b.threshold
+        );
+        return { ...offer, rules: sortedRules };
+      }
+      return offer;
+    });
+
+    const newSettings = {
+      ...settings,
+      topOffers: {
+        ...settings.topOffers,
+        customOffers: updatedOffers,
+      },
+    };
+    setSettings(newSettings);
+
+    // Auto-save
+    chrome.storage.sync.set({ cmdkSettings: newSettings }, () => {
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 2000);
+    });
+  };
+
+  const handleAddCustomOfferRule = (offerId: string) => {
+    const currentOffers = settings.topOffers?.customOffers || [];
+    const updatedOffers = currentOffers.map((offer) => {
+      if (offer.id === offerId) {
+        const lastRule = offer.rules[offer.rules.length - 1];
+        const newRule = lastRule
+          ? { threshold: lastRule.threshold + 100, percentage: lastRule.percentage }
+          : { threshold: 100, percentage: 0.2 };
+        const newRules = [...offer.rules, newRule].sort(
+          (a, b) => a.threshold - b.threshold
+        );
+        return { ...offer, rules: newRules };
+      }
+      return offer;
+    });
+
+    const newSettings = {
+      ...settings,
+      topOffers: {
+        ...settings.topOffers,
+        customOffers: updatedOffers,
+      },
+    };
+    setSettings(newSettings);
+
+    // Auto-save
+    chrome.storage.sync.set({ cmdkSettings: newSettings }, () => {
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 2000);
+    });
+  };
+
+  const handleRemoveCustomOfferRule = (offerId: string, ruleIndex: number) => {
+    const currentOffers = settings.topOffers?.customOffers || [];
+    const updatedOffers = currentOffers.map((offer) => {
+      if (offer.id === offerId) {
+        const newRules = [...offer.rules];
+        newRules.splice(ruleIndex, 1);
+        return { ...offer, rules: newRules };
+      }
+      return offer;
+    });
+
+    const newSettings = {
+      ...settings,
+      topOffers: {
+        ...settings.topOffers,
+        customOffers: updatedOffers,
+      },
+    };
+    setSettings(newSettings);
+
+    // Auto-save
+    chrome.storage.sync.set({ cmdkSettings: newSettings }, () => {
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 2000);
+    });
+  };
+
+  const handleUpdateCustomOfferDefaultPercentage = (
+    offerId: string,
+    value: number
+  ) => {
+    const currentOffers = settings.topOffers?.customOffers || [];
+    const updatedOffers = currentOffers.map((offer) =>
+      offer.id === offerId ? { ...offer, defaultPercentage: value } : offer
+    );
+
+    const newSettings = {
+      ...settings,
+      topOffers: {
+        ...settings.topOffers,
+        customOffers: updatedOffers,
       },
     };
     setSettings(newSettings);
@@ -2252,6 +2520,7 @@ export default function SettingsPage() {
                                 parseFloat(e.target.value)
                               )
                             }
+                            onBlur={() => handleSortRules("standard")}
                             className="w-full px-3 py-2 border border-border rounded-lg bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
                           />
                         </div>
@@ -2349,6 +2618,7 @@ export default function SettingsPage() {
                                 parseFloat(e.target.value)
                               )
                             }
+                            onBlur={() => handleSortRules("premium")}
                             className="w-full px-3 py-2 border border-border rounded-lg bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
                           />
                         </div>
@@ -2443,6 +2713,210 @@ export default function SettingsPage() {
                     </div>
                     <div className="col-span-2"></div>
                   </div>
+                </div>
+
+                <div className="border-t border-border" />
+
+                {/* Custom Offers Section */}
+                <div>
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="font-semibold text-lg">Custom Offers</h3>
+                      <p className="text-sm text-muted-foreground">
+                        Create custom offer calculations with your own rates
+                      </p>
+                    </div>
+                    <button
+                      onClick={handleAddCustomOffer}
+                      className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg transition-colors text-sm font-medium"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add Custom Offer
+                    </button>
+                  </div>
+
+                  {settings.topOffers?.customOffers &&
+                  settings.topOffers.customOffers.length > 0 ? (
+                    <div className="space-y-6">
+                      {settings.topOffers.customOffers.map((offer) => (
+                        <div
+                          key={offer.id}
+                          className="p-4 border border-border rounded-lg bg-muted/20"
+                        >
+                          {/* Custom Offer Header */}
+                          <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center gap-2">
+                              {editingCustomOffer === offer.id ? (
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="text"
+                                    value={newCustomOfferName}
+                                    onChange={(e) =>
+                                      setNewCustomOfferName(e.target.value)
+                                    }
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter") {
+                                        handleUpdateCustomOfferName(
+                                          offer.id,
+                                          newCustomOfferName
+                                        );
+                                      }
+                                      if (e.key === "Escape") {
+                                        setEditingCustomOffer(null);
+                                      }
+                                    }}
+                                    className="px-3 py-1.5 border border-border rounded-lg bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors text-base font-semibold"
+                                    autoFocus
+                                  />
+                                  <button
+                                    onClick={() =>
+                                      handleUpdateCustomOfferName(
+                                        offer.id,
+                                        newCustomOfferName
+                                      )
+                                    }
+                                    className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                                  >
+                                    <Check className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => setEditingCustomOffer(null)}
+                                    className="p-1.5 text-muted-foreground hover:bg-muted rounded-lg transition-colors"
+                                  >
+                                    <X className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <>
+                                  <h4 className="font-semibold text-base">
+                                    {offer.name}
+                                  </h4>
+                                  <button
+                                    onClick={() => {
+                                      setEditingCustomOffer(offer.id);
+                                      setNewCustomOfferName(offer.name);
+                                    }}
+                                    className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
+                                  >
+                                    <Pencil className="w-3.5 h-3.5" />
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                            <button
+                              onClick={() => handleDeleteCustomOffer(offer.id)}
+                              className="p-2 text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+
+                          {/* Custom Offer Rules */}
+                          <div className="space-y-3">
+                            <div className="grid grid-cols-12 gap-4 text-sm font-medium text-muted-foreground px-2">
+                              <div className="col-span-5">Under Amount ($)</div>
+                              <div className="col-span-5">
+                                Percentage (0.1 = 10%)
+                              </div>
+                              <div className="col-span-2"></div>
+                            </div>
+                            {offer.rules.map((rule, ruleIndex) => (
+                              <div
+                                key={ruleIndex}
+                                className="grid grid-cols-12 gap-4 items-center"
+                              >
+                                <div className="col-span-5">
+                                  <input
+                                    type="number"
+                                    value={rule.threshold}
+                                    onChange={(e) =>
+                                      handleUpdateCustomOfferRule(
+                                        offer.id,
+                                        ruleIndex,
+                                        "threshold",
+                                        parseFloat(e.target.value)
+                                      )
+                                    }
+                                    onBlur={() =>
+                                      handleSortCustomOfferRules(offer.id)
+                                    }
+                                    className="w-full px-3 py-2 border border-border rounded-lg bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
+                                  />
+                                </div>
+                                <div className="col-span-5">
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    value={rule.percentage}
+                                    onChange={(e) =>
+                                      handleUpdateCustomOfferRule(
+                                        offer.id,
+                                        ruleIndex,
+                                        "percentage",
+                                        parseFloat(e.target.value)
+                                      )
+                                    }
+                                    className="w-full px-3 py-2 border border-border rounded-lg bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
+                                  />
+                                </div>
+                                <div className="col-span-2 flex justify-end">
+                                  <button
+                                    onClick={() =>
+                                      handleRemoveCustomOfferRule(
+                                        offer.id,
+                                        ruleIndex
+                                      )
+                                    }
+                                    className="p-2 text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                            <div className="grid grid-cols-12 gap-4 items-center pt-2">
+                              <div className="col-span-5 text-sm font-medium pl-2">
+                                Everything else
+                              </div>
+                              <div className="col-span-5">
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  value={offer.defaultPercentage}
+                                  onChange={(e) =>
+                                    handleUpdateCustomOfferDefaultPercentage(
+                                      offer.id,
+                                      parseFloat(e.target.value)
+                                    )
+                                  }
+                                  className="w-full px-3 py-2 border border-border rounded-lg bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
+                                />
+                              </div>
+                              <div className="col-span-2"></div>
+                            </div>
+                            <div className="pt-2">
+                              <button
+                                onClick={() =>
+                                  handleAddCustomOfferRule(offer.id)
+                                }
+                                className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                              >
+                                <Plus className="w-4 h-4" />
+                                Add Rule
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 px-4 bg-muted/20 rounded-lg border border-dashed border-border">
+                      <p className="text-sm text-muted-foreground">
+                        No custom offers added yet. Click "Add Custom Offer" to
+                        create one with your own rates.
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
