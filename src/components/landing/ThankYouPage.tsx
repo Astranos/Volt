@@ -21,58 +21,36 @@ import {
   Pin,
   ExternalLink,
   Info,
+  Layers,
+  Layout,
+  Calculator,
+  BookOpen,
+  Tag,
+  HelpCircle,
+  List,
 } from "lucide-react";
 import { Dialog, DialogContent } from "../ui/dialog";
 
-// Component to render text with keyboard shortcuts
-const renderTextWithKbd = (text: string) => {
-  const parts = text.split(
-    /(CMD\+Shift\+K|CTRL\+Shift\+K|CMD\+K|CTRL\+K|Tab|Enter|CMD|CTRL|Shift|K|eb|arrow keys)/
-  );
-
-  return parts.map((part, index) => {
-    if (
-      [
-        "CMD+Shift+K",
-        "CTRL+Shift+K",
-        "CMD+K",
-        "CTRL+K",
-        "CMD",
-        "CTRL",
-        "Shift",
-        "K",
-        "Tab",
-        "Enter",
-        "ebay",
-        "upc",
-        "price charting",
-        "arrow keys",
-      ].includes(part)
-    ) {
-      return <kbd key={index}>{part}</kbd>;
-    }
-    return part;
-  });
-};
-
 export default function ThankYouPage() {
   const [version, setVersion] = useState<string>("");
-  const [copied, setCopied] = useState<boolean>(false);
   const [selectedImage, setSelectedImage] = useState<string>("");
   const [isImageModalOpen, setIsImageModalOpen] = useState<boolean>(false);
   const [scrollProgress, setScrollProgress] = useState<number>(0);
   const [isStickyNavVisible, setIsStickyNavVisible] = useState<boolean>(false);
   const [activeSection, setActiveSection] = useState<string>("hero");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
-  const [expandedFeature, setExpandedFeature] = useState<number | null>(null);
 
   const heroRef = useRef<HTMLDivElement>(null);
   const featuresRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     // Get extension version
-    const manifest = chrome.runtime.getManifest();
-    setVersion(manifest.version);
+    try {
+      const manifest = chrome.runtime.getManifest();
+      setVersion(manifest.version);
+    } catch (e) {
+      setVersion("1.0.0");
+    }
 
     // Handle scroll events
     const handleScroll = () => {
@@ -109,19 +87,13 @@ export default function ThankYouPage() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  const handleCopyLink = () => {
-    const installUrl =
-      "https://chromewebstore.google.com/detail/volt/bmgghhmlflbhlnomgnoodpidekpaaifk";
-    navigator.clipboard.writeText(installUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
   const handleNavClick = (sectionName: string) => {
-    const sectionRef = {
+    const refs: Record<string, React.RefObject<HTMLDivElement | null>> = {
       hero: heroRef,
       features: featuresRef,
-    }[sectionName];
+    };
+
+    const sectionRef = refs[sectionName];
 
     if (sectionRef?.current) {
       sectionRef.current.scrollIntoView({ behavior: "smooth" });
@@ -138,140 +110,116 @@ export default function ThankYouPage() {
     setIsImageModalOpen(true);
   };
 
-  // All features with individual sections
   const mainFeatures = [
     {
       id: 1,
       title: "Quick Actions",
       description:
-        "Highlight text and instantly search for Sold Listings on eBay, MPN codes (Google), UPC codes (UPCItemDB & Google), or PriceCharting pricing data.",
-      image: "/assets/images/quick-actions.png",
+        "Highlight any text to instantly search eBay Sold Listings, PriceCharting, or UPC/MPN databases via the right-click context menu.",
       icon: MousePointer,
-      howToUse: [
-        "Highlight/select the text for a product anywhere on the page.",
-        "Right click the selection to open the context menu.",
-        "Choose the search you need: Sold eBay Listings, UPC Item DB, Google UPC/MPN, or PriceCharting.",
-      ],
+      image: "/assets/images/quick-actions.png",
     },
     {
       id: 2,
-      title: "Command Menu Popup",
+      title: "Click To Copy UPC Codes",
       description:
-        "Arc-style command palette for quick navigation, tab switching, and multi-provider search with 14 integrated search providers.",
-      image: "/assets/images/command-menu.png",
-      icon: Command,
-      howToUse: [
-        "Pin the Volt extension icon to your toolbar (or use CMD+Shift+K / CTRL+Shift+K).",
-        "Click the Volt extension icon to open the command menu instantly.",
-        "Type to filter through tabs, quick links, bookmarks, history, or search providers.",
-        "Use Tab or arrow keys to navigate, hit Enter to select, or type a trigger word (like 'ebay' + Tab) to search.",
-      ],
-      subsections: [
-        {
-          title: "14 Search Providers",
-          description:
-            "Type a trigger word (like 'ebay', 'amazon', 'youtube') + Tab to activate a search provider, then type your query and hit Enter to search.",
-          subSubsections: [
-            {
-              title: "E-commerce",
-              description:
-                "Amazon, Best Buy, eBay (sold listings), Home Depot, Lowe's, Menards, Micro Center, Price Charting",
-            },
-            {
-              title: "Product Data",
-              description:
-                "UPC Item DB (barcode lookup), eBay Taxonomy API (category suggestions)",
-            },
-          ],
-        },
-        {
-          title: "Quick Links & Quick Navigation",
-          description:
-            "Access custom links from Google Sheets (30-min cache) with categories. Configure custom CSV URL in settings or download the template to create your own.",
-        },
-        {
-          title: "Tab Switching & Bookmarks",
-          description:
-            "Switch between open tabs, access your 20 most recent bookmarks (with folder filtering), and browse last 30 visited pages.",
-        },
-        {
-          title: "eBay Category API",
-          description:
-            "Live eBay category suggestions as you type. Click any category to copy the category ID to clipboard instantly.",
-        },
-      ],
+        "Automatically detects and highlights UPC codes on any webpage, allowing for instant one-click copying to your clipboard.",
+      icon: Barcode,
+      image: "/assets/images/upc-highlighter.png",
     },
     {
       id: 3,
-      title: "Built-In Controller Testing",
+      title: "Price Charting Lot Tool",
       description:
-        "Real-time controller testing with visual feedback. Press CMD+J / CTRL+J to open the sidepanel and test any gamepad.",
-      image: "/assets/images/controller-testing.png",
-      icon: Gamepad2,
-      features: [
-        "Test all 20 buttons, analog sticks, and triggers with real-time visualization",
-        "Color-coded feedback: Green (light input), Orange (medium input), Red (strong input)",
-        "Customizable thresholds in settings for personalized sensitivity",
-        "Auto-detects and connects to Xbox, PlayStation, and generic controllers",
-        "SVG-based controller diagram with live input highlighting",
-        "Automatically opens when a new controller is connected",
-      ],
+        "Easily add, manage, and create video game lots via PriceCharting.",
+      icon: Layers,
     },
     {
       id: 4,
-      title: "eBay Summary",
+      title: "Volt Tab",
       description:
-        "Get instant context on eBay search pages with an inline summary showing whether you're viewing Sold or Active listings, plus current condition filters. Color-coded indicators help you quickly understand your search context.",
-      image: "/assets/images/ebay-summary.png",
-      icon: Info,
-      features: [
-        "Inline summary banner appears automatically on eBay search result pages",
-        "Displays current listing type (Sold, Active, or Completed) and condition filters",
-        "Quick action to switch from Active to Sold listings with one click",
-        "Condition filter shortcuts: Switch between Used, New, or For Parts filters",
-      ],
+        "Quickly get to any anything you need when opening a new tab.",
+      icon: Layout,
+      image: "/assets/images/new-tab.png",
     },
     {
       id: 5,
-      title: "UPC Highlighter",
-      description:
-        "Automatically detects and highlights 12-digit UPC codes on any webpage. Click any highlighted code to copy it to your clipboard.",
-      image: "/assets/images/upc-highlighter.png",
-      icon: Barcode,
-      features: [
-        "Detects 12-digit UPC codes automatically across all websites",
-        "Highlights codes with distinctive styling for easy identification",
-        "Click-to-copy functionality with visual confirmation",
-        "Hover tooltip shows 'Click to copy' instruction",
-        "Works on dynamic content and AJAX-loaded pages",
-        "Toggle on/off in settings (enabled by default)",
-      ],
+      title: "eBay Summary",
+      description: "Get a quick summary when viewing search results on eBay.",
+      icon: Info,
+      image: "/assets/images/ebay-summary.png",
     },
     {
       id: 6,
       title: "Shopify Buttons",
       description:
-        "Quick action buttons to quickly view market pricing for products on eBay and PriceCharting.",
-      image: "/assets/images/shopify-buttons.png",
+        "Instantly check market pricing for items when viewing in Shopify.",
       icon: Shield,
-      features: [
-        "PriceCharting button to quickly view prices via the UPC code.",
-        "eBay button to quickly view prices via the MPN code.",
-      ],
+      image: "/assets/images/shopify-buttons.png",
+    },
+    {
+      id: 7,
+      title: "Controller Testing",
+      description:
+        "Built-in controller testing with color visuals for indications of problems with the controller.",
+      icon: Gamepad2,
+      image: "/assets/images/controller-testing.png",
+    },
+    {
+      id: 8,
+      title: "Top Offer Calculator",
+      description:
+        "Automated buyout offer calculations based on projected sell prices with support for custom rate profiles.",
+      icon: Calculator,
+    },
+    {
+      id: 9,
+      title: "Buying Guide",
+      description:
+        "Instant access to buying requirements and quality guidelines for games and electronics via live Google Sheets integration.",
+      icon: BookOpen,
+    },
+    {
+      id: 10,
+      title: "eBay Categories",
+      description:
+        "Quickly find correct eBay Taxonomy categories for accurate product listing.",
+      icon: Tag,
+    },
+    {
+      id: 11,
+      title: "Cost Breakdown",
+      description:
+        "Detailed profit margin analysis and cost distribution for inventory items.",
+      icon: TrendingUp,
+    },
+    {
+      id: 12,
+      title: "Shopify Help",
+      description:
+        "Reference guide for Shopify tags and sales channel optimization.",
+      icon: HelpCircle,
+    },
+    {
+      id: 13,
+      title: "Tab Management",
+      description:
+        "Lightweight utility to view and manage open browser tabs directly from the sidepanel.",
+      icon: List,
     },
   ];
 
   return (
-    <div className="min-h-screen bg-white dark:bg-slate-900">
+    <div className="min-h-screen bg-white text-slate-900">
       {/* Progress Indicator */}
       <div
-        className="progress-indicator"
+        className="fixed top-0 left-0 h-1 bg-green-600 z-[60] transition-all duration-100"
         style={{ width: `${scrollProgress}%` }}
       />
 
       {/* Sticky Navigation */}
       <nav
-        className={`sticky-nav bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 transition-all duration-300 ${
+        className={`fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200 transition-all duration-300 ${
           isStickyNavVisible
             ? "translate-y-0 opacity-100"
             : "-translate-y-full opacity-0"
@@ -285,9 +233,7 @@ export default function ThankYouPage() {
                 alt="Volt"
                 className="w-8 h-8 rounded-lg"
               />
-              <span className="font-semibold text-slate-900 dark:text-white">
-                Volt
-              </span>
+              <span className="font-semibold text-slate-900">Volt</span>
             </div>
             <div className="hidden md:flex items-center gap-6">
               {[
@@ -299,8 +245,8 @@ export default function ThankYouPage() {
                   onClick={() => handleNavClick(item.name)}
                   className={`text-sm font-medium transition-colors ${
                     activeSection === item.name
-                      ? "text-green-600 dark:text-green-400"
-                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                      ? "text-green-600"
+                      : "text-slate-600 hover:text-slate-900"
                   }`}
                 >
                   {item.label}
@@ -309,12 +255,12 @@ export default function ThankYouPage() {
             </div>
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="md:hidden p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
+              className="md:hidden p-2 rounded-lg hover:bg-slate-100"
             >
               {isMobileMenuOpen ? (
-                <X className="w-5 h-5 text-slate-900 dark:text-white" />
+                <X className="w-5 h-5" />
               ) : (
-                <Menu className="w-5 h-5 text-slate-900 dark:text-white" />
+                <Menu className="w-5 h-5" />
               )}
             </button>
           </div>
@@ -323,7 +269,7 @@ export default function ThankYouPage() {
 
       {/* Mobile Menu */}
       {isMobileMenuOpen && (
-        <div className="fixed inset-0 z-50 bg-white dark:bg-slate-900 md:hidden">
+        <div className="fixed inset-0 z-[55] bg-white md:hidden">
           <div className="flex flex-col p-6 pt-20">
             {[
               { name: "hero", label: "Home" },
@@ -334,8 +280,8 @@ export default function ThankYouPage() {
                 onClick={() => handleNavClick(item.name)}
                 className={`text-lg font-medium py-3 text-left transition-colors ${
                   activeSection === item.name
-                    ? "text-green-600 dark:text-green-400"
-                    : "text-slate-600 dark:text-slate-400"
+                    ? "text-green-600"
+                    : "text-slate-600"
                 }`}
               >
                 {item.label}
@@ -347,7 +293,7 @@ export default function ThankYouPage() {
 
       {/* Image Viewer Dialog */}
       <Dialog open={isImageModalOpen} onOpenChange={setIsImageModalOpen}>
-        <DialogContent className="max-w-[90vw] max-h-[90vh] p-2 bg-transparent border-0 shadow-none">
+        <DialogContent className="max-w-[90vw] max-h-[90vh] p-2 bg-white/90 backdrop-blur-sm border-0 shadow-2xl">
           <img
             src={selectedImage}
             alt="Enlarged view"
@@ -356,285 +302,222 @@ export default function ThankYouPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Hero Section - Thank You Message */}
-      <section ref={heroRef} className="py-20 px-6">
+      {/* Hero Section */}
+      <section ref={heroRef} className="pt-32 pb-20 px-6 bg-slate-50">
         <div className="max-w-4xl mx-auto text-center">
           <div className="mb-8">
             <img
               src="/assets/icons/logo.png"
               alt="Volt"
-              className="w-20 h-20 rounded-lg mx-auto mb-6"
+              className="w-24 h-24 rounded-2xl mx-auto mb-8 shadow-xl"
             />
-            <h1 className="text-5xl font-bold text-slate-900 dark:text-white mb-4">
+            <h1 className="text-5xl md:text-6xl font-extrabold text-slate-900 mb-6 tracking-tight">
               Thank You for Installing Volt
             </h1>
-            <p className="text-xl text-slate-600 dark:text-slate-400 mb-8">
-              We're excited to have you on board! Volt's Chrome Extension is now
-              ready to enhance your workflow with powerful productivity tools
-              and features.
+            <p className="text-xl text-slate-600 mb-10 max-w-2xl mx-auto leading-relaxed">
+              Volt is your all-in-one productivity suite for professional
+              reselling. Streamline your workflow from sourcing to listing.
             </p>
           </div>
 
-          <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-8 mb-8">
-            <div className="flex items-center justify-center gap-3 mb-4">
-              <Pin className="w-8 h-8 text-green-600 dark:text-green-400" />
-              <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
-                Please Pin Volt's Chrome Extension to Your Toolbar
-              </h2>
-            </div>
-            <p className="text-lg text-slate-600 dark:text-slate-400 mb-6">
-              For quick access to all Volt's Chrome Extension features, we
-              recommend pinning the extension to your Chrome toolbar:
-            </p>
-            <div className="bg-white dark:bg-slate-800 rounded-lg p-6 text-left max-w-2xl mx-auto">
-              <ol className="space-y-3">
-                <li className="flex items-start gap-3">
-                  <span className="flex-shrink-0 w-6 h-6 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-full text-sm flex items-center justify-center font-medium">
-                    1
-                  </span>
-                  <span className="text-slate-700 dark:text-slate-300">
-                    Click the <strong>Extensions icon</strong> (puzzle piece) in
-                    the Chrome toolbar
-                  </span>
-                </li>
-                <li className="flex items-start gap-3">
-                  <span className="flex-shrink-0 w-6 h-6 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-full text-sm flex items-center justify-center font-medium">
-                    2
-                  </span>
-                  <span className="text-slate-700 dark:text-slate-300">
-                    Find <strong>Volt's Chrome Extension</strong> in the list of
-                    extensions
-                  </span>
-                </li>
-                <li className="flex items-start gap-3">
-                  <span className="flex-shrink-0 w-6 h-6 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-full text-sm flex items-center justify-center font-medium">
-                    3
-                  </span>
-                  <span className="text-slate-700 dark:text-slate-300">
-                    Click the <strong>pin icon</strong> next to Volt's Chrome
-                    Extension
-                  </span>
-                </li>
-                <li className="flex items-start gap-3">
-                  <span className="flex-shrink-0 w-6 h-6 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-full text-sm flex items-center justify-center font-medium">
-                    4
-                  </span>
-                  <span className="text-slate-700 dark:text-slate-300">
-                    Volt's Chrome Extension icon will now appear in your toolbar
-                    for quick access!
-                  </span>
-                </li>
-              </ol>
+          <div className="bg-white border border-green-100 rounded-3xl p-8 md:p-10 mb-12 shadow-sm relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-green-50 rounded-full -mr-16 -mt-16 opacity-50" />
+            <div className="relative z-10">
+              <div className="flex items-center justify-center gap-3 mb-6">
+                <Pin className="w-8 h-8 text-green-600" />
+                <h2 className="text-2xl font-bold text-slate-900">
+                  Pin Volt to Your Toolbar
+                </h2>
+              </div>
+              <div className="grid md:grid-cols-2 gap-8 text-left max-w-3xl mx-auto">
+                <div className="space-y-4">
+                  <div className="flex gap-4">
+                    <span className="flex-shrink-0 w-8 h-8 bg-green-100 text-green-700 rounded-full flex items-center justify-center font-bold">
+                      1
+                    </span>
+                    <p className="text-slate-700">
+                      Click the <strong>Extensions icon</strong> (puzzle piece)
+                      in your toolbar.
+                    </p>
+                  </div>
+                  <div className="flex gap-4">
+                    <span className="flex-shrink-0 w-8 h-8 bg-green-100 text-green-700 rounded-full flex items-center justify-center font-bold">
+                      2
+                    </span>
+                    <p className="text-slate-700">
+                      Find <strong>Volt</strong> in your list of installed
+                      extensions.
+                    </p>
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  <div className="flex gap-4">
+                    <span className="flex-shrink-0 w-8 h-8 bg-green-100 text-green-700 rounded-full flex items-center justify-center font-bold">
+                      3
+                    </span>
+                    <p className="text-slate-700">
+                      Click the <strong>pin icon</strong> next to Volt to keep
+                      it visible.
+                    </p>
+                  </div>
+                  <div className="flex gap-4">
+                    <span className="flex-shrink-0 w-8 h-8 bg-green-100 text-green-700 rounded-full flex items-center justify-center font-bold">
+                      4
+                    </span>
+                    <p className="font-medium text-green-700">
+                      Access all features instantly from your browser toolbar!
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-12">
+          <div className="bg-green-50 border border-green-200 rounded-3xl p-8 md:p-10 mb-12 shadow-sm relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-green-100 rounded-full -mr-16 -mt-16 opacity-50" />
+            <div className="relative z-10">
+              <div className="flex items-center justify-center gap-3 mb-6">
+                <Layout className="w-8 h-8 text-green-600" />
+                <h2 className="text-2xl font-bold text-slate-900">
+                  Enable New Tab Features
+                </h2>
+              </div>
+              <div className="max-w-2xl mx-auto text-center">
+                <p className="text-slate-700 text-lg mb-6">
+                  Chrome will ask if you want to change the new tab override
+                  back to Google.
+                </p>
+                <div className="bg-white p-6 rounded-2xl border border-green-100 shadow-sm inline-block">
+                  <p className="font-bold text-xl text-slate-900 mb-2">
+                    Click{" "}
+                    <span className="text-green-600 underline decoration-2 underline-offset-4">
+                      Keep It
+                    </span>
+                  </p>
+                  <p className="text-slate-600">
+                    This allows Volt to provide your new custom dashboard.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <button
               onClick={() => handleNavClick("features")}
-              className="px-8 py-4 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-3 text-lg font-semibold"
+              className="w-full sm:w-auto px-8 py-4 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-all transform hover:scale-[1.02] flex items-center justify-center gap-3 text-lg font-bold shadow-lg shadow-green-200"
             >
               <Search className="w-5 h-5" />
-              Explore Features
+              Explore All Features
             </button>
             <button
               onClick={() =>
                 chrome.tabs.create({ url: "chrome://extensions/shortcuts" })
               }
-              className="px-8 py-4 bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-white rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors flex items-center gap-3 text-lg font-semibold"
+              className="w-full sm:w-auto px-8 py-4 bg-slate-100 text-slate-700 rounded-xl hover:bg-slate-200 transition-all flex items-center justify-center gap-3 text-lg font-bold"
             >
               <Keyboard className="w-5 h-5" />
-              Customize Shortcuts
+              Keyboard Shortcuts
             </button>
-          </div>
-
-          <div className="flex items-center justify-center">
-            <a
-              href="https://github.com/JuanQuenga/volt-chrome-extension"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
-            >
-              <Github className="w-4 h-4" />
-              <span>Contribute on GitHub</span>
-              <ExternalLink className="w-3 h-3" />
-            </a>
           </div>
         </div>
       </section>
 
-      {/* Features Section - Each Feature in its Own Section */}
-      <section ref={featuresRef} className="py-4 px-6">
+      {/* Features Section */}
+      <section ref={featuresRef} className="py-24 px-6 bg-white">
         <div className="max-w-6xl mx-auto">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold text-slate-900 dark:text-white mb-4">
-              Volt's Chrome Extension Features
+          <div className="text-center mb-20">
+            <h2 className="text-4xl font-bold text-slate-900 mb-4">
+              Everything You Need in One Extension
             </h2>
-            <p className="text-xl text-slate-600 dark:text-slate-400 max-w-3xl mx-auto">
-              Everything you need to enhance your workflow with our extension.
+            <p className="text-xl text-slate-600 max-w-2xl mx-auto">
+              Volt integrates market data, testing tools, and listing utilities
+              directly into your browser.
             </p>
           </div>
 
-          {mainFeatures.map((feature, index) => (
-            <div
-              key={feature.id}
-              className="feature-card bg-white dark:bg-slate-800 rounded-xl shadow-lg p-8 mb-16"
-            >
-              <div className="flex items-center gap-3 mb-6">
-                <div className="p-3 bg-slate-100 dark:bg-slate-700 rounded-lg">
-                  <feature.icon className="w-8 h-8 text-slate-700 dark:text-slate-300" />
-                </div>
-                <div>
-                  <h3 className="text-3xl font-bold text-slate-900 dark:text-white">
-                    {feature.id}. {feature.title}
-                  </h3>
-                </div>
-              </div>
-
-              <div className="grid lg:grid-cols-2 gap-8 items-center">
-                <div>
-                  <p className="text-lg text-slate-600 dark:text-slate-400 mb-6">
-                    {feature.description}
-                  </p>
-
-                  <div className="space-y-4">
-                    {feature.howToUse && (
-                      <div>
-                        <h4 className="font-semibold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
-                          <ArrowRight className="w-4 h-4" />
-                          How To Use
-                        </h4>
-                        <ul className="space-y-2">
-                          {feature.howToUse.map((step, stepIndex) => (
-                            <li
-                              key={stepIndex}
-                              className="flex items-start gap-3"
-                            >
-                              <span className="flex-shrink-0 w-6 h-6 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 rounded-full text-xs flex items-center justify-center mt-0.5 font-medium">
-                                {stepIndex + 1}
-                              </span>
-                              <span className="text-slate-600 dark:text-slate-400 text-sm flex flex-wrap items-center gap-1">
-                                {renderTextWithKbd(step)}
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-
-                    {feature.subsections && (
-                      <div className="space-y-4">
-                        {feature.subsections.map((subsection, subIndex) => (
-                          <div
-                            key={subIndex}
-                            className="border-l-2 border-slate-300 dark:border-slate-600 pl-4"
-                          >
-                            <h5 className="font-semibold text-slate-900 dark:text-white mb-2">
-                              {subsection.title}
-                            </h5>
-                            <p className="text-slate-600 dark:text-slate-400 text-sm flex flex-wrap items-center gap-1">
-                              {renderTextWithKbd(subsection.description)}
-                            </p>
-                            {subsection.subSubsections && (
-                              <div className="mt-3 ml-4 space-y-3">
-                                {subsection.subSubsections.map(
-                                  (subSub, subSubIndex) => (
-                                    <div
-                                      key={subSubIndex}
-                                      className="border-l-2 border-slate-300 dark:border-slate-600 pl-3"
-                                    >
-                                      <h6 className="font-medium text-slate-800 dark:text-slate-200 mb-1 text-sm">
-                                        {subSub.title}
-                                      </h6>
-                                      <p className="text-slate-600 dark:text-slate-400 text-sm flex flex-wrap items-center gap-1">
-                                        {renderTextWithKbd(subSub.description)}
-                                      </p>
-                                    </div>
-                                  )
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {feature.features && (
-                      <div>
-                        <h4 className="font-semibold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
-                          <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
-                          Key Features
-                        </h4>
-                        <ul className="space-y-2">
-                          {feature.features.map((featureItem, featureIndex) => (
-                            <li
-                              key={featureIndex}
-                              className="flex items-start gap-3"
-                            >
-                              <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
-                              <span className="text-slate-600 dark:text-slate-400 text-sm">
-                                {featureItem}
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {mainFeatures.map((feature) => (
+              <div
+                key={feature.id}
+                className="group flex flex-col bg-slate-50 rounded-3xl p-8 border border-slate-100 hover:border-green-200 hover:bg-white hover:shadow-xl hover:shadow-green-50 transition-all duration-300"
+              >
+                <div className="mb-6 flex items-center justify-between">
+                  <div className="p-4 bg-white rounded-2xl shadow-sm text-green-600 group-hover:bg-green-600 group-hover:text-white transition-colors duration-300">
+                    <feature.icon className="w-6 h-6" />
                   </div>
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                    Feature {feature.id.toString().padStart(2, "0")}
+                  </span>
                 </div>
 
-                <div>
+                <h3 className="text-xl font-bold text-slate-900 mb-3">
+                  {feature.title}
+                </h3>
+                <p className="text-slate-600 mb-6 leading-relaxed">
+                  {feature.description}
+                </p>
+
+                {feature.image && (
                   <div
-                    onClick={() => handleImageClick(feature.image)}
-                    className="cursor-pointer"
+                    onClick={() => handleImageClick(feature.image!)}
+                    className="mt-auto cursor-pointer relative overflow-hidden rounded-xl border border-slate-200 bg-white"
                   >
                     <img
                       src={feature.image}
                       alt={feature.title}
-                      className="w-full h-auto rounded-lg shadow-sm"
+                      className="w-full h-40 object-cover object-top hover:scale-105 transition-transform duration-500"
                     />
+                    <div className="absolute inset-0 bg-black/0 hover:bg-black/5 transition-colors flex items-center justify-center opacity-0 hover:opacity-100">
+                      <div className="bg-white/90 p-2 rounded-full shadow-lg">
+                        <ExternalLink className="w-4 h-4 text-slate-900" />
+                      </div>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 py-8 px-6">
+      <footer className="bg-slate-900 text-white py-16 px-6">
         <div className="max-w-6xl mx-auto">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-10">
+            <div className="flex items-center gap-4">
               <img
                 src="/assets/icons/logo.png"
-                alt="Volt's Chrome Extension"
-                className="w-8 h-8 rounded-lg"
+                alt="Volt"
+                className="w-12 h-12 rounded-xl border border-white/10"
               />
               <div>
-                <p className="text-sm font-medium text-slate-900 dark:text-white">
-                  Volt Chrome Extension
-                </p>
-                <p className="text-xs text-slate-600 dark:text-slate-400">
-                  Powerful Chrome Extension
+                <p className="text-xl font-bold">Volt</p>
+                <p className="text-slate-400 text-sm">
+                  Professional Productivity Suite for Resellers
                   {version && (
-                    <span className="ml-2 px-2 py-0.5 bg-slate-100 dark:bg-slate-700 rounded text-xs">
+                    <span className="ml-3 px-2 py-0.5 bg-white/10 rounded text-xs">
                       v{version}
                     </span>
                   )}
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-6">
+
+            <div className="flex flex-col sm:flex-row items-center gap-8">
               <a
                 href="https://github.com/JuanQuenga/volt-chrome-extension"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
+                className="flex items-center gap-2 text-slate-400 hover:text-green-400 transition-colors font-medium"
               >
-                <span>Made with ❤️ by Juan Quenga</span>
-                <Github className="w-4 h-4" />
+                <Github className="w-5 h-5" />
+                <span>Source Code</span>
               </a>
-              <span className="text-xs text-slate-500 dark:text-slate-500">
+              <div className="h-4 w-px bg-white/10 hidden sm:block" />
+              <p className="text-slate-400 text-sm">Made by Juan Quenga</p>
+              <div className="h-4 w-px bg-white/10 hidden sm:block" />
+              <span className="text-xs text-slate-500 font-mono">
                 AGPL-3.0 License
               </span>
             </div>
@@ -645,10 +528,10 @@ export default function ThankYouPage() {
       {/* Floating Action Button */}
       <button
         onClick={scrollToTop}
-        className={`fab bg-green-600 text-white transition-all duration-300 ${
-          scrollProgress > 20
+        className={`fixed bottom-8 right-8 z-40 w-14 h-14 bg-green-600 text-white rounded-full shadow-lg shadow-green-200 flex items-center justify-center hover:bg-green-700 transition-all duration-300 transform ${
+          scrollProgress > 10
             ? "translate-y-0 opacity-100"
-            : "translate-y-16 opacity-0"
+            : "translate-y-20 opacity-0"
         }`}
       >
         <ChevronUp className="w-6 h-6" />

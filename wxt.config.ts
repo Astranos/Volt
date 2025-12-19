@@ -7,7 +7,7 @@ export default defineConfig({
   // Use the official Tailwind v4 Vite plugin for class scanning + HMR.
   vite: () => ({ plugins: [tailwindcss()] } as WxtViteConfig),
   outDir: ".output", // Base output directory
-  outDirTemplate: "scout", // Custom output directory name (removes browser/manifest folder nesting)
+  outDirTemplate: "volt", // Custom output directory name (removes browser/manifest folder nesting)
   manifest: {
     content_scripts: [
       {
@@ -55,7 +55,7 @@ export default defineConfig({
       },
     ],
     name: "Volt",
-    version: "1.0.12",
+    version: "1.0.13",
     description:
       "A versatile Chrome extension with command palette, controller testing, and multi-provider search capabilities.",
     permissions: [

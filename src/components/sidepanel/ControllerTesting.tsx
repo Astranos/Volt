@@ -1,13 +1,36 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Progress } from "../ui/progress";
 import { Badge } from "../ui/badge";
-import { Settings, Gamepad2, AlertCircle, Zap } from "lucide-react";
+import {
+  Settings,
+  Gamepad2,
+  AlertCircle,
+  Zap,
+  RotateCcw,
+  Play,
+  Square,
+} from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
 import { ScrollArea } from "../ui/scroll-area";
 import { Separator } from "../ui/separator";
 import SidepanelLayout from "./SidepanelLayout";
 import { Button } from "../ui/button";
+
+// Circularity test types
+interface CircularityPoint {
+  x: number;
+  y: number;
+  timestamp: number;
+}
+
+interface CircularityResult {
+  score: number; // 0-100, how circular the motion was
+  avgRadius: number;
+  radiusVariance: number;
+  coverage: number; // percentage of circle covered
+  direction: "cw" | "ccw" | "mixed";
+}
 
 export default function ControllerTesting() {
   // State for controller input values
@@ -40,6 +63,36 @@ export default function ControllerTesting() {
   // State for auto-start setting
   const [autoStart, setAutoStart] = useState(true);
 
+  // Circularity testing state - separate for left and right sticks
+  const [leftCircularityTestActive, setLeftCircularityTestActive] =
+    useState(false);
+  const [rightCircularityTestActive, setRightCircularityTestActive] =
+    useState(false);
+  const [leftCircularityPoints, setLeftCircularityPoints] = useState<
+    CircularityPoint[]
+  >([]);
+  const [rightCircularityPoints, setRightCircularityPoints] = useState<
+    CircularityPoint[]
+  >([]);
+  const [leftCircularityResult, setLeftCircularityResult] =
+    useState<CircularityResult | null>(null);
+  const [rightCircularityResult, setRightCircularityResult] =
+    useState<CircularityResult | null>(null);
+
+  const leftCircularityPointsRef = useRef<CircularityPoint[]>([]);
+  const rightCircularityPointsRef = useRef<CircularityPoint[]>([]);
+  const leftCircularityTestActiveRef = useRef(false);
+  const rightCircularityTestActiveRef = useRef(false);
+
+  // Keep refs in sync with state
+  useEffect(() => {
+    leftCircularityTestActiveRef.current = leftCircularityTestActive;
+  }, [leftCircularityTestActive]);
+
+  useEffect(() => {
+    rightCircularityTestActiveRef.current = rightCircularityTestActive;
+  }, [rightCircularityTestActive]);
+
   // Refs for SVG elements
   const lstickRef = useRef<SVGCircleElement>(null);
   const rstickRef = useRef<SVGCircleElement>(null);
@@ -64,6 +117,7 @@ export default function ControllerTesting() {
     r1?: Element | null;
     l2?: Element | null;
     r2?: Element | null;
+    touch?: Element | null;
   } | null>(null);
 
   // Controller button names
@@ -144,6 +198,145 @@ export default function ControllerTesting() {
     }
   };
 
+  // Circularity test functions
+  const analyzeCircularity = useCallback(
+    (points: CircularityPoint[]): CircularityResult => {
+      if (points.length < 10) {
+        return {
+          score: 0,
+          avgRadius: 0,
+          radiusVariance: 0,
+          coverage: 0,
+          direction: "mixed",
+        };
+      }
+
+      // Calculate center of all points
+      const centerX = points.reduce((sum, p) => sum + p.x, 0) / points.length;
+      const centerY = points.reduce((sum, p) => sum + p.y, 0) / points.length;
+
+      // Calculate radii from center
+      const radii = points.map((p) =>
+        Math.sqrt((p.x - centerX) ** 2 + (p.y - centerY) ** 2)
+      );
+      const avgRadius = radii.reduce((sum, r) => sum + r, 0) / radii.length;
+
+      // Calculate variance in radius (lower = more circular)
+      const radiusVariance =
+        radii.reduce((sum, r) => sum + (r - avgRadius) ** 2, 0) / radii.length;
+      const normalizedVariance = Math.sqrt(radiusVariance) / (avgRadius || 1);
+
+      // Calculate angular coverage (how much of the circle was covered)
+      const angles = points.map((p) =>
+        Math.atan2(p.y - centerY, p.x - centerX)
+      );
+
+      // Count unique angle sectors covered (divide circle into 12 sectors)
+      const sectors = new Set<number>();
+      angles.forEach((angle) => {
+        const sector = Math.floor(((angle + Math.PI) / (2 * Math.PI)) * 12);
+        sectors.add(sector);
+      });
+      const coverage = (sectors.size / 12) * 100;
+
+      // Determine rotation direction
+      let cwCount = 0;
+      let ccwCount = 0;
+      for (let i = 1; i < angles.length; i++) {
+        let diff = angles[i] - angles[i - 1];
+        // Normalize angle difference
+        if (diff > Math.PI) diff -= 2 * Math.PI;
+        if (diff < -Math.PI) diff += 2 * Math.PI;
+        if (diff > 0) ccwCount++;
+        else if (diff < 0) cwCount++;
+      }
+      const direction: "cw" | "ccw" | "mixed" =
+        cwCount > ccwCount * 1.5
+          ? "cw"
+          : ccwCount > cwCount * 1.5
+          ? "ccw"
+          : "mixed";
+
+      // Calculate final score (0-100)
+      // Score based on: low variance (40%), good coverage (40%), consistent direction (20%)
+      const varianceScore = Math.max(0, 100 - normalizedVariance * 200) * 0.4;
+      const coverageScore = coverage * 0.4;
+      const directionScore = direction !== "mixed" ? 20 : 10;
+      const score = Math.min(
+        100,
+        Math.round(varianceScore + coverageScore + directionScore)
+      );
+
+      return {
+        score,
+        avgRadius,
+        radiusVariance: normalizedVariance,
+        coverage,
+        direction,
+      };
+    },
+    []
+  );
+
+  const startCircularityTest = useCallback((stick: "left" | "right") => {
+    if (stick === "left") {
+      leftCircularityPointsRef.current = [];
+      setLeftCircularityPoints([]);
+      setLeftCircularityResult(null);
+      setLeftCircularityTestActive(true);
+    } else {
+      rightCircularityPointsRef.current = [];
+      setRightCircularityPoints([]);
+      setRightCircularityResult(null);
+      setRightCircularityTestActive(true);
+    }
+  }, []);
+
+  // Sync circularity points to state periodically during active test for visual feedback
+  useEffect(() => {
+    if (!leftCircularityTestActive && !rightCircularityTestActive) return;
+    const interval = setInterval(() => {
+      if (leftCircularityTestActive) {
+        setLeftCircularityPoints([...leftCircularityPointsRef.current]);
+      }
+      if (rightCircularityTestActive) {
+        setRightCircularityPoints([...rightCircularityPointsRef.current]);
+      }
+    }, 100); // Update UI every 100ms
+    return () => clearInterval(interval);
+  }, [leftCircularityTestActive, rightCircularityTestActive]);
+
+  const stopCircularityTest = useCallback(
+    (stick: "left" | "right") => {
+      if (stick === "left") {
+        setLeftCircularityTestActive(false);
+        const result = analyzeCircularity(leftCircularityPointsRef.current);
+        setLeftCircularityResult(result);
+        setLeftCircularityPoints([...leftCircularityPointsRef.current]);
+      } else {
+        setRightCircularityTestActive(false);
+        const result = analyzeCircularity(rightCircularityPointsRef.current);
+        setRightCircularityResult(result);
+        setRightCircularityPoints([...rightCircularityPointsRef.current]);
+      }
+    },
+    [analyzeCircularity]
+  );
+
+  const resetCircularityTest = useCallback((stick: "left" | "right") => {
+    if (stick === "left") {
+      leftCircularityPointsRef.current = [];
+      setLeftCircularityPoints([]);
+      setLeftCircularityResult(null);
+      setLeftCircularityTestActive(false);
+    } else {
+      rightCircularityPointsRef.current = [];
+      setRightCircularityPoints([]);
+      setRightCircularityResult(null);
+      setRightCircularityTestActive(false);
+    }
+  }, []);
+
   useEffect(() => {
     let selectedIndex = 0;
     let lastUpdateTime = 0;
@@ -164,6 +357,7 @@ export default function ControllerTesting() {
     const COLOR_GREEN = "rgba(34,197,94,0.85)";
     const COLOR_GREEN_LIGHT = "rgba(34,197,94,0.65)";
     const COLOR_ORANGE = "rgba(255,140,0,1.0)";
+    const COLOR_RED = "rgba(239, 68, 68, 0.9)";
     const COLOR_ACTIVE = "rgba(34,197,94,0.9)"; // Green for active input (user preference)
 
     const getStickColor = (x: number, y: number): string => {
@@ -171,12 +365,14 @@ export default function ControllerTesting() {
       if (magnitude < 0.05) return "rgba(156,163,175,0.6)"; // Inactive gray
       if (magnitude < thresholds.lightThreshold) return COLOR_GREEN;
       if (magnitude < thresholds.mediumThreshold) return COLOR_ORANGE;
-      return "rgba(34,197,94,0.9)"; // Active Green
+      return COLOR_RED;
     };
 
     const getTriggerColor = (value: number): string => {
       if (value < 0.05) return "rgba(64,64,64,0.2)"; // Default dark
-      return COLOR_ACTIVE;
+      if (value < thresholds.lightThreshold) return COLOR_GREEN;
+      if (value < thresholds.mediumThreshold) return COLOR_ORANGE;
+      return COLOR_RED;
     };
 
     const setGroupPathFill = (groupEl: Element | null, pressed: boolean) => {
@@ -226,6 +422,7 @@ export default function ControllerTesting() {
         r1: document.getElementById("R1"),
         l2: document.getElementById("L2"),
         r2: document.getElementById("R2"),
+        touch: document.getElementById("Touch"),
       };
     };
 
@@ -318,6 +515,36 @@ export default function ControllerTesting() {
           rstickRef.current.setAttribute("fill", getStickColor(rx, ry));
         }
 
+        // Track circularity test points for left stick
+        if (leftCircularityTestActiveRef.current) {
+          const magnitude = Math.sqrt(lx * lx + ly * ly);
+          if (magnitude > 0.15) {
+            leftCircularityPointsRef.current.push({
+              x: lx,
+              y: ly,
+              timestamp: currentTime,
+            });
+            if (leftCircularityPointsRef.current.length > 500) {
+              leftCircularityPointsRef.current.shift();
+            }
+          }
+        }
+
+        // Track circularity test points for right stick
+        if (rightCircularityTestActiveRef.current) {
+          const magnitude = Math.sqrt(rx * rx + ry * ry);
+          if (magnitude > 0.15) {
+            rightCircularityPointsRef.current.push({
+              x: rx,
+              y: ry,
+              timestamp: currentTime,
+            });
+            if (rightCircularityPointsRef.current.length > 500) {
+              rightCircularityPointsRef.current.shift();
+            }
+          }
+        }
+
         if (l2barRef.current) {
           const h = Math.max(0, Math.min(42, btn(6).value * 42));
           l2barRef.current.setAttribute("height", String(h));
@@ -348,6 +575,7 @@ export default function ControllerTesting() {
           r1 = null,
           l2 = null,
           r2 = null,
+          touch = null,
         } = svgCacheRef.current || {};
 
         setGroupPathFill(dup, btn(12).pressed);
@@ -371,6 +599,7 @@ export default function ControllerTesting() {
           );
         setFill(l1, btn(4).pressed);
         setFill(r1, btn(5).pressed);
+        setFill(touch, btn(17).pressed);
 
         if (l2) l2.setAttribute("fill", getTriggerColor(btn(6).value));
         if (r2) r2.setAttribute("fill", getTriggerColor(btn(7).value));
@@ -455,11 +684,12 @@ export default function ControllerTesting() {
         </div>
       }
     >
-      <div className="flex flex-col min-h-0 h-full">
-        <div className="px-4 py-2 border-b border-border/50 bg-muted/10">
+      <div className="flex flex-col min-h-0 h-full w-full overflow-hidden">
+        <div className="px-4 py-2 border-b border-border/50 bg-muted/10 flex-shrink-0 overflow-hidden">
           <div
             className="text-sm font-medium truncate"
             title={connectedController?.name ?? "No Controller Detected"}
+            style={{ maxWidth: "calc(100vw - 2rem)" }}
           >
             {connectedController?.name ?? "No Controller Detected"}
           </div>
@@ -469,8 +699,8 @@ export default function ControllerTesting() {
           </div>
         </div>
 
-        <ScrollArea className="flex-1">
-          <div className="p-4 space-y-6">
+        <ScrollArea className="flex-1 w-full">
+          <div className="p-4 space-y-6 w-full max-w-full overflow-hidden">
             {/* Visualizer */}
             <div className="flex justify-center">
               <div className="w-full max-w-[340px] aspect-[441/383]">
@@ -499,6 +729,7 @@ export default function ControllerTesting() {
                   />
                   {/* Touchpad */}
                   <rect
+                    id="Touch"
                     x="160"
                     y="100"
                     width="120"
@@ -863,23 +1094,394 @@ export default function ControllerTesting() {
                 <h4 className="text-xs font-semibold text-muted-foreground mb-2">
                   Buttons
                 </h4>
-                <div className="grid grid-cols-5 gap-1">
+                <div className="grid grid-cols-10 gap-1.5">
                   {controllerState.buttons.map((btn, i) => (
                     <div
                       key={i}
+                      title={buttonNames[i] || `Button ${i}`}
                       className={`
-                        text-[10px] px-1 py-1.5 rounded border text-center transition-colors
+                        aspect-square rounded border transition-colors
                         ${
                           btn.pressed
-                            ? "bg-green-500 border-green-600 text-white font-bold"
-                            : "bg-muted/30 text-muted-foreground border-transparent"
+                            ? "bg-green-500 border-green-600"
+                            : "bg-muted/30 border-transparent"
                         }
                       `}
-                    >
-                      B{i}
-                    </div>
+                    />
                   ))}
                 </div>
+              </div>
+
+              <Separator />
+
+              {/* Circularity Testing */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+                    <RotateCcw className="h-4 w-4" />
+                    Circularity Test
+                  </h4>
+                  <div className="flex items-center gap-1.5">
+                    {/* Left Stick Controls */}
+                    <div className="flex items-center gap-0.5 bg-muted/30 rounded-md p-0.5">
+                      <span className="text-[10px] font-bold text-muted-foreground w-4 text-center">
+                        L
+                      </span>
+                      {!leftCircularityTestActive ? (
+                        <div className="flex items-center gap-0.5">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => startCircularityTest("left")}
+                            disabled={!connectedController}
+                            title="Start Left Test"
+                          >
+                            <Play className="h-5 w-5" />
+                          </Button>
+                          {leftCircularityResult && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => resetCircularityTest("left")}
+                              title="Reset Left"
+                            >
+                              <RotateCcw className="h-5 w-5" />
+                            </Button>
+                          )}
+                        </div>
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-red-500 hover:text-red-600"
+                          onClick={() => stopCircularityTest("left")}
+                          title="Stop Left"
+                        >
+                          <Square className="h-5 w-5" />
+                        </Button>
+                      )}
+                    </div>
+
+                    {/* Right Stick Controls */}
+                    <div className="flex items-center gap-0.5 bg-muted/30 rounded-md p-0.5">
+                      <span className="text-[10px] font-bold text-muted-foreground w-4 text-center">
+                        R
+                      </span>
+                      {!rightCircularityTestActive ? (
+                        <div className="flex items-center gap-0.5">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => startCircularityTest("right")}
+                            disabled={!connectedController}
+                            title="Start Right Test"
+                          >
+                            <Play className="h-5 w-5" />
+                          </Button>
+                          {rightCircularityResult && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => resetCircularityTest("right")}
+                              title="Reset Right"
+                            >
+                              <RotateCcw className="h-5 w-5" />
+                            </Button>
+                          )}
+                        </div>
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-red-500 hover:text-red-600"
+                          onClick={() => stopCircularityTest("right")}
+                          title="Stop Right"
+                        >
+                          <Square className="h-5 w-5" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Side-by-side circular visualization areas */}
+                <div className="grid grid-cols-2 gap-3">
+                  {/* Left Stick */}
+                  <div className="space-y-2">
+                    <div className="relative w-full aspect-square max-w-[140px] mx-auto">
+                      <svg
+                        viewBox="-1.2 -1.2 2.4 2.4"
+                        className="w-full h-full"
+                      >
+                        <circle
+                          cx="0"
+                          cy="0"
+                          r="1"
+                          fill="rgba(64,64,64,0.1)"
+                          stroke="rgba(156,163,175,0.3)"
+                          strokeWidth="0.02"
+                        />
+                        <circle
+                          cx="0"
+                          cy="0"
+                          r="0.5"
+                          fill="none"
+                          stroke="rgba(156,163,175,0.2)"
+                          strokeWidth="0.01"
+                          strokeDasharray="0.05 0.05"
+                        />
+                        <line
+                          x1="-1"
+                          y1="0"
+                          x2="1"
+                          y2="0"
+                          stroke="rgba(156,163,175,0.2)"
+                          strokeWidth="0.01"
+                        />
+                        <line
+                          x1="0"
+                          y1="-1"
+                          x2="0"
+                          y2="1"
+                          stroke="rgba(156,163,175,0.2)"
+                          strokeWidth="0.01"
+                        />
+                        {leftCircularityPoints.length > 1 && (
+                          <path
+                            d={`M ${leftCircularityPoints[0].x} ${
+                              leftCircularityPoints[0].y
+                            } ${leftCircularityPoints
+                              .slice(1)
+                              .map((p) => `L ${p.x} ${p.y}`)
+                              .join(" ")}`}
+                            fill="none"
+                            stroke={
+                              leftCircularityTestActive
+                                ? "rgba(34,197,94,0.8)"
+                                : "rgba(59,130,246,0.6)"
+                            }
+                            strokeWidth="0.04"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        )}
+                        <circle
+                          cx={controllerState.lx}
+                          cy={controllerState.ly}
+                          r="0.08"
+                          fill={
+                            leftCircularityTestActive
+                              ? "rgba(34,197,94,0.9)"
+                              : "rgba(156,163,175,0.8)"
+                          }
+                          stroke="currentColor"
+                          strokeWidth="0.02"
+                          className="text-foreground"
+                        />
+                      </svg>
+                      {!leftCircularityTestActive && leftCircularityResult && (
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                          <div className="text-center bg-background/80 rounded-lg px-2 py-1">
+                            <div
+                              className={`text-lg font-bold ${
+                                leftCircularityResult.score >= 80
+                                  ? "text-green-500"
+                                  : leftCircularityResult.score >= 60
+                                  ? "text-yellow-500"
+                                  : leftCircularityResult.score >= 40
+                                  ? "text-orange-500"
+                                  : "text-red-500"
+                              }`}
+                            >
+                              {leftCircularityResult.score}%
+                            </div>
+                            <div className="text-[8px] text-muted-foreground">
+                              {leftCircularityResult.direction === "cw"
+                                ? "CW"
+                                : leftCircularityResult.direction === "ccw"
+                                ? "CCW"
+                                : "Mixed"}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    {leftCircularityTestActive && (
+                      <p className="text-[9px] text-green-500 text-center animate-pulse">
+                        Recording...
+                      </p>
+                    )}
+                    {leftCircularityResult && !leftCircularityTestActive && (
+                      <div className="grid grid-cols-2 gap-1 text-center">
+                        <div className="bg-muted/30 rounded px-1 py-0.5">
+                          <div className="text-[8px] text-muted-foreground">
+                            Cov
+                          </div>
+                          <div className="text-[10px] font-medium">
+                            {Math.round(leftCircularityResult.coverage)}%
+                          </div>
+                        </div>
+                        <div className="bg-muted/30 rounded px-1 py-0.5">
+                          <div className="text-[8px] text-muted-foreground">
+                            Var
+                          </div>
+                          <div className="text-[10px] font-medium">
+                            {(
+                              leftCircularityResult.radiusVariance * 100
+                            ).toFixed(0)}
+                            %
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Right Stick */}
+                  <div className="space-y-2">
+                    <div className="relative w-full aspect-square max-w-[140px] mx-auto">
+                      <svg
+                        viewBox="-1.2 -1.2 2.4 2.4"
+                        className="w-full h-full"
+                      >
+                        <circle
+                          cx="0"
+                          cy="0"
+                          r="1"
+                          fill="rgba(64,64,64,0.1)"
+                          stroke="rgba(156,163,175,0.3)"
+                          strokeWidth="0.02"
+                        />
+                        <circle
+                          cx="0"
+                          cy="0"
+                          r="0.5"
+                          fill="none"
+                          stroke="rgba(156,163,175,0.2)"
+                          strokeWidth="0.01"
+                          strokeDasharray="0.05 0.05"
+                        />
+                        <line
+                          x1="-1"
+                          y1="0"
+                          x2="1"
+                          y2="0"
+                          stroke="rgba(156,163,175,0.2)"
+                          strokeWidth="0.01"
+                        />
+                        <line
+                          x1="0"
+                          y1="-1"
+                          x2="0"
+                          y2="1"
+                          stroke="rgba(156,163,175,0.2)"
+                          strokeWidth="0.01"
+                        />
+                        {rightCircularityPoints.length > 1 && (
+                          <path
+                            d={`M ${rightCircularityPoints[0].x} ${
+                              rightCircularityPoints[0].y
+                            } ${rightCircularityPoints
+                              .slice(1)
+                              .map((p) => `L ${p.x} ${p.y}`)
+                              .join(" ")}`}
+                            fill="none"
+                            stroke={
+                              rightCircularityTestActive
+                                ? "rgba(34,197,94,0.8)"
+                                : "rgba(59,130,246,0.6)"
+                            }
+                            strokeWidth="0.04"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        )}
+                        <circle
+                          cx={controllerState.rx}
+                          cy={controllerState.ry}
+                          r="0.08"
+                          fill={
+                            rightCircularityTestActive
+                              ? "rgba(34,197,94,0.9)"
+                              : "rgba(156,163,175,0.8)"
+                          }
+                          stroke="currentColor"
+                          strokeWidth="0.02"
+                          className="text-foreground"
+                        />
+                      </svg>
+                      {!rightCircularityTestActive &&
+                        rightCircularityResult && (
+                          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                            <div className="text-center bg-background/80 rounded-lg px-2 py-1">
+                              <div
+                                className={`text-lg font-bold ${
+                                  rightCircularityResult.score >= 80
+                                    ? "text-green-500"
+                                    : rightCircularityResult.score >= 60
+                                    ? "text-yellow-500"
+                                    : rightCircularityResult.score >= 40
+                                    ? "text-orange-500"
+                                    : "text-red-500"
+                                }`}
+                              >
+                                {rightCircularityResult.score}%
+                              </div>
+                              <div className="text-[8px] text-muted-foreground">
+                                {rightCircularityResult.direction === "cw"
+                                  ? "CW"
+                                  : rightCircularityResult.direction === "ccw"
+                                  ? "CCW"
+                                  : "Mixed"}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                    </div>
+                    {rightCircularityTestActive && (
+                      <p className="text-[9px] text-green-500 text-center animate-pulse">
+                        Recording...
+                      </p>
+                    )}
+                    {rightCircularityResult && !rightCircularityTestActive && (
+                      <div className="grid grid-cols-2 gap-1 text-center">
+                        <div className="bg-muted/30 rounded px-1 py-0.5">
+                          <div className="text-[8px] text-muted-foreground">
+                            Cov
+                          </div>
+                          <div className="text-[10px] font-medium">
+                            {Math.round(rightCircularityResult.coverage)}%
+                          </div>
+                        </div>
+                        <div className="bg-muted/30 rounded px-1 py-0.5">
+                          <div className="text-[8px] text-muted-foreground">
+                            Var
+                          </div>
+                          <div className="text-[10px] font-medium">
+                            {(
+                              rightCircularityResult.radiusVariance * 100
+                            ).toFixed(0)}
+                            %
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Instructions when neither has result */}
+                {!leftCircularityResult &&
+                  !rightCircularityResult &&
+                  !leftCircularityTestActive &&
+                  !rightCircularityTestActive && (
+                    <p className="text-[10px] text-muted-foreground text-center">
+                      Test stick circularity. Press play and rotate each stick
+                      in a full circle.
+                    </p>
+                  )}
               </div>
             </div>
           </div>

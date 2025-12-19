@@ -34,7 +34,7 @@ export default function SidepanelLayout({
       )} */}
 
       {/* Content */}
-      <ScrollArea className={cn("flex-1", contentClassName)}>
+      <ScrollArea className={cn("flex-1 [&>div]:!overflow-x-hidden", contentClassName)}>
         {children}
       </ScrollArea>
     </div>
