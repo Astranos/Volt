@@ -18,3 +18,4 @@ export function getFaviconUrl(pageUrl: string, size: number = 32): string {
     }
   }
 }
+
