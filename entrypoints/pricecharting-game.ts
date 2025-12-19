@@ -85,6 +85,77 @@ export default defineContentScript({
       return match ? parseFloat(match[0].replace(/,/g, "")) : 0;
     };
 
+    // Extract details from the full_details table
+    const getGameDetails = () => {
+      const detailsTable = document.querySelector("#full_details #attribute");
+      if (!detailsTable) return null;
+
+      const details: Record<string, string> = {};
+      const rows = detailsTable.querySelectorAll("tbody tr");
+
+      rows.forEach((row) => {
+        const titleCell = row.querySelector("td.title");
+        const detailsCell = row.querySelector("td.details");
+        if (titleCell && detailsCell) {
+          let key = titleCell.textContent?.trim().replace(":", "") || "";
+          let value = detailsCell.textContent?.trim() || "";
+
+          // Skip empty rows
+          if (!key || !value || value === "none") return;
+
+          // Handle special cases
+          if (key === "UPC:") {
+            // Extract all UPCs from spans
+            const upcSpans = detailsCell.querySelectorAll(
+              ".scout-upc-highlight[data-upc]"
+            );
+            if (upcSpans.length > 0) {
+              value = Array.from(upcSpans)
+                .map((span) => span.getAttribute("data-upc"))
+                .filter(Boolean)
+                .join(", ");
+            }
+          } else if (key === "Variants:") {
+            // Extract variant links
+            const variantLinks = detailsCell.querySelectorAll("a.variant");
+            if (variantLinks.length > 0) {
+              value = Array.from(variantLinks)
+                .map((link) => link.textContent?.trim())
+                .filter(Boolean)
+                .join(", ");
+            }
+          }
+
+          // Map keys to readable format
+          const keyMap: Record<string, string> = {
+            "Genre:": "Genre",
+            "Release Date:": "Release Date",
+            "ESRB Rating:": "ESRB Rating",
+            "Publisher:": "Publisher",
+            "Developer:": "Developer",
+            "Model Number:": "Model Number",
+            "Disc Count:": "Disc Count",
+            "Player Count:": "Player Count",
+            "Also Compatible On:": "Also Compatible On",
+            "Notes:": "Notes",
+            "UPC:": "UPC",
+            "ASIN (Amazon):": "ASIN",
+            "ePID (eBay):": "ePID",
+            "PriceCharting ID:": "PriceCharting ID",
+            "Variants:": "Variants",
+            "Description:": "Description",
+          };
+
+          const displayKey = keyMap[key] || key.replace(":", "");
+          if (value) {
+            details[displayKey] = value;
+          }
+        }
+      });
+
+      return Object.keys(details).length > 0 ? details : null;
+    };
+
     // Get game info from the page
     const getGameInfo = () => {
       const titleEl = document.querySelector("#product_name");
@@ -113,11 +184,15 @@ export default defineContentScript({
         upc = upcElements[0].getAttribute("data-upc") || "";
       }
 
+      // Extract full details
+      const gameDetails = getGameDetails();
+
       return {
         title,
         console: consoleName,
         url: window.location.href,
         upc,
+        details: gameDetails,
       };
     };
 
@@ -208,6 +283,7 @@ export default defineContentScript({
               saleTitle:
                 row.querySelector("td.title a")?.textContent?.trim() || "",
               upc: gameInfo.upc || "",
+              details: gameInfo.details || null,
             };
 
             log("Adding sale item to lot:", itemData);
@@ -217,6 +293,11 @@ export default defineContentScript({
               chrome.runtime.sendMessage({
                 type: "PC_ITEM_SELECTED",
                 data: itemData,
+              });
+
+              // Signal to close the PriceCharting popup if it's open
+              chrome.storage.local.set({
+                scout_close_pc_popup: Date.now(),
               });
 
               // Try to open/switch the sidepanel to the PriceCharting tool
