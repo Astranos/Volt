@@ -6,7 +6,7 @@ import { Search as SearchIcon } from "lucide-react";
 import { getFaviconUrl } from "@/src/utils/favicon";
 import "./column-styles.css";
 
-export function QuickLinksColumn() {
+export function QuickLinksColumn({ id }: { id?: string }) {
   const [search, setSearch] = useState("");
   const [csvLinks, setCSVLinks] = useState<CSVLink[]>([]);
   const [loading, setLoading] = useState(true);
@@ -55,7 +55,7 @@ export function QuickLinksColumn() {
   };
 
   return (
-    <div className="newtab-column newtab-column-left">
+    <div id={id} className="newtab-column newtab-column-left">
       <div className="newtab-column-header">
         <h3>Quick Links</h3>
       </div>

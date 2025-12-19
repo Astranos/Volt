@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { ClosedTabsPanel } from "../../src/components/newtab/ClosedTabsPanel";
 import { QuickLinksColumn } from "../../src/components/newtab/QuickLinksColumn";
 import { BookmarksColumn } from "../../src/components/newtab/BookmarksColumn";
+import { NewTabHelp } from "../../src/components/newtab/NewTabHelp";
 import { Button } from "../../src/components/ui/button";
 import {
   Tooltip,
@@ -350,10 +351,11 @@ export default function NewTab() {
               className="newtab-header-logo"
             />
             <h1 className="newtab-header-title">Volt Resale</h1>
+            <NewTabHelp />
 
             {/* Toolbar buttons for sidepanel tools */}
             <TooltipProvider>
-              <div className="newtab-toolbar-buttons">
+              <div id="tour-tools" className="newtab-toolbar-buttons">
                 {SIDEPANEL_TOOLS.map((tool) => {
                   const Icon = tool.icon;
                   return (
@@ -382,7 +384,10 @@ export default function NewTab() {
         {/* Main layout with three columns */}
         <div className="newtab-main">
           {/* Left column: Closed Tabs & History */}
-          <div className="newtab-column newtab-column-center">
+          <div
+            id="tour-search-history"
+            className="newtab-column newtab-column-center"
+          >
             <ClosedTabsPanel
               onSearchSubmit={handleSearchSubmit}
               activeMode={activeMode}
@@ -393,8 +398,8 @@ export default function NewTab() {
 
           {/* Right columns: Quick Links & Bookmarks */}
           <div className="newtab-right-columns">
-            <QuickLinksColumn />
-            <BookmarksColumn />
+            <QuickLinksColumn id="tour-quick-links" />
+            <BookmarksColumn id="tour-bookmarks" />
           </div>
         </div>
       </div>

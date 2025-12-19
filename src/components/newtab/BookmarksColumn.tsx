@@ -10,7 +10,7 @@ import { Search as SearchIcon } from "lucide-react";
 import { getFaviconUrl } from "@/src/utils/favicon";
 import "./column-styles.css";
 
-export function BookmarksColumn() {
+export function BookmarksColumn({ id }: { id?: string }) {
   const [search, setSearch] = useState("");
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const [loading, setLoading] = useState(true);
@@ -49,7 +49,7 @@ export function BookmarksColumn() {
   };
 
   return (
-    <div className="newtab-column newtab-column-right">
+    <div id={id} className="newtab-column newtab-column-right">
       <div className="newtab-column-header">
         <h3>Bookmarks</h3>
       </div>
