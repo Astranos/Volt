@@ -440,25 +440,6 @@ export function CMDKPalette({
         } finally {
           onClose();
         }
-      } else if (toolId === "quick-links") {
-        // Send message to open quick links in sidebar and await ack before closing
-        try {
-          const response = await new Promise<any>((resolve) => {
-            try {
-              chrome.runtime.sendMessage(
-                { action: "openInSidebar", tool: "quick-links" },
-                (resp: any) => resolve(resp)
-              );
-            } catch (err) {
-              resolve({ success: false, error: String(err) });
-            }
-          });
-          if (!response?.success && chrome.runtime.lastError) {
-            console.error("Error opening sidebar:", chrome.runtime.lastError);
-          }
-        } finally {
-          onClose();
-        }
       } else if (toolId === "pc-cost-breakdown") {
         // Send message to open PC cost breakdown in sidebar and await ack before closing
         try {
@@ -570,8 +551,8 @@ export function CMDKPalette({
 
   // Filter tools by search (only show specific tools in command palette)
   const commandPaletteToolIds: Array<
-    "controller-testing" | "quick-links" | "pc-cost-breakdown"
-  > = ["controller-testing", "quick-links", "pc-cost-breakdown"];
+    "controller-testing" | "pc-cost-breakdown"
+  > = ["controller-testing", "pc-cost-breakdown"];
 
   const filteredTools =
     activeProvider || !enabledSources.tools

@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import ControllerTesting from "./ControllerTesting";
 import TopOffersPage from "./TopOffers";
-import QuickLinks from "./QuickLinks";
 import CostBreakdown from "./CostBreakdown";
 import PriceChartingTool from "./PriceChartingTool";
 import EbayTaxonomyTool from "./EbayTaxonomyTool";
@@ -110,7 +109,6 @@ export default function UnifiedSidepanel() {
   > = {
     "controller-testing": ControllerTesting,
     "top-offers": TopOffersPage,
-    "quick-links": QuickLinks,
     "pc-cost-breakdown": CostBreakdown,
     "price-charting-tool": PriceChartingTool,
     "ebay-taxonomy-tool": EbayTaxonomyTool,

@@ -19,7 +19,6 @@ type ToolbarTool = {
 const buttonIdMap: Record<SidepanelToolId, string> = {
   "controller-testing": "scout-tb-controller",
   "top-offers": "scout-tb-top-offers",
-  "quick-links": "scout-tb-quick-links",
   "pc-cost-breakdown": "scout-tb-pc-costs",
   "ebay-taxonomy-tool": "scout-tb-ebay-taxonomy",
   "buying-guide": "scout-tb-buying-guide",

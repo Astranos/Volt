@@ -48,6 +48,7 @@ export default defineContentScript({
     // Feature flag from settings
     let enabled = true;
     let dismissedUntilRefresh = false;
+    let activePopup: Window | null = null;
     try {
       chrome.storage.sync.get(["cmdkSettings"], (result) => {
         const s = result?.cmdkSettings || {};
@@ -67,6 +68,7 @@ export default defineContentScript({
       requiresSelection?: boolean;
       requiresUrl?: boolean;
       onInvoke: (ctx: { x: number; y: number; selection: string }) => void;
+      getUrl?: (selection: string) => string;
     };
 
     const openUrl = (url: string) => {
@@ -74,6 +76,24 @@ export default defineContentScript({
         chrome.runtime.sendMessage({ action: "openUrl", url });
       } catch (_) {}
     };
+
+    const openSearchPopup = (url: string) => {
+      if (activePopup && !activePopup.closed) {
+        activePopup.close();
+      }
+
+      const width = 1100;
+      const height = 800;
+      const left = (window.screen.width - width) / 2;
+      const top = (window.screen.height - height) / 2;
+
+      activePopup = window.open(
+        url,
+        "scout_search_popup",
+        `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+      );
+    };
+
     const buildEbaySoldUrl = (q: string) => {
       try {
         const u = new URL(
@@ -432,8 +452,9 @@ export default defineContentScript({
         description: "Search for completed sold listings",
         icon: PackageSearch,
         requiresSelection: true,
+        getUrl: (s) => buildEbaySoldUrl(s),
         onInvoke: ({ selection }) =>
-          selection && openUrl(buildEbaySoldUrl(selection)),
+          selection && openSearchPopup(buildEbaySoldUrl(selection)),
       },
       {
         id: "google-upc",
@@ -442,9 +463,13 @@ export default defineContentScript({
         description: "Find products by UPC code",
         icon: Search,
         requiresSelection: true,
+        getUrl: (s) =>
+          `https://www.google.com/search?q=${encodeURIComponent(
+            "UPC for " + s
+          )}`,
         onInvoke: ({ selection }) =>
           selection &&
-          openUrl(
+          openSearchPopup(
             `https://www.google.com/search?q=${encodeURIComponent(
               "UPC for " + selection
             )}`
@@ -457,9 +482,13 @@ export default defineContentScript({
         description: "Find manufacturer part numbers on Google",
         icon: Search,
         requiresSelection: true,
+        getUrl: (s) =>
+          `https://www.google.com/search?q=${encodeURIComponent(
+            "MPN for " + s
+          )}`,
         onInvoke: ({ selection }) =>
           selection &&
-          openUrl(
+          openSearchPopup(
             `https://www.google.com/search?q=${encodeURIComponent(
               "MPN for " + selection
             )}`
@@ -473,9 +502,11 @@ export default defineContentScript({
         description: "Look up product information by UPC",
         icon: Barcode,
         requiresSelection: true,
+        getUrl: (s) =>
+          `https://www.upcitemdb.com/upc/${encodeURIComponent(s)}`,
         onInvoke: ({ selection }) =>
           selection &&
-          openUrl(
+          openSearchPopup(
             `https://www.upcitemdb.com/upc/${encodeURIComponent(selection)}`
           ),
       },
@@ -486,9 +517,13 @@ export default defineContentScript({
         description: "Check prices for collectibles and games",
         icon: TrendingUp,
         requiresSelection: true,
+        getUrl: (s) =>
+          `https://www.pricecharting.com/search-products?type=prices&q=${encodeURIComponent(
+            s
+          )}&go=Go`,
         onInvoke: ({ selection }) =>
           selection &&
-          openUrl(
+          openSearchPopup(
             `https://www.pricecharting.com/search-products?type=prices&q=${encodeURIComponent(
               selection
             )}&go=Go`
@@ -536,6 +571,9 @@ export default defineContentScript({
       .item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;cursor:pointer;outline:none;font-size:14px;font-weight:400;transition:all 0.15s;position:relative}
       .item:hover:not(.disabled){background:#f3f4f6}
       .item[aria-selected="true"]:not(.disabled), .item:focus:not(.disabled){background:#e5e7eb}
+      .item .new-tab-btn{display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:6px;border:none;background:transparent;color:#9ca3af;cursor:pointer;transition:all 0.15s;opacity:0;margin-left:4px}
+      .item:hover .new-tab-btn{opacity:1}
+      .item .new-tab-btn:hover{background:#d1d5db;color:#111827}
       .item.disabled{opacity:0.4;cursor:not-allowed}
       .item-tooltip{position:absolute;left:calc(100% + 8px);top:50%;transform:translateY(-50%);background:#111827;color:#fff;padding:6px 10px;border-radius:6px;font-size:12px;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity 0.2s;z-index:10;max-width:200px}
       .item:hover .item-tooltip{opacity:1;transition-delay:0.5s}
@@ -736,6 +774,19 @@ export default defineContentScript({
                     {item.icon && <item.icon size={16} />}
                   </div>
                   <div className="label">{item.label}</div>
+                  {item.getUrl && hasSelection && (
+                    <button
+                      className="new-tab-btn"
+                      title="Open in New Tab"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openUrl(item.getUrl!(lastSelection));
+                        closeMenu();
+                      }}
+                    >
+                      <ExternalLink size={14} />
+                    </button>
+                  )}
                   {item.shortcut && (
                     <div className="shortcut">{item.shortcut}</div>
                   )}
@@ -827,6 +878,14 @@ export default defineContentScript({
 
     window.addEventListener("resize", () => {
       if (isOpen) closeMenu();
+    });
+
+    // Close popup when main window is focused, similar to shopify-buttons
+    window.addEventListener("focus", () => {
+      if (activePopup && !activePopup.closed) {
+        activePopup.close();
+        activePopup = null;
+      }
     });
   },
 });

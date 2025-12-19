@@ -58,6 +58,10 @@
 
 **Justification:** Enables users to download files directly through the extension's interface when explicitly requested, such as exporting search results or saving data from extension features.
 
+### favicon
+
+**Justification:** The favicon permission allows the extension to access and display website favicons in the command palette, bookmarks, tabs, and other UI elements. This helps users visually identify websites and improves the overall user experience by providing familiar visual cues for quick recognition of pages and bookmarks.
+
 ### tabs
 
 **Justification:** Tabs permission is used to manage and interact with browser tabs, allowing users to switch between tabs, create new tabs, and access tab information through the extension's interface.

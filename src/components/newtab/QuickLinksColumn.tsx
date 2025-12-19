@@ -3,6 +3,7 @@ import { CSVLink, fetchCSVLinks, filterCSVLinks } from "@/src/utils/csv-links";
 import { Skeleton } from "@/src/components/ui/skeleton";
 import { ScrollArea } from "@/src/components/ui/scroll-area";
 import { Search as SearchIcon } from "lucide-react";
+import { getFaviconUrl } from "@/src/utils/favicon";
 import "./column-styles.css";
 
 export function QuickLinksColumn() {
@@ -112,6 +113,16 @@ export function QuickLinksColumn() {
                     className="newtab-column-item"
                     title={link.title}
                   >
+                    <div className="flex-shrink-0 w-4 h-4 flex items-center justify-center">
+                      <img
+                        src={getFaviconUrl(link.url)}
+                        alt=""
+                        className="w-4 h-4 object-contain"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.opacity = "0";
+                        }}
+                      />
+                    </div>
                     <span className="newtab-column-item-text">
                       {link.title}
                     </span>

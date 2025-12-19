@@ -16,7 +16,6 @@ import {
 export type SidepanelToolId =
   | "controller-testing"
   | "top-offers"
-  | "quick-links"
   | "pc-cost-breakdown"
   | "ebay-taxonomy-tool"
   | "buying-guide"
@@ -44,12 +43,6 @@ export const SIDEPANEL_TOOLS: SidepanelToolMetadata[] = [
     label: "Top Offer Calculator",
     description: "Open top offer calculator in the sidepanel",
     icon: Calculator,
-  },
-  {
-    id: "quick-links",
-    label: "Quick Links",
-    description: "Open quick links in the sidepanel",
-    icon: LinkIcon,
   },
   {
     id: "pc-cost-breakdown",

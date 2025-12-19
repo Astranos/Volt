@@ -261,37 +261,6 @@ export default defineBackground({
             log("open-controller-testing: no active tab id");
           }
         });
-      } else if (command === "open-quick-links") {
-        log("Quick links shortcut triggered");
-        // Open the quick links sidepanel
-        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-          const active = tabs && tabs[0];
-          if (active?.id) {
-            toggleSidePanelForTab(active.id, "quick-links");
-          } else {
-            log("open-quick-links: no active tab id");
-          }
-        });
-      } else if (command === "reopen-last-closed-tab") {
-        log("Reopen last closed tab shortcut triggered");
-        try {
-          if (!chrome.sessions || !chrome.sessions.restore) {
-            log("chrome.sessions.restore is not available");
-            return;
-          }
-          chrome.sessions.restore(undefined, (session) => {
-            if (chrome.runtime.lastError) {
-              log(
-                "Error restoring last closed session",
-                chrome.runtime.lastError.message
-              );
-              return;
-            }
-            log("Restored session from shortcut", session);
-          });
-        } catch (e) {
-          log("Unexpected error in reopen-last-closed-tab handler", e);
-        }
       }
     });
 
@@ -975,6 +944,40 @@ export default defineBackground({
             sendResponse({ tabs: tabInfo });
           });
           return true; // Keep message channel open for async response
+        case "GET_CLOSED_TABS":
+          // Get recently closed tabs using chrome.sessions API
+          try {
+            chrome.sessions.getRecentlyClosed({ maxResults: 25 }, (sessions) => {
+              const closedTabs = sessions
+                .filter((s) => s.tab)
+                .map((s) => ({
+                  id: s.tab.sessionId, // Use sessionId for closed tabs
+                  title: s.tab.title,
+                  url: s.tab.url,
+                  favIconUrl: s.tab.favIconUrl,
+                  windowId: s.tab.windowId,
+                  active: false,
+                }));
+              sendResponse({ tabs: closedTabs });
+            });
+          } catch (e) {
+            log("Error getting closed tabs:", e);
+            sendResponse({ tabs: [] });
+          }
+          return true; // Keep message channel open for async response
+        case "RESTORE_TAB":
+          // Restore a recently closed tab by sessionId
+          if (message.sessionId) {
+            chrome.sessions.restore(message.sessionId, (session) => {
+              if (message.closeTabId !== undefined) {
+                chrome.tabs.remove(message.closeTabId);
+              }
+              sendResponse({ success: true });
+            });
+          } else {
+            sendResponse({ success: false, error: "No sessionId provided" });
+          }
+          return true;
         case "SWITCH_TAB":
           // Switch to a specific tab
           const tabId = message.tabId;

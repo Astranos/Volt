@@ -1,5 +1,5 @@
 export interface TabInfo {
-  id: number;
+  id: number | string;
   title: string;
   url: string;
   favIconUrl?: string;
@@ -25,6 +25,22 @@ export class TabManager {
   }
 
   /**
+   * Get recently closed tabs
+   */
+  static async getClosedTabs(): Promise<TabInfo[]> {
+    return new Promise((resolve) => {
+      chrome.runtime.sendMessage({ action: "GET_CLOSED_TABS" }, (response) => {
+        if (chrome.runtime.lastError) {
+          console.error("Error getting closed tabs:", chrome.runtime.lastError);
+          resolve([]);
+          return;
+        }
+        resolve(response?.tabs || []);
+      });
+    });
+  }
+
+  /**
    * Switch to a specific tab
    */
   static async switchToTab(tabId: number): Promise<void> {
@@ -35,6 +51,26 @@ export class TabManager {
         }
         resolve();
       });
+    });
+  }
+
+  /**
+   * Restore a recently closed tab
+   */
+  static async restoreTab(
+    sessionId: string,
+    closeTabId?: number
+  ): Promise<void> {
+    return new Promise((resolve) => {
+      chrome.runtime.sendMessage(
+        { action: "RESTORE_TAB", sessionId, closeTabId },
+        () => {
+          if (chrome.runtime.lastError) {
+            console.error("Error restoring tab:", chrome.runtime.lastError);
+          }
+          resolve();
+        }
+      );
     });
   }
 

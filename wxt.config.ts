@@ -55,7 +55,7 @@ export default defineConfig({
       },
     ],
     name: "Volt",
-    version: "1.0.11",
+    version: "1.0.12",
     description:
       "A versatile Chrome extension with command palette, controller testing, and multi-provider search capabilities.",
     permissions: [
@@ -76,6 +76,7 @@ export default defineConfig({
       "downloads",
       // Needed for accessing recently closed tabs
       "sessions",
+      "favicon",
     ],
     host_permissions: ["<all_urls>"],
     icons: {
@@ -128,15 +129,6 @@ export default defineConfig({
           mac: "Command+Shift+O",
         },
         description: "Open extension options",
-      },
-      "reopen-last-closed-tab": {
-        suggested_key: {
-          // Note: Chrome may not allow overriding the browser's native Undo shortcut
-          // with Ctrl/Cmd+Z. Users can adjust this in chrome://extensions/shortcuts.
-          default: "Ctrl+Z",
-          mac: "Command+Z",
-        },
-        description: "Reopen last closed tab",
       },
     },
     chrome_url_overrides: {
