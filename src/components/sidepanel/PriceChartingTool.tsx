@@ -1,7 +1,14 @@
 /* global chrome */
 import { useState, useEffect, useRef } from "react";
 import SidepanelLayout from "./SidepanelLayout";
-import { Copy, ExternalLink, Info, Plus, Minus } from "lucide-react";
+import {
+  Copy,
+  ExternalLink,
+  Info,
+  Plus,
+  Minus,
+  TrendingUp,
+} from "lucide-react";
 import { Button } from "../ui/button";
 import { Card } from "../ui/card";
 import { ScrollArea } from "../ui/scroll-area";
@@ -21,6 +28,7 @@ import {
   DrawerTitle,
   DrawerTrigger,
 } from "../ui/drawer";
+import { PriceChartingHelp } from "./PriceChartingHelp";
 
 interface PriceChartingItem {
   id: string;
@@ -307,6 +315,7 @@ export default function PriceChartingTool() {
           <div className="flex gap-2">
             <input
               ref={searchInputRef}
+              id="tour-pc-search"
               type="text"
               placeholder="Enter UPC code or game name..."
               value={searchInput}
@@ -339,6 +348,7 @@ export default function PriceChartingTool() {
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
+                  id="tour-pc-open-site"
                   variant="outline"
                   size="icon"
                   className="h-9 w-9 shrink-0"
@@ -346,7 +356,7 @@ export default function PriceChartingTool() {
                 >
                   <img
                     src={chrome.runtime.getURL(
-                      "assets/logos/pricecharting.webp"
+                      "/assets/logos/pricecharting.webp"
                     )}
                     alt="PriceCharting"
                     className="h-4 w-4 object-contain brightness-0 invert"
@@ -361,8 +371,12 @@ export default function PriceChartingTool() {
                 </p>
               </TooltipContent>
             </Tooltip>
+            <PriceChartingHelp />
           </div>
-          <div className="text-sm text-muted-foreground">
+          <div
+            id="tour-pc-instruction"
+            className="text-sm text-muted-foreground"
+          >
             Click on the{" "}
             <span className="inline-block bg-[#22c55e] text-white px-2 py-0.5 rounded text-[11px] font-semibold leading-tight whitespace-nowrap">
               Add To Game Lot
@@ -374,7 +388,7 @@ export default function PriceChartingTool() {
         <div className="flex-1 flex flex-col min-h-0">
           <div className="p-4 pb-0 space-y-3">
             <div className="flex items-center justify-between">
-              <h3 className="font-semibold text-sm">
+              <h3 id="tour-pc-lot-summary" className="font-semibold text-sm">
                 Lot Items (
                 {savedItems.reduce(
                   (sum, item) => sum + (item.quantity ?? 1),
@@ -395,7 +409,10 @@ export default function PriceChartingTool() {
             </div>
 
             {savedItems.length > 0 && (
-              <div className="p-3 border border-border/40 rounded-md bg-muted/20">
+              <div
+                id="tour-pc-total-value"
+                className="p-3 border border-border/40 rounded-md bg-muted/20"
+              >
                 <div className="flex justify-between items-center">
                   <span className="font-semibold">Total Value</span>
                   <span className="font-bold text-lg text-green-600">
@@ -407,7 +424,7 @@ export default function PriceChartingTool() {
           </div>
 
           <ScrollArea className="flex-1 px-4 mt-2">
-            <div className="space-y-3 pb-4">
+            <div id="tour-pc-lot-items" className="space-y-3 pb-4">
               {savedItems.length === 0 ? (
                 <div className="text-center text-muted-foreground py-8 text-sm">
                   No games added yet.

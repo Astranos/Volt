@@ -7,24 +7,12 @@ import {
   ChevronLeft,
   X,
   Search,
-  History,
-  ExternalLink,
-  Bookmark,
-  Layout,
-  Info,
   TrendingUp,
-  Barcode,
-  Tag,
-  Store,
+  MousePointer2,
+  ListPlus,
+  Settings2,
 } from "lucide-react";
 import { cn } from "../../lib/utils";
-
-export type SearchMode =
-  | "google"
-  | "ebay"
-  | "pricecharting"
-  | "barcodelookup"
-  | "shopify";
 
 interface TourStep {
   targetId: string;
@@ -32,94 +20,60 @@ interface TourStep {
   description: string;
   icon: React.ReactNode;
   position: "bottom" | "top" | "left" | "right";
-  mode?: SearchMode;
 }
 
 const TOUR_STEPS: TourStep[] = [
   {
-    targetId: "tour-search-history",
-    title: "Unified Search & History",
+    targetId: "tour-pc-search",
+    title: "UPC & Game Search",
     description:
-      "Search across eBay, PriceCharting, Shopify, and more. Your recently closed tabs and history are also right here.",
-    icon: <Search className="h-5 w-5 text-green-600" />,
-    position: "right",
-  },
-  {
-    targetId: "tour-search-google",
-    title: "Google Search",
-    description:
-      "The default search engine for all your general inquiries and web browsing.",
+      "Quickly find any game or card by entering its name or UPC/Barcode number.",
     icon: <Search className="h-5 w-5 text-green-600" />,
     position: "bottom",
-    mode: "google",
   },
   {
-    targetId: "tour-search-pricecharting",
-    title: "PriceCharting Search",
+    targetId: "tour-pc-open-site",
+    title: "Open PriceCharting",
     description:
-      "Quickly look up game and card prices across the PriceCharting database.",
+      "Click here to open the PriceCharting website in a popup or new tab to see full market details and recent sales.",
     icon: <TrendingUp className="h-5 w-5 text-green-600" />,
     position: "bottom",
-    mode: "pricecharting",
   },
   {
-    targetId: "tour-search-upc",
-    title: "UPC Lookup",
+    targetId: "tour-pc-instruction",
+    title: "One-Click Lot Building",
     description:
-      "Find product details instantly by searching with a barcode or UPC number.",
-    icon: <Barcode className="h-5 w-5 text-green-600" />,
+      "When browsing PriceCharting.com, look for the 'Add To Game Lot' buttons added by Scout. Click them to instantly add prices to your list.",
+    icon: <MousePointer2 className="h-5 w-5 text-green-600" />,
     position: "bottom",
-    mode: "barcodelookup",
   },
   {
-    targetId: "tour-search-ebay",
-    title: "eBay Sold Prices",
+    targetId: "tour-pc-lot-summary",
+    title: "Lot Overview",
     description:
-      "Check actual sold prices on eBay to accurately value your items.",
-    icon: <Tag className="h-5 w-5 text-green-600" />,
+      "Track your total lot value and item count in real-time as you add new games and cards.",
+    icon: <ListPlus className="h-5 w-5 text-green-600" />,
     position: "bottom",
-    mode: "ebay",
   },
   {
-    targetId: "tour-search-shopify",
-    title: "Shopify Inventory",
+    targetId: "tour-pc-total-value",
+    title: "Market Valuation",
     description:
-      "Search through your Shopify store's inventory directly from your new tab.",
-    icon: <Store className="h-5 w-5 text-green-600" />,
-    position: "bottom",
-    mode: "shopify",
+      "Instantly see the combined market value of your entire lot based on the latest PriceCharting data.",
+    icon: <TrendingUp className="h-5 w-5 text-green-600" />,
+    position: "top",
   },
   {
-    targetId: "tour-quick-links",
-    title: "Quick Links",
+    targetId: "tour-pc-lot-items",
+    title: "Manage Your Lot",
     description:
-      "Your most important resale platforms and tools, organized for one-click access.",
-    icon: <ExternalLink className="h-5 w-5 text-green-600" />,
-    position: "left",
-  },
-  {
-    targetId: "tour-bookmarks",
-    title: "Browser Bookmarks",
-    description:
-      "Access your Chrome bookmarks without leaving the page. Stays perfectly in sync.",
-    icon: <Bookmark className="h-5 w-5 text-green-600" />,
-    position: "left",
-  },
-  {
-    targetId: "tour-tools",
-    title: "Sidepanel Tools",
-    description:
-      "Quickly open specialized tools like Price Checkers and Inventory Managers in the Chrome sidepanel.",
-    icon: <Layout className="h-5 w-5 text-green-600" />,
-    position: "bottom",
+      "Review added items, adjust quantities, copy UPCs, or view deep game details right here in the sidepanel.",
+    icon: <Settings2 className="h-5 w-5 text-green-600" />,
+    position: "top",
   },
 ];
 
-interface NewTabHelpProps {
-  onSelectMode?: (mode: SearchMode) => void;
-}
-
-export function NewTabHelp({ onSelectMode }: NewTabHelpProps) {
+export function PriceChartingHelp() {
   const [isOpen, setIsOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [coords, setCoords] = useState<{
@@ -128,6 +82,7 @@ export function NewTabHelp({ onSelectMode }: NewTabHelpProps) {
     width: number;
     height: number;
   } | null>(null);
+  const [tooltipStyle, setTooltipStyle] = useState<React.CSSProperties>({});
 
   const updateCoords = useCallback(() => {
     const step = TOUR_STEPS[currentStep];
@@ -141,18 +96,49 @@ export function NewTabHelp({ onSelectMode }: NewTabHelpProps) {
         height: rect.height,
       });
 
-      // If step has a mode, select it
-      if (step.mode && onSelectMode) {
-        onSelectMode(step.mode);
+      // Responsive positioning for sidepanel
+      const tooltipWidth = Math.min(window.innerWidth - 32, 280);
+      const padding = 16;
+
+      let left = rect.left + rect.width / 2 - tooltipWidth / 2;
+
+      if (step.position === "right") {
+        left = rect.left + rect.width + 12;
+      } else if (step.position === "left") {
+        left = rect.left - tooltipWidth - 12;
       }
+
+      // Final clamping to ensure it stays on screen
+      left = Math.max(
+        padding,
+        Math.min(window.innerWidth - tooltipWidth - padding, left)
+      );
+
+      let top = rect.top + rect.height / 2 - 90;
+      if (step.position === "bottom") {
+        top = rect.top + rect.height + 12;
+      } else if (step.position === "top") {
+        top = rect.top - 180;
+      }
+
+      setTooltipStyle({
+        top,
+        left,
+        width: tooltipWidth,
+      });
     }
-  }, [currentStep, onSelectMode]);
+  }, [currentStep]);
 
   useEffect(() => {
     if (isOpen) {
       updateCoords();
+      // Add a small delay to ensure elements are rendered and positioned
+      const timer = setTimeout(updateCoords, 100);
       window.addEventListener("resize", updateCoords);
-      return () => window.removeEventListener("resize", updateCoords);
+      return () => {
+        window.removeEventListener("resize", updateCoords);
+        clearTimeout(timer);
+      };
     }
   }, [isOpen, updateCoords]);
 
@@ -177,16 +163,15 @@ export function NewTabHelp({ onSelectMode }: NewTabHelpProps) {
     <>
       <Button
         variant="ghost"
-        size="sm"
-        className="h-8 ml-2 text-gray-400 hover:text-green-600 transition-colors gap-1.5"
+        size="icon"
+        className="h-8 w-8 text-muted-foreground hover:text-green-600 transition-colors"
         onClick={() => {
           setIsOpen(true);
           setCurrentStep(0);
         }}
-        title="Start Page Tour"
+        title="Show Guide"
       >
         <HelpCircle className="h-4 w-4" />
-        <span className="text-sm font-medium">View Guide</span>
       </Button>
 
       {isOpen &&
@@ -196,7 +181,7 @@ export function NewTabHelp({ onSelectMode }: NewTabHelpProps) {
             {/* SVG Overlay with Hole */}
             <svg className="absolute inset-0 w-full h-full pointer-events-none">
               <defs>
-                <mask id="tour-mask">
+                <mask id="pc-tour-mask">
                   <rect x="0" y="0" width="100%" height="100%" fill="white" />
                   <rect
                     x={coords.left - 8}
@@ -215,7 +200,7 @@ export function NewTabHelp({ onSelectMode }: NewTabHelpProps) {
                 width="100%"
                 height="100%"
                 fill="rgba(0,0,0,0.7)"
-                mask="url(#tour-mask)"
+                mask="url(#pc-tour-mask)"
                 className="pointer-events-auto"
                 onClick={() => setIsOpen(false)}
               />
@@ -224,26 +209,13 @@ export function NewTabHelp({ onSelectMode }: NewTabHelpProps) {
             {/* Tooltip Content */}
             <div
               className={cn(
-                "absolute z-[101] w-80 bg-white rounded-xl shadow-2xl p-6 transition-all duration-300 ease-in-out border border-green-100",
+                "absolute z-[101] bg-white rounded-xl shadow-2xl p-5 transition-all duration-300 ease-in-out border border-green-100",
                 step.position === "right" && "ml-4",
                 step.position === "left" && "mr-4",
                 step.position === "bottom" && "mt-4",
                 step.position === "top" && "mb-4"
               )}
-              style={{
-                top:
-                  step.position === "bottom"
-                    ? coords.top + coords.height + 20
-                    : step.position === "top"
-                    ? coords.top - 200
-                    : coords.top + coords.height / 2 - 100,
-                left:
-                  step.position === "right"
-                    ? coords.left + coords.width + 20
-                    : step.position === "left"
-                    ? coords.left - 340
-                    : coords.left + coords.width / 2 - 160,
-              }}
+              style={tooltipStyle}
             >
               <button
                 onClick={() => setIsOpen(false)}
@@ -254,10 +226,10 @@ export function NewTabHelp({ onSelectMode }: NewTabHelpProps) {
 
               <div className="flex items-center gap-3 mb-3">
                 <div className="p-2 bg-green-50 rounded-lg">{step.icon}</div>
-                <h3 className="font-bold text-gray-900">{step.title}</h3>
+                <h3 className="font-bold text-gray-900 text-sm">{step.title}</h3>
               </div>
 
-              <p className="text-sm text-gray-600 leading-relaxed mb-6">
+              <p className="text-xs text-gray-600 leading-relaxed mb-6">
                 {step.description}
               </p>
 
@@ -267,8 +239,8 @@ export function NewTabHelp({ onSelectMode }: NewTabHelpProps) {
                     <div
                       key={i}
                       className={cn(
-                        "h-1.5 w-1.5 rounded-full transition-all duration-300",
-                        i === currentStep ? "w-4 bg-green-600" : "bg-gray-200"
+                        "h-1 w-1 rounded-full transition-all duration-300",
+                        i === currentStep ? "w-3 bg-green-600" : "bg-gray-200"
                       )}
                     />
                   ))}
@@ -280,20 +252,20 @@ export function NewTabHelp({ onSelectMode }: NewTabHelpProps) {
                       variant="ghost"
                       size="sm"
                       onClick={prevStep}
-                      className="h-8 px-2 text-gray-500"
+                      className="h-7 px-2 text-gray-500 text-[11px]"
                     >
-                      <ChevronLeft className="h-4 w-4 mr-1" />
+                      <ChevronLeft className="h-3 w-3 mr-1" />
                       Back
                     </Button>
                   )}
                   <Button
                     size="sm"
                     onClick={nextStep}
-                    className="h-8 px-4 bg-green-600 hover:bg-green-700 text-white shadow-sm transition-all hover:scale-105"
+                    className="h-7 px-3 bg-green-600 hover:bg-green-700 text-white shadow-sm transition-all text-[11px]"
                   >
                     {currentStep === TOUR_STEPS.length - 1 ? "Finish" : "Next"}
                     {currentStep < TOUR_STEPS.length - 1 && (
-                      <ChevronRight className="h-4 w-4 ml-1" />
+                      <ChevronRight className="h-3 w-3 ml-1" />
                     )}
                   </Button>
                 </div>
@@ -305,3 +277,4 @@ export function NewTabHelp({ onSelectMode }: NewTabHelpProps) {
     </>
   );
 }
+

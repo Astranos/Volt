@@ -6,19 +6,13 @@ import { ScrollArea } from "@/src/components/ui/scroll-area";
 import { ToggleGroup, ToggleGroupItem } from "@/src/components/ui/toggle-group";
 import { Search as SearchIcon } from "lucide-react";
 import { searchProviders } from "../cmdk-palette/SearchProviders";
+import { type SearchMode } from "./NewTabHelp";
 import "./closed-tabs-panel.css";
 
 interface ClosedTabsPanelProps {
   onSearchSubmit?: (query: string) => void;
-  activeMode?:
-    | "google"
-    | "ebay"
-    | "pricecharting"
-    | "barcodelookup"
-    | "shopify";
-  onToggleSearchMode?: (
-    mode: "google" | "ebay" | "pricecharting" | "barcodelookup" | "shopify"
-  ) => void;
+  activeMode?: SearchMode;
+  onToggleSearchMode?: (mode: SearchMode) => void;
   resolvingShopifyStore?: boolean;
 }
 
@@ -155,10 +149,16 @@ export function ClosedTabsPanel({
           }}
           className="closed-tabs-search-toggle"
         >
-          <ToggleGroupItem value="google" size="sm" className="text-xs px-2">
+          <ToggleGroupItem
+            id="tour-search-google"
+            value="google"
+            size="sm"
+            className="text-xs px-2"
+          >
             Google
           </ToggleGroupItem>
           <ToggleGroupItem
+            id="tour-search-pricecharting"
             value="pricecharting"
             size="sm"
             className="text-xs px-2"
@@ -166,16 +166,23 @@ export function ClosedTabsPanel({
             PriceCharting
           </ToggleGroupItem>
           <ToggleGroupItem
+            id="tour-search-upc"
             value="barcodelookup"
             size="sm"
             className="text-xs px-2"
           >
             UPC
           </ToggleGroupItem>
-          <ToggleGroupItem value="ebay" size="sm" className="text-xs px-2">
+          <ToggleGroupItem
+            id="tour-search-ebay"
+            value="ebay"
+            size="sm"
+            className="text-xs px-2"
+          >
             eBay
           </ToggleGroupItem>
           <ToggleGroupItem
+            id="tour-search-shopify"
             value="shopify"
             size="sm"
             className="text-xs px-2"

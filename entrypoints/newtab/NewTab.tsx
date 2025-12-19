@@ -2,7 +2,10 @@ import React, { useEffect, useState } from "react";
 import { ClosedTabsPanel } from "../../src/components/newtab/ClosedTabsPanel";
 import { QuickLinksColumn } from "../../src/components/newtab/QuickLinksColumn";
 import { BookmarksColumn } from "../../src/components/newtab/BookmarksColumn";
-import { NewTabHelp } from "../../src/components/newtab/NewTabHelp";
+import {
+  NewTabHelp,
+  type SearchMode,
+} from "../../src/components/newtab/NewTabHelp";
 import { Button } from "../../src/components/ui/button";
 import {
   Tooltip,
@@ -21,13 +24,6 @@ import "../../src/components/cmdk-palette/styles.css";
 import "../../src/components/newtab/column-styles.css";
 import "../../src/components/newtab/closed-tabs-panel.css";
 import "../../src/components/newtab/newtab-layout.css";
-
-type SearchMode =
-  | "google"
-  | "ebay"
-  | "pricecharting"
-  | "barcodelookup"
-  | "shopify";
 
 export default function NewTab() {
   const [activeMode, setActiveMode] = useState<SearchMode>("google");
@@ -351,7 +347,14 @@ export default function NewTab() {
               className="newtab-header-logo"
             />
             <h1 className="newtab-header-title">Volt Resale</h1>
-            <NewTabHelp />
+            <NewTabHelp
+              onSelectMode={(mode) => {
+                setActiveMode(mode);
+                if (typeof chrome !== "undefined" && chrome.storage?.local) {
+                  chrome.storage.local.set({ scout_search_mode: mode });
+                }
+              }}
+            />
 
             {/* Toolbar buttons for sidepanel tools */}
             <TooltipProvider>
