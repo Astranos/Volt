@@ -502,8 +502,7 @@ export default defineContentScript({
         description: "Look up product information by UPC",
         icon: Barcode,
         requiresSelection: true,
-        getUrl: (s) =>
-          `https://www.upcitemdb.com/upc/${encodeURIComponent(s)}`,
+        getUrl: (s) => `https://www.upcitemdb.com/upc/${encodeURIComponent(s)}`,
         onInvoke: ({ selection }) =>
           selection &&
           openSearchPopup(

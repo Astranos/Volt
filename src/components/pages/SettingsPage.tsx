@@ -19,7 +19,6 @@ import {
   MousePointerClick,
   MapPin,
   Plus,
-  Minus,
 } from "lucide-react";
 import { getBookmarkFolders, BookmarkFolder } from "@/src/utils/bookmarks";
 
@@ -80,6 +79,9 @@ interface CMDKSettings {
       premium: {
         rules: { threshold: number; percentage: number }[];
         defaultPercentage: number;
+      };
+      checkout?: {
+        percentage: number;
       };
     };
   };
@@ -170,6 +172,9 @@ const DEFAULT_SETTINGS: CMDKSettings = {
           { threshold: 750, percentage: 0.65 },
         ],
         defaultPercentage: 0.75,
+      },
+      checkout: {
+        percentage: 0.8,
       },
     },
   },
@@ -848,6 +853,29 @@ export default function SettingsPage() {
           [type]: {
             ...currentRates,
             defaultPercentage: value,
+          },
+        },
+      },
+    };
+    setSettings(newSettings);
+
+    // Auto-save
+    chrome.storage.sync.set({ cmdkSettings: newSettings }, () => {
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 2000);
+    });
+  };
+
+  const handleUpdateCheckoutRate = (value: number) => {
+    const newSettings = {
+      ...settings,
+      topOffers: {
+        ...settings.topOffers,
+        customRates: {
+          ...(settings.topOffers?.customRates ||
+            DEFAULT_SETTINGS.topOffers!.customRates!),
+          checkout: {
+            percentage: value,
           },
         },
       },
@@ -2166,6 +2194,9 @@ export default function SettingsPage() {
                       ],
                       defaultPercentage: 0.7,
                     },
+                    checkout: {
+                      percentage: 0.8,
+                    },
                   };
 
                   const newSettings = {
@@ -2381,6 +2412,36 @@ export default function SettingsPage() {
                         Add Rule
                       </button>
                     </div>
+                  </div>
+                </div>
+
+                <div className="border-t border-border" />
+
+                {/* Checkout Rate Editor */}
+                <div>
+                  <h3 className="font-semibold text-lg mb-4">Checkout Rate</h3>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Set the percentage used for the "Top Offer (Checkout)" calculation. This rate applies to all amounts.
+                  </p>
+                  <div className="grid grid-cols-12 gap-4 items-center">
+                    <div className="col-span-5 text-sm font-medium pl-2">
+                      All amounts
+                    </div>
+                    <div className="col-span-5">
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={
+                          settings.topOffers?.customRates?.checkout
+                            ?.percentage ?? 0.8
+                        }
+                        onChange={(e) =>
+                          handleUpdateCheckoutRate(parseFloat(e.target.value))
+                        }
+                        className="w-full px-3 py-2 border border-border rounded-lg bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
+                      />
+                    </div>
+                    <div className="col-span-2"></div>
                   </div>
                 </div>
               </div>

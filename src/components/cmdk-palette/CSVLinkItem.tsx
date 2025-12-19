@@ -33,9 +33,7 @@ export function CSVLinkItem({ link, kbdHintAction }: CSVLinkItemProps) {
           )}
         </div>
         {/* Description intentionally hidden per requirements */}
-        <p className="text-xs text-gray-400 truncate">
-          {link.url}
-        </p>
+        <p className="text-xs text-gray-400 truncate">{link.url}</p>
       </div>
       {kbdHintAction && (
         <div className="cmdk-item-kbd-hint">

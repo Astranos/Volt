@@ -261,6 +261,34 @@ export default defineBackground({
             log("open-controller-testing: no active tab id");
           }
         });
+      } else if (command === "reopen-last-tab") {
+        log("Reopen last tab command triggered");
+        // Get the most recently closed tab and restore it
+        chrome.sessions.getRecentlyClosed({ maxResults: 1 }, (sessions) => {
+          if (chrome.runtime.lastError) {
+            log(
+              "Error getting recently closed tabs:",
+              chrome.runtime.lastError
+            );
+            return;
+          }
+          // Find the first closed tab (not a window)
+          const closedTab = sessions.find((s) => s.tab);
+          if (closedTab && closedTab.tab) {
+            chrome.sessions.restore(
+              closedTab.tab.sessionId,
+              (restoredSession) => {
+                if (chrome.runtime.lastError) {
+                  log("Error restoring tab:", chrome.runtime.lastError);
+                } else {
+                  log("Successfully restored last closed tab");
+                }
+              }
+            );
+          } else {
+            log("No recently closed tabs found");
+          }
+        });
       }
     });
 
@@ -947,19 +975,22 @@ export default defineBackground({
         case "GET_CLOSED_TABS":
           // Get recently closed tabs using chrome.sessions API
           try {
-            chrome.sessions.getRecentlyClosed({ maxResults: 25 }, (sessions) => {
-              const closedTabs = sessions
-                .filter((s) => s.tab)
-                .map((s) => ({
-                  id: s.tab.sessionId, // Use sessionId for closed tabs
-                  title: s.tab.title,
-                  url: s.tab.url,
-                  favIconUrl: s.tab.favIconUrl,
-                  windowId: s.tab.windowId,
-                  active: false,
-                }));
-              sendResponse({ tabs: closedTabs });
-            });
+            chrome.sessions.getRecentlyClosed(
+              { maxResults: 25 },
+              (sessions) => {
+                const closedTabs = sessions
+                  .filter((s) => s.tab)
+                  .map((s) => ({
+                    id: s.tab.sessionId, // Use sessionId for closed tabs
+                    title: s.tab.title,
+                    url: s.tab.url,
+                    favIconUrl: s.tab.favIconUrl,
+                    windowId: s.tab.windowId,
+                    active: false,
+                  }));
+                sendResponse({ tabs: closedTabs });
+              }
+            );
           } catch (e) {
             log("Error getting closed tabs:", e);
             sendResponse({ tabs: [] });

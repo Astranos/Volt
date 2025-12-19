@@ -130,6 +130,13 @@ export default defineConfig({
         },
         description: "Open extension options",
       },
+      "reopen-last-tab": {
+        suggested_key: {
+          default: "Ctrl+Shift+Z",
+          mac: "Command+Shift+Z",
+        },
+        description: "Reopen last closed tab",
+      },
     },
     chrome_url_overrides: {
       newtab: "newtab.html",

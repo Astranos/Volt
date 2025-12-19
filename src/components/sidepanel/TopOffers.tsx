@@ -3,13 +3,13 @@
 
 import { useState, useEffect } from "react";
 import { Input } from "../ui/input";
-import { Check, Settings } from "lucide-react";
+import { Check, Pencil } from "lucide-react";
 import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "../ui/accordion";
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "../ui/tooltip";
 import SidepanelLayout from "./SidepanelLayout";
 
 interface RateRule {
@@ -25,6 +25,9 @@ interface CustomRates {
   premium: {
     rules: RateRule[];
     defaultPercentage: number;
+  };
+  checkout?: {
+    percentage: number;
   };
 }
 
@@ -173,7 +176,8 @@ function TopOfferCalculator() {
     const projection = parseFloat(numericValue) || 0;
     const topOffer = calculateTopOffer(projection, customRates);
     const topOfferPremium = calculateTopOfferPremium(projection, customRates);
-    const topOfferCheckout = floorToMultiple(projection * 0.8, 5);
+    const checkoutRate = customRates?.checkout?.percentage ?? 0.8;
+    const topOfferCheckout = floorToMultiple(projection * checkoutRate, 5);
 
     setResults({
       topOffer,
@@ -184,14 +188,11 @@ function TopOfferCalculator() {
 
   const openSettings = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (
-      typeof chrome !== "undefined" &&
-      chrome.runtime &&
-      chrome.runtime.openOptionsPage
-    ) {
-      chrome.runtime.openOptionsPage();
-    } else {
-      window.open(chrome.runtime.getURL("/options.html"));
+    if (typeof chrome !== "undefined" && chrome.runtime) {
+      chrome.runtime.sendMessage({
+        action: "open-settings",
+        section: "topoffers",
+      });
     }
   };
 
@@ -199,179 +200,244 @@ function TopOfferCalculator() {
     <SidepanelLayout>
       <div className="p-4 space-y-4">
         <div className="space-y-4">
-          <div className="space-y-3">
+          <div className="relative">
             <Input
               type="text"
               value={projectionAmount}
               onChange={(e) => handleProjectionChange(e.target.value)}
-              className="text-lg h-12 bg-slate-50 focus:bg-white"
-              placeholder="Enter estimated projection"
+              className="text-lg h-12 bg-slate-50 focus:bg-white pr-12"
+              placeholder="Enter Projection"
             />
-          </div>
-
-          {/* Results Section */}
-          <div className="space-y-4">
-            <Accordion type="single" collapsible className="w-full">
-              <AccordionItem value="info" className="border-none">
-                <div className="flex items-center justify-between w-full">
-                  <AccordionTrigger className="py-2 text-sm text-muted-foreground hover:no-underline justify-start gap-2 flex-1">
-                    <span>How offers are calculated</span>
-                  </AccordionTrigger>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
                   <button
                     onClick={openSettings}
-                    className="p-1.5 text-muted-foreground hover:text-foreground rounded-md hover:bg-muted transition-colors"
-                    title="Open Settings"
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2 h-9 w-9 text-muted-foreground hover:text-foreground hover:bg-muted/80 rounded-md transition-colors flex items-center justify-center"
                   >
-                    <Settings className="h-4 w-4" />
+                    <Pencil className="h-4 w-4" />
                   </button>
-                </div>
-                <AccordionContent>
-                  <div className="space-y-4 text-sm text-muted-foreground pt-2">
-                    <div>
-                      <h6 className="font-semibold text-foreground mb-1">
-                        Top Offer
-                      </h6>
-                      <p className="mb-1.5">
-                        Standard offer calculated as a percentage of projection,
-                        rounded down to the nearest $5.
-                      </p>
-                      <ul className="list-disc list-inside ml-2 space-y-0.5 text-xs">
-                        {customRates ? (
-                          <>
-                            {customRates.standard.rules.map((rule, i) => (
-                              <li key={i}>
-                                Under ${rule.threshold}:{" "}
-                                <strong>
-                                  {Math.round(rule.percentage * 100)}%
-                                </strong>
-                              </li>
-                            ))}
-                            <li>
-                              $
-                              {
-                                customRates.standard.rules[
-                                  customRates.standard.rules.length - 1
-                                ]?.threshold
-                              }
-                              +:{" "}
-                              <strong>
-                                {Math.round(
-                                  customRates.standard.defaultPercentage * 100
-                                )}
-                                %
-                              </strong>
-                            </li>
-                          </>
-                        ) : (
-                          <>
-                            <li>
-                              Under $50: <strong>20%</strong>
-                            </li>
-                            <li>
-                              $50–$99.99: <strong>30%</strong>
-                            </li>
-                            <li>
-                              $100–$249.99: <strong>35%</strong>
-                            </li>
-                            <li>
-                              $250–$499.99: <strong>45%</strong>
-                            </li>
-                            <li>
-                              $500–$749.99: <strong>50%</strong>
-                            </li>
-                            <li>
-                              $750+: <strong>60%</strong>
-                            </li>
-                          </>
+                </TooltipTrigger>
+                <TooltipContent className="border-border bg-popover text-popover-foreground">
+                  <p>Change Rates</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3">
+            <div
+              onClick={() => handleCopy(results.topOffer, "standard")}
+              className="text-center p-4 bg-secondary/50 rounded-lg border border-border/50 cursor-pointer hover:bg-secondary transition-colors select-none"
+            >
+              <div className="text-3xl font-bold text-primary">
+                ${formatCurrency(results.topOffer)}
+              </div>
+              <div className="text-sm text-muted-foreground mt-1 flex items-center justify-center gap-1.5">
+                {copied === "standard" ? (
+                  <>
+                    <Check className="h-3.5 w-3.5 text-green-500" />
+                    <span className="text-green-500 font-medium">Copied!</span>
+                  </>
+                ) : (
+                  "Top Offer"
+                )}
+              </div>
+            </div>
+
+            <div
+              onClick={() => handleCopy(results.topOfferPremium, "premium")}
+              className="text-center p-4 bg-secondary/50 rounded-lg border border-border/50 cursor-pointer hover:bg-secondary transition-colors select-none"
+            >
+              <div className="text-3xl font-bold text-primary">
+                ${formatCurrency(results.topOfferPremium)}
+              </div>
+              <div className="text-sm text-muted-foreground mt-1 flex items-center justify-center gap-1.5">
+                {copied === "premium" ? (
+                  <>
+                    <Check className="h-3.5 w-3.5 text-green-500" />
+                    <span className="text-green-500 font-medium">Copied!</span>
+                  </>
+                ) : (
+                  "Top Offer (Premium)"
+                )}
+              </div>
+            </div>
+
+            <div
+              onClick={() => handleCopy(results.topOfferCheckout, "checkout")}
+              className="text-center p-4 bg-secondary/50 rounded-lg border border-border/50 cursor-pointer hover:bg-secondary transition-colors select-none"
+            >
+              <div className="text-3xl font-bold text-primary">
+                ${formatCurrency(results.topOfferCheckout)}
+              </div>
+              <div className="text-sm text-muted-foreground mt-1 flex items-center justify-center gap-1.5">
+                {copied === "checkout" ? (
+                  <>
+                    <Check className="h-3.5 w-3.5 text-green-500" />
+                    <span className="text-green-500 font-medium">Copied!</span>
+                  </>
+                ) : (
+                  "Top Offer (Checkout)"
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Current Rates Display */}
+          <div className="pt-2 border-t border-border/50 space-y-4">
+            {/* Standard Rates */}
+            <div>
+              <div className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground mb-2 px-1">
+                Standard Rates
+              </div>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 px-1">
+                {customRates ? (
+                  <>
+                    {customRates.standard.rules.map((rule, i) => (
+                      <div key={i} className="flex justify-between text-xs">
+                        <span className="text-muted-foreground">
+                          Under ${rule.threshold}
+                        </span>
+                        <span className="font-semibold text-foreground">
+                          {Math.round(rule.percentage * 100)}%
+                        </span>
+                      </div>
+                    ))}
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">
+                        $
+                        {
+                          customRates.standard.rules[
+                            customRates.standard.rules.length - 1
+                          ]?.threshold
+                        }
+                        +
+                      </span>
+                      <span className="font-semibold text-foreground">
+                        {Math.round(
+                          customRates.standard.defaultPercentage * 100
                         )}
-                      </ul>
-                    </div>
-
-                    <div>
-                      <h6 className="font-semibold text-foreground mb-1">
-                        Top Offer (Premium)
-                      </h6>
-                      <p>
-                        Higher offer for premium items with better rates for
-                        larger projections, rounded down to the nearest $5.
-                      </p>
-                    </div>
-
-                    <div>
-                      <h6 className="font-semibold text-foreground mb-1">
-                        Top Offer (Checkout)
-                      </h6>
-                      <p>
-                        Always <strong>80%</strong> of projection, rounded down
-                        to the nearest $5. Highest offer amount.
-                      </p>
-                    </div>
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
-            </Accordion>
-
-            <div className="grid grid-cols-1 gap-3">
-              <div
-                onClick={() => handleCopy(results.topOffer, "standard")}
-                className="text-center p-4 bg-secondary/50 rounded-lg border border-border/50 cursor-pointer hover:bg-secondary transition-colors select-none"
-              >
-                <div className="text-3xl font-bold text-primary">
-                  ${formatCurrency(results.topOffer)}
-                </div>
-                <div className="text-sm text-muted-foreground mt-1 flex items-center justify-center gap-1.5">
-                  {copied === "standard" ? (
-                    <>
-                      <Check className="h-3.5 w-3.5 text-green-500" />
-                      <span className="text-green-500 font-medium">
-                        Copied!
+                        %
                       </span>
-                    </>
-                  ) : (
-                    "Top Offer"
-                  )}
-                </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">Under $50</span>
+                      <span className="font-semibold text-foreground">20%</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">$50–$99</span>
+                      <span className="font-semibold text-foreground">30%</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">$100–$249</span>
+                      <span className="font-semibold text-foreground">35%</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">$250–$499</span>
+                      <span className="font-semibold text-foreground">45%</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">$500–$749</span>
+                      <span className="font-semibold text-foreground">50%</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">$750+</span>
+                      <span className="font-semibold text-foreground">60%</span>
+                    </div>
+                  </>
+                )}
               </div>
+            </div>
 
-              <div
-                onClick={() => handleCopy(results.topOfferPremium, "premium")}
-                className="text-center p-4 bg-secondary/50 rounded-lg border border-border/50 cursor-pointer hover:bg-secondary transition-colors select-none"
-              >
-                <div className="text-3xl font-bold text-primary">
-                  ${formatCurrency(results.topOfferPremium)}
-                </div>
-                <div className="text-sm text-muted-foreground mt-1 flex items-center justify-center gap-1.5">
-                  {copied === "premium" ? (
-                    <>
-                      <Check className="h-3.5 w-3.5 text-green-500" />
-                      <span className="text-green-500 font-medium">
-                        Copied!
-                      </span>
-                    </>
-                  ) : (
-                    "Top Offer (Premium)"
-                  )}
-                </div>
+            {/* Premium Rates */}
+            <div>
+              <div className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground mb-2 px-1">
+                Premium Rates
               </div>
-
-              <div
-                onClick={() => handleCopy(results.topOfferCheckout, "checkout")}
-                className="text-center p-4 bg-secondary/50 rounded-lg border border-border/50 cursor-pointer hover:bg-secondary transition-colors select-none"
-              >
-                <div className="text-3xl font-bold text-primary">
-                  ${formatCurrency(results.topOfferCheckout)}
-                </div>
-                <div className="text-sm text-muted-foreground mt-1 flex items-center justify-center gap-1.5">
-                  {copied === "checkout" ? (
-                    <>
-                      <Check className="h-3.5 w-3.5 text-green-500" />
-                      <span className="text-green-500 font-medium">
-                        Copied!
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 px-1">
+                {customRates ? (
+                  <>
+                    {customRates.premium.rules.map((rule, i) => (
+                      <div key={i} className="flex justify-between text-xs">
+                        <span className="text-muted-foreground">
+                          Under ${rule.threshold}
+                        </span>
+                        <span className="font-semibold text-foreground">
+                          {Math.round(rule.percentage * 100)}%
+                        </span>
+                      </div>
+                    ))}
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">
+                        $
+                        {
+                          customRates.premium.rules[
+                            customRates.premium.rules.length - 1
+                          ]?.threshold
+                        }
+                        +
                       </span>
-                    </>
-                  ) : (
-                    "Top Offer (Checkout)"
-                  )}
+                      <span className="font-semibold text-foreground">
+                        {Math.round(
+                          customRates.premium.defaultPercentage * 100
+                        )}
+                        %
+                      </span>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">Under $50</span>
+                      <span className="font-semibold text-foreground">20%</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">$50–$99</span>
+                      <span className="font-semibold text-foreground">30%</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">$100–$199</span>
+                      <span className="font-semibold text-foreground">35%</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">$200–$249</span>
+                      <span className="font-semibold text-foreground">45%</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">$250–$499</span>
+                      <span className="font-semibold text-foreground">55%</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">$500–$749</span>
+                      <span className="font-semibold text-foreground">60%</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">$750+</span>
+                      <span className="font-semibold text-foreground">70%</span>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Checkout Rate */}
+            <div>
+              <div className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground mb-2 px-1">
+                Checkout Rate
+              </div>
+              <div className="px-1">
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">All amounts</span>
+                  <span className="font-semibold text-foreground">
+                    {Math.round(
+                      (customRates?.checkout?.percentage ?? 0.8) * 100
+                    )}
+                    %
+                  </span>
                 </div>
               </div>
             </div>
