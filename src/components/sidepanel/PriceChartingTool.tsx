@@ -1,7 +1,7 @@
 /* global chrome */
 import { useState, useEffect, useRef } from "react";
 import SidepanelLayout from "./SidepanelLayout";
-import { Copy, Trash2, ExternalLink, Info } from "lucide-react";
+import { Copy, ExternalLink, Info, Plus, Minus } from "lucide-react";
 import { Button } from "../ui/button";
 import { Card } from "../ui/card";
 import { ScrollArea } from "../ui/scroll-area";
@@ -31,6 +31,7 @@ interface PriceChartingItem {
   url: string;
   upc?: string;
   details?: Record<string, string> | null;
+  quantity?: number; // Default to 1 if not present
 }
 
 export default function PriceChartingTool() {
@@ -46,7 +47,13 @@ export default function PriceChartingTool() {
     const saved = localStorage.getItem("scout_saved_pricecharting_lot");
     if (saved) {
       try {
-        setSavedItems(JSON.parse(saved));
+        const parsed = JSON.parse(saved);
+        // Ensure all items have quantity (default to 1 for existing items)
+        const itemsWithQuantity = parsed.map((item: PriceChartingItem) => ({
+          ...item,
+          quantity: item.quantity ?? 1,
+        }));
+        setSavedItems(itemsWithQuantity);
       } catch (e) {
         console.error("Failed to parse saved lot", e);
       }
@@ -60,7 +67,14 @@ export default function PriceChartingTool() {
           const pendingItems = result.scout_pricecharting_pending_items || [];
           if (pendingItems.length > 0) {
             setSavedItems((prev) => {
-              const newItems = [...prev, ...pendingItems];
+              // Ensure pending items have quantity
+              const itemsWithQuantity = pendingItems.map(
+                (item: PriceChartingItem) => ({
+                  ...item,
+                  quantity: item.quantity ?? 1,
+                })
+              );
+              const newItems = [...prev, ...itemsWithQuantity];
               localStorage.setItem(
                 "scout_saved_pricecharting_lot",
                 JSON.stringify(newItems)
@@ -137,9 +151,21 @@ export default function PriceChartingTool() {
     };
   }, []);
 
-  const removeItem = (id: string) => {
+  const updateQuantity = (id: string, delta: number) => {
     setSavedItems((prev) => {
-      const next = prev.filter((item) => item.id !== id);
+      const next = prev
+        .map((item) => {
+          if (item.id === id) {
+            const newQuantity = Math.max(0, (item.quantity ?? 1) + delta);
+            // Remove item if quantity reaches 0
+            if (newQuantity === 0) {
+              return null;
+            }
+            return { ...item, quantity: newQuantity };
+          }
+          return item;
+        })
+        .filter((item): item is PriceChartingItem => item !== null);
       localStorage.setItem(
         "scout_saved_pricecharting_lot",
         JSON.stringify(next)
@@ -178,7 +204,9 @@ export default function PriceChartingTool() {
   const getItemPrice = (item: PriceChartingItem) => {
     const value =
       typeof item.price === "number" ? item.price : Number(item.price);
-    return Number.isFinite(value) ? value : 0;
+    const price = Number.isFinite(value) ? value : 0;
+    const quantity = item.quantity ?? 1;
+    return price * quantity;
   };
 
   const openPriceCharting = () => {
@@ -347,7 +375,12 @@ export default function PriceChartingTool() {
           <div className="p-4 pb-0 space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="font-semibold text-sm">
-                Lot Items ({savedItems.length})
+                Lot Items (
+                {savedItems.reduce(
+                  (sum, item) => sum + (item.quantity ?? 1),
+                  0
+                )}
+                )
               </h3>
               {savedItems.length > 0 && (
                 <Button
@@ -404,8 +437,21 @@ export default function PriceChartingTool() {
                           </div>
                         )}
                       </div>
-                      <div className="font-bold text-sm whitespace-nowrap">
-                        ${getItemPrice(item).toFixed(2)}
+                      <div className="text-right">
+                        <div className="font-bold text-sm whitespace-nowrap">
+                          ${getItemPrice(item).toFixed(2)}
+                        </div>
+                        {(item.quantity ?? 1) > 1 && (
+                          <div className="text-xs text-muted-foreground mt-0.5">
+                            $
+                            {(
+                              (typeof item.price === "number"
+                                ? item.price
+                                : Number(item.price)) || 0
+                            ).toFixed(2)}{" "}
+                            × {item.quantity ?? 1}
+                          </div>
+                        )}
                       </div>
                     </div>
                     <div className="flex gap-2 mt-3">
@@ -508,22 +554,41 @@ export default function PriceChartingTool() {
                           </DrawerContent>
                         </Drawer>
                       )}
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-8 hover:bg-destructive hover:text-destructive-foreground hover:border-destructive"
-                            onClick={() => removeItem(item.id)}
-                          >
-                            <Trash2 className="h-3 w-3 mr-1" />
-                            Remove
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent className="border-border">
-                          <p>Remove item from lot</p>
-                        </TooltipContent>
-                      </Tooltip>
+                      <div className="flex items-center gap-1 border border-border/40 rounded-md">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0 hover:bg-destructive hover:text-destructive-foreground"
+                              onClick={() => updateQuantity(item.id, -1)}
+                            >
+                              <Minus className="h-3 w-3" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent className="border-border">
+                            <p>Decrease quantity</p>
+                          </TooltipContent>
+                        </Tooltip>
+                        <span className="text-sm font-medium min-w-[2rem] text-center">
+                          {item.quantity ?? 1}
+                        </span>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0"
+                              onClick={() => updateQuantity(item.id, 1)}
+                            >
+                              <Plus className="h-3 w-3" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent className="border-border">
+                            <p>Increase quantity</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
                     </div>
                   </Card>
                 ))

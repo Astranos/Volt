@@ -301,6 +301,16 @@ export default defineContentScript({
               });
 
               // Try to open/switch the sidepanel to the PriceCharting tool
+              // Always use the background script approach for reliability
+              // The direct content script approach can fail when tabId isn't initialized
+              const openViaBg = () => {
+                chrome.runtime.sendMessage({
+                  action: "openInSidebar",
+                  tool: "price-charting-tool",
+                  mode: "open",
+                });
+              };
+
               try {
                 if (isSidePanelApiAvailable()) {
                   triggerSidepanelToolFromContentScript("price-charting-tool", {
@@ -308,23 +318,22 @@ export default defineContentScript({
                     mode: "open",
                   }).catch((err) => {
                     log(
-                      "Sidepanel trigger error from PriceCharting game:",
+                      "Sidepanel trigger error, falling back to background:",
                       err
                     );
+                    // Fallback to background script approach on failure
+                    openViaBg();
                   });
                 } else {
                   // Fallback: ask background to open the sidepanel tool
-                  chrome.runtime.sendMessage({
-                    action: "openInSidebar",
-                    tool: "price-charting-tool",
-                    mode: "open",
-                  });
+                  openViaBg();
                 }
               } catch (panelErr) {
                 log(
-                  "Error triggering sidepanel from PriceCharting game:",
+                  "Error triggering sidepanel, falling back to background:",
                   panelErr
                 );
+                openViaBg();
               }
 
               // Visual feedback

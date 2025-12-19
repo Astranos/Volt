@@ -209,8 +209,15 @@ export function triggerSidepanelToolFromContentScript(
   const ctx = getGlobalContext();
   // Ensure priming in case initialization was missed
   primeContext(ctx);
-  
+
   const tabId = ctx.tabId;
+
+  // If tabId is not yet initialized, reject early so caller can fall back to background approach
+  // This is common when the page just loaded and primeContext hasn't completed yet
+  if (typeof tabId !== "number") {
+    return Promise.reject(new Error("tabId not initialized - use background fallback"));
+  }
+
   const currentState = ctx.state || { open: false, tool: null };
   const mode = options?.mode ?? "toggle";
   const shouldClose = mode === "toggle" && currentState.open && currentState.tool === toolId;

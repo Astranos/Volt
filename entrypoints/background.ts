@@ -120,17 +120,13 @@ export default defineBackground({
         };
       }
 
-      if (mode === "open" && prev.open && prev.tool === desiredTool) {
-        return {
-          mode: "noop",
-          tabId,
-          tool: desiredTool,
-        };
-      }
-
+      // For "open" mode, always attempt to open the sidepanel.
+      // The in-memory state can be stale after service worker restarts,
+      // so we don't trust it for "open" mode. Chrome's API handles
+      // opening an already-open panel gracefully.
       updatePreferredTool(desiredTool);
 
-      if (prev.open && prev.tool !== desiredTool) {
+      if (mode === "toggle" && prev.open && prev.tool !== desiredTool) {
         setSidePanelState(tabId, { open: true, tool: desiredTool });
         return {
           mode: "switch",
