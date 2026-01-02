@@ -2,7 +2,7 @@
  * @fileoverview PayMore Shared Utility Functions
  * @description Common utility functions shared across modal components
  * @version 1.0.0
- * @author PayMore Team
+ * @author Juan Quenga
  * @license MIT
  *
  * This module provides:

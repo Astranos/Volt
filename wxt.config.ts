@@ -53,9 +53,14 @@ export default defineConfig({
         run_at: "document_idle",
         all_frames: true,
       },
+      {
+        matches: ["<all_urls>"],
+        js: ["link-previewer.js"],
+        run_at: "document_start",
+      },
     ],
     name: "Volt",
-    version: "1.0.13",
+    version: "1.0.14",
     description:
       "A versatile Chrome extension with command palette, controller testing, and multi-provider search capabilities.",
     permissions: [
@@ -128,7 +133,7 @@ export default defineConfig({
           default: "Ctrl+Shift+O",
           mac: "Command+Shift+O",
         },
-        description: "Open extension options",
+        description: "Open Volt Web Extension Options",
       },
       "reopen-last-tab": {
         suggested_key: {
@@ -136,6 +141,13 @@ export default defineConfig({
           mac: "Command+Shift+Z",
         },
         description: "Reopen last closed tab",
+      },
+      "promote-preview": {
+        suggested_key: {
+          default: "Alt+Shift+T",
+          mac: "Alt+Shift+T",
+        },
+        description: "Promote preview popup to a full tab",
       },
     },
     chrome_url_overrides: {

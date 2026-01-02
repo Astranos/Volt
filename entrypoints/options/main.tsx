@@ -6,7 +6,7 @@ import "./options.css";
  * @fileoverview PayMore Chrome Extension Options/Settings Page
  * @description Extension Settings configuration page
  * @version 1.0.0
- * @author PayMore Team
+ * @author Juan Quenga
  * @license MIT
  */
 

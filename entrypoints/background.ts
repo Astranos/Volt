@@ -13,13 +13,13 @@ export default defineBackground({
      * @fileoverview Volt Chrome Extension Background Service Worker
      * @description Manages extension lifecycle, message handling, and core functionality
      * @version 1.0.0
-     * @author PayMore Team
+     * @author Juan Quenga
      * @license MIT
      *
      * This lite service worker handles:
      * - Extension installation and startup
      * - Message routing between content scripts and popup
-     * - Side panel state management for controller testing
+     * - Side panel state management per window for controller testing
      * - Basic storage configuration
      * - Tab communication and injection
      * - Controller detection and testing
@@ -32,61 +32,76 @@ export default defineBackground({
 
     /**
      * @type {Map<number, {open: boolean, tool: string|null}>}
-     * Track side panel state per tab for toggle/switch functionality
+     * Track side panel state per window for toggle/switch functionality
      */
-    const SIDE_PANEL_STATE = new Map(); // tabId -> { open: boolean, tool: string | null }
+    const SIDE_PANEL_STATE = new Map(); // windowId -> { open: boolean, tool: string | null }
     const PANEL_PAGE_PATH = "sidepanel.html";
 
-    function getSidePanelState(tabId) {
+    function getSidePanelState(windowId) {
       return (
-        SIDE_PANEL_STATE.get(tabId) || {
+        SIDE_PANEL_STATE.get(windowId) || {
           open: false,
           tool: null,
         }
       );
     }
 
-    function setSidePanelState(tabId, nextState) {
-      if (typeof tabId !== "number") return;
-      SIDE_PANEL_STATE.set(tabId, nextState);
-      broadcastSidePanelState(tabId, nextState);
+    function setSidePanelState(windowId, nextState) {
+      if (typeof windowId !== "number") return;
+      SIDE_PANEL_STATE.set(windowId, nextState);
+      broadcastSidePanelState(windowId, nextState);
     }
 
-    function broadcastSidePanelState(tabId, state) {
-      if (typeof tabId !== "number") return;
-      const payload = state || getSidePanelState(tabId);
+    function broadcastSidePanelState(windowId, state) {
+      if (typeof windowId !== "number") return;
+      const payload = state || getSidePanelState(windowId);
       try {
-        chrome.tabs.sendMessage(
-          tabId,
-          { action: "sidePanelStateSync", state: payload },
-          () => {
-            const err = chrome.runtime.lastError;
-            if (
-              err &&
-              DEBUG &&
-              !String(err.message || "").includes("Receiving end")
-            ) {
-              log("sidePanelStateSync delivery issue", err.message);
+        // Broadcast to all tabs in the window
+        chrome.tabs.query({ windowId }, (tabs) => {
+          tabs.forEach((tab) => {
+            try {
+              chrome.tabs.sendMessage(
+                tab.id,
+                { action: "sidePanelStateSync", state: payload },
+                () => {
+                  const err = chrome.runtime.lastError;
+                  if (
+                    err &&
+                    DEBUG &&
+                    !String(err.message || "").includes("Receiving end")
+                  ) {
+                    log("sidePanelStateSync delivery issue", err.message);
+                  }
+                }
+              );
+            } catch (e) {
+              if (DEBUG) {
+                log(
+                  "sidePanelStateSync sendMessage error",
+                  e?.message || e,
+                  tab.id
+                );
+              }
             }
-          }
-        );
+          });
+        });
       } catch (e) {
         if (DEBUG) {
-          log("sidePanelStateSync sendMessage error", e?.message || e, tabId);
+          log("sidePanelStateSync broadcast error", e?.message || e, windowId);
         }
       }
     }
 
-    function configurePanelForTab(tabId) {
+    function configurePanelForWindow(windowId) {
       try {
         const options: any = {
           enabled: true,
           path: PANEL_PAGE_PATH,
         };
-        // When we know the tabId, configure options for that tab explicitly so
-        // chrome.sidePanel.open({ tabId }) is allowed to show the panel there.
-        if (typeof tabId === "number") {
-          options.tabId = tabId;
+        // When we know the windowId, configure options for that window explicitly so
+        // chrome.sidePanel.open({ windowId }) is allowed to show the panel there.
+        if (typeof windowId === "number") {
+          options.windowId = windowId;
         }
         chrome.sidePanel.setOptions(options);
       } catch (setErr) {
@@ -108,14 +123,14 @@ export default defineBackground({
       }
     }
 
-    function planSidePanelAction(tabId, desiredTool, mode = "toggle") {
-      if (typeof tabId !== "number" || !desiredTool) return null;
-      const prev = getSidePanelState(tabId);
+    function planSidePanelAction(windowId, desiredTool, mode = "toggle") {
+      if (typeof windowId !== "number" || !desiredTool) return null;
+      const prev = getSidePanelState(windowId);
 
       if (mode === "toggle" && prev.open && prev.tool === desiredTool) {
         return {
           mode: "close",
-          tabId,
+          windowId,
           tool: desiredTool,
         };
       }
@@ -127,18 +142,18 @@ export default defineBackground({
       updatePreferredTool(desiredTool);
 
       if (mode === "toggle" && prev.open && prev.tool !== desiredTool) {
-        setSidePanelState(tabId, { open: true, tool: desiredTool });
+        setSidePanelState(windowId, { open: true, tool: desiredTool });
         return {
           mode: "switch",
-          tabId,
+          windowId,
           tool: desiredTool,
         };
       }
 
-      configurePanelForTab(tabId);
+      configurePanelForWindow(windowId);
       return {
         mode: "open",
-        tabId,
+        windowId,
         tool: desiredTool,
       };
     }
@@ -285,6 +300,9 @@ export default defineBackground({
             log("No recently closed tabs found");
           }
         });
+      } else if (command === "promote-preview") {
+        log("Promote preview command triggered");
+        promotePreviewToTab();
       }
     });
 
@@ -700,12 +718,19 @@ export default defineBackground({
             sendResponse({ success: false, error: "missing_tab" });
             break;
           }
-          sendResponse({
-            success: true,
-            tabId,
-            state: getSidePanelState(tabId),
+          chrome.tabs.get(tabId, (tab) => {
+            if (tab?.windowId) {
+              sendResponse({
+                success: true,
+                tabId,
+                windowId: tab.windowId,
+                state: getSidePanelState(tab.windowId),
+              });
+            } else {
+              sendResponse({ success: false, error: "missing_window" });
+            }
           });
-          break;
+          return true; // async response
         }
         case "sidePanelToggleResult": {
           const tabId = message?.tabId ?? sender?.tab?.id;
@@ -715,19 +740,30 @@ export default defineBackground({
             sendResponse({ success: false, error: "missing_tab" });
             break;
           }
-          if (status === "opened") {
-            setSidePanelState(tabId, { open: true, tool });
-          } else if (status === "closed") {
-            setSidePanelState(tabId, { open: false, tool: null });
-          } else if (status === "error") {
-            log(
-              "sidePanelToggleResult error",
-              message?.error || "unknown_error",
-              { tool, tabId, source: message?.source }
-            );
-          }
-          sendResponse({ success: true });
-          break;
+          chrome.tabs.get(tabId, (tab) => {
+            if (tab?.windowId) {
+              if (status === "opened") {
+                setSidePanelState(tab.windowId, { open: true, tool });
+              } else if (status === "closed") {
+                setSidePanelState(tab.windowId, { open: false, tool: null });
+              } else if (status === "error") {
+                log(
+                  "sidePanelToggleResult error",
+                  message?.error || "unknown_error",
+                  {
+                    tool,
+                    tabId,
+                    windowId: tab.windowId,
+                    source: message?.source,
+                  }
+                );
+              }
+              sendResponse({ success: true });
+            } else {
+              sendResponse({ success: false, error: "missing_window" });
+            }
+          });
+          return true; // async response
         }
         case "openToolbarCustomization": {
           const intentKey = "popupIntent";
@@ -786,21 +822,53 @@ export default defineBackground({
         case "closeSidebar": {
           const tabId = sender?.tab?.id ?? message?.tabId;
           if (typeof tabId === "number") {
-            try {
-              chrome.sidePanel.close({ tabId }, () => {
-                const err = chrome.runtime.lastError;
-                if (err) {
-                  log("sidePanel close error", err.message);
-                } else {
-                  setSidePanelState(tabId, { open: false, tool: null });
-                  log(`Sidepanel closed for tab: ${tabId}`);
+            chrome.tabs.get(tabId, (tab) => {
+              if (tab?.windowId) {
+                try {
+                  chrome.sidePanel.close({ windowId: tab.windowId }, () => {
+                    const err = chrome.runtime.lastError;
+                    if (err) {
+                      log("sidePanel close error", err.message);
+                    } else {
+                      setSidePanelState(tab.windowId, {
+                        open: false,
+                        tool: null,
+                      });
+                      log(`Sidepanel closed for window: ${tab.windowId}`);
+                    }
+                  });
+                } catch (e) {
+                  log("sidePanel close error", e?.message || e);
                 }
-              });
-            } catch (e) {
-              log("sidePanel close error", e?.message || e);
-            }
+              } else {
+                log("closeSidebar missing windowId for tab", tabId);
+              }
+            });
           } else {
-            log("closeSidebar missing tabId");
+            // Fallback: use current window
+            chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+              const active = tabs && tabs[0];
+              if (active?.windowId) {
+                try {
+                  chrome.sidePanel.close({ windowId: active.windowId }, () => {
+                    const err = chrome.runtime.lastError;
+                    if (err) {
+                      log("sidePanel close error", err.message);
+                    } else {
+                      setSidePanelState(active.windowId, {
+                        open: false,
+                        tool: null,
+                      });
+                      log(`Sidepanel closed for window: ${active.windowId}`);
+                    }
+                  });
+                } catch (e) {
+                  log("sidePanel close error", e?.message || e);
+                }
+              } else {
+                log("closeSidebar missing windowId");
+              }
+            });
           }
           sendResponse({ success: true });
           break;
@@ -871,6 +939,61 @@ export default defineBackground({
           stopControllerDetection();
           sendResponse({ success: true });
           break;
+        case "openPreviewPopup": {
+          const url = message?.url;
+          if (!url) {
+            sendResponse({ success: false, error: "missing_url" });
+            break;
+          }
+
+          // Close existing preview if any
+          if (PREVIEW_POPUP_ID) {
+            try {
+              chrome.windows.remove(PREVIEW_POPUP_ID, () => {});
+            } catch (_) {}
+          }
+
+          PREVIEW_SOURCE_TAB_ID = sender?.tab?.id;
+
+          const width = 1100;
+          const height = 800;
+
+          chrome.windows.create(
+            {
+              url,
+              type: "popup",
+              width,
+              height,
+              // Center it roughly
+              left: Math.floor(message.x ? message.x - width / 2 : 100),
+              top: Math.floor(message.y ? message.y - height / 2 : 100),
+              focused: true,
+            },
+            (win) => {
+              PREVIEW_POPUP_ID = win?.id || null;
+              log("Preview popup created:", PREVIEW_POPUP_ID);
+              sendResponse({ success: true });
+            }
+          );
+          return true;
+        }
+        case "parentWindowFocused": {
+          // Auto-dismiss preview when parent window is focused
+          if (PREVIEW_POPUP_ID) {
+            log("Auto-dismissing preview popup due to parent focus");
+            try {
+              chrome.windows.remove(PREVIEW_POPUP_ID, () => {});
+            } catch (_) {}
+            PREVIEW_POPUP_ID = null;
+          }
+          sendResponse({ success: true });
+          break;
+        }
+        case "promotePreviewToTab": {
+          promotePreviewToTab();
+          sendResponse({ success: true });
+          break;
+        }
         case "openUrl": {
           const url = message?.url;
           if (!url) {
@@ -1397,6 +1520,58 @@ export default defineBackground({
       return true; // keep the message channel open if needed
     });
 
+    function promotePreviewToTab() {
+      if (!PREVIEW_POPUP_ID) {
+        log("No preview popup to promote");
+        return;
+      }
+
+      chrome.windows.get(PREVIEW_POPUP_ID, { populate: true }, (win) => {
+        if (
+          chrome.runtime.lastError ||
+          !win ||
+          !win.tabs ||
+          win.tabs.length === 0
+        ) {
+          log("Could not find preview window or tabs");
+          PREVIEW_POPUP_ID = null;
+          return;
+        }
+
+        const tab = win.tabs[0];
+        const tabId = tab.id;
+
+        // Try to move it back to the source window if possible,
+        // otherwise just move it to the last focused window
+        const targetWindowId = PREVIEW_SOURCE_TAB_ID
+          ? null
+          : chrome.windows.WINDOW_ID_CURRENT;
+
+        if (PREVIEW_SOURCE_TAB_ID) {
+          chrome.tabs.get(PREVIEW_SOURCE_TAB_ID, (sourceTab) => {
+            const windowId =
+              sourceTab?.windowId || chrome.windows.WINDOW_ID_CURRENT;
+            chrome.tabs.move(tabId, { windowId, index: -1 }, (movedTab) => {
+              chrome.tabs.update(tabId, { active: true });
+              chrome.windows.update(windowId, { focused: true });
+              PREVIEW_POPUP_ID = null;
+              log("Promoted preview to tab in window:", windowId);
+            });
+          });
+        } else {
+          // If no source tab known, just turn it into a regular window or move to current
+          chrome.tabs.move(
+            tabId,
+            { windowId: chrome.windows.WINDOW_ID_CURRENT, index: -1 },
+            () => {
+              chrome.tabs.update(tabId, { active: true });
+              PREVIEW_POPUP_ID = null;
+            }
+          );
+        }
+      });
+    }
+
     function openControllerTest() {
       log("Opening Controller Test");
       // Use sidebar instead of action popup
@@ -1459,13 +1634,13 @@ export default defineBackground({
       });
     }
 
-    function toggleSidePanelForTab(tabId, tool, mode = "toggle") {
+    function toggleSidePanelForWindow(windowId, tool, mode = "toggle") {
       if (!tool) {
         chrome.storage.local.get(
           { sidePanelTool: "controller-testing" },
           (res) => {
-            toggleSidePanelForTab(
-              tabId,
+            toggleSidePanelForWindow(
+              windowId,
               res.sidePanelTool || "controller-testing",
               mode
             );
@@ -1475,7 +1650,7 @@ export default defineBackground({
       }
       const desiredTool = tool;
 
-      const asValidTabId = (value) => {
+      const asValidWindowId = (value) => {
         if (typeof value === "number" && Number.isInteger(value) && value >= 0)
           return value;
         if (typeof value === "string") {
@@ -1486,7 +1661,7 @@ export default defineBackground({
       };
 
       try {
-        const openForTab = (id) => {
+        const openForWindow = (id) => {
           const plan = planSidePanelAction(id, desiredTool, mode);
           if (!plan) return;
 
@@ -1497,7 +1672,7 @@ export default defineBackground({
 
           if (plan.mode === "close") {
             try {
-              chrome.sidePanel.close({ tabId: id }, () => {
+              chrome.sidePanel.close({ windowId: id }, () => {
                 const err = chrome.runtime.lastError;
                 if (err) {
                   log("sidePanel close error", err.message);
@@ -1513,18 +1688,20 @@ export default defineBackground({
           }
 
           if (plan.mode === "switch") {
-            log(`Switched sidepanel to tool: ${desiredTool} on tab: ${id}`);
+            log(`Switched sidepanel to tool: ${desiredTool} on window: ${id}`);
             return;
           }
 
           try {
-            chrome.sidePanel.open({ tabId: id }, () => {
+            chrome.sidePanel.open({ windowId: id }, () => {
               const err = chrome.runtime.lastError;
               if (err) {
                 log("sidePanel open lastError", err.message);
               } else {
                 setSidePanelState(id, { open: true, tool: desiredTool });
-                log(`Sidepanel opened for tool: ${desiredTool} on tab: ${id}`);
+                log(
+                  `Sidepanel opened for tool: ${desiredTool} on window: ${id}`
+                );
               }
             });
           } catch (openErr) {
@@ -1532,33 +1709,74 @@ export default defineBackground({
           }
         };
 
-        const resolvedTabId =
-          asValidTabId(tabId) ??
-          asValidTabId(currentActiveTabId) ??
-          asValidTabId(lastActiveTabId);
+        const resolvedWindowId = asValidWindowId(windowId);
 
-        if (resolvedTabId !== null) {
-          openForTab(resolvedTabId);
+        if (resolvedWindowId !== null) {
+          openForWindow(resolvedWindowId);
           return;
         }
 
+        // If windowId not provided, resolve from current active tab
         log(
-          "toggleSidePanelForTab: could not resolve tab id immediately; querying"
+          "toggleSidePanelForWindow: could not resolve window id immediately; querying"
         );
         chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
           const active = tabs && tabs[0];
-          const fallbackId = asValidTabId(active?.id);
-          if (fallbackId !== null) {
-            openForTab(fallbackId);
+          if (active?.windowId) {
+            openForWindow(active.windowId);
           } else {
             log(
-              "toggleSidePanelForTab: unable to resolve active tab id for sidepanel"
+              "toggleSidePanelForWindow: unable to resolve active window id for sidepanel"
             );
           }
         });
       } catch (e) {
-        log("toggleSidePanelForTab error", e?.message || e);
+        log("toggleSidePanelForWindow error", e?.message || e);
       }
+    }
+
+    // Helper function to toggle sidepanel for a tab (resolves to window)
+    function toggleSidePanelForTab(tabId, tool, mode = "toggle") {
+      const asValidTabId = (value) => {
+        if (typeof value === "number" && Number.isInteger(value) && value >= 0)
+          return value;
+        if (typeof value === "string") {
+          const parsed = Number(value);
+          if (Number.isInteger(parsed) && parsed >= 0) return parsed;
+        }
+        return null;
+      };
+
+      const resolvedTabId =
+        asValidTabId(tabId) ??
+        asValidTabId(currentActiveTabId) ??
+        asValidTabId(lastActiveTabId);
+
+      if (resolvedTabId !== null) {
+        chrome.tabs.get(resolvedTabId, (tab) => {
+          if (tab?.windowId) {
+            toggleSidePanelForWindow(tab.windowId, tool, mode);
+          } else {
+            log(
+              "toggleSidePanelForTab: could not get windowId for tab",
+              resolvedTabId
+            );
+          }
+        });
+        return;
+      }
+
+      // Fallback: query active tab
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        const active = tabs && tabs[0];
+        if (active?.windowId) {
+          toggleSidePanelForWindow(active.windowId, tool, mode);
+        } else {
+          log(
+            "toggleSidePanelForTab: unable to resolve window id for sidepanel"
+          );
+        }
+      });
     }
 
     function arrayBufferToBase64(buffer) {
@@ -1614,6 +1832,8 @@ export default defineBackground({
     }
 
     let CURRENT_TOOL_POPUP_ID = null;
+    let PREVIEW_POPUP_ID = null;
+    let PREVIEW_SOURCE_TAB_ID = null;
     let AUTOCLOSE_ON_BLUR = true;
     let FOCUS_LISTENER_ATTACHED = false;
 

@@ -6,7 +6,7 @@ import "./sidepanel.css";
  * @fileoverview Volt Chrome Extension Side Panel Script
  * @description Manages the side panel functionality with tabbed navigation
  * @version 2.0.0
- * @author PayMore Team
+ * @author Juan Quenga
  * @license MIT
  */
 

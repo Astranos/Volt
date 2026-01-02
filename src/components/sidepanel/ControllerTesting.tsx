@@ -426,8 +426,6 @@ export default function ControllerTesting() {
       };
     };
 
-    // test
-
     function update(currentTime: number) {
       if (currentTime - lastUpdateTime < UPDATE_INTERVAL) {
         animationIdRef.current = requestAnimationFrame(update);
