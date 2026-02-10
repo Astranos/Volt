@@ -5,6 +5,9 @@ export interface Bookmark {
   dateAdded?: number;
 }
 
+// @ts-ignore: chrome namespace not found
+declare var chrome: any;
+
 export interface BookmarkFolder {
   id: string;
   title: string;
@@ -15,7 +18,7 @@ export interface BookmarkFolder {
  * Recursively traverse bookmark tree and collect all bookmarks
  */
 function traverseBookmarks(
-  nodes: chrome.bookmarks.BookmarkTreeNode[]
+  nodes: any[]
 ): Bookmark[] {
   const bookmarks: Bookmark[] = [];
 
@@ -44,7 +47,7 @@ function traverseBookmarks(
  */
 export async function getAllBookmarks(): Promise<Bookmark[]> {
   return new Promise((resolve) => {
-    chrome.bookmarks.getTree((bookmarkTreeNodes) => {
+    chrome.bookmarks.getTree((bookmarkTreeNodes: any[]) => {
       if (chrome.runtime.lastError) {
         console.error(
           "[Bookmarks] Error getting bookmarks:",
@@ -55,9 +58,8 @@ export async function getAllBookmarks(): Promise<Bookmark[]> {
       }
 
       const bookmarks = traverseBookmarks(bookmarkTreeNodes);
-
       // Sort by date added (most recent first)
-      bookmarks.sort((a, b) => (b.dateAdded || 0) - (a.dateAdded || 0));
+      bookmarks.sort((a: any, b: any) => (b.dateAdded || 0) - (a.dateAdded || 0));
 
       console.log("[Bookmarks] Found bookmarks:", bookmarks.length);
       resolve(bookmarks);
@@ -70,7 +72,7 @@ export async function getAllBookmarks(): Promise<Bookmark[]> {
  */
 export async function getBookmarkFolders(): Promise<BookmarkFolder[]> {
   return new Promise((resolve) => {
-    chrome.bookmarks.getTree((bookmarkTreeNodes) => {
+    chrome.bookmarks.getTree((bookmarkTreeNodes: any[]) => {
       if (chrome.runtime.lastError) {
         console.error(
           "[Bookmarks] Error getting folders:",
@@ -82,7 +84,7 @@ export async function getBookmarkFolders(): Promise<BookmarkFolder[]> {
 
       const folders: BookmarkFolder[] = [];
 
-      function traverseFolders(nodes: chrome.bookmarks.BookmarkTreeNode[]) {
+      function traverseFolders(nodes: any[]) {
         for (const node of nodes) {
           // If it's a folder (no url), add it
           if (!node.url && node.id !== "0") {
@@ -121,7 +123,7 @@ export async function getBookmarksFromFolder(
       return;
     }
 
-    chrome.bookmarks.getSubTree(folderId, (bookmarkTreeNodes) => {
+    chrome.bookmarks.getSubTree(folderId, (bookmarkTreeNodes: any[]) => {
       if (chrome.runtime.lastError) {
         console.error(
           "[Bookmarks] Error getting folder bookmarks:",
@@ -134,8 +136,8 @@ export async function getBookmarksFromFolder(
       const bookmarks = recursive
         ? traverseBookmarks(bookmarkTreeNodes)
         : bookmarkTreeNodes[0]?.children
-            ?.filter((node) => node.url)
-            .map((node) => ({
+            ?.filter((node: any) => node.url)
+            .map((node: any) => ({
               id: node.id,
               title: node.title || "Untitled",
               url: node.url!,
@@ -143,7 +145,7 @@ export async function getBookmarksFromFolder(
             })) || [];
 
       // Sort by date added (most recent first)
-      bookmarks.sort((a, b) => (b.dateAdded || 0) - (a.dateAdded || 0));
+      bookmarks.sort((a: any, b: any) => (b.dateAdded || 0) - (a.dateAdded || 0));
 
       console.log(
         `[Bookmarks] Found ${bookmarks.length} bookmarks in folder ${folderId}`

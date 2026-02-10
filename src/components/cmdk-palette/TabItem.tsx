@@ -30,16 +30,16 @@ export function TabItem({ tab, kbdHintAction }: TabItemProps) {
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+          <p className="text-sm font-medium text-gray-900 truncate">
             {truncateText(tab.title || "Untitled", 60)}
           </p>
           {tab.active && (
-            <span className="text-xs px-1.5 py-0.5 rounded bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300">
+            <span className="text-xs px-1.5 py-0.5 rounded bg-green-100 text-green-700">
               Current
             </span>
           )}
         </div>
-        <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+        <p className="text-xs text-gray-500 truncate">
           {truncateText(tab.url || "", 80)}
         </p>
       </div>

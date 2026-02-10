@@ -31,9 +31,14 @@ import {
   X,
   Search as SearchIcon,
   Gamepad2,
-  Layers,
   Settings,
+  ExternalLink,
+  Boxes,
+  Calculator,
+  PanelRight,
+  LayoutList,
 } from "lucide-react";
+import { SIDEPANEL_TOOLS, getToolLabel } from "@/src/lib/sidepanel-tools";
 import "./styles.css";
 
 const DEFAULT_ENABLED_SOURCES = {
@@ -43,32 +48,47 @@ const DEFAULT_ENABLED_SOURCES = {
   quickLinks: true,
   tools: true,
   searchProviders: true,
-  ebayCategories: true,
 } as const;
 
 const DEFAULT_SOURCE_ORDER = [
   "tabs",
   "quickLinks",
-  "ebayCategories",
   "bookmarks",
   "tools",
   "searchProviders",
   "history",
 ] as const;
 
+interface LastAction {
+  type: "search" | "url" | "tool" | "tab";
+  value: string;
+  label: string;
+  timestamp: number;
+  metadata?: any;
+}
+
 interface CMDKPaletteProps {
   isOpen: boolean;
   onClose: () => void;
   noOverlay?: boolean; // When true, renders without the overlay wrapper (for popup use)
+  defaultProviderId?: string;
+  embedded?: boolean; // When true, renders just the content without any wrapper (for new tab use)
+  ebayCondition?: string;
+  onProviderChange?: (providerId: string | null) => void; // Callback when provider changes
 }
 
 export function CMDKPalette({
   isOpen,
   onClose,
   noOverlay = false,
+  defaultProviderId,
+  embedded = false,
+  ebayCondition,
+  onProviderChange,
 }: CMDKPaletteProps) {
   const [search, setSearch] = useState("");
   const [tabs, setTabs] = useState<TabInfo[]>([]);
+  const [lastAction, setLastAction] = useState<LastAction | null>(null);
   const [previousTabId, setPreviousTabId] = useState<number | null>(null);
   const [csvLinks, setCSVLinks] = useState<CSVLink[]>([]);
   const [csvLinksLoading, setCSVLinksLoading] = useState(false);
@@ -78,12 +98,11 @@ export function CMDKPalette({
     null
   );
   const [providerQuery, setProviderQuery] = useState("");
-  const [ebaySuggestions, setEbaySuggestions] = useState<any[]>([]);
-  const [ebayLoading, setEbayLoading] = useState(false);
-  const [copiedEbayId, setCopiedEbayId] = useState<string | null>(null);
   const [userNavigated, setUserNavigated] = useState(false);
   const [selectedValue, setSelectedValue] = useState<string>("");
   const listRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef(search);
+  const providerQueryRef = useRef(providerQuery);
   const [enabledSources, setEnabledSources] = useState({
     ...DEFAULT_ENABLED_SOURCES,
   });
@@ -91,13 +110,14 @@ export function CMDKPalette({
     ...DEFAULT_SOURCE_ORDER,
   ]);
   const trimmedSearch = search.trim();
+
   const previousTab =
     previousTabId !== null
       ? tabs.find((tab) => tab.id === previousTabId) ?? null
       : null;
-  const previousTabLabel = previousTab?.title?.trim() || previousTab?.url || "";
-  const showPreviousTabHint =
-    !activeProvider && !trimmedSearch && Boolean(previousTabLabel);
+
+  const showLastActionHint =
+    !activeProvider && !trimmedSearch && Boolean(lastAction);
 
   useEffect(() => {
     // Load settings from chrome storage
@@ -127,6 +147,13 @@ export function CMDKPalette({
         }
       }
     });
+
+    // Load last action
+    chrome.storage.local.get(["cmdkLastAction"], (result: any) => {
+      if (result.cmdkLastAction) {
+        setLastAction(result.cmdkLastAction);
+      }
+    });
   }, []);
 
   useEffect(() => {
@@ -136,12 +163,62 @@ export function CMDKPalette({
       if (enabledSources.bookmarks) loadBookmarks();
       if (enabledSources.history) loadHistory();
       setSearch("");
-      setActiveProvider(null);
+
       setProviderQuery("");
       setUserNavigated(false);
       setSelectedValue("");
     }
   }, [isOpen, enabledSources]);
+
+  // Keep refs in sync with state
+  useEffect(() => {
+    searchRef.current = search;
+  }, [search]);
+
+  useEffect(() => {
+    providerQueryRef.current = providerQuery;
+  }, [providerQuery]);
+
+  // Separate effect for defaultProviderId to avoid clearing search when toggling providers
+  useEffect(() => {
+    if (isOpen) {
+      if (defaultProviderId) {
+        const provider = searchProviders.find(
+          (p) => p.id === defaultProviderId
+        );
+        if (provider) {
+          // Preserve current input value when activating a provider
+          const currentSearch = searchRef.current;
+          const currentProviderQuery = providerQueryRef.current;
+
+          setActiveProvider((prevProvider) => {
+            if (!prevProvider) {
+              // Switching from no provider to a provider: move search to providerQuery
+              if (currentSearch) {
+                setProviderQuery(currentSearch);
+              }
+            } else {
+              // Switching between providers: preserve providerQuery (already set, no action needed)
+            }
+            return provider;
+          });
+        } else {
+          setActiveProvider(null);
+        }
+      } else {
+        // When deactivating provider, preserve providerQuery in search if search is empty
+        const currentProviderQuery = providerQueryRef.current;
+        const currentSearch = searchRef.current;
+
+        setActiveProvider((prevProvider) => {
+          if (prevProvider && currentProviderQuery && !currentSearch) {
+            setSearch(currentProviderQuery);
+          }
+          return null;
+        });
+      }
+    }
+  }, [defaultProviderId, isOpen]);
 
   const loadTabs = async () => {
     const [allTabs, prevTabId] = await Promise.all([
@@ -206,6 +283,7 @@ export function CMDKPalette({
       setActiveProvider(null);
       setProviderQuery("");
       setSearch("");
+      onProviderChange?.(null);
     }
 
     // Tab key to activate provider
@@ -223,6 +301,7 @@ export function CMDKPalette({
         setActiveProvider(provider);
         setProviderQuery(remainder);
         setSearch("");
+        onProviderChange?.(provider.id);
       }
     }
 
@@ -232,6 +311,7 @@ export function CMDKPalette({
         setActiveProvider(null);
         setProviderQuery("");
         setSearch("");
+        onProviderChange?.(null);
       } else {
         onClose();
       }
@@ -241,6 +321,19 @@ export function CMDKPalette({
   const handleSelect = async (value: string) => {
     if (value.startsWith("tab-")) {
       const tabId = parseInt(value.replace("tab-", ""));
+
+      // Save as last action
+      const tab = tabs.find((t) => t.id === tabId);
+      if (tab) {
+        const action: LastAction = {
+          type: "tab",
+          value: value,
+          label: tab.title || tab.url,
+          timestamp: Date.now(),
+        };
+        chrome.storage.local.set({ cmdkLastAction: action });
+      }
+
       await TabManager.switchToTab(tabId);
       onClose();
     } else if (value.startsWith("provider-switch-")) {
@@ -253,6 +346,7 @@ export function CMDKPalette({
         setActiveProvider(provider);
         setProviderQuery(currentQuery);
         setSearch("");
+        onProviderChange?.(providerId);
       }
     } else if (value.startsWith("provider-")) {
       const providerId = value.replace("provider-", "");
@@ -263,26 +357,66 @@ export function CMDKPalette({
         setActiveProvider(provider);
         setProviderQuery(currentQuery);
         setSearch("");
+        onProviderChange?.(providerId);
       }
     } else if (value.startsWith("csv-link-")) {
       const linkId = value;
       const link = csvLinks.find((l) => l.id === linkId);
       if (link) {
-        await TabManager.openNewTab(link.url);
+        // Save as last action
+        const action: LastAction = {
+          type: "url",
+          value: value,
+          label: link.title,
+          timestamp: Date.now(),
+        };
+        chrome.storage.local.set({ cmdkLastAction: action });
+
+        if (embedded) {
+          await TabManager.updateCurrentTab(link.url);
+        } else {
+          await TabManager.openNewTab(link.url);
+        }
         onClose();
       }
     } else if (value.startsWith("bookmark-")) {
       const bookmarkId = value.replace("bookmark-", "");
       const bookmark = bookmarks.find((b) => b.id === bookmarkId);
       if (bookmark) {
-        await TabManager.openNewTab(bookmark.url);
+        // Save as last action
+        const action: LastAction = {
+          type: "url",
+          value: value,
+          label: bookmark.title,
+          timestamp: Date.now(),
+        };
+        chrome.storage.local.set({ cmdkLastAction: action });
+
+        if (embedded) {
+          await TabManager.updateCurrentTab(bookmark.url);
+        } else {
+          await TabManager.openNewTab(bookmark.url);
+        }
         onClose();
       }
     } else if (value.startsWith("history-")) {
       const historyId = value.replace("history-", "");
       const historyItem = history.find((h) => h.id === historyId);
       if (historyItem) {
-        await TabManager.openNewTab(historyItem.url);
+        // Save as last action
+        const action: LastAction = {
+          type: "url",
+          value: value,
+          label: historyItem.title || historyItem.url,
+          timestamp: Date.now(),
+        };
+        chrome.storage.local.set({ cmdkLastAction: action });
+
+        if (embedded) {
+          await TabManager.updateCurrentTab(historyItem.url);
+        } else {
+          await TabManager.openNewTab(historyItem.url);
+        }
         onClose();
       }
     } else if (value.startsWith("tool-")) {
@@ -306,13 +440,25 @@ export function CMDKPalette({
         } finally {
           onClose();
         }
-      }
-    } else if (value.startsWith("ebay-cat-")) {
-      // Copy category path to clipboard but keep the palette open and show feedback
-      const catId = value.replace("ebay-cat-", "");
-      const suggestion = ebaySuggestions.find((s) => s.categoryId === catId);
-      if (suggestion) {
-        await copyEbayCategory(suggestion.categoryPath, suggestion.categoryId);
+      } else if (toolId === "pc-cost-breakdown") {
+        // Send message to open PC cost breakdown in sidebar and await ack before closing
+        try {
+          const response = await new Promise<any>((resolve) => {
+            try {
+              chrome.runtime.sendMessage(
+                { action: "openInSidebar", tool: "pc-cost-breakdown" },
+                (resp: any) => resolve(resp)
+              );
+            } catch (err) {
+              resolve({ success: false, error: String(err) });
+            }
+          });
+          if (!response?.success && chrome.runtime.lastError) {
+            console.error("Error opening sidebar:", chrome.runtime.lastError);
+          }
+        } finally {
+          onClose();
+        }
       }
     }
   };
@@ -327,11 +473,54 @@ export function CMDKPalette({
         "{query}",
         encodeURIComponent(providerQuery)
       );
-      console.log("[CMDK] Search URL:", url);
-      await TabManager.openNewTab(url);
+
+      let finalUrl = url;
+      if (activeProvider.id === "ebay" && ebayCondition) {
+        finalUrl += `&LH_ItemCondition=${ebayCondition}`;
+      }
+
+      console.log("[CMDK] Search URL:", finalUrl);
+
+      // Save as last action
+      const action: LastAction = {
+        type: "search",
+        value: providerQuery,
+        label: `${providerQuery} (${activeProvider.name})`,
+        timestamp: Date.now(),
+        metadata: {
+          providerId: activeProvider.id,
+          ebayCondition:
+            activeProvider.id === "ebay" ? ebayCondition : undefined,
+        },
+      };
+      chrome.storage.local.set({ cmdkLastAction: action });
+
+      if (embedded) {
+        await TabManager.updateCurrentTab(finalUrl);
+      } else {
+        await TabManager.openNewTab(finalUrl);
+      }
       onClose();
     } else if (!trimmedSearch && !activeProvider) {
-      // Empty input + Enter = go back to previous tab
+      // Empty input + Enter = repeat last action if available, otherwise go back to previous tab
+      if (lastAction) {
+        if (lastAction.type === "search" && lastAction.metadata?.providerId) {
+          const provider = searchProviders.find(
+            (p) => p.id === lastAction.metadata.providerId
+          );
+          if (provider) {
+            setActiveProvider(provider);
+            setProviderQuery(lastAction.value);
+            // Trigger search immediately
+            setTimeout(() => handleSearchSubmit(), 0);
+            return;
+          }
+        } else {
+          handleSelect(lastAction.value);
+          return;
+        }
+      }
+
       console.log("[CMDK] Returning to previous tab");
       const previousTabId = await TabManager.getPreviousTab();
       if (previousTabId) {
@@ -341,65 +530,12 @@ export function CMDKPalette({
     }
   };
 
-  // Copy helper for ebay categories
-  const copyEbayCategory = async (categoryPath: string, categoryId: string) => {
-    try {
-      await navigator.clipboard.writeText(categoryPath);
-      setCopiedEbayId(categoryId);
-      setTimeout(() => setCopiedEbayId(null), 1500);
-    } catch (err) {
-      console.error("Failed to copy eBay category:", err);
-    }
-  };
-
-  // Fetch eBay suggestions when search changes (not tied to provider)
-  useEffect(() => {
-    if (!enabledSources.ebayCategories) {
-      setEbaySuggestions([]);
-      return;
-    }
-
-    let cancelled = false;
-    const fetchSuggestions = async () => {
-      const q = search.trim();
-      if (q.length < 2) {
-        setEbaySuggestions([]);
-        return;
-      }
-      setEbayLoading(true);
-      try {
-        const res = await fetch(
-          `https://paymore-extension.vercel.app/api/ebay-categories?q=${encodeURIComponent(
-            q
-          )}`
-        );
-        const data = await res.json().catch(() => ({}));
-        if (!cancelled) {
-          setEbaySuggestions((data.suggestions || []).slice(0, 1));
-        }
-      } catch (err) {
-        console.error("Failed to fetch eBay suggestions:", err);
-        if (!cancelled) {
-          setEbaySuggestions([]);
-        }
-      } finally {
-        if (!cancelled) setEbayLoading(false);
-      }
-    };
-
-    const t = setTimeout(fetchSuggestions, 250);
-    return () => {
-      cancelled = true;
-      clearTimeout(t);
-    };
-  }, [search, enabledSources.ebayCategories]);
-
   const filteredTabs =
     activeProvider || !enabledSources.tabs
       ? []
-      : TabManager.filterTabs(tabs, search).filter(
-          (tab) => !showPreviousTabHint || tab.id !== previousTabId
-        );
+      : TabManager.filterTabs(tabs, search)
+          .filter((tab) => !tab.active) // Exclude currently opened tabs
+          .filter((tab) => !showLastActionHint || tab.id !== previousTabId);
   const filteredCSVLinks =
     activeProvider || !enabledSources.quickLinks
       ? []
@@ -413,17 +549,20 @@ export function CMDKPalette({
       ? []
       : filterHistory(history, search);
 
-  // Filter tools by search (always include controller testing)
+  // Filter tools by search (only show specific tools in command palette)
+  const commandPaletteToolIds: Array<
+    "controller-testing" | "pc-cost-breakdown"
+  > = ["controller-testing", "pc-cost-breakdown"];
+
   const filteredTools =
     activeProvider || !enabledSources.tools
       ? []
-      : [
-          {
-            id: "controller-testing",
-            label: "Controller Testing",
-            description: "Test hardware controllers",
-          },
-        ];
+      : SIDEPANEL_TOOLS.filter(
+          (tool) =>
+            !trimmedSearch ||
+            tool.label.toLowerCase().includes(trimmedSearch.toLowerCase()) ||
+            tool.description.toLowerCase().includes(trimmedSearch.toLowerCase())
+        );
 
   const getUrlFromInput = (input: string): string | null => {
     const value = input.trim();
@@ -452,7 +591,11 @@ export function CMDKPalette({
 
   const openUrlAndClose = async (url: string) => {
     try {
-      await TabManager.openNewTab(url);
+      if (embedded) {
+        await TabManager.updateCurrentTab(url);
+      } else {
+        await TabManager.openNewTab(url);
+      }
     } finally {
       onClose();
     }
@@ -465,27 +608,28 @@ export function CMDKPalette({
 
   const openSettings = async () => {
     // Open settings page in a new tab
-    const optionsUrl = chrome.runtime.getURL('options.html');
-    await TabManager.openNewTab(optionsUrl);
+    const optionsUrl = chrome.runtime.getURL("options.html");
+    if (embedded) {
+      await TabManager.updateCurrentTab(optionsUrl);
+    } else {
+      await TabManager.openNewTab(optionsUrl);
+    }
     onClose();
   };
 
-  const openControllerTesting = async () => {
-    // Send message to open controller testing in sidebar
+  const toggleSidepanel = async () => {
+    // Send message to toggle sidepanel
     try {
-      const response = await new Promise<any>((resolve) => {
+      await new Promise<any>((resolve) => {
         try {
           chrome.runtime.sendMessage(
-            { action: "openInSidebar", tool: "controller-testing" },
+            { action: "toggleSidepanelTool" },
             (resp: any) => resolve(resp)
           );
         } catch (err) {
           resolve({ success: false, error: String(err) });
         }
       });
-      if (!response?.success && chrome.runtime.lastError) {
-        console.error("Error opening sidebar:", chrome.runtime.lastError);
-      }
     } finally {
       onClose();
     }
@@ -509,6 +653,24 @@ export function CMDKPalette({
     csvLinksByCategory[category].sort((a, b) => a.title.localeCompare(b.title));
   });
 
+  const executeLastAction = () => {
+    if (!lastAction) return;
+
+    if (lastAction.type === "search" && lastAction.metadata?.providerId) {
+      const provider = searchProviders.find(
+        (p) => p.id === lastAction.metadata.providerId
+      );
+      if (provider) {
+        setActiveProvider(provider);
+        setProviderQuery(lastAction.value);
+        // We can't easily auto-submit here without state update, so we just prep the search
+        // Or we could call handleSearchSubmit after a timeout, but user might want to edit
+      }
+    } else {
+      handleSelect(lastAction.value);
+    }
+  };
+
   // Check if there are any visible items
   const hasVisibleItems =
     filteredTabs.length > 0 ||
@@ -519,12 +681,18 @@ export function CMDKPalette({
 
   if (!isOpen) return null;
 
-  // Set initial selected value when previous tab is shown
+  // Set initial selected value when previous action is shown
   useEffect(() => {
-    if (isOpen && showPreviousTabHint && previousTab && !selectedValue) {
-      setSelectedValue(`tab-${previousTab.id}`);
+    if (isOpen && showLastActionHint && lastAction && !selectedValue) {
+      if (lastAction.type === "search") {
+        // For search, we don't have a direct value in the list unless we add a special item
+        // But we'll add a special item for last action
+        setSelectedValue("last-action");
+      } else {
+        setSelectedValue(lastAction.value);
+      }
     }
-  }, [isOpen, showPreviousTabHint, previousTab, selectedValue]);
+  }, [isOpen, showLastActionHint, lastAction, selectedValue]);
 
   const content = (
     <Command
@@ -546,6 +714,7 @@ export function CMDKPalette({
               onClick={() => {
                 setActiveProvider(null);
                 setProviderQuery("");
+                onProviderChange?.(null);
               }}
               className="ml-1 hover:bg-white/20 rounded p-0.5"
             >
@@ -562,8 +731,10 @@ export function CMDKPalette({
             placeholder={
               activeProvider
                 ? `Search ${activeProvider.name}...`
-                : showPreviousTabHint
-                ? "Search or press Enter to switch tabs..."
+                : showLastActionHint
+                ? `Press Enter to ${
+                    lastAction?.type === "search" ? "search" : "open"
+                  } "${lastAction?.label}"...`
                 : "Search tabs or type a command..."
             }
             className="cmdk-input"
@@ -603,11 +774,11 @@ export function CMDKPalette({
         {!trimmedSearch && !activeProvider && (
           <div className="flex gap-2">
             <button
-              onClick={openControllerTesting}
+              onClick={toggleSidepanel}
               className="cmdk-settings-button"
-              title="Controller Testing"
+              title="Toggle Sidepanel"
             >
-              <Gamepad2 className="w-4 h-4" />
+              <PanelRight className="w-4 h-4" />
             </button>
             <button
               onClick={openSettings}
@@ -623,11 +794,11 @@ export function CMDKPalette({
       <Command.List className="cmdk-list" ref={listRef}>
         <Command.Empty className="cmdk-empty">
           <div className="flex flex-col items-center justify-center py-8 px-4">
-            <SearchIcon className="w-12 h-12 text-gray-300 dark:text-gray-600 mb-3" />
-            <p className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
+            <SearchIcon className="w-12 h-12 text-gray-300 mb-3" />
+            <p className="text-sm font-medium text-gray-500 mb-1">
               No results found
             </p>
-            <p className="text-xs text-gray-400 dark:text-gray-500">
+            <p className="text-xs text-gray-400">
               {trimmedSearch ? (
                 <>
                   Press <kbd className="cmdk-kbd">Enter</kbd> to search Google
@@ -659,15 +830,15 @@ export function CMDKPalette({
                         <provider.icon className="w-4 h-4 text-white" />
                       </div>
                       <div className="flex-1">
-                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        <p className="text-sm font-medium text-gray-900">
                           {provider.name}
                           {provider.id === activeProvider?.id && (
-                            <span className="ml-2 text-xs px-1.5 py-0.5 rounded bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300">
+                            <span className="ml-2 text-xs px-1.5 py-0.5 rounded bg-green-100 text-green-700">
                               Active
                             </span>
                           )}
                         </p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                        <p className="text-xs text-gray-500">
                           {provider.id === activeProvider?.id ? (
                             <>
                               Press <kbd className="cmdk-kbd">Enter</kbd> to
@@ -687,16 +858,45 @@ export function CMDKPalette({
 
         {!activeProvider && (
           <>
-            {/* Previous Tab - shown as first option when no search */}
-            {showPreviousTabHint && previousTab && (
-              <Command.Group heading="Previous Tab" className="cmdk-group">
+            {/* Previous Action - shown as first option when no search */}
+            {showLastActionHint && lastAction && (
+              <Command.Group heading="Previous Action" className="cmdk-group">
                 <Command.Item
-                  key={`tab-${previousTab.id}`}
-                  value={`tab-${previousTab.id}`}
-                  onSelect={handleSelect}
+                  key="last-action"
+                  value={
+                    lastAction.type === "search"
+                      ? "last-action"
+                      : lastAction.value
+                  }
+                  onSelect={() => executeLastAction()}
                   className="cmdk-item"
                 >
-                  <TabItem tab={previousTab} kbdHintAction="Switch to tab" />
+                  <div className="flex items-center gap-3 px-4 py-3 w-full">
+                    <div className="p-2 rounded bg-gray-100">
+                      {lastAction.type === "search" ? (
+                        <SearchIcon className="w-4 h-4 text-gray-500" />
+                      ) : lastAction.type === "tool" ? (
+                        <PanelRight className="w-4 h-4 text-gray-500" />
+                      ) : lastAction.type === "tab" ? (
+                        <LayoutList className="w-4 h-4 text-gray-500" />
+                      ) : (
+                        <ExternalLink className="w-4 h-4 text-gray-500" />
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-gray-900">
+                        {lastAction.label}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {lastAction.type === "search"
+                          ? "Search again"
+                          : "Open again"}
+                      </p>
+                    </div>
+                    <div className="cmdk-item-kbd-hint">
+                      <kbd className="cmdk-kbd">↵</kbd>
+                    </div>
+                  </div>
                 </Command.Item>
               </Command.Group>
             )}
@@ -706,7 +906,6 @@ export function CMDKPalette({
               ? [
                   "tabs",
                   "quickLinks",
-                  "ebayCategories",
                   "tools",
                   "bookmarks",
                   "searchProviders",
@@ -788,70 +987,6 @@ export function CMDKPalette({
                     </React.Fragment>
                   );
 
-                case "ebayCategories":
-                  return (
-                    <React.Fragment key="ebayCategories">
-                      {/* eBay Category Loading */}
-                      {ebayLoading && (
-                        <Command.Group
-                          heading="eBay Category"
-                          className="cmdk-group"
-                        >
-                          <div className="cmdk-item px-4 py-3">
-                            <div className="flex items-center gap-3">
-                              <Skeleton className="w-8 h-8 rounded" />
-                              <div className="flex-1 space-y-2">
-                                <Skeleton className="h-4 w-[180px]" />
-                                <Skeleton className="h-3 w-[240px]" />
-                              </div>
-                            </div>
-                          </div>
-                        </Command.Group>
-                      )}
-
-                      {/* eBay Category */}
-                      {!ebayLoading && ebaySuggestions.length > 0 && (
-                        <Command.Group
-                          heading="eBay Category"
-                          className="cmdk-group"
-                        >
-                          {ebaySuggestions.map((s) => (
-                            <Command.Item
-                              key={s.categoryId}
-                              value={`ebay-cat-${s.categoryId}`}
-                              onSelect={handleSelect}
-                              keywords={[s.categoryName, s.categoryPath]}
-                              className="cmdk-item"
-                            >
-                              <div
-                                className={`flex items-center gap-3 px-4 py-3 w-full`}
-                              >
-                                <div className="p-2 rounded bg-purple-600">
-                                  <Layers className="w-4 h-4 text-white" />
-                                </div>
-                                <div className="flex-1">
-                                  <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                                    {s.categoryName}
-                                  </p>
-                                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                                    {s.categoryPath}
-                                  </p>
-                                </div>
-                                <div className="cmdk-item-kbd-hint">
-                                  {copiedEbayId === s.categoryId ? (
-                                    <kbd className="cmdk-kbd">Copied</kbd>
-                                  ) : (
-                                    <kbd className="cmdk-kbd">↵</kbd>
-                                  )}
-                                </div>
-                              </div>
-                            </Command.Item>
-                          ))}
-                        </Command.Group>
-                      )}
-                    </React.Fragment>
-                  );
-
                 case "tools":
                   return (
                     <React.Fragment key="tools">
@@ -866,14 +1001,14 @@ export function CMDKPalette({
                               className="cmdk-item"
                             >
                               <div className="flex items-center gap-3 px-4 py-3 w-full">
-                                <div className="p-2 rounded bg-blue-500">
-                                  <Gamepad2 className="w-4 h-4 text-white" />
+                                <div className={`p-2 rounded ${tool.color}`}>
+                                  <tool.icon className="w-4 h-4 text-white" />
                                 </div>
                                 <div className="flex-1">
-                                  <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                  <p className="text-sm font-medium text-gray-900">
                                     {tool.label}
                                   </p>
-                                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                                  <p className="text-xs text-gray-500">
                                     {tool.description}
                                   </p>
                                 </div>
@@ -943,10 +1078,10 @@ export function CMDKPalette({
                                     <provider.icon className="w-4 h-4 text-white" />
                                   </div>
                                   <div>
-                                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                    <p className="text-sm font-medium text-gray-900">
                                       Search {provider.name}
                                     </p>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                                    <p className="text-xs text-gray-500">
                                       Press <kbd className="cmdk-kbd">Tab</kbd>{" "}
                                       to activate
                                     </p>
@@ -995,6 +1130,10 @@ export function CMDKPalette({
       </Command.List>
     </Command>
   );
+
+  if (embedded) {
+    return content;
+  }
 
   if (noOverlay) {
     return (

@@ -197,7 +197,7 @@ export default function SettingsPopup() {
           />
           <div>
             <h1 className="text-2xl font-bold">
-              Scout Settings
+              Volt Settings
               {version && (
                 <span className="text-sm text-muted-foreground ml-3">
                   v{version}

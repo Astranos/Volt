@@ -46,6 +46,45 @@
               error: error.message,
             });
           }
+        } else if (message.action === "copyToClipboard") {
+          try {
+            const text = message.text;
+            const textArea = document.createElement("textarea");
+            textArea.value = text;
+            document.body.appendChild(textArea);
+            textArea.select();
+            const successful = document.execCommand("copy");
+            document.body.removeChild(textArea);
+            if (!successful) {
+              // Fallback to navigator.clipboard
+              navigator.clipboard.writeText(text)
+                .then(() => sendResponse({ success: true }))
+                .catch(err => sendResponse({ success: false, error: err.message }));
+              return true;
+            }
+            sendResponse({ success: true });
+          } catch (e) {
+            sendResponse({ success: false, error: e.message });
+          }
+        } else if (message.action === "readFromClipboard") {
+          try {
+            const textArea = document.createElement("textarea");
+            document.body.appendChild(textArea);
+            textArea.focus();
+            const successful = document.execCommand("paste");
+            const text = textArea.value;
+            document.body.removeChild(textArea);
+            if (!successful && !text) {
+              // Fallback to navigator.clipboard if execCommand fails
+              navigator.clipboard.readText()
+                .then(text => sendResponse({ success: true, text }))
+                .catch(err => sendResponse({ success: false, error: err.message }));
+              return true;
+            }
+            sendResponse({ success: true, text });
+          } catch (e) {
+            sendResponse({ success: false, error: e.message });
+          }
         }
         return true; // Keep the message channel open for async response
       });

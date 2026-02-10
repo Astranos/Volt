@@ -7,7 +7,7 @@ export default defineConfig({
   // Use the official Tailwind v4 Vite plugin for class scanning + HMR.
   vite: () => ({ plugins: [tailwindcss()] } as WxtViteConfig),
   outDir: ".output", // Base output directory
-  outDirTemplate: "scout", // Custom output directory name (removes browser/manifest folder nesting)
+  outDirTemplate: "volt", // Custom output directory name (removes browser/manifest folder nesting)
   manifest: {
     content_scripts: [
       {
@@ -19,6 +19,8 @@ export default defineConfig({
         matches: ["<all_urls>"],
         js: ["context-menu.js"],
         run_at: "document_idle",
+        all_frames: true,
+        match_about_blank: true,
       },
       {
         matches: ["<all_urls>"],
@@ -31,17 +33,34 @@ export default defineConfig({
           "https://admin.shopify.com/*",
           "https://*.myshopify.com/admin/*",
         ],
-        js: ["shopify-guardrails.js"],
+        js: ["shopify-buttons.js", "shopify-product-search.js"],
+
         run_at: "document_idle",
       },
       {
         matches: ["https://www.ebay.com/sch/*"],
-        js: ["ebay-sold-summary.js"],
+        js: ["ebay-summary.js"],
         run_at: "document_idle",
       },
+      {
+        matches: ["https://www.pricecharting.com/game/*"],
+        js: ["pricecharting-game.js"],
+        run_at: "document_idle",
+      },
+      {
+        matches: ["<all_urls>"],
+        js: ["toolbar-mount.js"],
+        run_at: "document_idle",
+        all_frames: true,
+      },
+      {
+        matches: ["<all_urls>"],
+        js: ["link-previewer.js"],
+        run_at: "document_start",
+      },
     ],
-    name: "Scout",
-    version: "1.0.2",
+    name: "Volt",
+    version: "1.0.14",
     description:
       "A versatile Chrome extension with command palette, controller testing, and multi-provider search capabilities.",
     permissions: [
@@ -53,27 +72,31 @@ export default defineConfig({
       "system.display",
       // Needed for adding right-click context menu actions
       "contextMenus",
+      "clipboardRead",
+      "clipboardWrite",
       // Needed for CMDK bookmarks and history
       "bookmarks",
       "history",
       // Needed for Save As button in context menu
       "downloads",
+      // Needed for accessing recently closed tabs
+      "sessions",
+      "favicon",
     ],
     host_permissions: ["<all_urls>"],
     icons: {
-      16: "assets/icons/dog-16.png",
-      32: "assets/icons/dog-32.png",
-      48: "assets/icons/dog-48.png",
-      128: "assets/icons/dog-128.png",
+      16: "assets/icons/logo-16.png",
+      32: "assets/icons/logo-32.png",
+      48: "assets/icons/logo-48.png",
+      128: "assets/icons/logo-128.png",
     },
     action: {
       default_icon: {
-        16: "assets/icons/dog-16.png",
-        32: "assets/icons/dog-32.png",
-        48: "assets/icons/dog-48.png",
-        128: "assets/icons/dog-128.png",
+        16: "assets/icons/logo-16.png",
+        32: "assets/icons/logo-32.png",
+        48: "assets/icons/logo-48.png",
+        128: "assets/icons/logo-128.png",
       },
-      default_popup: "popup.html",
     },
     side_panel: {
       default_path: "sidepanel.html",
@@ -92,6 +115,10 @@ export default defineConfig({
         resources: ["assets/icons/*"],
         matches: ["<all_urls>"],
       },
+      {
+        resources: ["assets/logos/*"],
+        matches: ["<all_urls>"],
+      },
     ],
     commands: {
       _execute_action: {
@@ -99,22 +126,32 @@ export default defineConfig({
           default: "Ctrl+Shift+K",
           mac: "Command+Shift+K",
         },
-        description: "Open Command Menu Popup",
+        description: "Toggle Side Panel",
       },
       "open-options": {
         suggested_key: {
           default: "Ctrl+Shift+O",
           mac: "Command+Shift+O",
         },
-        description: "Open extension options",
+        description: "Open Volt Web Extension Options",
       },
-      "open-controller-testing": {
+      "reopen-last-tab": {
         suggested_key: {
-          default: "Ctrl+J",
-          mac: "Command+J",
+          default: "Ctrl+Shift+Z",
+          mac: "Command+Shift+Z",
         },
-        description: "Open Controller Testing Sidepanel",
+        description: "Reopen last closed tab",
       },
+      "promote-preview": {
+        suggested_key: {
+          default: "Alt+Shift+T",
+          mac: "Alt+Shift+T",
+        },
+        description: "Promote preview popup to a full tab",
+      },
+    },
+    chrome_url_overrides: {
+      newtab: "newtab.html",
     },
   },
 } as any);

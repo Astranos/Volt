@@ -131,16 +131,100 @@ export default defineContentScript({
     // Function to copy UPC to clipboard
     const copyUPCToClipboard = async (upcCode, element) => {
       try {
-        await navigator.clipboard.writeText(upcCode);
-        element.classList.add("scout-upc-copied");
-        showTooltip(element, "UPC copied!");
+        // Try multiple clipboard strategies similar to context menu
+        const tryNavigatorApi = async () => {
+          if (!navigator?.clipboard?.writeText) return false;
+          await navigator.clipboard.writeText(upcCode);
+          return true;
+        };
+
+        const tryExecCommand = () => {
+          if (!document?.body) return false;
+          const textarea = document.createElement("textarea");
+          textarea.value = upcCode;
+          textarea.setAttribute("readonly", "true");
+          textarea.style.position = "fixed";
+          textarea.style.left = "-9999px";
+          textarea.style.opacity = "0";
+          textarea.style.pointerEvents = "none";
+          document.body.appendChild(textarea);
+
+          textarea.focus();
+          textarea.select();
+          const success = document.execCommand?.("copy");
+
+          document.body.removeChild(textarea);
+          return !!success;
+        };
+
+        const tryBackgroundFallback = async () => {
+          await new Promise<void>((resolve, reject) => {
+            try {
+              chrome.runtime.sendMessage(
+                { action: "copyToClipboard", text: upcCode },
+                (response) => {
+                  const lastError = chrome.runtime.lastError;
+                  if (lastError) {
+                    reject(lastError);
+                    return;
+                  }
+                  if (response?.success === false) {
+                    reject(new Error(response.error || "copy_failed"));
+                    return;
+                  }
+                  resolve();
+                }
+              );
+            } catch (err) {
+              reject(err);
+            }
+          });
+          return true;
+        };
+
+        const strategies = [
+          () =>
+            tryNavigatorApi().catch((err) => {
+              log("navigator.clipboard.writeText failed", err);
+              return false;
+            }),
+          () => {
+            try {
+              return tryExecCommand();
+            } catch (err) {
+              log("document.execCommand copy failed", err);
+              return false;
+            }
+          },
+          () =>
+            tryBackgroundFallback().catch((err) => {
+              log("Background clipboard copy failed", err);
+              return false;
+            }),
+        ];
+
+        let success = false;
+        for (const strategy of strategies) {
+          const result = await strategy();
+          if (result) {
+            success = true;
+            break;
+          }
+        }
+
+        if (success) {
+          element.classList.add("scout-upc-copied");
+          showTooltip(element, "UPC copied!");
+          log("UPC code copied to clipboard:", upcCode);
+        } else {
+          showTooltip(element, "Failed to copy");
+          log("Failed to copy UPC code after all strategies");
+        }
 
         // Remove the copied class after 2 seconds
         setTimeout(() => {
           element.classList.remove("scout-upc-copied");
         }, 2000);
-
-        log("UPC code copied to clipboard:", upcCode);
       } catch (err) {
         log("Failed to copy UPC code:", err);
         showTooltip(element, "Failed to copy");

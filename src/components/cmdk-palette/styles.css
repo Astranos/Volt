@@ -48,12 +48,6 @@
   }
 }
 
-@media (prefers-color-scheme: dark) {
-  .cmdk-container {
-    background: #1f2937;
-    border: 1px solid #374151;
-  }
-}
 
 /* CMDK Root */
 .cmdk-root {
@@ -71,11 +65,6 @@
   border-bottom: 1px solid #e5e7eb;
 }
 
-@media (prefers-color-scheme: dark) {
-  .cmdk-input-wrapper {
-    border-bottom-color: #374151;
-  }
-}
 
 /* Provider Badge */
 .cmdk-provider-badge {
@@ -109,14 +98,6 @@
   color: #9ca3af;
 }
 
-@media (prefers-color-scheme: dark) {
-  .cmdk-input {
-    color: #f3f4f6;
-  }
-  .cmdk-input::placeholder {
-    color: #6b7280;
-  }
-}
 
 /* Settings Button */
 .cmdk-settings-button {
@@ -144,20 +125,6 @@
   transform: scale(0.95);
 }
 
-@media (prefers-color-scheme: dark) {
-  .cmdk-settings-button {
-    color: #9ca3af;
-  }
-  
-  .cmdk-settings-button:hover {
-    background: #374151;
-    color: #d1d5db;
-  }
-  
-  .cmdk-settings-button:active {
-    background: #4b5563;
-  }
-}
 
 /* List */
 .cmdk-list {
@@ -179,11 +146,6 @@
   border-radius: 4px;
 }
 
-@media (prefers-color-scheme: dark) {
-  .cmdk-list::-webkit-scrollbar-thumb {
-    background: #4b5563;
-  }
-}
 
 /* Group */
 .cmdk-group {
@@ -199,11 +161,6 @@
   letter-spacing: 0.5px;
 }
 
-@media (prefers-color-scheme: dark) {
-  .cmdk-group [cmdk-group-heading] {
-    color: #9ca3af;
-  }
-}
 
 /* Item */
 .cmdk-item {
@@ -218,21 +175,11 @@
   background: #f3f4f6;
 }
 
-@media (prefers-color-scheme: dark) {
-  .cmdk-item[data-selected="true"] {
-    background: #374151;
-  }
-}
 
 .cmdk-item:active {
   background: #e5e7eb;
 }
 
-@media (prefers-color-scheme: dark) {
-  .cmdk-item:active {
-    background: #4b5563;
-  }
-}
 
 /* Empty */
 .cmdk-empty {
@@ -271,14 +218,6 @@
   box-shadow: inset 0 -1px 0 rgba(148, 163, 184, 0.4);
 }
 
-@media (prefers-color-scheme: dark) {
-  .cmdk-kbd {
-    border-color: rgba(148, 163, 184, 0.4);
-    background-color: rgba(148, 163, 184, 0.25);
-    color: #e2e8f0;
-    box-shadow: inset 0 -1px 0 rgba(15, 23, 42, 0.6);
-  }
-}
 
 .cmdk-input-overlay {
   position: absolute;
@@ -312,15 +251,6 @@
   white-space: nowrap;
 }
 
-@media (prefers-color-scheme: dark) {
-  .cmdk-input-overlay {
-    color: #9ca3af;
-  }
-
-  .cmdk-input-overlay-title {
-    color: #f3f4f6;
-  }
-}
 
 /* Keyboard hint for selected items */
 .cmdk-item-kbd-hint {

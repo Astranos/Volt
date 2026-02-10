@@ -17,6 +17,9 @@ import {
   RefreshCw,
   Download,
   MousePointerClick,
+  MapPin,
+  Plus,
+  Pencil,
 } from "lucide-react";
 import { getBookmarkFolders, BookmarkFolder } from "@/src/utils/bookmarks";
 
@@ -41,9 +44,11 @@ interface CMDKSettings {
     searchUrl: string;
     color: string;
   }>;
-  shopifyGuardrails?: {
-    enableConditionCheck?: boolean;
-    enableGoogleFieldsCheck?: boolean;
+  shopifyButtons?: {
+    enabled?: boolean;
+  };
+  newTabOverride?: {
+    enabled?: boolean;
   };
   controllerTesting?: {
     lightThreshold?: number;
@@ -62,6 +67,30 @@ interface CMDKSettings {
   };
   contextMenu?: {
     enabled?: boolean;
+  };
+  toolbar?: {
+    enabled?: boolean;
+  };
+  topOffers?: {
+    customRates?: {
+      standard: {
+        rules: { threshold: number; percentage: number }[];
+        defaultPercentage: number;
+      };
+      premium: {
+        rules: { threshold: number; percentage: number }[];
+        defaultPercentage: number;
+      };
+      checkout?: {
+        percentage: number;
+      };
+    };
+    customOffers?: Array<{
+      id: string;
+      name: string;
+      rules: { threshold: number; percentage: number }[];
+      defaultPercentage: number;
+    }>;
   };
 }
 
@@ -101,9 +130,11 @@ const DEFAULT_SETTINGS: CMDKSettings = {
     microcenter: true,
   },
   customSearchProviders: [],
-  shopifyGuardrails: {
-    enableConditionCheck: true,
-    enableGoogleFieldsCheck: true,
+  shopifyButtons: {
+    enabled: true,
+  },
+  newTabOverride: {
+    enabled: true,
   },
   controllerTesting: {
     lightThreshold: 0.1,
@@ -122,6 +153,38 @@ const DEFAULT_SETTINGS: CMDKSettings = {
   },
   contextMenu: {
     enabled: true,
+  },
+  toolbar: {
+    enabled: true,
+  },
+  topOffers: {
+    customRates: {
+      standard: {
+        rules: [
+          { threshold: 50, percentage: 0.2 },
+          { threshold: 100, percentage: 0.3 },
+          { threshold: 250, percentage: 0.4 },
+          { threshold: 500, percentage: 0.5 },
+          { threshold: 750, percentage: 0.55 },
+        ],
+        defaultPercentage: 0.65,
+      },
+      premium: {
+        rules: [
+          { threshold: 50, percentage: 0.2 },
+          { threshold: 100, percentage: 0.3 },
+          { threshold: 200, percentage: 0.4 },
+          { threshold: 250, percentage: 0.5 },
+          { threshold: 500, percentage: 0.6 },
+          { threshold: 750, percentage: 0.65 },
+        ],
+        defaultPercentage: 0.75,
+      },
+      checkout: {
+        percentage: 0.8,
+      },
+    },
+    customOffers: [],
   },
 };
 
@@ -152,9 +215,14 @@ const mergeSettings = (stored?: Partial<CMDKSettings>): CMDKSettings => {
     ...(stored.enabledSearchProviders || {}),
   };
 
-  const mergedShopifyGuardrails = {
-    ...(DEFAULT_SETTINGS.shopifyGuardrails || {}),
-    ...(stored.shopifyGuardrails || {}),
+  const mergedShopifyButtons = {
+    ...(DEFAULT_SETTINGS.shopifyButtons || {}),
+    ...(stored.shopifyButtons || {}),
+  };
+
+  const mergedNewTabOverride = {
+    ...(DEFAULT_SETTINGS.newTabOverride || {}),
+    ...(stored.newTabOverride || {}),
   };
 
   const mergedControllerTesting = {
@@ -191,7 +259,8 @@ const mergeSettings = (stored?: Partial<CMDKSettings>): CMDKSettings => {
     customSearchProviders: stored.customSearchProviders
       ? [...stored.customSearchProviders]
       : [...DEFAULT_SETTINGS.customSearchProviders],
-    shopifyGuardrails: mergedShopifyGuardrails,
+    shopifyButtons: mergedShopifyButtons,
+    newTabOverride: mergedNewTabOverride,
     controllerTesting: mergedControllerTesting,
     bookmarkFolderIds: stored.bookmarkFolderIds
       ? [...stored.bookmarkFolderIds]
@@ -200,6 +269,14 @@ const mergeSettings = (stored?: Partial<CMDKSettings>): CMDKSettings => {
     upcHighlighter: mergedUpcHighlighter,
     csvLinks: mergedCsvLinks,
     contextMenu: mergedContextMenu,
+    toolbar: {
+      ...(DEFAULT_SETTINGS.toolbar || {}),
+      ...(stored.toolbar || {}),
+    },
+    topOffers: {
+      ...(DEFAULT_SETTINGS.topOffers || {}),
+      ...(stored.topOffers || {}),
+    },
   };
 };
 
@@ -219,6 +296,8 @@ export default function SettingsPage() {
   const [csvCacheCleared, setCsvCacheCleared] = useState(false);
   const [csvRefreshing, setCsvRefreshing] = useState(false);
   const [csvDownloading, setCsvDownloading] = useState(false);
+  const [editingCustomOffer, setEditingCustomOffer] = useState<string | null>(null);
+  const [newCustomOfferName, setNewCustomOfferName] = useState("");
 
   useEffect(() => {
     // Load settings from chrome storage
@@ -403,22 +482,15 @@ export default function SettingsPage() {
     });
   };
 
-  const handleToggleGuardrail = (type: "condition" | "googleFields") => {
-    const newGuardrails = {
-      ...settings.shopifyGuardrails,
-      enableConditionCheck:
-        type === "condition"
-          ? !settings.shopifyGuardrails?.enableConditionCheck
-          : settings.shopifyGuardrails?.enableConditionCheck ?? true,
-      enableGoogleFieldsCheck:
-        type === "googleFields"
-          ? !settings.shopifyGuardrails?.enableGoogleFieldsCheck
-          : settings.shopifyGuardrails?.enableGoogleFieldsCheck ?? true,
+  const handleToggleShopifyButtons = () => {
+    const newShopifyButtons = {
+      ...settings.shopifyButtons,
+      enabled: !settings.shopifyButtons?.enabled,
     };
 
     const newSettings = {
       ...settings,
-      shopifyGuardrails: newGuardrails,
+      shopifyButtons: newShopifyButtons,
     };
     setSettings(newSettings);
 
@@ -433,8 +505,8 @@ export default function SettingsPage() {
           if (tab.id) {
             chrome.tabs
               .sendMessage(tab.id, {
-                action: "guardrails-settings-changed",
-                settings: newGuardrails,
+                action: "shopify-buttons-settings-changed",
+                enabled: newShopifyButtons.enabled,
               })
               .catch(() => {
                 // Ignore errors for tabs that don't have the content script
@@ -464,25 +536,6 @@ export default function SettingsPage() {
     const newSettings = {
       ...settings,
       controllerTesting: newThresholds,
-    };
-    setSettings(newSettings);
-
-    // Auto-save
-    chrome.storage.sync.set({ cmdkSettings: newSettings }, () => {
-      setIsSaved(true);
-      setTimeout(() => setIsSaved(false), 2000);
-    });
-  };
-
-  const handleToggleControllerAutoStart = () => {
-    const newControllerTesting = {
-      ...settings.controllerTesting,
-      autoStart: !settings.controllerTesting?.autoStart,
-    };
-
-    const newSettings = {
-      ...settings,
-      controllerTesting: newControllerTesting,
     };
     setSettings(newSettings);
 
@@ -628,6 +681,479 @@ export default function SettingsPage() {
           }
         });
       });
+    });
+  };
+
+  const handleToggleNewTabOverride = () => {
+    const newNewTabOverride = {
+      ...settings.newTabOverride,
+      enabled: !settings.newTabOverride?.enabled,
+    };
+
+    const newSettings = {
+      ...settings,
+      newTabOverride: newNewTabOverride,
+    };
+    setSettings(newSettings);
+
+    // Auto-save
+    chrome.storage.sync.set({ cmdkSettings: newSettings }, () => {
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 2000);
+    });
+  };
+
+  const handleToggleToolbar = () => {
+    const newToolbar = {
+      ...settings.toolbar,
+      enabled: !settings.toolbar?.enabled,
+    };
+
+    const newSettings = {
+      ...settings,
+      toolbar: newToolbar,
+    };
+    setSettings(newSettings);
+
+    // Auto-save
+    chrome.storage.sync.set({ cmdkSettings: newSettings }, () => {
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 2000);
+
+      // Notify content script of settings change
+      chrome.tabs.query({}, (tabs) => {
+        tabs.forEach((tab) => {
+          if (tab.id) {
+            chrome.tabs
+              .sendMessage(tab.id, {
+                action: "toolbar-settings-changed",
+                enabled: newToolbar.enabled,
+              })
+              .catch(() => {
+                // Ignore errors for tabs that don't have the content script
+              });
+          }
+        });
+      });
+    });
+  };
+
+  const handleUpdateRateRule = (
+    type: "standard" | "premium",
+    index: number,
+    field: "threshold" | "percentage",
+    value: number
+  ) => {
+    const currentRates =
+      settings.topOffers?.customRates?.[type] ||
+      DEFAULT_SETTINGS.topOffers!.customRates![type];
+    const newRules = [...currentRates.rules];
+    newRules[index] = { ...newRules[index], [field]: value };
+
+    const newSettings = {
+      ...settings,
+      topOffers: {
+        ...settings.topOffers,
+        customRates: {
+          ...(settings.topOffers?.customRates ||
+            DEFAULT_SETTINGS.topOffers!.customRates!),
+          [type]: {
+            ...currentRates,
+            rules: newRules,
+          },
+        },
+      },
+    };
+    setSettings(newSettings);
+
+    // Auto-save
+    chrome.storage.sync.set({ cmdkSettings: newSettings }, () => {
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 2000);
+    });
+  };
+
+  const handleSortRules = (type: "standard" | "premium") => {
+    const currentRates =
+      settings.topOffers?.customRates?.[type] ||
+      DEFAULT_SETTINGS.topOffers!.customRates![type];
+    const newRules = [...currentRates.rules];
+    
+    // Sort rules by threshold to ensure correct logic
+    newRules.sort((a, b) => a.threshold - b.threshold);
+
+    const newSettings = {
+      ...settings,
+      topOffers: {
+        ...settings.topOffers,
+        customRates: {
+          ...(settings.topOffers?.customRates ||
+            DEFAULT_SETTINGS.topOffers!.customRates!),
+          [type]: {
+            ...currentRates,
+            rules: newRules,
+          },
+        },
+      },
+    };
+    setSettings(newSettings);
+
+    // Auto-save
+    chrome.storage.sync.set({ cmdkSettings: newSettings }, () => {
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 2000);
+    });
+  };
+
+  const handleAddRateRule = (type: "standard" | "premium") => {
+    const currentRates =
+      settings.topOffers?.customRates?.[type] ||
+      DEFAULT_SETTINGS.topOffers!.customRates![type];
+
+    // Create a new rule with values based on the last rule or defaults
+    const lastRule = currentRates.rules[currentRates.rules.length - 1];
+    const newRule = lastRule
+      ? { threshold: lastRule.threshold + 100, percentage: lastRule.percentage }
+      : { threshold: 100, percentage: 0.2 };
+
+    const newRules = [...currentRates.rules, newRule];
+    
+    // Sort rules by threshold to ensure correct logic
+    newRules.sort((a, b) => a.threshold - b.threshold);
+
+    const newSettings = {
+      ...settings,
+      topOffers: {
+        ...settings.topOffers,
+        customRates: {
+          ...(settings.topOffers?.customRates ||
+            DEFAULT_SETTINGS.topOffers!.customRates!),
+          [type]: {
+            ...currentRates,
+            rules: newRules,
+          },
+        },
+      },
+    };
+    setSettings(newSettings);
+
+    // Auto-save
+    chrome.storage.sync.set({ cmdkSettings: newSettings }, () => {
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 2000);
+    });
+  };
+
+  const handleRemoveRateRule = (
+    type: "standard" | "premium",
+    index: number
+  ) => {
+    const currentRates =
+      settings.topOffers?.customRates?.[type] ||
+      DEFAULT_SETTINGS.topOffers!.customRates![type];
+    const newRules = [...currentRates.rules];
+    newRules.splice(index, 1);
+
+    const newSettings = {
+      ...settings,
+      topOffers: {
+        ...settings.topOffers,
+        customRates: {
+          ...(settings.topOffers?.customRates ||
+            DEFAULT_SETTINGS.topOffers!.customRates!),
+          [type]: {
+            ...currentRates,
+            rules: newRules,
+          },
+        },
+      },
+    };
+    setSettings(newSettings);
+
+    // Auto-save
+    chrome.storage.sync.set({ cmdkSettings: newSettings }, () => {
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 2000);
+    });
+  };
+
+  const handleUpdateDefaultPercentage = (
+    type: "standard" | "premium",
+    value: number
+  ) => {
+    const currentRates =
+      settings.topOffers?.customRates?.[type] ||
+      DEFAULT_SETTINGS.topOffers!.customRates![type];
+
+    const newSettings = {
+      ...settings,
+      topOffers: {
+        ...settings.topOffers,
+        customRates: {
+          ...(settings.topOffers?.customRates ||
+            DEFAULT_SETTINGS.topOffers!.customRates!),
+          [type]: {
+            ...currentRates,
+            defaultPercentage: value,
+          },
+        },
+      },
+    };
+    setSettings(newSettings);
+
+    // Auto-save
+    chrome.storage.sync.set({ cmdkSettings: newSettings }, () => {
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 2000);
+    });
+  };
+
+  const handleUpdateCheckoutRate = (value: number) => {
+    const newSettings = {
+      ...settings,
+      topOffers: {
+        ...settings.topOffers,
+        customRates: {
+          ...(settings.topOffers?.customRates ||
+            DEFAULT_SETTINGS.topOffers!.customRates!),
+          checkout: {
+            percentage: value,
+          },
+        },
+      },
+    };
+    setSettings(newSettings);
+
+    // Auto-save
+    chrome.storage.sync.set({ cmdkSettings: newSettings }, () => {
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 2000);
+    });
+  };
+
+  const handleAddCustomOffer = () => {
+    const id = `custom-${Date.now()}`;
+    const defaultRules = [
+      { threshold: 50, percentage: 0.2 },
+      { threshold: 100, percentage: 0.3 },
+      { threshold: 250, percentage: 0.35 },
+      { threshold: 500, percentage: 0.45 },
+      { threshold: 750, percentage: 0.5 },
+    ];
+
+    const newCustomOffer = {
+      id,
+      name: "Custom Offer",
+      rules: defaultRules,
+      defaultPercentage: 0.6,
+    };
+
+    const currentOffers = settings.topOffers?.customOffers || [];
+    const newSettings = {
+      ...settings,
+      topOffers: {
+        ...settings.topOffers,
+        customOffers: [...currentOffers, newCustomOffer],
+      },
+    };
+    setSettings(newSettings);
+
+    // Auto-save
+    chrome.storage.sync.set({ cmdkSettings: newSettings }, () => {
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 2000);
+    });
+
+    // Start editing the name
+    setEditingCustomOffer(id);
+    setNewCustomOfferName("Custom Offer");
+  };
+
+  const handleUpdateCustomOfferName = (offerId: string, name: string) => {
+    const currentOffers = settings.topOffers?.customOffers || [];
+    const updatedOffers = currentOffers.map((offer) =>
+      offer.id === offerId ? { ...offer, name } : offer
+    );
+
+    const newSettings = {
+      ...settings,
+      topOffers: {
+        ...settings.topOffers,
+        customOffers: updatedOffers,
+      },
+    };
+    setSettings(newSettings);
+
+    // Auto-save
+    chrome.storage.sync.set({ cmdkSettings: newSettings }, () => {
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 2000);
+    });
+
+    setEditingCustomOffer(null);
+  };
+
+  const handleDeleteCustomOffer = (offerId: string) => {
+    const currentOffers = settings.topOffers?.customOffers || [];
+    const updatedOffers = currentOffers.filter((offer) => offer.id !== offerId);
+
+    const newSettings = {
+      ...settings,
+      topOffers: {
+        ...settings.topOffers,
+        customOffers: updatedOffers,
+      },
+    };
+    setSettings(newSettings);
+
+    // Auto-save
+    chrome.storage.sync.set({ cmdkSettings: newSettings }, () => {
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 2000);
+    });
+  };
+
+  const handleUpdateCustomOfferRule = (
+    offerId: string,
+    ruleIndex: number,
+    field: "threshold" | "percentage",
+    value: number
+  ) => {
+    const currentOffers = settings.topOffers?.customOffers || [];
+    const updatedOffers = currentOffers.map((offer) => {
+      if (offer.id === offerId) {
+        const newRules = [...offer.rules];
+        newRules[ruleIndex] = { ...newRules[ruleIndex], [field]: value };
+        return { ...offer, rules: newRules };
+      }
+      return offer;
+    });
+
+    const newSettings = {
+      ...settings,
+      topOffers: {
+        ...settings.topOffers,
+        customOffers: updatedOffers,
+      },
+    };
+    setSettings(newSettings);
+
+    // Auto-save
+    chrome.storage.sync.set({ cmdkSettings: newSettings }, () => {
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 2000);
+    });
+  };
+
+  const handleSortCustomOfferRules = (offerId: string) => {
+    const currentOffers = settings.topOffers?.customOffers || [];
+    const updatedOffers = currentOffers.map((offer) => {
+      if (offer.id === offerId) {
+        const sortedRules = [...offer.rules].sort(
+          (a, b) => a.threshold - b.threshold
+        );
+        return { ...offer, rules: sortedRules };
+      }
+      return offer;
+    });
+
+    const newSettings = {
+      ...settings,
+      topOffers: {
+        ...settings.topOffers,
+        customOffers: updatedOffers,
+      },
+    };
+    setSettings(newSettings);
+
+    // Auto-save
+    chrome.storage.sync.set({ cmdkSettings: newSettings }, () => {
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 2000);
+    });
+  };
+
+  const handleAddCustomOfferRule = (offerId: string) => {
+    const currentOffers = settings.topOffers?.customOffers || [];
+    const updatedOffers = currentOffers.map((offer) => {
+      if (offer.id === offerId) {
+        const lastRule = offer.rules[offer.rules.length - 1];
+        const newRule = lastRule
+          ? { threshold: lastRule.threshold + 100, percentage: lastRule.percentage }
+          : { threshold: 100, percentage: 0.2 };
+        const newRules = [...offer.rules, newRule].sort(
+          (a, b) => a.threshold - b.threshold
+        );
+        return { ...offer, rules: newRules };
+      }
+      return offer;
+    });
+
+    const newSettings = {
+      ...settings,
+      topOffers: {
+        ...settings.topOffers,
+        customOffers: updatedOffers,
+      },
+    };
+    setSettings(newSettings);
+
+    // Auto-save
+    chrome.storage.sync.set({ cmdkSettings: newSettings }, () => {
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 2000);
+    });
+  };
+
+  const handleRemoveCustomOfferRule = (offerId: string, ruleIndex: number) => {
+    const currentOffers = settings.topOffers?.customOffers || [];
+    const updatedOffers = currentOffers.map((offer) => {
+      if (offer.id === offerId) {
+        const newRules = [...offer.rules];
+        newRules.splice(ruleIndex, 1);
+        return { ...offer, rules: newRules };
+      }
+      return offer;
+    });
+
+    const newSettings = {
+      ...settings,
+      topOffers: {
+        ...settings.topOffers,
+        customOffers: updatedOffers,
+      },
+    };
+    setSettings(newSettings);
+
+    // Auto-save
+    chrome.storage.sync.set({ cmdkSettings: newSettings }, () => {
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 2000);
+    });
+  };
+
+  const handleUpdateCustomOfferDefaultPercentage = (
+    offerId: string,
+    value: number
+  ) => {
+    const currentOffers = settings.topOffers?.customOffers || [];
+    const updatedOffers = currentOffers.map((offer) =>
+      offer.id === offerId ? { ...offer, defaultPercentage: value } : offer
+    );
+
+    const newSettings = {
+      ...settings,
+      topOffers: {
+        ...settings.topOffers,
+        customOffers: updatedOffers,
+      },
+    };
+    setSettings(newSettings);
+
+    // Auto-save
+    chrome.storage.sync.set({ cmdkSettings: newSettings }, () => {
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 2000);
     });
   };
 
@@ -783,12 +1309,12 @@ export default function SettingsPage() {
         <div className="flex h-16 items-center px-6">
           <div className="flex items-center gap-3">
             <img
-              src="/assets/icons/dog.png"
-              alt="Scout"
-              className="w-8 h-8 rounded-lg shadow-sm"
+              src="/assets/icons/volt.webp"
+              alt="Volt"
+              className="w-10 h-10"
             />
             <div>
-              <h1 className="text-lg font-bold">Scout Settings</h1>
+              <h1 className="text-lg font-bold">Volt Settings</h1>
               {version && (
                 <p className="text-xs text-muted-foreground">
                   Version {version}
@@ -798,7 +1324,7 @@ export default function SettingsPage() {
           </div>
           <div className="ml-auto flex items-center gap-3">
             {isSaved && (
-              <div className="flex items-center gap-2 px-3 py-1.5 text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/20 rounded-lg">
+              <div className="flex items-center gap-2 px-3 py-1.5 text-green-700 bg-green-50 rounded-lg">
                 <Check className="w-4 h-4" />
                 <span className="text-sm font-medium">Saved!</span>
               </div>
@@ -818,6 +1344,20 @@ export default function SettingsPage() {
         {/* Sidebar Navigation */}
         <aside className="sticky top-16 h-[calc(100vh-4rem)] w-64 border-r border-border/40 bg-background/50 backdrop-blur p-6">
           <nav className="space-y-1">
+            <a
+              href="#toolbar"
+              className="flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg hover:bg-muted/50 transition-colors text-foreground"
+            >
+              <MousePointerClick className="w-4 h-4" />
+              Global Toolbar
+            </a>
+            <a
+              href="#newtab"
+              className="flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg hover:bg-muted/50 transition-colors text-foreground"
+            >
+              <ScanLine className="w-4 h-4" />
+              New Tab Override
+            </a>
             <a
               href="#sources"
               className="flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg hover:bg-muted/50 transition-colors text-foreground"
@@ -858,7 +1398,7 @@ export default function SettingsPage() {
               className="flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg hover:bg-muted/50 transition-colors text-foreground"
             >
               <TrendingUp className="w-4 h-4" />
-              eBay Price Summary
+              eBay Summary
             </a>
             <a
               href="#upc"
@@ -881,6 +1421,13 @@ export default function SettingsPage() {
               <Link2 className="w-4 h-4" />
               Quick Links
             </a>
+            <a
+              href="#topoffers"
+              className="flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg hover:bg-muted/50 transition-colors text-foreground"
+            >
+              <MapPin className="w-4 h-4" />
+              Top Offers
+            </a>
           </nav>
 
           <div className="mt-8 p-4 bg-muted/30 rounded-lg border border-border/40">
@@ -894,6 +1441,109 @@ export default function SettingsPage() {
 
         {/* Content Area */}
         <main className="flex-1 p-8 space-y-12 max-w-5xl">
+          {/* Global Toolbar Section */}
+          <section id="toolbar" className="scroll-mt-20">
+            <div className="mb-6">
+              <h2 className="text-2xl font-bold mb-2">Global Toolbar</h2>
+              <p className="text-muted-foreground">
+                Enable or disable the floating toolbar on all pages
+              </p>
+            </div>
+
+            <div className="bg-card rounded-xl border border-border shadow-lg overflow-hidden">
+              <div className="divide-y divide-border">
+                {/* Enable Toolbar Toggle */}
+                <div className="p-6 flex items-start gap-4">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <h3 className="font-semibold text-base">
+                        Enable Floating Toolbar
+                      </h3>
+                      {settings.toolbar?.enabled && (
+                        <span className="text-xs px-2.5 py-1 rounded-full bg-green-100 text-green-700 font-medium">
+                          Active
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-muted-foreground leading-relaxed">
+                      Shows the floating toolbar on the right side of the screen
+                      on all pages. Provides quick access to tools like
+                      Controller Testing, Top Offers, and more.
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleToggleToolbar}
+                    className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${
+                      settings.toolbar?.enabled ?? true
+                        ? "bg-primary"
+                        : "bg-muted-foreground/30"
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform ${
+                        settings.toolbar?.enabled ?? true
+                          ? "translate-x-6"
+                          : "translate-x-1"
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* New Tab Override Section */}
+          <section id="newtab" className="scroll-mt-20">
+            <div className="mb-6">
+              <h2 className="text-2xl font-bold mb-2">New Tab Override</h2>
+              <p className="text-muted-foreground">
+                Control whether Volt replaces Chrome&apos;s default New Tab
+                page.
+              </p>
+            </div>
+
+            <div className="bg-card rounded-xl border border-border shadow-lg overflow-hidden">
+              <div className="divide-y divide-border">
+                <div className="p-6 flex items-start gap-4">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <h3 className="font-semibold text-base">
+                        Use Volt New Tab
+                      </h3>
+                      {(settings.newTabOverride?.enabled ?? true) && (
+                        <span className="text-xs px-2.5 py-1 rounded-full bg-green-100 text-green-700 font-medium">
+                          Active
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-muted-foreground leading-relaxed">
+                      When enabled, new tabs open Volt&apos;s custom layout with
+                      closed tabs, quick links, and bookmarks. When disabled,
+                      new tabs will redirect back to Chrome&apos;s default New
+                      Tab page as much as the browser allows.
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleToggleNewTabOverride}
+                    className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${
+                      settings.newTabOverride?.enabled ?? true
+                        ? "bg-primary"
+                        : "bg-muted-foreground/30"
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform ${
+                        settings.newTabOverride?.enabled ?? true
+                          ? "translate-x-6"
+                          : "translate-x-1"
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
+
           {/* Command Sources Section */}
           <section id="sources" className="scroll-mt-20">
             <div className="mb-6">
@@ -929,7 +1579,7 @@ export default function SettingsPage() {
                           {source.label}
                         </h3>
                         {settings.enabledSources[source.key] && (
-                          <span className="text-xs px-2.5 py-1 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 font-medium">
+                          <span className="text-xs px-2.5 py-1 rounded-full bg-green-100 text-green-700 font-medium">
                             Enabled
                           </span>
                         )}
@@ -987,8 +1637,8 @@ export default function SettingsPage() {
                   </div>
 
                   {settings.bookmarkFolderIds?.length === 0 && (
-                    <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
-                      <p className="text-sm text-green-700 dark:text-green-400">
+                    <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                      <p className="text-sm text-green-700">
                         All bookmarks from all folders are currently shown
                       </p>
                     </div>
@@ -1300,87 +1950,47 @@ export default function SettingsPage() {
             </div>
           </section>
 
-          {/* Shopify Guardrails Section */}
-          <section id="guardrails" className="scroll-mt-20">
+          {/* Shopify Buttons Section */}
+          <section id="shopify-buttons" className="scroll-mt-20">
             <div className="mb-6">
-              <h2 className="text-2xl font-bold mb-2">Shopify Guardrails</h2>
+              <h2 className="text-2xl font-bold mb-2">Shopify Buttons</h2>
               <p className="text-muted-foreground">
-                Automated validation checks for Shopify product pages to prevent
-                common errors
+                Enable or disable the quick action buttons on Shopify product
+                pages
               </p>
             </div>
 
             <div className="bg-card rounded-xl border border-border shadow-lg overflow-hidden">
               <div className="divide-y divide-border">
-                {/* Condition Mismatch Check */}
+                {/* Enable Buttons Toggle */}
                 <div className="p-6 flex items-start gap-4">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-2">
                       <h3 className="font-semibold text-base">
-                        Condition Mismatch Check
+                        Enable Quick Action Buttons
                       </h3>
-                      {settings.shopifyGuardrails?.enableConditionCheck && (
-                        <span className="text-xs px-2.5 py-1 rounded-full bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 font-medium">
+                      {settings.shopifyButtons?.enabled && (
+                        <span className="text-xs px-2.5 py-1 rounded-full bg-green-100 text-green-700 font-medium">
                           Active
                         </span>
                       )}
                     </div>
                     <p className="text-sm text-muted-foreground leading-relaxed">
-                      Validates that eBay condition ID matches the Shopify
-                      condition. Shows red border and notification when
-                      mismatched.
+                      Shows the floating toolbar with eBay and PriceCharting
+                      buttons on Shopify product pages.
                     </p>
                   </div>
                   <button
-                    onClick={() => handleToggleGuardrail("condition")}
+                    onClick={handleToggleShopifyButtons}
                     className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${
-                      settings.shopifyGuardrails?.enableConditionCheck ?? true
+                      settings.shopifyButtons?.enabled ?? true
                         ? "bg-primary"
                         : "bg-muted-foreground/30"
                     }`}
                   >
                     <span
                       className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform ${
-                        settings.shopifyGuardrails?.enableConditionCheck ?? true
-                          ? "translate-x-6"
-                          : "translate-x-1"
-                      }`}
-                    />
-                  </button>
-                </div>
-
-                {/* Google Fields Check */}
-                <div className="p-6 flex items-start gap-4">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      <h3 className="font-semibold text-base">
-                        Empty Google Fields Check
-                      </h3>
-                      {settings.shopifyGuardrails?.enableGoogleFieldsCheck && (
-                        <span className="text-xs px-2.5 py-1 rounded-full bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 font-medium">
-                          Active
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-sm text-muted-foreground leading-relaxed">
-                      Alerts when required Google Shopping metafields are empty.
-                      Shows orange border and notification with dismissible
-                      warning.
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => handleToggleGuardrail("googleFields")}
-                    className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${
-                      settings.shopifyGuardrails?.enableGoogleFieldsCheck ??
-                      true
-                        ? "bg-primary"
-                        : "bg-muted-foreground/30"
-                    }`}
-                  >
-                    <span
-                      className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform ${
-                        settings.shopifyGuardrails?.enableGoogleFieldsCheck ??
-                        true
+                        settings.shopifyButtons?.enabled ?? true
                           ? "translate-x-6"
                           : "translate-x-1"
                       }`}
@@ -1404,43 +2014,6 @@ export default function SettingsPage() {
             <div className="bg-card rounded-xl border border-border shadow-lg overflow-hidden">
               <div className="p-8">
                 <div className="space-y-6">
-                  {/* Auto-Start Toggle */}
-                  <div className="p-6 flex items-start gap-4 bg-muted/20 rounded-lg border border-border/50">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <h3 className="font-semibold text-base">
-                          Auto-Start Controller Detection
-                        </h3>
-                        {settings.controllerTesting?.autoStart !== false && (
-                          <span className="text-xs px-2.5 py-1 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 font-medium">
-                            Enabled
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-sm text-muted-foreground leading-relaxed">
-                        Automatically start detecting controller inputs when
-                        opening the controller testing panel. Disable this if
-                        you want to manually connect your controller before
-                        starting detection.
-                      </p>
-                    </div>
-                    <button
-                      onClick={handleToggleControllerAutoStart}
-                      className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${
-                        settings.controllerTesting?.autoStart !== false
-                          ? "bg-primary"
-                          : "bg-muted-foreground/30"
-                      }`}
-                    >
-                      <span
-                        className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform ${
-                          settings.controllerTesting?.autoStart !== false
-                            ? "translate-x-6"
-                            : "translate-x-1"
-                        }`}
-                      />
-                    </button>
-                  </div>
                   <div className="p-4 bg-muted/20 rounded-lg border border-border/50">
                     <p className="text-sm text-muted-foreground mb-4">
                       Set the thresholds at which controller inputs change
@@ -1541,9 +2114,9 @@ export default function SettingsPage() {
           {/* eBay Price Summary Section */}
           <section id="ebay" className="scroll-mt-20">
             <div className="mb-6">
-              <h2 className="text-2xl font-bold mb-2">eBay Price Summary</h2>
+              <h2 className="text-2xl font-bold mb-2">eBay Summary</h2>
               <p className="text-muted-foreground">
-                Configure the price summary feature for eBay sold listings
+                Display search context summary on eBay search pages
               </p>
             </div>
 
@@ -1554,29 +2127,32 @@ export default function SettingsPage() {
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-2">
                       <h3 className="font-semibold text-base">
-                        Enable Price Summary
+                        Enable eBay Summary
                       </h3>
                       {settings.ebaySummary?.enabled && (
-                        <span className="text-xs px-2.5 py-1 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 font-medium">
+                        <span className="text-xs px-2.5 py-1 rounded-full bg-blue-100 text-blue-700 font-medium">
                           Active
                         </span>
                       )}
                     </div>
                     <p className="text-sm text-muted-foreground leading-relaxed mb-3">
-                      Automatically displays average, median, high, and low sale
-                      prices for eBay sold listings. Includes clickable metrics
-                      to jump to specific listings and quick filters for viewing
-                      new/used items.
+                      Displays a summary banner showing your current search
+                      context (Active vs Sold listings, item condition) at the
+                      top of eBay search results. Includes quick filter links.
                     </p>
                     <div className="text-xs text-muted-foreground space-y-1">
                       <p>
-                        • Shows price statistics at the top of search results
+                        • Shows current listing type (Active/Sold/Completed) and
+                        condition filters
                       </p>
                       <p>
-                        • Click metrics to scroll to highest/lowest/latest sold
-                        items
+                        • Quick filter links to switch between New, Used, and
+                        Broken conditions
                       </p>
-                      <p>• Quick filter buttons for new and used conditions</p>
+                      <p>
+                        • One-click switch to Sold Listings for price analysis
+                      </p>
+                      <p>• Access to eBay Tool sidepanel and settings</p>
                       <p>• Dismissible per search session</p>
                     </div>
                   </div>
@@ -1620,7 +2196,7 @@ export default function SettingsPage() {
                         Enable UPC Detection
                       </h3>
                       {settings.upcHighlighter?.enabled && (
-                        <span className="text-xs px-2.5 py-1 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 font-medium">
+                        <span className="text-xs px-2.5 py-1 rounded-full bg-blue-100 text-blue-700 font-medium">
                           Active
                         </span>
                       )}
@@ -1677,7 +2253,7 @@ export default function SettingsPage() {
                         Enable Context Menu
                       </h3>
                       {settings.contextMenu?.enabled && (
-                        <span className="text-xs px-2.5 py-1 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 font-medium">
+                        <span className="text-xs px-2.5 py-1 rounded-full bg-blue-100 text-blue-700 font-medium">
                           Active
                         </span>
                       )}
@@ -1778,8 +2354,8 @@ export default function SettingsPage() {
                   </div>
 
                   {settings.csvLinks?.customUrl && (
-                    <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                      <p className="text-xs text-blue-700 dark:text-blue-400">
+                    <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <p className="text-xs text-blue-700">
                         ✓ Using custom CSV URL. Clear the cache to reload from
                         your new URL.
                       </p>
@@ -1812,8 +2388,8 @@ export default function SettingsPage() {
                           URL
                         </p>
                       </div>
-                      <div className="mt-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
-                        <p className="text-xs text-amber-700 dark:text-amber-400">
+                      <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                        <p className="text-xs text-amber-700">
                           <strong>Note:</strong> Clearing CSV cache does NOT
                           affect your Chrome bookmarks. These are separate
                           features.
@@ -1841,13 +2417,506 @@ export default function SettingsPage() {
                         Clear Cache
                       </button>
                       {csvCacheCleared && (
-                        <div className="flex items-center gap-2 px-3 py-1.5 text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                        <div className="flex items-center gap-2 px-3 py-1.5 text-green-700 bg-green-50 rounded-lg">
                           <Check className="w-4 h-4" />
                           <span className="text-xs font-medium">Done!</span>
                         </div>
                       )}
                     </div>
                   </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Top Offers Section */}
+          <section id="topoffers" className="scroll-mt-20">
+            <div className="mb-6 flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-bold mb-2">Top Offers</h2>
+                <p className="text-muted-foreground">
+                  Configure settings for the Top Offers calculator
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  const defaultRates = {
+                    standard: {
+                      rules: [
+                        { threshold: 50, percentage: 0.2 },
+                        { threshold: 100, percentage: 0.3 },
+                        { threshold: 250, percentage: 0.35 },
+                        { threshold: 500, percentage: 0.45 },
+                        { threshold: 750, percentage: 0.5 },
+                      ],
+                      defaultPercentage: 0.6,
+                    },
+                    premium: {
+                      rules: [
+                        { threshold: 50, percentage: 0.2 },
+                        { threshold: 100, percentage: 0.3 },
+                        { threshold: 200, percentage: 0.35 },
+                        { threshold: 250, percentage: 0.45 },
+                        { threshold: 500, percentage: 0.55 },
+                        { threshold: 750, percentage: 0.6 },
+                      ],
+                      defaultPercentage: 0.7,
+                    },
+                    checkout: {
+                      percentage: 0.8,
+                    },
+                  };
+
+                  const newSettings = {
+                    ...settings,
+                    topOffers: {
+                      ...settings.topOffers,
+                      customRates: defaultRates,
+                    },
+                  };
+                  setSettings(newSettings);
+
+                  // Auto-save
+                  chrome.storage.sync.set({ cmdkSettings: newSettings }, () => {
+                    setIsSaved(true);
+                    setTimeout(() => setIsSaved(false), 2000);
+                  });
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-muted text-foreground hover:bg-muted/80 rounded-lg transition-colors text-sm font-medium"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Reset Rates
+              </button>
+            </div>
+
+            <div className="bg-card rounded-xl border border-border shadow-lg overflow-hidden">
+              <div className="p-8 space-y-8">
+                {/* Standard Rates Editor */}
+                <div>
+                  <h3 className="font-semibold text-lg mb-4">Standard Rates</h3>
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-12 gap-4 text-sm font-medium text-muted-foreground px-2">
+                      <div className="col-span-5">Under Amount ($)</div>
+                      <div className="col-span-5">Percentage (0.1 = 10%)</div>
+                      <div className="col-span-2"></div>
+                    </div>
+                    {(
+                      settings.topOffers?.customRates?.standard.rules ||
+                      DEFAULT_SETTINGS.topOffers!.customRates!.standard.rules
+                    ).map((rule, index) => (
+                      <div
+                        key={index}
+                        className="grid grid-cols-12 gap-4 items-center"
+                      >
+                        <div className="col-span-5">
+                          <input
+                            type="number"
+                            value={rule.threshold}
+                            onChange={(e) =>
+                              handleUpdateRateRule(
+                                "standard",
+                                index,
+                                "threshold",
+                                parseFloat(e.target.value)
+                              )
+                            }
+                            onBlur={() => handleSortRules("standard")}
+                            className="w-full px-3 py-2 border border-border rounded-lg bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
+                          />
+                        </div>
+                        <div className="col-span-5">
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={rule.percentage}
+                            onChange={(e) =>
+                              handleUpdateRateRule(
+                                "standard",
+                                index,
+                                "percentage",
+                                parseFloat(e.target.value)
+                              )
+                            }
+                            className="w-full px-3 py-2 border border-border rounded-lg bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
+                          />
+                        </div>
+                        <div className="col-span-2 flex justify-end">
+                          <button
+                            onClick={() =>
+                              handleRemoveRateRule("standard", index)
+                            }
+                            className="p-2 text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                    <div className="grid grid-cols-12 gap-4 items-center pt-2">
+                      <div className="col-span-5 text-sm font-medium pl-2">
+                        Everything else
+                      </div>
+                      <div className="col-span-5">
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={
+                            settings.topOffers?.customRates?.standard
+                              .defaultPercentage ?? 0.65
+                          }
+                          onChange={(e) =>
+                            handleUpdateDefaultPercentage(
+                              "standard",
+                              parseFloat(e.target.value)
+                            )
+                          }
+                          className="w-full px-3 py-2 border border-border rounded-lg bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
+                        />
+                      </div>
+                      <div className="col-span-2"></div>
+                    </div>
+                    <div className="pt-2">
+                      <button
+                        onClick={() => handleAddRateRule("standard")}
+                        className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Add Rule
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border-t border-border" />
+
+                {/* Premium Rates Editor */}
+                <div>
+                  <h3 className="font-semibold text-lg mb-4">Premium Rates</h3>
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-12 gap-4 text-sm font-medium text-muted-foreground px-2">
+                      <div className="col-span-5">Under Amount ($)</div>
+                      <div className="col-span-5">Percentage (0.1 = 10%)</div>
+                      <div className="col-span-2"></div>
+                    </div>
+                    {(
+                      settings.topOffers?.customRates?.premium.rules ||
+                      DEFAULT_SETTINGS.topOffers!.customRates!.premium.rules
+                    ).map((rule, index) => (
+                      <div
+                        key={index}
+                        className="grid grid-cols-12 gap-4 items-center"
+                      >
+                        <div className="col-span-5">
+                          <input
+                            type="number"
+                            value={rule.threshold}
+                            onChange={(e) =>
+                              handleUpdateRateRule(
+                                "premium",
+                                index,
+                                "threshold",
+                                parseFloat(e.target.value)
+                              )
+                            }
+                            onBlur={() => handleSortRules("premium")}
+                            className="w-full px-3 py-2 border border-border rounded-lg bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
+                          />
+                        </div>
+                        <div className="col-span-5">
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={rule.percentage}
+                            onChange={(e) =>
+                              handleUpdateRateRule(
+                                "premium",
+                                index,
+                                "percentage",
+                                parseFloat(e.target.value)
+                              )
+                            }
+                            className="w-full px-3 py-2 border border-border rounded-lg bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
+                          />
+                        </div>
+                        <div className="col-span-2 flex justify-end">
+                          <button
+                            onClick={() =>
+                              handleRemoveRateRule("premium", index)
+                            }
+                            className="p-2 text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                    <div className="grid grid-cols-12 gap-4 items-center pt-2">
+                      <div className="col-span-5 text-sm font-medium pl-2">
+                        Everything else
+                      </div>
+                      <div className="col-span-5">
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={
+                            settings.topOffers?.customRates?.premium
+                              .defaultPercentage ?? 0.75
+                          }
+                          onChange={(e) =>
+                            handleUpdateDefaultPercentage(
+                              "premium",
+                              parseFloat(e.target.value)
+                            )
+                          }
+                          className="w-full px-3 py-2 border border-border rounded-lg bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
+                        />
+                      </div>
+                      <div className="col-span-2"></div>
+                    </div>
+                    <div className="pt-2">
+                      <button
+                        onClick={() => handleAddRateRule("premium")}
+                        className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Add Rule
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border-t border-border" />
+
+                {/* Checkout Rate Editor */}
+                <div>
+                  <h3 className="font-semibold text-lg mb-4">Checkout Rate</h3>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Set the percentage used for the "Top Offer (Checkout)" calculation. This rate applies to all amounts.
+                  </p>
+                  <div className="grid grid-cols-12 gap-4 items-center">
+                    <div className="col-span-5 text-sm font-medium pl-2">
+                      All amounts
+                    </div>
+                    <div className="col-span-5">
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={
+                          settings.topOffers?.customRates?.checkout
+                            ?.percentage ?? 0.8
+                        }
+                        onChange={(e) =>
+                          handleUpdateCheckoutRate(parseFloat(e.target.value))
+                        }
+                        className="w-full px-3 py-2 border border-border rounded-lg bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
+                      />
+                    </div>
+                    <div className="col-span-2"></div>
+                  </div>
+                </div>
+
+                <div className="border-t border-border" />
+
+                {/* Custom Offers Section */}
+                <div>
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="font-semibold text-lg">Custom Offers</h3>
+                      <p className="text-sm text-muted-foreground">
+                        Create custom offer calculations with your own rates
+                      </p>
+                    </div>
+                    <button
+                      onClick={handleAddCustomOffer}
+                      className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg transition-colors text-sm font-medium"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add Custom Offer
+                    </button>
+                  </div>
+
+                  {settings.topOffers?.customOffers &&
+                  settings.topOffers.customOffers.length > 0 ? (
+                    <div className="space-y-6">
+                      {settings.topOffers.customOffers.map((offer) => (
+                        <div
+                          key={offer.id}
+                          className="p-4 border border-border rounded-lg bg-muted/20"
+                        >
+                          {/* Custom Offer Header */}
+                          <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center gap-2">
+                              {editingCustomOffer === offer.id ? (
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="text"
+                                    value={newCustomOfferName}
+                                    onChange={(e) =>
+                                      setNewCustomOfferName(e.target.value)
+                                    }
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter") {
+                                        handleUpdateCustomOfferName(
+                                          offer.id,
+                                          newCustomOfferName
+                                        );
+                                      }
+                                      if (e.key === "Escape") {
+                                        setEditingCustomOffer(null);
+                                      }
+                                    }}
+                                    className="px-3 py-1.5 border border-border rounded-lg bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors text-base font-semibold"
+                                    autoFocus
+                                  />
+                                  <button
+                                    onClick={() =>
+                                      handleUpdateCustomOfferName(
+                                        offer.id,
+                                        newCustomOfferName
+                                      )
+                                    }
+                                    className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                                  >
+                                    <Check className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => setEditingCustomOffer(null)}
+                                    className="p-1.5 text-muted-foreground hover:bg-muted rounded-lg transition-colors"
+                                  >
+                                    <X className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <>
+                                  <h4 className="font-semibold text-base">
+                                    {offer.name}
+                                  </h4>
+                                  <button
+                                    onClick={() => {
+                                      setEditingCustomOffer(offer.id);
+                                      setNewCustomOfferName(offer.name);
+                                    }}
+                                    className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
+                                  >
+                                    <Pencil className="w-3.5 h-3.5" />
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                            <button
+                              onClick={() => handleDeleteCustomOffer(offer.id)}
+                              className="p-2 text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+
+                          {/* Custom Offer Rules */}
+                          <div className="space-y-3">
+                            <div className="grid grid-cols-12 gap-4 text-sm font-medium text-muted-foreground px-2">
+                              <div className="col-span-5">Under Amount ($)</div>
+                              <div className="col-span-5">
+                                Percentage (0.1 = 10%)
+                              </div>
+                              <div className="col-span-2"></div>
+                            </div>
+                            {offer.rules.map((rule, ruleIndex) => (
+                              <div
+                                key={ruleIndex}
+                                className="grid grid-cols-12 gap-4 items-center"
+                              >
+                                <div className="col-span-5">
+                                  <input
+                                    type="number"
+                                    value={rule.threshold}
+                                    onChange={(e) =>
+                                      handleUpdateCustomOfferRule(
+                                        offer.id,
+                                        ruleIndex,
+                                        "threshold",
+                                        parseFloat(e.target.value)
+                                      )
+                                    }
+                                    onBlur={() =>
+                                      handleSortCustomOfferRules(offer.id)
+                                    }
+                                    className="w-full px-3 py-2 border border-border rounded-lg bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
+                                  />
+                                </div>
+                                <div className="col-span-5">
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    value={rule.percentage}
+                                    onChange={(e) =>
+                                      handleUpdateCustomOfferRule(
+                                        offer.id,
+                                        ruleIndex,
+                                        "percentage",
+                                        parseFloat(e.target.value)
+                                      )
+                                    }
+                                    className="w-full px-3 py-2 border border-border rounded-lg bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
+                                  />
+                                </div>
+                                <div className="col-span-2 flex justify-end">
+                                  <button
+                                    onClick={() =>
+                                      handleRemoveCustomOfferRule(
+                                        offer.id,
+                                        ruleIndex
+                                      )
+                                    }
+                                    className="p-2 text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                            <div className="grid grid-cols-12 gap-4 items-center pt-2">
+                              <div className="col-span-5 text-sm font-medium pl-2">
+                                Everything else
+                              </div>
+                              <div className="col-span-5">
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  value={offer.defaultPercentage}
+                                  onChange={(e) =>
+                                    handleUpdateCustomOfferDefaultPercentage(
+                                      offer.id,
+                                      parseFloat(e.target.value)
+                                    )
+                                  }
+                                  className="w-full px-3 py-2 border border-border rounded-lg bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
+                                />
+                              </div>
+                              <div className="col-span-2"></div>
+                            </div>
+                            <div className="pt-2">
+                              <button
+                                onClick={() =>
+                                  handleAddCustomOfferRule(offer.id)
+                                }
+                                className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                              >
+                                <Plus className="w-4 h-4" />
+                                Add Rule
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 px-4 bg-muted/20 rounded-lg border border-dashed border-border">
+                      <p className="text-sm text-muted-foreground">
+                        No custom offers added yet. Click "Add Custom Offer" to
+                        create one with your own rates.
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

@@ -38,7 +38,7 @@ The page showcases all key features of Scout:
 
 - **eBay Price Summary** - Automatic price statistics on eBay sold listings (average, median, high, low) with clickable metrics and quick filters
 - **UPC Highlighter** - Automatic detection and highlighting of 12-digit UPC codes with click-to-copy functionality
-- **Shopify Guardrails** - Automated validation for Shopify product pages (condition mismatch and empty Google fields checks)
+- **Shopify Buttons** - Buttons to quickly view market pricing for products.
 
 #### Navigation & Customization
 
