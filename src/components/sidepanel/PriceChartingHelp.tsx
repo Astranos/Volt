@@ -162,14 +162,14 @@ export function PriceChartingHelp() {
   return (
     <>
       <Button
-        variant="ghost"
+        variant="outline"
         size="icon"
-        className="h-8 w-8 text-muted-foreground hover:text-green-600 transition-colors"
+        className="h-9 w-9 shrink-0 text-muted-foreground hover:text-green-600 transition-colors"
         onClick={() => {
           setIsOpen(true);
           setCurrentStep(0);
         }}
-        title="Show Guide"
+        title="View Guide"
       >
         <HelpCircle className="h-4 w-4" />
       </Button>

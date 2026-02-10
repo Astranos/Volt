@@ -184,6 +184,15 @@ export default defineContentScript({
         upc = upcElements[0].getAttribute("data-upc") || "";
       }
 
+      // Extract game cover image
+      let imageUrl = "";
+      const coverImg = document.querySelector(
+        "#product_details .cover img"
+      ) as HTMLImageElement;
+      if (coverImg && coverImg.src) {
+        imageUrl = coverImg.src;
+      }
+
       // Extract full details
       const gameDetails = getGameDetails();
 
@@ -192,6 +201,7 @@ export default defineContentScript({
         console: consoleName,
         url: window.location.href,
         upc,
+        imageUrl,
         details: gameDetails,
       };
     };
@@ -283,6 +293,7 @@ export default defineContentScript({
               saleTitle:
                 row.querySelector("td.title a")?.textContent?.trim() || "",
               upc: gameInfo.upc || "",
+              imageUrl: gameInfo.imageUrl || "",
               details: gameInfo.details || null,
             };
 

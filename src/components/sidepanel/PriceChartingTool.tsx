@@ -1,16 +1,9 @@
 /* global chrome */
 import { useState, useEffect, useRef } from "react";
 import SidepanelLayout from "./SidepanelLayout";
-import {
-  Copy,
-  ExternalLink,
-  Info,
-  Plus,
-  Minus,
-  TrendingUp,
-} from "lucide-react";
+import { ExternalLink, Plus, Minus } from "lucide-react";
 import { Button } from "../ui/button";
-import { Card } from "../ui/card";
+import { Badge } from "../ui/badge";
 import { ScrollArea } from "../ui/scroll-area";
 import {
   Tooltip,
@@ -38,6 +31,7 @@ interface PriceChartingItem {
   condition: string; // 'Loose', 'CIB', 'New', 'Graded', etc.
   url: string;
   upc?: string;
+  imageUrl?: string;
   details?: Record<string, string> | null;
   quantity?: number; // Default to 1 if not present
 }
@@ -218,11 +212,6 @@ export default function PriceChartingTool() {
   };
 
   const openPriceCharting = () => {
-    // Close existing popup if open
-    if (activePopupRef.current && !activePopupRef.current.closed) {
-      activePopupRef.current.close();
-    }
-
     let url = "https://www.pricecharting.com/";
 
     // If there's a search query, use it
@@ -235,16 +224,8 @@ export default function PriceChartingTool() {
       )}&type=${searchType}`;
     }
 
-    const width = 1100;
-    const height = 800;
-    const left = (window.screen.width - width) / 2;
-    const top = (window.screen.height - height) / 2;
-
-    activePopupRef.current = window.open(
-      url,
-      "scout_pricecharting_popup",
-      `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
-    );
+    // Open in active tab instead of popup
+    chrome.tabs.create({ url, active: true });
   };
 
   const openSearchPopup = (query: string, isUpc: boolean = false) => {
@@ -276,6 +257,24 @@ export default function PriceChartingTool() {
       query
     )}&type=${searchType}`;
     window.open(url, "_blank");
+  };
+
+  const openItemPopup = (url: string) => {
+    // Close existing popup if open
+    if (activePopupRef.current && !activePopupRef.current.closed) {
+      activePopupRef.current.close();
+    }
+
+    const width = 1100;
+    const height = 800;
+    const left = (window.screen.width - width) / 2;
+    const top = (window.screen.height - height) / 2;
+
+    activePopupRef.current = window.open(
+      url,
+      "scout_pricecharting_popup",
+      `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+    );
   };
 
   const handleSearchInput = (value: string) => {
@@ -310,7 +309,7 @@ export default function PriceChartingTool() {
 
   return (
     <TooltipProvider>
-      <SidepanelLayout className="h-full flex flex-col">
+      <SidepanelLayout className="h-full flex flex-col overflow-hidden">
         <div className="p-4 space-y-3 border-b border-border/40 bg-background z-10">
           <div className="flex gap-2">
             <input
@@ -323,28 +322,6 @@ export default function PriceChartingTool() {
               onKeyDown={handleKeyDown}
               className="flex-1 h-9 px-3 rounded-md border border-input bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             />
-            {searchInput.trim() && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-9 w-9 shrink-0"
-                    onClick={() => {
-                      const digitsOnly = searchInput.replace(/\D/g, "");
-                      const isUpc =
-                        digitsOnly.length === 12 || digitsOnly.length === 13;
-                      openSearchNewTab(searchInput.trim(), isUpc);
-                    }}
-                  >
-                    <ExternalLink className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent className="border-border">
-                  <p>Open in new tab</p>
-                </TooltipContent>
-              </Tooltip>
-            )}
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -352,26 +329,38 @@ export default function PriceChartingTool() {
                   variant="outline"
                   size="icon"
                   className="h-9 w-9 shrink-0"
-                  onClick={openPriceCharting}
+                  onClick={() => {
+                    if (searchInput.trim()) {
+                      const digitsOnly = searchInput.replace(/\D/g, "");
+                      const isUpc =
+                        digitsOnly.length === 12 || digitsOnly.length === 13;
+                      openSearchNewTab(searchInput.trim(), isUpc);
+                    } else {
+                      openPriceCharting();
+                    }
+                  }}
                 >
-                  <img
-                    src={chrome.runtime.getURL(
-                      "/assets/logos/pricecharting.webp"
-                    )}
-                    alt="PriceCharting"
-                    className="h-4 w-4 object-contain brightness-0 invert"
-                  />
+                  {searchInput.trim() ? (
+                    <ExternalLink className="h-4 w-4" />
+                  ) : (
+                    <img
+                      src={chrome.runtime.getURL(
+                        "/assets/logos/pricecharting.webp"
+                      )}
+                      alt="PriceCharting"
+                      className="h-4 w-4 object-contain brightness-0 invert"
+                    />
+                  )}
                 </Button>
               </TooltipTrigger>
               <TooltipContent className="border-border">
                 <p>
                   {searchInput.trim()
-                    ? "Search PriceCharting"
+                    ? "Open in new tab"
                     : "Open PriceCharting"}
                 </p>
               </TooltipContent>
             </Tooltip>
-            <PriceChartingHelp />
           </div>
           <div
             id="tour-pc-instruction"
@@ -385,7 +374,7 @@ export default function PriceChartingTool() {
           </div>
         </div>
 
-        <div className="flex-1 flex flex-col min-h-0">
+          <div className="flex-1 flex flex-col min-h-0">
           <div className="p-4 pb-0 space-y-3">
             <div className="flex items-center justify-between">
               <h3 id="tour-pc-lot-summary" className="font-semibold text-sm">
@@ -396,16 +385,49 @@ export default function PriceChartingTool() {
                 )}
                 )
               </h3>
-              {savedItems.length > 0 && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={clearAll}
-                  className="h-8 px-2 text-destructive hover:text-destructive"
-                >
-                  Clear All
-                </Button>
-              )}
+              <div className="flex items-center gap-2">
+                {savedItems.length > 0 ? (
+                  <>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div>
+                          <PriceChartingHelp />
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent className="border-border">
+                        <p>View Guide</p>
+                      </TooltipContent>
+                    </Tooltip>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={clearAll}
+                      className="h-9 px-3 text-destructive hover:text-destructive"
+                    >
+                      Clear All
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <div className="hidden">
+                      <PriceChartingHelp />
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        const helpButton = document.querySelector(
+                          '[title="View Guide"]'
+                        ) as HTMLButtonElement;
+                        helpButton?.click();
+                      }}
+                      className="h-9 px-3 text-muted-foreground hover:text-green-600 transition-colors"
+                    >
+                      View Guide
+                    </Button>
+                  </>
+                )}
+              </div>
             </div>
 
             {savedItems.length > 0 && (
@@ -423,92 +445,107 @@ export default function PriceChartingTool() {
             )}
           </div>
 
-          <ScrollArea className="flex-1 px-4 mt-2">
-            <div id="tour-pc-lot-items" className="space-y-3 pb-4">
+          <ScrollArea className="flex-1 px-4 mt-2 [&>[data-radix-scroll-area-viewport]]:!overflow-y-scroll">
+            <div id="tour-pc-lot-items" className="space-y-1.5 pb-4">
               {savedItems.length === 0 ? (
                 <div className="text-center text-muted-foreground py-8 text-sm">
                   No games added yet.
                 </div>
               ) : (
                 savedItems.map((item) => (
-                  <Card key={item.id} className="p-3 border-border/40">
-                    <div className="flex justify-between items-start gap-2">
-                      <div className="min-w-0 flex-1">
-                        <a
-                          href={item.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="font-medium text-sm hover:underline line-clamp-2 block"
-                          title={item.title}
-                        >
-                          {item.title}
-                        </a>
-                        <div className="text-xs text-muted-foreground mt-1">
-                          {item.console}{" "}
-                          {item.console && item.condition ? "•" : ""}{" "}
-                          {item.condition}
+                  <div
+                    key={item.id}
+                    className="group rounded-lg border border-border/40 bg-card overflow-hidden"
+                  >
+                    {/* Main content area with optional image */}
+                    <div className="flex gap-3 p-3">
+                      {/* Game cover image */}
+                      {item.imageUrl && (
+                        <div className="shrink-0">
+                          <img
+                            src={item.imageUrl}
+                            alt={item.title}
+                            className="w-14 h-auto rounded object-cover bg-muted"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = "none";
+                            }}
+                          />
                         </div>
-                        {item.upc && (
-                          <div className="text-xs text-muted-foreground mt-1">
-                            UPC: {item.upc}
-                          </div>
-                        )}
-                      </div>
-                      <div className="text-right">
-                        <div className="font-bold text-sm whitespace-nowrap">
-                          ${getItemPrice(item).toFixed(2)}
+                      )}
+
+                      {/* Title, badges, price */}
+                      <div className="flex-1 min-w-0 space-y-1.5">
+                        {/* Title row with price */}
+                        <div className="flex items-start justify-between gap-2">
+                          <span
+                            onClick={() => openItemPopup(item.url)}
+                            className="text-sm font-semibold leading-tight text-foreground hover:text-green-600 cursor-pointer transition-colors line-clamp-2"
+                            title={item.title}
+                          >
+                            {item.title}
+                          </span>
+                          <span className="shrink-0 text-base font-bold text-green-600 tabular-nums">
+                            ${getItemPrice(item).toFixed(2)}
+                          </span>
                         </div>
-                        {(item.quantity ?? 1) > 1 && (
-                          <div className="text-xs text-muted-foreground mt-0.5">
-                            $
-                            {(
-                              (typeof item.price === "number"
-                                ? item.price
-                                : Number(item.price)) || 0
-                            ).toFixed(2)}{" "}
-                            × {item.quantity ?? 1}
-                          </div>
-                        )}
+
+                        {/* Badges row */}
+                        <div className="flex flex-wrap items-center gap-1">
+                          <Badge
+                            variant="secondary"
+                            className="px-1.5 py-0 text-[10px] font-medium"
+                          >
+                            {item.console}
+                          </Badge>
+                          {item.condition && (
+                            <Badge
+                              variant="secondary"
+                              className="px-1.5 py-0 text-[10px] font-medium"
+                            >
+                              {item.condition}
+                            </Badge>
+                          )}
+                          {(item.quantity ?? 1) > 1 && (
+                            <span className="text-[10px] text-muted-foreground tabular-nums">
+                              $
+                              {(
+                                (typeof item.price === "number"
+                                  ? item.price
+                                  : Number(item.price)) || 0
+                              ).toFixed(2)}{" "}
+                              × {item.quantity}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
-                    <div className="flex gap-2 mt-3">
+
+                    {/* Bottom action bar */}
+                    <div className="px-3 pb-3 flex items-center gap-2">
+                      {/* Large UPC button */}
                       {item.upc && (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
+                        <Button
+                          variant="outline"
+                          onClick={() => copyUPC(item.upc!, item.id)}
+                          className="flex-1 h-9 font-mono text-sm tracking-wide hover:border-green-600 hover:text-green-600 transition-colors"
+                          title="Click to copy UPC"
+                        >
+                          {copiedId === item.id ? "Copied!" : item.upc}
+                        </Button>
+                      )}
+
+                      {/* Details button */}
+                      {item.details && (
+                        <Drawer>
+                          <DrawerTrigger asChild>
                             <Button
                               variant="outline"
                               size="sm"
-                              className="flex-1 h-8"
-                              onClick={() => copyUPC(item.upc!, item.id)}
+                              className="h-9 px-3 text-xs shrink-0"
                             >
-                              <Copy className="h-3 w-3 mr-1" />
-                              {copiedId === item.id ? "Copied!" : "Copy UPC"}
+                              Details
                             </Button>
-                          </TooltipTrigger>
-                          <TooltipContent className="border-border">
-                            <p>Copy UPC to clipboard</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      )}
-                      {item.details && (
-                        <Drawer>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <DrawerTrigger asChild>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="h-8"
-                                >
-                                  <Info className="h-3 w-3 mr-1" />
-                                  Details
-                                </Button>
-                              </DrawerTrigger>
-                            </TooltipTrigger>
-                            <TooltipContent className="border-border">
-                              <p>View game details</p>
-                            </TooltipContent>
-                          </Tooltip>
+                          </DrawerTrigger>
                           <DrawerContent>
                             <DrawerHeader>
                               <DrawerTitle>{item.title}</DrawerTitle>
@@ -533,9 +570,9 @@ export default function PriceChartingTool() {
                                     .map(([key, value]) => (
                                       <div
                                         key={key}
-                                        className="grid grid-cols-[120px_1fr] gap-3 py-2 border-b border-border/40 last:border-0"
+                                        className="flex justify-between gap-3 py-1.5 border-b border-border/40 last:border-0"
                                       >
-                                        <span className="text-sm font-semibold text-muted-foreground">
+                                        <span className="text-xs text-muted-foreground">
                                           {key}
                                         </span>
                                         <button
@@ -548,7 +585,7 @@ export default function PriceChartingTool() {
                                                 .replace(/\s+/g, "-")
                                             )
                                           }
-                                          className="text-sm text-left hover:text-primary cursor-pointer transition-colors"
+                                          className="text-xs text-right hover:text-green-600 cursor-pointer transition-colors"
                                           title="Click to copy"
                                         >
                                           {copiedId ===
@@ -565,49 +602,41 @@ export default function PriceChartingTool() {
                             </div>
                             <DrawerFooter>
                               <DrawerClose asChild>
-                                <Button variant="outline">Close</Button>
+                                <Button variant="outline" size="sm">
+                                  Close
+                                </Button>
                               </DrawerClose>
                             </DrawerFooter>
                           </DrawerContent>
                         </Drawer>
                       )}
-                      <div className="flex items-center gap-1 border border-border/40 rounded-md">
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 w-8 p-0 hover:bg-destructive hover:text-destructive-foreground"
-                              onClick={() => updateQuantity(item.id, -1)}
-                            >
-                              <Minus className="h-3 w-3" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent className="border-border">
-                            <p>Decrease quantity</p>
-                          </TooltipContent>
-                        </Tooltip>
-                        <span className="text-sm font-medium min-w-[2rem] text-center">
+
+                      {/* Quantity stepper */}
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-9 w-9"
+                          onClick={() => updateQuantity(item.id, -1)}
+                          aria-label="Decrease quantity"
+                        >
+                          <Minus className="h-4 w-4" />
+                        </Button>
+                        <span className="w-6 text-center text-sm font-semibold tabular-nums">
                           {item.quantity ?? 1}
                         </span>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 w-8 p-0"
-                              onClick={() => updateQuantity(item.id, 1)}
-                            >
-                              <Plus className="h-3 w-3" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent className="border-border">
-                            <p>Increase quantity</p>
-                          </TooltipContent>
-                        </Tooltip>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-9 w-9"
+                          onClick={() => updateQuantity(item.id, 1)}
+                          aria-label="Increase quantity"
+                        >
+                          <Plus className="h-4 w-4" />
+                        </Button>
                       </div>
                     </div>
-                  </Card>
+                  </div>
                 ))
               )}
             </div>
