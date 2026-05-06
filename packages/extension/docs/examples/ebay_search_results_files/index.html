@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<!-- saved from url=(0071)https://s0.2mdn.net/sadbundle/11015196239600323558/index.html?ev=01_262 -->
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <title>300x250</title>
+  <!-- <script src="https://s0.2mdn.net/ads/studio/Enabler.js"></script> -->
+  
+  <meta name="ad.size" content="width=300,height=250">
+  <link rel="StyleSheet" href="./style.css" type="text/css">
+<script type="text/javascript">
+    
+  (function() {
+    var MAX_URL_PARAM_LENGTH = 34;
+    var CLICK_X_URL_KEY = 'nx';
+    var CLICK_Y_URL_KEY = 'ny';
+    var CREATIVE_DIMENSIONS_KEY = 'dim';
+    var AD_URL_PARAM = '&adurl=';
+
+    var relegateNavigation = '';
+    var urlParamMap = {};
+
+    var isNewtonTokenSet = false;
+    var isTurtleXAdClick = false;
+    var reportingIds = {};
+
+    urlParamMap[CLICK_X_URL_KEY] = null;
+    urlParamMap[CLICK_Y_URL_KEY] = null;
+    urlParamMap[CREATIVE_DIMENSIONS_KEY] = null;
+
+    var handleClickTagMessage = function(e) {
+      try {
+        var eventData = JSON.parse(e.data);
+      } catch (err) {
+        return;
+      }
+      if (eventData.isInitClickTag) {
+        if (eventData.clickTags) {
+          for (var i = 0; i < eventData.clickTags.length; i++) {
+            var clkTag = eventData.clickTags[i];
+            window[clkTag.name] = clkTag.url;
+
+            if (clkTag.eTldPlusOne) {
+              eTldPlusOnes[clkTag.url] = clkTag.eTldPlusOne;
+            }
+            if (clkTag.reportingId) {
+              reportingIds[clkTag.url] = clkTag.reportingId;
+            }
+          }
+        } else if (eventData.clickTag) {
+          window.clickTag = eventData.clickTag;
+        }
+        relegateNavigation = eventData.relegateNavigation;
+      }
+      if (isNewtonEnabled(eventData) && !isNewtonTokenSet) {
+        var newtonOt2Token = eventData.newtonOt2Token;
+        enableAttributionReportingApi(newtonOt2Token);
+      }
+      if (eventData.isTurtleXAdClick) {
+        isTurtleXAdClick = true;
+      }
+    };
+
+    var isNewtonEnabled = function(eventData) {
+      return 'newtonOt2Token' in eventData;
+    }
+
+    var enableAttributionReportingApi = function(originTrialToken) {
+      if (/Chrome/.test(window.navigator.userAgent)) {
+        var meta = document.createElement('meta');
+        meta.httpEquiv = 'origin-trial';
+        meta.content = String(originTrialToken);
+        document.getElementsByTagName('head')[0].appendChild(meta);
+        isNewtonTokenSet = true;
+      }
+    };
+
+    var storeClickCoordinates = function(e) {
+      urlParamMap[CLICK_X_URL_KEY] = Math.round(e.clientX);
+      urlParamMap[CLICK_Y_URL_KEY] = Math.round(e.clientY);
+    };
+
+    var getCreativeDimensions = function() {
+      return window.innerWidth + 'x' + window.innerHeight;
+    }
+
+    var getExitClickParams = function(e) {
+      urlParamMap[CREATIVE_DIMENSIONS_KEY] = getCreativeDimensions();
+
+      var exitParams = '';
+      for (var key in urlParamMap) {
+        exitParams += '&' + key + '=';
+        if (urlParamMap[key] !== null) {
+          exitParams += urlParamMap[key];
+        }
+      }
+      return exitParams;
+    }
+
+    var appendExitClickParams = function(url) {
+      var adUrlIndex = url.toLowerCase().indexOf(AD_URL_PARAM);
+      var paramsToBeAdded = getExitClickParams();
+      if (adUrlIndex > -1 && paramsToBeAdded.length <= MAX_URL_PARAM_LENGTH) {
+        url = url.substr(0, adUrlIndex) + paramsToBeAdded +
+          url.substr(adUrlIndex);
+      };
+      return url;
+    };
+
+    if (open.call) {
+      window.open = function(open) {
+        return function(url, name, features) {
+          if (isTurtleXAdClick && !!reportingIds[url]) {
+            var message = {
+              'reportingId': reportingIds[url],
+              'clickX': urlParamMap[CLICK_X_URL_KEY],
+              'clickY': urlParamMap[CLICK_Y_URL_KEY],
+              'creativeDims': getCreativeDimensions()
+              };
+            parent.postMessage(JSON.stringify(message), '*');
+          }
+          url = appendExitClickParams(url);
+          if (relegateNavigation === 'parent') {
+            var message = {'clickTag': url, 'isPostClickTag': true};
+            parent.postMessage(JSON.stringify(message), '*');
+          } else {
+            var args = [url, name];
+            var windowFeatures = '';
+
+            if (features) {
+              windowFeatures = windowFeatures.concat(features);
+            }
+            if (isNewtonTokenSet &&
+                !!document.featurePolicy?.allowedFeatures().includes(
+                  'attribution-reporting')) {
+              if (features) {
+                if (!features.includes('attributionsrc')) {
+                  windowFeatures = windowFeatures.concat(features, ', attributionsrc');
+                }
+              } else {
+                windowFeatures = windowFeatures.concat('attributionsrc');
+              }
+            }
+
+            if (windowFeatures) {
+              args.push(windowFeatures);
+            }
+            open.apply(window,args);
+          }
+        };
+      }(window.open);
+    }
+
+    if (window.addEventListener) {
+      window.addEventListener(
+          'message', handleClickTagMessage, false);
+      window.addEventListener('mousedown', storeClickCoordinates, true);
+    } else {
+      window.attachEvent('onmessage', handleClickTagMessage);
+    }
+  })();
+    
+  </script><script src="./lottie.min.js"></script><script type="text/javascript">
+  var clickTag = "";
+</script><style id="scout-upc-highlighter-styles">
+      .scout-upc-highlight {
+        background-color: rgba(59, 130, 246, 0.15);
+        border-bottom: 2px dotted #3b82f6;
+        cursor: pointer;
+        padding: 1px 2px;
+        border-radius: 2px;
+        transition: all 0.2s ease;
+        position: relative;
+      }
+
+      .scout-upc-highlight:hover {
+        background-color: rgba(59, 130, 246, 0.25);
+        border-bottom-style: solid;
+      }
+
+      .scout-upc-copied {
+        background-color: rgba(16, 185, 129, 0.2) !important;
+        border-bottom-color: #10b981 !important;
+      }
+
+      .scout-upc-tooltip {
+        position: fixed;
+        background-color: #1f2937;
+        color: white;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        white-space: nowrap;
+        z-index: 2147483647;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.2s ease;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+      }
+
+      .scout-upc-tooltip.show {
+        opacity: 1;
+      }
+    </style><meta http-equiv="origin-trial" content="A4AD7vbM2W0e5fHylDM4fFrsUvtmQ95U+ZVrdOdh3fgH0l0e7RVkAsZryrSQIRhPVvmC60wTlh880eDyo+HpXQAAAABueyJvcmlnaW4iOiJodHRwczovL3MwLjJtZG4ubmV0OjQ0MyIsImZlYXR1cmUiOiJQcml2YWN5U2FuZGJveEFkc0FQSXMiLCJleHBpcnkiOjE2OTUxNjc5OTksImlzVGhpcmRQYXJ0eSI6dHJ1ZX0="></head>
+
+
+  <body>
+    <div id="border"></div>
+    <div id="container" style="visibility: inherit; opacity: 1;">
+      <div id="img1" class="fsize" style="transform: matrix(1, 0, 0, 1, 0, 0);"></div>
+      <div id="c1_01" class="fL c1 fsize copy hide" style="transform: matrix(1, 0, 0, 1, 0, 0); visibility: hidden; opacity: 0;"></div>
+      <div id="c1_02" class="fL c1 fsize copy hide" style="transform: matrix(1, 0, 0, 1, 0, 0); visibility: hidden; opacity: 0;"></div>
+      <div id="c1_03" class="fL c1 fsize copy hide" style="transform: matrix(1, 0, 0, 1, 0, 0); visibility: hidden; opacity: 0;"></div>
+      <!-- <div id="c1_04" class="fL c1 fsize copy hide"></div> -->
+      <!-- <div id="c1_05" class="fL c1 fsize copy hide"></div> -->
+
+      <div id="c2_01" class="fL c2 fsize copy hide" style="transform: matrix(1, 0, 0, 1, 0, 0); visibility: inherit; opacity: 1;"></div>
+      <div id="c2_02" class="fL c2 fsize copy hide" style="transform: matrix(1, 0, 0, 1, 0, 0); visibility: inherit; opacity: 1;"></div>
+      <div id="c2_03" class="fL c2 fsize copy hide" style="transform: matrix(1, 0, 0, 1, 0, 0); visibility: inherit; opacity: 1;"></div>
+      <div id="c2_04" class="fL c2 fsize copy hide" style="transform: matrix(1, 0, 0, 1, 0, 0); visibility: inherit; opacity: 1;"></div>
+      <div id="c2_05" class="fL c2 fsize copy hide" style="transform: matrix(1, 0, 0, 1, 0, 0); visibility: inherit; opacity: 1;"></div>
+      <div id="c2_06" class="fL c2 fsize copy hide" style="transform: matrix(1, 0, 0, 1, 0, 0); visibility: inherit; opacity: 1;"></div>
+      <div id="c2_07" class="fL c2 fsize copy hide" style="transform: matrix(1, 0, 0, 1, 0, 0); visibility: inherit; opacity: 1;"></div>
+      <div id="c2_08" class="fL c2 fsize copy hide" style="transform: matrix(1, 0, 0, 1, 0, 0); visibility: inherit; opacity: 1;"></div>
+
+
+      <div id="bg2" class="fsize hide"></div>
+      
+      <div id="logo2" class="logo1 fsize" style="transform: matrix(1, 0, 0, 1, -84, 0);"></div>
+      <div id="logo_mask" class="fsize" style="transform: matrix(1, 0, 0, 1, 90, 0);"></div>
+      <div id="logo1" class="logo1 fsize" style="transform: matrix(1, 0, 0, 1, 55, 0);"></div>
+      <div id="tac" class=" fsize hide"></div>
+      <div id="bg3" class="fsize hide" style="visibility: inherit; opacity: 1; transform: matrix(1, 0, 0, 1, 0, 0);"></div>
+
+      <div id="cta1" class=" fsize hide" style="visibility: hidden; opacity: 0; transform-origin: 70px 215px 0px; transform: translate3d(0px, 0px, 0.01px);"></div>
+      <div id="cta2" class=" fsize hide" style="visibility: inherit; opacity: 1; transform: matrix(1, 0, 0, 1, 0, 0);"></div>
+      <div id="cta1_hover" class=" fsize hide" style="visibility: hidden; opacity: 0; transform-origin: 70px 215px 0px; transform: translate3d(0px, 0px, 0.01px);"></div>
+      <div id="cta2_hover" class=" fsize hide" style="visibility: inherit; opacity: 1; transform: matrix(1, 0, 0, 1, 0, 0);"></div>
+
+
+      <div id="c3" class="fsize copy hide"></div>
+      <div id="lottie-container" style="opacity: 0; visibility: hidden;"><canvas width="277" height="449" style="width: 100%; height: 100%; transform-origin: 0px 0px 0px; content-visibility: visible;"></canvas></div>
+      <div id="lottie-container-2" style="opacity: 1;"><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 2160 3840" width="2160" height="3840" preserveAspectRatio="xMidYMid meet" style="width: 100%; height: 100%; transform: translate3d(0px, 0px, 0px); content-visibility: visible;"><defs><clippath id="__lottie_element_16"><rect width="2160" height="3840" x="0" y="0"></rect></clippath><image href="images/img_0.png"></image><clippath id="__lottie_element_21"><path d="M0,0 L1920,0 L1920,500 L0,500z"></path></clippath><clippath id="__lottie_element_29"><path d="M0,0 L1920,0 L1920,400 L0,400z"></path></clippath><clippath id="__lottie_element_36"><path d="M0,0 L1035,0 L1035,1035 L0,1035z"></path></clippath><g id="__lottie_element_42"><g style="display: none;"><g><path></path></g></g></g><mask id="__lottie_element_42_1" mask-type="alpha"><use href="#__lottie_element_42"></use></mask><clippath id="__lottie_element_82"><path d="M0,0 L1920,0 L1920,500 L0,500z"></path></clippath><clippath id="__lottie_element_92"><path d="M0,0 L1920,0 L1920,400 L0,400z"></path></clippath><clippath id="__lottie_element_99"><path d="M0,0 L1035,0 L1035,1035 L0,1035z"></path></clippath><g id="__lottie_element_105"><g style="display: none;"><g><path></path></g></g></g><mask id="__lottie_element_105_1" mask-type="alpha"><use href="#__lottie_element_105"></use></mask><clippath id="__lottie_element_137"><path d="M0,0 L2400,0 L2400,500 L0,500z"></path></clippath><clippath id="__lottie_element_141"><path d="M0,0 L1920,0 L1920,400 L0,400z"></path></clippath><clippath id="__lottie_element_148"><path d="M0,0 L1035,0 L1035,1035 L0,1035z"></path></clippath><g id="__lottie_element_154"><g style="display: none;"><g><path></path></g></g></g><mask id="__lottie_element_154_1" mask-type="alpha"><use href="#__lottie_element_154"></use></mask></defs><g clip-path="url(#__lottie_element_16)"><g clip-path="url(#__lottie_element_82)" style="display: none;"><g clip-path="url(#__lottie_element_137)" style="display: none;"><g clip-path="url(#__lottie_element_141)" style="display: none;"><g clip-path="url(#__lottie_element_148)" style="display: none;"><g style="display: none;"><g><path></path></g></g><g mask="url(#__lottie_element_154_1)" style="display: none;"><g><g><path></path></g></g></g><g mask="url(#__lottie_element_154_1)" style="display: none;"><g><g><path></path></g></g></g><g mask="url(#__lottie_element_154_1)" style="display: none;"><g><g><path></path></g></g></g><g mask="url(#__lottie_element_154_1)" style="display: none;"><g><g><path></path></g></g></g><g mask="url(#__lottie_element_154_1)" style="display: none;"><g><g><path></path></g></g></g><g mask="url(#__lottie_element_154_1)" style="display: none;"><g><g><path></path></g></g></g><g mask="url(#__lottie_element_154_1)" style="display: none;"><g><g><path></path></g></g></g><g mask="url(#__lottie_element_154_1)" style="display: none;"><g><g><path></path></g></g></g></g><g style="display: none;"><g><path></path></g><g><path></path></g><g><path></path></g><g><path></path></g><g><path></path></g></g></g></g><g style="display: none;"></g></g></g></svg></div>
+      <!-- insert elements here -->
+
+      <!-- end -->
+      <div id="guide" class="fsize"></div>
+    </div>
+    <script src="./TweenMax.min.js"></script>
+    <script src="./zepto.min.js"></script>
+    <script type="module" src="./main.js"></script>
+                      
+
+        </body></html>

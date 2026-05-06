@@ -1,0 +1,27 @@
+.no-print, #choose-consoles, #cart-settings, #subscriber_menu, div.login, div#enter-items, div.footer, div.top_bar, .screen-only {
+    display: none;
+}
+h3.print-only {
+    display: block;
+}
+.print-only {
+    display: inline;
+}
+.container {
+    border:none;
+}
+body {
+    background-color: white;
+}
+#cart-contents {
+    width: 100%; /* use all horizontal space on the printed page */
+}
+
+/* marketplace offer page into invoice */
+#market_offer .pricebox,
+#market_offer .item_meta {
+    width: 95% !important;
+}
+#market_offer .guarantee {
+    display: none;
+}

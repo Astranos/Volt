@@ -307,15 +307,6 @@ export default defineBackground({
         openOptionsPage().catch((error) =>
           log("openOptions command handler error", error)
         );
-      } else if (command === "_execute_action") {
-        log("Action shortcut triggered");
-        // Open the sidepanel instead of the popup
-        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-          const active = tabs && tabs[0];
-          if (active?.id) {
-            toggleSidePanelForTab(active.id);
-          }
-        });
       } else if (command === "open-controller-testing") {
         log("Controller testing shortcut triggered");
         // Open the controller testing sidepanel

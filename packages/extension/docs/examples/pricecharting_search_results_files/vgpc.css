@@ -1,0 +1,4535 @@
+/*! normalize.css 2011-11-04T15:38 UTC - http://github.com/necolas/normalize.css */
+/* =============================================================================
+   HTML5 display definitions
+   ========================================================================== */
+article,
+aside,
+details,
+figcaption,
+figure,
+footer,
+header,
+hgroup,
+nav,
+section {
+    display: block;
+}
+audio,
+canvas,
+video {
+    display: inline-block;
+    *display: inline;
+    *zoom: 1;
+}
+audio:not([controls]) {
+    display: none;
+}
+[hidden] {
+    display: none;
+}
+html {
+    font-size: 100%; /* 1 */
+    overflow-y: auto; /* scroll; /* 2 */
+    -webkit-text-size-adjust: 100%; /* 3 */
+    -ms-text-size-adjust: 100%; /* 3 */
+}
+body {
+    margin: 0;
+}
+body,
+button,
+input,
+select,
+textarea {
+    font-family: sans-serif;
+}
+a:focus {
+    outline: thin dotted;
+}
+a:hover,
+a:active {
+    outline: 0;
+}
+h1 {
+    font-size: 2em;
+}
+abbr[title] {
+    border-bottom: 1px dotted;
+}
+b,
+strong {
+    font-weight: bold;
+}
+blockquote {
+    margin: 1em 40px;
+}
+dfn {
+    font-style: italic;
+}
+mark {
+    background: #ff0;
+    color: #000;
+}
+pre,
+code,
+kbd,
+samp {
+    font-family: monospace, serif;
+    _font-family: 'courier new', monospace;
+    font-size: 1em;
+}
+pre {
+    white-space: pre;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+q {
+    quotes: none;
+}
+q:before,
+q:after {
+    content: '';
+    content: none;
+}
+small {
+    font-size: 75%;
+}
+sub,
+sup {
+    font-size: 75%;
+    line-height: 0;
+    position: relative;
+    vertical-align: baseline;
+}
+sup {
+    top: -0.5em;
+}
+sub {
+    bottom: -0.25em;
+}
+ul,
+ol {
+    margin-left: 0;
+    padding: 0 0 0 40px;
+}
+dd {
+    margin: 0 0 0 40px;
+}
+nav ul,
+nav ol {
+    list-style: none;
+    list-style-image: none;
+}
+img {
+    border: 0; /* 1 */
+    -ms-interpolation-mode: bicubic; /* 2 */
+}
+svg:not(:root) {
+    overflow: hidden;
+}
+form {
+    margin: 0;
+}
+fieldset {
+    border: 1px solid #c0c0c0;
+    margin: 0 2px;
+    padding: 0.35em 0.625em 0.75em;
+}
+legend {
+    border: 0; /* 1 */
+    *margin-left: -7px; /* 2 */
+}
+button,
+input,
+select,
+textarea {
+    font-size: 100%; /* 1 */
+    margin: 0; /* 2 */
+    vertical-align: baseline; /* 3 */
+    *vertical-align: middle; /* 3 */
+}
+button,
+input {
+    line-height: normal; /* 1 */
+}
+button,
+input[type="button"],
+input[type="reset"],
+input[type="submit"] {
+    cursor: pointer; /* 1 */
+    -webkit-appearance: button; /* 2 */
+    *overflow: visible;  /* 3 */
+}
+input[type="checkbox"],
+input[type="radio"] {
+    box-sizing: border-box; /* 1 */
+    padding: 0; /* 2 */
+}
+input[type="search"] {
+    -webkit-appearance: textfield; /* 1 */
+    -moz-box-sizing: content-box;
+    -webkit-box-sizing: content-box; /* 2 */
+    box-sizing: content-box;
+}
+input[type="search"]::-webkit-search-decoration {
+    -webkit-appearance: none;
+}
+input::-webkit-calendar-picker-indicator {
+  opacity: 100; /* always show drop down indicator on datalists */
+}
+button::-moz-focus-inner,
+input::-moz-focus-inner {
+    border: 0;
+    padding: 0;
+}
+textarea {
+    overflow: auto; /* 1 */
+    vertical-align: top; /* 2 */
+}
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+/* PriceCharting Styling */
+
+/* General layout
+=====================================================================*/
+body {
+   font: 14px Arial, Verdana, Geneva, Helvetica, sans-serif;
+   line-height: 1.6em;
+   color : #333;
+   background-color: #ffffff;
+}
+html, body {
+    width: 100%;
+    margin: 0px;
+    padding: 0px;
+    overflow-x: visible !important;
+}
+div.top_bar {
+    padding-top:5px;
+}
+a#logo{
+    margin-left:10px;
+    margin-bottom:5px;
+    display:block;
+    height:62px;
+}
+.container {
+    position : relative;
+    margin : 0;
+    width : 100%;
+    text-align : left;
+    background-color: #fff;
+    border:none;
+}
+#content {
+    width: 100%;
+    margin: 0 0 0 0;
+}
+.mid_col {
+    margin : 0px 10px;
+}
+h1, h2 {
+    margin: 1em 0 .75em 0;
+    font: 18px Arial, Verdana, Geneva, Helvetica, sans-serif;
+    line-height: 1.4em;
+    font-weight: normal;
+    color: #333;
+    clear: both;
+    text-transform: capitalize;
+}
+h3 {
+    margin: 0 0 .75em 0;
+    font: 18px Arial, Verdana, Geneva, Helvetica, sans-serif;
+    line-height: 1.4em;
+    font-weight: bold;
+    color: #0076df;
+}
+p {
+    margin: 0px 5px 10px 0px;
+}
+td {
+    font-size : 12px;
+}
+div.login {
+    position: absolute;
+    top: 0;
+    right: 2px;
+}
+div.login p {
+    display: inline-block;
+}
+.dropdown {
+    display: inline-block;
+    list-style:none;
+    margin:0;
+    padding:0;
+}
+.dropdown li ul {
+    list-style:none;
+    padding: 5px 10px;
+    background-color: #fff;
+    border: solid 1px #ccc;
+    display:none;
+    height:auto;
+    position:absolute;
+    z-index:200;
+}
+.dropdown li a {
+    text-decoration: none;
+}
+.dropdown li:hover ul {
+    display:block;
+}
+.dropdown li li {
+    display:block;
+    float:none;
+}
+.dropdown li ul a,
+.dropdown li ul span {
+    display:block;
+    font-size:12px;
+    font-style:normal;
+    padding:5px 2px;
+    text-align:left;
+}
+.dropdown #color-theme {
+    margin-left: 10px;
+}
+.account_dropdown li ul {
+    width:80px;
+}
+.account_dropdown li li{
+    width:80px;
+}
+.currency_dropdown li ul {
+    width: 30px;
+}
+.currency_dropdown li li{
+    width: 30px;
+}
+.currency_dropdown a {
+    cursor: pointer;
+}
+table.hoverable-rows tbody tr:hover {
+    background-color: #ddd;
+}
+.phone-landscape-show {
+    display: none;
+}
+.tablet-portrait-show {
+    display: none;
+}
+#no-ads {
+    display: block;
+    text-align: right;
+    font-size: 12px;
+}
+#no-ads a:link {
+    text-decoration: none;
+}
+
+/* Ads
+=====================================================================*/
+.pw-leaderboard {
+    width: 970px !important;
+    max-width: 970px !important;
+    height: 100px !important;
+    clear: both;
+    overflow: hidden !important;
+}
+.pw-medium-rec {
+    width: 300px !important;
+    max-width: 300px !important;
+    height: 250px !important;
+    max-height: 250px !important;
+    clear: both;
+    display: inline-block;
+    overflow: hidden !important;
+}
+@media screen and (max-width:1000px) {
+    .pw-leaderboard {
+        width: 320px !important;
+        max-width: 320px !important;
+        height: 100px !important;
+        max-height: 100px !important;
+    }
+}
+
+/* Sitewide Banner
+=====================================================================*/
+p.market_banner {
+    text-align: center;
+    margin: 0 auto;
+    background-color: #0176d5;
+    padding: 6px 0 10px 0;
+    color: #fff;
+}
+p.market_banner a,
+p.market_banner a:visited {
+    color: #fff;
+}
+p.market_banner a:hover {
+    color: #333;
+}
+
+/* Sitewide Banner
+=====================================================================*/
+#premium-banner {
+    text-align: center;
+    background-color: #0176d5;
+}
+#premium-banner h2 {
+    padding: 10px 0;
+    margin: 0;
+}
+#premium-banner h2 a,
+#premium-banner h2 a:visited {
+    color: #fff;
+}
+#premium-banner h2 a:hover {
+    color: #222;
+}
+
+/* Links and Button styles
+===================================== */
+a {
+    color: #0000ff;
+}
+a:hover, a:visited:hover {
+    color: #ff0000;
+}
+a:visited {
+    color: #800080;
+}
+.button,
+.button:visited{
+    display:inline-block;
+    padding:5px 10px 5px 10px;
+    color:#fff;
+    font-family:Arial, Verdana, Geneva, Helvetica, sans-serif;
+    text-decoration:none;
+    border-radius:5px;
+    box-shadow:0 1px 3px rgba(0,0,0,0.5);
+    text-shadow:0 -1px 1px rgba(0,0,0,0.25);
+    border-bottom:0;
+    border-left:none;
+    border-right:0;
+    border-top:0;
+    position:relative;
+    cursor:pointer;
+    margin:5px 5px 5px 0;
+    overflow:visible;
+}
+.button:hover{
+    background-color:#111;
+    color:#fff;
+}
+.button:visited:hover{
+    color:#fff;
+}
+.button:active{
+    top:1px;
+}
+.button,
+.button:visited,
+.medium.button,
+.medium.button:visited{
+    font-size:14px;
+    font-weight:bold;
+    line-height:1;
+    text-shadow:0 -1px 1px rgba(0,0,0,0.25);
+    color:#fff;
+}
+.large.button,
+.large.button:visited{
+    font-size:16px;
+    padding:8px 14px 8px 14px;
+}
+.medium.button,
+.medium.button:visited{
+    font-size:14px;
+    padding:6px 10px 6px 10px;
+}
+.small.button,
+.small.button:visited{
+    font-size:9px;padding:3px 6px;
+}
+.blue.button,
+.blue.button:visited,
+.blue.orange.button,
+.blue.orange.button:visited {
+    background-color:#0174d5;
+}
+.blue.button:hover,
+.blue.orange.button:hover{
+    background-color:#025dab;
+}
+.opaque.button,
+.opaque.button:visited{
+    background-color:#b1d4f2;
+}
+.orange.button,
+.orange.button:visited{
+    background-color:#fe6915;
+}
+.orange.button:hover{
+    background-color:#fb8e09;
+}
+.red.button {
+    background-color: #ED143F;
+    cursor: default;
+    box-shadow: none;
+}
+.green.button {
+    background-color: green;
+    color: #fff;
+}
+.black.button {
+    background-color: #000000;
+    color: #fff;
+}
+
+/* Top Search Box
+========================================= */
+div.search_box {
+    position: absolute;
+    top: 25px;
+    left: 250px;
+    width: 55%;
+    white-space: nowrap;
+}
+div.search_box.sportscards {
+    top: 29px;
+    left: 380px;
+    width: 50%;
+}
+span.search_box {
+    display: inline;
+    font-size: 16px;
+    font-weight: bold;
+}
+.search_box form {
+    display: inline;
+}
+#game_search_box, #search_type {
+    font-size : 16px;
+}
+#search_type {
+    padding: 1px 0 2px 0;
+}
+#game_search_box {
+    width: 70%;
+}
+#scan_button{
+    display: none;
+}
+button.search_icon {
+    vertical-align: top;
+    border: none;
+    width: 44px;
+    height: 24px;
+    background-image: url('/images/camera-upc-icons.png');
+}
+button.search_icon.upc {
+    background-position: 0 0;
+}
+button.search_icon.camera {
+    background-position: 44px 0;
+}
+.upc-dialog {
+    margin-top: 30px;
+}
+#js-dialog-upc {
+    padding: 10px 0;
+}
+#upc-stream {
+    position: relative;
+}
+
+#upc-stream > canvas, #upc-stream > video {
+    max-width: 100%;
+    width: 100%;
+}
+canvas.drawing, canvas.drawingBuffer {
+    position: absolute;
+    left: 0;
+    top: 0;
+}
+p.new-feature {
+    font-size: 11px;
+    text-align: center;
+}
+p.new-feature span {
+    color: #fb8e09;
+}
+
+/* Grid view styling
+ ============================================= */
+#grid-view .item {
+    border: solid 1px #ccc;
+    border-radius: 10px;
+    padding: 10px;
+    width: 20%;
+    min-width: 300px;
+    float: left;
+    margin: 5px 1% 5px 0;
+}
+#grid-view .item .cover {
+    position: relative;
+    display: table-cell;
+    width: 320px;
+    height: 240px;
+    vertical-align: middle;
+}
+#grid-view .item img {
+    display: block;
+    margin: 0 auto;
+    max-width: 240px;
+    max-height: 240px;
+}
+#grid-view .item .title {
+    margin-top: 10px;
+    font-size: 1.2em;
+    width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+#grid-view .item div.price {
+    font-size: 1.2em;
+    margin-bottom: 10px;
+}
+#grid-view .item div.price span {
+    font-weight: bold;
+}
+#grid-view ul.add_to li ul.list li.list-item a {
+    font-size: 9px;
+}
+.view-icons {
+    margin-left: 20px;
+}
+.view-icons .icon-container {
+    float: left;
+    margin: 5px 5px 0 5px;
+    padding: 2px;
+    line-height: 0;
+    border-radius: 5px;
+}
+.view-icons .selected {
+    background-color: #bbb;
+}
+.view-icons .icon-container:hover {
+    background-color: #999;
+}
+.view-icons .selected:hover {
+    background-color: #999;
+}
+.view-icons .icon-container img {
+    width: 22px;
+    height: 22px;
+}
+
+/* Search Autocomplete styling
+============================================== */
+ul.ui-autocomplete {
+    list-style-type: none;
+    margin: 0;
+    border: solid 1px #aaa;
+    border-radius: 0 0 3px 3px;
+    border-top: none;
+    background-color: #fff;
+}
+ul.ui-autocomplete li.ui-menu-item {
+    text-align: left;
+    color: #333;
+    background-color: #fff;
+}
+ul.ui-autocomplete li.ui-menu-item .ui-state-active {
+    border: none;
+    background: initial;
+    background-color: #dddddd !important;
+    font-weight: normal;
+    color: #333;
+    padding: 6px 0 6px 0;
+}
+ul.ui-autocomplete li.ui-menu-item .ui-menu-item-wrapper {
+    padding: 6px 0 6px 10px;
+}
+ul.ui-autocomplete li.ui-menu-item a.ui-state-focus {
+    margin:0;
+}
+.ui-button-icon-only {
+    /* hide ARIA live regions for sighted users */
+    box-sizing: border-box;
+    text-indent: -9999px;
+    white-space: nowrap;
+}
+
+/* Menu
+========================================= */
+.menu{
+    border:none;
+    border:0;
+    margin:0;
+    padding:0;
+    font-family:Arial, Verdana, Geneva, Helvetica, sans-serif;
+    font-size:14px;
+    font-weight:bold;
+    color:#8e8e8e;
+}
+.menu ul { /* applies to all menu lists */
+    height:43px;
+    list-style:none;
+    margin:0;
+    padding:0;
+}
+.menu ul.brand{
+    background-image:url(/images/menu-sprites_b.png); /* basic menu */
+    background-repeat: repeat-x;
+    background-position: center 0px;
+}
+.menu ul.brand li.brand{
+    float:left;
+}
+.menu li.brand a{
+    color:#666;
+    display:block;
+    font-weight:bold;
+    line-height:43px;
+    padding:0 25px;
+    text-decoration:none;
+    font-size: 11px;
+}
+.menu li.brand a:hover{
+    background-image:url(/images/menu-sprites_b.png); /* hover menu */
+    background-repeat: repeat-x;
+    background-position: center -45px;
+    height:43px;
+    color:#FFF;
+    text-decoration:none;
+}
+.menu li.brand ul.menu-dropdown,
+.menu li.brand ul.menu-dropdown li .child {
+    background:#dfebce;
+    border-left:1px solid #0176d5;
+    border-right:1px solid #0176d5;
+    border-bottom:1px solid #0176d5;
+    height:auto;
+    position:absolute;
+    width:auto;
+    z-index:200;
+    box-shadow: 7px 5px 15px #888888;
+    visibility: hidden;
+    transition: 0s 0.15s;
+    -webkit-transition: 0s 0.15s;
+}
+.menu li.brand ul.menu-dropdown.single{
+    width: 175px;
+}
+.menu li.brand:hover ul.menu-dropdown{
+    visibility: visible;
+    transition-delay: 0.15s;
+    -webkit-transition-delay: 0.15s;
+}
+.menu li.brand ul.menu-dropdown a:hover{
+    background-image: none;
+    background:#4195c0;
+    color:#FFF;
+}
+.menu li.brand li {
+    display:block;
+    float:none;
+    width:175px;
+    position: relative;
+}
+.menu li.brand ul.menu-dropdown li {
+    width: auto;
+}
+.menu li.brand ul.menu-dropdown ul li.title {
+    color: #666;
+    font-size: 10px;
+    padding: 10px 10px 0px 15px;
+    border-bottom: solid 1px #ccc;
+    font-weight: normal;
+}
+.menu li.brand ul.menu-dropdown ul a,
+.menu li.brand ul.menu-dropdown li a{
+    display:block;
+    font-size:12px;
+    font-style:normal;
+    padding:0 10px 0 15px;
+    text-align:left;
+    white-space: nowrap;
+}
+.menu .expand{
+    font-size:12px;
+    float:right;
+    margin-right:5px;
+}
+.menu li.brand ul.menu-dropdown li div.child {
+    visibility: hidden;
+    left: 100%;
+    top: 0;
+    width: 450px;
+    border-top:1px solid #0176d5;
+}
+.menu li.brand ul.menu-dropdown li div.child.single {
+    width: 150px;
+}
+.menu li.brand ul.menu-dropdown li div.child ul {
+    background:#dfebce;
+    height:auto;
+    width:150px;
+    float: left;
+    z-index:200;
+    visibility: hidden;
+}
+.menu li.brand ul.menu-dropdown li:hover > .child{
+    visibility: visible;
+    position: absolute;
+    transition-delay: 0.05s;
+    -webkit-transition-delay: 0.05s;
+}
+.menu li.brand ul.menu-dropdown li:hover > .child ul {
+    visibility: visible;
+}
+.menu li#desktop-other ul a {
+    line-height: 35px; /* less padding to make other menu fit on short height screens */
+    height: 35px;
+}
+.menu li.brand ul.region a:hover{
+    background:#4195c0;
+    color:#FFF;
+}
+.menu p{
+    clear:left;
+}
+.menu #current{
+    background-image:url(/images/menu-sprites_b.png); /* current menu */
+    background-repeat: repeat-x;
+    background-position: center -90px;
+    height:43px;
+    color:#fff;
+}
+.menu #menu-vgpc-other {
+    display: none;
+}
+.menu #menu-item-sports-cards,
+.menu #menu-item-trading-cards,
+.menu #menu-item-comics,
+.menu #menu-item-coins,
+.menu #menu-item-lego,
+.menu #menu-item-funko {
+    display: none;
+}
+.search_button {
+    background-color:#0076df;
+    font-size: 16px;
+    padding:2px 10px;
+    color:white;
+    border:none;
+    border: 1px solid #0076df;
+    border-radius:3px;
+}
+.search_box .search_button {
+    vertical-align: top;
+    width: 44px;
+    height: 24px;
+}
+
+/* Footer
+========================================= */
+.footer {
+    border-top: 2px solid #b8cf9a;
+    clear: both;
+    width: 100%;
+}
+.footer ul {
+    float: left;
+    margin-top: 30px;
+    margin-bottom: 0;
+    padding: 0 0 0 10px;
+    width:200px;
+}
+.footer li {
+    display: block;
+    float: left;
+    width: 175px;
+    text-align: left;
+    margin-left:10px;
+    font-size:1em;
+    padding: 4px 0;
+}
+li.first_row {
+    margin-left:0;
+    font-weight:bold;
+    font-size:1em;
+}
+div[class] .footer li {
+    width: 180px;  /* fix for smart browsers */
+}
+.footer p {
+    padding-top: 30px;
+    padding-bottom: 50px;
+    width: 100%;
+    text-align: center;
+    clear: both;
+}
+
+/* Footer banner
+======================================== */
+#footer-banner {
+    position: fixed;
+    width: 100%;
+    bottom: 0;
+    left: 0;
+    z-index: 100;
+    text-align: center;
+    background-color: #0176d5;
+    padding: 10px 0 10px 0;
+}
+#footer-banner p {
+    margin: 0;
+    color: #fff;
+    font-size: 18px;
+}
+
+/* Various Rules
+======================================== */
+.hidden {
+    display: none;
+}
+.error {
+    color: red;
+    font-weight: bold;
+}
+#toast {
+    display: none;  /* start off hidden */
+    position: absolute;
+    top: 0px;
+    left: 0px;
+    background-color: #444;
+    color: white;
+    padding: .4em;
+}
+.print-only {
+    display: none;
+}
+.code {
+    font-family: monospace;
+}
+.numeric {
+    text-align : right;
+    white-space: nowrap;
+}
+td.numeric { /* numbers in tables */
+    vertical-align: top;
+}
+.date {
+    white-space: nowrap;  /* dates look awful when they're wrapped */
+}
+td.date {  /* dates in tables */
+    vertical-align: top;
+    text-align: right;
+}
+.percent {
+    text-align: right;
+}
+.icon-throbber {
+    height: 16px;
+    width: 16px;
+    display: inline-block;
+    background: top left no-repeat url(/images/throbber.gif);
+}
+#user_notification {
+    background-color: #F4CAC1;
+    text-align: center;
+    padding: 10px;
+    margin-bottom: 10px;
+}
+a.affiliate {
+    display: inline-block;
+    margin: 0 2px;
+    height: 10px;
+    background-image: url(/images/affiliate-sprites.gif);
+    background-repeat: no-repeat;
+}
+a.affiliate.ebay {
+    width: 31px;
+    background-position: 0px 0px;
+}
+a.affiliate.amazon {
+    width: 33px;
+    background-position: 0 -16px;
+}
+a.ebay_, a.asin_, a.half_ {
+    display : none;
+}
+
+.spacer {
+    clear: both;
+    line-height: 1px;
+}
+a.add_to_cart {
+    display: block;
+    margin-top: 0;
+    font-size: .9em;
+}
+.market .main {
+    margin-bottom: 10px;
+    background: url(/images/market-splash.jpg) no-repeat;
+}
+.market .main div {
+    padding: 45px 0 45px 15%;
+    background-color: rgba(1,118,213,.92);
+}
+.market .main h1 {
+    font-weight: bold;
+    font-size: 34px;
+    letter-spacing: 1px;
+    color: #fff;
+    margin: 0;
+}
+.market .main p {
+    color: #fff;
+    letter-spacing: 1px;
+    font-size: 20px;
+    margin: 0;
+}
+.market .main #game_search_box {
+    margin:20px 0 30px 0;
+    font-size:24px;
+    width:60%;
+    border-radius:3px;
+}
+select#filter-by-console {
+    width: 100%;
+    max-width:200px;
+}
+
+.market .main input[type="submit"] {
+    background-color: #fe6915;
+    font-size: 24px;
+    padding: 2px 10px;
+    color: white;
+    border: 0;
+    border-radius: 3px;
+}
+.market .main input[type="submit"]:hover {
+    background-color: #fb8e09;
+}
+.market .reason span {
+    padding: 8px 16px;
+    color: #333;
+    font-size: 24px;
+    font-weight: bold;
+    margin-right: 5%;
+}
+.market .reason ul {
+    list-style-type: none;
+}
+.market h2 {
+    color: #333;
+    font-size: 20px;
+}
+.market .how_works {
+    background-color: #0174d5;
+}
+.market .how_works .step {
+    text-align: center;
+    float: left;
+    width: 22%;
+    margin: 2em 10% 1em 0;
+}
+.market .how_works .number span {
+    border: solid 1px #fff;
+    border-radius: 50%;
+    background-color: #fff;
+    padding: 12px 4px 0 4px;
+    width: 46px;
+    height: 46px;
+    display: inline-block;
+    color: #333;
+    font-size: 28px;
+    font-weight: bold;
+    box-sizing: border-box;
+}
+.market .how_works h2 {
+    color: #fff;
+}
+.market .how_works .text {
+    font-size: 1em;
+    padding-top: 15px;
+    color: #fff;
+}
+.market .how_works .reason span,
+.market .how_works .reason ul,
+.market .how_works .reason li a {
+    color: #fff;
+}
+.market .why {
+    padding-right: 15%;
+}
+.market .why .second {
+    margin-top: 50px;
+    margin-bottom: 50px;
+}
+.market .faq {
+    border-bottom: none !important;
+}
+.market .faq h3 {
+    margin-bottom: 0;
+    margin-top: 40px;
+}
+.market .faq .first {
+    float: left;
+    width: 45%;
+    margin-right: 3%;
+}
+.market .faq .second {
+    float: left;
+    width: 45%;
+}
+.market h3 {
+    margin: 30px 0 4px 0;
+    color: #333;
+}
+.market .how_works,
+.market .why,
+.market .faq,
+.market .selling_bar,
+#market_home .browse {
+    padding: 26px 0px 26px 15%;
+    border-bottom: solid 1px #ccc;
+}
+.market .offers_nav {
+    float: left;
+    width: 225px;
+    margin-right: 2%;
+}
+.market #console-page .offers_nav {
+    clear: both;
+}
+.market .filters {
+    margin-bottom: 15px;
+    padding: 15px 4% 15px 4%;
+    background-color: #dddddd;
+    border: solid 1px #cccccc;
+}
+.market .filters .options {
+    display: none;
+}
+.market .filters a {
+    display: block;
+}
+.market .filters span.separator {
+    display: none;
+}
+.market .filters a.selected {
+    text-decoration: none;
+    color: inherit;
+    font-weight: bold;
+}
+.market .filters p.head {
+    font-weight: bold;
+}
+.market .filters p.subhead {
+    margin-top: 20px;
+    margin-bottom: 0px;
+    text-transform: uppercase;
+}
+.market .filters #includes,
+.market .filters #console {
+    margin-bottom: 20px;
+    padding-bottom: 20px;
+    border-bottom: solid 1px #cccccc;
+}
+.market .filters input[type="checkbox"] {
+    margin-right: 10px;
+}
+.market .filters .button {
+    margin-left: 0;
+}
+.market p.guarantee {
+    margin: 10px 0 0 0;
+    text-align: center;
+    color: #999;
+    font-size: .8em;
+}
+.market #offer_list {
+    float: left;
+    margin-bottom: 20px;
+    width: 70%;
+}
+.market #offer_list table {
+    width: 100%;
+}
+.market #offer_list .free_ship p {
+    width: 100%;
+    padding: 10px 0;
+    background-color: #ddd;
+    border: solid 1px #ccc;
+    text-align: center;
+    font-size: 1.3em;
+}
+.market #offer_list .offer {
+    height: 200px;
+    border: solid 1px #cccccc;
+}
+.market #offer_list .gap {
+    height: 15px;
+}
+.market #offer_list .unavailable p,
+#subscriber-selling .selling_table .unavailable p {
+    font-size: 1.5em;
+    margin: 20px 0;
+    text-align: center;
+}
+.market #offer_list .offer td {
+    padding: 15px 15px 9px 15px;
+}
+.market #offer_list .photo {
+    text-decoration: none;
+}
+.market #offer_list .photo div {
+    width: 240px;
+    height: 190px;
+    line-height: 1em;
+    display: table-cell;
+    vertical-align: middle;
+}
+.market #offer_list .photo img {
+    display: block;
+    margin: 0 auto;
+    max-width: 240px;
+    max-height: 190px;
+}
+.market #offer_list .photo img.no_photo {
+    max-width: 100px;
+}
+.market #offer_list .meta p {
+    font-size: 1.5em;
+}
+.market #offer_list .meta p span {
+    font-size: 12px;
+}
+.market #offer_list .seller_info {
+    margin-top: 10%;
+    font-size: 1.2em;
+}
+.market #offer_list .seller_info .score {
+    font-weight: bold;
+}
+.market #offer_list .offer .separator {
+    padding-left: 0;
+    padding-right: 0;
+}
+.market #offer_list .pricebox {
+    width: 20%;
+}
+.market #offer_list .pricebox .listing_type {
+    text-align: right;
+    font-size: 16px;
+    color: #999;
+}
+.market .pricebox .price {
+    font-size: 1.8em;
+    color: #0076df;
+    font-weight: bold;
+    margin-bottom: 40px;
+}
+.market .pricebox .price #cost-basis,
+.market .pricebox .price #quantity {
+    font-size: 14px;
+    color: #333;
+    font-weight: normal;
+}
+.market .pricebox .price #each {
+    font-size: 16px;
+    color: #333;
+}
+.market p.market_values {
+    margin-bottom: 0;
+}
+.market p.market_values span.title {
+    display: inline;
+    padding-right: 15px;
+}
+.market p.market_values span.title span {
+    color: #0076df;
+}
+.badge {
+    display: inline-block;
+    border: solid 1px #777;
+    border-radius: 14px;
+    background-color: #777;
+    padding: 2px 8px;
+    margin: 2px;
+    color: #fff;
+    font-size: 10px;
+    vertical-align: middle;
+    line-height: 1em;
+}
+.market .city {
+    text-transform: capitalize;
+}
+.market .state {
+    text-transform: uppercase;
+}
+.subtle_underline {
+    text-decoration: underline;
+}
+.account_age {
+    display: block;
+    font-size: 12px;
+}
+.space-below {
+    margin-bottom: 20px;
+}
+.market .next_page,
+.market .first_page {
+    display: inline-block;
+}
+.market .next_page {
+    float: right;
+}
+.market .pricebox .price span.text {
+    color: #333;
+    font-size: .5em;
+}
+.market .pricebox .price .market_comp {
+    font-weight: normal;
+    line-height: 4em;
+    font-size: .5em;
+    color: #999;
+}
+.market .pricebox .price .market_comp span {
+    font-weight: normal;
+    color: inherit;
+    font-size: 1.1em;
+}
+.market .check_mark {
+    font-size: 1.1em;
+    color: green;
+}
+.alert {
+    margin-top: 10px;
+    padding: 5px 0px;
+    text-align: center;
+    border: solid 1px #b1d188;
+    background-color: #E4EFD6;
+}
+span.new {
+    vertical-align: super;
+    font-weight: bold;
+    color: #fe6915;
+    font-size: 10px;
+}
+
+/*-------------------- guided tours --------------------*/
+.tour {
+    border:solid 1px #333;
+    background-color: #333;
+    color: #ffffff;
+    padding: 10px;
+    width: 200px;
+    z-index:100;
+    display:none;
+    position: absolute;
+    font-size: 12px;
+    font-weight: normal;
+}
+.pointer-up{
+    border:solid 10px transparent;
+    border-bottom-color:#333;
+    position:absolute;
+    top:-20px;
+    left: 70px;
+}
+.pointer-down{
+    border:solid 10px transparent;
+    border-top-color:#333;
+    position:absolute;
+    bottom:-20px;
+    left: 70px;
+}
+.tour a {
+    background: #fff;
+    color: #0076df;
+    text-decoration: none;
+    text-transform: uppercase;
+    font-weight: bold;
+    padding: 2px 8px;
+    float: right;
+    font-size: 12px;
+    border-radius: 3px;
+}
+.tour a.tour-link {
+    background: inherit;
+    padding: 0;
+    float: none;
+    font-size: inherit;
+    text-transform: none;
+    font-weight: normal;
+    text-decoration: underline;
+}
+.tour a.tour-link:hover,
+.tour a.tour-link:visited:hover {
+    color: #ff0000;
+}
+
+/* pipe separated lists
+=================================================*/
+.pipe-list {
+    display: inline;
+    list-style: none;
+}
+.pipe-list li {
+    display: inline;
+}
+.pipe-list li:after {
+    content: " | ";
+}
+.pipe-list li:last-child:after {
+    content: "";
+}
+
+/* dialogs
+=================================================*/
+.dialog {
+    display: none;
+}
+.ui-dialog {
+    text-align: center;
+}
+.dialog code pre {
+    text-align: left;
+    overflow-x: scroll;
+    white-space: pre;
+    word-wrap: normal;
+}
+
+/* documentation
+=================================================*/
+.documentation p,
+.documentation dd {
+    max-width: 50em; /* about 50-60 characters per line */
+}
+
+/* "what's this?"
+=================================================*/
+.question_mark {
+    display: inline-block;
+    border: solid 1px #333;
+    border-radius: 14px;
+    background-color: #333;
+    padding: 2px 4px;
+    margin: 0 5px;
+    color: #fff;
+    font-size: 10px;
+    vertical-align: middle;
+    line-height: 1em;
+}
+.question_mark:hover + .more_info,
+.question_mark:focus + .more_info {
+    display: inline-block;
+}
+.more_info {
+    display: none;
+    padding: 5px;
+    margin: 0 0 0 5px;
+    color: #333;
+    font-size: 14px;
+    line-height: 1em;
+    font-weight: bold;
+}
+.guide_signup .more_info {
+    display: block;
+}
+.guide_signup .more_info.hidden {
+    display: none;
+}
+.more_info:hover,
+.more_info:focus {
+    display: inline-block;
+}
+
+/* console pricing pages
+=================================================*/
+#console-page #console-header {
+    float: left;
+    max-width: 800px;
+}
+#console-page h1 {
+    clear: none;
+}
+#console-page .price-index {
+    position: static;
+    top: auto;
+    right: auto;
+    width: 40%;
+    max-width: 550px;
+    float: left;
+    margin: 1em 0 0 5%;
+}
+#console-page .price-index h2,
+#console-page .price-index p {
+    margin-top: 0;
+    margin-bottom: 0;
+}
+#console-page .other_regions.highlight {
+    font-size: 16px;
+}
+#console-page .other_regions.highlight .headline {
+    font-weight: bold;
+}
+.rookie {
+    color: #fe6915;
+    padding-left: 5px;
+}
+
+/* Tab formatting
+=========================================*/
+#tab-bar {
+    border-top: 1px solid #FFFFFF;
+    clear: both;
+}
+#tab-bar .throbber {
+    display : none;
+}
+.tab {
+    height: 16px;
+    float: left;
+    font-size: 11px;
+    margin-right: 5px;
+    padding: 5px 6px;
+    border-radius:5px 5px 0 0;
+}
+.tab.available:hover {
+    cursor: pointer;
+    color: #f00;
+}
+.tab.label {
+    background: #FFFFFF;
+    border: solid 1px #FFFFFF;
+    font-weight: bold;
+}
+.tab.selected {
+    background-color: #0174d5;
+    border: solid 1px #0174d5;
+    color: #FFFFFF;
+    text-decoration: none;
+}
+.tab.available {
+    background: #eeeeee;
+    border: solid 1px #0174d5;
+}
+
+/* List of games in a table
+=========================================*/
+#games_table tfoot td,
+#games_table_sticky tfoot td {
+    text-align : center;
+    font-weight: bold;
+}
+#games_table {
+    line-height: 1.6em;
+    margin-bottom: 50px;
+    width: 80%;
+    border-collapse: collapse;
+}
+#games_table_sticky {
+    line-height: 1.6em;
+    border-collapse: collapse;
+}
+#games_table th span,
+#games_table_sticky th span {
+    font-size: 14px;
+    padding-left: 25px;
+}
+#games_table th span span {
+    padding: 0;
+}
+#games_table td,
+#games_table th {
+    padding: 2px 5px;
+}
+#games_table td,
+#games_table th,
+#games_table_sticky td,
+#games_table_sticky th{
+    padding: 2px 5px;
+}
+#games_table img,
+#games_table_sticky img {
+    border: 0px;
+}
+#games_table th,
+#games_table_sticky th {
+    color: white;
+    background-color: #0174d5;
+    font-style: italic;
+    font-weight: normal;
+    text-align: left;
+}
+#games_table thead tr,
+#games_table_sticky thead tr {
+    border: none;
+}
+#games_table tbody tr,
+#games_table_sticky tbody tr {
+    border-bottom: dashed 1px #dddddd;
+}
+#games_table td.title,
+#games_table_sticky td.title,
+#games_table td.console,
+#games_table_sticky td.console,
+#games_table td.price,
+#games_table_sticky td.price {
+    cursor: pointer;
+    vertical-align: top;
+}
+#games_table .more,
+#games_table_sticky .more {
+    display: none;
+    width: 16px;
+    color: #aaa;
+    font-size: 16px;
+    cursor: pointer;
+    padding-right: 0px;
+    padding-left: 2px;
+}
+#games_table .mobile-links,
+#games_table_sticky .mobile-links {
+    display: none;
+    padding: 0;
+    margin: 0 0 0 20px;
+}
+#games_table td.new_price,
+#games_table td.funko_new_price,
+#games_table_sticky td.new_price,
+#games_table_sticky td.funko_new_price {
+    border-right: solid 1px #0174d5;
+}
+#games_table th.numeric,
+#games_table_sticky th.numeric {
+    text-align: right;
+}
+
+/* game pricing pages
+=================================================*/
+#game-page h1.chart_title {
+       text-align: left;
+       margin: .12em 0 0 0;
+}
+#game-page h1.chart_title {
+       color: #0076df;
+}
+#game-page #price_data {
+    table-layout: fixed;
+    border: solid 1px #ccc;
+    width: 100%;
+    margin-top : 10px;
+    margin-bottom : 0px;
+    padding-left: 10px;
+    clear: both;
+    border-radius:5px;
+    border-collapse: separate;  /* prevent border glitches on hidden cells */
+}
+#game-page #price_data .for-retail-prices {
+    display: none;
+}
+#game-page #price_data .for-retail-prices td span.retail-prices{
+    font-size:14px;
+}
+#game-page #price_data td {
+    width: 18%;
+    font-size:10px;
+    line-height:1.5em;
+}
+#game-page #price_data thead th {
+    color: #000;
+    font-size: 1.1em;
+    font-weight: bold;
+    margin: 5px 0px 0px 10px;
+    text-align: left;
+    vertical-align: top;
+}
+#game-page #price_data tbody .price {
+    font-size: 1.8em;
+    color: #0076df;
+    font-weight: bold;
+}
+#game-page #price_data tbody .price a {
+    font-size: .9em;
+    font-weight: normal;
+}
+#game-page .tab.label {
+    color: black;
+}
+#game-page .tab.selected {
+    color: #333333;
+    font-weight: bold;
+    background-color: #B1D188;
+    border-color: #B1D188;
+}
+#game-page .tab.available:hover {
+    background-color: #ddd;
+}
+#game-page .tab.available {
+    background-color: #fff;
+    font-weight: bold;
+    border-color: #B1D188;
+}
+#game-page .tab-frame {
+    border-top: 2px solid #B1D188;
+    padding-top: 10px;
+    clear: both;
+}
+#game-page table.used-prices {
+   width: 100%;
+}
+#game-page table.used-prices.vertical {
+   display:none;
+}
+#game-page table.used-prices td.price {
+    width:150px;
+}
+#game-page table.used-prices tr td{
+    font-size:18px;
+    padding:5px 0;
+    border-top: dotted 1px #333333;
+}
+#game-page table.used-prices tr:first-child td {
+    border-top: none;
+}
+#game-page table.used-prices td.store {
+   width:160px;
+   font-weight: bold;
+}
+#game-page table.used-prices thead th.adjust-for-shipping {
+    text-align: right;
+    font-weight: normal;
+}
+#game-page p.price_info {
+    margin-top: 50px;
+    font-size: 12px;
+    border-top: dashed 1px #aaa;
+    padding-top: 20px;
+    clear: both;
+}
+#game-page .see-it img {
+    display: block;
+}
+#game-page #product_details{
+    float:left;
+    width:300px;
+}
+#game-page #product_details ul.product-links {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+}
+#game-page #product_details ul.product-links li.product-link {
+    display: block;
+    float: left;
+    text-align: center;
+    line-height: 28px;
+    font-size: 12px;
+    margin-right: 5px;
+}
+#game-page #product_details ul.product-links li#chart_link {
+    display: none;
+}
+#game-page #product_details ul.product-links li.product-link span.button {
+    font-size: 11px;
+}
+#game-page #product_details ul.product-links li.product-link a {
+    vertical-align: middle;
+    font-size: 11px;
+    display: block;
+}
+#game-page #product_details div.cover{
+    display:table-cell;
+    width:265px;
+    height:240px;
+    vertical-align:middle;
+}
+#game-page #product_details div.cover img{
+    float: left;
+    display:block;
+    margin:0 auto;
+    max-width: 240px;
+    max-height: 240px;
+}
+#game-page #product_details div.cover span {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+}
+#game-page #product_details .attribute {
+    font-weight:bold;
+    display:block;
+}
+#game-page #product_details .attribute span {
+    font-weight:normal;
+}
+#game-page #full_details,
+#game-page #extra-images {
+    margin-top: 50px;
+    padding-top: 20px;
+    border-top: dashed 1px #aaa;
+}
+#game-page #full_details {
+    margin-top: 0;
+}
+#game-page #full_details #attribute {
+    border-collapse: collapse;
+}
+#game-page #full_details #attribute tr {
+    line-height: 1.6em;
+}
+#game-page #full_details #attribute td {
+    font-size: 14px;
+    color: #333;
+}
+#game-page #full_details #attribute td.title{
+    font-weight:bold;
+    padding-right: 10px;
+    width: 150px;
+}
+#game-page #full_details #attribute td.details {
+
+}
+#game-page #full_details a.variant {
+    text-transform: capitalize;
+}
+#game-page #extra-images .extra,
+#game-page #extra-images .add {
+    width: 240px;
+    height: 260px;
+    border: solid 1px #ccc;
+    text-align: center;
+    float: left;
+    margin: 0 10px 10px 0;
+    padding: 5px;
+}
+#game-page #extra-images .extra div {
+    width: 240px;
+    height: 240px;
+    vertical-align: middle;
+    display: table-cell;
+}
+#game-page #extra-images .extra div img {
+    max-width: 240px;
+    max-height: 240px;
+}
+#game-page #extra-images .add a {
+    color: #ccc;
+    position: relative;
+    top: 50%;
+    transform: translateY(-50%);
+    display: block;
+    font-size: 20px;
+    font-weight: bold;
+}
+#game-page .tab-frame div.tab {
+    display: none;
+    width: 95%;
+}
+#game-page .tab-frame thead th {
+    min-width: 100px;
+    text-align: left;
+    padding: 4px 2px;
+    cursor: pointer;
+}
+#game-page .tab-frame thead th.numeric {
+    text-align: right;
+}
+#game-page .tab-frame tbody td {
+    padding: 1px 3px;
+    height: 26px;
+    vertical-align: top;
+}
+#game-page .tab-frame tbody td.thumb-down {
+    vertical-align: top;
+}
+#chart { /* not game page specific */
+    width: 70%;
+    height: 280px;
+    background-color: #FFFFFF;
+    margin: 0 0 10px 10px;
+    position : relative;
+    float:right;
+    padding: 2px;
+    border-radius: 10px;
+    border: solid 1px #B1D188;
+}
+#game-page #chart > p {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    margin-left:-8px;  /* half of the 16px width */
+    margin-top:-8px;   /* half of the 16px height */
+}
+#game-page #price_comparison {
+    display: block;
+    margin: 10px 0 0 0;
+    width: 100%;
+}
+#game-page .retail-price-label {
+    font-size:14px;
+}
+#game-page .report-sale {
+    font-size: 10px;
+    padding-left: 10px;
+}
+#game-page a.edit {
+    font-size: 10px;
+    margin-left: 10px;
+}
+.change {
+    color: #9a9a9a;
+    font-size: 12px;
+}
+
+/* ======== add to collection/wishlist button styling ==========*/
+td.add_to {
+    text-align: center;
+    width: 200px;
+}
+#game-page td.add_to {
+    width: auto;
+}
+ul.add_to {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+    display: inline-block;
+}
+ul.add_to.collection,
+ul.add_to.wishlist {
+    padding-right: 10px;
+}
+ul.add_to li.add_to {
+    width: 75px;
+    margin: auto;
+}
+#game-page ul.add_to li.add_to {
+    width: 85px;
+}
+ul.add_to li.add_to .button {
+    width: 65px;
+}
+#game-page li.add_to .button {
+    width: 70px;
+}
+ul.add_to.wishlist li.add_to.wishlist .button {
+    width: 50px;
+    white-space: nowrap;
+}
+ul.add_to.collection li.add_to.collection .button:hover,
+ul.add_to.wishlist li.add_to.collection .button:hover {
+    border-radius: 5px 5px 0 0;
+    cursor: auto;
+}
+ul.add_to.collection li ul.list li.list-item a,
+ul.add_to.wishlist li ul.list li.list-item a {
+    color: #333;
+    text-align: left;
+    padding: 2px 6px;
+    font-size: 12px;
+    text-decoration: none;
+    width: 65px;
+}
+ul.add_to.collection li ul.list,
+ul.add_to.wishlist li ul.list {
+    display: none;
+    z-index:200;
+    position:absolute;
+    height: auto;
+    margin: 0;
+    padding: 0;
+    background-color: #dfebce;
+    margin-top: 23px;
+    box-shadow: 7px 5px 15px #888888;
+    border: solid 1px #025dab;
+    border-top: none;
+    list-style-type: none;
+}
+ul.add_to.collection li:hover ul.list,
+ul.add_to.wishlist li:hover ul.list {
+    display: block;
+}
+ul.add_to.collection li ul.list li.list-item,
+ul.add_to.wishlist li ul.list li.list-item {
+    display: block;
+    float: none;
+    position: relative;
+    width: 75px;
+}
+#game-page ul.add_to.collection li ul.list li.list-item {
+    width: 80px;
+}
+ul.add_to.collection li ul.list li.list-item:hover,
+ul.add_to.wishlist li ul.list li.list-item:hover {
+    background:#4195c0;
+    color: #fff;
+    margin-right: 0px;
+    width: 75px;
+}
+#game-page ul.add_to.collection li ul.list li.list-item:hover {
+    width: 80px;
+}
+ul.add_to.collection li ul.list li.list-item:hover a,
+ul.add_to.wishlist li ul.list li.list-item:hover a {
+    color: #fff;
+}
+ul.add_to.collection li ul.list:hover + .blue.button,
+ul.add_to.wishlist li ul.list:hover + .blue.button {
+    border-radius: 5px 5px 0 0;
+    background-color: #025dab;
+}
+#games_table ul.add_to li ul.list{
+    margin-top: 20px;
+}
+#games_table ul.add_to li ul.list li.list-item a {
+    font-size: 9px;
+}
+.sortable th.thumb-down {
+    min-width: 0 !important;
+}
+.sortable th.date,
+.sortable td.date {
+    text-align: left;
+}
+.sortable th.amount,
+.sortable td.amount {
+    text-align: right;
+}
+.sortable .arrow-up,
+.sortable .arrow-down {
+    display: none;
+}
+.sortable .default {
+    display: inline-block;
+}
+table.condition-comparison thead th.condition {
+    font-style: italic;
+    font-size: 16px;
+    font-weight: normal;
+    text-align: left;
+}
+table.condition-comparison thead th.notify-me {
+    font-size: 0.8em;
+}
+table.condition-comparison thead tr.column-labels th {
+    text-align: left;
+    font-weight: normal;
+    font-size: 12px;
+    padding-top: 2px;
+    padding-bottom: 2px;
+    background: #dddddd;
+}
+table.condition-comparison tbody tr td:first-child {
+    padding-left: 0;
+}
+
+/* list of offers
+=================================================*/
+#market_list #product_details {
+    float: left;
+    margin: 20px 0 30px 0;
+    width: 60%;
+}
+#market_list .guarantee {
+    float: left;
+    margin: 60px 0 30px 0;
+}
+#market_list #product_details div.cover {
+    float: left;
+    display: table-cell;
+    width: 140px;
+    height: 140px;
+    vertical-align: middle;
+}
+#market_list #product_details div.cover img {
+    max-height: 120px;
+    max-width: 120px;
+    display:block;
+    margin: 0 auto;
+}
+#market_list #product_details h1 {
+    font-size: 24px;
+    margin: 0 0 5px 0;
+    clear: none;
+}
+#market_list a.button {
+    letter-spacing: .1em;
+}
+#market_list #product_details .rating {
+    font-weight: bold;
+    font-size: 16px;
+    padding-right: 20px;
+}
+
+/* Collection page
+========================================= */
+#market_list .values {
+    margin: 0;
+    padding: 0;
+    display: inline-block;
+    vertical-align: top;
+    margin-right: 5%;
+}
+#market_list .collection_value {
+    color: #0076df;
+}
+#subscriber-selling.collection .selling_table p.title {
+    margin-top: 0;
+}
+#subscriber-selling.collection .selling_table {
+    max-width: none;
+}
+#subscriber-selling.collection .selling_table .price {
+    font-size: 16px;
+    text-align: right;
+    padding-right: 15px;
+}
+#subscriber-selling.collection .selling_table td.cost input {
+    width: 50px;
+}
+
+/* custom down arrow */
+i.arrow.down {
+    border: solid #333;
+    border-width: 0 2px 2px 0;
+    display: inline-block;
+    padding: 2px;
+    margin-bottom: 3px;
+    transform: rotate(45deg);
+    transform: rotate(45deg);
+    -webkit-transform: rotate(45deg);
+}
+i.arrow.up {
+    border: solid #333;
+    border-width: 0 2px 2px 0;
+    display: inline-block;
+    padding: 2px;
+    margin-bottom: 3px;
+    transform: rotate(225deg);
+    -webkit-transform: rotate(225deg);
+}
+
+/* Share it box
+========================================= */
+#market_list .share_it,
+#subscriber-bids .share_it {
+    border: solid 1px #B1D188;
+    background-color: #E4EFD6;
+    padding: 10px;
+}
+.share_it h1 {
+    margin: 0;
+    font-size: 14px;
+}
+.share_it textarea {
+    width: 40em;
+    height: 26px;
+}
+.share_it div {
+    display: none;
+}
+
+/* search by photo
+========================================= */
+div.search-by-photo-results {
+    display: block;
+    align-content: left;
+    margin-top: 20px;
+    border-top: dashed 1px #bbb;
+    padding-top: 10px;
+}
+#search-by-photo input[type="file"] {
+    display: none !important;
+}
+div.search-by-photo-results p.header{
+    display: none;
+}
+div.search-by-photo-results a:hover,
+div.search-by-photo-resultsa:visited:hover {
+    color: #ff0000;
+}
+div.search-by-photo-results a:visited {
+    color: #800080;
+}
+div.search-by-photo-results div.result {
+    display: none;
+    width: 19%;
+    max-width: 240px;
+    min-width: 120px;
+    padding: 20px 10px 5px 10px;
+}
+div.search-by-photo-results div#first {
+    min-width: 240px;
+}
+div.search-by-photo-results div.result img {
+    max-width: 120px;
+    display: table-cell;
+    margin: 0 auto;
+}
+div.search-by-photo-results div#first img {
+    max-width: 240px;
+}
+div.search-by-photo-results div.result p {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin: 0px;
+}
+div.search-by-photo-results a.search {
+    font-size: 12px;
+    display: inline-block;
+    margin-top: 10px;
+    color: blue;
+}
+div.search-by-photo-results a.search:hover,
+div.search-by-photo-results a.search:visited:hover {
+    color: blue;
+}
+div.search-by-photo-results a.search:visited {
+    color: #800080;
+}
+@media screen and (max-width:420px) {
+    div.search-by-photo-results div.result {
+        width: 90%;
+        max-width: 90%;
+    }
+    div.search-by-photo-results div.result {
+        padding-top: 20px;
+    }
+}
+
+
+/* offer page
+========================================= */
+#market_offer .status {
+    margin: 20px 0;
+    border: solid 1px #ccc;
+    padding: 5px 20px;
+    background-color: #ddd;
+}
+#market_offer .status.user_is_seller div{
+    display: inline-block;
+    vertical-align: top;
+}
+#market_offer #sold .buyer_info {
+    margin-right: 20px;
+}
+#market_offer #sold .address {
+    float: left;
+    margin-top: 10px;
+}
+#market_offer #sold #billing {
+    font-size: .8em;
+    margin-left: 10%;
+}
+#market_offer #sold #billing #js-billing-address {
+    display: none;
+}
+#market_offer #sold .address span {
+    font-weight: bold;
+}
+#market_offer .breadcrumbs {
+    margin: 5px 0 40px 0;
+    padding-bottom: 0;
+    border-bottom: solid 1px #ccc;
+}
+#market_offer .breadcrumbs .crumbs {
+    width: 40%;
+    display: inline-block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+#market_offer .breadcrumbs .other {
+    float: right;
+}
+#market_offer .item_photos {
+    float: left;
+    width: 55%;
+    max-width: 760px;
+    max-height: 760px;
+    vertical-align: middle;
+    display: table-cell;
+    margin-bottom: 50px;
+    margin-right: 2%;
+}
+#market_offer .item_photos .primary img {
+    display: block;
+    margin: 0 auto 10px auto;
+    max-height: 400px;
+}
+#market_offer .item_photos p {
+    clear: left;
+    text-align: center;
+    margin: 0 0 25px 0;
+    font-size: .8em;
+}
+#market_offer .item_photos .secondary {
+    display: table-cell;
+    vertical-align: middle;
+    width: 1%;
+    padding-right: 1%;
+}
+#market_offer .item_photos .secondary img {
+    display: block;
+    max-height: 70px;
+    margin: 0 auto;
+}
+#market_offer .item_meta,
+#market_offer .pricebox,
+#market_offer .guarantee {
+    float: left;
+    width: 40%;
+    padding: 0 0 0 15px;
+}
+#market_offer .market_values {
+    margin-bottom: 40px;
+    font-size: 11px;
+}
+#market_offer .item_meta {
+    padding-top: 0;
+    padding-bottom: 40px;
+}
+#market_offer .item_meta h1 {
+    margin-top: 40px;
+    font-size: 22px;
+}
+#market_offer .item_meta h2 {
+    color: #333;
+    margin-top: 0;
+}
+#market_offer .item_meta p {
+    font-size: 16px;
+}
+#market_offer .item_meta h2 span,
+#market_offer .item_meta p span {
+    font-size: 12px;
+}
+#market_offer .item_meta p span.city,
+#market_offer .item_meta p span.state{
+    font-size: 16px;
+}
+#market_offer .pricebox {
+    background-color: #ddd;
+    border: solid 1px #ccc;
+    padding: 0;
+}
+#market_offer .pricebox table {
+    width: 100%;
+    height: 110px;
+    margin-left: 15px;
+}
+#market_offer .pricebox .price {
+    margin-bottom: 5px;
+}
+#market_offer .pricebox .seller {
+    font-size: 16px;
+}
+#market_offer .pricebox .verified {
+    border: solid 1px #333;
+    border-radius: 10px;
+    display: inline;
+    padding: 0px .5em;
+    background-color: #333;
+    font-size: .8em;
+    color: white;
+}
+#market_offer .seller .rep_number {
+    margin-bottom: 3px;
+}
+#market_offer .seller .headline {
+    font-size: .8em;
+    color: #999;
+}
+#market_offer .seller .rep_percent {
+    font-size: .8em;
+    margin-bottom: 3px;
+}
+#market_offer .item_seller {
+    width: 95%;
+    clear: both;
+    padding: 15px;
+    margin-bottom: 50px;
+    border: solid 1px #cccccc;
+    background-color: #ddd;
+}
+#market_offer .item_seller p {
+    margin: 0;
+    font-size: 16px;
+}
+#market_offer .pricebox form {
+    margin-bottom: 15px;
+}
+
+/* market home page
+========================================= */
+#market_home .opposite {
+    color: #000;
+    font-size: .9em;
+}
+#market_home .selling_bar {
+    padding-top: 20px;
+    padding-bottom: 40px;
+    background-color: #ddd;
+}
+#market_home .browse h2 {
+    margin: 0;
+    padding:0 0 7px 0;
+    font-size: 1.5em;
+    clear: none;
+    white-space: nowrap;
+}
+#market_home .browse ul {
+    float:left;
+    width:240px;
+    margin:0 0 20px 0;
+    padding:0 0 0 5px;
+}
+#market_home .browse li {
+    display:block;
+    float:left;
+    width:220px;
+    text-align:left;
+    font-size:14px;
+    padding-bottom:3px;
+}
+#market_home .guarantee {
+    clear: both;
+}
+#market_home .guarantee img {
+    vertical-align: middle;
+    margin-right: 30px;
+    padding-bottom: 4px;
+}
+
+/* image uploader
+========================================= */
+.upload_image {
+    display: inline-block;
+}
+.upload_image .thumbnail {
+    display: none; /* JS changes to 'table-cell' to make visible */
+    vertical-align: middle;
+    width: 120px;
+    height: 120px;
+}
+.upload_image .thumbnail img {
+    max-width: 120px;
+    max-height: 120px;
+    padding: 5px 5px 5px 0;
+}
+.upload_image input {
+    display: none; /* inputs are shown by JS as needed */
+    margin-bottom: 5px;
+}
+
+/* image rotate modal
+========================================= */
+#image-rotate-modal-overlay {
+    position: fixed;
+    display: none; /* overlay is shown by JS as needed */
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 100;
+    width: 100%;
+    height: 100%;
+    background: rgba(204, 204, 204, 0.5);
+    box-shadow: 7px 5px 15px #888888;
+}
+.image-rotate-modal {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    width: 90%;
+    height: 90%;
+    margin: auto;
+    padding: 20px;
+    background: white;
+    overflow-y: auto;
+    text-align: center;
+}
+.rotate-buttons {
+    margin-bottom: 20px;
+}
+.rotate-confirm {
+    margin-left: 30px;
+}
+.rotate-buttons .large.button.blue {
+    font-size: 20px;
+}
+.image-rotate-canvas {
+    margin: auto;
+    max-width: 90% !important;
+}
+@media screen and (max-width:500px) {
+    .image-rotate-modal {
+        width: 80%;
+        height: 80%;
+    }
+    .image-rotate-canvas {
+        max-width: 80% !important;
+    }
+}
+@media screen and (max-width:320px) {
+    .image-rotate-modal {
+        width: 60%;
+        height: 60%;
+    }
+    .image-rotate-canvas {
+        max-width: 60% !important;
+    }
+}
+
+/* make a listing
+========================================= */
+.market #views {
+    font-size: .9em;
+    color: #aaa;
+}
+#make_listing form {
+    margin-bottom: 30px;
+}
+#make_listing .info_block p.error {
+    display: none;
+}
+#make_listing .item_info {
+    margin-top: 20px;
+}
+#make_listing .item_info img {
+    float: left;
+    margin-right: 20px;
+    max-height: 100px;
+}
+#make_listing .item_info span {
+    font-size: 20px;
+}
+#make_listing .item_info span.sell_yours {
+    font-size: 14px;
+}
+#make_listing .take_photo_info {
+    font-size: .7em;
+    display: none;
+}
+#make_listing .details {
+    padding: 10px;
+    margin-bottom: 30px;
+    margin-top: 20px;
+}
+#make_listing .encourage_photos {
+    color: #ffffff;
+    border-radius: 5px;
+    background: #0076df;
+    display: inline-block;
+    padding: 2px 8px;
+    font-size: .8em;
+}
+#make_listing .encourage_photos span {
+    color: #ffffff;
+    padding: 2px 6px;
+    margin-right: 7px;
+    background-color: #000000;
+    border-radius: 5px;
+}
+#make_listing h3 {
+    margin: 20px 0 0 0;
+}
+#make_listing h4 {
+    margin: 0 0 5px 0;
+    line-height: 2em;
+}
+#make_listing textarea {
+    width: 90%;
+}
+#make_listing input::-webkit-outer-spin-button,
+#make_listing input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+#make_listing input[type="number"] {
+    width: 6em;
+}
+#make_listing .short,
+#make_listing #full_form {
+    display: none;
+}
+#make_listing .form_type {
+    font-size: .8em;
+}
+#make_listing .descending-price {
+    display: none;
+}
+#make_listing .show-descending-options {
+    margin-left: 20px;
+}
+#make_listing .show-descending-options input[type="checkbox"] {
+    margin-right: 5px;
+}
+
+/* karma events
+========================================= */
+.karma td {
+    padding: 5px 8px;
+}
+.karma .rating {
+    display: inline-block;
+    font-size: 16px;
+    font-weight: bold;
+    text-align: left;
+}
+.karma .date {
+    text-align: left;
+    color: #aaa;
+}
+.karma .rating.positive {
+    color: green;
+}
+.karma .rating.neutral {
+    color: black;
+}
+.karma .rating.negative {
+    color: red;
+}
+.karma blockquote {
+    font-style: italic;
+    display: inline-block;
+    margin: 0 0 0 30px;
+}
+
+/* gallery view for offer lists
+========================================= */
+.market #offer_list .photo div.gallery_details {
+    display: none; /* don't show these unless in gallery view */
+}
+.market #offer_list.gallery .photo div.gallery_details {
+    display: block;
+    height: auto;
+    font-size: 14px;
+    line-height: 1.1em;
+    text-align: center;
+    margin: 10px 0;
+}
+.market #offer_list.gallery .photo div.gallery_details p {
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    margin: 0;
+}
+.market div.gallery_details .price {
+    color: #0076df;
+    padding-left: 10px;
+}
+.market #offer_list.gallery table {
+    display: block;
+}
+.market #offer_list.gallery tbody {
+    display: block;
+}
+.market #offer_list.gallery .offer {
+    height: auto;
+}
+.market #offer_list.gallery tr {
+    float: left;
+    display: block;
+    width: auto;
+    margin-right: 1.5%;
+    margin-bottom: 15px;
+}
+.market #offer_list.gallery tr:hover {
+    box-shadow: #999 3px 3px 5px;
+}
+.market #offer_list.gallery tr.gap {
+    display: none;
+}
+.market #offer_list.gallery tr.free_ship {
+    display: none;
+}
+.market #offer_list.gallery td.photo {
+    display: block;
+}
+.market #offer_list.gallery .pricebox,
+.market #offer_list.gallery .meta {
+    display:none;
+}
+
+/* Sell game search results
+========================================= */
+#sell-search-results h1 span {
+    color: #333;
+    font-size: .8em;
+    margin-left: 10px;
+}
+#sell-search-results form {
+    font-size: 1em;
+}
+#sell-search-results .next_page {
+    width: 30%;
+    float: right;
+}
+#sell-search-results #games_table {
+    width: 80%;
+    display: block;
+    float: left;
+}
+#sell-search-results #games_table td.console {
+    display: none;
+}
+#sell-search-results #games_table thead {
+    display: none;
+}
+#sell-search-results #games_table tbody tr {
+    border: solid 1px #ccc;
+    float: left;
+    display: block;
+    width: 200px;
+    height: 200px;
+    margin-right: 30px;
+    margin-bottom: 30px;
+}
+#sell-search-results #games_table tbody td {
+    display: block;
+    max-width: 190px;
+    padding: 5px;
+}
+#sell-search-results .market a {
+    display: block;
+}
+#sell-search-results .cover {
+    width: 190px;
+    height: 120px;
+    line-height: 1em;
+    display: table-cell;
+    vertical-align: middle;
+}
+#sell-search-results .cover img {
+    display: block;
+    margin: 0 auto 10px auto;
+    max-width: 190px;
+    max-height: 120px;
+}
+#sell-search-results #games_table div.item_name,
+#sell-search-results #games_table div.console_name {
+    font-size: 1.4em;
+    text-align: center;
+    display: block;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+}
+#sell-search-results .best_price {
+    font-size: 1em;
+    color: #333;
+    text-align: center;
+}
+#sell-search-results .best_price span{
+    font-size: 1.2em;
+    color: #0076df;
+}
+
+/* Search results in a list
+===================================================*/
+#sell-search-results #offer_list .offer {
+    height: 120px;
+}
+#sell-search-results #offer_list .photo div {
+    width: 140px;
+    height: 110px;
+}
+#sell-search-results #offer_list .photo img {
+    max-width: 140px;
+    max-height: 110px;
+}
+#sell-search-results #offer_list .pricebox .price{
+    margin-bottom: 0;
+}
+#sell-search-results #offer_list .pricebox .none_available{
+    font-size: 14px;
+    color: #0076df;
+}
+#sell-search-results #offer_list .pricebox .sell_yours {
+    margin-top: 5px;
+}
+#sell-search-results #offer_list .pricebox .sell_yours a{
+    font-size: 12px;
+}
+
+/* Subscriber buying history
+============================================*/
+#subscriber-buying .buying_table {
+    width: 100%;
+    max-width: 900px;
+}
+/* Subscriber selling history
+============================================*/
+#subscriber-selling .main,
+#subscriber-sold .main {
+    background: none;
+}
+#subscriber-selling .main div,
+#subscriber-sold .main div {
+    background-color: #fff;
+    padding-top: 0;
+    padding-bottom: 0;
+}
+#subscriber-selling .main h1,
+#subscriber-sold .main h1 {
+    color: #333;
+    font-size: 24px;
+}
+#subscriber-selling .main #game_search_box,
+#subscriber-sold .main #game_search_box {
+    margin: 5px 0;
+}
+#subscriber-selling .main p,
+#subscriber-selling .main h1,
+#subscriber-sold .main p,
+#subscriber-sold .main h1 {
+    display: none;
+}
+#subscriber-selling .selling_table {
+    float: left;
+    width: 70%;
+    max-width: 900px;
+    margin-bottom: 50px;
+}
+#subscriber-selling .selling_table tr.offer {
+    border: solid 1px #ccc;
+}
+#subscriber-selling .selling_table td,
+#subscriber-buying .buying_table td {
+    padding: 5px 15px;
+}
+#subscriber-selling .selling_table img,
+#subscriber-buying .buying_table img {
+    max-width: 60px;
+    max-height: 60px;
+}
+#subscriber-selling .selling_table th.header,
+#subscriber-buying .buying_table th.header {
+    background-color: #ddd;
+    font-size: 12px;
+    text-align: left;
+    padding: 5px 0 5px 15px;
+}
+#subscriber-selling .selling_table th.header.value,
+#subscriber-buying .buying_table th.header.value {
+    text-align: right;
+    padding-right: 15px;
+}
+#subscriber-selling .selling_table th.header span,
+#subscriber-buying .buying_table th.header span {
+    background-color: #999;
+    color: #fff;
+    padding: 1px 2px;
+}
+#subscriber-selling .selling_table .title,
+#subscriber-buying .buying_table .title {
+    font-size: 1.3em;
+    margin-top: .8em;
+    margin-bottom: .8em;
+}
+#subscriber-selling .selling_table .price,
+#subscriber-buying .buying_table .price {
+    font-size: 20px;
+    color: #0174d5;
+}
+#subscriber-selling .selling_table .lowest {
+    white-space: nowrap;
+    font-size: 14px;
+    color: #333;
+}
+#subscriber-selling .selling_table p,
+#subscriber-buying .buying_table p {
+    margin: 0;
+}
+#subscriber-selling .selling_table .status.shipped {
+    padding: 4px 6px;
+    background-color: #e4efd6;
+}
+#subscriber-selling .selling_table .status.unshipped {
+    padding: 4px 6px;
+    background-color: #F4CAC1;
+}
+#subscriber-selling .selling_table .links,
+#subscriber-buying .buying_table .links {
+    white-space: nowrap;
+}
+#subscriber-selling .selling_table .links ul,
+#subscriber-buying .buying_table .links ul {
+    list-style-position: inside;
+    list-style-type: none;
+    padding: 0;
+}
+#subscriber-selling .selling_table .links li
+#subscriber-buying .buying_table .links li {
+    margin: 5px 0;
+}
+
+/* Marketplace user settings
+=====================================================*/
+p.has-pro {
+    margin: 20px 20px 0 20px;
+    padding: 15px 5px;
+    background-color: #ddd;
+    border: dashed 1px #111111;
+}
+p.has-pro b {
+    font-size: 16px;
+}
+#subscriber-tabs {
+    margin-top: 5px;
+}
+#subscriber-tabs .tab {
+    border: solid 1px #2E89FF;
+    border-bottom: none;
+    height: 1.4em;
+    float: left;
+    font-size: 1em;
+    margin-right: 3px;
+    margin-left: 3px;
+    padding: 3px .8em;
+    border-radius: 5px 5px 0 0;
+    color: #fff;
+}
+#subscriber-tabs .tab:hover {
+    background-color: #ddd;
+}
+#subscriber-tabs .tab a,
+#subscriber-tabs .tab a:visited,
+#subscriber-tabs .tab a:hover {
+    text-decoration: none;
+    color: #333;
+}
+.tab-clear {
+    width: 100%;
+    border-top: 1px solid #2E89FF;
+    clear:both;
+    margin-bottom: 20px;
+}
+#subscriber-tabs .tab.selected {
+    color: #fff;
+    background-color: #2E89FF;
+}
+#subscriber-tabs .tab.available a {
+    color: #333;
+    text-decoration: none;
+}
+#user-settings .user_info td {
+    font-size: 16px;
+    padding: 3px 20px 3px 0;
+}
+#subscriber-home-page .tab.guides,
+#profile-page .tab.settings,
+#subscriber-buying .tab.buying,
+#subscriber-selling .tab.selling,
+#subscriber-sold .tab.sold,
+#subscriber-collection .tab.collection,
+#subscriber-bids .tab.notifications {
+    background-color: #2E89FF;
+}
+#subscriber-home-page .tab.guides a,
+#profile-page .tab.settings a,
+#subscriber-buying .tab.buying a,
+#subscriber-selling .tab.selling a,
+#subscriber-sold .tab.sold a,
+#subscriber-collection .tab.collection a,
+#subscriber-bids .tab.notifications a {
+    color: #fff;
+    cursor: default;
+}
+
+/* Documentation pages
+=====================================================*/
+#documentation h1 {
+    font-size: 24px;
+}
+#documentation h3 {
+    margin-top: 60px;
+}
+#documentation h4 {
+    font-size: 18px;
+    font-style: italic;
+    font-weight: normal;
+    margin-bottom: 10px;
+}
+#documentation code.example {
+    white-space: pre;
+    padding: 0px 10px;
+    border: 1px solid #ccc;
+    display: block;
+    border-radius: 3px;
+    -webkit-border-radius: 3px;
+}
+#documentation p code,
+#documentation dt code,
+#documentation dd code,
+#documentation li code {
+    background-color: white;
+    border: solid 1px #ccc;
+    padding: 0 3px;
+    display: inline-block;
+    border-radius: 3px;
+    -webkit-border-radius: 3px;
+}
+#documentation dt {
+    margin-top: 20px;
+}
+#documentation #games_table {
+    width: 95%;
+}
+#documentation #games_table tbody tr {
+    border-bottom: solid 1px #ccc;
+}
+#documentation #games_table td {
+    padding: 7px 10px;
+}
+#documentation #api_nav {
+    float: left;
+    width: 10%;
+    min-width: 150px;
+    max-width: 180px;
+    margin: 1em 2% 0 0;
+    background-color: #ddd;
+    border: solid 1px #ccc;
+    padding: 10px;
+    position: fixed;
+}
+#documentation #api_nav ul {
+    list-style-position: inside;
+    list-style-type: none;
+    margin: 5px 0 30px 0px;
+    padding-left: 20px;
+}
+#documentation #api_content {
+    float: left;
+    width: 80%;
+    margin-left: 220px;
+}
+#documentation .spacer {
+    border: solid 1px #ccc;
+    margin: 75px 0;
+}
+@media screen and (max-width:1000px) {
+    #documentation #api_content {
+        width: 70%;
+        margin-left: 190px;
+    }
+}
+@media screen and (max-width:600px) {
+    #documentation #api_nav {
+        position: static;
+        float: none;
+    }
+    #documentation #api_content {
+        width: 95%;
+        margin-left: 5px;
+        float: none;
+    }
+}
+
+/* Marketplace server error page
+=====================================================*/
+#server_error {
+    text-align: center;
+    padding: 30px 0;
+}
+
+/* On page FAQ sections
+=====================================================*/
+#faq h3 {
+    margin-top: 50px;
+}
+
+/* Login Pages
+=====================================================*/
+#login-page {
+    margin-bottom: 30px;
+}
+#login-page div.boxes {
+    float: left;
+    margin: 0 20% 30px 0;
+}
+#login-page .one_more_step {
+    margin: 15px 0;
+    background-color: #ddd;
+    border: solid 1px #ccc;
+    padding: 15px;
+}
+
+/* terms of service and privacy policy
+======================================================*/
+#terms-of-service .section {
+    padding: 20px 0 30px 0;
+    border-top: solid 1px #ccc;
+    clear: both;
+    float: left;
+    width: 99%;
+}
+#terms-of-service .section.first{
+    border: none;
+    padding-bottom: 0;
+}
+#terms-of-service .section .legal {
+    float: left;
+    min-width: 55%;
+    width: 55%;
+    padding-right: 5%;
+}
+#terms-of-service .section .legal p{
+    font-size: 14px;
+    line-height: 1.3em;
+}
+#terms-of-service .section .summary {
+    float: left;
+    min-width: 35%;
+    width: 35%;
+}
+#terms-of-service .section .summary p{
+    font-size: 16px;
+    line-height: 1.3em;
+}
+#terms-of-service .section .summary h3 {
+    color: #999;
+    font-size: 14px;
+}
+
+/* General Recommendations
+=====================================================*/
+.recommendations {
+    display: none;
+}
+.recommendations ul {
+    padding: 0;
+}
+.recommendations li.item {
+    list-style: none;
+}
+.recommendations li div {
+    position: relative;
+    width: 200px;
+    height: 150px;
+    display: table-cell;
+    vertical-align: bottom;
+}
+.recommendations li img {
+    display: block;
+    margin: 0 auto;
+    max-width: 200px;
+    max-height: 150px;
+}
+.recommendations li a {
+    text-decoration: none;
+}
+.recommendations li a p {
+    position: absolute;
+    right: 0px;
+    bottom: 0px;
+    background: rgba(0, 0, 0, 0.7);
+    color: #fff;
+    font-size: 16px;
+    font-weight: bold;
+    text-align: right;
+    padding: 5px 10px;
+    margin: 0;
+}
+/* Vertical recommmendations
+======================================*/
+.recommendations.vertical {
+    border: solid 1px #cccccc;
+    padding: 15px 4% 15px 4%;
+}
+.recommendations.vertical p.headline {
+    font-weight: bold;
+}
+.recommendations.vertical li.item {
+    margin-bottom: 40px;
+}
+/* Horizontal recommmendations
+======================================*/
+.recommendations.horizontal ul {
+    margin-bottom: 0;
+}
+.recommendations.horizontal li.item {
+    display: inline-block;
+    margin-right: 5%;
+}
+
+/* Home page styles
+====================================*/
+#home-page h1 {
+    margin:0 0 5px 0;
+    clear: none;
+    line-height : 1em;
+    color:#333333;
+    text-shadow:#ffffff 0px 0px 10px;
+    font-size:40px;
+    padding-top:60px;
+}
+#home-page h1, #home-page h2 {
+    color : black;
+}
+#home-page .compare-prices {
+    margin-left:15%;
+    width:80%;
+}
+#home-page .compare-prices p {
+    margin: 0;
+    font-size:24px;
+    text-shadow:#ffffff 0px 0px 5px;
+}
+#home-page .compare-prices #game_search_box {
+    margin:20px 0 60px 0;
+    font-size:24px;
+    width:60%;
+    border-radius:3px;
+}
+#home-page .search_button {
+    font-size: 24px;
+    border: 1px solid #0076df;
+    margin-left: 5px;
+}
+#home-page .home-box {
+    display: block;
+    padding: 10px 0 10px 10px;
+    width:80%;
+    margin: 60px 0 20px 15%;
+    border:none;
+    background:#ffffff;
+}
+#home-page .home-box h2,
+#home-page #tools-box h2,
+#home-page .collection-box h2,
+#home-page .market-box h2 {
+    margin: 0;
+    padding:0 0 7px 0;
+    font-size: 1.5em;
+    clear: none;
+    white-space: nowrap;
+}
+#home-page .home-box h2.more-browse {
+    font-size: 1.2em;
+    clear: both;
+    padding-top:40px;
+}
+#home-page .home-box ul {
+    float:left;
+    width:220px;
+    margin:0;
+    padding:0;
+}
+#home-page .home-box li {
+    display:block;
+    float:left;
+    width:190px;
+    text-align:left;
+    font-size:14px;
+    padding-bottom:10px;
+}
+#home-page .collection-box .gradient,
+#home-page .market-box .gradient {
+    padding: 100px 0;
+    background-color: rgba(220,220,220,.85);
+}
+#home-page .collection-box div.content,
+#home-page .market-box div.content {
+    margin: 0 0 0 15%;
+}
+#home-page .collection-box ul,
+#home-page .market-box ul {
+    list-style-position: inside;
+}
+#home-page .collection-box li,
+#home-page .market-box li {
+    font-size: 1.2em;
+    line-height: 1.6em;
+}
+#home-page #tools-box{
+    margin: 80px auto 20px 0;
+    text-align:center;
+}
+#home-page #tools-box h2 {
+    text-align: left;
+    margin-left: 15%;
+}
+#home-page #tools-box div{
+    display:block;
+    float:left;
+    width:20%;
+    min-width: 300px;
+    margin-bottom: 60px;
+}
+#home-page #tools-box h4{
+    font-size:16px;
+    font-weight:bold;
+    margin:1em 0 .5em 0;
+}
+#home-page #tools-box p{
+    margin-top: 10px;
+    margin-bottom:10px;
+    font-size: 14px;
+}
+#home-page #tools-box span.icon {
+    display: inline-block;
+    background-image:url(/images/home-sprites.gif);
+}
+@media screen and (max-width:1100px) {
+    #home-page .compare-prices,
+    #home-page .home-box{
+        width:92%;
+        margin-left:5%;
+    }
+}
+@media screen and (max-width:930px) {
+    #home-page .compare-prices {
+        clear: left;
+    }
+}
+@media screen and (max-width:930px) {
+    #home-page #tools-box {
+        width:100%;
+    }
+}
+@media screen and (max-width:830px) {
+    #home-page .compare-prices {
+        float: none;
+    }
+    #home-page .home-box {
+        float: none;
+    }
+    #home-page .compare-prices h1 {
+        font-size: 30px;
+    }
+    #home-page .compare-prices #game_search_box {
+        margin-bottom: 40px;
+    }
+    #home-page #tools-box div{
+        margin-bottom:30px;
+    }
+}
+@media screen and (max-width:768px) {
+    #home-page #tools-box div {
+        width: 49%;
+    }
+    #home-page #tools-box p {
+        font-size: 12px;
+    }
+    #home-page .home-box h2,
+    #home-page #tools-box h2,
+    #home-page .collection-box h2,
+    #home-page .market-box h2 {
+        font-size: 16px;
+        white-space: normal;
+    }
+}
+@media screen and (max-width:600px) {
+    #home-page .compare-prices h1 {
+        font-size: 24px;
+        padding-top: 40px;
+    }
+    #home-page .compare-prices p {
+        font-size: 18px;
+    }
+    #home-page .compare-prices #game_search_box {
+        margin-bottom: 20px;
+    }
+}
+@media screen and (max-width:560px) {
+    #home-page .collection-box div.content,
+    #home-page .market-box div.content,
+    #home-page #tools-box h2 {
+        margin-left: 10px;
+    }
+    #home-page .collection-box .gradient,
+    #home-page .market-box .gradient {
+        padding: 80px 0;
+    }
+    #home-page .collection-box ul,
+    #home-page .market-box ul {
+        padding-left: 0;
+    }
+    .menu #sports-cards {
+        display: none;
+    }
+    .menu #menu-item-sports-cards {
+        display: block;
+    }
+}
+@media screen and (max-width:532px) {
+    #home-page .home-box {
+        width: 100%;
+        padding-left: 5px;
+    }
+    #home-page .compare-prices p {
+        white-space: normal;
+    }
+}
+@media screen and (max-width:500px) {
+    #home-page .compare-prices h1 {
+        font-size: 20px;
+        line-height: 1.4em;
+    }
+    #home-page .compare-prices p {
+        font-size: 16px;
+    }
+    #home-page .compare-prices #game_search_box {
+        margin-bottom: 20px;
+    }
+    #home-page #tools-box div {
+        width: 90%;
+    }
+}
+@media screen and (max-width:340px) {
+    #home-page .compare-prices h1,
+    #home-page .compare-prices #game_search_box,
+    #home-page .search_button {
+        font-size: 18px;
+    }
+    #home-page .compare-prices p {
+        font-size: 14px;
+    }
+    #home-page .compare-prices #game_search_box {
+        width: 75%;
+    }
+}
+
+
+/* Media queries
+=====================================================*/
+@media screen and (max-width:1440px) {
+    #console-page .price-index {
+        margin: 10px 0;
+        width: 100%;
+    }
+    #console-page #chart {
+        height: 200px;
+    }
+    #games_table {
+        width: 100%;  /* use all available screen real estate */
+    }
+    .market .offers_nav,
+    .market #offer_list,
+    #subscriber-selling .selling_table{
+        margin-left: 1.5%;
+        width: 95%;
+        float: none;
+    }
+    .market .filters div,
+    .market .selling_nav div{
+        display: none;
+        margin-right: 2%;
+        float: none;
+    }
+    .market .filters a,
+    .market .filters span.separator    {
+        display: inline;
+    }
+    .market .filters .options {
+        display: inline;
+    }
+    .market .filters p.head {
+        margin-bottom: -10px;
+    }
+}
+@media screen and (max-width:1300px) {
+    .thirteen-hundred-px-hidden {
+        display: none !important;
+    }
+    .thirteen-hundred-px-visible {
+        display: block !important;
+    }
+}
+@media screen and (min-width:1300px) {
+    .thirteen-hundred-px-hidden {
+        display: block !important;
+    }
+    .thirteen-hundred-px-visible {
+        display: none !important;
+    }
+}
+@media screen and (max-width:1200px) {
+    .twelve-hundred-px-hidden {
+        display: none !important;
+    }
+    .market #views {
+        display: none;
+    }
+    #market_offer .item_meta,
+    #market_offer .pricebox,
+    #market_offer .guarantee {
+        width: 35%;
+    }
+    #market_list #product_details {
+        float: left;
+        margin-bottom: 20px;
+        width: 100%;
+    }
+    #market_list .guarantee {
+        float: none;
+        text-align: center;
+        margin: 0 0 30px 0;
+    }
+    #search-results #games_table th.new_price,
+    #search-results #games_table td.new_price,
+    #search-results #games_table td.funko_new_price {
+        border-right: none;
+    }
+    #lot-bot-listing img {
+        width: 600px;
+    }
+    #lot-bot-listing #listing-info .box {
+        width: 25%;
+    }
+    div.search_box #game_search_box ~ #scan_button {
+        display: inline;
+    }
+    div.compare-prices #game_search_box ~ #scan_button {
+        font-size: 10px;
+        padding: 5px 15px;
+        display: block;
+        margin: 0px auto;
+    }
+}
+@media screen and (max-width:1100px) {
+    .eleven-hundred-px-hidden {
+        display: none !important;
+    }
+    .eleven-hundred-px-visible {
+        display: block !important;
+    }
+}
+@media screen and (min-width:1100px) {
+    .eleven-hundred-px-hidden {
+        display: block !important;
+    }
+    .eleven-hundred-px-visible {
+        display: none !important;
+    }
+}
+@media screen and (max-width:1100px) {
+    div.search_box,
+    div.search_box.sportscards {  /* move further down and to the left */
+        left: 10px;
+        top: 80px;
+        width: 95%;
+    }
+    div.search_box.sportscards {
+        top: 88px;
+    }
+    div.search_box #game_search_box,
+    div.search_box.sportscards #game_search_box {
+        width: 70%;
+    }
+    div.compare-prices #game_search_box {
+        width: 70%;
+        margin-bottom: 15px;
+    }
+    span.search_box {  /* hide "Search" preface */
+        display: none;
+    }
+    #search_type {  /* hide Games, Market, ... search selector */
+        display: none;
+    }
+    div.top_bar {
+        padding-top: 0px;
+    }
+
+    #game-page #product_details{
+        float:none;
+        width:90%;
+    }
+    #game-page #product_details div.cover {
+        float: left;
+        display:block;
+        width:155px;
+        height: auto;
+        margin-right: 10%;
+        margin-bottom: 10px;
+    }
+    #game-page #product_details div.cover img {
+        display:block;
+        width:130px;
+    }
+    #game-page #product_details ul.product-links {
+        float: left;
+    }
+    #game-page #product_details ul.product-links li.product-link {
+        float: none;
+        display: block;
+        text-align: left;
+        margin: revert;
+    }
+    #chart {
+        width: 50%;
+    }
+}
+@media screen and (max-width:1050px) {
+    .small-desktop-hidden {
+        display: none !important;
+    }
+    #grid-view span.small-desktop-hidden {
+        display: inline !important;
+    }
+    .small-desktop-visible {
+        display: inline-block !important;
+    }
+    .small-desktop-visible-block {
+        display: block !important;
+    }
+    .small-desktop-visible-cell {
+        display: table-cell !important;
+    }
+    .menu #menu-top-xbox {
+        display: none;
+    }
+    .blue.orange.button {
+        background: linear-gradient(-45deg, rgba(254,105,21,1) 0%, rgba(254,105,21,1) 50%, rgba(1,116,213,1) 51%, rgba(1,116,213,1) 100%);
+    }
+    #games_table td.add_to {
+        width: 10px;
+    }
+    #games_table ul.add_to.collection {
+        padding-right: 0;
+    }
+    #games_table ul.add_to.wishlist {
+        display: none;
+    }
+    #games_table ul.add_to.collection li ul.list {
+        border: solid 1px #025dab;
+    }
+    #games_table ul.add_to.collection li ul.list li.list-item {
+        width: 120px;
+        text-align: left;
+    }
+    #games_table ul.add_to.collection li ul.list li.list-item.in-wishlist {
+        background-color: #fe6915;
+    }
+    #games_table ul.add_to li.add_to {
+        width: auto;
+    }
+    #games_table ul.add_to li.add_to .button {
+        width: 10px;
+    }
+    #games_table ul.add_to li ul.list {
+        position: absolute;
+        right: 10px;
+    }
+    #games_table .small.button,
+    #games_table .small.button:visited {
+        padding: 3px 5px 3px 4px;
+    }
+    #games_table th.add_to,
+    #games_table td.add_to {
+        display: table-cell; /* display '+collection' */
+    }
+}
+@media screen and (min-width:1050px) {
+    .small-desktop-visible,
+    .small-desktop-visible-block,
+    .small-desktop-visible-cell {
+        display: none !important;
+    }
+}
+@media screen and (min-width:1040px) {
+    .menu #menu-item-racing {
+        display: none;
+    }
+}
+@media screen and (max-width:1040px) {
+    .menu #menu-top-racing {
+        display: none;
+    }
+}
+@media screen and (max-width:950px) {
+    .nine-fifty-px-hidden {
+        display: none !important;
+    }
+    .nine-fifty-px-visible {
+        display: block !important;
+    }
+}
+@media screen and (min-width:950px) {
+    .nine-fifty-px-hidden {
+        display: block !important;
+    }
+    .nine-fifty-px-visible {
+        display: none !important;
+    }
+}
+@media screen and (max-width:930px) {
+    #game-page #price_data thead th {
+        font-size: 14px;
+    }
+    #game-page #price_data tbody .price {
+        font-size: 16px;
+    }
+    .menu li.brand a {
+        padding-left: 15px;
+        padding-right: 15px;
+    }
+    .market #offer_list .meta p span {
+        display: none;
+    }
+    #subscriber-selling .selling_table td,
+    #subscriber-selling .selling_table th.header {
+        padding: 5px 5px;
+    }
+    .share_it textarea {
+        width: 95%;
+        height: 26px;
+    }
+}
+@media screen and (max-width:830px) {
+    #game-page #extra-images .extra,
+    #game-page #extra-images .add {
+        width: 180px;
+        height: 200px;
+    }
+    #game-page #extra-images .extra div {
+        width: 180px;
+        height: 180px;
+    }
+    #game-page #extra-images .extra div img {
+        max-width: 180px;
+        max-height: 180px;
+    }
+    #chart { /* hide chart on small screens as default.  other css if they click show */
+        display: none;
+        width: 90%;
+        clear: both;
+        margin: 0px auto;
+        float: none;
+    }
+    div.login {
+        top: 0;
+    }
+    .market .offers_nav {
+        padding: 0;
+        margin-bottom: 15px;
+    }
+    #sell-search-results #games_table {
+        width: 100%;
+    }
+    .market .filters p.head {
+        margin-bottom: 2px;
+    }
+    #market_profile .filters div {
+        width: 28%;
+    }
+    .market .filters #includes,
+    .market .filters #console{
+        border-bottom: none;
+    }
+    #market_offer .item_photos {
+        width: 95%;
+        float: none;
+        display: block;
+    }
+    #market_offer .item_meta,
+    #market_offer .pricebox,
+    #market_offer .guarantee {
+        float: none;
+        width: 95%;
+        clear: both;
+    }
+    #market_offer .item_meta h1 {
+        font-size: 18px;
+    }
+    .market #offer_list .offer {
+        height: 180px;
+    }
+    .market #offer_list .photo div {
+        width: 190px;
+        height: 160px;
+    }
+    .market #offer_list .photo img {
+        max-width: 180px;
+        max-height: 150px;
+    }
+    .market .main div,
+    .market .how_works,
+    .market .why,
+    .market .faq,
+    .market .selling_bar,
+    #market_home .browse,
+    #market_home .recommendations {
+        padding-left: 3%;
+    }
+    #make_listing .take_photo_info {
+        display: inline;
+    }
+    #market-guarantee .guarantee img{
+        width: 600px;
+    }
+    #market_profile #profile .info .title {
+        font-size: 12px;
+    }
+    #market_profile #profile .info .detail {
+        font-size: 16px;
+    }
+}
+@media screen and (max-width:800px) {
+    /* on very small screens shrink menu width to display all sub-menu data in smaller area */
+    .menu li.brand a {
+        padding-left: 10px;
+        padding-right: 10px;
+        font-size: 11px;
+    }
+    .menu li.brand ul.menu-dropdown.single,
+    .menu li.brand ul.menu-dropdown ul {
+        width: 140px;
+    }
+    .menu li.brand ul.menu-dropdown ul a,
+    .menu li.brand ul.menu-dropdown li a,
+    .menu li.brand ul.menu-dropdown ul li.title {
+        font-size: 12px;
+        padding-left: 7px;
+        padding-right: 5px;
+    }
+    .menu li.brand ul.menu-dropdown ul li.title {
+        font-size: 9px;
+    }
+    .menu ul li#main a {
+        padding-left: 5px;
+        padding-right: 10px;
+    }
+    .tablet-portrait-hidden {
+        display: none !important;
+    }
+    .tablet-portrait-show {
+        display: block !important;
+    }
+    .mid_col {  /* reduce horizontal margins to use available space */
+        margin: 0 0 0 2px;
+    }
+    #game-page #price_data thead th {
+        font-size: 12px;
+    }
+    #game-page #price_data tbody .price {
+        font-size: 14px;
+    }
+    #game-page .change {
+        font-size: 10px;
+    }
+    #game-page #price_data {
+        float: none;
+        width: 90%;
+    }
+    #game-page #price_data td {
+        width: auto;  /* real estate becomes too scarce to have fixed width */
+    }
+    #game-page #price_comparison {
+        float: none;
+        width: 100%;
+        margin-left: auto;
+        margin-right: auto;
+    }
+    #games_table td.price {
+        border-right: none;
+    }
+    #games_table td {  /* size cells to be roughly a finger's height */
+        padding: 10px 5px;
+    }
+    #subscriber-home-page div.included,
+    #subscriber-home-page div.not_included,
+    #subscriber-home-page div.payment_options table,
+    #subscriber-home-page h3 {
+        margin-left: 10px;
+    }
+    #subscriber-home-page div.features {
+        margin-left: 10px;
+        width:60%;
+    }
+    #subscriber-home-page .payment_options h3 {
+        margin-left: 0;
+    }
+    #console-page #chart {
+        height: 150px;
+    }
+}
+@media screen and (min-width:700px) {
+    .menu #menu-item-ufc {
+        display: none;
+    }
+}
+@media screen and (max-width:700px) {
+    .menu #menu-top-ufc {
+        display: none;
+    }
+    .menu li.brand ul.menu-dropdown li div.child {
+        width: 150px;
+    }
+    #game-page #price_data .label{
+        display:none;
+    }
+    ul.ui-autocomplete li.ui-menu-item {
+        padding-top: 7px;  /* add space for fingers in suggestion list */
+    }
+    #search-results #games_table .new_price {
+        display: none;
+    }
+    #search-results #games_table .funko_used_price {
+        display: none;
+    }
+    #grid-view .item {
+        width: 250px;
+        min-width: 250px;
+    }
+}
+@media screen and (max-width:650px) {
+    #menu-top-other-systems { /* use 'other' and 'market' on very small screens */
+        display: none;
+    }
+    #games_table th#genre, #games_table td.genre { /* no more room for genre */
+        display: none;
+    }
+    #market_home .guarantee img {
+        display: block;
+    }
+    .market #offer_list .meta p,
+    .market #offer_list .meta h2 {
+        font-size: 14px !important;
+    }
+    #make_listing.compact .info_block {
+        width: 90%;
+    }
+    #market-guarantee .guarantee img{
+        width: 400px;
+    }
+    #sell-search-results #games_table div.item_name,
+    #sell-search-results #games_table div.console_name {
+        font-size: .8em;
+    }
+}
+@media screen and (min-width:600px) {
+    .menu #menu-item-wrestling {
+        display: none;
+    }
+}
+@media screen and (max-width:600px) {
+    .menu #funko,
+    .menu #lego {
+        display: none;
+    }
+    .menu #menu-vgpc-other,
+    .menu #menu-item-funko,
+    .menu #menu-item-lego {
+        display: block;
+    }
+    .sixhundred-px-hidden {
+        display: none ! important;
+    }
+    div.search_box {
+        top: 65px;
+    }
+    div.search_box.sportscards {
+        top: 58px;
+    }
+    .menu #menu-top-wrestling {
+        display: none;
+    }
+    .menu #menu-top-ps { /* only show 'sony' on smaller screens */
+        display: none;
+    }
+    .menu #menu-top-sony { /* only show 'sony' on smaller screens */
+        display: inline;
+    }
+    input[type="checkbox"] { /* bigger checkboxes on small screens */
+        -ms-transform: scale(1.5); /* IE */
+        -moz-transform: scale(1.5); /* FF */
+        -webkit-transform: scale(1.5); /* Safari and Chrome */
+        -o-transform: scale(1.5); /* Opera */
+        margin: 8px;
+    }
+    .market #offer_list .condition,
+    .market #offer_list .includes,
+    .market #offer_list .description {
+        font-size: 1.1em;
+    }
+    .market .pricebox .price {
+        font-size: 1.4em;
+    }
+    .market #offer_list .pricebox .listing_type {
+        font-size: 12px;
+    }
+    .market .faq .first,
+    .market .faq .second    {
+        float: none;
+        width: 100%;
+        margin-right: 0;
+    }
+    #market_profile #profile{
+        width: 95%;
+    }
+    #footer-banner {
+        padding: 5px 0;
+    }
+    #footer-banner p {
+        font-size: 14px;
+    }
+}
+@media screen and (max-width:580px) {
+    .five-eighty-px-hidden {
+        display: none !important;
+    }
+    .five-eighty-px-visible {
+        display: block !important;
+    }
+}
+@media screen and (min-width:580px) {
+    .five-eighty-px-hidden {
+        display: block !important;
+    }
+    .five-eighty-px-visible {
+        display: none !important;
+    }
+}
+@media screen and (max-width:560px) {
+    div.search_box,
+    div.search_box.sportscards {  /* move further down and to the left */
+        left: 5px;
+    }
+    div.search_box #game_search_box {
+        width: 60%;
+    }
+    div.compare-prices #game_search_box {
+        width: 60%;
+    }
+    .search_box .search_button {
+        width: 40px;
+        padding: 0;
+    }
+    #subscriber-home-page div.included,
+    #subscriber-home-page div.not_included  {
+        width: 90%;
+    }
+    #subscriber-home-page div.features {
+        width: 90%;
+    }
+    #game-page table.used-prices tr td {
+        font-size: 16px;
+    }
+    .market p.market_values b {
+        display: block;
+    }
+    .market p.market_values span.title {
+        display: block;
+        padding-right: 5px;
+    }
+    p.new-feature {
+        display:none;
+    }
+    #subscriber-selling .selling_table .title,
+    #subscriber-selling .selling_table .price {
+        font-size: 12px;
+        margin-top: 5px;
+    }
+    #market_list .share_it,
+    #subscriber-bids .share_it {
+        padding: 5px;
+    }
+    #subscriber-selling .selling_table th.header {
+        padding: 5px 3px 5px 3px;
+    }
+    #subscriber-selling.collection .selling_table .price {
+        font-size: 14px;
+    }
+    #grid-view .item {
+        width: 220px;
+        min-width: 220px;
+    }
+    #grid-view .item img {
+        max-width: 220px;
+        max-height: 220px;
+    }
+    #grid-view .item .title {
+        font-size: 1em;
+    }
+    #grid-view .item div.price {
+        font-size: 1em;
+    }
+}
+@media screen and (max-width:532px) {
+    .phone-landscape-hidden {
+        display: none ! important;
+    }
+    .phone-landscape-show {
+        display: block ! important;
+    }
+    #game-page h1,
+    #game-page h2,
+    table.condition-comparison thead th.condition {
+        font-size:14px;
+    }
+    #game-page .tab-frame thead th {
+        min-width: 60px;
+    }
+    #game-page .sortable .default {
+        display: none;
+    }
+    .market .main div,
+    .market .how_works,
+    .market .why,
+    .market .faq,
+    .market .selling_bar,
+    #market_home .browse,
+    #market_home .recommendations{
+        padding-left: 10px;
+    }
+    .market .main h1 {
+        font-size: 24px;
+    }
+    .market .main p {
+        font-size: 16px;
+    }
+    .market .main #game_search_box,
+    .market .main input[type="submit"] {
+        font-size: 16px;
+    }
+    .market .why {
+        padding-right: 1%;
+    }
+    .market .why ul {
+        display: block;
+        clear: left;
+    }
+    .market #offer_list .offer {
+        height: 140px;
+    }
+    .market #offer_list .photo div {
+        width: 130px;
+        height: 130px;
+    }
+    .market #offer_list .photo img {
+        max-width: 120px;
+        max-height: 120px;
+    }
+    .market #offer_list a.button {
+        padding: 10px 5px;
+        font-size: 12px;
+    }
+    .unavailable .or_sell {
+        display: block;
+    }
+    #search-results #games_table .cib_price  {
+        display: none;
+    }
+}
+@media screen and (max-width:500px) {
+    .menu li.brand ul.menu-dropdown.single,
+    .menu li.brand ul.menu-dropdown ul {
+        width: 140px;
+    }
+    .menu li#nintendo ul,
+    .menu li#sony ul{
+        left: 0;
+    }
+    /* on very small screens shrink menu font to fit all menu on one line */
+    .menu li.brand ul.menu-dropdown ul a,
+    .menu li.brand ul.menu-dropdown li a {
+        font-size: 12px;
+    }
+    .menu li.brand ul.menu-dropdown ul li.title {
+        padding-top: 5px;
+        font-size: 10px;
+    }
+    div.search_box {
+        width: 85%;
+    }
+    #game-page #product_details div.cover {
+        width: 145px;
+        height: auto;
+    }
+    #game-page #product_details div.cover img {
+        width: 120px;
+        height: auto;
+    }
+    #game-page #extra-images .extra,
+    #game-page #extra-images .add {
+        width: 120px;
+        height: 140px;
+    }
+    #game-page #extra-images .extra div {
+        width: 120px;
+        height: 120px;
+    }
+    #game-page #extra-images .extra div img {
+        max-width: 120px;
+        max-height: 120px;
+    }
+    #game-page .change {
+        display: none;
+    }
+    #market_offer .item_photos .primary img {
+        max-width: 280px;
+    }
+    #market_list #product_details h1 {
+        font-size: 18px;
+    }
+    #market_profile #profile .info {
+        width: 100%;
+        display: block;
+    }
+    #market-guarantee .guarantee img{
+        width: 260px;
+    }
+    .market p.market_values {
+        display: none;
+        display: none;
+    }
+    #market_list #product_details div.cover {
+        height: auto;
+    }
+    .menu #menu-top-hockey {
+        display: none;
+    }
+}
+@media screen and (min-width:500px) {
+    .menu #menu-item-hockey {
+        display: none;
+    }
+}
+@media screen and (max-width:480px) {
+    .menu #menu-top-soccer {
+        display: none;
+    }
+    .menu #coins {
+        display: none;
+    }
+    .menu #menu-item-coins {
+        display: block;
+    }
+    #grid-view .item {
+        width: 280px;
+        min-width: 280px;
+    }
+    #grid-view .item img {
+        max-width: 240px;
+        max-height: 240px;
+    }
+}
+@media screen and (min-width:480px) {
+    .menu #menu-item-soccer {
+        display: none;
+    }
+}
+@media screen and (max-width:420px) {
+    .menu #menu-top-football {
+        display: none;
+    }
+}
+@media screen and (min-width:420px) {
+    .menu #menu-item-football{
+        display: none;
+    }
+}
+@media screen and (max-width:420px) {  /* phones in portrait mode or smaller */
+    .phone-portrait-hidden {
+        display: none ! important;
+    }
+    .menu li.brand ul.menu-dropdown.single,
+    .menu li.brand ul.menu-dropdown ul {
+        width: 130px;
+    }
+    .menu li#nintendo ul,
+    .menu li#sony ul{
+        left: 0;
+    }
+    /* on very small screens shrink menu font to fit all menu on one line */
+    .menu li.brand ul.menu-dropdown ul a,
+    .menu li.brand ul.menu-dropdown li a {
+        font-size: 12px;
+    }
+    .menu li.brand ul.menu-dropdown ul li.title {
+        padding-top: 5px;
+        font-size: 8px;
+    }
+    #game-page #price_data {
+        width: 95%;
+    }
+    #game-page table.used-prices td.price {
+        width:auto;
+    }
+    #game-page table.used-prices tr td {
+        font-size: 14px;
+    }
+    #game-page .see-it img {
+        height:70%;
+        display:inline;
+    }
+    .market #offer_list .offer td {
+        padding-left: 5px;
+        padding-right: 5px;
+    }
+    .market #offer_list .photo div {
+        width: 110px;
+        height: 110px;
+    }
+    .market #offer_list .photo img,
+    #sell-search-results #offer_list .photo img {
+        max-width: 100px;
+        max-height: 100px;
+    }
+    #market_offer .item_photos .primary img {
+        max-width: 240px;
+    }
+    #market_profile .filters div {
+        width: 90%;
+    }
+    #subscriber-selling td.photo,
+    #subscriber-selling th.photo {
+        display: none;
+    }
+    #subscriber-selling p.title {
+        font-size: 14px;
+    }
+    #subscriber-selling #active input.price {
+        font-size: 16px;
+    }
+    #subscriber-selling.collection .selling_table .price,
+    #subscriber-selling .selling_table .links {
+        font-size: 12px;
+    }
+    #subscriber-tabs .tab {
+        padding: 3px .2em;
+    }
+    .market .main #game_search_box {
+        width: 95%;
+    }
+    #sell-search-results .next_page {
+        width: 100%;
+        float: none;
+    }
+    #market_list #product_details div.cover {
+        float: none;
+    }
+    #market_list #product_details div.cover {
+        display: block;
+        width: auto;
+    }
+    /* gallery view for small screens */
+    .market #offer_list .product_table .photo div.gallery_details {
+        display: block;
+        height: auto;
+        font-size: 14px;
+        line-height: 1.1em;
+        text-align: center;
+        margin: 10px 0;
+    }
+    .market #offer_list .product_table .photo div.gallery_details p {
+        white-space: nowrap;
+        text-overflow: ellipsis;
+        overflow: hidden;
+        margin: 0;
+    }
+    .market div.gallery_details .price {
+        color: #0076df;
+        padding-left: 10px;
+    }
+    .market #offer_list table.product_table {
+        display: block;
+    }
+    .market #offer_list .product_table .offer {
+        height: auto;
+    }
+    .market #offer_list .product_table tr {
+        float: left;
+        display: block;
+        width: 100%;
+        margin-right: 1.5%;
+        margin-bottom: 15px;
+    }
+    .market #offer_list .product_table tr:hover {
+        box-shadow: #999 3px 3px 5px;
+    }
+    .market #offer_list .product_table tr.gap {
+        display: none;
+    }
+    .market #offer_list .product_table tr.free_ship {
+        display: none;
+    }
+    .market #offer_list .product_table td.photo {
+        display: block;
+        width: 280px;
+    }
+    .market #offer_list.product_table td.photo img {
+        max-width: 200px;
+        max-height: 200px;
+    }
+    .market #offer_list .product_table td.photo div {
+        width: 280px;
+        height: auto;
+        display: block;
+    }
+    .market #offer_list .product_table .pricebox,
+    .market #offer_list .product_table .meta {
+        display:none;
+    }
+    .menu #comics {
+        display: none;
+    }
+    .menu #menu-item-comics {
+        display: block;
+    }
+}
+@media screen and (max-width:400px) {
+    .menu #edit {
+        display: none;
+    }
+}
+@media screen and (max-width:340px) {
+    .menu li#tools ul,
+    .menu li#edit ul {
+        right: 0;
+    }
+    .tab {
+        margin-right:0px; /* prevents tab wrapping on game pages */
+    }
+    #div.search_box { /* on very small screens shrink search box so submit button is completely visible */
+        width: 70%;
+    }
+    #market_list a.button {
+        font-size: 12px;
+    }
+    .market .main h1 {
+        font-size: 26px;
+    }
+    .market .filters div {
+        width: 100%;
+        float: none;
+    }
+    .menu #menu-top-basketball {
+        display: none;
+    }
+    div.search_box.sportscards {
+        top: 60px;
+    }
+}
+@media screen and (min-width:340px) {
+    .menu #menu-item-basketball{
+        display: none;
+    }
+}
+
+.menu {
+    position: relative;
+}
+#zombie {
+    position: absolute;
+    width: 40px;
+    height: 40px;
+    cursor: crosshair;
+    z-index: 100;
+
+    -webkit-animation-timing-function: linear;
+    -webkit-animation-delay: .6s;
+    -webkit-animation-play-state: running;
+    animation-timing-function: linear;
+    animation-delay: .6s;
+    animation-play-state: running;
+}
+#zombie.right {
+    -webkit-animation-name: zombieWalkRightToLeft;
+    animation-name: zombieWalkRightToLeft;
+    right: -55px;
+}
+#zombie.left {
+    -webkit-animation-name: zombieWalkLeftToRight;
+    animation-name: zombieWalkLeftToRight;
+    left: -55px;
+    -moz-transform: scaleX(-1);
+    -o-transform: scaleX(-1);
+    -webkit-transform: scaleX(-1);
+    transform: scaleX(-1);
+    filter: FlipH;
+    -ms-filter: "FlipH";
+}
+#zombie_point {
+    display: none;
+    font-size:14px;
+    color: #333;
+    position: absolute;
+}
+@-webkit-keyframes zombieWalkRightToLeft
+{
+100% {right: 500px;}
+}
+@keyframes zombieWalkRightToLeft
+{
+100% {right: 500px;}
+}
+@-webkit-keyframes zombieWalkLeftToRight
+{
+100% {left: 500px;}
+}
+@keyframes zombieWalkLeftToRight
+{
+100% {left: 500px;}
+}
+#zombie.alien {
+    bottom: 31px;
+    background: url(/images/zombies/short-alien.gif) no-repeat;
+    -webkit-animation-duration: 12s;
+    animation-duration: 12s;
+}
+#zombie.green {
+    bottom: 36px;
+    background: url(/images/zombies/short-green.gif) no-repeat;
+    -webkit-animation-duration: 6s;
+    animation-duration: 6s;
+}
+#zombie.skinny {
+    bottom: 37px;
+    background: url(/images/zombies/short-skinny.gif) no-repeat;
+    -webkit-animation-duration: 25s;
+    animation-duration: 25s;
+}
+#zombie.giant {
+    bottom: 37px;
+    background: url(/images/zombies/short-giant.gif) no-repeat;
+    -webkit-animation-duration: 10s;
+    animation-duration: 10s;
+}
+#zombie.boss.right {
+    right: -110px;
+    bottom: 53px;
+    -webkit-animation-duration: 6s;
+    animation-duration: 6s;
+    transform: scale(1.8);
+}
+#zombie.boss.left {
+    left: -110px;
+    bottom: 53px;
+    -webkit-animation-duration: 6s;
+    animation-duration: 6s;
+    transform: scale(1.8) scaleX(-1);
+}
+#zombie_kills {
+    display: block;
+    padding-right: 5px;
+    text-align: right;
+}
+#zombie_kills img {
+    width: 20px;
+    height: 20px;
+    padding: 0 2px;
+    vertical-align: middle;
+}

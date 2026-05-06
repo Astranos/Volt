@@ -1,0 +1,679 @@
+/*DYNAMIC OLA UNITS*/
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+*:before,
+*:after {
+    pointer-events: none;
+}
+
+html {
+    scroll-behavior: smooth;
+}
+
+a {
+    cursor: pointer;
+}
+
+sup {
+    top: -0.8em;
+}
+
+div,
+img {
+    position: absolute;
+}
+
+/*------- CALLING FT FONTS --------*/
+@font-face {
+  font-family: 'Montserrat-Light';
+  src: url('https://cdn.flashtalking.com/93411/fonts/2cczrpn38mxjc205rcrjrijcf71xzv9kbhkp8exz.woff') format('woff'), url('https://cdn.flashtalking.com/93411/fonts/2cczrpn38mxjc205rcrjrijcf71xzv9kbhkp8exz.woff') format('woff'); /* Legacy iOS */
+}
+
+@font-face {
+  font-family: 'Montserrat-ExtraLight';
+  src:url('https://cdn.flashtalking.com/93411/fonts/qh7ol4i3pg42u0v5rydo487uats6yyvk7xlxollt.woff') format('woff'), url('https://cdn.flashtalking.com/93411/fonts/qh7ol4i3pg42u0v5rydo487uats6yyvk7xlxollt.woff') format('woff'); /* Legacy iOS */
+}
+
+@font-face {
+  font-family: 'Montserrat-Thin';
+  src: url('https://cdn.flashtalking.com/93411/fonts/fgelvkzt0f3nz70a5jvhvohluh4evpdqurateurv.woff') format('woff'), url('https://cdn.flashtalking.com/93411/fonts/fgelvkzt0f3nz70a5jvhvohluh4evpdqurateurv.woff') format('woff'); /* Legacy iOS */
+}
+
+@font-face {
+  font-family: 'Montserrat-Regular';
+  src: url('https://cdn.flashtalking.com/93411/fonts/tu11k1r8ozm2ttu90j9uoh0wqrx0mvxxq4w8g1zb.woff') format('woff'), url('https://cdn.flashtalking.com/93411/fonts/tu11k1r8ozm2ttu90j9uoh0wqrx0mvxxq4w8g1zb.woff') format('woff'); /* Legacy iOS */
+}
+
+@font-face {
+  font-family: 'Montserrat-Medium';
+  src: url('https://cdn.flashtalking.com/93411/fonts/Montserrat-Medium.woff') format('woff'), url('https://cdn.flashtalking.com/93411/fonts/Montserrat-Medium.woff') format('woff'); /* Legacy iOS */
+}
+
+@font-face {
+  font-family: 'Montserrat-SemiBold';
+  src: url('https://cdn.flashtalking.com/93411/fonts/b27nt0fra3fmh0qy2domq99fog1al6d4g0wj7qk8.woff') format('woff'), url('https://cdn.flashtalking.com/93411/fonts/b27nt0fra3fmh0qy2domq99fog1al6d4g0wj7qk8.woff') format('woff'); /* Legacy iOS */
+}
+
+@font-face {
+  font-family: 'Montserrat-Bold';
+  src: url('https://cdn.flashtalking.com/93411/fonts/8dn1hqxhjozmohaxmiydzcl4ohc6hbxr2pga5ec1.woff') format('woff'), url('https://cdn.flashtalking.com/93411/fonts/8dn1hqxhjozmohaxmiydzcl4ohc6hbxr2pga5ec1.woff') format('woff'); /* Legacy iOS */
+}
+
+@font-face {
+  font-family: 'Montserrat-ExtraBold';
+  src: url('https://cdn.flashtalking.com/93411/fonts/Montserrat-ExtraBold.woff') format('woff'), url('https://cdn.flashtalking.com/93411/fonts/Montserrat-ExtraBold.woff') format('woff'); /* Legacy iOS */
+}
+
+@font-face {
+  font-family: 'Montserrat-Black';
+  src: url('https://cdn.flashtalking.com/93411/fonts/Montserrat-Black.woff') format('woff'), url('https://cdn.flashtalking.com/93411/fonts/Montserrat-Black.woff') format('woff'); /* Legacy iOS */
+}
+
+/* ---------------------------------- FONT FAMILY STYLES VARIABLES  ---------------------------------- */
+:root {
+    --Light_FontFamily: 'Montserrat-Light', sans-serif;
+    --ExtraLight_FontFamily: 'Montserrat-ExtraLight', sans-serif;
+    --Thin_FontFamily: 'Montserrat-Thin', sans-serif;
+    --Regular_FontFamily: 'Montserrat-Regular', sans-serif;
+    --Medium_FontFamily: 'Montserrat-Medium', sans-serif;
+    --SemiBold_FontFamily: 'Montserrat-SemiBold', sans-serif;
+    --Bold_FontFamily: 'Montserrat-Bold', sans-serif;
+    --ExtraBold_FontFamily: 'Montserrat-ExtraBold', sans-serif;
+    --Black_FontFamily: 'Montserrat-Black', sans-serif;
+    --ColorWhite: #FFFFFF;
+    --ColorCoreBlue: #0D62FF;
+    --ColorLightBlue: #3DD8F2;
+    --ColorDarkBlue: #000A73;
+    --ColorGreen: #61F29D ;
+    --ColorYellow: #FFEB40;
+    --ColorPurple: #8781FF;
+    --ColorBlack: #1A1A1A ;
+}
+
+/* ---------------------------------- FONT FAMILY CLASSES ---------------------------------- */
+.ff-Light {
+    font-family: var(--Light_FontFamily);
+}
+
+.ff-ExtraLight {
+    font-family: var(--ExtraLight_FontFamily);
+}
+
+.ff-Thin {
+    font-family: var(--Thin_FontFamily);
+}
+
+.ff-Regular {
+    font-family: var(--Regular_FontFamily);
+}
+
+.ff-Medium {
+    font-family: var(--Medium_FontFamily);
+}
+
+.ff-SemiBold {
+    font-family: var(--SemiBold_FontFamily);
+}
+
+.ff-Bold {
+    font-family: var(--Bold_FontFamily);
+}
+
+.ff-ExtraBold {
+    font-family: var(--ExtraBold_FontFamily);
+}
+
+.ff-Black {
+    font-family: var(--Black_FontFamily);
+}
+
+/* ---------------------------------- FONT COLOR CLASSES ---------------------------------- */
+.fc-White {
+    color: var(--ColorWhite);
+}
+
+.fc-CoreBlue {
+   color: var(--ColorCoreBlue);
+}
+
+.fc-LightBlue {
+   color: var(--ColorLightBlue);
+}
+
+.fc-DarkBlue {
+   color: var(--ColorDarkBlue);
+}
+
+.fc-Green {
+    color: var(--ColorGreen);
+}
+
+.fc-Yellow {
+    color: var(--ColorYellow);
+}
+
+.fc-Purple {
+    color: var(--ColorPurple);
+}
+
+.fc-Black {
+    color: var(--ColorBlack);
+}
+
+/* ---------------------------------- FONT SIZE HEADLINES  CLASSES ---------------------------------- */
+.fs-Headline {
+    font-size: 16px;
+    letter-spacing: -.3px;
+    line-height: 1.3;
+}
+
+.fs-SubHeadline {
+    font-size: 12px;
+    letter-spacing: .1px;
+    line-height:1;
+}
+
+.fs-HeadlineSmall {
+    font-size: 13px;
+    letter-spacing: -.3px;
+    line-height: 1.3;
+}
+
+.fs-SubHeadlineSmall {
+    font-size: 10px;
+    letter-spacing: .1px;
+    line-height:1;
+}
+
+/* ---------------------------------- FONT SIZE HEADLINES FFP  CLASSES ---------------------------------- */
+.fs-FFPHeader {
+    font-size: 12px;
+    letter-spacing: .1px;
+}
+
+.fs-FFPHeadline {
+    font-size: 15px;
+    letter-spacing: -.3px;
+}
+
+.fs-FFPPrice {
+    font-size: 50px;
+    letter-spacing: .1px;
+}
+
+.fs-FFPDollar {
+    position: relative;
+    top: -18px;
+    vertical-align: baseline;
+    font-size: 30px;
+    line-height: 0;
+    margin-right: 1px;
+}
+
+.fs-FFPCents {
+    position: relative;
+    top: -18px;
+    vertical-align: baseline;
+    font-size: 30px;
+    line-height: 0;
+    margin-right: 1px;
+}
+
+.fs-FFPBoltOn {
+    font-size: 9px;
+    letter-spacing: .1px;
+}
+
+/* ---------------------------------- FONT SIZE HEADLINES FFC  CLASSES ---------------------------------- */
+.fs-FFCHeader {
+    font-size: 12px;
+    letter-spacing: -.3px;
+}
+
+.fs-FFCHeadline {
+    font-size: 18px;
+    letter-spacing: -.1px;
+}
+
+.fs-FFCCardDollar {
+    position: relative;
+    top: -7px;
+    vertical-align: baseline;
+    font-size: 14px;
+    line-height: 0;
+    margin-right: 1px;
+}
+
+.fs-FFCPriceCard{
+    font-size: 23px;
+    letter-spacing: .1px;
+}
+
+.fs-FFCBoltOn{
+    font-size: 9px;
+    letter-spacing: .1px;
+}
+
+/* ---------------------------------- BASIC STYLES ---------------------------------- */
+
+html {
+    -ms-text-size-adjust: 100%;
+    -webkit-text-size-adjust: 100%;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    image-rendering: -webkit-optimize-contrast;
+}
+
+div, img {
+   position : absolute;
+}
+
+#container {
+    width: 160px;
+    height: 600px;
+    overflow: hidden;
+    cursor: pointer;
+    background-color: white;
+    color: white;
+    border: 1px solid #808080;
+}
+
+#timelines {
+    color: transparent;
+    opacity: 0;
+}
+
+/* ---------------------------------- BACKGROUND ELEMENTS ---------------------------------- */
+#BackgroundContainer01, #BackgroundContainer02 {
+    position: absolute;
+    top: 0px;
+    left: 0px;
+    width: 160px;
+    height: 600px;
+}
+
+#Background01 img{
+    position: absolute;
+    top: 0px;
+    left: 0px;
+    width: 160px;
+    height: 600px; 
+    background-size: 100% 100%;
+}
+
+#Background02 img{
+    position: absolute;
+    top: 0px;
+    left: 0px;
+    width: 160px;
+    height: 600px; 
+    background-size: 100% 100%;
+}
+
+/* ---------------------------------- LIGHT01/GLOW01 ELEMENTS ---------------------------------- */
+#LightImageContainer01 {
+    position: absolute;
+    top: 198px;
+    left: 0px;
+    width: 160px;
+    height: 261px;
+    overflow: hidden;
+}
+
+#LightGlowImage01 img{
+    position: absolute;
+    top: 0px;
+    left: 0px;
+    width: 160px;
+    height: 261px;
+    background-size: 100% 100%;
+}
+
+#LightPathImage01 img{
+    position: absolute;
+    top: 0px;
+    left: 0px;
+    width: 160px;
+    height: 261px;
+    background-size: 100% 100%;
+}
+
+/* ---------------------------------- LIGHT02/GLOW02 ELEMENTS ---------------------------------- */
+#LightImageContainer02 {
+    position: absolute;
+    top: 300px;
+    left: 0px;
+    width: 300px;
+    height: 300px;
+    overflow: hidden;
+}
+
+#LightGlowImage02{
+    position: absolute;
+    top: 0px;
+    left: 0px;
+    width: 300px;
+    height: 300px; 
+    background-image: url(COMCAST_8374_LightGlow02_160x600.png);
+    background-size: 100% 100%;
+}
+
+#LightPathImage02{
+    position: absolute;
+    top: 0px;
+    left: 0px;
+    width: 300px;
+    height: 300px; 
+    background-image: url(COMCAST_8374_LightPath02_160x600.png);
+    background-size: 100% 100%;
+}
+/* ---------------------------------- F01-F04 IMAGES ELEMENTS ---------------------------------- */
+#F01ImageContainer, #F02ImageContainer, #F03ImageContainer, #F04ImageContainer{
+    position: absolute;
+    top:212px;
+    left: 0px;
+    width: 160px;
+    height: 220px;
+}
+
+#F01Image, #F02Image, #F03Image, #F04Image, img{
+    position: absolute;
+    top: 0px;
+    left: 0px;
+    width: 160px;
+    height: 220px;
+    background-size: 100% 100%;
+}
+
+/* ---------------------------------- FRAME 01-04 & FF ONLY TEXT HEADLINES  ---------------------------------- */
+#F01HeadlineHolder, #F02HeadlineHolder, #F03HeadlineHolder, #F04HeadlineHolder, #FFTHeadlineHolder{
+    position: absolute;
+    top: 91px;
+    left: 11px;
+    width: 136px;
+    height: 120px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: flex-start;
+}
+
+#F01Headline01, #F01Headline02, #F02Headline01, #F02Headline02, #F03Headline01, #F03Headline02, #F04Headline01, #F04Headline02, #FFTHeadline01, #FFTHeadline02, #FFCHeadline01, #FFCHeadline02{
+    position: relative;
+    text-align: left;
+}
+
+/* ---------------------------------- FRAME 01-04 & FF ONLY TEXT LEGAL DISCLAIMER  ---------------------------------- */
+#F01LegalDisclaimerHolder, #F02LegalDisclaimerHolder, #F03LegalDisclaimerHolder, #F04LegalDisclaimerHolder, #FFTLegalDisclaimerHolder, #FFPLegalDisclaimerHolder, #FFCLegalDisclaimerHolder{
+    position: absolute;
+    top: 493px;
+    left: 15px;
+    width: 136px;
+    height: 105px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-start;
+}
+
+#F01LegalDisclaimer, #F02LegalDisclaimer, #F03LegalDisclaimer, #F04LegalDisclaimer, #FFTLegalDisclaimer, #FFPLegalDisclaimer, #FFCLegalDisclaimer {
+    position: relative;
+    text-align: left;
+    letter-spacing: -.1px;
+    line-height: 1.1;
+}
+
+/* ---------------------------------- FINAL FRAME PRICE TEXT ELEMENTS ---------------------------------- */
+#FFPOfferHolder {
+    position: absolute;
+    top: 91px;
+    left: 11px;
+    width: 136px;
+    height: 310px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: flex-start;
+}
+
+#FFPHeaderHolder{
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: flex-start;
+    margin-bottom: 7px;
+}
+
+#FFPHeader{
+    position: relative;
+    text-align: left;
+    letter-spacing: .2px;
+    line-height: 1;
+}
+
+#FFPHeadlineHolder{
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: center;
+    margin-bottom: 9px;
+}
+ 
+#FFPHeadline{
+    position: relative;
+    text-align: left;
+    letter-spacing: -.2px;
+    line-height: 1;
+}
+
+#FFPPriceHolder{
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+#FFPPrice{
+    position: relative;
+    text-align: left;
+    letter-spacing: -.2px;
+    line-height: 1;
+}
+
+#FFPBoltOnHolder{
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: center;
+}
+ 
+#FFPBoltOn{
+    position: relative;
+    text-align: left;
+    letter-spacing: -.3px;
+    line-height: .7;
+}
+
+/* ---------------------------------- FINAL FRAME CARD TEXT ELEMENTS ---------------------------------- */
+#FFCOfferHolder {
+    position: absolute;
+    top: 91px;
+    left: 11px;
+    width: 136px;
+    height: 290px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: flex-start;
+}
+
+#FFCHeaderHolder{
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: flex-start;
+    margin-bottom: 6px;
+}
+
+#FFCHeader{
+    position: relative;
+    text-align: left;
+    letter-spacing: .2px;
+    line-height: 1;
+}
+
+#FFCHeadlineHolder{
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: flex-start;
+    margin-bottom: 9px; 
+}
+
+#FFCHeadline{
+    position: relative;
+    text-align: left;
+    letter-spacing: .2px;
+    line-height: 1.2;
+}
+
+#FFCCardContainer{
+    position: relative;
+    width: 123px;
+    height: 77px;
+    border-radius: 9px;
+    overflow: hidden;
+    margin-bottom: 6px; 
+}
+
+#FFCCard img{
+    position: absolute;
+    top:0px;
+    left:0px;
+    width: 123px;
+    height: 77px;
+    background-size: 100% 100%;
+}
+
+#FFCPriceCardHolder{
+    position: absolute;
+    top: 20px;
+    left:25px;
+    width:74px;
+    height: 25px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: center;
+}
+ 
+#FFCPriceCard{
+    position: relative;
+    text-align: left;
+    letter-spacing: -.2px;
+    line-height: 1;
+}
+
+#FFCBoltOnHolder{
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: center;
+}
+ 
+#FFCBoltOn{
+    position: relative;
+    text-align: left;
+    letter-spacing: -.3px;
+    line-height: .7;
+}
+
+/* ---------------------------------- GENERAL ELEMENTS ---------------------------------- */
+#CBLogoContainer {
+    position: absolute;
+    top: 32px;
+    left: 10px;
+    width: 76px;
+    height: 26px;
+}
+
+#CBLogo img{
+    position: absolute;
+    top:0px;
+    left:0px;
+    width: 76px;
+    height: 26px;
+    background-size: 100% 100%;
+}
+
+#CTAContainer{
+    position: absolute;
+    top: 452px;
+    left: 15px;
+    width: 103px;
+    height: 24px;
+    border-radius: 2px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+#CTAText {
+    position: relative;
+    text-align: center;
+    font-size: 10px;
+    letter-spacing: .1px;
+    line-height: 1.3; 
+}
+
+#PhoneNumberContainer{
+    position: absolute;
+    top: 478px;
+    left: 15px;
+    width: 103px;
+    height: 20px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-start;
+}
+
+#PhoneNumber {
+    position: relative;
+    text-align: left;
+    font-size: 10px;
+    letter-spacing:-.2px;
+    line-height: 1;
+}
+/*------------------ Static Image Variable ------------------- */
+
+#staticImage img {
+    position: absolute;
+     width: 160px;
+    height: 600px;
+    overflow: hidden;
+    cursor: pointer;
+    border: 1px solid #808080;
+}
+
+/*------------------ JS Switching Classes ------------------- */
+.hidden {
+    display: none;
+}
+
+.visible {
+    display: inline-block;
+}
