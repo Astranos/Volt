@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import ControllerTesting from "./ControllerTesting";
 import TopOffersPage from "./TopOffers";
-import CostBreakdown from "./CostBreakdown";
-import PriceChartingTool from "./PriceChartingTool";
 import EbayTaxonomyTool from "./EbayTaxonomyTool";
 import BuyingGuide from "./BuyingGuide";
 import ShopifyHelp from "./ShopifyHelp";
@@ -117,8 +115,6 @@ export default function UnifiedSidepanel() {
   > = {
     "controller-testing": ControllerTesting,
     "top-offers": TopOffersPage,
-    "pc-cost-breakdown": CostBreakdown,
-    "price-charting-tool": PriceChartingTool,
     "ebay-taxonomy-tool": EbayTaxonomyTool,
     "buying-guide": BuyingGuide,
     "shopify-help": ShopifyHelp,

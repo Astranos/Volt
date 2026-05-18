@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from "react";
 import { Input } from "../ui/input";
-import { Check, Pencil } from "lucide-react";
+import { Check } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -12,186 +12,14 @@ import {
 } from "../ui/tooltip";
 import SidepanelLayout from "./SidepanelLayout";
 import type {
-  CustomOffer,
-  CustomRates,
-  RateRule,
   SyncStorageChanges,
   SyncStorageResult,
   TopOffersSettings,
 } from "../../types/settings";
-
-// Helper function to implement FLOOR functionality
-function floorToMultiple(value: number, multiple: number): number {
-  return Math.floor(value / multiple) * multiple;
-}
-
-// Helper function to format numbers with commas
-function formatCurrency(value: number): string {
-  return value.toLocaleString("en-US", {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  });
-}
-
-// Default rate definitions
-const DEFAULT_STANDARD_RULES: RateRule[] = [
-  { threshold: 50, percentage: 0.2 },
-  { threshold: 100, percentage: 0.3 },
-  { threshold: 250, percentage: 0.35 },
-  { threshold: 500, percentage: 0.45 },
-  { threshold: 750, percentage: 0.5 },
-];
-const DEFAULT_STANDARD_DEFAULT_PERCENTAGE = 0.6;
-
-const DEFAULT_PREMIUM_RULES: RateRule[] = [
-  { threshold: 50, percentage: 0.2 },
-  { threshold: 100, percentage: 0.3 },
-  { threshold: 200, percentage: 0.35 },
-  { threshold: 250, percentage: 0.45 },
-  { threshold: 500, percentage: 0.55 },
-  { threshold: 750, percentage: 0.6 },
-];
-const DEFAULT_PREMIUM_DEFAULT_PERCENTAGE = 0.7;
-const DEFAULT_CHECKOUT_PERCENTAGE = 0.8;
-
-// Helper function to check if a standard rate is custom
-function isStandardRateCustom(
-  threshold: number | undefined,
-  percentage: number,
-  customRates?: CustomRates
-): boolean {
-  if (!customRates) return false;
-
-  if (threshold === undefined) {
-    // This is the default percentage
-    return (
-      Math.abs(
-        customRates.standard.defaultPercentage -
-          DEFAULT_STANDARD_DEFAULT_PERCENTAGE
-      ) > 0.001
-    );
-  }
-
-  const defaultRule = DEFAULT_STANDARD_RULES.find(
-    (r) => r.threshold === threshold
-  );
-  if (!defaultRule) return true; // New threshold, must be custom
-
-  return Math.abs(defaultRule.percentage - percentage) > 0.001;
-}
-
-// Helper function to check if a premium rate is custom
-function isPremiumRateCustom(
-  threshold: number | undefined,
-  percentage: number,
-  customRates?: CustomRates
-): boolean {
-  if (!customRates) return false;
-
-  if (threshold === undefined) {
-    // This is the default percentage
-    return (
-      Math.abs(
-        customRates.premium.defaultPercentage -
-          DEFAULT_PREMIUM_DEFAULT_PERCENTAGE
-      ) > 0.001
-    );
-  }
-
-  const defaultRule = DEFAULT_PREMIUM_RULES.find(
-    (r) => r.threshold === threshold
-  );
-  if (!defaultRule) return true; // New threshold, must be custom
-
-  return Math.abs(defaultRule.percentage - percentage) > 0.001;
-}
-
-// Helper function to check if checkout rate is custom
-function isCheckoutRateCustom(customRates?: CustomRates): boolean {
-  if (!customRates?.checkout) return false;
-  return (
-    Math.abs(customRates.checkout.percentage - DEFAULT_CHECKOUT_PERCENTAGE) >
-    0.001
-  );
-}
-
-// Top Offer calculation logic
-function calculateTopOffer(
-  projection: number,
-  customRates?: CustomRates
-): number {
-  if (customRates) {
-    for (const rule of customRates.standard.rules) {
-      if (projection < rule.threshold) {
-        return floorToMultiple(projection * rule.percentage, 5);
-      }
-    }
-    return floorToMultiple(
-      projection * customRates.standard.defaultPercentage,
-      5
-    );
-  }
-
-  // Standard Logic
-  if (projection < 50) {
-    return floorToMultiple(projection * 0.2, 5);
-  } else if (projection < 100) {
-    return floorToMultiple(projection * 0.3, 5);
-  } else if (projection < 250) {
-    return floorToMultiple(projection * 0.35, 5);
-  } else if (projection < 500) {
-    return floorToMultiple(projection * 0.45, 5);
-  } else if (projection < 750) {
-    return floorToMultiple(projection * 0.5, 5);
-  } else {
-    return floorToMultiple(projection * 0.6, 5);
-  }
-}
-
-// Premium Top Offer calculation logic
-function calculateTopOfferPremium(
-  projection: number,
-  customRates?: CustomRates
-): number {
-  if (customRates) {
-    for (const rule of customRates.premium.rules) {
-      if (projection < rule.threshold) {
-        return floorToMultiple(projection * rule.percentage, 5);
-      }
-    }
-    return floorToMultiple(
-      projection * customRates.premium.defaultPercentage,
-      5
-    );
-  }
-
-  // Standard Logic
-  if (projection < 50) {
-    return floorToMultiple(projection * 0.2, 5);
-  } else if (projection < 100) {
-    return floorToMultiple(projection * 0.3, 5);
-  } else if (projection < 200) {
-    return floorToMultiple(projection * 0.35, 5);
-  } else if (projection < 250) {
-    return floorToMultiple(projection * 0.45, 5);
-  } else if (projection < 500) {
-    return floorToMultiple(projection * 0.55, 5);
-  } else if (projection < 750) {
-    return floorToMultiple(projection * 0.6, 5);
-  } else {
-    return floorToMultiple(projection * 0.7, 5);
-  }
-}
-
-// Helper function to calculate custom offer value
-function calculateCustomOffer(projection: number, offer: CustomOffer): number {
-  for (const rule of offer.rules) {
-    if (projection < rule.threshold) {
-      return floorToMultiple(projection * rule.percentage, 5);
-    }
-  }
-  return floorToMultiple(projection * offer.defaultPercentage, 5);
-}
+import {
+  calculateTopOfferResults,
+  formatCurrency,
+} from "../../domain/top-offers";
 
 // Top Offer Calculator Component
 function TopOfferCalculator() {
@@ -258,26 +86,14 @@ function TopOfferCalculator() {
 
     // Auto-calculate when input changes
     const projection = parseFloat(numericValue) || 0;
-    const customRates = topOffersSettings.customRates;
-    const topOffer = calculateTopOffer(projection, customRates);
-    const topOfferPremium = calculateTopOfferPremium(projection, customRates);
-    const checkoutRate = customRates?.checkout?.percentage ?? 0.8;
-    const topOfferCheckout = floorToMultiple(projection * checkoutRate, 5);
+    const calculated = calculateTopOfferResults(projection, topOffersSettings);
 
     setResults({
-      topOffer,
-      topOfferPremium,
-      topOfferCheckout,
+      topOffer: calculated.topOffer,
+      topOfferPremium: calculated.topOfferPremium,
+      topOfferCheckout: calculated.topOfferCheckout,
     });
-
-    // Calculate custom offers
-    const customOffers = topOffersSettings.customOffers || [];
-    const customResults = customOffers.map((offer) => ({
-      id: offer.id,
-      name: offer.name,
-      value: calculateCustomOffer(projection, offer),
-    }));
-    setCustomOfferResults(customResults);
+    setCustomOfferResults(calculated.customOffers);
   };
 
   const openSettings = (e: React.MouseEvent) => {

@@ -43,24 +43,13 @@ export default defineConfig({
         run_at: "document_idle",
       },
       {
-        matches: ["https://www.pricecharting.com/game/*"],
-        js: ["pricecharting-game.js"],
-        run_at: "document_idle",
-      },
-      {
-        matches: ["<all_urls>"],
-        js: ["toolbar-mount.js"],
-        run_at: "document_idle",
-        all_frames: true,
-      },
-      {
         matches: ["<all_urls>"],
         js: ["link-previewer.js"],
         run_at: "document_start",
       },
     ],
     name: "Volt",
-    version: "1.0.19",
+    version: "1.0.20",
     description:
       "A versatile Chrome extension with command palette, controller testing, and multi-provider search capabilities.",
     permissions: [
@@ -152,10 +141,6 @@ export default defineConfig({
         description: "Reopen last closed tab",
       },
       "promote-preview": {
-        suggested_key: {
-          default: "Alt+Shift+T",
-          mac: "Alt+Shift+T",
-        },
         description: "Promote preview popup to a full tab",
       },
     },

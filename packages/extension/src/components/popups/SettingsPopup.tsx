@@ -1,74 +1,11 @@
 /* global chrome */
 import { useState, useEffect } from "react";
 import { Check, Menu } from "lucide-react";
-
-interface CMDKSettings {
-  enabledSources: {
-    tabs: boolean;
-    bookmarks: boolean;
-    history: boolean;
-    quickLinks: boolean;
-    tools: boolean;
-    searchProviders: boolean;
-    ebayCategories: boolean;
-  };
-  sourceOrder: string[];
-}
-
-const DEFAULT_SETTINGS: CMDKSettings = {
-  enabledSources: {
-    tabs: true,
-    bookmarks: true,
-    history: true,
-    quickLinks: true,
-    tools: true,
-    searchProviders: true,
-    ebayCategories: true,
-  },
-  sourceOrder: [
-    "tabs",
-    "quickLinks",
-    "ebayCategories",
-    "bookmarks",
-    "tools",
-    "searchProviders",
-    "history",
-  ],
-};
-
-const ALL_SOURCE_KEYS = [...DEFAULT_SETTINGS.sourceOrder];
-
-const mergeSettings = (stored?: Partial<CMDKSettings>): CMDKSettings => {
-  if (!stored) {
-    return DEFAULT_SETTINGS;
-  }
-
-  const mergedEnabledSources = {
-    ...DEFAULT_SETTINGS.enabledSources,
-    ...(stored.enabledSources || {}),
-  };
-
-  const sanitizedOrder = Array.isArray(stored.sourceOrder)
-    ? stored.sourceOrder.filter((key) => ALL_SOURCE_KEYS.includes(key))
-    : [];
-
-  const mergedSourceOrder = [...sanitizedOrder];
-  for (const key of ALL_SOURCE_KEYS) {
-    if (!mergedSourceOrder.includes(key)) {
-      mergedSourceOrder.push(key);
-    }
-  }
-
-  return {
-    ...DEFAULT_SETTINGS,
-    ...stored,
-    enabledSources: mergedEnabledSources,
-    sourceOrder: mergedSourceOrder,
-  };
-};
+import type { CmdkSettings } from "@/src/types/settings";
+import { DEFAULT_SETTINGS, mergeSettings } from "@/src/domain/settings";
 
 export default function SettingsPopup() {
-  const [settings, setSettings] = useState<CMDKSettings>(DEFAULT_SETTINGS);
+  const [settings, setSettings] = useState<CmdkSettings>(DEFAULT_SETTINGS);
   const [isSaved, setIsSaved] = useState(false);
   const [version, setVersion] = useState<string>("");
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
@@ -86,7 +23,7 @@ export default function SettingsPopup() {
     setVersion(manifest.version);
   }, []);
 
-  const handleToggle = (source: keyof CMDKSettings["enabledSources"]) => {
+  const handleToggle = (source: keyof CmdkSettings["enabledSources"]) => {
     const newSettings = {
       ...settings,
       enabledSources: {

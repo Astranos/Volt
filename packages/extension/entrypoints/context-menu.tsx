@@ -6,6 +6,7 @@ import { defineContentScript } from "wxt/utils/define-content-script";
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { initializeSidePanelContext } from "../src/lib/sidepanel-gesture";
+import { buildSearchUrl, SEARCH_URL_TEMPLATES } from "../src/domain/search";
 import {
   Search,
   Barcode,
@@ -107,17 +108,7 @@ export default defineContentScript({
     };
 
     const buildEbaySoldUrl = (q: string) => {
-      try {
-        const u = new URL(
-          "https://www.ebay.com/sch/i.html?_nkw=x&_sacat=0&_from=R40&_dmd=2&rt=nc&LH_Sold=1&LH_Complete=1"
-        );
-        u.searchParams.set("_nkw", q);
-        return u.href;
-      } catch (_) {
-        return `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(
-          q
-        )}&LH_Sold=1&LH_Complete=1`;
-      }
+      return buildSearchUrl(SEARCH_URL_TEMPLATES.ebay, q);
     };
 
     const copyToClipboard = async (text: string) => {
@@ -528,17 +519,10 @@ export default defineContentScript({
         description: "Check prices for collectibles and games",
         icon: TrendingUp,
         requiresSelection: true,
-        getUrl: (s) =>
-          `https://www.pricecharting.com/search-products?type=prices&q=${encodeURIComponent(
-            s
-          )}&go=Go`,
+        getUrl: (s) => buildSearchUrl(SEARCH_URL_TEMPLATES.pricecharting, s),
         onInvoke: ({ selection }) =>
           selection &&
-          openSearchPopup(
-            `https://www.pricecharting.com/search-products?type=prices&q=${encodeURIComponent(
-              selection
-            )}&go=Go`
-          ),
+          openSearchPopup(buildSearchUrl(SEARCH_URL_TEMPLATES.pricecharting, selection)),
       },
       {
         id: "settings",

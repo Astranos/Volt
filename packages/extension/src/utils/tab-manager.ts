@@ -1,3 +1,5 @@
+import { TAB_ACTIONS } from "../background/tab-message-handler";
+
 export interface TabInfo {
   id: number | string;
   title: string;
@@ -13,7 +15,7 @@ export class TabManager {
    */
   static async getAllTabs(): Promise<TabInfo[]> {
     return new Promise((resolve) => {
-      chrome.runtime.sendMessage({ action: "GET_TABS" }, (response) => {
+      chrome.runtime.sendMessage({ action: TAB_ACTIONS.getTabs }, (response) => {
         if (chrome.runtime.lastError) {
           console.error("Error getting tabs:", chrome.runtime.lastError);
           resolve([]);
@@ -29,7 +31,7 @@ export class TabManager {
    */
   static async getClosedTabs(): Promise<TabInfo[]> {
     return new Promise((resolve) => {
-      chrome.runtime.sendMessage({ action: "GET_CLOSED_TABS" }, (response) => {
+      chrome.runtime.sendMessage({ action: TAB_ACTIONS.getClosedTabs }, (response) => {
         if (chrome.runtime.lastError) {
           console.error("Error getting closed tabs:", chrome.runtime.lastError);
           resolve([]);
@@ -45,7 +47,7 @@ export class TabManager {
    */
   static async switchToTab(tabId: number): Promise<void> {
     return new Promise((resolve) => {
-      chrome.runtime.sendMessage({ action: "SWITCH_TAB", tabId }, () => {
+      chrome.runtime.sendMessage({ action: TAB_ACTIONS.switchTab, tabId }, () => {
         if (chrome.runtime.lastError) {
           console.error("Error switching tab:", chrome.runtime.lastError);
         }
@@ -63,7 +65,7 @@ export class TabManager {
   ): Promise<void> {
     return new Promise((resolve) => {
       chrome.runtime.sendMessage(
-        { action: "RESTORE_TAB", sessionId, closeTabId },
+        { action: TAB_ACTIONS.restoreTab, sessionId, closeTabId },
         () => {
           if (chrome.runtime.lastError) {
             console.error("Error restoring tab:", chrome.runtime.lastError);
@@ -79,7 +81,7 @@ export class TabManager {
    */
   static async getPreviousTab(): Promise<number | null> {
     return new Promise((resolve) => {
-      chrome.runtime.sendMessage({ action: "GET_PREVIOUS_TAB" }, (response) => {
+      chrome.runtime.sendMessage({ action: TAB_ACTIONS.getPreviousTab }, (response) => {
         if (chrome.runtime.lastError) {
           console.error(
             "Error getting previous tab:",
@@ -99,7 +101,7 @@ export class TabManager {
   static async openNewTab(url: string): Promise<void> {
     console.log("[TabManager] Opening new tab:", url);
     return new Promise((resolve) => {
-      chrome.runtime.sendMessage({ action: "OPEN_TAB", url }, (response) => {
+      chrome.runtime.sendMessage({ action: TAB_ACTIONS.openTab, url }, (response) => {
         if (chrome.runtime.lastError) {
           console.error(
             "[TabManager] Error opening tab:",
@@ -119,7 +121,7 @@ export class TabManager {
   static async updateCurrentTab(url: string): Promise<void> {
     console.log("[TabManager] Updating current tab:", url);
     return new Promise((resolve) => {
-      chrome.runtime.sendMessage({ action: "UPDATE_CURRENT_TAB", url }, (response) => {
+      chrome.runtime.sendMessage({ action: TAB_ACTIONS.updateCurrentTab, url }, (response) => {
         if (chrome.runtime.lastError) {
           console.error(
             "[TabManager] Error updating tab:",

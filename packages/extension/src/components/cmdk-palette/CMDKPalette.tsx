@@ -38,26 +38,18 @@ import {
   PanelRight,
   LayoutList,
 } from "lucide-react";
-import { SIDEPANEL_TOOLS, getToolLabel } from "@/src/lib/sidepanel-tools";
+import {
+  SIDEPANEL_TOOLS,
+  getToolLabel,
+  type SidepanelToolId,
+} from "@/src/lib/sidepanel-tools";
+import { DEFAULT_SETTINGS, mergeSettings } from "@/src/domain/settings";
+import {
+  buildGoogleSearchUrl,
+  buildSearchUrl,
+  getUrlFromInput,
+} from "@/src/domain/search";
 import "./styles.css";
-
-const DEFAULT_ENABLED_SOURCES = {
-  tabs: true,
-  bookmarks: true,
-  history: true,
-  quickLinks: true,
-  tools: true,
-  searchProviders: true,
-} as const;
-
-const DEFAULT_SOURCE_ORDER = [
-  "tabs",
-  "quickLinks",
-  "bookmarks",
-  "tools",
-  "searchProviders",
-  "history",
-] as const;
 
 interface LastAction {
   type: "search" | "url" | "tool" | "tab";
@@ -104,10 +96,10 @@ export function CMDKPalette({
   const searchRef = useRef(search);
   const providerQueryRef = useRef(providerQuery);
   const [enabledSources, setEnabledSources] = useState({
-    ...DEFAULT_ENABLED_SOURCES,
+    ...DEFAULT_SETTINGS.enabledSources,
   });
   const [sourceOrder, setSourceOrder] = useState<string[]>([
-    ...DEFAULT_SOURCE_ORDER,
+    ...DEFAULT_SETTINGS.sourceOrder,
   ]);
   const trimmedSearch = search.trim();
 
@@ -123,28 +115,9 @@ export function CMDKPalette({
     // Load settings from chrome storage
     chrome.storage.sync.get(["cmdkSettings"], (result: any) => {
       if (result.cmdkSettings) {
-        if (result.cmdkSettings.enabledSources) {
-          setEnabledSources((prev) => ({
-            ...DEFAULT_ENABLED_SOURCES,
-            ...prev,
-            ...result.cmdkSettings.enabledSources,
-          }));
-        }
-        if (Array.isArray(result.cmdkSettings.sourceOrder)) {
-          setSourceOrder(() => {
-            const storedOrder = result.cmdkSettings.sourceOrder.filter(
-              (key: string) =>
-                (DEFAULT_SOURCE_ORDER as readonly string[]).includes(key)
-            );
-            const mergedOrder = [...storedOrder];
-            for (const key of DEFAULT_SOURCE_ORDER) {
-              if (!mergedOrder.includes(key)) {
-                mergedOrder.push(key);
-              }
-            }
-            return mergedOrder;
-          });
-        }
+        const merged = mergeSettings(result.cmdkSettings);
+        setEnabledSources(merged.enabledSources);
+        setSourceOrder(merged.sourceOrder);
       }
     });
 
@@ -440,25 +413,6 @@ export function CMDKPalette({
         } finally {
           onClose();
         }
-      } else if (toolId === "pc-cost-breakdown") {
-        // Send message to open PC cost breakdown in sidebar and await ack before closing
-        try {
-          const response = await new Promise<any>((resolve) => {
-            try {
-              chrome.runtime.sendMessage(
-                { action: "openInSidebar", tool: "pc-cost-breakdown" },
-                (resp: any) => resolve(resp)
-              );
-            } catch (err) {
-              resolve({ success: false, error: String(err) });
-            }
-          });
-          if (!response?.success && chrome.runtime.lastError) {
-            console.error("Error opening sidebar:", chrome.runtime.lastError);
-          }
-        } finally {
-          onClose();
-        }
       }
     }
   };
@@ -469,15 +423,10 @@ export function CMDKPalette({
         provider: activeProvider.name,
         query: providerQuery,
       });
-      const url = activeProvider!.searchUrl.replace(
-        "{query}",
-        encodeURIComponent(providerQuery)
-      );
-
-      let finalUrl = url;
-      if (activeProvider.id === "ebay" && ebayCondition) {
-        finalUrl += `&LH_ItemCondition=${ebayCondition}`;
-      }
+      const finalUrl = buildSearchUrl(activeProvider.searchUrl, providerQuery, {
+        ebayCondition:
+          activeProvider.id === "ebay" ? ebayCondition : undefined,
+      });
 
       console.log("[CMDK] Search URL:", finalUrl);
 
@@ -550,44 +499,20 @@ export function CMDKPalette({
       : filterHistory(history, search);
 
   // Filter tools by search (only show specific tools in command palette)
-  const commandPaletteToolIds: Array<
-    "controller-testing" | "pc-cost-breakdown"
-  > = ["controller-testing", "pc-cost-breakdown"];
+  const commandPaletteToolIds: SidepanelToolId[] = ["controller-testing"];
 
   const filteredTools =
     activeProvider || !enabledSources.tools
       ? []
       : SIDEPANEL_TOOLS.filter(
           (tool) =>
-            !trimmedSearch ||
-            tool.label.toLowerCase().includes(trimmedSearch.toLowerCase()) ||
-            tool.description.toLowerCase().includes(trimmedSearch.toLowerCase())
+            commandPaletteToolIds.includes(tool.id) &&
+            (!trimmedSearch ||
+              tool.label.toLowerCase().includes(trimmedSearch.toLowerCase()) ||
+              tool.description
+                .toLowerCase()
+                .includes(trimmedSearch.toLowerCase()))
         );
-
-  const getUrlFromInput = (input: string): string | null => {
-    const value = input.trim();
-    if (!value) return null;
-
-    try {
-      const hasScheme = /^[a-z][\w+.-]*:/i.test(value);
-      if (hasScheme) {
-        return new URL(value).href;
-      }
-
-      const looksLikeLocalhost = /^localhost(?:[:][0-9]+)?(?:\/.*)?$/i.test(
-        value
-      );
-      const looksLikeDomain = /^[\w.-]+\.[a-z]{2,}(?::[0-9]+)?(?:\/.*)?$/i.test(
-        value
-      );
-
-      if (looksLikeLocalhost || looksLikeDomain) {
-        return new URL(`https://${value}`).href;
-      }
-    } catch (_) {}
-
-    return null;
-  };
 
   const openUrlAndClose = async (url: string) => {
     try {
@@ -602,8 +527,7 @@ export function CMDKPalette({
   };
 
   const openGoogleSearch = async (query: string) => {
-    const url = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
-    await openUrlAndClose(url);
+    await openUrlAndClose(buildGoogleSearchUrl(query));
   };
 
   const openSettings = async () => {

@@ -29,7 +29,30 @@ export interface TopOffersSettings {
   customOffers?: CustomOffer[];
 }
 
+export interface CustomSearchProviderSettings {
+  id: string;
+  name: string;
+  triggers: string[];
+  searchUrl: string;
+  color: string;
+}
+
 export interface CmdkSettings {
+  enabledSources: {
+    tabs: boolean;
+    bookmarks: boolean;
+    history: boolean;
+    quickLinks: boolean;
+    tools: boolean;
+    searchProviders: boolean;
+    ebayCategories: boolean;
+  };
+  sourceOrder: string[];
+  enabledSearchProviders: Record<string, boolean>;
+  customSearchProviders: CustomSearchProviderSettings[];
+  shopifyButtons?: {
+    enabled?: boolean;
+  };
   newTabOverride?: {
     enabled?: boolean;
   };
@@ -41,12 +64,16 @@ export interface CmdkSettings {
   ebaySummary?: {
     enabled?: boolean;
   };
+  upcHighlighter?: {
+    enabled?: boolean;
+  };
   csvLinks?: {
     customUrl?: string;
   };
-  toolbar?: {
+  contextMenu?: {
     enabled?: boolean;
   };
+  bookmarkFolderIds?: string[];
   topOffers?: TopOffersSettings;
 }
 

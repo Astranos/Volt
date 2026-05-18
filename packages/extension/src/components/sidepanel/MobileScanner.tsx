@@ -1,20 +1,24 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import { Smartphone, Loader2, CheckCircle, XCircle, Copy, RefreshCw } from "lucide-react";
 import { Button } from "../ui/button";
-
-// Web app URL - update this after deploying to Vercel
-const WEB_APP_URL = "https://volt-scanner.vercel.app";
+import {
+  decodeBarcodeMessage,
+  SCANNER_ANSWER_POLL_INTERVAL_MS,
+  SCANNER_DATA_CHANNEL,
+  SCANNER_ICE_GATHERING_TIMEOUT_MS,
+  SCANNER_ICE_SERVERS,
+  SCANNER_WEB_APP_URL,
+  type ScannerConnectionStatus,
+} from "../../../../scanner-protocol/src";
 
 interface MobileScannerProps {
   onClose?: () => void;
 }
 
-type ConnectionStatus = "disconnected" | "creating" | "waiting" | "connected" | "error";
-
 export default function MobileScanner({ onClose }: MobileScannerProps) {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
-  const [status, setStatus] = useState<ConnectionStatus>("disconnected");
+  const [status, setStatus] = useState<ScannerConnectionStatus>("disconnected");
   const [lastBarcode, setLastBarcode] = useState<string | null>(null);
   const [scanCount, setScanCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -122,15 +126,12 @@ export default function MobileScanner({ onClose }: MobileScannerProps) {
     try {
       // Create peer connection
       const pc = new RTCPeerConnection({
-        iceServers: [
-          { urls: "stun:stun.l.google.com:19302" },
-          { urls: "stun:stun1.l.google.com:19302" },
-        ],
+        iceServers: SCANNER_ICE_SERVERS,
       });
       peerConnectionRef.current = pc;
 
       // Create data channel (extension is the offerer)
-      const dataChannel = pc.createDataChannel("barcodes", {
+      const dataChannel = pc.createDataChannel(SCANNER_DATA_CHANNEL, {
         ordered: true,
       });
       dataChannelRef.current = dataChannel;
@@ -154,13 +155,11 @@ export default function MobileScanner({ onClose }: MobileScannerProps) {
       };
 
       dataChannel.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          if (data.barcode) {
-            handleBarcode(data.barcode);
-          }
-        } catch (err) {
-          console.error("Failed to parse barcode message:", err);
+        const data = decodeBarcodeMessage(event.data);
+        if (data) {
+          handleBarcode(data.barcode);
+        } else {
+          console.error("Failed to parse barcode message");
         }
       };
 
@@ -190,12 +189,12 @@ export default function MobileScanner({ onClose }: MobileScannerProps) {
           };
           pc.onicegatheringstatechange = checkState;
           // Timeout after 5 seconds
-          setTimeout(resolve, 5000);
+          setTimeout(resolve, SCANNER_ICE_GATHERING_TIMEOUT_MS);
         }
       });
 
       // Upload offer to signaling server
-      const response = await fetch(`${WEB_APP_URL}/api/signal`, {
+      const response = await fetch(`${SCANNER_WEB_APP_URL}/api/signal`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ offer: JSON.stringify(pc.localDescription) }),
@@ -209,7 +208,7 @@ export default function MobileScanner({ onClose }: MobileScannerProps) {
       setSessionId(newSessionId);
 
       // Generate QR code
-      const scanUrl = `${WEB_APP_URL}/scan/${newSessionId}`;
+      const scanUrl = `${SCANNER_WEB_APP_URL}/scan/${newSessionId}`;
       const qrUrl = await generateQrCode(scanUrl);
       setQrDataUrl(qrUrl);
       setStatus("waiting");
@@ -217,7 +216,7 @@ export default function MobileScanner({ onClose }: MobileScannerProps) {
       // Poll for answer
       pollIntervalRef.current = setInterval(async () => {
         try {
-          const answerRes = await fetch(`${WEB_APP_URL}/api/signal/${newSessionId}/answer`);
+          const answerRes = await fetch(`${SCANNER_WEB_APP_URL}/api/signal/${newSessionId}/answer`);
           if (!answerRes.ok) return;
 
           const { answer } = await answerRes.json();
@@ -232,7 +231,7 @@ export default function MobileScanner({ onClose }: MobileScannerProps) {
         } catch (err) {
           // Ignore polling errors
         }
-      }, 1000);
+      }, SCANNER_ANSWER_POLL_INTERVAL_MS);
 
     } catch (err) {
       setStatus("error");
@@ -254,7 +253,7 @@ export default function MobileScanner({ onClose }: MobileScannerProps) {
 
   const copyQrUrl = () => {
     if (sessionId) {
-      navigator.clipboard.writeText(`${WEB_APP_URL}/scan/${sessionId}`);
+      navigator.clipboard.writeText(`${SCANNER_WEB_APP_URL}/scan/${sessionId}`);
     }
   };
 

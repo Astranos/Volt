@@ -1,5 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState, useCallback } from "react";
+import {
+  encodeBarcodeMessage,
+  SCANNER_ICE_SERVERS,
+  SCANNER_SCAN_COOLDOWN_MS,
+} from "../../../../../packages/scanner-protocol/src";
 
 export const Route = createFileRoute("/scan/$sessionId")({
   component: ScannerPage,
@@ -26,7 +31,7 @@ function ScannerPage() {
   // Send barcode over WebRTC data channel
   const sendBarcode = useCallback((barcode: string, format: string) => {
     if (dataChannelRef.current?.readyState === "open") {
-      dataChannelRef.current.send(JSON.stringify({ barcode, format }));
+      dataChannelRef.current.send(encodeBarcodeMessage({ barcode, format }));
       setLastScanned(barcode);
       setScanCount((c) => c + 1);
       // Vibrate on success
@@ -53,10 +58,7 @@ function ScannerPage() {
 
         // Create peer connection
         const pc = new RTCPeerConnection({
-          iceServers: [
-            { urls: "stun:stun.l.google.com:19302" },
-            { urls: "stun:stun1.l.google.com:19302" },
-          ],
+          iceServers: SCANNER_ICE_SERVERS,
         });
         peerConnectionRef.current = pc;
 
@@ -163,7 +165,7 @@ function ScannerPage() {
             // Debounce scans (2 second cooldown for same barcode)
             const now = Date.now();
             if (decodedText === lastScanTimeRef.current.toString()) return;
-            if (now - lastScanTimeRef.current < 500) return; // General cooldown
+            if (now - lastScanTimeRef.current < SCANNER_SCAN_COOLDOWN_MS) return;
 
             lastScanTimeRef.current = now;
             const format = decodedResult.result.format?.formatName || "unknown";

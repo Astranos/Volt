@@ -1,10 +1,28 @@
-# Scout Chrome Extension Releases
+# Volt Chrome Extension Releases
 
-Download the latest version of the Scout Chrome Extension.
+Download the latest version of the Volt Chrome Extension.
 
 ## Latest Release
 
-### v1.0.2 (Current)
+### v1.0.20 (Current)
+
+**Release Date:** May 5, 2026
+**Download:** [voltextension-1.0.20-chrome.zip](./voltextension-1.0.20-chrome.zip)
+
+**What's New:**
+
+This release removes deprecated tools and simplifies the extension surface.
+
+### Changes
+
+- Removed the injected floating toolbar from all pages
+- Removed the PC cost breakdown sidepanel tool
+- Removed the PriceCharting video game lot tool and related page enhancements
+- Bumped the extension version to `1.0.20`
+
+## Previous Release
+
+### v1.0.2
 
 **Release Date:** October 16, 2025
 **Download:** [scout-1.0.2-chrome.zip](./scout-1.0.2-chrome.zip)
@@ -25,7 +43,7 @@ This update includes bug fixes and usability improvements based on user feedback
 - **Enhanced Reliability**: Improved error handling in settings management
 - **Performance**: Streamlined code by removing deprecated features
 
-## Previous Release
+## Older Releases
 
 ### v1.0.0
 

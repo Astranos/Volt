@@ -2,7 +2,7 @@
   "name": "@volt/extension",
   "description": "A versatile Chrome extension with command palette, controller testing, and multi-provider search capabilities.",
   "private": true,
-  "version": "1.0.19",
+  "version": "1.0.20",
   "type": "module",
   "license": "AGPL-3.0-or-later",
   "scripts": {

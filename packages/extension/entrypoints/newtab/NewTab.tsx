@@ -21,6 +21,13 @@ import { triggerSidepanelToolFromContentScript } from "../../src/lib/sidepanel-g
 import { searchProviders } from "../../src/components/cmdk-palette/SearchProviders";
 import { TabManager } from "../../src/utils/tab-manager";
 import type { SyncStorageResult } from "../../src/types/settings";
+import {
+  buildGoogleSearchUrl,
+  buildSearchUrl,
+  buildShopifyInventoryUrl,
+  extractShopifyStoreName,
+  getUrlFromInput,
+} from "../../src/domain/search";
 import "../../src/components/cmdk-palette/styles.css";
 import "../../src/components/newtab/column-styles.css";
 import "../../src/components/newtab/closed-tabs-panel.css";
@@ -133,33 +140,6 @@ export default function NewTab() {
     }
   };
 
-  const getUrlFromInput = (input: string): string | null => {
-    const value = input.trim();
-    if (!value) return null;
-
-    try {
-      const hasScheme = /^[a-z][\w+.-]*:/i.test(value);
-      if (hasScheme) {
-        return new URL(value).href;
-      }
-
-      const looksLikeLocalhost = /^localhost(?:[:][0-9]+)?(?:\/.*)?$/i.test(
-        value
-      );
-      const looksLikeDomain = /^[\w.-]+\.[a-z]{2,}(?::[0-9]+)?(?:\/.*)?$/i.test(
-        value
-      );
-
-      if (looksLikeLocalhost || looksLikeDomain) {
-        return new URL(`https://${value}`).href;
-      }
-    } catch (_e) {
-      // ignore URL parsing errors
-    }
-
-    return null;
-  };
-
   const resolveShopifyStoreFromTabs = async (): Promise<string | null> => {
     return new Promise((resolve) => {
       if (typeof chrome === "undefined" || !chrome.tabs) {
@@ -170,17 +150,9 @@ export default function NewTab() {
       chrome.tabs.query({}, (tabs) => {
         for (const tab of tabs) {
           if (!tab.url) continue;
-          const unifiedMatch = tab.url.match(
-            /admin\.shopify\.com\/store\/([^/?]+)/
-          );
-          if (unifiedMatch && unifiedMatch[1]) {
-            resolve(unifiedMatch[1]);
-            return;
-          }
-
-          const legacyMatch = tab.url.match(/([^/.]+)\.myshopify\.com/);
-          if (legacyMatch && legacyMatch[1]) {
-            resolve(legacyMatch[1]);
+          const storeName = extractShopifyStoreName(tab.url);
+          if (storeName) {
+            resolve(storeName);
             return;
           }
         }
@@ -225,17 +197,7 @@ export default function NewTab() {
               if (tabId !== createdTabId) return;
               if (changeInfo.status !== "complete" || !updatedTab.url) return;
 
-              const unifiedMatch = updatedTab.url.match(
-                /admin\.shopify\.com\/store\/([^/?]+)/
-              );
-              const legacyMatch = updatedTab.url.match(
-                /([^/.]+)\.myshopify\.com/
-              );
-
-              const storeName =
-                (unifiedMatch && unifiedMatch[1]) ||
-                (legacyMatch && legacyMatch[1]) ||
-                null;
+              const storeName = extractShopifyStoreName(updatedTab.url);
 
               if (storeName) {
                 clearTimeout(timeoutId);
@@ -295,8 +257,7 @@ export default function NewTab() {
       // Treat as URL or Google search
       const directUrl = getUrlFromInput(trimmed);
       const finalUrl =
-        directUrl ||
-        `https://www.google.com/search?q=${encodeURIComponent(trimmed)}`;
+        directUrl || buildGoogleSearchUrl(trimmed);
       await TabManager.updateCurrentTab(finalUrl);
       return;
     }
@@ -309,10 +270,7 @@ export default function NewTab() {
       const provider = searchProviders.find((p) => p.id === activeMode);
       if (!provider) return;
 
-      const url = provider.searchUrl.replace(
-        "{query}",
-        encodeURIComponent(trimmed)
-      );
+      const url = buildSearchUrl(provider.searchUrl, trimmed);
       await TabManager.updateCurrentTab(url);
       return;
     }
@@ -326,9 +284,7 @@ export default function NewTab() {
         return;
       }
 
-      const url = `https://admin.shopify.com/store/${storeName}/products?query=${encodeURIComponent(
-        trimmed
-      )}&order=inventory_total%20desc`;
+      const url = buildShopifyInventoryUrl(storeName, trimmed);
       await TabManager.updateCurrentTab(url);
       return;
     }
@@ -360,7 +316,7 @@ export default function NewTab() {
               }}
             />
 
-            {/* Toolbar buttons for sidepanel tools */}
+            {/* Sidepanel tool buttons */}
             <TooltipProvider>
               <div id="tour-tools" className="newtab-toolbar-buttons">
                 {SIDEPANEL_TOOLS.map((tool) => {

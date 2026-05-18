@@ -1,5 +1,6 @@
 // Minimal WebRTC signaling relay
 // Stores offers and answers temporarily for P2P connection establishment
+import { SCANNER_SESSION_TTL_MS } from "../../../packages/scanner-protocol/src";
 
 export const config = {
   runtime: "edge",
@@ -12,11 +13,10 @@ const sessions = new Map<string, {
   createdAt: number;
 }>();
 
-// Clean up old sessions (older than 5 minutes)
 function cleanup() {
-  const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+  const expiresBefore = Date.now() - SCANNER_SESSION_TTL_MS;
   for (const [id, session] of sessions.entries()) {
-    if (session.createdAt < fiveMinutesAgo) {
+    if (session.createdAt < expiresBefore) {
       sessions.delete(id);
     }
   }

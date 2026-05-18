@@ -161,47 +161,103 @@ export default defineContentScript({
     let lastUrl = location.href;
     let isInitialized = false;
 
+    const findTitleControl = () => {
+      const direct = document.querySelector(
+        'input[name="title"], input[id*="title" i], input[aria-label="Title"], input[placeholder="Title"]'
+      ) as HTMLElement | null;
+      if (direct) return direct;
+
+      const shopifyField = document.querySelector(
+        's-internal-text-field[name="title"], s-text-field[name="title"], [name="title"][label="Title"]'
+      ) as HTMLElement | null;
+      if (shopifyField) return shopifyField;
+
+      const titleLabel = Array.from(document.querySelectorAll("label")).find(
+        (label) => label.textContent?.trim().toLowerCase() === "title"
+      );
+      const labelledId = titleLabel?.getAttribute("for");
+      if (labelledId) {
+        const labelledInput = document.getElementById(
+          labelledId
+        ) as HTMLElement | null;
+        if (labelledInput?.tagName === "INPUT") return labelledInput;
+      }
+
+      const labelledWrapper = titleLabel?.closest("div");
+      return (
+        (labelledWrapper?.querySelector("input") as HTMLInputElement | null) ||
+        null
+      );
+    };
+
+    const getControlValue = (control) => {
+      if (!control) return "";
+      const value = control.value || control.getAttribute?.("value") || "";
+      if (value) return String(value).trim();
+
+      const input = control.querySelector?.("input");
+      if (input?.value) return input.value.trim();
+
+      const shadowInput = control.shadowRoot?.querySelector?.("input");
+      if (shadowInput?.value) return shadowInput.value.trim();
+
+      return "";
+    };
+
+    const looksLikeProductCard = (el) => {
+      if (!el || el === document.body) return false;
+      const rect = el.getBoundingClientRect();
+      if (rect.width < 300 || rect.height < 120) return false;
+
+      const classes = (el.className || "").toString();
+      if (
+        classes.includes("Polaris-ShadowBevel") ||
+        classes.includes("Polaris-LegacyCard") ||
+        classes.includes("Polaris-Card")
+      ) {
+        return true;
+      }
+
+      const style = window.getComputedStyle(el);
+      return (
+        style.backgroundColor === "rgb(255, 255, 255)" &&
+        (style.boxShadow !== "none" ||
+          style.borderRadius !== "0px" ||
+          style.borderColor !== "rgba(0, 0, 0, 0)")
+      );
+    };
+
     // Find the main product card
     const findMainCard = () => {
       // Strategy: Look for the title input and go up to the card
-      const titleInput = document.querySelector('input[name="title"]');
-      if (titleInput) {
-        // Newer Shopify layouts wrap the product editor in a single form;
-        // use that as the main card container when available.
-        const form = titleInput.closest("form");
-        if (form) {
-          log("Found main product form for Shopify quick actions");
-          return form;
-        }
+      const titleControl = findTitleControl();
+      if (titleControl) {
+        const section = titleControl.closest(
+          ".Polaris-Layout__Section"
+        ) as HTMLElement | null;
+        if (section) return section;
 
-        let current = titleInput.parentElement;
+        let current = titleControl.parentElement;
         while (current && current !== document.body) {
-          const classes = (current.className || "").toString();
-          // Look for Polaris Card classes
-          if (
-            classes.includes("Polaris-ShadowBevel") ||
-            classes.includes("Polaris-LegacyCard") ||
-            classes.includes("Polaris-Card")
-          ) {
+          if (looksLikeProductCard(current)) {
             return current;
-          }
-          // Fallback for some Shopify versions: looks for the section content wrapper
-          if (
-            current.tagName === "SECTION" ||
-            classes.includes("Polaris-Box")
-          ) {
-            // Check if it looks like the main card (white bg, shadow)
-            const style = window.getComputedStyle(current);
-            if (
-              style.backgroundColor === "rgb(255, 255, 255)" &&
-              style.boxShadow !== "none"
-            ) {
-              return current;
-            }
           }
           current = current.parentElement;
         }
       }
+
+      const cards = Array.from(
+        document.querySelectorAll(
+          'main [class*="Polaris-ShadowBevel"], main [class*="Polaris-LegacyCard"], main [class*="Polaris-Card"], main section'
+        )
+      );
+      const productCard = cards.find((card) => {
+        if (!looksLikeProductCard(card)) return false;
+        const text = card.textContent || "";
+        return text.includes("Title") && text.includes("Description");
+      });
+      if (productCard) return productCard;
+
       return null;
     };
 
@@ -223,10 +279,11 @@ export default defineContentScript({
     // Find Metafields
     const findFields = () => {
       // Find product title
-      const titleInput = document.querySelector(
-        'input[name="title"]'
-      ) as HTMLInputElement;
-      productTitle = titleInput?.value || null;
+      const titleInput = findTitleControl();
+      productTitle =
+        getControlValue(titleInput) ||
+        document.querySelector("h1")?.textContent?.replace(/\s+Active$/, "") ||
+        null;
 
       // Find UPC
       const upcContainer =
@@ -249,20 +306,49 @@ export default defineContentScript({
 
     // Open Popup Helper
     const openSearchPopup = (url) => {
-      if (activePopup && !activePopup.closed) {
-        activePopup.close();
-      }
-
       const width = 1100;
       const height = 800;
-      const left = (window.screen.width - width) / 2;
-      const top = (window.screen.height - height) / 2;
+      const x = window.screen.width / 2;
+      const y = window.screen.height / 2;
 
-      activePopup = window.open(
-        url,
-        "scout_search_popup",
-        `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
-      );
+      try {
+        chrome.runtime.sendMessage(
+          {
+            action: "openPreviewPopup",
+            url,
+            x,
+            y,
+          },
+          () => {
+            const err = chrome.runtime.lastError;
+            if (!err) return;
+
+            if (activePopup && !activePopup.closed) {
+              activePopup.close();
+            }
+
+            const left = x - width / 2;
+            const top = y - height / 2;
+            activePopup = window.open(
+              url,
+              "scout_search_popup",
+              `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+            );
+          }
+        );
+      } catch (_) {
+        if (activePopup && !activePopup.closed) {
+          activePopup.close();
+        }
+
+        const left = x - width / 2;
+        const top = y - height / 2;
+        activePopup = window.open(
+          url,
+          "scout_search_popup",
+          `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+        );
+      }
     };
 
     // Create Overlay
@@ -292,6 +378,7 @@ export default defineContentScript({
       pcTab.appendChild(pcImg);
       pcTab.onclick = (e) => {
         e.stopPropagation();
+        findFields();
         if (upcValue) {
           const url = `https://www.pricecharting.com/search-products?q=${encodeURIComponent(
             upcValue
@@ -310,6 +397,7 @@ export default defineContentScript({
       ebayTab.appendChild(ebayImg);
       ebayTab.onclick = (e) => {
         e.stopPropagation();
+        findFields();
         if (productTitle) {
           const url = `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(
             productTitle
@@ -326,7 +414,7 @@ export default defineContentScript({
 
     // Update Overlay Position and State
     const updateOverlay = () => {
-      if (!mainCard) {
+      if (!mainCard || !document.contains(mainCard)) {
         mainCard = findMainCard();
         if (!mainCard && !hasLoggedMissingCard) {
           hasLoggedMissingCard = true;
@@ -340,9 +428,22 @@ export default defineContentScript({
         return;
       }
 
-      // If we couldn't find the main card, hide the toolbar
+      // If we couldn't find the main card, keep a visible fallback on product
+      // pages so Shopify DOM changes do not make the actions disappear.
       if (!mainCard) {
-        overlay.style.opacity = "0";
+        if (isProductPage()) {
+          const titleControl = findTitleControl();
+          const titleRect = titleControl?.getBoundingClientRect();
+          if (titleRect && titleRect.width > 0 && titleRect.height > 0) {
+            overlay.style.left = `${Math.max(16, titleRect.left - 64)}px`;
+            overlay.style.top = `${Math.max(96, titleRect.top - 28)}px`;
+            overlay.style.opacity = "1";
+          } else {
+            overlay.style.opacity = "0";
+          }
+        } else {
+          overlay.style.opacity = "0";
+        }
         return;
       }
 
@@ -363,8 +464,9 @@ export default defineContentScript({
 
       // Position logic: Left of the card
       const tabWidth = 48; // base width
-      const left = rect.left - tabWidth;
-      const top = rect.top + 60; // Offset from top of card
+      const gap = 8;
+      const left = Math.max(16, rect.left - tabWidth - gap);
+      const top = Math.max(96, rect.top + 24); // Offset from top of card
 
       overlay.style.left = `${left}px`;
       overlay.style.top = `${top}px`;

@@ -22,266 +22,17 @@ import {
   Pencil,
 } from "lucide-react";
 import { getBookmarkFolders, BookmarkFolder } from "@/src/utils/bookmarks";
-
-interface CMDKSettings {
-  enabledSources: {
-    tabs: boolean;
-    bookmarks: boolean;
-    history: boolean;
-    quickLinks: boolean;
-    tools: boolean;
-    searchProviders: boolean;
-    ebayCategories: boolean;
-  };
-  sourceOrder: string[];
-  enabledSearchProviders: {
-    [providerId: string]: boolean;
-  };
-  customSearchProviders: Array<{
-    id: string;
-    name: string;
-    triggers: string[];
-    searchUrl: string;
-    color: string;
-  }>;
-  shopifyButtons?: {
-    enabled?: boolean;
-  };
-  newTabOverride?: {
-    enabled?: boolean;
-  };
-  controllerTesting?: {
-    lightThreshold?: number;
-    mediumThreshold?: number;
-    autoStart?: boolean;
-  };
-  bookmarkFolderIds?: string[];
-  ebaySummary?: {
-    enabled?: boolean;
-  };
-  upcHighlighter?: {
-    enabled?: boolean;
-  };
-  csvLinks?: {
-    customUrl?: string;
-  };
-  contextMenu?: {
-    enabled?: boolean;
-  };
-  toolbar?: {
-    enabled?: boolean;
-  };
-  topOffers?: {
-    customRates?: {
-      standard: {
-        rules: { threshold: number; percentage: number }[];
-        defaultPercentage: number;
-      };
-      premium: {
-        rules: { threshold: number; percentage: number }[];
-        defaultPercentage: number;
-      };
-      checkout?: {
-        percentage: number;
-      };
-    };
-    customOffers?: Array<{
-      id: string;
-      name: string;
-      rules: { threshold: number; percentage: number }[];
-      defaultPercentage: number;
-    }>;
-  };
-}
-
-const DEFAULT_SETTINGS: CMDKSettings = {
-  enabledSources: {
-    tabs: true,
-    bookmarks: true,
-    history: true,
-    quickLinks: true,
-    tools: true,
-    searchProviders: true,
-    ebayCategories: true,
-  },
-  sourceOrder: [
-    "tabs",
-    "quickLinks",
-    "ebayCategories",
-    "bookmarks",
-    "tools",
-    "searchProviders",
-    "history",
-  ],
-  enabledSearchProviders: {
-    google: true,
-    scout: true,
-    amazon: true,
-    bestbuy: true,
-    ebay: true,
-    pricecharting: true,
-    upcitemdb: true,
-    youtube: true,
-    github: true,
-    twitter: true,
-    homedepot: true,
-    lowes: true,
-    menards: true,
-    microcenter: true,
-  },
-  customSearchProviders: [],
-  shopifyButtons: {
-    enabled: true,
-  },
-  newTabOverride: {
-    enabled: true,
-  },
-  controllerTesting: {
-    lightThreshold: 0.1,
-    mediumThreshold: 0.25,
-    autoStart: true,
-  },
-  bookmarkFolderIds: [],
-  ebaySummary: {
-    enabled: true,
-  },
-  upcHighlighter: {
-    enabled: true,
-  },
-  csvLinks: {
-    customUrl: "",
-  },
-  contextMenu: {
-    enabled: true,
-  },
-  toolbar: {
-    enabled: true,
-  },
-  topOffers: {
-    customRates: {
-      standard: {
-        rules: [
-          { threshold: 50, percentage: 0.2 },
-          { threshold: 100, percentage: 0.3 },
-          { threshold: 250, percentage: 0.4 },
-          { threshold: 500, percentage: 0.5 },
-          { threshold: 750, percentage: 0.55 },
-        ],
-        defaultPercentage: 0.65,
-      },
-      premium: {
-        rules: [
-          { threshold: 50, percentage: 0.2 },
-          { threshold: 100, percentage: 0.3 },
-          { threshold: 200, percentage: 0.4 },
-          { threshold: 250, percentage: 0.5 },
-          { threshold: 500, percentage: 0.6 },
-          { threshold: 750, percentage: 0.65 },
-        ],
-        defaultPercentage: 0.75,
-      },
-      checkout: {
-        percentage: 0.8,
-      },
-    },
-    customOffers: [],
-  },
-};
-
-const ALL_SOURCE_KEYS = [...DEFAULT_SETTINGS.sourceOrder];
-
-const mergeSettings = (stored?: Partial<CMDKSettings>): CMDKSettings => {
-  if (!stored) {
-    return DEFAULT_SETTINGS;
-  }
-
-  const mergedEnabledSources = {
-    ...DEFAULT_SETTINGS.enabledSources,
-    ...(stored.enabledSources || {}),
-  };
-
-  const sanitizedOrder = Array.isArray(stored.sourceOrder)
-    ? stored.sourceOrder.filter((key) => ALL_SOURCE_KEYS.includes(key))
-    : [];
-  const mergedSourceOrder = [...sanitizedOrder];
-  for (const key of ALL_SOURCE_KEYS) {
-    if (!mergedSourceOrder.includes(key)) {
-      mergedSourceOrder.push(key);
-    }
-  }
-
-  const mergedEnabledProviders = {
-    ...DEFAULT_SETTINGS.enabledSearchProviders,
-    ...(stored.enabledSearchProviders || {}),
-  };
-
-  const mergedShopifyButtons = {
-    ...(DEFAULT_SETTINGS.shopifyButtons || {}),
-    ...(stored.shopifyButtons || {}),
-  };
-
-  const mergedNewTabOverride = {
-    ...(DEFAULT_SETTINGS.newTabOverride || {}),
-    ...(stored.newTabOverride || {}),
-  };
-
-  const mergedControllerTesting = {
-    ...(DEFAULT_SETTINGS.controllerTesting || {}),
-    ...(stored.controllerTesting || {}),
-  };
-
-  const mergedEbaySummary = {
-    ...(DEFAULT_SETTINGS.ebaySummary || {}),
-    ...(stored.ebaySummary || {}),
-  };
-
-  const mergedUpcHighlighter = {
-    ...(DEFAULT_SETTINGS.upcHighlighter || {}),
-    ...(stored.upcHighlighter || {}),
-  };
-
-  const mergedCsvLinks = {
-    ...(DEFAULT_SETTINGS.csvLinks || {}),
-    ...(stored.csvLinks || {}),
-  };
-
-  const mergedContextMenu = {
-    ...(DEFAULT_SETTINGS.contextMenu || {}),
-    ...(stored.contextMenu || {}),
-  };
-
-  return {
-    ...DEFAULT_SETTINGS,
-    ...stored,
-    enabledSources: mergedEnabledSources,
-    sourceOrder: mergedSourceOrder,
-    enabledSearchProviders: mergedEnabledProviders,
-    customSearchProviders: stored.customSearchProviders
-      ? [...stored.customSearchProviders]
-      : [...DEFAULT_SETTINGS.customSearchProviders],
-    shopifyButtons: mergedShopifyButtons,
-    newTabOverride: mergedNewTabOverride,
-    controllerTesting: mergedControllerTesting,
-    bookmarkFolderIds: stored.bookmarkFolderIds
-      ? [...stored.bookmarkFolderIds]
-      : [...(DEFAULT_SETTINGS.bookmarkFolderIds || [])],
-    ebaySummary: mergedEbaySummary,
-    upcHighlighter: mergedUpcHighlighter,
-    csvLinks: mergedCsvLinks,
-    contextMenu: mergedContextMenu,
-    toolbar: {
-      ...(DEFAULT_SETTINGS.toolbar || {}),
-      ...(stored.toolbar || {}),
-    },
-    topOffers: {
-      ...(DEFAULT_SETTINGS.topOffers || {}),
-      ...(stored.topOffers || {}),
-    },
-  };
-};
+import type { CmdkSettings } from "@/src/types/settings";
+import { DEFAULT_SETTINGS, mergeSettings } from "@/src/domain/settings";
+import {
+  createCustomOffer,
+  createNextRateRule,
+  DEFAULT_CUSTOM_RATES,
+  sortRateRules,
+} from "@/src/domain/top-offers";
 
 export default function SettingsPage() {
-  const [settings, setSettings] = useState<CMDKSettings>(DEFAULT_SETTINGS);
+  const [settings, setSettings] = useState<CmdkSettings>(DEFAULT_SETTINGS);
   const [isSaved, setIsSaved] = useState(false);
   const [version, setVersion] = useState<string>("");
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
@@ -339,7 +90,7 @@ export default function SettingsPage() {
     };
   }, []);
 
-  const handleToggle = (source: keyof CMDKSettings["enabledSources"]) => {
+  const handleToggle = (source: keyof CmdkSettings["enabledSources"]) => {
     const newSettings = {
       ...settings,
       enabledSources: {
@@ -703,41 +454,6 @@ export default function SettingsPage() {
     });
   };
 
-  const handleToggleToolbar = () => {
-    const newToolbar = {
-      ...settings.toolbar,
-      enabled: !settings.toolbar?.enabled,
-    };
-
-    const newSettings = {
-      ...settings,
-      toolbar: newToolbar,
-    };
-    setSettings(newSettings);
-
-    // Auto-save
-    chrome.storage.sync.set({ cmdkSettings: newSettings }, () => {
-      setIsSaved(true);
-      setTimeout(() => setIsSaved(false), 2000);
-
-      // Notify content script of settings change
-      chrome.tabs.query({}, (tabs) => {
-        tabs.forEach((tab) => {
-          if (tab.id) {
-            chrome.tabs
-              .sendMessage(tab.id, {
-                action: "toolbar-settings-changed",
-                enabled: newToolbar.enabled,
-              })
-              .catch(() => {
-                // Ignore errors for tabs that don't have the content script
-              });
-          }
-        });
-      });
-    });
-  };
-
   const handleUpdateRateRule = (
     type: "standard" | "premium",
     index: number,
@@ -810,16 +526,10 @@ export default function SettingsPage() {
       settings.topOffers?.customRates?.[type] ||
       DEFAULT_SETTINGS.topOffers!.customRates![type];
 
-    // Create a new rule with values based on the last rule or defaults
-    const lastRule = currentRates.rules[currentRates.rules.length - 1];
-    const newRule = lastRule
-      ? { threshold: lastRule.threshold + 100, percentage: lastRule.percentage }
-      : { threshold: 100, percentage: 0.2 };
-
-    const newRules = [...currentRates.rules, newRule];
-    
-    // Sort rules by threshold to ensure correct logic
-    newRules.sort((a, b) => a.threshold - b.threshold);
+    const newRules = sortRateRules([
+      ...currentRates.rules,
+      createNextRateRule(currentRates.rules),
+    ]);
 
     const newSettings = {
       ...settings,
@@ -933,20 +643,7 @@ export default function SettingsPage() {
 
   const handleAddCustomOffer = () => {
     const id = `custom-${Date.now()}`;
-    const defaultRules = [
-      { threshold: 50, percentage: 0.2 },
-      { threshold: 100, percentage: 0.3 },
-      { threshold: 250, percentage: 0.35 },
-      { threshold: 500, percentage: 0.45 },
-      { threshold: 750, percentage: 0.5 },
-    ];
-
-    const newCustomOffer = {
-      id,
-      name: "Custom Offer",
-      rules: defaultRules,
-      defaultPercentage: 0.6,
-    };
+    const newCustomOffer = createCustomOffer(id);
 
     const currentOffers = settings.topOffers?.customOffers || [];
     const newSettings = {
@@ -1078,12 +775,10 @@ export default function SettingsPage() {
     const updatedOffers = currentOffers.map((offer) => {
       if (offer.id === offerId) {
         const lastRule = offer.rules[offer.rules.length - 1];
-        const newRule = lastRule
-          ? { threshold: lastRule.threshold + 100, percentage: lastRule.percentage }
-          : { threshold: 100, percentage: 0.2 };
-        const newRules = [...offer.rules, newRule].sort(
-          (a, b) => a.threshold - b.threshold
-        );
+        const newRules = sortRateRules([
+          ...offer.rules,
+          createNextRateRule(lastRule ? offer.rules : []),
+        ]);
         return { ...offer, rules: newRules };
       }
       return offer;
@@ -1345,13 +1040,6 @@ export default function SettingsPage() {
         <aside className="sticky top-16 h-[calc(100vh-4rem)] w-64 border-r border-border/40 bg-background/50 backdrop-blur p-6">
           <nav className="space-y-1">
             <a
-              href="#toolbar"
-              className="flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg hover:bg-muted/50 transition-colors text-foreground"
-            >
-              <MousePointerClick className="w-4 h-4" />
-              Global Toolbar
-            </a>
-            <a
               href="#newtab"
               className="flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg hover:bg-muted/50 transition-colors text-foreground"
             >
@@ -1441,57 +1129,6 @@ export default function SettingsPage() {
 
         {/* Content Area */}
         <main className="flex-1 p-8 space-y-12 max-w-5xl">
-          {/* Global Toolbar Section */}
-          <section id="toolbar" className="scroll-mt-20">
-            <div className="mb-6">
-              <h2 className="text-2xl font-bold mb-2">Global Toolbar</h2>
-              <p className="text-muted-foreground">
-                Enable or disable the floating toolbar on all pages
-              </p>
-            </div>
-
-            <div className="bg-card rounded-xl border border-border shadow-lg overflow-hidden">
-              <div className="divide-y divide-border">
-                {/* Enable Toolbar Toggle */}
-                <div className="p-6 flex items-start gap-4">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      <h3 className="font-semibold text-base">
-                        Enable Floating Toolbar
-                      </h3>
-                      {settings.toolbar?.enabled && (
-                        <span className="text-xs px-2.5 py-1 rounded-full bg-green-100 text-green-700 font-medium">
-                          Active
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-sm text-muted-foreground leading-relaxed">
-                      Shows the floating toolbar on the right side of the screen
-                      on all pages. Provides quick access to tools like
-                      Controller Testing, Top Offers, and more.
-                    </p>
-                  </div>
-                  <button
-                    onClick={handleToggleToolbar}
-                    className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${
-                      settings.toolbar?.enabled ?? true
-                        ? "bg-primary"
-                        : "bg-muted-foreground/30"
-                    }`}
-                  >
-                    <span
-                      className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform ${
-                        settings.toolbar?.enabled ?? true
-                          ? "translate-x-6"
-                          : "translate-x-1"
-                      }`}
-                    />
-                  </button>
-                </div>
-              </div>
-            </div>
-          </section>
-
           {/* New Tab Override Section */}
           <section id="newtab" className="scroll-mt-20">
             <div className="mb-6">
@@ -2440,38 +2077,11 @@ export default function SettingsPage() {
               </div>
               <button
                 onClick={() => {
-                  const defaultRates = {
-                    standard: {
-                      rules: [
-                        { threshold: 50, percentage: 0.2 },
-                        { threshold: 100, percentage: 0.3 },
-                        { threshold: 250, percentage: 0.35 },
-                        { threshold: 500, percentage: 0.45 },
-                        { threshold: 750, percentage: 0.5 },
-                      ],
-                      defaultPercentage: 0.6,
-                    },
-                    premium: {
-                      rules: [
-                        { threshold: 50, percentage: 0.2 },
-                        { threshold: 100, percentage: 0.3 },
-                        { threshold: 200, percentage: 0.35 },
-                        { threshold: 250, percentage: 0.45 },
-                        { threshold: 500, percentage: 0.55 },
-                        { threshold: 750, percentage: 0.6 },
-                      ],
-                      defaultPercentage: 0.7,
-                    },
-                    checkout: {
-                      percentage: 0.8,
-                    },
-                  };
-
                   const newSettings = {
                     ...settings,
                     topOffers: {
                       ...settings.topOffers,
-                      customRates: defaultRates,
+                      customRates: DEFAULT_CUSTOM_RATES,
                     },
                   };
                   setSettings(newSettings);

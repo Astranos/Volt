@@ -6,6 +6,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* global chrome */
 import { defineBackground } from "wxt/utils/define-background";
+import { handleTabMessage } from "../src/background/tab-message-handler";
 
 export default defineBackground({
   main() {
@@ -721,6 +722,14 @@ export default defineBackground({
         return true;
       }
 
+      if (
+        handleTabMessage(message, sender, sendResponse, {
+          getPreviousActiveTabId: () => previousActiveTabId,
+        })
+      ) {
+        return true;
+      }
+
       switch (message.action) {
         case "csReady":
           log("content script ready", message?.url);
@@ -821,60 +830,6 @@ export default defineBackground({
             }
           });
           return true; // async response
-        }
-        case "openToolbarCustomization": {
-          const intentKey = "popupIntent";
-          const intentValue = "toolbar-customization";
-          let notifyQueued = false;
-          const notifyPopup = () => {
-            if (notifyQueued) return;
-            notifyQueued = true;
-            setTimeout(() => {
-              try {
-                chrome.runtime.sendMessage({
-                  action: "toolbarCustomizationIntent",
-                });
-              } catch (e) {
-                log("openToolbarCustomization notify error", e?.message || e);
-              }
-            }, 100);
-          };
-
-          chrome.storage.local.set({ [intentKey]: intentValue });
-          // Try to open the action popup; if that fails (no user gesture or other
-          // restriction), fall back to opening the popup page as a normal window.
-          try {
-            chrome.action.openPopup(() => {
-              const err = chrome.runtime.lastError;
-              if (err) {
-                log("openPopup error", err.message);
-                try {
-                  chrome.windows.create({
-                    url: chrome.runtime.getURL("popup.html"),
-                    type: "popup",
-                    width: 480,
-                    height: 640,
-                    focused: true,
-                  });
-                } catch (_) {}
-              }
-              notifyPopup();
-            });
-          } catch (e) {
-            log("openToolbarCustomization openPopup threw", e?.message || e);
-            try {
-              chrome.windows.create({
-                url: chrome.runtime.getURL("popup.html"),
-                type: "popup",
-                width: 480,
-                height: 640,
-                focused: true,
-              });
-            } catch (_) {}
-            notifyPopup();
-          }
-          sendResponse({ success: true });
-          break;
         }
         case "closeSidebar": {
           const tabId = sender?.tab?.id ?? message?.tabId;
@@ -1011,6 +966,8 @@ export default defineBackground({
           }
 
           PREVIEW_SOURCE_TAB_ID = sender?.tab?.id;
+          PREVIEW_SOURCE_WINDOW_ID = sender?.tab?.windowId ?? null;
+          PREVIEW_OPENED_AT = Date.now();
 
           const width = 1100;
           const height = 800;
@@ -1028,6 +985,7 @@ export default defineBackground({
             },
             (win) => {
               PREVIEW_POPUP_ID = win?.id || null;
+              PREVIEW_OPENED_AT = Date.now();
               log("Preview popup created:", PREVIEW_POPUP_ID);
               sendResponse({ success: true });
             }
@@ -1037,11 +995,22 @@ export default defineBackground({
         case "parentWindowFocused": {
           // Auto-dismiss preview when parent window is focused
           if (PREVIEW_POPUP_ID) {
+            const senderWindowId = sender?.tab?.windowId ?? null;
+            const elapsed = Date.now() - PREVIEW_OPENED_AT;
+            if (
+              elapsed < POPUP_FOCUS_GRACE_MS &&
+              senderWindowId === PREVIEW_SOURCE_WINDOW_ID
+            ) {
+              sendResponse({ success: true, ignored: "opening_focus_grace" });
+              break;
+            }
             log("Auto-dismissing preview popup due to parent focus");
             try {
               chrome.windows.remove(PREVIEW_POPUP_ID, () => {});
             } catch (_) {}
             PREVIEW_POPUP_ID = null;
+            PREVIEW_OPENED_AT = 0;
+            PREVIEW_SOURCE_WINDOW_ID = null;
           }
           sendResponse({ success: true });
           break;
@@ -1282,10 +1251,6 @@ export default defineBackground({
         case "ping":
           log("pong");
           sendResponse({ pong: true, time: Date.now() });
-          break;
-        case "openFloatingToolbar":
-          openFloatingToolbar();
-          sendResponse({ success: true });
           break;
         case "toggleSidepanelTool": {
           const tool = message?.tool || "controller-testing";
@@ -1642,11 +1607,6 @@ export default defineBackground({
       });
     }
 
-    function openFloatingToolbar() {
-      log("Opening Floating Toolbar");
-      openInActionPopup("floating-toolbar");
-    }
-
     function goBackToPOS() {
       log("Going back to POS tab");
 
@@ -1874,16 +1834,12 @@ export default defineBackground({
       switch (tool) {
         case "controller-testing":
           return "/tools/controller-testing";
-        case "price-charting-tool":
-          return "/tools/price-charting";
         case "upc-search":
           return "/tools/upc-search";
         case "scout":
           return "/tools/scout";
         case "settings":
           return "/tools/settings";
-        case "floating-toolbar":
-          return "/tools/floating-toolbar";
         case "help":
           return "/tools/help";
         case "min-reqs":
@@ -1914,8 +1870,11 @@ export default defineBackground({
     let CURRENT_TOOL_POPUP_ID = null;
     let PREVIEW_POPUP_ID = null;
     let PREVIEW_SOURCE_TAB_ID = null;
+    let PREVIEW_OPENED_AT = 0;
+    let PREVIEW_SOURCE_WINDOW_ID = null;
     let AUTOCLOSE_ON_BLUR = true;
     let FOCUS_LISTENER_ATTACHED = false;
+    const POPUP_FOCUS_GRACE_MS = 1200;
 
     function ensureAutoCloseListener() {
       if (FOCUS_LISTENER_ATTACHED) return;

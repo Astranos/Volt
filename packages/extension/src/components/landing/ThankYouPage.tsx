@@ -21,7 +21,6 @@ import {
   Pin,
   ExternalLink,
   Info,
-  Layers,
   Layout,
   Calculator,
   BookOpen,
@@ -126,13 +125,6 @@ export default function ThankYouPage() {
         "Automatically detects and highlights UPC codes on any webpage, allowing for instant one-click copying to your clipboard.",
       icon: Barcode,
       image: "/assets/images/upc-highlighter.png",
-    },
-    {
-      id: 3,
-      title: "Price Charting Lot Tool",
-      description:
-        "Easily add, manage, and create video game lots via PriceCharting.",
-      icon: Layers,
     },
     {
       id: 4,

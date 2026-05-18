@@ -4,20 +4,16 @@ import {
   Layers,
   ShoppingBag,
   LucideIcon,
-  Shapes,
   HelpCircle,
-  LineChart,
   Smartphone,
 } from "lucide-react";
 
 export type SidepanelToolId =
   | "controller-testing"
   | "top-offers"
-  | "pc-cost-breakdown"
   | "ebay-taxonomy-tool"
   | "buying-guide"
   | "shopify-help"
-  | "price-charting-tool"
   | "mobile-scanner";
 
 export interface SidepanelToolMetadata {
@@ -40,18 +36,6 @@ export const SIDEPANEL_TOOLS: SidepanelToolMetadata[] = [
     label: "Top Offer Calculator",
     description: "Open top offer calculator in the sidepanel",
     icon: Calculator,
-  },
-  {
-    id: "pc-cost-breakdown",
-    label: "Breakdown Listing",
-    description: "Open cost breakdown in the sidepanel",
-    icon: Shapes,
-  },
-  {
-    id: "price-charting-tool",
-    label: "PriceCharting Lot",
-    description: "Search and build game lots with PriceCharting",
-    icon: LineChart,
   },
   {
     id: "ebay-taxonomy-tool",
