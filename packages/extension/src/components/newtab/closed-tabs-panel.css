@@ -1,28 +1,38 @@
-/* Closed Tabs Panel */
+/* ============================================================
+   Closed Tabs Panel — used inside .newtab-search-panel
+   Inherits theme tokens from .newtab-root.
+   ============================================================ */
+
 .closed-tabs-panel {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  height: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: hidden;
+  background: transparent;
 }
 
-/* Search Container */
+/* Search bar row — entire row is a hit-target for focusing the input */
 .closed-tabs-search-container {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px 16px;
-  border-bottom: 1px solid #e5e7eb;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--nt-border);
   flex-shrink: 0;
+  cursor: text;
 }
 
-/* Search Input */
+.closed-tabs-search-container button {
+  cursor: pointer;
+}
+
 .closed-tabs-search {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   flex: 1;
+  min-width: 0;
 }
 
 .closed-tabs-search-input {
@@ -31,101 +41,282 @@
   outline: none;
   background: transparent;
   font-size: 16px;
-  color: #111827;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: var(--nt-text);
+  font-family: inherit;
   width: 100%;
+  letter-spacing: -0.005em;
 }
 
 .closed-tabs-search-input::placeholder {
-  color: #9ca3af;
+  color: var(--nt-text-faint);
 }
 
-/* Search Toggle Group */
+/* Search mode toggle group */
 .closed-tabs-search-toggle {
   flex-shrink: 0;
-  border: 1px solid #e5e7eb;
-  border-radius: 6px;
-  padding: 2px;
-  background: #f9fafb;
+  display: flex;
+  border-radius: 999px;
+  padding: 3px;
+  background: rgba(10, 10, 10, 0.04);
+  border: 1px solid var(--nt-border);
 }
 
-.closed-tabs-search-toggle button[data-state="on"] {
-  background: #16a34a;
-  color: white;
-}
-
-.closed-tabs-search-toggle button[data-state="on"]:hover {
-  background: #15803d;
+@media (prefers-color-scheme: dark) {
+  .closed-tabs-search-toggle {
+    background: rgba(255, 255, 255, 0.04);
+  }
 }
 
 .closed-tabs-search-toggle button {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px !important;
+  height: 26px !important;
+  padding: 0 10px !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  color: var(--nt-text-muted) !important;
+  background: transparent !important;
+  border: none !important;
   cursor: pointer;
+  transition:
+    background 140ms ease,
+    color 140ms ease;
+}
+
+.closed-tabs-search-toggle button[data-state="on"] {
+  background: var(--nt-accent) !important;
+  color: white !important;
+  box-shadow: 0 1px 2px rgba(22, 163, 74, 0.3);
+}
+
+.closed-tabs-search-toggle button[data-state="on"]:hover {
+  background: var(--nt-accent-strong) !important;
 }
 
 .closed-tabs-search-toggle button[data-state="off"]:hover {
-  background: #e5e7eb;
-  color: #111827;
+  color: var(--nt-text) !important;
+  background: rgba(10, 10, 10, 0.05) !important;
+}
+
+@media (prefers-color-scheme: dark) {
+  .closed-tabs-search-toggle button[data-state="off"]:hover {
+    background: rgba(255, 255, 255, 0.06) !important;
+  }
 }
 
 /* Command */
 .closed-tabs-command {
   display: flex;
   flex-direction: column;
-  height: 100%;
-}
-
-/* List */
-.closed-tabs-list {
   flex: 1;
-  padding: 8px 0;
+  min-height: 0;
 }
 
-/* Group */
-.closed-tabs-group {
-  padding: 0;
+/* ============================================================
+   Recent-tab tiles (top of the search panel scroll area)
+   ============================================================ */
+
+.closed-tabs-tiles-section {
+  padding: 14px 16px 4px;
 }
 
-.closed-tabs-group [cmdk-group-heading] {
-  padding: 8px 16px 4px;
+.closed-tabs-section-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 11px;
   font-weight: 600;
-  color: #6b7280;
+  color: var(--nt-text-faint);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.08em;
+  margin-bottom: 10px;
+  padding: 0 2px;
 }
 
-/* Item */
-.closed-tabs-item {
+.closed-tabs-section-hint {
+  margin-left: auto;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 500;
+  opacity: 0.72;
+}
+
+.closed-tabs-section-label-inline {
+  padding: 14px 16px 4px;
+  margin: 0;
+}
+
+.recent-tab-tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.recent-tab-tile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid var(--nt-border);
   cursor: pointer;
-  user-select: none;
+  text-align: left;
+  transition:
+    transform 140ms ease,
+    background 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+@media (prefers-color-scheme: dark) {
+  .recent-tab-tile {
+    background: rgba(255, 255, 255, 0.04);
+  }
+}
+
+.recent-tab-tile:hover {
+  background: var(--nt-surface-hover);
+  border-color: var(--nt-border-strong);
+  transform: translateY(-1px);
+  box-shadow: var(--nt-shadow-sm);
+}
+
+.recent-tab-tile-icon {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
   border-radius: 6px;
-  margin: 0 8px;
-  transition: background-color 0.1s ease;
-}
-
-.closed-tabs-item[data-selected="true"] {
-  background: #f3f4f6;
-}
-
-.closed-tabs-item:active {
-  background: #e5e7eb;
-}
-
-/* Empty State */
-.closed-tabs-empty {
+  background: rgba(10, 10, 10, 0.05);
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 200px;
-  color: #9ca3af;
-  font-size: 14px;
+  overflow: hidden;
 }
 
-/* Loading State */
+@media (prefers-color-scheme: dark) {
+  .recent-tab-tile-icon {
+    background: rgba(255, 255, 255, 0.06);
+  }
+}
+
+.recent-tab-tile-icon img {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+}
+
+.recent-tab-tile-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.recent-tab-tile-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--nt-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.recent-tab-tile-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--nt-text-faint);
+  min-width: 0;
+}
+
+.recent-tab-tile-domain {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.recent-tab-tile-dot {
+  opacity: 0.7;
+}
+
+.recent-tab-tile-time {
+  font-feature-settings: "tnum" 1;
+  flex-shrink: 0;
+}
+
+.recent-tab-tile-restore {
+  flex-shrink: 0;
+  color: var(--nt-text-faint);
+  opacity: 0;
+  transform: translateX(-4px);
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease;
+}
+
+.recent-tab-tile:hover .recent-tab-tile-restore {
+  opacity: 1;
+  transform: translateX(0);
+  color: var(--nt-accent);
+}
+
+/* ============================================================
+   List rows
+   ============================================================ */
+
+.closed-tabs-list {
+  flex: 1;
+  padding: 6px 8px 10px;
+}
+
+.closed-tabs-item {
+  cursor: pointer;
+  user-select: none;
+  border-radius: 10px;
+  margin: 0;
+  transition: background-color 0.12s ease;
+  color: var(--nt-text);
+}
+
+.closed-tabs-item p {
+  color: var(--nt-text) !important;
+}
+
+.closed-tabs-item .text-gray-500 {
+  color: var(--nt-text-faint) !important;
+}
+
+.closed-tabs-item[data-selected="true"] {
+  background: var(--nt-accent-soft);
+}
+
+.closed-tabs-item:hover {
+  background: rgba(10, 10, 10, 0.04);
+}
+
+@media (prefers-color-scheme: dark) {
+  .closed-tabs-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+  }
+}
+
+.closed-tabs-item:active {
+  background: var(--nt-accent-soft);
+}
+
+/* Empty / loading */
+.closed-tabs-empty,
 .closed-tabs-loading {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 200px;
-  color: #6b7280;
+  min-height: 120px;
+  color: var(--nt-text-faint);
+  font-size: 13px;
 }

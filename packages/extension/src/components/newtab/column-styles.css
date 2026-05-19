@@ -1,50 +1,66 @@
-/* New Tab Column Layout */
+/* ============================================================
+   Side column (Quick Links / Bookmarks) — glassmorphism panels
+   Inherits theme tokens from .newtab-root.
+   ============================================================ */
+
 .newtab-column {
   display: flex;
   flex-direction: column;
   gap: 12px;
   padding: 16px;
-  background: white;
-  border-radius: 8px;
+  background: var(--nt-surface-strong);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  border-radius: var(--nt-radius);
+  border: 1px solid var(--nt-border);
+  box-shadow: var(--nt-shadow-md);
   min-width: 0;
   overflow: hidden;
-  flex: 0 0 auto;
-  height: calc(100vh - 200px);
-  max-height: calc(100vh - 200px);
+  flex: 1 1 0;
+  min-height: 360px;
+  max-height: min(560px, 70vh);
 }
 
-.newtab-column-left {
-  width: 320px;
-}
-
-.newtab-column-right {
-  width: 320px;
-}
-
-/* Column Header */
+/* Column header */
 .newtab-column-header {
-  margin: 0 0 8px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0;
 }
 
 .newtab-column-header h3 {
   margin: 0;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 600;
-  color: #111827;
+  color: var(--nt-text-faint);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.1em;
 }
 
-/* Column Search */
+/* Column search — entire pill is a hit-target for focusing the input */
 .newtab-column-search {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 10px;
-  border: 1px solid #e5e7eb;
-  border-radius: 6px;
-  background: #f9fafb;
+  padding: 8px 12px;
+  border: 1px solid var(--nt-border);
+  border-radius: 999px;
+  background: rgba(10, 10, 10, 0.03);
   flex-shrink: 0;
+  transition: border-color 140ms ease, background 140ms ease;
+  cursor: text;
+}
+
+@media (prefers-color-scheme: dark) {
+  .newtab-column-search {
+    background: rgba(255, 255, 255, 0.04);
+  }
+}
+
+.newtab-column-search:focus-within {
+  border-color: var(--nt-accent);
+  background: var(--nt-surface-hover);
 }
 
 .newtab-column-search-input {
@@ -53,20 +69,20 @@
   outline: none;
   background: transparent;
   font-size: 13px;
-  color: #111827;
+  color: var(--nt-text);
   min-width: 0;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: inherit;
 }
 
 .newtab-column-search-input::placeholder {
-  color: #9ca3af;
+  color: var(--nt-text-faint);
 }
 
-/* Column List */
+/* Column list */
 .newtab-column-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   flex: 1;
   min-height: 0;
 }
@@ -75,55 +91,62 @@
 .newtab-column-category {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
 }
 
 .newtab-column-category-header {
-  padding: 6px 8px;
-  font-size: 12px;
-  font-weight: 700;
-  color: #111827;
+  padding: 10px 8px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--nt-text-faint);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-top: 4px;
+  letter-spacing: 0.08em;
 }
 
 .newtab-column-category:first-child .newtab-column-category-header {
-  margin-top: 0;
+  padding-top: 4px;
 }
 
 .newtab-column-category-divider {
-  height: 1px;
-  background: #e5e7eb;
-  margin: 4px 8px;
+  display: none;
 }
 
-/* Column Item */
+/* Column item */
 .newtab-column-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
+  gap: 10px;
+  padding: 7px 10px;
   border: none;
   background: transparent;
-  border-radius: 4px;
+  border-radius: 8px;
   cursor: pointer;
   text-align: left;
-  transition: all 0.1s ease;
-  color: #374151;
+  transition:
+    background 120ms ease,
+    color 120ms ease,
+    transform 120ms ease;
+  color: var(--nt-text-muted);
+  width: 100%;
 }
 
 .newtab-column-item:hover {
-  background: #f3f4f6;
-  color: #111827;
+  background: rgba(10, 10, 10, 0.05);
+  color: var(--nt-text);
+}
+
+@media (prefers-color-scheme: dark) {
+  .newtab-column-item:hover {
+    background: rgba(255, 255, 255, 0.06);
+  }
 }
 
 .newtab-column-item:active {
-  background: #e5e7eb;
+  transform: scale(0.99);
 }
 
 .newtab-column-item:focus-visible {
-  outline: 2px solid #3b82f6;
+  outline: 2px solid var(--nt-accent);
   outline-offset: -2px;
 }
 
@@ -136,43 +159,28 @@
   white-space: nowrap;
 }
 
-/* Loading State */
+/* Loading */
 .newtab-column-loading {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   padding: 4px 0;
 }
 
 .newtab-column-item-skeleton {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
+  gap: 10px;
+  padding: 7px 10px;
 }
 
-/* Empty State */
+/* Empty */
 .newtab-column-empty {
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 24px 16px;
   text-align: center;
-  color: #9ca3af;
+  color: var(--nt-text-faint);
   font-size: 13px;
-}
-
-/* Responsive */
-@media (max-width: 1024px) {
-  .newtab-column-left,
-  .newtab-column-right {
-    width: 200px;
-  }
-}
-
-@media (max-width: 768px) {
-  .newtab-column {
-    width: 100% !important;
-    max-width: 250px;
-  }
 }

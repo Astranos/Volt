@@ -60,7 +60,7 @@ export function QuickLinksColumn({ id }: { id?: string }) {
         <h3>Quick Links</h3>
       </div>
 
-      <div className="newtab-column-search">
+      <label className="newtab-column-search">
         <SearchIcon className="w-4 h-4 text-gray-400" />
         <input
           type="text"
@@ -72,7 +72,7 @@ export function QuickLinksColumn({ id }: { id?: string }) {
           }}
           className="newtab-column-search-input"
         />
-      </div>
+      </label>
 
       <ScrollArea className="flex-1">
         <div className="newtab-column-list">

@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ClosedTabsPanel } from "../../src/components/newtab/ClosedTabsPanel";
 import { QuickLinksColumn } from "../../src/components/newtab/QuickLinksColumn";
 import { BookmarksColumn } from "../../src/components/newtab/BookmarksColumn";
+import { HeroBlock } from "../../src/components/newtab/HeroBlock";
 import {
   NewTabHelp,
   type SearchMode,
@@ -33,11 +34,51 @@ import "../../src/components/newtab/column-styles.css";
 import "../../src/components/newtab/closed-tabs-panel.css";
 import "../../src/components/newtab/newtab-layout.css";
 
+const SEARCH_PREFIXES: Record<string, SearchMode> = {
+  g: "google",
+  p: "pricecharting",
+  u: "barcodelookup",
+  e: "ebay",
+  s: "shopify",
+};
+
+function parseSearchPrefix(input: string): {
+  mode: SearchMode | null;
+  query: string;
+} {
+  const match = input.match(/^([a-z])\s+(.+)$/i);
+  if (!match) {
+    return { mode: null, query: input };
+  }
+
+  const mode = SEARCH_PREFIXES[match[1].toLowerCase()];
+  if (!mode) {
+    return { mode: null, query: input };
+  }
+
+  return { mode, query: match[2].trim() };
+}
+
 export default function NewTab() {
   const [activeMode, setActiveMode] = useState<SearchMode>("google");
   const [shopifyStore, setShopifyStore] = useState<string | null>(null);
   const [resolvingShopifyStore, setResolvingShopifyStore] = useState(false);
   const [overrideEnabled, setOverrideEnabled] = useState<boolean | null>(null);
+
+  // Randomize the aurora blobs' starting offset + animation phase on every
+  // new-tab load so the bg looks fresh each time.
+  const auroraStyle = useMemo(() => {
+    const rand = (min: number, max: number) =>
+      Math.round(min + Math.random() * (max - min));
+    return {
+      "--blob1-x": `${rand(-200, 320)}px`,
+      "--blob1-y": `${rand(-160, 220)}px`,
+      "--blob1-delay": `${-rand(0, 22)}s`,
+      "--blob2-x": `${rand(-320, 200)}px`,
+      "--blob2-y": `${rand(-220, 160)}px`,
+      "--blob2-delay": `${-rand(0, 28)}s`,
+    } as React.CSSProperties;
+  }, []);
 
   useEffect(() => {
     document.title = "Volt";
@@ -113,6 +154,13 @@ export default function NewTab() {
       }
       return newMode;
     });
+  };
+
+  const setSearchMode = (mode: SearchMode) => {
+    setActiveMode(mode);
+    if (typeof chrome !== "undefined" && chrome.storage?.local) {
+      chrome.storage.local.set({ scout_search_mode: mode });
+    }
   };
 
   const handleSidepanelToolClick = (toolId: SidepanelToolId) => {
@@ -253,29 +301,39 @@ export default function NewTab() {
     const trimmed = query.trim();
     if (!trimmed) return;
 
-    if (activeMode === "google") {
+    const prefixedSearch = parseSearchPrefix(trimmed);
+    const effectiveMode = prefixedSearch.mode ?? activeMode;
+    const effectiveQuery = prefixedSearch.query;
+
+    if (!effectiveQuery) return;
+
+    if (prefixedSearch.mode && prefixedSearch.mode !== activeMode) {
+      setSearchMode(prefixedSearch.mode);
+    }
+
+    if (effectiveMode === "google") {
       // Treat as URL or Google search
-      const directUrl = getUrlFromInput(trimmed);
+      const directUrl = getUrlFromInput(effectiveQuery);
       const finalUrl =
-        directUrl || buildGoogleSearchUrl(trimmed);
+        directUrl || buildGoogleSearchUrl(effectiveQuery);
       await TabManager.updateCurrentTab(finalUrl);
       return;
     }
 
     if (
-      activeMode === "ebay" ||
-      activeMode === "pricecharting" ||
-      activeMode === "barcodelookup"
+      effectiveMode === "ebay" ||
+      effectiveMode === "pricecharting" ||
+      effectiveMode === "barcodelookup"
     ) {
-      const provider = searchProviders.find((p) => p.id === activeMode);
+      const provider = searchProviders.find((p) => p.id === effectiveMode);
       if (!provider) return;
 
-      const url = buildSearchUrl(provider.searchUrl, trimmed);
+      const url = buildSearchUrl(provider.searchUrl, effectiveQuery);
       await TabManager.updateCurrentTab(url);
       return;
     }
 
-    if (activeMode === "shopify") {
+    if (effectiveMode === "shopify") {
       const storeName = await resolveShopifyStore();
       if (!storeName) {
         console.warn(
@@ -284,7 +342,7 @@ export default function NewTab() {
         return;
       }
 
-      const url = buildShopifyInventoryUrl(storeName, trimmed);
+      const url = buildShopifyInventoryUrl(storeName, effectiveQuery);
       await TabManager.updateCurrentTab(url);
       return;
     }
@@ -297,16 +355,28 @@ export default function NewTab() {
 
   return (
     <div className="newtab-root">
+      {/* Decorative aurora background — pointer-events:none, sits behind everything */}
+      <div
+        className="newtab-aurora"
+        aria-hidden="true"
+        style={auroraStyle}
+      >
+        <span className="aurora-blob aurora-blob-1" />
+        <span className="aurora-blob aurora-blob-2" />
+      </div>
+
       <div className="newtab-container">
-        {/* Header with logo and toolbar */}
-        <div className="newtab-header">
-          <div className="newtab-header-content">
+        {/* Compact header */}
+        <header className="newtab-header">
+          <div className="newtab-header-brand">
             <img
               src="/assets/icons/logo.png"
-              alt="Logo"
+              alt=""
               className="newtab-header-logo"
             />
             <h1 className="newtab-header-title">Volt Resale</h1>
+          </div>
+          <div className="newtab-header-actions">
             <NewTabHelp
               onSelectMode={(mode) => {
                 setActiveMode(mode);
@@ -315,41 +385,17 @@ export default function NewTab() {
                 }
               }}
             />
-
-            {/* Sidepanel tool buttons */}
-            <TooltipProvider>
-              <div id="tour-tools" className="newtab-toolbar-buttons">
-                {SIDEPANEL_TOOLS.map((tool) => {
-                  const Icon = tool.icon;
-                  return (
-                    <Tooltip key={tool.id}>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          onClick={() => handleSidepanelToolClick(tool.id)}
-                          className="newtab-toolbar-button cursor-pointer flex items-center justify-center"
-                          aria-label={tool.label}
-                        >
-                          <Icon className="h-4 w-4" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent className="border-gray-200">
-                        <p>{tool.label}</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  );
-                })}
-              </div>
-            </TooltipProvider>
           </div>
-        </div>
+        </header>
 
-        {/* Main layout with three columns */}
-        <div className="newtab-main">
-          {/* Left column: Closed Tabs & History */}
+        {/* Hero: greeting + clock */}
+        <HeroBlock />
+
+        {/* Search + sidepanel tools */}
+        <section className="newtab-search-section">
           <div
             id="tour-search-history"
-            className="newtab-column newtab-column-center"
+            className="newtab-search-panel"
           >
             <ClosedTabsPanel
               onSearchSubmit={handleSearchSubmit}
@@ -359,12 +405,40 @@ export default function NewTab() {
             />
           </div>
 
-          {/* Right columns: Quick Links & Bookmarks */}
-          <div className="newtab-right-columns">
-            <QuickLinksColumn id="tour-quick-links" />
-            <BookmarksColumn id="tour-bookmarks" />
-          </div>
-        </div>
+          <TooltipProvider>
+            <div id="tour-tools" className="newtab-tool-tiles">
+              {SIDEPANEL_TOOLS.map((tool) => {
+                const Icon = tool.icon;
+                return (
+                  <Tooltip key={tool.id}>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        onClick={() => handleSidepanelToolClick(tool.id)}
+                        className="newtab-tool-tile cursor-pointer"
+                        aria-label={tool.label}
+                      >
+                        <Icon className="newtab-tool-tile-icon" />
+                        <span className="newtab-tool-tile-label">
+                          {tool.label}
+                        </span>
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent className="border-gray-200">
+                      <p>{tool.description}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                );
+              })}
+            </div>
+          </TooltipProvider>
+        </section>
+
+        {/* Side columns: Quick Links & Bookmarks */}
+        <section className="newtab-side-columns">
+          <QuickLinksColumn id="tour-quick-links" />
+          <BookmarksColumn id="tour-bookmarks" />
+        </section>
       </div>
     </div>
   );

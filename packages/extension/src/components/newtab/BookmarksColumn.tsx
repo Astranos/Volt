@@ -54,7 +54,7 @@ export function BookmarksColumn({ id }: { id?: string }) {
         <h3>Bookmarks</h3>
       </div>
 
-      <div className="newtab-column-search">
+      <label className="newtab-column-search">
         <SearchIcon className="w-4 h-4 text-gray-400" />
         <input
           type="text"
@@ -63,7 +63,7 @@ export function BookmarksColumn({ id }: { id?: string }) {
           onChange={(e) => setSearch(e.target.value)}
           className="newtab-column-search-input"
         />
-      </div>
+      </label>
 
       <ScrollArea className="flex-1">
         <div className="newtab-column-list">

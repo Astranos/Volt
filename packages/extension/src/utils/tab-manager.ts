@@ -7,6 +7,8 @@ export interface TabInfo {
   favIconUrl?: string;
   active: boolean;
   windowId: number;
+  /** Seconds since epoch — present on closed tabs from chrome.sessions. */
+  lastModified?: number;
 }
 
 export class TabManager {

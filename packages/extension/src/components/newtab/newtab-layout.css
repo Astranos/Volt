@@ -1,179 +1,402 @@
-/* New Tab Layout */
+/* ============================================================
+   New Tab — root, theme tokens, background
+   ============================================================ */
+
+/* Local design tokens (kept independent of Tailwind theme to avoid
+   inheriting full chrome-extension widget styles). */
 .newtab-root {
+  --nt-text: #0a0a0a;
+  --nt-text-muted: #525252;
+  --nt-text-faint: #a3a3a3;
+  --nt-surface: rgba(255, 255, 255, 0.7);
+  --nt-surface-strong: rgba(255, 255, 255, 0.88);
+  --nt-surface-hover: rgba(255, 255, 255, 0.95);
+  --nt-border: rgba(10, 10, 10, 0.08);
+  --nt-border-strong: rgba(10, 10, 10, 0.14);
+  --nt-accent: #16a34a;
+  --nt-accent-strong: #15803d;
+  --nt-accent-soft: rgba(22, 163, 74, 0.1);
+  --nt-shadow-sm: 0 1px 2px rgba(10, 10, 10, 0.04);
+  --nt-shadow-md: 0 8px 24px -8px rgba(10, 10, 10, 0.12),
+    0 2px 6px rgba(10, 10, 10, 0.04);
+  --nt-shadow-lg: 0 24px 60px -16px rgba(10, 10, 10, 0.18),
+    0 8px 20px -8px rgba(10, 10, 10, 0.08);
+  --nt-radius: 16px;
+  --nt-radius-sm: 10px;
+
+  position: relative;
   min-height: 100vh;
   width: 100%;
-  background: linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 100%);
-  padding: 20px;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  padding: 28px clamp(20px, 4vw, 56px) 48px;
+  background: linear-gradient(180deg, #fafafa 0%, #f0f0f0 100%);
+  font-family:
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+  color: var(--nt-text);
+  overflow-x: hidden;
 }
+
+@media (prefers-color-scheme: dark) {
+  .newtab-root {
+    --nt-text: #fafafa;
+    --nt-text-muted: #d4d4d4;
+    --nt-text-faint: #737373;
+    --nt-surface: rgba(23, 23, 23, 0.55);
+    --nt-surface-strong: rgba(23, 23, 23, 0.78);
+    --nt-surface-hover: rgba(38, 38, 38, 0.85);
+    --nt-border: rgba(212, 212, 212, 0.14);
+    --nt-border-strong: rgba(212, 212, 212, 0.24);
+    --nt-accent: #22c55e;
+    --nt-accent-strong: #16a34a;
+    --nt-accent-soft: rgba(34, 197, 94, 0.16);
+    --nt-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --nt-shadow-md: 0 8px 24px -8px rgba(0, 0, 0, 0.5),
+      0 2px 6px rgba(0, 0, 0, 0.2);
+    --nt-shadow-lg: 0 24px 60px -16px rgba(0, 0, 0, 0.6),
+      0 8px 20px -8px rgba(0, 0, 0, 0.3);
+
+    background: linear-gradient(180deg, #0a0a0a 0%, #050505 100%);
+  }
+}
+
+/* Aurora blobs — soft animated gradients behind the layout */
+.newtab-aurora {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 0;
+}
+
+.aurora-blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(90px);
+  will-change: transform;
+}
+
+/* Primary: brand-green ambient glow, drifts top-left → toward center → back.
+   --blob1-x/y and --blob1-delay are set per page-load from JS so each new
+   tab opens with a slightly different starting position and phase. */
+.aurora-blob-1 {
+  width: 720px;
+  height: 720px;
+  top: calc(-220px + var(--blob1-y, 0px));
+  left: calc(-180px + var(--blob1-x, 0px));
+  background: radial-gradient(circle, #86efac 0%, transparent 70%);
+  opacity: 0.55;
+  animation: aurora-drift-1 22s ease-in-out infinite;
+  animation-delay: var(--blob1-delay, 0s);
+}
+
+/* Counterpoint: subtle cool-neutral glow, drifts bottom-right → toward center → back */
+.aurora-blob-2 {
+  width: 560px;
+  height: 560px;
+  bottom: calc(-200px + var(--blob2-y, 0px));
+  right: calc(-160px + var(--blob2-x, 0px));
+  background: radial-gradient(circle, #e5e5e5 0%, transparent 70%);
+  opacity: 0.45;
+  animation: aurora-drift-2 28s ease-in-out infinite;
+  animation-delay: var(--blob2-delay, -9s);
+}
+
+@media (prefers-color-scheme: dark) {
+  .aurora-blob-1 {
+    background: radial-gradient(circle, #16a34a 0%, transparent 70%);
+    opacity: 0.28;
+  }
+  .aurora-blob-2 {
+    background: radial-gradient(circle, #525252 0%, transparent 70%);
+    opacity: 0.22;
+  }
+}
+
+@keyframes aurora-drift-1 {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  25% {
+    transform: translate3d(22vw, 6vh, 0) scale(1.05);
+  }
+  50% {
+    transform: translate3d(38vw, 22vh, 0) scale(1.1);
+  }
+  75% {
+    transform: translate3d(14vw, 12vh, 0) scale(1.04);
+  }
+}
+
+@keyframes aurora-drift-2 {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  25% {
+    transform: translate3d(-18vw, -10vh, 0) scale(1.06);
+  }
+  50% {
+    transform: translate3d(-32vw, -20vh, 0) scale(1.1);
+  }
+  75% {
+    transform: translate3d(-12vw, -6vh, 0) scale(1.03);
+  }
+}
+
+/* If the OS asks for reduced motion, slow the drift dramatically instead of
+   killing it — the blobs are blurred and far behind the UI, so the residual
+   motion is gentle. */
+@media (prefers-reduced-motion: reduce) {
+  .aurora-blob-1 {
+    animation-duration: 90s;
+  }
+  .aurora-blob-2 {
+    animation-duration: 120s;
+  }
+}
+
+/* ============================================================
+   Layout grid
+   ============================================================ */
 
 .newtab-container {
+  position: relative;
+  z-index: 1;
   width: 100%;
-  max-width: 1600px;
+  max-width: 1280px;
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 24px;
+  animation: nt-fade-up 360ms ease-out both;
 }
 
-/* Header */
+@keyframes nt-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ============================================================
+   Header
+   ============================================================ */
+
 .newtab-header {
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  border: 1px solid #e5e7eb;
-  padding: 12px 16px;
-}
-
-.newtab-header-content {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
-  gap: 12px;
-  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 16px;
 }
 
-.newtab-toolbar-buttons {
+.newtab-header-brand {
   display: flex;
   align-items: center;
-  gap: 4px;
-  margin-left: auto;
-}
-
-.newtab-toolbar-button {
-  width: 32px;
-  height: 32px;
-  padding: 0;
+  gap: 10px;
 }
 
 .newtab-header-logo {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   border-radius: 8px;
 }
 
 .newtab-header-title {
-  font-size: 20px;
+  font-size: 16px;
   font-weight: 600;
-  color: #111827;
+  color: var(--nt-text);
   margin: 0;
-  line-height: 1;
+  letter-spacing: -0.01em;
 }
 
-.newtab-header-divider {
-  width: 1px;
-  height: 32px;
-  background: #e5e7eb;
-}
-
-.newtab-toggle-group {
+.newtab-header-actions {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.newtab-toggle-label {
-  font-weight: 500;
-  color: #111827;
-  cursor: pointer;
-  user-select: none;
-  font-size: 14px;
-}
+/* ============================================================
+   Hero (greeting, clock, date)
+   ============================================================ */
 
-.newtab-header-condition-select {
-  margin-left: auto;
-  animation: slideIn 0.2s ease-out;
-}
-
-/* Main Content Area */
-.newtab-main {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 16px;
-  min-height: calc(100vh - 200px);
-}
-
-.newtab-right-columns {
-  display: flex;
-  gap: 16px;
-  align-items: stretch;
-  height: calc(100vh - 200px);
-}
-
-/* Center column styling */
-.newtab-column-center {
+.hero-block {
   display: flex;
   flex-direction: column;
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
-  border: 1px solid #e5e7eb;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 0 4px;
+  text-align: center;
+  animation: nt-fade-up 480ms 80ms ease-out both;
+}
+
+.hero-block-greeting {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--nt-text-muted);
+  letter-spacing: 0.01em;
+}
+
+.hero-block-clock {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  color: var(--nt-text);
+  font-feature-settings: "tnum" 1;
+}
+
+.hero-block-time {
+  font-size: clamp(48px, 7vw, 76px);
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1.05;
+  background: linear-gradient(
+    180deg,
+    var(--nt-text) 0%,
+    var(--nt-text-muted) 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.hero-block-period {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--nt-text-muted);
+  letter-spacing: 0.02em;
+}
+
+.hero-block-date {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--nt-text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+/* ============================================================
+   Search section + sidepanel tool tiles
+   ============================================================ */
+
+.newtab-search-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  animation: nt-fade-up 480ms 140ms ease-out both;
+}
+
+.newtab-search-panel {
+  width: 100%;
+  max-width: 760px;
+  display: flex;
+  flex-direction: column;
+  background: var(--nt-surface-strong);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  border-radius: var(--nt-radius);
+  border: 1px solid var(--nt-border);
+  box-shadow: var(--nt-shadow-lg);
   overflow: hidden;
-  height: calc(100vh - 200px);
-  max-height: calc(100vh - 200px);
-  padding: 0 !important;
-  gap: 0 !important;
+  max-height: 460px;
 }
 
-/* Responsive Design */
-@media (max-width: 1400px) {
-  .newtab-column-left,
-  .newtab-column-right {
-    width: 280px;
+.newtab-tool-tiles {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  max-width: 760px;
+}
+
+.newtab-tool-tile {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  height: 38px !important;
+  padding: 0 14px !important;
+  background: var(--nt-surface) !important;
+  border: 1px solid var(--nt-border) !important;
+  border-radius: 999px !important;
+  color: var(--nt-text-muted) !important;
+  box-shadow: var(--nt-shadow-sm);
+  transition:
+    transform 160ms ease,
+    background 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.newtab-tool-tile:hover {
+  background: var(--nt-surface-hover) !important;
+  border-color: var(--nt-border-strong) !important;
+  color: var(--nt-text) !important;
+  transform: translateY(-1px);
+}
+
+.newtab-tool-tile-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--nt-accent);
+}
+
+.newtab-tool-tile-label {
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* ============================================================
+   Side columns (Quick Links + Bookmarks)
+   ============================================================ */
+
+.newtab-side-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  animation: nt-fade-up 480ms 220ms ease-out both;
+}
+
+/* Legacy class names kept for backwards compatibility with column-styles.css */
+.newtab-main,
+.newtab-right-columns,
+.newtab-column-center {
+  /* no-op; kept so older selectors don't break if referenced elsewhere */
+}
+
+/* ============================================================
+   Responsive
+   ============================================================ */
+
+@media (max-width: 900px) {
+  .newtab-side-columns {
+    grid-template-columns: 1fr;
   }
 }
 
-@media (max-width: 1024px) {
-  .newtab-column-left,
-  .newtab-column-right {
-    width: 260px;
-  }
-}
-
-@media (max-width: 768px) {
+@media (max-width: 600px) {
   .newtab-root {
-    padding: 12px;
+    padding: 20px 16px 36px;
   }
-
-  .newtab-container {
-    gap: 12px;
-  }
-
-  .newtab-header-content {
-    gap: 8px;
-  }
-
-  .newtab-header-divider {
+  .newtab-tool-tile-label {
     display: none;
   }
-
-  .newtab-main {
-    grid-template-columns: 1fr;
-    min-height: auto;
-    gap: 12px;
-  }
-
-  .newtab-column {
-    width: 100% !important;
-    min-height: 300px;
-  }
-
-  .newtab-column-center {
-    order: -1;
-    min-height: 400px;
-  }
-}
-
-/* Animation */
-@keyframes slideIn {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
+  .newtab-tool-tile {
+    width: 40px !important;
+    padding: 0 !important;
+    justify-content: center;
   }
 }

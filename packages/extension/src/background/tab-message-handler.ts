@@ -49,6 +49,7 @@ export function handleTabMessage(
               favIconUrl: session.tab?.favIconUrl,
               windowId: session.tab?.windowId,
               active: false,
+              lastModified: session.lastModified,
             }));
           sendResponse({ tabs: closedTabs });
         });

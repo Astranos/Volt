@@ -8,10 +8,6 @@ import {
   X,
   Search,
   History,
-  ExternalLink,
-  Bookmark,
-  Layout,
-  Info,
   TrendingUp,
   Barcode,
   Tag,
@@ -40,7 +36,7 @@ const TOUR_STEPS: TourStep[] = [
     targetId: "tour-search-history",
     title: "Unified Search & History",
     description:
-      "Search across eBay, PriceCharting, Shopify, and more. Your recently closed tabs and history are also right here.",
+      "Search with the selected provider, or use prefixes like e iphone 15, p pokemon blue, u 012345678905, g iphone 15, and s iphone 15. Recently closed tabs are also available here.",
     icon: <Search className="h-5 w-5 text-green-600" />,
     position: "right",
   },
@@ -48,7 +44,7 @@ const TOUR_STEPS: TourStep[] = [
     targetId: "tour-search-google",
     title: "Google Search",
     description:
-      "The default search engine for all your general inquiries and web browsing.",
+      "Use Google for general searches and direct URLs. You can also type g followed by your query.",
     icon: <Search className="h-5 w-5 text-green-600" />,
     position: "bottom",
     mode: "google",
@@ -57,7 +53,7 @@ const TOUR_STEPS: TourStep[] = [
     targetId: "tour-search-pricecharting",
     title: "PriceCharting Search",
     description:
-      "Quickly look up game and card prices across the PriceCharting database.",
+      "Use PriceCharting for quick game and card price lookups. You can also type p followed by your query.",
     icon: <TrendingUp className="h-5 w-5 text-green-600" />,
     position: "bottom",
     mode: "pricecharting",
@@ -66,7 +62,7 @@ const TOUR_STEPS: TourStep[] = [
     targetId: "tour-search-upc",
     title: "UPC Lookup",
     description:
-      "Find product details instantly by searching with a barcode or UPC number.",
+      "Use UPC for barcode and product lookups. You can also type u followed by the barcode or query.",
     icon: <Barcode className="h-5 w-5 text-green-600" />,
     position: "bottom",
     mode: "barcodelookup",
@@ -75,7 +71,7 @@ const TOUR_STEPS: TourStep[] = [
     targetId: "tour-search-ebay",
     title: "eBay Sold Prices",
     description:
-      "Check actual sold prices on eBay to accurately value your items.",
+      "Use eBay to check sold prices. You can also type e followed by your query, like e iphone 15.",
     icon: <Tag className="h-5 w-5 text-green-600" />,
     position: "bottom",
     mode: "ebay",
@@ -84,34 +80,26 @@ const TOUR_STEPS: TourStep[] = [
     targetId: "tour-search-shopify",
     title: "Shopify Inventory",
     description:
-      "Search through your Shopify store's inventory directly from your new tab.",
+      "Use Shopify to search available inventory. You can also type s followed by your query.",
     icon: <Store className="h-5 w-5 text-green-600" />,
     position: "bottom",
     mode: "shopify",
   },
   {
-    targetId: "tour-quick-links",
-    title: "Quick Links",
+    targetId: "tour-recent-tabs",
+    title: "Recently Closed Tabs",
     description:
-      "Your most important resale platforms and tools, organized for one-click access.",
-    icon: <ExternalLink className="h-5 w-5 text-green-600" />,
-    position: "left",
+      "The first card section shows tabs you recently closed. You can also press Ctrl+Shift+Z anywhere in Chrome to reopen the last closed tab.",
+    icon: <History className="h-5 w-5 text-green-600" />,
+    position: "right",
   },
   {
-    targetId: "tour-bookmarks",
-    title: "Browser Bookmarks",
+    targetId: "tour-earlier-today",
+    title: "Earlier Today",
     description:
-      "Access your Chrome bookmarks without leaving the page. Stays perfectly in sync.",
-    icon: <Bookmark className="h-5 w-5 text-green-600" />,
-    position: "left",
-  },
-  {
-    targetId: "tour-tools",
-    title: "Sidepanel Tools",
-    description:
-      "Quickly open specialized tools like Price Checkers and Inventory Managers in the Chrome sidepanel.",
-    icon: <Layout className="h-5 w-5 text-green-600" />,
-    position: "bottom",
+      "Older recently closed tabs stay in this list, so the newest few cards stay easy to scan while the rest are still close by.",
+    icon: <History className="h-5 w-5 text-green-600" />,
+    position: "right",
   },
 ];
 
@@ -132,19 +120,27 @@ export function NewTabHelp({ onSelectMode }: NewTabHelpProps) {
   const updateCoords = useCallback(() => {
     const step = TOUR_STEPS[currentStep];
     const el = document.getElementById(step.targetId);
-    if (el) {
-      const rect = el.getBoundingClientRect();
-      setCoords({
-        top: rect.top,
-        left: rect.left,
-        width: rect.width,
-        height: rect.height,
-      });
-
-      // If step has a mode, select it
-      if (step.mode && onSelectMode) {
-        onSelectMode(step.mode);
+    if (!el) {
+      if (currentStep < TOUR_STEPS.length - 1) {
+        setCurrentStep((s) => s + 1);
+      } else {
+        setIsOpen(false);
+        setCurrentStep(0);
       }
+      return;
+    }
+
+    const rect = el.getBoundingClientRect();
+    setCoords({
+      top: rect.top,
+      left: rect.left,
+      width: rect.width,
+      height: rect.height,
+    });
+
+    // If step has a mode, select it
+    if (step.mode && onSelectMode) {
+      onSelectMode(step.mode);
     }
   }, [currentStep, onSelectMode]);
 
