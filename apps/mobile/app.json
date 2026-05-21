@@ -9,13 +9,18 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.volt.mobile",
+      "buildNumber": "2",
       "infoPlist": {
         "NSCameraUsageDescription": "Volt uses the camera to scan barcodes, model numbers, serial numbers, and other text for the paired Chrome extension."
       }
     },
     "android": {
       "package": "com.volt.mobile",
-      "permissions": ["CAMERA"]
+      "permissions": [
+        "CAMERA",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "plugins": [
       "expo-router",
@@ -36,6 +41,13 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "71dab3bf-43d4-456b-973f-4298fd0b645d"
+      }
+    },
+    "owner": "juanquenga"
   }
 }

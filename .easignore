@@ -1,0 +1,7 @@
+node_modules/
+apps/*/node_modules/
+apps/mobile/ios/build/
+apps/mobile/ios/Pods/
+apps/mobile/.expo/
+*.xcuserstate
+DerivedData/

@@ -320,7 +320,7 @@ export default function VoltScanner() {
       <SafeAreaView style={styles.root}>
         <StatusBar style="light" />
         <View style={styles.permissionPanel}>
-          <Ionicons name="camera-outline" size={44} color="#67e8f9" />
+          <Ionicons name="camera-outline" size={44} color="#22c55e" />
           <Text style={styles.title}>Volt</Text>
           <Text style={styles.bodyText}>
             Camera access is needed to scan UPC, EAN, QR, Code 128, model labels, and serial labels.
@@ -343,107 +343,118 @@ export default function VoltScanner() {
             <Text style={styles.status}>{statusLabel}</Text>
           </View>
           <Pressable style={styles.iconButton} onPress={() => setTorch((value) => !value)}>
-            <Ionicons name={torch ? "flash" : "flash-outline"} size={20} color="#f8fafc" />
+            <Ionicons name={torch ? "flash" : "flash-outline"} size={20} color="#fafaf9" />
           </Pressable>
         </View>
 
-        <View style={styles.cameraShell}>
-          <CameraView
-            ref={cameraRef}
-            style={styles.camera}
-            facing="back"
-            enableTorch={torch}
-            barcodeScannerSettings={{ barcodeTypes: [...barcodeTypes] }}
-            onBarcodeScanned={connected ? onBarcodeScanned : undefined}
-          />
-          <View style={styles.scanFrame} pointerEvents="none" />
-        </View>
+        <View style={styles.content}>
+          <View style={styles.cameraShell}>
+            <CameraView
+              ref={cameraRef}
+              style={styles.camera}
+              facing="back"
+              enableTorch={torch}
+              barcodeScannerSettings={{ barcodeTypes: [...barcodeTypes] }}
+              onBarcodeScanned={connected ? onBarcodeScanned : undefined}
+            />
+            <View style={styles.scanFrame} pointerEvents="none" />
+          </View>
 
-        <View style={styles.controls}>
-          <TextInput
-            value={manualText}
-            onChangeText={setManualText}
-            placeholder="Model, serial, IMEI, asset tag..."
-            placeholderTextColor="#64748b"
-            autoCapitalize="characters"
-            autoCorrect={false}
-            style={styles.input}
-            returnKeyType="send"
-            onSubmitEditing={sendManualText}
-          />
-          <Pressable style={[styles.sendButton, !manualText.trim() && styles.disabled]} onPress={sendManualText}>
-            <Ionicons name="send" size={18} color="#061014" />
-          </Pressable>
-        </View>
-
-        <Pressable
-          style={[styles.ocrButton, recognizingText && styles.disabled]}
-          onPress={captureText}
-          disabled={recognizingText}
-        >
-          {recognizingText ? (
-            <Text style={styles.ocrButtonText}>Reading text...</Text>
-          ) : (
-            <>
-              <Ionicons name="text" size={18} color="#e0f2fe" />
-              <Text style={styles.ocrButtonText}>Read model or serial text</Text>
-            </>
-          )}
-        </Pressable>
-
-        {answerCode && status !== "connected" ? (
-          <Pressable style={styles.answerPanel} onPress={copyAnswer}>
-            <Text style={styles.answerTitle}>Answer code ready</Text>
-            <Text numberOfLines={2} style={styles.answerText}>{answerCode}</Text>
-            <Text style={styles.answerHint}>Tap to copy</Text>
-          </Pressable>
-        ) : null}
-
-        <ScrollView style={styles.history} contentContainerStyle={styles.historyContent}>
-          {scans.map((scan) => (
-            <View key={scan.id} style={styles.scanRow}>
-              <View style={styles.scanTextBlock}>
-                <Text numberOfLines={1} style={styles.scanValue}>{scan.barcode}</Text>
-                <Text style={styles.scanMeta}>{scan.kind} • {scan.format}</Text>
+          <ScrollView style={styles.history} contentContainerStyle={styles.historyContent}>
+            {scans.map((scan) => (
+              <View key={scan.id} style={styles.scanRow}>
+                <View style={styles.scanTextBlock}>
+                  <Text numberOfLines={1} style={styles.scanValue}>{scan.barcode}</Text>
+                  <Text style={styles.scanMeta}>{scan.kind} • {scan.format}</Text>
+                </View>
+                <Ionicons name="checkmark-circle" size={20} color="#22c55e" />
               </View>
-              <Ionicons name="checkmark-circle" size={20} color="#22c55e" />
-            </View>
-          ))}
-        </ScrollView>
+            ))}
+          </ScrollView>
+        </View>
+
+        <View style={styles.bottomControls}>
+          {answerCode && status !== "connected" ? (
+            <Pressable style={styles.answerPanel} onPress={copyAnswer}>
+              <Text style={styles.answerTitle}>Answer code ready</Text>
+              <Text numberOfLines={2} style={styles.answerText}>{answerCode}</Text>
+              <Text style={styles.answerHint}>Tap to copy</Text>
+            </Pressable>
+          ) : null}
+
+          <Pressable
+            style={[styles.ocrButton, recognizingText && styles.disabled]}
+            onPress={captureText}
+            disabled={recognizingText}
+          >
+            {recognizingText ? (
+              <Text style={styles.ocrButtonText}>Reading text...</Text>
+            ) : (
+              <>
+                <Ionicons name="text" size={18} color="#166534" />
+                <Text style={styles.ocrButtonText}>Read model or serial text</Text>
+              </>
+            )}
+          </Pressable>
+
+          <View style={styles.controls}>
+            <TextInput
+              value={manualText}
+              onChangeText={setManualText}
+              placeholder="Model, serial, IMEI, asset tag..."
+              placeholderTextColor="#78716c"
+              autoCapitalize="characters"
+              autoCorrect={false}
+              style={styles.input}
+              returnKeyType="send"
+              onSubmitEditing={sendManualText}
+            />
+            <Pressable style={[styles.sendButton, !manualText.trim() && styles.disabled]} onPress={sendManualText}>
+              <Ionicons name="send" size={18} color="#f0fdf4" />
+            </Pressable>
+          </View>
+        </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#0b0f14" },
+  root: { flex: 1, backgroundColor: "#ffffff" },
   header: {
     paddingHorizontal: 18,
     paddingVertical: 14,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    backgroundColor: "#1c1917",
+    borderBottomWidth: 1,
+    borderBottomColor: "#292524",
   },
-  title: { color: "#f8fafc", fontSize: 28, fontWeight: "800", letterSpacing: 0 },
-  status: { color: "#94a3b8", marginTop: 2, fontSize: 13 },
+  title: { color: "#fafaf9", fontSize: 28, fontWeight: "800", letterSpacing: 0 },
+  status: { color: "#d6d3d1", marginTop: 2, fontSize: 13 },
   iconButton: {
     width: 42,
     height: 42,
     borderRadius: 21,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#17202b",
+    backgroundColor: "#292524",
     borderWidth: 1,
-    borderColor: "#263241",
+    borderColor: "#44403c",
+  },
+  content: {
+    flex: 1,
+    paddingTop: 14,
   },
   cameraShell: {
     marginHorizontal: 18,
     aspectRatio: 1,
-    borderRadius: 8,
+    borderRadius: 32,
     overflow: "hidden",
-    backgroundColor: "#111827",
+    backgroundColor: "#1c1917",
     borderWidth: 1,
-    borderColor: "#263241",
+    borderColor: "#292524",
   },
   camera: { flex: 1 },
   scanFrame: {
@@ -453,76 +464,79 @@ const styles = StyleSheet.create({
     width: "74%",
     height: "74%",
     borderWidth: 2,
-    borderColor: "#67e8f9",
-    borderRadius: 8,
+    borderColor: "#22c55e",
+    borderRadius: 999,
   },
   controls: {
-    marginHorizontal: 18,
-    marginTop: 12,
     flexDirection: "row",
     gap: 10,
   },
   input: {
     flex: 1,
     minHeight: 46,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    color: "#f8fafc",
-    backgroundColor: "#111827",
+    borderRadius: 999,
+    paddingHorizontal: 16,
+    color: "#1c1917",
+    backgroundColor: "#ffffff",
     borderWidth: 1,
-    borderColor: "#263241",
+    borderColor: "#d6d3d1",
   },
   sendButton: {
     width: 46,
     height: 46,
-    borderRadius: 8,
+    borderRadius: 23,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#67e8f9",
+    backgroundColor: "#16a34a",
   },
   disabled: { opacity: 0.45 },
+  bottomControls: {
+    paddingHorizontal: 18,
+    paddingTop: 12,
+    paddingBottom: 14,
+    gap: 10,
+    backgroundColor: "#fafaf9",
+    borderTopWidth: 1,
+    borderTopColor: "#e7e5e4",
+  },
   ocrButton: {
     minHeight: 44,
-    marginHorizontal: 18,
-    marginTop: 10,
-    borderRadius: 8,
+    borderRadius: 999,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
     gap: 8,
-    backgroundColor: "#10202a",
+    backgroundColor: "#f0fdf4",
     borderWidth: 1,
-    borderColor: "#155e75",
+    borderColor: "#bbf7d0",
   },
-  ocrButtonText: { color: "#e0f2fe", fontWeight: "700" },
+  ocrButtonText: { color: "#166534", fontWeight: "700" },
   answerPanel: {
-    marginHorizontal: 18,
-    marginTop: 12,
     padding: 12,
-    borderRadius: 8,
-    backgroundColor: "#10202a",
+    borderRadius: 24,
+    backgroundColor: "#f0fdf4",
     borderWidth: 1,
-    borderColor: "#155e75",
+    borderColor: "#bbf7d0",
   },
-  answerTitle: { color: "#e0f2fe", fontWeight: "700", marginBottom: 4 },
-  answerText: { color: "#bae6fd", fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace", fontSize: 11 },
-  answerHint: { color: "#67e8f9", marginTop: 6, fontSize: 12 },
+  answerTitle: { color: "#166534", fontWeight: "700", marginBottom: 4 },
+  answerText: { color: "#14532d", fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace", fontSize: 11 },
+  answerHint: { color: "#16a34a", marginTop: 6, fontSize: 12 },
   history: { flex: 1, marginTop: 12 },
   historyContent: { paddingHorizontal: 18, paddingBottom: 18, gap: 8 },
   scanRow: {
     minHeight: 54,
-    borderRadius: 8,
+    borderRadius: 27,
     paddingHorizontal: 12,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "#111827",
+    backgroundColor: "#fafaf9",
     borderWidth: 1,
-    borderColor: "#263241",
+    borderColor: "#e7e5e4",
   },
   scanTextBlock: { flex: 1, paddingRight: 12 },
-  scanValue: { color: "#f8fafc", fontSize: 15, fontWeight: "700" },
-  scanMeta: { color: "#94a3b8", fontSize: 12, marginTop: 2, textTransform: "uppercase" },
+  scanValue: { color: "#1c1917", fontSize: 15, fontWeight: "700" },
+  scanMeta: { color: "#78716c", fontSize: 12, marginTop: 2, textTransform: "uppercase" },
   permissionPanel: {
     flex: 1,
     alignItems: "center",
@@ -530,14 +544,14 @@ const styles = StyleSheet.create({
     padding: 24,
     gap: 14,
   },
-  bodyText: { color: "#cbd5e1", textAlign: "center", lineHeight: 20 },
+  bodyText: { color: "#57534e", textAlign: "center", lineHeight: 20 },
   primaryButton: {
     minHeight: 46,
     paddingHorizontal: 18,
-    borderRadius: 8,
+    borderRadius: 999,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#67e8f9",
+    backgroundColor: "#16a34a",
   },
-  primaryButtonText: { color: "#061014", fontWeight: "800" },
+  primaryButtonText: { color: "#f0fdf4", fontWeight: "800" },
 });

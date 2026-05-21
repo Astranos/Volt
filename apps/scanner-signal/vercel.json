@@ -3,6 +3,14 @@
     {
       "source": "/api/signal/:path*",
       "destination": "/api/signal?path=:path*"
+    },
+    {
+      "source": "/pair",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/debug",
+      "destination": "/index.html"
     }
   ]
 }

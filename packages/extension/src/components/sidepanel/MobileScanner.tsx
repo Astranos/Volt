@@ -19,6 +19,7 @@ import {
   SCANNER_DATA_CHANNEL,
   SCANNER_ICE_GATHERING_TIMEOUT_MS,
   SCANNER_ICE_SERVERS,
+  SCANNER_PAIRING_PAGE_URL,
   SCANNER_SIGNAL_URL,
   decodePairingPayload,
   type BarcodeMessage,
@@ -210,7 +211,8 @@ export default function MobileScanner({ onClose }: MobileScannerProps) {
         throw new Error("Invalid pairing session");
       }
 
-      const url = `${SCANNER_APP_PAIR_URL}?session=${encodeURIComponent(sessionId)}`;
+      const appPairingUrl = `${SCANNER_APP_PAIR_URL}?session=${encodeURIComponent(sessionId)}`;
+      const url = `${SCANNER_PAIRING_PAGE_URL}/pair?session=${encodeURIComponent(sessionId)}&app=${encodeURIComponent(appPairingUrl)}`;
       setPairingUrl(url);
       setQrDataUrl(await generateQrCode(url));
       setStatus("waiting");
@@ -306,7 +308,7 @@ export default function MobileScanner({ onClose }: MobileScannerProps) {
         {status === "waiting" && (
           <>
             <QrCode className="h-4 w-4 text-yellow-500" />
-            <span className="text-sm text-yellow-500">Scan with Volt app</span>
+            <span className="text-sm text-yellow-500">Open scanner page</span>
           </>
         )}
         {status === "connected" && (
@@ -355,7 +357,7 @@ export default function MobileScanner({ onClose }: MobileScannerProps) {
         {pairingUrl && status === "waiting" && (
           <Button variant="ghost" size="sm" className="mt-2 text-xs text-muted-foreground" onClick={copyPairingUrl}>
             <Copy className="mr-1 h-3 w-3" />
-            Copy app pairing link
+            Copy browser pairing link
           </Button>
         )}
       </div>
