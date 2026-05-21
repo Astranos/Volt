@@ -15,11 +15,12 @@ import { Button } from "../ui/button";
 import {
   decodeBarcodeMessage,
   SCANNER_APP_PAIR_URL,
+  SCANNER_ANSWER_POLL_INTERVAL_MS,
   SCANNER_DATA_CHANNEL,
   SCANNER_ICE_GATHERING_TIMEOUT_MS,
   SCANNER_ICE_SERVERS,
+  SCANNER_SIGNAL_URL,
   decodePairingPayload,
-  encodePairingPayload,
   type BarcodeMessage,
   type ScannerConnectionStatus,
 } from "../../../../scanner-protocol/src";
@@ -47,12 +48,17 @@ export default function MobileScanner({ onClose }: MobileScannerProps) {
 
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
+  const answerPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const generateQrCode = useCallback(async (url: string) => {
     return QRCode.toDataURL(url, {
-      width: 256,
-      margin: 2,
-      errorCorrectionLevel: "M",
+      width: 768,
+      margin: 3,
+      errorCorrectionLevel: "H",
+      color: {
+        dark: "#05070a",
+        light: "#ffffff",
+      },
     });
   }, []);
 
@@ -121,6 +127,10 @@ export default function MobileScanner({ onClose }: MobileScannerProps) {
   }, []);
 
   const cleanup = useCallback(() => {
+    if (answerPollRef.current) {
+      clearInterval(answerPollRef.current);
+      answerPollRef.current = null;
+    }
     dataChannelRef.current?.close();
     peerConnectionRef.current?.close();
     dataChannelRef.current = null;
@@ -185,11 +195,46 @@ export default function MobileScanner({ onClose }: MobileScannerProps) {
         throw new Error("Failed to create pairing offer");
       }
 
-      const offerCode = encodePairingPayload(pc.localDescription);
-      const url = `${SCANNER_APP_PAIR_URL}?offer=${encodeURIComponent(offerCode)}`;
+      const sessionResponse = await fetch(SCANNER_SIGNAL_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ offer: JSON.stringify(pc.localDescription) }),
+      });
+
+      if (!sessionResponse.ok) {
+        throw new Error("Failed to create pairing session");
+      }
+
+      const { sessionId } = await sessionResponse.json();
+      if (typeof sessionId !== "string" || !sessionId) {
+        throw new Error("Invalid pairing session");
+      }
+
+      const url = `${SCANNER_APP_PAIR_URL}?session=${encodeURIComponent(sessionId)}`;
       setPairingUrl(url);
       setQrDataUrl(await generateQrCode(url));
       setStatus("waiting");
+
+      answerPollRef.current = setInterval(async () => {
+        try {
+          const answerResponse = await fetch(`${SCANNER_SIGNAL_URL}/${sessionId}/answer`);
+          if (!answerResponse.ok) return;
+
+          const { answer } = await answerResponse.json();
+          if (typeof answer !== "string" || !answer || !peerConnectionRef.current) return;
+
+          await peerConnectionRef.current.setRemoteDescription(JSON.parse(answer));
+          setAnswerApplied(true);
+          setError(null);
+
+          if (answerPollRef.current) {
+            clearInterval(answerPollRef.current);
+            answerPollRef.current = null;
+          }
+        } catch (err) {
+          console.error("Failed to apply scanner answer", err);
+        }
+      }, SCANNER_ANSWER_POLL_INTERVAL_MS);
     } catch (err) {
       setStatus("error");
       setError(err instanceof Error ? err.message : "Failed to start session");
@@ -286,11 +331,23 @@ export default function MobileScanner({ onClose }: MobileScannerProps) {
 
       <div className="flex flex-col items-center">
         {qrDataUrl ? (
-          <div className="rounded-lg bg-white p-4 shadow-lg">
-            <img src={qrDataUrl} alt="Scan this QR code with the Volt mobile app" className="h-48 w-48" />
+          <div className="relative w-full max-w-[320px] rounded-lg bg-white p-4 shadow-lg">
+            <img
+              src={qrDataUrl}
+              alt="Scan this QR code with the Volt mobile app"
+              className="aspect-square w-full"
+            />
+            <div className="absolute left-1/2 top-1/2 flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-lg border border-slate-200 bg-white p-2 shadow-sm">
+              <img
+                src={chrome.runtime.getURL("/assets/icons/logo-128.png")}
+                alt=""
+                aria-hidden="true"
+                className="h-full w-full object-contain"
+              />
+            </div>
           </div>
         ) : status === "creating" ? (
-          <div className="flex h-48 w-48 items-center justify-center rounded-lg bg-muted">
+          <div className="flex aspect-square w-full max-w-[320px] items-center justify-center rounded-lg bg-muted">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
         ) : null}

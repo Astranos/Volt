@@ -1,4 +1,5 @@
 export const SCANNER_WEB_APP_URL = "https://volt-scanner.vercel.app";
+export const SCANNER_SIGNAL_URL = "https://scanner-signal.vercel.app/api/signal";
 export const SCANNER_APP_SCHEME = "volt";
 export const SCANNER_APP_PAIR_URL = `${SCANNER_APP_SCHEME}://pair`;
 

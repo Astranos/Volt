@@ -23,6 +23,7 @@ import {
   encodeBarcodeMessage,
   encodePairingPayload,
   SCANNER_ICE_SERVERS,
+  SCANNER_SIGNAL_URL,
   type BarcodeMessage,
 } from "@volt/scanner-protocol";
 
@@ -55,6 +56,12 @@ function getOfferFromUrl(url: string) {
   const parsed = Linking.parse(url);
   const offer = parsed.queryParams?.offer;
   return typeof offer === "string" ? offer : undefined;
+}
+
+function getSessionFromUrl(url: string) {
+  const parsed = Linking.parse(url);
+  const session = parsed.queryParams?.session;
+  return typeof session === "string" ? session : undefined;
 }
 
 function makeScanItem(value: string, format: string, kind: BarcodeMessage["kind"]): ScanItem {
@@ -92,7 +99,7 @@ export default function VoltScanner() {
   }, []);
 
   const pairWithOffer = useCallback(
-    async (offerCode: string) => {
+    async (offerCode: string, sessionId?: string) => {
       closeConnection();
       setStatus("pairing");
       setAnswerCode(null);
@@ -141,8 +148,22 @@ export default function VoltScanner() {
           throw new Error("Failed to create answer");
         }
 
-        setAnswerCode(encodePairingPayload(pc.localDescription as any));
-        setStatus("answer-ready");
+        if (sessionId) {
+          const answerResponse = await fetch(`${SCANNER_SIGNAL_URL}/${sessionId}/answer`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ answer: JSON.stringify(pc.localDescription) }),
+          });
+
+          if (!answerResponse.ok) {
+            throw new Error("Failed to send pairing answer");
+          }
+
+          setAnswerCode(null);
+        } else {
+          setAnswerCode(encodePairingPayload(pc.localDescription as any));
+          setStatus("answer-ready");
+        }
       } catch (err) {
         closeConnection();
         setStatus("error");
@@ -152,22 +173,51 @@ export default function VoltScanner() {
     [closeConnection]
   );
 
+  const pairWithSession = useCallback(
+    async (sessionId: string) => {
+      try {
+        setStatus("pairing");
+        setError(null);
+        const offerResponse = await fetch(`${SCANNER_SIGNAL_URL}/${sessionId}`);
+        if (!offerResponse.ok) {
+          throw new Error("Pairing session not found");
+        }
+
+        const { offer } = await offerResponse.json();
+        if (typeof offer !== "string" || !offer) {
+          throw new Error("Invalid pairing session");
+        }
+
+        await pairWithOffer(encodePairingPayload(JSON.parse(offer)), sessionId);
+      } catch (err) {
+        closeConnection();
+        setStatus("error");
+        setError(err instanceof Error ? err.message : "Pairing failed");
+      }
+    },
+    [closeConnection, pairWithOffer]
+  );
+
   useEffect(() => {
     Linking.getInitialURL().then((url) => {
       const offer = url ? getOfferFromUrl(url) : undefined;
+      const session = url ? getSessionFromUrl(url) : undefined;
       if (offer) pairWithOffer(offer);
+      else if (session) pairWithSession(session);
     });
 
     const subscription = Linking.addEventListener("url", ({ url }) => {
       const offer = getOfferFromUrl(url);
+      const session = getSessionFromUrl(url);
       if (offer) pairWithOffer(offer);
+      else if (session) pairWithSession(session);
     });
 
     return () => {
       subscription.remove();
       closeConnection();
     };
-  }, [closeConnection, pairWithOffer]);
+  }, [closeConnection, pairWithOffer, pairWithSession]);
 
   const sendScan = useCallback(
     async (item: ScanItem) => {

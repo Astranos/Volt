@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/signal/:path*",
+      "destination": "/api/signal?path=:path*"
+    }
+  ]
+}
