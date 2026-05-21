@@ -4,7 +4,26 @@ Download the latest version of the Volt Chrome Extension.
 
 ## Latest Release
 
-### v1.0.20 (Current)
+### v1.0.21 (Current)
+
+**Release Date:** May 18, 2026
+**Download:** [voltextension-1.0.21-chrome.zip](./voltextension-1.0.21-chrome.zip)
+
+**What's New:**
+
+This release refreshes the new tab experience and improves search/tab workflows.
+
+### Changes
+
+- Redesigned the new tab layout with improved hero content, recent tab tiles, quick links, bookmarks, and closed tabs presentation
+- Added relative time formatting for recent and closed tab activity
+- Improved command palette tab results and search prefix previews
+- Refined popup focus behavior and Shopify button placement
+- Bumped the extension version to `1.0.21`
+
+## Previous Release
+
+### v1.0.20
 
 **Release Date:** May 5, 2026
 **Download:** [voltextension-1.0.20-chrome.zip](./voltextension-1.0.20-chrome.zip)

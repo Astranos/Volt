@@ -1,0 +1,41 @@
+{
+  "expo": {
+    "name": "Volt",
+    "slug": "volt-mobile",
+    "scheme": "volt",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.volt.mobile",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Volt uses the camera to scan barcodes, model numbers, serial numbers, and other text for the paired Chrome extension."
+      }
+    },
+    "android": {
+      "package": "com.volt.mobile",
+      "permissions": ["CAMERA"]
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "15.5"
+          }
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Volt uses the camera to scan barcodes, model numbers, serial numbers, and other text for the paired Chrome extension."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

@@ -2,7 +2,7 @@
   "name": "@volt/extension",
   "description": "A versatile Chrome extension with command palette, controller testing, and multi-provider search capabilities.",
   "private": true,
-  "version": "1.0.20",
+  "version": "1.0.21",
   "type": "module",
   "license": "AGPL-3.0-or-later",
   "scripts": {
@@ -37,6 +37,7 @@
     "cmdk": "^1.1.1",
     "lucide-react": "^0.544.0",
     "postcss": "^8.5.6",
+    "qrcode": "^1.5.4",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "tailwind-merge": "^3.3.1",
@@ -45,6 +46,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.13",
     "@tailwindcss/vite": "^4.1.13",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^19.1.12",
     "@types/react-dom": "^19.1.9",
     "@wxt-dev/module-react": "^1.1.3",

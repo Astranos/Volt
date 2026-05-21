@@ -1,8 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState, useCallback } from "react";
 import {
+  decodePairingPayload,
+  encodePairingPayload,
   encodeBarcodeMessage,
+  SCANNER_ICE_GATHERING_TIMEOUT_MS,
   SCANNER_ICE_SERVERS,
+  SCANNER_LOCAL_SESSION_ID,
   SCANNER_SCAN_COOLDOWN_MS,
 } from "../../../../../packages/scanner-protocol/src";
 
@@ -19,6 +23,8 @@ function ScannerPage() {
   const [flashOn, setFlashOn] = useState(false);
   const [lastScanned, setLastScanned] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [answerCode, setAnswerCode] = useState<string | null>(null);
+  const [answerCopied, setAnswerCopied] = useState(false);
   const [scanCount, setScanCount] = useState(0);
 
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -49,12 +55,23 @@ function ScannerPage() {
 
     async function initWebRTC() {
       try {
-        // Fetch the offer from signaling server
-        const offerRes = await fetch(`/api/signal/${sessionId}`);
-        if (!offerRes.ok) {
-          throw new Error("Session not found or expired");
+        let offerDescription: RTCSessionDescriptionInit;
+
+        if (sessionId === SCANNER_LOCAL_SESSION_ID) {
+          const offer = new URLSearchParams(window.location.hash.slice(1)).get("offer");
+          if (!offer) {
+            throw new Error("Missing QR pairing offer");
+          }
+          offerDescription = decodePairingPayload(offer);
+        } else {
+          // Backward-compatible hosted signaling path.
+          const offerRes = await fetch(`/api/signal/${sessionId}`);
+          if (!offerRes.ok) {
+            throw new Error("Session not found or expired");
+          }
+          const { offer } = await offerRes.json();
+          offerDescription = JSON.parse(offer);
         }
-        const { offer } = await offerRes.json();
 
         // Create peer connection
         const pc = new RTCPeerConnection({
@@ -92,7 +109,7 @@ function ScannerPage() {
         };
 
         // Set remote description (the offer)
-        await pc.setRemoteDescription(JSON.parse(offer));
+        await pc.setRemoteDescription(offerDescription);
 
         // Create and set local description (the answer)
         const answer = await pc.createAnswer();
@@ -105,23 +122,32 @@ function ScannerPage() {
           } else {
             pc.onicegatheringstatechange = () => {
               if (pc.iceGatheringState === "complete") {
+                pc.onicegatheringstatechange = null;
                 resolve();
               }
             };
+            setTimeout(resolve, SCANNER_ICE_GATHERING_TIMEOUT_MS);
           }
         });
 
-        // Send answer to signaling server
-        const answerRes = await fetch(`/api/signal/${sessionId}/answer`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ answer: JSON.stringify(pc.localDescription) }),
-        });
-
-        if (!answerRes.ok) {
-          throw new Error("Failed to send answer");
+        if (!pc.localDescription) {
+          throw new Error("Failed to create answer");
         }
 
+        if (sessionId === SCANNER_LOCAL_SESSION_ID) {
+          if (mounted) setAnswerCode(encodePairingPayload(pc.localDescription));
+        } else {
+          // Send answer to signaling server
+          const answerRes = await fetch(`/api/signal/${sessionId}/answer`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ answer: JSON.stringify(pc.localDescription) }),
+          });
+
+          if (!answerRes.ok) {
+            throw new Error("Failed to send answer");
+          }
+        }
       } catch (err) {
         console.error("WebRTC init error:", err);
         if (mounted) {
@@ -138,6 +164,17 @@ function ScannerPage() {
       peerConnectionRef.current?.close();
     };
   }, [sessionId]);
+
+  const copyAnswer = useCallback(async () => {
+    if (!answerCode) return;
+
+    try {
+      await navigator.clipboard.writeText(answerCode);
+      setAnswerCopied(true);
+    } catch (_err) {
+      setAnswerCopied(false);
+    }
+  }, [answerCode]);
 
   // Initialize camera and barcode scanner
   useEffect(() => {
@@ -278,7 +315,55 @@ function ScannerPage() {
           position: "relative",
         }}
       >
-        {connectionStatus === "connected" ? (
+        {answerCode && connectionStatus !== "connected" ? (
+          <div
+            style={{
+              width: "100%",
+              maxWidth: "400px",
+              borderRadius: "16px",
+              backgroundColor: "#1a1a1a",
+              display: "flex",
+              flexDirection: "column",
+              gap: "1rem",
+              border: "2px solid #333",
+              padding: "1rem",
+            }}
+          >
+            <p style={{ color: "#ddd", fontWeight: 600 }}>Finish pairing on desktop</p>
+            <p style={{ color: "#888", fontSize: "0.875rem", lineHeight: 1.4 }}>
+              Copy this answer code, paste it into the Scout extension, then tap Connect Phone.
+            </p>
+            <textarea
+              readOnly
+              value={answerCode}
+              style={{
+                minHeight: "120px",
+                resize: "none",
+                borderRadius: "8px",
+                border: "1px solid #444",
+                backgroundColor: "#0a0a0a",
+                color: "#e5e5e5",
+                padding: "0.75rem",
+                fontFamily: "monospace",
+                fontSize: "0.75rem",
+              }}
+            />
+            <button
+              onClick={copyAnswer}
+              style={{
+                padding: "0.875rem 1rem",
+                backgroundColor: "#22c55e",
+                border: "none",
+                borderRadius: "8px",
+                color: "#07110a",
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              {answerCopied ? "Copied" : "Copy Answer Code"}
+            </button>
+          </div>
+        ) : connectionStatus === "connected" ? (
           <div
             id="scanner-viewport"
             style={{
