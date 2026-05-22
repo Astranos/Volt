@@ -33,7 +33,7 @@
       </dict>
     </array>
     <key>CFBundleVersion</key>
-    <string>4</string>
+    <string>8</string>
     <key>LSMinimumSystemVersion</key>
     <string>12.0</string>
     <key>LSRequiresIPhoneOS</key>
@@ -49,6 +49,8 @@
     <string>Volt uses the camera to scan barcodes, model numbers, serial numbers, and other text for the paired Chrome extension.</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>Volt uses the microphone for hold-to-speak dictation into the paired Chrome browser.</string>
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>Volt may request photo library access if an imported image is used for scanning product codes, model numbers, serial numbers, or other text for the paired Chrome extension.</string>
     <key>NSSpeechRecognitionUsageDescription</key>
     <string>Volt uses speech recognition to turn dictated speech into text for the paired Chrome browser.</string>
     <key>NSUserActivityTypes</key>

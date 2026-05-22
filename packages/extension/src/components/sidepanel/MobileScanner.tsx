@@ -104,8 +104,13 @@ function insertTextAtTrackedEditable(value: string) {
       const input = target as HTMLInputElement | HTMLTextAreaElement;
       const start = input.selectionStart ?? input.value.length;
       const end = input.selectionEnd ?? input.value.length;
-      input.value = input.value.slice(0, start) + value + input.value.slice(end);
-      input.selectionStart = input.selectionEnd = start + value.length;
+      if (typeof input.setRangeText === "function") {
+        input.setRangeText(value, start, end, "end");
+      } else {
+        input.value =
+          input.value.slice(0, start) + value + input.value.slice(end);
+        input.selectionStart = input.selectionEnd = start + value.length;
+      }
       input.dispatchEvent(new Event("input", { bubbles: true }));
       input.dispatchEvent(new Event("change", { bubbles: true }));
     }
@@ -214,7 +219,7 @@ export default function MobileScanner({ onClose }: MobileScannerProps) {
       onStatus: setStatus,
       onError: setError,
       onScan: addScan,
-      onDictation: (text) => void typeAtCursor(text),
+      onInsert: (text) => void typeAtCursor(text),
     });
 
     return () => {

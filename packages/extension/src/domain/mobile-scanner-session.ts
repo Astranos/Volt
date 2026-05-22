@@ -17,8 +17,15 @@ export type MobileScannerSessionEvents = {
   onStatus: (status: ScannerConnectionStatus) => void;
   onError: (error: string | null) => void;
   onScan: (message: BarcodeMessage) => void;
-  onDictation: (text: string) => void;
+  onInsert: (text: string) => void;
 };
+
+export function shouldInsertScannerMessage(message: BarcodeMessage) {
+  return (
+    message.kind === "barcode" ||
+    (message.kind === "text" && message.format === "dictation")
+  );
+}
 
 export class MobileScannerSession {
   private peerConnection: RTCPeerConnection | null = null;
@@ -57,8 +64,8 @@ export class MobileScannerSession {
         if (!data) return;
         if (this.isDuplicateMessage(data)) return;
         this.events.onScan(data);
-        if (data.kind === "text" && data.format === "dictation") {
-          this.events.onDictation(data.barcode);
+        if (shouldInsertScannerMessage(data)) {
+          this.events.onInsert(data.barcode);
         }
       };
 

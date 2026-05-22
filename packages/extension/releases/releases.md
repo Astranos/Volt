@@ -4,7 +4,24 @@ Download the latest version of the Volt Chrome Extension.
 
 ## Latest Release
 
-### v1.0.22 (Current)
+### v1.0.23 (Current)
+
+**Release Date:** May 22, 2026
+**Download:** [voltextension-1.0.23-chrome.zip](./voltextension-1.0.23-chrome.zip)
+
+**What's New:**
+
+This release fixes Mobile Scanner barcode insertion so scans are typed into the active or last-focused page input while still appearing in scanner results.
+
+### Changes
+
+- Fixed barcode scans not auto-inserting at the cursor from the Mobile Scanner sidepanel
+- Improved text-field insertion reliability when replacing selected input text
+- Bumped the extension version to `1.0.23`
+
+## Previous Release
+
+### v1.0.22
 
 **Release Date:** May 22, 2026
 **Download:** [voltextension-1.0.22-chrome.zip](./voltextension-1.0.22-chrome.zip)
