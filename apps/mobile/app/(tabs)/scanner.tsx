@@ -130,7 +130,6 @@ export default function ScannerTab() {
                     onBarcodeScanned={scanner.onBarcodeScanned}
                   />
                 ) : null}
-                <View style={styles.scanFrame} pointerEvents="none" />
                 {!cameraActive ? <StartCameraOverlay onPress={() => setCameraActive(true)} /> : null}
               </View>
               <View style={localStyles.hintPanel}>

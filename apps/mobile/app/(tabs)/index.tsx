@@ -1,16 +1,16 @@
 import { Ionicons } from "@expo/vector-icons";
 import { CameraView, type BarcodeScanningResult } from "expo-camera";
 import { useFocusEffect } from "expo-router";
-import { Dimensions, Image, Keyboard, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Image, Keyboard, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { initialWindowMetrics } from "react-native-safe-area-context";
 import { useCallback, useEffect, useRef, useState, type PropsWithChildren } from "react";
+import { LiveTextImageView } from "../../lib/live-text-image-view";
 import { useScanner } from "../../lib/scanner-state";
 
 const baseFloatingBottom = Platform.select({ ios: 94, default: 86 });
 const keyboardFloatingGap = 10;
 const continuousCorners = Platform.select({ ios: { borderCurve: "continuous" as const }, default: null });
 const stableTopInset = initialWindowMetrics?.insets.top ?? 0;
-const viewfinderSize = Dimensions.get("window").width - 36;
 
 export default function OcrTab() {
   const scanner = useScanner();
@@ -131,9 +131,24 @@ export default function OcrTab() {
     <ScreenRoot>
       <Header />
       <View style={styles.page}>
-        <View style={styles.content}>
+        <View style={[styles.content, styles.captureContent]}>
           <View style={styles.cameraShell}>
-            {cameraActive ? (
+            {scanner.textCapture ? (
+              <>
+                <LiveTextImageView
+                  imageUri={scanner.textCapture.photoUri}
+                  style={styles.capturedImage}
+                />
+                <Pressable
+                  accessibilityLabel="Retake text capture"
+                  accessibilityRole="button"
+                  style={styles.captureRetakeButton}
+                  onPress={scanner.clearTextCapture}
+                >
+                  <Ionicons name="refresh" size={18} color="#fafaf9" />
+                </Pressable>
+              </>
+            ) : cameraActive ? (
               <CameraView
                 ref={scanner.cameraRef}
                 style={styles.camera}
@@ -141,8 +156,8 @@ export default function OcrTab() {
                 enableTorch={scanner.torch}
               />
             ) : null}
-            <View style={styles.scanFrame} pointerEvents="none" />
-            {!cameraActive ? <StartCameraOverlay onPress={() => setCameraActive(true)} /> : null}
+            {!cameraActive && !scanner.textCapture ? <StartCameraOverlay onPress={() => setCameraActive(true)} /> : null}
+            {cameraActive && !scanner.textCapture ? <TorchButton /> : null}
           </View>
         </View>
         <BottomControls />
@@ -199,20 +214,30 @@ export function PairingPanel({
 }
 
 export function Header() {
-  const { connected, setTorch, statusLabel, torch } = useScanner();
+  const { statusLabel } = useScanner();
 
   return (
     <View style={styles.header}>
       <View style={styles.headerBrand}>
         <Image source={require("../../assets/volt-logo.png")} style={styles.headerLogo} resizeMode="contain" />
-        <Text numberOfLines={1} style={styles.status}>{statusLabel}</Text>
       </View>
-      {connected ? (
-        <Pressable style={styles.iconButton} onPress={() => setTorch((value) => !value)}>
-          <Ionicons name={torch ? "flash" : "flash-outline"} size={20} color="#fafaf9" />
-        </Pressable>
-      ) : null}
+      <Text numberOfLines={1} style={styles.status}>{statusLabel}</Text>
     </View>
+  );
+}
+
+export function TorchButton() {
+  const { setTorch, torch } = useScanner();
+
+  return (
+    <Pressable
+      accessibilityLabel={torch ? "Turn flash off" : "Turn flash on"}
+      accessibilityRole="button"
+      style={styles.torchButton}
+      onPress={() => setTorch((value) => !value)}
+    >
+      <Ionicons name={torch ? "flash" : "flash-outline"} size={20} color="#fafaf9" />
+    </Pressable>
   );
 }
 
@@ -220,11 +245,13 @@ export function BottomControls() {
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const {
     captureText,
+    clearTextCapture,
     hasManualText,
     manualText,
     recognizingText,
     sendManualText,
     setManualText,
+    textCapture,
   } = useScanner();
 
   useEffect(() => {
@@ -243,6 +270,10 @@ export function BottomControls() {
 
   const floatingBottom = keyboardHeight ? keyboardHeight + keyboardFloatingGap : baseFloatingBottom;
 
+  const actionPress = hasManualText ? sendManualText : textCapture ? clearTextCapture : captureText;
+  const actionDisabled = !hasManualText && !textCapture && recognizingText;
+  const actionIcon = hasManualText ? "send" : textCapture ? "refresh" : "camera";
+
   return (
     <View style={[styles.bottomControls, { bottom: floatingBottom }]}>
       <View style={styles.controls}>
@@ -259,11 +290,11 @@ export function BottomControls() {
         />
         <Pressable
           accessibilityLabel={hasManualText ? "Send text" : "Capture text"}
-          style={[styles.actionButton, recognizingText && !hasManualText && styles.disabled]}
-          onPress={hasManualText ? sendManualText : captureText}
-          disabled={!hasManualText && recognizingText}
+          style={[styles.actionButton, actionDisabled && styles.disabled]}
+          onPress={actionPress}
+          disabled={actionDisabled}
         >
-          <Ionicons name={hasManualText ? "send" : "camera"} size={hasManualText ? 18 : 21} color="#f0fdf4" />
+          <Ionicons name={actionIcon} size={hasManualText ? 18 : 21} color="#f0fdf4" />
         </Pressable>
       </View>
     </View>
@@ -281,10 +312,13 @@ export const styles = StyleSheet.create({
     justifyContent: "space-between",
     backgroundColor: "#1c1917",
   },
-  status: { color: "#d6d3d1", marginTop: 2, fontSize: 13, lineHeight: 16, maxWidth: 250 },
-  headerBrand: { height: 51, justifyContent: "center", gap: 3 },
+  status: { color: "#d6d3d1", marginLeft: 14, fontSize: 13, lineHeight: 16, maxWidth: 250, textAlign: "right" },
+  headerBrand: { height: 51, justifyContent: "center" },
   headerLogo: { width: 32, height: 32 },
-  iconButton: {
+  torchButton: {
+    position: "absolute",
+    right: 12,
+    bottom: 12,
     width: 42,
     height: 42,
     borderRadius: 21,
@@ -307,10 +341,10 @@ export const styles = StyleSheet.create({
     paddingBottom: 104,
   },
   content: { flex: 1, paddingTop: 18, paddingBottom: 18 },
+  captureContent: { paddingBottom: 178 },
   cameraShell: {
-    width: viewfinderSize,
-    height: viewfinderSize,
-    alignSelf: "center",
+    flex: 1,
+    marginHorizontal: 18,
     borderRadius: 32,
     ...continuousCorners,
     overflow: "hidden",
@@ -319,6 +353,24 @@ export const styles = StyleSheet.create({
     borderColor: "#292524",
   },
   camera: { flex: 1 },
+  capturedImage: {
+    ...StyleSheet.absoluteFillObject,
+    width: "100%",
+    height: "100%",
+    backgroundColor: "#1c1917",
+  },
+  captureRetakeButton: {
+    position: "absolute",
+    right: 12,
+    top: 12,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    ...continuousCorners,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(28, 25, 23, 0.82)",
+  },
   pairingShell: {
     flex: 1,
     marginHorizontal: 18,
@@ -388,16 +440,6 @@ export const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(28, 25, 23, 0.82)",
-  },
-  scanFrame: {
-    position: "absolute",
-    left: "13%",
-    top: "13%",
-    width: "74%",
-    height: "74%",
-    borderWidth: 2,
-    borderColor: "#22c55e",
-    borderRadius: 999,
   },
   startCameraOverlay: {
     ...StyleSheet.absoluteFillObject,

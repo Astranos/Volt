@@ -45,6 +45,10 @@ export type ScanItem = BarcodeMessage & {
   id: string;
 };
 
+type TextCapture = {
+  photoUri: string;
+};
+
 export const barcodeTypes = [
   "aztec",
   "codabar",
@@ -64,6 +68,7 @@ export const barcodeTypes = [
 type ScannerState = {
   cameraRef: React.MutableRefObject<any>;
   captureText: () => Promise<void>;
+  clearTextCapture: () => void;
   connected: boolean;
   dictating: boolean;
   dictationError: string | null;
@@ -85,6 +90,7 @@ type ScannerState = {
   status: ConnectionStatus;
   statusLabel: string;
   stopDictation: () => void;
+  textCapture: TextCapture | null;
   torch: boolean;
 };
 
@@ -117,37 +123,6 @@ function makeScanItem(value: string, format: string, kind: BarcodeMessage["kind"
   };
 }
 
-function selectOcrLines(lines: string[], fallbackText: string) {
-  const sourceLines = lines.length ? lines : fallbackText.split(/\r?\n/);
-  const labelPattern = /\b(imei|meid|serial|sn|s\/n|model|sku|upc|ean|asset|tag|barcode)\b/i;
-  const valuePattern = /\b[A-Z0-9][A-Z0-9._/-]{3,}\b/i;
-  const weakWords = /\b(warning|caution|made in|designed|assembled|copyright|trademark|battery|recycle|manual|instructions)\b/i;
-
-  const candidates = sourceLines
-    .map((rawLine) => rawLine.replace(/\s+/g, " ").trim())
-    .filter((line) => line.length >= 4 && line.length <= 80)
-    .map((line) => {
-      const labeledValue = line.match(/(?:imei|meid|serial|sn|s\/n|model|sku|upc|ean|asset|tag|barcode)\s*[:#-]?\s*([A-Z0-9][A-Z0-9._/-]{3,})/i)?.[1];
-      const value = (labeledValue ?? line).trim();
-      const hasDigit = /\d/.test(value);
-      const hasValue = valuePattern.test(value);
-      let score = 0;
-
-      if (labelPattern.test(line)) score += 4;
-      if (labeledValue) score += 3;
-      if (hasValue) score += 2;
-      if (hasDigit) score += 2;
-      if (/^[A-Z0-9._/-]+$/i.test(value)) score += 1;
-      if (weakWords.test(line)) score -= 4;
-      if (!hasDigit && !labelPattern.test(line)) score -= 3;
-
-      return { value, score };
-    })
-    .filter((candidate) => candidate.score >= 3);
-
-  return Array.from(new Set(candidates.sort((a, b) => b.score - a.score).map((candidate) => candidate.value))).slice(0, 4);
-}
-
 export function ScannerProvider({ children }: PropsWithChildren) {
   const [permission, requestPermission] = useCameraPermissions();
   const [status, setStatus] = useState<ConnectionStatus>("idle");
@@ -156,6 +131,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
   const [scans, setScans] = useState<ScanItem[]>([]);
   const [torch, setTorch] = useState(false);
   const [recognizingText, setRecognizingText] = useState(false);
+  const [textCapture, setTextCapture] = useState<TextCapture | null>(null);
   const [dictating, setDictating] = useState(false);
   const [dictationTranscript, setDictationTranscript] = useState("");
   const [dictationError, setDictationError] = useState<string | null>(null);
@@ -480,6 +456,8 @@ export function ScannerProvider({ children }: PropsWithChildren) {
     setRecognizingText(true);
     try {
       const photo = await cameraRef.current.takePictureAsync({ quality: 0.75, skipProcessing: true });
+      setTextCapture({ photoUri: photo.uri });
+
       let capturedCodeCount = 0;
       if (settings.detectCodesOnOcrCapture) {
         try {
@@ -493,23 +471,6 @@ export function ScannerProvider({ children }: PropsWithChildren) {
           capturedCodeCount = 0;
         }
       }
-
-      const TextRecognition = require("@react-native-ml-kit/text-recognition").default;
-      const result = await TextRecognition.recognize(photo.uri) as {
-        text: string;
-        blocks: Array<{ lines: Array<{ text: string }> }>;
-      };
-      const lines = result.blocks.flatMap((block) => block.lines.map((line) => line.text.trim())).filter(Boolean);
-      const selectedLines = selectOcrLines(lines, result.text.trim());
-
-      if (!selectedLines.length) {
-        if (capturedCodeCount > 0) return;
-        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-        Alert.alert("No usable ID found", "Fill the frame with a model, serial, IMEI, UPC, SKU, or asset tag.");
-        return;
-      }
-
-      await Promise.all(selectedLines.map((line) => sendScan(makeScanItem(line, "ocr", "text"))));
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not read text from the camera.";
       Alert.alert(
@@ -523,6 +484,10 @@ export function ScannerProvider({ children }: PropsWithChildren) {
     }
   }, [recognizingText, sendScan, settings.detectCodesOnOcrCapture]);
 
+  const clearTextCapture = useCallback(() => {
+    setTextCapture(null);
+  }, []);
+
   const statusLabel = useMemo(() => {
     if (status === "connected") return "Connected to Chrome";
     if (status === "pairing") return "Pairing";
@@ -534,6 +499,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
     () => ({
       cameraRef,
       captureText,
+      clearTextCapture,
       connected,
       dictating,
       dictationError,
@@ -555,10 +521,12 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       status,
       statusLabel,
       stopDictation,
+      textCapture,
       torch,
     }),
     [
       captureText,
+      clearTextCapture,
       connected,
       dictating,
       dictationError,
@@ -577,6 +545,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       status,
       statusLabel,
       stopDictation,
+      textCapture,
       torch,
     ]
   );

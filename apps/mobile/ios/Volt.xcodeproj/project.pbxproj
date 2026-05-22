@@ -14,6 +14,8 @@
 		AC7AC6ECCE1446F6331DC713 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC612F95403FFD79D2EA2F75 /* ExpoModulesProvider.swift */; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
+		F2A7E5012D7A000100000001 /* LiveTextImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2A7E5002D7A000100000001 /* LiveTextImageView.swift */; };
+		F2A7E5032D7A000100000001 /* LiveTextImageViewManager.m in Sources */ = {isa = PBXBuildFile; fileRef = F2A7E5022D7A000100000001 /* LiveTextImageViewManager.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -30,6 +32,8 @@
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = Volt/AppDelegate.swift; sourceTree = "<group>"; };
 		F11748442D0722820044C1D9 /* Volt-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "Volt-Bridging-Header.h"; path = "Volt/Volt-Bridging-Header.h"; sourceTree = "<group>"; };
+		F2A7E5002D7A000100000001 /* LiveTextImageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LiveTextImageView.swift; path = Volt/LiveTextImageView.swift; sourceTree = "<group>"; };
+		F2A7E5022D7A000100000001 /* LiveTextImageViewManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = LiveTextImageViewManager.m; path = Volt/LiveTextImageViewManager.m; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -48,6 +52,8 @@
 			isa = PBXGroup;
 			children = (
 				F11748412D0307B40044C1D9 /* AppDelegate.swift */,
+				F2A7E5002D7A000100000001 /* LiveTextImageView.swift */,
+				F2A7E5022D7A000100000001 /* LiveTextImageViewManager.m */,
 				F11748442D0722820044C1D9 /* Volt-Bridging-Header.h */,
 				BB2F792B24A3F905000567C9 /* Supporting */,
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
@@ -349,6 +355,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */,
+				F2A7E5012D7A000100000001 /* LiveTextImageView.swift in Sources */,
+				F2A7E5032D7A000100000001 /* LiveTextImageViewManager.m in Sources */,
 				AC7AC6ECCE1446F6331DC713 /* ExpoModulesProvider.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
