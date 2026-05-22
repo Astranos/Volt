@@ -1,10 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import { CameraView, type BarcodeScanningResult } from "expo-camera";
 import { Pressable, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { useRef, useState } from "react";
 import { useScanner } from "../../lib/scanner-state";
-import { Header, PairingPanel, styles } from "./index";
+import { Header, PairingPanel, ScreenRoot, styles } from "./index";
 
 export default function DictationTab() {
   const scanner = useScanner();
@@ -57,7 +56,7 @@ export default function DictationTab() {
   };
 
   return (
-    <SafeAreaView edges={["top", "left", "right"]} style={styles.scannerRoot}>
+    <ScreenRoot>
       <Header />
       <View style={[styles.page, !connected ? styles.disconnectedPage : localStyles.dictationPage]}>
         {!connected ? (
@@ -125,7 +124,7 @@ export default function DictationTab() {
           </View>
         )}
       </View>
-    </SafeAreaView>
+    </ScreenRoot>
   );
 }
 

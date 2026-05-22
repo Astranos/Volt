@@ -2,13 +2,14 @@ import { Ionicons } from "@expo/vector-icons";
 import { CameraView, type BarcodeScanningResult } from "expo-camera";
 import { useFocusEffect } from "expo-router";
 import { Dimensions, Image, Keyboard, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { initialWindowMetrics } from "react-native-safe-area-context";
+import { useCallback, useEffect, useRef, useState, type PropsWithChildren } from "react";
 import { useScanner } from "../../lib/scanner-state";
 
 const baseFloatingBottom = Platform.select({ ios: 94, default: 86 });
 const keyboardFloatingGap = 10;
 const continuousCorners = Platform.select({ ios: { borderCurve: "continuous" as const }, default: null });
+const stableTopInset = initialWindowMetrics?.insets.top ?? 0;
 const viewfinderSize = Dimensions.get("window").width - 36;
 
 export default function OcrTab() {
@@ -68,7 +69,7 @@ export default function OcrTab() {
 
   if (!scanner.connected) {
     return (
-      <SafeAreaView edges={["top", "left", "right"]} style={styles.scannerRoot}>
+      <ScreenRoot>
         <Header />
         <View style={[styles.page, styles.disconnectedPage]}>
           <View style={styles.content}>
@@ -103,13 +104,13 @@ export default function OcrTab() {
             )}
           </View>
         </View>
-      </SafeAreaView>
+      </ScreenRoot>
     );
   }
 
   if (!scanner.permission || !scanner.permission.granted) {
     return (
-      <SafeAreaView edges={["top", "left", "right"]} style={styles.scannerRoot}>
+      <ScreenRoot>
         <Header />
         <View style={styles.page}>
           <View style={styles.permissionPanel}>
@@ -122,12 +123,12 @@ export default function OcrTab() {
             </Pressable>
           </View>
         </View>
-      </SafeAreaView>
+      </ScreenRoot>
     );
   }
 
   return (
-    <SafeAreaView edges={["top", "left", "right"]} style={styles.scannerRoot}>
+    <ScreenRoot>
       <Header />
       <View style={styles.page}>
         <View style={styles.content}>
@@ -146,8 +147,12 @@ export default function OcrTab() {
         </View>
         <BottomControls />
       </View>
-    </SafeAreaView>
+    </ScreenRoot>
   );
+}
+
+export function ScreenRoot({ children }: PropsWithChildren) {
+  return <View style={styles.scannerRoot}>{children}</View>;
 }
 
 export function StartCameraOverlay({ onPress }: { onPress: () => void }) {
@@ -267,7 +272,7 @@ export function BottomControls() {
 
 export const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#ffffff" },
-  scannerRoot: { flex: 1, backgroundColor: "#1c1917" },
+  scannerRoot: { flex: 1, paddingTop: stableTopInset, backgroundColor: "#1c1917" },
   header: {
     height: 70,
     paddingHorizontal: 18,

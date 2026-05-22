@@ -2,10 +2,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { CameraView, type BarcodeScanningResult } from "expo-camera";
 import { useFocusEffect } from "expo-router";
 import { Image, Pressable, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { useCallback, useRef, useState } from "react";
 import { barcodeTypes, useScanner } from "../../lib/scanner-state";
-import { Header, PairingPanel, StartCameraOverlay, styles } from "./index";
+import { Header, PairingPanel, ScreenRoot, StartCameraOverlay, styles } from "./index";
 
 export default function ScannerTab() {
   const scanner = useScanner();
@@ -66,7 +65,7 @@ export default function ScannerTab() {
   if (scanner.connected) {
     if (!permission || !permission.granted) {
       return (
-        <SafeAreaView edges={["top", "left", "right"]} style={styles.scannerRoot}>
+        <ScreenRoot>
           <Header />
           <View style={styles.page}>
             <View style={styles.permissionPanel}>
@@ -79,13 +78,13 @@ export default function ScannerTab() {
               </Pressable>
             </View>
           </View>
-        </SafeAreaView>
+        </ScreenRoot>
       );
     }
   }
 
   return (
-    <SafeAreaView edges={["top", "left", "right"]} style={styles.scannerRoot}>
+    <ScreenRoot>
       <Header />
       <View style={[styles.page, !scanner.connected && styles.disconnectedPage]}>
         <View style={styles.content}>
@@ -144,7 +143,7 @@ export default function ScannerTab() {
           )}
         </View>
       </View>
-    </SafeAreaView>
+    </ScreenRoot>
   );
 }
 

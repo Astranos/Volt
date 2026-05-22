@@ -1,14 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
 import { ScrollView, Switch, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { useScanner } from "../../lib/scanner-state";
-import { Header, styles } from "./index";
+import { Header, ScreenRoot, styles } from "./index";
 
 export default function SettingsTab() {
   const { setSetting, setTorch, settings, statusLabel, torch } = useScanner();
 
   return (
-    <SafeAreaView edges={["top", "left", "right"]} style={styles.scannerRoot}>
+    <ScreenRoot>
       <Header />
       <View style={styles.page}>
         <ScrollView style={localStyles.scroll} contentContainerStyle={localStyles.scrollContent}>
@@ -57,7 +56,7 @@ export default function SettingsTab() {
           />
         </ScrollView>
       </View>
-    </SafeAreaView>
+    </ScreenRoot>
   );
 }
 
