@@ -1,10 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
 import { CameraView, type BarcodeScanningResult } from "expo-camera";
+import { useFocusEffect } from "expo-router";
 import { Image, Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { barcodeTypes, useScanner } from "../../lib/scanner-state";
-import { Header, PairingPanel, styles } from "./index";
+import { Header, PairingPanel, StartCameraOverlay, styles } from "./index";
 
 export default function ScannerTab() {
   const scanner = useScanner();
@@ -12,7 +13,20 @@ export default function ScannerTab() {
   const [pairScannerOpen, setPairScannerOpen] = useState(false);
   const [pairScannerLocked, setPairScannerLocked] = useState(false);
   const [pairScannerError, setPairScannerError] = useState<string | null>(null);
+  const [cameraActive, setCameraActive] = useState(false);
   const pairScannerLockedRef = useRef(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        setCameraActive(false);
+        setPairScannerOpen(false);
+        setPairScannerLocked(false);
+        pairScannerLockedRef.current = false;
+        scanner.setTorch(false);
+      };
+    }, [scanner.setTorch])
+  );
 
   const openPairScanner = async () => {
     if (!scanner.permission?.granted) {
@@ -108,14 +122,17 @@ export default function ScannerTab() {
           ) : (
             <>
               <View style={styles.cameraShell}>
-                <CameraView
-                  style={styles.camera}
-                  facing="back"
-                  enableTorch={scanner.torch}
-                  barcodeScannerSettings={{ barcodeTypes: [...barcodeTypes] }}
-                  onBarcodeScanned={scanner.onBarcodeScanned}
-                />
+                {cameraActive ? (
+                  <CameraView
+                    style={styles.camera}
+                    facing="back"
+                    enableTorch={scanner.torch}
+                    barcodeScannerSettings={{ barcodeTypes: [...barcodeTypes] }}
+                    onBarcodeScanned={scanner.onBarcodeScanned}
+                  />
+                ) : null}
                 <View style={styles.scanFrame} pointerEvents="none" />
+                {!cameraActive ? <StartCameraOverlay onPress={() => setCameraActive(true)} /> : null}
               </View>
               <View style={localStyles.hintPanel}>
                 <Text style={localStyles.hintTitle}>Auto scanner</Text>

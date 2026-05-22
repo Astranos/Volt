@@ -1,20 +1,35 @@
 import { Ionicons } from "@expo/vector-icons";
 import { CameraView, type BarcodeScanningResult } from "expo-camera";
-import { Image, Keyboard, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { useFocusEffect } from "expo-router";
+import { Dimensions, Image, Keyboard, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useScanner } from "../../lib/scanner-state";
 
 const baseFloatingBottom = Platform.select({ ios: 94, default: 86 });
 const keyboardFloatingGap = 10;
 const continuousCorners = Platform.select({ ios: { borderCurve: "continuous" as const }, default: null });
+const viewfinderSize = Dimensions.get("window").width - 36;
 
 export default function OcrTab() {
   const scanner = useScanner();
   const [pairScannerOpen, setPairScannerOpen] = useState(false);
   const [pairScannerLocked, setPairScannerLocked] = useState(false);
   const [pairScannerError, setPairScannerError] = useState<string | null>(null);
+  const [cameraActive, setCameraActive] = useState(false);
   const pairScannerLockedRef = useRef(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        setCameraActive(false);
+        setPairScannerOpen(false);
+        setPairScannerLocked(false);
+        pairScannerLockedRef.current = false;
+        scanner.setTorch(false);
+      };
+    }, [scanner.setTorch])
+  );
 
   const openPairScanner = async () => {
     if (!scanner.permission?.granted) {
@@ -117,18 +132,37 @@ export default function OcrTab() {
       <View style={styles.page}>
         <View style={styles.content}>
           <View style={styles.cameraShell}>
-            <CameraView
-              ref={scanner.cameraRef}
-              style={styles.camera}
-              facing="back"
-              enableTorch={scanner.torch}
-            />
+            {cameraActive ? (
+              <CameraView
+                ref={scanner.cameraRef}
+                style={styles.camera}
+                facing="back"
+                enableTorch={scanner.torch}
+              />
+            ) : null}
             <View style={styles.scanFrame} pointerEvents="none" />
+            {!cameraActive ? <StartCameraOverlay onPress={() => setCameraActive(true)} /> : null}
           </View>
         </View>
         <BottomControls />
       </View>
     </SafeAreaView>
+  );
+}
+
+export function StartCameraOverlay({ onPress }: { onPress: () => void }) {
+  return (
+    <Pressable
+      accessibilityLabel="Start camera"
+      accessibilityRole="button"
+      onPress={onPress}
+      style={styles.startCameraOverlay}
+    >
+      <View style={styles.startCameraButton}>
+        <Ionicons name="play" size={22} color="#f0fdf4" />
+        <Text style={styles.startCameraText}>Start</Text>
+      </View>
+    </Pressable>
   );
 }
 
@@ -166,7 +200,7 @@ export function Header() {
     <View style={styles.header}>
       <View style={styles.headerBrand}>
         <Image source={require("../../assets/volt-logo.png")} style={styles.headerLogo} resizeMode="contain" />
-        <Text style={styles.status}>{statusLabel}</Text>
+        <Text numberOfLines={1} style={styles.status}>{statusLabel}</Text>
       </View>
       {connected ? (
         <Pressable style={styles.iconButton} onPress={() => setTorch((value) => !value)}>
@@ -235,15 +269,15 @@ export const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#ffffff" },
   scannerRoot: { flex: 1, backgroundColor: "#1c1917" },
   header: {
+    height: 70,
     paddingHorizontal: 18,
-    paddingVertical: 14,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     backgroundColor: "#1c1917",
   },
-  status: { color: "#d6d3d1", marginTop: 2, fontSize: 13 },
-  headerBrand: { gap: 3 },
+  status: { color: "#d6d3d1", marginTop: 2, fontSize: 13, lineHeight: 16, maxWidth: 250 },
+  headerBrand: { height: 51, justifyContent: "center", gap: 3 },
   headerLogo: { width: 32, height: 32 },
   iconButton: {
     width: 42,
@@ -269,8 +303,9 @@ export const styles = StyleSheet.create({
   },
   content: { flex: 1, paddingTop: 18, paddingBottom: 18 },
   cameraShell: {
-    marginHorizontal: 18,
-    aspectRatio: 1,
+    width: viewfinderSize,
+    height: viewfinderSize,
+    alignSelf: "center",
     borderRadius: 32,
     ...continuousCorners,
     overflow: "hidden",
@@ -359,6 +394,24 @@ export const styles = StyleSheet.create({
     borderColor: "#22c55e",
     borderRadius: 999,
   },
+  startCameraOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(28, 25, 23, 0.68)",
+  },
+  startCameraButton: {
+    minHeight: 54,
+    paddingHorizontal: 22,
+    borderRadius: 999,
+    ...continuousCorners,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 8,
+    backgroundColor: "#16a34a",
+  },
+  startCameraText: { color: "#f0fdf4", fontSize: 17, fontWeight: "800" },
   controls: { flexDirection: "row", gap: 10 },
   input: {
     flex: 1,
