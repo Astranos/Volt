@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { CameraView, type BarcodeScanningResult } from "expo-camera";
 import { useFocusEffect } from "expo-router";
-import { Image, Keyboard, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Image, Keyboard, Platform, Pressable, StyleSheet, Text, TextInput, View, type GestureResponderEvent } from "react-native";
 import { initialWindowMetrics } from "react-native-safe-area-context";
 import { useCallback, useEffect, useRef, useState, type PropsWithChildren } from "react";
 import { LiveTextImageView } from "../../lib/live-text-image-view";
@@ -11,6 +11,18 @@ const baseFloatingBottom = Platform.select({ ios: 94, default: 86 });
 const keyboardFloatingGap = 10;
 const continuousCorners = Platform.select({ ios: { borderCurve: "continuous" as const }, default: null });
 const stableTopInset = initialWindowMetrics?.insets.top ?? 0;
+const zoomStep = 0.08;
+
+function clampZoom(value: number) {
+  return Math.max(0, Math.min(1, value));
+}
+
+function touchDistance(event: GestureResponderEvent) {
+  const touches = event.nativeEvent.touches;
+  if (touches.length < 2) return null;
+  const [first, second] = touches;
+  return Math.hypot(first.pageX - second.pageX, first.pageY - second.pageY);
+}
 
 export default function OcrTab() {
   const scanner = useScanner();
@@ -18,7 +30,13 @@ export default function OcrTab() {
   const [pairScannerLocked, setPairScannerLocked] = useState(false);
   const [pairScannerError, setPairScannerError] = useState<string | null>(null);
   const [cameraActive, setCameraActive] = useState(false);
+  const [cameraZoom, setCameraZoom] = useState(0);
+  const [focusMode, setFocusMode] = useState<"on" | "off">("off");
+  const [focusPoint, setFocusPoint] = useState<{ x: number; y: number } | null>(null);
   const pairScannerLockedRef = useRef(false);
+  const focusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pinchStartDistanceRef = useRef<number | null>(null);
+  const pinchStartZoomRef = useRef(0);
 
   useFocusEffect(
     useCallback(() => {
@@ -28,9 +46,47 @@ export default function OcrTab() {
         setPairScannerLocked(false);
         pairScannerLockedRef.current = false;
         scanner.setTorch(false);
+        setCameraZoom(0);
+        setFocusPoint(null);
+        if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
       };
     }, [scanner.setTorch])
   );
+
+  const triggerFocus = useCallback((event: GestureResponderEvent) => {
+    const { locationX, locationY } = event.nativeEvent;
+    setFocusMode("on");
+    setFocusPoint({ x: locationX, y: locationY });
+    if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
+    focusTimerRef.current = setTimeout(() => {
+      setFocusMode("off");
+      setFocusPoint(null);
+    }, 900);
+  }, []);
+
+  const handleCameraTouchStart = useCallback(
+    (event: GestureResponderEvent) => {
+      const distance = touchDistance(event);
+      if (distance != null) {
+        pinchStartDistanceRef.current = distance;
+        pinchStartZoomRef.current = cameraZoom;
+        return;
+      }
+      triggerFocus(event);
+    },
+    [cameraZoom, triggerFocus]
+  );
+
+  const handleCameraTouchMove = useCallback((event: GestureResponderEvent) => {
+    const distance = touchDistance(event);
+    if (distance == null || pinchStartDistanceRef.current == null) return;
+    const delta = (distance - pinchStartDistanceRef.current) / 260;
+    setCameraZoom(clampZoom(pinchStartZoomRef.current + delta));
+  }, []);
+
+  const handleCameraTouchEnd = useCallback(() => {
+    pinchStartDistanceRef.current = null;
+  }, []);
 
   const openPairScanner = async () => {
     if (!scanner.permission?.granted) {
@@ -149,12 +205,50 @@ export default function OcrTab() {
                 </Pressable>
               </>
             ) : cameraActive ? (
-              <CameraView
-                ref={scanner.cameraRef}
-                style={styles.camera}
-                facing="back"
-                enableTorch={scanner.torch}
-              />
+              <>
+                <CameraView
+                  ref={scanner.cameraRef}
+                  style={styles.camera}
+                  facing="back"
+                  enableTorch={scanner.torch}
+                  zoom={cameraZoom}
+                  autofocus={focusMode}
+                  onTouchStart={handleCameraTouchStart}
+                  onTouchMove={handleCameraTouchMove}
+                  onTouchEnd={handleCameraTouchEnd}
+                />
+                {focusPoint ? (
+                  <View
+                    pointerEvents="none"
+                    style={[
+                      styles.focusRing,
+                      {
+                        left: focusPoint.x - 34,
+                        top: focusPoint.y - 34,
+                      },
+                    ]}
+                  />
+                ) : null}
+                <View style={styles.zoomControls}>
+                  <Pressable
+                    accessibilityLabel="Zoom out"
+                    accessibilityRole="button"
+                    style={styles.zoomButton}
+                    onPress={() => setCameraZoom((value) => clampZoom(value - zoomStep))}
+                  >
+                    <Ionicons name="remove" size={18} color="#fafaf9" />
+                  </Pressable>
+                  <Text style={styles.zoomText}>{Math.round(cameraZoom * 100)}%</Text>
+                  <Pressable
+                    accessibilityLabel="Zoom in"
+                    accessibilityRole="button"
+                    style={styles.zoomButton}
+                    onPress={() => setCameraZoom((value) => clampZoom(value + zoomStep))}
+                  >
+                    <Ionicons name="add" size={18} color="#fafaf9" />
+                  </Pressable>
+                </View>
+              </>
             ) : null}
             {!cameraActive && !scanner.textCapture ? <StartCameraOverlay onPress={() => setCameraActive(true)} /> : null}
             {cameraActive && !scanner.textCapture ? <TorchButton /> : null}
@@ -358,6 +452,47 @@ export const styles = StyleSheet.create({
     width: "100%",
     height: "100%",
     backgroundColor: "#1c1917",
+  },
+  focusRing: {
+    position: "absolute",
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    ...continuousCorners,
+    borderWidth: 2,
+    borderColor: "#f0fdf4",
+    backgroundColor: "rgba(240, 253, 244, 0.08)",
+  },
+  zoomControls: {
+    position: "absolute",
+    left: 12,
+    bottom: 12,
+    minHeight: 42,
+    borderRadius: 999,
+    ...continuousCorners,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 8,
+    backgroundColor: "rgba(28, 25, 23, 0.82)",
+    borderWidth: 1,
+    borderColor: "#44403c",
+  },
+  zoomButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    ...continuousCorners,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#292524",
+  },
+  zoomText: {
+    minWidth: 38,
+    color: "#fafaf9",
+    fontSize: 12,
+    fontWeight: "800",
+    textAlign: "center",
   },
   captureRetakeButton: {
     position: "absolute",

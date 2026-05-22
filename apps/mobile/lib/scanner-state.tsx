@@ -1,6 +1,7 @@
 import { decode as base64Decode, encode as base64Encode } from "base-64";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { scanFromURLAsync, useCameraPermissions, type BarcodeScanningResult } from "expo-camera";
+import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
 import * as Linking from "expo-linking";
 import {
@@ -26,6 +27,7 @@ type ConnectionStatus = "idle" | "pairing" | "connected" | "disconnected" | "err
 const PAIRING_SESSION_RETRY_DELAYS_MS = [0, 350, 800, 1400];
 const SETTINGS_STORAGE_KEY = "volt.mobileScanner.settings.v1";
 const MULTI_SCAN_WINDOW_MS = 650;
+const CLIPBOARD_POLL_MS = 900;
 
 export type ScannerSettings = {
   autoSendSingleBarcode: boolean;
@@ -143,6 +145,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
   const lastScanRef = useRef<{ value: string; at: number } | null>(null);
   const lastSentScanRef = useRef<{ key: string; at: number } | null>(null);
   const lastDictationRef = useRef("");
+  const lastTextCaptureClipboardRef = useRef<string | null>(null);
   const pendingScannerItemsRef = useRef<ScanItem[]>([]);
   const scannerFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -404,6 +407,61 @@ export function ScannerProvider({ children }: PropsWithChildren) {
     [sendScan]
   );
 
+  const sendClipboardTextCapture = useCallback(
+    async (text?: string) => {
+      const value = (text ?? (await Clipboard.getStringAsync())).trim();
+      if (!value || value === lastTextCaptureClipboardRef.current) return;
+      lastTextCaptureClipboardRef.current = value;
+      await sendScan(makeScanItem(value, "live-text", "text"));
+    },
+    [sendScan]
+  );
+
+  useEffect(() => {
+    if (!textCapture) {
+      lastTextCaptureClipboardRef.current = null;
+      return;
+    }
+
+    let cancelled = false;
+    let checkingClipboard = false;
+
+    const checkClipboard = async () => {
+      if (cancelled || checkingClipboard) return;
+      checkingClipboard = true;
+      try {
+        const value = (await Clipboard.getStringAsync()).trim();
+        if (!cancelled && value && value !== lastTextCaptureClipboardRef.current) {
+          await sendClipboardTextCapture(value);
+        }
+      } catch {
+      } finally {
+        checkingClipboard = false;
+      }
+    };
+
+    void Clipboard.getStringAsync()
+      .then((value) => {
+        if (!cancelled) lastTextCaptureClipboardRef.current = value.trim();
+      })
+      .catch(() => {
+        if (!cancelled) lastTextCaptureClipboardRef.current = "";
+      });
+
+    const subscription = Clipboard.addClipboardListener((event) => {
+      if (event.contentTypes.includes(Clipboard.ContentType.PLAIN_TEXT)) {
+        void checkClipboard();
+      }
+    });
+    const pollTimer = setInterval(checkClipboard, CLIPBOARD_POLL_MS);
+
+    return () => {
+      cancelled = true;
+      Clipboard.removeClipboardListener(subscription);
+      clearInterval(pollTimer);
+    };
+  }, [sendClipboardTextCapture, textCapture]);
+
   useSpeechRecognitionEvent("start", () => {
     setDictating(true);
     setDictationError(null);
@@ -455,7 +513,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
 
     setRecognizingText(true);
     try {
-      const photo = await cameraRef.current.takePictureAsync({ quality: 0.75, skipProcessing: true });
+      const photo = await cameraRef.current.takePictureAsync({ quality: 1, skipProcessing: false });
       setTextCapture({ photoUri: photo.uri });
 
       let capturedCodeCount = 0;
