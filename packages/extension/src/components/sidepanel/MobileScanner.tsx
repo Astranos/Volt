@@ -2,7 +2,6 @@ import React, { useEffect, useState, useRef, useCallback } from "react";
 import {
   CheckCircle,
   Copy,
-  Keyboard,
   Loader2,
   QrCode,
   RefreshCw,
@@ -358,14 +357,6 @@ export default function MobileScanner({ onClose }: MobileScannerProps) {
           <div className="flex aspect-square w-full max-w-[320px] items-center justify-center rounded-lg bg-muted">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
-        ) : status === "connected" ? (
-          <div className="w-full max-w-[320px] rounded-lg border bg-card p-4 text-center">
-            <CheckCircle className="mx-auto h-8 w-8 text-green-500" />
-            <div className="mt-2 text-sm font-semibold">Volt app paired</div>
-            <div className="mt-1 text-xs text-muted-foreground">
-              Scans and dictation will send to this browser.
-            </div>
-          </div>
         ) : null}
 
         {status === "waiting" && (
@@ -413,14 +404,10 @@ export default function MobileScanner({ onClose }: MobileScannerProps) {
                   {scan.kind ?? "barcode"} {scan.format ? `• ${scan.format}` : ""}
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                <Button size="sm" onClick={() => copyScan(scan)}>
+              <div>
+                <Button size="sm" className="w-full" onClick={() => copyScan(scan)}>
                   <Copy className="mr-2 h-3.5 w-3.5" />
                   {scan.copied ? "Copied" : "Copy"}
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => typeAtCursor(scan.barcode)}>
-                  <Keyboard className="mr-2 h-3.5 w-3.5" />
-                  Type
                 </Button>
               </div>
             </div>

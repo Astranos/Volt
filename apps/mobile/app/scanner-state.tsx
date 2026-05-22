@@ -21,6 +21,7 @@ globalThis.atob ??= base64Decode;
 globalThis.btoa ??= base64Encode;
 
 type ConnectionStatus = "idle" | "pairing" | "connected" | "disconnected" | "error";
+const PAIRING_SESSION_RETRY_DELAYS_MS = [0, 350, 800, 1400];
 
 export type ScanItem = BarcodeMessage & {
   id: string;
@@ -52,6 +53,7 @@ type ScannerState = {
   hasManualText: boolean;
   manualText: string;
   onBarcodeScanned: (result: BarcodeScanningResult) => void;
+  pairFromUrl: (url: string) => Promise<boolean>;
   permission: ReturnType<typeof useCameraPermissions>[0];
   recognizingText: boolean;
   requestPermission: ReturnType<typeof useCameraPermissions>[1];
@@ -78,6 +80,10 @@ function getSessionFromUrl(url: string) {
   const parsed = Linking.parse(url);
   const session = parsed.queryParams?.session;
   return typeof session === "string" ? session : undefined;
+}
+
+function wait(delayMs: number) {
+  return new Promise((resolve) => setTimeout(resolve, delayMs));
 }
 
 function makeScanItem(value: string, format: string, kind: BarcodeMessage["kind"]): ScanItem {
@@ -220,8 +226,20 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       try {
         setStatus("pairing");
         setError(null);
-        const offerResponse = await fetch(`${SCANNER_SIGNAL_URL}/${sessionId}`);
-        if (!offerResponse.ok) throw new Error("Pairing session not found");
+
+        let offerResponse: Response | null = null;
+        for (const delayMs of PAIRING_SESSION_RETRY_DELAYS_MS) {
+          if (delayMs) await wait(delayMs);
+          offerResponse = await fetch(`${SCANNER_SIGNAL_URL}/${sessionId}`);
+          if (offerResponse.ok) break;
+          if (offerResponse.status !== 404) {
+            throw new Error("Pairing service unavailable");
+          }
+        }
+
+        if (!offerResponse?.ok) {
+          throw new Error("Pairing service is not ready. Restart pairing in the Chrome extension and scan the new QR.");
+        }
 
         const { offer } = await offerResponse.json();
         if (typeof offer !== "string" || !offer) throw new Error("Invalid pairing session");
@@ -237,25 +255,42 @@ export function ScannerProvider({ children }: PropsWithChildren) {
   );
 
   useEffect(() => {
+    return () => closeConnection();
+  }, [closeConnection]);
+
+  const pairFromUrl = useCallback(
+    async (url: string) => {
+      const offer = getOfferFromUrl(url);
+      const session = getSessionFromUrl(url);
+
+      if (offer) {
+        await pairWithOffer(offer, session);
+        return true;
+      }
+
+      if (session) {
+        await pairWithSession(session);
+        return true;
+      }
+
+      return false;
+    },
+    [pairWithOffer, pairWithSession]
+  );
+
+  useEffect(() => {
     Linking.getInitialURL().then((url) => {
-      const offer = url ? getOfferFromUrl(url) : undefined;
-      const session = url ? getSessionFromUrl(url) : undefined;
-      if (offer) pairWithOffer(offer, session);
-      else if (session) pairWithSession(session);
+      if (url) void pairFromUrl(url);
     });
 
     const subscription = Linking.addEventListener("url", ({ url }) => {
-      const offer = getOfferFromUrl(url);
-      const session = getSessionFromUrl(url);
-      if (offer) pairWithOffer(offer, session);
-      else if (session) pairWithSession(session);
+      void pairFromUrl(url);
     });
 
     return () => {
       subscription.remove();
-      closeConnection();
     };
-  }, [closeConnection, pairWithOffer, pairWithSession]);
+  }, [pairFromUrl]);
 
   const sendScan = useCallback(async (item: ScanItem) => {
     setScans((current) => [item, ...current].slice(0, 50));
@@ -399,6 +434,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       hasManualText: manualText.trim().length > 0,
       manualText,
       onBarcodeScanned,
+      pairFromUrl,
       permission,
       recognizingText,
       requestPermission,
@@ -420,6 +456,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       dictationTranscript,
       manualText,
       onBarcodeScanned,
+      pairFromUrl,
       permission,
       recognizingText,
       requestPermission,

@@ -1,9 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
-import { CameraView } from "expo-camera";
+import { CameraView, type BarcodeScanningResult } from "expo-camera";
 import { StatusBar } from "expo-status-bar";
 import { Image, Keyboard, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { barcodeTypes, useScanner } from "../scanner-state";
 
 const baseFloatingBottom = Platform.select({ ios: 94, default: 86 });
@@ -12,6 +12,45 @@ const continuousCorners = Platform.select({ ios: { borderCurve: "continuous" as 
 
 export default function ScannerTab() {
   const scanner = useScanner();
+  const [pairScannerOpen, setPairScannerOpen] = useState(false);
+  const [pairScannerLocked, setPairScannerLocked] = useState(false);
+  const [pairScannerError, setPairScannerError] = useState<string | null>(null);
+  const pairScannerLockedRef = useRef(false);
+
+  const openPairScanner = async () => {
+    if (!scanner.permission?.granted) {
+      const nextPermission = await scanner.requestPermission();
+      if (!nextPermission.granted) {
+        setPairScannerError("Camera permission is required to scan the extension QR.");
+        return;
+      }
+    }
+
+    setPairScannerError(null);
+    setPairScannerLocked(false);
+    pairScannerLockedRef.current = false;
+    setPairScannerOpen(true);
+  };
+
+  const onPairingQrScanned = async ({ data }: BarcodeScanningResult) => {
+    if (pairScannerLockedRef.current) return;
+
+    pairScannerLockedRef.current = true;
+    setPairScannerLocked(true);
+    const accepted = await scanner.pairFromUrl(data.trim());
+
+    if (accepted) {
+      setPairScannerOpen(false);
+      setPairScannerError(null);
+      return;
+    }
+
+    setPairScannerError("That QR code is not a Volt pairing code.");
+    setTimeout(() => {
+      pairScannerLockedRef.current = false;
+      setPairScannerLocked(false);
+    }, 1200);
+  };
 
   if (!scanner.connected) {
     return (
@@ -20,7 +59,35 @@ export default function ScannerTab() {
         <Header />
         <View style={styles.page}>
           <View style={styles.content}>
-            <PairingPanel statusLabel={scanner.statusLabel} />
+            {pairScannerOpen ? (
+              <View style={styles.cameraShell}>
+                <CameraView
+                  style={styles.camera}
+                  facing="back"
+                  barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
+                  onBarcodeScanned={pairScannerLocked ? undefined : onPairingQrScanned}
+                />
+                <View style={styles.pairingScanOverlay} pointerEvents="none">
+                  <View style={styles.pairingScanFrame} />
+                </View>
+                <Pressable
+                  style={styles.pairingCloseButton}
+                  onPress={() => {
+                    pairScannerLockedRef.current = false;
+                    setPairScannerLocked(false);
+                    setPairScannerOpen(false);
+                  }}
+                >
+                  <Ionicons name="close" size={18} color="#fafaf9" />
+                </Pressable>
+              </View>
+            ) : (
+              <PairingPanel
+                error={pairScannerError}
+                onOpenScanner={openPairScanner}
+                statusLabel={scanner.statusLabel}
+              />
+            )}
           </View>
         </View>
       </SafeAreaView>
@@ -70,7 +137,15 @@ export default function ScannerTab() {
   );
 }
 
-function PairingPanel({ statusLabel }: { statusLabel: string }) {
+function PairingPanel({
+  error,
+  onOpenScanner,
+  statusLabel,
+}: {
+  error: string | null;
+  onOpenScanner: () => void;
+  statusLabel: string;
+}) {
   return (
     <View style={styles.pairingShell}>
       <View style={styles.pairingIcon}>
@@ -78,8 +153,13 @@ function PairingPanel({ statusLabel }: { statusLabel: string }) {
       </View>
       <Text style={styles.pairingTitle}>{statusLabel}</Text>
       <Text style={styles.pairingText}>
-        Open the Volt Chrome extension, choose Mobile Scanner, then scan the QR code with the phone Camera app to pair.
+        Open the Volt Chrome extension, choose Mobile Scanner, then scan its QR code here.
       </Text>
+      {error ? <Text style={styles.pairingError}>{error}</Text> : null}
+      <Pressable style={styles.primaryButton} onPress={onOpenScanner}>
+        <Ionicons name="qr-code-outline" size={18} color="#f0fdf4" />
+        <Text style={styles.primaryButtonText}>Scan extension QR</Text>
+      </Pressable>
     </View>
   );
 }
@@ -238,6 +318,39 @@ export const styles = StyleSheet.create({
     lineHeight: 20,
     textAlign: "center",
   },
+  pairingError: {
+    marginTop: 10,
+    color: "#dc2626",
+    fontSize: 13,
+    lineHeight: 18,
+    textAlign: "center",
+  },
+  pairingScanOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(28, 25, 23, 0.18)",
+  },
+  pairingScanFrame: {
+    width: "68%",
+    aspectRatio: 1,
+    borderWidth: 3,
+    borderColor: "#22c55e",
+    borderRadius: 28,
+    ...continuousCorners,
+  },
+  pairingCloseButton: {
+    position: "absolute",
+    right: 12,
+    top: 12,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    ...continuousCorners,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(28, 25, 23, 0.82)",
+  },
   scanFrame: {
     position: "absolute",
     left: "13%",
@@ -310,6 +423,8 @@ export const styles = StyleSheet.create({
     ...continuousCorners,
     alignItems: "center",
     justifyContent: "center",
+    flexDirection: "row",
+    gap: 8,
     backgroundColor: "#16a34a",
   },
   primaryButtonText: { color: "#f0fdf4", fontWeight: "800" },

@@ -1,6 +1,8 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
 const SCANNER_SESSION_TTL_MS = 5 * 60 * 1000;
+const SCANNER_SESSION_TTL_SECONDS = Math.ceil(SCANNER_SESSION_TTL_MS / 1000);
+const SESSION_KEY_PREFIX = "volt:scanner:session:";
 
 type ScannerSession = {
   offer?: string;
@@ -8,7 +10,54 @@ type ScannerSession = {
   createdAt: number;
 };
 
-const sessions = new Map<string, ScannerSession>();
+const globalState = globalThis as typeof globalThis & {
+  __voltScannerSessions?: Map<string, ScannerSession>;
+};
+
+const memorySessions = (globalState.__voltScannerSessions ??= new Map<string, ScannerSession>());
+const redisUrl = process.env.KV_REST_API_URL ?? process.env.UPSTASH_REDIS_REST_URL;
+const redisToken = process.env.KV_REST_API_TOKEN ?? process.env.UPSTASH_REDIS_REST_TOKEN;
+const isVercelProduction = process.env.VERCEL === "1";
+
+function hasRedisStorage() {
+  return Boolean(redisUrl && redisToken);
+}
+
+function ensureSignalStorage() {
+  if (isVercelProduction && !hasRedisStorage()) {
+    throw new Error("Persistent signal storage is not configured");
+  }
+}
+
+async function redisCommand<T>(command: unknown[]) {
+  if (!redisUrl || !redisToken) {
+    throw new Error("Redis storage is not configured");
+  }
+
+  const result = await fetch(redisUrl, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${redisToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(command),
+  });
+
+  if (!result.ok) {
+    throw new Error(`Redis command failed with ${result.status}`);
+  }
+
+  const payload = (await result.json()) as { result?: T; error?: string };
+  if (payload.error) {
+    throw new Error(payload.error);
+  }
+
+  return payload.result;
+}
+
+function sessionKey(sessionId: string) {
+  return `${SESSION_KEY_PREFIX}${sessionId}`;
+}
 
 function setCors(response: VercelResponse) {
   response.setHeader("Access-Control-Allow-Origin", "*");
@@ -16,13 +65,39 @@ function setCors(response: VercelResponse) {
   response.setHeader("Access-Control-Allow-Headers", "Content-Type");
 }
 
-function cleanup() {
+function cleanupMemorySessions() {
   const expiresBefore = Date.now() - SCANNER_SESSION_TTL_MS;
-  for (const [id, session] of sessions.entries()) {
+  for (const [id, session] of memorySessions.entries()) {
     if (session.createdAt < expiresBefore) {
-      sessions.delete(id);
+      memorySessions.delete(id);
     }
   }
+}
+
+async function getSession(sessionId: string) {
+  if (hasRedisStorage()) {
+    const rawSession = await redisCommand<string | null>(["GET", sessionKey(sessionId)]);
+    return rawSession ? (JSON.parse(rawSession) as ScannerSession) : undefined;
+  }
+
+  cleanupMemorySessions();
+  return memorySessions.get(sessionId);
+}
+
+async function saveSession(sessionId: string, session: ScannerSession) {
+  if (hasRedisStorage()) {
+    await redisCommand<string>([
+      "SET",
+      sessionKey(sessionId),
+      JSON.stringify(session),
+      "EX",
+      SCANNER_SESSION_TTL_SECONDS,
+    ]);
+    return;
+  }
+
+  cleanupMemorySessions();
+  memorySessions.set(sessionId, session);
 }
 
 function sessionIdFromRequest(request: VercelRequest) {
@@ -44,7 +119,7 @@ function isAnswerRequest(request: VercelRequest) {
   return request.url?.endsWith("/answer") ?? false;
 }
 
-export default function handler(request: VercelRequest, response: VercelResponse) {
+export default async function handler(request: VercelRequest, response: VercelResponse) {
   setCors(response);
 
   if (request.method === "OPTIONS") {
@@ -52,57 +127,61 @@ export default function handler(request: VercelRequest, response: VercelResponse
     return;
   }
 
-  cleanup();
-
   const sessionId = sessionIdFromRequest(request);
   const isAnswerRoute = isAnswerRequest(request);
 
-  if (request.method === "POST" && !sessionId) {
-    const offer = request.body?.offer;
-    if (typeof offer !== "string" || !offer) {
-      response.status(400).json({ error: "Missing offer" });
+  try {
+    ensureSignalStorage();
+
+    if (request.method === "POST" && !sessionId) {
+      const offer = request.body?.offer;
+      if (typeof offer !== "string" || !offer) {
+        response.status(400).json({ error: "Missing offer" });
+        return;
+      }
+
+      const nextSessionId = Math.random().toString(36).slice(2, 10);
+      await saveSession(nextSessionId, { offer, createdAt: Date.now() });
+      response.status(200).json({ sessionId: nextSessionId });
       return;
     }
 
-    const nextSessionId = Math.random().toString(36).slice(2, 10);
-    sessions.set(nextSessionId, { offer, createdAt: Date.now() });
-    response.status(200).json({ sessionId: nextSessionId });
-    return;
-  }
+    if (!sessionId) {
+      response.status(404).json({ error: "Not found" });
+      return;
+    }
 
-  if (!sessionId) {
+    const session = await getSession(sessionId);
+    if (!session) {
+      response.status(404).json({ error: "Session not found" });
+      return;
+    }
+
+    if (request.method === "GET" && !isAnswerRoute) {
+      response.status(200).json({ offer: session.offer });
+      return;
+    }
+
+    if (request.method === "POST" && isAnswerRoute) {
+      const answer = request.body?.answer;
+      if (typeof answer !== "string" || !answer) {
+        response.status(400).json({ error: "Missing answer" });
+        return;
+      }
+
+      await saveSession(sessionId, { ...session, answer });
+      response.status(200).json({ success: true });
+      return;
+    }
+
+    if (request.method === "GET" && isAnswerRoute) {
+      response.status(200).json({ answer: session.answer ?? null });
+      return;
+    }
+
     response.status(404).json({ error: "Not found" });
-    return;
+  } catch (error) {
+    console.error("Scanner signal storage error", error);
+    response.status(500).json({ error: "Signal storage unavailable" });
   }
-
-  const session = sessions.get(sessionId);
-  if (!session) {
-    response.status(404).json({ error: "Session not found" });
-    return;
-  }
-
-  if (request.method === "GET" && !isAnswerRoute) {
-    response.status(200).json({ offer: session.offer });
-    return;
-  }
-
-  if (request.method === "POST" && isAnswerRoute) {
-    const answer = request.body?.answer;
-    if (typeof answer !== "string" || !answer) {
-      response.status(400).json({ error: "Missing answer" });
-      return;
-    }
-
-    session.answer = answer;
-    sessions.set(sessionId, session);
-    response.status(200).json({ success: true });
-    return;
-  }
-
-  if (request.method === "GET" && isAnswerRoute) {
-    response.status(200).json({ answer: session.answer ?? null });
-    return;
-  }
-
-  response.status(404).json({ error: "Not found" });
 }

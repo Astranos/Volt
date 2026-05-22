@@ -11,22 +11,22 @@ export default function TabsLayout() {
       }}
       backgroundColor="#ffffff"
       blurEffect="systemChromeMaterialLight"
-      minimizeBehavior="automatic"
+      minimizeBehavior="never"
       disableTransparentOnScrollEdge
     >
-      <NativeTabs.Trigger name="index">
+      <NativeTabs.Trigger name="index" disableScrollToTop>
         <Icon sf={{ default: "barcode.viewfinder", selected: "barcode.viewfinder" }} />
         <Label>Scanner</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="history">
+      <NativeTabs.Trigger name="history" disableScrollToTop>
         <Icon sf={{ default: "clock", selected: "clock.fill" }} />
         <Label>History</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="dictation">
+      <NativeTabs.Trigger name="dictation" disableScrollToTop>
         <Icon sf={{ default: "mic", selected: "mic.fill" }} />
         <Label>Dictation</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="settings">
+      <NativeTabs.Trigger name="settings" disableScrollToTop>
         <Icon sf={{ default: "gearshape", selected: "gearshape.fill" }} />
         <Label>Settings</Label>
       </NativeTabs.Trigger>
