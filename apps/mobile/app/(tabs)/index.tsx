@@ -1,10 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import { CameraView, type BarcodeScanningResult } from "expo-camera";
-import { StatusBar } from "expo-status-bar";
 import { Image, Keyboard, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useEffect, useRef, useState } from "react";
-import { useScanner } from "../scanner-state";
+import { useScanner } from "../../lib/scanner-state";
 
 const baseFloatingBottom = Platform.select({ ios: 94, default: 86 });
 const keyboardFloatingGap = 10;
@@ -55,9 +54,8 @@ export default function OcrTab() {
   if (!scanner.connected) {
     return (
       <SafeAreaView edges={["top", "left", "right"]} style={styles.scannerRoot}>
-        <StatusBar style="light" backgroundColor="#1c1917" />
         <Header />
-        <View style={styles.page}>
+        <View style={[styles.page, styles.disconnectedPage]}>
           <View style={styles.content}>
             {pairScannerOpen ? (
               <View style={styles.cameraShell}>
@@ -94,20 +92,20 @@ export default function OcrTab() {
     );
   }
 
-  if (!scanner.permission) return <View style={styles.root} />;
-
-  if (!scanner.permission.granted) {
+  if (!scanner.permission || !scanner.permission.granted) {
     return (
-      <SafeAreaView edges={["top", "left", "right"]} style={styles.root}>
-        <StatusBar style="light" />
-        <View style={styles.permissionPanel}>
-          <Image source={require("../../assets/volt-logo.png")} style={styles.permissionLogo} resizeMode="contain" />
-          <Text style={styles.bodyText}>
-            Camera access is needed to read labels and capture barcodes from a still image.
-          </Text>
-          <Pressable style={styles.primaryButton} onPress={scanner.requestPermission}>
-            <Text style={styles.primaryButtonText}>Allow Camera</Text>
-          </Pressable>
+      <SafeAreaView edges={["top", "left", "right"]} style={styles.scannerRoot}>
+        <Header />
+        <View style={styles.page}>
+          <View style={styles.permissionPanel}>
+            <Image source={require("../../assets/volt-logo.png")} style={styles.permissionLogo} resizeMode="contain" />
+            <Text style={styles.bodyText}>
+              Camera access is needed to read labels and capture barcodes from a still image.
+            </Text>
+            <Pressable style={styles.primaryButton} onPress={scanner.requestPermission}>
+              <Text style={styles.primaryButtonText}>Allow Camera</Text>
+            </Pressable>
+          </View>
         </View>
       </SafeAreaView>
     );
@@ -115,7 +113,6 @@ export default function OcrTab() {
 
   return (
     <SafeAreaView edges={["top", "left", "right"]} style={styles.scannerRoot}>
-      <StatusBar style="light" backgroundColor="#1c1917" />
       <Header />
       <View style={styles.page}>
         <View style={styles.content}>
@@ -154,7 +151,7 @@ export function PairingPanel({
         Open the Volt Chrome extension, choose Mobile Scanner, then scan its QR code here.
       </Text>
       {error ? <Text style={styles.pairingError}>{error}</Text> : null}
-      <Pressable style={styles.primaryButton} onPress={onOpenScanner}>
+      <Pressable style={[styles.primaryButton, styles.pairingButton]} onPress={onOpenScanner}>
         <Ionicons name="qr-code-outline" size={18} color="#f0fdf4" />
         <Text style={styles.primaryButtonText}>Scan extension QR</Text>
       </Pressable>
@@ -266,6 +263,9 @@ export const styles = StyleSheet.create({
     borderTopRightRadius: 36,
     ...continuousCorners,
     overflow: "hidden",
+  },
+  disconnectedPage: {
+    paddingBottom: 104,
   },
   content: { flex: 1, paddingTop: 18, paddingBottom: 18 },
   cameraShell: {
@@ -424,6 +424,9 @@ export const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 8,
     backgroundColor: "#16a34a",
+  },
+  pairingButton: {
+    marginTop: 22,
   },
   primaryButtonText: { color: "#f0fdf4", fontWeight: "800" },
 });

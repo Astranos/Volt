@@ -1,8 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
-import { StatusBar } from "expo-status-bar";
 import { ScrollView, Switch, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useScanner } from "../scanner-state";
+import { useScanner } from "../../lib/scanner-state";
 import { Header, styles } from "./index";
 
 export default function SettingsTab() {
@@ -10,7 +9,6 @@ export default function SettingsTab() {
 
   return (
     <SafeAreaView edges={["top", "left", "right"]} style={styles.scannerRoot}>
-      <StatusBar style="light" backgroundColor="#1c1917" />
       <Header />
       <View style={styles.page}>
         <ScrollView style={localStyles.scroll} contentContainerStyle={localStyles.scrollContent}>

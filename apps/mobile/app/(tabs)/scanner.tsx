@@ -1,10 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import { CameraView, type BarcodeScanningResult } from "expo-camera";
-import { StatusBar } from "expo-status-bar";
 import { Image, Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRef, useState } from "react";
-import { barcodeTypes, useScanner } from "../scanner-state";
+import { barcodeTypes, useScanner } from "../../lib/scanner-state";
 import { Header, PairingPanel, styles } from "./index";
 
 export default function ScannerTab() {
@@ -51,20 +50,20 @@ export default function ScannerTab() {
   };
 
   if (scanner.connected) {
-    if (!permission) return <View style={styles.root} />;
-
-    if (!permission.granted) {
+    if (!permission || !permission.granted) {
       return (
-        <SafeAreaView edges={["top", "left", "right"]} style={styles.root}>
-          <StatusBar style="light" />
-          <View style={styles.permissionPanel}>
-            <Image source={require("../../assets/volt-logo.png")} style={styles.permissionLogo} resizeMode="contain" />
-            <Text style={styles.bodyText}>
-              Camera access is needed to auto scan barcodes and QR codes into Chrome.
-            </Text>
-            <Pressable style={styles.primaryButton} onPress={scanner.requestPermission}>
-              <Text style={styles.primaryButtonText}>Allow Camera</Text>
-            </Pressable>
+        <SafeAreaView edges={["top", "left", "right"]} style={styles.scannerRoot}>
+          <Header />
+          <View style={styles.page}>
+            <View style={styles.permissionPanel}>
+              <Image source={require("../../assets/volt-logo.png")} style={styles.permissionLogo} resizeMode="contain" />
+              <Text style={styles.bodyText}>
+                Camera access is needed to auto scan barcodes and QR codes into Chrome.
+              </Text>
+              <Pressable style={styles.primaryButton} onPress={scanner.requestPermission}>
+                <Text style={styles.primaryButtonText}>Allow Camera</Text>
+              </Pressable>
+            </View>
           </View>
         </SafeAreaView>
       );
@@ -73,9 +72,8 @@ export default function ScannerTab() {
 
   return (
     <SafeAreaView edges={["top", "left", "right"]} style={styles.scannerRoot}>
-      <StatusBar style="light" backgroundColor="#1c1917" />
       <Header />
-      <View style={styles.page}>
+      <View style={[styles.page, !scanner.connected && styles.disconnectedPage]}>
         <View style={styles.content}>
           {!scanner.connected ? (
             pairScannerOpen ? (

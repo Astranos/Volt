@@ -1,10 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import { CameraView, type BarcodeScanningResult } from "expo-camera";
-import { StatusBar } from "expo-status-bar";
 import { Pressable, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRef, useState } from "react";
-import { useScanner } from "../scanner-state";
+import { useScanner } from "../../lib/scanner-state";
 import { Header, PairingPanel, styles } from "./index";
 
 export default function DictationTab() {
@@ -59,9 +58,8 @@ export default function DictationTab() {
 
   return (
     <SafeAreaView edges={["top", "left", "right"]} style={styles.scannerRoot}>
-      <StatusBar style="light" backgroundColor="#1c1917" />
       <Header />
-      <View style={[styles.page, localStyles.dictationPage]}>
+      <View style={[styles.page, !connected ? styles.disconnectedPage : localStyles.dictationPage]}>
         {!connected ? (
           <View style={styles.content}>
             {pairScannerOpen ? (

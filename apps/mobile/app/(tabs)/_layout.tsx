@@ -7,7 +7,7 @@ export default function TabsLayout() {
       iconColor={{ default: "#78716c", selected: "#16a34a" }}
       labelStyle={{
         default: { color: "#78716c", fontSize: 11, fontWeight: "600" },
-        selected: { color: "#16a34a", fontSize: 11, fontWeight: "700" },
+        selected: { color: "#16a34a", fontSize: 11, fontWeight: "600" },
       }}
       backgroundColor="#ffffff"
       blurEffect="systemChromeMaterialLight"
