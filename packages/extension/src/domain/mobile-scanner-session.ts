@@ -25,6 +25,7 @@ export class MobileScannerSession {
   private dataChannel: RTCDataChannel | null = null;
   private answerPoll: SessionTimer | null = null;
   private restartTimer: number | null = null;
+  private sessionId: string | null = null;
   private intentionallyClosing = false;
   private recentMessages = new Map<string, number>();
 
@@ -80,6 +81,7 @@ export class MobileScannerSession {
       }
 
       const sessionId = await this.createSignalingSession(pc.localDescription);
+      this.sessionId = sessionId;
       const appPairingUrl = `${SCANNER_APP_PAIR_URL}?session=${encodeURIComponent(sessionId)}`;
       this.events.onQrCodeUrl(appPairingUrl);
       this.events.onStatus("waiting");
@@ -93,6 +95,7 @@ export class MobileScannerSession {
   }
 
   unpair() {
+    this.sessionId = null;
     this.cleanup();
     void this.start();
   }
@@ -167,7 +170,10 @@ export class MobileScannerSession {
   }
 
   private async createSignalingSession(localDescription: RTCSessionDescription) {
-    const sessionResponse = await fetch(SCANNER_SIGNAL_URL, {
+    const sessionUrl = this.sessionId
+      ? `${SCANNER_SIGNAL_URL}/${encodeURIComponent(this.sessionId)}`
+      : SCANNER_SIGNAL_URL;
+    const sessionResponse = await fetch(sessionUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ offer: JSON.stringify(localDescription) }),

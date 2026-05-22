@@ -10,7 +10,7 @@ import {
 } from "expo-speech-recognition";
 import { RTCPeerConnection, RTCSessionDescription } from "react-native-webrtc";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type PropsWithChildren } from "react";
-import { Alert } from "react-native";
+import { Alert, AppState } from "react-native";
 import {
   decodePairingPayload,
   encodeBarcodeMessage,
@@ -27,6 +27,7 @@ globalThis.btoa ??= base64Encode;
 type ConnectionStatus = "idle" | "pairing" | "connected" | "disconnected" | "error";
 const PAIRING_SESSION_RETRY_DELAYS_MS = [0, 350, 800, 1400];
 const SETTINGS_STORAGE_KEY = "volt.mobileScanner.settings.v1";
+const PAIRING_SESSION_STORAGE_KEY = "volt.mobileScanner.pairingSession.v1";
 const MULTI_SCAN_WINDOW_MS = 650;
 const CLIPBOARD_POLL_MS = 900;
 
@@ -158,6 +159,9 @@ export function ScannerProvider({ children }: PropsWithChildren) {
   const lastTextCaptureClipboardRef = useRef<string | null>(null);
   const pendingScannerItemsRef = useRef<ScanItem[]>([]);
   const scannerFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pairingSessionRef = useRef<string | null>(null);
+  const lastOfferRef = useRef<string | null>(null);
+  const reconnectingRef = useRef(false);
 
   const connected = status === "connected" && channelRef.current?.readyState === "open";
 
@@ -196,6 +200,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       setError(null);
 
       try {
+        lastOfferRef.current = offerCode;
         const pc = new RTCPeerConnection({ iceServers: SCANNER_ICE_SERVERS });
         const pcEvents = pc as any;
         peerRef.current = pc;
@@ -243,6 +248,9 @@ export function ScannerProvider({ children }: PropsWithChildren) {
           });
 
           if (!answerResponse.ok) throw new Error("Failed to send pairing answer");
+
+          pairingSessionRef.current = sessionId;
+          void AsyncStorage.setItem(PAIRING_SESSION_STORAGE_KEY, sessionId);
         } else {
           throw new Error("Pairing session missing");
         }
@@ -261,22 +269,29 @@ export function ScannerProvider({ children }: PropsWithChildren) {
         setStatus("pairing");
         setError(null);
 
-        let offerResponse: Response | null = null;
+        let offer: string | null = null;
         for (const delayMs of PAIRING_SESSION_RETRY_DELAYS_MS) {
           if (delayMs) await wait(delayMs);
-          offerResponse = await fetch(`${SCANNER_SIGNAL_URL}/${sessionId}`);
-          if (offerResponse.ok) break;
+          const offerResponse = await fetch(`${SCANNER_SIGNAL_URL}/${sessionId}`);
+          if (offerResponse.ok) {
+            const payload = await offerResponse.json();
+            if (typeof payload.offer !== "string" || !payload.offer) {
+              throw new Error("Invalid pairing session");
+            }
+
+            const nextOffer = payload.offer;
+            offer = nextOffer;
+            if (encodePairingPayload(JSON.parse(nextOffer)) !== lastOfferRef.current) break;
+            continue;
+          }
           if (offerResponse.status !== 404) {
             throw new Error("Pairing service unavailable");
           }
         }
 
-        if (!offerResponse?.ok) {
+        if (!offer) {
           throw new Error("Pairing service is not ready. Restart pairing in the Chrome extension and scan the new QR.");
         }
-
-        const { offer } = await offerResponse.json();
-        if (typeof offer !== "string" || !offer) throw new Error("Invalid pairing session");
 
         await pairWithOffer(encodePairingPayload(JSON.parse(offer)), sessionId);
       } catch (err) {
@@ -297,6 +312,11 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       const offer = getOfferFromUrl(url);
       const session = getSessionFromUrl(url);
 
+      if (session) {
+        pairingSessionRef.current = session;
+        void AsyncStorage.setItem(PAIRING_SESSION_STORAGE_KEY, session);
+      }
+
       if (offer) {
         await pairWithOffer(offer, session);
         return true;
@@ -312,9 +332,28 @@ export function ScannerProvider({ children }: PropsWithChildren) {
     [pairWithOffer, pairWithSession]
   );
 
+  const reconnectToStoredSession = useCallback(async () => {
+    if (reconnectingRef.current || channelRef.current?.readyState === "open") return;
+    const sessionId = pairingSessionRef.current ?? (await AsyncStorage.getItem(PAIRING_SESSION_STORAGE_KEY));
+    if (!sessionId) return;
+
+    pairingSessionRef.current = sessionId;
+    reconnectingRef.current = true;
+    try {
+      await pairWithSession(sessionId);
+    } finally {
+      reconnectingRef.current = false;
+    }
+  }, [pairWithSession]);
+
   useEffect(() => {
     Linking.getInitialURL().then((url) => {
-      if (url) void pairFromUrl(url);
+      if (url) {
+        void pairFromUrl(url);
+        return;
+      }
+
+      void reconnectToStoredSession();
     });
 
     const subscription = Linking.addEventListener("url", ({ url }) => {
@@ -324,7 +363,21 @@ export function ScannerProvider({ children }: PropsWithChildren) {
     return () => {
       subscription.remove();
     };
-  }, [pairFromUrl]);
+  }, [pairFromUrl, reconnectToStoredSession]);
+
+  useEffect(() => {
+    void AsyncStorage.getItem(PAIRING_SESSION_STORAGE_KEY).then((sessionId) => {
+      if (sessionId) pairingSessionRef.current = sessionId;
+    });
+
+    const subscription = AppState.addEventListener("change", (nextAppState) => {
+      if (nextAppState === "active") {
+        void reconnectToStoredSession();
+      }
+    });
+
+    return () => subscription.remove();
+  }, [reconnectToStoredSession]);
 
   const sendScan = useCallback(async (item: ScanItem) => {
     const now = Date.now();

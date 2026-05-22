@@ -22,7 +22,7 @@ export const SCANNER_ICE_SERVERS: ScannerIceServer[] = [
 export const SCANNER_DATA_CHANNEL = "barcodes";
 export const SCANNER_ICE_GATHERING_TIMEOUT_MS = 5000;
 export const SCANNER_ANSWER_POLL_INTERVAL_MS = 1000;
-export const SCANNER_SESSION_TTL_MS = 5 * 60 * 1000;
+export const SCANNER_SESSION_TTL_MS = 30 * 60 * 1000;
 export const SCANNER_SCAN_COOLDOWN_MS = 500;
 export const SCANNER_LOCAL_SESSION_ID = "local";
 

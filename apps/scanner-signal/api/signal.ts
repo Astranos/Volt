@@ -1,8 +1,9 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
-const SCANNER_SESSION_TTL_MS = 5 * 60 * 1000;
+const SCANNER_SESSION_TTL_MS = 30 * 60 * 1000;
 const SCANNER_SESSION_TTL_SECONDS = Math.ceil(SCANNER_SESSION_TTL_MS / 1000);
 const SESSION_KEY_PREFIX = "volt:scanner:session:";
+const SESSION_ID_PATTERN = /^[a-zA-Z0-9_-]{4,80}$/;
 
 type ScannerSession = {
   offer?: string;
@@ -148,6 +149,23 @@ export default async function handler(request: VercelRequest, response: VercelRe
 
     if (!sessionId) {
       response.status(404).json({ error: "Not found" });
+      return;
+    }
+
+    if (!SESSION_ID_PATTERN.test(sessionId)) {
+      response.status(400).json({ error: "Invalid session" });
+      return;
+    }
+
+    if (request.method === "POST" && !isAnswerRoute) {
+      const offer = request.body?.offer;
+      if (typeof offer !== "string" || !offer) {
+        response.status(400).json({ error: "Missing offer" });
+        return;
+      }
+
+      await saveSession(sessionId, { offer, createdAt: Date.now() });
+      response.status(200).json({ sessionId });
       return;
     }
 
