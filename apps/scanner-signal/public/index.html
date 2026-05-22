@@ -257,9 +257,15 @@
 
       const params = new URLSearchParams(location.search);
       const sessionId = params.get("session") || "";
-      const appLink = params.get("app") || (sessionId ? `volt://pair?session=${encodeURIComponent(sessionId)}` : "");
+      const offerCode = params.get("offer") || "";
+      const appLink =
+        params.get("app") ||
+        (sessionId
+          ? `volt://pair?session=${encodeURIComponent(sessionId)}${offerCode ? `&offer=${encodeURIComponent(offerCode)}` : ""}`
+          : "");
       const state = {
         sessionId,
+        offerCode,
         appLink,
         status: "starting",
         lastSent: null,
@@ -295,6 +301,12 @@
         statusDot.className = `dot ${status === "connected" ? "connected" : status.includes("error") ? "error" : ""}`;
       }
 
+      function decodePairingPayload(payload) {
+        const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
+        const padded = normalized.padEnd(normalized.length + ((4 - normalized.length % 4) % 4), "=");
+        return JSON.parse(atob(padded));
+      }
+
       function sendValue(value, format = "manual", kind = "barcode") {
         const barcode = value.trim();
         if (!barcode) return;
@@ -323,11 +335,18 @@
         if (!sessionId) return;
         setStatus("fetching offer");
         try {
-          const offerResponse = await fetch(`${SIGNAL_URL}/${encodeURIComponent(sessionId)}`);
-          log("GET offer", { status: offerResponse.status });
-          if (!offerResponse.ok) throw new Error(`Offer fetch failed: ${offerResponse.status}`);
-          const { offer } = await offerResponse.json();
-          if (!offer) throw new Error("Offer response did not include an offer");
+          let offerDescription = offerCode ? decodePairingPayload(offerCode) : null;
+
+          if (!offerDescription) {
+            const offerResponse = await fetch(`${SIGNAL_URL}/${encodeURIComponent(sessionId)}`);
+            log("GET offer", { status: offerResponse.status });
+            if (!offerResponse.ok) throw new Error(`Offer fetch failed: ${offerResponse.status}`);
+            const { offer } = await offerResponse.json();
+            if (!offer) throw new Error("Offer response did not include an offer");
+            offerDescription = JSON.parse(offer);
+          } else {
+            log("using embedded offer fallback");
+          }
 
           pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
           pc.onconnectionstatechange = () => {
@@ -353,7 +372,7 @@
             };
           };
 
-          await pc.setRemoteDescription(JSON.parse(offer));
+          await pc.setRemoteDescription(offerDescription);
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
           await new Promise((resolve) => {

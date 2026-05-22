@@ -14,7 +14,6 @@ import QRCode from "qrcode";
 import { Button } from "../ui/button";
 import {
   decodeBarcodeMessage,
-  SCANNER_APP_PAIR_URL,
   SCANNER_ANSWER_POLL_INTERVAL_MS,
   SCANNER_DATA_CHANNEL,
   SCANNER_ICE_GATHERING_TIMEOUT_MS,
@@ -22,6 +21,7 @@ import {
   SCANNER_PAIRING_PAGE_URL,
   SCANNER_SIGNAL_URL,
   decodePairingPayload,
+  encodePairingPayload,
   type BarcodeMessage,
   type ScannerConnectionStatus,
 } from "../../../../scanner-protocol/src";
@@ -211,8 +211,8 @@ export default function MobileScanner({ onClose }: MobileScannerProps) {
         throw new Error("Invalid pairing session");
       }
 
-      const appPairingUrl = `${SCANNER_APP_PAIR_URL}?session=${encodeURIComponent(sessionId)}`;
-      const url = `${SCANNER_PAIRING_PAGE_URL}/pair?session=${encodeURIComponent(sessionId)}&app=${encodeURIComponent(appPairingUrl)}`;
+      const offerCode = encodePairingPayload(pc.localDescription);
+      const url = `${SCANNER_PAIRING_PAGE_URL}/pair?session=${encodeURIComponent(sessionId)}&offer=${encodeURIComponent(offerCode)}`;
       setPairingUrl(url);
       setQrDataUrl(await generateQrCode(url));
       setStatus("waiting");
