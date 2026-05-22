@@ -605,6 +605,9 @@ export default defineContentScript({
     let focusedElementBeforeMenu: HTMLElement | null = null;
     let clickedElement: HTMLElement | null = null;
     let clickedUrl: string | null = null;
+    type CloseMenuOptions = {
+      restoreFocus?: boolean;
+    };
 
     // Menu React component
     const Menu: React.FC = () => {
@@ -656,7 +659,7 @@ export default defineContentScript({
               try {
                 item.onInvoke({ x, y, selection: lastSelection });
               } catch (_) {}
-              closeMenu();
+              closeMenu({ restoreFocus: false });
             }
           } else {
             // Check for letter shortcuts
@@ -669,7 +672,7 @@ export default defineContentScript({
               try {
                 matchingItem.onInvoke({ x, y, selection: lastSelection });
               } catch (_) {}
-              closeMenu();
+              closeMenu({ restoreFocus: false });
             }
           }
         };
@@ -687,7 +690,7 @@ export default defineContentScript({
         try {
           item.onInvoke({ x, y, selection: lastSelection });
         } catch (_) {}
-        closeMenu();
+        closeMenu({ restoreFocus: false });
       };
 
       const onQuickActionClick = (action: MenuAction) => {
@@ -696,7 +699,7 @@ export default defineContentScript({
         try {
           action.onInvoke({ x, y, selection: lastSelection });
         } catch (_) {}
-        closeMenu();
+        closeMenu({ restoreFocus: false });
       };
 
       const onDismiss = () => {
@@ -776,7 +779,7 @@ export default defineContentScript({
                       onClick={(e) => {
                         e.stopPropagation();
                         openUrl(item.getUrl!(lastSelection));
-                        closeMenu();
+                        closeMenu({ restoreFocus: false });
                       }}
                     >
                       <ExternalLink size={14} />
@@ -805,20 +808,21 @@ export default defineContentScript({
       reactRoot.render(<Menu />);
     };
 
-    const closeMenu = () => {
+    const closeMenu = (options: CloseMenuOptions = {}) => {
       if (!isOpen) return;
+      const { restoreFocus = true } = options;
       isOpen = false;
       if (host) host.style.pointerEvents = "none";
       if (reactRoot) {
         reactRoot.unmount();
         reactRoot = null;
       }
-      if (focusedElementBeforeMenu) {
+      if (restoreFocus && focusedElementBeforeMenu) {
         try {
           focusedElementBeforeMenu.focus();
         } catch (_) {}
-        focusedElementBeforeMenu = null;
       }
+      focusedElementBeforeMenu = null;
     };
 
     document.addEventListener(

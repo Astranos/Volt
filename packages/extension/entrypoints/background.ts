@@ -963,11 +963,13 @@ export default defineBackground({
             try {
               chrome.windows.remove(PREVIEW_POPUP_ID, () => {});
             } catch (_) {}
+            clearPreviewPopupState();
           }
 
           PREVIEW_SOURCE_TAB_ID = sender?.tab?.id;
           PREVIEW_SOURCE_WINDOW_ID = sender?.tab?.windowId ?? null;
           PREVIEW_OPENED_AT = Date.now();
+          PREVIEW_HAS_FOCUSED = false;
 
           const width = 1100;
           const height = 800;
@@ -986,6 +988,7 @@ export default defineBackground({
             (win) => {
               PREVIEW_POPUP_ID = win?.id || null;
               PREVIEW_OPENED_AT = Date.now();
+              PREVIEW_HAS_FOCUSED = win?.focused === true;
               log("Preview popup created:", PREVIEW_POPUP_ID);
               sendResponse({ success: true });
             }
@@ -998,8 +1001,8 @@ export default defineBackground({
             const senderWindowId = sender?.tab?.windowId ?? null;
             const elapsed = Date.now() - PREVIEW_OPENED_AT;
             if (
-              elapsed < POPUP_FOCUS_GRACE_MS &&
-              senderWindowId === PREVIEW_SOURCE_WINDOW_ID
+              senderWindowId === PREVIEW_SOURCE_WINDOW_ID &&
+              (!PREVIEW_HAS_FOCUSED || elapsed < POPUP_FOCUS_GRACE_MS)
             ) {
               sendResponse({ success: true, ignored: "opening_focus_grace" });
               break;
@@ -1008,9 +1011,7 @@ export default defineBackground({
             try {
               chrome.windows.remove(PREVIEW_POPUP_ID, () => {});
             } catch (_) {}
-            PREVIEW_POPUP_ID = null;
-            PREVIEW_OPENED_AT = 0;
-            PREVIEW_SOURCE_WINDOW_ID = null;
+            clearPreviewPopupState();
           }
           sendResponse({ success: true });
           break;
@@ -1872,9 +1873,18 @@ export default defineBackground({
     let PREVIEW_SOURCE_TAB_ID = null;
     let PREVIEW_OPENED_AT = 0;
     let PREVIEW_SOURCE_WINDOW_ID = null;
+    let PREVIEW_HAS_FOCUSED = false;
     let AUTOCLOSE_ON_BLUR = true;
     let FOCUS_LISTENER_ATTACHED = false;
     const POPUP_FOCUS_GRACE_MS = 1200;
+
+    function clearPreviewPopupState() {
+      PREVIEW_POPUP_ID = null;
+      PREVIEW_SOURCE_TAB_ID = null;
+      PREVIEW_OPENED_AT = 0;
+      PREVIEW_SOURCE_WINDOW_ID = null;
+      PREVIEW_HAS_FOCUSED = false;
+    }
 
     function ensureAutoCloseListener() {
       if (FOCUS_LISTENER_ATTACHED) return;
@@ -1882,6 +1892,17 @@ export default defineBackground({
         chrome.windows.onFocusChanged.addListener((winId) => {
           try {
             if (!AUTOCLOSE_ON_BLUR) return;
+            if (PREVIEW_POPUP_ID && winId === PREVIEW_POPUP_ID) {
+              PREVIEW_HAS_FOCUSED = true;
+            } else if (
+              PREVIEW_POPUP_ID &&
+              PREVIEW_HAS_FOCUSED &&
+              winId === PREVIEW_SOURCE_WINDOW_ID &&
+              Date.now() - PREVIEW_OPENED_AT >= POPUP_FOCUS_GRACE_MS
+            ) {
+              chrome.windows.remove(PREVIEW_POPUP_ID, () => {});
+              clearPreviewPopupState();
+            }
             // If our popup is open and focus moved to another window (or to none), close it
             if (
               CURRENT_TOOL_POPUP_ID &&
@@ -1895,6 +1916,7 @@ export default defineBackground({
         });
         chrome.windows.onRemoved.addListener((winId) => {
           if (winId === CURRENT_TOOL_POPUP_ID) CURRENT_TOOL_POPUP_ID = null;
+          if (winId === PREVIEW_POPUP_ID) clearPreviewPopupState();
         });
         FOCUS_LISTENER_ATTACHED = true;
       } catch (_) {}
