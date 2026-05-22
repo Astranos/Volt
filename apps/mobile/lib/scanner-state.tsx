@@ -8,6 +8,7 @@ import {
   ExpoSpeechRecognitionModule,
   useSpeechRecognitionEvent,
 } from "expo-speech-recognition";
+import { RTCPeerConnection, RTCSessionDescription } from "react-native-webrtc";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type PropsWithChildren } from "react";
 import { Alert } from "react-native";
 import {
@@ -89,6 +90,7 @@ type ScannerState = {
   recognizingText: boolean;
   requestPermission: ReturnType<typeof useCameraPermissions>[1];
   scans: ScanItem[];
+  sendBarcodeScanResult: (result: BarcodeScanningResult) => Promise<void>;
   sendManualText: () => void;
   setManualText: (value: string) => void;
   setSetting: <Key extends keyof ScannerSettings>(key: Key, value: ScannerSettings[Key]) => void;
@@ -194,7 +196,6 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       setError(null);
 
       try {
-        const { RTCPeerConnection, RTCSessionDescription } = require("react-native-webrtc");
         const pc = new RTCPeerConnection({ iceServers: SCANNER_ICE_SERVERS });
         const pcEvents = pc as any;
         peerRef.current = pc;
@@ -398,6 +399,15 @@ export function ScannerProvider({ children }: PropsWithChildren) {
     [connected, flushScannerItems]
   );
 
+  const sendBarcodeScanResult = useCallback(
+    async ({ data, type }: BarcodeScanningResult) => {
+      const value = data.trim();
+      if (!value) return;
+      await sendScan(makeScanItem(value, type, "barcode"));
+    },
+    [sendScan]
+  );
+
   const sendManualText = useCallback(() => {
     const value = manualText.trim();
     if (!value) return;
@@ -584,6 +594,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       recognizingText,
       requestPermission,
       scans,
+      sendBarcodeScanResult,
       sendManualText,
       setManualText,
       setSetting,
@@ -611,6 +622,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       recognizingText,
       requestPermission,
       scans,
+      sendBarcodeScanResult,
       sendManualText,
       setSetting,
       startDictation,
