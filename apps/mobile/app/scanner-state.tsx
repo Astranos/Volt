@@ -1,8 +1,11 @@
 import { decode as base64Decode, encode as base64Encode } from "base-64";
 import { useCameraPermissions, type BarcodeScanningResult } from "expo-camera";
-import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
 import * as Linking from "expo-linking";
+import {
+  ExpoSpeechRecognitionModule,
+  useSpeechRecognitionEvent,
+} from "expo-speech-recognition";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type PropsWithChildren } from "react";
 import { Alert } from "react-native";
 import {
@@ -17,7 +20,7 @@ import {
 globalThis.atob ??= base64Decode;
 globalThis.btoa ??= base64Encode;
 
-type ConnectionStatus = "idle" | "pairing" | "answer-ready" | "connected" | "disconnected" | "error";
+type ConnectionStatus = "idle" | "pairing" | "connected" | "disconnected" | "error";
 
 export type ScanItem = BarcodeMessage & {
   id: string;
@@ -40,11 +43,12 @@ export const barcodeTypes = [
 ] as const;
 
 type ScannerState = {
-  answerCode: string | null;
   cameraRef: React.MutableRefObject<any>;
   captureText: () => Promise<void>;
   connected: boolean;
-  copyAnswer: () => Promise<void>;
+  dictating: boolean;
+  dictationError: string | null;
+  dictationTranscript: string;
   hasManualText: boolean;
   manualText: string;
   onBarcodeScanned: (result: BarcodeScanningResult) => void;
@@ -54,9 +58,11 @@ type ScannerState = {
   scans: ScanItem[];
   sendManualText: () => void;
   setManualText: (value: string) => void;
+  startDictation: () => Promise<void>;
   setTorch: React.Dispatch<React.SetStateAction<boolean>>;
   status: ConnectionStatus;
   statusLabel: string;
+  stopDictation: () => void;
   torch: boolean;
 };
 
@@ -84,20 +90,54 @@ function makeScanItem(value: string, format: string, kind: BarcodeMessage["kind"
   };
 }
 
+function selectOcrLines(lines: string[], fallbackText: string) {
+  const sourceLines = lines.length ? lines : fallbackText.split(/\r?\n/);
+  const labelPattern = /\b(imei|meid|serial|sn|s\/n|model|sku|upc|ean|asset|tag|barcode)\b/i;
+  const valuePattern = /\b[A-Z0-9][A-Z0-9._/-]{3,}\b/i;
+  const weakWords = /\b(warning|caution|made in|designed|assembled|copyright|trademark|battery|recycle|manual|instructions)\b/i;
+
+  const candidates = sourceLines
+    .map((rawLine) => rawLine.replace(/\s+/g, " ").trim())
+    .filter((line) => line.length >= 4 && line.length <= 80)
+    .map((line) => {
+      const labeledValue = line.match(/(?:imei|meid|serial|sn|s\/n|model|sku|upc|ean|asset|tag|barcode)\s*[:#-]?\s*([A-Z0-9][A-Z0-9._/-]{3,})/i)?.[1];
+      const value = (labeledValue ?? line).trim();
+      const hasDigit = /\d/.test(value);
+      const hasValue = valuePattern.test(value);
+      let score = 0;
+
+      if (labelPattern.test(line)) score += 4;
+      if (labeledValue) score += 3;
+      if (hasValue) score += 2;
+      if (hasDigit) score += 2;
+      if (/^[A-Z0-9._/-]+$/i.test(value)) score += 1;
+      if (weakWords.test(line)) score -= 4;
+      if (!hasDigit && !labelPattern.test(line)) score -= 3;
+
+      return { value, score };
+    })
+    .filter((candidate) => candidate.score >= 3);
+
+  return Array.from(new Set(candidates.sort((a, b) => b.score - a.score).map((candidate) => candidate.value))).slice(0, 4);
+}
+
 export function ScannerProvider({ children }: PropsWithChildren) {
   const [permission, requestPermission] = useCameraPermissions();
   const [status, setStatus] = useState<ConnectionStatus>("idle");
   const [error, setError] = useState<string | null>(null);
-  const [answerCode, setAnswerCode] = useState<string | null>(null);
   const [manualText, setManualText] = useState("");
   const [scans, setScans] = useState<ScanItem[]>([]);
   const [torch, setTorch] = useState(false);
   const [recognizingText, setRecognizingText] = useState(false);
+  const [dictating, setDictating] = useState(false);
+  const [dictationTranscript, setDictationTranscript] = useState("");
+  const [dictationError, setDictationError] = useState<string | null>(null);
 
   const peerRef = useRef<any>(null);
   const channelRef = useRef<any>(null);
   const cameraRef = useRef<any>(null);
   const lastScanRef = useRef<{ value: string; at: number } | null>(null);
+  const lastDictationRef = useRef("");
 
   const connected = status === "connected" && channelRef.current?.readyState === "open";
 
@@ -112,7 +152,6 @@ export function ScannerProvider({ children }: PropsWithChildren) {
     async (offerCode: string, sessionId?: string) => {
       closeConnection();
       setStatus("pairing");
-      setAnswerCode(null);
       setError(null);
 
       try {
@@ -164,10 +203,8 @@ export function ScannerProvider({ children }: PropsWithChildren) {
           });
 
           if (!answerResponse.ok) throw new Error("Failed to send pairing answer");
-          setAnswerCode(null);
         } else {
-          setAnswerCode(encodePairingPayload(pc.localDescription as any));
-          setStatus("answer-ready");
+          throw new Error("Pairing session missing");
         }
       } catch (err) {
         closeConnection();
@@ -253,6 +290,62 @@ export function ScannerProvider({ children }: PropsWithChildren) {
     sendScan(makeScanItem(value, "plain-text", "text"));
   }, [manualText, sendScan]);
 
+  const sendDictationText = useCallback(
+    (text: string) => {
+      const value = text.trim();
+      if (!value || value === lastDictationRef.current) return;
+      lastDictationRef.current = value;
+      sendScan(makeScanItem(value, "dictation", "text"));
+    },
+    [sendScan]
+  );
+
+  useSpeechRecognitionEvent("start", () => {
+    setDictating(true);
+    setDictationError(null);
+  });
+
+  useSpeechRecognitionEvent("end", () => setDictating(false));
+
+  useSpeechRecognitionEvent("result", (event) => {
+    const transcript = event.results[0]?.transcript?.trim() ?? "";
+    setDictationTranscript(transcript);
+    if (event.isFinal) sendDictationText(transcript);
+  });
+
+  useSpeechRecognitionEvent("error", (event) => {
+    setDictating(false);
+    setDictationError(event.message || event.error);
+  });
+
+  const startDictation = useCallback(async () => {
+    if (!connected) {
+      setDictationError("Pair with Chrome before dictating.");
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      return;
+    }
+
+    const permissions = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+    if (!permissions.granted) {
+      setDictationError("Microphone and speech recognition permissions are required.");
+      return;
+    }
+
+    lastDictationRef.current = "";
+    setDictationTranscript("");
+    setDictationError(null);
+    ExpoSpeechRecognitionModule.start({
+      lang: "en-US",
+      interimResults: true,
+      continuous: false,
+      addsPunctuation: true,
+    });
+  }, [connected]);
+
+  const stopDictation = useCallback(() => {
+    ExpoSpeechRecognitionModule.stop();
+  }, []);
+
   const captureText = useCallback(async () => {
     if (!cameraRef.current || recognizingText) return;
 
@@ -265,15 +358,15 @@ export function ScannerProvider({ children }: PropsWithChildren) {
         blocks: Array<{ lines: Array<{ text: string }> }>;
       };
       const lines = result.blocks.flatMap((block) => block.lines.map((line) => line.text.trim())).filter(Boolean);
-      const uniqueLines = Array.from(new Set(lines.length ? lines : [result.text.trim()].filter(Boolean)));
+      const selectedLines = selectOcrLines(lines, result.text.trim());
 
-      if (!uniqueLines.length) {
+      if (!selectedLines.length) {
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-        Alert.alert("No text found", "Try filling the frame with the model or serial label.");
+        Alert.alert("No usable ID found", "Fill the frame with a model, serial, IMEI, UPC, SKU, or asset tag.");
         return;
       }
 
-      await Promise.all(uniqueLines.slice(0, 8).map((line) => sendScan(makeScanItem(line, "ocr", "text"))));
+      await Promise.all(selectedLines.map((line) => sendScan(makeScanItem(line, "ocr", "text"))));
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not read text from the camera.";
       Alert.alert(
@@ -287,15 +380,8 @@ export function ScannerProvider({ children }: PropsWithChildren) {
     }
   }, [recognizingText, sendScan]);
 
-  const copyAnswer = useCallback(async () => {
-    if (!answerCode) return;
-    await Clipboard.setStringAsync(answerCode);
-    Alert.alert("Answer code copied", "Paste it into the Volt extension and tap Connect Phone.");
-  }, [answerCode]);
-
   const statusLabel = useMemo(() => {
     if (status === "connected") return "Connected to Chrome";
-    if (status === "answer-ready") return "Paste answer in extension";
     if (status === "pairing") return "Pairing";
     if (status === "error") return error ?? "Connection error";
     if (status === "disconnected") return "Disconnected";
@@ -304,11 +390,12 @@ export function ScannerProvider({ children }: PropsWithChildren) {
 
   const value = useMemo<ScannerState>(
     () => ({
-      answerCode,
       cameraRef,
       captureText,
       connected,
-      copyAnswer,
+      dictating,
+      dictationError,
+      dictationTranscript,
       hasManualText: manualText.trim().length > 0,
       manualText,
       onBarcodeScanned,
@@ -318,16 +405,19 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       scans,
       sendManualText,
       setManualText,
+      startDictation,
       setTorch,
       status,
       statusLabel,
+      stopDictation,
       torch,
     }),
     [
-      answerCode,
       captureText,
       connected,
-      copyAnswer,
+      dictating,
+      dictationError,
+      dictationTranscript,
       manualText,
       onBarcodeScanned,
       permission,
@@ -335,8 +425,10 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       requestPermission,
       scans,
       sendManualText,
+      startDictation,
       status,
       statusLabel,
+      stopDictation,
       torch,
     ]
   );

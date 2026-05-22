@@ -48,7 +48,9 @@
     <key>NSCameraUsageDescription</key>
     <string>Volt uses the camera to scan barcodes, model numbers, serial numbers, and other text for the paired Chrome extension.</string>
     <key>NSMicrophoneUsageDescription</key>
-    <string>Allow $(PRODUCT_NAME) to access your microphone</string>
+    <string>Volt uses the microphone for hold-to-speak dictation into the paired Chrome browser.</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>Volt uses speech recognition to turn dictated speech into text for the paired Chrome browser.</string>
     <key>NSUserActivityTypes</key>
     <array>
       <string>$(PRODUCT_BUNDLE_IDENTIFIER).expo.index_route</string>

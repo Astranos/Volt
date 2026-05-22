@@ -13,6 +13,20 @@ const continuousCorners = Platform.select({ ios: { borderCurve: "continuous" as 
 export default function ScannerTab() {
   const scanner = useScanner();
 
+  if (!scanner.connected) {
+    return (
+      <SafeAreaView edges={["top", "left", "right"]} style={styles.scannerRoot}>
+        <StatusBar style="light" backgroundColor="#1c1917" />
+        <Header />
+        <View style={styles.page}>
+          <View style={styles.content}>
+            <PairingPanel statusLabel={scanner.statusLabel} />
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   if (!scanner.permission) return <View style={styles.root} />;
 
   if (!scanner.permission.granted) {
@@ -56,8 +70,22 @@ export default function ScannerTab() {
   );
 }
 
+function PairingPanel({ statusLabel }: { statusLabel: string }) {
+  return (
+    <View style={styles.pairingShell}>
+      <View style={styles.pairingIcon}>
+        <Ionicons name="phone-portrait-outline" size={34} color="#16a34a" />
+      </View>
+      <Text style={styles.pairingTitle}>{statusLabel}</Text>
+      <Text style={styles.pairingText}>
+        Open the Volt Chrome extension, choose Mobile Scanner, then scan the QR code with the phone Camera app to pair.
+      </Text>
+    </View>
+  );
+}
+
 export function Header() {
-  const { setTorch, statusLabel, torch } = useScanner();
+  const { connected, setTorch, statusLabel, torch } = useScanner();
 
   return (
     <View style={styles.header}>
@@ -65,9 +93,11 @@ export function Header() {
         <Image source={require("../../assets/volt-logo.png")} style={styles.headerLogo} resizeMode="contain" />
         <Text style={styles.status}>{statusLabel}</Text>
       </View>
-      <Pressable style={styles.iconButton} onPress={() => setTorch((value) => !value)}>
-        <Ionicons name={torch ? "flash" : "flash-outline"} size={20} color="#fafaf9" />
-      </Pressable>
+      {connected ? (
+        <Pressable style={styles.iconButton} onPress={() => setTorch((value) => !value)}>
+          <Ionicons name={torch ? "flash" : "flash-outline"} size={20} color="#fafaf9" />
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -75,15 +105,12 @@ export function Header() {
 export function BottomControls() {
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const {
-    answerCode,
     captureText,
-    copyAnswer,
     hasManualText,
     manualText,
     recognizingText,
     sendManualText,
     setManualText,
-    status,
   } = useScanner();
 
   useEffect(() => {
@@ -104,14 +131,6 @@ export function BottomControls() {
 
   return (
     <View style={[styles.bottomControls, { bottom: floatingBottom }]}>
-      {answerCode && status !== "connected" ? (
-        <Pressable style={styles.answerPanel} onPress={copyAnswer}>
-          <Text style={styles.answerTitle}>Answer code ready</Text>
-          <Text numberOfLines={2} style={styles.answerText}>{answerCode}</Text>
-          <Text style={styles.answerHint}>Tap to copy</Text>
-        </Pressable>
-      ) : null}
-
       <View style={styles.controls}>
         <TextInput
           value={manualText}
@@ -182,6 +201,43 @@ export const styles = StyleSheet.create({
     borderColor: "#292524",
   },
   camera: { flex: 1 },
+  pairingShell: {
+    marginHorizontal: 18,
+    aspectRatio: 1,
+    borderRadius: 32,
+    ...continuousCorners,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
+    backgroundColor: "#fafaf9",
+    borderWidth: 1,
+    borderColor: "#e7e5e4",
+  },
+  pairingIcon: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    ...continuousCorners,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#f0fdf4",
+    borderWidth: 1,
+    borderColor: "#bbf7d0",
+  },
+  pairingTitle: {
+    marginTop: 14,
+    color: "#1c1917",
+    fontSize: 18,
+    fontWeight: "800",
+    textAlign: "center",
+  },
+  pairingText: {
+    marginTop: 8,
+    color: "#78716c",
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: "center",
+  },
   scanFrame: {
     position: "absolute",
     left: "13%",

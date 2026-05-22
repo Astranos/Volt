@@ -11,7 +11,9 @@
       "bundleIdentifier": "com.volt.mobile",
       "buildNumber": "2",
       "infoPlist": {
-        "NSCameraUsageDescription": "Volt uses the camera to scan barcodes, model numbers, serial numbers, and other text for the paired Chrome extension."
+        "NSCameraUsageDescription": "Volt uses the camera to scan barcodes, model numbers, serial numbers, and other text for the paired Chrome extension.",
+        "NSMicrophoneUsageDescription": "Volt uses the microphone for hold-to-speak dictation into the paired Chrome browser.",
+        "NSSpeechRecognitionUsageDescription": "Volt uses speech recognition to turn dictated speech into text for the paired Chrome browser."
       }
     },
     "android": {
@@ -36,6 +38,13 @@
         "expo-camera",
         {
           "cameraPermission": "Volt uses the camera to scan barcodes, model numbers, serial numbers, and other text for the paired Chrome extension."
+        }
+      ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Volt uses the microphone for hold-to-speak dictation into the paired Chrome browser.",
+          "speechRecognitionPermission": "Volt uses speech recognition to turn dictated speech into text for the paired Chrome browser."
         }
       ]
     ],

@@ -18,10 +18,8 @@ import {
   SCANNER_DATA_CHANNEL,
   SCANNER_ICE_GATHERING_TIMEOUT_MS,
   SCANNER_ICE_SERVERS,
-  SCANNER_PAIRING_PAGE_URL,
+  SCANNER_APP_PAIR_URL,
   SCANNER_SIGNAL_URL,
-  decodePairingPayload,
-  encodePairingPayload,
   type BarcodeMessage,
   type ScannerConnectionStatus,
 } from "../../../../scanner-protocol/src";
@@ -40,16 +38,16 @@ interface MobileScannerProps {
 
 export default function MobileScanner({ onClose }: MobileScannerProps) {
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
-  const [pairingUrl, setPairingUrl] = useState<string | null>(null);
   const [status, setStatus] = useState<ScannerConnectionStatus>("disconnected");
   const [scans, setScans] = useState<ScanRecord[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [answerCode, setAnswerCode] = useState("");
-  const [answerApplied, setAnswerApplied] = useState(false);
 
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
   const answerPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const intentionallyClosingRef = useRef(false);
+  const restartTimerRef = useRef<number | null>(null);
+  const startSessionRef = useRef<(() => Promise<void>) | null>(null);
 
   const generateQrCode = useCallback(async (url: string) => {
     return QRCode.toDataURL(url, {
@@ -127,7 +125,12 @@ export default function MobileScanner({ onClose }: MobileScannerProps) {
     }
   }, []);
 
-  const cleanup = useCallback(() => {
+  const cleanup = useCallback((intentional = true) => {
+    intentionallyClosingRef.current = intentional;
+    if (restartTimerRef.current) {
+      clearTimeout(restartTimerRef.current);
+      restartTimerRef.current = null;
+    }
     if (answerPollRef.current) {
       clearInterval(answerPollRef.current);
       answerPollRef.current = null;
@@ -136,6 +139,19 @@ export default function MobileScanner({ onClose }: MobileScannerProps) {
     peerConnectionRef.current?.close();
     dataChannelRef.current = null;
     peerConnectionRef.current = null;
+    window.setTimeout(() => {
+      intentionallyClosingRef.current = false;
+    }, 0);
+  }, []);
+
+  const restartPairingSoon = useCallback(() => {
+    if (intentionallyClosingRef.current || restartTimerRef.current) return;
+    setStatus("creating");
+    setError(null);
+    restartTimerRef.current = window.setTimeout(() => {
+      restartTimerRef.current = null;
+      void startSessionRef.current?.();
+    }, 500);
   }, []);
 
   const startSession = useCallback(async () => {
@@ -143,9 +159,6 @@ export default function MobileScanner({ onClose }: MobileScannerProps) {
     setStatus("creating");
     setError(null);
     setQrDataUrl(null);
-    setPairingUrl(null);
-    setAnswerCode("");
-    setAnswerApplied(false);
 
     try {
       const pc = new RTCPeerConnection({ iceServers: SCANNER_ICE_SERVERS });
@@ -155,22 +168,25 @@ export default function MobileScanner({ onClose }: MobileScannerProps) {
       dataChannelRef.current = dataChannel;
 
       dataChannel.onopen = () => setStatus("connected");
-      dataChannel.onclose = () => setStatus("disconnected");
+      dataChannel.onclose = () => restartPairingSoon();
       dataChannel.onerror = () => {
         setStatus("error");
         setError("Connection error");
       };
       dataChannel.onmessage = (event) => {
         const data = decodeBarcodeMessage(event.data);
-        if (data) addScan(data);
+        if (!data) return;
+        addScan(data);
+        if (data.kind === "text" && data.format === "dictation") {
+          void typeAtCursor(data.barcode);
+        }
       };
 
       pc.onconnectionstatechange = () => {
         if (pc.connectionState === "failed") {
-          setStatus("error");
-          setError("Connection failed");
-        } else if (pc.connectionState === "disconnected") {
-          setStatus("disconnected");
+          restartPairingSoon();
+        } else if (pc.connectionState === "disconnected" || pc.connectionState === "closed") {
+          restartPairingSoon();
         }
       };
 
@@ -211,10 +227,8 @@ export default function MobileScanner({ onClose }: MobileScannerProps) {
         throw new Error("Invalid pairing session");
       }
 
-      const offerCode = encodePairingPayload(pc.localDescription);
-      const url = `${SCANNER_PAIRING_PAGE_URL}/pair?session=${encodeURIComponent(sessionId)}&offer=${encodeURIComponent(offerCode)}`;
-      setPairingUrl(url);
-      setQrDataUrl(await generateQrCode(url));
+      const appPairingUrl = `${SCANNER_APP_PAIR_URL}?session=${encodeURIComponent(sessionId)}`;
+      setQrDataUrl(await generateQrCode(appPairingUrl));
       setStatus("waiting");
 
       answerPollRef.current = setInterval(async () => {
@@ -226,7 +240,7 @@ export default function MobileScanner({ onClose }: MobileScannerProps) {
           if (typeof answer !== "string" || !answer || !peerConnectionRef.current) return;
 
           await peerConnectionRef.current.setRemoteDescription(JSON.parse(answer));
-          setAnswerApplied(true);
+          setStatus("connected");
           setError(null);
 
           if (answerPollRef.current) {
@@ -241,21 +255,16 @@ export default function MobileScanner({ onClose }: MobileScannerProps) {
       setStatus("error");
       setError(err instanceof Error ? err.message : "Failed to start session");
     }
-  }, [addScan, cleanup, generateQrCode]);
+  }, [addScan, cleanup, generateQrCode, restartPairingSoon, typeAtCursor]);
 
-  const applyAnswer = useCallback(async () => {
-    const trimmed = answerCode.trim();
-    if (!trimmed || !peerConnectionRef.current) return;
+  useEffect(() => {
+    startSessionRef.current = startSession;
+  }, [startSession]);
 
-    try {
-      await peerConnectionRef.current.setRemoteDescription(decodePairingPayload(trimmed));
-      setAnswerApplied(true);
-      setError(null);
-    } catch (err) {
-      setStatus("error");
-      setError(err instanceof Error ? err.message : "Invalid answer code");
-    }
-  }, [answerCode]);
+  const unpair = useCallback(() => {
+    cleanup();
+    void startSession();
+  }, [cleanup, startSession]);
 
   const copyScan = useCallback(async (scan: ScanRecord) => {
     await navigator.clipboard.writeText(scan.barcode);
@@ -280,11 +289,8 @@ export default function MobileScanner({ onClose }: MobileScannerProps) {
     return () => cleanup();
   }, [cleanup, startSession]);
 
-  const copyPairingUrl = () => {
-    if (pairingUrl) navigator.clipboard.writeText(pairingUrl);
-  };
-
   const scanCount = scans.length;
+  const showQr = status === "waiting" && qrDataUrl;
 
   return (
     <div className="flex h-full flex-col overflow-y-auto p-4">
@@ -308,7 +314,7 @@ export default function MobileScanner({ onClose }: MobileScannerProps) {
         {status === "waiting" && (
           <>
             <QrCode className="h-4 w-4 text-yellow-500" />
-            <span className="text-sm text-yellow-500">Open scanner page</span>
+            <span className="text-sm text-yellow-500">Waiting for Volt app</span>
           </>
         )}
         {status === "connected" && (
@@ -332,11 +338,11 @@ export default function MobileScanner({ onClose }: MobileScannerProps) {
       </div>
 
       <div className="flex flex-col items-center">
-        {qrDataUrl ? (
+        {showQr ? (
           <div className="relative w-full max-w-[320px] rounded-lg bg-white p-4 shadow-lg">
             <img
               src={qrDataUrl}
-              alt="Scan this QR code with the Volt mobile app"
+              alt="Scan this QR code to pair the Volt mobile app"
               className="aspect-square w-full"
             />
             <div className="absolute left-1/2 top-1/2 flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-lg border border-slate-200 bg-white p-2 shadow-sm">
@@ -352,33 +358,36 @@ export default function MobileScanner({ onClose }: MobileScannerProps) {
           <div className="flex aspect-square w-full max-w-[320px] items-center justify-center rounded-lg bg-muted">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
+        ) : status === "connected" ? (
+          <div className="w-full max-w-[320px] rounded-lg border bg-card p-4 text-center">
+            <CheckCircle className="mx-auto h-8 w-8 text-green-500" />
+            <div className="mt-2 text-sm font-semibold">Volt app paired</div>
+            <div className="mt-1 text-xs text-muted-foreground">
+              Scans and dictation will send to this browser.
+            </div>
+          </div>
         ) : null}
 
-        {pairingUrl && status === "waiting" && (
-          <Button variant="ghost" size="sm" className="mt-2 text-xs text-muted-foreground" onClick={copyPairingUrl}>
-            <Copy className="mr-1 h-3 w-3" />
-            Copy browser pairing link
-          </Button>
+        {status === "waiting" && (
+          <p className="mt-3 max-w-[320px] text-center text-xs text-muted-foreground">
+            Scan this QR with the phone Camera app to open Volt and pair.
+          </p>
         )}
       </div>
 
-      {status === "waiting" && (
-        <div className="mt-4 space-y-2">
-          <label className="text-xs font-medium text-muted-foreground">
-            Paste answer code from Volt app
-          </label>
-          <textarea
-            value={answerCode}
-            onChange={(event) => setAnswerCode(event.target.value)}
-            placeholder="Answer code"
-            className="min-h-20 w-full rounded-md border bg-background px-3 py-2 font-mono text-xs"
-            spellCheck={false}
-          />
-          <Button onClick={applyAnswer} disabled={!answerCode.trim() || answerApplied} className="w-full">
-            {answerApplied ? "Answer Applied" : "Connect Phone"}
+      <div className="mt-3">
+        {status === "connected" ? (
+          <Button onClick={unpair} variant="outline" className="w-full">
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Disconnect
           </Button>
-        </div>
-      )}
+        ) : (status === "error" || status === "disconnected") && (
+          <Button onClick={startSession} variant="outline" className="w-full">
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Restart Pairing
+          </Button>
+        )}
+      </div>
 
       <div className="mt-4 flex items-center justify-between">
         <div>
@@ -419,12 +428,6 @@ export default function MobileScanner({ onClose }: MobileScannerProps) {
         )}
       </div>
 
-      {(status === "error" || status === "disconnected" || status === "connected") && (
-        <Button onClick={startSession} variant="outline" className="mt-4">
-          <RefreshCw className="mr-2 h-4 w-4" />
-          {status === "connected" ? "New Pairing" : "Restart Pairing"}
-        </Button>
-      )}
     </div>
   );
 }
