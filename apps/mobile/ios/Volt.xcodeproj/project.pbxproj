@@ -13,6 +13,7 @@
 		821969B05715C8A27536A5B0 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 2F47C4DD7A4804A5FE038807 /* PrivacyInfo.xcprivacy */; };
 		AC7AC6ECCE1446F6331DC713 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC612F95403FFD79D2EA2F75 /* ExpoModulesProvider.swift */; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
+		E2F6A9102EEC3A2800D3B901 /* volt.icon in Resources */ = {isa = PBXBuildFile; fileRef = E2F6A90F2EEC3A2800D3B901 /* volt.icon */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
 		F2A7E5012D7A000100000001 /* LiveTextImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2A7E5002D7A000100000001 /* LiveTextImageView.swift */; };
 		F2A7E5032D7A000100000001 /* LiveTextImageViewManager.m in Sources */ = {isa = PBXBuildFile; fileRef = F2A7E5022D7A000100000001 /* LiveTextImageViewManager.m */; };
@@ -29,6 +30,7 @@
 		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = Volt/SplashScreen.storyboard; sourceTree = "<group>"; };
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
 		DC612F95403FFD79D2EA2F75 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-Volt/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
+		E2F6A90F2EEC3A2800D3B901 /* volt.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; name = volt.icon; path = ../assets/volt.icon; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = Volt/AppDelegate.swift; sourceTree = "<group>"; };
 		F11748442D0722820044C1D9 /* Volt-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "Volt-Bridging-Header.h"; path = "Volt/Volt-Bridging-Header.h"; sourceTree = "<group>"; };
@@ -56,6 +58,7 @@
 				F2A7E5022D7A000100000001 /* LiveTextImageViewManager.m */,
 				F11748442D0722820044C1D9 /* Volt-Bridging-Header.h */,
 				BB2F792B24A3F905000567C9 /* Supporting */,
+				E2F6A90F2EEC3A2800D3B901 /* volt.icon */,
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */,
@@ -201,6 +204,7 @@
 				BB2F792D24A3F905000567C9 /* Expo.plist in Resources */,
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */,
+				E2F6A9102EEC3A2800D3B901 /* volt.icon in Resources */,
 				821969B05715C8A27536A5B0 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -368,7 +372,6 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 068F79DB4BF81F67BB85C2FF /* Pods-Volt.debug.xcconfig */;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = Volt/Volt.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
@@ -408,7 +411,6 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 19E9CE1E49A8906BC6491E2D /* Pods-Volt.release.xcconfig */;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = Volt/Volt.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
