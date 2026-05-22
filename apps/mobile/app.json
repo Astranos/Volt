@@ -9,7 +9,7 @@
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
-      "icon": "./assets/icon.png",
+      "icon": "./assets/volt.icon",
       "bundleIdentifier": "com.volt.mobile",
       "buildNumber": "2",
       "infoPlist": {

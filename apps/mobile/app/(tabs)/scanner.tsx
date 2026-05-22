@@ -7,6 +7,8 @@ import { barcodeTypes, useScanner } from "../../lib/scanner-state";
 import { Header, PairingPanel, ScreenRoot, StartCameraOverlay, TorchButton, styles } from "./index";
 
 const scannerFloatingBottom = Platform.select({ ios: 94, default: 86 });
+const scannerControlsHeight = 122;
+const scannerCameraGap = 18;
 const zoomStep = 0.08;
 
 type ViewfinderSize = {
@@ -394,7 +396,7 @@ function ScannerBottomControls({
 
 const localStyles = {
   scannerContent: {
-    paddingBottom: 178,
+    paddingBottom: scannerFloatingBottom + scannerControlsHeight + scannerCameraGap,
   },
   viewfinderOverlay: {
     position: "absolute" as const,

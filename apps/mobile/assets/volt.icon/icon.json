@@ -6,7 +6,7 @@
         {
           "blend-mode" : "normal",
           "glass" : true,
-          "image-name" : "logo-hd.svg",
+          "image-name" : "logo-hd.png",
           "name" : "logo-hd",
           "position" : {
             "scale" : 0.77,
