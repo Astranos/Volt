@@ -419,8 +419,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
     if (status === "connected") return "Connected to Chrome";
     if (status === "pairing") return "Pairing";
     if (status === "error") return error ?? "Connection error";
-    if (status === "disconnected") return "Disconnected";
-    return "Scan the extension QR";
+    return "No Connection";
   }, [error, status]);
 
   const value = useMemo<ScannerState>(

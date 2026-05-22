@@ -137,7 +137,7 @@ export default function ScannerTab() {
   );
 }
 
-function PairingPanel({
+export function PairingPanel({
   error,
   onOpenScanner,
   statusLabel,
