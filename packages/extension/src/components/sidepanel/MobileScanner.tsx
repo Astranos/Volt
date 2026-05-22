@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   CheckCircle,
   Copy,
@@ -15,10 +15,15 @@ import type {
   BarcodeMessage,
   ScannerConnectionStatus,
 } from "../../../../scanner-protocol/src";
-import { MobileScannerSession } from "../../domain/mobile-scanner-session";
 
 const STORAGE_KEY = "volt.mobileScanner.scans";
 const MAX_SCANS = 100;
+
+type MobileScannerState = {
+  status: ScannerConnectionStatus;
+  qrCodeUrl: string | null;
+  error: string | null;
+};
 
 function installEditableTracker() {
   const root = window as typeof window & {
@@ -55,70 +60,6 @@ function installEditableTracker() {
   root.__voltEditableTrackerInstalled = true;
 }
 
-function insertTextAtTrackedEditable(value: string) {
-  const root = window as typeof window & {
-    __voltLastEditable?: HTMLElement | null;
-    __voltEditableTrackerInstalled?: boolean;
-  };
-
-  const isEditable = (element: Element | null): element is HTMLElement => {
-    if (!(element instanceof HTMLElement)) return false;
-    return (
-      element.tagName === "INPUT" ||
-      element.tagName === "TEXTAREA" ||
-      element.isContentEditable
-    );
-  };
-
-  if (isEditable(document.activeElement)) {
-    root.__voltLastEditable = document.activeElement;
-  }
-
-  if (!root.__voltEditableTrackerInstalled) {
-    document.addEventListener(
-      "focusin",
-      (event) => {
-        const target = event.target;
-        const editableTarget = target instanceof Element ? target : null;
-        if (isEditable(editableTarget)) {
-          root.__voltLastEditable = editableTarget;
-        }
-      },
-      true
-    );
-    root.__voltEditableTrackerInstalled = true;
-  }
-
-  const activeElement = document.activeElement;
-  const target = isEditable(activeElement)
-    ? activeElement
-    : isEditable(root.__voltLastEditable ?? null)
-    ? root.__voltLastEditable
-    : null;
-
-  if (target) {
-    target.focus();
-    if (target.isContentEditable) {
-      document.execCommand("insertText", false, value);
-    } else {
-      const input = target as HTMLInputElement | HTMLTextAreaElement;
-      const start = input.selectionStart ?? input.value.length;
-      const end = input.selectionEnd ?? input.value.length;
-      if (typeof input.setRangeText === "function") {
-        input.setRangeText(value, start, end, "end");
-      } else {
-        input.value =
-          input.value.slice(0, start) + value + input.value.slice(end);
-        input.selectionStart = input.selectionEnd = start + value.length;
-      }
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-      input.dispatchEvent(new Event("change", { bubbles: true }));
-    }
-  } else {
-    navigator.clipboard.writeText(value).catch(() => {});
-  }
-}
-
 type ScanRecord = BarcodeMessage & {
   id: string;
   copied?: boolean;
@@ -133,8 +74,6 @@ export default function MobileScanner({ onClose }: MobileScannerProps) {
   const [status, setStatus] = useState<ScannerConnectionStatus>("disconnected");
   const [scans, setScans] = useState<ScanRecord[]>([]);
   const [error, setError] = useState<string | null>(null);
-
-  const sessionRef = useRef<MobileScannerSession | null>(null);
 
   const generateQrCode = useCallback(async (url: string) => {
     return QRCode.toDataURL(url, {
@@ -152,6 +91,22 @@ export default function MobileScanner({ onClose }: MobileScannerProps) {
     void chrome.storage.local.set({ [STORAGE_KEY]: nextScans });
   }, []);
 
+  const applyScannerState = useCallback(
+    (state: Partial<MobileScannerState> | null | undefined) => {
+      if (!state) return;
+      if (state.status) setStatus(state.status);
+      setError(state.error ?? null);
+
+      if (!state.qrCodeUrl) {
+        setQrDataUrl(null);
+        return;
+      }
+
+      void generateQrCode(state.qrCodeUrl).then(setQrDataUrl);
+    },
+    [generateQrCode]
+  );
+
   const addScan = useCallback(
     (message: BarcodeMessage) => {
       const scan: ScanRecord = {
@@ -161,33 +116,10 @@ export default function MobileScanner({ onClose }: MobileScannerProps) {
         scannedAt: message.scannedAt ?? new Date().toISOString(),
       };
 
-      setScans((current) => {
-        const nextScans = [scan, ...current].slice(0, MAX_SCANS);
-        persistScans(nextScans);
-        return nextScans;
-      });
+      setScans((current) => [scan, ...current].slice(0, MAX_SCANS));
     },
-    [persistScans]
+    []
   );
-
-  const typeAtCursor = useCallback(async (text: string) => {
-    try {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-
-      if (!tab?.id) {
-        await navigator.clipboard.writeText(text);
-        return;
-      }
-
-      await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        func: insertTextAtTrackedEditable,
-        args: [text],
-      });
-    } catch (_err) {
-      await navigator.clipboard.writeText(text);
-    }
-  }, []);
 
   const primeCursorTarget = useCallback(async () => {
     try {
@@ -203,34 +135,23 @@ export default function MobileScanner({ onClose }: MobileScannerProps) {
   }, []);
 
   const startSession = useCallback(async () => {
-    await sessionRef.current?.start();
-  }, []);
-
-  useEffect(() => {
-    sessionRef.current?.cleanup();
-    sessionRef.current = new MobileScannerSession({
-      onQrCodeUrl: (url) => {
-        if (!url) {
-          setQrDataUrl(null);
-          return;
-        }
-        void generateQrCode(url).then(setQrDataUrl);
-      },
-      onStatus: setStatus,
-      onError: setError,
-      onScan: addScan,
-      onInsert: (text) => void typeAtCursor(text),
-    });
-
-    return () => {
-      sessionRef.current?.cleanup();
-      sessionRef.current = null;
-    };
-  }, [addScan, generateQrCode, typeAtCursor]);
+    setStatus("creating");
+    setError(null);
+    const response = await chrome.runtime.sendMessage({ action: "scannerStart" });
+    if (response?.state) applyScannerState(response.state);
+    if (response?.error) {
+      setStatus("error");
+      setError(response.error);
+    }
+  }, [applyScannerState]);
 
   const unpair = useCallback(() => {
-    sessionRef.current?.unpair();
-  }, []);
+    void chrome.runtime
+      .sendMessage({ action: "scannerDisconnect" })
+      .then((response) => {
+        if (response?.state) applyScannerState(response.state);
+      });
+  }, [applyScannerState]);
 
   const copyScan = useCallback(async (scan: ScanRecord) => {
     await navigator.clipboard.writeText(scan.barcode);
@@ -251,10 +172,32 @@ export default function MobileScanner({ onClose }: MobileScannerProps) {
     });
 
     void primeCursorTarget();
-    startSession();
+    void chrome.runtime
+      .sendMessage({ action: "scannerGetState" })
+      .then((response) => {
+        const state = response?.state as MobileScannerState | undefined;
+        applyScannerState(state);
+        if (!state || state.status === "disconnected" || state.status === "error") {
+          void startSession();
+        }
+      })
+      .catch(() => {
+        void startSession();
+      });
+  }, [applyScannerState, primeCursorTarget, startSession]);
 
-    return () => sessionRef.current?.cleanup();
-  }, [primeCursorTarget, startSession]);
+  useEffect(() => {
+    const handleMessage = (message: any) => {
+      if (message?.action === "scannerStateChanged") {
+        applyScannerState(message.state);
+      } else if (message?.action === "scannerScan") {
+        addScan(message.scan);
+      }
+    };
+
+    chrome.runtime.onMessage.addListener(handleMessage);
+    return () => chrome.runtime.onMessage.removeListener(handleMessage);
+  }, [addScan, applyScannerState]);
 
   const scanCount = scans.length;
   const showQr = status === "waiting" && qrDataUrl;

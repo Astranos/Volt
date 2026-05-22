@@ -82,8 +82,12 @@ export default defineBackground({
     let CONTROLLER_CONNECTED = false;
     let CONTROLLER_CHECK_INTERVAL = null;
     let LAST_CONTROLLER_COUNT = 0;
+    let OFFSCREEN_CREATE_PROMISE = null;
 
+    const OFFSCREEN_DOCUMENT_PATH = "offscreen.html";
     const STORAGE_STATS_KEY = "grokStorageStats";
+    const MOBILE_SCANNER_STORAGE_KEY = "volt.mobileScanner.scans";
+    const MOBILE_SCANNER_MAX_SCANS = 100;
     const DEFAULT_STORAGE_STATS = {
       indexedPages: 0,
       totalDocuments: 0,
@@ -110,6 +114,230 @@ export default defineBackground({
      */
     function log(...args) {
       if (DEBUG) console.log("[Volt Service Wroker]", ...args);
+    }
+
+    function shouldInsertScannerMessage(message) {
+      return (
+        message?.kind === "barcode" ||
+        (message?.kind === "text" && message?.format === "dictation")
+      );
+    }
+
+    function normalizeScannerMessage(message) {
+      if (!message || typeof message.barcode !== "string" || !message.barcode) {
+        return null;
+      }
+
+      return {
+        ...message,
+        id:
+          typeof message.id === "string" && message.id
+            ? message.id
+            : `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        kind: message.kind === "text" ? "text" : "barcode",
+        scannedAt:
+          typeof message.scannedAt === "string"
+            ? message.scannedAt
+            : new Date().toISOString(),
+      };
+    }
+
+    function insertTextAtTrackedEditableFromBackground(value) {
+      const root = window;
+
+      const isEditable = (element) => {
+        if (!(element instanceof HTMLElement)) return false;
+        return (
+          element.tagName === "INPUT" ||
+          element.tagName === "TEXTAREA" ||
+          element.isContentEditable
+        );
+      };
+
+      if (isEditable(document.activeElement)) {
+        root.__voltLastEditable = document.activeElement;
+      }
+
+      if (!root.__voltEditableTrackerInstalled) {
+        document.addEventListener(
+          "focusin",
+          (event) => {
+            const target = event.target;
+            const editableTarget = target instanceof Element ? target : null;
+            if (isEditable(editableTarget)) {
+              root.__voltLastEditable = editableTarget;
+            }
+          },
+          true
+        );
+        root.__voltEditableTrackerInstalled = true;
+      }
+
+      const activeElement = document.activeElement;
+      const target = isEditable(activeElement)
+        ? activeElement
+        : isEditable(root.__voltLastEditable ?? null)
+        ? root.__voltLastEditable
+        : null;
+
+      if (!target) {
+        navigator.clipboard.writeText(value).catch(() => {});
+        return;
+      }
+
+      target.focus();
+      if (target.isContentEditable) {
+        document.execCommand("insertText", false, value);
+        return;
+      }
+
+      const input = target;
+      const start = input.selectionStart ?? input.value.length;
+      const end = input.selectionEnd ?? input.value.length;
+      if (typeof input.setRangeText === "function") {
+        input.setRangeText(value, start, end, "end");
+      } else {
+        input.value = input.value.slice(0, start) + value + input.value.slice(end);
+        input.selectionStart = input.selectionEnd = start + value.length;
+      }
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+
+    async function insertScannerText(text) {
+      try {
+        const [tab] = await chrome.tabs.query({
+          active: true,
+          currentWindow: true,
+        });
+
+        if (!tab?.id) {
+          await handleClipboardWithOffscreen("copyToClipboard", text);
+          return;
+        }
+
+        await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          func: insertTextAtTrackedEditableFromBackground,
+          args: [text],
+        });
+      } catch (err) {
+        log("scanner insert fallback", err?.message || err);
+        try {
+          await handleClipboardWithOffscreen("copyToClipboard", text);
+        } catch (clipboardErr) {
+          log("scanner clipboard fallback failed", clipboardErr?.message || clipboardErr);
+        }
+      }
+    }
+
+    function persistScannerScan(scan) {
+      chrome.storage.local.get(
+        { [MOBILE_SCANNER_STORAGE_KEY]: [] },
+        (stored) => {
+          const current = Array.isArray(stored[MOBILE_SCANNER_STORAGE_KEY])
+            ? stored[MOBILE_SCANNER_STORAGE_KEY]
+            : [];
+          const next = [scan, ...current].slice(0, MOBILE_SCANNER_MAX_SCANS);
+          chrome.storage.local.set({ [MOBILE_SCANNER_STORAGE_KEY]: next });
+        }
+      );
+    }
+
+    function broadcastScannerMessage(message) {
+      try {
+        chrome.runtime.sendMessage(message, () => {
+          void chrome.runtime.lastError;
+        });
+      } catch (_) {}
+    }
+
+    async function pingScannerOffscreen() {
+      try {
+        const response = await chrome.runtime.sendMessage({
+          action: "scannerOffscreenPing",
+        });
+        return response?.ready === true;
+      } catch (_) {
+        return false;
+      }
+    }
+
+    async function ensureScannerOffscreenDocument() {
+      const offscreenCreated = await createOffscreenDocument();
+      if (!offscreenCreated) return false;
+
+      if (await pingScannerOffscreen()) return true;
+
+      const existingContexts = await getOffscreenContexts();
+      if (existingContexts.length > 0) {
+        try {
+          await chrome.offscreen.closeDocument();
+        } catch (error) {
+          log("Failed to close stale offscreen document", error?.message || error);
+          return false;
+        }
+      }
+
+      const recreated = await createOffscreenDocument();
+      if (!recreated) return false;
+      return pingScannerOffscreen();
+    }
+
+    async function sendScannerOffscreenMessage(message) {
+      const offscreenReady = await ensureScannerOffscreenDocument();
+      if (!offscreenReady) {
+        throw new Error("Failed to initialize scanner offscreen document");
+      }
+      return chrome.runtime.sendMessage(message);
+    }
+
+    async function handleScannerStart(sendResponse) {
+      try {
+        const state = await sendScannerOffscreenMessage({
+          action: "scannerOffscreenStart",
+        });
+        sendResponse({ success: true, state });
+      } catch (err) {
+        sendResponse({ success: false, error: String(err?.message || err) });
+      }
+    }
+
+    async function handleScannerDisconnect(sendResponse) {
+      try {
+        const state = await sendScannerOffscreenMessage({
+          action: "scannerOffscreenDisconnect",
+        });
+        sendResponse({ success: true, state });
+      } catch (err) {
+        sendResponse({ success: false, error: String(err?.message || err) });
+      }
+    }
+
+    async function handleScannerGetState(sendResponse) {
+      try {
+        const state = await sendScannerOffscreenMessage({
+          action: "scannerOffscreenGetState",
+        });
+        sendResponse({ success: true, state });
+      } catch (err) {
+        sendResponse({
+          success: true,
+          state: { status: "disconnected", qrCodeUrl: null, error: null },
+        });
+      }
+    }
+
+    function handleScannerScan(message) {
+      const scan = normalizeScannerMessage(message?.scan);
+      if (!scan) return;
+
+      persistScannerScan(scan);
+      broadcastScannerMessage({ action: "scannerScan", scan });
+
+      if (shouldInsertScannerMessage(scan)) {
+        void insertScannerText(scan.barcode);
+      }
     }
 
     log("Service worker booted", { time: new Date().toISOString() });
@@ -568,6 +796,17 @@ export default defineBackground({
     }
 
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+      if (
+        [
+          "scannerOffscreenPing",
+          "scannerOffscreenStart",
+          "scannerOffscreenDisconnect",
+          "scannerOffscreenGetState",
+        ].includes(message?.action)
+      ) {
+        return false;
+      }
+
       log("onMessage", {
         message,
         sender: { id: sender?.tab?.id, url: sender?.tab?.url },
@@ -616,6 +855,29 @@ export default defineBackground({
       }
 
       switch (message.action) {
+        case "scannerStart":
+          handleScannerStart(sendResponse);
+          return true;
+        case "scannerDisconnect":
+          handleScannerDisconnect(sendResponse);
+          return true;
+        case "scannerGetState":
+          handleScannerGetState(sendResponse);
+          return true;
+        case "scannerStateChanged":
+          if (message?.source !== "scanner-background") {
+            broadcastScannerMessage({
+              action: "scannerStateChanged",
+              source: "scanner-background",
+              state: message?.state,
+            });
+          }
+          sendResponse({ success: true });
+          break;
+        case "scannerOffscreenScan":
+          handleScannerScan(message);
+          sendResponse({ success: true });
+          break;
         case "csReady":
           log("content script ready", message?.url);
           sendResponse({ ok: true });
@@ -1742,23 +2004,89 @@ export default defineBackground({
      * @returns {Promise<boolean>} Success status
      */
     async function createOffscreenDocument() {
-      // Check if offscreen document already exists
-      const existingContexts = await chrome.runtime.getContexts({
-        contextTypes: ["OFFSCREEN_DOCUMENT"],
-        documentUrls: [chrome.runtime.getURL("offscreen.html")],
+      if (OFFSCREEN_CREATE_PROMISE) {
+        return OFFSCREEN_CREATE_PROMISE;
+      }
+
+      OFFSCREEN_CREATE_PROMISE = createOffscreenDocumentOnce().finally(() => {
+        OFFSCREEN_CREATE_PROMISE = null;
       });
+      return OFFSCREEN_CREATE_PROMISE;
+    }
+
+    async function getOffscreenContexts() {
+      if (!chrome.runtime.getContexts) {
+        const matchedClients = await clients.matchAll();
+        return matchedClients
+          .filter((client) => client.url.includes(chrome.runtime.id))
+          .map((client) => ({ documentUrl: client.url }));
+      }
+
+      return chrome.runtime.getContexts({
+        contextTypes: ["OFFSCREEN_DOCUMENT"],
+      });
+    }
+
+    async function createOffscreenDocumentOnce() {
+      const offscreenUrl = chrome.runtime.getURL(OFFSCREEN_DOCUMENT_PATH);
+      const existingContexts = await getOffscreenContexts();
+      const matchingContext = existingContexts.find(
+        (context) => context.documentUrl === offscreenUrl
+      );
+
+      if (matchingContext) {
+        return true;
+      }
 
       if (existingContexts.length > 0) {
-        return true; // Already exists
+        log(
+          "Non-matching offscreen document already exists",
+          existingContexts.map((context) => context.documentUrl)
+        );
+        return true;
       }
 
       try {
-        await chrome.offscreen.createDocument({
-          url: chrome.runtime.getURL("offscreen.html"),
-          reasons: ["DOM_SCRAPING"],
-          justification: "Gamepad detection requires access to Gamepad API",
-        });
-        log("Offscreen document created for gamepad detection");
+        const createOptions = {
+          url: OFFSCREEN_DOCUMENT_PATH,
+          reasons: ["DOM_SCRAPING", "CLIPBOARD", "WEB_RTC"],
+          justification:
+            "Gamepad detection, clipboard fallback, and the mobile scanner connection run without visible extension UI",
+        };
+        try {
+          await chrome.offscreen.createDocument(createOptions);
+        } catch (reasonError) {
+          if (
+            String(reasonError?.message || reasonError).includes(
+              "Only a single offscreen document"
+            )
+          ) {
+            log("Offscreen document already exists");
+            return true;
+          }
+
+          log(
+            "Offscreen create with extended reasons failed, retrying with DOM_SCRAPING",
+            reasonError?.message || reasonError
+          );
+          try {
+            await chrome.offscreen.createDocument({
+              ...createOptions,
+              reasons: ["DOM_SCRAPING"],
+            });
+          } catch (fallbackError) {
+            if (
+              String(fallbackError?.message || fallbackError).includes(
+                "Only a single offscreen document"
+              )
+            ) {
+              log("Offscreen document already exists");
+              return true;
+            }
+            throw fallbackError;
+          }
+        }
+        log("Offscreen document created");
         return true;
       } catch (error) {
         log("Failed to create offscreen document:", error);

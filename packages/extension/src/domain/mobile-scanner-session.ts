@@ -177,9 +177,25 @@ export class MobileScannerSession {
   }
 
   private async createSignalingSession(localDescription: RTCSessionDescription) {
-    const sessionUrl = this.sessionId
-      ? `${SCANNER_SIGNAL_URL}/${encodeURIComponent(this.sessionId)}`
-      : SCANNER_SIGNAL_URL;
+    if (this.sessionId) {
+      try {
+        return await this.postSignalingOffer(
+          `${SCANNER_SIGNAL_URL}/${encodeURIComponent(this.sessionId)}`,
+          localDescription
+        );
+      } catch (error) {
+        console.warn("Failed to refresh scanner pairing session; creating a new one", error);
+        this.sessionId = null;
+      }
+    }
+
+    return this.postSignalingOffer(SCANNER_SIGNAL_URL, localDescription);
+  }
+
+  private async postSignalingOffer(
+    sessionUrl: string,
+    localDescription: RTCSessionDescription
+  ) {
     const sessionResponse = await fetch(sessionUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -187,7 +203,17 @@ export class MobileScannerSession {
     });
 
     if (!sessionResponse.ok) {
-      throw new Error("Failed to create pairing session");
+      let details = "";
+      try {
+        const payload = await sessionResponse.json();
+        details =
+          typeof payload?.error === "string" && payload.error
+            ? `: ${payload.error}`
+            : "";
+      } catch (_error) {}
+      throw new Error(
+        `Failed to create pairing session (${sessionResponse.status})${details}`
+      );
     }
 
     const { sessionId } = await sessionResponse.json();
