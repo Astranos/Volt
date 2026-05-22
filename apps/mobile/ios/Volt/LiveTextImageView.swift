@@ -1,4 +1,6 @@
 import React
+import CoreImage
+import CoreImage.CIFilterBuiltins
 import UIKit
 import VisionKit
 
@@ -16,6 +18,7 @@ class LiveTextImageViewManager: RCTViewManager {
 @objc(LiveTextImageView)
 class LiveTextImageView: UIView {
   private let imageView = UIImageView()
+  private let ciContext = CIContext(options: nil)
   private var analysisTask: Task<Void, Never>?
   private var analyzer: Any?
   private var interaction: Any?
@@ -54,6 +57,7 @@ class LiveTextImageView: UIView {
     if #available(iOS 16.0, *) {
       let liveTextInteraction = ImageAnalysisInteraction()
       liveTextInteraction.preferredInteractionTypes = .textSelection
+      liveTextInteraction.allowLongPressForDataDetectorsInTextMode = false
       imageView.addInteraction(liveTextInteraction)
       interaction = liveTextInteraction
       analyzer = ImageAnalyzer()
@@ -71,8 +75,9 @@ class LiveTextImageView: UIView {
       return
     }
 
-    imageView.image = image
-    analyze(image)
+    let enhancedImage = imageForTextRecognition(from: image)
+    imageView.image = enhancedImage
+    analyze(enhancedImage)
   }
 
   private func image(from uri: String) -> UIImage? {
@@ -86,6 +91,36 @@ class LiveTextImageView: UIView {
     }
 
     return UIImage(contentsOfFile: url.path)
+  }
+
+  private func imageForTextRecognition(from image: UIImage) -> UIImage {
+    guard let inputImage = CIImage(image: image) else {
+      return image
+    }
+
+    let noiseReduction = CIFilter.noiseReduction()
+    noiseReduction.inputImage = inputImage
+    noiseReduction.noiseLevel = 0.02
+    noiseReduction.sharpness = 0.55
+
+    let colorControls = CIFilter.colorControls()
+    colorControls.inputImage = noiseReduction.outputImage ?? inputImage
+    colorControls.brightness = 0.02
+    colorControls.contrast = 1.22
+    colorControls.saturation = 0.92
+
+    let sharpen = CIFilter.sharpenLuminance()
+    sharpen.inputImage = colorControls.outputImage ?? inputImage
+    sharpen.sharpness = 0.55
+
+    guard
+      let outputImage = sharpen.outputImage,
+      let cgImage = ciContext.createCGImage(outputImage, from: outputImage.extent)
+    else {
+      return image
+    }
+
+    return UIImage(cgImage: cgImage, scale: image.scale, orientation: image.imageOrientation)
   }
 
   private func analyze(_ image: UIImage) {
@@ -110,6 +145,7 @@ class LiveTextImageView: UIView {
           }
           interaction.analysis = analysis
           interaction.preferredInteractionTypes = .textSelection
+          interaction.allowLongPressForDataDetectorsInTextMode = false
         }
       } catch {
         await MainActor.run {

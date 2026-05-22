@@ -31,6 +31,7 @@ export default function OcrTab() {
   const [pairScannerError, setPairScannerError] = useState<string | null>(null);
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraZoom, setCameraZoom] = useState(0);
+  const [captureZoom, setCaptureZoom] = useState(1);
   const [focusMode, setFocusMode] = useState<"on" | "off">("off");
   const [focusPoint, setFocusPoint] = useState<{ x: number; y: number } | null>(null);
   const pairScannerLockedRef = useRef(false);
@@ -47,6 +48,7 @@ export default function OcrTab() {
         pairScannerLockedRef.current = false;
         scanner.setTorch(false);
         setCameraZoom(0);
+        setCaptureZoom(1);
         setFocusPoint(null);
         if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
       };
@@ -191,10 +193,31 @@ export default function OcrTab() {
           <View style={styles.cameraShell}>
             {scanner.textCapture ? (
               <>
-                <LiveTextImageView
-                  imageUri={scanner.textCapture.photoUri}
-                  style={styles.capturedImage}
-                />
+                <View style={styles.capturedImageViewport}>
+                  <LiveTextImageView
+                    imageUri={scanner.textCapture.photoUri}
+                    style={[styles.capturedImage, { transform: [{ scale: captureZoom }] }]}
+                  />
+                </View>
+                <View style={styles.captureZoomControls}>
+                  <Pressable
+                    accessibilityLabel="Zoom captured image out"
+                    accessibilityRole="button"
+                    style={styles.zoomButton}
+                    onPress={() => setCaptureZoom((value) => Math.max(1, value - 0.25))}
+                  >
+                    <Ionicons name="remove" size={18} color="#fafaf9" />
+                  </Pressable>
+                  <Text style={styles.zoomText}>{Math.round(captureZoom * 100)}%</Text>
+                  <Pressable
+                    accessibilityLabel="Zoom captured image in"
+                    accessibilityRole="button"
+                    style={styles.zoomButton}
+                    onPress={() => setCaptureZoom((value) => Math.min(4, value + 0.25))}
+                  >
+                    <Ionicons name="add" size={18} color="#fafaf9" />
+                  </Pressable>
+                </View>
                 <Pressable
                   accessibilityLabel="Retake text capture"
                   accessibilityRole="button"
@@ -346,6 +369,7 @@ export function BottomControls() {
     sendManualText,
     setManualText,
     textCapture,
+    textCaptureResult,
   } = useScanner();
 
   useEffect(() => {
@@ -370,6 +394,15 @@ export function BottomControls() {
 
   return (
     <View style={[styles.bottomControls, { bottom: floatingBottom }]}>
+      {textCaptureResult ? (
+        <View style={styles.copiedPanel}>
+          <View style={styles.copiedHeader}>
+            <Ionicons name="checkmark-circle" size={18} color="#16a34a" />
+            <Text style={styles.copiedTitle}>Copied and sent to {textCaptureResult.target}</Text>
+          </View>
+          <Text numberOfLines={2} style={styles.copiedText}>{textCaptureResult.text}</Text>
+        </View>
+      ) : null}
       <View style={styles.controls}>
         <TextInput
           value={manualText}
@@ -452,6 +485,26 @@ export const styles = StyleSheet.create({
     width: "100%",
     height: "100%",
     backgroundColor: "#1c1917",
+  },
+  capturedImageViewport: {
+    ...StyleSheet.absoluteFillObject,
+    overflow: "hidden",
+    backgroundColor: "#1c1917",
+  },
+  captureZoomControls: {
+    position: "absolute",
+    left: 12,
+    bottom: 12,
+    minHeight: 42,
+    borderRadius: 999,
+    ...continuousCorners,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 8,
+    backgroundColor: "rgba(28, 25, 23, 0.82)",
+    borderWidth: 1,
+    borderColor: "#44403c",
   },
   focusRing: {
     position: "absolute",
@@ -634,6 +687,36 @@ export const styles = StyleSheet.create({
     zIndex: 10,
     gap: 10,
     backgroundColor: "transparent",
+  },
+  copiedPanel: {
+    padding: 12,
+    borderRadius: 22,
+    ...continuousCorners,
+    backgroundColor: "#f0fdf4",
+    borderWidth: 1,
+    borderColor: "#bbf7d0",
+    shadowColor: "#1c1917",
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 5,
+  },
+  copiedHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+  },
+  copiedTitle: {
+    flex: 1,
+    color: "#166534",
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  copiedText: {
+    marginTop: 6,
+    color: "#14532d",
+    fontSize: 13,
+    lineHeight: 18,
   },
   answerPanel: {
     padding: 12,

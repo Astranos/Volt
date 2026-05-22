@@ -51,6 +51,12 @@ type TextCapture = {
   photoUri: string;
 };
 
+type TextCaptureResult = {
+  text: string;
+  target: string;
+  sentAt: string;
+};
+
 export const barcodeTypes = [
   "aztec",
   "codabar",
@@ -93,6 +99,7 @@ type ScannerState = {
   statusLabel: string;
   stopDictation: () => void;
   textCapture: TextCapture | null;
+  textCaptureResult: TextCaptureResult | null;
   torch: boolean;
 };
 
@@ -134,6 +141,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
   const [torch, setTorch] = useState(false);
   const [recognizingText, setRecognizingText] = useState(false);
   const [textCapture, setTextCapture] = useState<TextCapture | null>(null);
+  const [textCaptureResult, setTextCaptureResult] = useState<TextCaptureResult | null>(null);
   const [dictating, setDictating] = useState(false);
   const [dictationTranscript, setDictationTranscript] = useState("");
   const [dictationError, setDictationError] = useState<string | null>(null);
@@ -413,6 +421,11 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       if (!value || value === lastTextCaptureClipboardRef.current) return;
       lastTextCaptureClipboardRef.current = value;
       await sendScan(makeScanItem(value, "live-text", "text"));
+      setTextCaptureResult({
+        text: value,
+        target: channelRef.current?.readyState === "open" ? "Chrome results" : "local scan history",
+        sentAt: new Date().toISOString(),
+      });
     },
     [sendScan]
   );
@@ -544,6 +557,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
 
   const clearTextCapture = useCallback(() => {
     setTextCapture(null);
+    setTextCaptureResult(null);
   }, []);
 
   const statusLabel = useMemo(() => {
@@ -580,6 +594,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       statusLabel,
       stopDictation,
       textCapture,
+      textCaptureResult,
       torch,
     }),
     [
@@ -604,6 +619,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       statusLabel,
       stopDictation,
       textCapture,
+      textCaptureResult,
       torch,
     ]
   );
