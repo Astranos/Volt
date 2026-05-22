@@ -131,11 +131,7 @@ class LiveTextImageView: UIView {
       return
     }
 
-    analysisTask = Task { [weak self] in
-      guard let self else {
-        return
-      }
-
+    analysisTask = Task {
       do {
         let configuration = ImageAnalyzer.Configuration([.text])
         let analysis = try await analyzer.analyze(image, configuration: configuration)

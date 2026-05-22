@@ -5,8 +5,11 @@
   "main": "expo-router/entry",
   "scripts": {
     "dev": "expo start",
+    "dev:device": "expo start --dev-client --host tunnel",
     "android": "expo run:android",
     "ios": "expo run:ios",
+    "ios:device": "expo run:ios --device",
+    "ios:device:release": "expo run:ios --device --configuration Release",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit"
   },
