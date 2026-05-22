@@ -4,13 +4,13 @@ import { StatusBar } from "expo-status-bar";
 import { Image, Keyboard, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useEffect, useRef, useState } from "react";
-import { barcodeTypes, useScanner } from "../scanner-state";
+import { useScanner } from "../scanner-state";
 
 const baseFloatingBottom = Platform.select({ ios: 94, default: 86 });
 const keyboardFloatingGap = 10;
 const continuousCorners = Platform.select({ ios: { borderCurve: "continuous" as const }, default: null });
 
-export default function ScannerTab() {
+export default function OcrTab() {
   const scanner = useScanner();
   const [pairScannerOpen, setPairScannerOpen] = useState(false);
   const [pairScannerLocked, setPairScannerLocked] = useState(false);
@@ -103,7 +103,7 @@ export default function ScannerTab() {
         <View style={styles.permissionPanel}>
           <Image source={require("../../assets/volt-logo.png")} style={styles.permissionLogo} resizeMode="contain" />
           <Text style={styles.bodyText}>
-            Camera access is needed to scan UPC, EAN, QR, Code 128, model labels, and serial labels.
+            Camera access is needed to read labels and capture barcodes from a still image.
           </Text>
           <Pressable style={styles.primaryButton} onPress={scanner.requestPermission}>
             <Text style={styles.primaryButtonText}>Allow Camera</Text>
@@ -125,8 +125,6 @@ export default function ScannerTab() {
               style={styles.camera}
               facing="back"
               enableTorch={scanner.torch}
-              barcodeScannerSettings={{ barcodeTypes: [...barcodeTypes] }}
-              onBarcodeScanned={scanner.connected ? scanner.onBarcodeScanned : undefined}
             />
             <View style={styles.scanFrame} pointerEvents="none" />
           </View>
@@ -269,7 +267,7 @@ export const styles = StyleSheet.create({
     ...continuousCorners,
     overflow: "hidden",
   },
-  content: { flex: 1, paddingTop: 18 },
+  content: { flex: 1, paddingTop: 18, paddingBottom: 18 },
   cameraShell: {
     marginHorizontal: 18,
     aspectRatio: 1,
@@ -282,8 +280,8 @@ export const styles = StyleSheet.create({
   },
   camera: { flex: 1 },
   pairingShell: {
+    flex: 1,
     marginHorizontal: 18,
-    aspectRatio: 1,
     borderRadius: 32,
     ...continuousCorners,
     alignItems: "center",

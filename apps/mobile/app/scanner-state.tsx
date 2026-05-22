@@ -1,5 +1,6 @@
 import { decode as base64Decode, encode as base64Encode } from "base-64";
-import { useCameraPermissions, type BarcodeScanningResult } from "expo-camera";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { scanFromURLAsync, useCameraPermissions, type BarcodeScanningResult } from "expo-camera";
 import * as Haptics from "expo-haptics";
 import * as Linking from "expo-linking";
 import {
@@ -23,6 +24,22 @@ globalThis.btoa ??= base64Encode;
 
 type ConnectionStatus = "idle" | "pairing" | "connected" | "disconnected" | "error";
 const PAIRING_SESSION_RETRY_DELAYS_MS = [0, 350, 800, 1400];
+const SETTINGS_STORAGE_KEY = "volt.mobileScanner.settings.v1";
+const MULTI_SCAN_WINDOW_MS = 650;
+
+export type ScannerSettings = {
+  autoSendSingleBarcode: boolean;
+  confirmMultipleBarcodes: boolean;
+  detectCodesOnOcrCapture: boolean;
+  dictationPunctuation: boolean;
+};
+
+const defaultSettings: ScannerSettings = {
+  autoSendSingleBarcode: true,
+  confirmMultipleBarcodes: true,
+  detectCodesOnOcrCapture: true,
+  dictationPunctuation: true,
+};
 
 export type ScanItem = BarcodeMessage & {
   id: string;
@@ -61,7 +78,9 @@ type ScannerState = {
   scans: ScanItem[];
   sendManualText: () => void;
   setManualText: (value: string) => void;
+  setSetting: <Key extends keyof ScannerSettings>(key: Key, value: ScannerSettings[Key]) => void;
   startDictation: () => Promise<void>;
+  settings: ScannerSettings;
   setTorch: React.Dispatch<React.SetStateAction<boolean>>;
   status: ConnectionStatus;
   statusLabel: string;
@@ -140,6 +159,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
   const [dictating, setDictating] = useState(false);
   const [dictationTranscript, setDictationTranscript] = useState("");
   const [dictationError, setDictationError] = useState<string | null>(null);
+  const [settings, setSettings] = useState<ScannerSettings>(defaultSettings);
 
   const peerRef = useRef<any>(null);
   const channelRef = useRef<any>(null);
@@ -147,6 +167,8 @@ export function ScannerProvider({ children }: PropsWithChildren) {
   const lastScanRef = useRef<{ value: string; at: number } | null>(null);
   const lastSentScanRef = useRef<{ key: string; at: number } | null>(null);
   const lastDictationRef = useRef("");
+  const pendingScannerItemsRef = useRef<ScanItem[]>([]);
+  const scannerFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const connected = status === "connected" && channelRef.current?.readyState === "open";
 
@@ -156,6 +178,27 @@ export function ScannerProvider({ children }: PropsWithChildren) {
     channelRef.current = null;
     peerRef.current = null;
   }, []);
+
+  useEffect(() => {
+    AsyncStorage.getItem(SETTINGS_STORAGE_KEY)
+      .then((rawValue) => {
+        if (!rawValue) return;
+        const parsed = JSON.parse(rawValue) as Partial<ScannerSettings>;
+        setSettings({ ...defaultSettings, ...parsed });
+      })
+      .catch(() => {});
+  }, []);
+
+  const setSetting = useCallback(
+    <Key extends keyof ScannerSettings>(key: Key, value: ScannerSettings[Key]) => {
+      setSettings((current) => {
+        const next = { ...current, [key]: value };
+        void AsyncStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(next));
+        return next;
+      });
+    },
+    []
+  );
 
   const pairWithOffer = useCallback(
     async (offerCode: string, sessionId?: string) => {
@@ -312,6 +355,42 @@ export function ScannerProvider({ children }: PropsWithChildren) {
     }
   }, []);
 
+  const flushScannerItems = useCallback(() => {
+    scannerFlushTimerRef.current = null;
+    const items = pendingScannerItemsRef.current;
+    pendingScannerItemsRef.current = [];
+    if (!items.length) return;
+
+    if (items.length === 1) {
+      if (settings.autoSendSingleBarcode) {
+        void sendScan(items[0]);
+      } else {
+        Alert.alert("Send barcode?", items[0].barcode, [
+          { text: "Send", onPress: () => void sendScan(items[0]) },
+          { text: "Cancel", style: "cancel" },
+        ]);
+      }
+      return;
+    }
+
+    if (!settings.confirmMultipleBarcodes) {
+      void sendScan(items[0]);
+      return;
+    }
+
+    Alert.alert(
+      "Choose barcode",
+      "More than one barcode was detected. Pick the one to type into Chrome.",
+      [
+        ...items.slice(0, 3).map((item) => ({
+          text: item.barcode.length > 24 ? `${item.barcode.slice(0, 21)}...` : item.barcode,
+          onPress: () => void sendScan(item),
+        })),
+        { text: "Cancel", style: "cancel" as const },
+      ]
+    );
+  }, [sendScan, settings.autoSendSingleBarcode, settings.confirmMultipleBarcodes]);
+
   const onBarcodeScanned = useCallback(
     ({ data, type }: BarcodeScanningResult) => {
       const value = data.trim();
@@ -322,9 +401,14 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       if (last?.value === value && now - last.at < REPEAT_SCAN_COOLDOWN_MS) return;
 
       lastScanRef.current = { value, at: now };
-      sendScan(makeScanItem(value, type, "barcode"));
+      const item = makeScanItem(value, type, "barcode");
+      const currentItems = pendingScannerItemsRef.current.filter((pending) => pending.barcode !== item.barcode);
+      pendingScannerItemsRef.current = [...currentItems, item];
+
+      if (scannerFlushTimerRef.current) clearTimeout(scannerFlushTimerRef.current);
+      scannerFlushTimerRef.current = setTimeout(flushScannerItems, MULTI_SCAN_WINDOW_MS);
     },
-    [connected, sendScan]
+    [connected, flushScannerItems]
   );
 
   const sendManualText = useCallback(() => {
@@ -382,9 +466,9 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       lang: "en-US",
       interimResults: true,
       continuous: false,
-      addsPunctuation: true,
+      addsPunctuation: settings.dictationPunctuation,
     });
-  }, [connected]);
+  }, [connected, settings.dictationPunctuation]);
 
   const stopDictation = useCallback(() => {
     ExpoSpeechRecognitionModule.stop();
@@ -396,6 +480,20 @@ export function ScannerProvider({ children }: PropsWithChildren) {
     setRecognizingText(true);
     try {
       const photo = await cameraRef.current.takePictureAsync({ quality: 0.75, skipProcessing: true });
+      let capturedCodeCount = 0;
+      if (settings.detectCodesOnOcrCapture) {
+        try {
+          const codeResults = await scanFromURLAsync(photo.uri, [...barcodeTypes]);
+          const uniqueCodes = Array.from(
+            new Map(codeResults.map((code) => [code.data.trim(), code])).values()
+          ).filter((code) => code.data.trim());
+          capturedCodeCount = uniqueCodes.length;
+          await Promise.all(uniqueCodes.map((code) => sendScan(makeScanItem(code.data, code.type, "barcode"))));
+        } catch {
+          capturedCodeCount = 0;
+        }
+      }
+
       const TextRecognition = require("@react-native-ml-kit/text-recognition").default;
       const result = await TextRecognition.recognize(photo.uri) as {
         text: string;
@@ -405,6 +503,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       const selectedLines = selectOcrLines(lines, result.text.trim());
 
       if (!selectedLines.length) {
+        if (capturedCodeCount > 0) return;
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
         Alert.alert("No usable ID found", "Fill the frame with a model, serial, IMEI, UPC, SKU, or asset tag.");
         return;
@@ -422,7 +521,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
     } finally {
       setRecognizingText(false);
     }
-  }, [recognizingText, sendScan]);
+  }, [recognizingText, sendScan, settings.detectCodesOnOcrCapture]);
 
   const statusLabel = useMemo(() => {
     if (status === "connected") return "Connected to Chrome";
@@ -449,7 +548,9 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       scans,
       sendManualText,
       setManualText,
+      setSetting,
       startDictation,
+      settings,
       setTorch,
       status,
       statusLabel,
@@ -470,7 +571,9 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       requestPermission,
       scans,
       sendManualText,
+      setSetting,
       startDictation,
+      settings,
       status,
       statusLabel,
       stopDictation,

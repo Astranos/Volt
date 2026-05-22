@@ -15,12 +15,12 @@ export default function TabsLayout() {
       disableTransparentOnScrollEdge
     >
       <NativeTabs.Trigger name="index" disableScrollToTop>
+        <Icon sf={{ default: "doc.text.viewfinder", selected: "doc.text.viewfinder" }} />
+        <Label>OCR</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="scanner" disableScrollToTop>
         <Icon sf={{ default: "barcode.viewfinder", selected: "barcode.viewfinder" }} />
         <Label>Scanner</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="history" disableScrollToTop>
-        <Icon sf={{ default: "clock", selected: "clock.fill" }} />
-        <Label>History</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="dictation" disableScrollToTop>
         <Icon sf={{ default: "mic", selected: "mic.fill" }} />

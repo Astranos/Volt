@@ -4,7 +4,25 @@ Download the latest version of the Volt Chrome Extension.
 
 ## Latest Release
 
-### v1.0.21 (Current)
+### v1.0.22 (Current)
+
+**Release Date:** May 22, 2026
+**Download:** [voltextension-1.0.22-chrome.zip](./voltextension-1.0.22-chrome.zip)
+
+**What's New:**
+
+This release fixes Mobile Scanner dictation targeting and duplicate scan handling, and deepens extension internals for search, sidepanel tools, background messages, and Top Offer settings.
+
+### Changes
+
+- Fixed repeated barcode scans flooding Mobile Scanner results
+- Improved dictation insertion into the active or last-focused page input
+- Refactored Search Intent, Sidepanel Tool, Background Message, Top Offer, and Mobile Scanner Session modules
+- Bumped the extension version to `1.0.22`
+
+## Previous Release
+
+### v1.0.21
 
 **Release Date:** May 18, 2026
 **Download:** [voltextension-1.0.21-chrome.zip](./voltextension-1.0.21-chrome.zip)
