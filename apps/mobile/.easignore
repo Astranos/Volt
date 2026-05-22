@@ -4,3 +4,10 @@ ios/Pods/
 *.xcuserstate
 DerivedData/
 .expo/
+
+# Local/generated output.
+.DS_Store
+coverage/
+dist/
+build/
+*.log

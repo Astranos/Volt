@@ -5,3 +5,19 @@ apps/mobile/ios/Pods/
 apps/mobile/.expo/
 *.xcuserstate
 DerivedData/
+
+# Non-mobile workspaces and generated artifacts are not needed for EAS iOS builds.
+apps/scanner-signal/
+apps/web/
+packages/extension/
+
+# Local/generated output.
+.DS_Store
+.expo/
+.output/
+.wxt/
+coverage/
+dist/
+build/
+releases/
+*.log
