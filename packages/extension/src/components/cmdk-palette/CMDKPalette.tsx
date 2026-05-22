@@ -46,9 +46,9 @@ import {
 import { DEFAULT_SETTINGS, mergeSettings } from "@/src/domain/settings";
 import {
   buildGoogleSearchUrl,
-  buildSearchUrl,
   getUrlFromInput,
 } from "@/src/domain/search";
+import { resolveProviderSearchIntent } from "@/src/domain/search-intent";
 import "./styles.css";
 
 interface LastAction {
@@ -423,12 +423,12 @@ export function CMDKPalette({
         provider: activeProvider.name,
         query: providerQuery,
       });
-      const finalUrl = buildSearchUrl(activeProvider.searchUrl, providerQuery, {
-        ebayCondition:
-          activeProvider.id === "ebay" ? ebayCondition : undefined,
+      const intent = resolveProviderSearchIntent(activeProvider, providerQuery, {
+        ebayCondition,
       });
+      if (!intent || intent.kind !== "search-provider") return;
 
-      console.log("[CMDK] Search URL:", finalUrl);
+      console.log("[CMDK] Search URL:", intent.url);
 
       // Save as last action
       const action: LastAction = {
@@ -445,9 +445,9 @@ export function CMDKPalette({
       chrome.storage.local.set({ cmdkLastAction: action });
 
       if (embedded) {
-        await TabManager.updateCurrentTab(finalUrl);
+        await TabManager.updateCurrentTab(intent.url);
       } else {
-        await TabManager.openNewTab(finalUrl);
+        await TabManager.openNewTab(intent.url);
       }
       onClose();
     } else if (!trimmedSearch && !activeProvider) {

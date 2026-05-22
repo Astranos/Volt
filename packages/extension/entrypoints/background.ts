@@ -7,6 +7,7 @@
 /* global chrome */
 import { defineBackground } from "wxt/utils/define-background";
 import { handleTabMessage } from "../src/background/tab-message-handler";
+import { createSidepanelToolController } from "../src/background/sidepanel-tool-controller";
 
 export default defineBackground({
   main() {
@@ -31,39 +32,7 @@ export default defineBackground({
     /** @type {boolean} Debug mode flag for console logging */
     let DEBUG = true;
 
-    /**
-     * @type {Map<number, {open: boolean, tool: string|null}>}
-     * Track side panel state per window for toggle/switch functionality
-     */
-    const SIDE_PANEL_STATE = new Map(); // windowId -> { open: boolean, tool: string | null }
-    const PANEL_PAGE_PATH = "sidepanel.html";
-    const SIDE_PANEL_OPEN_IN_FLIGHT = new Set();
-    const SIDE_PANEL_LAST_OPEN_AT = new Map();
-    const SIDE_PANEL_OPEN_COOLDOWN_MS = 900;
     const MAX_PENDING_PC_ITEMS = 250;
-
-    function getSidePanelState(windowId) {
-      return (
-        SIDE_PANEL_STATE.get(windowId) || {
-          open: false,
-          tool: null,
-        }
-      );
-    }
-
-    function setSidePanelState(windowId, nextState) {
-      if (typeof windowId !== "number") return;
-      const prevState = SIDE_PANEL_STATE.get(windowId);
-      if (
-        prevState &&
-        prevState.open === Boolean(nextState?.open) &&
-        (prevState.tool || null) === (nextState?.tool || null)
-      ) {
-        return;
-      }
-      SIDE_PANEL_STATE.set(windowId, nextState);
-      broadcastSidePanelState(windowId, nextState);
-    }
 
     function clampString(value, maxLength = 300) {
       const str = typeof value === "string" ? value : "";
@@ -108,111 +77,6 @@ export default defineBackground({
       };
     }
 
-    function broadcastSidePanelState(windowId, state) {
-      if (typeof windowId !== "number") return;
-      const payload = state || getSidePanelState(windowId);
-      try {
-        // Broadcast to all tabs in the window
-        chrome.tabs.query({ windowId }, (tabs) => {
-          tabs.forEach((tab) => {
-            try {
-              chrome.tabs.sendMessage(
-                tab.id,
-                { action: "sidePanelStateSync", state: payload },
-                () => {
-                  const err = chrome.runtime.lastError;
-                  if (
-                    err &&
-                    DEBUG &&
-                    !String(err.message || "").includes("Receiving end")
-                  ) {
-                    log("sidePanelStateSync delivery issue", err.message);
-                  }
-                }
-              );
-            } catch (e) {
-              if (DEBUG) {
-                log(
-                  "sidePanelStateSync sendMessage error",
-                  e?.message || e,
-                  tab.id
-                );
-              }
-            }
-          });
-        });
-      } catch (e) {
-        if (DEBUG) {
-          log("sidePanelStateSync broadcast error", e?.message || e, windowId);
-        }
-      }
-    }
-
-    function configurePanelForWindow(windowId) {
-      try {
-        const options: any = {
-          enabled: true,
-          path: PANEL_PAGE_PATH,
-        };
-        // When we know the windowId, configure options for that window explicitly so
-        // chrome.sidePanel.open({ windowId }) is allowed to show the panel there.
-        if (typeof windowId === "number") {
-          options.windowId = windowId;
-        }
-        chrome.sidePanel.setOptions(options);
-      } catch (setErr) {
-        log("sidePanel setOptions error", setErr?.message || setErr);
-      }
-    }
-
-    function updatePreferredTool(tool) {
-      try {
-        chrome.storage.local.set({
-          sidePanelTool: tool,
-          sidePanelUrl: null,
-        });
-      } catch (storageErr) {
-        log(
-          "Failed to set chrome storage for tool:",
-          storageErr?.message || storageErr
-        );
-      }
-    }
-
-    function planSidePanelAction(windowId, desiredTool, mode = "toggle") {
-      if (typeof windowId !== "number" || !desiredTool) return null;
-      const prev = getSidePanelState(windowId);
-
-      if (mode === "toggle" && prev.open && prev.tool === desiredTool) {
-        return {
-          mode: "close",
-          windowId,
-          tool: desiredTool,
-        };
-      }
-
-      // For "open" mode, always attempt to open the sidepanel.
-      // The in-memory state can be stale after service worker restarts,
-      // so we don't trust it for "open" mode. Chrome's API handles
-      // opening an already-open panel gracefully.
-      updatePreferredTool(desiredTool);
-
-      if (mode === "toggle" && prev.open && prev.tool !== desiredTool) {
-        setSidePanelState(windowId, { open: true, tool: desiredTool });
-        return {
-          mode: "switch",
-          windowId,
-          tool: desiredTool,
-        };
-      }
-
-      configurePanelForWindow(windowId);
-      return {
-        mode: "open",
-        windowId,
-        tool: desiredTool,
-      };
-    }
 
     // Track controller connection state
     let CONTROLLER_CONNECTED = false;
@@ -254,6 +118,27 @@ export default defineBackground({
     let previousActiveTabId = null;
     let lastActiveTabId = null;
     let currentActiveTabId = null;
+    const sidepanelTools = createSidepanelToolController({
+      chromeApi: chrome,
+      log,
+      getFallbackTabIds: () => [currentActiveTabId, lastActiveTabId],
+    });
+
+    function getSidePanelState(windowId) {
+      return sidepanelTools.getStateForWindow(windowId);
+    }
+
+    function setSidePanelState(windowId, nextState) {
+      sidepanelTools.setStateForWindow(windowId, nextState);
+    }
+
+    function toggleSidePanelForWindow(windowId, tool, mode = "toggle") {
+      sidepanelTools.toggleForWindow(windowId, tool, mode);
+    }
+
+    function toggleSidePanelForTab(tabId, tool, mode = "toggle") {
+      sidepanelTools.toggleForTab(tabId, tool, mode);
+    }
 
     try {
       chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
@@ -1104,100 +989,6 @@ export default defineBackground({
             }
           });
           return true; // Keep message channel open for async response
-        case "GET_TABS":
-          // Get all tabs for CMDK palette
-          chrome.tabs.query({}, (tabs) => {
-            const tabInfo = tabs.map((tab) => ({
-              id: tab.id,
-              title: tab.title,
-              url: tab.url,
-              favIconUrl: tab.favIconUrl,
-              active: tab.active,
-              windowId: tab.windowId,
-            }));
-            sendResponse({ tabs: tabInfo });
-          });
-          return true; // Keep message channel open for async response
-        case "GET_CLOSED_TABS":
-          // Get recently closed tabs using chrome.sessions API
-          try {
-            chrome.sessions.getRecentlyClosed(
-              { maxResults: 25 },
-              (sessions) => {
-                const closedTabs = sessions
-                  .filter((s) => s.tab)
-                  .map((s) => ({
-                    id: s.tab.sessionId, // Use sessionId for closed tabs
-                    title: s.tab.title,
-                    url: s.tab.url,
-                    favIconUrl: s.tab.favIconUrl,
-                    windowId: s.tab.windowId,
-                    active: false,
-                  }));
-                sendResponse({ tabs: closedTabs });
-              }
-            );
-          } catch (e) {
-            log("Error getting closed tabs:", e);
-            sendResponse({ tabs: [] });
-          }
-          return true; // Keep message channel open for async response
-        case "RESTORE_TAB":
-          // Restore a recently closed tab by sessionId
-          if (message.sessionId) {
-            chrome.sessions.restore(message.sessionId, (session) => {
-              if (message.closeTabId !== undefined) {
-                chrome.tabs.remove(message.closeTabId);
-              }
-              sendResponse({ success: true });
-            });
-          } else {
-            sendResponse({ success: false, error: "No sessionId provided" });
-          }
-          return true;
-        case "SWITCH_TAB":
-          // Switch to a specific tab
-          const tabId = message.tabId;
-          if (tabId) {
-            chrome.tabs.update(tabId, { active: true }, (tab) => {
-              if (tab) {
-                chrome.windows.update(tab.windowId, { focused: true });
-              }
-              sendResponse({ success: true });
-            });
-          } else {
-            sendResponse({ success: false, error: "No tabId provided" });
-          }
-          return true;
-        case "GET_PREVIOUS_TAB":
-          // Get the previous active tab ID
-          sendResponse({ tabId: previousActiveTabId });
-          break;
-        case "OPEN_TAB":
-          // Open a new tab with the given URL
-          const newTabUrl = message.url;
-          if (newTabUrl) {
-            chrome.tabs.create({ url: newTabUrl }, (tab) => {
-              sendResponse({ success: true, tabId: tab?.id });
-            });
-          } else {
-            sendResponse({ success: false, error: "No URL provided" });
-          }
-          return true;
-        case "UPDATE_CURRENT_TAB":
-          // Update the current tab's URL (for new tab override)
-          const updateTabUrl = message.url;
-          if (updateTabUrl && sender.tab?.id) {
-            chrome.tabs.update(sender.tab.id, { url: updateTabUrl }, (tab) => {
-              sendResponse({ success: true, tabId: tab?.id });
-            });
-          } else {
-            sendResponse({
-              success: false,
-              error: "No URL or tab ID provided",
-            });
-          }
-          return true;
         case "FETCH_CSV_LINKS":
           // Fetch CSV data (bypasses CORS in content scripts)
           const csvUrl = message.url;
@@ -1648,174 +1439,6 @@ export default defineBackground({
             url: "https://pos.paymore.tech",
             active: true,
           });
-        }
-      });
-    }
-
-    function toggleSidePanelForWindow(windowId, tool, mode = "toggle") {
-      if (!tool) {
-        chrome.storage.local.get(
-          { sidePanelTool: "controller-testing" },
-          (res) => {
-            toggleSidePanelForWindow(
-              windowId,
-              res.sidePanelTool || "controller-testing",
-              mode
-            );
-          }
-        );
-        return;
-      }
-      const desiredTool = tool;
-
-      const asValidWindowId = (value) => {
-        if (typeof value === "number" && Number.isInteger(value) && value >= 0)
-          return value;
-        if (typeof value === "string") {
-          const parsed = Number(value);
-          if (Number.isInteger(parsed) && parsed >= 0) return parsed;
-        }
-        return null;
-      };
-
-      try {
-        const openForWindow = (id) => {
-          const plan = planSidePanelAction(id, desiredTool, mode);
-          if (!plan) return;
-
-          if (plan.mode === "noop") {
-            log(`Sidepanel already open for tool: ${desiredTool} (open mode)`);
-            return;
-          }
-
-          if (plan.mode === "close") {
-            try {
-              chrome.sidePanel.close({ windowId: id }, () => {
-                const err = chrome.runtime.lastError;
-                if (err) {
-                  log("sidePanel close error", err.message);
-                } else {
-                  setSidePanelState(id, { open: false, tool: null });
-                  log(`Sidepanel closed for tool: ${desiredTool}`);
-                }
-              });
-            } catch (closeErr) {
-              log("sidePanel close error", closeErr?.message || closeErr);
-            }
-            return;
-          }
-
-          if (plan.mode === "switch") {
-            log(`Switched sidepanel to tool: ${desiredTool} on window: ${id}`);
-            return;
-          }
-
-          const now = Date.now();
-          const lastOpenAt = SIDE_PANEL_LAST_OPEN_AT.get(id) || 0;
-          const sinceLastOpen = now - lastOpenAt;
-          if (SIDE_PANEL_OPEN_IN_FLIGHT.has(id)) {
-            log(
-              `sidePanel open skipped (already in-flight) for window: ${id}, tool: ${desiredTool}`
-            );
-            return;
-          }
-          if (sinceLastOpen < SIDE_PANEL_OPEN_COOLDOWN_MS) {
-            log(
-              `sidePanel open skipped (cooldown ${SIDE_PANEL_OPEN_COOLDOWN_MS}ms) for window: ${id}, tool: ${desiredTool}`
-            );
-            return;
-          }
-
-          try {
-            SIDE_PANEL_OPEN_IN_FLIGHT.add(id);
-            chrome.sidePanel.open({ windowId: id }, () => {
-              SIDE_PANEL_OPEN_IN_FLIGHT.delete(id);
-              SIDE_PANEL_LAST_OPEN_AT.set(id, Date.now());
-              const err = chrome.runtime.lastError;
-              if (err) {
-                log("sidePanel open lastError", err.message);
-              } else {
-                setSidePanelState(id, { open: true, tool: desiredTool });
-                log(
-                  `Sidepanel opened for tool: ${desiredTool} on window: ${id}`
-                );
-              }
-            });
-            setTimeout(() => {
-              SIDE_PANEL_OPEN_IN_FLIGHT.delete(id);
-            }, 2000);
-          } catch (openErr) {
-            SIDE_PANEL_OPEN_IN_FLIGHT.delete(id);
-            log("sidePanel open error", openErr?.message || openErr);
-          }
-        };
-
-        const resolvedWindowId = asValidWindowId(windowId);
-
-        if (resolvedWindowId !== null) {
-          openForWindow(resolvedWindowId);
-          return;
-        }
-
-        // If windowId not provided, resolve from current active tab
-        log(
-          "toggleSidePanelForWindow: could not resolve window id immediately; querying"
-        );
-        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-          const active = tabs && tabs[0];
-          if (active?.windowId) {
-            openForWindow(active.windowId);
-          } else {
-            log(
-              "toggleSidePanelForWindow: unable to resolve active window id for sidepanel"
-            );
-          }
-        });
-      } catch (e) {
-        log("toggleSidePanelForWindow error", e?.message || e);
-      }
-    }
-
-    // Helper function to toggle sidepanel for a tab (resolves to window)
-    function toggleSidePanelForTab(tabId, tool, mode = "toggle") {
-      const asValidTabId = (value) => {
-        if (typeof value === "number" && Number.isInteger(value) && value >= 0)
-          return value;
-        if (typeof value === "string") {
-          const parsed = Number(value);
-          if (Number.isInteger(parsed) && parsed >= 0) return parsed;
-        }
-        return null;
-      };
-
-      const resolvedTabId =
-        asValidTabId(tabId) ??
-        asValidTabId(currentActiveTabId) ??
-        asValidTabId(lastActiveTabId);
-
-      if (resolvedTabId !== null) {
-        chrome.tabs.get(resolvedTabId, (tab) => {
-          if (tab?.windowId) {
-            toggleSidePanelForWindow(tab.windowId, tool, mode);
-          } else {
-            log(
-              "toggleSidePanelForTab: could not get windowId for tab",
-              resolvedTabId
-            );
-          }
-        });
-        return;
-      }
-
-      // Fallback: query active tab
-      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-        const active = tabs && tabs[0];
-        if (active?.windowId) {
-          toggleSidePanelForWindow(active.windowId, tool, mode);
-        } else {
-          log(
-            "toggleSidePanelForTab: unable to resolve window id for sidepanel"
-          );
         }
       });
     }

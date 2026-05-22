@@ -178,3 +178,222 @@ export function isCheckoutRateCustom(customRates?: CustomRates): boolean {
     0.001
   );
 }
+
+export type BuiltInTopOfferRateType = "standard" | "premium";
+
+function normalizeTopOffersSettings(
+  settings: TopOffersSettings = {}
+): Required<TopOffersSettings> & { customRates: CustomRates } {
+  const customRates = settings.customRates ?? DEFAULT_CUSTOM_RATES;
+
+  return {
+    customRates: {
+      standard: {
+        ...DEFAULT_CUSTOM_RATES.standard,
+        ...(customRates.standard || {}),
+        rules: [...(customRates.standard?.rules || DEFAULT_STANDARD_RULES)],
+      },
+      premium: {
+        ...DEFAULT_CUSTOM_RATES.premium,
+        ...(customRates.premium || {}),
+        rules: [...(customRates.premium?.rules || DEFAULT_PREMIUM_RULES)],
+      },
+      checkout: {
+        ...DEFAULT_CUSTOM_RATES.checkout,
+        ...(customRates.checkout || {}),
+        percentage:
+          customRates.checkout?.percentage ??
+          DEFAULT_CUSTOM_RATES.checkout!.percentage,
+      },
+    },
+    customOffers: (settings.customOffers || []).map((offer) => ({
+      ...offer,
+      rules: [...offer.rules],
+    })),
+  };
+}
+
+export function updateTopOfferRateRule(
+  settings: TopOffersSettings | undefined,
+  type: BuiltInTopOfferRateType,
+  index: number,
+  field: keyof RateRule,
+  value: number
+): TopOffersSettings {
+  const next = normalizeTopOffersSettings(settings);
+  const currentRates = next.customRates[type];
+  const rules = [...currentRates.rules];
+  if (!rules[index]) return next;
+
+  rules[index] = { ...rules[index], [field]: value };
+  next.customRates[type] = { ...currentRates, rules };
+  return next;
+}
+
+export function sortTopOfferRateRules(
+  settings: TopOffersSettings | undefined,
+  type: BuiltInTopOfferRateType
+): TopOffersSettings {
+  const next = normalizeTopOffersSettings(settings);
+  next.customRates[type] = {
+    ...next.customRates[type],
+    rules: sortRateRules(next.customRates[type].rules),
+  };
+  return next;
+}
+
+export function addTopOfferRateRule(
+  settings: TopOffersSettings | undefined,
+  type: BuiltInTopOfferRateType
+): TopOffersSettings {
+  const next = normalizeTopOffersSettings(settings);
+  const currentRates = next.customRates[type];
+  next.customRates[type] = {
+    ...currentRates,
+    rules: sortRateRules([
+      ...currentRates.rules,
+      createNextRateRule(currentRates.rules),
+    ]),
+  };
+  return next;
+}
+
+export function removeTopOfferRateRule(
+  settings: TopOffersSettings | undefined,
+  type: BuiltInTopOfferRateType,
+  index: number
+): TopOffersSettings {
+  const next = normalizeTopOffersSettings(settings);
+  const currentRates = next.customRates[type];
+  next.customRates[type] = {
+    ...currentRates,
+    rules: currentRates.rules.filter((_, ruleIndex) => ruleIndex !== index),
+  };
+  return next;
+}
+
+export function updateTopOfferDefaultPercentage(
+  settings: TopOffersSettings | undefined,
+  type: BuiltInTopOfferRateType,
+  value: number
+): TopOffersSettings {
+  const next = normalizeTopOffersSettings(settings);
+  next.customRates[type] = {
+    ...next.customRates[type],
+    defaultPercentage: value,
+  };
+  return next;
+}
+
+export function updateTopOfferCheckoutRate(
+  settings: TopOffersSettings | undefined,
+  value: number
+): TopOffersSettings {
+  const next = normalizeTopOffersSettings(settings);
+  next.customRates.checkout = { percentage: value };
+  return next;
+}
+
+export function addCustomTopOffer(
+  settings: TopOffersSettings | undefined,
+  id: string,
+  name = "Custom Offer"
+): TopOffersSettings {
+  const next = normalizeTopOffersSettings(settings);
+  next.customOffers = [...next.customOffers, createCustomOffer(id, name)];
+  return next;
+}
+
+export function updateCustomTopOfferName(
+  settings: TopOffersSettings | undefined,
+  offerId: string,
+  name: string
+): TopOffersSettings {
+  const next = normalizeTopOffersSettings(settings);
+  next.customOffers = next.customOffers.map((offer) =>
+    offer.id === offerId ? { ...offer, name } : offer
+  );
+  return next;
+}
+
+export function deleteCustomTopOffer(
+  settings: TopOffersSettings | undefined,
+  offerId: string
+): TopOffersSettings {
+  const next = normalizeTopOffersSettings(settings);
+  next.customOffers = next.customOffers.filter((offer) => offer.id !== offerId);
+  return next;
+}
+
+export function updateCustomTopOfferRule(
+  settings: TopOffersSettings | undefined,
+  offerId: string,
+  ruleIndex: number,
+  field: keyof RateRule,
+  value: number
+): TopOffersSettings {
+  const next = normalizeTopOffersSettings(settings);
+  next.customOffers = next.customOffers.map((offer) => {
+    if (offer.id !== offerId || !offer.rules[ruleIndex]) return offer;
+    const rules = [...offer.rules];
+    rules[ruleIndex] = { ...rules[ruleIndex], [field]: value };
+    return { ...offer, rules };
+  });
+  return next;
+}
+
+export function sortCustomTopOfferRules(
+  settings: TopOffersSettings | undefined,
+  offerId: string
+): TopOffersSettings {
+  const next = normalizeTopOffersSettings(settings);
+  next.customOffers = next.customOffers.map((offer) =>
+    offer.id === offerId ? { ...offer, rules: sortRateRules(offer.rules) } : offer
+  );
+  return next;
+}
+
+export function addCustomTopOfferRule(
+  settings: TopOffersSettings | undefined,
+  offerId: string
+): TopOffersSettings {
+  const next = normalizeTopOffersSettings(settings);
+  next.customOffers = next.customOffers.map((offer) =>
+    offer.id === offerId
+      ? {
+          ...offer,
+          rules: sortRateRules([...offer.rules, createNextRateRule(offer.rules)]),
+        }
+      : offer
+  );
+  return next;
+}
+
+export function removeCustomTopOfferRule(
+  settings: TopOffersSettings | undefined,
+  offerId: string,
+  ruleIndex: number
+): TopOffersSettings {
+  const next = normalizeTopOffersSettings(settings);
+  next.customOffers = next.customOffers.map((offer) =>
+    offer.id === offerId
+      ? {
+          ...offer,
+          rules: offer.rules.filter((_, index) => index !== ruleIndex),
+        }
+      : offer
+  );
+  return next;
+}
+
+export function updateCustomTopOfferDefaultPercentage(
+  settings: TopOffersSettings | undefined,
+  offerId: string,
+  value: number
+): TopOffersSettings {
+  const next = normalizeTopOffersSettings(settings);
+  next.customOffers = next.customOffers.map((offer) =>
+    offer.id === offerId ? { ...offer, defaultPercentage: value } : offer
+  );
+  return next;
+}

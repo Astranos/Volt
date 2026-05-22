@@ -11,20 +11,108 @@ import {
 } from "lucide-react";
 import QRCode from "qrcode";
 import { Button } from "../ui/button";
-import {
-  decodeBarcodeMessage,
-  SCANNER_ANSWER_POLL_INTERVAL_MS,
-  SCANNER_DATA_CHANNEL,
-  SCANNER_ICE_GATHERING_TIMEOUT_MS,
-  SCANNER_ICE_SERVERS,
-  SCANNER_APP_PAIR_URL,
-  SCANNER_SIGNAL_URL,
-  type BarcodeMessage,
-  type ScannerConnectionStatus,
+import type {
+  BarcodeMessage,
+  ScannerConnectionStatus,
 } from "../../../../scanner-protocol/src";
+import { MobileScannerSession } from "../../domain/mobile-scanner-session";
 
 const STORAGE_KEY = "volt.mobileScanner.scans";
 const MAX_SCANS = 100;
+
+function installEditableTracker() {
+  const root = window as typeof window & {
+    __voltLastEditable?: HTMLElement | null;
+    __voltEditableTrackerInstalled?: boolean;
+  };
+
+  const isEditable = (element: Element | null): element is HTMLElement => {
+    if (!(element instanceof HTMLElement)) return false;
+    return (
+      element.tagName === "INPUT" ||
+      element.tagName === "TEXTAREA" ||
+      element.isContentEditable
+    );
+  };
+
+  if (isEditable(document.activeElement)) {
+    root.__voltLastEditable = document.activeElement;
+  }
+
+  if (root.__voltEditableTrackerInstalled) return;
+
+  document.addEventListener(
+    "focusin",
+    (event) => {
+      const target = event.target;
+      const editableTarget = target instanceof Element ? target : null;
+      if (isEditable(editableTarget)) {
+        root.__voltLastEditable = editableTarget;
+      }
+    },
+    true
+  );
+  root.__voltEditableTrackerInstalled = true;
+}
+
+function insertTextAtTrackedEditable(value: string) {
+  const root = window as typeof window & {
+    __voltLastEditable?: HTMLElement | null;
+    __voltEditableTrackerInstalled?: boolean;
+  };
+
+  const isEditable = (element: Element | null): element is HTMLElement => {
+    if (!(element instanceof HTMLElement)) return false;
+    return (
+      element.tagName === "INPUT" ||
+      element.tagName === "TEXTAREA" ||
+      element.isContentEditable
+    );
+  };
+
+  if (isEditable(document.activeElement)) {
+    root.__voltLastEditable = document.activeElement;
+  }
+
+  if (!root.__voltEditableTrackerInstalled) {
+    document.addEventListener(
+      "focusin",
+      (event) => {
+        const target = event.target;
+        const editableTarget = target instanceof Element ? target : null;
+        if (isEditable(editableTarget)) {
+          root.__voltLastEditable = editableTarget;
+        }
+      },
+      true
+    );
+    root.__voltEditableTrackerInstalled = true;
+  }
+
+  const activeElement = document.activeElement;
+  const target = isEditable(activeElement)
+    ? activeElement
+    : isEditable(root.__voltLastEditable ?? null)
+    ? root.__voltLastEditable
+    : null;
+
+  if (target) {
+    target.focus();
+    if (target.isContentEditable) {
+      document.execCommand("insertText", false, value);
+    } else {
+      const input = target as HTMLInputElement | HTMLTextAreaElement;
+      const start = input.selectionStart ?? input.value.length;
+      const end = input.selectionEnd ?? input.value.length;
+      input.value = input.value.slice(0, start) + value + input.value.slice(end);
+      input.selectionStart = input.selectionEnd = start + value.length;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+  } else {
+    navigator.clipboard.writeText(value).catch(() => {});
+  }
+}
 
 type ScanRecord = BarcodeMessage & {
   id: string;
@@ -41,12 +129,7 @@ export default function MobileScanner({ onClose }: MobileScannerProps) {
   const [scans, setScans] = useState<ScanRecord[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
-  const dataChannelRef = useRef<RTCDataChannel | null>(null);
-  const answerPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const intentionallyClosingRef = useRef(false);
-  const restartTimerRef = useRef<number | null>(null);
-  const startSessionRef = useRef<(() => Promise<void>) | null>(null);
+  const sessionRef = useRef<MobileScannerSession | null>(null);
 
   const generateQrCode = useCallback(async (url: string) => {
     return QRCode.toDataURL(url, {
@@ -93,30 +176,7 @@ export default function MobileScanner({ onClose }: MobileScannerProps) {
 
       await chrome.scripting.executeScript({
         target: { tabId: tab.id },
-        func: (value: string) => {
-          const activeElement = document.activeElement as HTMLElement | null;
-
-          if (
-            activeElement &&
-            (activeElement.tagName === "INPUT" ||
-              activeElement.tagName === "TEXTAREA" ||
-              activeElement.isContentEditable)
-          ) {
-            if (activeElement.isContentEditable) {
-              document.execCommand("insertText", false, value);
-            } else {
-              const input = activeElement as HTMLInputElement | HTMLTextAreaElement;
-              const start = input.selectionStart ?? input.value.length;
-              const end = input.selectionEnd ?? input.value.length;
-              input.value = input.value.slice(0, start) + value + input.value.slice(end);
-              input.selectionStart = input.selectionEnd = start + value.length;
-              input.dispatchEvent(new Event("input", { bubbles: true }));
-              input.dispatchEvent(new Event("change", { bubbles: true }));
-            }
-          } else {
-            navigator.clipboard.writeText(value).catch(() => {});
-          }
-        },
+        func: insertTextAtTrackedEditable,
         args: [text],
       });
     } catch (_err) {
@@ -124,146 +184,48 @@ export default function MobileScanner({ onClose }: MobileScannerProps) {
     }
   }, []);
 
-  const cleanup = useCallback((intentional = true) => {
-    intentionallyClosingRef.current = intentional;
-    if (restartTimerRef.current) {
-      clearTimeout(restartTimerRef.current);
-      restartTimerRef.current = null;
+  const primeCursorTarget = useCallback(async () => {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!tab?.id) return;
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: installEditableTracker,
+      });
+    } catch (_err) {
+      // The active tab may be a restricted Chrome page; dictation will fall back to clipboard.
     }
-    if (answerPollRef.current) {
-      clearInterval(answerPollRef.current);
-      answerPollRef.current = null;
-    }
-    dataChannelRef.current?.close();
-    peerConnectionRef.current?.close();
-    dataChannelRef.current = null;
-    peerConnectionRef.current = null;
-    window.setTimeout(() => {
-      intentionallyClosingRef.current = false;
-    }, 0);
-  }, []);
-
-  const restartPairingSoon = useCallback(() => {
-    if (intentionallyClosingRef.current || restartTimerRef.current) return;
-    setStatus("creating");
-    setError(null);
-    restartTimerRef.current = window.setTimeout(() => {
-      restartTimerRef.current = null;
-      void startSessionRef.current?.();
-    }, 500);
   }, []);
 
   const startSession = useCallback(async () => {
-    cleanup();
-    setStatus("creating");
-    setError(null);
-    setQrDataUrl(null);
-
-    try {
-      const pc = new RTCPeerConnection({ iceServers: SCANNER_ICE_SERVERS });
-      peerConnectionRef.current = pc;
-
-      const dataChannel = pc.createDataChannel(SCANNER_DATA_CHANNEL, { ordered: true });
-      dataChannelRef.current = dataChannel;
-
-      dataChannel.onopen = () => setStatus("connected");
-      dataChannel.onclose = () => restartPairingSoon();
-      dataChannel.onerror = () => {
-        setStatus("error");
-        setError("Connection error");
-      };
-      dataChannel.onmessage = (event) => {
-        const data = decodeBarcodeMessage(event.data);
-        if (!data) return;
-        addScan(data);
-        if (data.kind === "text" && data.format === "dictation") {
-          void typeAtCursor(data.barcode);
-        }
-      };
-
-      pc.onconnectionstatechange = () => {
-        if (pc.connectionState === "failed") {
-          restartPairingSoon();
-        } else if (pc.connectionState === "disconnected" || pc.connectionState === "closed") {
-          restartPairingSoon();
-        }
-      };
-
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-
-      await new Promise<void>((resolve) => {
-        if (pc.iceGatheringState === "complete") {
-          resolve();
-          return;
-        }
-
-        pc.onicegatheringstatechange = () => {
-          if (pc.iceGatheringState === "complete") {
-            pc.onicegatheringstatechange = null;
-            resolve();
-          }
-        };
-        setTimeout(resolve, SCANNER_ICE_GATHERING_TIMEOUT_MS);
-      });
-
-      if (!pc.localDescription) {
-        throw new Error("Failed to create pairing offer");
-      }
-
-      const sessionResponse = await fetch(SCANNER_SIGNAL_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ offer: JSON.stringify(pc.localDescription) }),
-      });
-
-      if (!sessionResponse.ok) {
-        throw new Error("Failed to create pairing session");
-      }
-
-      const { sessionId } = await sessionResponse.json();
-      if (typeof sessionId !== "string" || !sessionId) {
-        throw new Error("Invalid pairing session");
-      }
-
-      const appPairingUrl = `${SCANNER_APP_PAIR_URL}?session=${encodeURIComponent(sessionId)}`;
-      setQrDataUrl(await generateQrCode(appPairingUrl));
-      setStatus("waiting");
-
-      answerPollRef.current = setInterval(async () => {
-        try {
-          const answerResponse = await fetch(`${SCANNER_SIGNAL_URL}/${sessionId}/answer`);
-          if (!answerResponse.ok) return;
-
-          const { answer } = await answerResponse.json();
-          if (typeof answer !== "string" || !answer || !peerConnectionRef.current) return;
-
-          await peerConnectionRef.current.setRemoteDescription(JSON.parse(answer));
-          setStatus("connected");
-          setError(null);
-
-          if (answerPollRef.current) {
-            clearInterval(answerPollRef.current);
-            answerPollRef.current = null;
-          }
-        } catch (err) {
-          console.error("Failed to apply scanner answer", err);
-        }
-      }, SCANNER_ANSWER_POLL_INTERVAL_MS);
-    } catch (err) {
-      setStatus("error");
-      setError(err instanceof Error ? err.message : "Failed to start session");
-    }
-  }, [addScan, cleanup, generateQrCode, restartPairingSoon, typeAtCursor]);
+    await sessionRef.current?.start();
+  }, []);
 
   useEffect(() => {
-    startSessionRef.current = startSession;
-  }, [startSession]);
+    sessionRef.current?.cleanup();
+    sessionRef.current = new MobileScannerSession({
+      onQrCodeUrl: (url) => {
+        if (!url) {
+          setQrDataUrl(null);
+          return;
+        }
+        void generateQrCode(url).then(setQrDataUrl);
+      },
+      onStatus: setStatus,
+      onError: setError,
+      onScan: addScan,
+      onDictation: (text) => void typeAtCursor(text),
+    });
+
+    return () => {
+      sessionRef.current?.cleanup();
+      sessionRef.current = null;
+    };
+  }, [addScan, generateQrCode, typeAtCursor]);
 
   const unpair = useCallback(() => {
-    cleanup();
-    void startSession();
-  }, [cleanup, startSession]);
+    sessionRef.current?.unpair();
+  }, []);
 
   const copyScan = useCallback(async (scan: ScanRecord) => {
     await navigator.clipboard.writeText(scan.barcode);
@@ -283,10 +245,11 @@ export default function MobileScanner({ onClose }: MobileScannerProps) {
       if (Array.isArray(saved)) setScans(saved);
     });
 
+    void primeCursorTarget();
     startSession();
 
-    return () => cleanup();
-  }, [cleanup, startSession]);
+    return () => sessionRef.current?.cleanup();
+  }, [primeCursorTarget, startSession]);
 
   const scanCount = scans.length;
   const showQr = status === "waiting" && qrDataUrl;

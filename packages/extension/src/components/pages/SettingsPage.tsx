@@ -25,10 +25,21 @@ import { getBookmarkFolders, BookmarkFolder } from "@/src/utils/bookmarks";
 import type { CmdkSettings } from "@/src/types/settings";
 import { DEFAULT_SETTINGS, mergeSettings } from "@/src/domain/settings";
 import {
-  createCustomOffer,
-  createNextRateRule,
+  addCustomTopOffer,
+  addCustomTopOfferRule,
+  addTopOfferRateRule,
+  deleteCustomTopOffer,
   DEFAULT_CUSTOM_RATES,
-  sortRateRules,
+  removeCustomTopOfferRule,
+  removeTopOfferRateRule,
+  sortCustomTopOfferRules,
+  sortTopOfferRateRules,
+  updateCustomTopOfferDefaultPercentage,
+  updateCustomTopOfferName,
+  updateCustomTopOfferRule,
+  updateTopOfferCheckoutRate,
+  updateTopOfferDefaultPercentage,
+  updateTopOfferRateRule,
 } from "@/src/domain/top-offers";
 
 export default function SettingsPage() {
@@ -460,25 +471,9 @@ export default function SettingsPage() {
     field: "threshold" | "percentage",
     value: number
   ) => {
-    const currentRates =
-      settings.topOffers?.customRates?.[type] ||
-      DEFAULT_SETTINGS.topOffers!.customRates![type];
-    const newRules = [...currentRates.rules];
-    newRules[index] = { ...newRules[index], [field]: value };
-
     const newSettings = {
       ...settings,
-      topOffers: {
-        ...settings.topOffers,
-        customRates: {
-          ...(settings.topOffers?.customRates ||
-            DEFAULT_SETTINGS.topOffers!.customRates!),
-          [type]: {
-            ...currentRates,
-            rules: newRules,
-          },
-        },
-      },
+      topOffers: updateTopOfferRateRule(settings.topOffers, type, index, field, value),
     };
     setSettings(newSettings);
 
@@ -490,27 +485,9 @@ export default function SettingsPage() {
   };
 
   const handleSortRules = (type: "standard" | "premium") => {
-    const currentRates =
-      settings.topOffers?.customRates?.[type] ||
-      DEFAULT_SETTINGS.topOffers!.customRates![type];
-    const newRules = [...currentRates.rules];
-    
-    // Sort rules by threshold to ensure correct logic
-    newRules.sort((a, b) => a.threshold - b.threshold);
-
     const newSettings = {
       ...settings,
-      topOffers: {
-        ...settings.topOffers,
-        customRates: {
-          ...(settings.topOffers?.customRates ||
-            DEFAULT_SETTINGS.topOffers!.customRates!),
-          [type]: {
-            ...currentRates,
-            rules: newRules,
-          },
-        },
-      },
+      topOffers: sortTopOfferRateRules(settings.topOffers, type),
     };
     setSettings(newSettings);
 
@@ -522,28 +499,9 @@ export default function SettingsPage() {
   };
 
   const handleAddRateRule = (type: "standard" | "premium") => {
-    const currentRates =
-      settings.topOffers?.customRates?.[type] ||
-      DEFAULT_SETTINGS.topOffers!.customRates![type];
-
-    const newRules = sortRateRules([
-      ...currentRates.rules,
-      createNextRateRule(currentRates.rules),
-    ]);
-
     const newSettings = {
       ...settings,
-      topOffers: {
-        ...settings.topOffers,
-        customRates: {
-          ...(settings.topOffers?.customRates ||
-            DEFAULT_SETTINGS.topOffers!.customRates!),
-          [type]: {
-            ...currentRates,
-            rules: newRules,
-          },
-        },
-      },
+      topOffers: addTopOfferRateRule(settings.topOffers, type),
     };
     setSettings(newSettings);
 
@@ -558,25 +516,9 @@ export default function SettingsPage() {
     type: "standard" | "premium",
     index: number
   ) => {
-    const currentRates =
-      settings.topOffers?.customRates?.[type] ||
-      DEFAULT_SETTINGS.topOffers!.customRates![type];
-    const newRules = [...currentRates.rules];
-    newRules.splice(index, 1);
-
     const newSettings = {
       ...settings,
-      topOffers: {
-        ...settings.topOffers,
-        customRates: {
-          ...(settings.topOffers?.customRates ||
-            DEFAULT_SETTINGS.topOffers!.customRates!),
-          [type]: {
-            ...currentRates,
-            rules: newRules,
-          },
-        },
-      },
+      topOffers: removeTopOfferRateRule(settings.topOffers, type, index),
     };
     setSettings(newSettings);
 
@@ -591,23 +533,9 @@ export default function SettingsPage() {
     type: "standard" | "premium",
     value: number
   ) => {
-    const currentRates =
-      settings.topOffers?.customRates?.[type] ||
-      DEFAULT_SETTINGS.topOffers!.customRates![type];
-
     const newSettings = {
       ...settings,
-      topOffers: {
-        ...settings.topOffers,
-        customRates: {
-          ...(settings.topOffers?.customRates ||
-            DEFAULT_SETTINGS.topOffers!.customRates!),
-          [type]: {
-            ...currentRates,
-            defaultPercentage: value,
-          },
-        },
-      },
+      topOffers: updateTopOfferDefaultPercentage(settings.topOffers, type, value),
     };
     setSettings(newSettings);
 
@@ -621,16 +549,7 @@ export default function SettingsPage() {
   const handleUpdateCheckoutRate = (value: number) => {
     const newSettings = {
       ...settings,
-      topOffers: {
-        ...settings.topOffers,
-        customRates: {
-          ...(settings.topOffers?.customRates ||
-            DEFAULT_SETTINGS.topOffers!.customRates!),
-          checkout: {
-            percentage: value,
-          },
-        },
-      },
+      topOffers: updateTopOfferCheckoutRate(settings.topOffers, value),
     };
     setSettings(newSettings);
 
@@ -643,15 +562,9 @@ export default function SettingsPage() {
 
   const handleAddCustomOffer = () => {
     const id = `custom-${Date.now()}`;
-    const newCustomOffer = createCustomOffer(id);
-
-    const currentOffers = settings.topOffers?.customOffers || [];
     const newSettings = {
       ...settings,
-      topOffers: {
-        ...settings.topOffers,
-        customOffers: [...currentOffers, newCustomOffer],
-      },
+      topOffers: addCustomTopOffer(settings.topOffers, id),
     };
     setSettings(newSettings);
 
@@ -667,17 +580,9 @@ export default function SettingsPage() {
   };
 
   const handleUpdateCustomOfferName = (offerId: string, name: string) => {
-    const currentOffers = settings.topOffers?.customOffers || [];
-    const updatedOffers = currentOffers.map((offer) =>
-      offer.id === offerId ? { ...offer, name } : offer
-    );
-
     const newSettings = {
       ...settings,
-      topOffers: {
-        ...settings.topOffers,
-        customOffers: updatedOffers,
-      },
+      topOffers: updateCustomTopOfferName(settings.topOffers, offerId, name),
     };
     setSettings(newSettings);
 
@@ -691,15 +596,9 @@ export default function SettingsPage() {
   };
 
   const handleDeleteCustomOffer = (offerId: string) => {
-    const currentOffers = settings.topOffers?.customOffers || [];
-    const updatedOffers = currentOffers.filter((offer) => offer.id !== offerId);
-
     const newSettings = {
       ...settings,
-      topOffers: {
-        ...settings.topOffers,
-        customOffers: updatedOffers,
-      },
+      topOffers: deleteCustomTopOffer(settings.topOffers, offerId),
     };
     setSettings(newSettings);
 
@@ -716,22 +615,9 @@ export default function SettingsPage() {
     field: "threshold" | "percentage",
     value: number
   ) => {
-    const currentOffers = settings.topOffers?.customOffers || [];
-    const updatedOffers = currentOffers.map((offer) => {
-      if (offer.id === offerId) {
-        const newRules = [...offer.rules];
-        newRules[ruleIndex] = { ...newRules[ruleIndex], [field]: value };
-        return { ...offer, rules: newRules };
-      }
-      return offer;
-    });
-
     const newSettings = {
       ...settings,
-      topOffers: {
-        ...settings.topOffers,
-        customOffers: updatedOffers,
-      },
+      topOffers: updateCustomTopOfferRule(settings.topOffers, offerId, ruleIndex, field, value),
     };
     setSettings(newSettings);
 
@@ -743,23 +629,9 @@ export default function SettingsPage() {
   };
 
   const handleSortCustomOfferRules = (offerId: string) => {
-    const currentOffers = settings.topOffers?.customOffers || [];
-    const updatedOffers = currentOffers.map((offer) => {
-      if (offer.id === offerId) {
-        const sortedRules = [...offer.rules].sort(
-          (a, b) => a.threshold - b.threshold
-        );
-        return { ...offer, rules: sortedRules };
-      }
-      return offer;
-    });
-
     const newSettings = {
       ...settings,
-      topOffers: {
-        ...settings.topOffers,
-        customOffers: updatedOffers,
-      },
+      topOffers: sortCustomTopOfferRules(settings.topOffers, offerId),
     };
     setSettings(newSettings);
 
@@ -771,25 +643,9 @@ export default function SettingsPage() {
   };
 
   const handleAddCustomOfferRule = (offerId: string) => {
-    const currentOffers = settings.topOffers?.customOffers || [];
-    const updatedOffers = currentOffers.map((offer) => {
-      if (offer.id === offerId) {
-        const lastRule = offer.rules[offer.rules.length - 1];
-        const newRules = sortRateRules([
-          ...offer.rules,
-          createNextRateRule(lastRule ? offer.rules : []),
-        ]);
-        return { ...offer, rules: newRules };
-      }
-      return offer;
-    });
-
     const newSettings = {
       ...settings,
-      topOffers: {
-        ...settings.topOffers,
-        customOffers: updatedOffers,
-      },
+      topOffers: addCustomTopOfferRule(settings.topOffers, offerId),
     };
     setSettings(newSettings);
 
@@ -801,22 +657,9 @@ export default function SettingsPage() {
   };
 
   const handleRemoveCustomOfferRule = (offerId: string, ruleIndex: number) => {
-    const currentOffers = settings.topOffers?.customOffers || [];
-    const updatedOffers = currentOffers.map((offer) => {
-      if (offer.id === offerId) {
-        const newRules = [...offer.rules];
-        newRules.splice(ruleIndex, 1);
-        return { ...offer, rules: newRules };
-      }
-      return offer;
-    });
-
     const newSettings = {
       ...settings,
-      topOffers: {
-        ...settings.topOffers,
-        customOffers: updatedOffers,
-      },
+      topOffers: removeCustomTopOfferRule(settings.topOffers, offerId, ruleIndex),
     };
     setSettings(newSettings);
 
@@ -831,17 +674,9 @@ export default function SettingsPage() {
     offerId: string,
     value: number
   ) => {
-    const currentOffers = settings.topOffers?.customOffers || [];
-    const updatedOffers = currentOffers.map((offer) =>
-      offer.id === offerId ? { ...offer, defaultPercentage: value } : offer
-    );
-
     const newSettings = {
       ...settings,
-      topOffers: {
-        ...settings.topOffers,
-        customOffers: updatedOffers,
-      },
+      topOffers: updateCustomTopOfferDefaultPercentage(settings.topOffers, offerId, value),
     };
     setSettings(newSettings);
 

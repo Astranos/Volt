@@ -22,42 +22,16 @@ import { triggerSidepanelToolFromContentScript } from "../../src/lib/sidepanel-g
 import { searchProviders } from "../../src/components/cmdk-palette/SearchProviders";
 import { TabManager } from "../../src/utils/tab-manager";
 import type { SyncStorageResult } from "../../src/types/settings";
+import { extractShopifyStoreName } from "../../src/domain/search";
 import {
-  buildGoogleSearchUrl,
-  buildSearchUrl,
-  buildShopifyInventoryUrl,
-  extractShopifyStoreName,
-  getUrlFromInput,
-} from "../../src/domain/search";
+  parseSearchPrefix,
+  resolveNewTabSearchIntent,
+  type NewTabSearchMode,
+} from "../../src/domain/search-intent";
 import "../../src/components/cmdk-palette/styles.css";
 import "../../src/components/newtab/column-styles.css";
 import "../../src/components/newtab/closed-tabs-panel.css";
 import "../../src/components/newtab/newtab-layout.css";
-
-const SEARCH_PREFIXES: Record<string, SearchMode> = {
-  g: "google",
-  p: "pricecharting",
-  u: "barcodelookup",
-  e: "ebay",
-  s: "shopify",
-};
-
-function parseSearchPrefix(input: string): {
-  mode: SearchMode | null;
-  query: string;
-} {
-  const match = input.match(/^([a-z])\s+(.+)$/i);
-  if (!match) {
-    return { mode: null, query: input };
-  }
-
-  const mode = SEARCH_PREFIXES[match[1].toLowerCase()];
-  if (!mode) {
-    return { mode: null, query: input };
-  }
-
-  return { mode, query: match[2].trim() };
-}
 
 export default function NewTab() {
   const [activeMode, setActiveMode] = useState<SearchMode>("google");
@@ -303,49 +277,30 @@ export default function NewTab() {
 
     const prefixedSearch = parseSearchPrefix(trimmed);
     const effectiveMode = prefixedSearch.mode ?? activeMode;
-    const effectiveQuery = prefixedSearch.query;
 
-    if (!effectiveQuery) return;
+    if (!prefixedSearch.query) return;
 
     if (prefixedSearch.mode && prefixedSearch.mode !== activeMode) {
       setSearchMode(prefixedSearch.mode);
     }
 
-    if (effectiveMode === "google") {
-      // Treat as URL or Google search
-      const directUrl = getUrlFromInput(effectiveQuery);
-      const finalUrl =
-        directUrl || buildGoogleSearchUrl(effectiveQuery);
-      await TabManager.updateCurrentTab(finalUrl);
+    const storeName =
+      effectiveMode === "shopify" ? await resolveShopifyStore() : shopifyStore;
+    const intent = resolveNewTabSearchIntent(trimmed, {
+      activeMode: activeMode as NewTabSearchMode,
+      providers: searchProviders,
+      shopifyStoreName: storeName,
+    });
+
+    if (!intent) return;
+    if (intent.kind === "missing-shopify-store") {
+      console.warn(
+        "[NewTab] Unable to resolve Shopify store for inventory search."
+      );
       return;
     }
 
-    if (
-      effectiveMode === "ebay" ||
-      effectiveMode === "pricecharting" ||
-      effectiveMode === "barcodelookup"
-    ) {
-      const provider = searchProviders.find((p) => p.id === effectiveMode);
-      if (!provider) return;
-
-      const url = buildSearchUrl(provider.searchUrl, effectiveQuery);
-      await TabManager.updateCurrentTab(url);
-      return;
-    }
-
-    if (effectiveMode === "shopify") {
-      const storeName = await resolveShopifyStore();
-      if (!storeName) {
-        console.warn(
-          "[NewTab] Unable to resolve Shopify store for inventory search."
-        );
-        return;
-      }
-
-      const url = buildShopifyInventoryUrl(storeName, effectiveQuery);
-      await TabManager.updateCurrentTab(url);
-      return;
-    }
+    await TabManager.updateCurrentTab(intent.url);
   };
 
   if (overrideEnabled === false) {

@@ -13,6 +13,7 @@ import {
   encodeBarcodeMessage,
   encodePairingPayload,
   SCANNER_ICE_SERVERS,
+  SCANNER_SCAN_COOLDOWN_MS,
   SCANNER_SIGNAL_URL,
   type BarcodeMessage,
 } from "@volt/scanner-protocol";
@@ -69,6 +70,7 @@ type ScannerState = {
 };
 
 const ScannerContext = createContext<ScannerState | null>(null);
+const REPEAT_SCAN_COOLDOWN_MS = Math.max(SCANNER_SCAN_COOLDOWN_MS, 1500);
 
 function getOfferFromUrl(url: string) {
   const parsed = Linking.parse(url);
@@ -143,6 +145,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
   const channelRef = useRef<any>(null);
   const cameraRef = useRef<any>(null);
   const lastScanRef = useRef<{ value: string; at: number } | null>(null);
+  const lastSentScanRef = useRef<{ key: string; at: number } | null>(null);
   const lastDictationRef = useRef("");
 
   const connected = status === "connected" && channelRef.current?.readyState === "open";
@@ -293,6 +296,12 @@ export function ScannerProvider({ children }: PropsWithChildren) {
   }, [pairFromUrl]);
 
   const sendScan = useCallback(async (item: ScanItem) => {
+    const now = Date.now();
+    const key = `${item.kind ?? "barcode"}:${item.format ?? ""}:${item.barcode.trim().toLowerCase()}`;
+    const lastSent = lastSentScanRef.current;
+    if (lastSent?.key === key && now - lastSent.at < REPEAT_SCAN_COOLDOWN_MS) return;
+    lastSentScanRef.current = { key, at: now };
+
     setScans((current) => [item, ...current].slice(0, 50));
 
     if (channelRef.current?.readyState === "open") {
@@ -310,7 +319,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
 
       const now = Date.now();
       const last = lastScanRef.current;
-      if (last?.value === value && now - last.at < 1200) return;
+      if (last?.value === value && now - last.at < REPEAT_SCAN_COOLDOWN_MS) return;
 
       lastScanRef.current = { value, at: now };
       sendScan(makeScanItem(value, type, "barcode"));
