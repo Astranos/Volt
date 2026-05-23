@@ -2,10 +2,12 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Camera,
   Check,
+  Copy,
   Download,
   ImagePlus,
   RefreshCw,
   Trash2,
+  Upload,
 } from "lucide-react";
 import QRCode from "qrcode";
 import type { ScannerConnectionStatus } from "../../../../scanner-protocol/src";
@@ -20,6 +22,8 @@ import {
 } from "./mobile-shared";
 
 const STORAGE_KEY = "volt.mobilePhotos.photos";
+const PHOTO_DROP_MIME = "application/x-volt-mobile-photos";
+const IMAGE_FILE_EXTENSIONS = /\.(avif|gif|heic|heif|jpe?g|png|webp)$/i;
 
 type MobileScannerState = {
   status: ScannerConnectionStatus;
@@ -42,12 +46,401 @@ type MobilePhoto = {
 function dataUrlToFile(dataUrl: string, filename: string, mimeType: string) {
   const [header, base64] = dataUrl.split(",");
   if (!header || !base64) return null;
+  const headerMimeType = header.match(/^data:([^;]+)/)?.[1];
+  const normalizedMimeType = normalizeImageMimeType(headerMimeType || mimeType);
+  const normalizedFilename = normalizeImageFilename(filename, normalizedMimeType);
   const binary = atob(base64);
   const bytes = new Uint8Array(binary.length);
   for (let index = 0; index < binary.length; index += 1) {
     bytes[index] = binary.charCodeAt(index);
   }
-  return new File([bytes], filename, { type: mimeType });
+  return new File([bytes], normalizedFilename, {
+    type: normalizedMimeType,
+    lastModified: Date.now(),
+  });
+}
+
+function normalizeImageMimeType(mimeType: string) {
+  const normalized = mimeType.toLowerCase().trim();
+  if (normalized === "image/jpg") return "image/jpeg";
+  if (
+    normalized === "image/jpeg" ||
+    normalized === "image/png" ||
+    normalized === "image/gif" ||
+    normalized === "image/webp" ||
+    normalized === "image/avif" ||
+    normalized === "image/heic" ||
+    normalized === "image/heif"
+  ) {
+    return normalized;
+  }
+  return "image/jpeg";
+}
+
+function extensionForMimeType(mimeType: string) {
+  if (mimeType === "image/png") return "png";
+  if (mimeType === "image/gif") return "gif";
+  if (mimeType === "image/webp") return "webp";
+  if (mimeType === "image/avif") return "avif";
+  if (mimeType === "image/heic") return "heic";
+  if (mimeType === "image/heif") return "heif";
+  return "jpg";
+}
+
+function normalizeImageFilename(filename: string, mimeType: string) {
+  const cleanName = filename.trim().replace(/[^\w.\-]+/g, "-") || "volt-photo";
+  const extension = extensionForMimeType(mimeType);
+  if (IMAGE_FILE_EXTENSIONS.test(cleanName)) {
+    return cleanName.replace(IMAGE_FILE_EXTENSIONS, `.${extension}`);
+  }
+  return `${cleanName}.${extension}`;
+}
+
+async function dataUrlToPngBlob(dataUrl: string) {
+  const image = new Image();
+  image.decoding = "async";
+  const loaded = new Promise<void>((resolve, reject) => {
+    image.onload = () => resolve();
+    image.onerror = () => reject(new Error("Image decode failed"));
+  });
+  image.src = dataUrl;
+  await loaded;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = image.naturalWidth || image.width;
+  canvas.height = image.naturalHeight || image.height;
+  const context = canvas.getContext("2d");
+  if (!context || !canvas.width || !canvas.height) {
+    throw new Error("Image canvas failed");
+  }
+
+  context.drawImage(image, 0, 0);
+  const blob = await new Promise<Blob | null>((resolve) => {
+    canvas.toBlob(resolve, "image/png");
+  });
+  if (!blob) throw new Error("PNG conversion failed");
+  return blob;
+}
+
+function installPhotoDropBridge(dropMime: string) {
+  const root = window as typeof window & {
+    __voltPhotoDropBridgeInstalled?: boolean;
+  };
+
+  if (root.__voltPhotoDropBridgeInstalled) return;
+
+  const normalizeImageMimeTypeInPage = (mimeType: string) => {
+    const normalized = mimeType.toLowerCase().trim();
+    if (normalized === "image/jpg") return "image/jpeg";
+    if (
+      normalized === "image/jpeg" ||
+      normalized === "image/png" ||
+      normalized === "image/gif" ||
+      normalized === "image/webp" ||
+      normalized === "image/avif" ||
+      normalized === "image/heic" ||
+      normalized === "image/heif"
+    ) {
+      return normalized;
+    }
+    return "image/jpeg";
+  };
+
+  const extensionForMimeTypeInPage = (mimeType: string) => {
+    if (mimeType === "image/png") return "png";
+    if (mimeType === "image/gif") return "gif";
+    if (mimeType === "image/webp") return "webp";
+    if (mimeType === "image/avif") return "avif";
+    if (mimeType === "image/heic") return "heic";
+    if (mimeType === "image/heif") return "heif";
+    return "jpg";
+  };
+
+  const normalizeImageFilenameInPage = (filename: string, mimeType: string) => {
+    const cleanName = filename.trim().replace(/[^\w.\-]+/g, "-") || "volt-photo";
+    const extension = extensionForMimeTypeInPage(mimeType);
+    if (/\.(avif|gif|heic|heif|jpe?g|png|webp)$/i.test(cleanName)) {
+      return cleanName.replace(/\.(avif|gif|heic|heif|jpe?g|png|webp)$/i, `.${extension}`);
+    }
+    return `${cleanName}.${extension}`;
+  };
+
+  const dataUrlToFileInPage = (dataUrl: string, filename: string, mimeType: string) => {
+    const [header, base64] = dataUrl.split(",");
+    if (!header || !base64) return null;
+    const headerMimeType = header.match(/^data:([^;]+)/)?.[1];
+    const normalizedMimeType = normalizeImageMimeTypeInPage(headerMimeType || mimeType);
+    const normalizedFilename = normalizeImageFilenameInPage(filename, normalizedMimeType);
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) {
+      bytes[index] = binary.charCodeAt(index);
+    }
+    return new File([bytes], normalizedFilename, {
+      type: normalizedMimeType,
+      lastModified: Date.now(),
+    });
+  };
+
+  const findFileInput = (target: EventTarget | null) => {
+    const element = target instanceof Element ? target : document.activeElement;
+    const closestInput = element?.closest?.("input[type='file']");
+    if (closestInput instanceof HTMLInputElement) return closestInput;
+
+    const closestContainer = element?.closest?.("form, [role='button'], label, div");
+    const localInput = closestContainer?.querySelector?.("input[type='file']");
+    if (localInput instanceof HTMLInputElement) return localInput;
+
+    return document.querySelector("input[type='file']") as HTMLInputElement | null;
+  };
+
+  document.addEventListener(
+    "dragover",
+    (event) => {
+      const hasVoltPhotos = Array.from(event.dataTransfer?.types ?? []).includes(dropMime);
+      if (!hasVoltPhotos) return;
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+    },
+    true
+  );
+
+  document.addEventListener(
+    "drop",
+    (event) => {
+      const rawPayload = event.dataTransfer?.getData(dropMime);
+      if (!rawPayload) return;
+
+      let photos: MobilePhoto[] = [];
+      try {
+        const parsed = JSON.parse(rawPayload);
+        photos = Array.isArray(parsed) ? parsed : [];
+      } catch (_err) {
+        return;
+      }
+
+      const files = photos
+        .map((photo) => dataUrlToFileInPage(photo.dataUrl, photo.name, photo.mimeType))
+        .filter((file): file is File => Boolean(file));
+
+      if (files.length === 0) return;
+
+      const transfer = new DataTransfer();
+      files.forEach((file) => transfer.items.add(file));
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      const target = event.target instanceof Element ? event.target : document.body;
+      const fileInput = findFileInput(target);
+      if (fileInput) {
+        fileInput.files = transfer.files;
+        fileInput.dispatchEvent(new Event("input", { bubbles: true }));
+        fileInput.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+
+      target.dispatchEvent(
+        new DragEvent("drop", {
+          bubbles: true,
+          cancelable: true,
+          dataTransfer: transfer,
+        })
+      );
+    },
+    true
+  );
+
+  root.__voltPhotoDropBridgeInstalled = true;
+}
+
+async function insertPhotosIntoPage(photos: MobilePhoto[]) {
+  const normalizeImageMimeTypeInPage = (mimeType: string) => {
+    const normalized = mimeType.toLowerCase().trim();
+    if (normalized === "image/jpg") return "image/jpeg";
+    if (
+      normalized === "image/jpeg" ||
+      normalized === "image/png" ||
+      normalized === "image/gif" ||
+      normalized === "image/webp" ||
+      normalized === "image/avif" ||
+      normalized === "image/heic" ||
+      normalized === "image/heif"
+    ) {
+      return normalized;
+    }
+    return "image/jpeg";
+  };
+
+  const extensionForMimeTypeInPage = (mimeType: string) => {
+    if (mimeType === "image/png") return "png";
+    if (mimeType === "image/gif") return "gif";
+    if (mimeType === "image/webp") return "webp";
+    if (mimeType === "image/avif") return "avif";
+    if (mimeType === "image/heic") return "heic";
+    if (mimeType === "image/heif") return "heif";
+    return "jpg";
+  };
+
+  const normalizeImageFilenameInPage = (filename: string, mimeType: string) => {
+    const cleanName = filename.trim().replace(/[^\w.\-]+/g, "-") || "volt-photo";
+    const extension = extensionForMimeTypeInPage(mimeType);
+    if (/\.(avif|gif|heic|heif|jpe?g|png|webp)$/i.test(cleanName)) {
+      return cleanName.replace(/\.(avif|gif|heic|heif|jpe?g|png|webp)$/i, `.${extension}`);
+    }
+    return `${cleanName}.${extension}`;
+  };
+
+  const dataUrlToFileInPage = (dataUrl: string, filename: string, mimeType: string) => {
+    const [header, base64] = dataUrl.split(",");
+    if (!header || !base64) return null;
+    const headerMimeType = header.match(/^data:([^;]+)/)?.[1];
+    const normalizedMimeType = normalizeImageMimeTypeInPage(headerMimeType || mimeType);
+    const normalizedFilename = normalizeImageFilenameInPage(filename, normalizedMimeType);
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) {
+      bytes[index] = binary.charCodeAt(index);
+    }
+    return new File([bytes], normalizedFilename, {
+      type: normalizedMimeType,
+      lastModified: Date.now(),
+    });
+  };
+
+  const dataUrlToShopifyJpegFile = async (dataUrl: string, filename: string) => {
+    const image = new Image();
+    image.decoding = "async";
+    const loaded = new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error("Image decode failed"));
+    });
+    image.src = dataUrl;
+    await loaded;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = image.naturalWidth || image.width;
+    canvas.height = image.naturalHeight || image.height;
+    const context = canvas.getContext("2d");
+    if (!context || !canvas.width || !canvas.height) {
+      throw new Error("Image canvas failed");
+    }
+
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(image, 0, 0);
+
+    const blob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob(resolve, "image/jpeg", 0.92);
+    });
+    if (!blob) throw new Error("JPEG conversion failed");
+
+    return new File([blob], normalizeImageFilenameInPage(filename, "image/jpeg"), {
+      type: "image/jpeg",
+      lastModified: Date.now(),
+    });
+  };
+
+  const isVisible = (element: Element) => {
+    const rect = element.getBoundingClientRect();
+    const style = window.getComputedStyle(element);
+    return (
+      rect.width > 0 &&
+      rect.height > 0 &&
+      style.visibility !== "hidden" &&
+      style.display !== "none"
+    );
+  };
+
+  const activeElement = document.activeElement;
+  const focusedInput =
+    activeElement instanceof HTMLInputElement && activeElement.type === "file"
+      ? activeElement
+      : null;
+  const fileInputs = Array.from(
+    document.querySelectorAll<HTMLInputElement>("input[type='file']")
+  );
+  const acceptsImages = (input: HTMLInputElement) => {
+    const accept = input.accept.toLowerCase();
+    return (
+      !accept ||
+      accept.includes("image") ||
+      accept.includes(".jpg") ||
+      accept.includes(".jpeg") ||
+      accept.includes(".png") ||
+      accept.includes(".webp")
+    );
+  };
+  const shopifyMediaInput = fileInputs.find((input) => {
+    const field = [
+      input.accept,
+      input.name,
+      input.id,
+      input.getAttribute("aria-label") ?? "",
+      input.closest("[data-testid], [data-polaris-dropzone], form, section")?.textContent ?? "",
+    ]
+      .join(" ")
+      .toLowerCase();
+    return (
+      acceptsImages(input) &&
+      (field.includes("image") ||
+        field.includes("media") ||
+        field.includes("photo") ||
+        field.includes("file upload"))
+    );
+  });
+  const fileInput =
+    focusedInput ??
+    shopifyMediaInput ??
+    fileInputs.find((input) => acceptsImages(input) && input.multiple && isVisible(input)) ??
+    fileInputs.find((input) => acceptsImages(input) && isVisible(input)) ??
+    fileInputs.find((input) => acceptsImages(input) && input.multiple) ??
+    fileInputs.find(acceptsImages) ??
+    fileInputs.find((input) => input.multiple && isVisible(input)) ??
+    fileInputs.find((input) => isVisible(input)) ??
+    fileInputs.find((input) => input.multiple) ??
+    fileInputs[0] ??
+    null;
+
+  const isShopifyAdmin = location.hostname === "admin.shopify.com" ||
+    location.hostname.endsWith(".myshopify.com");
+  const files = (
+    isShopifyAdmin
+      ? await Promise.all(
+          photos.map((photo) =>
+            dataUrlToShopifyJpegFile(photo.dataUrl, photo.name).catch(() =>
+              dataUrlToFileInPage(photo.dataUrl, photo.name, photo.mimeType)
+            )
+          )
+        )
+      : photos.map((photo) =>
+          dataUrlToFileInPage(photo.dataUrl, photo.name, photo.mimeType)
+        )
+  ).filter((file): file is File => Boolean(file));
+
+  if (!fileInput || files.length === 0) {
+    return { inserted: false, reason: fileInput ? "no_files" : "no_file_input" };
+  }
+
+  const transfer = new DataTransfer();
+  files.forEach((file) => transfer.items.add(file));
+  fileInput.files = transfer.files;
+
+  const eventOptions = { bubbles: true, cancelable: true };
+  fileInput.dispatchEvent(new Event("input", eventOptions));
+  fileInput.dispatchEvent(new Event("change", eventOptions));
+
+  const dropTarget =
+    fileInput.closest("label, form, [role='button'], [data-testid], div") ??
+    document.body;
+  dropTarget.dispatchEvent(
+    new DragEvent("drop", {
+      bubbles: true,
+      cancelable: true,
+      dataTransfer: transfer,
+    })
+  );
+
+  return { inserted: true, count: files.length };
 }
 
 function formatSize(bytes: number) {
@@ -162,15 +555,113 @@ export default function MobilePhotos() {
     }
   }, [selectedPhotos]);
 
+  const copySelected = useCallback(async () => {
+    if (selectedPhotos.length === 0) return;
+
+    const html = selectedPhotos
+      .map((photo) => {
+        const alt = photo.name.replace(/"/g, "&quot;");
+        return `<img src="${photo.dataUrl}" alt="${alt}">`;
+      })
+      .join("");
+    const plainText = selectedPhotos
+      .map((photo) => normalizeImageFilename(photo.name, photo.mimeType))
+      .join("\n");
+
+    try {
+      if ("ClipboardItem" in window && navigator.clipboard?.write) {
+        const clipboardData: Record<string, Blob> = {
+          "text/html": new Blob([html], { type: "text/html" }),
+          "text/plain": new Blob([plainText], { type: "text/plain" }),
+        };
+
+        if (selectedPhotos.length === 1) {
+          clipboardData["image/png"] = await dataUrlToPngBlob(selectedPhotos[0].dataUrl);
+        }
+
+        await navigator.clipboard.write([new ClipboardItem(clipboardData)]);
+        setError(null);
+        return;
+      }
+
+      await navigator.clipboard.writeText(plainText);
+      setError(null);
+    } catch (_err) {
+      try {
+        await navigator.clipboard.writeText(plainText);
+        setError(null);
+      } catch (_fallbackErr) {
+        setError("Could not copy selected photos.");
+      }
+    }
+  }, [selectedPhotos]);
+
+  const prepareActiveTabForPhotoDrop = useCallback(async () => {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!tab?.id) return;
+
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: installPhotoDropBridge,
+        args: [PHOTO_DROP_MIME],
+      });
+    } catch (_err) {
+      // Restricted Chrome pages cannot be scripted; the native browser drag payload still remains.
+    }
+  }, []);
+
+  const sendSelectedToActiveTab = useCallback(async () => {
+    if (selectedPhotos.length === 0) return;
+
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!tab?.id) {
+        setError("No active tab found for photo upload.");
+        return;
+      }
+
+      const [result] = await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: insertPhotosIntoPage,
+        args: [selectedPhotos],
+      });
+
+      const payload = result?.result as
+        | { inserted?: boolean; reason?: string; count?: number }
+        | undefined;
+
+      if (!payload?.inserted) {
+        setError(
+          payload?.reason === "no_file_input"
+            ? "No file upload input was found on the active tab."
+            : "Could not send the selected photos to the active tab."
+        );
+        return;
+      }
+
+      setError(null);
+    } catch (_err) {
+      setError("Could not access the active tab for photo upload.");
+    }
+  }, [selectedPhotos]);
+
   const handleDragStart = useCallback(
     (event: React.DragEvent, photo: MobilePhoto) => {
       const dragPhotos = selectedIds.has(photo.id) ? selectedPhotos : [photo];
       if (!selectedIds.has(photo.id)) setSelectedIds(new Set([photo.id]));
+      void prepareActiveTabForPhotoDrop();
 
       event.dataTransfer.effectAllowed = "copy";
+      event.dataTransfer.setData(PHOTO_DROP_MIME, JSON.stringify(dragPhotos));
       dragPhotos.forEach((item) => {
         const file = dataUrlToFile(item.dataUrl, item.name, item.mimeType);
-        if (file) event.dataTransfer.items.add(file);
+        if (!file) return;
+        try {
+          event.dataTransfer.items.add(file);
+        } catch (_err) {
+          // Some Chrome extension drag contexts reject programmatic file items.
+        }
       });
       event.dataTransfer.setData("text/uri-list", dragPhotos.map((item) => item.dataUrl).join("\n"));
       event.dataTransfer.setData(
@@ -179,7 +670,7 @@ export default function MobilePhotos() {
       );
       event.dataTransfer.setData("text/plain", dragPhotos.map((item) => item.name).join("\n"));
     },
-    [selectedIds, selectedPhotos]
+    [prepareActiveTabForPhotoDrop, selectedIds, selectedPhotos]
   );
 
   useEffect(() => {
@@ -214,6 +705,11 @@ export default function MobilePhotos() {
     chrome.runtime.onMessage.addListener(handleMessage);
     return () => chrome.runtime.onMessage.removeListener(handleMessage);
   }, [addPhoto, applyScannerState]);
+
+  useEffect(() => {
+    if (photos.length === 0) return;
+    void prepareActiveTabForPhotoDrop();
+  }, [photos.length, prepareActiveTabForPhotoDrop]);
 
   const showQr = status === "waiting" && qrDataUrl;
   const isCreating = status === "creating";
@@ -276,6 +772,20 @@ export default function MobilePhotos() {
           </div>
           <div className="flex gap-1">
             <IconChip
+              onClick={copySelected}
+              disabled={!selectedCount}
+              aria-label="Copy selected"
+            >
+              <Copy className="h-4 w-4" />
+            </IconChip>
+            <IconChip
+              onClick={sendSelectedToActiveTab}
+              disabled={!selectedCount}
+              aria-label="Send selected to active tab"
+            >
+              <Upload className="h-4 w-4" />
+            </IconChip>
+            <IconChip
               onClick={downloadSelected}
               disabled={!selectedCount}
               aria-label="Download selected"
@@ -313,6 +823,8 @@ export default function MobilePhotos() {
                     type="button"
                     draggable
                     onClick={() => togglePhoto(photo.id)}
+                    onPointerDown={() => void prepareActiveTabForPhotoDrop()}
+                    onMouseEnter={() => void prepareActiveTabForPhotoDrop()}
                     onDragStart={(event) => handleDragStart(event, photo)}
                     className={cn(
                       "group relative overflow-hidden rounded-2xl bg-stone-100 p-0 text-left shadow-sm transition",

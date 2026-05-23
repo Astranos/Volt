@@ -1,6 +1,5 @@
 export const SCANNER_WEB_APP_URL = "https://volt-scanner.vercel.app";
 export const SCANNER_SIGNAL_URL = "https://scanner-signal.vercel.app/api/signal";
-export const PRINT_RELAY_URL = "https://scanner-signal.vercel.app/api/print-relay";
 export const SCANNER_APP_SCHEME = "volt";
 export const SCANNER_APP_PAIR_URL = `${SCANNER_APP_SCHEME}://pair`;
 
@@ -75,52 +74,6 @@ export interface PhotoChunkMessage {
 export interface PhotoChunkEndMessage {
   kind: "photo-chunk-end";
   id: string;
-}
-
-export type PrintRelayPrinterType = "brother" | "zebra" | "other";
-
-export type PrintRelayPayloadType = "text" | "zpl" | "pdf" | "png";
-
-export type PrintRelayJobStatus =
-  | "queued"
-  | "claimed"
-  | "printing"
-  | "printed"
-  | "failed";
-
-export interface PrintRelayPrinter {
-  id: string;
-  name: string;
-  type: PrintRelayPrinterType;
-  localName?: string;
-}
-
-export interface PrintRelayStation {
-  id: string;
-  name: string;
-  location?: string;
-  online: boolean;
-  relayEnabled: boolean;
-  printers: PrintRelayPrinter[];
-  lastSeenAt: string;
-}
-
-export interface PrintRelayJob {
-  id: string;
-  fromStationId: string;
-  fromStationName: string;
-  targetStationId: string;
-  targetPrinterId: string;
-  targetPrinterName: string;
-  payloadType: PrintRelayPayloadType;
-  payload: string;
-  label: string;
-  status: PrintRelayJobStatus;
-  error?: string;
-  createdAt: string;
-  updatedAt: string;
-  claimedAt?: string;
-  completedAt?: string;
 }
 
 export type ScannerTransportMessage =

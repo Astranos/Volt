@@ -6,7 +6,6 @@ import BuyingGuide from "./BuyingGuide";
 import ShopifyHelp from "./ShopifyHelp";
 import MobileScanner from "./MobileScanner";
 import MobilePhotos from "./MobilePhotos";
-import PrintRelay from "./PrintRelay";
 import { ChevronDown } from "lucide-react";
 import {
   DropdownMenu,
@@ -122,7 +121,6 @@ export default function UnifiedSidepanel() {
     "shopify-help": ShopifyHelp,
     "mobile-scanner": MobileScanner,
     "mobile-photos": MobilePhotos,
-    "print-relay": PrintRelay,
   };
 
   const tools = SIDEPANEL_TOOLS.map((tool) => ({
