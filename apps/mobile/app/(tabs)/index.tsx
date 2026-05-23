@@ -12,6 +12,7 @@ import {
   View,
   type GestureResponderEvent,
   type LayoutChangeEvent,
+  type ViewProps,
 } from "react-native";
 import { initialWindowMetrics, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCallback, useEffect, useRef, useState, type ComponentType, type PropsWithChildren, type ReactNode } from "react";
@@ -220,7 +221,7 @@ export default function OcrTab() {
     <ScreenRoot>
       <Header />
       <View style={styles.page}>
-        <ViewfinderSurface>
+        <ViewfinderSurface onLayout={handleCapturedViewportLayout}>
             {scanner.textCapture ? (
               <View style={styles.capturedImageViewport} onLayout={handleCapturedViewportLayout}>
                 <ScrollView
@@ -228,7 +229,6 @@ export default function OcrTab() {
                   ref={capturedScrollRef}
                   automaticallyAdjustContentInsets={false}
                   bouncesZoom
-                  centerContent
                   contentContainerStyle={[
                     styles.capturedImageZoomContent,
                     capturedViewportSize ?? undefined,
@@ -269,6 +269,7 @@ export default function OcrTab() {
                     enableTorch={scanner.torch}
                     zoom={scanner.cameraZoom}
                     autofocus={scanner.focusMode}
+                    focusPoint={scanner.focusPoint}
                     animateShutter
                     onTouchStart={handleCameraTouchStart}
                     onTouchMove={handleCameraTouchMove}
@@ -346,9 +347,9 @@ export function ScreenRoot({ children }: PropsWithChildren) {
   return <View style={styles.scannerRoot}>{children}</View>;
 }
 
-export function ViewfinderSurface({ children }: PropsWithChildren) {
+export function ViewfinderSurface({ children, onLayout }: PropsWithChildren<{ onLayout?: ViewProps["onLayout"] }>) {
   return (
-    <View style={[styles.content, styles.viewfinderContent]}>
+    <View style={[styles.content, styles.viewfinderContent]} onLayout={onLayout}>
       <View style={styles.viewfinderShell}>{children}</View>
     </View>
   );
@@ -1123,8 +1124,8 @@ export const styles = StyleSheet.create({
     flex: 1,
   },
   capturedImageZoomContent: {
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: "stretch",
+    justifyContent: "flex-start",
   },
   ocrCopyPrompt: {
     position: "absolute",

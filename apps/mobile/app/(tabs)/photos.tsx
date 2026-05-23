@@ -190,6 +190,7 @@ export default function PhotosTab() {
               enableTorch={scanner.torch}
               zoom={scanner.cameraZoom}
               autofocus={scanner.focusMode}
+              focusPoint={scanner.focusPoint}
               animateShutter
               onTouchStart={handleCameraTouchStart}
               onTouchMove={handleCameraTouchMove}

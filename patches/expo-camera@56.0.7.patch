@@ -1,0 +1,94 @@
+diff --git a/ios/CameraViewModule.swift b/ios/CameraViewModule.swift
+index 03c82a4f55fe386908c7c8af520dc6d4ede89dc7..619cce2fc46e0c80a13037d2adc4804ca0fff06d 100644
+--- a/ios/CameraViewModule.swift
++++ b/ios/CameraViewModule.swift
+@@ -206,6 +206,13 @@ public final class CameraViewModule: Module, ScannerResultHandler {
+         }
+       }
+ 
++      Prop("focusPoint") { (view, point: [String: CGFloat]?) in
++        guard let point, let x = point["x"], let y = point["y"] else {
++          return
++        }
++        view.focusPoint = CGPoint(x: x, y: y)
++      }
++
+       Prop("responsiveOrientationWhenOrientationLocked") { (view, responsiveOrientation: Bool?) in
+         if let responsiveOrientation, view.responsiveWhenOrientationLocked != responsiveOrientation {
+           view.responsiveWhenOrientationLocked = responsiveOrientation
+diff --git a/ios/Current/CameraSessionManager.swift b/ios/Current/CameraSessionManager.swift
+index eb8305bb06de98419bef5a6a47892f9dcc3b42ff..84bf6fe6dd66125260cd37a75c1d533fa55d5245 100644
+--- a/ios/Current/CameraSessionManager.swift
++++ b/ios/Current/CameraSessionManager.swift
+@@ -206,6 +206,32 @@ class CameraSessionManager: NSObject, DeviceDiscoveryDelegate {
+     }
+   }
+ 
++  func focus(at point: CGPoint) {
++    guard let device = captureDeviceInput?.device else {
++      return
++    }
++
++    do {
++      try device.lockForConfiguration()
++      defer { device.unlockForConfiguration() }
++
++      if device.isFocusPointOfInterestSupported {
++        device.focusPointOfInterest = point
++      }
++      if device.isFocusModeSupported(.autoFocus) {
++        device.focusMode = .autoFocus
++      }
++      if device.isExposurePointOfInterestSupported {
++        device.exposurePointOfInterest = point
++      }
++      if device.isExposureModeSupported(.continuousAutoExposure) {
++        device.exposureMode = .continuousAutoExposure
++      }
++    } catch {
++      log.info("\(#function): \(error.localizedDescription)")
++    }
++  }
++
+   func updateZoom() {
+     guard let device = captureDeviceInput?.device, let delegate else {
+       return
+diff --git a/ios/Current/CameraView.swift b/ios/Current/CameraView.swift
+index 17470a95cc0037fa64adc26abb3cc496ab19737e..b123b1e89c298706c019690b15d675a736dd3be2 100644
+--- a/ios/Current/CameraView.swift
++++ b/ios/Current/CameraView.swift
+@@ -86,6 +86,15 @@ public class CameraView: ExpoView, EXAppLifecycleListener, EXCameraInterface, Ca
+     }
+   }
+ 
++  var focusPoint: CGPoint? {
++    didSet {
++      guard let focusPoint else {
++        return
++      }
++      focusCamera(atLayerPoint: focusPoint)
++    }
++  }
++
+   var pictureSize = PictureSize.high {
+     didSet {
+       updatePictureSize()
+@@ -178,6 +187,18 @@ public class CameraView: ExpoView, EXAppLifecycleListener, EXCameraInterface, Ca
+     previewLayer.needsDisplayOnBoundsChange = true
+   }
+ 
++  private func focusCamera(atLayerPoint point: CGPoint) {
++    DispatchQueue.main.async { [weak self] in
++      guard let self else {
++        return
++      }
++      let cameraPoint = self.previewLayer.captureDevicePointConverted(fromLayerPoint: point)
++      self.sessionQueue.async {
++        self.sessionManager.focus(at: cameraPoint)
++      }
++    }
++  }
++
+   public func onAppForegrounded() {
+     sessionQueue.async { [weak self] in
+       guard let self else {

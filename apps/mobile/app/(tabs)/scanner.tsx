@@ -296,6 +296,7 @@ export default function ScannerTab() {
                     enableTorch={scanner.torch}
                     zoom={scanner.cameraZoom}
                     autofocus={scanner.focusMode}
+                    focusPoint={scanner.focusPoint}
                     animateShutter
                     barcodeScannerSettings={{ barcodeTypes: [...barcodeTypes] }}
                     onBarcodeScanned={onCandidateBarcodeScanned}
