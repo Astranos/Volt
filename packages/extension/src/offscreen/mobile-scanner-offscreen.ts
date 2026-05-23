@@ -474,7 +474,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   if (message.action === "scannerOffscreenStart") {
     mobileScannerSession
-      .start()
+      .start(message.force === true)
       .then((state) => sendResponse(state))
       .catch((err) =>
         sendResponse({

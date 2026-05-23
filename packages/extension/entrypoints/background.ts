@@ -346,10 +346,11 @@ export default defineBackground({
       return chrome.runtime.sendMessage(message);
     }
 
-    async function handleScannerStart(sendResponse) {
+    async function handleScannerStart(message, sendResponse) {
       try {
         const state = await sendScannerOffscreenMessage({
           action: "scannerOffscreenStart",
+          force: message?.force === true,
         });
         sendResponse({ success: true, state });
       } catch (err) {
@@ -918,7 +919,7 @@ export default defineBackground({
 
       switch (message.action) {
         case "scannerStart":
-          handleScannerStart(sendResponse);
+          handleScannerStart(message, sendResponse);
           return true;
         case "scannerDisconnect":
           handleScannerDisconnect(sendResponse);

@@ -107,9 +107,12 @@ export default function ScannerTab() {
   const [pairScannerError, setPairScannerError] = useState<string | null>(null);
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraZoom, setCameraZoom] = useState(0);
+  const [focusMode, setFocusMode] = useState<"on" | "off">("off");
+  const [focusPoint, setFocusPoint] = useState<{ x: number; y: number } | null>(null);
   const [activeBarcode, setActiveBarcode] = useState<BarcodeScanningResult | null>(null);
   const [viewfinderSize, setViewfinderSize] = useState<ViewfinderSize | null>(null);
   const pairScannerLockedRef = useRef(false);
+  const focusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pinchStartDistanceRef = useRef<number | null>(null);
   const pinchStartZoomRef = useRef(0);
   const activeBarcodeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -123,7 +126,10 @@ export default function ScannerTab() {
         pairScannerLockedRef.current = false;
         scanner.setTorch(false);
         setCameraZoom(0);
+        setFocusMode("off");
+        setFocusPoint(null);
         setActiveBarcode(null);
+        if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
         if (activeBarcodeTimerRef.current) clearTimeout(activeBarcodeTimerRef.current);
       };
     }, [scanner.setTorch])
@@ -140,14 +146,28 @@ export default function ScannerTab() {
     setViewfinderSize({ width, height });
   }, []);
 
+  const triggerFocus = useCallback((event: GestureResponderEvent) => {
+    const { locationX, locationY } = event.nativeEvent;
+    setFocusMode("on");
+    setFocusPoint({ x: locationX, y: locationY });
+    if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
+    focusTimerRef.current = setTimeout(() => {
+      setFocusMode("off");
+      setFocusPoint(null);
+    }, 900);
+  }, []);
+
   const handleCameraTouchStart = useCallback(
     (event: GestureResponderEvent) => {
       const distance = touchDistance(event);
-      if (distance == null) return;
+      if (distance == null) {
+        triggerFocus(event);
+        return;
+      }
       pinchStartDistanceRef.current = distance;
       pinchStartZoomRef.current = cameraZoom;
     },
-    [cameraZoom]
+    [cameraZoom, triggerFocus]
   );
 
   const handleCameraTouchMove = useCallback((event: GestureResponderEvent) => {
@@ -289,6 +309,7 @@ export default function ScannerTab() {
                       facing="back"
                       enableTorch={scanner.torch}
                       zoom={cameraZoom}
+                      autofocus={focusMode}
                       barcodeScannerSettings={{ barcodeTypes: [...barcodeTypes] }}
                       onBarcodeScanned={onCandidateBarcodeScanned}
                       onLayout={handleCameraLayout}
@@ -296,6 +317,18 @@ export default function ScannerTab() {
                       onTouchMove={handleCameraTouchMove}
                       onTouchEnd={handleCameraTouchEnd}
                     />
+                    {focusPoint ? (
+                      <View
+                        pointerEvents="none"
+                        style={[
+                          styles.focusRing,
+                          {
+                            left: focusPoint.x - 34,
+                            top: focusPoint.y - 34,
+                          },
+                        ]}
+                      />
+                    ) : null}
                     <View style={localStyles.viewfinderOverlay} pointerEvents="none">
                       {targetFrame ? (
                         <View

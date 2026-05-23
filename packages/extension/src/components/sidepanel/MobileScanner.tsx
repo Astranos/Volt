@@ -1,16 +1,22 @@
 import React, { useEffect, useState, useCallback } from "react";
 import {
-  CheckCircle,
+  Check,
   Copy,
-  Loader2,
-  QrCode,
   RefreshCw,
+  Scan,
   Smartphone,
   Trash2,
-  XCircle,
 } from "lucide-react";
 import QRCode from "qrcode";
-import { Button } from "../ui/button";
+import { cn } from "../../lib/utils";
+import {
+  IconChip,
+  MobileToolHeader,
+  PairingPlaceholder,
+  PrimaryActionButton,
+  QrPairingPanel,
+  SecondaryActionButton,
+} from "./mobile-shared";
 import type {
   BarcodeMessage,
   ScannerConnectionStatus,
@@ -69,7 +75,7 @@ interface MobileScannerProps {
   onClose?: () => void;
 }
 
-export default function MobileScanner({ onClose }: MobileScannerProps) {
+export default function MobileScanner({ onClose: _onClose }: MobileScannerProps) {
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [status, setStatus] = useState<ScannerConnectionStatus>("disconnected");
   const [scans, setScans] = useState<ScanRecord[]>([]);
@@ -81,7 +87,7 @@ export default function MobileScanner({ onClose }: MobileScannerProps) {
       margin: 3,
       errorCorrectionLevel: "H",
       color: {
-        dark: "#05070a",
+        dark: "#1c1917",
         light: "#ffffff",
       },
     });
@@ -107,19 +113,16 @@ export default function MobileScanner({ onClose }: MobileScannerProps) {
     [generateQrCode]
   );
 
-  const addScan = useCallback(
-    (message: BarcodeMessage) => {
-      const scan: ScanRecord = {
-        ...message,
-        id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-        kind: message.kind ?? "barcode",
-        scannedAt: message.scannedAt ?? new Date().toISOString(),
-      };
+  const addScan = useCallback((message: BarcodeMessage) => {
+    const scan: ScanRecord = {
+      ...message,
+      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      kind: message.kind ?? "barcode",
+      scannedAt: message.scannedAt ?? new Date().toISOString(),
+    };
 
-      setScans((current) => [scan, ...current].slice(0, MAX_SCANS));
-    },
-    []
-  );
+    setScans((current) => [scan, ...current].slice(0, MAX_SCANS));
+  }, []);
 
   const primeCursorTarget = useCallback(async () => {
     try {
@@ -134,16 +137,19 @@ export default function MobileScanner({ onClose }: MobileScannerProps) {
     }
   }, []);
 
-  const startSession = useCallback(async () => {
-    setStatus("creating");
-    setError(null);
-    const response = await chrome.runtime.sendMessage({ action: "scannerStart" });
-    if (response?.state) applyScannerState(response.state);
-    if (response?.error) {
-      setStatus("error");
-      setError(response.error);
-    }
-  }, [applyScannerState]);
+  const startSession = useCallback(
+    async (force = false) => {
+      setStatus("creating");
+      setError(null);
+      const response = await chrome.runtime.sendMessage({ action: "scannerStart", force });
+      if (response?.state) applyScannerState(response.state);
+      if (response?.error) {
+        setStatus("error");
+        setError(response.error);
+      }
+    },
+    [applyScannerState]
+  );
 
   const unpair = useCallback(() => {
     void chrome.runtime
@@ -201,131 +207,110 @@ export default function MobileScanner({ onClose }: MobileScannerProps) {
 
   const scanCount = scans.length;
   const showQr = status === "waiting" && qrDataUrl;
+  const isCreating = status === "creating";
+  const connected = status === "connected";
 
   return (
-    <div className="flex h-full flex-col overflow-y-auto p-4">
-      <div className="mb-4 text-center">
-        <div className="flex items-center justify-center gap-2 text-lg font-semibold">
-          <Smartphone className="h-5 w-5" />
-          Mobile Scanner
-        </div>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Pair the Volt app once per browser sidepanel
-        </p>
-      </div>
+    <div className="flex h-full flex-col overflow-hidden bg-white">
+      <MobileToolHeader
+        icon={<Smartphone className="h-4 w-4" />}
+        title="Mobile Scanner"
+        subtitle="Pair the Volt app once per browser sidepanel"
+        status={status}
+        error={error}
+      />
 
-      <div className="mb-4 flex items-center justify-center gap-2">
-        {status === "creating" && (
-          <>
-            <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
-            <span className="text-sm text-blue-500">Setting up...</span>
-          </>
-        )}
-        {status === "waiting" && (
-          <>
-            <QrCode className="h-4 w-4 text-yellow-500" />
-            <span className="text-sm text-yellow-500">Waiting for Volt app</span>
-          </>
-        )}
-        {status === "connected" && (
-          <>
-            <CheckCircle className="h-4 w-4 text-green-500" />
-            <span className="text-sm text-green-500">Connected</span>
-          </>
-        )}
-        {status === "disconnected" && (
-          <>
-            <XCircle className="h-4 w-4 text-gray-500" />
-            <span className="text-sm text-gray-500">Disconnected</span>
-          </>
-        )}
-        {status === "error" && (
-          <>
-            <XCircle className="h-4 w-4 text-red-500" />
-            <span className="text-sm text-red-500">{error}</span>
-          </>
-        )}
-      </div>
-
-      <div className="flex flex-col items-center">
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-5 pt-4">
         {showQr ? (
-          <div className="relative w-full max-w-[320px] rounded-lg bg-white p-4 shadow-lg">
-            <img
-              src={qrDataUrl}
-              alt="Scan this QR code to pair the Volt mobile app"
-              className="aspect-square w-full"
+          <div className="mb-5">
+            <QrPairingPanel
+              qrDataUrl={qrDataUrl}
+              hint="Scan with the phone Camera app to open Volt and pair."
             />
-            <div className="absolute left-1/2 top-1/2 flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-lg border border-slate-200 bg-white p-2 shadow-sm">
-              <img
-                src={chrome.runtime.getURL("/assets/icons/logo-128.png")}
-                alt=""
-                aria-hidden="true"
-                className="h-full w-full object-contain"
-              />
-            </div>
           </div>
-        ) : status === "creating" ? (
-          <div className="flex aspect-square w-full max-w-[320px] items-center justify-center rounded-lg bg-muted">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        ) : isCreating ? (
+          <div className="mb-5 flex justify-center">
+            <PairingPlaceholder label="Setting up secure pairing…" />
           </div>
         ) : null}
 
-        {status === "waiting" && (
-          <p className="mt-3 max-w-[320px] text-center text-xs text-muted-foreground">
-            Scan this QR with the phone Camera app to open Volt and pair.
-          </p>
-        )}
-      </div>
-
-      <div className="mt-3">
-        {status === "connected" ? (
-          <Button onClick={unpair} variant="outline" className="w-full">
-            <RefreshCw className="mr-2 h-4 w-4" />
-            Disconnect
-          </Button>
-        ) : (status === "error" || status === "disconnected") && (
-          <Button onClick={startSession} variant="outline" className="w-full">
-            <RefreshCw className="mr-2 h-4 w-4" />
-            Restart Pairing
-          </Button>
-        )}
-      </div>
-
-      <div className="mt-4 flex items-center justify-between">
         <div>
-          <div className="text-sm font-semibold">Scanned results</div>
-          <div className="text-xs text-muted-foreground">{scanCount} saved for this browser</div>
+          {connected ? (
+            <SecondaryActionButton onClick={unpair} className="w-full">
+              <RefreshCw className="h-4 w-4" />
+              Disconnect
+            </SecondaryActionButton>
+          ) : (
+            <PrimaryActionButton onClick={() => startSession(true)} className="w-full">
+              <RefreshCw className="h-4 w-4" />
+              Restart pairing
+            </PrimaryActionButton>
+          )}
         </div>
-        <Button variant="ghost" size="sm" onClick={clearScans} disabled={!scanCount}>
-          <Trash2 className="h-4 w-4" />
-        </Button>
-      </div>
 
-      <div className="mt-3 space-y-2">
-        {scans.length === 0 ? (
-          <div className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">
-            Scan a barcode or send text from the Volt app. Each result appears here as a one-click copy button.
-          </div>
-        ) : (
-          scans.map((scan) => (
-            <div key={scan.id} className="rounded-lg border bg-card p-3">
-              <div className="mb-2 min-w-0">
-                <div className="truncate font-mono text-sm font-semibold">{scan.barcode}</div>
-                <div className="mt-1 text-xs uppercase tracking-wide text-muted-foreground">
-                  {scan.kind ?? "barcode"} {scan.format ? `• ${scan.format}` : ""}
-                </div>
-              </div>
-              <div>
-                <Button size="sm" className="w-full" onClick={() => copyScan(scan)}>
-                  <Copy className="mr-2 h-3.5 w-3.5" />
-                  {scan.copied ? "Copied" : "Copy"}
-                </Button>
-              </div>
+        <div className="mt-6 flex items-center justify-between">
+          <div>
+            <div className="text-sm font-bold text-stone-900">Scanned results</div>
+            <div className="text-xs text-stone-500">
+              {scanCount} saved for this browser
             </div>
-          ))
-        )}
-      </div>
+          </div>
+          <IconChip
+            onClick={clearScans}
+            disabled={!scanCount}
+            aria-label="Clear scanned results"
+          >
+            <Trash2 className="h-4 w-4" />
+          </IconChip>
+        </div>
 
+        <div className="mt-3 space-y-2">
+          {scans.length === 0 ? (
+            <div className="flex flex-col items-center rounded-2xl border border-dashed border-stone-300 bg-stone-50 px-4 py-9 text-center">
+              <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-white text-stone-400 ring-1 ring-stone-200">
+                <Scan className="h-5 w-5" />
+              </div>
+              <p className="text-sm font-semibold text-stone-700">No scans yet</p>
+              <p className="mt-1 max-w-[260px] text-xs text-stone-500">
+                Scan a barcode or send text from the Volt app. Each result appears here as a one-click copy.
+              </p>
+            </div>
+          ) : (
+            scans.map((scan) => (
+              <ScanCard key={scan.id} scan={scan} onCopy={() => copyScan(scan)} />
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ScanCard({ scan, onCopy }: { scan: ScanRecord; onCopy: () => void }) {
+  return (
+    <div className="rounded-2xl border border-stone-200 bg-white p-3 shadow-sm">
+      <div className="mb-2 min-w-0">
+        <div className="truncate font-mono text-sm font-bold text-stone-900">
+          {scan.barcode}
+        </div>
+        <div className="mt-1 text-[10px] uppercase tracking-wider text-stone-500">
+          <span className="font-semibold text-stone-600">{scan.kind ?? "barcode"}</span>
+          {scan.format ? ` · ${scan.format}` : ""}
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={onCopy}
+        className={cn(
+          "inline-flex h-9 w-full items-center justify-center gap-2 rounded-full text-xs font-bold transition active:scale-[0.99]",
+          scan.copied
+            ? "bg-green-50 text-green-700 ring-1 ring-inset ring-green-200"
+            : "bg-stone-900 text-stone-50 hover:bg-stone-800",
+        )}
+      >
+        {scan.copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+        {scan.copied ? "Copied" : "Copy"}
+      </button>
     </div>
   );
 }

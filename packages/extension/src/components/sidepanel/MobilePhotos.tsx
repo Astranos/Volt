@@ -1,17 +1,23 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  CheckCircle,
+  Camera,
+  Check,
   Download,
   ImagePlus,
-  Loader2,
-  QrCode,
   RefreshCw,
   Trash2,
-  XCircle,
 } from "lucide-react";
 import QRCode from "qrcode";
-import { Button } from "../ui/button";
 import type { ScannerConnectionStatus } from "../../../../scanner-protocol/src";
+import { cn } from "../../lib/utils";
+import {
+  IconChip,
+  MobileToolHeader,
+  PairingPlaceholder,
+  PrimaryActionButton,
+  QrPairingPanel,
+  SecondaryActionButton,
+} from "./mobile-shared";
 
 const STORAGE_KEY = "volt.mobilePhotos.photos";
 
@@ -67,7 +73,7 @@ export default function MobilePhotos() {
       width: 768,
       margin: 3,
       errorCorrectionLevel: "H",
-      color: { dark: "#05070a", light: "#ffffff" },
+      color: { dark: "#1c1917", light: "#ffffff" },
     });
   }, []);
 
@@ -91,16 +97,19 @@ export default function MobilePhotos() {
     [generateQrCode]
   );
 
-  const startSession = useCallback(async () => {
-    setStatus("creating");
-    setError(null);
-    const response = await chrome.runtime.sendMessage({ action: "scannerStart" });
-    if (response?.state) applyScannerState(response.state);
-    if (response?.error) {
-      setStatus("error");
-      setError(response.error);
-    }
-  }, [applyScannerState]);
+  const startSession = useCallback(
+    async (force = false) => {
+      setStatus("creating");
+      setError(null);
+      const response = await chrome.runtime.sendMessage({ action: "scannerStart", force });
+      if (response?.state) applyScannerState(response.state);
+      if (response?.error) {
+        setStatus("error");
+        setError(response.error);
+      }
+    },
+    [applyScannerState]
+  );
 
   const unpair = useCallback(() => {
     void chrome.runtime
@@ -207,112 +216,140 @@ export default function MobilePhotos() {
   }, [addPhoto, applyScannerState]);
 
   const showQr = status === "waiting" && qrDataUrl;
+  const isCreating = status === "creating";
   const selectedCount = selectedIds.size;
+  const connected = status === "connected";
 
   return (
-    <div className="flex h-full flex-col overflow-hidden p-4">
-      <div className="mb-3 text-center">
-        <div className="flex items-center justify-center gap-2 text-lg font-semibold">
-          <ImagePlus className="h-5 w-5" />
-          Mobile Photos
+    <div className="flex h-full flex-col overflow-hidden bg-white">
+      <MobileToolHeader
+        icon={<ImagePlus className="h-4 w-4" />}
+        title="Mobile Photos"
+        subtitle="Capture from paired Volt app"
+        status={status}
+        error={error}
+      />
+
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-5 pt-4">
+        {showQr ? (
+          <div className="mb-5">
+            <QrPairingPanel
+              qrDataUrl={qrDataUrl}
+              hint="Scan with Volt, then open the Photos tab on the phone."
+            />
+          </div>
+        ) : isCreating ? (
+          <div className="mb-5 flex justify-center">
+            <PairingPlaceholder label="Setting up secure pairing…" />
+          </div>
+        ) : null}
+
+        <div className="flex gap-2">
+          {connected ? (
+            <SecondaryActionButton onClick={unpair} className="flex-1">
+              <RefreshCw className="h-4 w-4" />
+              Disconnect
+            </SecondaryActionButton>
+          ) : (
+            <PrimaryActionButton onClick={() => startSession(true)} className="flex-1">
+              <RefreshCw className="h-4 w-4" />
+              Restart pairing
+            </PrimaryActionButton>
+          )}
+          {photos.length > 0 ? (
+            <SecondaryActionButton
+              onClick={clearPhotos}
+              aria-label="Clear all photos"
+              className="h-11! w-11! px-0!"
+            >
+              <Trash2 className="h-4 w-4" />
+            </SecondaryActionButton>
+          ) : null}
         </div>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Uses the same paired Volt app session as Mobile Scanner
-        </p>
-      </div>
 
-      <div className="mb-3 flex items-center justify-center gap-2">
-        {status === "creating" && <><Loader2 className="h-4 w-4 animate-spin text-blue-500" /><span className="text-sm text-blue-500">Setting up...</span></>}
-        {status === "waiting" && <><QrCode className="h-4 w-4 text-yellow-500" /><span className="text-sm text-yellow-500">Waiting for Volt app</span></>}
-        {status === "connected" && <><CheckCircle className="h-4 w-4 text-green-500" /><span className="text-sm text-green-500">Connected</span></>}
-        {status === "disconnected" && <><XCircle className="h-4 w-4 text-gray-500" /><span className="text-sm text-gray-500">Disconnected</span></>}
-        {status === "error" && <><XCircle className="h-4 w-4 text-red-500" /><span className="text-sm text-red-500">{error}</span></>}
-      </div>
-
-      {showQr ? (
-        <div className="mb-3 flex flex-col items-center">
-          <div className="relative w-full max-w-[260px] rounded-lg bg-white p-3 shadow-lg">
-            <img src={qrDataUrl} alt="Scan this QR code to pair the Volt mobile app" className="aspect-square w-full" />
-            <div className="absolute left-1/2 top-1/2 flex h-12 w-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-lg border border-slate-200 bg-white p-2 shadow-sm">
-              <img src={chrome.runtime.getURL("/assets/icons/logo-128.png")} alt="" aria-hidden="true" className="h-full w-full object-contain" />
+        <div className="mt-6 flex items-center justify-between">
+          <div>
+            <div className="text-sm font-bold text-stone-900">Photos</div>
+            <div className="text-xs text-stone-500">
+              {photos.length} received{selectedCount ? `, ${selectedCount} selected` : ""}
             </div>
           </div>
-          <p className="mt-2 max-w-[280px] text-center text-xs text-muted-foreground">
-            Scan this QR with Volt, then use the Photos tab on the phone.
-          </p>
-        </div>
-      ) : null}
-
-      <div className="mb-3 flex gap-2">
-        {status === "connected" ? (
-          <Button onClick={unpair} variant="outline" className="flex-1">
-            <RefreshCw className="mr-2 h-4 w-4" />
-            Disconnect
-          </Button>
-        ) : (
-          <Button onClick={startSession} variant="outline" className="flex-1">
-            <RefreshCw className="mr-2 h-4 w-4" />
-            Restart Pairing
-          </Button>
-        )}
-        <Button variant="outline" size="icon" onClick={clearPhotos} disabled={!photos.length} title="Clear photos">
-          <Trash2 className="h-4 w-4" />
-        </Button>
-      </div>
-
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <div>
-          <div className="text-sm font-semibold">Photos</div>
-          <div className="text-xs text-muted-foreground">
-            {photos.length} received{selectedCount ? `, ${selectedCount} selected` : ""}
+          <div className="flex gap-1">
+            <IconChip
+              onClick={downloadSelected}
+              disabled={!selectedCount}
+              aria-label="Download selected"
+            >
+              <Download className="h-4 w-4" />
+            </IconChip>
+            <IconChip
+              onClick={deleteSelected}
+              disabled={!selectedCount}
+              aria-label="Delete selected"
+            >
+              <Trash2 className="h-4 w-4" />
+            </IconChip>
           </div>
         </div>
-        <div className="flex gap-1">
-          <Button variant="ghost" size="sm" onClick={downloadSelected} disabled={!selectedCount}>
-            <Download className="h-4 w-4" />
-          </Button>
-          <Button variant="ghost" size="sm" onClick={deleteSelected} disabled={!selectedCount}>
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        {photos.length === 0 ? (
-          <div className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">
-            Captured phone photos will appear here. Select one or more, then drag them into a page photo uploader.
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 gap-2">
-            {photos.map((photo) => {
-              const selected = selectedIds.has(photo.id);
-              return (
-                <button
-                  key={photo.id}
-                  type="button"
-                  draggable
-                  onClick={() => togglePhoto(photo.id)}
-                  onDragStart={(event) => handleDragStart(event, photo)}
-                  className={[
-                    "group relative overflow-hidden rounded-lg border bg-card p-0 text-left shadow-sm transition",
-                    selected ? "border-primary ring-2 ring-primary/30" : "border-border hover:border-primary/60",
-                  ].join(" ")}
-                >
-                  <img src={photo.dataUrl} alt={photo.name} className="aspect-square w-full object-cover" />
-                  <div className="absolute inset-x-0 bottom-0 bg-black/55 px-2 py-1 text-[11px] text-white">
-                    <div className="truncate font-medium">{photo.name}</div>
-                    <div className="truncate opacity-80">
-                      {[photo.width && photo.height ? `${photo.width}x${photo.height}` : "", formatSize(photo.size)]
-                        .filter(Boolean)
-                        .join(" · ")}
+        <div className="mt-3">
+          {photos.length === 0 ? (
+            <div className="flex flex-col items-center rounded-2xl border border-dashed border-stone-300 bg-stone-50 px-4 py-9 text-center">
+              <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-white text-stone-400 ring-1 ring-stone-200">
+                <Camera className="h-5 w-5" />
+              </div>
+              <p className="text-sm font-semibold text-stone-700">No photos yet</p>
+              <p className="mt-1 max-w-[260px] text-xs text-stone-500">
+                Captured phone photos appear here. Select one or more, then drag them into a page photo uploader.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-2.5">
+              {photos.map((photo) => {
+                const selected = selectedIds.has(photo.id);
+                return (
+                  <button
+                    key={photo.id}
+                    type="button"
+                    draggable
+                    onClick={() => togglePhoto(photo.id)}
+                    onDragStart={(event) => handleDragStart(event, photo)}
+                    className={cn(
+                      "group relative overflow-hidden rounded-2xl bg-stone-100 p-0 text-left shadow-sm transition",
+                      "ring-1 ring-stone-200 hover:ring-green-500/60",
+                      selected && "ring-2 ring-green-500 ring-offset-2 ring-offset-white",
+                    )}
+                  >
+                    <img
+                      src={photo.dataUrl}
+                      alt={photo.name}
+                      className="aspect-square w-full object-cover"
+                    />
+                    <div className="absolute inset-x-0 bottom-0 bg-linear-to-t from-stone-900/80 via-stone-900/40 to-transparent px-2.5 pb-1.5 pt-3 text-[11px] text-white">
+                      <div className="truncate font-semibold">{photo.name}</div>
+                      <div className="truncate opacity-80">
+                        {[
+                          photo.width && photo.height ? `${photo.width}×${photo.height}` : "",
+                          formatSize(photo.size),
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </div>
                     </div>
-                  </div>
-                  <span className={["absolute right-2 top-2 h-4 w-4 rounded-full border-2 border-white", selected ? "bg-primary" : "bg-black/30"].join(" ")} />
-                </button>
-              );
-            })}
-          </div>
-        )}
+                    <span
+                      className={cn(
+                        "absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full border-2 border-white transition",
+                        selected ? "bg-green-500" : "bg-stone-900/40 backdrop-blur-sm",
+                      )}
+                    >
+                      {selected ? <Check className="h-3 w-3 stroke-3 text-white" /> : null}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

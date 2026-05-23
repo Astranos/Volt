@@ -1,12 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
 import { CameraView, type BarcodeScanningResult } from "expo-camera";
 import { useFocusEffect } from "expo-router";
-import { Image, Platform, Pressable, Text, View, type GestureResponderEvent } from "react-native";
+import { Image, Pressable, Text, View, type GestureResponderEvent } from "react-native";
 import { useCallback, useRef, useState } from "react";
 import { useScanner } from "../../lib/scanner-state";
-import { Header, PairingPanel, ScreenRoot, StartCameraOverlay, TorchButton, styles } from "./index";
+import { Header, PairingPanel, ScreenRoot, StartCameraOverlay, styles } from "./index";
 
-const floatingBottom = Platform.select({ ios: 94, default: 86 });
 const zoomStep = 0.08;
 
 function clampZoom(value: number) {
@@ -27,7 +26,11 @@ export default function PhotosTab() {
   const [pairScannerError, setPairScannerError] = useState<string | null>(null);
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraZoom, setCameraZoom] = useState(0);
+  const [focusMode, setFocusMode] = useState<"on" | "off">("off");
+  const [focusPoint, setFocusPoint] = useState<{ x: number; y: number } | null>(null);
+  const [gridVisible, setGridVisible] = useState(true);
   const pairScannerLockedRef = useRef(false);
+  const focusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pinchStartDistanceRef = useRef<number | null>(null);
   const pinchStartZoomRef = useRef(0);
 
@@ -40,18 +43,35 @@ export default function PhotosTab() {
         pairScannerLockedRef.current = false;
         scanner.setTorch(false);
         setCameraZoom(0);
+        setFocusMode("off");
+        setFocusPoint(null);
+        if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
       };
     }, [scanner.setTorch])
   );
 
+  const triggerFocus = useCallback((event: GestureResponderEvent) => {
+    const { locationX, locationY } = event.nativeEvent;
+    setFocusMode("on");
+    setFocusPoint({ x: locationX, y: locationY });
+    if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
+    focusTimerRef.current = setTimeout(() => {
+      setFocusMode("off");
+      setFocusPoint(null);
+    }, 900);
+  }, []);
+
   const handleCameraTouchStart = useCallback(
     (event: GestureResponderEvent) => {
       const distance = touchDistance(event);
-      if (distance == null) return;
+      if (distance == null) {
+        triggerFocus(event);
+        return;
+      }
       pinchStartDistanceRef.current = distance;
       pinchStartZoomRef.current = cameraZoom;
     },
-    [cameraZoom]
+    [cameraZoom, triggerFocus]
   );
 
   const handleCameraTouchMove = useCallback((event: GestureResponderEvent) => {
@@ -165,7 +185,7 @@ export default function PhotosTab() {
       <Header />
       <View style={styles.page}>
         <View style={[styles.content, localStyles.photoContent]}>
-          <View style={styles.cameraShell}>
+          <View style={[styles.cameraShell, localStyles.photoCameraShell]}>
             {cameraActive ? (
               <>
                 <CameraView
@@ -174,58 +194,131 @@ export default function PhotosTab() {
                   facing="back"
                   enableTorch={scanner.torch}
                   zoom={cameraZoom}
+                  autofocus={focusMode}
                   onTouchStart={handleCameraTouchStart}
                   onTouchMove={handleCameraTouchMove}
                   onTouchEnd={handleCameraTouchEnd}
                 />
-                <View style={styles.zoomControls}>
+                {gridVisible ? <PhotoGridOverlay /> : null}
+                {focusPoint ? (
+                  <View
+                    pointerEvents="none"
+                    style={[
+                      styles.focusRing,
+                      {
+                        left: focusPoint.x - 34,
+                        top: focusPoint.y - 34,
+                      },
+                    ]}
+                  />
+                ) : null}
+
+                <View style={localStyles.viewfinderTopRight}>
                   <Pressable
-                    accessibilityLabel="Zoom photo camera out"
+                    accessibilityLabel={scanner.torch ? "Turn flash off" : "Turn flash on"}
                     accessibilityRole="button"
-                    style={styles.zoomButton}
-                    onPress={() => setCameraZoom((value) => clampZoom(value - zoomStep))}
+                    hitSlop={8}
+                    style={[localStyles.overlayButton, scanner.torch && localStyles.overlayButtonActive]}
+                    onPress={() => scanner.setTorch((value) => !value)}
                   >
-                    <Ionicons name="remove" size={18} color="#fafaf9" />
+                    <Ionicons
+                      name={scanner.torch ? "flash" : "flash-outline"}
+                      size={22}
+                      color={scanner.torch ? "#facc15" : "#fafaf9"}
+                    />
                   </Pressable>
-                  <Text style={styles.zoomText}>{Math.round(cameraZoom * 100)}%</Text>
                   <Pressable
-                    accessibilityLabel="Zoom photo camera in"
+                    accessibilityLabel={gridVisible ? "Hide photo grid" : "Show photo grid"}
                     accessibilityRole="button"
-                    style={styles.zoomButton}
-                    onPress={() => setCameraZoom((value) => clampZoom(value + zoomStep))}
+                    hitSlop={8}
+                    style={[localStyles.overlayButton, gridVisible && localStyles.overlayButtonActive]}
+                    onPress={() => setGridVisible((value) => !value)}
                   >
-                    <Ionicons name="add" size={18} color="#fafaf9" />
+                    <Ionicons
+                      name={gridVisible ? "grid" : "grid-outline"}
+                      size={20}
+                      color={gridVisible ? "#86efac" : "#fafaf9"}
+                    />
                   </Pressable>
                 </View>
-                <TorchButton />
+
+                <View style={localStyles.viewfinderZoomBar} pointerEvents="box-none">
+                  <View style={localStyles.zoomPill}>
+                    <Pressable
+                      accessibilityLabel="Zoom photo camera out"
+                      accessibilityRole="button"
+                      hitSlop={6}
+                      style={localStyles.zoomPillButton}
+                      onPress={() => setCameraZoom((value) => clampZoom(value - zoomStep))}
+                    >
+                      <Ionicons name="remove" size={20} color="#fafaf9" />
+                    </Pressable>
+                    <Text style={localStyles.zoomPillText}>{`${(1 + cameraZoom * 4).toFixed(1)}x`}</Text>
+                    <Pressable
+                      accessibilityLabel="Zoom photo camera in"
+                      accessibilityRole="button"
+                      hitSlop={6}
+                      style={localStyles.zoomPillButton}
+                      onPress={() => setCameraZoom((value) => clampZoom(value + zoomStep))}
+                    >
+                      <Ionicons name="add" size={20} color="#fafaf9" />
+                    </Pressable>
+                  </View>
+                </View>
               </>
             ) : null}
             {!cameraActive ? <StartCameraOverlay onPress={() => setCameraActive(true)} /> : null}
           </View>
 
-          <View style={[styles.bottomControls, { bottom: floatingBottom }]}>
-            <View style={localStyles.statusPanel}>
-              <Ionicons name="images-outline" size={18} color={scanner.photoError ? "#dc2626" : "#16a34a"} />
-              <View style={localStyles.statusTextGroup}>
-                <Text style={localStyles.statusTitle}>
-                  {scanner.photoSending ? "Sending photo" : "Ready for photos"}
-                </Text>
-                <Text numberOfLines={1} style={localStyles.statusValue}>
-                  {scanner.photoError ?? "Photos transfer directly to the Chrome sidepanel"}
-                </Text>
-              </View>
+          <View style={localStyles.photoControls}>
+            <View
+              style={[
+                localStyles.statusPill,
+                scanner.photoError && localStyles.statusPillError,
+                scanner.photoSending && localStyles.statusPillActive,
+              ]}
+            >
+              <View
+                style={[
+                  localStyles.statusDot,
+                  scanner.photoError && localStyles.statusDotError,
+                  scanner.photoSending && localStyles.statusDotActive,
+                ]}
+              />
+              <Text numberOfLines={1} style={localStyles.statusPillText}>
+                {scanner.photoError
+                  ? scanner.photoError
+                  : scanner.photoSending
+                    ? "Sending photo…"
+                    : cameraActive
+                      ? "Tap shutter to send to Chrome"
+                      : "Tap Start to activate camera"}
+              </Text>
             </View>
+
             <Pressable
               accessibilityLabel="Take and send photo"
               accessibilityRole="button"
               disabled={!cameraActive || scanner.photoSending}
               onPress={scanner.sendPhotoCapture}
-              style={[localStyles.captureButton, (!cameraActive || scanner.photoSending) && styles.disabled]}
+              style={({ pressed }) => [
+                localStyles.shutterRing,
+                (!cameraActive || scanner.photoSending) && styles.disabled,
+                pressed && cameraActive && !scanner.photoSending && localStyles.shutterRingPressed,
+              ]}
             >
-              <Ionicons name={scanner.photoSending ? "hourglass-outline" : "camera"} size={22} color="#f0fdf4" />
-              <Text style={localStyles.captureButtonText}>
-                {scanner.photoSending ? "Sending" : "Photo"}
-              </Text>
+              <View
+                style={[
+                  localStyles.shutterCore,
+                  scanner.photoSending && localStyles.shutterCoreBusy,
+                ]}
+              >
+                <Ionicons
+                  name={scanner.photoSending ? "hourglass-outline" : "camera"}
+                  size={28}
+                  color="#f0fdf4"
+                />
+              </View>
             </Pressable>
           </View>
         </View>
@@ -234,37 +327,174 @@ export default function PhotosTab() {
   );
 }
 
+function PhotoGridOverlay() {
+  return (
+    <View pointerEvents="none" style={localStyles.gridOverlay}>
+      <View style={[localStyles.gridLineVertical, { left: "33.333%" }]} />
+      <View style={[localStyles.gridLineVertical, { left: "66.666%" }]} />
+      <View style={[localStyles.gridLineHorizontal, { top: "33.333%" }]} />
+      <View style={[localStyles.gridLineHorizontal, { top: "66.666%" }]} />
+    </View>
+  );
+}
+
 const localStyles = {
   photoContent: {
-    paddingBottom: floatingBottom + 140,
+    paddingTop: 18,
+    paddingBottom: 18,
+    justifyContent: "flex-start" as const,
   },
-  statusPanel: {
-    minHeight: 54,
-    paddingHorizontal: 14,
-    borderRadius: 22,
-    backgroundColor: "#fafaf9",
-    borderWidth: 1,
-    borderColor: "#e7e5e4",
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
+  photoCameraShell: {
+    flex: 0,
+    aspectRatio: 1,
+    width: "auto" as const,
+  },
+  viewfinderTopRight: {
+    position: "absolute" as const,
+    top: 12,
+    right: 12,
+    flexDirection: "column" as const,
     gap: 10,
   },
-  statusTextGroup: { flex: 1 },
-  statusTitle: { color: "#1c1917", fontSize: 13, fontWeight: "800" as const },
-  statusValue: { color: "#78716c", fontSize: 13, marginTop: 2 },
-  captureButton: {
-    height: 58,
-    borderRadius: 29,
+  overlayButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: "center" as const,
     justifyContent: "center" as const,
+    backgroundColor: "rgba(28, 25, 23, 0.55)",
+    borderWidth: 1,
+    borderColor: "rgba(250, 250, 249, 0.14)",
+  },
+  overlayButtonActive: {
+    backgroundColor: "rgba(28, 25, 23, 0.82)",
+    borderColor: "rgba(250, 250, 249, 0.32)",
+  },
+  viewfinderZoomBar: {
+    position: "absolute" as const,
+    left: 0,
+    right: 0,
+    bottom: 14,
+    alignItems: "center" as const,
+  },
+  zoomPill: {
+    minHeight: 44,
+    paddingHorizontal: 6,
+    borderRadius: 999,
     flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 4,
+    backgroundColor: "rgba(28, 25, 23, 0.62)",
+    borderWidth: 1,
+    borderColor: "rgba(250, 250, 249, 0.14)",
+  },
+  zoomPillButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+  },
+  zoomPillText: {
+    minWidth: 44,
+    color: "#fafaf9",
+    fontSize: 14,
+    fontWeight: "800" as const,
+    textAlign: "center" as const,
+  },
+  gridOverlay: {
+    position: "absolute" as const,
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+  },
+  gridLineVertical: {
+    position: "absolute" as const,
+    top: 0,
+    bottom: 0,
+    width: 1,
+    backgroundColor: "rgba(28, 25, 23, 0.45)",
+  },
+  gridLineHorizontal: {
+    position: "absolute" as const,
+    left: 0,
+    right: 0,
+    height: 1,
+    backgroundColor: "rgba(28, 25, 23, 0.45)",
+  },
+  photoControls: {
+    marginTop: 22,
+    marginHorizontal: 18,
+    alignItems: "center" as const,
+    gap: 20,
+  },
+  statusPill: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
     gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 999,
+    backgroundColor: "#f5f5f4",
+    borderWidth: 1,
+    borderColor: "#e7e5e4",
+    maxWidth: "100%" as const,
+  },
+  statusPillActive: {
+    backgroundColor: "#fef3c7",
+    borderColor: "#fde68a",
+  },
+  statusPillError: {
+    backgroundColor: "#fee2e2",
+    borderColor: "#fecaca",
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#22c55e",
+  },
+  statusDotActive: {
+    backgroundColor: "#f59e0b",
+  },
+  statusDotError: {
+    backgroundColor: "#dc2626",
+  },
+  statusPillText: {
+    color: "#1c1917",
+    fontSize: 13,
+    fontWeight: "600" as const,
+    flexShrink: 1 as const,
+  },
+  shutterRing: {
+    width: 82,
+    height: 82,
+    borderRadius: 41,
+    padding: 5,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    backgroundColor: "transparent",
+    borderWidth: 4,
+    borderColor: "#1c1917",
+  },
+  shutterRingPressed: {
+    transform: [{ scale: 0.96 }],
+  },
+  shutterCore: {
+    flex: 1,
+    width: "100%" as const,
+    borderRadius: 999,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
     backgroundColor: "#16a34a",
     shadowColor: "#15803d",
-    shadowOpacity: 0.24,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.32,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
     elevation: 6,
   },
-  captureButtonText: { color: "#f0fdf4", fontSize: 17, fontWeight: "800" as const },
+  shutterCoreBusy: {
+    backgroundColor: "#15803d",
+  },
 };

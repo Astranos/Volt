@@ -3,6 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { scanFromURLAsync, useCameraPermissions, type BarcodeScanningResult } from "expo-camera";
 import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
+import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
 import * as Linking from "expo-linking";
 import {
   ExpoSpeechRecognitionModule,
@@ -418,19 +419,42 @@ export function ScannerProvider({ children }: PropsWithChildren) {
 
     try {
       const photo = await cameraRef.current.takePictureAsync({
-        base64: true,
         quality: 0.72,
         skipProcessing: false,
       });
 
-      if (!photo.base64) {
+      if (!photo.uri || !photo.width || !photo.height) {
         throw new Error("Camera did not return photo data.");
+      }
+
+      const cropSize = Math.min(photo.width, photo.height);
+      const squarePhoto = await manipulateAsync(
+        photo.uri,
+        [
+          {
+            crop: {
+              originX: Math.max(0, Math.floor((photo.width - cropSize) / 2)),
+              originY: Math.max(0, Math.floor((photo.height - cropSize) / 2)),
+              width: cropSize,
+              height: cropSize,
+            },
+          },
+        ],
+        {
+          base64: true,
+          compress: 0.72,
+          format: SaveFormat.JPEG,
+        }
+      );
+
+      if (!squarePhoto.base64) {
+        throw new Error("Could not prepare square photo data.");
       }
 
       const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
       const mimeType = "image/jpeg";
       const name = `volt-photo-${new Date().toISOString().replace(/[:.]/g, "-")}.jpg`;
-      const chunks = photo.base64.match(new RegExp(`.{1,${PHOTO_CHUNK_SIZE}}`, "g")) ?? [];
+      const chunks = squarePhoto.base64.match(new RegExp(`.{1,${PHOTO_CHUNK_SIZE}}`, "g")) ?? [];
 
       channel.send(
         encodeScannerTransportMessage({
@@ -438,9 +462,9 @@ export function ScannerProvider({ children }: PropsWithChildren) {
           id,
           name,
           mimeType,
-          size: Math.ceil((photo.base64.length * 3) / 4),
-          width: typeof photo.width === "number" ? photo.width : undefined,
-          height: typeof photo.height === "number" ? photo.height : undefined,
+          size: Math.ceil((squarePhoto.base64.length * 3) / 4),
+          width: squarePhoto.width,
+          height: squarePhoto.height,
           capturedAt: new Date().toISOString(),
           totalChunks: chunks.length,
         })
