@@ -35,6 +35,8 @@ export type ScannerConnectionStatus =
 
 export interface BarcodeMessage {
   barcode: string;
+  dictationPhase?: "partial" | "final";
+  dictationSessionId?: string;
   format?: string;
   insertIntoCursor?: boolean;
   kind?: "barcode" | "text";
@@ -114,6 +116,8 @@ export function decodeBarcodeMessage(data: string): BarcodeMessage | null {
 
     return {
       barcode: parsed.barcode,
+      dictationPhase: parsed.dictationPhase === "partial" || parsed.dictationPhase === "final" ? parsed.dictationPhase : undefined,
+      dictationSessionId: typeof parsed.dictationSessionId === "string" ? parsed.dictationSessionId : undefined,
       format: typeof parsed.format === "string" ? parsed.format : undefined,
       insertIntoCursor: typeof parsed.insertIntoCursor === "boolean" ? parsed.insertIntoCursor : undefined,
       kind: parsed.kind === "text" ? "text" : "barcode",

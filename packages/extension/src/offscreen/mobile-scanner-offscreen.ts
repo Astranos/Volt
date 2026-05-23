@@ -16,6 +16,8 @@ type ScannerState = {
 
 type BarcodeMessage = {
   barcode: string;
+  dictationPhase?: "partial" | "final";
+  dictationSessionId?: string;
   format?: string;
   insertIntoCursor?: boolean;
   kind?: "barcode" | "text";
@@ -144,6 +146,8 @@ function decodeScannerTransportMessage(data: string): ScannerTransportMessage | 
 
     return {
       barcode: parsed.barcode,
+      dictationPhase: parsed.dictationPhase === "partial" || parsed.dictationPhase === "final" ? parsed.dictationPhase : undefined,
+      dictationSessionId: typeof parsed.dictationSessionId === "string" ? parsed.dictationSessionId : undefined,
       format: typeof parsed.format === "string" ? parsed.format : undefined,
       insertIntoCursor: typeof parsed.insertIntoCursor === "boolean" ? parsed.insertIntoCursor : undefined,
       kind: parsed.kind === "text" ? "text" : "barcode",
@@ -326,7 +330,7 @@ class MobileScannerOffscreenSession {
       return;
     }
 
-    if (this.isDuplicateMessage(data)) return;
+    if (data.format !== "dictation" && this.isDuplicateMessage(data)) return;
     void chrome.runtime.sendMessage({
       action: "scannerOffscreenScan",
       scan: {

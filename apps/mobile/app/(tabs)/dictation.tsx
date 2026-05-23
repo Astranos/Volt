@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { CameraView as ExpoCameraView, type BarcodeScanningResult } from "expo-camera";
 import { Pressable, Text, View } from "react-native";
-import { useRef, useState, type ComponentType } from "react";
+import { useEffect, useRef, useState, type ComponentType } from "react";
 import { useScanner } from "../../lib/scanner-state";
 import { Header, PairingPanel, ScreenRoot, styles } from "./index";
 
@@ -14,6 +14,7 @@ export default function DictationTab() {
     dictating,
     dictationError,
     dictationTranscript,
+    prepareDictation,
     startDictation,
     stopDictation,
   } = scanner;
@@ -21,6 +22,10 @@ export default function DictationTab() {
   const [pairScannerLocked, setPairScannerLocked] = useState(false);
   const [pairScannerError, setPairScannerError] = useState<string | null>(null);
   const pairScannerLockedRef = useRef(false);
+
+  useEffect(() => {
+    if (connected) void prepareDictation();
+  }, [connected, prepareDictation]);
 
   const openPairScanner = async () => {
     if (!scanner.permission?.granted) {

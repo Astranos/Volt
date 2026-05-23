@@ -113,6 +113,7 @@ type ScannerState = {
   photoError: string | null;
   photoSentAt: string | null;
   photoSending: boolean;
+  prepareDictation: () => Promise<void>;
   setSetting: <Key extends keyof ScannerSettings>(key: Key, value: ScannerSettings[Key]) => void;
   startDictation: () => Promise<void>;
   settings: ScannerSettings;
@@ -204,6 +205,10 @@ export function ScannerProvider({ children }: PropsWithChildren) {
   const lastScanRef = useRef<{ value: string; at: number } | null>(null);
   const lastSentScanRef = useRef<{ key: string; at: number } | null>(null);
   const lastDictationRef = useRef("");
+  const lastDictationPartialRef = useRef("");
+  const dictationSessionIdRef = useRef<string | null>(null);
+  const dictationTranscriptRef = useRef("");
+  const dictationPermissionGrantedRef = useRef(false);
   const lastTextCaptureClipboardRef = useRef<string | null>(null);
   const pendingScannerItemsRef = useRef<ScanItem[]>([]);
   const settingsRef = useRef(defaultSettings);
@@ -444,16 +449,24 @@ export function ScannerProvider({ children }: PropsWithChildren) {
 
   const sendScan = useCallback(async (item: ScanItem) => {
     const now = Date.now();
+    const isDictation = item.kind === "text" && item.format === "dictation";
+    const isPartialDictation = isDictation && item.dictationPhase === "partial";
     const key = `${item.kind ?? "barcode"}:${item.format ?? ""}:${item.barcode.trim().toLowerCase()}`;
     const lastSent = lastSentScanRef.current;
-    if (lastSent?.key === key && now - lastSent.at < REPEAT_SCAN_COOLDOWN_MS) return;
-    lastSentScanRef.current = { key, at: now };
+    if (!isDictation) {
+      if (lastSent?.key === key && now - lastSent.at < REPEAT_SCAN_COOLDOWN_MS) return;
+      lastSentScanRef.current = { key, at: now };
+    }
 
-    setScans((current) => [item, ...current].slice(0, 50));
+    if (!isPartialDictation) {
+      setScans((current) => [item, ...current].slice(0, 50));
+    }
 
     if (channelRef.current?.readyState === "open") {
       channelRef.current.send(encodeBarcodeMessage(item));
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      if (!isPartialDictation) {
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
     } else {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     }
@@ -625,11 +638,27 @@ export function ScannerProvider({ children }: PropsWithChildren) {
   }, [manualText, sendScan]);
 
   const sendDictationText = useCallback(
-    (text: string) => {
+    (text: string, phase: "partial" | "final") => {
       const value = text.trim();
-      if (!value || value === lastDictationRef.current) return;
-      lastDictationRef.current = value;
-      sendScan(makeScanItem(value, "dictation", "text", true));
+      if (!value) return;
+      const sessionId =
+        dictationSessionIdRef.current ??
+        `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      dictationSessionIdRef.current = sessionId;
+
+      if (phase === "partial") {
+        if (value === lastDictationPartialRef.current) return;
+        lastDictationPartialRef.current = value;
+      } else {
+        if (value === lastDictationRef.current) return;
+        lastDictationRef.current = value;
+      }
+
+      sendScan({
+        ...makeScanItem(value, "dictation", "text", true),
+        dictationPhase: phase,
+        dictationSessionId: sessionId,
+      });
     },
     [sendScan]
   );
@@ -703,14 +732,24 @@ export function ScannerProvider({ children }: PropsWithChildren) {
 
   useSpeechRecognitionEvent("result", (event) => {
     const transcript = event.results[0]?.transcript?.trim() ?? "";
+    dictationTranscriptRef.current = transcript;
     setDictationTranscript(transcript);
-    if (event.isFinal) sendDictationText(transcript);
+    sendDictationText(transcript, event.isFinal ? "final" : "partial");
   });
 
   useSpeechRecognitionEvent("error", (event) => {
     setDictating(false);
     setDictationError(event.message || event.error);
   });
+
+  const prepareDictation = useCallback(async () => {
+    if (dictationPermissionGrantedRef.current) return;
+    const permissions = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+    dictationPermissionGrantedRef.current = permissions.granted;
+    if (!permissions.granted) {
+      setDictationError("Microphone and speech recognition permissions are required.");
+    }
+  }, []);
 
   const startDictation = useCallback(async () => {
     if (!connected) {
@@ -719,22 +758,25 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       return;
     }
 
-    const permissions = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
-    if (!permissions.granted) {
-      setDictationError("Microphone and speech recognition permissions are required.");
-      return;
+    if (!dictationPermissionGrantedRef.current) {
+      await prepareDictation();
+      if (!dictationPermissionGrantedRef.current) return;
     }
 
     lastDictationRef.current = "";
+    lastDictationPartialRef.current = "";
+    dictationSessionIdRef.current = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    dictationTranscriptRef.current = "";
     setDictationTranscript("");
     setDictationError(null);
+    setDictating(true);
     ExpoSpeechRecognitionModule.start({
       lang: "en-US",
       interimResults: true,
       continuous: false,
       addsPunctuation: settings.dictationPunctuation,
     });
-  }, [connected, settings.dictationPunctuation]);
+  }, [connected, prepareDictation, settings.dictationPunctuation]);
 
   const stopDictation = useCallback(() => {
     ExpoSpeechRecognitionModule.stop();
@@ -803,6 +845,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       photoError,
       photoSentAt,
       photoSending,
+      prepareDictation,
       recognizingText,
       requestPermission,
       scans,
@@ -844,6 +887,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       photoError,
       photoSentAt,
       photoSending,
+      prepareDictation,
       recognizingText,
       requestPermission,
       scans,

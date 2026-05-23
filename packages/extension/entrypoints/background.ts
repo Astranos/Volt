@@ -133,6 +133,14 @@ export default defineBackground({
 
       return {
         ...message,
+        dictationPhase:
+          message.dictationPhase === "partial" || message.dictationPhase === "final"
+            ? message.dictationPhase
+            : undefined,
+        dictationSessionId:
+          typeof message.dictationSessionId === "string"
+            ? message.dictationSessionId
+            : undefined,
         id:
           typeof message.id === "string" && message.id
             ? message.id
@@ -181,8 +189,15 @@ export default defineBackground({
       };
     }
 
-    function insertTextAtTrackedEditableFromBackground(value) {
+    function insertTextAtTrackedEditableFromBackground(value, options = {}) {
       const root = window;
+      const liveSessionId =
+        typeof options.dictationSessionId === "string" ? options.dictationSessionId : null;
+      const livePhase =
+        options.dictationPhase === "partial" || options.dictationPhase === "final"
+          ? options.dictationPhase
+          : null;
+      const isLiveDictation = options.format === "dictation" && liveSessionId;
 
       const isEditable = (element) => {
         if (!(element instanceof HTMLElement)) return false;
@@ -220,30 +235,89 @@ export default defineBackground({
         : null;
 
       if (!target) {
+        if (isLiveDictation && livePhase === "partial") return;
         navigator.clipboard.writeText(value).catch(() => {});
         return;
       }
 
       target.focus();
       if (target.isContentEditable) {
-        document.execCommand("insertText", false, value);
+        const selection = window.getSelection();
+        const live = root.__voltLiveDictation;
+        if (
+          isLiveDictation &&
+          live?.sessionId === liveSessionId &&
+          live.target === target &&
+          live.node?.isConnected
+        ) {
+          live.node.nodeValue = value;
+          const range = document.createRange();
+          range.setStartAfter(live.node);
+          range.collapse(true);
+          selection?.removeAllRanges();
+          selection?.addRange(range);
+          if (livePhase === "final") root.__voltLiveDictation = null;
+        } else if (isLiveDictation && selection) {
+          const range =
+            selection.rangeCount > 0
+              ? selection.getRangeAt(0)
+              : document.createRange();
+          if (selection.rangeCount === 0) {
+            range.selectNodeContents(target);
+            range.collapse(false);
+          }
+          range.deleteContents();
+          const node = document.createTextNode(value);
+          range.insertNode(node);
+          range.setStartAfter(node);
+          range.collapse(true);
+          selection.removeAllRanges();
+          selection.addRange(range);
+          root.__voltLiveDictation =
+            livePhase === "final" ? null : { sessionId: liveSessionId, target, node };
+        } else {
+          document.execCommand("insertText", false, value);
+        }
+        target.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: value }));
         return;
       }
 
       const input = target;
-      const start = input.selectionStart ?? input.value.length;
-      const end = input.selectionEnd ?? input.value.length;
+      const live = root.__voltLiveDictation;
+      const replaceLiveInput =
+        isLiveDictation &&
+        live?.sessionId === liveSessionId &&
+        live.target === input &&
+        typeof live.start === "number" &&
+        typeof live.end === "number";
+      const start = replaceLiveInput
+        ? live.start
+        : input.selectionStart ?? input.value.length;
+      const end = replaceLiveInput
+        ? live.end
+        : input.selectionEnd ?? input.value.length;
       if (typeof input.setRangeText === "function") {
         input.setRangeText(value, start, end, "end");
       } else {
         input.value = input.value.slice(0, start) + value + input.value.slice(end);
         input.selectionStart = input.selectionEnd = start + value.length;
       }
+      if (isLiveDictation) {
+        root.__voltLiveDictation =
+          livePhase === "final"
+            ? null
+            : {
+                sessionId: liveSessionId,
+                target: input,
+                start,
+                end: start + value.length,
+              };
+      }
       input.dispatchEvent(new Event("input", { bubbles: true }));
       input.dispatchEvent(new Event("change", { bubbles: true }));
     }
 
-    async function insertScannerText(text) {
+    async function insertScannerText(text, options = {}) {
       try {
         const [tab] = await chrome.tabs.query({
           active: true,
@@ -258,7 +332,7 @@ export default defineBackground({
         await chrome.scripting.executeScript({
           target: { tabId: tab.id },
           func: insertTextAtTrackedEditableFromBackground,
-          args: [text],
+          args: [text, options],
         });
       } catch (err) {
         log("scanner insert fallback", err?.message || err);
@@ -387,12 +461,23 @@ export default defineBackground({
     function handleScannerScan(message) {
       const scan = normalizeScannerMessage(message?.scan);
       if (!scan) return;
+      const isPartialDictation =
+        scan.kind === "text" &&
+        scan.format === "dictation" &&
+        scan.dictationPhase === "partial";
 
-      persistScannerScan(scan);
-      broadcastScannerMessage({ action: "scannerScan", scan });
+      if (!isPartialDictation) {
+        persistScannerScan(scan);
+        broadcastScannerMessage({ action: "scannerScan", scan });
+      }
 
       if (shouldInsertScannerMessage(scan)) {
-        void insertScannerText(scan.barcode);
+        void insertScannerText(scan.barcode, {
+          dictationPhase: scan.dictationPhase,
+          dictationSessionId: scan.dictationSessionId,
+          format: scan.format,
+          kind: scan.kind,
+        });
       }
     }
 

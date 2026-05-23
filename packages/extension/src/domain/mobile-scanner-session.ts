@@ -61,7 +61,7 @@ export class MobileScannerSession {
       dataChannel.onmessage = (event) => {
         const data = decodeBarcodeMessage(event.data);
         if (!data) return;
-        if (this.isDuplicateMessage(data)) return;
+        if (data.format !== "dictation" && this.isDuplicateMessage(data)) return;
         this.events.onScan(data);
         if (shouldInsertScannerMessage(data)) {
           this.events.onInsert(data.barcode);
