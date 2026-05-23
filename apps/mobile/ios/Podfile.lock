@@ -2249,6 +2249,51 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
+  - RNSVG (15.15.5):
+    - hermes-engine
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-Core-prebuilt
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-jsi
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - ReactNativeDependencies
+    - RNSVG/common (= 15.15.5)
+    - Yoga
+  - RNSVG/common (15.15.5):
+    - hermes-engine
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-Core-prebuilt
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-jsi
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - ReactNativeDependencies
+    - Yoga
   - RNWorklets (0.8.3):
     - hermes-engine
     - RCTRequired
@@ -2335,8 +2380,8 @@ DEPENDENCIES:
   - "EXConstants (from `../../../node_modules/.pnpm/expo-constants@56.0.14_expo@56.0.3_react-native@0.85.3_@babel+core@7.28.6_@react-native_29cfb5ee4b2ee0ec62efb9d3ac3e052d/node_modules/expo-constants/ios`)"
   - "Expo (from `../../../node_modules/.pnpm/expo@56.0.3_@babel+core@7.28.6_@expo+dom-webview@56.0.5_@expo+metro-runtime@56.0.11_exp_8659c56c9759a0ec07de4674cfd976c1/node_modules/expo`)"
   - "ExpoAsset (from `../../../node_modules/.pnpm/expo-asset@56.0.13_expo@56.0.3_react-native@0.85.3_@babel+core@7.28.6_@react-native+met_4e7faf5eb6f638ad0ee86f28e67fe3a4/node_modules/expo-asset/ios`)"
-  - "ExpoCamera (from `../../../node_modules/.pnpm/expo-camera@56.0.7_@types+emscripten@1.41.5_expo@56.0.3_react-native@0.85.3_@babel+core_0751c9349b240d72589d6b52576193da/node_modules/expo-camera/ios`)"
-  - "ExpoCameraBarcodeScanning (from `../../../node_modules/.pnpm/expo-camera@56.0.7_@types+emscripten@1.41.5_expo@56.0.3_react-native@0.85.3_@babel+core_0751c9349b240d72589d6b52576193da/node_modules/expo-camera/ios`)"
+  - "ExpoCamera (from `../../../node_modules/.pnpm/expo-camera@56.0.7_patch_hash=d4c0059296fc3f4eb9d370b954279d1edaf12256beacbbdb1b315de73_5848f46a30eeed64b330906d1eff0c4f/node_modules/expo-camera/ios`)"
+  - "ExpoCameraBarcodeScanning (from `../../../node_modules/.pnpm/expo-camera@56.0.7_patch_hash=d4c0059296fc3f4eb9d370b954279d1edaf12256beacbbdb1b315de73_5848f46a30eeed64b330906d1eff0c4f/node_modules/expo-camera/ios`)"
   - "ExpoClipboard (from `../../../node_modules/.pnpm/expo-clipboard@56.0.3_expo@56.0.3_react-native@0.85.3_@babel+core@7.28.6_@react-native+_313ec9d4df9c83931b36480c653c5a1a/node_modules/expo-clipboard/ios`)"
   - "ExpoDomWebView (from `../../../node_modules/.pnpm/@expo+dom-webview@56.0.5_expo@56.0.3_react-native@0.85.3_@babel+core@7.28.6_@react-nati_408de090f9f65460df710991d3012f63/node_modules/@expo/dom-webview/ios`)"
   - "ExpoFileSystem (from `../../../node_modules/.pnpm/expo-file-system@56.0.7_expo@56.0.3_react-native@0.85.3_@babel+core@7.28.6_@react-nativ_097051a9ddf2194f6dac0c9909bd9cad/node_modules/expo-file-system/ios`)"
@@ -2438,6 +2483,7 @@ DEPENDENCIES:
   - "RNMLKitTextRecognition (from `../../../node_modules/.pnpm/@react-native-ml-kit+text-recognition@2.0.0_react-native@0.85.3_@babel+core@7.28.6_@rea_415d15309e8a212c8d3ae2aa4e456efe/node_modules/@react-native-ml-kit/text-recognition`)"
   - "RNReanimated (from `../../../node_modules/.pnpm/react-native-reanimated@4.3.1_react-native-worklets@0.8.3_@babel+core@7.28.6_@react-nat_b789dfe5b1f495cdd91770a97e45a4da/node_modules/react-native-reanimated`)"
   - "RNScreens (from `../../../node_modules/.pnpm/react-native-screens@4.25.1_react-native@0.85.3_@babel+core@7.28.6_@react-native+metro-_c644ec7f56bcf26b7f376d6b74bb64fa/node_modules/react-native-screens`)"
+  - "RNSVG (from `../../../node_modules/.pnpm/react-native-svg@15.15.5_react-native@0.85.3_@babel+core@7.28.6_@react-native+metro-con_0b678b53c06c7d49d495dc8cccfcd2d1/node_modules/react-native-svg`)"
   - "RNWorklets (from `../../../node_modules/.pnpm/react-native-worklets@0.8.3_@babel+core@7.28.6_@react-native+metro-config@0.85.3_@babel_54cc68219165a716a59068755eaef20c/node_modules/react-native-worklets`)"
   - "Yoga (from `../../../node_modules/.pnpm/react-native@0.85.3_@babel+core@7.28.6_@react-native+metro-config@0.85.3_@babel+core@7._2c2bbf7cd58d990000558d1ae27881c5/node_modules/react-native/ReactCommon/yoga`)"
 
@@ -2473,9 +2519,9 @@ EXTERNAL SOURCES:
   ExpoAsset:
     :path: "../../../node_modules/.pnpm/expo-asset@56.0.13_expo@56.0.3_react-native@0.85.3_@babel+core@7.28.6_@react-native+met_4e7faf5eb6f638ad0ee86f28e67fe3a4/node_modules/expo-asset/ios"
   ExpoCamera:
-    :path: "../../../node_modules/.pnpm/expo-camera@56.0.7_@types+emscripten@1.41.5_expo@56.0.3_react-native@0.85.3_@babel+core_0751c9349b240d72589d6b52576193da/node_modules/expo-camera/ios"
+    :path: "../../../node_modules/.pnpm/expo-camera@56.0.7_patch_hash=d4c0059296fc3f4eb9d370b954279d1edaf12256beacbbdb1b315de73_5848f46a30eeed64b330906d1eff0c4f/node_modules/expo-camera/ios"
   ExpoCameraBarcodeScanning:
-    :path: "../../../node_modules/.pnpm/expo-camera@56.0.7_@types+emscripten@1.41.5_expo@56.0.3_react-native@0.85.3_@babel+core_0751c9349b240d72589d6b52576193da/node_modules/expo-camera/ios"
+    :path: "../../../node_modules/.pnpm/expo-camera@56.0.7_patch_hash=d4c0059296fc3f4eb9d370b954279d1edaf12256beacbbdb1b315de73_5848f46a30eeed64b330906d1eff0c4f/node_modules/expo-camera/ios"
   ExpoClipboard:
     :path: "../../../node_modules/.pnpm/expo-clipboard@56.0.3_expo@56.0.3_react-native@0.85.3_@babel+core@7.28.6_@react-native+_313ec9d4df9c83931b36480c653c5a1a/node_modules/expo-clipboard/ios"
   ExpoDomWebView:
@@ -2677,6 +2723,8 @@ EXTERNAL SOURCES:
     :path: "../../../node_modules/.pnpm/react-native-reanimated@4.3.1_react-native-worklets@0.8.3_@babel+core@7.28.6_@react-nat_b789dfe5b1f495cdd91770a97e45a4da/node_modules/react-native-reanimated"
   RNScreens:
     :path: "../../../node_modules/.pnpm/react-native-screens@4.25.1_react-native@0.85.3_@babel+core@7.28.6_@react-native+metro-_c644ec7f56bcf26b7f376d6b74bb64fa/node_modules/react-native-screens"
+  RNSVG:
+    :path: "../../../node_modules/.pnpm/react-native-svg@15.15.5_react-native@0.85.3_@babel+core@7.28.6_@react-native+metro-con_0b678b53c06c7d49d495dc8cccfcd2d1/node_modules/react-native-svg"
   RNWorklets:
     :path: "../../../node_modules/.pnpm/react-native-worklets@0.8.3_@babel+core@7.28.6_@react-native+metro-config@0.85.3_@babel_54cc68219165a716a59068755eaef20c/node_modules/react-native-worklets"
   Yoga:
@@ -2806,6 +2854,7 @@ SPEC CHECKSUMS:
   RNMLKitTextRecognition: 2d7c3481b9dabc72f7e31c67025c28b2c8d653b0
   RNReanimated: ed660b8a6195b4ac482ba893c708467b5dc2cdb1
   RNScreens: 75d04ea58bd7a8e8ac60b7968d0382aa71631a7d
+  RNSVG: 0e52210d4d43165e7e2cf9c890a9848b27e513ac
   RNWorklets: e5e9e192dc0ff117d5566c4f8af4ecf2b0699e37
   SDWebImage: e9fc87c1aab89a8ab1bbd74eba378c6f53be8abf
   SDWebImageWebPCoder: 0e06e365080397465cc73a7a9b472d8a3bd0f377

@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { CameraView as ExpoCameraView, type BarcodeScanningResult } from "expo-camera";
 import { useFocusEffect } from "expo-router";
-import { Alert, Image, Platform, Pressable, Text, View, type GestureResponderEvent, type LayoutChangeEvent } from "react-native";
+import { Alert, Animated, Image, Platform, Pressable, Text, View, type GestureResponderEvent, type LayoutChangeEvent } from "react-native";
 import { useCallback, useMemo, useRef, useState, type ComponentType } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { barcodeTypes, useScanner } from "../../lib/scanner-state";
@@ -14,8 +14,8 @@ import {
   PhotoNegativeOverlay,
   ScreenRoot,
   ViewfinderBottomShutter,
+  ViewfinderMessageToast,
   ViewfinderSurface,
-  ViewfinderTopRightControls,
   styles,
 } from "./index";
 
@@ -121,12 +121,14 @@ export default function ScannerTab() {
   const [pairScannerError, setPairScannerError] = useState<string | null>(null);
   const [viewfinderFocused, setViewfinderFocused] = useState(false);
   const [activeBarcode, setActiveBarcode] = useState<BarcodeScanningResult | null>(null);
+  const [cursorToastMessage, setCursorToastMessage] = useState<string | null>(null);
   const [viewfinderSize, setViewfinderSize] = useState<ViewfinderSize | null>(null);
   const pairScannerLockedRef = useRef(false);
   const focusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pinchStartDistanceRef = useRef<number | null>(null);
   const pinchStartZoomRef = useRef(0);
   const activeBarcodeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cursorToastOpacity = useRef(new Animated.Value(0)).current;
 
   useFocusEffect(
     useCallback(() => {
@@ -150,6 +152,31 @@ export default function ScannerTab() {
     [activeBarcode, viewfinderSize]
   );
   const floatingBottom = Math.max(scannerFloatingBottom, insets.bottom + 74);
+
+  const showCursorInsertToast = useCallback((enabled: boolean) => {
+    setCursorToastMessage(
+      enabled
+        ? "Copied text will be pasted into browser's current position"
+        : "Copied text will NOT be pasted into browser's current position"
+    );
+    cursorToastOpacity.stopAnimation();
+    cursorToastOpacity.setValue(0);
+    Animated.sequence([
+      Animated.timing(cursorToastOpacity, {
+        duration: 160,
+        toValue: 1,
+        useNativeDriver: true,
+      }),
+      Animated.delay(1500),
+      Animated.timing(cursorToastOpacity, {
+        duration: 220,
+        toValue: 0,
+        useNativeDriver: true,
+      }),
+    ]).start(({ finished }) => {
+      if (finished) setCursorToastMessage(null);
+    });
+  }, [cursorToastOpacity]);
 
   const handleCameraLayout = useCallback((event: LayoutChangeEvent) => {
     const { width, height } = event.nativeEvent.layout;
@@ -349,29 +376,35 @@ export default function ScannerTab() {
                   ) : null}
                 </View>
                 <PhotoNegativeOverlay>
-                  <ViewfinderTopRightControls>
-                    <CameraOverlayButton
-                      active={scanner.torch}
-                      accessibilityLabel={scanner.torch ? "Turn flash off" : "Turn flash on"}
-                      onPress={() => scanner.setTorch((value) => !value)}
-                    >
-                      <Ionicons
-                        name={scanner.torch ? "flash" : "flash-outline"}
-                        size={22}
-                        color={scanner.torch ? "#facc15" : "#fafaf9"}
-                      />
-                    </CameraOverlayButton>
-                    <CursorInsertButton
-                      active={scanner.settings.scannerInsertIntoCursor}
-                      accessibilityLabel={
-                        scanner.settings.scannerInsertIntoCursor
-                          ? "Send barcode scans to cursor"
-                          : "Send barcode scans to results"
-                      }
-                      onValueChange={(value) => scanner.setSetting("scannerInsertIntoCursor", value)}
-                    />
-                  </ViewfinderTopRightControls>
+                  <ViewfinderMessageToast message={cursorToastMessage} opacity={cursorToastOpacity} />
                   <CameraControlStack
+                    leftControls={
+                        <CameraOverlayButton
+                          active={scanner.torch}
+                          accessibilityLabel={scanner.torch ? "Turn flash off" : "Turn flash on"}
+                          onPress={() => scanner.setTorch((value) => !value)}
+                        >
+                          <Ionicons
+                            name={scanner.torch ? "flash" : "flash-outline"}
+                            size={22}
+                            color={scanner.torch ? "#facc15" : "#fafaf9"}
+                          />
+                        </CameraOverlayButton>
+                    }
+                    rightControls={
+                        <CursorInsertButton
+                          active={scanner.settings.scannerInsertIntoCursor}
+                          accessibilityLabel={
+                            scanner.settings.scannerInsertIntoCursor
+                              ? "Send barcode scans to cursor"
+                              : "Send barcode scans to results"
+                          }
+                          onValueChange={(value) => {
+                            scanner.setSetting("scannerInsertIntoCursor", value);
+                            showCursorInsertToast(value);
+                          }}
+                        />
+                    }
                     bottom={floatingBottom}
                     label={`${(1 + scanner.cameraZoom * 4).toFixed(1)}x`}
                     onZoomIn={() => scanner.setCameraZoom((value) => clampZoom(value + zoomStep))}

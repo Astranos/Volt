@@ -30,6 +30,9 @@ importers:
       '@expo/vector-icons':
         specifier: ^15.0.3
         version: 15.1.1(expo-font@56.0.5)(react-native@0.85.3(@babel/core@7.28.6)(@react-native/metro-config@0.85.3(@babel/core@7.28.6))(@types/react@19.2.15)(react@19.2.3))(react@19.2.3)
+      '@hugeicons/core-free-icons':
+        specifier: ^4.1.4
+        version: 4.1.4
       '@react-native-async-storage/async-storage':
         specifier: 2.2.0
         version: 2.2.0(react-native@0.85.3(@babel/core@7.28.6)(@react-native/metro-config@0.85.3(@babel/core@7.28.6))(@types/react@19.2.15)(react@19.2.3))
@@ -93,6 +96,9 @@ importers:
       react-native-screens:
         specifier: ~4.25.1
         version: 4.25.1(react-native@0.85.3(@babel/core@7.28.6)(@react-native/metro-config@0.85.3(@babel/core@7.28.6))(@types/react@19.2.15)(react@19.2.3))(react@19.2.3)
+      react-native-svg:
+        specifier: 15.15.5
+        version: 15.15.5(react-native@0.85.3(@babel/core@7.28.6)(@react-native/metro-config@0.85.3(@babel/core@7.28.6))(@types/react@19.2.15)(react@19.2.3))(react@19.2.3)
       react-native-webrtc:
         specifier: ^124.0.6
         version: 124.0.7(patch_hash=ae0078586afe96dd4b722821318d17846ee85693a5d558b420b4ebb7d4afe269)(react-native@0.85.3(@babel/core@7.28.6)(@react-native/metro-config@0.85.3(@babel/core@7.28.6))(@types/react@19.2.15)(react@19.2.3))
@@ -1420,6 +1426,9 @@ packages:
 
   '@floating-ui/utils@0.2.10':
     resolution: {integrity: sha512-aGTxbpbg8/b5JfU1HXSrbH3wXZuLPJcNEcZQFMxLs3oSzgtVu6nFPkbbGGUvBcUjKV2YyB9Wxxabo+HEH9tcRQ==}
+
+  '@hugeicons/core-free-icons@4.1.4':
+    resolution: {integrity: sha512-vkMvlnW7Atqh7juhZCadYDvqABWcEeVAkavAK6HJBFbYkLCme5CN51Oc91D5j5ruDja+HQPjMfWkTxxulcwvAQ==}
 
   '@img/colour@1.0.0':
     resolution: {integrity: sha512-A5P/LfWGFSl6nsckYtjw9da+19jB8hkJ6ACTGcDfEJ0aE+l2n2El7dsVM7UVHZQ9s2lmYMWlrS21YLy2IR1LUw==}
@@ -3231,6 +3240,10 @@ packages:
   css-select@5.2.2:
     resolution: {integrity: sha512-TizTzUddG/xYLA3NXodFM0fSbNizXjOKhqiQQwvhlspadZokn1KDy0NZFS0wuEubIYAV5/c1/lAr0TaaFXEXzw==}
 
+  css-tree@1.1.3:
+    resolution: {integrity: sha512-tRpdppF7TRazZrjJ6v3stzv93qxRcSsFmW6cX0Zm2NVKpxE1WV1HblnghVv9TreireHkqI/VDEsfolRF1p6y7Q==}
+    engines: {node: '>=8.0.0'}
+
   css-what@6.2.2:
     resolution: {integrity: sha512-u/O3vwbptzhMs3L1fQE82ZSLHQQfto5gyZzwteVIEyeaY5Fc7R4dapF/BvRoSYFeqfBk4m0V1Vafq5Pjv25wvA==}
     engines: {node: '>= 6'}
@@ -4342,6 +4355,9 @@ packages:
   marky@1.3.0:
     resolution: {integrity: sha512-ocnPZQLNpvbedwTy9kNrQEsknEfgvcLMvOtz3sFeWApDq1MXH1TqkCIx58xlpESsfwQOnuBO9beyQuNGzVvuhQ==}
 
+  mdn-data@2.0.14:
+    resolution: {integrity: sha512-dn6wd0uw5GsdswPFfsgMp5NSB0/aDe6fK94YJV/AJDYXL6HVLWBsxeq7js7Ad+mU2K9LAlwpk6kN2D5mwCPVow==}
+
   memoize-one@5.2.1:
     resolution: {integrity: sha512-zYiwtZUcYyXKo/np96AGZAckk+FWWsUdJ3cHGGmld7+AhvcWmQyGCYUh1hc4Q/pkOhb65dQR/pqCyK0cOaHz4Q==}
 
@@ -4940,6 +4956,12 @@ packages:
     peerDependencies:
       react: '*'
       react-native: '>=0.82.0'
+
+  react-native-svg@15.15.5:
+    resolution: {integrity: sha512-L4go5jA+GWutdJ/JucuN20cjAbMg1HmMtAP+wZ+3JLCf6Jd0bhXQHxciRP/AQm/FlrIEZwkMcHNZP+FXAiic0w==}
+    peerDependencies:
+      react: '*'
+      react-native: '*'
 
   react-native-webrtc@124.0.7:
     resolution: {integrity: sha512-gnXPdbUS8IkKHq9WNaWptW/yy5s6nMyI6cNn90LXdobPVCgYSk6NA2uUGdT4c4J14BRgaFA95F+cR28tUPkMVA==}
@@ -7115,6 +7137,8 @@ snapshots:
 
   '@floating-ui/utils@0.2.10': {}
 
+  '@hugeicons/core-free-icons@4.1.4': {}
+
   '@img/colour@1.0.0': {}
 
   '@img/sharp-darwin-arm64@0.34.5':
@@ -9275,6 +9299,11 @@ snapshots:
       domutils: 3.2.2
       nth-check: 2.1.1
 
+  css-tree@1.1.3:
+    dependencies:
+      mdn-data: 2.0.14
+      source-map: 0.6.1
+
   css-what@6.2.2: {}
 
   css.escape@1.5.1: {}
@@ -10339,6 +10368,8 @@ snapshots:
 
   marky@1.3.0: {}
 
+  mdn-data@2.0.14: {}
+
   memoize-one@5.2.1: {}
 
   merge-options@3.0.4:
@@ -11043,6 +11074,13 @@ snapshots:
       react-freeze: 1.0.4(react@19.2.3)
       react-native: 0.85.3(@babel/core@7.28.6)(@react-native/metro-config@0.85.3(@babel/core@7.28.6))(@types/react@19.2.15)(react@19.2.3)
       warn-once: 0.1.1
+
+  react-native-svg@15.15.5(react-native@0.85.3(@babel/core@7.28.6)(@react-native/metro-config@0.85.3(@babel/core@7.28.6))(@types/react@19.2.15)(react@19.2.3))(react@19.2.3):
+    dependencies:
+      css-select: 5.2.2
+      css-tree: 1.1.3
+      react: 19.2.3
+      react-native: 0.85.3(@babel/core@7.28.6)(@react-native/metro-config@0.85.3(@babel/core@7.28.6))(@types/react@19.2.15)(react@19.2.3)
 
   react-native-webrtc@124.0.7(patch_hash=ae0078586afe96dd4b722821318d17846ee85693a5d558b420b4ebb7d4afe269)(react-native@0.85.3(@babel/core@7.28.6)(@react-native/metro-config@0.85.3(@babel/core@7.28.6))(@types/react@19.2.15)(react@19.2.3)):
     dependencies:

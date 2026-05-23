@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { InputLongTextIcon } from "@hugeicons/core-free-icons";
 import { Host, Toggle } from "@expo/ui/swift-ui";
 import { CameraView as ExpoCameraView, type BarcodeScanningResult } from "expo-camera";
 import { useFocusEffect } from "expo-router";
@@ -16,6 +17,7 @@ import {
   type LayoutChangeEvent,
   type ViewProps,
 } from "react-native";
+import Svg, { Circle, G, Line, Path, Rect } from "react-native-svg";
 import { initialWindowMetrics, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCallback, useEffect, useRef, useState, type ComponentType, type PropsWithChildren, type ReactNode } from "react";
 import { LiveTextImageView } from "../../lib/live-text-image-view";
@@ -28,6 +30,7 @@ const absoluteFillObject = { position: "absolute" as const, top: 0, right: 0, bo
 const stableTopInset = initialWindowMetrics?.insets.top ?? 0;
 const zoomStep = 0.08;
 const captureZoomStep = 0.25;
+const cursorIconSize = 23;
 
 function clampZoom(value: number) {
   return Math.max(0, Math.min(1, value));
@@ -40,6 +43,33 @@ function touchDistance(event: GestureResponderEvent) {
   return Math.hypot(first.pageX - second.pageX, first.pageY - second.pageY);
 }
 
+function normalizeHugeIconAttrs(attrs: Record<string, string | number>, color: string) {
+  const normalized: Record<string, string | number> = { ...attrs };
+  delete normalized.key;
+  if (normalized.stroke === "currentColor") normalized.stroke = color;
+  if (normalized.fill === "currentColor") normalized.fill = color;
+  if (normalized.strokeWidth != null) normalized.strokeWidth = 1.8;
+  return normalized as any;
+}
+
+function InputLongTextHugeIcon({ color }: { color: string }) {
+  return (
+    <View style={styles.cursorToggleIconSlot} pointerEvents="none">
+      <Svg width={cursorIconSize} height={cursorIconSize} viewBox="0 0 24 24" fill="none">
+        {InputLongTextIcon.map(([tag, rawAttrs], index) => {
+          const attrs = normalizeHugeIconAttrs(rawAttrs as Record<string, string | number>, color);
+          if (tag === "path") return <Path key={index} {...attrs} />;
+          if (tag === "circle") return <Circle key={index} {...attrs} />;
+          if (tag === "rect") return <Rect key={index} {...attrs} />;
+          if (tag === "line") return <Line key={index} {...attrs} />;
+          if (tag === "g") return <G key={index} {...attrs} />;
+          return null;
+        })}
+      </Svg>
+    </View>
+  );
+}
+
 export default function OcrTab() {
   const scanner = useScanner();
   const insets = useSafeAreaInsets();
@@ -49,11 +79,13 @@ export default function OcrTab() {
   const [viewfinderFocused, setViewfinderFocused] = useState(false);
   const [capturedViewportSize, setCapturedViewportSize] = useState<{ width: number; height: number } | null>(null);
   const [showTextPrompt, setShowTextPrompt] = useState(false);
+  const [cursorToastMessage, setCursorToastMessage] = useState<string | null>(null);
   const pairScannerLockedRef = useRef(false);
   const focusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const capturedScrollRef = useRef<ScrollView | null>(null);
   const pinchStartDistanceRef = useRef<number | null>(null);
   const pinchStartZoomRef = useRef(0);
+  const cursorToastOpacity = useRef(new Animated.Value(0)).current;
 
   useFocusEffect(
     useCallback(() => {
@@ -103,6 +135,31 @@ export default function OcrTab() {
   }, []);
 
   const floatingBottom = Math.max(baseFloatingBottom, insets.bottom + 74);
+
+  const showCursorInsertToast = useCallback((enabled: boolean) => {
+    setCursorToastMessage(
+      enabled
+        ? "Copied text will be pasted into browser's current position"
+        : "Copied text will NOT be pasted into browser's current position"
+    );
+    cursorToastOpacity.stopAnimation();
+    cursorToastOpacity.setValue(0);
+    Animated.sequence([
+      Animated.timing(cursorToastOpacity, {
+        duration: 160,
+        toValue: 1,
+        useNativeDriver: true,
+      }),
+      Animated.delay(1500),
+      Animated.timing(cursorToastOpacity, {
+        duration: 220,
+        toValue: 0,
+        useNativeDriver: true,
+      }),
+    ]).start(({ finished }) => {
+      if (finished) setCursorToastMessage(null);
+    });
+  }, [cursorToastOpacity]);
 
   useEffect(() => {
     if (!scanner.textCapture) {
@@ -291,29 +348,35 @@ export default function OcrTab() {
                   />
                 ) : null}
                 <PhotoNegativeOverlay>
-                  <ViewfinderTopRightControls>
-                    <CameraOverlayButton
-                      active={scanner.torch}
-                      accessibilityLabel={scanner.torch ? "Turn flash off" : "Turn flash on"}
-                      onPress={() => scanner.setTorch((value) => !value)}
-                    >
-                      <Ionicons
-                        name={scanner.torch ? "flash" : "flash-outline"}
-                        size={22}
-                        color={scanner.torch ? "#facc15" : "#fafaf9"}
-                      />
-                    </CameraOverlayButton>
-                    <CursorInsertButton
-                      active={scanner.settings.ocrInsertIntoCursor}
-                      accessibilityLabel={
-                        scanner.settings.ocrInsertIntoCursor
-                          ? "Send OCR text to cursor"
-                          : "Send OCR text to results"
-                      }
-                      onValueChange={(value) => scanner.setSetting("ocrInsertIntoCursor", value)}
-                    />
-                  </ViewfinderTopRightControls>
+                  <ViewfinderMessageToast message={cursorToastMessage} opacity={cursorToastOpacity} />
                   <CameraControlStack
+                    leftControls={
+                        <CameraOverlayButton
+                          active={scanner.torch}
+                          accessibilityLabel={scanner.torch ? "Turn flash off" : "Turn flash on"}
+                          onPress={() => scanner.setTorch((value) => !value)}
+                        >
+                          <Ionicons
+                            name={scanner.torch ? "flash" : "flash-outline"}
+                            size={22}
+                            color={scanner.torch ? "#facc15" : "#fafaf9"}
+                          />
+                        </CameraOverlayButton>
+                    }
+                    rightControls={
+                        <CursorInsertButton
+                          active={scanner.settings.ocrInsertIntoCursor}
+                          accessibilityLabel={
+                            scanner.settings.ocrInsertIntoCursor
+                              ? "Send OCR text to cursor"
+                              : "Send OCR text to results"
+                          }
+                          onValueChange={(value) => {
+                            scanner.setSetting("ocrInsertIntoCursor", value);
+                            showCursorInsertToast(value);
+                          }}
+                        />
+                    }
                     bottom={floatingBottom}
                     label={`${(1 + scanner.cameraZoom * 4).toFixed(1)}x`}
                     onZoomIn={() => scanner.setCameraZoom((value) => clampZoom(value + zoomStep))}
@@ -403,7 +466,7 @@ export function CursorInsertButton({
 }) {
   return (
     <View accessibilityLabel={accessibilityLabel} style={[styles.cursorTogglePill, active && styles.cursorTogglePillActive]}>
-      <Ionicons name={active ? "text" : "text-outline"} size={21} color={active ? "#86efac" : "#fafaf9"} />
+      <InputLongTextHugeIcon color={active ? "#86efac" : "#fafaf9"} />
       <View style={styles.cursorNativeToggle}>
         {Platform.OS === "ios" ? (
           <Host matchContents>
@@ -422,43 +485,86 @@ export function CursorInsertButton({
   );
 }
 
+export function ViewfinderMessageToast({
+  message,
+  opacity,
+}: {
+  message: string | null;
+  opacity: Animated.Value;
+}) {
+  if (!message) return null;
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[
+        styles.viewfinderMessageToast,
+        {
+          opacity,
+          transform: [
+            {
+              translateY: opacity.interpolate({
+                inputRange: [0, 1],
+                outputRange: [-8, 0],
+              }),
+            },
+          ],
+        },
+      ]}
+    >
+      <View style={styles.viewfinderMessagePill}>
+        <Ionicons name="information-circle" size={17} color="#16a34a" />
+        <Text numberOfLines={2} style={styles.viewfinderMessageText}>{message}</Text>
+      </View>
+    </Animated.View>
+  );
+}
+
 export function CameraControlStack({
   bottom,
   label,
+  leftControls,
   onZoomIn,
   onZoomOut,
+  rightControls,
   shutter,
 }: {
   bottom: number;
   label: string;
+  leftControls?: ReactNode;
   onZoomIn: () => void;
   onZoomOut: () => void;
+  rightControls?: ReactNode;
   shutter: ReactNode;
 }) {
   return (
     <View style={[styles.cameraControlStack, { bottom }]} pointerEvents="box-none">
-      <View style={styles.zoomPill} pointerEvents="auto">
-        <Pressable
-          accessibilityLabel="Zoom camera out"
-          accessibilityRole="button"
-          hitSlop={6}
-          style={styles.zoomPillButton}
-          onPress={onZoomOut}
-        >
-          <Ionicons name="remove" size={20} color="#fafaf9" />
-        </Pressable>
-        <Text style={styles.zoomPillText}>{label}</Text>
-        <Pressable
-          accessibilityLabel="Zoom camera in"
-          accessibilityRole="button"
-          hitSlop={6}
-          style={styles.zoomPillButton}
-          onPress={onZoomIn}
-        >
-          <Ionicons name="add" size={20} color="#fafaf9" />
-        </Pressable>
-      </View>
       {shutter}
+      <View style={styles.cameraControlRow} pointerEvents="auto">
+        <View style={styles.cameraControlSide}>{leftControls}</View>
+        <View style={styles.zoomPill}>
+          <Pressable
+            accessibilityLabel="Zoom camera out"
+            accessibilityRole="button"
+            hitSlop={6}
+            style={styles.zoomPillButton}
+            onPress={onZoomOut}
+          >
+            <Ionicons name="remove" size={20} color="#fafaf9" />
+          </Pressable>
+          <Text style={styles.zoomPillText}>{label}</Text>
+          <Pressable
+            accessibilityLabel="Zoom camera in"
+            accessibilityRole="button"
+            hitSlop={6}
+            style={styles.zoomPillButton}
+            onPress={onZoomIn}
+          >
+            <Ionicons name="add" size={20} color="#fafaf9" />
+          </Pressable>
+        </View>
+        <View style={styles.cameraControlSide}>{rightControls}</View>
+      </View>
     </View>
   );
 }
@@ -812,7 +918,7 @@ export function OcrBottomControls({
           pointerEvents="none"
           style={[
             styles.bottomControls,
-            styles.copiedToastPosition,
+            styles.copiedToastTopPosition,
             {
               opacity: copiedToastOpacity,
               transform: [
@@ -954,12 +1060,12 @@ export const styles = StyleSheet.create({
     minHeight: 44,
     borderRadius: 22,
     ...continuousCorners,
-    paddingLeft: 12,
+    paddingLeft: 10,
     paddingRight: 8,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 8,
+    gap: 10,
     backgroundColor: "rgba(28, 25, 23, 0.55)",
     borderWidth: 1,
     borderColor: "rgba(250, 250, 249, 0.14)",
@@ -968,9 +1074,49 @@ export const styles = StyleSheet.create({
     backgroundColor: "rgba(28, 25, 23, 0.82)",
     borderColor: "rgba(250, 250, 249, 0.32)",
   },
+  cursorToggleIconSlot: {
+    width: 26,
+    height: 26,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   cursorNativeToggle: {
     minWidth: 48,
     alignItems: "flex-end",
+  },
+  viewfinderMessageToast: {
+    position: "absolute",
+    top: 16,
+    left: 18,
+    right: 18,
+    zIndex: 25,
+    alignItems: "center",
+  },
+  viewfinderMessagePill: {
+    maxWidth: "100%",
+    minHeight: 42,
+    paddingHorizontal: 13,
+    paddingVertical: 9,
+    borderRadius: 999,
+    ...continuousCorners,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#f0fdf4",
+    borderWidth: 1,
+    borderColor: "#bbf7d0",
+    shadowColor: "#1c1917",
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 5,
+  },
+  viewfinderMessageText: {
+    flexShrink: 1,
+    color: "#14532d",
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: "700",
   },
   viewfinderZoomBar: {
     position: "absolute",
@@ -984,7 +1130,18 @@ export const styles = StyleSheet.create({
     right: 18,
     bottom: 0,
     alignItems: "center",
-    gap: 12,
+    gap: 28,
+  },
+  cameraControlRow: {
+    minHeight: 48,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+  },
+  cameraControlSide: {
+    minWidth: 54,
+    alignItems: "center",
   },
   zoomPill: {
     minHeight: 44,
@@ -1407,7 +1564,7 @@ export const styles = StyleSheet.create({
   },
   photoControls: {
     alignItems: "center",
-    gap: 8,
+    gap: 22,
   },
   photoControlsFloating: {
     position: "absolute",
@@ -1493,8 +1650,8 @@ export const styles = StyleSheet.create({
     gap: 10,
     backgroundColor: "transparent",
   },
-  copiedToastPosition: {
-    bottom: "28%",
+  copiedToastTopPosition: {
+    top: 16,
   },
   copiedPanel: {
     padding: 12,

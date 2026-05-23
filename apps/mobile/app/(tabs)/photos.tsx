@@ -223,32 +223,33 @@ export default function PhotosTab() {
                 <Text numberOfLines={1} style={localStyles.photoSentToastText}>Photo sent to browser</Text>
               </View>
             ) : null}
-            <View style={localStyles.photoTopRightControls}>
-              <CameraOverlayButton
-                active={scanner.torch}
-                accessibilityLabel={scanner.torch ? "Turn flash off" : "Turn flash on"}
-                onPress={() => scanner.setTorch((value) => !value)}
-              >
-                <Ionicons
-                  name={scanner.torch ? "flash" : "flash-outline"}
-                  size={22}
-                  color={scanner.torch ? "#facc15" : "#fafaf9"}
-                />
-              </CameraOverlayButton>
-              <CameraOverlayButton
-                active={gridVisible}
-                accessibilityLabel={gridVisible ? "Hide photo grid" : "Show photo grid"}
-                onPress={() => setGridVisible((value) => !value)}
-              >
-                <Ionicons
-                  name={gridVisible ? "grid" : "grid-outline"}
-                  size={20}
-                  color={gridVisible ? "#86efac" : "#fafaf9"}
-                />
-              </CameraOverlayButton>
-            </View>
-
             <CameraControlStack
+              leftControls={
+                  <CameraOverlayButton
+                    active={scanner.torch}
+                    accessibilityLabel={scanner.torch ? "Turn flash off" : "Turn flash on"}
+                    onPress={() => scanner.setTorch((value) => !value)}
+                  >
+                    <Ionicons
+                      name={scanner.torch ? "flash" : "flash-outline"}
+                      size={22}
+                      color={scanner.torch ? "#facc15" : "#fafaf9"}
+                    />
+                  </CameraOverlayButton>
+              }
+              rightControls={
+                  <CameraOverlayButton
+                    active={gridVisible}
+                    accessibilityLabel={gridVisible ? "Hide photo grid" : "Show photo grid"}
+                    onPress={() => setGridVisible((value) => !value)}
+                  >
+                    <Ionicons
+                      name={gridVisible ? "grid" : "grid-outline"}
+                      size={20}
+                      color={gridVisible ? "#86efac" : "#fafaf9"}
+                    />
+                  </CameraOverlayButton>
+              }
               bottom={floatingBottom}
               label={`${(1 + scanner.cameraZoom * 4).toFixed(1)}x`}
               onZoomIn={() => scanner.setCameraZoom((value) => clampZoom(value + zoomStep))}
@@ -347,13 +348,6 @@ const localStyles = {
     right: 0,
     bottom: 0,
     left: 0,
-  },
-  photoTopRightControls: {
-    position: "absolute" as const,
-    top: 30,
-    right: 30,
-    flexDirection: "column" as const,
-    gap: 10,
   },
   photoSentToast: {
     position: "absolute" as const,
