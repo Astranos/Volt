@@ -6,6 +6,7 @@ import {
   LucideIcon,
   HelpCircle,
   Images,
+  Printer,
   Smartphone,
 } from "lucide-react";
 
@@ -16,7 +17,8 @@ export type SidepanelToolId =
   | "buying-guide"
   | "shopify-help"
   | "mobile-scanner"
-  | "mobile-photos";
+  | "mobile-photos"
+  | "print-relay";
 
 export interface SidepanelToolMetadata {
   id: SidepanelToolId;
@@ -68,6 +70,12 @@ export const SIDEPANEL_TOOLS: SidepanelToolMetadata[] = [
     label: "Mobile Photos",
     description: "Transfer phone photos over the paired session",
     icon: Images,
+  },
+  {
+    id: "print-relay",
+    label: "Print Relay",
+    description: "Route label print jobs through another browser on the network",
+    icon: Printer,
   },
 ];
 

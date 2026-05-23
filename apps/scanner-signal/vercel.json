@@ -3,6 +3,10 @@
     {
       "source": "/api/signal/:path*",
       "destination": "/api/signal?path=:path*"
+    },
+    {
+      "source": "/api/print-relay/:path*",
+      "destination": "/api/print-relay?path=:path*"
     }
   ]
 }
