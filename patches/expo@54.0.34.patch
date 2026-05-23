@@ -1,0 +1,26 @@
+diff --git a/src/async-require/messageSocket.native.ts b/src/async-require/messageSocket.native.ts
+index 55b3c43763b3decc67987075d5131237a43309b7..2fc4e2f9b040ef37cb617d942eb860961a1f2432 100644
+--- a/src/async-require/messageSocket.native.ts
++++ b/src/async-require/messageSocket.native.ts
+@@ -6,10 +6,10 @@ declare namespace globalThis {
+ }
+ 
+ if (__DEV__) {
+-  const socket: WebSocket = (() => {
++  const socket: WebSocket | null = (() => {
+     const devServer = getDevServer();
+     if (!devServer.bundleLoadedFromServer) {
+-      throw new Error('Cannot create devtools websocket connections in embedded environments.');
++      return null;
+     }
+ 
+     const devServerUrl = new URL(devServer.url);
+@@ -17,7 +17,7 @@ if (__DEV__) {
+     return new WebSocket(`${serverScheme}://${devServerUrl.host}/message`);
+   })();
+ 
+-  socket.onmessage = (message: { data: any }) => {
++  if (socket) socket.onmessage = (message: { data: any }) => {
+     const data = JSON.parse(String(message.data));
+     switch (data.method) {
+       case 'sendDevCommand':

@@ -87,7 +87,9 @@ export default defineBackground({
     const OFFSCREEN_DOCUMENT_PATH = "offscreen.html";
     const STORAGE_STATS_KEY = "grokStorageStats";
     const MOBILE_SCANNER_STORAGE_KEY = "volt.mobileScanner.scans";
+    const MOBILE_PHOTOS_STORAGE_KEY = "volt.mobilePhotos.photos";
     const MOBILE_SCANNER_MAX_SCANS = 100;
+    const MOBILE_PHOTOS_MAX_PHOTOS = 80;
     const DEFAULT_STORAGE_STATS = {
       indexedPages: 0,
       totalDocuments: 0,
@@ -138,6 +140,42 @@ export default defineBackground({
         scannedAt:
           typeof message.scannedAt === "string"
             ? message.scannedAt
+            : new Date().toISOString(),
+      };
+    }
+
+    function normalizeMobilePhoto(photo) {
+      if (
+        !photo ||
+        typeof photo !== "object" ||
+        typeof photo.dataUrl !== "string" ||
+        !photo.dataUrl.startsWith("data:image/") ||
+        typeof photo.mimeType !== "string"
+      ) {
+        return null;
+      }
+
+      const id =
+        typeof photo.id === "string" && photo.id
+          ? photo.id
+          : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const extension = photo.mimeType.includes("png") ? "png" : "jpg";
+
+      return {
+        id,
+        kind: "photo",
+        name:
+          typeof photo.name === "string" && photo.name
+            ? clampString(photo.name, 120)
+            : `volt-photo-${id}.${extension}`,
+        mimeType: clampString(photo.mimeType, 64),
+        dataUrl: photo.dataUrl,
+        size: Math.max(0, toFiniteNumber(photo.size, 0)),
+        width: photo.width ? Math.max(0, Math.floor(toFiniteNumber(photo.width, 0))) : undefined,
+        height: photo.height ? Math.max(0, Math.floor(toFiniteNumber(photo.height, 0))) : undefined,
+        capturedAt:
+          typeof photo.capturedAt === "string"
+            ? photo.capturedAt
             : new Date().toISOString(),
       };
     }
@@ -244,6 +282,22 @@ export default defineBackground({
       );
     }
 
+    function persistMobilePhoto(photo) {
+      chrome.storage.local.get(
+        { [MOBILE_PHOTOS_STORAGE_KEY]: [] },
+        (stored) => {
+          const current = Array.isArray(stored[MOBILE_PHOTOS_STORAGE_KEY])
+            ? stored[MOBILE_PHOTOS_STORAGE_KEY]
+            : [];
+          const next = [photo, ...current.filter((item) => item?.id !== photo.id)].slice(
+            0,
+            MOBILE_PHOTOS_MAX_PHOTOS
+          );
+          chrome.storage.local.set({ [MOBILE_PHOTOS_STORAGE_KEY]: next });
+        }
+      );
+    }
+
     function broadcastScannerMessage(message) {
       try {
         chrome.runtime.sendMessage(message, () => {
@@ -338,6 +392,14 @@ export default defineBackground({
       if (shouldInsertScannerMessage(scan)) {
         void insertScannerText(scan.barcode);
       }
+    }
+
+    function handleScannerPhoto(message) {
+      const photo = normalizeMobilePhoto(message?.photo);
+      if (!photo) return;
+
+      persistMobilePhoto(photo);
+      broadcastScannerMessage({ action: "scannerPhoto", photo });
     }
 
     log("Service worker booted", { time: new Date().toISOString() });
@@ -876,6 +938,10 @@ export default defineBackground({
           break;
         case "scannerOffscreenScan":
           handleScannerScan(message);
+          sendResponse({ success: true });
+          break;
+        case "scannerOffscreenPhoto":
+          handleScannerPhoto(message);
           sendResponse({ success: true });
           break;
         case "csReady":

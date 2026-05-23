@@ -14,6 +14,7 @@ import { Alert, AppState } from "react-native";
 import {
   decodePairingPayload,
   encodeBarcodeMessage,
+  encodeScannerTransportMessage,
   encodePairingPayload,
   SCANNER_ICE_SERVERS,
   SCANNER_SCAN_COOLDOWN_MS,
@@ -30,6 +31,7 @@ const SETTINGS_STORAGE_KEY = "volt.mobileScanner.settings.v1";
 const PAIRING_SESSION_STORAGE_KEY = "volt.mobileScanner.pairingSession.v1";
 const MULTI_SCAN_WINDOW_MS = 650;
 const CLIPBOARD_POLL_MS = 900;
+const PHOTO_CHUNK_SIZE = 12000;
 
 export type ScannerSettings = {
   autoSendSingleBarcode: boolean;
@@ -92,8 +94,11 @@ type ScannerState = {
   requestPermission: ReturnType<typeof useCameraPermissions>[1];
   scans: ScanItem[];
   sendBarcodeScanResult: (result: BarcodeScanningResult) => Promise<void>;
+  sendPhotoCapture: () => Promise<void>;
   sendManualText: () => void;
   setManualText: (value: string) => void;
+  photoError: string | null;
+  photoSending: boolean;
   setSetting: <Key extends keyof ScannerSettings>(key: Key, value: ScannerSettings[Key]) => void;
   startDictation: () => Promise<void>;
   settings: ScannerSettings;
@@ -148,6 +153,8 @@ export function ScannerProvider({ children }: PropsWithChildren) {
   const [dictating, setDictating] = useState(false);
   const [dictationTranscript, setDictationTranscript] = useState("");
   const [dictationError, setDictationError] = useState<string | null>(null);
+  const [photoSending, setPhotoSending] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
   const [settings, setSettings] = useState<ScannerSettings>(defaultSettings);
 
   const peerRef = useRef<any>(null);
@@ -395,6 +402,72 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     }
   }, []);
+
+  const sendPhotoCapture = useCallback(async () => {
+    if (!cameraRef.current || photoSending) return;
+
+    const channel = channelRef.current;
+    if (channel?.readyState !== "open") {
+      setPhotoError("Pair with Chrome before taking photos.");
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      return;
+    }
+
+    setPhotoSending(true);
+    setPhotoError(null);
+
+    try {
+      const photo = await cameraRef.current.takePictureAsync({
+        base64: true,
+        quality: 0.72,
+        skipProcessing: false,
+      });
+
+      if (!photo.base64) {
+        throw new Error("Camera did not return photo data.");
+      }
+
+      const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const mimeType = "image/jpeg";
+      const name = `volt-photo-${new Date().toISOString().replace(/[:.]/g, "-")}.jpg`;
+      const chunks = photo.base64.match(new RegExp(`.{1,${PHOTO_CHUNK_SIZE}}`, "g")) ?? [];
+
+      channel.send(
+        encodeScannerTransportMessage({
+          kind: "photo-chunk-start",
+          id,
+          name,
+          mimeType,
+          size: Math.ceil((photo.base64.length * 3) / 4),
+          width: typeof photo.width === "number" ? photo.width : undefined,
+          height: typeof photo.height === "number" ? photo.height : undefined,
+          capturedAt: new Date().toISOString(),
+          totalChunks: chunks.length,
+        })
+      );
+
+      for (let index = 0; index < chunks.length; index += 1) {
+        channel.send(
+          encodeScannerTransportMessage({
+            kind: "photo-chunk",
+            id,
+            index,
+            data: chunks[index],
+          })
+        );
+        await wait(8);
+      }
+
+      channel.send(encodeScannerTransportMessage({ kind: "photo-chunk-end", id }));
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not send the photo.";
+      setPhotoError(message);
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    } finally {
+      setPhotoSending(false);
+    }
+  }, [photoSending]);
 
   const flushScannerItems = useCallback(() => {
     scannerFlushTimerRef.current = null;
@@ -644,10 +717,13 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       onBarcodeScanned,
       pairFromUrl,
       permission,
+      photoError,
+      photoSending,
       recognizingText,
       requestPermission,
       scans,
       sendBarcodeScanResult,
+      sendPhotoCapture,
       sendManualText,
       setManualText,
       setSetting,
@@ -676,6 +752,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       requestPermission,
       scans,
       sendBarcodeScanResult,
+      sendPhotoCapture,
       sendManualText,
       setSetting,
       startDictation,

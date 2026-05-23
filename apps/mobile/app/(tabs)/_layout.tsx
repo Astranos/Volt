@@ -22,6 +22,10 @@ export default function TabsLayout() {
         <Icon sf={{ default: "barcode.viewfinder", selected: "barcode.viewfinder" }} />
         <Label>Scanner</Label>
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="photos" disableScrollToTop>
+        <Icon sf={{ default: "photo.on.rectangle", selected: "photo.fill.on.rectangle.fill" }} />
+        <Label>Photos</Label>
+      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="dictation" disableScrollToTop>
         <Icon sf={{ default: "mic", selected: "mic.fill" }} />
         <Label>Dictation</Label>

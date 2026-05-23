@@ -5,6 +5,7 @@ import EbayTaxonomyTool from "./EbayTaxonomyTool";
 import BuyingGuide from "./BuyingGuide";
 import ShopifyHelp from "./ShopifyHelp";
 import MobileScanner from "./MobileScanner";
+import MobilePhotos from "./MobilePhotos";
 import { ChevronDown } from "lucide-react";
 import {
   DropdownMenu,
@@ -119,6 +120,7 @@ export default function UnifiedSidepanel() {
     "buying-guide": BuyingGuide,
     "shopify-help": ShopifyHelp,
     "mobile-scanner": MobileScanner,
+    "mobile-photos": MobilePhotos,
   };
 
   const tools = SIDEPANEL_TOOLS.map((tool) => ({

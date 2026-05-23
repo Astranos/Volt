@@ -21,10 +21,123 @@ type BarcodeMessage = {
   scannedAt?: string;
 };
 
-function decodeBarcodeMessage(data: string): BarcodeMessage | null {
+type PhotoMessage = {
+  kind: "photo";
+  id: string;
+  name: string;
+  mimeType: string;
+  dataUrl: string;
+  size: number;
+  width?: number;
+  height?: number;
+  capturedAt?: string;
+};
+
+type PhotoChunkStartMessage = Omit<PhotoMessage, "kind" | "dataUrl"> & {
+  kind: "photo-chunk-start";
+  totalChunks: number;
+};
+
+type PhotoChunkMessage = {
+  kind: "photo-chunk";
+  id: string;
+  index: number;
+  data: string;
+};
+
+type PhotoChunkEndMessage = {
+  kind: "photo-chunk-end";
+  id: string;
+};
+
+type ScannerTransportMessage =
+  | BarcodeMessage
+  | PhotoMessage
+  | PhotoChunkStartMessage
+  | PhotoChunkMessage
+  | PhotoChunkEndMessage;
+
+type PendingPhoto = PhotoChunkStartMessage & {
+  chunks: string[];
+  receivedChunks: number;
+  updatedAt: number;
+};
+
+function decodeScannerTransportMessage(data: string): ScannerTransportMessage | null {
   try {
     const parsed = JSON.parse(data);
-    if (!parsed || typeof parsed.barcode !== "string" || !parsed.barcode) {
+    if (!parsed || typeof parsed !== "object") return null;
+
+    if (parsed.kind === "photo") {
+      if (
+        typeof parsed.id !== "string" ||
+        typeof parsed.name !== "string" ||
+        typeof parsed.mimeType !== "string" ||
+        typeof parsed.dataUrl !== "string" ||
+        typeof parsed.size !== "number"
+      ) {
+        return null;
+      }
+
+      return {
+        kind: "photo",
+        id: parsed.id,
+        name: parsed.name,
+        mimeType: parsed.mimeType,
+        dataUrl: parsed.dataUrl,
+        size: parsed.size,
+        width: typeof parsed.width === "number" ? parsed.width : undefined,
+        height: typeof parsed.height === "number" ? parsed.height : undefined,
+        capturedAt: typeof parsed.capturedAt === "string" ? parsed.capturedAt : undefined,
+      };
+    }
+
+    if (parsed.kind === "photo-chunk-start") {
+      if (
+        typeof parsed.id !== "string" ||
+        typeof parsed.name !== "string" ||
+        typeof parsed.mimeType !== "string" ||
+        typeof parsed.size !== "number" ||
+        typeof parsed.totalChunks !== "number"
+      ) {
+        return null;
+      }
+
+      return {
+        kind: "photo-chunk-start",
+        id: parsed.id,
+        name: parsed.name,
+        mimeType: parsed.mimeType,
+        size: parsed.size,
+        width: typeof parsed.width === "number" ? parsed.width : undefined,
+        height: typeof parsed.height === "number" ? parsed.height : undefined,
+        capturedAt: typeof parsed.capturedAt === "string" ? parsed.capturedAt : undefined,
+        totalChunks: parsed.totalChunks,
+      };
+    }
+
+    if (parsed.kind === "photo-chunk") {
+      if (
+        typeof parsed.id !== "string" ||
+        typeof parsed.index !== "number" ||
+        typeof parsed.data !== "string"
+      ) {
+        return null;
+      }
+
+      return {
+        kind: "photo-chunk",
+        id: parsed.id,
+        index: parsed.index,
+        data: parsed.data,
+      };
+    }
+
+    if (parsed.kind === "photo-chunk-end") {
+      return typeof parsed.id === "string" ? { kind: "photo-chunk-end", id: parsed.id } : null;
+    }
+
+    if (typeof parsed.barcode !== "string" || !parsed.barcode) {
       return null;
     }
 
@@ -47,6 +160,7 @@ class MobileScannerOffscreenSession {
   private sessionId: string | null = null;
   private intentionallyClosing = false;
   private recentMessages = new Map<string, number>();
+  private pendingPhotos = new Map<string, PendingPhoto>();
   private state: ScannerState = {
     status: "disconnected",
     qrCodeUrl: null,
@@ -93,18 +207,7 @@ class MobileScannerOffscreenSession {
       dataChannel.onerror = () => {
         this.setState({ status: "error", error: "Connection error" });
       };
-      dataChannel.onmessage = (event) => {
-        const data = decodeBarcodeMessage(String(event.data));
-        if (!data || this.isDuplicateMessage(data)) return;
-        void chrome.runtime.sendMessage({
-          action: "scannerOffscreenScan",
-          scan: {
-            ...data,
-            id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-            scannedAt: data.scannedAt || new Date().toISOString(),
-          },
-        });
-      };
+      dataChannel.onmessage = (event) => this.handleDataChannelMessage(String(event.data));
 
       pc.onconnectionstatechange = () => {
         if (
@@ -177,6 +280,76 @@ class MobileScannerOffscreenSession {
       this.cleanup(true);
       void this.start(true);
     }, 500);
+  }
+
+  private handleDataChannelMessage(rawData: string) {
+    const data = decodeScannerTransportMessage(rawData);
+    if (!data) return;
+
+    if (data.kind === "photo") {
+      this.sendPhoto(data);
+      return;
+    }
+
+    if (data.kind === "photo-chunk-start") {
+      this.cleanupStalePhotos();
+      this.pendingPhotos.set(data.id, {
+        ...data,
+        chunks: Array.from({ length: data.totalChunks }),
+        receivedChunks: 0,
+        updatedAt: Date.now(),
+      });
+      return;
+    }
+
+    if (data.kind === "photo-chunk") {
+      const pending = this.pendingPhotos.get(data.id);
+      if (!pending || data.index < 0 || data.index >= pending.totalChunks) return;
+      if (!pending.chunks[data.index]) pending.receivedChunks += 1;
+      pending.chunks[data.index] = data.data;
+      pending.updatedAt = Date.now();
+      return;
+    }
+
+    if (data.kind === "photo-chunk-end") {
+      const pending = this.pendingPhotos.get(data.id);
+      if (!pending || pending.receivedChunks !== pending.totalChunks) return;
+      this.pendingPhotos.delete(data.id);
+      const { chunks, receivedChunks, totalChunks, updatedAt, kind, ...photo } = pending;
+      this.sendPhoto({
+        ...photo,
+        kind: "photo",
+        dataUrl: `data:${pending.mimeType};base64,${chunks.join("")}`,
+      });
+      return;
+    }
+
+    if (this.isDuplicateMessage(data)) return;
+    void chrome.runtime.sendMessage({
+      action: "scannerOffscreenScan",
+      scan: {
+        ...data,
+        id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        scannedAt: data.scannedAt || new Date().toISOString(),
+      },
+    });
+  }
+
+  private sendPhoto(photo: PhotoMessage) {
+    void chrome.runtime.sendMessage({
+      action: "scannerOffscreenPhoto",
+      photo: {
+        ...photo,
+        capturedAt: photo.capturedAt || new Date().toISOString(),
+      },
+    });
+  }
+
+  private cleanupStalePhotos() {
+    const staleBefore = Date.now() - 2 * 60 * 1000;
+    for (const [id, pending] of this.pendingPhotos) {
+      if (pending.updatedAt < staleBefore) this.pendingPhotos.delete(id);
+    }
   }
 
   private isDuplicateMessage(message: BarcodeMessage) {

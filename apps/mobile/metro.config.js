@@ -13,6 +13,10 @@ config.resolver.nodeModulesPaths = [
 ];
 config.resolver.extraNodeModules = {
   ...config.resolver.extraNodeModules,
+  expo: path.resolve(projectRoot, "node_modules/expo"),
+  "expo-router": path.resolve(projectRoot, "node_modules/expo-router"),
+  react: path.resolve(projectRoot, "node_modules/react"),
+  "react-native": path.resolve(projectRoot, "node_modules/react-native"),
   "react-native-webrtc": path.resolve(projectRoot, "node_modules/react-native-webrtc"),
 };
 
