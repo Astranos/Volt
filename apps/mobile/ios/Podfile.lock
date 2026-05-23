@@ -94,7 +94,7 @@ PODS:
   - ExpoRouter (56.2.5):
     - ExpoModulesCore
     - RNScreens
-  - ExpoSpeechRecognition (3.1.3):
+  - ExpoSpeechRecognition (56.0.0):
     - ExpoModulesCore
   - ExpoSymbols (56.0.5):
     - ExpoModulesCore
@@ -2352,7 +2352,7 @@ DEPENDENCIES:
   - "ExpoModulesWorklets (from `../../../node_modules/.pnpm/expo-modules-core@56.0.12_react-native-worklets@0.8.3_@babel+core@7.28.6_@react-native+_e5f0ce7f9a20a49e19b870a7bb70e034/node_modules/expo-modules-core`)"
   - "ExpoModulesWorkletsAdapter (from `../../../node_modules/.pnpm/expo-modules-core@56.0.12_react-native-worklets@0.8.3_@babel+core@7.28.6_@react-native+_e5f0ce7f9a20a49e19b870a7bb70e034/node_modules/expo-modules-core`)"
   - "ExpoRouter (from `../../../node_modules/.pnpm/expo-router@56.2.5_1708a8ae5d2e1e87fd1359bb4ae4bfbe/node_modules/expo-router/ios`)"
-  - "ExpoSpeechRecognition (from `../../../node_modules/.pnpm/expo-speech-recognition@3.1.3_expo@56.0.3_react-native@0.85.3_@babel+core@7.28.6_@react_fa33ca63fabcb7dc24517d911f09ede2/node_modules/expo-speech-recognition/ios`)"
+  - "ExpoSpeechRecognition (from `../../../node_modules/.pnpm/expo-speech-recognition@56.0.0_expo@56.0.3_react-native@0.85.3_@babel+core@7.28.6_@reac_b39991ccb57d7536c912b8c30d083602/node_modules/expo-speech-recognition/ios`)"
   - "ExpoSymbols (from `../../../node_modules/.pnpm/expo-symbols@56.0.5_expo-font@56.0.5_expo@56.0.3_react-native@0.85.3_@babel+core@7.28.6_399636be51951221ad6472de65b79696/node_modules/expo-symbols/ios`)"
   - "ExpoUI (from `../../../node_modules/.pnpm/@expo+ui@56.0.12_@babel+core@7.28.6_@types+react-dom@19.2.3_@types+react@19.2.15__@type_a29dca64d918514f8a69cc32cc45a7c4/node_modules/@expo/ui/ios`)"
   - "FBLazyVector (from `../../../node_modules/.pnpm/react-native@0.85.3_@babel+core@7.28.6_@react-native+metro-config@0.85.3_@babel+core@7._2c2bbf7cd58d990000558d1ae27881c5/node_modules/react-native/Libraries/FBLazyVector`)"
@@ -2507,7 +2507,7 @@ EXTERNAL SOURCES:
   ExpoRouter:
     :path: "../../../node_modules/.pnpm/expo-router@56.2.5_1708a8ae5d2e1e87fd1359bb4ae4bfbe/node_modules/expo-router/ios"
   ExpoSpeechRecognition:
-    :path: "../../../node_modules/.pnpm/expo-speech-recognition@3.1.3_expo@56.0.3_react-native@0.85.3_@babel+core@7.28.6_@react_fa33ca63fabcb7dc24517d911f09ede2/node_modules/expo-speech-recognition/ios"
+    :path: "../../../node_modules/.pnpm/expo-speech-recognition@56.0.0_expo@56.0.3_react-native@0.85.3_@babel+core@7.28.6_@reac_b39991ccb57d7536c912b8c30d083602/node_modules/expo-speech-recognition/ios"
   ExpoSymbols:
     :path: "../../../node_modules/.pnpm/expo-symbols@56.0.5_expo-font@56.0.5_expo@56.0.3_react-native@0.85.3_@babel+core@7.28.6_399636be51951221ad6472de65b79696/node_modules/expo-symbols/ios"
   ExpoUI:
@@ -2703,7 +2703,7 @@ SPEC CHECKSUMS:
   ExpoModulesWorklets: 5349d7281651a11e0a5d14f32db8bb47e32c2ff4
   ExpoModulesWorkletsAdapter: 83e68a279a6e66e8fedd7a7a65ae89eb9c53589d
   ExpoRouter: 163be4e8bc2898aabef81592717e212026718337
-  ExpoSpeechRecognition: 95a6287f24fb8764ded6e9d0dd667a1e9e633dab
+  ExpoSpeechRecognition: 255445556dbf20df46cc7585d0f5827e4825df8a
   ExpoSymbols: f83c91f2897d37102b98b9224c603095630be9d0
   ExpoUI: 556eeaf2686e78f690c8a6779e85412171f3bb76
   FBLazyVector: 24e62c765683b8d89006a88a2c8f5cf019f0074d
@@ -2812,6 +2812,6 @@ SPEC CHECKSUMS:
   Yoga: 77dfa8673de2874e1855002ae59c68b8be9b007b
   ZXingObjC: 8898711ab495761b2dbbdec76d90164a6d7e14c5
 
-PODFILE CHECKSUM: 6bc94de48af3100bb1409f4e7c8a2424649ef173
+PODFILE CHECKSUM: e2e27ec50f20a770be12f49a2a3494256d4929d0
 
 COCOAPODS: 1.16.2

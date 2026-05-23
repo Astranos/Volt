@@ -53,11 +53,25 @@ target 'Volt' do
   )
 
   post_install do |installer|
+    installer.pods_project.targets.each do |target|
+      target.build_configurations.each do |config|
+        config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '16.4'
+      end
+    end
+
     react_native_post_install(
       installer,
       config[:reactNativePath],
       :mac_catalyst_enabled => false,
       :ccache_enabled => ccache_enabled?(podfile_properties),
     )
+  end
+
+  post_integrate do |installer|
+    modules_provider = File.join(__dir__, 'Pods', 'Target Support Files', 'Pods-Volt', 'ExpoModulesProvider.swift')
+    if File.exist?(modules_provider)
+      contents = File.read(modules_provider)
+      File.write(modules_provider, contents.gsub(/^internal import Expo$/, 'public import Expo'))
+    end
   end
 end

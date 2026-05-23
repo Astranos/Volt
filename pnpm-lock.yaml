@@ -5,6 +5,9 @@ settings:
   excludeLinksFromLockfile: false
 
 patchedDependencies:
+  '@expo/cli@56.1.10':
+    hash: 9f9a720f3795cf1c9eadb248f7596a32eb2314ef976aeda3538fbb78a331a87d
+    path: patches/@expo__cli@56.1.10.patch
   event-target-shim@6.0.2:
     hash: 55363e9743064572ff9ecc527aaf75377943ae6cf4cf2751994b6737e1727fab
     path: patches/event-target-shim@6.0.2.patch
@@ -67,8 +70,8 @@ importers:
         specifier: ~56.2.5
         version: 56.2.5(1708a8ae5d2e1e87fd1359bb4ae4bfbe)
       expo-speech-recognition:
-        specifier: ^3.1.3
-        version: 3.1.3(expo@56.0.3)(react-native@0.85.3(@babel/core@7.28.6)(@react-native/metro-config@0.85.3(@babel/core@7.28.6))(@types/react@19.2.15)(react@19.2.3))(react@19.2.3)
+        specifier: ^56.0.0
+        version: 56.0.0(expo@56.0.3)(react-native@0.85.3(@babel/core@7.28.6)(@react-native/metro-config@0.85.3(@babel/core@7.28.6))(@types/react@19.2.15)(react@19.2.3))(react@19.2.3)
       expo-status-bar:
         specifier: ~56.0.4
         version: 56.0.4(expo@56.0.3)(react-native@0.85.3(@babel/core@7.28.6)(@react-native/metro-config@0.85.3(@babel/core@7.28.6))(@types/react@19.2.15)(react@19.2.3))(react@19.2.3)
@@ -3654,8 +3657,8 @@ packages:
     resolution: {integrity: sha512-4dJ57KuAwDl7eQGD6aG9kTzBIftWAfHH1+6Zxy7NcPCBrKYis3/H5enGUz1asH8HHhONXfJ5BdJqfEWAEAgWxA==}
     engines: {node: '>=20.16.0'}
 
-  expo-speech-recognition@3.1.3:
-    resolution: {integrity: sha512-vluXqggfY2AJcazYITvnV6YSE2rVe5SId5TpdjMC/m6JPUgHCOODrcHJtAQF6OUYl4f2T7oZSceGw6fJCC86Xw==}
+  expo-speech-recognition@56.0.0:
+    resolution: {integrity: sha512-spA6HqnA/rgwMNS5YmFktmzly7f46kGOv3tXZ2f0Xfh7x9pAsmXyG3YtPtB9sHGbW7RmUSjbMGEzsvCak2Q4sA==}
     peerDependencies:
       expo: '*'
       react: '*'
@@ -6707,7 +6710,7 @@ snapshots:
 
   '@expo-google-fonts/material-symbols@0.4.38': {}
 
-  '@expo/cli@56.1.10(@expo/dom-webview@56.0.5)(@expo/metro-runtime@56.0.11)(expo-constants@56.0.14)(expo-font@56.0.5)(expo-router@56.2.5)(expo@56.0.3)(react-dom@19.2.3(react@19.2.3))(react-native@0.85.3(@babel/core@7.28.6)(@react-native/metro-config@0.85.3(@babel/core@7.28.6))(@types/react@19.2.15)(react@19.2.3))(react@19.2.3)(typescript@6.0.3)':
+  '@expo/cli@56.1.10(patch_hash=9f9a720f3795cf1c9eadb248f7596a32eb2314ef976aeda3538fbb78a331a87d)(@expo/dom-webview@56.0.5)(@expo/metro-runtime@56.0.11)(expo-constants@56.0.14)(expo-font@56.0.5)(expo-router@56.2.5)(expo@56.0.3)(react-dom@19.2.3(react@19.2.3))(react-native@0.85.3(@babel/core@7.28.6)(@react-native/metro-config@0.85.3(@babel/core@7.28.6))(@types/react@19.2.15)(react@19.2.3))(react@19.2.3)(typescript@6.0.3)':
     dependencies:
       '@expo/code-signing-certificates': 0.0.6
       '@expo/config': 56.0.8(typescript@6.0.3)
@@ -8178,9 +8181,7 @@ snapshots:
       metro-runtime: 0.84.4
     transitivePeerDependencies:
       - '@babel/core'
-      - bufferutil
       - supports-color
-      - utf-8-validate
 
   '@react-native/normalize-colors@0.85.3': {}
 
@@ -9708,7 +9709,7 @@ snapshots:
 
   expo-server@56.0.4: {}
 
-  expo-speech-recognition@3.1.3(expo@56.0.3)(react-native@0.85.3(@babel/core@7.28.6)(@react-native/metro-config@0.85.3(@babel/core@7.28.6))(@types/react@19.2.15)(react@19.2.3))(react@19.2.3):
+  expo-speech-recognition@56.0.0(expo@56.0.3)(react-native@0.85.3(@babel/core@7.28.6)(@react-native/metro-config@0.85.3(@babel/core@7.28.6))(@types/react@19.2.15)(react@19.2.3))(react@19.2.3):
     dependencies:
       expo: 56.0.3(@babel/core@7.28.6)(@expo/dom-webview@56.0.5)(@expo/metro-runtime@56.0.11)(expo-router@56.2.5)(react-dom@19.2.3(react@19.2.3))(react-native-worklets@0.8.3(@babel/core@7.28.6)(@react-native/metro-config@0.85.3(@babel/core@7.28.6))(react-native@0.85.3(@babel/core@7.28.6)(@react-native/metro-config@0.85.3(@babel/core@7.28.6))(@types/react@19.2.15)(react@19.2.3))(react@19.2.3))(react-native@0.85.3(@babel/core@7.28.6)(@react-native/metro-config@0.85.3(@babel/core@7.28.6))(@types/react@19.2.15)(react@19.2.3))(react@19.2.3)(typescript@6.0.3)
       react: 19.2.3
@@ -9732,7 +9733,7 @@ snapshots:
   expo@56.0.3(@babel/core@7.28.6)(@expo/dom-webview@56.0.5)(@expo/metro-runtime@56.0.11)(expo-router@56.2.5)(react-dom@19.2.3(react@19.2.3))(react-native-worklets@0.8.3(@babel/core@7.28.6)(@react-native/metro-config@0.85.3(@babel/core@7.28.6))(react-native@0.85.3(@babel/core@7.28.6)(@react-native/metro-config@0.85.3(@babel/core@7.28.6))(@types/react@19.2.15)(react@19.2.3))(react@19.2.3))(react-native@0.85.3(@babel/core@7.28.6)(@react-native/metro-config@0.85.3(@babel/core@7.28.6))(@types/react@19.2.15)(react@19.2.3))(react@19.2.3)(typescript@6.0.3):
     dependencies:
       '@babel/runtime': 7.28.2
-      '@expo/cli': 56.1.10(@expo/dom-webview@56.0.5)(@expo/metro-runtime@56.0.11)(expo-constants@56.0.14)(expo-font@56.0.5)(expo-router@56.2.5)(expo@56.0.3)(react-dom@19.2.3(react@19.2.3))(react-native@0.85.3(@babel/core@7.28.6)(@react-native/metro-config@0.85.3(@babel/core@7.28.6))(@types/react@19.2.15)(react@19.2.3))(react@19.2.3)(typescript@6.0.3)
+      '@expo/cli': 56.1.10(patch_hash=9f9a720f3795cf1c9eadb248f7596a32eb2314ef976aeda3538fbb78a331a87d)(@expo/dom-webview@56.0.5)(@expo/metro-runtime@56.0.11)(expo-constants@56.0.14)(expo-font@56.0.5)(expo-router@56.2.5)(expo@56.0.3)(react-dom@19.2.3(react@19.2.3))(react-native@0.85.3(@babel/core@7.28.6)(@react-native/metro-config@0.85.3(@babel/core@7.28.6))(@types/react@19.2.15)(react@19.2.3))(react@19.2.3)(typescript@6.0.3)
       '@expo/config': 56.0.8(typescript@6.0.3)
       '@expo/config-plugins': 56.0.7(typescript@6.0.3)
       '@expo/devtools': 56.0.2(react-native@0.85.3(@babel/core@7.28.6)(@react-native/metro-config@0.85.3(@babel/core@7.28.6))(@types/react@19.2.15)(react@19.2.3))(react@19.2.3)
