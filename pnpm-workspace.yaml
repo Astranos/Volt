@@ -4,5 +4,4 @@ packages:
 
 patchedDependencies:
   event-target-shim@6.0.2: patches/event-target-shim@6.0.2.patch
-  expo@54.0.34: patches/expo@54.0.34.patch
   react-native-webrtc@124.0.7: patches/react-native-webrtc@124.0.7.patch

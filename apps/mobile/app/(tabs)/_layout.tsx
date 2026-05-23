@@ -1,4 +1,6 @@
-import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
+import { NativeTabs as ExpoNativeTabs } from "expo-router/unstable-native-tabs";
+
+const NativeTabs = ExpoNativeTabs as any;
 
 export default function TabsLayout() {
   return (
@@ -15,24 +17,24 @@ export default function TabsLayout() {
       disableTransparentOnScrollEdge
     >
       <NativeTabs.Trigger name="index" disableScrollToTop>
-        <Icon sf={{ default: "doc.text.viewfinder", selected: "doc.text.viewfinder" }} />
-        <Label>OCR</Label>
+        <NativeTabs.Trigger.Icon sf={{ default: "doc.text.viewfinder", selected: "doc.text.viewfinder" }} />
+        <NativeTabs.Trigger.Label>OCR</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="scanner" disableScrollToTop>
-        <Icon sf={{ default: "barcode.viewfinder", selected: "barcode.viewfinder" }} />
-        <Label>Scanner</Label>
+        <NativeTabs.Trigger.Icon sf={{ default: "barcode.viewfinder", selected: "barcode.viewfinder" }} />
+        <NativeTabs.Trigger.Label>Scanner</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="photos" disableScrollToTop>
-        <Icon sf={{ default: "photo.on.rectangle", selected: "photo.fill.on.rectangle.fill" }} />
-        <Label>Photos</Label>
+        <NativeTabs.Trigger.Icon sf={{ default: "photo.on.rectangle", selected: "photo.fill.on.rectangle.fill" }} />
+        <NativeTabs.Trigger.Label>Photos</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="dictation" disableScrollToTop>
-        <Icon sf={{ default: "mic", selected: "mic.fill" }} />
-        <Label>Dictation</Label>
+        <NativeTabs.Trigger.Icon sf={{ default: "mic", selected: "mic.fill" }} />
+        <NativeTabs.Trigger.Label>Dictation</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="settings" disableScrollToTop>
-        <Icon sf={{ default: "gearshape", selected: "gearshape.fill" }} />
-        <Label>Settings</Label>
+        <NativeTabs.Trigger.Icon sf={{ default: "gearshape", selected: "gearshape.fill" }} />
+        <NativeTabs.Trigger.Label>Settings</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );

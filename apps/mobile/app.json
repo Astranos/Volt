@@ -34,7 +34,7 @@
         "expo-build-properties",
         {
           "ios": {
-            "deploymentTarget": "15.5"
+            "deploymentTarget": "16.4"
           }
         }
       ],
@@ -50,9 +50,11 @@
           "microphonePermission": "Volt uses the microphone for hold-to-speak dictation into the paired Chrome browser.",
           "speechRecognitionPermission": "Volt uses speech recognition to turn dictated speech into text for the paired Chrome browser."
         }
-      ]
+      ],
+      "expo-font"
     ],
     "experiments": {
+      "reactCompiler": true,
       "typedRoutes": true
     },
     "extra": {

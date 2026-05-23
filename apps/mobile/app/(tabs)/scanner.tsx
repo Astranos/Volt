@@ -1,8 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
-import { CameraView, type BarcodeScanningResult } from "expo-camera";
+import { CameraView as ExpoCameraView, type BarcodeScanningResult } from "expo-camera";
 import { useFocusEffect } from "expo-router";
 import { Alert, Image, Platform, Pressable, Text, View, type GestureResponderEvent, type LayoutChangeEvent } from "react-native";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState, type ComponentType } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { barcodeTypes, useScanner } from "../../lib/scanner-state";
 import {
@@ -20,6 +20,7 @@ import {
 } from "./index";
 
 const scannerFloatingBottom = Platform.select({ ios: 94, default: 86 });
+const CameraView = ExpoCameraView as unknown as ComponentType<any>;
 const zoomStep = 0.08;
 
 type ViewfinderSize = {

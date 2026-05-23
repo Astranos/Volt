@@ -1,8 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
-import { CameraView, type BarcodeScanningResult } from "expo-camera";
+import { CameraView as ExpoCameraView, type BarcodeScanningResult } from "expo-camera";
 import { useFocusEffect } from "expo-router";
 import { Image, Platform, Pressable, Text, View, useWindowDimensions, type GestureResponderEvent } from "react-native";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useRef, useState, type ComponentType } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useScanner } from "../../lib/scanner-state";
 import {
@@ -17,6 +17,7 @@ import {
 } from "./index";
 
 const photoFloatingBottom = Platform.select({ ios: 94, default: 86 });
+const CameraView = ExpoCameraView as unknown as ComponentType<any>;
 const zoomStep = 0.08;
 
 function clampZoom(value: number) {

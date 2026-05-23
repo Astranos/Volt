@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import { ScrollView, Switch, Text, View } from "react-native";
+import { Host, Toggle } from "@expo/ui/swift-ui";
+import { Platform, ScrollView, Switch as RNSwitch, Text, View } from "react-native";
 import { useScanner } from "../../lib/scanner-state";
 import { Header, ScreenRoot, styles } from "./index";
 
@@ -89,12 +90,18 @@ function SettingRow({
         <Text style={localStyles.settingTitle}>{title}</Text>
         <Text style={localStyles.settingDescription}>{description}</Text>
       </View>
-      <Switch
-        value={value}
-        onValueChange={onValueChange}
-        trackColor={{ false: "#d6d3d1", true: "#bbf7d0" }}
-        thumbColor={value ? "#16a34a" : "#fafaf9"}
-      />
+      {Platform.OS === "ios" ? (
+        <Host matchContents>
+          <Toggle isOn={value} onIsOnChange={onValueChange} />
+        </Host>
+      ) : (
+        <RNSwitch
+          value={value}
+          onValueChange={onValueChange}
+          trackColor={{ false: "#d6d3d1", true: "#bbf7d0" }}
+          thumbColor={value ? "#16a34a" : "#fafaf9"}
+        />
+      )}
     </View>
   );
 }

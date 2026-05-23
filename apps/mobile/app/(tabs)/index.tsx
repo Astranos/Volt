@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { CameraView, type BarcodeScanningResult } from "expo-camera";
+import { CameraView as ExpoCameraView, type BarcodeScanningResult } from "expo-camera";
 import { useFocusEffect } from "expo-router";
 import {
   Image,
@@ -13,12 +13,14 @@ import {
   type LayoutChangeEvent,
 } from "react-native";
 import { initialWindowMetrics, useSafeAreaInsets } from "react-native-safe-area-context";
-import { useCallback, useEffect, useRef, useState, type PropsWithChildren, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ComponentType, type PropsWithChildren, type ReactNode } from "react";
 import { LiveTextImageView } from "../../lib/live-text-image-view";
 import { useScanner } from "../../lib/scanner-state";
 
 const baseFloatingBottom = Platform.select({ ios: 94, default: 86 });
+const CameraView = ExpoCameraView as unknown as ComponentType<any>;
 const continuousCorners = Platform.select({ ios: { borderCurve: "continuous" as const }, default: null });
+const absoluteFillObject = { position: "absolute" as const, top: 0, right: 0, bottom: 0, left: 0 };
 const stableTopInset = initialWindowMetrics?.insets.top ?? 0;
 const zoomStep = 0.08;
 const captureZoomStep = 0.25;
@@ -768,9 +770,9 @@ export const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#292524",
   },
-  camera: StyleSheet.absoluteFillObject,
+  camera: absoluteFillObject,
   photoNegativeOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...absoluteFillObject,
     backgroundColor: "rgba(0, 0, 0, 0.34)",
   },
   viewfinderTopRight: {
@@ -837,7 +839,7 @@ export const styles = StyleSheet.create({
     textAlign: "center",
   },
   disconnectedPairingOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...absoluteFillObject,
     alignItems: "center",
     justifyContent: "center",
     paddingTop: 0,
@@ -946,7 +948,7 @@ export const styles = StyleSheet.create({
     height: 1,
   },
   capturedImageViewport: {
-    ...StyleSheet.absoluteFillObject,
+    ...absoluteFillObject,
     overflow: "hidden",
     backgroundColor: "#1c1917",
   },
@@ -1093,7 +1095,7 @@ export const styles = StyleSheet.create({
     textAlign: "center",
   },
   pairingScanOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...absoluteFillObject,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(28, 25, 23, 0.18)",
@@ -1119,7 +1121,7 @@ export const styles = StyleSheet.create({
     backgroundColor: "rgba(28, 25, 23, 0.82)",
   },
   startCameraOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...absoluteFillObject,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(28, 25, 23, 0.68)",

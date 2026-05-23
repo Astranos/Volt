@@ -1,9 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
-import { CameraView, type BarcodeScanningResult } from "expo-camera";
+import { CameraView as ExpoCameraView, type BarcodeScanningResult } from "expo-camera";
 import { Pressable, Text, View } from "react-native";
-import { useRef, useState } from "react";
+import { useRef, useState, type ComponentType } from "react";
 import { useScanner } from "../../lib/scanner-state";
 import { Header, PairingPanel, ScreenRoot, styles } from "./index";
+
+const CameraView = ExpoCameraView as unknown as ComponentType<any>;
 
 export default function DictationTab() {
   const scanner = useScanner();

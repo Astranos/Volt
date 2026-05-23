@@ -9,7 +9,7 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider initialMetrics={initialWindowMetrics}>
       <ScannerProvider>
-        <StatusBar style="light" backgroundColor="#1c1917" />
+        <StatusBar style="light" />
         <View style={{ flex: 1, backgroundColor: "#ffffff" }}>
           <Slot />
         </View>
