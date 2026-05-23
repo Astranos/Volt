@@ -24,5 +24,5 @@ export function LiveTextImageView({ imageUri, style }: LiveTextImageViewProps) {
     return <NativeLiveTextImageView imageUri={imageUri} style={style} />;
   }
 
-  return <Image source={{ uri: imageUri }} style={style} resizeMode="contain" />;
+  return <Image source={{ uri: imageUri }} style={style} resizeMode="cover" />;
 }

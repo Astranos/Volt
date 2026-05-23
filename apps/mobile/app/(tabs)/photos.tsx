@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { CameraView as ExpoCameraView, type BarcodeScanningResult } from "expo-camera";
 import { useFocusEffect } from "expo-router";
 import { Image, Platform, Pressable, Text, View, useWindowDimensions, type GestureResponderEvent } from "react-native";
-import { useCallback, useRef, useState, type ComponentType } from "react";
+import { useCallback, useEffect, useRef, useState, type ComponentType } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useScanner } from "../../lib/scanner-state";
 import {
@@ -40,6 +40,7 @@ export default function PhotosTab() {
   const [pairScannerError, setPairScannerError] = useState<string | null>(null);
   const [viewfinderFocused, setViewfinderFocused] = useState(false);
   const [gridVisible, setGridVisible] = useState(true);
+  const [showPhotoSent, setShowPhotoSent] = useState(false);
   const pairScannerLockedRef = useRef(false);
   const focusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pinchStartDistanceRef = useRef<number | null>(null);
@@ -96,6 +97,14 @@ export default function PhotosTab() {
   const photoFrameGap = 18;
   const photoFrameSize = Math.max(0, windowWidth - photoFrameGap * 2);
   const photoMaskBorderWidth = Math.max(windowHeight, windowWidth);
+
+  useEffect(() => {
+    if (!scanner.photoSentAt) return;
+
+    setShowPhotoSent(true);
+    const timer = setTimeout(() => setShowPhotoSent(false), 1700);
+    return () => clearTimeout(timer);
+  }, [scanner.photoSentAt]);
 
   const openPairScanner = async () => {
     if (!scanner.permission?.granted) {
@@ -181,6 +190,7 @@ export default function PhotosTab() {
               enableTorch={scanner.torch}
               zoom={scanner.cameraZoom}
               autofocus={scanner.focusMode}
+              animateShutter
               onTouchStart={handleCameraTouchStart}
               onTouchMove={handleCameraTouchMove}
               onTouchEnd={handleCameraTouchEnd}
@@ -206,6 +216,12 @@ export default function PhotosTab() {
           ) : null}
 
           <View pointerEvents="box-none" style={localStyles.photoControlsOverlay}>
+            {showPhotoSent ? (
+              <View pointerEvents="none" style={localStyles.photoSentToast}>
+                <Ionicons name="checkmark-circle" size={18} color="#bbf7d0" />
+                <Text numberOfLines={1} style={localStyles.photoSentToastText}>Photo sent to browser</Text>
+              </View>
+            ) : null}
             <View style={localStyles.photoTopRightControls}>
               <CameraOverlayButton
                 active={scanner.torch}
@@ -243,7 +259,13 @@ export default function PhotosTab() {
                   icon={scanner.photoSending ? "hourglass-outline" : "camera"}
                   label="Take and send photo"
                   onPress={scanner.sendPhotoCapture}
-                  status={scanner.photoSending ? "Sending photo..." : "Tap shutter to send to Chrome"}
+                  status={
+                    scanner.photoSending
+                      ? "Sending photo..."
+                      : showPhotoSent
+                        ? "Photo sent to browser"
+                        : "Tap shutter to send to Chrome"
+                  }
                   statusActive={scanner.photoSending}
                 />
               }
@@ -331,6 +353,27 @@ const localStyles = {
     right: 30,
     flexDirection: "column" as const,
     gap: 10,
+  },
+  photoSentToast: {
+    position: "absolute" as const,
+    top: "16%" as const,
+    alignSelf: "center" as const,
+    minHeight: 38,
+    maxWidth: "82%" as const,
+    paddingHorizontal: 13,
+    borderRadius: 999,
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 7,
+    backgroundColor: "rgba(28, 25, 23, 0.74)",
+    borderWidth: 1,
+    borderColor: "rgba(250, 250, 249, 0.16)",
+  },
+  photoSentToastText: {
+    flexShrink: 1,
+    color: "#f5f5f4",
+    fontSize: 13,
+    fontWeight: "800" as const,
   },
   gridLineVertical: {
     position: "absolute" as const,

@@ -3,6 +3,7 @@ import { CameraView as ExpoCameraView, type BarcodeScanningResult } from "expo-c
 import { useFocusEffect } from "expo-router";
 import {
   Image,
+  Animated,
   Platform,
   Pressable,
   ScrollView,
@@ -223,7 +224,9 @@ export default function OcrTab() {
             {scanner.textCapture ? (
               <View style={styles.capturedImageViewport} onLayout={handleCapturedViewportLayout}>
                 <ScrollView
+                  key={`${scanner.textCapture.photoUri}-${capturedViewportSize?.width ?? 0}x${capturedViewportSize?.height ?? 0}`}
                   ref={capturedScrollRef}
+                  automaticallyAdjustContentInsets={false}
                   bouncesZoom
                   centerContent
                   contentContainerStyle={[
@@ -251,7 +254,7 @@ export default function OcrTab() {
                   <View pointerEvents="none" style={styles.ocrCopyPrompt}>
                     <Ionicons name="copy-outline" size={14} color="#bbf7d0" />
                     <Text numberOfLines={1} style={styles.ocrCopyPromptText}>
-                      Select text and click Copy to send to browser
+                      Select the text & hit copy to send to browser
                     </Text>
                   </View>
                 ) : null}
@@ -266,6 +269,7 @@ export default function OcrTab() {
                     enableTorch={scanner.torch}
                     zoom={scanner.cameraZoom}
                     autofocus={scanner.focusMode}
+                    animateShutter
                     onTouchStart={handleCameraTouchStart}
                     onTouchMove={handleCameraTouchMove}
                     onTouchEnd={handleCameraTouchEnd}
@@ -396,7 +400,7 @@ export function CursorInsertButton({
 }) {
   return (
     <CameraOverlayButton active={active} accessibilityLabel={accessibilityLabel} onPress={onPress}>
-      <Ionicons name={active ? "enter" : "enter-outline"} size={21} color={active ? "#86efac" : "#fafaf9"} />
+      <Ionicons name={active ? "text" : "text-outline"} size={21} color={active ? "#86efac" : "#fafaf9"} />
     </CameraOverlayButton>
   );
 }
@@ -522,10 +526,23 @@ export function DisconnectedPairingView({
   const scanner = useScanner();
   const insets = useSafeAreaInsets();
   const [viewfinderFocused, setViewfinderFocused] = useState(false);
+  const pairingPulse = useRef(new Animated.Value(0)).current;
   const cameraReady = !!scanner.permission?.granted;
   const showCamera = cameraReady && viewfinderFocused;
   const scanEnabled = showCamera && pairingActive && !pairingLocked;
   const pairingBottomInset = Math.max(baseFloatingBottom, insets.bottom + 126);
+  const pairingInProgress = pairingLocked || scanner.status === "pairing";
+  const pairingTitle = !cameraReady
+    ? "Allow camera to pair"
+    : pairingInProgress
+      ? "Pairing with browser..."
+      : "Aim at browser QR code";
+  const pairingMessage = !cameraReady
+    ? "Camera access is needed to scan the pairing code."
+    : pairingInProgress
+      ? "QR code found. Keep this screen open while Volt connects."
+      : "Open the Chrome extension and center its pairing code in the square.";
+  const pairingIcon = !cameraReady ? "camera-outline" : pairingInProgress ? "sync" : "qr-code-outline";
 
   useFocusEffect(
     useCallback(() => {
@@ -538,6 +555,26 @@ export function DisconnectedPairingView({
     if (cameraReady || scanner.permission?.canAskAgain === false) return;
     void scanner.requestPermission();
   }, [cameraReady, scanner.permission?.canAskAgain, scanner.requestPermission]);
+
+  useEffect(() => {
+    pairingPulse.setValue(0);
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pairingPulse, {
+          duration: pairingInProgress ? 520 : 900,
+          toValue: 1,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pairingPulse, {
+          duration: pairingInProgress ? 520 : 900,
+          toValue: 0,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    animation.start();
+    return () => animation.stop();
+  }, [pairingInProgress, pairingPulse]);
 
   return (
     <ViewfinderSurface>
@@ -554,16 +591,69 @@ export function DisconnectedPairingView({
         pointerEvents="box-none"
       >
         <View pointerEvents="box-none" style={styles.disconnectedQrFrame}>
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.disconnectedQrPulse,
+              {
+                opacity: pairingPulse.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: pairingInProgress ? [0.3, 0.72] : [0.12, 0.34],
+                }),
+                transform: [
+                  {
+                    scale: pairingPulse.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: pairingInProgress ? [0.98, 1.08] : [0.99, 1.04],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          />
           <View pointerEvents="none" style={styles.disconnectedQrCornerTopLeft} />
           <View pointerEvents="none" style={styles.disconnectedQrCornerTopRight} />
           <View pointerEvents="none" style={styles.disconnectedQrCornerBottomLeft} />
           <View pointerEvents="none" style={styles.disconnectedQrCornerBottomRight} />
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.disconnectedQrScanLine,
+              {
+                opacity: cameraReady ? 1 : 0,
+                transform: [
+                  {
+                    translateY: pairingPulse.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [-58, 58],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          />
           <View style={styles.disconnectedPairingCopy}>
-            <Ionicons name="qr-code-outline" size={30} color="#f0fdf4" />
-            <Text style={styles.disconnectedPairingTitle}>Point camera at browser QR code</Text>
-            <Text style={styles.disconnectedPairingText}>
-              Open the Chrome extension and aim this square at its pairing code.
-            </Text>
+            <Animated.View
+              style={[
+                styles.disconnectedPairingIcon,
+                {
+                  transform: [
+                    {
+                      rotate: pairingInProgress
+                        ? pairingPulse.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: ["0deg", "180deg"],
+                          })
+                        : "0deg",
+                    },
+                  ],
+                },
+              ]}
+            >
+              <Ionicons name={pairingIcon} size={24} color="#f0fdf4" />
+            </Animated.View>
+            <Text style={styles.disconnectedPairingTitle}>{pairingTitle}</Text>
+            <Text style={styles.disconnectedPairingText}>{pairingMessage}</Text>
             {error ? <Text style={styles.disconnectedPairingError}>{error}</Text> : null}
             {!cameraReady ? (
               <Pressable style={styles.disconnectedPairingButton} onPress={onOpenScanner}>
@@ -667,23 +757,63 @@ export function OcrBottomControls({
     textCapture,
     textCaptureResult,
   } = useScanner();
+  const copiedToastOpacity = useRef(new Animated.Value(0)).current;
 
   const floatingBottom = bottom ?? Math.max(baseFloatingBottom, insets.bottom + 74);
   const actionPress = textCapture ? clearTextCapture : captureText;
   const actionDisabled = !textCapture && recognizingText;
 
+  useEffect(() => {
+    if (!textCaptureResult) return;
+
+    copiedToastOpacity.stopAnimation();
+    copiedToastOpacity.setValue(0);
+    Animated.sequence([
+      Animated.timing(copiedToastOpacity, {
+        duration: 180,
+        toValue: 1,
+        useNativeDriver: true,
+      }),
+      Animated.delay(1400),
+      Animated.timing(copiedToastOpacity, {
+        duration: 240,
+        toValue: 0,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [copiedToastOpacity, textCaptureResult?.sentAt]);
+
   return (
     <>
       {textCaptureResult ? (
-        <View style={[styles.bottomControls, { bottom: floatingBottom + 122 }]}>
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.bottomControls,
+            styles.copiedToastPosition,
+            {
+              opacity: copiedToastOpacity,
+              transform: [
+                {
+                  translateY: copiedToastOpacity.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [8, 0],
+                  }),
+                },
+              ],
+            },
+          ]}
+        >
           <View style={styles.copiedPanel}>
           <View style={styles.copiedHeader}>
             <Ionicons name="checkmark-circle" size={18} color="#16a34a" />
-            <Text style={styles.copiedTitle}>Copied and sent to {textCaptureResult.target}</Text>
+            <Text style={styles.copiedTitle}>
+              {textCaptureResult.target === "browser" ? "Copied and sent to browser" : "Copied to scan history"}
+            </Text>
           </View>
           <Text numberOfLines={2} style={styles.copiedText}>{textCaptureResult.text}</Text>
           </View>
-        </View>
+        </Animated.View>
       ) : null}
       <CameraControlStack
         bottom={floatingBottom}
@@ -696,7 +826,7 @@ export function OcrBottomControls({
             icon={textCapture ? "refresh" : recognizingText ? "hourglass-outline" : "camera"}
             label={textCapture ? "Retake text capture" : "Capture text"}
             onPress={actionPress}
-            status={textCapture ? "Select text in the image to send to results" : "Tap shutter to capture text"}
+            status={textCapture ? "Select text & hit copy to send to browser" : "Tap shutter to capture text"}
             statusActive={recognizingText}
           />
         }
@@ -847,10 +977,36 @@ export const styles = StyleSheet.create({
   },
   disconnectedQrFrame: {
     position: "absolute",
+    top: "18%",
     width: "68%",
     aspectRatio: 1,
     alignItems: "center",
     justifyContent: "center",
+  },
+  disconnectedQrPulse: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    bottom: 8,
+    left: 8,
+    borderRadius: 28,
+    ...continuousCorners,
+    backgroundColor: "rgba(34, 197, 94, 0.22)",
+    borderWidth: 1,
+    borderColor: "rgba(187, 247, 208, 0.5)",
+  },
+  disconnectedQrScanLine: {
+    position: "absolute",
+    left: 24,
+    right: 24,
+    top: "50%",
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: "#86efac",
+    shadowColor: "#22c55e",
+    shadowOpacity: 0.8,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 0 },
   },
   disconnectedQrCornerTopLeft: {
     position: "absolute",
@@ -904,6 +1060,17 @@ export const styles = StyleSheet.create({
     borderRadius: 24,
     ...continuousCorners,
     backgroundColor: "rgba(28, 25, 23, 0.72)",
+  },
+  disconnectedPairingIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    ...continuousCorners,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(22, 163, 74, 0.5)",
+    borderWidth: 1,
+    borderColor: "rgba(187, 247, 208, 0.28)",
   },
   disconnectedPairingTitle: {
     marginTop: 10,
@@ -1280,6 +1447,9 @@ export const styles = StyleSheet.create({
     zIndex: 10,
     gap: 10,
     backgroundColor: "transparent",
+  },
+  copiedToastPosition: {
+    bottom: "28%",
   },
   copiedPanel: {
     padding: 12,

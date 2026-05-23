@@ -111,6 +111,7 @@ type ScannerState = {
   setFocusPoint: React.Dispatch<React.SetStateAction<{ x: number; y: number } | null>>;
   setManualText: (value: string) => void;
   photoError: string | null;
+  photoSentAt: string | null;
   photoSending: boolean;
   setSetting: <Key extends keyof ScannerSettings>(key: Key, value: ScannerSettings[Key]) => void;
   startDictation: () => Promise<void>;
@@ -194,6 +195,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
   const [dictationError, setDictationError] = useState<string | null>(null);
   const [photoSending, setPhotoSending] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
+  const [photoSentAt, setPhotoSentAt] = useState<string | null>(null);
   const [settings, setSettings] = useState<ScannerSettings>(defaultSettings);
 
   const peerRef = useRef<any>(null);
@@ -204,6 +206,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
   const lastDictationRef = useRef("");
   const lastTextCaptureClipboardRef = useRef<string | null>(null);
   const pendingScannerItemsRef = useRef<ScanItem[]>([]);
+  const settingsRef = useRef(defaultSettings);
   const scannerFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pairingSessionRef = useRef<string | null>(null);
   const lastOfferRef = useRef<string | null>(null);
@@ -228,7 +231,9 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       .then((rawValue) => {
         if (!rawValue) return;
         const parsed = JSON.parse(rawValue) as Partial<ScannerSettings>;
-        setSettings({ ...defaultSettings, ...parsed });
+        const nextSettings = { ...defaultSettings, ...parsed };
+        settingsRef.current = nextSettings;
+        setSettings(nextSettings);
       })
       .catch(() => {});
   }, []);
@@ -237,6 +242,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
     <Key extends keyof ScannerSettings>(key: Key, value: ScannerSettings[Key]) => {
       setSettings((current) => {
         const next = { ...current, [key]: value };
+        settingsRef.current = next;
         void AsyncStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(next));
         return next;
       });
@@ -459,6 +465,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
 
     setPhotoSending(true);
     setPhotoError(null);
+    setPhotoSentAt(null);
 
     try {
       const photo = await cameraRef.current.takePictureAsync({
@@ -526,6 +533,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       }
 
       channel.send(encodeScannerTransportMessage({ kind: "photo-chunk-end", id }));
+      setPhotoSentAt(new Date().toISOString());
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not send the photo.";
@@ -542,8 +550,10 @@ export function ScannerProvider({ children }: PropsWithChildren) {
     pendingScannerItemsRef.current = [];
     if (!items.length) return;
 
+    const latestSettings = settingsRef.current;
+
     if (items.length === 1) {
-      if (settings.autoSendSingleBarcode) {
+      if (latestSettings.autoSendSingleBarcode) {
         void sendScan(items[0]);
       } else {
         Alert.alert("Send barcode?", items[0].barcode, [
@@ -554,7 +564,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       return;
     }
 
-    if (!settings.confirmMultipleBarcodes) {
+    if (!latestSettings.confirmMultipleBarcodes) {
       void sendScan(items[0]);
       return;
     }
@@ -570,7 +580,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
         { text: "Cancel", style: "cancel" as const },
       ]
     );
-  }, [sendScan, settings.autoSendSingleBarcode, settings.confirmMultipleBarcodes]);
+  }, [sendScan]);
 
   const onBarcodeScanned = useCallback(
     ({ data, type }: BarcodeScanningResult) => {
@@ -582,23 +592,23 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       if (last?.value === value && now - last.at < REPEAT_SCAN_COOLDOWN_MS) return;
 
       lastScanRef.current = { value, at: now };
-      const item = makeScanItem(value, type, "barcode", settings.scannerInsertIntoCursor);
+      const item = makeScanItem(value, type, "barcode", settingsRef.current.scannerInsertIntoCursor);
       const currentItems = pendingScannerItemsRef.current.filter((pending) => pending.barcode !== item.barcode);
       pendingScannerItemsRef.current = [...currentItems, item];
 
       if (scannerFlushTimerRef.current) clearTimeout(scannerFlushTimerRef.current);
       scannerFlushTimerRef.current = setTimeout(flushScannerItems, MULTI_SCAN_WINDOW_MS);
     },
-    [connected, flushScannerItems, settings.scannerInsertIntoCursor]
+    [connected, flushScannerItems]
   );
 
   const sendBarcodeScanResult = useCallback(
     async ({ data, type }: BarcodeScanningResult) => {
       const value = data.trim();
       if (!value) return;
-      await sendScan(makeScanItem(value, type, "barcode", settings.scannerInsertIntoCursor));
+      await sendScan(makeScanItem(value, type, "barcode", settingsRef.current.scannerInsertIntoCursor));
     },
-    [sendScan, settings.scannerInsertIntoCursor]
+    [sendScan]
   );
 
   const sendManualText = useCallback(() => {
@@ -623,14 +633,14 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       const value = (text ?? (await Clipboard.getStringAsync())).trim();
       if (!value || value === lastTextCaptureClipboardRef.current) return;
       lastTextCaptureClipboardRef.current = value;
-      await sendScan(makeScanItem(value, "live-text", "text", settings.ocrInsertIntoCursor));
+      await sendScan(makeScanItem(value, "live-text", "text", settingsRef.current.ocrInsertIntoCursor));
       setTextCaptureResult({
         text: value,
-        target: channelRef.current?.readyState === "open" ? "Chrome results" : "local scan history",
+        target: channelRef.current?.readyState === "open" ? "browser" : "local scan history",
         sentAt: new Date().toISOString(),
       });
     },
-    [sendScan, settings.ocrInsertIntoCursor]
+    [sendScan]
   );
 
   useEffect(() => {
@@ -785,6 +795,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       pairFromUrl,
       permission,
       photoError,
+      photoSentAt,
       photoSending,
       recognizingText,
       requestPermission,
@@ -825,6 +836,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       pairFromUrl,
       permission,
       photoError,
+      photoSentAt,
       photoSending,
       recognizingText,
       requestPermission,
