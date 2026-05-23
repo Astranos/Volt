@@ -34,18 +34,25 @@ export default function SettingsTab() {
             onValueChange={(value) => setSetting("autoSendSingleBarcode", value)}
           />
           <SettingRow
+            icon="enter-outline"
+            title="Scanner writes to cursor"
+            description="Send scanner barcodes to the active browser field by default."
+            value={settings.scannerInsertIntoCursor}
+            onValueChange={(value) => setSetting("scannerInsertIntoCursor", value)}
+          />
+          <SettingRow
+            icon="text-outline"
+            title="OCR writes to cursor"
+            description="Send copied OCR text to the active browser field instead of only results."
+            value={settings.ocrInsertIntoCursor}
+            onValueChange={(value) => setSetting("ocrInsertIntoCursor", value)}
+          />
+          <SettingRow
             icon="copy-outline"
             title="Confirm multiple codes"
             description="Ask which barcode to type when more than one code is detected."
             value={settings.confirmMultipleBarcodes}
             onValueChange={(value) => setSetting("confirmMultipleBarcodes", value)}
-          />
-          <SettingRow
-            icon="scan-outline"
-            title="OCR capture reads codes"
-            description="Also look for barcodes and QR codes when you tap capture on OCR."
-            value={settings.detectCodesOnOcrCapture}
-            onValueChange={(value) => setSetting("detectCodesOnOcrCapture", value)}
           />
           <SettingRow
             icon="mic-outline"

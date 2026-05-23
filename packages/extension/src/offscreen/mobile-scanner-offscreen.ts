@@ -17,6 +17,7 @@ type ScannerState = {
 type BarcodeMessage = {
   barcode: string;
   format?: string;
+  insertIntoCursor?: boolean;
   kind?: "barcode" | "text";
   scannedAt?: string;
 };
@@ -144,6 +145,7 @@ function decodeScannerTransportMessage(data: string): ScannerTransportMessage | 
     return {
       barcode: parsed.barcode,
       format: typeof parsed.format === "string" ? parsed.format : undefined,
+      insertIntoCursor: typeof parsed.insertIntoCursor === "boolean" ? parsed.insertIntoCursor : undefined,
       kind: parsed.kind === "text" ? "text" : "barcode",
       scannedAt: typeof parsed.scannedAt === "string" ? parsed.scannedAt : undefined,
     };

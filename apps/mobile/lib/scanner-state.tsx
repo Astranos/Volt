@@ -1,6 +1,6 @@
 import { decode as base64Decode, encode as base64Encode } from "base-64";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { scanFromURLAsync, useCameraPermissions, type BarcodeScanningResult } from "expo-camera";
+import { useCameraPermissions, type BarcodeScanningResult } from "expo-camera";
 import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
 import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
@@ -33,19 +33,22 @@ const PAIRING_SESSION_STORAGE_KEY = "volt.mobileScanner.pairingSession.v1";
 const MULTI_SCAN_WINDOW_MS = 650;
 const CLIPBOARD_POLL_MS = 900;
 const PHOTO_CHUNK_SIZE = 12000;
+const OCR_CAPTURE_MAX_DIMENSION = 1800;
 
 export type ScannerSettings = {
   autoSendSingleBarcode: boolean;
   confirmMultipleBarcodes: boolean;
-  detectCodesOnOcrCapture: boolean;
   dictationPunctuation: boolean;
+  ocrInsertIntoCursor: boolean;
+  scannerInsertIntoCursor: boolean;
 };
 
 const defaultSettings: ScannerSettings = {
   autoSendSingleBarcode: true,
   confirmMultipleBarcodes: true,
-  detectCodesOnOcrCapture: true,
   dictationPunctuation: true,
+  ocrInsertIntoCursor: false,
+  scannerInsertIntoCursor: true,
 };
 
 export type ScanItem = BarcodeMessage & {
@@ -80,12 +83,17 @@ export const barcodeTypes = [
 
 type ScannerState = {
   cameraRef: React.MutableRefObject<any>;
+  cameraZoom: number;
   captureText: () => Promise<void>;
+  captureZoom: number;
+  clearCameraFocus: () => void;
   clearTextCapture: () => void;
   connected: boolean;
   dictating: boolean;
   dictationError: string | null;
   dictationTranscript: string;
+  focusMode: "on" | "off";
+  focusPoint: { x: number; y: number } | null;
   hasManualText: boolean;
   manualText: string;
   onBarcodeScanned: (result: BarcodeScanningResult) => void;
@@ -97,6 +105,10 @@ type ScannerState = {
   sendBarcodeScanResult: (result: BarcodeScanningResult) => Promise<void>;
   sendPhotoCapture: () => Promise<void>;
   sendManualText: () => void;
+  setCameraZoom: React.Dispatch<React.SetStateAction<number>>;
+  setCaptureZoom: React.Dispatch<React.SetStateAction<number>>;
+  setFocusMode: React.Dispatch<React.SetStateAction<"on" | "off">>;
+  setFocusPoint: React.Dispatch<React.SetStateAction<{ x: number; y: number } | null>>;
   setManualText: (value: string) => void;
   photoError: string | null;
   photoSending: boolean;
@@ -131,13 +143,35 @@ function wait(delayMs: number) {
   return new Promise((resolve) => setTimeout(resolve, delayMs));
 }
 
-function makeScanItem(value: string, format: string, kind: BarcodeMessage["kind"]): ScanItem {
+function makeScanItem(
+  value: string,
+  format: string,
+  kind: BarcodeMessage["kind"],
+  insertIntoCursor?: boolean
+): ScanItem {
   return {
     id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
     barcode: value.trim(),
     format,
+    insertIntoCursor,
     kind,
     scannedAt: new Date().toISOString(),
+  };
+}
+
+function getOcrResizeAction(photo: { width?: number; height?: number }) {
+  const { height, width } = photo;
+  if (!width || !height) return null;
+
+  const maxDimension = Math.max(width, height);
+  if (maxDimension <= OCR_CAPTURE_MAX_DIMENSION) return null;
+
+  const scale = OCR_CAPTURE_MAX_DIMENSION / maxDimension;
+  return {
+    resize: {
+      height: Math.round(height * scale),
+      width: Math.round(width * scale),
+    },
   };
 }
 
@@ -146,6 +180,10 @@ export function ScannerProvider({ children }: PropsWithChildren) {
   const [status, setStatus] = useState<ConnectionStatus>("idle");
   const [error, setError] = useState<string | null>(null);
   const [manualText, setManualText] = useState("");
+  const [cameraZoom, setCameraZoom] = useState(0);
+  const [captureZoom, setCaptureZoom] = useState(1);
+  const [focusMode, setFocusMode] = useState<"on" | "off">("off");
+  const [focusPoint, setFocusPoint] = useState<{ x: number; y: number } | null>(null);
   const [scans, setScans] = useState<ScanItem[]>([]);
   const [torch, setTorch] = useState(false);
   const [recognizingText, setRecognizingText] = useState(false);
@@ -172,6 +210,11 @@ export function ScannerProvider({ children }: PropsWithChildren) {
   const reconnectingRef = useRef(false);
 
   const connected = status === "connected" && channelRef.current?.readyState === "open";
+
+  const clearCameraFocus = useCallback(() => {
+    setFocusMode("off");
+    setFocusPoint(null);
+  }, []);
 
   const closeConnection = useCallback(() => {
     channelRef.current?.close();
@@ -539,30 +582,30 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       if (last?.value === value && now - last.at < REPEAT_SCAN_COOLDOWN_MS) return;
 
       lastScanRef.current = { value, at: now };
-      const item = makeScanItem(value, type, "barcode");
+      const item = makeScanItem(value, type, "barcode", settings.scannerInsertIntoCursor);
       const currentItems = pendingScannerItemsRef.current.filter((pending) => pending.barcode !== item.barcode);
       pendingScannerItemsRef.current = [...currentItems, item];
 
       if (scannerFlushTimerRef.current) clearTimeout(scannerFlushTimerRef.current);
       scannerFlushTimerRef.current = setTimeout(flushScannerItems, MULTI_SCAN_WINDOW_MS);
     },
-    [connected, flushScannerItems]
+    [connected, flushScannerItems, settings.scannerInsertIntoCursor]
   );
 
   const sendBarcodeScanResult = useCallback(
     async ({ data, type }: BarcodeScanningResult) => {
       const value = data.trim();
       if (!value) return;
-      await sendScan(makeScanItem(value, type, "barcode"));
+      await sendScan(makeScanItem(value, type, "barcode", settings.scannerInsertIntoCursor));
     },
-    [sendScan]
+    [sendScan, settings.scannerInsertIntoCursor]
   );
 
   const sendManualText = useCallback(() => {
     const value = manualText.trim();
     if (!value) return;
     setManualText("");
-    sendScan(makeScanItem(value, "plain-text", "text"));
+    sendScan(makeScanItem(value, "plain-text", "text", false));
   }, [manualText, sendScan]);
 
   const sendDictationText = useCallback(
@@ -570,7 +613,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       const value = text.trim();
       if (!value || value === lastDictationRef.current) return;
       lastDictationRef.current = value;
-      sendScan(makeScanItem(value, "dictation", "text"));
+      sendScan(makeScanItem(value, "dictation", "text", true));
     },
     [sendScan]
   );
@@ -580,14 +623,14 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       const value = (text ?? (await Clipboard.getStringAsync())).trim();
       if (!value || value === lastTextCaptureClipboardRef.current) return;
       lastTextCaptureClipboardRef.current = value;
-      await sendScan(makeScanItem(value, "live-text", "text"));
+      await sendScan(makeScanItem(value, "live-text", "text", settings.ocrInsertIntoCursor));
       setTextCaptureResult({
         text: value,
         target: channelRef.current?.readyState === "open" ? "Chrome results" : "local scan history",
         sentAt: new Date().toISOString(),
       });
     },
-    [sendScan]
+    [sendScan, settings.ocrInsertIntoCursor]
   );
 
   useEffect(() => {
@@ -686,22 +729,16 @@ export function ScannerProvider({ children }: PropsWithChildren) {
 
     setRecognizingText(true);
     try {
-      const photo = await cameraRef.current.takePictureAsync({ quality: 1, skipProcessing: false });
-      setTextCapture({ photoUri: photo.uri });
-
-      let capturedCodeCount = 0;
-      if (settings.detectCodesOnOcrCapture) {
-        try {
-          const codeResults = await scanFromURLAsync(photo.uri, [...barcodeTypes]);
-          const uniqueCodes = Array.from(
-            new Map(codeResults.map((code) => [code.data.trim(), code])).values()
-          ).filter((code) => code.data.trim());
-          capturedCodeCount = uniqueCodes.length;
-          await Promise.all(uniqueCodes.map((code) => sendScan(makeScanItem(code.data, code.type, "barcode"))));
-        } catch {
-          capturedCodeCount = 0;
-        }
-      }
+      const photo = await cameraRef.current.takePictureAsync({ quality: 0.92, skipProcessing: false });
+      const resizeAction = getOcrResizeAction(photo);
+      const preparedPhoto = resizeAction
+        ? await manipulateAsync(photo.uri, [resizeAction], {
+            compress: 0.92,
+            format: SaveFormat.JPEG,
+          })
+        : photo;
+      setCaptureZoom(1);
+      setTextCapture({ photoUri: preparedPhoto.uri });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not read text from the camera.";
       Alert.alert(
@@ -713,11 +750,12 @@ export function ScannerProvider({ children }: PropsWithChildren) {
     } finally {
       setRecognizingText(false);
     }
-  }, [recognizingText, sendScan, settings.detectCodesOnOcrCapture]);
+  }, [recognizingText]);
 
   const clearTextCapture = useCallback(() => {
     setTextCapture(null);
     setTextCaptureResult(null);
+    setCaptureZoom(1);
   }, []);
 
   const statusLabel = useMemo(() => {
@@ -730,12 +768,17 @@ export function ScannerProvider({ children }: PropsWithChildren) {
   const value = useMemo<ScannerState>(
     () => ({
       cameraRef,
+      cameraZoom,
+      captureZoom,
       captureText,
+      clearCameraFocus,
       clearTextCapture,
       connected,
       dictating,
       dictationError,
       dictationTranscript,
+      focusMode,
+      focusPoint,
       hasManualText: manualText.trim().length > 0,
       manualText,
       onBarcodeScanned,
@@ -749,6 +792,10 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       sendBarcodeScanResult,
       sendPhotoCapture,
       sendManualText,
+      setCameraZoom,
+      setCaptureZoom,
+      setFocusMode,
+      setFocusPoint,
       setManualText,
       setSetting,
       startDictation,
@@ -762,16 +809,23 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       torch,
     }),
     [
+      cameraZoom,
+      captureZoom,
       captureText,
+      clearCameraFocus,
       clearTextCapture,
       connected,
       dictating,
       dictationError,
       dictationTranscript,
+      focusMode,
+      focusPoint,
       manualText,
       onBarcodeScanned,
       pairFromUrl,
       permission,
+      photoError,
+      photoSending,
       recognizingText,
       requestPermission,
       scans,

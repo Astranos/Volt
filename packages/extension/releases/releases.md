@@ -4,6 +4,22 @@ Download the latest version of the Volt Chrome Extension.
 
 ## Latest Release
 
+### v1.0.29 (Current)
+
+**Release Date:** May 23, 2026
+**Download:** [voltextension-1.0.29-chrome.zip](./voltextension-1.0.29-chrome.zip)
+
+**What's New:**
+
+This release includes the latest mobile scanner viewfinder updates and extension build artifacts.
+
+### Changes
+
+- Bumped the extension version to `1.0.29`
+- Built the Chrome extension release zip
+
+## Previous Release
+
 ### v1.0.23 (Current)
 
 **Release Date:** May 22, 2026

@@ -119,6 +119,10 @@ export default defineBackground({
     }
 
     function shouldInsertScannerMessage(message) {
+      if (typeof message?.insertIntoCursor === "boolean") {
+        return message.insertIntoCursor;
+      }
+
       return (
         message?.kind === "barcode" ||
         (message?.kind === "text" && message?.format === "dictation")

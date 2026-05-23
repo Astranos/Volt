@@ -3,12 +3,23 @@ import { CameraView, type BarcodeScanningResult } from "expo-camera";
 import { useFocusEffect } from "expo-router";
 import { Alert, Image, Platform, Pressable, Text, View, type GestureResponderEvent, type LayoutChangeEvent } from "react-native";
 import { useCallback, useMemo, useRef, useState } from "react";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { barcodeTypes, useScanner } from "../../lib/scanner-state";
-import { Header, PairingPanel, ScreenRoot, StartCameraOverlay, TorchButton, styles } from "./index";
+import {
+  CameraOverlayButton,
+  CameraControlStack,
+  CursorInsertButton,
+  DisconnectedPairingView,
+  Header,
+  PhotoNegativeOverlay,
+  ScreenRoot,
+  ViewfinderBottomShutter,
+  ViewfinderSurface,
+  ViewfinderTopRightControls,
+  styles,
+} from "./index";
 
 const scannerFloatingBottom = Platform.select({ ios: 94, default: 86 });
-const scannerControlsHeight = 122;
-const scannerCameraGap = 18;
 const zoomStep = 0.08;
 
 type ViewfinderSize = {
@@ -37,10 +48,11 @@ function touchDistance(event: GestureResponderEvent) {
 function getTargetFrame(size: ViewfinderSize): BarcodeBox {
   const width = size.width * 0.78;
   const height = Math.max(108, size.height * 0.24);
+  const centerY = size.height * 0.4;
 
   return {
     left: (size.width - width) / 2,
-    top: (size.height - height) / 2,
+    top: Math.max(24, centerY - height / 2),
     width,
     height,
   };
@@ -101,14 +113,12 @@ function getBarcodeBox(result: BarcodeScanningResult | null, size: ViewfinderSiz
 
 export default function ScannerTab() {
   const scanner = useScanner();
+  const insets = useSafeAreaInsets();
   const permission = scanner.permission;
   const [pairScannerOpen, setPairScannerOpen] = useState(false);
   const [pairScannerLocked, setPairScannerLocked] = useState(false);
   const [pairScannerError, setPairScannerError] = useState<string | null>(null);
-  const [cameraActive, setCameraActive] = useState(false);
-  const [cameraZoom, setCameraZoom] = useState(0);
-  const [focusMode, setFocusMode] = useState<"on" | "off">("off");
-  const [focusPoint, setFocusPoint] = useState<{ x: number; y: number } | null>(null);
+  const [viewfinderFocused, setViewfinderFocused] = useState(false);
   const [activeBarcode, setActiveBarcode] = useState<BarcodeScanningResult | null>(null);
   const [viewfinderSize, setViewfinderSize] = useState<ViewfinderSize | null>(null);
   const pairScannerLockedRef = useRef(false);
@@ -119,20 +129,18 @@ export default function ScannerTab() {
 
   useFocusEffect(
     useCallback(() => {
+      setViewfinderFocused(true);
       return () => {
-        setCameraActive(false);
+        setViewfinderFocused(false);
         setPairScannerOpen(false);
         setPairScannerLocked(false);
         pairScannerLockedRef.current = false;
-        scanner.setTorch(false);
-        setCameraZoom(0);
-        setFocusMode("off");
-        setFocusPoint(null);
+        scanner.clearCameraFocus();
         setActiveBarcode(null);
         if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
         if (activeBarcodeTimerRef.current) clearTimeout(activeBarcodeTimerRef.current);
       };
-    }, [scanner.setTorch])
+    }, [scanner.clearCameraFocus])
   );
 
   const targetFrame = useMemo(() => (viewfinderSize ? getTargetFrame(viewfinderSize) : null), [viewfinderSize]);
@@ -140,6 +148,7 @@ export default function ScannerTab() {
     () => getBarcodeBox(activeBarcode, viewfinderSize),
     [activeBarcode, viewfinderSize]
   );
+  const floatingBottom = Math.max(scannerFloatingBottom, insets.bottom + 74);
 
   const handleCameraLayout = useCallback((event: LayoutChangeEvent) => {
     const { width, height } = event.nativeEvent.layout;
@@ -148,14 +157,12 @@ export default function ScannerTab() {
 
   const triggerFocus = useCallback((event: GestureResponderEvent) => {
     const { locationX, locationY } = event.nativeEvent;
-    setFocusMode("on");
-    setFocusPoint({ x: locationX, y: locationY });
+    scanner.setFocusMode("off");
+    scanner.setFocusPoint({ x: locationX, y: locationY });
+    requestAnimationFrame(() => scanner.setFocusMode("on"));
     if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
-    focusTimerRef.current = setTimeout(() => {
-      setFocusMode("off");
-      setFocusPoint(null);
-    }, 900);
-  }, []);
+    focusTimerRef.current = setTimeout(scanner.clearCameraFocus, 900);
+  }, [scanner]);
 
   const handleCameraTouchStart = useCallback(
     (event: GestureResponderEvent) => {
@@ -165,17 +172,17 @@ export default function ScannerTab() {
         return;
       }
       pinchStartDistanceRef.current = distance;
-      pinchStartZoomRef.current = cameraZoom;
+      pinchStartZoomRef.current = scanner.cameraZoom;
     },
-    [cameraZoom, triggerFocus]
+    [scanner.cameraZoom, triggerFocus]
   );
 
   const handleCameraTouchMove = useCallback((event: GestureResponderEvent) => {
     const distance = touchDistance(event);
     if (distance == null || pinchStartDistanceRef.current == null) return;
     const delta = (distance - pinchStartDistanceRef.current) / 260;
-    setCameraZoom(clampZoom(pinchStartZoomRef.current + delta));
-  }, []);
+    scanner.setCameraZoom(clampZoom(pinchStartZoomRef.current + delta));
+  }, [scanner]);
 
   const handleCameraTouchEnd = useCallback(() => {
     pinchStartDistanceRef.current = null;
@@ -267,123 +274,113 @@ export default function ScannerTab() {
   return (
     <ScreenRoot>
       <Header />
-      <View style={[styles.page, !scanner.connected && styles.disconnectedPage]}>
-        <View style={[styles.content, scanner.connected && localStyles.scannerContent]}>
+      <View style={styles.page}>
+        <View style={localStyles.connectedBody}>
           {!scanner.connected ? (
-            pairScannerOpen ? (
-              <View style={styles.cameraShell}>
-                <CameraView
-                  style={styles.camera}
-                  facing="back"
-                  barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
-                  onBarcodeScanned={pairScannerLocked ? undefined : onPairingQrScanned}
-                />
-                <View style={styles.pairingScanOverlay} pointerEvents="none">
-                  <View style={styles.pairingScanFrame} />
-                </View>
-                <Pressable
-                  style={styles.pairingCloseButton}
-                  onPress={() => {
-                    pairScannerLockedRef.current = false;
-                    setPairScannerLocked(false);
-                    setPairScannerOpen(false);
-                  }}
-                >
-                  <Ionicons name="close" size={18} color="#fafaf9" />
-                </Pressable>
-              </View>
-            ) : (
-              <PairingPanel
-                error={pairScannerError}
-                onOpenScanner={openPairScanner}
-                statusLabel={scanner.statusLabel}
-              />
-            )
+            <DisconnectedPairingView
+              error={pairScannerError}
+              pairingActive={pairScannerOpen || !!scanner.permission?.granted}
+              pairingLocked={pairScannerLocked}
+              onOpenScanner={openPairScanner}
+              onPairingQrScanned={onPairingQrScanned}
+            />
           ) : (
             <>
-              <View style={styles.cameraShell}>
-                {cameraActive ? (
-                  <>
-                    <CameraView
-                      style={styles.camera}
-                      facing="back"
-                      enableTorch={scanner.torch}
-                      zoom={cameraZoom}
-                      autofocus={focusMode}
-                      barcodeScannerSettings={{ barcodeTypes: [...barcodeTypes] }}
-                      onBarcodeScanned={onCandidateBarcodeScanned}
-                      onLayout={handleCameraLayout}
-                      onTouchStart={handleCameraTouchStart}
-                      onTouchMove={handleCameraTouchMove}
-                      onTouchEnd={handleCameraTouchEnd}
-                    />
-                    {focusPoint ? (
-                      <View
-                        pointerEvents="none"
-                        style={[
-                          styles.focusRing,
-                          {
-                            left: focusPoint.x - 34,
-                            top: focusPoint.y - 34,
-                          },
-                        ]}
-                      />
-                    ) : null}
-                    <View style={localStyles.viewfinderOverlay} pointerEvents="none">
-                      {targetFrame ? (
-                        <View
-                          style={[
-                            localStyles.scanFrame,
-                            {
-                              left: targetFrame.left,
-                              top: targetFrame.top,
-                              width: targetFrame.width,
-                              height: targetFrame.height,
-                            },
-                          ]}
-                        >
-                          <View style={localStyles.scanLine} />
-                        </View>
-                      ) : null}
-                      {activeBarcodeBox ? (
-                        <View
-                          style={[
-                            localStyles.activeBarcodeBox,
-                            {
-                              left: activeBarcodeBox.left,
-                              top: activeBarcodeBox.top,
-                              width: activeBarcodeBox.width,
-                              height: activeBarcodeBox.height,
-                            },
-                          ]}
-                        />
-                      ) : null}
-                    </View>
-                    <View style={styles.zoomControls}>
-                      <Pressable
-                        accessibilityLabel="Zoom scanner out"
-                        accessibilityRole="button"
-                        style={styles.zoomButton}
-                        onPress={() => setCameraZoom((value) => clampZoom(value - zoomStep))}
-                      >
-                        <Ionicons name="remove" size={18} color="#fafaf9" />
-                      </Pressable>
-                      <Text style={styles.zoomText}>{Math.round(cameraZoom * 100)}%</Text>
-                      <Pressable
-                        accessibilityLabel="Zoom scanner in"
-                        accessibilityRole="button"
-                        style={styles.zoomButton}
-                        onPress={() => setCameraZoom((value) => clampZoom(value + zoomStep))}
-                      >
-                        <Ionicons name="add" size={18} color="#fafaf9" />
-                      </Pressable>
-                    </View>
-                    <TorchButton />
-                  </>
+              <ViewfinderSurface>
+                {viewfinderFocused ? (
+                  <CameraView
+                    ref={scanner.cameraRef}
+                    style={styles.camera}
+                    facing="back"
+                    enableTorch={scanner.torch}
+                    zoom={scanner.cameraZoom}
+                    autofocus={scanner.focusMode}
+                    barcodeScannerSettings={{ barcodeTypes: [...barcodeTypes] }}
+                    onBarcodeScanned={onCandidateBarcodeScanned}
+                    onLayout={handleCameraLayout}
+                    onTouchStart={handleCameraTouchStart}
+                    onTouchMove={handleCameraTouchMove}
+                    onTouchEnd={handleCameraTouchEnd}
+                  />
                 ) : null}
-                {!cameraActive ? <StartCameraOverlay onPress={() => setCameraActive(true)} /> : null}
-              </View>
-              <ScannerBottomControls activeBarcode={activeBarcode} cameraActive={cameraActive} onScan={sendActiveBarcode} />
+                {scanner.focusPoint ? (
+                  <View
+                    pointerEvents="none"
+                    style={[
+                      styles.focusRing,
+                      {
+                        left: scanner.focusPoint.x - 34,
+                        top: scanner.focusPoint.y - 34,
+                      },
+                    ]}
+                  />
+                ) : null}
+                <View style={localStyles.viewfinderOverlay} pointerEvents="none">
+                  {targetFrame ? (
+                    <View
+                      style={[
+                        localStyles.scanFrame,
+                        {
+                          left: targetFrame.left,
+                          top: targetFrame.top,
+                          width: targetFrame.width,
+                          height: targetFrame.height,
+                        },
+                      ]}
+                    >
+                      <View style={localStyles.scanLine} />
+                    </View>
+                  ) : null}
+                  {activeBarcodeBox ? (
+                    <View
+                      style={[
+                        localStyles.activeBarcodeBox,
+                        {
+                          left: activeBarcodeBox.left,
+                          top: activeBarcodeBox.top,
+                          width: activeBarcodeBox.width,
+                          height: activeBarcodeBox.height,
+                        },
+                      ]}
+                    />
+                  ) : null}
+                </View>
+                <PhotoNegativeOverlay>
+                  <ViewfinderTopRightControls>
+                    <CameraOverlayButton
+                      active={scanner.torch}
+                      accessibilityLabel={scanner.torch ? "Turn flash off" : "Turn flash on"}
+                      onPress={() => scanner.setTorch((value) => !value)}
+                    >
+                      <Ionicons
+                        name={scanner.torch ? "flash" : "flash-outline"}
+                        size={22}
+                        color={scanner.torch ? "#facc15" : "#fafaf9"}
+                      />
+                    </CameraOverlayButton>
+                    <CursorInsertButton
+                      active={scanner.settings.scannerInsertIntoCursor}
+                      accessibilityLabel={
+                        scanner.settings.scannerInsertIntoCursor
+                          ? "Send barcode scans to cursor"
+                          : "Send barcode scans to results"
+                      }
+                      onPress={() =>
+                        scanner.setSetting("scannerInsertIntoCursor", !scanner.settings.scannerInsertIntoCursor)
+                      }
+                    />
+                  </ViewfinderTopRightControls>
+                  <CameraControlStack
+                    bottom={floatingBottom}
+                    label={`${(1 + scanner.cameraZoom * 4).toFixed(1)}x`}
+                    onZoomIn={() => scanner.setCameraZoom((value) => clampZoom(value + zoomStep))}
+                    onZoomOut={() => scanner.setCameraZoom((value) => clampZoom(value - zoomStep))}
+                    shutter={
+                      <ScannerBottomControls activeBarcode={activeBarcode} onScan={sendActiveBarcode} />
+                    }
+                  />
+                </PhotoNegativeOverlay>
+              </ViewfinderSurface>
             </>
           )}
         </View>
@@ -394,42 +391,28 @@ export default function ScannerTab() {
 
 function ScannerBottomControls({
   activeBarcode,
-  cameraActive,
   onScan,
 }: {
   activeBarcode: BarcodeScanningResult | null;
-  cameraActive: boolean;
   onScan: () => void;
 }) {
-  const scanDisabled = !cameraActive || !activeBarcode;
+  const scanDisabled = !activeBarcode;
   const scanLabel = activeBarcode?.data.trim() || "Center a barcode in the frame";
 
   return (
-    <View style={[styles.bottomControls, { bottom: scannerFloatingBottom }]}>
-      <View style={localStyles.scanStatusPanel}>
-        <Ionicons name={activeBarcode ? "scan" : "scan-outline"} size={18} color={activeBarcode ? "#16a34a" : "#78716c"} />
-        <View style={localStyles.scanStatusTextGroup}>
-          <Text style={localStyles.scanStatusTitle}>{activeBarcode ? "Ready to scan" : "No active barcode"}</Text>
-          <Text numberOfLines={1} style={localStyles.scanStatusValue}>{scanLabel}</Text>
-        </View>
-      </View>
-      <Pressable
-        accessibilityLabel="Scan active barcode"
-        accessibilityRole="button"
-        disabled={scanDisabled}
-        onPress={onScan}
-        style={[localStyles.scanButton, scanDisabled && styles.disabled]}
-      >
-        <Ionicons name="barcode-outline" size={22} color="#f0fdf4" />
-        <Text style={localStyles.scanButtonText}>Scan</Text>
-      </Pressable>
-    </View>
+    <ViewfinderBottomShutter
+      disabled={scanDisabled}
+      icon="barcode-outline"
+      label="Scan active barcode"
+      onPress={onScan}
+      status={activeBarcode ? `Ready: ${scanLabel}` : scanLabel}
+    />
   );
 }
 
 const localStyles = {
-  scannerContent: {
-    paddingBottom: scannerFloatingBottom + scannerControlsHeight + scannerCameraGap,
+  connectedBody: {
+    flex: 1,
   },
   viewfinderOverlay: {
     position: "absolute" as const,
@@ -461,33 +444,4 @@ const localStyles = {
     borderRadius: 10,
     backgroundColor: "rgba(34, 197, 94, 0.12)",
   },
-  scanStatusPanel: {
-    minHeight: 54,
-    paddingHorizontal: 14,
-    borderRadius: 22,
-    backgroundColor: "#fafaf9",
-    borderWidth: 1,
-    borderColor: "#e7e5e4",
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: 10,
-  },
-  scanStatusTextGroup: { flex: 1 },
-  scanStatusTitle: { color: "#1c1917", fontSize: 13, fontWeight: "800" as const },
-  scanStatusValue: { color: "#78716c", fontSize: 13, marginTop: 2 },
-  scanButton: {
-    height: 58,
-    borderRadius: 29,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-    flexDirection: "row" as const,
-    gap: 8,
-    backgroundColor: "#16a34a",
-    shadowColor: "#15803d",
-    shadowOpacity: 0.24,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 6,
-  },
-  scanButtonText: { color: "#f0fdf4", fontSize: 17, fontWeight: "800" as const },
 };

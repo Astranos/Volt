@@ -1,11 +1,22 @@
 import { Ionicons } from "@expo/vector-icons";
 import { CameraView, type BarcodeScanningResult } from "expo-camera";
 import { useFocusEffect } from "expo-router";
-import { Image, Pressable, Text, View, type GestureResponderEvent } from "react-native";
+import { Image, Platform, Pressable, Text, View, useWindowDimensions, type GestureResponderEvent } from "react-native";
 import { useCallback, useRef, useState } from "react";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useScanner } from "../../lib/scanner-state";
-import { Header, PairingPanel, ScreenRoot, StartCameraOverlay, styles } from "./index";
+import {
+  CameraOverlayButton,
+  CameraControlStack,
+  DisconnectedPairingView,
+  Header,
+  ScreenRoot,
+  ViewfinderBottomShutter,
+  ViewfinderSurface,
+  styles,
+} from "./index";
 
+const photoFloatingBottom = Platform.select({ ios: 94, default: 86 });
 const zoomStep = 0.08;
 
 function clampZoom(value: number) {
@@ -21,13 +32,12 @@ function touchDistance(event: GestureResponderEvent) {
 
 export default function PhotosTab() {
   const scanner = useScanner();
+  const insets = useSafeAreaInsets();
+  const { height: windowHeight, width: windowWidth } = useWindowDimensions();
   const [pairScannerOpen, setPairScannerOpen] = useState(false);
   const [pairScannerLocked, setPairScannerLocked] = useState(false);
   const [pairScannerError, setPairScannerError] = useState<string | null>(null);
-  const [cameraActive, setCameraActive] = useState(false);
-  const [cameraZoom, setCameraZoom] = useState(0);
-  const [focusMode, setFocusMode] = useState<"on" | "off">("off");
-  const [focusPoint, setFocusPoint] = useState<{ x: number; y: number } | null>(null);
+  const [viewfinderFocused, setViewfinderFocused] = useState(false);
   const [gridVisible, setGridVisible] = useState(true);
   const pairScannerLockedRef = useRef(false);
   const focusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -36,30 +46,26 @@ export default function PhotosTab() {
 
   useFocusEffect(
     useCallback(() => {
+      setViewfinderFocused(true);
       return () => {
-        setCameraActive(false);
+        setViewfinderFocused(false);
         setPairScannerOpen(false);
         setPairScannerLocked(false);
         pairScannerLockedRef.current = false;
-        scanner.setTorch(false);
-        setCameraZoom(0);
-        setFocusMode("off");
-        setFocusPoint(null);
+        scanner.clearCameraFocus();
         if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
       };
-    }, [scanner.setTorch])
+    }, [scanner.clearCameraFocus])
   );
 
   const triggerFocus = useCallback((event: GestureResponderEvent) => {
     const { locationX, locationY } = event.nativeEvent;
-    setFocusMode("on");
-    setFocusPoint({ x: locationX, y: locationY });
+    scanner.setFocusMode("off");
+    scanner.setFocusPoint({ x: locationX, y: locationY });
+    requestAnimationFrame(() => scanner.setFocusMode("on"));
     if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
-    focusTimerRef.current = setTimeout(() => {
-      setFocusMode("off");
-      setFocusPoint(null);
-    }, 900);
-  }, []);
+    focusTimerRef.current = setTimeout(scanner.clearCameraFocus, 900);
+  }, [scanner]);
 
   const handleCameraTouchStart = useCallback(
     (event: GestureResponderEvent) => {
@@ -69,21 +75,26 @@ export default function PhotosTab() {
         return;
       }
       pinchStartDistanceRef.current = distance;
-      pinchStartZoomRef.current = cameraZoom;
+      pinchStartZoomRef.current = scanner.cameraZoom;
     },
-    [cameraZoom, triggerFocus]
+    [scanner.cameraZoom, triggerFocus]
   );
 
   const handleCameraTouchMove = useCallback((event: GestureResponderEvent) => {
     const distance = touchDistance(event);
     if (distance == null || pinchStartDistanceRef.current == null) return;
     const delta = (distance - pinchStartDistanceRef.current) / 260;
-    setCameraZoom(clampZoom(pinchStartZoomRef.current + delta));
-  }, []);
+    scanner.setCameraZoom(clampZoom(pinchStartZoomRef.current + delta));
+  }, [scanner]);
 
   const handleCameraTouchEnd = useCallback(() => {
     pinchStartDistanceRef.current = null;
   }, []);
+
+  const floatingBottom = Math.max(photoFloatingBottom, insets.bottom + 74);
+  const photoFrameGap = 18;
+  const photoFrameSize = Math.max(0, windowWidth - photoFrameGap * 2);
+  const photoMaskBorderWidth = Math.max(windowHeight, windowWidth);
 
   const openPairScanner = async () => {
     if (!scanner.permission?.granted) {
@@ -124,38 +135,14 @@ export default function PhotosTab() {
     return (
       <ScreenRoot>
         <Header />
-        <View style={[styles.page, styles.disconnectedPage]}>
-          <View style={styles.content}>
-            {pairScannerOpen ? (
-              <View style={styles.cameraShell}>
-                <CameraView
-                  style={styles.camera}
-                  facing="back"
-                  barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
-                  onBarcodeScanned={pairScannerLocked ? undefined : onPairingQrScanned}
-                />
-                <View style={styles.pairingScanOverlay} pointerEvents="none">
-                  <View style={styles.pairingScanFrame} />
-                </View>
-                <Pressable
-                  style={styles.pairingCloseButton}
-                  onPress={() => {
-                    pairScannerLockedRef.current = false;
-                    setPairScannerLocked(false);
-                    setPairScannerOpen(false);
-                  }}
-                >
-                  <Ionicons name="close" size={18} color="#fafaf9" />
-                </Pressable>
-              </View>
-            ) : (
-              <PairingPanel
-                error={pairScannerError}
-                onOpenScanner={openPairScanner}
-                statusLabel={scanner.statusLabel}
-              />
-            )}
-          </View>
+        <View style={styles.page}>
+          <DisconnectedPairingView
+            error={pairScannerError}
+            pairingActive={pairScannerOpen || !!scanner.permission?.granted}
+            pairingLocked={pairScannerLocked}
+            onOpenScanner={openPairScanner}
+            onPairingQrScanned={onPairingQrScanned}
+          />
         </View>
       </ScreenRoot>
     );
@@ -184,230 +171,165 @@ export default function PhotosTab() {
     <ScreenRoot>
       <Header />
       <View style={styles.page}>
-        <View style={[styles.content, localStyles.photoContent]}>
-          <View style={[styles.cameraShell, localStyles.photoCameraShell]}>
-            {cameraActive ? (
-              <>
-                <CameraView
-                  ref={scanner.cameraRef}
-                  style={styles.camera}
-                  facing="back"
-                  enableTorch={scanner.torch}
-                  zoom={cameraZoom}
-                  autofocus={focusMode}
-                  onTouchStart={handleCameraTouchStart}
-                  onTouchMove={handleCameraTouchMove}
-                  onTouchEnd={handleCameraTouchEnd}
-                />
-                {gridVisible ? <PhotoGridOverlay /> : null}
-                {focusPoint ? (
-                  <View
-                    pointerEvents="none"
-                    style={[
-                      styles.focusRing,
-                      {
-                        left: focusPoint.x - 34,
-                        top: focusPoint.y - 34,
-                      },
-                    ]}
-                  />
-                ) : null}
-
-                <View style={localStyles.viewfinderTopRight}>
-                  <Pressable
-                    accessibilityLabel={scanner.torch ? "Turn flash off" : "Turn flash on"}
-                    accessibilityRole="button"
-                    hitSlop={8}
-                    style={[localStyles.overlayButton, scanner.torch && localStyles.overlayButtonActive]}
-                    onPress={() => scanner.setTorch((value) => !value)}
-                  >
-                    <Ionicons
-                      name={scanner.torch ? "flash" : "flash-outline"}
-                      size={22}
-                      color={scanner.torch ? "#facc15" : "#fafaf9"}
-                    />
-                  </Pressable>
-                  <Pressable
-                    accessibilityLabel={gridVisible ? "Hide photo grid" : "Show photo grid"}
-                    accessibilityRole="button"
-                    hitSlop={8}
-                    style={[localStyles.overlayButton, gridVisible && localStyles.overlayButtonActive]}
-                    onPress={() => setGridVisible((value) => !value)}
-                  >
-                    <Ionicons
-                      name={gridVisible ? "grid" : "grid-outline"}
-                      size={20}
-                      color={gridVisible ? "#86efac" : "#fafaf9"}
-                    />
-                  </Pressable>
-                </View>
-
-                <View style={localStyles.viewfinderZoomBar} pointerEvents="box-none">
-                  <View style={localStyles.zoomPill}>
-                    <Pressable
-                      accessibilityLabel="Zoom photo camera out"
-                      accessibilityRole="button"
-                      hitSlop={6}
-                      style={localStyles.zoomPillButton}
-                      onPress={() => setCameraZoom((value) => clampZoom(value - zoomStep))}
-                    >
-                      <Ionicons name="remove" size={20} color="#fafaf9" />
-                    </Pressable>
-                    <Text style={localStyles.zoomPillText}>{`${(1 + cameraZoom * 4).toFixed(1)}x`}</Text>
-                    <Pressable
-                      accessibilityLabel="Zoom photo camera in"
-                      accessibilityRole="button"
-                      hitSlop={6}
-                      style={localStyles.zoomPillButton}
-                      onPress={() => setCameraZoom((value) => clampZoom(value + zoomStep))}
-                    >
-                      <Ionicons name="add" size={20} color="#fafaf9" />
-                    </Pressable>
-                  </View>
-                </View>
-              </>
-            ) : null}
-            {!cameraActive ? <StartCameraOverlay onPress={() => setCameraActive(true)} /> : null}
-          </View>
-
-          <View style={localStyles.photoControls}>
+        <ViewfinderSurface>
+          {viewfinderFocused ? (
+            <CameraView
+              ref={scanner.cameraRef}
+              style={styles.camera}
+              facing="back"
+              enableTorch={scanner.torch}
+              zoom={scanner.cameraZoom}
+              autofocus={scanner.focusMode}
+              onTouchStart={handleCameraTouchStart}
+              onTouchMove={handleCameraTouchMove}
+              onTouchEnd={handleCameraTouchEnd}
+            />
+          ) : null}
+          <PhotoFrameOverlay
+            gap={photoFrameGap}
+            gridVisible={gridVisible}
+            maskBorderWidth={photoMaskBorderWidth}
+            size={photoFrameSize}
+          />
+          {scanner.focusPoint ? (
             <View
+              pointerEvents="none"
               style={[
-                localStyles.statusPill,
-                scanner.photoError && localStyles.statusPillError,
-                scanner.photoSending && localStyles.statusPillActive,
+                styles.focusRing,
+                {
+                  left: scanner.focusPoint.x - 34,
+                  top: scanner.focusPoint.y - 34,
+                },
               ]}
-            >
-              <View
-                style={[
-                  localStyles.statusDot,
-                  scanner.photoError && localStyles.statusDotError,
-                  scanner.photoSending && localStyles.statusDotActive,
-                ]}
-              />
-              <Text numberOfLines={1} style={localStyles.statusPillText}>
-                {scanner.photoError
-                  ? scanner.photoError
-                  : scanner.photoSending
-                    ? "Sending photo…"
-                    : cameraActive
-                      ? "Tap shutter to send to Chrome"
-                      : "Tap Start to activate camera"}
-              </Text>
-            </View>
+            />
+          ) : null}
 
-            <Pressable
-              accessibilityLabel="Take and send photo"
-              accessibilityRole="button"
-              disabled={!cameraActive || scanner.photoSending}
-              onPress={scanner.sendPhotoCapture}
-              style={({ pressed }) => [
-                localStyles.shutterRing,
-                (!cameraActive || scanner.photoSending) && styles.disabled,
-                pressed && cameraActive && !scanner.photoSending && localStyles.shutterRingPressed,
-              ]}
-            >
-              <View
-                style={[
-                  localStyles.shutterCore,
-                  scanner.photoSending && localStyles.shutterCoreBusy,
-                ]}
+          <View pointerEvents="box-none" style={localStyles.photoControlsOverlay}>
+            <View style={localStyles.photoTopRightControls}>
+              <CameraOverlayButton
+                active={scanner.torch}
+                accessibilityLabel={scanner.torch ? "Turn flash off" : "Turn flash on"}
+                onPress={() => scanner.setTorch((value) => !value)}
               >
                 <Ionicons
-                  name={scanner.photoSending ? "hourglass-outline" : "camera"}
-                  size={28}
-                  color="#f0fdf4"
+                  name={scanner.torch ? "flash" : "flash-outline"}
+                  size={22}
+                  color={scanner.torch ? "#facc15" : "#fafaf9"}
                 />
-              </View>
-            </Pressable>
+              </CameraOverlayButton>
+              <CameraOverlayButton
+                active={gridVisible}
+                accessibilityLabel={gridVisible ? "Hide photo grid" : "Show photo grid"}
+                onPress={() => setGridVisible((value) => !value)}
+              >
+                <Ionicons
+                  name={gridVisible ? "grid" : "grid-outline"}
+                  size={20}
+                  color={gridVisible ? "#86efac" : "#fafaf9"}
+                />
+              </CameraOverlayButton>
+            </View>
+
+            <CameraControlStack
+              bottom={floatingBottom}
+              label={`${(1 + scanner.cameraZoom * 4).toFixed(1)}x`}
+              onZoomIn={() => scanner.setCameraZoom((value) => clampZoom(value + zoomStep))}
+              onZoomOut={() => scanner.setCameraZoom((value) => clampZoom(value - zoomStep))}
+              shutter={
+                <ViewfinderBottomShutter
+                  disabled={scanner.photoSending}
+                  error={scanner.photoError}
+                  icon={scanner.photoSending ? "hourglass-outline" : "camera"}
+                  label="Take and send photo"
+                  onPress={scanner.sendPhotoCapture}
+                  status={scanner.photoSending ? "Sending photo..." : "Tap shutter to send to Chrome"}
+                  statusActive={scanner.photoSending}
+                />
+              }
+            />
           </View>
-        </View>
+        </ViewfinderSurface>
       </View>
     </ScreenRoot>
   );
 }
 
-function PhotoGridOverlay() {
+function PhotoFrameOverlay({
+  gap,
+  gridVisible,
+  maskBorderWidth,
+  size,
+}: {
+  gap: number;
+  gridVisible: boolean;
+  maskBorderWidth: number;
+  size: number;
+}) {
   return (
-    <View pointerEvents="none" style={localStyles.gridOverlay}>
-      <View style={[localStyles.gridLineVertical, { left: "33.333%" }]} />
-      <View style={[localStyles.gridLineVertical, { left: "66.666%" }]} />
-      <View style={[localStyles.gridLineHorizontal, { top: "33.333%" }]} />
-      <View style={[localStyles.gridLineHorizontal, { top: "66.666%" }]} />
+    <View pointerEvents="none" style={localStyles.photoFrameOverlay}>
+      <View
+        style={[
+          localStyles.photoRoundedDimMask,
+          {
+            top: gap - maskBorderWidth,
+            left: gap - maskBorderWidth,
+            width: size + maskBorderWidth * 2,
+            height: size + maskBorderWidth * 2,
+            borderRadius: maskBorderWidth + 34,
+            borderWidth: maskBorderWidth,
+          },
+        ]}
+      />
+      <View style={[localStyles.photoFrameBorder, { top: gap, left: gap, width: size, height: size }]}>
+        {gridVisible ? <PhotoGridOverlay /> : null}
+      </View>
     </View>
   );
 }
 
+function PhotoGridOverlay() {
+  return (
+    <>
+      <View style={[localStyles.gridLineVertical, { left: "33.333%" }]} />
+      <View style={[localStyles.gridLineVertical, { left: "66.666%" }]} />
+      <View style={[localStyles.gridLineHorizontal, { top: "33.333%" }]} />
+      <View style={[localStyles.gridLineHorizontal, { top: "66.666%" }]} />
+    </>
+  );
+}
+
 const localStyles = {
-  photoContent: {
-    paddingTop: 18,
-    paddingBottom: 18,
-    justifyContent: "flex-start" as const,
-  },
-  photoCameraShell: {
-    flex: 0,
-    aspectRatio: 1,
-    width: "auto" as const,
-  },
-  viewfinderTopRight: {
-    position: "absolute" as const,
-    top: 12,
-    right: 12,
-    flexDirection: "column" as const,
-    gap: 10,
-  },
-  overlayButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-    backgroundColor: "rgba(28, 25, 23, 0.55)",
-    borderWidth: 1,
-    borderColor: "rgba(250, 250, 249, 0.14)",
-  },
-  overlayButtonActive: {
-    backgroundColor: "rgba(28, 25, 23, 0.82)",
-    borderColor: "rgba(250, 250, 249, 0.32)",
-  },
-  viewfinderZoomBar: {
-    position: "absolute" as const,
-    left: 0,
-    right: 0,
-    bottom: 14,
-    alignItems: "center" as const,
-  },
-  zoomPill: {
-    minHeight: 44,
-    paddingHorizontal: 6,
-    borderRadius: 999,
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: 4,
-    backgroundColor: "rgba(28, 25, 23, 0.62)",
-    borderWidth: 1,
-    borderColor: "rgba(250, 250, 249, 0.14)",
-  },
-  zoomPillButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-  },
-  zoomPillText: {
-    minWidth: 44,
-    color: "#fafaf9",
-    fontSize: 14,
-    fontWeight: "800" as const,
-    textAlign: "center" as const,
-  },
-  gridOverlay: {
+  photoFrameOverlay: {
     position: "absolute" as const,
     top: 0,
     right: 0,
     bottom: 0,
     left: 0,
+  },
+  photoRoundedDimMask: {
+    position: "absolute" as const,
+    borderColor: "rgba(0, 0, 0, 0.56)",
+  },
+  photoFrameBorder: {
+    position: "absolute" as const,
+    borderRadius: 34,
+    overflow: "hidden" as const,
+    borderWidth: 1,
+    borderColor: "rgba(250, 250, 249, 0.14)",
+  },
+  photoControlsOverlay: {
+    position: "absolute" as const,
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+  },
+  photoTopRightControls: {
+    position: "absolute" as const,
+    top: 30,
+    right: 30,
+    flexDirection: "column" as const,
+    gap: 10,
   },
   gridLineVertical: {
     position: "absolute" as const,
@@ -422,79 +344,5 @@ const localStyles = {
     right: 0,
     height: 1,
     backgroundColor: "rgba(28, 25, 23, 0.45)",
-  },
-  photoControls: {
-    marginTop: 22,
-    marginHorizontal: 18,
-    alignItems: "center" as const,
-    gap: 20,
-  },
-  statusPill: {
-    flexDirection: "row" as const,
-    alignItems: "center" as const,
-    gap: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 999,
-    backgroundColor: "#f5f5f4",
-    borderWidth: 1,
-    borderColor: "#e7e5e4",
-    maxWidth: "100%" as const,
-  },
-  statusPillActive: {
-    backgroundColor: "#fef3c7",
-    borderColor: "#fde68a",
-  },
-  statusPillError: {
-    backgroundColor: "#fee2e2",
-    borderColor: "#fecaca",
-  },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#22c55e",
-  },
-  statusDotActive: {
-    backgroundColor: "#f59e0b",
-  },
-  statusDotError: {
-    backgroundColor: "#dc2626",
-  },
-  statusPillText: {
-    color: "#1c1917",
-    fontSize: 13,
-    fontWeight: "600" as const,
-    flexShrink: 1 as const,
-  },
-  shutterRing: {
-    width: 82,
-    height: 82,
-    borderRadius: 41,
-    padding: 5,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-    backgroundColor: "transparent",
-    borderWidth: 4,
-    borderColor: "#1c1917",
-  },
-  shutterRingPressed: {
-    transform: [{ scale: 0.96 }],
-  },
-  shutterCore: {
-    flex: 1,
-    width: "100%" as const,
-    borderRadius: 999,
-    alignItems: "center" as const,
-    justifyContent: "center" as const,
-    backgroundColor: "#16a34a",
-    shadowColor: "#15803d",
-    shadowOpacity: 0.32,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 6,
-  },
-  shutterCoreBusy: {
-    backgroundColor: "#15803d",
   },
 };

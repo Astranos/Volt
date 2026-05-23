@@ -49,7 +49,7 @@ export default defineConfig({
       },
     ],
     name: "Volt",
-    version: "1.0.28",
+    version: "1.0.29",
     description:
       "A versatile Chrome extension with command palette, controller testing, and multi-provider search capabilities.",
     permissions: [

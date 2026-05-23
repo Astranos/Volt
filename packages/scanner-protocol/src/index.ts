@@ -36,6 +36,7 @@ export type ScannerConnectionStatus =
 export interface BarcodeMessage {
   barcode: string;
   format?: string;
+  insertIntoCursor?: boolean;
   kind?: "barcode" | "text";
   scannedAt?: string;
 }
@@ -114,6 +115,7 @@ export function decodeBarcodeMessage(data: string): BarcodeMessage | null {
     return {
       barcode: parsed.barcode,
       format: typeof parsed.format === "string" ? parsed.format : undefined,
+      insertIntoCursor: typeof parsed.insertIntoCursor === "boolean" ? parsed.insertIntoCursor : undefined,
       kind: parsed.kind === "text" ? "text" : "barcode",
       scannedAt: typeof parsed.scannedAt === "string" ? parsed.scannedAt : undefined,
     };
