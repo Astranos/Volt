@@ -368,9 +368,7 @@ export default function ScannerTab() {
                           ? "Send barcode scans to cursor"
                           : "Send barcode scans to results"
                       }
-                      onPress={() =>
-                        scanner.setSetting("scannerInsertIntoCursor", !scanner.settings.scannerInsertIntoCursor)
-                      }
+                      onValueChange={(value) => scanner.setSetting("scannerInsertIntoCursor", value)}
                     />
                   </ViewfinderTopRightControls>
                   <CameraControlStack

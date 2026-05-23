@@ -226,6 +226,11 @@ export function ScannerProvider({ children }: PropsWithChildren) {
     peerRef.current = null;
   }, []);
 
+  const clearStoredPairingSession = useCallback(() => {
+    pairingSessionRef.current = null;
+    void AsyncStorage.removeItem(PAIRING_SESSION_STORAGE_KEY);
+  }, []);
+
   useEffect(() => {
     AsyncStorage.getItem(SETTINGS_STORAGE_KEY)
       .then((rawValue) => {
@@ -311,13 +316,17 @@ export function ScannerProvider({ children }: PropsWithChildren) {
         } else {
           throw new Error("Pairing session missing");
         }
+
+        return true;
       } catch (err) {
         closeConnection();
+        clearStoredPairingSession();
         setStatus("error");
         setError(err instanceof Error ? err.message : "Pairing failed");
+        return false;
       }
     },
-    [closeConnection]
+    [clearStoredPairingSession, closeConnection]
   );
 
   const pairWithSession = useCallback(
@@ -350,14 +359,18 @@ export function ScannerProvider({ children }: PropsWithChildren) {
           throw new Error("Pairing service is not ready. Restart pairing in the Chrome extension and scan the new QR.");
         }
 
-        await pairWithOffer(encodePairingPayload(JSON.parse(offer)), sessionId);
+        const paired = await pairWithOffer(encodePairingPayload(JSON.parse(offer)), sessionId);
+        if (!paired) clearStoredPairingSession();
+        return paired;
       } catch (err) {
         closeConnection();
+        clearStoredPairingSession();
         setStatus("error");
         setError(err instanceof Error ? err.message : "Pairing failed");
+        return false;
       }
     },
-    [closeConnection, pairWithOffer]
+    [clearStoredPairingSession, closeConnection, pairWithOffer]
   );
 
   useEffect(() => {
@@ -369,19 +382,12 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       const offer = getOfferFromUrl(url);
       const session = getSessionFromUrl(url);
 
-      if (session) {
-        pairingSessionRef.current = session;
-        void AsyncStorage.setItem(PAIRING_SESSION_STORAGE_KEY, session);
-      }
-
       if (offer) {
-        await pairWithOffer(offer, session);
-        return true;
+        return pairWithOffer(offer, session);
       }
 
       if (session) {
-        await pairWithSession(session);
-        return true;
+        return pairWithSession(session);
       }
 
       return false;

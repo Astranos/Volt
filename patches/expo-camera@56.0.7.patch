@@ -54,7 +54,7 @@ index eb8305bb06de98419bef5a6a47892f9dcc3b42ff..84bf6fe6dd66125260cd37a75c1d533f
      guard let device = captureDeviceInput?.device, let delegate else {
        return
 diff --git a/ios/Current/CameraView.swift b/ios/Current/CameraView.swift
-index 17470a95cc0037fa64adc26abb3cc496ab19737e..b123b1e89c298706c019690b15d675a736dd3be2 100644
+index 17470a95cc0037fa64adc26abb3cc496ab19737e..c646d39f2efbaf8d71cf1ab9411eb20440b81109 100644
 --- a/ios/Current/CameraView.swift
 +++ b/ios/Current/CameraView.swift
 @@ -86,6 +86,15 @@ public class CameraView: ExpoView, EXAppLifecycleListener, EXCameraInterface, Ca
@@ -73,10 +73,16 @@ index 17470a95cc0037fa64adc26abb3cc496ab19737e..b123b1e89c298706c019690b15d675a7
    var pictureSize = PictureSize.high {
      didSet {
        updatePictureSize()
-@@ -178,6 +187,18 @@ public class CameraView: ExpoView, EXAppLifecycleListener, EXCameraInterface, Ca
+@@ -176,6 +185,29 @@ public class CameraView: ExpoView, EXAppLifecycleListener, EXCameraInterface, Ca
+     previewLayer = AVCaptureVideoPreviewLayer(session: sessionManager.session)
+     previewLayer.videoGravity = .resizeAspectFill
      previewLayer.needsDisplayOnBoundsChange = true
-   }
- 
++
++    let tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleFocusTap(_:)))
++    tapGesture.cancelsTouchesInView = false
++    addGestureRecognizer(tapGesture)
++  }
++
 +  private func focusCamera(atLayerPoint point: CGPoint) {
 +    DispatchQueue.main.async { [weak self] in
 +      guard let self else {
@@ -89,6 +95,11 @@ index 17470a95cc0037fa64adc26abb3cc496ab19737e..b123b1e89c298706c019690b15d675a7
 +    }
 +  }
 +
++  @objc private func handleFocusTap(_ gesture: UITapGestureRecognizer) {
++    guard gesture.state == .ended else {
++      return
++    }
++    focusCamera(atLayerPoint: gesture.location(in: self))
+   }
+ 
    public func onAppForegrounded() {
-     sessionQueue.async { [weak self] in
-       guard let self else {

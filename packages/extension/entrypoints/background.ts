@@ -123,10 +123,7 @@ export default defineBackground({
         return message.insertIntoCursor;
       }
 
-      return (
-        message?.kind === "barcode" ||
-        (message?.kind === "text" && message?.format === "dictation")
-      );
+      return message?.kind === "text" && message?.format === "dictation";
     }
 
     function normalizeScannerMessage(message) {

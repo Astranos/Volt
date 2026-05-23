@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { Host, Toggle } from "@expo/ui/swift-ui";
 import { CameraView as ExpoCameraView, type BarcodeScanningResult } from "expo-camera";
 import { useFocusEffect } from "expo-router";
 import {
@@ -7,6 +8,7 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  Switch as RNSwitch,
   StyleSheet,
   Text,
   View,
@@ -308,7 +310,7 @@ export default function OcrTab() {
                           ? "Send OCR text to cursor"
                           : "Send OCR text to results"
                       }
-                      onPress={() => scanner.setSetting("ocrInsertIntoCursor", !scanner.settings.ocrInsertIntoCursor)}
+                      onValueChange={(value) => scanner.setSetting("ocrInsertIntoCursor", value)}
                     />
                   </ViewfinderTopRightControls>
                   <CameraControlStack
@@ -393,16 +395,30 @@ export function CameraOverlayButton({
 export function CursorInsertButton({
   active,
   accessibilityLabel,
-  onPress,
+  onValueChange,
 }: {
   active: boolean;
   accessibilityLabel: string;
-  onPress: () => void;
+  onValueChange: (value: boolean) => void;
 }) {
   return (
-    <CameraOverlayButton active={active} accessibilityLabel={accessibilityLabel} onPress={onPress}>
+    <View accessibilityLabel={accessibilityLabel} style={[styles.cursorTogglePill, active && styles.cursorTogglePillActive]}>
       <Ionicons name={active ? "text" : "text-outline"} size={21} color={active ? "#86efac" : "#fafaf9"} />
-    </CameraOverlayButton>
+      <View style={styles.cursorNativeToggle}>
+        {Platform.OS === "ios" ? (
+          <Host matchContents>
+            <Toggle isOn={active} onIsOnChange={onValueChange} />
+          </Host>
+        ) : (
+          <RNSwitch
+            value={active}
+            onValueChange={onValueChange}
+            trackColor={{ false: "#44403c", true: "#bbf7d0" }}
+            thumbColor={active ? "#16a34a" : "#fafaf9"}
+          />
+        )}
+      </View>
+    </View>
   );
 }
 
@@ -532,16 +548,21 @@ export function DisconnectedPairingView({
   const showCamera = cameraReady && viewfinderFocused;
   const scanEnabled = showCamera && pairingActive && !pairingLocked;
   const pairingBottomInset = Math.max(baseFloatingBottom, insets.bottom + 126);
-  const pairingInProgress = pairingLocked || scanner.status === "pairing";
+  const reconnecting = !pairingLocked && scanner.status === "pairing";
+  const pairingInProgress = pairingLocked || reconnecting;
   const pairingTitle = !cameraReady
     ? "Allow camera to pair"
-    : pairingInProgress
+    : pairingLocked
       ? "Pairing with browser..."
+      : reconnecting
+        ? "Reconnecting to browser..."
       : "Aim at browser QR code";
   const pairingMessage = !cameraReady
     ? "Camera access is needed to scan the pairing code."
-    : pairingInProgress
+    : pairingLocked
       ? "QR code found. Keep this screen open while Volt connects."
+      : reconnecting
+        ? "Trying the saved pairing. Scan the current browser QR if this does not connect."
       : "Open the Chrome extension and center its pairing code in the square.";
   const pairingIcon = !cameraReady ? "camera-outline" : pairingInProgress ? "sync" : "qr-code-outline";
 
@@ -927,6 +948,29 @@ export const styles = StyleSheet.create({
   cameraOverlayButtonActive: {
     backgroundColor: "rgba(28, 25, 23, 0.82)",
     borderColor: "rgba(250, 250, 249, 0.32)",
+  },
+  cursorTogglePill: {
+    minWidth: 94,
+    minHeight: 44,
+    borderRadius: 22,
+    ...continuousCorners,
+    paddingLeft: 12,
+    paddingRight: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+    backgroundColor: "rgba(28, 25, 23, 0.55)",
+    borderWidth: 1,
+    borderColor: "rgba(250, 250, 249, 0.14)",
+  },
+  cursorTogglePillActive: {
+    backgroundColor: "rgba(28, 25, 23, 0.82)",
+    borderColor: "rgba(250, 250, 249, 0.32)",
+  },
+  cursorNativeToggle: {
+    minWidth: 48,
+    alignItems: "flex-end",
   },
   viewfinderZoomBar: {
     position: "absolute",

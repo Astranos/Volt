@@ -23,10 +23,7 @@ export type MobileScannerSessionEvents = {
 export function shouldInsertScannerMessage(message: BarcodeMessage) {
   if (typeof message.insertIntoCursor === "boolean") return message.insertIntoCursor;
 
-  return (
-    message.kind === "barcode" ||
-    (message.kind === "text" && message.format === "dictation")
-  );
+  return message.kind === "text" && message.format === "dictation";
 }
 
 export class MobileScannerSession {

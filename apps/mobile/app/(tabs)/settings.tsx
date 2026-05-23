@@ -35,7 +35,7 @@ export default function SettingsTab() {
             onValueChange={(value) => setSetting("autoSendSingleBarcode", value)}
           />
           <SettingRow
-            icon="enter-outline"
+            icon="text-outline"
             title="Scanner writes to cursor"
             description="Send scanner barcodes to the active browser field by default."
             value={settings.scannerInsertIntoCursor}
