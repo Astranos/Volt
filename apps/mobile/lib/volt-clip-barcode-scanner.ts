@@ -6,7 +6,7 @@ export type VoltClipBarcodeCandidate = {
 };
 
 type VoltClipBarcodeScannerModule = {
-  start: () => Promise<{ running: boolean }>;
+  start: (options?: { fullFrame?: boolean }) => Promise<{ running: boolean }>;
   stop: () => Promise<{ running: boolean }>;
 };
 
@@ -15,12 +15,12 @@ const eventEmitter = nativeModule ? new NativeEventEmitter(nativeModule as never
 
 export const hasVoltClipBarcodeScanner = Platform.OS === "ios" && Boolean(nativeModule && eventEmitter);
 
-export function startVoltClipBarcodeScanner() {
+export function startVoltClipBarcodeScanner(options?: { fullFrame?: boolean }) {
   if (!nativeModule) {
     return Promise.reject(new Error("Volt Clip barcode scanner is unavailable."));
   }
 
-  return nativeModule.start();
+  return nativeModule.start(options);
 }
 
 export function stopVoltClipBarcodeScanner() {

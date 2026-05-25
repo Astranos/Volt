@@ -4,10 +4,10 @@ import Speech
 
 @objc(VoltClipDictation)
 class VoltClipDictation: RCTEventEmitter {
-  private let audioEngine = AVAudioEngine()
+  private var audioEngine: AVAudioEngine?
   private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
   private var recognitionTask: SFSpeechRecognitionTask?
-  private var recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en_US"))
+  private lazy var recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en_US"))
   private var hasListeners = false
 
   override static func requiresMainQueueSetup() -> Bool {
@@ -41,25 +41,44 @@ class VoltClipDictation: RCTEventEmitter {
 
   @objc(start:rejecter:)
   func start(resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) {
-    recognitionTask?.cancel()
-    recognitionTask = nil
+    stopAudio()
 
-    guard let recognizer, recognizer.isAvailable else {
-      reject("dictation_unavailable", "Speech recognition is unavailable.", nil)
+    guard SFSpeechRecognizer.authorizationStatus() == .authorized else {
+      reject("dictation_not_authorized", "Speech recognition permission is not authorized.", nil)
+      return
+    }
+
+    guard AVAudioSession.sharedInstance().recordPermission == .granted else {
+      reject("dictation_microphone_not_authorized", "Microphone permission is not authorized.", nil)
+      return
+    }
+
+    guard let recognizer else {
+      reject("dictation_unavailable", "Speech recognizer could not be created.", nil)
       return
     }
 
     do {
+      let audioEngine = AVAudioEngine()
+      self.audioEngine = audioEngine
       let audioSession = AVAudioSession.sharedInstance()
-      try audioSession.setCategory(.record, mode: .measurement, options: .duckOthers)
+      try audioSession.setCategory(.playAndRecord, mode: .measurement, options: [.duckOthers, .defaultToSpeaker, .allowBluetoothHFP])
       try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
 
       let request = SFSpeechAudioBufferRecognitionRequest()
       request.shouldReportPartialResults = true
+      if recognizer.supportsOnDeviceRecognition {
+        request.requiresOnDeviceRecognition = true
+      }
       recognitionRequest = request
 
       let inputNode = audioEngine.inputNode
       let format = inputNode.outputFormat(forBus: 0)
+      guard format.sampleRate > 0 && format.channelCount > 0 else {
+        stopAudio()
+        reject("dictation_audio_unavailable", "Microphone input is unavailable.", nil)
+        return
+      }
       inputNode.removeTap(onBus: 0)
       inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
         self?.recognitionRequest?.append(buffer)
@@ -79,14 +98,16 @@ class VoltClipDictation: RCTEventEmitter {
         }
 
         if let error {
-          self.stopAudio()
+          self.stopAudioInput()
+          self.resetRecognitionState()
           if self.hasListeners {
             self.sendEvent(withName: "error", body: ["message": error.localizedDescription])
           }
         }
 
         if result?.isFinal == true {
-          self.stopAudio()
+          self.stopAudioInput()
+          self.resetRecognitionState()
         }
       }
 
@@ -100,18 +121,32 @@ class VoltClipDictation: RCTEventEmitter {
   @objc(stop:rejecter:)
   func stop(resolve: @escaping RCTPromiseResolveBlock, rejecter reject: RCTPromiseRejectBlock) {
     recognitionRequest?.endAudio()
-    stopAudio()
+    stopAudioInput()
     resolve(["running": false])
   }
 
   private func stopAudio() {
+    recognitionTask?.cancel()
+    stopAudioInput()
+    resetRecognitionState()
+  }
+
+  private func stopAudioInput() {
+    guard let audioEngine else {
+      return
+    }
+
     if audioEngine.isRunning {
       audioEngine.stop()
     }
     audioEngine.inputNode.removeTap(onBus: 0)
+    self.audioEngine = nil
+    try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+  }
+
+  private func resetRecognitionState() {
     recognitionRequest = nil
     recognitionTask = nil
-    try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
   }
 
   private func speechStatusName(_ status: SFSpeechRecognizerAuthorizationStatus) -> String {

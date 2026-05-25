@@ -16,6 +16,8 @@
 		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
 		444469CDDA33068EC65021D7 /* VoltClipTextRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1B912B7C32F4CDFAA6AB622 /* VoltClipTextRecognizer.swift */; };
 		4F1C0D7C71C04A619E61A101 /* VoltClipTextCameraViewManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 4F1C0D7B71C04A619E61A101 /* VoltClipTextCameraViewManager.m */; };
+		5E2F4B5A2F4E4A9A8A9E1001 /* VoltClipLiquidTabBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E2F4B592F4E4A9A8A9E1001 /* VoltClipLiquidTabBarView.swift */; };
+		5E2F4B5C2F4E4A9A8A9E1001 /* VoltClipLiquidTabBarViewManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 5E2F4B5B2F4E4A9A8A9E1001 /* VoltClipLiquidTabBarViewManager.m */; };
 		6255E961A70D4649B8813AB7 /* VoltClipClipboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6255E95FA70D4649B8813AB7 /* VoltClipClipboard.swift */; };
 		6255E962A70D4649B8813AB7 /* VoltClipClipboard.m in Sources */ = {isa = PBXBuildFile; fileRef = 6255E960A70D4649B8813AB7 /* VoltClipClipboard.m */; };
 		6D55B21D269D79F18C320AE3 /* VoltClipBarcodeScanner.m in Sources */ = {isa = PBXBuildFile; fileRef = 3EB0F83AFD6F9946D831242B /* VoltClipBarcodeScanner.m */; };
@@ -73,6 +75,8 @@
 		3EB0F83AFD6F9946D831242B /* VoltClipBarcodeScanner.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; path = VoltClipBarcodeScanner.m; sourceTree = "<group>"; };
 		4131A068EA86235F07C8AE89 /* libPods-Volt.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-Volt.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		4F1C0D7B71C04A619E61A101 /* VoltClipTextCameraViewManager.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; path = VoltClipTextCameraViewManager.m; sourceTree = "<group>"; };
+		5E2F4B592F4E4A9A8A9E1001 /* VoltClipLiquidTabBarView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VoltClipLiquidTabBarView.swift; sourceTree = "<group>"; };
+		5E2F4B5B2F4E4A9A8A9E1001 /* VoltClipLiquidTabBarViewManager.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; path = VoltClipLiquidTabBarViewManager.m; sourceTree = "<group>"; };
 		52C7599C80F9D87BD73166E1 /* SplashScreen.storyboard */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = file.storyboard; path = SplashScreen.storyboard; sourceTree = "<group>"; };
 		6255E95FA70D4649B8813AB7 /* VoltClipClipboard.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VoltClipClipboard.swift; sourceTree = "<group>"; };
 		6255E960A70D4649B8813AB7 /* VoltClipClipboard.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; path = VoltClipClipboard.m; sourceTree = "<group>"; };
@@ -138,6 +142,8 @@
 				C1B912B7C32F4CDFAA6AB622 /* VoltClipTextRecognizer.swift */,
 				8C78E3CB0F4CCA44907D5F77 /* VoltClipTextRecognizer.m */,
 				4F1C0D7B71C04A619E61A101 /* VoltClipTextCameraViewManager.m */,
+				5E2F4B592F4E4A9A8A9E1001 /* VoltClipLiquidTabBarView.swift */,
+				5E2F4B5B2F4E4A9A8A9E1001 /* VoltClipLiquidTabBarViewManager.m */,
 			);
 			name = VoltClip;
 			path = VoltClip;
@@ -662,6 +668,8 @@
 				444469CDDA33068EC65021D7 /* VoltClipTextRecognizer.swift in Sources */,
 				3C14A89EF195550FDF8E5664 /* VoltClipTextRecognizer.m in Sources */,
 				4F1C0D7C71C04A619E61A101 /* VoltClipTextCameraViewManager.m in Sources */,
+				5E2F4B5A2F4E4A9A8A9E1001 /* VoltClipLiquidTabBarView.swift in Sources */,
+				5E2F4B5C2F4E4A9A8A9E1001 /* VoltClipLiquidTabBarViewManager.m in Sources */,
 				7059B2631F004960AEE9C790 /* LiveTextImageView.swift in Sources */,
 				7059B2641F004960AEE9C790 /* LiveTextImageViewManager.m in Sources */,
 			);

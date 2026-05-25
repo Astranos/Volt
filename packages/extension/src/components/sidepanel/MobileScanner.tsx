@@ -58,8 +58,33 @@ function installEditableTracker() {
     );
   };
 
+  const describeEditable = (element: HTMLElement) => {
+    const label =
+      element.getAttribute("aria-label") ||
+      element.getAttribute("placeholder") ||
+      element.getAttribute("name") ||
+      element.getAttribute("id") ||
+      (element.tagName === "TEXTAREA" ? "Textarea" : element.isContentEditable ? "Editable text" : "Text input");
+    return String(label).slice(0, 120);
+  };
+
+  const notifyTarget = (element: HTMLElement) => {
+    try {
+      chrome.runtime.sendMessage({
+        action: "mobileCursorTargetChanged",
+        target: {
+          browser: "Chrome",
+          tabTitle: document.title || "Current tab",
+          url: location.href,
+          cursor: describeEditable(element),
+        },
+      });
+    } catch (_error) {}
+  };
+
   if (isEditable(document.activeElement)) {
     root.__voltLastEditable = document.activeElement;
+    notifyTarget(document.activeElement);
   }
 
   if (root.__voltEditableTrackerInstalled) return;
@@ -71,6 +96,7 @@ function installEditableTracker() {
       const editableTarget = target instanceof Element ? target : null;
       if (isEditable(editableTarget)) {
         root.__voltLastEditable = editableTarget;
+        notifyTarget(editableTarget);
       }
     },
     true

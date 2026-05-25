@@ -12,6 +12,7 @@ type ScannerSession = {
   results?: ScannerResult[];
   mode?: ScannerResult["mode"];
   target?: SessionTarget;
+  connectedAt?: string;
   createdAt: number;
 };
 
@@ -168,6 +169,24 @@ function isResultRequest(request: VercelRequest) {
   return request.url?.endsWith("/result") ?? false;
 }
 
+function isTargetRequest(request: VercelRequest) {
+  const path = request.query.path;
+  if (typeof path === "string") {
+    return path.split("/")[1] === "target";
+  }
+
+  return request.url?.endsWith("/target") ?? false;
+}
+
+function isConnectRequest(request: VercelRequest) {
+  const path = request.query.path;
+  if (typeof path === "string") {
+    return path.split("/")[1] === "connect";
+  }
+
+  return request.url?.endsWith("/connect") ?? false;
+}
+
 function isCaptureMode(value: unknown): value is ScannerResult["mode"] {
   return value === "ocr" || value === "barcode" || value === "dictation" || value === "photo";
 }
@@ -304,6 +323,8 @@ export default async function handler(request: VercelRequest, response: VercelRe
   const sessionId = sessionIdFromRequest(request);
   const isAnswerRoute = isAnswerRequest(request);
   const isResultRoute = isResultRequest(request);
+  const isTargetRoute = isTargetRequest(request);
+  const isConnectRoute = isConnectRequest(request);
 
   try {
     ensureSignalStorage();
@@ -338,7 +359,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
       return;
     }
 
-    if (request.method === "POST" && !isAnswerRoute && !isResultRoute) {
+    if (request.method === "POST" && !isAnswerRoute && !isResultRoute && !isTargetRoute && !isConnectRoute) {
       const offer = request.body?.offer;
       if (typeof offer !== "string" || !offer) {
         response.status(400).json({ error: "Missing offer" });
@@ -353,6 +374,20 @@ export default async function handler(request: VercelRequest, response: VercelRe
     const session = await getSession(sessionId);
     if (!session) {
       response.status(404).json({ error: "Session not found" });
+      return;
+    }
+
+    if (request.method === "POST" && isTargetRoute) {
+      const target = parseSessionTarget(request.body?.target);
+      await saveSession(sessionId, { ...session, target });
+      response.status(200).json({ success: true, target: target ?? null });
+      return;
+    }
+
+    if (request.method === "POST" && isConnectRoute) {
+      const connectedAt = new Date().toISOString();
+      await saveSession(sessionId, { ...session, connectedAt });
+      response.status(200).json({ success: true, connectedAt });
       return;
     }
 
@@ -385,7 +420,12 @@ export default async function handler(request: VercelRequest, response: VercelRe
     }
 
     if (request.method === "GET" && !isAnswerRoute) {
-      response.status(200).json({ offer: session.offer, mode: session.mode, target: session.target ?? null });
+      response.status(200).json({
+        offer: session.offer,
+        mode: session.mode,
+        target: session.target ?? null,
+        connectedAt: session.connectedAt ?? null,
+      });
       return;
     }
 

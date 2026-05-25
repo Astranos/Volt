@@ -299,6 +299,20 @@ class MobileScannerOffscreenSession {
     return this.getState();
   }
 
+  async updateTarget(target?: SessionTarget | null) {
+    if (!this.sessionId || !target) return this.getState();
+    try {
+      await fetch(`${SCANNER_SIGNAL_URL}/${encodeURIComponent(this.sessionId)}/target`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ target }),
+      });
+    } catch (error) {
+      console.warn("Failed to update App Clip target", error);
+    }
+    return this.getState();
+  }
+
   private buildPairingUrl(sessionId: string, mode: MobileCaptureMode | null) {
     const encodedSession = encodeURIComponent(sessionId);
     if (!mode) return `${SCANNER_APP_PAIR_URL}?session=${encodedSession}`;
@@ -580,6 +594,14 @@ class MobileScannerOffscreenSession {
           return;
         }
 
+        const sessionResponse = await fetch(`${SCANNER_SIGNAL_URL}/${sessionId}`);
+        if (sessionResponse.ok) {
+          const sessionPayload = (await sessionResponse.json()) as { connectedAt?: string | null };
+          if (sessionPayload.connectedAt && this.state.status === "waiting") {
+            this.setState({ status: "connected", error: null });
+          }
+        }
+
         const resultResponse = await fetch(`${SCANNER_SIGNAL_URL}/${sessionId}/result`);
         if (!resultResponse.ok) return;
 
@@ -635,6 +657,21 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.action === "scannerOffscreenDisconnect") {
     sendResponse(mobileScannerSession.disconnect());
     return false;
+  }
+
+  if (message.action === "scannerOffscreenUpdateTarget") {
+    mobileScannerSession
+      .updateTarget(message.target && typeof message.target === "object" ? message.target : null)
+      .then((state) => sendResponse(state))
+      .catch((err) =>
+        sendResponse({
+          status: "error",
+          qrCodeUrl: null,
+          error: err instanceof Error ? err.message : String(err),
+          mode: null,
+        })
+      );
+    return true;
   }
 
   if (message.action === "scannerOffscreenGetState") {

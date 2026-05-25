@@ -457,6 +457,26 @@ export default defineBackground({
       }
     }
 
+    async function updateMobileCaptureTarget(target) {
+      const normalizedTarget =
+        target && typeof target === "object"
+          ? {
+              browser: clampString(target.browser || "Chrome", 80),
+              tabTitle: clampString(target.tabTitle || "Current tab", 160),
+              url: clampString(target.url || "", 600),
+              cursor: clampString(target.cursor || "Last focused editable field", 120),
+            }
+          : await getMobileCaptureTarget();
+      try {
+        await sendScannerOffscreenMessage({
+          action: "scannerOffscreenUpdateTarget",
+          target: normalizedTarget,
+        });
+      } catch (error) {
+        log("Failed to update mobile capture target", error?.message || error);
+      }
+    }
+
     async function handleScannerStart(message, sendResponse) {
       try {
         const mode = normalizeMobileCaptureMode(message?.mode);
@@ -1093,6 +1113,10 @@ export default defineBackground({
         case "scannerGetState":
           handleScannerGetState(sendResponse);
           return true;
+        case "mobileCursorTargetChanged":
+          void updateMobileCaptureTarget(message?.target);
+          sendResponse({ success: true });
+          return false;
         case "scannerStateChanged":
           if (message?.source !== "scanner-background") {
             broadcastScannerMessage({

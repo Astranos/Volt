@@ -183,6 +183,88 @@ test("signal relay creates a session, stores one App Clip result, and reads it b
   assert.match(getResponse.body.result.createdAt, /^\d{4}-\d{2}-\d{2}T/);
 });
 
+test("signal relay stores and updates App Clip session target metadata", async () => {
+  const createResponse = makeResponse();
+  await signalHandler(
+    makeRequest({
+      method: "POST",
+      body: {
+        relay: true,
+        mode: "dictation",
+        target: {
+          browser: "Chrome",
+          tabTitle: "Original field",
+          url: "https://example.com/a",
+          cursor: "Search box",
+        },
+      },
+    }),
+    createResponse
+  );
+
+  const firstGet = makeResponse();
+  await signalHandler(makeRequest({ method: "GET", path: createResponse.body.sessionId }), firstGet);
+  assert.equal(firstGet.statusCode, 200);
+  assert.equal(firstGet.body.target.tabTitle, "Original field");
+  assert.equal(firstGet.body.target.cursor, "Search box");
+
+  const updateResponse = makeResponse();
+  await signalHandler(
+    makeRequest({
+      method: "POST",
+      path: `${createResponse.body.sessionId}/target`,
+      body: {
+        target: {
+          browser: "Chrome",
+          tabTitle: "New field",
+          url: "https://example.com/b",
+          cursor: "Notes",
+        },
+      },
+    }),
+    updateResponse
+  );
+  assert.equal(updateResponse.statusCode, 200);
+  assert.equal(updateResponse.body.target.tabTitle, "New field");
+
+  const secondGet = makeResponse();
+  await signalHandler(makeRequest({ method: "GET", path: createResponse.body.sessionId }), secondGet);
+  assert.equal(secondGet.body.target.tabTitle, "New field");
+  assert.equal(secondGet.body.target.cursor, "Notes");
+});
+
+test("signal relay records when an App Clip opens a session", async () => {
+  const createResponse = makeResponse();
+  await signalHandler(
+    makeRequest({
+      method: "POST",
+      body: {
+        relay: true,
+        mode: "dictation",
+      },
+    }),
+    createResponse
+  );
+
+  const connectResponse = makeResponse();
+  await signalHandler(
+    makeRequest({
+      method: "POST",
+      path: `${createResponse.body.sessionId}/connect`,
+      body: { openedAt: "2026-05-25T15:00:00.000Z" },
+    }),
+    connectResponse
+  );
+
+  assert.equal(connectResponse.statusCode, 200);
+  assert.match(connectResponse.body.connectedAt, /^\d{4}-\d{2}-\d{2}T/);
+
+  const getResponse = makeResponse();
+  await signalHandler(makeRequest({ method: "GET", path: createResponse.body.sessionId }), getResponse);
+  assert.equal(getResponse.statusCode, 200);
+  assert.equal(getResponse.body.connectedAt, connectResponse.body.connectedAt);
+});
+
 test("signal relay supports generic App Clip sessions and rejects unsupported modes", async () => {
   const genericResponse = makeResponse();
   await signalHandler(makeRequest({ method: "POST", body: { relay: true } }), genericResponse);

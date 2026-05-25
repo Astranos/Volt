@@ -10,12 +10,13 @@ import {
   Switch,
   Text,
   TextInput,
+  UIManager,
   View,
+  requireNativeComponent,
   useWindowDimensions,
 } from "react-native";
 import type { ViewProps } from "react-native";
 import type { GestureResponderEvent } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 import { initialWindowMetrics } from "react-native-safe-area-context";
 import { SCANNER_SIGNAL_URL } from "@volt/scanner-protocol";
 import { createBarcodeCandidateGuard } from "../../lib/barcode-candidate-guard";
@@ -69,7 +70,7 @@ const OCR_ZOOM_DEFAULT = 1;
 const OCR_ZOOM_MAX = 4;
 const OCR_ZOOM_WHEEL_DRAG_PER_STOP = 38;
 const OCR_ZOOM_WHEEL_STOPS = [0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4] as const;
-const OCR_ZOOM_WHEEL_TICK_SPACING = 52;
+const OCR_ZOOM_WHEEL_TICK_SPACING = 58;
 
 function getOcrZoomStops(min = OCR_ZOOM_MIN, max = OCR_ZOOM_MAX) {
   return OCR_ZOOM_WHEEL_STOPS.filter((stop) => stop >= min - 0.01 && stop <= max + 0.01);
@@ -108,6 +109,13 @@ const modeTitles = {
   dictation: "Dictation",
   photo: "Photo Capture",
 };
+const clipModes = ["ocr", "barcode", "photo", "dictation"] as const;
+const modeLabels: Record<ScannerCaptureMode, string> = {
+  ocr: "OCR",
+  barcode: "Scanner",
+  photo: "Photos",
+  dictation: "Dictation",
+};
 const RESULT_SEND_TIMEOUT_MS = 12_000;
 const CLIPBOARD_POLL_MS = 650;
 const stableTopInset = initialWindowMetrics?.insets.top ?? 0;
@@ -119,6 +127,12 @@ const TextCameraView = VoltClipTextCameraView as ComponentType<{
   style?: ViewProps["style"];
   collapsable?: boolean;
 }> | null;
+const LiquidTabBarView = Platform.OS === "ios" && UIManager.getViewManagerConfig("VoltClipLiquidTabBarView") != null
+  ? requireNativeComponent<ViewProps & {
+      selectedMode?: ScannerCaptureMode;
+      onModeChange?: (event: { nativeEvent?: { mode?: ScannerCaptureMode } }) => void;
+    }>("VoltClipLiquidTabBarView")
+  : null;
 
 function makeTestMessage(mode: ScannerCaptureMode) {
   if (mode === "ocr") return makeOcrMessage("hello from Volt Clip");
@@ -136,12 +150,72 @@ function makeTestMessage(mode: ScannerCaptureMode) {
   return makeBarcodeMessage("hello-from-volt-clip", "qr");
 }
 
+function ModeIcon({ mode, selected }: { mode: ScannerCaptureMode; selected: boolean }) {
+  const iconTone = selected ? styles.ocrModeNavIconSelected : styles.ocrModeNavIconDefault;
+  const lineTone = selected ? styles.ocrModeNavIconLineSelected : styles.ocrModeNavIconLineDefault;
+
+  if (mode === "ocr") {
+    return (
+      <View style={styles.ocrModeNavIconBox}>
+        <View style={[styles.ocrModeDocIcon, iconTone]}>
+          <View style={[styles.ocrModeDocFold, selected && styles.ocrModeDocFoldSelected]} />
+          <View style={[styles.ocrModeDocLine, lineTone]} />
+          <View style={[styles.ocrModeDocLineShort, lineTone]} />
+        </View>
+        <View style={[styles.ocrModeViewfinderTopLeft, iconTone]} />
+        <View style={[styles.ocrModeViewfinderTopRight, iconTone]} />
+        <View style={[styles.ocrModeViewfinderBottomLeft, iconTone]} />
+        <View style={[styles.ocrModeViewfinderBottomRight, iconTone]} />
+      </View>
+    );
+  }
+
+  if (mode === "barcode") {
+    return (
+      <View style={styles.ocrModeNavIconBox}>
+        <View style={[styles.ocrModeBarcodeBars, selected && styles.ocrModeBarcodeBarsSelected]}>
+          {[4, 2, 6, 3, 5].map((width, index) => (
+            <View key={index} style={[styles.ocrModeBarcodeBar, lineTone, { width }]} />
+          ))}
+        </View>
+        <View style={[styles.ocrModeViewfinderTopLeft, iconTone]} />
+        <View style={[styles.ocrModeViewfinderTopRight, iconTone]} />
+        <View style={[styles.ocrModeViewfinderBottomLeft, iconTone]} />
+        <View style={[styles.ocrModeViewfinderBottomRight, iconTone]} />
+      </View>
+    );
+  }
+
+  if (mode === "photo") {
+    return (
+      <View style={styles.ocrModeNavIconBox}>
+        <View style={[styles.ocrModePhotoBack, iconTone]} />
+        <View style={[styles.ocrModePhotoFront, iconTone, selected && styles.ocrModePhotoFrontSelected]}>
+          <View style={[styles.ocrModePhotoSun, lineTone]} />
+          <View style={[styles.ocrModePhotoMountain, lineTone]} />
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.ocrModeNavIconBox}>
+      <View style={[styles.ocrModeMicCapsule, iconTone, selected && styles.ocrModeMicCapsuleSelected]} />
+      <View style={[styles.ocrModeMicStem, lineTone]} />
+      <View style={[styles.ocrModeMicBase, lineTone]} />
+      <View style={[styles.ocrModeMicArc, selected ? styles.ocrModeMicArcSelected : styles.ocrModeMicArcDefault]} />
+    </View>
+  );
+}
+
 export default function ClipInvocationScreen() {
   const [invocation, setInvocation] = useState<CaptureInvocation | null>(null);
   const initialMode = invocation?.mode ?? "ocr";
   const [activeMode, setActiveMode] = useState<ScannerCaptureMode>(initialMode);
   const mode = activeMode;
   const session = invocation?.sessionId ?? "";
+  const isPairingMode = !session;
+  const isDiscoveryMode = isPairingMode;
   const [sessionTarget, setSessionTarget] = useState<{
     browser?: string;
     tabTitle?: string;
@@ -157,6 +231,7 @@ export default function ClipInvocationScreen() {
   );
   const [dictationTranscript, setDictationTranscript] = useState("");
   const [dictationFinal, setDictationFinal] = useState(false);
+  const dictationLongPressRef = useRef(false);
   const [ocrState, setOcrState] = useState<"idle" | "capturing" | "ready" | "unavailable" | "error">("idle");
   const [ocrPreviewState, setOcrPreviewState] = useState<"idle" | "starting" | "ready" | "failed">("idle");
   const [ocrText, setOcrText] = useState("");
@@ -179,27 +254,56 @@ export default function ClipInvocationScreen() {
   const ocrZoomMaxRef = useRef(OCR_ZOOM_MAX);
   const ocrZoomFactorRef = useRef(OCR_ZOOM_DEFAULT);
   const isOcrMode = Boolean(mode);
-  const [ocrAutoSendCopiedText, setOcrAutoSendCopiedText] = useState(true);
+  const [ocrAutoTypeCopiedText, setOcrAutoTypeCopiedText] = useState(true);
   const [ocrGlassTone, setOcrGlassTone] = useState<"adaptive" | "bright" | "dark">("adaptive");
   const [ocrTorchEnabled, setOcrTorchEnabled] = useState(false);
   const [ocrZoomFactor, setOcrZoomFactor] = useState(OCR_ZOOM_DEFAULT);
   const [ocrZoomMin, setOcrZoomMin] = useState(OCR_ZOOM_DEFAULT);
   const [ocrZoomMax, setOcrZoomMax] = useState(OCR_ZOOM_MAX);
   const [ocrFocusPoint, setOcrFocusPoint] = useState<{ x: number; y: number } | null>(null);
+  const isCameraCaptureMode = isPairingMode || mode === "ocr" || mode === "barcode" || mode === "photo";
+  const resetToDiscoveryMode = useCallback((message?: string) => {
+    setInvocation(null);
+    setActiveMode("ocr");
+    setSessionTarget(null);
+    setBarcodeCandidate(null);
+    setDictationTranscript("");
+    setDictationFinal(false);
+    setSendState("idle");
+    setOcrImageUri(null);
+    setOcrText("");
+    setError(message ?? "Browser session lost. Scan the Mobile Scanner QR in Chrome to pair again.");
+  }, []);
   useEffect(() => {
     if (!session) return;
     let cancelled = false;
-    fetch(`${SCANNER_SIGNAL_URL}/${encodeURIComponent(session)}`)
-      .then((response) => (response.ok ? response.json() : null))
-      .then((payload) => {
-        if (cancelled || !payload?.target || typeof payload.target !== "object") return;
-        setSessionTarget(payload.target);
-      })
-      .catch(() => {});
+    fetch(`${SCANNER_SIGNAL_URL}/${encodeURIComponent(session)}/connect`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ openedAt: new Date().toISOString() }),
+    }).catch(() => {});
+    const fetchTarget = () => {
+      fetch(`${SCANNER_SIGNAL_URL}/${encodeURIComponent(session)}`)
+        .then((response) => {
+          if (response.status === 404 || response.status === 410) {
+            if (!cancelled) resetToDiscoveryMode();
+            return null;
+          }
+          return response.ok ? response.json() : null;
+        })
+        .then((payload) => {
+          if (cancelled || !payload?.target || typeof payload.target !== "object") return;
+          setSessionTarget(payload.target);
+        })
+        .catch(() => {});
+    };
+    fetchTarget();
+    const interval = setInterval(fetchTarget, 1000);
     return () => {
       cancelled = true;
+      clearInterval(interval);
     };
-  }, [session]);
+  }, [resetToDiscoveryMode, session]);
   const resetOcrCapture = useCallback(() => {
     setOcrImageUri(null);
     setOcrText("");
@@ -220,7 +324,7 @@ export default function ClipInvocationScreen() {
       (mode !== "dictation" || dictationTranscript.trim()) &&
       (mode !== "photo" || ocrImageUri)
   );
-  const ocrDrawerCollapsedHeight = 148;
+  const ocrDrawerCollapsedHeight = 158;
   const ocrDrawerExpandedHeight = Math.min(
     Math.max(windowDimensions.height * 0.58, 360),
     Math.max(windowDimensions.height - stableTopInset - 110, ocrDrawerCollapsedHeight)
@@ -396,7 +500,13 @@ export default function ClipInvocationScreen() {
     ]
   );
   const statusText = useMemo(() => {
-    if (!session) return "Missing browser session";
+    if (!session) {
+      if (scannerState === "starting") return "Starting QR scanner";
+      if (scannerState === "ready") return "Scan the Chrome side-panel QR";
+      if (scannerState === "unavailable") return "QR scanner unavailable";
+      if (scannerState === "error") return "QR scanner failed";
+      return "Ready to pair";
+    }
     if (sendState === "sending") return "Sending result";
     if (sendState === "sent") return "Result sent";
     if (sendState === "error") return "Send failed";
@@ -419,7 +529,7 @@ export default function ClipInvocationScreen() {
     return "Browser session found";
   }, [dictationFinal, dictationState, mode, ocrImageUri, ocrPreviewState, ocrState, ocrText, scannerState, sendState, session]);
   const showMeasuredOcrPreview = useCallback(() => {
-    if ((mode !== "ocr" && mode !== "photo") || !hasVoltClipTextRecognizer || ocrImageUri) return;
+    if (!isCameraCaptureMode || !hasVoltClipTextRecognizer || ocrImageUri) return;
 
     setOcrPreviewState("starting");
     showVoltClipTextPreview({
@@ -429,10 +539,10 @@ export default function ClipInvocationScreen() {
       height: windowDimensions.height,
     });
     setOcrPreviewState("ready");
-  }, [mode, ocrImageUri, windowDimensions.height, windowDimensions.width]);
+  }, [isCameraCaptureMode, ocrImageUri, windowDimensions.height, windowDimensions.width]);
 
   useEffect(() => {
-    if ((mode !== "ocr" && mode !== "photo") || !hasVoltClipTextRecognizer || ocrImageUri) {
+    if (!isCameraCaptureMode || !hasVoltClipTextRecognizer || ocrImageUri) {
       hideVoltClipTextPreview();
       return;
     }
@@ -443,7 +553,7 @@ export default function ClipInvocationScreen() {
       clearTimeout(timer);
       hideVoltClipTextPreview();
     };
-  }, [mode, ocrImageUri, showMeasuredOcrPreview]);
+  }, [isCameraCaptureMode, ocrImageUri, showMeasuredOcrPreview]);
 
   useEffect(() => {
     let mounted = true;
@@ -472,7 +582,7 @@ export default function ClipInvocationScreen() {
   }, [initialMode]);
 
   useEffect(() => {
-    if (mode !== "ocr" && mode !== "photo") return;
+    if (!isCameraCaptureMode) return;
 
     if (!hasVoltClipTextRecognizer) {
       setOcrState("unavailable");
@@ -495,10 +605,10 @@ export default function ClipInvocationScreen() {
         setOcrZoomFactor(OCR_ZOOM_DEFAULT);
         ocrZoomFactorRef.current = OCR_ZOOM_DEFAULT;
       });
-  }, [mode]);
+  }, [isCameraCaptureMode]);
 
   useEffect(() => {
-    if (mode !== "barcode") return;
+    if (mode !== "barcode" && !isDiscoveryMode) return;
 
     if (!hasVoltClipBarcodeScanner) {
       setScannerState("unavailable");
@@ -509,6 +619,18 @@ export default function ClipInvocationScreen() {
     const shouldAcceptCandidate = createBarcodeCandidateGuard();
     const candidateSubscription = addVoltClipBarcodeCandidateListener((candidate) => {
       if (!shouldAcceptCandidate(candidate)) return;
+      if (isDiscoveryMode) {
+        setBarcodeCandidate(candidate);
+        const nextInvocation = parseCaptureInvocation(candidate.value);
+        if (nextInvocation) {
+          setInvocation(nextInvocation);
+          setActiveMode(nextInvocation.mode);
+          setBarcodeCandidate(null);
+          setError(null);
+          setSendState("idle");
+        }
+        return;
+      }
       setBarcodeCandidate(candidate);
     });
     const errorSubscription = addVoltClipBarcodeErrorListener((message) => {
@@ -517,7 +639,7 @@ export default function ClipInvocationScreen() {
     });
 
     setScannerState("starting");
-    startVoltClipBarcodeScanner()
+    startVoltClipBarcodeScanner({ fullFrame: isDiscoveryMode })
       .then(() => {
         if (isMounted) setScannerState("ready");
       })
@@ -533,7 +655,7 @@ export default function ClipInvocationScreen() {
       errorSubscription.remove();
       void stopVoltClipBarcodeScanner();
     };
-  }, [mode]);
+  }, [isDiscoveryMode, mode]);
 
   useEffect(() => {
     if (mode !== "dictation") return;
@@ -577,7 +699,7 @@ export default function ClipInvocationScreen() {
   }, [mode, session]);
 
   async function toggleDictation() {
-    if (mode !== "dictation" || sendState === "sending" || sendState === "sent") return;
+    if (mode !== "dictation") return;
 
     if (dictationState === "recording") {
       setDictationState("ready");
@@ -587,18 +709,28 @@ export default function ClipInvocationScreen() {
 
     setError(null);
     setDictationFinal(false);
+    setSendState("idle");
     setDictationState("requesting");
 
     try {
       const permissions = await requestVoltClipDictationPermissions();
       if (!permissions.granted) {
         setDictationState("error");
-        setError("Microphone and speech recognition permissions are required.");
+        setError(
+          `Microphone and speech recognition permissions are required. Speech: ${permissions.speechStatus}; Microphone: ${
+            permissions.microphoneGranted ? "granted" : "denied"
+          }.`
+        );
         return;
       }
 
       setDictationTranscript("");
-      await startVoltClipDictation();
+      const result = await startVoltClipDictation();
+      if (!result.running) {
+        setDictationState("error");
+        setError("Dictation did not start. Try again.");
+        return;
+      }
       setDictationState("recording");
     } catch (dictationError) {
       setDictationState("error");
@@ -665,17 +797,56 @@ export default function ClipInvocationScreen() {
 
   function renderOcrShutter() {
     const isBusy = ocrState === "capturing" || sendState === "sending";
+    const renderMicIcon = () => (
+      <View style={styles.ocrMicIcon}>
+        <View style={styles.ocrMicCapsule} />
+        <View style={styles.ocrMicStem} />
+        <View style={styles.ocrMicBase} />
+      </View>
+    );
+    const renderUndoIcon = () => (
+      <View style={styles.ocrUndoIcon}>
+        <Text style={styles.ocrUndoIconText}>↶</Text>
+      </View>
+    );
+    const renderRefreshIcon = () => (
+      <View style={styles.ocrRefreshIcon}>
+        <Text style={styles.ocrRefreshIconText}>↻</Text>
+      </View>
+    );
     if (mode === "dictation") {
       const dictationBusy = dictationState === "requesting" || sendState === "sending";
+      const handleDictationPress = () => {
+        if (dictationLongPressRef.current) {
+          dictationLongPressRef.current = false;
+          return;
+        }
+        if (dictationFinal) {
+          undoDictation();
+          return;
+        }
+        void toggleDictation();
+      };
+      const handleDictationLongPress = () => {
+        dictationLongPressRef.current = true;
+        void startDictationFromShutter();
+      };
+      const handleDictationPressOut = () => {
+        if (!dictationLongPressRef.current) return;
+        void stopDictationFromShutter();
+        setTimeout(() => {
+          dictationLongPressRef.current = false;
+        }, 0);
+      };
       return (
         <Pressable
           accessibilityLabel={dictationFinal ? "Undo dictation" : "Hold to dictate"}
           accessibilityRole="button"
           disabled={dictationBusy}
-          delayLongPress={120}
-          onLongPress={() => void startDictationFromShutter()}
-          onPress={dictationFinal ? undoDictation : undefined}
-          onPressOut={() => void stopDictationFromShutter()}
+          delayLongPress={180}
+          onLongPress={handleDictationLongPress}
+          onPress={handleDictationPress}
+          onPressOut={handleDictationPressOut}
           style={[
             styles.ocrShutterButton,
             dictationState === "recording" && styles.ocrShutterButtonActive,
@@ -683,11 +854,7 @@ export default function ClipInvocationScreen() {
           ]}
         >
           <View style={styles.ocrShutterInner}>
-            <Ionicons
-              name={dictationFinal ? "arrow-undo" : dictationState === "recording" ? "mic" : "mic-outline"}
-              size={36}
-              color="#1c1917"
-            />
+            {dictationFinal ? renderUndoIcon() : renderMicIcon()}
           </View>
         </Pressable>
       );
@@ -710,7 +877,7 @@ export default function ClipInvocationScreen() {
           {isBusy ? (
             <Text style={styles.ocrShutterIcon}>...</Text>
           ) : ocrImageUri && mode === "ocr" ? (
-            <Ionicons name="refresh" size={34} color="#1c1917" />
+            renderRefreshIcon()
           ) : (
             <View style={styles.ocrShutterDot} />
           )}
@@ -720,7 +887,7 @@ export default function ClipInvocationScreen() {
   }
 
   const sendOcrClipboardText = useCallback(
-    async (text: string) => {
+    async (text: string, insertIntoCursor: boolean) => {
       const value = text.trim();
       if (!session || !value || value === lastOcrClipboardRef.current || sendState === "sending") return;
 
@@ -737,20 +904,26 @@ export default function ClipInvocationScreen() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           signal: abortController.signal,
-          body: JSON.stringify(makeClipRelayResult("ocr", makeOcrMessage(value))),
+          body: JSON.stringify(makeClipRelayResult("ocr", makeOcrMessage(value, insertIntoCursor))),
         });
 
         if (!response.ok) {
+          if (response.status === 400 || response.status === 404 || response.status === 410) {
+            resetToDiscoveryMode();
+            return;
+          }
           throw new Error(messageForClipRelayStatus(response.status));
         }
 
         setSendState("sent");
       } catch (sendError) {
+        if (sendError instanceof Error && sendError.name === "AbortError") {
+          resetToDiscoveryMode("Browser session stopped responding. Scan the Mobile Scanner QR in Chrome to pair again.");
+          return;
+        }
         setSendState("error");
         setError(
-          sendError instanceof Error && sendError.name === "AbortError"
-            ? "The browser session did not respond. Keep the QR overlay open and try again."
-            : sendError instanceof Error
+          sendError instanceof Error
               ? sendError.message
               : "Unable to send copied text"
         );
@@ -758,11 +931,11 @@ export default function ClipInvocationScreen() {
         clearTimeout(timeoutId);
       }
     },
-    [sendState, session]
+    [resetToDiscoveryMode, sendState, session]
   );
 
   useEffect(() => {
-    if (mode !== "ocr" || !ocrImageUri || !hasVoltClipClipboard || sendState === "sent" || !ocrAutoSendCopiedText) return;
+    if (mode !== "ocr" || !ocrImageUri || !hasVoltClipClipboard) return;
 
     let cancelled = false;
     let checkingClipboard = false;
@@ -785,7 +958,7 @@ export default function ClipInvocationScreen() {
 
         const value = (await getVoltClipClipboardString()).trim();
         if (!cancelled && value && value !== lastOcrClipboardRef.current) {
-          await sendOcrClipboardText(value);
+          await sendOcrClipboardText(value, ocrAutoTypeCopiedText);
         }
       } finally {
         checkingClipboard = false;
@@ -797,7 +970,7 @@ export default function ClipInvocationScreen() {
       cancelled = true;
       clearInterval(pollTimer);
     };
-  }, [mode, ocrAutoSendCopiedText, ocrImageUri, sendOcrClipboardText, sendState]);
+  }, [mode, ocrAutoTypeCopiedText, ocrImageUri, sendOcrClipboardText, sendState]);
 
   useEffect(() => {
     const subscription = ocrDrawerProgress.addListener(({ value }) => {
@@ -848,6 +1021,10 @@ export default function ClipInvocationScreen() {
       });
 
       if (!response.ok) {
+        if (response.status === 400 || response.status === 404 || response.status === 410) {
+          resetToDiscoveryMode();
+          return;
+        }
         throw new Error(messageForClipRelayStatus(response.status));
       }
 
@@ -859,11 +1036,13 @@ export default function ClipInvocationScreen() {
         void stopVoltClipDictation();
       }
     } catch (sendError) {
+      if (sendError instanceof Error && sendError.name === "AbortError") {
+        resetToDiscoveryMode("Browser session stopped responding. Scan the Mobile Scanner QR in Chrome to pair again.");
+        return;
+      }
       setSendState("error");
       setError(
-        sendError instanceof Error && sendError.name === "AbortError"
-          ? "The browser session did not respond. Keep the QR overlay open and try again."
-          : sendError instanceof Error
+        sendError instanceof Error
             ? sendError.message
             : "Unable to send result"
       );
@@ -879,7 +1058,7 @@ export default function ClipInvocationScreen() {
       mode === "barcode" && barcodeCandidate
         ? makeBarcodeMessage(barcodeCandidate.value, barcodeCandidate.format)
         : mode === "ocr" && ocrText.trim()
-          ? makeOcrMessage(ocrText.trim())
+          ? makeOcrMessage(ocrText.trim(), ocrAutoTypeCopiedText)
         : mode === "dictation" && dictationTranscript.trim()
           ? makeDictationMessage(dictationTranscript.trim(), `clip-${session}`)
         : makeTestMessage(mode);
@@ -897,11 +1076,19 @@ export default function ClipInvocationScreen() {
   })();
 
   const shutterHint = (() => {
+    if (isDiscoveryMode) {
+      if (scannerState === "starting") return "Starting QR discovery...";
+      if (barcodeCandidate) return "QR code detected. Looking for Volt pairing session...";
+      if (scannerState === "unavailable") return "QR discovery unavailable. Open Mobile Scanner in Chrome.";
+      if (scannerState === "error") return "QR discovery failed. Open a fresh Mobile Scanner QR in Chrome.";
+      return "Open Mobile Scanner in Chrome and point anywhere at its QR";
+    }
     if (mode === "dictation") {
+      if (dictationState === "error" && error) return error;
       if (dictationState === "requesting") return "Starting dictation...";
-      if (dictationState === "recording") return "Release to end dictation";
+      if (dictationState === "recording") return "Tap or release to end dictation";
       if (dictationFinal) return "Tap to undo or hold to dictate more";
-      return "Tap and hold to start dictating";
+      return "Tap or hold to start dictating";
     }
     if (mode === "ocr") {
       if (ocrState === "capturing") return "Reading text...";
@@ -918,7 +1105,7 @@ export default function ClipInvocationScreen() {
   })();
 
   const footerMessage = (() => {
-    if (!mode || !session) return "Scan a fresh QR code from the Volt Chrome extension.";
+    if (!mode || !session) return "Open the Volt Chrome extension side panel and scan its Mobile Scanner QR to pair this App Clip.";
     if (sendState === "sent") {
       return "Result sent. Return to Chrome; if the page blocked insertion, Volt will use its clipboard fallback.";
     }
@@ -1081,6 +1268,44 @@ export default function ClipInvocationScreen() {
       },
     ],
   };
+  const ocrExpandedSheetTabAnimatedStyle = {
+    opacity: ocrDrawerProgress.interpolate({
+      inputRange: [0, 0.72, 1],
+      outputRange: [0, 0, 1],
+      extrapolate: "clamp",
+    }),
+    transform: [
+      {
+        translateY: ocrDrawerProgress.interpolate({
+          inputRange: [0, 1],
+          outputRange: [18, 0],
+          extrapolate: "clamp",
+        }),
+      },
+      {
+        scale: ocrDrawerProgress.interpolate({
+          inputRange: [0, 1],
+          outputRange: [0.92, 1],
+          extrapolate: "clamp",
+        }),
+      },
+    ],
+  };
+  const switchClipMode = useCallback((nextMode: ScannerCaptureMode) => {
+    if (nextMode === mode) return;
+    setActiveMode(nextMode);
+    setSendState("idle");
+    setError(null);
+    setBarcodeCandidate(null);
+    if (nextMode !== "dictation") {
+      setDictationTranscript("");
+      setDictationFinal(false);
+    }
+    if (nextMode !== "ocr" && nextMode !== "photo") {
+      setOcrImageUri(null);
+      setOcrText("");
+    }
+  }, [mode]);
   const ocrBottomSheetToneStyle =
     ocrGlassTone === "bright"
       ? styles.ocrBottomSheetBright
@@ -1123,7 +1348,7 @@ export default function ClipInvocationScreen() {
   }, []);
   const focusOcrCamera = useCallback(
     (event: GestureResponderEvent) => {
-      if (ocrImageUri || mode !== "ocr") return;
+      if (ocrImageUri || !isCameraCaptureMode) return;
 
       const { locationX, locationY, pageX, pageY } = event.nativeEvent;
       const x = Math.max(0, Math.min(pageX / windowDimensions.width, 1));
@@ -1135,7 +1360,7 @@ export default function ClipInvocationScreen() {
       });
       setTimeout(() => setOcrFocusPoint(null), 900);
     },
-    [mode, ocrImageUri, windowDimensions.height, windowDimensions.width]
+    [isCameraCaptureMode, ocrImageUri, windowDimensions.height, windowDimensions.width]
   );
 
   if (isOcrMode) {
@@ -1196,28 +1421,22 @@ export default function ClipInvocationScreen() {
                   >
                     <LiveTextImageView imageUri={ocrImageUri} style={styles.ocrCapturedImage} />
                   </ScrollView>
-                  <View pointerEvents="none" style={styles.ocrCopyPrompt}>
-                    <Text numberOfLines={1} style={styles.ocrCopyPromptText}>
-                      Select text and tap Copy to send to browser
-                    </Text>
-                  </View>
                 </View>
               </View>
           ) : hasVoltClipTextRecognizer ? (
-            <>
-              {ocrPreviewState === "failed" ? (
-                <View pointerEvents="none" style={styles.ocrPreviewWarning}>
-                  <Text style={styles.ocrPreviewWarningText}>Camera preview unavailable</Text>
-                  </View>
-                ) : null}
-              </>
+            <></>
             ) : (
               <View style={styles.ocrUnavailablePanel}>
                 <Text style={styles.ocrUnavailableText}>OCR camera unavailable</Text>
               </View>
             )}
 
-            {mode === "barcode" ? (
+            {isDiscoveryMode ? (
+              <View pointerEvents="none" style={styles.ocrBarcodeGuide}>
+                <View style={[styles.ocrDiscoveryFrame, barcodeCandidate && styles.ocrBarcodeGuideFrameActive]} />
+                {barcodeCandidate ? <View style={styles.ocrDiscoveryPulse} /> : null}
+              </View>
+            ) : mode === "barcode" ? (
               <View pointerEvents="none" style={styles.ocrBarcodeGuide}>
                 <View style={[styles.ocrBarcodeGuideFrame, barcodeCandidate && styles.ocrBarcodeGuideFrameActive]} />
                 <Text numberOfLines={2} style={styles.ocrBarcodeGuideText}>
@@ -1226,22 +1445,6 @@ export default function ClipInvocationScreen() {
               </View>
             ) : null}
 
-            {sendState === "sent" && ocrText ? (
-              <View pointerEvents="none" style={styles.ocrSentToast}>
-                <Text style={styles.ocrSentTitle}>Copied and sent to browser</Text>
-                <Text numberOfLines={2} style={styles.ocrSentText}>
-                  {ocrText}
-                </Text>
-              </View>
-            ) : null}
-
-            {sendState === "error" && error ? (
-              <View pointerEvents="none" style={styles.ocrErrorToast}>
-                <Text numberOfLines={2} style={styles.ocrErrorText}>
-                  {error}
-                </Text>
-              </View>
-            ) : null}
         </View>
         <Animated.View style={[styles.ocrFloatingShutter, ocrFloatingShutterAnimatedStyle]}>
           {renderOcrShutter()}
@@ -1277,64 +1480,44 @@ export default function ClipInvocationScreen() {
                   </Text>
                 </View>
               ) : (
-              <Animated.View style={[styles.ocrZoomWheel, ocrZoomWheelAnimatedStyle]}>
-                <Text style={styles.ocrZoomWheelLabel}>Zoom</Text>
-                <View style={[styles.ocrZoomWheelViewport, { width: ocrZoomWheelViewportWidth }]}>
-                  <View style={[styles.ocrZoomWheelTrack, { transform: [{ translateX: ocrZoomWheelTranslateX }] }]}>
-                    {getOcrZoomStops(ocrZoomMin, ocrZoomMax).map((stop) => (
-                      <Pressable
-                        accessibilityLabel={`Set zoom to ${formatOcrZoomLabel(stop)}`}
-                        accessibilityRole="button"
-                        accessibilityState={{ selected: Math.abs(ocrZoomFactor - stop) < 0.01 }}
-                        key={stop}
-                        onPress={() => commitOcrZoomSnap(stop)}
-                        style={[
-                          styles.ocrZoomWheelTick,
-                          Math.abs(ocrZoomFactor - stop) < 0.01 && styles.ocrZoomWheelTickActive,
-                        ]}
-                      >
-                        <View
+                <Animated.View style={[styles.ocrZoomWheel, ocrZoomWheelAnimatedStyle]}>
+                  <Text style={styles.ocrZoomWheelLabel}>Zoom</Text>
+                  <View style={[styles.ocrZoomWheelViewport, { width: ocrZoomWheelViewportWidth }]}>
+                    <View style={[styles.ocrZoomWheelTrack, { transform: [{ translateX: ocrZoomWheelTranslateX }] }]}>
+                      {getOcrZoomStops(ocrZoomMin, ocrZoomMax).map((stop) => (
+                        <Pressable
+                          accessibilityLabel={`Set zoom to ${formatOcrZoomLabel(stop)}`}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected: Math.abs(ocrZoomFactor - stop) < 0.01 }}
+                          key={stop}
+                          onPress={() => commitOcrZoomSnap(stop)}
                           style={[
-                            styles.ocrZoomWheelTickMark,
-                            Math.abs(ocrZoomFactor - stop) < 0.01 && styles.ocrZoomWheelTickMarkActive,
-                          ]}
-                        />
-                        <Text
-                          style={[
-                            styles.ocrZoomWheelTickText,
-                            Math.abs(ocrZoomFactor - stop) < 0.01 && styles.ocrZoomWheelTickTextActive,
+                            styles.ocrZoomWheelTick,
+                            Math.abs(ocrZoomFactor - stop) < 0.01 && styles.ocrZoomWheelTickActive,
                           ]}
                         >
-                          {formatOcrZoomLabel(stop)}
-                        </Text>
-                      </Pressable>
-                    ))}
+                          <View
+                            style={[
+                              styles.ocrZoomWheelTickMark,
+                              Math.abs(ocrZoomFactor - stop) < 0.01 && styles.ocrZoomWheelTickMarkActive,
+                            ]}
+                          />
+                          <Text
+                            style={[
+                              styles.ocrZoomWheelTickText,
+                              Math.abs(ocrZoomFactor - stop) < 0.01 && styles.ocrZoomWheelTickTextActive,
+                            ]}
+                          >
+                            {formatOcrZoomLabel(stop)}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
                   </View>
-                </View>
-                <Text style={styles.ocrZoomWheelValue}>{formatOcrZoomLabel(ocrZoomFactor)}</Text>
-              </Animated.View>
+                </Animated.View>
               )}
             </Animated.View>
             <Animated.View style={[styles.ocrExpandedControls, ocrExpandedControlsAnimatedStyle]}>
-              <View style={styles.ocrModeOptions}>
-                {(["ocr", "barcode", "dictation", "photo"] as const).map((nextMode) => (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: mode === nextMode }}
-                    key={nextMode}
-                    onPress={() => {
-                      setActiveMode(nextMode);
-                      setSendState("idle");
-                      setError(null);
-                    }}
-                    style={[styles.ocrModeOption, mode === nextMode && styles.ocrModeOptionActive]}
-                  >
-                    <Text style={[styles.ocrModeOptionText, mode === nextMode && styles.ocrModeOptionTextActive]}>
-                      {nextMode === "ocr" ? "OCR" : nextMode === "barcode" ? "Code" : nextMode === "dictation" ? "Talk" : "Photo"}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
               {mode !== "dictation" ? (
               <View style={styles.ocrCameraControls}>
                 <Pressable
@@ -1373,20 +1556,20 @@ export default function ClipInvocationScreen() {
               ) : null}
               <Pressable
                 accessibilityRole="switch"
-                accessibilityState={{ checked: ocrAutoSendCopiedText }}
-                onPress={() => setOcrAutoSendCopiedText((value) => !value)}
+                accessibilityState={{ checked: ocrAutoTypeCopiedText }}
+                onPress={() => setOcrAutoTypeCopiedText((value) => !value)}
                 style={styles.ocrSettingRow}
               >
                 <View>
-                  <Text style={styles.ocrSettingTitle}>Auto-send copied text</Text>
-                  <Text style={styles.ocrSettingText}>Copies from Live Text relay to Chrome.</Text>
+                  <Text style={styles.ocrSettingTitle}>Auto-type copied text</Text>
+                  <Text style={styles.ocrSettingText}>Copied Live Text always relays to Chrome; this controls cursor typing.</Text>
                 </View>
                 <Switch
                   ios_backgroundColor="rgba(255, 255, 255, 0.18)"
-                  onValueChange={setOcrAutoSendCopiedText}
+                  onValueChange={setOcrAutoTypeCopiedText}
                   thumbColor="#ffffff"
                   trackColor={{ false: "rgba(255, 255, 255, 0.22)", true: "rgba(255, 255, 255, 0.5)" }}
-                  value={ocrAutoSendCopiedText}
+                  value={ocrAutoTypeCopiedText}
                 />
               </Pressable>
               <View style={styles.ocrSettingBlock}>
@@ -1410,6 +1593,42 @@ export default function ClipInvocationScreen() {
                   ))}
                 </View>
               </View>
+            </Animated.View>
+            <Animated.View style={[styles.ocrExpandedSheetTab, ocrExpandedSheetTabAnimatedStyle]}>
+              {LiquidTabBarView ? (
+                <LiquidTabBarView
+                  onModeChange={(event) => {
+                    const nextMode = event.nativeEvent?.mode;
+                    if (nextMode === "ocr" || nextMode === "barcode" || nextMode === "photo" || nextMode === "dictation") {
+                      switchClipMode(nextMode);
+                    }
+                  }}
+                  selectedMode={mode}
+                  style={styles.ocrExpandedSheetNativeTabBar}
+                />
+              ) : (
+                <>
+                  <View pointerEvents="none" style={styles.ocrExpandedSheetTabGlow} />
+                  {clipModes.map((nextMode) => {
+                    const selected = mode === nextMode;
+                    return (
+                      <Pressable
+                        accessibilityLabel={`Switch to ${modeLabels[nextMode]}`}
+                        accessibilityRole="tab"
+                        accessibilityState={{ selected }}
+                        key={nextMode}
+                        onPress={() => switchClipMode(nextMode)}
+                        style={[styles.ocrModeNavItem, selected && styles.ocrModeNavItemSelected]}
+                      >
+                        <ModeIcon mode={nextMode} selected={selected} />
+                        <Text numberOfLines={1} style={[styles.ocrModeNavLabel, selected && styles.ocrModeNavLabelSelected]}>
+                          {modeLabels[nextMode]}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </>
+              )}
             </Animated.View>
           </View>
         </Animated.View>
@@ -1553,9 +1772,9 @@ const styles = StyleSheet.create({
   },
   ocrDrawerHandleHitArea: {
     alignItems: "center",
-    height: 34,
+    height: 24,
     justifyContent: "center",
-    marginBottom: 4,
+    marginBottom: 2,
   },
   ocrDrawerHandle: {
     width: 44,
@@ -1773,6 +1992,26 @@ const styles = StyleSheet.create({
     borderColor: "#86efac",
     backgroundColor: "rgba(22, 163, 74, 0.12)",
   },
+  ocrDiscoveryFrame: {
+    width: "88%",
+    height: "62%",
+    borderRadius: 34,
+    ...continuousCorners,
+    borderWidth: 2,
+    borderColor: "rgba(255, 255, 255, 0.62)",
+    backgroundColor: "rgba(255, 255, 255, 0.04)",
+  },
+  ocrDiscoveryPulse: {
+    position: "absolute",
+    width: 18,
+    height: 18,
+    borderRadius: 999,
+    backgroundColor: "#86efac",
+    shadowColor: "#86efac",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.85,
+    shadowRadius: 16,
+  },
   ocrBarcodeGuideText: {
     marginTop: 14,
     maxWidth: "78%",
@@ -1790,14 +2029,19 @@ const styles = StyleSheet.create({
   },
   ocrBottomControls: {
     alignItems: "center",
+    flex: 1,
     minHeight: 84,
     paddingTop: 0,
-    paddingBottom: 0,
+    paddingBottom: 18,
+    position: "relative",
     width: "100%",
   },
   ocrCollapsedControls: {
-    minHeight: 84,
-    position: "relative",
+    height: 126,
+    left: 0,
+    position: "absolute",
+    right: 0,
+    top: 0,
     width: "100%",
   },
   ocrSheetSummary: {
@@ -1811,8 +2055,9 @@ const styles = StyleSheet.create({
   ocrZoomWheel: {
     ...absoluteFillObject,
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent: "flex-start",
     paddingHorizontal: 8,
+    paddingTop: 6,
     top: 0,
   },
   ocrZoomWheelLabel: {
@@ -1821,40 +2066,46 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     letterSpacing: 0.6,
     lineHeight: 14,
-    marginBottom: 8,
+    marginBottom: 7,
     textTransform: "uppercase",
   },
   ocrZoomWheelViewport: {
     alignItems: "center",
-    height: 54,
+    height: 72,
     justifyContent: "center",
     overflow: "hidden",
     width: "100%",
   },
   ocrZoomWheelTrack: {
-    alignItems: "flex-end",
+    alignItems: "center",
     flexDirection: "row",
-    height: 54,
+    height: 72,
   },
   ocrZoomWheelTick: {
     alignItems: "center",
+    backgroundColor: "transparent",
     borderColor: "transparent",
     borderRadius: 999,
     borderWidth: 2,
-    justifyContent: "flex-end",
-    minHeight: 48,
-    paddingBottom: 2,
+    height: 62,
+    justifyContent: "center",
+    paddingBottom: 0,
     width: OCR_ZOOM_WHEEL_TICK_SPACING,
     ...continuousCorners,
   },
   ocrZoomWheelTickActive: {
+    backgroundColor: "rgba(255, 255, 255, 0.16)",
     borderColor: "rgba(255, 255, 255, 0.88)",
+    shadowColor: "#ffffff",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.18,
+    shadowRadius: 14,
   },
   ocrZoomWheelTickMark: {
     backgroundColor: "rgba(255, 255, 255, 0.28)",
     borderRadius: 999,
     height: 14,
-    marginBottom: 6,
+    marginBottom: 5,
     width: 2,
   },
   ocrZoomWheelTickMarkActive: {
@@ -1870,13 +2121,6 @@ const styles = StyleSheet.create({
   ocrZoomWheelTickTextActive: {
     color: "#ffffff",
     fontSize: 12,
-  },
-  ocrZoomWheelValue: {
-    color: "#ffffff",
-    fontSize: 22,
-    fontWeight: "900",
-    lineHeight: 26,
-    marginTop: 4,
   },
   ocrDictationDestinationCard: {
     ...absoluteFillObject,
@@ -2083,8 +2327,264 @@ const styles = StyleSheet.create({
   },
   ocrExpandedControls: {
     gap: 0,
-    paddingTop: 2,
+    paddingBottom: 96,
+    paddingTop: 0,
     width: "100%",
+  },
+  ocrExpandedSheetTab: {
+    alignItems: "center",
+    alignSelf: "center",
+    bottom: 10,
+    flexDirection: "row",
+    gap: 4,
+    height: 84,
+    justifyContent: "center",
+    position: "absolute",
+    paddingHorizontal: 6,
+    paddingVertical: 8,
+    width: "100%",
+  },
+  ocrExpandedSheetTabGlow: {
+    ...absoluteFillObject,
+    borderRadius: 28,
+    ...continuousCorners,
+    backgroundColor: "rgba(255, 255, 255, 0.14)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.22)",
+    shadowColor: "#ffffff",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.18,
+    shadowRadius: 14,
+  },
+  ocrExpandedSheetTabGlass: {
+    ...absoluteFillObject,
+    borderRadius: 28,
+    ...continuousCorners,
+    overflow: "hidden",
+  },
+  ocrExpandedSheetNativeTabBar: {
+    ...absoluteFillObject,
+    borderRadius: 28,
+    ...continuousCorners,
+    overflow: "visible",
+  },
+  ocrModeNavItem: {
+    alignItems: "center",
+    borderRadius: 22,
+    ...continuousCorners,
+    flex: 1,
+    gap: 2,
+    height: 54,
+    justifyContent: "center",
+  },
+  ocrModeNavItemSelected: {
+    backgroundColor: "rgba(255, 255, 255, 0.22)",
+    shadowColor: "#ffffff",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+  },
+  ocrModeNavLabel: {
+    color: "rgba(245, 245, 244, 0.68)",
+    fontSize: 10,
+    fontWeight: "800",
+    lineHeight: 12,
+    maxWidth: "100%",
+    textAlign: "center",
+  },
+  ocrModeNavLabelSelected: {
+    color: "#ffffff",
+  },
+  ocrModeNavIconBox: {
+    alignItems: "center",
+    height: 28,
+    justifyContent: "center",
+    position: "relative",
+    width: 32,
+  },
+  ocrModeNavIconDefault: {
+    borderColor: "rgba(245, 245, 244, 0.66)",
+  },
+  ocrModeNavIconSelected: {
+    borderColor: "#ffffff",
+  },
+  ocrModeNavIconLineDefault: {
+    backgroundColor: "rgba(245, 245, 244, 0.66)",
+  },
+  ocrModeNavIconLineSelected: {
+    backgroundColor: "#ffffff",
+  },
+  ocrModeDocIcon: {
+    borderRadius: 4,
+    borderWidth: 1.8,
+    height: 22,
+    paddingLeft: 5,
+    paddingTop: 8,
+    width: 18,
+  },
+  ocrModeDocFold: {
+    borderBottomColor: "rgba(245, 245, 244, 0.42)",
+    borderBottomWidth: 1.5,
+    borderLeftColor: "transparent",
+    borderLeftWidth: 5,
+    height: 7,
+    position: "absolute",
+    right: 0,
+    top: 0,
+    width: 7,
+  },
+  ocrModeDocFoldSelected: {
+    borderBottomColor: "rgba(255, 255, 255, 0.78)",
+  },
+  ocrModeDocLine: {
+    borderRadius: 999,
+    height: 2,
+    marginBottom: 3,
+    width: 8,
+  },
+  ocrModeDocLineShort: {
+    borderRadius: 999,
+    height: 2,
+    width: 6,
+  },
+  ocrModeViewfinderTopLeft: {
+    borderLeftWidth: 2,
+    borderTopWidth: 2,
+    borderTopLeftRadius: 6,
+    height: 8,
+    left: 2,
+    position: "absolute",
+    top: 2,
+    width: 8,
+  },
+  ocrModeViewfinderTopRight: {
+    borderRightWidth: 2,
+    borderTopWidth: 2,
+    borderTopRightRadius: 6,
+    height: 8,
+    position: "absolute",
+    right: 2,
+    top: 2,
+    width: 8,
+  },
+  ocrModeViewfinderBottomLeft: {
+    borderBottomWidth: 2,
+    borderLeftWidth: 2,
+    borderBottomLeftRadius: 6,
+    bottom: 2,
+    height: 8,
+    left: 2,
+    position: "absolute",
+    width: 8,
+  },
+  ocrModeViewfinderBottomRight: {
+    borderBottomWidth: 2,
+    borderRightWidth: 2,
+    borderBottomRightRadius: 6,
+    bottom: 2,
+    height: 8,
+    position: "absolute",
+    right: 2,
+    width: 8,
+  },
+  ocrModeBarcodeBars: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 2,
+    height: 18,
+    justifyContent: "center",
+    width: 22,
+  },
+  ocrModeBarcodeBarsSelected: {
+    opacity: 1,
+  },
+  ocrModeBarcodeBar: {
+    borderRadius: 999,
+    height: 18,
+  },
+  ocrModePhotoBack: {
+    borderRadius: 5,
+    borderWidth: 1.7,
+    height: 18,
+    left: 8,
+    position: "absolute",
+    top: 3,
+    width: 19,
+  },
+  ocrModePhotoFront: {
+    borderRadius: 5,
+    borderWidth: 1.9,
+    height: 19,
+    overflow: "hidden",
+    position: "absolute",
+    right: 7,
+    top: 7,
+    width: 21,
+  },
+  ocrModePhotoFrontSelected: {
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
+  },
+  ocrModePhotoSun: {
+    borderRadius: 999,
+    height: 4,
+    position: "absolute",
+    right: 4,
+    top: 4,
+    width: 4,
+  },
+  ocrModePhotoMountain: {
+    bottom: 4,
+    height: 7,
+    left: 4,
+    position: "absolute",
+    transform: [{ rotate: "45deg" }],
+    width: 7,
+  },
+  ocrModeMicCapsule: {
+    borderRadius: 999,
+    borderWidth: 2,
+    height: 18,
+    width: 12,
+  },
+  ocrModeMicCapsuleSelected: {
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
+  },
+  ocrModeMicStem: {
+    height: 7,
+    marginTop: -1,
+    width: 2,
+  },
+  ocrModeMicBase: {
+    borderRadius: 999,
+    height: 2,
+    width: 14,
+  },
+  ocrModeMicArc: {
+    borderBottomWidth: 2,
+    borderColor: "rgba(245, 245, 244, 0.66)",
+    borderLeftWidth: 2,
+    borderRightWidth: 2,
+    borderRadius: 10,
+    bottom: 7,
+    height: 10,
+    position: "absolute",
+    width: 20,
+  },
+  ocrModeMicArcDefault: {
+    borderColor: "rgba(245, 245, 244, 0.66)",
+  },
+  ocrModeMicArcSelected: {
+    borderColor: "#ffffff",
+  },
+  ocrExpandedSheetTabGrip: {
+    width: 54,
+    height: 5,
+    borderRadius: 999,
+    backgroundColor: "rgba(255, 255, 255, 0.72)",
+    shadowColor: "#ffffff",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.32,
+    shadowRadius: 8,
   },
   ocrSettingBlock: {
     gap: 12,
@@ -2203,6 +2703,53 @@ const styles = StyleSheet.create({
     borderRadius: 26,
     ...continuousCorners,
     backgroundColor: "#1c1917",
+  },
+  ocrMicIcon: {
+    alignItems: "center",
+    height: 42,
+    justifyContent: "center",
+    width: 42,
+  },
+  ocrMicCapsule: {
+    width: 18,
+    height: 28,
+    borderRadius: 10,
+    ...continuousCorners,
+    backgroundColor: "#1c1917",
+  },
+  ocrMicStem: {
+    width: 4,
+    height: 9,
+    borderRadius: 2,
+    backgroundColor: "#1c1917",
+    marginTop: 2,
+  },
+  ocrMicBase: {
+    width: 24,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#1c1917",
+    marginTop: -1,
+  },
+  ocrUndoIcon: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  ocrUndoIconText: {
+    color: "#1c1917",
+    fontSize: 45,
+    fontWeight: "900",
+    lineHeight: 50,
+  },
+  ocrRefreshIcon: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  ocrRefreshIconText: {
+    color: "#1c1917",
+    fontSize: 39,
+    fontWeight: "900",
+    lineHeight: 44,
   },
   ocrShutterIcon: {
     color: "#1c1917",

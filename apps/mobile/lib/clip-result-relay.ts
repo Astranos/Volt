@@ -22,7 +22,7 @@ export function makeClipRelayResult(mode: CaptureMode, message: ScannerTransport
 
 export function messageForClipRelayStatus(status: number) {
   if (status === 400) {
-    return "This App Clip link no longer matches the browser session. Start a fresh scan from Chrome.";
+    return "Scan the Mobile Scanner QR in Chrome to pair again.";
   }
 
   if (status === 404) {

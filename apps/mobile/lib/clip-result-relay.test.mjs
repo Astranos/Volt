@@ -37,7 +37,7 @@ test("makeClipRelayResult preserves final dictation metadata", () => {
 });
 
 test("messageForClipRelayStatus explains recoverable session failures", () => {
-  assert.match(messageForClipRelayStatus(400), /no longer matches the browser session/);
+  assert.match(messageForClipRelayStatus(400), /Mobile Scanner QR/);
   assert.match(messageForClipRelayStatus(404), /browser session expired/);
   assert.match(messageForClipRelayStatus(409), /already sent/);
   assert.match(messageForClipRelayStatus(503), /returned 503/);
