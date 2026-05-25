@@ -92,7 +92,7 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
   const [status, setStatus] = useState<ScannerConnectionStatus>("disconnected");
   const [scans, setScans] = useState<ScanRecord[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [mode, setMode] = useState<MobileCaptureMode | null>(null);
+  const [mode, setMode] = useState<MobileCaptureMode | null>("ocr");
   const [activeTab, setActiveTab] = useState<"scans" | "photos">("scans");
 
   const generateQrCode = useCallback(async (url: string) => {
@@ -115,7 +115,7 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
     (state: Partial<MobileScannerState> | null | undefined) => {
       if (!state) return;
       if (state.status) setStatus(state.status);
-      if ("mode" in state) setMode(state.mode ?? null);
+      if ("mode" in state) setMode(state.mode ?? "ocr");
       setError(state.error ?? null);
 
       if (!state.qrCodeUrl) {

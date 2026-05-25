@@ -38,7 +38,7 @@ function parseArgs(argv = process.argv.slice(2)) {
 
 Options:
   --device DEVICE_ID   Device id from xcrun devicectl list devices
-  --mode MODE         ocr, barcode, or dictation. Default: ocr
+  --mode MODE         ocr, barcode, dictation, or photo. Default: ocr
   --url URL           Existing App Clip URL to launch instead of creating a new session
   --origin ORIGIN     Scanner signal origin. Default: https://scanner-signal.vercel.app
   --skip-build        Install and launch the existing /tmp App Clip build
@@ -50,7 +50,7 @@ Options:
     }
   }
 
-  if (!["ocr", "barcode", "dictation"].includes(options.mode)) {
+  if (!["ocr", "barcode", "dictation", "photo"].includes(options.mode)) {
     throw new Error(`Unsupported App Clip mode: ${options.mode}`);
   }
 

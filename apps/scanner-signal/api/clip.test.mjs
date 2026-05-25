@@ -71,6 +71,7 @@ test("clip fallback page renders mode-specific fallback copy for every App Clip 
     ["ocr", "Scan printed text with your iPhone camera."],
     ["barcode", "Scan a UPC, EAN, or QR code with your iPhone camera."],
     ["dictation", "Speak a short note and send the final transcript back to Chrome."],
+    ["photo", "Capture a photo with your iPhone camera and send it back to Chrome."],
   ]) {
     const response = makeResponse();
 

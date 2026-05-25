@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
-const CLIP_MODES = new Set(["ocr", "barcode", "dictation"]);
+const CLIP_MODES = new Set(["ocr", "barcode", "dictation", "photo"]);
 const DEFAULT_APP_CLIP_BUNDLE_ID = "com.volt.mobile.Clip";
 const SESSION_ID_PATTERN = /^[a-zA-Z0-9_-]{4,80}$/;
 
@@ -16,6 +16,10 @@ const MODE_COPY = {
   dictation: {
     title: "Dictation",
     action: "Speak a short note and send the final transcript back to Chrome.",
+  },
+  photo: {
+    title: "Photo capture",
+    action: "Capture a photo with your iPhone camera and send it back to Chrome.",
   },
 } as const;
 

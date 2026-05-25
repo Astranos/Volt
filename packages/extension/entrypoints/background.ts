@@ -439,12 +439,32 @@ export default defineBackground({
       return chrome.runtime.sendMessage(message);
     }
 
+    async function getMobileCaptureTarget() {
+      try {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (!tab) return null;
+        return {
+          browser: "Chrome",
+          tabTitle: clampString(tab.title || "Current tab", 140),
+          url: clampString(tab.url || "", 500),
+          cursor: "Last focused editable field",
+        };
+      } catch (_error) {
+        return {
+          browser: "Chrome",
+          cursor: "Last focused editable field",
+        };
+      }
+    }
+
     async function handleScannerStart(message, sendResponse) {
       try {
+        const mode = normalizeMobileCaptureMode(message?.mode);
         const state = await sendScannerOffscreenMessage({
           action: "scannerOffscreenStart",
           force: message?.force === true,
-          mode: normalizeMobileCaptureMode(message?.mode),
+          mode,
+          target: mode ? await getMobileCaptureTarget() : null,
         });
         sendResponse({ success: true, state });
       } catch (err) {
@@ -674,6 +694,11 @@ export default defineBackground({
 
       try {
         chrome.contextMenus.create({
+          id: "pm-mobile",
+          title: "Mobile",
+          contexts: ["all"],
+        });
+        chrome.contextMenus.create({
           id: "pm-search-ebay-sold",
           title: "Search for sold listings on eBay",
           contexts: ["selection"],
@@ -703,6 +728,12 @@ export default defineBackground({
       }
 
       chrome.contextMenus.onClicked.addListener((info, _tab) => {
+        if (info.menuItemId === "pm-mobile") {
+          const tabId = _tab?.id ?? currentActiveTabId ?? lastActiveTabId;
+          toggleSidePanelForTab(tabId, "mobile-scanner", "open");
+          return;
+        }
+
         const selection = (info.selectionText || "").trim();
         if (!selection) return;
 

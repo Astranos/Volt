@@ -20,6 +20,13 @@ type ScannerState = {
 
 type MobileCaptureMode = "ocr" | "barcode" | "dictation" | "photo";
 
+type SessionTarget = {
+  browser?: string;
+  tabTitle?: string;
+  url?: string;
+  cursor?: string;
+};
+
 type BarcodeMessage = {
   barcode: string;
   dictationPhase?: "partial" | "final";
@@ -203,7 +210,7 @@ class MobileScannerOffscreenSession {
     });
   }
 
-  async start(force = false, mode: MobileCaptureMode | null = null) {
+  async start(force = false, mode: MobileCaptureMode | null = null, target?: SessionTarget | null) {
     const nextMode = mode ?? this.state.mode;
     if (
       !force &&
@@ -220,7 +227,7 @@ class MobileScannerOffscreenSession {
 
     try {
       if (nextMode) {
-        const sessionId = await this.createRelaySession(null);
+        const sessionId = await this.createRelaySession(nextMode, target);
         this.sessionId = sessionId;
         this.setState({
           status: "waiting",
@@ -461,11 +468,11 @@ class MobileScannerOffscreenSession {
     return this.postSignalingOffer(SCANNER_SIGNAL_URL, localDescription);
   }
 
-  private async createRelaySession(mode: MobileCaptureMode | null) {
+  private async createRelaySession(mode: MobileCaptureMode | null, target?: SessionTarget | null) {
     const sessionResponse = await fetch(SCANNER_SIGNAL_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(mode ? { relay: true, mode } : { relay: true }),
+      body: JSON.stringify(mode ? { relay: true, mode, target } : { relay: true, target }),
     });
 
     if (!sessionResponse.ok) {
@@ -610,7 +617,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         message.force === true,
         message.mode === "ocr" || message.mode === "barcode" || message.mode === "dictation" || message.mode === "photo"
           ? message.mode
-          : null
+          : null,
+        message.target && typeof message.target === "object" ? message.target : null
       )
       .then((state) => sendResponse(state))
       .catch((err) =>

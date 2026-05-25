@@ -11,7 +11,15 @@ type ScannerSession = {
   result?: ScannerResult;
   results?: ScannerResult[];
   mode?: ScannerResult["mode"];
+  target?: SessionTarget;
   createdAt: number;
+};
+
+type SessionTarget = {
+  browser?: string;
+  tabTitle?: string;
+  url?: string;
+  cursor?: string;
 };
 
 type ScannerResult = {
@@ -164,6 +172,25 @@ function isCaptureMode(value: unknown): value is ScannerResult["mode"] {
   return value === "ocr" || value === "barcode" || value === "dictation" || value === "photo";
 }
 
+function clampTargetString(value: unknown, maxLength: number) {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  return trimmed.length > maxLength ? trimmed.slice(0, maxLength) : trimmed;
+}
+
+function parseSessionTarget(value: unknown): SessionTarget | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const source = value as Record<string, unknown>;
+  const target = {
+    browser: clampTargetString(source.browser, 80),
+    tabTitle: clampTargetString(source.tabTitle, 160),
+    url: clampTargetString(source.url, 600),
+    cursor: clampTargetString(source.cursor, 120),
+  };
+  return Object.values(target).some(Boolean) ? target : undefined;
+}
+
 function isValidResultForMode(mode: ScannerResult["mode"], message: ScannerResult["message"]) {
   if (mode === "photo") {
     return message.kind === "photo";
@@ -285,6 +312,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
       const offer = request.body?.offer;
       const isRelaySession = request.body?.relay === true;
       const relayMode = isCaptureMode(request.body?.mode) ? request.body.mode : undefined;
+      const target = parseSessionTarget(request.body?.target);
       if (!isRelaySession && (typeof offer !== "string" || !offer)) {
         response.status(400).json({ error: "Missing offer" });
         return;
@@ -293,6 +321,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
       await saveSession(nextSessionId, {
         offer: typeof offer === "string" ? offer : undefined,
         mode: relayMode,
+        target,
         createdAt: Date.now(),
       });
       response.status(200).json({ sessionId: nextSessionId });
@@ -356,7 +385,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
     }
 
     if (request.method === "GET" && !isAnswerRoute) {
-      response.status(200).json({ offer: session.offer });
+      response.status(200).json({ offer: session.offer, mode: session.mode, target: session.target ?? null });
       return;
     }
 

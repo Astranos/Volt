@@ -15,6 +15,7 @@ import {
 } from "react-native";
 import type { ViewProps } from "react-native";
 import type { GestureResponderEvent } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { initialWindowMetrics } from "react-native-safe-area-context";
 import { SCANNER_SIGNAL_URL } from "@volt/scanner-protocol";
 import { createBarcodeCandidateGuard } from "../../lib/barcode-candidate-guard";
@@ -138,9 +139,15 @@ function makeTestMessage(mode: ScannerCaptureMode) {
 export default function ClipInvocationScreen() {
   const [invocation, setInvocation] = useState<CaptureInvocation | null>(null);
   const initialMode = invocation?.mode ?? "ocr";
-  const [activeMode, setActiveMode] = useState<ScannerCaptureMode>("ocr");
+  const [activeMode, setActiveMode] = useState<ScannerCaptureMode>(initialMode);
   const mode = activeMode;
   const session = invocation?.sessionId ?? "";
+  const [sessionTarget, setSessionTarget] = useState<{
+    browser?: string;
+    tabTitle?: string;
+    url?: string;
+    cursor?: string;
+  } | null>(null);
   const [sendState, setSendState] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
   const [scannerState, setScannerState] = useState<"idle" | "starting" | "ready" | "unavailable" | "error">("idle");
@@ -179,6 +186,20 @@ export default function ClipInvocationScreen() {
   const [ocrZoomMin, setOcrZoomMin] = useState(OCR_ZOOM_DEFAULT);
   const [ocrZoomMax, setOcrZoomMax] = useState(OCR_ZOOM_MAX);
   const [ocrFocusPoint, setOcrFocusPoint] = useState<{ x: number; y: number } | null>(null);
+  useEffect(() => {
+    if (!session) return;
+    let cancelled = false;
+    fetch(`${SCANNER_SIGNAL_URL}/${encodeURIComponent(session)}`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((payload) => {
+        if (cancelled || !payload?.target || typeof payload.target !== "object") return;
+        setSessionTarget(payload.target);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [session]);
   const resetOcrCapture = useCallback(() => {
     setOcrImageUri(null);
     setOcrText("");
@@ -585,6 +606,30 @@ export default function ClipInvocationScreen() {
     }
   }
 
+  async function startDictationFromShutter() {
+    if (mode !== "dictation" || dictationState === "recording" || dictationState === "requesting" || sendState === "sending") return;
+    if (dictationFinal) {
+      setDictationTranscript("");
+      setDictationFinal(false);
+      setSendState("idle");
+      setError(null);
+    }
+    await toggleDictation();
+  }
+
+  async function stopDictationFromShutter() {
+    if (mode !== "dictation" || dictationState !== "recording") return;
+    await toggleDictation();
+  }
+
+  function undoDictation() {
+    if (mode !== "dictation" || !dictationFinal) return;
+    setDictationTranscript("");
+    setDictationFinal(false);
+    setSendState("idle");
+    setError(null);
+  }
+
   async function captureText() {
     if ((mode !== "ocr" && mode !== "photo") || sendState === "sending" || sendState === "sent") return;
 
@@ -620,6 +665,33 @@ export default function ClipInvocationScreen() {
 
   function renderOcrShutter() {
     const isBusy = ocrState === "capturing" || sendState === "sending";
+    if (mode === "dictation") {
+      const dictationBusy = dictationState === "requesting" || sendState === "sending";
+      return (
+        <Pressable
+          accessibilityLabel={dictationFinal ? "Undo dictation" : "Hold to dictate"}
+          accessibilityRole="button"
+          disabled={dictationBusy}
+          delayLongPress={120}
+          onLongPress={() => void startDictationFromShutter()}
+          onPress={dictationFinal ? undoDictation : undefined}
+          onPressOut={() => void stopDictationFromShutter()}
+          style={[
+            styles.ocrShutterButton,
+            dictationState === "recording" && styles.ocrShutterButtonActive,
+            dictationBusy && styles.ocrShutterButtonDisabled,
+          ]}
+        >
+          <View style={styles.ocrShutterInner}>
+            <Ionicons
+              name={dictationFinal ? "arrow-undo" : dictationState === "recording" ? "mic" : "mic-outline"}
+              size={36}
+              color="#1c1917"
+            />
+          </View>
+        </Pressable>
+      );
+    }
     return (
       <Pressable
         accessibilityLabel={ocrImageUri ? "Retake text capture" : "Capture text"}
@@ -635,9 +707,13 @@ export default function ClipInvocationScreen() {
         style={[styles.ocrShutterButton, isBusy && styles.ocrShutterButtonDisabled]}
       >
         <View style={styles.ocrShutterInner}>
-          <Text style={styles.ocrShutterIcon}>
-            {isBusy ? "…" : ""}
-          </Text>
+          {isBusy ? (
+            <Text style={styles.ocrShutterIcon}>...</Text>
+          ) : ocrImageUri && mode === "ocr" ? (
+            <Ionicons name="refresh" size={34} color="#1c1917" />
+          ) : (
+            <View style={styles.ocrShutterDot} />
+          )}
         </View>
       </Pressable>
     );
@@ -811,6 +887,36 @@ export default function ClipInvocationScreen() {
     await sendRelayMessage(mode, message);
   }
 
+  const sessionTargetHost = (() => {
+    if (!sessionTarget?.url) return null;
+    try {
+      return new URL(sessionTarget.url).hostname.replace(/^www\./, "");
+    } catch (_error) {
+      return null;
+    }
+  })();
+
+  const shutterHint = (() => {
+    if (mode === "dictation") {
+      if (dictationState === "requesting") return "Starting dictation...";
+      if (dictationState === "recording") return "Release to end dictation";
+      if (dictationFinal) return "Tap to undo or hold to dictate more";
+      return "Tap and hold to start dictating";
+    }
+    if (mode === "ocr") {
+      if (ocrState === "capturing") return "Reading text...";
+      if (ocrImageUri) return "Tap to retake photo for OCR";
+      return "Tap shutter to capture text";
+    }
+    if (mode === "photo") {
+      if (ocrState === "capturing" || sendState === "sending") return "Sending photo...";
+      if (ocrImageUri) return "Photo sent to Chrome";
+      return "Tap shutter to capture photo";
+    }
+    if (mode === "barcode") return barcodeCandidate ? "Barcode found" : "Center a barcode or QR code";
+    return "Scan a fresh QR code from the Volt Chrome extension.";
+  })();
+
   const footerMessage = (() => {
     if (!mode || !session) return "Scan a fresh QR code from the Volt Chrome extension.";
     if (sendState === "sent") {
@@ -946,7 +1052,7 @@ export default function ClipInvocationScreen() {
   };
   const ocrZoomWheelTrackOffset = ocrZoomToWheelOffset(ocrZoomFactor, ocrZoomMin, ocrZoomMax);
   const ocrZoomWheelViewportWidth = Math.max(windowDimensions.width - 36, 240);
-  const ocrZoomWheelTranslateX = ocrZoomWheelViewportWidth / 2 - ocrZoomWheelTrackOffset;
+  const ocrZoomWheelTranslateX = ocrZoomWheelViewportWidth / 2 - ocrZoomWheelTrackOffset - OCR_ZOOM_WHEEL_TICK_SPACING / 2;
   const ocrDrawerHandleAnimatedStyle = {
     width: ocrDrawerProgress.interpolate({
       inputRange: [0, 0.5, 1],
@@ -1058,9 +1164,21 @@ export default function ClipInvocationScreen() {
             ) : null}
             {mode === "dictation" ? (
               <View style={styles.ocrDictationPanel}>
-                <Text style={styles.ocrDictationText}>
-                  {dictationTranscript || "Tap Record and start speaking"}
+                <Text style={styles.ocrDictationKicker}>Dictating to</Text>
+                <Text numberOfLines={2} style={styles.ocrDictationTargetTitle}>
+                  {sessionTarget?.tabTitle || sessionTargetHost || "Current Chrome tab"}
                 </Text>
+                <Text numberOfLines={1} style={styles.ocrDictationTargetMeta}>
+                  {sessionTarget?.browser || "Chrome"}{sessionTargetHost ? ` · ${sessionTargetHost}` : ""}
+                </Text>
+                <Text numberOfLines={2} style={styles.ocrDictationTargetCursor}>
+                  {sessionTarget?.cursor || "Last focused editable field"}
+                </Text>
+                <View style={styles.ocrDictationTranscriptBox}>
+                  <Text style={styles.ocrDictationText}>
+                    {dictationTranscript || "Hold the mic and speak"}
+                  </Text>
+                </View>
               </View>
             ) : ocrImageUri ? (
               <View style={styles.ocrCapturedSheet}>
@@ -1129,13 +1247,7 @@ export default function ClipInvocationScreen() {
           {renderOcrShutter()}
         </Animated.View>
         <Animated.View pointerEvents="none" style={[styles.ocrFloatingHint, ocrHintAnimatedStyle]}>
-          <Text style={styles.ocrShutterLabel}>
-            {ocrImageUri
-              ? "Copy selected text to send"
-              : ocrState === "capturing"
-                ? "Reading text..."
-                : "Tap shutter to capture text"}
-          </Text>
+          <Text style={styles.ocrShutterLabel}>{shutterHint}</Text>
         </Animated.View>
         <Animated.View
           {...ocrDrawerPanResponder.panHandlers}
@@ -1151,6 +1263,20 @@ export default function ClipInvocationScreen() {
           </Pressable>
           <View style={styles.ocrBottomControls}>
             <Animated.View style={[styles.ocrCollapsedControls, ocrCollapsedControlsAnimatedStyle]}>
+              {mode === "dictation" ? (
+                <View style={styles.ocrDictationDestinationCard}>
+                  <Text style={styles.ocrDictationDestinationLabel}>Destination</Text>
+                  <Text numberOfLines={1} style={styles.ocrDictationDestinationTitle}>
+                    {sessionTarget?.tabTitle || sessionTargetHost || "Current Chrome tab"}
+                  </Text>
+                  <Text numberOfLines={1} style={styles.ocrDictationDestinationMeta}>
+                    {(sessionTarget?.browser || "Chrome") + (sessionTargetHost ? ` · ${sessionTargetHost}` : "")}
+                  </Text>
+                  <Text numberOfLines={1} style={styles.ocrDictationDestinationCursor}>
+                    {sessionTarget?.cursor || "Last focused editable field"}
+                  </Text>
+                </View>
+              ) : (
               <Animated.View style={[styles.ocrZoomWheel, ocrZoomWheelAnimatedStyle]}>
                 <Text style={styles.ocrZoomWheelLabel}>Zoom</Text>
                 <View style={[styles.ocrZoomWheelViewport, { width: ocrZoomWheelViewportWidth }]}>
@@ -1187,6 +1313,7 @@ export default function ClipInvocationScreen() {
                 </View>
                 <Text style={styles.ocrZoomWheelValue}>{formatOcrZoomLabel(ocrZoomFactor)}</Text>
               </Animated.View>
+              )}
             </Animated.View>
             <Animated.View style={[styles.ocrExpandedControls, ocrExpandedControlsAnimatedStyle]}>
               <View style={styles.ocrModeOptions}>
@@ -1208,18 +1335,7 @@ export default function ClipInvocationScreen() {
                   </Pressable>
                 ))}
               </View>
-              {mode === "dictation" ? (
-                <Pressable
-                  accessibilityRole="button"
-                  disabled={dictationState === "requesting" || sendState === "sending"}
-                  onPress={toggleDictation}
-                  style={[styles.ocrDictationButton, dictationState === "recording" && styles.ocrDictationButtonActive]}
-                >
-                  <Text style={styles.ocrDictationButtonText}>
-                    {dictationState === "recording" ? "Stop dictation" : dictationState === "requesting" ? "Starting..." : "Record dictation"}
-                  </Text>
-                </Pressable>
-              ) : null}
+              {mode !== "dictation" ? (
               <View style={styles.ocrCameraControls}>
                 <Pressable
                   accessibilityLabel={ocrTorchEnabled ? "Turn torch off" : "Turn torch on"}
@@ -1254,6 +1370,7 @@ export default function ClipInvocationScreen() {
                   <Text style={styles.ocrCameraControlButtonMeta}>1x</Text>
                 </Pressable>
               </View>
+              ) : null}
               <Pressable
                 accessibilityRole="switch"
                 accessibilityState={{ checked: ocrAutoSendCopiedText }}
@@ -1585,11 +1702,56 @@ const styles = StyleSheet.create({
     paddingBottom: 180,
     backgroundColor: "#111111",
   },
+  ocrDictationKicker: {
+    color: "rgba(245, 245, 244, 0.55)",
+    fontSize: 12,
+    fontWeight: "900",
+    letterSpacing: 0.8,
+    lineHeight: 16,
+    marginBottom: 8,
+    textTransform: "uppercase",
+  },
+  ocrDictationTargetTitle: {
+    color: "#ffffff",
+    fontSize: 26,
+    fontWeight: "900",
+    lineHeight: 31,
+    textAlign: "center",
+  },
+  ocrDictationTargetMeta: {
+    color: "rgba(245, 245, 244, 0.68)",
+    fontSize: 13,
+    fontWeight: "800",
+    lineHeight: 17,
+    marginTop: 8,
+    textAlign: "center",
+  },
+  ocrDictationTargetCursor: {
+    color: "#bbf7d0",
+    fontSize: 14,
+    fontWeight: "900",
+    lineHeight: 18,
+    marginTop: 14,
+    textAlign: "center",
+  },
+  ocrDictationTranscriptBox: {
+    borderRadius: 28,
+    ...continuousCorners,
+    marginTop: 28,
+    maxWidth: "100%",
+    minHeight: 104,
+    justifyContent: "center",
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.12)",
+  },
   ocrDictationText: {
     color: "#ffffff",
-    fontSize: 30,
+    fontSize: 24,
     fontWeight: "900",
-    lineHeight: 38,
+    lineHeight: 31,
     textAlign: "center",
   },
   ocrBarcodeGuide: {
@@ -1715,6 +1877,47 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     lineHeight: 26,
     marginTop: 4,
+  },
+  ocrDictationDestinationCard: {
+    ...absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 22,
+  },
+  ocrDictationDestinationLabel: {
+    color: "rgba(245, 245, 244, 0.55)",
+    fontSize: 11,
+    fontWeight: "900",
+    letterSpacing: 0.6,
+    lineHeight: 14,
+    marginBottom: 5,
+    textTransform: "uppercase",
+  },
+  ocrDictationDestinationTitle: {
+    color: "#ffffff",
+    fontSize: 16,
+    fontWeight: "900",
+    lineHeight: 20,
+    maxWidth: "100%",
+    textAlign: "center",
+  },
+  ocrDictationDestinationMeta: {
+    color: "rgba(245, 245, 244, 0.64)",
+    fontSize: 12,
+    fontWeight: "800",
+    lineHeight: 15,
+    marginTop: 3,
+    maxWidth: "100%",
+    textAlign: "center",
+  },
+  ocrDictationDestinationCursor: {
+    color: "#bbf7d0",
+    fontSize: 12,
+    fontWeight: "900",
+    lineHeight: 15,
+    marginTop: 5,
+    maxWidth: "100%",
+    textAlign: "center",
   },
   ocrCameraControls: {
     alignItems: "stretch",
@@ -1989,6 +2192,17 @@ const styles = StyleSheet.create({
   },
   ocrShutterButtonDisabled: {
     opacity: 0.7,
+  },
+  ocrShutterButtonActive: {
+    backgroundColor: "rgba(34, 197, 94, 0.28)",
+    borderColor: "rgba(187, 247, 208, 0.86)",
+  },
+  ocrShutterDot: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    ...continuousCorners,
+    backgroundColor: "#1c1917",
   },
   ocrShutterIcon: {
     color: "#1c1917",

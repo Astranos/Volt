@@ -22,6 +22,7 @@ import {
   ChevronRight,
   ScanText,
   Mic,
+  Smartphone,
 } from "lucide-react";
 
 /**
@@ -414,6 +415,19 @@ export default defineContentScript({
       } catch (_) {}
     };
 
+    const openMobileSidepanel = () => {
+      primeEditableTarget();
+      try {
+        chrome.runtime.sendMessage({
+          action: "openInSidebar",
+          tool: "mobile-scanner",
+          mode: "open",
+        });
+      } catch (error) {
+        log("Mobile sidepanel open failed", error);
+      }
+    };
+
     const quickActions: MenuAction[] = [
       {
         id: "copy",
@@ -511,22 +525,10 @@ export default defineContentScript({
         },
       },
       {
-        id: "appclip-ocr",
-        label: "OCR Scanning",
-        icon: ScanText,
-        onInvoke: () => openMobileCapture("ocr"),
-      },
-      {
-        id: "appclip-barcode",
-        label: "Barcode Scanner",
-        icon: Barcode,
-        onInvoke: () => openMobileCapture("barcode"),
-      },
-      {
-        id: "appclip-dictation",
-        label: "Dictation",
-        icon: Mic,
-        onInvoke: () => openMobileCapture("dictation"),
+        id: "mobile",
+        label: "Mobile",
+        icon: Smartphone,
+        onInvoke: openMobileSidepanel,
       },
       {
         id: "go-left",
