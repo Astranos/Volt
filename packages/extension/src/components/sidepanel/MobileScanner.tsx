@@ -7,6 +7,9 @@ import {
   Smartphone,
   Trash2,
   Images,
+  Mic,
+  ScanLine,
+  TextCursorInput,
 } from "lucide-react";
 import QRCode from "qrcode";
 import { cn } from "../../lib/utils";
@@ -37,11 +40,43 @@ type MobileScannerState = {
 type MobileCaptureMode = "ocr" | "barcode" | "dictation" | "photo";
 
 const MODE_LABELS: Record<MobileCaptureMode, string> = {
-  ocr: "OCR Scanning",
-  barcode: "Barcode Scanner",
+  ocr: "Text OCR",
+  barcode: "Barcode",
   dictation: "Dictation",
   photo: "Photos",
 };
+
+const MODE_OPTIONS: Array<{
+  value: MobileCaptureMode;
+  label: string;
+  description: string;
+  icon: React.ComponentType<{ className?: string }>;
+}> = [
+  {
+    value: "ocr",
+    label: "Text",
+    description: "OCR",
+    icon: TextCursorInput,
+  },
+  {
+    value: "barcode",
+    label: "Code",
+    description: "UPC",
+    icon: ScanLine,
+  },
+  {
+    value: "dictation",
+    label: "Voice",
+    description: "Speak",
+    icon: Mic,
+  },
+  {
+    value: "photo",
+    label: "Photos",
+    description: "Upload",
+    icon: Images,
+  },
+];
 
 function installEditableTracker() {
   const root = window as typeof window & {
@@ -179,13 +214,13 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
   }, []);
 
   const startSession = useCallback(
-    async (force = false) => {
+    async (force = false, nextMode = mode) => {
       setStatus("creating");
       setError(null);
       const response = await chrome.runtime.sendMessage({
-        action: mode ? "scannerStartForMode" : "scannerStart",
+        action: nextMode ? "scannerStartForMode" : "scannerStart",
         force,
-        mode,
+        mode: nextMode,
       });
       if (response?.state) applyScannerState(response.state);
       if (response?.error) {
@@ -194,6 +229,17 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
       }
     },
     [applyScannerState, mode]
+  );
+
+  const selectMode = useCallback(
+    (nextMode: MobileCaptureMode) => {
+      const nextTab = nextMode === "photo" ? "photos" : "scans";
+      if (mode === nextMode && activeTab === nextTab) return;
+      setMode(nextMode);
+      setActiveTab(nextTab);
+      void startSession(true, nextMode);
+    },
+    [activeTab, mode, startSession]
   );
 
   const unpair = useCallback(() => {
@@ -255,24 +301,76 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
   const isCreating = status === "creating";
   const connected = status === "connected";
   const modeLabel = mode ? MODE_LABELS[mode] : null;
+  const statusCopy = connected
+    ? "Ready for App Clip captures"
+    : showQr
+      ? "Scan QR with iPhone Camera"
+      : isCreating
+        ? "Preparing pairing"
+        : error ?? "Pair iPhone to begin";
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-white">
+    <div className="sidepanel-shell flex h-full flex-col overflow-hidden">
       <MobileToolHeader
         icon={<Smartphone className="h-4 w-4" />}
-        title="Mobile Capture"
+        title="Volt App Clip"
         subtitle={
           modeLabel
-            ? `Scan with iPhone for ${modeLabel}`
-            : "Pair the Volt app once per browser sidepanel"
+            ? `${modeLabel} capture from iPhone`
+            : "Unified mobile scanner"
         }
         status={status}
         error={error}
       />
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-5 pt-4">
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-5 pt-1">
+        <div className="liquid-glass concentric-xl overflow-hidden p-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-[11px] font-bold uppercase text-green-700">
+                Mobile scanner
+              </div>
+              <div className="mt-1 text-xl font-black leading-tight text-stone-950">
+                Capture into Chrome
+              </div>
+              <p className="mt-1 text-xs font-medium leading-5 text-stone-600">
+                {statusCopy}
+              </p>
+            </div>
+            <div className="liquid-glass-soft flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-green-700">
+              <Smartphone className="h-5 w-5" />
+            </div>
+          </div>
+
+          <div className="mt-4 grid grid-cols-4 gap-1.5">
+            {MODE_OPTIONS.map((option) => {
+              const Icon = option.icon;
+              const selected = mode === option.value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => selectMode(option.value)}
+                  className={cn(
+                    "group flex min-w-0 flex-col items-center justify-center gap-1 rounded-[18px] px-1 py-2.5 text-center transition active:scale-[0.98]",
+                    selected
+                      ? "bg-stone-950 text-white shadow-lg shadow-stone-950/15"
+                      : "liquid-glass-soft text-stone-600 hover:text-stone-950",
+                  )}
+                >
+                  <Icon className="h-4 w-4 shrink-0" />
+                  <span className="max-w-full truncate text-[11px] font-black">{option.label}</span>
+                  <span className={cn("max-w-full truncate text-[9px] font-semibold", selected ? "text-white/65" : "text-stone-400")}>
+                    {option.description}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         {showQr ? (
-          <div className="mb-5">
+          <div className="mt-4">
             <QrPairingPanel
               qrDataUrl={qrDataUrl}
               hint={
@@ -283,12 +381,12 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
             />
           </div>
         ) : isCreating ? (
-          <div className="mb-5 flex justify-center">
+          <div className="mt-4 flex justify-center">
             <PairingPlaceholder label="Setting up secure pairing…" />
           </div>
         ) : null}
 
-        <div>
+        <div className="mt-4">
           {connected ? (
             <SecondaryActionButton onClick={unpair} className="w-full">
               <RefreshCw className="h-4 w-4" />
@@ -302,24 +400,27 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
           )}
         </div>
 
-        <div className="mt-5 grid grid-cols-2 rounded-full bg-stone-100 p-1 text-xs font-bold text-stone-600">
+        <div className="liquid-glass-soft mt-4 grid grid-cols-2 rounded-[20px] p-1 text-xs font-bold text-stone-600">
           <button
             type="button"
-            onClick={() => setActiveTab("scans")}
+            onClick={() => {
+              setActiveTab("scans");
+              if (mode === "photo") selectMode("ocr");
+            }}
             className={cn(
-              "flex h-9 items-center justify-center gap-2 rounded-full transition",
-              activeTab === "scans" ? "bg-white text-stone-950 shadow-sm" : "hover:text-stone-900",
+              "flex h-10 items-center justify-center gap-2 rounded-[16px] transition",
+              activeTab === "scans" ? "bg-white/80 text-stone-950 shadow-sm" : "hover:text-stone-900",
             )}
           >
             <Scan className="h-3.5 w-3.5" />
-            Text
+            Results
           </button>
           <button
             type="button"
-            onClick={() => setActiveTab("photos")}
+            onClick={() => selectMode("photo")}
             className={cn(
-              "flex h-9 items-center justify-center gap-2 rounded-full transition",
-              activeTab === "photos" ? "bg-white text-stone-950 shadow-sm" : "hover:text-stone-900",
+              "flex h-10 items-center justify-center gap-2 rounded-[16px] transition",
+              activeTab === "photos" ? "bg-white/80 text-stone-950 shadow-sm" : "hover:text-stone-900",
             )}
           >
             <Images className="h-3.5 w-3.5" />
@@ -328,10 +429,12 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
         </div>
 
         {activeTab === "photos" ? (
-          <MobilePhotos embedded />
+          <div className="liquid-glass-soft concentric-xl mt-4 p-3">
+            <MobilePhotos embedded showConnectionControls={false} />
+          </div>
         ) : (
           <>
-        <div className="mt-6 flex items-center justify-between">
+        <div className="mt-5 flex items-center justify-between">
           <div>
             <div className="text-sm font-bold text-stone-900">Scanned results</div>
             <div className="text-xs text-stone-500">
@@ -349,8 +452,8 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
 
         <div className="mt-3 space-y-2">
           {scans.length === 0 ? (
-            <div className="flex flex-col items-center rounded-2xl border border-dashed border-stone-300 bg-stone-50 px-4 py-9 text-center">
-              <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-white text-stone-400 ring-1 ring-stone-200">
+            <div className="liquid-glass-soft concentric-lg flex flex-col items-center border-dashed border-stone-300 px-4 py-9 text-center">
+              <div className="liquid-glass-soft mb-3 flex h-12 w-12 items-center justify-center rounded-full text-stone-400">
                 <Scan className="h-5 w-5" />
               </div>
               <p className="text-sm font-semibold text-stone-700">No scans yet</p>
@@ -373,7 +476,7 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
 
 function ScanCard({ scan, onCopy }: { scan: ScanRecord; onCopy: () => void }) {
   return (
-    <div className="rounded-2xl border border-stone-200 bg-white p-3 shadow-sm">
+    <div className="liquid-glass-soft concentric-lg p-3">
       <div className="mb-2 min-w-0">
         <div className="truncate font-mono text-sm font-bold text-stone-900">
           {scan.barcode}

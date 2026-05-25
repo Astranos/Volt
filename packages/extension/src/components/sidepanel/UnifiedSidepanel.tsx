@@ -133,14 +133,14 @@ export default function UnifiedSidepanel() {
   const activeToolMeta = tools.find((t) => t.id === activeTool) || tools[0];
 
   return (
-    <div className="h-full w-full flex flex-col bg-background">
+    <div className="sidepanel-shell h-full w-full flex flex-col">
       {/* Fixed Header */}
-      <div className="flex-none p-2 pb-2 bg-background z-10">
+      <div className="flex-none p-2 pb-2 z-10">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              className="flex w-full items-center justify-between rounded-lg border border-input bg-card px-4 py-2 text-left text-lg font-semibold shadow-sm transition focus:outline-none focus:ring-2 focus:ring-primary/40 hover:bg-accent/40"
+              className="liquid-glass concentric-lg flex w-full items-center justify-between px-4 py-2 text-left text-lg font-semibold text-stone-950 transition focus:outline-none focus:ring-2 focus:ring-primary/40 hover:bg-white/60"
               ref={triggerRef}
             >
               <span className="flex items-center gap-2">
@@ -153,7 +153,7 @@ export default function UnifiedSidepanel() {
           <DropdownMenuContent
             align="start"
             sideOffset={8}
-            className="p-1"
+            className="liquid-glass concentric-lg p-1"
             style={{
               width: dropdownWidth ? `${dropdownWidth}px` : undefined,
             }}
@@ -163,7 +163,7 @@ export default function UnifiedSidepanel() {
                 key={tool.id}
                 onSelect={() => handleToolChange(tool.id)}
                 className={cn(
-                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                  "flex items-center gap-3 concentric-md px-3 py-2 text-sm font-medium transition-colors",
                   activeTool === tool.id
                     ? "bg-primary text-primary-foreground"
                     : "text-foreground hover:bg-accent hover:text-accent-foreground"

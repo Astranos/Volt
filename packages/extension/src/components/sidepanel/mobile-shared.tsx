@@ -53,7 +53,7 @@ export function StatusPill({
   return (
     <span
       className={cn(
-        "inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold",
+        "liquid-glass-soft inline-flex max-w-full items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold",
         styles.pill,
         styles.text,
         className,
@@ -100,9 +100,9 @@ export function MobileToolHeader({
   error: string | null;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 border-b border-stone-200 bg-stone-50 px-4 py-3">
+    <div className="liquid-glass-soft concentric-xl m-3 flex items-center justify-between gap-3 px-3 py-3">
       <div className="flex min-w-0 items-center gap-3">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-green-50 text-green-700 ring-1 ring-green-200">
+        <div className="liquid-glass-soft flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-green-700">
           {icon}
         </div>
         <div className="min-w-0">
@@ -124,13 +124,13 @@ export function QrPairingPanel({
 }) {
   return (
     <div className="flex flex-col items-center">
-      <div className="relative w-full max-w-[280px] rounded-3xl border border-stone-200 bg-white p-4 shadow-sm">
+      <div className="liquid-glass concentric-xl relative w-full max-w-[280px] p-4">
         <img
           src={qrDataUrl}
           alt="Scan this QR code with the Volt mobile app"
-          className="aspect-square w-full"
+          className="concentric-lg aspect-square w-full"
         />
-        <div className="absolute left-1/2 top-1/2 flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-2xl border border-stone-200 bg-white p-2 shadow-md">
+        <div className="liquid-glass concentric-md absolute left-1/2 top-1/2 flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center p-2">
           <img
             src={chrome.runtime.getURL("/assets/icons/logo-128.png")}
             alt=""
@@ -146,7 +146,7 @@ export function QrPairingPanel({
 
 export function PairingPlaceholder({ label }: { label: string }) {
   return (
-    <div className="flex aspect-square w-full max-w-[280px] flex-col items-center justify-center gap-3 rounded-3xl border border-dashed border-stone-300 bg-stone-50 px-6 text-stone-500">
+    <div className="liquid-glass-soft concentric-xl flex aspect-square w-full max-w-[280px] flex-col items-center justify-center gap-3 border-dashed border-stone-300 px-6 text-stone-500">
       <Loader2 className="h-7 w-7 animate-spin text-stone-400" />
       <span className="text-xs font-medium">{label}</span>
     </div>
@@ -171,8 +171,8 @@ export function PairingHero({
   const Icon = status === "connected" ? CheckCircle2 : status === "error" ? XCircle : status === "waiting" ? QrCode : Smartphone;
 
   return (
-    <div className="mx-auto flex w-full max-w-[320px] flex-col items-center rounded-3xl border border-stone-200 bg-white p-5 text-center shadow-sm">
-      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-green-50 ring-1 ring-green-200">
+    <div className="liquid-glass concentric-xl mx-auto flex w-full max-w-[320px] flex-col items-center p-5 text-center">
+      <div className="liquid-glass-soft flex h-16 w-16 items-center justify-center rounded-full">
         <Icon className="h-7 w-7 text-green-700" />
       </div>
       <div className="mt-4 text-base font-bold text-stone-900">{title}</div>
@@ -227,7 +227,7 @@ export function SecondaryActionButton({
       onClick={onClick}
       className={cn(
         "inline-flex h-11 items-center justify-center gap-2 rounded-full border border-stone-300 bg-white px-5 text-sm font-bold text-stone-700 transition",
-        "hover:bg-stone-50 active:scale-[0.99] disabled:opacity-50",
+        "liquid-glass-soft hover:bg-white/70 active:scale-[0.99] disabled:opacity-50",
         className,
       )}
       {...rest}
@@ -248,8 +248,8 @@ export function IconChip({
       type="button"
       onClick={onClick}
       className={cn(
-        "inline-flex h-9 w-9 items-center justify-center rounded-full text-stone-700 transition",
-        "hover:bg-stone-100 active:scale-95 disabled:opacity-40 disabled:hover:bg-transparent",
+        "liquid-glass-soft inline-flex h-9 w-9 items-center justify-center rounded-full text-stone-700 transition",
+        "hover:bg-white/70 active:scale-95 disabled:opacity-40 disabled:hover:bg-transparent",
         className,
       )}
       {...rest}

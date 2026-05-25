@@ -133,6 +133,14 @@ const LiquidTabBarView = Platform.OS === "ios" && UIManager.getViewManagerConfig
       onModeChange?: (event: { nativeEvent?: { mode?: ScannerCaptureMode } }) => void;
     }>("VoltClipLiquidTabBarView")
   : null;
+const LiquidGlassView = Platform.OS === "ios" && UIManager.getViewManagerConfig("VoltClipLiquidGlassView") != null
+  ? requireNativeComponent<ViewProps & {
+      progress?: number;
+      cornerRadius?: number;
+      tone?: "adaptive" | "dark" | "bright";
+    }>("VoltClipLiquidGlassView")
+  : null;
+const AnimatedLiquidGlassView = LiquidGlassView ? Animated.createAnimatedComponent(LiquidGlassView) : null;
 
 function makeTestMessage(mode: ScannerCaptureMode) {
   if (mode === "ocr") return makeOcrMessage("hello from Volt Clip");
@@ -325,16 +333,17 @@ export default function ClipInvocationScreen() {
       (mode !== "photo" || ocrImageUri)
   );
   const ocrDrawerCollapsedHeight = 158;
+  const ocrDrawerEdgeBleed = 2;
   const ocrDrawerExpandedHeight = Math.min(
-    Math.max(windowDimensions.height * 0.58, 360),
-    Math.max(windowDimensions.height - stableTopInset - 110, ocrDrawerCollapsedHeight)
+    Math.max(windowDimensions.height * 0.64, 420),
+    Math.max(windowDimensions.height - stableTopInset - 36, ocrDrawerCollapsedHeight)
   );
   const ocrDrawerCollapsedInset = 7;
-  const ocrDrawerExpandedInset = 7;
+  const ocrDrawerExpandedInset = -ocrDrawerEdgeBleed;
   const ocrDrawerCollapsedRadius = 48;
-  const ocrDrawerExpandedRadius = 48;
+  const ocrDrawerExpandedRadius = 34;
   const ocrDrawerCollapsedBottom = ocrDrawerCollapsedInset;
-  const ocrDrawerExpandedBottom = ocrDrawerExpandedInset;
+  const ocrDrawerExpandedBottom = -ocrDrawerEdgeBleed;
   const animateOcrDrawerTo = useCallback(
     (value: number) => {
       Animated.spring(ocrDrawerProgress, {
@@ -342,7 +351,7 @@ export default function ClipInvocationScreen() {
         damping: 24,
         mass: 0.9,
         stiffness: 210,
-        overshootClamping: false,
+        overshootClamping: true,
         restDisplacementThreshold: 0.4,
         restSpeedThreshold: 0.4,
         useNativeDriver: false,
@@ -1125,26 +1134,42 @@ export default function ClipInvocationScreen() {
     left: ocrDrawerProgress.interpolate({
       inputRange: [0, 1],
       outputRange: [ocrDrawerCollapsedInset, ocrDrawerExpandedInset],
+      extrapolate: "clamp",
     }),
     right: ocrDrawerProgress.interpolate({
       inputRange: [0, 1],
       outputRange: [ocrDrawerCollapsedInset, ocrDrawerExpandedInset],
+      extrapolate: "clamp",
     }),
     bottom: ocrDrawerProgress.interpolate({
       inputRange: [0, 1],
       outputRange: [ocrDrawerCollapsedBottom, ocrDrawerExpandedBottom],
+      extrapolate: "clamp",
     }),
     height: ocrDrawerProgress.interpolate({
       inputRange: [0, 1],
       outputRange: [ocrDrawerCollapsedHeight, ocrDrawerExpandedHeight],
+      extrapolate: "clamp",
     }),
     paddingTop: ocrDrawerProgress.interpolate({
       inputRange: [0, 1],
       outputRange: [12, 14],
+      extrapolate: "clamp",
     }),
     borderRadius: ocrDrawerProgress.interpolate({
       inputRange: [0, 1],
       outputRange: [ocrDrawerCollapsedRadius, ocrDrawerExpandedRadius],
+      extrapolate: "clamp",
+    }),
+    borderBottomLeftRadius: ocrDrawerProgress.interpolate({
+      inputRange: [0, 0.82, 1],
+      outputRange: [ocrDrawerCollapsedRadius, 22, 0],
+      extrapolate: "clamp",
+    }),
+    borderBottomRightRadius: ocrDrawerProgress.interpolate({
+      inputRange: [0, 0.82, 1],
+      outputRange: [ocrDrawerCollapsedRadius, 22, 0],
+      extrapolate: "clamp",
     }),
     transform: [
       {
@@ -1154,6 +1179,20 @@ export default function ClipInvocationScreen() {
         }),
       },
     ],
+  };
+  const ocrBottomSheetGlassAnimatedStyle = {
+    opacity: ocrDrawerProgress.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0.82, 1],
+      extrapolate: "clamp",
+    }),
+  };
+  const ocrBottomSheetTintAnimatedStyle = {
+    opacity: ocrDrawerProgress.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0.12, 0.28],
+      extrapolate: "clamp",
+    }),
   };
   const ocrHintAnimatedStyle = {
     bottom: ocrDrawerProgress.interpolate({
@@ -1456,6 +1495,20 @@ export default function ClipInvocationScreen() {
           {...ocrDrawerPanResponder.panHandlers}
           style={[styles.ocrBottomSheet, ocrBottomSheetToneStyle, ocrBottomSheetAnimatedStyle]}
         >
+          {AnimatedLiquidGlassView ? (
+            <AnimatedLiquidGlassView
+              pointerEvents="none"
+              progress={ocrDrawerProgress as any}
+              cornerRadius={ocrDrawerProgress.interpolate({
+                inputRange: [0, 1],
+                outputRange: [ocrDrawerCollapsedRadius, ocrDrawerExpandedRadius],
+              }) as any}
+              tone={ocrGlassTone}
+              style={[styles.ocrBottomSheetNativeGlass, ocrBottomSheetGlassAnimatedStyle]}
+            />
+          ) : (
+            <Animated.View pointerEvents="none" style={[styles.ocrBottomSheetTint, ocrBottomSheetTintAnimatedStyle]} />
+          )}
           <Pressable
             accessibilityLabel="Toggle controls drawer"
             accessibilityRole="button"
@@ -1738,23 +1791,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingBottom: 16,
     ...continuousCorners,
-    borderWidth: 1,
     shadowColor: "#000000",
     shadowOffset: { width: 0, height: -10 },
     shadowOpacity: 0.2,
     shadowRadius: 30,
   },
+  ocrBottomSheetNativeGlass: {
+    ...absoluteFillObject,
+  },
+  ocrBottomSheetTint: {
+    ...absoluteFillObject,
+    backgroundColor: "#ffffff",
+  },
   ocrBottomSheetAdaptive: {
-    backgroundColor: "rgba(22, 21, 20, 0.64)",
-    borderColor: "rgba(255, 255, 255, 0.24)",
+    backgroundColor: "rgba(22, 21, 20, 0.34)",
   },
   ocrBottomSheetBright: {
-    backgroundColor: "rgba(246, 245, 242, 0.42)",
-    borderColor: "rgba(255, 255, 255, 0.46)",
+    backgroundColor: "rgba(246, 245, 242, 0.24)",
   },
   ocrBottomSheetDark: {
-    backgroundColor: "rgba(8, 8, 8, 0.72)",
-    borderColor: "rgba(255, 255, 255, 0.2)",
+    backgroundColor: "rgba(8, 8, 8, 0.42)",
   },
   ocrFloatingShutter: {
     alignItems: "center",

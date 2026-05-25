@@ -449,7 +449,13 @@ function formatSize(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export default function MobilePhotos({ embedded = false }: { embedded?: boolean } = {}) {
+export default function MobilePhotos({
+  embedded = false,
+  showConnectionControls = true,
+}: {
+  embedded?: boolean;
+  showConnectionControls?: boolean;
+} = {}) {
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [status, setStatus] = useState<ScannerConnectionStatus>("disconnected");
   const [photos, setPhotos] = useState<MobilePhoto[]>([]);
@@ -679,19 +685,21 @@ export default function MobilePhotos({ embedded = false }: { embedded?: boolean 
       if (Array.isArray(saved)) setPhotos(saved);
     });
 
-    void chrome.runtime
-      .sendMessage({ action: "scannerGetState" })
-      .then((response) => {
-        const state = response?.state as MobileScannerState | undefined;
-        applyScannerState(state);
-        if (!state || state.status === "disconnected" || state.status === "error") {
+    if (showConnectionControls) {
+      void chrome.runtime
+        .sendMessage({ action: "scannerGetState" })
+        .then((response) => {
+          const state = response?.state as MobileScannerState | undefined;
+          applyScannerState(state);
+          if (!state || state.status === "disconnected" || state.status === "error") {
+            void startSession();
+          }
+        })
+        .catch(() => {
           void startSession();
-        }
-      })
-      .catch(() => {
-        void startSession();
-      });
-  }, [applyScannerState, startSession]);
+        });
+    }
+  }, [applyScannerState, showConnectionControls, startSession]);
 
   useEffect(() => {
     const handleMessage = (message: any) => {
@@ -717,7 +725,12 @@ export default function MobilePhotos({ embedded = false }: { embedded?: boolean 
   const connected = status === "connected";
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-white">
+    <div
+      className={cn(
+        "flex flex-col overflow-hidden",
+        embedded ? "bg-transparent" : "sidepanel-shell h-full",
+      )}
+    >
       {embedded ? null : (
         <MobileToolHeader
           icon={<ImagePlus className="h-4 w-4" />}
@@ -728,21 +741,21 @@ export default function MobilePhotos({ embedded = false }: { embedded?: boolean 
         />
       )}
 
-      <div className={cn("min-h-0 flex-1 overflow-y-auto pb-5 pt-4", embedded ? "px-0" : "px-4")}>
-        {showQr ? (
+      <div className={cn("min-h-0 flex-1 overflow-y-auto pb-5", embedded ? "px-0 pt-0" : "px-4 pt-4")}>
+        {showConnectionControls && showQr ? (
           <div className="mb-5">
             <QrPairingPanel
               qrDataUrl={qrDataUrl}
               hint="Scan with Volt, then open the Photos tab on the phone."
             />
           </div>
-        ) : isCreating ? (
+        ) : showConnectionControls && isCreating ? (
           <div className="mb-5 flex justify-center">
             <PairingPlaceholder label="Setting up secure pairing…" />
           </div>
         ) : null}
 
-        <div className="flex gap-2">
+        {showConnectionControls ? <div className="flex gap-2">
           {connected ? (
             <SecondaryActionButton onClick={unpair} className="flex-1">
               <RefreshCw className="h-4 w-4" />
@@ -763,9 +776,9 @@ export default function MobilePhotos({ embedded = false }: { embedded?: boolean 
               <Trash2 className="h-4 w-4" />
             </SecondaryActionButton>
           ) : null}
-        </div>
+        </div> : null}
 
-        <div className="mt-6 flex items-center justify-between">
+        <div className={cn("flex items-center justify-between", showConnectionControls ? "mt-6" : "mt-0")}>
           <div>
             <div className="text-sm font-bold text-stone-900">Photos</div>
             <div className="text-xs text-stone-500">
@@ -806,8 +819,8 @@ export default function MobilePhotos({ embedded = false }: { embedded?: boolean 
 
         <div className="mt-3">
           {photos.length === 0 ? (
-            <div className="flex flex-col items-center rounded-2xl border border-dashed border-stone-300 bg-stone-50 px-4 py-9 text-center">
-              <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-white text-stone-400 ring-1 ring-stone-200">
+            <div className="liquid-glass-soft concentric-lg flex flex-col items-center border-dashed border-stone-300 px-4 py-9 text-center">
+              <div className="liquid-glass-soft mb-3 flex h-12 w-12 items-center justify-center rounded-full text-stone-400">
                 <Camera className="h-5 w-5" />
               </div>
               <p className="text-sm font-semibold text-stone-700">No photos yet</p>
@@ -829,8 +842,8 @@ export default function MobilePhotos({ embedded = false }: { embedded?: boolean 
                     onMouseEnter={() => void prepareActiveTabForPhotoDrop()}
                     onDragStart={(event) => handleDragStart(event, photo)}
                     className={cn(
-                      "group relative overflow-hidden rounded-2xl bg-stone-100 p-0 text-left shadow-sm transition",
-                      "ring-1 ring-stone-200 hover:ring-green-500/60",
+                      "liquid-glass-soft concentric-lg group relative overflow-hidden p-0 text-left transition",
+                      "ring-1 ring-white/60 hover:ring-green-500/60",
                       selected && "ring-2 ring-green-500 ring-offset-2 ring-offset-white",
                     )}
                   >
