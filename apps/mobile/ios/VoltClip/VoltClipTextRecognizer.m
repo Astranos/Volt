@@ -1,6 +1,7 @@
 #import <React/RCTBridgeModule.h>
+#import <React/RCTEventEmitter.h>
 
-@interface RCT_EXTERN_MODULE(VoltClipTextRecognizer, NSObject)
+@interface RCT_EXTERN_MODULE(VoltClipTextRecognizer, RCTEventEmitter)
 
 RCT_EXTERN_METHOD(captureAndRecognize:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)

@@ -50,7 +50,7 @@ class LiveTextImageView: UIView {
 
   private func setup() {
     clipsToBounds = true
-    imageView.contentMode = .scaleAspectFill
+    imageView.contentMode = .scaleAspectFit
     imageView.isUserInteractionEnabled = true
     addSubview(imageView)
 

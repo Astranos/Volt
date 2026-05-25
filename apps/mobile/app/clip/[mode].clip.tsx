@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import {
+  Alert,
   Animated,
   Linking,
   PanResponder,
@@ -25,7 +26,6 @@ import { parseCaptureInvocation, type CaptureInvocation } from "../../lib/captur
 import { LiveTextImageView } from "../../lib/live-text-image-view";
 import {
   makeBarcodeMessage,
-  makeCaptureMessage,
   makeDictationMessage,
   makePhotoMessage,
   makeOcrMessage,
@@ -43,6 +43,7 @@ import {
   addVoltClipDictationErrorListener,
   addVoltClipDictationFinalListener,
   addVoltClipDictationPartialListener,
+  getVoltClipDictationPermissions,
   hasVoltClipDictation,
   requestVoltClipDictationPermissions,
   startVoltClipDictation,
@@ -55,6 +56,7 @@ import {
 } from "../../lib/volt-clip-clipboard";
 import {
   captureAndRecognizeVoltClipText,
+  addVoltClipTextCaptureListener,
   focusVoltClipTextCamera,
   hideVoltClipTextPreview,
   hasVoltClipTextRecognizer,
@@ -142,6 +144,10 @@ const LiquidGlassView = Platform.OS === "ios" && UIManager.getViewManagerConfig(
   : null;
 const AnimatedLiquidGlassView = LiquidGlassView ? Animated.createAnimatedComponent(LiquidGlassView) : null;
 
+function canRequestDictationPermissionAgain(speechStatus: string, microphoneGranted: boolean) {
+  return speechStatus === "notDetermined" || (!microphoneGranted && speechStatus === "authorized");
+}
+
 function makeTestMessage(mode: ScannerCaptureMode) {
   if (mode === "ocr") return makeOcrMessage("hello from Volt Clip");
   if (mode === "dictation") return makeDictationMessage("hello from Volt Clip", `clip-${Date.now()}`);
@@ -216,6 +222,43 @@ function ModeIcon({ mode, selected }: { mode: ScannerCaptureMode; selected: bool
   );
 }
 
+function NativeBarcodeHighlight({ candidate }: { candidate: VoltClipBarcodeCandidate | null }) {
+  if (!candidate?.bounds) return null;
+
+  const { bounds, corners } = candidate;
+  const hasCorners = Array.isArray(corners) && corners.length >= 4;
+
+  return (
+    <View
+      pointerEvents="none"
+      style={[
+        styles.ocrNativeBarcodeBounds,
+        {
+          left: bounds.x,
+          top: bounds.y,
+          width: bounds.width,
+          height: bounds.height,
+        },
+      ]}
+    >
+      {hasCorners
+        ? corners.slice(0, 4).map((corner, index) => (
+            <View
+              key={`${corner.x}-${corner.y}-${index}`}
+              style={[
+                styles.ocrNativeBarcodeCornerDot,
+                {
+                  left: corner.x - bounds.x - 5,
+                  top: corner.y - bounds.y - 5,
+                },
+              ]}
+            />
+          ))
+        : null}
+    </View>
+  );
+}
+
 export default function ClipInvocationScreen() {
   const [invocation, setInvocation] = useState<CaptureInvocation | null>(null);
   const initialMode = invocation?.mode ?? "ocr";
@@ -244,6 +287,7 @@ export default function ClipInvocationScreen() {
   const [ocrPreviewState, setOcrPreviewState] = useState<"idle" | "starting" | "ready" | "failed">("idle");
   const [ocrText, setOcrText] = useState("");
   const [ocrImageUri, setOcrImageUri] = useState<string | null>(null);
+  const [ocrFrozenImageUri, setOcrFrozenImageUri] = useState<string | null>(null);
   const windowDimensions = useWindowDimensions();
   const lastOcrClipboardRef = useRef<string | null>(null);
   const lastOcrClipboardChangeCountRef = useRef<number | null>(null);
@@ -263,6 +307,10 @@ export default function ClipInvocationScreen() {
   const ocrZoomFactorRef = useRef(OCR_ZOOM_DEFAULT);
   const isOcrMode = Boolean(mode);
   const [ocrAutoTypeCopiedText, setOcrAutoTypeCopiedText] = useState(true);
+  const [barcodeInsertIntoCursor, setBarcodeInsertIntoCursor] = useState(true);
+  const [barcodeAutoSend, setBarcodeAutoSend] = useState(false);
+  const [barcodeFullFrameScan, setBarcodeFullFrameScan] = useState(false);
+  const [dictationAddsPunctuation, setDictationAddsPunctuation] = useState(true);
   const [ocrGlassTone, setOcrGlassTone] = useState<"adaptive" | "bright" | "dark">("adaptive");
   const [ocrTorchEnabled, setOcrTorchEnabled] = useState(false);
   const [ocrZoomFactor, setOcrZoomFactor] = useState(OCR_ZOOM_DEFAULT);
@@ -279,6 +327,7 @@ export default function ClipInvocationScreen() {
     setDictationFinal(false);
     setSendState("idle");
     setOcrImageUri(null);
+    setOcrFrozenImageUri(null);
     setOcrText("");
     setError(message ?? "Browser session lost. Scan the Mobile Scanner QR in Chrome to pair again.");
   }, []);
@@ -314,6 +363,7 @@ export default function ClipInvocationScreen() {
   }, [resetToDiscoveryMode, session]);
   const resetOcrCapture = useCallback(() => {
     setOcrImageUri(null);
+    setOcrFrozenImageUri(null);
     setOcrText("");
     setOcrState("ready");
     setOcrPreviewState("ready");
@@ -322,6 +372,7 @@ export default function ClipInvocationScreen() {
     lastOcrClipboardRef.current = null;
     lastOcrClipboardChangeCountRef.current = null;
   }, []);
+  const capturedOcrImageUri = ocrImageUri ?? ocrFrozenImageUri;
   const canSend = Boolean(
     mode &&
       session &&
@@ -330,7 +381,7 @@ export default function ClipInvocationScreen() {
       (mode !== "ocr" || ocrText.trim()) &&
       (mode !== "barcode" || barcodeCandidate) &&
       (mode !== "dictation" || dictationTranscript.trim()) &&
-      (mode !== "photo" || ocrImageUri)
+      (mode !== "photo" || capturedOcrImageUri)
   );
   const ocrDrawerCollapsedHeight = 158;
   const ocrDrawerEdgeBleed = 2;
@@ -526,7 +577,7 @@ export default function ClipInvocationScreen() {
     if (mode === "ocr" && ocrState === "capturing") return "Reading text";
     if (mode === "ocr" && ocrPreviewState === "starting") return "Starting camera";
     if (mode === "ocr" && ocrPreviewState === "failed") return "Camera preview unavailable";
-    if (mode === "ocr" && ocrImageUri) return "Select text and copy";
+    if (mode === "ocr" && capturedOcrImageUri) return "Select text and copy";
     if (mode === "ocr" && ocrText.trim()) return "Text ready";
     if (mode === "ocr" && ocrState === "unavailable") return "OCR unavailable";
     if (mode === "ocr" && ocrState === "error") return "OCR failed";
@@ -536,9 +587,10 @@ export default function ClipInvocationScreen() {
     if (mode === "dictation" && dictationState === "unavailable") return "Dictation unavailable";
     if (mode === "dictation" && dictationState === "error") return "Dictation failed";
     return "Browser session found";
-  }, [dictationFinal, dictationState, mode, ocrImageUri, ocrPreviewState, ocrState, ocrText, scannerState, sendState, session]);
+  }, [capturedOcrImageUri, dictationFinal, dictationState, mode, ocrPreviewState, ocrState, ocrText, scannerState, sendState, session]);
+
   const showMeasuredOcrPreview = useCallback(() => {
-    if (!isCameraCaptureMode || !hasVoltClipTextRecognizer || ocrImageUri) return;
+    if (!isCameraCaptureMode || !hasVoltClipTextRecognizer || capturedOcrImageUri) return;
 
     setOcrPreviewState("starting");
     showVoltClipTextPreview({
@@ -548,10 +600,10 @@ export default function ClipInvocationScreen() {
       height: windowDimensions.height,
     });
     setOcrPreviewState("ready");
-  }, [isCameraCaptureMode, ocrImageUri, windowDimensions.height, windowDimensions.width]);
+  }, [capturedOcrImageUri, isCameraCaptureMode, windowDimensions.height, windowDimensions.width]);
 
   useEffect(() => {
-    if (!isCameraCaptureMode || !hasVoltClipTextRecognizer || ocrImageUri) {
+    if (!isCameraCaptureMode || !hasVoltClipTextRecognizer || capturedOcrImageUri) {
       hideVoltClipTextPreview();
       return;
     }
@@ -562,7 +614,7 @@ export default function ClipInvocationScreen() {
       clearTimeout(timer);
       hideVoltClipTextPreview();
     };
-  }, [isCameraCaptureMode, ocrImageUri, showMeasuredOcrPreview]);
+  }, [capturedOcrImageUri, isCameraCaptureMode, showMeasuredOcrPreview]);
 
   useEffect(() => {
     let mounted = true;
@@ -628,6 +680,7 @@ export default function ClipInvocationScreen() {
     const shouldAcceptCandidate = createBarcodeCandidateGuard();
     const candidateSubscription = addVoltClipBarcodeCandidateListener((candidate) => {
       if (!shouldAcceptCandidate(candidate)) return;
+      playVoltClipSelectionHaptic();
       if (isDiscoveryMode) {
         setBarcodeCandidate(candidate);
         const nextInvocation = parseCaptureInvocation(candidate.value);
@@ -648,7 +701,7 @@ export default function ClipInvocationScreen() {
     });
 
     setScannerState("starting");
-    startVoltClipBarcodeScanner({ fullFrame: isDiscoveryMode })
+    startVoltClipBarcodeScanner({ fullFrame: isDiscoveryMode || barcodeFullFrameScan })
       .then(() => {
         if (isMounted) setScannerState("ready");
       })
@@ -664,7 +717,7 @@ export default function ClipInvocationScreen() {
       errorSubscription.remove();
       void stopVoltClipBarcodeScanner();
     };
-  }, [isDiscoveryMode, mode]);
+  }, [barcodeFullFrameScan, isDiscoveryMode, mode]);
 
   useEffect(() => {
     if (mode !== "dictation") return;
@@ -677,14 +730,6 @@ export default function ClipInvocationScreen() {
     const partialSubscription = addVoltClipDictationPartialListener((transcript) => {
       setDictationTranscript(transcript);
       setDictationFinal(false);
-      void sendRelayMessage(
-        "dictation",
-        {
-          ...makeCaptureMessage(transcript, "dictation", "text", true),
-          dictationPhase: "partial",
-          dictationSessionId: `clip-${session}`,
-        }
-      );
     });
     const finalSubscription = addVoltClipDictationFinalListener((transcript) => {
       setDictationTranscript(transcript);
@@ -707,6 +752,22 @@ export default function ClipInvocationScreen() {
     };
   }, [mode, session]);
 
+  useEffect(() => {
+    if (mode !== "ocr" && mode !== "photo") return;
+
+    const subscription = addVoltClipTextCaptureListener((result) => {
+      if (result.imageUri) {
+        setOcrFrozenImageUri(result.imageUri);
+        setOcrImageUri(result.imageUri);
+        hideVoltClipTextPreview();
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [mode]);
+
   async function toggleDictation() {
     if (mode !== "dictation") return;
 
@@ -720,21 +781,20 @@ export default function ClipInvocationScreen() {
     setDictationFinal(false);
     setSendState("idle");
     setDictationState("requesting");
+    await stopVoltClipBarcodeScanner();
+    hideVoltClipTextPreview();
 
     try {
       const permissions = await requestVoltClipDictationPermissions();
       if (!permissions.granted) {
         setDictationState("error");
-        setError(
-          `Microphone and speech recognition permissions are required. Speech: ${permissions.speechStatus}; Microphone: ${
-            permissions.microphoneGranted ? "granted" : "denied"
-          }.`
-        );
+        setError("Microphone and speech recognition permissions are required.");
+        showDictationPermissionRecovery(permissions.speechStatus, permissions.microphoneGranted);
         return;
       }
 
       setDictationTranscript("");
-      const result = await startVoltClipDictation();
+      const result = await startVoltClipDictation({ addsPunctuation: dictationAddsPunctuation });
       if (!result.running) {
         setDictationState("error");
         setError("Dictation did not start. Try again.");
@@ -743,7 +803,16 @@ export default function ClipInvocationScreen() {
       setDictationState("recording");
     } catch (dictationError) {
       setDictationState("error");
-      setError(dictationError instanceof Error ? dictationError.message : "Unable to start dictation");
+      const message = dictationError instanceof Error ? dictationError.message : "Unable to start dictation";
+      setError(message);
+      if (/permission|authorized|microphone/i.test(message)) {
+        const permissions = await getVoltClipDictationPermissions().catch(() => ({
+          granted: false,
+          speechStatus: "denied",
+          microphoneGranted: false,
+        }));
+        showDictationPermissionRecovery(permissions.speechStatus, permissions.microphoneGranted);
+      }
     }
   }
 
@@ -771,11 +840,36 @@ export default function ClipInvocationScreen() {
     setError(null);
   }
 
+  function showDictationPermissionRecovery(speechStatus: string, microphoneGranted: boolean) {
+    const canPromptAgain = canRequestDictationPermissionAgain(speechStatus, microphoneGranted);
+    Alert.alert(
+      "Enable dictation",
+      "Volt needs microphone and speech recognition access to dictate into Chrome.",
+      [
+        { text: "Cancel", style: "cancel" },
+        canPromptAgain
+          ? {
+              text: "Try Again",
+              onPress: () => void toggleDictation(),
+            }
+          : {
+              text: "Open Settings",
+              onPress: () => {
+                void Linking.openSettings().catch(() => {
+                  setError("Open Settings and allow Microphone and Speech Recognition for Volt.");
+                });
+              },
+            },
+      ]
+    );
+  }
+
   async function captureText() {
     if ((mode !== "ocr" && mode !== "photo") || sendState === "sending" || sendState === "sent") return;
 
     setError(null);
     setOcrState("capturing");
+    hideVoltClipTextPreview();
 
     try {
       const result = await captureAndRecognizeVoltClipText();
@@ -823,6 +917,13 @@ export default function ClipInvocationScreen() {
         <Text style={styles.ocrRefreshIconText}>↻</Text>
       </View>
     );
+    const renderBarcodeIcon = () => (
+      <View style={styles.ocrBarcodeIcon}>
+        {[4, 2, 6, 3, 5].map((width, index) => (
+          <View key={index} style={[styles.ocrBarcodeIconBar, { width }]} />
+        ))}
+      </View>
+    );
     if (mode === "dictation") {
       const dictationBusy = dictationState === "requesting" || sendState === "sending";
       const handleDictationPress = () => {
@@ -868,13 +969,34 @@ export default function ClipInvocationScreen() {
         </Pressable>
       );
     }
+    if (mode === "barcode") {
+      const barcodeBusy = sendState === "sending";
+      const barcodeDisabled = !barcodeCandidate || barcodeBusy;
+      return (
+        <Pressable
+          accessibilityLabel={barcodeCandidate ? "Send barcode to Chrome" : "Center a barcode"}
+          accessibilityRole="button"
+          disabled={barcodeDisabled}
+          onPress={() => void sendResult()}
+          style={[
+            styles.ocrShutterButton,
+            barcodeCandidate && styles.ocrShutterButtonActive,
+            barcodeDisabled && styles.ocrShutterButtonDisabled,
+          ]}
+        >
+          <View style={styles.ocrShutterInner}>
+            {barcodeBusy ? <Text style={styles.ocrShutterIcon}>...</Text> : renderBarcodeIcon()}
+          </View>
+        </Pressable>
+      );
+    }
     return (
       <Pressable
-        accessibilityLabel={ocrImageUri ? "Retake text capture" : "Capture text"}
+        accessibilityLabel={capturedOcrImageUri ? "Retake text capture" : "Capture text"}
         accessibilityRole="button"
         disabled={isBusy}
         onPress={() => {
-          if (ocrImageUri) {
+          if (capturedOcrImageUri) {
             resetOcrCapture();
             return;
           }
@@ -885,7 +1007,7 @@ export default function ClipInvocationScreen() {
         <View style={styles.ocrShutterInner}>
           {isBusy ? (
             <Text style={styles.ocrShutterIcon}>...</Text>
-          ) : ocrImageUri && mode === "ocr" ? (
+          ) : capturedOcrImageUri && mode === "ocr" ? (
             renderRefreshIcon()
           ) : (
             <View style={styles.ocrShutterDot} />
@@ -944,7 +1066,7 @@ export default function ClipInvocationScreen() {
   );
 
   useEffect(() => {
-    if (mode !== "ocr" || !ocrImageUri || !hasVoltClipClipboard) return;
+    if (mode !== "ocr" || !capturedOcrImageUri || !hasVoltClipClipboard) return;
 
     let cancelled = false;
     let checkingClipboard = false;
@@ -979,7 +1101,7 @@ export default function ClipInvocationScreen() {
       cancelled = true;
       clearInterval(pollTimer);
     };
-  }, [mode, ocrAutoTypeCopiedText, ocrImageUri, sendOcrClipboardText, sendState]);
+  }, [capturedOcrImageUri, mode, ocrAutoTypeCopiedText, sendOcrClipboardText, sendState]);
 
   useEffect(() => {
     const subscription = ocrDrawerProgress.addListener(({ value }) => {
@@ -1013,6 +1135,11 @@ export default function ClipInvocationScreen() {
     },
     []
   );
+
+  useEffect(() => {
+    if (mode !== "barcode" || !barcodeAutoSend || !barcodeCandidate || sendState !== "idle") return;
+    void sendResult();
+  }, [barcodeAutoSend, barcodeCandidate, mode, sendState]);
 
   async function sendRelayMessage(relayMode: ScannerCaptureMode, message: ReturnType<typeof makeBarcodeMessage> | ReturnType<typeof makeDictationMessage> | ReturnType<typeof makePhotoMessage>) {
     if (!session) return;
@@ -1065,7 +1192,7 @@ export default function ClipInvocationScreen() {
 
     const message =
       mode === "barcode" && barcodeCandidate
-        ? makeBarcodeMessage(barcodeCandidate.value, barcodeCandidate.format)
+        ? makeBarcodeMessage(barcodeCandidate.value, barcodeCandidate.format, barcodeInsertIntoCursor)
         : mode === "ocr" && ocrText.trim()
           ? makeOcrMessage(ocrText.trim(), ocrAutoTypeCopiedText)
         : mode === "dictation" && dictationTranscript.trim()
@@ -1090,18 +1217,18 @@ export default function ClipInvocationScreen() {
       if (barcodeCandidate) return "QR code detected. Looking for Volt pairing session...";
       if (scannerState === "unavailable") return "QR discovery unavailable. Open Mobile Scanner in Chrome.";
       if (scannerState === "error") return "QR discovery failed. Open a fresh Mobile Scanner QR in Chrome.";
-      return "Open Mobile Scanner in Chrome and point anywhere at its QR";
+      return "Scan Chrome QR";
     }
     if (mode === "dictation") {
-      if (dictationState === "error" && error) return error;
-      if (dictationState === "requesting") return "Starting dictation...";
+      if (dictationState === "error" && error) return "Dictation needs permission";
+      if (dictationState === "requesting") return "Starting...";
       if (dictationState === "recording") return "Tap or release to end dictation";
-      if (dictationFinal) return "Tap to undo or hold to dictate more";
-      return "Tap or hold to start dictating";
+      if (dictationFinal) return "Transcript ready";
+      return "Hold to dictate";
     }
     if (mode === "ocr") {
       if (ocrState === "capturing") return "Reading text...";
-      if (ocrImageUri) return "Tap to retake photo for OCR";
+      if (capturedOcrImageUri) return "Select & copy text to send";
       return "Tap shutter to capture text";
     }
     if (mode === "photo") {
@@ -1109,7 +1236,7 @@ export default function ClipInvocationScreen() {
       if (ocrImageUri) return "Photo sent to Chrome";
       return "Tap shutter to capture photo";
     }
-    if (mode === "barcode") return barcodeCandidate ? "Barcode found" : "Center a barcode or QR code";
+    if (mode === "barcode") return barcodeCandidate ? "Barcode found. Tap shutter to send." : "Center a barcode or QR code";
     return "Scan a fresh QR code from the Volt Chrome extension.";
   })();
 
@@ -1163,12 +1290,12 @@ export default function ClipInvocationScreen() {
     }),
     borderBottomLeftRadius: ocrDrawerProgress.interpolate({
       inputRange: [0, 0.82, 1],
-      outputRange: [ocrDrawerCollapsedRadius, 22, 0],
+      outputRange: [ocrDrawerCollapsedRadius, ocrDrawerExpandedRadius, ocrDrawerExpandedRadius],
       extrapolate: "clamp",
     }),
     borderBottomRightRadius: ocrDrawerProgress.interpolate({
       inputRange: [0, 0.82, 1],
-      outputRange: [ocrDrawerCollapsedRadius, 22, 0],
+      outputRange: [ocrDrawerCollapsedRadius, ocrDrawerExpandedRadius, ocrDrawerExpandedRadius],
       extrapolate: "clamp",
     }),
     transform: [
@@ -1342,6 +1469,7 @@ export default function ClipInvocationScreen() {
     }
     if (nextMode !== "ocr" && nextMode !== "photo") {
       setOcrImageUri(null);
+      setOcrFrozenImageUri(null);
       setOcrText("");
     }
   }, [mode]);
@@ -1387,7 +1515,7 @@ export default function ClipInvocationScreen() {
   }, []);
   const focusOcrCamera = useCallback(
     (event: GestureResponderEvent) => {
-      if (ocrImageUri || !isCameraCaptureMode) return;
+      if (capturedOcrImageUri || !isCameraCaptureMode) return;
 
       const { locationX, locationY, pageX, pageY } = event.nativeEvent;
       const x = Math.max(0, Math.min(pageX / windowDimensions.width, 1));
@@ -1399,14 +1527,14 @@ export default function ClipInvocationScreen() {
       });
       setTimeout(() => setOcrFocusPoint(null), 900);
     },
-    [isCameraCaptureMode, ocrImageUri, windowDimensions.height, windowDimensions.width]
+    [capturedOcrImageUri, isCameraCaptureMode, windowDimensions.height, windowDimensions.width]
   );
 
   if (isOcrMode) {
     return (
       <View style={styles.ocrRoot}>
         <View style={styles.ocrCameraSurface}>
-            {!ocrImageUri && hasVoltClipTextRecognizer ? (
+            {!capturedOcrImageUri && hasVoltClipTextRecognizer ? (
               <Pressable
                 accessibilityLabel="Tap camera preview to focus"
                 accessibilityRole="button"
@@ -1444,12 +1572,22 @@ export default function ClipInvocationScreen() {
                   </Text>
                 </View>
               </View>
-            ) : ocrImageUri ? (
+            ) : capturedOcrImageUri ? (
               <View style={styles.ocrCapturedSheet}>
                 <View style={styles.ocrCapturedViewport}>
                   <ScrollView
                     automaticallyAdjustContentInsets={false}
                     bouncesZoom
+                    centerContent
+                    contentContainerStyle={[
+                      styles.ocrCapturedScrollContent,
+                      {
+                        minHeight: windowDimensions.height + stableBottomInset + 240,
+                        paddingBottom: ocrDrawerCollapsedHeight + stableBottomInset + 180,
+                        paddingTop: stableTopInset + 72,
+                      },
+                    ]}
+                    contentInsetAdjustmentBehavior="never"
                     maximumZoomScale={4}
                     minimumZoomScale={1}
                     pinchGestureEnabled
@@ -1458,9 +1596,25 @@ export default function ClipInvocationScreen() {
                     showsVerticalScrollIndicator={false}
                     style={styles.ocrCapturedScroll}
                   >
-                    <LiveTextImageView imageUri={ocrImageUri} style={styles.ocrCapturedImage} />
+                    <LiveTextImageView
+                      imageUri={capturedOcrImageUri}
+                      style={[
+                        styles.ocrCapturedImage,
+                        {
+                          height: windowDimensions.height,
+                          width: windowDimensions.width,
+                        },
+                      ]}
+                    />
                   </ScrollView>
                 </View>
+                {mode === "ocr" ? (
+                  <View pointerEvents="none" style={styles.ocrCopyPrompt}>
+                    <Text style={styles.ocrCopyPromptText}>
+                      {ocrText.trim() ? "Text found. Select and copy." : "Image frozen. Select text to copy."}
+                    </Text>
+                  </View>
+                ) : null}
               </View>
           ) : hasVoltClipTextRecognizer ? (
             <></>
@@ -1471,13 +1625,14 @@ export default function ClipInvocationScreen() {
             )}
 
             {isDiscoveryMode ? (
-              <View pointerEvents="none" style={styles.ocrBarcodeGuide}>
+              <View pointerEvents="none" style={[styles.ocrBarcodeGuide, styles.ocrDiscoveryGuide]}>
                 <View style={[styles.ocrDiscoveryFrame, barcodeCandidate && styles.ocrBarcodeGuideFrameActive]} />
-                {barcodeCandidate ? <View style={styles.ocrDiscoveryPulse} /> : null}
+                <NativeBarcodeHighlight candidate={barcodeCandidate} />
               </View>
             ) : mode === "barcode" ? (
               <View pointerEvents="none" style={styles.ocrBarcodeGuide}>
                 <View style={[styles.ocrBarcodeGuideFrame, barcodeCandidate && styles.ocrBarcodeGuideFrameActive]} />
+                <NativeBarcodeHighlight candidate={barcodeCandidate} />
                 <Text numberOfLines={2} style={styles.ocrBarcodeGuideText}>
                   {barcodeCandidate ? barcodeCandidate.value : "Center barcode or QR code"}
                 </Text>
@@ -1518,7 +1673,12 @@ export default function ClipInvocationScreen() {
             <Animated.View pointerEvents="none" style={[styles.ocrDrawerHandle, ocrDrawerHandleAnimatedStyle]} />
           </Pressable>
           <View style={styles.ocrBottomControls}>
-            <Animated.View style={[styles.ocrCollapsedControls, ocrCollapsedControlsAnimatedStyle]}>
+            <Animated.View
+              style={[
+                styles.ocrCollapsedControls,
+                ocrCollapsedControlsAnimatedStyle,
+              ]}
+            >
               {mode === "dictation" ? (
                 <View style={styles.ocrDictationDestinationCard}>
                   <Text style={styles.ocrDictationDestinationLabel}>Destination</Text>
@@ -1607,24 +1767,114 @@ export default function ClipInvocationScreen() {
                 </Pressable>
               </View>
               ) : null}
-              <Pressable
-                accessibilityRole="switch"
-                accessibilityState={{ checked: ocrAutoTypeCopiedText }}
-                onPress={() => setOcrAutoTypeCopiedText((value) => !value)}
-                style={styles.ocrSettingRow}
-              >
-                <View>
-                  <Text style={styles.ocrSettingTitle}>Auto-type copied text</Text>
-                  <Text style={styles.ocrSettingText}>Copied Live Text always relays to Chrome; this controls cursor typing.</Text>
-                </View>
-                <Switch
-                  ios_backgroundColor="rgba(255, 255, 255, 0.18)"
-                  onValueChange={setOcrAutoTypeCopiedText}
-                  thumbColor="#ffffff"
-                  trackColor={{ false: "rgba(255, 255, 255, 0.22)", true: "rgba(255, 255, 255, 0.5)" }}
-                  value={ocrAutoTypeCopiedText}
-                />
-              </Pressable>
+              {mode === "ocr" ? (
+                <Pressable
+                  accessibilityRole="switch"
+                  accessibilityState={{ checked: ocrAutoTypeCopiedText }}
+                  onPress={() => setOcrAutoTypeCopiedText((value) => !value)}
+                  style={styles.ocrSettingRow}
+                >
+                  <View style={styles.ocrSettingCopy}>
+                    <Text style={styles.ocrSettingTitle}>OCR writes to cursor</Text>
+                    <Text style={styles.ocrSettingText}>Copied Live Text relays to Chrome; this controls cursor typing.</Text>
+                  </View>
+                  <View style={styles.ocrSettingSwitchSlot}>
+                    <Switch
+                      ios_backgroundColor="rgba(255, 255, 255, 0.18)"
+                      onValueChange={setOcrAutoTypeCopiedText}
+                      thumbColor="#ffffff"
+                      trackColor={{ false: "rgba(255, 255, 255, 0.22)", true: "rgba(255, 255, 255, 0.5)" }}
+                      value={ocrAutoTypeCopiedText}
+                    />
+                  </View>
+                </Pressable>
+              ) : null}
+              {mode === "barcode" ? (
+                <>
+                  <Pressable
+                    accessibilityRole="switch"
+                    accessibilityState={{ checked: barcodeInsertIntoCursor }}
+                    onPress={() => setBarcodeInsertIntoCursor((value) => !value)}
+                    style={styles.ocrSettingRow}
+                  >
+                    <View style={styles.ocrSettingCopy}>
+                      <Text style={styles.ocrSettingTitle}>Scanner writes to cursor</Text>
+                      <Text style={styles.ocrSettingText}>Send barcode scans to the active browser field by default.</Text>
+                    </View>
+                    <View style={styles.ocrSettingSwitchSlot}>
+                      <Switch
+                        ios_backgroundColor="rgba(255, 255, 255, 0.18)"
+                        onValueChange={setBarcodeInsertIntoCursor}
+                        thumbColor="#ffffff"
+                        trackColor={{ false: "rgba(255, 255, 255, 0.22)", true: "rgba(255, 255, 255, 0.5)" }}
+                        value={barcodeInsertIntoCursor}
+                      />
+                    </View>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="switch"
+                    accessibilityState={{ checked: barcodeAutoSend }}
+                    onPress={() => setBarcodeAutoSend((value) => !value)}
+                    style={styles.ocrSettingRow}
+                  >
+                    <View style={styles.ocrSettingCopy}>
+                      <Text style={styles.ocrSettingTitle}>Auto-send scanner codes</Text>
+                      <Text style={styles.ocrSettingText}>Send the first confirmed code without tapping the shutter.</Text>
+                    </View>
+                    <View style={styles.ocrSettingSwitchSlot}>
+                      <Switch
+                        ios_backgroundColor="rgba(255, 255, 255, 0.18)"
+                        onValueChange={setBarcodeAutoSend}
+                        thumbColor="#ffffff"
+                        trackColor={{ false: "rgba(255, 255, 255, 0.22)", true: "rgba(255, 255, 255, 0.5)" }}
+                        value={barcodeAutoSend}
+                      />
+                    </View>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="switch"
+                    accessibilityState={{ checked: barcodeFullFrameScan }}
+                    onPress={() => setBarcodeFullFrameScan((value) => !value)}
+                    style={styles.ocrSettingRow}
+                  >
+                    <View style={styles.ocrSettingCopy}>
+                      <Text style={styles.ocrSettingTitle}>Full-frame scanning</Text>
+                      <Text style={styles.ocrSettingText}>Detect codes anywhere in the camera view instead of the center frame.</Text>
+                    </View>
+                    <View style={styles.ocrSettingSwitchSlot}>
+                      <Switch
+                        ios_backgroundColor="rgba(255, 255, 255, 0.18)"
+                        onValueChange={setBarcodeFullFrameScan}
+                        thumbColor="#ffffff"
+                        trackColor={{ false: "rgba(255, 255, 255, 0.22)", true: "rgba(255, 255, 255, 0.5)" }}
+                        value={barcodeFullFrameScan}
+                      />
+                    </View>
+                  </Pressable>
+                </>
+              ) : null}
+              {mode === "dictation" ? (
+                <Pressable
+                  accessibilityRole="switch"
+                  accessibilityState={{ checked: dictationAddsPunctuation }}
+                  onPress={() => setDictationAddsPunctuation((value) => !value)}
+                  style={styles.ocrSettingRow}
+                >
+                  <View style={styles.ocrSettingCopy}>
+                    <Text style={styles.ocrSettingTitle}>Dictation punctuation</Text>
+                    <Text style={styles.ocrSettingText}>Add punctuation to spoken text before sending it to Chrome.</Text>
+                  </View>
+                  <View style={styles.ocrSettingSwitchSlot}>
+                    <Switch
+                      ios_backgroundColor="rgba(255, 255, 255, 0.18)"
+                      onValueChange={setDictationAddsPunctuation}
+                      thumbColor="#ffffff"
+                      trackColor={{ false: "rgba(255, 255, 255, 0.22)", true: "rgba(255, 255, 255, 0.5)" }}
+                      value={dictationAddsPunctuation}
+                    />
+                  </View>
+                </Pressable>
+              ) : null}
               <View style={styles.ocrSettingBlock}>
                 <View>
                   <Text style={styles.ocrSettingTitle}>Glass contrast</Text>
@@ -1850,9 +2100,11 @@ const styles = StyleSheet.create({
   ocrCapturedScroll: {
     flex: 1,
   },
+  ocrCapturedScrollContent: {
+    alignItems: "center",
+    justifyContent: "flex-start",
+  },
   ocrCapturedImage: {
-    minHeight: "100%",
-    width: "100%",
     backgroundColor: "#1c1917",
   },
   ocrCopyPrompt: {
@@ -2035,6 +2287,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingBottom: 170,
   },
+  ocrDiscoveryGuide: {
+    paddingBottom: 260,
+  },
   ocrBarcodeGuideFrame: {
     width: "72%",
     aspectRatio: 1.35,
@@ -2048,9 +2303,30 @@ const styles = StyleSheet.create({
     borderColor: "#86efac",
     backgroundColor: "rgba(22, 163, 74, 0.12)",
   },
+  ocrNativeBarcodeBounds: {
+    position: "absolute",
+    borderWidth: 3,
+    borderRadius: 12,
+    ...continuousCorners,
+    borderColor: "#86efac",
+    backgroundColor: "rgba(34, 197, 94, 0.14)",
+    shadowColor: "#86efac",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.75,
+    shadowRadius: 14,
+  },
+  ocrNativeBarcodeCornerDot: {
+    position: "absolute",
+    width: 10,
+    height: 10,
+    borderRadius: 999,
+    backgroundColor: "#bbf7d0",
+    borderWidth: 2,
+    borderColor: "#052e16",
+  },
   ocrDiscoveryFrame: {
-    width: "88%",
-    height: "62%",
+    width: "80%",
+    height: "48%",
     borderRadius: 34,
     ...continuousCorners,
     borderWidth: 2,
@@ -2654,12 +2930,24 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flexDirection: "row",
     justifyContent: "space-between",
-    minHeight: 72,
+    minHeight: 64,
     paddingHorizontal: 4,
-    paddingVertical: 10,
+    paddingVertical: 8,
     borderTopWidth: 1,
     borderTopColor: "rgba(255, 255, 255, 0.14)",
     gap: 14,
+  },
+  ocrSettingCopy: {
+    flex: 1,
+    minWidth: 0,
+    paddingRight: 6,
+  },
+  ocrSettingSwitchSlot: {
+    alignItems: "center",
+    alignSelf: "center",
+    justifyContent: "center",
+    minHeight: 48,
+    minWidth: 54,
   },
   ocrSettingTitle: {
     color: "#f5f5f4",
@@ -2765,6 +3053,19 @@ const styles = StyleSheet.create({
     height: 42,
     justifyContent: "center",
     width: 42,
+  },
+  ocrBarcodeIcon: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 3,
+    height: 42,
+    justifyContent: "center",
+    width: 42,
+  },
+  ocrBarcodeIconBar: {
+    borderRadius: 999,
+    height: 30,
+    backgroundColor: "#1c1917",
   },
   ocrMicCapsule: {
     width: 18,

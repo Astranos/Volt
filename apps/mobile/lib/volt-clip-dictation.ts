@@ -7,8 +7,9 @@ export type VoltClipDictationPermissions = {
 };
 
 type VoltClipDictationModule = {
+  currentPermissions: () => Promise<VoltClipDictationPermissions>;
   requestPermissions: () => Promise<VoltClipDictationPermissions>;
-  start: () => Promise<{ running: boolean }>;
+  start: (options?: { addsPunctuation?: boolean }) => Promise<{ running: boolean }>;
   stop: () => Promise<{ running: boolean }>;
 };
 
@@ -16,6 +17,14 @@ const nativeModule = NativeModules.VoltClipDictation as VoltClipDictationModule 
 const eventEmitter = nativeModule ? new NativeEventEmitter(nativeModule as never) : null;
 
 export const hasVoltClipDictation = Platform.OS === "ios" && Boolean(nativeModule && eventEmitter);
+
+export function getVoltClipDictationPermissions() {
+  if (!nativeModule) {
+    return Promise.resolve({ granted: false, speechStatus: "unavailable", microphoneGranted: false });
+  }
+
+  return nativeModule.currentPermissions();
+}
 
 export function requestVoltClipDictationPermissions() {
   if (!nativeModule) {
@@ -25,12 +34,12 @@ export function requestVoltClipDictationPermissions() {
   return nativeModule.requestPermissions();
 }
 
-export function startVoltClipDictation() {
+export function startVoltClipDictation(options?: { addsPunctuation?: boolean }) {
   if (!nativeModule) {
     return Promise.reject(new Error("Volt Clip dictation is unavailable."));
   }
 
-  return nativeModule.start();
+  return nativeModule.start(options);
 }
 
 export function stopVoltClipDictation() {

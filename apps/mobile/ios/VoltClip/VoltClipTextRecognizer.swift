@@ -5,7 +5,7 @@ import UIKit
 import Vision
 
 @objc(VoltClipTextRecognizer)
-class VoltClipTextRecognizer: NSObject, AVCapturePhotoCaptureDelegate, AVCaptureMetadataOutputObjectsDelegate {
+class VoltClipTextRecognizer: RCTEventEmitter, AVCapturePhotoCaptureDelegate, AVCaptureMetadataOutputObjectsDelegate {
   static let shared = VoltClipTextRecognizer()
 
   let session = AVCaptureSession()
@@ -14,7 +14,7 @@ class VoltClipTextRecognizer: NSObject, AVCapturePhotoCaptureDelegate, AVCapture
   private let metadataOutput = AVCaptureMetadataOutput()
   private var videoDevice: AVCaptureDevice?
   private var isConfigured = false
-  private var barcodeCallback: ((String, String) -> Void)?
+  private var barcodeCallback: (([String: Any]) -> Void)?
   private var pendingResolve: RCTPromiseResolveBlock?
   private var pendingReject: RCTPromiseRejectBlock?
   private var pendingImageURL: URL?
@@ -23,9 +23,22 @@ class VoltClipTextRecognizer: NSObject, AVCapturePhotoCaptureDelegate, AVCapture
   private weak var previewOverlayView: VoltClipTextCameraView?
   private var captureTimeoutWorkItem: DispatchWorkItem?
   private let selectionHaptic = UISelectionFeedbackGenerator()
+  private var hasListeners = false
 
-  @objc static func requiresMainQueueSetup() -> Bool {
+  override static func requiresMainQueueSetup() -> Bool {
     false
+  }
+
+  override func supportedEvents() -> [String]! {
+    ["capture"]
+  }
+
+  override func startObserving() {
+    hasListeners = true
+  }
+
+  override func stopObserving() {
+    hasListeners = false
   }
 
   @objc(captureAndRecognize:rejecter:)
@@ -143,7 +156,7 @@ class VoltClipTextRecognizer: NSObject, AVCapturePhotoCaptureDelegate, AVCapture
   }
 
   func startBarcodeScanning(
-    onCandidate: @escaping (String, String) -> Void,
+    onCandidate: @escaping ([String: Any]) -> Void,
     fullFrame: Bool,
     resolve: @escaping RCTPromiseResolveBlock,
     rejecter reject: @escaping RCTPromiseRejectBlock
@@ -223,6 +236,7 @@ class VoltClipTextRecognizer: NSObject, AVCapturePhotoCaptureDelegate, AVCapture
       self.previewOverlayView?.removeFromSuperview()
       self.previewOverlayView = nil
     }
+    stopPreview()
   }
 
   private func configureIfNeeded() throws {
@@ -295,9 +309,41 @@ class VoltClipTextRecognizer: NSObject, AVCapturePhotoCaptureDelegate, AVCapture
         continue
       }
 
-      barcodeCallback(value, metadataName(for: readableObject.type))
+      barcodeCallback(barcodeCandidatePayload(for: readableObject, value: value))
       return
     }
+  }
+
+  private func barcodeCandidatePayload(
+    for readableObject: AVMetadataMachineReadableCodeObject,
+    value: String
+  ) -> [String: Any] {
+    let transformedObject = DispatchQueue.main.sync {
+      previewOverlayView?.transformedMachineReadableCodeObject(for: readableObject)
+    }
+    let displayObject = transformedObject ?? readableObject
+    var payload: [String: Any] = [
+      "value": value,
+      "format": metadataName(for: readableObject.type),
+    ]
+
+    let bounds = displayObject.bounds
+    if !bounds.isNull && !bounds.isEmpty {
+      payload["bounds"] = [
+        "x": bounds.origin.x,
+        "y": bounds.origin.y,
+        "width": bounds.size.width,
+        "height": bounds.size.height,
+      ]
+    }
+
+    if !displayObject.corners.isEmpty {
+      payload["corners"] = displayObject.corners.map { point in
+        ["x": point.x, "y": point.y]
+      }
+    }
+
+    return payload
   }
 
   private func metadataName(for type: AVMetadataObject.ObjectType) -> String {
@@ -428,7 +474,28 @@ class VoltClipTextRecognizer: NSObject, AVCapturePhotoCaptureDelegate, AVCapture
     let imageURL = saveCapturedImage(data)
     pendingImageData = data
     pendingImageSize = CGSize(width: cgImage.width, height: cgImage.height)
+    emitCapturedImage(imageURL: imageURL, imageData: data, imageSize: pendingImageSize)
     recognizeText(in: cgImage, imageURL: imageURL)
+  }
+
+  private func emitCapturedImage(imageURL: URL?, imageData: Data, imageSize: CGSize?) {
+    guard hasListeners else {
+      return
+    }
+
+    DispatchQueue.main.async {
+      var body: [String: String] = ["phase": "captured"]
+      if let imageURL {
+        body["imageUri"] = imageURL.absoluteString
+      }
+      body["dataUrl"] = "data:image/jpeg;base64,\(imageData.base64EncodedString())"
+      body["size"] = "\(imageData.count)"
+      if let imageSize {
+        body["width"] = "\(Int(imageSize.width))"
+        body["height"] = "\(Int(imageSize.height))"
+      }
+      self.sendEvent(withName: "capture", body: body)
+    }
   }
 
   private func saveCapturedImage(_ data: Data) -> URL? {
@@ -580,6 +647,12 @@ class VoltClipTextCameraView: UIView {
   func captureDevicePoint(fromNormalizedPoint point: CGPoint) -> CGPoint {
     let layerPoint = CGPoint(x: bounds.width * point.x, y: bounds.height * point.y)
     return previewLayer.captureDevicePointConverted(fromLayerPoint: layerPoint)
+  }
+
+  func transformedMachineReadableCodeObject(
+    for metadataObject: AVMetadataMachineReadableCodeObject
+  ) -> AVMetadataMachineReadableCodeObject? {
+    previewLayer.transformedMetadataObject(for: metadataObject) as? AVMetadataMachineReadableCodeObject
   }
 
   private func startPreview() {

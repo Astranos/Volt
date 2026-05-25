@@ -31,15 +31,9 @@ class VoltClipBarcodeScanner: RCTEventEmitter {
       }
 
       VoltClipTextRecognizer.shared.startBarcodeScanning(
-        onCandidate: { [weak self] value, format in
+        onCandidate: { [weak self] candidate in
           guard let self, self.hasListeners else { return }
-          self.sendEvent(
-            withName: "candidate",
-            body: [
-              "value": value,
-              "format": format,
-            ]
-          )
+          self.sendEvent(withName: "candidate", body: candidate)
         },
         fullFrame: fullFrame,
         resolve: resolve,

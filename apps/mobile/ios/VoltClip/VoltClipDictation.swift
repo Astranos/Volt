@@ -1,4 +1,5 @@
 import AVFoundation
+import AVFAudio
 import React
 import Speech
 
@@ -9,6 +10,8 @@ class VoltClipDictation: RCTEventEmitter {
   private var recognitionTask: SFSpeechRecognitionTask?
   private lazy var recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en_US"))
   private var hasListeners = false
+  private var lastTranscript = ""
+  private var finalTranscriptSent = false
 
   override static func requiresMainQueueSetup() -> Bool {
     false
@@ -29,26 +32,31 @@ class VoltClipDictation: RCTEventEmitter {
   @objc(requestPermissions:rejecter:)
   func requestPermissions(resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) {
     SFSpeechRecognizer.requestAuthorization { speechStatus in
-      AVAudioSession.sharedInstance().requestRecordPermission { microphoneGranted in
-        resolve([
-          "granted": speechStatus == .authorized && microphoneGranted,
-          "speechStatus": self.speechStatusName(speechStatus),
-          "microphoneGranted": microphoneGranted,
-        ])
+      self.requestMicrophonePermission { microphoneGranted in
+        resolve(self.permissionPayload(speechStatus: speechStatus, microphoneGranted: microphoneGranted))
       }
     }
   }
 
-  @objc(start:rejecter:)
-  func start(resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) {
+  @objc(currentPermissions:rejecter:)
+  func currentPermissions(resolve: @escaping RCTPromiseResolveBlock, rejecter reject: RCTPromiseRejectBlock) {
+    resolve(permissionPayload(
+      speechStatus: SFSpeechRecognizer.authorizationStatus(),
+      microphoneGranted: currentMicrophonePermissionGranted()
+    ))
+  }
+
+  @objc(start:resolver:rejecter:)
+  func start(options: NSDictionary?, resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) {
     stopAudio()
+    let addsPunctuation = options?["addsPunctuation"] as? Bool ?? true
 
     guard SFSpeechRecognizer.authorizationStatus() == .authorized else {
       reject("dictation_not_authorized", "Speech recognition permission is not authorized.", nil)
       return
     }
 
-    guard AVAudioSession.sharedInstance().recordPermission == .granted else {
+    guard currentMicrophonePermissionGranted() else {
       reject("dictation_microphone_not_authorized", "Microphone permission is not authorized.", nil)
       return
     }
@@ -67,10 +75,15 @@ class VoltClipDictation: RCTEventEmitter {
 
       let request = SFSpeechAudioBufferRecognitionRequest()
       request.shouldReportPartialResults = true
+      if #available(iOS 16.0, *) {
+        request.addsPunctuation = addsPunctuation
+      }
       if recognizer.supportsOnDeviceRecognition {
         request.requiresOnDeviceRecognition = true
       }
       recognitionRequest = request
+      lastTranscript = ""
+      finalTranscriptSent = false
 
       let inputNode = audioEngine.inputNode
       let format = inputNode.outputFormat(forBus: 0)
@@ -92,8 +105,13 @@ class VoltClipDictation: RCTEventEmitter {
 
         if let result {
           let transcript = result.bestTranscription.formattedString.trimmingCharacters(in: .whitespacesAndNewlines)
+          self.lastTranscript = transcript
           if !transcript.isEmpty && self.hasListeners {
-            self.sendEvent(withName: result.isFinal ? "final" : "partial", body: ["transcript": transcript])
+            if result.isFinal {
+              self.emitFinalTranscript(transcript)
+            } else {
+              self.sendEvent(withName: "partial", body: ["transcript": transcript])
+            }
           }
         }
 
@@ -120,8 +138,11 @@ class VoltClipDictation: RCTEventEmitter {
 
   @objc(stop:rejecter:)
   func stop(resolve: @escaping RCTPromiseResolveBlock, rejecter reject: RCTPromiseRejectBlock) {
+    let transcript = lastTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
+    emitFinalTranscript(transcript)
     recognitionRequest?.endAudio()
     stopAudioInput()
+    resetRecognitionState()
     resolve(["running": false])
   }
 
@@ -147,6 +168,54 @@ class VoltClipDictation: RCTEventEmitter {
   private func resetRecognitionState() {
     recognitionRequest = nil
     recognitionTask = nil
+    lastTranscript = ""
+  }
+
+  private func emitFinalTranscript(_ transcript: String) {
+    guard !finalTranscriptSent, !transcript.isEmpty, hasListeners else {
+      return
+    }
+
+    finalTranscriptSent = true
+    sendEvent(withName: "final", body: ["transcript": transcript])
+  }
+
+  private func permissionPayload(
+    speechStatus: SFSpeechRecognizerAuthorizationStatus,
+    microphoneGranted: Bool
+  ) -> [String: Any] {
+    [
+      "granted": speechStatus == .authorized && microphoneGranted,
+      "speechStatus": speechStatusName(speechStatus),
+      "microphoneGranted": microphoneGranted,
+    ]
+  }
+
+  private func currentMicrophonePermissionGranted() -> Bool {
+    if #available(iOS 17.0, *) {
+      return AVAudioApplication.shared.recordPermission == .granted
+    }
+
+    return AVAudioSession.sharedInstance().recordPermission == .granted
+  }
+
+  private func requestMicrophonePermission(completion: @escaping (Bool) -> Void) {
+    let completeOnMain: (Bool) -> Void = { granted in
+      DispatchQueue.main.async {
+        completion(granted)
+      }
+    }
+
+    if #available(iOS 17.0, *) {
+      AVAudioApplication.requestRecordPermission { granted in
+        completeOnMain(granted)
+      }
+      return
+    }
+
+    AVAudioSession.sharedInstance().requestRecordPermission { granted in
+      completeOnMain(granted)
+    }
   }
 
   private func speechStatusName(_ status: SFSpeechRecognizerAuthorizationStatus) -> String {

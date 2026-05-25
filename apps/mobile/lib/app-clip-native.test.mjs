@@ -27,6 +27,8 @@ const nativeFiles = {
   barcodeScanner: new URL("../ios/VoltClip/VoltClipBarcodeScanner.swift", import.meta.url),
   dictation: new URL("../ios/VoltClip/VoltClipDictation.swift", import.meta.url),
   textRecognizer: new URL("../ios/VoltClip/VoltClipTextRecognizer.swift", import.meta.url),
+  liquidTabBar: new URL("../ios/VoltClip/VoltClipLiquidTabBarView.swift", import.meta.url),
+  liveTextImageView: new URL("../ios/Volt/LiveTextImageView.swift", import.meta.url),
   clipAppDelegate: new URL("../ios/VoltClip/AppDelegate.swift", import.meta.url),
 };
 
@@ -99,6 +101,80 @@ test("App Clip subscribes to native capture error events", () => {
   assert.match(dictationWrapper, /addVoltClipDictationErrorListener/);
   assert.match(clipScreen, /addVoltClipBarcodeErrorListener/);
   assert.match(clipScreen, /addVoltClipDictationErrorListener/);
+});
+
+test("App Clip OCR emits the frozen capture before text recognition completes", () => {
+  const textRecognizer = readText(nativeFiles.textRecognizer);
+  const textRecognizerWrapper = readText(nativeFiles.textRecognizerWrapper);
+  const clipScreen = readText(nativeFiles.clipScreen);
+
+  assert.match(textRecognizer, /supportedEvents\(\).*?\["capture"\]/s);
+  assert.match(textRecognizer, /emitCapturedImage\(imageURL: imageURL, imageData: data, imageSize: pendingImageSize\)/);
+  assert.match(textRecognizer, /recognizeText\(in: cgImage, imageURL: imageURL\)/);
+  assert.match(textRecognizerWrapper, /addVoltClipTextCaptureListener/);
+  assert.match(clipScreen, /setOcrFrozenImageUri\(result\.imageUri\)/);
+});
+
+test("App Clip dictation stops with a final transcript instead of leaving recording pending", () => {
+  const dictation = readText(nativeFiles.dictation);
+  const clipScreen = readText(nativeFiles.clipScreen);
+
+  assert.match(dictation, /AVAudioApplication\.requestRecordPermission/);
+  assert.match(dictation, /AVAudioApplication\.shared\.recordPermission/);
+  assert.match(dictation, /private var lastTranscript = ""/);
+  assert.match(dictation, /request\.addsPunctuation = addsPunctuation/);
+  assert.match(dictation, /emitFinalTranscript\(transcript\)/);
+  assert.match(dictation, /recognitionRequest\?\.endAudio\(\)/);
+  assert.doesNotMatch(clipScreen, /dictationPhase: "partial"/);
+});
+
+test("App Clip barcode scanner returns native preview geometry for active code highlighting", () => {
+  const textRecognizer = readText(nativeFiles.textRecognizer);
+  const barcodeWrapper = readText(nativeFiles.barcodeScannerWrapper);
+  const clipScreen = readText(nativeFiles.clipScreen);
+
+  assert.match(textRecognizer, /transformedMetadataObject\(for: metadataObject\)/);
+  assert.match(textRecognizer, /payload\["bounds"\]/);
+  assert.match(textRecognizer, /payload\["corners"\]/);
+  assert.match(barcodeWrapper, /bounds\?: \{ x: number; y: number; width: number; height: number \}/);
+  assert.match(clipScreen, /NativeBarcodeHighlight/);
+  assert.doesNotMatch(clipScreen, /ocrBarcodeScanLine/);
+});
+
+test("App Clip dictation permission denial offers retry or Settings recovery", () => {
+  const clipScreen = readText(nativeFiles.clipScreen);
+
+  assert.match(clipScreen, /Alert\.alert\(\s*"Enable dictation"/);
+  assert.match(clipScreen, /Linking\.openSettings\(\)/);
+  assert.match(clipScreen, /canRequestDictationPermissionAgain/);
+});
+
+test("App Clip OCR captured image has stable pan and zoom room for Live Text selection", () => {
+  const clipScreen = readText(nativeFiles.clipScreen);
+  const liveTextImageView = readText(nativeFiles.liveTextImageView);
+
+  assert.match(clipScreen, /contentInsetAdjustmentBehavior="never"/);
+  assert.match(clipScreen, /ocrCapturedScrollContent/);
+  assert.match(clipScreen, /paddingBottom: ocrDrawerCollapsedHeight \+ stableBottomInset \+ 180/);
+  assert.match(liveTextImageView, /contentMode = \.scaleAspectFit/);
+});
+
+test("App Clip bottom controls use native Liquid Glass with concentric screen corners", () => {
+  const clipScreen = readText(nativeFiles.clipScreen);
+  const liquidTabBar = readText(nativeFiles.liquidTabBar);
+
+  assert.match(clipScreen, /const ocrDrawerCollapsedHeight = 158/);
+  assert.match(clipScreen, /const ocrDrawerEdgeBleed = 2/);
+  assert.match(clipScreen, /const ocrDrawerExpandedInset = -ocrDrawerEdgeBleed/);
+  assert.match(clipScreen, /const ocrDrawerExpandedRadius = 34/);
+  assert.match(clipScreen, /LiquidTabBarView \?/);
+  assert.match(clipScreen, /inputRange: \[0, 0\.72, 1\]/);
+  assert.match(liquidTabBar, /NSClassFromString\("UIGlassEffect"\)/);
+  assert.match(liquidTabBar, /UIGlassEffect\(style: \.regular\)/);
+  assert.match(liquidTabBar, /blurView\.cornerConfiguration = \.corners/);
+  assert.match(liquidTabBar, /UITabBarDelegate/);
+  assert.match(liquidTabBar, /UITabBarAppearance/);
+  assert.doesNotMatch(liquidTabBar, /VoltClipModeTabButton/);
 });
 
 test("App Clip native view wrappers guard unregistered components", () => {

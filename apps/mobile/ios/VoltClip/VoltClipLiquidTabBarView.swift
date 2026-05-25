@@ -24,6 +24,8 @@ class VoltClipLiquidGlassView: UIView {
   private let blurView = UIVisualEffectView(effect: nil)
   private var blurAnimator: UIViewPropertyAnimator?
   private var blurStyle: UIBlurEffect.Style = .systemUltraThinMaterialDark
+  private var nativeGlassEffect: Any?
+  private var isMounted = false
 
   override init(frame: CGRect) {
     super.init(frame: frame)
@@ -38,7 +40,9 @@ class VoltClipLiquidGlassView: UIView {
   override func layoutSubviews() {
     super.layoutSubviews()
     blurView.frame = bounds
+    isMounted = true
     updateCornerRadius()
+    updateAppearance()
   }
 
   private func setup() {
@@ -56,11 +60,17 @@ class VoltClipLiquidGlassView: UIView {
     blurView.layer.cornerRadius = radius
     blurView.layer.cornerCurve = .continuous
     blurView.clipsToBounds = true
+    updateNativeGlassCornerRadius(radius)
   }
 
   private func updateAppearance() {
     let clampedProgress = max(0, min(1, CGFloat(truncating: progress)))
     let toneValue = tone as String
+
+    if applyNativeLiquidGlass(progress: clampedProgress, tone: toneValue) {
+      return
+    }
+
     let baseAlpha: CGFloat
     let openAlpha: CGFloat
     let nextBlurStyle: UIBlurEffect.Style
@@ -92,83 +102,77 @@ class VoltClipLiquidGlassView: UIView {
     layer.borderWidth = 1
     layer.borderColor = UIColor.white.withAlphaComponent(0.18 + (0.12 * clampedProgress)).cgColor
   }
-}
 
-private final class VoltClipModeTabButton: UIControl {
-  let mode: String
-  private let iconView = UIImageView()
-  private let titleLabel = UILabel()
-  private let selectedBackground = UIView()
-
-  init(mode: String, title: String, image: UIImage?) {
-    self.mode = mode
-    super.init(frame: .zero)
-
-    isAccessibilityElement = true
-    accessibilityTraits = [.button]
-    accessibilityLabel = title
-    clipsToBounds = false
-
-    selectedBackground.isUserInteractionEnabled = false
-    selectedBackground.backgroundColor = UIColor.white.withAlphaComponent(0.18)
-    selectedBackground.layer.cornerCurve = .continuous
-    selectedBackground.alpha = 0
-    addSubview(selectedBackground)
-
-    iconView.image = image
-    iconView.contentMode = .scaleAspectFit
-    iconView.tintColor = UIColor.white.withAlphaComponent(0.84)
-    addSubview(iconView)
-
-    titleLabel.text = title
-    titleLabel.textAlignment = .center
-    titleLabel.font = UIFont.systemFont(ofSize: 12, weight: .semibold)
-    titleLabel.textColor = UIColor.white.withAlphaComponent(0.84)
-    addSubview(titleLabel)
-  }
-
-  required init?(coder: NSCoder) {
-    fatalError("init(coder:) has not been implemented")
-  }
-
-  override var isSelected: Bool {
-    didSet {
-      updateSelection()
+  private func isNativeLiquidGlassAvailable() -> Bool {
+    #if compiler(>=6.2)
+    if #available(iOS 26.0, *) {
+      guard let glassEffectClass = NSClassFromString("UIGlassEffect") as? NSObject.Type else {
+        return false
+      }
+      return glassEffectClass.responds(to: Selector(("effectWithStyle:")))
     }
+    #endif
+    return false
   }
 
-  override var isHighlighted: Bool {
-    didSet {
-      alpha = isHighlighted ? 0.72 : 1
+  private func applyNativeLiquidGlass(progress: CGFloat, tone: String) -> Bool {
+    guard isMounted, isNativeLiquidGlassAvailable() else {
+      return false
     }
+
+    #if compiler(>=6.2)
+    if #available(iOS 26.0, *) {
+      let effect: UIGlassEffect
+      if let existing = nativeGlassEffect as? UIGlassEffect {
+        effect = existing
+      } else {
+        effect = UIGlassEffect(style: .regular)
+        nativeGlassEffect = effect
+      }
+
+      if tone == "bright" {
+        effect.tintColor = UIColor.white.withAlphaComponent(0.12 + (0.12 * progress))
+        blurView.overrideUserInterfaceStyle = .light
+      } else {
+        effect.tintColor = UIColor.black.withAlphaComponent(0.10 + (0.14 * progress))
+        blurView.overrideUserInterfaceStyle = .dark
+      }
+      effect.isInteractive = true
+      blurAnimator?.stopAnimation(true)
+      blurAnimator = nil
+      blurView.effect = effect
+      blurView.alpha = 1
+      backgroundColor = .clear
+      layer.borderWidth = 0
+      updateNativeGlassCornerRadius(CGFloat(truncating: cornerRadius))
+      return true
+    }
+    #endif
+
+    return false
   }
 
-  override func layoutSubviews() {
-    super.layoutSubviews()
-    selectedBackground.frame = bounds.insetBy(dx: 2, dy: 0)
-    selectedBackground.layer.cornerRadius = selectedBackground.bounds.height / 2
+  private func updateNativeGlassCornerRadius(_ radius: CGFloat) {
+    guard isMounted, isNativeLiquidGlassAvailable() else {
+      return
+    }
 
-    let iconSize: CGFloat = 30
-    iconView.frame = CGRect(
-      x: (bounds.width - iconSize) / 2,
-      y: 7,
-      width: iconSize,
-      height: iconSize
-    )
-    titleLabel.frame = CGRect(x: 2, y: 42, width: bounds.width - 4, height: 17)
-  }
-
-  private func updateSelection() {
-    accessibilityTraits = isSelected ? [.button, .selected] : [.button]
-    selectedBackground.alpha = isSelected ? 1 : 0
-    iconView.tintColor = isSelected ? .white : UIColor.white.withAlphaComponent(0.76)
-    titleLabel.textColor = isSelected ? .white : UIColor.white.withAlphaComponent(0.76)
-    titleLabel.font = UIFont.systemFont(ofSize: 12, weight: isSelected ? .bold : .semibold)
+    #if compiler(>=6.2)
+    if #available(iOS 26.0, *) {
+      let cornerRadius = UICornerRadius(floatLiteral: radius)
+      blurView.cornerConfiguration = .corners(
+        topLeftRadius: cornerRadius,
+        topRightRadius: cornerRadius,
+        bottomLeftRadius: cornerRadius,
+        bottomRightRadius: cornerRadius
+      )
+    }
+    #endif
   }
 }
 
 @objc(VoltClipLiquidTabBarView)
-class VoltClipLiquidTabBarView: UIView {
+class VoltClipLiquidTabBarView: UIView, UITabBarDelegate {
   @objc var onModeChange: RCTDirectEventBlock?
   @objc var selectedMode: NSString = "ocr" {
     didSet {
@@ -176,14 +180,13 @@ class VoltClipLiquidTabBarView: UIView {
     }
   }
 
-  private let backgroundView = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterialDark))
+  private let tabBar = UITabBar()
   private let itemImageConfiguration = UIImage.SymbolConfiguration(pointSize: 24, weight: .semibold)
-  private let stackView = UIStackView()
-  private lazy var modeButtons: [String: VoltClipModeTabButton] = [
-    "ocr": makeButton(mode: "ocr", title: "OCR", image: "doc.text.viewfinder"),
-    "barcode": makeButton(mode: "barcode", title: "Scanner", image: "barcode.viewfinder"),
-    "photo": makeButton(mode: "photo", title: "Photos", image: "photo.on.rectangle"),
-    "dictation": makeButton(mode: "dictation", title: "Dictation", image: "mic"),
+  private lazy var modeItems: [String: UITabBarItem] = [
+    "ocr": makeItem(title: "OCR", image: "doc.text.viewfinder", selectedImage: "doc.text.viewfinder"),
+    "barcode": makeItem(title: "Scanner", image: "barcode.viewfinder", selectedImage: "barcode.viewfinder"),
+    "photo": makeItem(title: "Photos", image: "photo.on.rectangle", selectedImage: "photo.fill.on.rectangle.fill"),
+    "dictation": makeItem(title: "Dictation", image: "mic", selectedImage: "mic.fill"),
   ]
 
   override init(frame: CGRect) {
@@ -198,9 +201,7 @@ class VoltClipLiquidTabBarView: UIView {
 
   override func layoutSubviews() {
     super.layoutSubviews()
-    backgroundView.frame = bounds.insetBy(dx: 0, dy: 6)
-    backgroundView.layer.cornerRadius = backgroundView.bounds.height / 2
-    stackView.frame = backgroundView.frame.insetBy(dx: 6, dy: 5)
+    tabBar.frame = bounds
   }
 
   private func setup() {
@@ -212,46 +213,76 @@ class VoltClipLiquidTabBarView: UIView {
     layer.shadowOpacity = 0.28
     layer.shadowRadius = 18
 
-    backgroundView.isUserInteractionEnabled = false
-    backgroundView.clipsToBounds = true
-    backgroundView.layer.cornerCurve = .continuous
-    backgroundView.contentView.backgroundColor = UIColor.black.withAlphaComponent(0.24)
-    backgroundView.layer.borderWidth = 0
+    tabBar.delegate = self
+    tabBar.items = ["ocr", "barcode", "photo", "dictation"].compactMap { modeItems[$0] }
+    tabBar.selectedItem = modeItems["ocr"]
+    tabBar.tintColor = .white
+    tabBar.unselectedItemTintColor = UIColor.white.withAlphaComponent(0.76)
+    tabBar.itemPositioning = .fill
+    tabBar.isTranslucent = true
+    tabBar.clipsToBounds = false
+    tabBar.backgroundColor = .clear
+    tabBar.layer.cornerCurve = .continuous
+    tabBar.items?.forEach { item in
+      item.imageInsets = UIEdgeInsets(top: -3, left: 0, bottom: 3, right: 0)
+      item.titlePositionAdjustment = UIOffset(horizontal: 0, vertical: 4)
+    }
 
-    stackView.axis = .horizontal
-    stackView.alignment = .fill
-    stackView.distribution = .fillEqually
-    stackView.spacing = 4
-    ["ocr", "barcode", "photo", "dictation"].compactMap { modeButtons[$0] }.forEach { stackView.addArrangedSubview($0) }
+    let appearance = UITabBarAppearance()
+    appearance.configureWithTransparentBackground()
+    appearance.backgroundEffect = UIBlurEffect(style: .systemUltraThinMaterialDark)
+    appearance.backgroundColor = UIColor.black.withAlphaComponent(0.08)
+    appearance.shadowColor = .clear
+    configureItemAppearance(appearance.stackedLayoutAppearance)
+    configureItemAppearance(appearance.inlineLayoutAppearance)
+    configureItemAppearance(appearance.compactInlineLayoutAppearance)
+    tabBar.standardAppearance = appearance
+    tabBar.scrollEdgeAppearance = appearance
 
-    addSubview(backgroundView)
-    addSubview(stackView)
+    if #available(iOS 26.0, *) {
+      tabBar.isTranslucent = true
+    }
+
+    addSubview(tabBar)
     selectMode(selectedMode as String)
   }
 
-  private func makeButton(mode: String, title: String, image: String) -> VoltClipModeTabButton {
-    let button = VoltClipModeTabButton(
-      mode: mode,
+  private func makeItem(title: String, image: String, selectedImage: String) -> UITabBarItem {
+    UITabBarItem(
       title: title,
       image: UIImage(systemName: image)?
         .withConfiguration(itemImageConfiguration)
+        .withRenderingMode(.alwaysTemplate),
+      selectedImage: UIImage(systemName: selectedImage)?
+        .withConfiguration(itemImageConfiguration)
         .withRenderingMode(.alwaysTemplate)
     )
-    button.addTarget(self, action: #selector(didTapModeButton(_:)), for: .touchUpInside)
-    return button
+  }
+
+  private func configureItemAppearance(_ itemAppearance: UITabBarItemAppearance) {
+    itemAppearance.normal.iconColor = UIColor.white.withAlphaComponent(0.76)
+    itemAppearance.normal.titleTextAttributes = [
+      .foregroundColor: UIColor.white.withAlphaComponent(0.76),
+      .font: UIFont.systemFont(ofSize: 11, weight: .semibold),
+    ]
+    itemAppearance.selected.iconColor = .white
+    itemAppearance.selected.titleTextAttributes = [
+      .foregroundColor: UIColor.white,
+      .font: UIFont.systemFont(ofSize: 11, weight: .bold),
+    ]
   }
 
   private func selectMode(_ mode: String) {
-    modeButtons.forEach { buttonMode, button in
-      button.isSelected = buttonMode == mode
-    }
-  }
-
-  @objc private func didTapModeButton(_ sender: UIControl) {
-    guard let button = sender as? VoltClipModeTabButton else {
+    guard let item = modeItems[mode], tabBar.selectedItem !== item else {
       return
     }
-    let mode = button.mode
+    tabBar.selectedItem = item
+  }
+
+  func tabBar(_ tabBar: UITabBar, didSelect item: UITabBarItem) {
+    guard let mode = modeItems.first(where: { $0.value === item })?.key else {
+      return
+    }
     selectedMode = mode as NSString
     onModeChange?(["mode": mode])
   }

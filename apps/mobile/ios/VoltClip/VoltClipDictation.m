@@ -6,7 +6,11 @@
 RCT_EXTERN_METHOD(requestPermissions:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
-RCT_EXTERN_METHOD(start:(RCTPromiseResolveBlock)resolve
+RCT_EXTERN_METHOD(currentPermissions:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
+RCT_EXTERN_METHOD(start:(NSDictionary *)options
+                  resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
 RCT_EXTERN_METHOD(stop:(RCTPromiseResolveBlock)resolve

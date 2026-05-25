@@ -3,6 +3,8 @@ import { NativeEventEmitter, NativeModules, Platform } from "react-native";
 export type VoltClipBarcodeCandidate = {
   value: string;
   format: string;
+  bounds?: { x: number; y: number; width: number; height: number };
+  corners?: Array<{ x: number; y: number }>;
 };
 
 type VoltClipBarcodeScannerModule = {

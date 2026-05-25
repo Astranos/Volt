@@ -1,8 +1,17 @@
-import { NativeModules, Platform, UIManager, requireNativeComponent } from "react-native";
+import { NativeEventEmitter, NativeModules, Platform, UIManager, requireNativeComponent } from "react-native";
 import type { ViewStyle } from "react-native";
 
+export type VoltClipTextCaptureResult = {
+  text?: string;
+  imageUri?: string;
+  dataUrl?: string;
+  size?: string;
+  width?: string;
+  height?: string;
+};
+
 type VoltClipTextRecognizerModule = {
-  captureAndRecognize: () => Promise<{ text: string; imageUri?: string; dataUrl?: string; size?: string; width?: string; height?: string }>;
+  captureAndRecognize: () => Promise<VoltClipTextCaptureResult & { text: string }>;
   focusAt?: (x: number, y: number) => Promise<{ x: number; y: number }>;
   showPreview?: (x: number, y: number, width: number, height: number) => void;
   hidePreview?: () => void;
@@ -12,6 +21,7 @@ type VoltClipTextRecognizerModule = {
 };
 
 const nativeModule = NativeModules.VoltClipTextRecognizer as VoltClipTextRecognizerModule | undefined;
+const eventEmitter = nativeModule ? new NativeEventEmitter(nativeModule as never) : null;
 const nativeComponentName = "VoltClipTextCameraView";
 const hasNativeTextCameraView =
   Platform.OS === "ios" && UIManager.getViewManagerConfig(nativeComponentName) != null;
@@ -31,6 +41,16 @@ export function captureAndRecognizeVoltClipText() {
   }
 
   return nativeModule.captureAndRecognize();
+}
+
+export function addVoltClipTextCaptureListener(listener: (result: VoltClipTextCaptureResult) => void) {
+  if (!eventEmitter) {
+    return { remove() {} };
+  }
+
+  return eventEmitter.addListener("capture", (event: VoltClipTextCaptureResult & { phase?: string }) => {
+    if (event.phase === "captured") listener(event);
+  });
 }
 
 export function showVoltClipTextPreview(frame: { x: number; y: number; width: number; height: number }) {
