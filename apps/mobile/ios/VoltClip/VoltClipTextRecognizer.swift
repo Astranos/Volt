@@ -16,6 +16,7 @@ class VoltClipTextRecognizer: NSObject, AVCapturePhotoCaptureDelegate {
   private var pendingReject: RCTPromiseRejectBlock?
   private var pendingImageURL: URL?
   private weak var previewOverlayView: VoltClipTextCameraView?
+  private var captureTimeoutWorkItem: DispatchWorkItem?
 
   @objc static func requiresMainQueueSetup() -> Bool {
     false
@@ -50,8 +51,14 @@ class VoltClipTextRecognizer: NSObject, AVCapturePhotoCaptureDelegate {
       self.sessionQueue.async {
         do {
           try self.configureIfNeeded()
+          guard self.pendingResolve == nil && self.pendingReject == nil else {
+            reject("ocr_capture_in_progress", "A text capture is already in progress.", nil)
+            return
+          }
+
           self.pendingResolve = resolve
           self.pendingReject = reject
+          self.scheduleCaptureTimeout()
 
           if !self.session.isRunning {
             self.session.startRunning()
@@ -60,6 +67,7 @@ class VoltClipTextRecognizer: NSObject, AVCapturePhotoCaptureDelegate {
           let settings = AVCapturePhotoSettings()
           self.output.capturePhoto(with: settings, delegate: self)
         } catch {
+          self.clearPendingCapture()
           reject("ocr_capture_failed", error.localizedDescription, error)
         }
       }
@@ -240,9 +248,7 @@ class VoltClipTextRecognizer: NSObject, AVCapturePhotoCaptureDelegate {
           result["imageUri"] = imageURL.absoluteString
         }
         self.pendingResolve?(result)
-        self.pendingResolve = nil
-        self.pendingReject = nil
-        self.pendingImageURL = nil
+        self.clearPendingCapture()
       }
     }
   }
@@ -251,11 +257,26 @@ class VoltClipTextRecognizer: NSObject, AVCapturePhotoCaptureDelegate {
     sessionQueue.async {
       DispatchQueue.main.async {
         self.pendingReject?(code, message, error)
-        self.pendingResolve = nil
-        self.pendingReject = nil
-        self.pendingImageURL = nil
+        self.clearPendingCapture()
       }
     }
+  }
+
+  private func scheduleCaptureTimeout() {
+    captureTimeoutWorkItem?.cancel()
+    let timeout = DispatchWorkItem { [weak self] in
+      self?.finishWithError(code: "ocr_capture_timeout", message: "The text capture timed out. Try again.", error: nil)
+    }
+    captureTimeoutWorkItem = timeout
+    DispatchQueue.main.asyncAfter(deadline: .now() + 12, execute: timeout)
+  }
+
+  private func clearPendingCapture() {
+    captureTimeoutWorkItem?.cancel()
+    captureTimeoutWorkItem = nil
+    pendingResolve = nil
+    pendingReject = nil
+    pendingImageURL = nil
   }
 }
 
@@ -281,10 +302,6 @@ class VoltClipTextCameraView: UIView {
     setup()
   }
 
-  deinit {
-    VoltClipTextRecognizer.shared.stopPreview()
-  }
-
   override func layoutSubviews() {
     super.layoutSubviews()
     previewLayer.frame = bounds
@@ -303,7 +320,6 @@ class VoltClipTextCameraView: UIView {
 
     if window == nil {
       previewLayer.session = nil
-      VoltClipTextRecognizer.shared.stopPreview()
       return
     }
 

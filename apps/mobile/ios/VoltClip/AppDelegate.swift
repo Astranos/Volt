@@ -22,6 +22,7 @@ public class AppDelegate: ExpoAppDelegate {
 
 #if os(iOS) || os(tvOS)
     window = UIWindow(frame: UIScreen.main.bounds)
+    window?.backgroundColor = .clear
     factory.startReactNative(
       withModuleName: "main",
       in: window,
@@ -53,6 +54,18 @@ public class AppDelegate: ExpoAppDelegate {
 
 class ReactNativeDelegate: ExpoReactNativeFactoryDelegate {
   // Extension point for config-plugins
+
+  override func customize(_ rootView: UIView) {
+    super.customize(rootView)
+    rootView.backgroundColor = .clear
+    rootView.isOpaque = false
+  }
+
+  override func setRootView(_ rootView: UIView, toRootViewController rootViewController: UIViewController) {
+    super.setRootView(rootView, toRootViewController: rootViewController)
+    rootViewController.view.backgroundColor = .clear
+    rootViewController.view.isOpaque = false
+  }
 
   override func sourceURL(for bridge: RCTBridge) -> URL? {
     // needed to return the correct URL for expo-dev-client.

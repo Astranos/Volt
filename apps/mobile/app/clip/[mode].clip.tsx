@@ -132,6 +132,7 @@ export default function ClipInvocationScreen() {
   const showMeasuredOcrPreview = useCallback(() => {
     if (mode !== "ocr" || ocrImageUri || !hasVoltClipTextRecognizer) return;
 
+    setOcrPreviewState("starting");
     showVoltClipTextPreview({
       x: 0,
       y: 0,
@@ -147,7 +148,8 @@ export default function ClipInvocationScreen() {
       return;
     }
 
-    const timer = setTimeout(showMeasuredOcrPreview, 50);
+    showMeasuredOcrPreview();
+    const timer = setTimeout(showMeasuredOcrPreview, 150);
     return () => {
       clearTimeout(timer);
       hideVoltClipTextPreview();
@@ -179,7 +181,7 @@ export default function ClipInvocationScreen() {
   useEffect(() => {
     if (mode !== "ocr") return;
 
-    if (!hasVoltClipTextRecognizer || !TextCameraView) {
+    if (!hasVoltClipTextRecognizer) {
       setOcrState("unavailable");
       setError("OCR camera is unavailable in this App Clip build.");
       return;
@@ -293,6 +295,7 @@ export default function ClipInvocationScreen() {
 
     setError(null);
     setOcrState("capturing");
+    setOcrPreviewState("idle");
     hideVoltClipTextPreview();
 
     try {
@@ -531,6 +534,8 @@ export default function ClipInvocationScreen() {
               if (ocrImageUri) {
                 setOcrImageUri(null);
                 setOcrText("");
+                setOcrState("ready");
+                setOcrPreviewState("starting");
                 setSendState("idle");
                 setError(null);
                 lastOcrClipboardRef.current = null;
