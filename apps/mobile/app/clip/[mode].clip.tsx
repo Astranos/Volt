@@ -471,60 +471,58 @@ export default function ClipInvocationScreen() {
         </View>
 
         <View style={styles.ocrViewfinderShell}>
-          {ocrImageUri ? (
-            <View style={styles.ocrCapturedViewport}>
-              <ScrollView
-                automaticallyAdjustContentInsets={false}
-                bouncesZoom
-                maximumZoomScale={4}
-                minimumZoomScale={1}
-                pinchGestureEnabled
-                scrollEventThrottle={16}
-                showsHorizontalScrollIndicator={false}
-                showsVerticalScrollIndicator={false}
-                style={styles.ocrCapturedScroll}
-              >
-                <LiveTextImageView imageUri={ocrImageUri} style={styles.ocrCapturedImage} />
-              </ScrollView>
-              <View pointerEvents="none" style={styles.ocrCopyPrompt}>
-                <Text numberOfLines={1} style={styles.ocrCopyPromptText}>
-                  Select text and tap Copy to send to browser
-                </Text>
+            {ocrImageUri ? (
+              <View style={styles.ocrCapturedViewport}>
+                <ScrollView
+                  automaticallyAdjustContentInsets={false}
+                  bouncesZoom
+                  maximumZoomScale={4}
+                  minimumZoomScale={1}
+                  pinchGestureEnabled
+                  scrollEventThrottle={16}
+                  showsHorizontalScrollIndicator={false}
+                  showsVerticalScrollIndicator={false}
+                  style={styles.ocrCapturedScroll}
+                >
+                  <LiveTextImageView imageUri={ocrImageUri} style={styles.ocrCapturedImage} />
+                </ScrollView>
+                <View pointerEvents="none" style={styles.ocrCopyPrompt}>
+                  <Text numberOfLines={1} style={styles.ocrCopyPromptText}>
+                    Select text and tap Copy to send to browser
+                  </Text>
+                </View>
               </View>
-            </View>
           ) : hasVoltClipTextRecognizer ? (
             <>
-              <View pointerEvents="none" style={styles.ocrCamera} />
-              <View pointerEvents="none" style={styles.ocrCameraOverlay} />
+              <View pointerEvents="none" style={styles.ocrLiquidGlassSheet} />
               {ocrPreviewState === "failed" ? (
                 <View pointerEvents="none" style={styles.ocrPreviewWarning}>
                   <Text style={styles.ocrPreviewWarningText}>Camera preview unavailable</Text>
-                </View>
-              ) : null}
-            </>
-          ) : (
-            <View style={styles.ocrUnavailablePanel}>
-              <Text style={styles.ocrUnavailableText}>OCR camera unavailable</Text>
-            </View>
-          )}
+                  </View>
+                ) : null}
+              </>
+            ) : (
+              <View style={styles.ocrUnavailablePanel}>
+                <Text style={styles.ocrUnavailableText}>OCR camera unavailable</Text>
+              </View>
+            )}
 
-          {sendState === "sent" && ocrText ? (
-            <View pointerEvents="none" style={styles.ocrSentToast}>
-              <Text style={styles.ocrSentTitle}>Copied and sent to browser</Text>
-              <Text numberOfLines={2} style={styles.ocrSentText}>
-                {ocrText}
-              </Text>
-            </View>
-          ) : null}
+            {sendState === "sent" && ocrText ? (
+              <View pointerEvents="none" style={styles.ocrSentToast}>
+                <Text style={styles.ocrSentTitle}>Copied and sent to browser</Text>
+                <Text numberOfLines={2} style={styles.ocrSentText}>
+                  {ocrText}
+                </Text>
+              </View>
+            ) : null}
 
-          {sendState === "error" && error ? (
-            <View pointerEvents="none" style={styles.ocrErrorToast}>
-              <Text numberOfLines={2} style={styles.ocrErrorText}>
-                {error}
-              </Text>
-            </View>
-          ) : null}
-
+            {sendState === "error" && error ? (
+              <View pointerEvents="none" style={styles.ocrErrorToast}>
+                <Text numberOfLines={2} style={styles.ocrErrorText}>
+                  {error}
+                </Text>
+              </View>
+            ) : null}
         </View>
         <View style={styles.ocrBottomControls}>
           <Pressable
@@ -685,7 +683,7 @@ const styles = StyleSheet.create({
   ocrRoot: {
     flex: 1,
     minHeight: "100%",
-    backgroundColor: "rgba(5, 5, 5, 0.42)",
+    backgroundColor: "transparent",
     paddingTop: stableTopInset,
   },
   ocrHeader: {
@@ -725,27 +723,21 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 260,
     marginHorizontal: 18,
-    borderRadius: 32,
-    ...continuousCorners,
-    overflow: "hidden",
-    backgroundColor: "rgba(0, 0, 0, 0.08)",
-    borderWidth: 1,
-    borderColor: "rgba(250, 250, 249, 0.38)",
-  },
-  ocrCamera: {
-    height: "100%",
-    width: "100%",
-    borderRadius: 31,
+    borderRadius: 44,
     ...continuousCorners,
     backgroundColor: "transparent",
   },
-  ocrCameraOverlay: {
+  ocrLiquidGlassSheet: {
     ...absoluteFillObject,
-    borderRadius: 31,
+    borderRadius: 44,
     ...continuousCorners,
     borderWidth: 1,
-    borderColor: "rgba(250, 250, 249, 0.42)",
-    backgroundColor: "rgba(0, 0, 0, 0.08)",
+    borderColor: "rgba(255, 255, 255, 0.16)",
+    backgroundColor: "rgba(255, 255, 255, 0.075)",
+    shadowColor: "#ffffff",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.14,
+    shadowRadius: 18,
   },
   ocrCapturedViewport: {
     ...absoluteFillObject,
