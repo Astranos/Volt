@@ -254,7 +254,7 @@ export default function UnifiedSidepanel() {
           <DropdownMenuContent
             align="start"
             sideOffset={8}
-            className="liquid-glass concentric-lg p-1"
+            className="sidepanel-tool-menu liquid-glass concentric-lg p-1"
             style={{
               width: dropdownWidth ? `${dropdownWidth}px` : undefined,
             }}
@@ -267,7 +267,7 @@ export default function UnifiedSidepanel() {
                   "flex items-center gap-3 concentric-md px-3 py-2 text-sm font-medium transition-colors",
                   activeTool === tool.id
                     ? "bg-primary text-primary-foreground"
-                    : "text-foreground hover:bg-accent hover:text-accent-foreground"
+                    : "text-foreground hover:bg-white/45 hover:text-foreground focus:bg-white/45 focus:text-foreground dark:hover:bg-white/10 dark:focus:bg-white/10"
                 )}
               >
                 <tool.icon className="h-4 w-4" />

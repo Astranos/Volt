@@ -826,7 +826,7 @@ function UnifiedPairingCard({
   const statusCopy = connected
     ? `Ready for ${modeLabel ?? "App Clip"} captures`
     : showQr
-      ? `Scan with iPhone Camera${modeLabel ? ` for ${modeLabel}` : ""}`
+      ? "Waiting for iPhone"
       : isCreating
         ? "Preparing pairing…"
         : hasError
@@ -974,7 +974,7 @@ function PairingSlot({
           : "loading";
 
   return (
-    <div className="relative mt-3 flex min-h-[220px] items-center justify-center overflow-hidden">
+    <div className="relative mt-3 flex h-[248px] items-center justify-center overflow-hidden">
       {slotKey === "qr" && qrDataUrl ? (
         <SlotFader key="qr">
           <QrPanel
@@ -1011,7 +1011,7 @@ function PairingSlot({
 
 function SlotFader({ children }: { children: React.ReactNode }) {
   return (
-    <div className="volt-fade-in flex w-full items-center justify-center">
+    <div className="volt-fade-in absolute inset-0 flex w-full items-center justify-center">
       {children}
     </div>
   );
