@@ -7,12 +7,14 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
   useWindowDimensions,
 } from "react-native";
 import type { ViewProps } from "react-native";
+import type { GestureResponderEvent } from "react-native";
 import { initialWindowMetrics } from "react-native-safe-area-context";
 import { SCANNER_SIGNAL_URL } from "@volt/scanner-protocol";
 import { createBarcodeCandidateGuard } from "../../lib/barcode-candidate-guard";
@@ -49,11 +51,53 @@ import {
 } from "../../lib/volt-clip-clipboard";
 import {
   captureAndRecognizeVoltClipText,
+  focusVoltClipTextCamera,
   hideVoltClipTextPreview,
   hasVoltClipTextRecognizer,
+  playVoltClipSelectionHaptic,
+  setVoltClipTextCameraTorch,
+  setVoltClipTextCameraZoom,
   showVoltClipTextPreview,
   VoltClipTextCameraView,
 } from "../../lib/volt-clip-text-recognizer";
+
+const OCR_ZOOM_MIN = 0.5;
+const OCR_ZOOM_DEFAULT = 1;
+const OCR_ZOOM_MAX = 4;
+const OCR_ZOOM_WHEEL_DRAG_PER_STOP = 38;
+const OCR_ZOOM_WHEEL_STOPS = [0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4] as const;
+const OCR_ZOOM_WHEEL_TICK_SPACING = 52;
+
+function getOcrZoomStops(min = OCR_ZOOM_MIN, max = OCR_ZOOM_MAX) {
+  return OCR_ZOOM_WHEEL_STOPS.filter((stop) => stop >= min - 0.01 && stop <= max + 0.01);
+}
+
+function nearestOcrZoomStopIndex(factor: number, min = OCR_ZOOM_MIN, max = OCR_ZOOM_MAX) {
+  const stops = getOcrZoomStops(min, max);
+  let bestIndex = 0;
+  let bestDistance = Number.POSITIVE_INFINITY;
+  stops.forEach((stop, index) => {
+    const distance = Math.abs(factor - stop);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestIndex = index;
+    }
+  });
+  return bestIndex;
+}
+
+function snapOcrZoomToStop(factor: number, min = OCR_ZOOM_MIN, max = OCR_ZOOM_MAX) {
+  const stops = getOcrZoomStops(min, max);
+  return stops[nearestOcrZoomStopIndex(factor, min, max)] ?? Math.max(min, OCR_ZOOM_DEFAULT);
+}
+
+function formatOcrZoomLabel(factor: number) {
+  return `${factor.toFixed(factor % 1 === 0 ? 0 : 1)}x`;
+}
+
+function ocrZoomToWheelOffset(factor: number, min = OCR_ZOOM_MIN, max = OCR_ZOOM_MAX) {
+  return nearestOcrZoomStopIndex(factor, min, max) * OCR_ZOOM_WHEEL_TICK_SPACING;
+}
 
 const modeTitles = {
   ocr: "OCR Capture",
@@ -99,9 +143,27 @@ export default function ClipInvocationScreen() {
   const lastOcrClipboardRef = useRef<string | null>(null);
   const lastOcrClipboardChangeCountRef = useRef<number | null>(null);
   const ocrDrawerProgress = useRef(new Animated.Value(0)).current;
+  const ocrWheelEngagement = useRef(new Animated.Value(1)).current;
   const ocrDrawerProgressRef = useRef(0);
+  const ocrWheelEngagementRef = useRef(1);
   const ocrDrawerDragStartRef = useRef(0);
+  const ocrDrawerGestureAxisRef = useRef<"horizontal" | "vertical" | null>(null);
+  const ocrWheelDragStartStopIndexRef = useRef(0);
+  const ocrWheelDragStartEngagementRef = useRef(0);
+  const ocrWheelDragDidEngageRef = useRef(false);
+  const ocrLastHapticStopIndexRef = useRef(0);
+  const ocrZoomNativeSyncRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const ocrZoomMinRef = useRef(OCR_ZOOM_DEFAULT);
+  const ocrZoomMaxRef = useRef(OCR_ZOOM_MAX);
+  const ocrZoomFactorRef = useRef(OCR_ZOOM_DEFAULT);
   const isOcrMode = mode === "ocr";
+  const [ocrAutoSendCopiedText, setOcrAutoSendCopiedText] = useState(true);
+  const [ocrGlassTone, setOcrGlassTone] = useState<"adaptive" | "bright" | "dark">("adaptive");
+  const [ocrTorchEnabled, setOcrTorchEnabled] = useState(false);
+  const [ocrZoomFactor, setOcrZoomFactor] = useState(OCR_ZOOM_DEFAULT);
+  const [ocrZoomMin, setOcrZoomMin] = useState(OCR_ZOOM_DEFAULT);
+  const [ocrZoomMax, setOcrZoomMax] = useState(OCR_ZOOM_MAX);
+  const [ocrFocusPoint, setOcrFocusPoint] = useState<{ x: number; y: number } | null>(null);
   const resetOcrCapture = useCallback(() => {
     setOcrImageUri(null);
     setOcrText("");
@@ -147,35 +209,154 @@ export default function ClipInvocationScreen() {
     },
     [ocrDrawerProgress]
   );
+  const animateOcrWheelEngagementTo = useCallback(
+    (value: number) => {
+      Animated.spring(ocrWheelEngagement, {
+        toValue: Math.max(0, Math.min(1, value)),
+        damping: 22,
+        mass: 0.82,
+        stiffness: 240,
+        overshootClamping: true,
+        useNativeDriver: false,
+      }).start();
+    },
+    [ocrWheelEngagement]
+  );
+  const syncOcrZoomToNative = useCallback((factor: number) => {
+    if (ocrZoomNativeSyncRef.current) clearTimeout(ocrZoomNativeSyncRef.current);
+    ocrZoomNativeSyncRef.current = setTimeout(() => {
+      ocrZoomNativeSyncRef.current = null;
+      void setVoltClipTextCameraZoom(factor)
+        .then((result) => {
+          setOcrZoomFactor(result.factor);
+          setOcrZoomMin(result.min ?? OCR_ZOOM_DEFAULT);
+          setOcrZoomMax(result.max);
+          ocrZoomMinRef.current = result.min ?? OCR_ZOOM_DEFAULT;
+          ocrZoomMaxRef.current = result.max;
+        })
+        .catch((zoomError) => {
+          setOcrZoomFactor(OCR_ZOOM_DEFAULT);
+          setError(zoomError instanceof Error ? zoomError.message : "Camera zoom is not available.");
+        });
+    }, 36);
+  }, []);
+  const applyOcrZoomStop = useCallback(
+    (factor: number, stopIndex: number, { haptic = true }: { haptic?: boolean } = {}) => {
+      if (haptic && stopIndex !== ocrLastHapticStopIndexRef.current) {
+        ocrLastHapticStopIndexRef.current = stopIndex;
+        playVoltClipSelectionHaptic();
+      }
+      if (Math.abs(factor - ocrZoomFactorRef.current) < 0.001) return;
+      setOcrZoomFactor(factor);
+      ocrZoomFactorRef.current = factor;
+      syncOcrZoomToNative(factor);
+    },
+    [syncOcrZoomToNative]
+  );
+  const commitOcrZoomSnap = useCallback(
+    (factor: number) => {
+      const max = ocrZoomMaxRef.current;
+      const min = ocrZoomMinRef.current;
+      const snapped = snapOcrZoomToStop(factor, min, max);
+      const stopIndex = nearestOcrZoomStopIndex(snapped, min, max);
+      applyOcrZoomStop(snapped, stopIndex, { haptic: stopIndex !== ocrLastHapticStopIndexRef.current });
+      void setVoltClipTextCameraZoom(snapped)
+        .then((result) => {
+          setOcrZoomFactor(result.factor);
+          setOcrZoomMin(result.min ?? OCR_ZOOM_DEFAULT);
+          setOcrZoomMax(result.max);
+          ocrZoomMinRef.current = result.min ?? OCR_ZOOM_DEFAULT;
+          ocrZoomMaxRef.current = result.max;
+          ocrZoomFactorRef.current = result.factor;
+          ocrLastHapticStopIndexRef.current = nearestOcrZoomStopIndex(result.factor, result.min ?? OCR_ZOOM_DEFAULT, result.max);
+        })
+        .catch((zoomError) => {
+          setOcrZoomFactor(OCR_ZOOM_DEFAULT);
+          ocrZoomFactorRef.current = OCR_ZOOM_DEFAULT;
+          setError(zoomError instanceof Error ? zoomError.message : "Camera zoom is not available.");
+        });
+    },
+    [applyOcrZoomStop]
+  );
   const ocrDrawerPanResponder = useMemo(
     () =>
       PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dy) > 6,
+        onStartShouldSetPanResponder: () => false,
+        onMoveShouldSetPanResponder: (_, gestureState) =>
+          Math.abs(gestureState.dy) > 6 || Math.abs(gestureState.dx) > 6,
+        onMoveShouldSetPanResponderCapture: (_, gestureState) =>
+          Math.abs(gestureState.dy) > 6 || Math.abs(gestureState.dx) > 6,
         onPanResponderTerminationRequest: () => false,
         onPanResponderGrant: () => {
           ocrDrawerDragStartRef.current = ocrDrawerProgressRef.current;
+          ocrWheelDragStartStopIndexRef.current = nearestOcrZoomStopIndex(
+            ocrZoomFactorRef.current,
+            ocrZoomMinRef.current,
+            ocrZoomMaxRef.current
+          );
+          ocrWheelDragStartEngagementRef.current = ocrWheelEngagementRef.current;
+          ocrWheelDragDidEngageRef.current = false;
+          ocrDrawerGestureAxisRef.current = null;
         },
         onPanResponderMove: (_, gestureState) => {
+          if (!ocrDrawerGestureAxisRef.current) {
+            const absDx = Math.abs(gestureState.dx);
+            const absDy = Math.abs(gestureState.dy);
+            if (absDx > 8 || absDy > 8) {
+              if (ocrDrawerProgressRef.current < 0.12 && absDx > absDy * 0.92) {
+                ocrDrawerGestureAxisRef.current = "horizontal";
+                ocrWheelDragDidEngageRef.current = true;
+                playVoltClipSelectionHaptic();
+              } else {
+                ocrDrawerGestureAxisRef.current = "vertical";
+              }
+            }
+          }
+
+          if (ocrDrawerGestureAxisRef.current === "horizontal" && ocrDrawerProgressRef.current < 0.18) {
+            const engagement = Math.min(1, Math.max(ocrWheelDragStartEngagementRef.current, Math.abs(gestureState.dx) / 54));
+            ocrWheelEngagement.setValue(engagement);
+            const stops = getOcrZoomStops(ocrZoomMinRef.current, ocrZoomMaxRef.current);
+            const deltaStops = Math.round(-gestureState.dx / OCR_ZOOM_WHEEL_DRAG_PER_STOP);
+            const nextIndex = Math.max(0, Math.min(stops.length - 1, ocrWheelDragStartStopIndexRef.current + deltaStops));
+            applyOcrZoomStop(stops[nextIndex], nextIndex);
+            return;
+          }
+
           const dragRange = Math.max(ocrDrawerExpandedHeight - ocrDrawerCollapsedHeight, 220);
           const nextValue = ocrDrawerDragStartRef.current - gestureState.dy / dragRange;
           ocrDrawerProgress.setValue(Math.max(0, Math.min(1, nextValue)));
         },
         onPanResponderRelease: (_, gestureState) => {
-          const isTap = Math.abs(gestureState.dy) < 6 && Math.abs(gestureState.dx) < 6;
-          if (isTap) {
-            animateOcrDrawerTo(ocrDrawerProgressRef.current > 0.5 ? 0 : 1);
+          if (ocrDrawerGestureAxisRef.current === "horizontal" && ocrDrawerProgressRef.current < 0.18) {
+            commitOcrZoomSnap(ocrZoomFactorRef.current);
+            animateOcrWheelEngagementTo(1);
+            ocrDrawerGestureAxisRef.current = null;
             return;
           }
 
+          ocrDrawerGestureAxisRef.current = null;
           const shouldExpand = gestureState.vy < -0.35 || (gestureState.vy < 0.35 && ocrDrawerProgressRef.current > 0.42);
           animateOcrDrawerTo(shouldExpand ? 1 : 0);
+          if (shouldExpand) {
+            animateOcrWheelEngagementTo(1);
+          }
         },
         onPanResponderTerminate: () => {
+          ocrDrawerGestureAxisRef.current = null;
           animateOcrDrawerTo(ocrDrawerProgressRef.current > 0.5 ? 1 : 0);
         },
       }),
-    [animateOcrDrawerTo, ocrDrawerCollapsedHeight, ocrDrawerExpandedHeight, ocrDrawerProgress]
+    [
+      animateOcrDrawerTo,
+      animateOcrWheelEngagementTo,
+      applyOcrZoomStop,
+      commitOcrZoomSnap,
+      ocrDrawerCollapsedHeight,
+      ocrDrawerExpandedHeight,
+      ocrDrawerProgress,
+      ocrWheelEngagement,
+    ]
   );
   const statusText = useMemo(() => {
     if (!session) return "Missing browser session";
@@ -189,7 +370,7 @@ export default function ClipInvocationScreen() {
     if (mode === "ocr" && ocrState === "capturing") return "Reading text";
     if (mode === "ocr" && ocrPreviewState === "starting") return "Starting camera";
     if (mode === "ocr" && ocrPreviewState === "failed") return "Camera preview unavailable";
-    if (mode === "ocr" && ocrImageUri) return sendState === "sent" ? "Copied text sent" : "Select text and copy";
+    if (mode === "ocr" && ocrImageUri) return "Select text and copy";
     if (mode === "ocr" && ocrText.trim()) return "Text ready";
     if (mode === "ocr" && ocrState === "unavailable") return "OCR unavailable";
     if (mode === "ocr" && ocrState === "error") return "OCR failed";
@@ -259,6 +440,20 @@ export default function ClipInvocationScreen() {
     }
 
     setOcrState("ready");
+    void setVoltClipTextCameraZoom(OCR_ZOOM_DEFAULT)
+      .then((result) => {
+        setOcrZoomFactor(result.factor);
+        setOcrZoomMin(result.min ?? OCR_ZOOM_DEFAULT);
+        setOcrZoomMax(result.max);
+        ocrZoomFactorRef.current = result.factor;
+        ocrZoomMinRef.current = result.min ?? OCR_ZOOM_DEFAULT;
+        ocrZoomMaxRef.current = result.max;
+        ocrLastHapticStopIndexRef.current = nearestOcrZoomStopIndex(result.factor, result.min ?? OCR_ZOOM_DEFAULT, result.max);
+      })
+      .catch(() => {
+        setOcrZoomFactor(OCR_ZOOM_DEFAULT);
+        ocrZoomFactorRef.current = OCR_ZOOM_DEFAULT;
+      });
   }, [mode]);
 
   useEffect(() => {
@@ -447,7 +642,7 @@ export default function ClipInvocationScreen() {
   );
 
   useEffect(() => {
-    if (mode !== "ocr" || !ocrImageUri || !hasVoltClipClipboard || sendState === "sent") return;
+    if (mode !== "ocr" || !ocrImageUri || !hasVoltClipClipboard || sendState === "sent" || !ocrAutoSendCopiedText) return;
 
     let cancelled = false;
     let checkingClipboard = false;
@@ -482,7 +677,7 @@ export default function ClipInvocationScreen() {
       cancelled = true;
       clearInterval(pollTimer);
     };
-  }, [mode, ocrImageUri, sendOcrClipboardText, sendState]);
+  }, [mode, ocrAutoSendCopiedText, ocrImageUri, sendOcrClipboardText, sendState]);
 
   useEffect(() => {
     const subscription = ocrDrawerProgress.addListener(({ value }) => {
@@ -492,6 +687,30 @@ export default function ClipInvocationScreen() {
       ocrDrawerProgress.removeListener(subscription);
     };
   }, [ocrDrawerProgress]);
+
+  useEffect(() => {
+    const subscription = ocrWheelEngagement.addListener(({ value }) => {
+      ocrWheelEngagementRef.current = value;
+    });
+    return () => {
+      ocrWheelEngagement.removeListener(subscription);
+    };
+  }, [ocrWheelEngagement]);
+
+  useEffect(() => {
+    ocrZoomFactorRef.current = ocrZoomFactor;
+  }, [ocrZoomFactor]);
+
+  useEffect(() => {
+    ocrZoomMaxRef.current = ocrZoomMax;
+  }, [ocrZoomMax]);
+
+  useEffect(
+    () => () => {
+      if (ocrZoomNativeSyncRef.current) clearTimeout(ocrZoomNativeSyncRef.current);
+    },
+    []
+  );
 
   async function sendResult() {
     if (!mode || !session) return;
@@ -617,11 +836,17 @@ export default function ClipInvocationScreen() {
     }),
   };
   const ocrExpandedControlsAnimatedStyle = {
+    maxHeight: ocrDrawerProgress.interpolate({
+      inputRange: [0, 0.28, 1],
+      outputRange: [0, 0, 720],
+      extrapolate: "clamp",
+    }),
     opacity: ocrDrawerProgress.interpolate({
       inputRange: [0, 0.35, 1],
       outputRange: [0, 0, 1],
       extrapolate: "clamp",
     }),
+    overflow: "hidden" as const,
     transform: [
       {
         translateY: ocrDrawerProgress.interpolate({
@@ -631,6 +856,48 @@ export default function ClipInvocationScreen() {
       },
     ],
   };
+  const ocrCollapsedControlsAnimatedStyle = {
+    opacity: ocrDrawerProgress.interpolate({
+      inputRange: [0, 0.22, 0.42],
+      outputRange: [1, 0.42, 0],
+      extrapolate: "clamp",
+    }),
+    transform: [
+      {
+        translateY: ocrDrawerProgress.interpolate({
+          inputRange: [0, 0.35],
+          outputRange: [0, 10],
+          extrapolate: "clamp",
+        }),
+      },
+    ],
+  };
+  const ocrZoomWheelAnimatedStyle = {
+    opacity: ocrWheelEngagement.interpolate({
+      inputRange: [0, 0.18, 1],
+      outputRange: [0, 0.35, 1],
+      extrapolate: "clamp",
+    }),
+    transform: [
+      {
+        translateY: ocrWheelEngagement.interpolate({
+          inputRange: [0, 1],
+          outputRange: [12, 0],
+          extrapolate: "clamp",
+        }),
+      },
+      {
+        scale: ocrWheelEngagement.interpolate({
+          inputRange: [0, 1],
+          outputRange: [0.94, 1],
+          extrapolate: "clamp",
+        }),
+      },
+    ],
+  };
+  const ocrZoomWheelTrackOffset = ocrZoomToWheelOffset(ocrZoomFactor, ocrZoomMin, ocrZoomMax);
+  const ocrZoomWheelViewportWidth = Math.max(windowDimensions.width - 36, 240);
+  const ocrZoomWheelTranslateX = ocrZoomWheelViewportWidth / 2 - ocrZoomWheelTrackOffset;
   const ocrDrawerHandleAnimatedStyle = {
     width: ocrDrawerProgress.interpolate({
       inputRange: [0, 0.5, 1],
@@ -659,11 +926,87 @@ export default function ClipInvocationScreen() {
       },
     ],
   };
+  const ocrBottomSheetToneStyle =
+    ocrGlassTone === "bright"
+      ? styles.ocrBottomSheetBright
+      : ocrGlassTone === "dark"
+        ? styles.ocrBottomSheetDark
+        : styles.ocrBottomSheetAdaptive;
+  const setOcrTorch = useCallback(async (enabled: boolean) => {
+    setOcrTorchEnabled(enabled);
+    try {
+      const result = await setVoltClipTextCameraTorch(enabled);
+      setOcrTorchEnabled(result.enabled);
+    } catch (torchError) {
+      setOcrTorchEnabled(false);
+      setError(torchError instanceof Error ? torchError.message : "Torch is not available.");
+    }
+  }, []);
+  const setOcrZoom = useCallback(async (factor: number) => {
+    const min = ocrZoomMinRef.current;
+    const max = ocrZoomMaxRef.current;
+    const snapped = snapOcrZoomToStop(factor, min, max);
+    const stopIndex = nearestOcrZoomStopIndex(snapped, min, max);
+    setOcrZoomFactor(snapped);
+    ocrZoomFactorRef.current = snapped;
+    ocrLastHapticStopIndexRef.current = stopIndex;
+    try {
+      const result = await setVoltClipTextCameraZoom(snapped);
+      setOcrZoomFactor(result.factor);
+      setOcrZoomMin(result.min ?? OCR_ZOOM_DEFAULT);
+      setOcrZoomMax(result.max);
+      ocrZoomMinRef.current = result.min ?? OCR_ZOOM_DEFAULT;
+      ocrZoomMaxRef.current = result.max;
+      ocrZoomFactorRef.current = result.factor;
+      ocrLastHapticStopIndexRef.current = nearestOcrZoomStopIndex(result.factor, result.min ?? OCR_ZOOM_DEFAULT, result.max);
+    } catch (zoomError) {
+      setOcrZoomFactor(OCR_ZOOM_DEFAULT);
+      ocrZoomFactorRef.current = OCR_ZOOM_DEFAULT;
+      ocrLastHapticStopIndexRef.current = nearestOcrZoomStopIndex(OCR_ZOOM_DEFAULT, min, max);
+      setError(zoomError instanceof Error ? zoomError.message : "Camera zoom is not available.");
+    }
+  }, []);
+  const focusOcrCamera = useCallback(
+    (event: GestureResponderEvent) => {
+      if (ocrImageUri || mode !== "ocr") return;
+
+      const { locationX, locationY, pageX, pageY } = event.nativeEvent;
+      const x = Math.max(0, Math.min(pageX / windowDimensions.width, 1));
+      const y = Math.max(0, Math.min(pageY / windowDimensions.height, 1));
+      setOcrFocusPoint({ x: locationX, y: locationY });
+      setError(null);
+      void focusVoltClipTextCamera(x, y).catch((focusError) => {
+        setError(focusError instanceof Error ? focusError.message : "Tap to focus is unavailable.");
+      });
+      setTimeout(() => setOcrFocusPoint(null), 900);
+    },
+    [mode, ocrImageUri, windowDimensions.height, windowDimensions.width]
+  );
 
   if (isOcrMode) {
     return (
       <View style={styles.ocrRoot}>
         <View style={styles.ocrCameraSurface}>
+            {!ocrImageUri && hasVoltClipTextRecognizer ? (
+              <Pressable
+                accessibilityLabel="Tap camera preview to focus"
+                accessibilityRole="button"
+                onPress={focusOcrCamera}
+                style={styles.ocrCameraTapLayer}
+              />
+            ) : null}
+            {ocrFocusPoint ? (
+              <View
+                pointerEvents="none"
+                style={[
+                  styles.ocrFocusReticle,
+                  {
+                    left: ocrFocusPoint.x - 34,
+                    top: ocrFocusPoint.y - 34,
+                  },
+                ]}
+              />
+            ) : null}
             {ocrImageUri ? (
               <View style={styles.ocrCapturedSheet}>
                 <View style={styles.ocrCapturedViewport}>
@@ -730,48 +1073,129 @@ export default function ClipInvocationScreen() {
                 : "Tap shutter to capture text"}
           </Text>
         </Animated.View>
-        <Animated.View {...ocrDrawerPanResponder.panHandlers} style={[styles.ocrBottomSheet, ocrBottomSheetAnimatedStyle]}>
-          <View style={styles.ocrDrawerHandleHitArea}>
+        <Animated.View
+          {...ocrDrawerPanResponder.panHandlers}
+          style={[styles.ocrBottomSheet, ocrBottomSheetToneStyle, ocrBottomSheetAnimatedStyle]}
+        >
+          <Pressable
+            accessibilityLabel="Toggle controls drawer"
+            accessibilityRole="button"
+            onPress={() => animateOcrDrawerTo(ocrDrawerProgressRef.current > 0.5 ? 0 : 1)}
+            style={styles.ocrDrawerHandleHitArea}
+          >
             <Animated.View pointerEvents="none" style={[styles.ocrDrawerHandle, ocrDrawerHandleAnimatedStyle]} />
-          </View>
+          </Pressable>
           <View style={styles.ocrBottomControls}>
-            <View style={styles.ocrQuickControls}>
-              <View style={styles.ocrQuickControl}>
-                <Text style={styles.ocrQuickControlTitle}>Live Text</Text>
-                <Text style={styles.ocrQuickControlValue}>{ocrImageUri ? "Ready" : "Standby"}</Text>
-              </View>
-              <View style={styles.ocrQuickControl}>
-                <Text style={styles.ocrQuickControlTitle}>Browser</Text>
-                <Text style={styles.ocrQuickControlValue}>{session ? "Linked" : "Missing"}</Text>
-              </View>
-            </View>
+            <Animated.View style={[styles.ocrCollapsedControls, ocrCollapsedControlsAnimatedStyle]}>
+              <Animated.View style={[styles.ocrZoomWheel, ocrZoomWheelAnimatedStyle]}>
+                <Text style={styles.ocrZoomWheelLabel}>Zoom</Text>
+                <View style={[styles.ocrZoomWheelViewport, { width: ocrZoomWheelViewportWidth }]}>
+                  <View style={[styles.ocrZoomWheelTrack, { transform: [{ translateX: ocrZoomWheelTranslateX }] }]}>
+                    {getOcrZoomStops(ocrZoomMin, ocrZoomMax).map((stop) => (
+                      <Pressable
+                        accessibilityLabel={`Set zoom to ${formatOcrZoomLabel(stop)}`}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: Math.abs(ocrZoomFactor - stop) < 0.01 }}
+                        key={stop}
+                        onPress={() => commitOcrZoomSnap(stop)}
+                        style={[
+                          styles.ocrZoomWheelTick,
+                          Math.abs(ocrZoomFactor - stop) < 0.01 && styles.ocrZoomWheelTickActive,
+                        ]}
+                      >
+                        <View
+                          style={[
+                            styles.ocrZoomWheelTickMark,
+                            Math.abs(ocrZoomFactor - stop) < 0.01 && styles.ocrZoomWheelTickMarkActive,
+                          ]}
+                        />
+                        <Text
+                          style={[
+                            styles.ocrZoomWheelTickText,
+                            Math.abs(ocrZoomFactor - stop) < 0.01 && styles.ocrZoomWheelTickTextActive,
+                          ]}
+                        >
+                          {formatOcrZoomLabel(stop)}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+                <Text style={styles.ocrZoomWheelValue}>{formatOcrZoomLabel(ocrZoomFactor)}</Text>
+              </Animated.View>
+            </Animated.View>
             <Animated.View style={[styles.ocrExpandedControls, ocrExpandedControlsAnimatedStyle]}>
-              <Text style={styles.ocrExpandedTitle}>Capture Settings</Text>
-              <View style={styles.ocrSettingRow}>
+              <View style={styles.ocrCameraControls}>
+                <Pressable
+                  accessibilityLabel={ocrTorchEnabled ? "Turn torch off" : "Turn torch on"}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: ocrTorchEnabled }}
+                  onPress={() => void setOcrTorch(!ocrTorchEnabled)}
+                  style={[styles.ocrCameraControlButton, ocrTorchEnabled && styles.ocrCameraControlButtonActive]}
+                >
+                  <Text style={[styles.ocrCameraControlButtonText, ocrTorchEnabled && styles.ocrCameraControlButtonTextActive]}>
+                    Torch
+                  </Text>
+                  <Text style={styles.ocrCameraControlButtonMeta}>{ocrTorchEnabled ? "On" : "Off"}</Text>
+                </Pressable>
+                <View style={styles.ocrCameraControlReadout}>
+                  <Text style={styles.ocrCameraControlReadoutLabel}>Zoom</Text>
+                  <Text style={styles.ocrCameraControlReadoutValue}>{formatOcrZoomLabel(ocrZoomFactor)}</Text>
+                </View>
+                <Pressable
+                  accessibilityLabel="Reset zoom to 1x"
+                  accessibilityRole="button"
+                  disabled={Math.abs(ocrZoomFactor - OCR_ZOOM_DEFAULT) < 0.04}
+                  onPress={() => {
+                    void setOcrZoom(OCR_ZOOM_DEFAULT);
+                    animateOcrWheelEngagementTo(1);
+                  }}
+                  style={[
+                    styles.ocrCameraControlButton,
+                    Math.abs(ocrZoomFactor - OCR_ZOOM_DEFAULT) < 0.01 && styles.ocrCameraControlButtonDisabled,
+                  ]}
+                >
+                  <Text style={styles.ocrCameraControlButtonText}>Reset</Text>
+                  <Text style={styles.ocrCameraControlButtonMeta}>1x</Text>
+                </Pressable>
+              </View>
+              <Pressable
+                accessibilityRole="switch"
+                accessibilityState={{ checked: ocrAutoSendCopiedText }}
+                onPress={() => setOcrAutoSendCopiedText((value) => !value)}
+                style={styles.ocrSettingRow}
+              >
                 <View>
                   <Text style={styles.ocrSettingTitle}>Auto-send copied text</Text>
                   <Text style={styles.ocrSettingText}>Copies from Live Text relay to Chrome.</Text>
                 </View>
-                <View style={styles.ocrSettingPill}>
-                  <Text style={styles.ocrSettingPillText}>On</Text>
-                </View>
-              </View>
-              <View style={styles.ocrSettingRow}>
+                <Switch
+                  ios_backgroundColor="rgba(255, 255, 255, 0.18)"
+                  onValueChange={setOcrAutoSendCopiedText}
+                  thumbColor="#ffffff"
+                  trackColor={{ false: "rgba(255, 255, 255, 0.22)", true: "rgba(255, 255, 255, 0.5)" }}
+                  value={ocrAutoSendCopiedText}
+                />
+              </Pressable>
+              <View style={styles.ocrSettingBlock}>
                 <View>
-                  <Text style={styles.ocrSettingTitle}>Text extraction area</Text>
-                  <Text style={styles.ocrSettingText}>Whole captured frame is selectable.</Text>
+                  <Text style={styles.ocrSettingTitle}>Glass contrast</Text>
+                  <Text style={styles.ocrSettingText}>Adjusts legibility over light or dark camera scenes.</Text>
                 </View>
-                <View style={styles.ocrSettingPill}>
-                  <Text style={styles.ocrSettingPillText}>Full</Text>
-                </View>
-              </View>
-              <View style={styles.ocrSettingRow}>
-                <View>
-                  <Text style={styles.ocrSettingTitle}>Camera background</Text>
-                  <Text style={styles.ocrSettingText}>Live preview resumes on retake.</Text>
-                </View>
-                <View style={styles.ocrSettingPill}>
-                  <Text style={styles.ocrSettingPillText}>Live</Text>
+                <View style={styles.ocrGlassOptions}>
+                  {(["adaptive", "dark", "bright"] as const).map((tone) => (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: ocrGlassTone === tone }}
+                      key={tone}
+                      onPress={() => setOcrGlassTone(tone)}
+                      style={[styles.ocrGlassOption, ocrGlassTone === tone && styles.ocrGlassOptionActive]}
+                    >
+                      <Text style={[styles.ocrGlassOptionText, ocrGlassTone === tone && styles.ocrGlassOptionTextActive]}>
+                        {tone === "adaptive" ? "Auto" : tone === "dark" ? "Dark" : "Light"}
+                      </Text>
+                    </Pressable>
+                  ))}
                 </View>
               </View>
             </Animated.View>
@@ -790,48 +1214,16 @@ export default function ClipInvocationScreen() {
       </View>
 
       <View style={styles.captureSurface}>
-        <View style={[styles.focusFrame, ocrImageUri && styles.focusFrameCaptured]}>
-          {mode === "ocr" && ocrImageUri ? (
-            <ScrollView
-              bouncesZoom
-              maximumZoomScale={4}
-              minimumZoomScale={1}
-              pinchGestureEnabled
-              showsHorizontalScrollIndicator={false}
-              showsVerticalScrollIndicator={false}
-              style={styles.capturedImageScroll}
-            >
-              <LiveTextImageView imageUri={ocrImageUri} style={styles.capturedImage} />
-            </ScrollView>
-          ) : mode === "ocr" && TextCameraView ? (
-            <TextCameraView style={styles.cameraPreview} />
-          ) : null}
-        </View>
-        {mode === "ocr" && ocrText && !ocrImageUri ? (
-          <TextInput
-            accessibilityLabel="Detected text"
-            editable={sendState !== "sending" && sendState !== "sent"}
-            multiline
-            onChangeText={setOcrText}
-            returnKeyType="default"
-            scrollEnabled
-            style={styles.ocrTextInput}
-            textAlignVertical="top"
-            value={ocrText}
-          />
-        ) : (
-          <Text style={styles.captureLabel}>
-            {mode === "barcode"
-              ? barcodeCandidate
-                ? barcodeCandidate.value
-                : "Center a barcode in front of the camera"
-              : mode === "ocr"
-                ? "Point the camera at text"
-              : mode === "dictation"
-                ? dictationTranscript || "Tap the mic and speak"
+        <View style={styles.focusFrame} />
+        <Text style={styles.captureLabel}>
+          {mode === "barcode"
+            ? barcodeCandidate
+              ? barcodeCandidate.value
+              : "Center a barcode in front of the camera"
+            : mode === "dictation"
+              ? dictationTranscript || "Tap the mic and speak"
               : "Scan a fresh QR code from Chrome"}
-          </Text>
-        )}
+        </Text>
         {mode === "barcode" && barcodeCandidate ? (
           <Text style={styles.captureMeta}>{barcodeCandidate.format}</Text>
         ) : null}
@@ -852,20 +1244,6 @@ export default function ClipInvocationScreen() {
             </Text>
           </Pressable>
         ) : null}
-        {mode === "ocr" ? (
-          <Pressable
-            accessibilityRole="button"
-            disabled={ocrState === "capturing" || sendState === "sent" || sendState === "sending"}
-            onPress={captureText}
-            style={[
-              styles.captureButton,
-              (ocrState === "capturing" || sendState === "sent" || sendState === "sending") &&
-                styles.primaryButtonDisabled,
-            ]}
-          >
-            <Text style={styles.captureButtonText}>{ocrState === "capturing" ? "Capturing" : "Capture Text"}</Text>
-          </Pressable>
-        ) : null}
       </View>
 
       <View style={styles.footer}>
@@ -882,8 +1260,6 @@ export default function ClipInvocationScreen() {
                 ? "Sending"
                 : sendState === "error"
                   ? "Try Again"
-                : mode === "ocr"
-                  ? "Send Text"
                 : mode === "barcode"
                   ? "Send Barcode"
                   : mode === "dictation"
@@ -909,19 +1285,45 @@ const styles = StyleSheet.create({
     minHeight: 280,
     backgroundColor: "transparent",
   },
+  ocrCameraTapLayer: {
+    ...absoluteFillObject,
+    zIndex: 0,
+  },
+  ocrFocusReticle: {
+    position: "absolute",
+    width: 68,
+    height: 68,
+    borderRadius: 20,
+    ...continuousCorners,
+    borderWidth: 2,
+    borderColor: "rgba(255, 255, 255, 0.86)",
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
+    zIndex: 8,
+  },
   ocrBottomSheet: {
     position: "absolute",
+    zIndex: 20,
     overflow: "hidden",
     paddingHorizontal: 18,
     paddingBottom: 16,
     ...continuousCorners,
-    backgroundColor: "rgba(250, 250, 249, 0.18)",
     borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.36)",
-    shadowColor: "#ffffff",
-    shadowOffset: { width: 0, height: 1 },
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: -10 },
     shadowOpacity: 0.2,
-    shadowRadius: 28,
+    shadowRadius: 30,
+  },
+  ocrBottomSheetAdaptive: {
+    backgroundColor: "rgba(22, 21, 20, 0.64)",
+    borderColor: "rgba(255, 255, 255, 0.24)",
+  },
+  ocrBottomSheetBright: {
+    backgroundColor: "rgba(246, 245, 242, 0.42)",
+    borderColor: "rgba(255, 255, 255, 0.46)",
+  },
+  ocrBottomSheetDark: {
+    backgroundColor: "rgba(8, 8, 8, 0.72)",
+    borderColor: "rgba(255, 255, 255, 0.2)",
   },
   ocrFloatingShutter: {
     alignItems: "center",
@@ -1087,59 +1489,222 @@ const styles = StyleSheet.create({
     paddingBottom: 0,
     width: "100%",
   },
-  ocrQuickControls: {
-    flexDirection: "row",
-    gap: 10,
+  ocrCollapsedControls: {
+    minHeight: 84,
+    position: "relative",
     width: "100%",
   },
-  ocrQuickControl: {
-    flex: 1,
-    minHeight: 58,
-    borderRadius: 24,
-    ...continuousCorners,
-    justifyContent: "center",
-    paddingHorizontal: 14,
-    backgroundColor: "rgba(250, 250, 249, 0.2)",
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.28)",
+  ocrSheetSummary: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 12,
+    minHeight: 66,
+    paddingHorizontal: 4,
+    width: "100%",
   },
-  ocrQuickControlTitle: {
+  ocrZoomWheel: {
+    ...absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 8,
+    top: 0,
+  },
+  ocrZoomWheelLabel: {
+    color: "rgba(245, 245, 244, 0.62)",
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 0.6,
+    lineHeight: 14,
+    marginBottom: 8,
+    textTransform: "uppercase",
+  },
+  ocrZoomWheelViewport: {
+    alignItems: "center",
+    height: 54,
+    justifyContent: "center",
+    overflow: "hidden",
+    width: "100%",
+  },
+  ocrZoomWheelTrack: {
+    alignItems: "flex-end",
+    flexDirection: "row",
+    height: 54,
+  },
+  ocrZoomWheelTick: {
+    alignItems: "center",
+    borderColor: "transparent",
+    borderRadius: 999,
+    borderWidth: 2,
+    justifyContent: "flex-end",
+    minHeight: 48,
+    paddingBottom: 2,
+    width: OCR_ZOOM_WHEEL_TICK_SPACING,
+    ...continuousCorners,
+  },
+  ocrZoomWheelTickActive: {
+    borderColor: "rgba(255, 255, 255, 0.88)",
+  },
+  ocrZoomWheelTickMark: {
+    backgroundColor: "rgba(255, 255, 255, 0.28)",
+    borderRadius: 999,
+    height: 14,
+    marginBottom: 6,
+    width: 2,
+  },
+  ocrZoomWheelTickMarkActive: {
+    backgroundColor: "rgba(255, 255, 255, 0.92)",
+    height: 22,
+  },
+  ocrZoomWheelTickText: {
+    color: "rgba(245, 245, 244, 0.52)",
+    fontSize: 11,
+    fontWeight: "800",
+    lineHeight: 14,
+  },
+  ocrZoomWheelTickTextActive: {
+    color: "#ffffff",
+    fontSize: 12,
+  },
+  ocrZoomWheelValue: {
+    color: "#ffffff",
+    fontSize: 22,
+    fontWeight: "900",
+    lineHeight: 26,
+    marginTop: 4,
+  },
+  ocrCameraControls: {
+    alignItems: "stretch",
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 4,
+    paddingHorizontal: 4,
+    width: "100%",
+  },
+  ocrCameraControlButton: {
+    alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.12)",
+    borderColor: "rgba(255, 255, 255, 0.16)",
+    borderRadius: 18,
+    borderWidth: 1,
+    flex: 1,
+    justifyContent: "center",
+    minHeight: 58,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    ...continuousCorners,
+  },
+  ocrCameraControlButtonActive: {
+    backgroundColor: "rgba(255, 255, 255, 0.34)",
+    borderColor: "rgba(255, 255, 255, 0.34)",
+  },
+  ocrCameraControlButtonDisabled: {
+    opacity: 0.45,
+  },
+  ocrCameraControlButtonText: {
     color: "#f5f5f4",
     fontSize: 13,
     fontWeight: "900",
     lineHeight: 16,
   },
-  ocrQuickControlValue: {
-    color: "rgba(245, 245, 244, 0.72)",
-    fontSize: 12,
+  ocrCameraControlButtonTextActive: {
+    color: "#ffffff",
+  },
+  ocrCameraControlButtonMeta: {
+    color: "rgba(245, 245, 244, 0.68)",
+    fontSize: 11,
     fontWeight: "800",
-    lineHeight: 15,
+    lineHeight: 14,
     marginTop: 2,
   },
-  ocrExpandedControls: {
-    gap: 10,
-    paddingTop: 18,
-    width: "100%",
+  ocrCameraControlReadout: {
+    alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
+    borderColor: "rgba(255, 255, 255, 0.12)",
+    borderRadius: 18,
+    borderWidth: 1,
+    flex: 1,
+    justifyContent: "center",
+    minHeight: 58,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    ...continuousCorners,
   },
-  ocrExpandedTitle: {
+  ocrCameraControlReadoutLabel: {
+    color: "rgba(245, 245, 244, 0.62)",
+    fontSize: 11,
+    fontWeight: "800",
+    lineHeight: 14,
+    textTransform: "uppercase",
+  },
+  ocrCameraControlReadoutValue: {
+    color: "#ffffff",
+    fontSize: 18,
+    fontWeight: "900",
+    lineHeight: 22,
+    marginTop: 2,
+  },
+  ocrSummaryPrimary: {
+    flex: 1,
+    justifyContent: "center",
+    minWidth: 0,
+  },
+  ocrSummaryTitle: {
     color: "#f5f5f4",
     fontSize: 17,
     fontWeight: "900",
-    lineHeight: 22,
+    lineHeight: 21,
+  },
+  ocrSummaryText: {
+    color: "rgba(245, 245, 244, 0.72)",
+    fontSize: 12,
+    fontWeight: "800",
+    lineHeight: 16,
+    marginTop: 3,
+  },
+  ocrSummaryBadges: {
+    alignItems: "flex-end",
+    gap: 6,
+  },
+  ocrSummaryBadge: {
+    alignItems: "center",
+    borderRadius: 999,
+    ...continuousCorners,
+    minHeight: 24,
+    justifyContent: "center",
+    paddingHorizontal: 10,
+    backgroundColor: "rgba(255, 255, 255, 0.16)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.16)",
+  },
+  ocrSummaryBadgeText: {
+    color: "rgba(245, 245, 244, 0.86)",
+    fontSize: 11,
+    fontWeight: "900",
+    lineHeight: 14,
+  },
+  ocrExpandedControls: {
+    gap: 0,
+    paddingTop: 2,
+    width: "100%",
+  },
+  ocrSettingBlock: {
+    gap: 12,
+    minHeight: 102,
     paddingHorizontal: 4,
+    paddingVertical: 14,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255, 255, 255, 0.14)",
   },
   ocrSettingRow: {
     alignItems: "center",
-    borderRadius: 24,
-    ...continuousCorners,
     flexDirection: "row",
     justifyContent: "space-between",
     minHeight: 72,
-    paddingHorizontal: 14,
+    paddingHorizontal: 4,
     paddingVertical: 10,
-    backgroundColor: "rgba(250, 250, 249, 0.16)",
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.22)",
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255, 255, 255, 0.14)",
+    gap: 14,
   },
   ocrSettingTitle: {
     color: "#f5f5f4",
@@ -1155,15 +1720,48 @@ const styles = StyleSheet.create({
     marginTop: 2,
     maxWidth: 230,
   },
+  ocrGlassOptions: {
+    flexDirection: "row",
+    gap: 6,
+    width: "100%",
+  },
+  ocrGlassOption: {
+    alignItems: "center",
+    borderRadius: 999,
+    ...continuousCorners,
+    flex: 1,
+    minHeight: 36,
+    justifyContent: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.1)",
+  },
+  ocrGlassOptionActive: {
+    backgroundColor: "rgba(255, 255, 255, 0.34)",
+    borderColor: "rgba(255, 255, 255, 0.34)",
+  },
+  ocrGlassOptionText: {
+    color: "rgba(245, 245, 244, 0.68)",
+    fontSize: 12,
+    fontWeight: "900",
+    lineHeight: 15,
+  },
+  ocrGlassOptionTextActive: {
+    color: "#ffffff",
+  },
   ocrSettingPill: {
     borderRadius: 999,
     ...continuousCorners,
+    minWidth: 64,
+    alignItems: "center",
     paddingHorizontal: 11,
     paddingVertical: 6,
-    backgroundColor: "rgba(250, 250, 249, 0.84)",
+    backgroundColor: "rgba(255, 255, 255, 0.32)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.26)",
   },
   ocrSettingPillText: {
-    color: "#1c1917",
+    color: "#f5f5f4",
     fontSize: 12,
     fontWeight: "900",
   },

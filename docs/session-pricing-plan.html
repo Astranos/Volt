@@ -110,6 +110,11 @@
         gap: 16px;
       }
 
+      .grid > *,
+      .calculator > * {
+        min-width: 0;
+      }
+
       .two {
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
@@ -250,9 +255,16 @@
 
       table {
         width: 100%;
+        min-width: 720px;
         border-collapse: collapse;
         margin-top: 12px;
         font-size: 0.92rem;
+      }
+
+      .table-scroll {
+        width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
       }
 
       th,
@@ -308,11 +320,11 @@
     <header>
       <div class="wrap hero">
         <p class="eyebrow">Monetization concept</p>
-        <h1>Charge for created sessions after a free allowance.</h1>
+        <h1>Charge a low price per pairing session.</h1>
         <p>
-          A usage limit lets new users experience the product before paying,
-          while giving the business a measurable path from activation to
-          recurring revenue.
+          Bundle a predictable number of browser-to-phone pair sessions into
+          each plan, then charge a small overage when teams use more than their
+          included amount.
         </p>
       </div>
     </header>
@@ -322,24 +334,24 @@
         <h2>Recommended Model</h2>
         <div class="grid three">
           <article class="card">
-            <h3>Free allowance</h3>
+            <h3>Included sessions</h3>
             <p class="muted">
-              Each account gets a fixed number of created sessions per month,
-              such as 10 free sessions.
+              Each plan includes a monthly amount of successful pair sessions,
+              such as 50, 250, or 1,000 sessions.
             </p>
           </article>
           <article class="card">
-            <h3>Upgrade trigger</h3>
+            <h3>Low overage price</h3>
             <p class="muted">
-              When the allowance is exhausted, creating another session opens a
-              clear upgrade or credits screen.
+              Extra successful pair sessions are billed at a small set price,
+              such as $0.03 to $0.10 each.
             </p>
           </article>
           <article class="card">
-            <h3>Paid access</h3>
+            <h3>Plan ladder</h3>
             <p class="muted">
-              Paid users receive a larger monthly session limit, extra credits,
-              or unlimited use subject to fair-use rules.
+              Higher plans lower the effective price per session by including
+              more sessions up front.
             </p>
           </article>
         </div>
@@ -352,8 +364,9 @@
             <div>
               <h3>Define what counts</h3>
               <p class="muted">
-                Count only successful created sessions. Failed attempts,
-                duplicates, and internal test sessions should not reduce quota.
+                Count only successful pair sessions that connect the browser to
+                the App Clip or mobile app. Failed attempts, expired QR codes,
+                retries, and internal tests should not be billable.
               </p>
             </div>
           </div>
@@ -362,16 +375,17 @@
               <h3>Track entitlement state</h3>
               <p class="muted">
                 Store user plan, billing status, period start, period end,
-                sessions created in period, and any purchased credits.
+                included sessions, sessions used in period, overage price, and
+                any prepaid session credits.
               </p>
             </div>
           </div>
           <div class="step">
             <div>
-              <h3>Gate session creation</h3>
+              <h3>Meter session creation</h3>
               <p class="muted">
-                Before creating a session, check the user quota. If they are
-                over the limit, return a paywall state instead of creating it.
+                Let paid plans continue past the included amount, but mark
+                overage sessions clearly before they accrue extra charges.
               </p>
             </div>
           </div>
@@ -379,8 +393,8 @@
             <div>
               <h3>Connect billing</h3>
               <p class="muted">
-                Use Stripe subscriptions or credit packs. Sync payment state
-                with webhooks so the app never relies only on client-side state.
+                Use Stripe subscriptions with metered billing for overages, or
+                invoice overages at the end of the billing period.
               </p>
             </div>
           </div>
@@ -388,8 +402,9 @@
             <div>
               <h3>Review the numbers</h3>
               <p class="muted">
-                Track free-to-paid conversion, session volume, gross margin,
-                churn, support issues, and how often users hit the limit.
+                Track included usage, overage usage, effective price per
+                session, gross margin, churn, support issues, and whether users
+                understand what a pair session means.
               </p>
             </div>
           </div>
@@ -414,20 +429,24 @@
               <input id="growth" type="number" min="0" step="0.1" value="12" />
             </label>
             <label>
-              Free sessions per user
-              <input id="freeLimit" type="number" min="0" step="1" value="10" />
-            </label>
-            <label>
-              Average sessions per user
-              <input id="avgSessions" type="number" min="0" step="1" value="18" />
-            </label>
-            <label>
-              Free-to-paid conversion (%)
+              Paid account conversion (%)
               <input id="conversion" type="number" min="0" max="100" step="0.1" value="8" />
             </label>
             <label>
-              Monthly subscription price ($)
-              <input id="price" type="number" min="0" step="0.01" value="9" />
+              Base plan price ($)
+              <input id="basePrice" type="number" min="0" step="0.01" value="9" />
+            </label>
+            <label>
+              Included pair sessions
+              <input id="includedSessions" type="number" min="0" step="1" value="250" />
+            </label>
+            <label>
+              Avg sessions per paid account
+              <input id="avgSessions" type="number" min="0" step="1" value="340" />
+            </label>
+            <label>
+              Overage price per session ($)
+              <input id="overagePrice" type="number" min="0" step="0.001" value="0.05" />
             </label>
             <label>
               Variable cost per session ($)
@@ -438,19 +457,19 @@
           <div class="grid">
             <div class="metric-grid" aria-live="polite">
               <div class="metric">
-                <span>Users over free limit</span>
-                <strong id="overLimit">0</strong>
-                <small>users likely to see paywall</small>
+                <span>Paid accounts</span>
+                <strong id="paidAccounts">0</strong>
+                <small>converted active accounts</small>
               </div>
               <div class="metric">
-                <span>Paid users</span>
-                <strong id="paidUsers">0</strong>
-                <small>converted from over-limit users</small>
+                <span>Overage sessions</span>
+                <strong id="overageSessions">0</strong>
+                <small>billable sessions above included amount</small>
               </div>
               <div class="metric">
                 <span>Monthly revenue</span>
                 <strong id="revenue">$0</strong>
-                <small>paid users x price</small>
+                <small>base plan plus overage</small>
               </div>
               <div class="metric">
                 <span>Gross profit</span>
@@ -466,19 +485,23 @@
 
             <div class="card">
               <h3>12-month projection</h3>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Month</th>
-                    <th>Users</th>
-                    <th>Paid</th>
-                    <th>Revenue</th>
-                    <th>Cost</th>
-                    <th>Profit</th>
-                  </tr>
-                </thead>
-                <tbody id="projectionRows"></tbody>
-              </table>
+              <div class="table-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Month</th>
+                      <th>Users</th>
+                      <th>Paid accounts</th>
+                      <th>Included</th>
+                      <th>Overage</th>
+                      <th>Revenue</th>
+                      <th>Cost</th>
+                      <th>Profit</th>
+                    </tr>
+                  </thead>
+                  <tbody id="projectionRows"></tbody>
+                </table>
+              </div>
             </div>
           </div>
         </div>
@@ -490,17 +513,19 @@
           <div class="callout">
             <h3>Best first version</h3>
             <p>
-              Start with a simple subscription: for example, 10 free sessions
-              per month, then $9/month for a higher session limit. It is easier
-              to explain than charging small amounts per session.
+              This model can work if "pair session" maps cleanly to real usage
+              and costs. Start with plans that include generous sessions, then
+              use a low overage price as a fairness valve instead of making
+              every scan feel metered.
             </p>
           </div>
           <div class="card">
             <h3>Watch-outs</h3>
             <ul class="muted">
               <li>Do not charge for failed or accidental sessions.</li>
-              <li>Show usage clearly before the limit is reached.</li>
-              <li>Reset free quota on a predictable monthly schedule.</li>
+              <li>Explain exactly when a pair session starts and ends.</li>
+              <li>Show included usage and projected overage before billing.</li>
+              <li>Reset included sessions on a predictable monthly schedule.</li>
               <li>Keep billing checks on the server, not only in the UI.</li>
             </ul>
           </div>
@@ -512,10 +537,11 @@
       const ids = [
         "users",
         "growth",
-        "freeLimit",
-        "avgSessions",
         "conversion",
-        "price",
+        "basePrice",
+        "includedSessions",
+        "avgSessions",
+        "overagePrice",
         "cost",
       ];
 
@@ -539,25 +565,31 @@
       }
 
       function calculateMonth(userCount) {
-        const freeLimit = readNumber("freeLimit");
-        const avgSessions = readNumber("avgSessions");
         const conversion = readNumber("conversion") / 100;
-        const price = readNumber("price");
+        const basePrice = readNumber("basePrice");
+        const includedSessions = readNumber("includedSessions");
+        const avgSessions = readNumber("avgSessions");
+        const overagePrice = readNumber("overagePrice");
         const costPerSession = readNumber("cost");
 
-        const excessSessionShare =
-          avgSessions <= 0 ? 0 : Math.max(avgSessions - freeLimit, 0) / avgSessions;
-        const overLimitUsers = userCount * excessSessionShare;
-        const paidUsers = overLimitUsers * conversion;
-        const totalSessions = userCount * avgSessions;
-        const revenue = paidUsers * price;
+        const paidAccounts = userCount * conversion;
+        const includedUsage = paidAccounts * Math.min(avgSessions, includedSessions);
+        const overageSessions =
+          paidAccounts * Math.max(avgSessions - includedSessions, 0);
+        const totalSessions = paidAccounts * avgSessions;
+        const baseRevenue = paidAccounts * basePrice;
+        const overageRevenue = overageSessions * overagePrice;
+        const revenue = baseRevenue + overageRevenue;
         const variableCost = totalSessions * costPerSession;
         const profit = revenue - variableCost;
 
         return {
-          overLimitUsers,
-          paidUsers,
+          paidAccounts,
+          includedUsage,
+          overageSessions,
           totalSessions,
+          baseRevenue,
+          overageRevenue,
           revenue,
           variableCost,
           profit,
@@ -569,11 +601,11 @@
         const growth = readNumber("growth") / 100;
         const current = calculateMonth(users);
 
-        document.getElementById("overLimit").textContent = number.format(
-          current.overLimitUsers,
+        document.getElementById("paidAccounts").textContent = number.format(
+          current.paidAccounts,
         );
-        document.getElementById("paidUsers").textContent = number.format(
-          current.paidUsers,
+        document.getElementById("overageSessions").textContent = number.format(
+          current.overageSessions,
         );
         document.getElementById("revenue").textContent = money.format(
           current.revenue,
@@ -585,10 +617,11 @@
           current.profit >= 0 ? "good" : "warn";
 
         document.getElementById("formula").textContent =
-          "over_limit_users = users * max(avg_sessions - free_limit, 0) / avg_sessions; " +
-          "paid_users = over_limit_users * conversion_rate; " +
-          "revenue = paid_users * price; " +
-          "gross_profit = revenue - (users * avg_sessions * cost_per_session)";
+          "paid_accounts = users * conversion_rate; " +
+          "included_usage = paid_accounts * min(avg_sessions, included_sessions); " +
+          "overage_sessions = paid_accounts * max(avg_sessions - included_sessions, 0); " +
+          "revenue = paid_accounts * base_plan_price + overage_sessions * overage_price; " +
+          "gross_profit = revenue - paid_accounts * avg_sessions * cost_per_session";
 
         const rows = [];
         for (let month = 1; month <= 12; month += 1) {
@@ -598,7 +631,9 @@
             <tr>
               <td>Month ${month}</td>
               <td>${number.format(monthUsers)}</td>
-              <td>${number.format(result.paidUsers)}</td>
+              <td>${number.format(result.paidAccounts)}</td>
+              <td>${number.format(result.includedUsage)}</td>
+              <td>${number.format(result.overageSessions)}</td>
               <td>${money.format(result.revenue)}</td>
               <td>${money.format(result.variableCost)}</td>
               <td class="${result.profit >= 0 ? "good" : "warn"}">${money.format(result.profit)}</td>

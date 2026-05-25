@@ -98,6 +98,14 @@ test("App Clip subscribes to native capture error events", () => {
   assert.match(clipScreen, /addVoltClipDictationErrorListener/);
 });
 
+test("App Clip native view wrappers guard unregistered components", () => {
+  const textRecognizerWrapper = readText(nativeFiles.textRecognizerWrapper);
+
+  assert.match(textRecognizerWrapper, /UIManager/);
+  assert.match(textRecognizerWrapper, /getViewManagerConfig\(nativeComponentName\) != null/);
+  assert.match(textRecognizerWrapper, /hasNativeTextCameraView\s*\?/);
+});
+
 test("App Clip target is configured with invocation-critical bundle id and entitlements", () => {
   const project = readText(nativeFiles.xcodeProject);
   const clipEntitlements = readText(nativeFiles.clipEntitlements);

@@ -11,12 +11,14 @@ class VoltClipTextRecognizer: NSObject, AVCapturePhotoCaptureDelegate {
   let session = AVCaptureSession()
   private let sessionQueue = DispatchQueue(label: "com.volt.clip.text.session")
   private let output = AVCapturePhotoOutput()
+  private var videoDevice: AVCaptureDevice?
   private var isConfigured = false
   private var pendingResolve: RCTPromiseResolveBlock?
   private var pendingReject: RCTPromiseRejectBlock?
   private var pendingImageURL: URL?
   private weak var previewOverlayView: VoltClipTextCameraView?
   private var captureTimeoutWorkItem: DispatchWorkItem?
+  private let selectionHaptic = UISelectionFeedbackGenerator()
 
   @objc static func requiresMainQueueSetup() -> Bool {
     false
@@ -37,6 +39,33 @@ class VoltClipTextRecognizer: NSObject, AVCapturePhotoCaptureDelegate {
   @objc(hidePreview)
   func hidePreview() {
     VoltClipTextRecognizer.shared.hideOverlayPreview()
+  }
+
+  @objc(setTorch:resolver:rejecter:)
+  func setTorch(enabled: Bool, resolver resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) {
+    VoltClipTextRecognizer.shared.setTorch(enabled: enabled, resolve: resolve, rejecter: reject)
+  }
+
+  @objc(setZoom:resolver:rejecter:)
+  func setZoom(factor: NSNumber, resolver resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) {
+    VoltClipTextRecognizer.shared.setZoom(factor: CGFloat(truncating: factor), resolve: resolve, rejecter: reject)
+  }
+
+  @objc(focusAt:y:resolver:rejecter:)
+  func focusAt(x: NSNumber, y: NSNumber, resolver resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) {
+    VoltClipTextRecognizer.shared.focusAt(
+      normalizedPoint: CGPoint(x: CGFloat(truncating: x), y: CGFloat(truncating: y)),
+      resolve: resolve,
+      rejecter: reject
+    )
+  }
+
+  @objc(playSelectionHaptic)
+  func playSelectionHaptic() {
+    DispatchQueue.main.async {
+      self.selectionHaptic.selectionChanged()
+      self.selectionHaptic.prepare()
+    }
   }
 
   func captureText(resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) {
@@ -155,7 +184,10 @@ class VoltClipTextRecognizer: NSObject, AVCapturePhotoCaptureDelegate {
     }
 
     guard
-      let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back)
+      let device = AVCaptureDevice.default(.builtInTripleCamera, for: .video, position: .back)
+        ?? AVCaptureDevice.default(.builtInDualWideCamera, for: .video, position: .back)
+        ?? AVCaptureDevice.default(.builtInDualCamera, for: .video, position: .back)
+        ?? AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back)
         ?? AVCaptureDevice.default(for: .video)
     else {
       throw TextRecognizerError.cameraUnavailable
@@ -174,7 +206,83 @@ class VoltClipTextRecognizer: NSObject, AVCapturePhotoCaptureDelegate {
     session.addInput(input)
     session.addOutput(output)
     session.commitConfiguration()
+    videoDevice = device
     isConfigured = true
+  }
+
+  private func setTorch(enabled: Bool, resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) {
+    sessionQueue.async {
+      do {
+        try self.configureIfNeeded()
+        guard let device = self.videoDevice, device.hasTorch else {
+          reject("ocr_torch_unavailable", "Torch is not available on this device.", nil)
+          return
+        }
+
+        try device.lockForConfiguration()
+        device.torchMode = enabled ? .on : .off
+        device.unlockForConfiguration()
+        resolve(["enabled": enabled])
+      } catch {
+        reject("ocr_torch_failed", error.localizedDescription, error)
+      }
+    }
+  }
+
+  private func setZoom(factor: CGFloat, resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) {
+    sessionQueue.async {
+      do {
+        try self.configureIfNeeded()
+        guard let device = self.videoDevice else {
+          reject("ocr_zoom_unavailable", "Camera zoom is not available.", nil)
+          return
+        }
+
+        let minZoom = max(device.minAvailableVideoZoomFactor, 0.5)
+        let maxZoom = min(device.activeFormat.videoMaxZoomFactor, device.maxAvailableVideoZoomFactor, 4)
+        let clampedZoom = max(minZoom, min(factor, maxZoom))
+        try device.lockForConfiguration()
+        device.videoZoomFactor = clampedZoom
+        device.unlockForConfiguration()
+        resolve(["factor": clampedZoom, "min": minZoom, "max": maxZoom])
+      } catch {
+        reject("ocr_zoom_failed", error.localizedDescription, error)
+      }
+    }
+  }
+
+  private func focusAt(normalizedPoint: CGPoint, resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) {
+    sessionQueue.async {
+      do {
+        try self.configureIfNeeded()
+        guard let device = self.videoDevice else {
+          reject("ocr_focus_unavailable", "Camera focus is not available.", nil)
+          return
+        }
+
+        let fallbackPoint = CGPoint(
+          x: max(0, min(normalizedPoint.x, 1)),
+          y: max(0, min(normalizedPoint.y, 1))
+        )
+        let devicePoint = DispatchQueue.main.sync {
+          self.previewOverlayView?.captureDevicePoint(fromNormalizedPoint: fallbackPoint) ?? fallbackPoint
+        }
+
+        try device.lockForConfiguration()
+        if device.isFocusPointOfInterestSupported {
+          device.focusPointOfInterest = devicePoint
+          device.focusMode = .autoFocus
+        }
+        if device.isExposurePointOfInterestSupported {
+          device.exposurePointOfInterest = devicePoint
+          device.exposureMode = .continuousAutoExposure
+        }
+        device.unlockForConfiguration()
+        resolve(["x": devicePoint.x, "y": devicePoint.y])
+      } catch {
+        reject("ocr_focus_failed", error.localizedDescription, error)
+      }
+    }
   }
 
   func photoOutput(
@@ -334,6 +442,11 @@ class VoltClipTextCameraView: UIView {
 
   func startPreviewFromHost() {
     startPreview()
+  }
+
+  func captureDevicePoint(fromNormalizedPoint point: CGPoint) -> CGPoint {
+    let layerPoint = CGPoint(x: bounds.width * point.x, y: bounds.height * point.y)
+    return previewLayer.captureDevicePointConverted(fromLayerPoint: layerPoint)
   }
 
   private func startPreview() {
