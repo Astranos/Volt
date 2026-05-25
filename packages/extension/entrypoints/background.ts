@@ -91,7 +91,7 @@ export default defineBackground({
     const MOBILE_PHOTOS_STORAGE_KEY = "volt.mobilePhotos.photos";
     const MOBILE_SCANNER_MAX_SCANS = 100;
     const MOBILE_PHOTOS_MAX_PHOTOS = 80;
-    const MOBILE_CAPTURE_MODES = new Set(["ocr", "barcode", "dictation"]);
+    const MOBILE_CAPTURE_MODES = new Set(["ocr", "barcode", "dictation", "photo"]);
     const DEFAULT_STORAGE_STATS = {
       indexedPages: 0,
       totalDocuments: 0,

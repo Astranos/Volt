@@ -6,6 +6,7 @@ import {
   Scan,
   Smartphone,
   Trash2,
+  Images,
 } from "lucide-react";
 import QRCode from "qrcode";
 import { cn } from "../../lib/utils";
@@ -17,6 +18,7 @@ import {
   QrPairingPanel,
   SecondaryActionButton,
 } from "./mobile-shared";
+import MobilePhotos from "./MobilePhotos";
 import type {
   BarcodeMessage,
   ScannerConnectionStatus,
@@ -32,12 +34,13 @@ type MobileScannerState = {
   mode: MobileCaptureMode | null;
 };
 
-type MobileCaptureMode = "ocr" | "barcode" | "dictation";
+type MobileCaptureMode = "ocr" | "barcode" | "dictation" | "photo";
 
 const MODE_LABELS: Record<MobileCaptureMode, string> = {
   ocr: "OCR Scanning",
   barcode: "Barcode Scanner",
   dictation: "Dictation",
+  photo: "Photos",
 };
 
 function installEditableTracker() {
@@ -90,6 +93,7 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
   const [scans, setScans] = useState<ScanRecord[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<MobileCaptureMode | null>(null);
+  const [activeTab, setActiveTab] = useState<"scans" | "photos">("scans");
 
   const generateQrCode = useCallback(async (url: string) => {
     return QRCode.toDataURL(url, {
@@ -163,7 +167,7 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
         setError(response.error);
       }
     },
-    [applyScannerState]
+    [applyScannerState, mode]
   );
 
   const unpair = useCallback(() => {
@@ -230,7 +234,7 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
     <div className="flex h-full flex-col overflow-hidden bg-white">
       <MobileToolHeader
         icon={<Smartphone className="h-4 w-4" />}
-        title="Mobile Scanner"
+        title="Mobile Capture"
         subtitle={
           modeLabel
             ? `Scan with iPhone for ${modeLabel}`
@@ -272,6 +276,35 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
           )}
         </div>
 
+        <div className="mt-5 grid grid-cols-2 rounded-full bg-stone-100 p-1 text-xs font-bold text-stone-600">
+          <button
+            type="button"
+            onClick={() => setActiveTab("scans")}
+            className={cn(
+              "flex h-9 items-center justify-center gap-2 rounded-full transition",
+              activeTab === "scans" ? "bg-white text-stone-950 shadow-sm" : "hover:text-stone-900",
+            )}
+          >
+            <Scan className="h-3.5 w-3.5" />
+            Text
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("photos")}
+            className={cn(
+              "flex h-9 items-center justify-center gap-2 rounded-full transition",
+              activeTab === "photos" ? "bg-white text-stone-950 shadow-sm" : "hover:text-stone-900",
+            )}
+          >
+            <Images className="h-3.5 w-3.5" />
+            Photos
+          </button>
+        </div>
+
+        {activeTab === "photos" ? (
+          <MobilePhotos embedded />
+        ) : (
+          <>
         <div className="mt-6 flex items-center justify-between">
           <div>
             <div className="text-sm font-bold text-stone-900">Scanned results</div>
@@ -305,6 +338,8 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
             ))
           )}
         </div>
+          </>
+        )}
       </div>
     </div>
   );

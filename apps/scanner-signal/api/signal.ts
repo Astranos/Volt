@@ -9,14 +9,16 @@ type ScannerSession = {
   offer?: string;
   answer?: string;
   result?: ScannerResult;
+  results?: ScannerResult[];
   mode?: ScannerResult["mode"];
   createdAt: number;
 };
 
 type ScannerResult = {
   id: string;
-  mode: "ocr" | "barcode" | "dictation";
-  message: {
+  mode: "ocr" | "barcode" | "dictation" | "photo";
+  message: (
+    {
     barcode: string;
     dictationPhase?: "partial" | "final";
     dictationSessionId?: string;
@@ -24,7 +26,18 @@ type ScannerResult = {
     insertIntoCursor?: boolean;
     kind?: "barcode" | "text";
     scannedAt?: string;
-  };
+    } | {
+      kind: "photo";
+      id: string;
+      name: string;
+      mimeType: string;
+      dataUrl: string;
+      size: number;
+      width?: number;
+      height?: number;
+      capturedAt?: string;
+    }
+  );
   createdAt: string;
 };
 
@@ -148,10 +161,15 @@ function isResultRequest(request: VercelRequest) {
 }
 
 function isCaptureMode(value: unknown): value is ScannerResult["mode"] {
-  return value === "ocr" || value === "barcode" || value === "dictation";
+  return value === "ocr" || value === "barcode" || value === "dictation" || value === "photo";
 }
 
 function isValidResultForMode(mode: ScannerResult["mode"], message: ScannerResult["message"]) {
+  if (mode === "photo") {
+    return message.kind === "photo";
+  }
+  if (message.kind === "photo") return false;
+
   if (mode === "ocr") {
     return message.kind === "text" && message.format === "live-text";
   }
@@ -182,12 +200,44 @@ function parseScannerResult(body: unknown): ScannerResult | null {
     !value.id ||
     !isCaptureMode(value.mode) ||
     !message ||
-    typeof message !== "object" ||
-    typeof message.barcode !== "string" ||
-    !message.barcode
+    typeof message !== "object"
   ) {
     return null;
   }
+
+  if (message.kind === "photo") {
+    if (
+      typeof message.id !== "string" ||
+      typeof message.name !== "string" ||
+      typeof message.mimeType !== "string" ||
+      typeof message.dataUrl !== "string" ||
+      !message.dataUrl.startsWith("data:image/") ||
+      typeof message.size !== "number"
+    ) {
+      return null;
+    }
+
+    const result: ScannerResult = {
+      id: value.id,
+      mode: value.mode,
+      message: {
+        kind: "photo",
+        id: message.id,
+        name: message.name,
+        mimeType: message.mimeType,
+        dataUrl: message.dataUrl,
+        size: message.size,
+        width: typeof message.width === "number" ? message.width : undefined,
+        height: typeof message.height === "number" ? message.height : undefined,
+        capturedAt: typeof message.capturedAt === "string" ? message.capturedAt : undefined,
+      },
+      createdAt: new Date().toISOString(),
+    };
+
+    return isValidResultForMode(result.mode, result.message) ? result : null;
+  }
+
+  if (typeof message.barcode !== "string" || !message.barcode) return null;
 
   const result: ScannerResult = {
     id: value.id,
@@ -239,11 +289,6 @@ export default async function handler(request: VercelRequest, response: VercelRe
         response.status(400).json({ error: "Missing offer" });
         return;
       }
-      if (isRelaySession && !relayMode) {
-        response.status(400).json({ error: "Missing mode" });
-        return;
-      }
-
       const nextSessionId = Math.random().toString(36).slice(2, 10);
       await saveSession(nextSessionId, {
         offer: typeof offer === "string" ? offer : undefined,
@@ -292,23 +337,21 @@ export default async function handler(request: VercelRequest, response: VercelRe
         response.status(400).json({ error: "Result mode mismatch" });
         return;
       }
-      if (session.result) {
-        if (session.result.id === result.id) {
+      const previousResults = session.results ?? (session.result ? [session.result] : []);
+      const previousResult = previousResults.find((item) => item.id === result.id);
+      if (previousResult) {
           response.status(200).json({ success: true });
           return;
-        }
-
-        response.status(409).json({ error: "Result already submitted" });
-        return;
       }
 
-      await saveSession(sessionId, { ...session, result });
+      const nextResults = [...previousResults, result].slice(-100);
+      await saveSession(sessionId, { ...session, result, results: nextResults });
       response.status(200).json({ success: true });
       return;
     }
 
     if (request.method === "GET" && isResultRoute) {
-      response.status(200).json({ result: session.result ?? null });
+      response.status(200).json({ result: session.result ?? null, results: session.results ?? (session.result ? [session.result] : []) });
       return;
     }
 

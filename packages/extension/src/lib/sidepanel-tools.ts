@@ -5,7 +5,6 @@ import {
   ShoppingBag,
   LucideIcon,
   HelpCircle,
-  Images,
   Smartphone,
 } from "lucide-react";
 
@@ -62,12 +61,6 @@ export const SIDEPANEL_TOOLS: SidepanelToolMetadata[] = [
     label: "Mobile Scanner",
     description: "Scan barcodes with your phone",
     icon: Smartphone,
-  },
-  {
-    id: "mobile-photos",
-    label: "Mobile Photos",
-    description: "Transfer phone photos over the paired session",
-    icon: Images,
   },
 ];
 

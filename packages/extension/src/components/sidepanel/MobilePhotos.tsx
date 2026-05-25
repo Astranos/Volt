@@ -449,7 +449,7 @@ function formatSize(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export default function MobilePhotos() {
+export default function MobilePhotos({ embedded = false }: { embedded?: boolean } = {}) {
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [status, setStatus] = useState<ScannerConnectionStatus>("disconnected");
   const [photos, setPhotos] = useState<MobilePhoto[]>([]);
@@ -718,15 +718,17 @@ export default function MobilePhotos() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-white">
-      <MobileToolHeader
-        icon={<ImagePlus className="h-4 w-4" />}
-        title="Mobile Photos"
-        subtitle="Capture from paired Volt app"
-        status={status}
-        error={error}
-      />
+      {embedded ? null : (
+        <MobileToolHeader
+          icon={<ImagePlus className="h-4 w-4" />}
+          title="Mobile Photos"
+          subtitle="Capture from paired Volt app"
+          status={status}
+          error={error}
+        />
+      )}
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-5 pt-4">
+      <div className={cn("min-h-0 flex-1 overflow-y-auto pb-5 pt-4", embedded ? "px-0" : "px-4")}>
         {showQr ? (
           <div className="mb-5">
             <QrPairingPanel

@@ -16,6 +16,8 @@ class VoltClipTextRecognizer: NSObject, AVCapturePhotoCaptureDelegate {
   private var pendingResolve: RCTPromiseResolveBlock?
   private var pendingReject: RCTPromiseRejectBlock?
   private var pendingImageURL: URL?
+  private var pendingImageData: Data?
+  private var pendingImageSize: CGSize?
   private weak var previewOverlayView: VoltClipTextCameraView?
   private var captureTimeoutWorkItem: DispatchWorkItem?
   private let selectionHaptic = UISelectionFeedbackGenerator()
@@ -305,6 +307,8 @@ class VoltClipTextRecognizer: NSObject, AVCapturePhotoCaptureDelegate {
     }
 
     let imageURL = saveCapturedImage(data)
+    pendingImageData = data
+    pendingImageSize = CGSize(width: cgImage.width, height: cgImage.height)
     recognizeText(in: cgImage, imageURL: imageURL)
   }
 
@@ -355,6 +359,14 @@ class VoltClipTextRecognizer: NSObject, AVCapturePhotoCaptureDelegate {
         if let imageURL = self.pendingImageURL {
           result["imageUri"] = imageURL.absoluteString
         }
+        if let imageData = self.pendingImageData {
+          result["dataUrl"] = "data:image/jpeg;base64,\(imageData.base64EncodedString())"
+          result["size"] = "\(imageData.count)"
+        }
+        if let imageSize = self.pendingImageSize {
+          result["width"] = "\(Int(imageSize.width))"
+          result["height"] = "\(Int(imageSize.height))"
+        }
         self.pendingResolve?(result)
         self.clearPendingCapture()
       }
@@ -385,6 +397,8 @@ class VoltClipTextRecognizer: NSObject, AVCapturePhotoCaptureDelegate {
     pendingResolve = nil
     pendingReject = nil
     pendingImageURL = nil
+    pendingImageData = nil
+    pendingImageSize = nil
   }
 }
 

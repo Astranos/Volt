@@ -4,10 +4,11 @@ import { ActivityIndicator, Text, View } from "react-native";
 import { normalizeCaptureMode } from "../../lib/capture-url";
 import { useScanner } from "../../lib/scanner-state";
 
-const modeRoutes: Record<"ocr" | "barcode" | "dictation", "/(tabs)" | "/(tabs)/scanner" | "/(tabs)/dictation"> = {
+const modeRoutes: Record<"ocr" | "barcode" | "dictation" | "photo", "/(tabs)" | "/(tabs)/scanner" | "/(tabs)/dictation" | "/(tabs)/photos"> = {
   ocr: "/(tabs)",
   barcode: "/(tabs)/scanner",
   dictation: "/(tabs)/dictation",
+  photo: "/(tabs)/photos",
 };
 
 export default function AppClipInvocationRoute() {

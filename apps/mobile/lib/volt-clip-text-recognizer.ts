@@ -2,7 +2,7 @@ import { NativeModules, Platform, UIManager, requireNativeComponent } from "reac
 import type { ViewStyle } from "react-native";
 
 type VoltClipTextRecognizerModule = {
-  captureAndRecognize: () => Promise<{ text: string; imageUri?: string }>;
+  captureAndRecognize: () => Promise<{ text: string; imageUri?: string; dataUrl?: string; size?: string; width?: string; height?: string }>;
   focusAt?: (x: number, y: number) => Promise<{ x: number; y: number }>;
   showPreview?: (x: number, y: number, width: number, height: number) => void;
   hidePreview?: () => void;

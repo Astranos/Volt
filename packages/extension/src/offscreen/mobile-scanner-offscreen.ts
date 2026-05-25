@@ -18,7 +18,7 @@ type ScannerState = {
   mode: MobileCaptureMode | null;
 };
 
-type MobileCaptureMode = "ocr" | "barcode" | "dictation";
+type MobileCaptureMode = "ocr" | "barcode" | "dictation" | "photo";
 
 type BarcodeMessage = {
   barcode: string;
@@ -75,7 +75,7 @@ type PendingPhoto = PhotoChunkStartMessage & {
 type ScannerRelayResult = {
   id: string;
   mode: MobileCaptureMode;
-  message: BarcodeMessage;
+  message: ScannerTransportMessage;
   createdAt: string;
 };
 
@@ -182,6 +182,7 @@ class MobileScannerOffscreenSession {
   private intentionallyClosing = false;
   private recentMessages = new Map<string, number>();
   private pendingPhotos = new Map<string, PendingPhoto>();
+  private seenRelayResultIds = new Set<string>();
   private state: ScannerState = {
     status: "disconnected",
     qrCodeUrl: null,
@@ -219,7 +220,7 @@ class MobileScannerOffscreenSession {
 
     try {
       if (nextMode) {
-        const sessionId = await this.createRelaySession(nextMode);
+        const sessionId = await this.createRelaySession(null);
         this.sessionId = sessionId;
         this.setState({
           status: "waiting",
@@ -460,11 +461,11 @@ class MobileScannerOffscreenSession {
     return this.postSignalingOffer(SCANNER_SIGNAL_URL, localDescription);
   }
 
-  private async createRelaySession(mode: MobileCaptureMode) {
+  private async createRelaySession(mode: MobileCaptureMode | null) {
     const sessionResponse = await fetch(SCANNER_SIGNAL_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ relay: true, mode }),
+      body: JSON.stringify(mode ? { relay: true, mode } : { relay: true }),
     });
 
     if (!sessionResponse.ok) {
@@ -575,21 +576,19 @@ class MobileScannerOffscreenSession {
         const resultResponse = await fetch(`${SCANNER_SIGNAL_URL}/${sessionId}/result`);
         if (!resultResponse.ok) return;
 
-        const payload = (await resultResponse.json()) as { result?: ScannerRelayResult | null };
-        const result = payload.result;
-        if (!result?.message) return;
+        const payload = (await resultResponse.json()) as {
+          result?: ScannerRelayResult | null;
+          results?: ScannerRelayResult[];
+        };
+        const results = Array.isArray(payload.results) ? payload.results : payload.result ? [payload.result] : [];
+        const unseenResults = results.filter((result) => result?.id && !this.seenRelayResultIds.has(result.id));
+        if (unseenResults.length === 0) return;
 
-        this.handleDataChannelMessage(JSON.stringify(result.message));
+        for (const result of unseenResults) {
+          this.seenRelayResultIds.add(result.id);
+          if (result.message) this.handleDataChannelMessage(JSON.stringify(result.message));
+        }
         this.setState({ status: "connected", error: null });
-
-        if (this.resultPoll) {
-          window.clearInterval(this.resultPoll);
-          this.resultPoll = null;
-        }
-        if (this.resultPollTimeout) {
-          window.clearTimeout(this.resultPollTimeout);
-          this.resultPollTimeout = null;
-        }
       } catch (err) {
         console.error("Failed to poll scanner result", err);
       }
@@ -609,7 +608,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     mobileScannerSession
       .start(
         message.force === true,
-        message.mode === "ocr" || message.mode === "barcode" || message.mode === "dictation"
+        message.mode === "ocr" || message.mode === "barcode" || message.mode === "dictation" || message.mode === "photo"
           ? message.mode
           : null
       )

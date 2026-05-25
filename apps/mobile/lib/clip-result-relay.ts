@@ -1,18 +1,18 @@
-import type { BarcodeMessage } from "@volt/scanner-protocol";
+import type { ScannerTransportMessage } from "@volt/scanner-protocol";
 
 import type { CaptureMode } from "./capture-url";
 
 export type ClipRelayResult = {
   id: string;
   mode: CaptureMode;
-  message: BarcodeMessage;
+  message: ScannerTransportMessage;
 };
 
 function makeRelayResultId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
-export function makeClipRelayResult(mode: CaptureMode, message: BarcodeMessage): ClipRelayResult {
+export function makeClipRelayResult(mode: CaptureMode, message: ScannerTransportMessage): ClipRelayResult {
   return {
     id: makeRelayResultId(),
     mode,

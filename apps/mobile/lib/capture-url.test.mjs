@@ -27,7 +27,10 @@ test("parseCaptureInvocation accepts custom scheme paths", () => {
 
 test("parseCaptureInvocation rejects invalid or incomplete URLs", () => {
   assert.equal(parseCaptureInvocation("not a url"), null);
-  assert.equal(parseCaptureInvocation("https://scanner-signal.vercel.app/clip/photo?session=abc"), null);
+  assert.deepEqual(parseCaptureInvocation("https://scanner-signal.vercel.app/clip/photo?session=abcd"), {
+    mode: "photo",
+    sessionId: "abcd",
+  });
   assert.equal(parseCaptureInvocation("https://scanner-signal.vercel.app/clip/ocr"), null);
   assert.equal(parseCaptureInvocation("https://scanner-signal.vercel.app/clip/ocr?session=%20"), null);
   assert.equal(parseCaptureInvocation("https://scanner-signal.vercel.app/clip/ocr?session=abc"), null);
@@ -42,6 +45,6 @@ test("normalizeCaptureMode only returns supported capture modes", () => {
   assert.equal(normalizeCaptureMode("ocr"), "ocr");
   assert.equal(normalizeCaptureMode("barcode"), "barcode");
   assert.equal(normalizeCaptureMode("dictation"), "dictation");
-  assert.equal(normalizeCaptureMode("photo"), null);
+  assert.equal(normalizeCaptureMode("photo"), "photo");
   assert.equal(normalizeCaptureMode(undefined), null);
 });

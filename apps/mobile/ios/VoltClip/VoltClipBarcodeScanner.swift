@@ -82,6 +82,7 @@ class VoltClipBarcodeScanner: RCTEventEmitter, AVCaptureMetadataOutputObjectsDel
     session.addOutput(output)
     output.setMetadataObjectsDelegate(self, queue: DispatchQueue.main)
     output.metadataObjectTypes = supportedMetadataTypes(from: output.availableMetadataObjectTypes)
+    output.rectOfInterest = CGRect(x: 0.18, y: 0.18, width: 0.64, height: 0.64)
     session.commitConfiguration()
 
     isConfigured = true

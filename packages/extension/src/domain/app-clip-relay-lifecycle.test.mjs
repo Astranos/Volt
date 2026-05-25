@@ -14,7 +14,7 @@ const contextMenuSource = readFileSync(
 test("App Clip result relay polling has a timeout and clears it on success", () => {
   assert.match(offscreenSource, /const SCANNER_RESULT_TIMEOUT_MS = 30 \* 60 \* 1000;/);
   assert.match(offscreenSource, /private resultPollTimeout: number \| null = null;/);
-  assert.match(offscreenSource, /JSON\.stringify\(\{ relay: true, mode \}\)/);
+  assert.match(offscreenSource, /JSON\.stringify\(mode \? \{ relay: true, mode \} : \{ relay: true \}\)/);
   assert.match(offscreenSource, /window\.setTimeout\(\(\) => \{/);
   assert.match(offscreenSource, /App Clip session timed out/);
   assert.match(offscreenSource, /window\.clearTimeout\(this\.resultPollTimeout\)/);

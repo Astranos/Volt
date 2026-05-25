@@ -1,15 +1,15 @@
-export type CaptureMode = "ocr" | "barcode" | "dictation";
+export type CaptureMode = "ocr" | "barcode" | "dictation" | "photo";
 
 export type CaptureInvocation = {
   mode: CaptureMode;
   sessionId: string;
 };
 
-const captureModes = new Set<CaptureMode>(["ocr", "barcode", "dictation"]);
+const captureModes = new Set<CaptureMode>(["ocr", "barcode", "dictation", "photo"]);
 const sessionIdPattern = /^[a-zA-Z0-9_-]{4,80}$/;
 
 function isCaptureMode(value: string | undefined): value is CaptureMode {
-  return value === "ocr" || value === "barcode" || value === "dictation";
+  return value === "ocr" || value === "barcode" || value === "dictation" || value === "photo";
 }
 
 function getStringParam(searchParams: URLSearchParams, key: string) {

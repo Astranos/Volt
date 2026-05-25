@@ -23,7 +23,9 @@ import { parseCaptureInvocation, type CaptureInvocation } from "../../lib/captur
 import { LiveTextImageView } from "../../lib/live-text-image-view";
 import {
   makeBarcodeMessage,
+  makeCaptureMessage,
   makeDictationMessage,
+  makePhotoMessage,
   makeOcrMessage,
   type ScannerCaptureMode,
 } from "../../lib/scanner-messages";
@@ -103,6 +105,7 @@ const modeTitles = {
   ocr: "OCR Capture",
   barcode: "Barcode Scanner",
   dictation: "Dictation",
+  photo: "Photo Capture",
 };
 const RESULT_SEND_TIMEOUT_MS = 12_000;
 const CLIPBOARD_POLL_MS = 650;
@@ -119,12 +122,24 @@ const TextCameraView = VoltClipTextCameraView as ComponentType<{
 function makeTestMessage(mode: ScannerCaptureMode) {
   if (mode === "ocr") return makeOcrMessage("hello from Volt Clip");
   if (mode === "dictation") return makeDictationMessage("hello from Volt Clip", `clip-${Date.now()}`);
+  if (mode === "photo") {
+    return makePhotoMessage({
+      id: `clip-photo-${Date.now()}`,
+      name: "volt-photo.jpg",
+      mimeType: "image/jpeg",
+      dataUrl: "data:image/jpeg;base64,",
+      size: 0,
+      capturedAt: new Date().toISOString(),
+    });
+  }
   return makeBarcodeMessage("hello-from-volt-clip", "qr");
 }
 
 export default function ClipInvocationScreen() {
   const [invocation, setInvocation] = useState<CaptureInvocation | null>(null);
-  const mode = invocation?.mode ?? null;
+  const initialMode = invocation?.mode ?? "ocr";
+  const [activeMode, setActiveMode] = useState<ScannerCaptureMode>("ocr");
+  const mode = activeMode;
   const session = invocation?.sessionId ?? "";
   const [sendState, setSendState] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
@@ -156,7 +171,7 @@ export default function ClipInvocationScreen() {
   const ocrZoomMinRef = useRef(OCR_ZOOM_DEFAULT);
   const ocrZoomMaxRef = useRef(OCR_ZOOM_MAX);
   const ocrZoomFactorRef = useRef(OCR_ZOOM_DEFAULT);
-  const isOcrMode = mode === "ocr";
+  const isOcrMode = Boolean(mode);
   const [ocrAutoSendCopiedText, setOcrAutoSendCopiedText] = useState(true);
   const [ocrGlassTone, setOcrGlassTone] = useState<"adaptive" | "bright" | "dark">("adaptive");
   const [ocrTorchEnabled, setOcrTorchEnabled] = useState(false);
@@ -178,10 +193,11 @@ export default function ClipInvocationScreen() {
     mode &&
       session &&
       sendState !== "sending" &&
-      sendState !== "sent" &&
+      (mode === "dictation" || sendState !== "sent") &&
       (mode !== "ocr" || ocrText.trim()) &&
       (mode !== "barcode" || barcodeCandidate) &&
-      (mode !== "dictation" || (dictationFinal && dictationTranscript.trim()))
+      (mode !== "dictation" || dictationTranscript.trim()) &&
+      (mode !== "photo" || ocrImageUri)
   );
   const ocrDrawerCollapsedHeight = 148;
   const ocrDrawerExpandedHeight = Math.min(
@@ -382,7 +398,7 @@ export default function ClipInvocationScreen() {
     return "Browser session found";
   }, [dictationFinal, dictationState, mode, ocrImageUri, ocrPreviewState, ocrState, ocrText, scannerState, sendState, session]);
   const showMeasuredOcrPreview = useCallback(() => {
-    if (mode !== "ocr" || !hasVoltClipTextRecognizer || ocrImageUri) return;
+    if ((mode !== "ocr" && mode !== "photo") || !hasVoltClipTextRecognizer || ocrImageUri) return;
 
     setOcrPreviewState("starting");
     showVoltClipTextPreview({
@@ -395,7 +411,7 @@ export default function ClipInvocationScreen() {
   }, [mode, ocrImageUri, windowDimensions.height, windowDimensions.width]);
 
   useEffect(() => {
-    if (mode !== "ocr" || !hasVoltClipTextRecognizer || ocrImageUri) {
+    if ((mode !== "ocr" && mode !== "photo") || !hasVoltClipTextRecognizer || ocrImageUri) {
       hideVoltClipTextPreview();
       return;
     }
@@ -431,7 +447,11 @@ export default function ClipInvocationScreen() {
   }, []);
 
   useEffect(() => {
-    if (mode !== "ocr") return;
+    setActiveMode(initialMode);
+  }, [initialMode]);
+
+  useEffect(() => {
+    if (mode !== "ocr" && mode !== "photo") return;
 
     if (!hasVoltClipTextRecognizer) {
       setOcrState("unavailable");
@@ -505,11 +525,20 @@ export default function ClipInvocationScreen() {
     const partialSubscription = addVoltClipDictationPartialListener((transcript) => {
       setDictationTranscript(transcript);
       setDictationFinal(false);
+      void sendRelayMessage(
+        "dictation",
+        {
+          ...makeCaptureMessage(transcript, "dictation", "text", true),
+          dictationPhase: "partial",
+          dictationSessionId: `clip-${session}`,
+        }
+      );
     });
     const finalSubscription = addVoltClipDictationFinalListener((transcript) => {
       setDictationTranscript(transcript);
       setDictationFinal(true);
       setDictationState("ready");
+      void sendRelayMessage("dictation", makeDictationMessage(transcript, `clip-${session}`));
     });
     const errorSubscription = addVoltClipDictationErrorListener((message) => {
       setDictationState("error");
@@ -524,7 +553,7 @@ export default function ClipInvocationScreen() {
       errorSubscription.remove();
       void stopVoltClipDictation();
     };
-  }, [mode]);
+  }, [mode, session]);
 
   async function toggleDictation() {
     if (mode !== "dictation" || sendState === "sending" || sendState === "sent") return;
@@ -557,7 +586,7 @@ export default function ClipInvocationScreen() {
   }
 
   async function captureText() {
-    if (mode !== "ocr" || sendState === "sending" || sendState === "sent") return;
+    if ((mode !== "ocr" && mode !== "photo") || sendState === "sending" || sendState === "sent") return;
 
     setError(null);
     setOcrState("capturing");
@@ -568,6 +597,21 @@ export default function ClipInvocationScreen() {
       setOcrImageUri(result.imageUri ?? null);
       hideVoltClipTextPreview();
       setOcrState("ready");
+      if (mode === "photo" && result.dataUrl) {
+        await sendRelayMessage(
+          "photo",
+          makePhotoMessage({
+            id: `clip-photo-${Date.now()}`,
+            name: `volt-photo-${new Date().toISOString().replace(/[:.]/g, "-")}.jpg`,
+            mimeType: "image/jpeg",
+            dataUrl: result.dataUrl,
+            size: Number(result.size ?? 0),
+            width: result.width ? Number(result.width) : undefined,
+            height: result.height ? Number(result.height) : undefined,
+            capturedAt: new Date().toISOString(),
+          })
+        );
+      }
     } catch (captureError) {
       setOcrState("error");
       setError(captureError instanceof Error ? captureError.message : "Unable to capture text");
@@ -712,29 +756,19 @@ export default function ClipInvocationScreen() {
     []
   );
 
-  async function sendResult() {
-    if (!mode || !session) return;
-
+  async function sendRelayMessage(relayMode: ScannerCaptureMode, message: ReturnType<typeof makeBarcodeMessage> | ReturnType<typeof makeDictationMessage> | ReturnType<typeof makePhotoMessage>) {
+    if (!session) return;
     setSendState("sending");
     setError(null);
     const abortController = new AbortController();
     const timeoutId = setTimeout(() => abortController.abort(), RESULT_SEND_TIMEOUT_MS);
 
     try {
-      const message =
-        mode === "barcode" && barcodeCandidate
-          ? makeBarcodeMessage(barcodeCandidate.value, barcodeCandidate.format)
-          : mode === "ocr" && ocrText.trim()
-            ? makeOcrMessage(ocrText.trim())
-          : mode === "dictation" && dictationTranscript.trim()
-            ? makeDictationMessage(dictationTranscript.trim(), `clip-${session}`)
-          : makeTestMessage(mode);
-
       const response = await fetch(`${SCANNER_SIGNAL_URL}/${encodeURIComponent(session)}/result`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         signal: abortController.signal,
-        body: JSON.stringify(makeClipRelayResult(mode, message)),
+        body: JSON.stringify(makeClipRelayResult(relayMode, message)),
       });
 
       if (!response.ok) {
@@ -742,10 +776,10 @@ export default function ClipInvocationScreen() {
       }
 
       setSendState("sent");
-      if (mode === "barcode") {
+      if (relayMode === "barcode") {
         void stopVoltClipBarcodeScanner();
       }
-      if (mode === "dictation") {
+      if (relayMode === "dictation" && "dictationPhase" in message && message.dictationPhase === "final") {
         void stopVoltClipDictation();
       }
     } catch (sendError) {
@@ -760,6 +794,21 @@ export default function ClipInvocationScreen() {
     } finally {
       clearTimeout(timeoutId);
     }
+  }
+
+  async function sendResult() {
+    if (!mode || !session) return;
+
+    const message =
+      mode === "barcode" && barcodeCandidate
+        ? makeBarcodeMessage(barcodeCandidate.value, barcodeCandidate.format)
+        : mode === "ocr" && ocrText.trim()
+          ? makeOcrMessage(ocrText.trim())
+        : mode === "dictation" && dictationTranscript.trim()
+          ? makeDictationMessage(dictationTranscript.trim(), `clip-${session}`)
+        : makeTestMessage(mode);
+
+    await sendRelayMessage(mode, message);
   }
 
   const footerMessage = (() => {
@@ -1007,7 +1056,13 @@ export default function ClipInvocationScreen() {
                 ]}
               />
             ) : null}
-            {ocrImageUri ? (
+            {mode === "dictation" ? (
+              <View style={styles.ocrDictationPanel}>
+                <Text style={styles.ocrDictationText}>
+                  {dictationTranscript || "Tap Record and start speaking"}
+                </Text>
+              </View>
+            ) : ocrImageUri ? (
               <View style={styles.ocrCapturedSheet}>
                 <View style={styles.ocrCapturedViewport}>
                   <ScrollView
@@ -1043,6 +1098,15 @@ export default function ClipInvocationScreen() {
                 <Text style={styles.ocrUnavailableText}>OCR camera unavailable</Text>
               </View>
             )}
+
+            {mode === "barcode" ? (
+              <View pointerEvents="none" style={styles.ocrBarcodeGuide}>
+                <View style={[styles.ocrBarcodeGuideFrame, barcodeCandidate && styles.ocrBarcodeGuideFrameActive]} />
+                <Text numberOfLines={2} style={styles.ocrBarcodeGuideText}>
+                  {barcodeCandidate ? barcodeCandidate.value : "Center barcode or QR code"}
+                </Text>
+              </View>
+            ) : null}
 
             {sendState === "sent" && ocrText ? (
               <View pointerEvents="none" style={styles.ocrSentToast}>
@@ -1125,6 +1189,37 @@ export default function ClipInvocationScreen() {
               </Animated.View>
             </Animated.View>
             <Animated.View style={[styles.ocrExpandedControls, ocrExpandedControlsAnimatedStyle]}>
+              <View style={styles.ocrModeOptions}>
+                {(["ocr", "barcode", "dictation", "photo"] as const).map((nextMode) => (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: mode === nextMode }}
+                    key={nextMode}
+                    onPress={() => {
+                      setActiveMode(nextMode);
+                      setSendState("idle");
+                      setError(null);
+                    }}
+                    style={[styles.ocrModeOption, mode === nextMode && styles.ocrModeOptionActive]}
+                  >
+                    <Text style={[styles.ocrModeOptionText, mode === nextMode && styles.ocrModeOptionTextActive]}>
+                      {nextMode === "ocr" ? "OCR" : nextMode === "barcode" ? "Code" : nextMode === "dictation" ? "Talk" : "Photo"}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+              {mode === "dictation" ? (
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={dictationState === "requesting" || sendState === "sending"}
+                  onPress={toggleDictation}
+                  style={[styles.ocrDictationButton, dictationState === "recording" && styles.ocrDictationButtonActive]}
+                >
+                  <Text style={styles.ocrDictationButtonText}>
+                    {dictationState === "recording" ? "Stop dictation" : dictationState === "requesting" ? "Starting..." : "Record dictation"}
+                  </Text>
+                </Pressable>
+              ) : null}
               <View style={styles.ocrCameraControls}>
                 <Pressable
                   accessibilityLabel={ocrTorchEnabled ? "Turn torch off" : "Turn torch on"}
@@ -1482,6 +1577,55 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     textAlign: "center",
   },
+  ocrDictationPanel: {
+    ...absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 28,
+    paddingBottom: 180,
+    backgroundColor: "#111111",
+  },
+  ocrDictationText: {
+    color: "#ffffff",
+    fontSize: 30,
+    fontWeight: "900",
+    lineHeight: 38,
+    textAlign: "center",
+  },
+  ocrBarcodeGuide: {
+    ...absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingBottom: 170,
+  },
+  ocrBarcodeGuideFrame: {
+    width: "72%",
+    aspectRatio: 1.35,
+    borderRadius: 28,
+    ...continuousCorners,
+    borderWidth: 3,
+    borderColor: "rgba(255, 255, 255, 0.82)",
+    backgroundColor: "rgba(0, 0, 0, 0.08)",
+  },
+  ocrBarcodeGuideFrameActive: {
+    borderColor: "#86efac",
+    backgroundColor: "rgba(22, 163, 74, 0.12)",
+  },
+  ocrBarcodeGuideText: {
+    marginTop: 14,
+    maxWidth: "78%",
+    color: "#ffffff",
+    fontSize: 15,
+    fontWeight: "900",
+    lineHeight: 19,
+    textAlign: "center",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    ...continuousCorners,
+    backgroundColor: "rgba(28, 25, 23, 0.7)",
+    overflow: "hidden",
+  },
   ocrBottomControls: {
     alignItems: "center",
     minHeight: 84,
@@ -1579,6 +1723,58 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     paddingHorizontal: 4,
     width: "100%",
+  },
+  ocrDictationButton: {
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 48,
+    marginHorizontal: 4,
+    marginBottom: 10,
+    borderRadius: 999,
+    ...continuousCorners,
+    backgroundColor: "rgba(255, 255, 255, 0.18)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.2)",
+  },
+  ocrDictationButtonActive: {
+    backgroundColor: "rgba(220, 38, 38, 0.82)",
+    borderColor: "rgba(255, 255, 255, 0.28)",
+  },
+  ocrDictationButtonText: {
+    color: "#ffffff",
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  ocrModeOptions: {
+    flexDirection: "row",
+    gap: 6,
+    paddingHorizontal: 4,
+    paddingBottom: 10,
+    width: "100%",
+  },
+  ocrModeOption: {
+    alignItems: "center",
+    borderRadius: 999,
+    ...continuousCorners,
+    flex: 1,
+    minHeight: 38,
+    justifyContent: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.1)",
+  },
+  ocrModeOptionActive: {
+    backgroundColor: "rgba(255, 255, 255, 0.36)",
+    borderColor: "rgba(255, 255, 255, 0.34)",
+  },
+  ocrModeOptionText: {
+    color: "rgba(245, 245, 244, 0.7)",
+    fontSize: 12,
+    fontWeight: "900",
+    lineHeight: 15,
+  },
+  ocrModeOptionTextActive: {
+    color: "#ffffff",
   },
   ocrCameraControlButton: {
     alignItems: "center",

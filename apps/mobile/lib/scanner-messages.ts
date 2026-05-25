@@ -1,6 +1,6 @@
-import type { BarcodeMessage } from "@volt/scanner-protocol";
+import type { BarcodeMessage, PhotoMessage } from "@volt/scanner-protocol";
 
-export type ScannerCaptureMode = "ocr" | "barcode" | "dictation";
+export type ScannerCaptureMode = "ocr" | "barcode" | "dictation" | "photo";
 
 export type ScanItem = BarcodeMessage & {
   id: string;
@@ -39,5 +39,12 @@ export function makeDictationMessage(text: string, dictationSessionId: string): 
     ...makeCaptureMessage(text, "dictation", "text", true),
     dictationPhase: "final",
     dictationSessionId,
+  };
+}
+
+export function makePhotoMessage(photo: Omit<PhotoMessage, "kind">): PhotoMessage {
+  return {
+    ...photo,
+    kind: "photo",
   };
 }
