@@ -29,6 +29,15 @@ type MobileScannerState = {
   status: ScannerConnectionStatus;
   qrCodeUrl: string | null;
   error: string | null;
+  mode: MobileCaptureMode | null;
+};
+
+type MobileCaptureMode = "ocr" | "barcode" | "dictation";
+
+const MODE_LABELS: Record<MobileCaptureMode, string> = {
+  ocr: "OCR Scanning",
+  barcode: "Barcode Scanner",
+  dictation: "Dictation",
 };
 
 function installEditableTracker() {
@@ -80,6 +89,7 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
   const [status, setStatus] = useState<ScannerConnectionStatus>("disconnected");
   const [scans, setScans] = useState<ScanRecord[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [mode, setMode] = useState<MobileCaptureMode | null>(null);
 
   const generateQrCode = useCallback(async (url: string) => {
     return QRCode.toDataURL(url, {
@@ -101,6 +111,7 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
     (state: Partial<MobileScannerState> | null | undefined) => {
       if (!state) return;
       if (state.status) setStatus(state.status);
+      if ("mode" in state) setMode(state.mode ?? null);
       setError(state.error ?? null);
 
       if (!state.qrCodeUrl) {
@@ -141,7 +152,11 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
     async (force = false) => {
       setStatus("creating");
       setError(null);
-      const response = await chrome.runtime.sendMessage({ action: "scannerStart", force });
+      const response = await chrome.runtime.sendMessage({
+        action: mode ? "scannerStartForMode" : "scannerStart",
+        force,
+        mode,
+      });
       if (response?.state) applyScannerState(response.state);
       if (response?.error) {
         setStatus("error");
@@ -209,13 +224,18 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
   const showQr = status === "waiting" && qrDataUrl;
   const isCreating = status === "creating";
   const connected = status === "connected";
+  const modeLabel = mode ? MODE_LABELS[mode] : null;
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-white">
       <MobileToolHeader
         icon={<Smartphone className="h-4 w-4" />}
         title="Mobile Scanner"
-        subtitle="Pair the Volt app once per browser sidepanel"
+        subtitle={
+          modeLabel
+            ? `Scan with iPhone for ${modeLabel}`
+            : "Pair the Volt app once per browser sidepanel"
+        }
         status={status}
         error={error}
       />
@@ -225,7 +245,11 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
           <div className="mb-5">
             <QrPairingPanel
               qrDataUrl={qrDataUrl}
-              hint="Scan with the phone Camera app to open Volt and pair."
+              hint={
+                modeLabel
+                  ? `Scan with the iPhone Camera app for ${modeLabel}.`
+                  : "Scan with the phone Camera app to open Volt and pair."
+              }
             />
           </div>
         ) : isCreating ? (
@@ -272,7 +296,7 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
               </div>
               <p className="text-sm font-semibold text-stone-700">No scans yet</p>
               <p className="mt-1 max-w-[260px] text-xs text-stone-500">
-                Scan a barcode or send text from the Volt app. Each result appears here as a one-click copy.
+                Scan a barcode, capture text, or dictate from iPhone. Each result appears here as a one-click copy.
               </p>
             </div>
           ) : (

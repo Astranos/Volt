@@ -9,6 +9,7 @@ import {
   type BarcodeMessage,
   type ScannerConnectionStatus,
 } from "../../../scanner-protocol/src";
+import { shouldInsertScannerMessage } from "./scanner-message";
 
 type SessionTimer = ReturnType<typeof setInterval>;
 
@@ -19,12 +20,6 @@ export type MobileScannerSessionEvents = {
   onScan: (message: BarcodeMessage) => void;
   onInsert: (text: string) => void;
 };
-
-export function shouldInsertScannerMessage(message: BarcodeMessage) {
-  if (typeof message.insertIntoCursor === "boolean") return message.insertIntoCursor;
-
-  return message.kind === "text" && message.format === "dictation";
-}
 
 export class MobileScannerSession {
   private peerConnection: RTCPeerConnection | null = null;

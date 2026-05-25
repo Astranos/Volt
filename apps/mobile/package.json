@@ -11,6 +11,9 @@
     "ios:device": "expo run:ios --device",
     "ios:device:release": "expo run:ios --device --configuration Release",
     "web": "expo start --web",
+    "apply:clip-completion-record": "node scripts/apply-app-clip-completion-record.mjs",
+    "preflight:clip": "node scripts/app-clip-preflight.mjs",
+    "test:clip": "node --experimental-default-type=module --test lib/*.test.mjs scripts/*.test.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -35,6 +38,7 @@
     "expo-status-bar": "~56.0.4",
     "react": "19.2.3",
     "react-native": "0.85.3",
+    "react-native-app-clip": "0.8.0",
     "react-native-get-random-values": "~1.11.0",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.25.1",
@@ -42,6 +46,7 @@
     "react-native-webrtc": "^124.0.6"
   },
   "devDependencies": {
+    "@react-native-community/cli": "20.1.3",
     "@types/react": "~19.2.15",
     "typescript": "~6.0.3"
   },

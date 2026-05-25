@@ -12,6 +12,10 @@
       "icon": "./assets/volt.icon",
       "bundleIdentifier": "com.volt.mobile",
       "buildNumber": "11",
+      "associatedDomains": [
+        "applinks:scanner-signal.vercel.app",
+        "appclips:scanner-signal.vercel.app"
+      ],
       "infoPlist": {
         "NSCameraUsageDescription": "Volt uses the camera to scan barcodes, capture photos, model numbers, serial numbers, and other text for the paired Chrome extension.",
         "NSMicrophoneUsageDescription": "Volt uses the microphone for hold-to-speak dictation into the paired Chrome browser.",
@@ -36,6 +40,46 @@
           "ios": {
             "deploymentTarget": "16.4"
           }
+        }
+      ],
+      [
+        "react-native-app-clip",
+        {
+          "name": "Volt Clip",
+          "bundleIdSuffix": "Clip",
+          "targetSuffix": "Clip",
+          "deploymentTarget": "16.4",
+          "requestEphemeralUserNotification": false,
+          "requestLocationConfirmation": false,
+          "excludedPackages": [
+            "@expo/dom-webview",
+            "@expo/log-box",
+            "@react-native-ml-kit/text-recognition",
+            "@expo/ui",
+            "expo-clipboard",
+            "expo-camera",
+            "expo-dom-webview",
+            "expo-file-system",
+            "expo-glass-effect",
+            "expo-haptics",
+            "expo-image-manipulator",
+            "expo-keep-awake",
+            "expo-speech-recognition",
+            "expo-symbols",
+            "expo-router",
+            "expo-asset",
+            "expo-font",
+            "expo-linking",
+            "@react-native-async-storage/async-storage",
+            "@react-native-masked-view/masked-view",
+            "react-native-gesture-handler",
+            "react-native-get-random-values",
+            "react-native-reanimated",
+            "react-native-screens",
+            "react-native-svg",
+            "react-native-webrtc",
+            "react-native-worklets"
+          ]
         }
       ],
       [

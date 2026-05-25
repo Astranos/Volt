@@ -3,5 +3,7 @@
   "EX_DEV_CLIENT_NETWORK_INSPECTOR": "true",
   "ios.deploymentTarget": "16.4",
   "ios.forceStaticLinking": "[]",
-  "apple.privacyManifestAggregationEnabled": "true"
+  "apple.privacyManifestAggregationEnabled": "true",
+  "expo.inlineModules.watchedDirectories": "[]",
+  "EXPO_USE_PRECOMPILED_MODULES": "false"
 }

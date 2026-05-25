@@ -8,6 +8,7 @@
 import { defineBackground } from "wxt/utils/define-background";
 import { handleTabMessage } from "../src/background/tab-message-handler";
 import { createSidepanelToolController } from "../src/background/sidepanel-tool-controller";
+import { shouldInsertScannerMessage } from "../src/domain/scanner-message";
 
 export default defineBackground({
   main() {
@@ -90,6 +91,7 @@ export default defineBackground({
     const MOBILE_PHOTOS_STORAGE_KEY = "volt.mobilePhotos.photos";
     const MOBILE_SCANNER_MAX_SCANS = 100;
     const MOBILE_PHOTOS_MAX_PHOTOS = 80;
+    const MOBILE_CAPTURE_MODES = new Set(["ocr", "barcode", "dictation"]);
     const DEFAULT_STORAGE_STATS = {
       indexedPages: 0,
       totalDocuments: 0,
@@ -118,12 +120,8 @@ export default defineBackground({
       if (DEBUG) console.log("[Volt Service Wroker]", ...args);
     }
 
-    function shouldInsertScannerMessage(message) {
-      if (typeof message?.insertIntoCursor === "boolean") {
-        return message.insertIntoCursor;
-      }
-
-      return message?.kind === "text" && message?.format === "dictation";
+    function normalizeMobileCaptureMode(mode) {
+      return MOBILE_CAPTURE_MODES.has(mode) ? mode : null;
     }
 
     function normalizeScannerMessage(message) {
@@ -243,6 +241,14 @@ export default defineBackground({
       target.focus();
       if (target.isContentEditable) {
         const selection = window.getSelection();
+        const trackedRange =
+          root.__voltLastEditable === target && root.__voltLastEditableRange?.commonAncestorContainer?.isConnected
+            ? root.__voltLastEditableRange
+            : null;
+        if (trackedRange && selection) {
+          selection.removeAllRanges();
+          selection.addRange(trackedRange);
+        }
         const live = root.__voltLiveDictation;
         if (
           isLiveDictation &&
@@ -279,6 +285,7 @@ export default defineBackground({
           document.execCommand("insertText", false, value);
         }
         target.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: value }));
+        root.__voltLastEditableRange = null;
         return;
       }
 
@@ -290,11 +297,21 @@ export default defineBackground({
         live.target === input &&
         typeof live.start === "number" &&
         typeof live.end === "number";
+      const trackedSelection =
+        root.__voltLastEditable === input &&
+        root.__voltLastEditableSelection &&
+        root.__voltLastEditableSelection.isContentEditable !== true
+          ? root.__voltLastEditableSelection
+          : null;
       const start = replaceLiveInput
         ? live.start
+        : typeof trackedSelection?.start === "number"
+        ? trackedSelection.start
         : input.selectionStart ?? input.value.length;
       const end = replaceLiveInput
         ? live.end
+        : typeof trackedSelection?.end === "number"
+        ? trackedSelection.end
         : input.selectionEnd ?? input.value.length;
       if (typeof input.setRangeText === "function") {
         input.setRangeText(value, start, end, "end");
@@ -315,6 +332,7 @@ export default defineBackground({
       }
       input.dispatchEvent(new Event("input", { bubbles: true }));
       input.dispatchEvent(new Event("change", { bubbles: true }));
+      root.__voltLastEditableSelection = null;
     }
 
     async function insertScannerText(text, options = {}) {
@@ -426,8 +444,33 @@ export default defineBackground({
         const state = await sendScannerOffscreenMessage({
           action: "scannerOffscreenStart",
           force: message?.force === true,
+          mode: normalizeMobileCaptureMode(message?.mode),
         });
         sendResponse({ success: true, state });
+      } catch (err) {
+        sendResponse({ success: false, error: String(err?.message || err) });
+      }
+    }
+
+    async function handleOpenMobileCapture(message, sender, sendResponse) {
+      const mode = normalizeMobileCaptureMode(message?.mode);
+      if (!mode) {
+        sendResponse({ success: false, error: "invalid_mode" });
+        return;
+      }
+
+      try {
+        const state = await sendScannerOffscreenMessage({
+          action: "scannerOffscreenStart",
+          force: false,
+          mode,
+        });
+
+        sendResponse(
+          state?.qrCodeUrl
+            ? { success: true, state }
+            : { success: false, state, error: "missing_app_clip_url" }
+        );
       } catch (err) {
         sendResponse({ success: false, error: String(err?.message || err) });
       }
@@ -1006,6 +1049,12 @@ export default defineBackground({
       switch (message.action) {
         case "scannerStart":
           handleScannerStart(message, sendResponse);
+          return true;
+        case "scannerStartForMode":
+          handleScannerStart(message, sendResponse);
+          return true;
+        case "openMobileCapture":
+          handleOpenMobileCapture(message, sender, sendResponse);
           return true;
         case "scannerDisconnect":
           handleScannerDisconnect(sendResponse);

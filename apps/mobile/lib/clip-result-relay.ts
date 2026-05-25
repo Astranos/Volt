@@ -1,0 +1,37 @@
+import type { BarcodeMessage } from "@volt/scanner-protocol";
+
+import type { CaptureMode } from "./capture-url";
+
+export type ClipRelayResult = {
+  id: string;
+  mode: CaptureMode;
+  message: BarcodeMessage;
+};
+
+function makeRelayResultId() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+export function makeClipRelayResult(mode: CaptureMode, message: BarcodeMessage): ClipRelayResult {
+  return {
+    id: makeRelayResultId(),
+    mode,
+    message,
+  };
+}
+
+export function messageForClipRelayStatus(status: number) {
+  if (status === 400) {
+    return "This App Clip link no longer matches the browser session. Start a fresh scan from Chrome.";
+  }
+
+  if (status === 404) {
+    return "The browser session expired. Start a new scan from Chrome and use the latest QR code.";
+  }
+
+  if (status === 409) {
+    return "A result was already sent for this browser session. Start a new scan to send another result.";
+  }
+
+  return `The browser session returned ${status}. Keep the QR overlay open and try again.`;
+}

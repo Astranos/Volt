@@ -46,7 +46,7 @@
       <true/>
     </dict>
     <key>NSCameraUsageDescription</key>
-    <string>Volt uses the camera to scan barcodes, model numbers, serial numbers, and other text for the paired Chrome extension.</string>
+    <string>Volt uses the camera to scan barcodes, capture photos, model numbers, serial numbers, and other text for the paired Chrome extension.</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>Volt uses the microphone for hold-to-speak dictation into the paired Chrome browser.</string>
     <key>NSPhotoLibraryUsageDescription</key>

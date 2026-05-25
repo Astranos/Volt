@@ -5,7 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vercel dev",
-    "build": "echo 'No build step required'"
+    "build": "echo 'No build step required'",
+    "test:clip": "node --experimental-strip-types --test api/*.test.mjs scripts/*.test.mjs",
+    "validate:production": "node scripts/validate-production.mjs",
+    "create:device-validation-session": "node scripts/create-device-validation-session.mjs",
+    "validate:device-evidence-manifest": "node scripts/validate-device-evidence-manifest.mjs",
+    "generate:device-evidence-completion-record": "node scripts/generate-device-evidence-completion-record.mjs"
   },
   "dependencies": {},
   "devDependencies": {

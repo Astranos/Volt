@@ -22,6 +22,7 @@ import {
   SCANNER_SIGNAL_URL,
   type BarcodeMessage,
 } from "@volt/scanner-protocol";
+import { makeBarcodeMessage, makeCaptureMessage, makeOcrMessage, type ScanItem } from "./scanner-messages";
 
 globalThis.atob ??= base64Decode;
 globalThis.btoa ??= base64Encode;
@@ -49,10 +50,6 @@ const defaultSettings: ScannerSettings = {
   dictationPunctuation: true,
   ocrInsertIntoCursor: false,
   scannerInsertIntoCursor: true,
-};
-
-export type ScanItem = BarcodeMessage & {
-  id: string;
 };
 
 type TextCapture = {
@@ -143,22 +140,6 @@ function getSessionFromUrl(url: string) {
 
 function wait(delayMs: number) {
   return new Promise((resolve) => setTimeout(resolve, delayMs));
-}
-
-function makeScanItem(
-  value: string,
-  format: string,
-  kind: BarcodeMessage["kind"],
-  insertIntoCursor?: boolean
-): ScanItem {
-  return {
-    id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    barcode: value.trim(),
-    format,
-    insertIntoCursor,
-    kind,
-    scannedAt: new Date().toISOString(),
-  };
 }
 
 function getOcrResizeAction(photo: { width?: number; height?: number }) {
@@ -611,7 +592,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       if (last?.value === value && now - last.at < REPEAT_SCAN_COOLDOWN_MS) return;
 
       lastScanRef.current = { value, at: now };
-      const item = makeScanItem(value, type, "barcode", settingsRef.current.scannerInsertIntoCursor);
+      const item = makeBarcodeMessage(value, type, settingsRef.current.scannerInsertIntoCursor);
       const currentItems = pendingScannerItemsRef.current.filter((pending) => pending.barcode !== item.barcode);
       pendingScannerItemsRef.current = [...currentItems, item];
 
@@ -625,7 +606,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
     async ({ data, type }: BarcodeScanningResult) => {
       const value = data.trim();
       if (!value) return;
-      await sendScan(makeScanItem(value, type, "barcode", settingsRef.current.scannerInsertIntoCursor));
+      await sendScan(makeBarcodeMessage(value, type, settingsRef.current.scannerInsertIntoCursor));
     },
     [sendScan]
   );
@@ -634,7 +615,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
     const value = manualText.trim();
     if (!value) return;
     setManualText("");
-    sendScan(makeScanItem(value, "plain-text", "text", false));
+    sendScan(makeCaptureMessage(value, "plain-text", "text", false));
   }, [manualText, sendScan]);
 
   const sendDictationText = useCallback(
@@ -655,7 +636,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       }
 
       sendScan({
-        ...makeScanItem(value, "dictation", "text", true),
+        ...makeCaptureMessage(value, "dictation", "text", true),
         dictationPhase: phase,
         dictationSessionId: sessionId,
       });
@@ -668,7 +649,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       const value = (text ?? (await Clipboard.getStringAsync())).trim();
       if (!value || value === lastTextCaptureClipboardRef.current) return;
       lastTextCaptureClipboardRef.current = value;
-      await sendScan(makeScanItem(value, "live-text", "text", settingsRef.current.ocrInsertIntoCursor));
+      await sendScan(makeOcrMessage(value, settingsRef.current.ocrInsertIntoCursor));
       setTextCaptureResult({
         text: value,
         target: channelRef.current?.readyState === "open" ? "browser" : "local scan history",
@@ -734,7 +715,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
     const transcript = event.results[0]?.transcript?.trim() ?? "";
     dictationTranscriptRef.current = transcript;
     setDictationTranscript(transcript);
-    sendDictationText(transcript, event.isFinal ? "final" : "partial");
+    if (event.isFinal) sendDictationText(transcript, "final");
   });
 
   useSpeechRecognitionEvent("error", (event) => {
@@ -772,7 +753,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
     setDictating(true);
     ExpoSpeechRecognitionModule.start({
       lang: "en-US",
-      interimResults: true,
+      interimResults: false,
       continuous: false,
       addsPunctuation: settings.dictationPunctuation,
     });

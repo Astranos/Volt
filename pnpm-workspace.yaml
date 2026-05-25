@@ -6,4 +6,6 @@ patchedDependencies:
   '@expo/cli@56.1.10': patches/@expo__cli@56.1.10.patch
   event-target-shim@6.0.2: patches/event-target-shim@6.0.2.patch
   expo-camera@56.0.7: patches/expo-camera@56.0.7.patch
+  react-native@0.85.3: patches/react-native@0.85.3.patch
+  react-native-app-clip@0.8.0: patches/react-native-app-clip@0.8.0.patch
   react-native-webrtc@124.0.7: patches/react-native-webrtc@124.0.7.patch

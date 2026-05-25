@@ -2,6 +2,17 @@ diff --git a/ios/CameraViewModule.swift b/ios/CameraViewModule.swift
 index 03c82a4f55fe386908c7c8af520dc6d4ede89dc7..619cce2fc46e0c80a13037d2adc4804ca0fff06d 100644
 --- a/ios/CameraViewModule.swift
 +++ b/ios/CameraViewModule.swift
+@@ -18,7 +18,9 @@ public final class CameraViewModule: Module, ScannerResultHandler {
+     Events("onModernBarcodeScanned")
+ 
+     OnCreate {
+-      let permissionsManager = self.appContext?.permissions
++      guard let permissionsManager = self.appContext?.permissions else {
++        return
++      }
+       EXPermissionsMethodsDelegate.register(
+         [
+           CameraOnlyPermissionRequester(),
 @@ -206,6 +206,13 @@ public final class CameraViewModule: Module, ScannerResultHandler {
          }
        }

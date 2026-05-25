@@ -1,4 +1,5 @@
 const SCANNER_SIGNAL_URL = "https://scanner-signal.vercel.app/api/signal";
+const SCANNER_APP_CLIP_BASE_URL = "https://scanner-signal.vercel.app/clip";
 const SCANNER_APP_PAIR_URL = "volt://pair";
 const SCANNER_ICE_SERVERS = [
   { urls: "stun:stun.l.google.com:19302" },
@@ -7,12 +8,17 @@ const SCANNER_ICE_SERVERS = [
 const SCANNER_DATA_CHANNEL = "barcodes";
 const SCANNER_ICE_GATHERING_TIMEOUT_MS = 5000;
 const SCANNER_ANSWER_POLL_INTERVAL_MS = 1000;
+const SCANNER_RESULT_POLL_INTERVAL_MS = 500;
+const SCANNER_RESULT_TIMEOUT_MS = 30 * 60 * 1000;
 
 type ScannerState = {
   status: "disconnected" | "creating" | "waiting" | "connected" | "error";
   qrCodeUrl: string | null;
   error: string | null;
+  mode: MobileCaptureMode | null;
 };
+
+type MobileCaptureMode = "ocr" | "barcode" | "dictation";
 
 type BarcodeMessage = {
   barcode: string;
@@ -64,6 +70,13 @@ type PendingPhoto = PhotoChunkStartMessage & {
   chunks: string[];
   receivedChunks: number;
   updatedAt: number;
+};
+
+type ScannerRelayResult = {
+  id: string;
+  mode: MobileCaptureMode;
+  message: BarcodeMessage;
+  createdAt: string;
 };
 
 function decodeScannerTransportMessage(data: string): ScannerTransportMessage | null {
@@ -162,6 +175,8 @@ class MobileScannerOffscreenSession {
   private peerConnection: RTCPeerConnection | null = null;
   private dataChannel: RTCDataChannel | null = null;
   private answerPoll: number | null = null;
+  private resultPoll: number | null = null;
+  private resultPollTimeout: number | null = null;
   private restartTimer: number | null = null;
   private sessionId: string | null = null;
   private intentionallyClosing = false;
@@ -171,6 +186,7 @@ class MobileScannerOffscreenSession {
     status: "disconnected",
     qrCodeUrl: null,
     error: null,
+    mode: null,
   };
 
   getState() {
@@ -186,9 +202,11 @@ class MobileScannerOffscreenSession {
     });
   }
 
-  async start(force = false) {
+  async start(force = false, mode: MobileCaptureMode | null = null) {
+    const nextMode = mode ?? this.state.mode;
     if (
       !force &&
+      nextMode === this.state.mode &&
       (this.state.status === "creating" ||
         this.state.status === "waiting" ||
         this.state.status === "connected")
@@ -197,9 +215,22 @@ class MobileScannerOffscreenSession {
     }
 
     this.cleanup(true);
-    this.setState({ status: "creating", error: null, qrCodeUrl: null });
+    this.setState({ status: "creating", error: null, qrCodeUrl: null, mode: nextMode });
 
     try {
+      if (nextMode) {
+        const sessionId = await this.createRelaySession(nextMode);
+        this.sessionId = sessionId;
+        this.setState({
+          status: "waiting",
+          qrCodeUrl: this.buildPairingUrl(sessionId, nextMode),
+          error: null,
+          mode: nextMode,
+        });
+        this.pollForResult(sessionId);
+        return this.getState();
+      }
+
       const pc = new RTCPeerConnection({ iceServers: SCANNER_ICE_SERVERS });
       this.peerConnection = pc;
 
@@ -235,11 +266,12 @@ class MobileScannerOffscreenSession {
 
       const sessionId = await this.createSignalingSession(pc.localDescription);
       this.sessionId = sessionId;
-      const appPairingUrl = `${SCANNER_APP_PAIR_URL}?session=${encodeURIComponent(sessionId)}`;
+      const appPairingUrl = this.buildPairingUrl(sessionId, nextMode);
       this.setState({
         status: "waiting",
         qrCodeUrl: appPairingUrl,
         error: null,
+        mode: nextMode,
       });
       this.pollForAnswer(sessionId);
     } catch (err) {
@@ -255,8 +287,14 @@ class MobileScannerOffscreenSession {
   disconnect() {
     this.sessionId = null;
     this.cleanup(true);
-    this.setState({ status: "disconnected", qrCodeUrl: null, error: null });
+    this.setState({ status: "disconnected", qrCodeUrl: null, error: null, mode: null });
     return this.getState();
+  }
+
+  private buildPairingUrl(sessionId: string, mode: MobileCaptureMode | null) {
+    const encodedSession = encodeURIComponent(sessionId);
+    if (!mode) return `${SCANNER_APP_PAIR_URL}?session=${encodedSession}`;
+    return `${SCANNER_APP_CLIP_BASE_URL}/${mode}?session=${encodedSession}`;
   }
 
   private cleanup(intentional = true) {
@@ -268,6 +306,14 @@ class MobileScannerOffscreenSession {
     if (this.answerPoll) {
       window.clearInterval(this.answerPoll);
       this.answerPoll = null;
+    }
+    if (this.resultPoll) {
+      window.clearInterval(this.resultPoll);
+      this.resultPoll = null;
+    }
+    if (this.resultPollTimeout) {
+      window.clearTimeout(this.resultPollTimeout);
+      this.resultPollTimeout = null;
     }
     this.dataChannel?.close();
     this.peerConnection?.close();
@@ -284,7 +330,7 @@ class MobileScannerOffscreenSession {
     this.restartTimer = window.setTimeout(() => {
       this.restartTimer = null;
       this.cleanup(true);
-      void this.start(true);
+      void this.start(true, this.state.mode);
     }, 500);
   }
 
@@ -414,6 +460,34 @@ class MobileScannerOffscreenSession {
     return this.postSignalingOffer(SCANNER_SIGNAL_URL, localDescription);
   }
 
+  private async createRelaySession(mode: MobileCaptureMode) {
+    const sessionResponse = await fetch(SCANNER_SIGNAL_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ relay: true, mode }),
+    });
+
+    if (!sessionResponse.ok) {
+      let details = "";
+      try {
+        const payload = await sessionResponse.json();
+        details =
+          typeof payload?.error === "string" && payload.error
+            ? `: ${payload.error}`
+            : "";
+      } catch (_error) {}
+      throw new Error(
+        `Failed to create App Clip session (${sessionResponse.status})${details}`
+      );
+    }
+
+    const { sessionId } = await sessionResponse.json();
+    if (typeof sessionId !== "string" || !sessionId) {
+      throw new Error("Invalid App Clip session");
+    }
+    return sessionId;
+  }
+
   private async postSignalingOffer(
     sessionUrl: string,
     localDescription: RTCSessionDescription
@@ -468,6 +542,59 @@ class MobileScannerOffscreenSession {
       }
     }, SCANNER_ANSWER_POLL_INTERVAL_MS);
   }
+
+  private pollForResult(sessionId: string) {
+    if (this.resultPollTimeout) {
+      window.clearTimeout(this.resultPollTimeout);
+    }
+
+    this.resultPollTimeout = window.setTimeout(() => {
+      if (this.sessionId !== sessionId) return;
+      if (this.resultPoll) {
+        window.clearInterval(this.resultPoll);
+        this.resultPoll = null;
+      }
+      this.resultPollTimeout = null;
+      this.setState({
+        status: "error",
+        qrCodeUrl: null,
+        error: "App Clip session timed out. Start a new scan and use the latest QR code.",
+      });
+    }, SCANNER_RESULT_TIMEOUT_MS);
+
+    this.resultPoll = window.setInterval(async () => {
+      try {
+        if (this.sessionId !== sessionId) {
+          if (this.resultPoll) {
+            window.clearInterval(this.resultPoll);
+            this.resultPoll = null;
+          }
+          return;
+        }
+
+        const resultResponse = await fetch(`${SCANNER_SIGNAL_URL}/${sessionId}/result`);
+        if (!resultResponse.ok) return;
+
+        const payload = (await resultResponse.json()) as { result?: ScannerRelayResult | null };
+        const result = payload.result;
+        if (!result?.message) return;
+
+        this.handleDataChannelMessage(JSON.stringify(result.message));
+        this.setState({ status: "connected", error: null });
+
+        if (this.resultPoll) {
+          window.clearInterval(this.resultPoll);
+          this.resultPoll = null;
+        }
+        if (this.resultPollTimeout) {
+          window.clearTimeout(this.resultPollTimeout);
+          this.resultPollTimeout = null;
+        }
+      } catch (err) {
+        console.error("Failed to poll scanner result", err);
+      }
+    }, SCANNER_RESULT_POLL_INTERVAL_MS);
+  }
 }
 
 const mobileScannerSession = new MobileScannerOffscreenSession();
@@ -480,13 +607,19 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   if (message.action === "scannerOffscreenStart") {
     mobileScannerSession
-      .start(message.force === true)
+      .start(
+        message.force === true,
+        message.mode === "ocr" || message.mode === "barcode" || message.mode === "dictation"
+          ? message.mode
+          : null
+      )
       .then((state) => sendResponse(state))
       .catch((err) =>
         sendResponse({
           status: "error",
           qrCodeUrl: null,
           error: err instanceof Error ? err.message : String(err),
+          mode: null,
         })
       );
     return true;
