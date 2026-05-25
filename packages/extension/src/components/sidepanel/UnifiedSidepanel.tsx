@@ -5,7 +5,13 @@ import EbayTaxonomyTool from "./EbayTaxonomyTool";
 import BuyingGuide from "./BuyingGuide";
 import ShopifyHelp from "./ShopifyHelp";
 import MobileScanner from "./MobileScanner";
-import { ChevronDown } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  ChevronDown,
+  Info,
+  XCircle,
+} from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,12 +24,76 @@ import {
   isSidepanelToolId,
   type SidepanelToolId,
 } from "../../lib/sidepanel-tools";
+import {
+  SIDEPANEL_TOAST_EVENT,
+  type SidepanelToastDetail,
+  type SidepanelToastTone,
+} from "../../lib/sidepanel-toast";
+
+type ActiveToast = {
+  message: string;
+  tone: SidepanelToastTone;
+  id: number;
+};
+
+const TOAST_DURATION_MS = 1900;
+
+const TOAST_TONE_STYLES: Record<
+  SidepanelToastTone,
+  { text: string; icon: React.ComponentType<{ className?: string }> }
+> = {
+  success: {
+    text: "text-green-700 dark:text-green-300",
+    icon: CheckCircle2,
+  },
+  info: {
+    text: "text-sky-700 dark:text-sky-300",
+    icon: Info,
+  },
+  warning: {
+    text: "text-amber-700 dark:text-amber-300",
+    icon: AlertTriangle,
+  },
+  error: {
+    text: "text-red-600 dark:text-red-300",
+    icon: XCircle,
+  },
+};
 
 export default function UnifiedSidepanel() {
   const [activeTool, setActiveTool] =
     useState<SidepanelToolId>("controller-testing");
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const [dropdownWidth, setDropdownWidth] = useState<number>();
+  const [toast, setToast] = useState<ActiveToast | null>(null);
+  const toastTimer = useRef<number | null>(null);
+  const toastCounter = useRef(0);
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<SidepanelToastDetail>).detail;
+      if (!detail || typeof detail.message !== "string" || !detail.message) {
+        return;
+      }
+      toastCounter.current += 1;
+      const id = toastCounter.current;
+      const tone: SidepanelToastTone = detail.tone ?? "success";
+      setToast({ message: detail.message, tone, id });
+      if (toastTimer.current) window.clearTimeout(toastTimer.current);
+      toastTimer.current = window.setTimeout(() => {
+        setToast((curr) => (curr && curr.id === id ? null : curr));
+        toastTimer.current = null;
+      }, TOAST_DURATION_MS);
+    };
+    window.addEventListener(SIDEPANEL_TOAST_EVENT, handler as EventListener);
+    return () => {
+      window.removeEventListener(
+        SIDEPANEL_TOAST_EVENT,
+        handler as EventListener,
+      );
+      if (toastTimer.current) window.clearTimeout(toastTimer.current);
+    };
+  }, []);
 
   // Load the initial tool from storage
   useEffect(() => {
@@ -132,6 +202,9 @@ export default function UnifiedSidepanel() {
 
   const activeToolMeta = tools.find((t) => t.id === activeTool) || tools[0];
 
+  const toneStyles = toast ? TOAST_TONE_STYLES[toast.tone] : null;
+  const ToastIcon = toneStyles?.icon;
+
   return (
     <div className="sidepanel-shell h-full w-full flex flex-col">
       {/* Fixed Header */}
@@ -140,14 +213,42 @@ export default function UnifiedSidepanel() {
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              className="liquid-glass concentric-lg flex w-full items-center justify-between px-4 py-2 text-left text-lg font-semibold text-stone-950 transition focus:outline-none focus:ring-2 focus:ring-primary/40 hover:bg-white/60"
+              className="liquid-glass concentric-lg relative flex w-full items-center justify-between overflow-hidden px-4 py-2 text-left text-lg font-semibold text-stone-950 transition focus:outline-none focus:ring-2 focus:ring-primary/40 hover:bg-white/60 dark:text-stone-50 dark:hover:bg-white/5"
               ref={triggerRef}
             >
-              <span className="flex items-center gap-2">
-                <activeToolMeta.icon className="h-5 w-5" />
-                {activeToolMeta.label}
+              <span className="relative flex min-w-0 flex-1 items-center">
+                <span
+                  className={cn(
+                    "flex min-w-0 items-center gap-2 transition-all duration-200 ease-out",
+                    toast
+                      ? "-translate-y-1 opacity-0"
+                      : "translate-y-0 opacity-100",
+                  )}
+                  aria-hidden={toast ? "true" : undefined}
+                >
+                  <activeToolMeta.icon className="h-5 w-5 shrink-0" />
+                  <span className="truncate">{activeToolMeta.label}</span>
+                </span>
+                {toast && ToastIcon ? (
+                  <span
+                    key={toast.id}
+                    aria-live="polite"
+                    className={cn(
+                      "volt-toast-enter absolute inset-y-0 left-0 flex min-w-0 items-center gap-2 text-base font-bold",
+                      toneStyles?.text,
+                    )}
+                  >
+                    <ToastIcon className="h-5 w-5 shrink-0" />
+                    <span className="truncate">{toast.message}</span>
+                  </span>
+                ) : null}
               </span>
-              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+              <ChevronDown
+                className={cn(
+                  "h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200",
+                  toast && "scale-90 opacity-60",
+                )}
+              />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent

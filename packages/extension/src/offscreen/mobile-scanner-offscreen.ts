@@ -613,11 +613,25 @@ class MobileScannerOffscreenSession {
         const unseenResults = results.filter((result) => result?.id && !this.seenRelayResultIds.has(result.id));
         if (unseenResults.length === 0) return;
 
+        let inferredMode: MobileCaptureMode | null = null;
         for (const result of unseenResults) {
           this.seenRelayResultIds.add(result.id);
+          if (
+            result.mode &&
+            (result.mode === "ocr" ||
+              result.mode === "barcode" ||
+              result.mode === "dictation" ||
+              result.mode === "photo")
+          ) {
+            inferredMode = result.mode;
+          }
           if (result.message) this.handleDataChannelMessage(JSON.stringify(result.message));
         }
-        this.setState({ status: "connected", error: null });
+        const patch: Partial<ScannerState> = { status: "connected", error: null };
+        if (inferredMode && inferredMode !== this.state.mode) {
+          patch.mode = inferredMode;
+        }
+        this.setState(patch);
       } catch (err) {
         console.error("Failed to poll scanner result", err);
       }
