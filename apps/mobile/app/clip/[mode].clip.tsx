@@ -130,7 +130,7 @@ export default function ClipInvocationScreen() {
     return "Browser session found";
   }, [dictationFinal, dictationState, mode, ocrImageUri, ocrPreviewState, ocrState, ocrText, scannerState, sendState, session]);
   const showMeasuredOcrPreview = useCallback(() => {
-    if (mode !== "ocr" || ocrImageUri || !hasVoltClipTextRecognizer) return;
+    if (mode !== "ocr" || !hasVoltClipTextRecognizer) return;
 
     setOcrPreviewState("starting");
     showVoltClipTextPreview({
@@ -140,10 +140,10 @@ export default function ClipInvocationScreen() {
       height: windowDimensions.height,
     });
     setOcrPreviewState("ready");
-  }, [mode, ocrImageUri, windowDimensions.height, windowDimensions.width]);
+  }, [mode, windowDimensions.height, windowDimensions.width]);
 
   useEffect(() => {
-    if (mode !== "ocr" || ocrImageUri || !hasVoltClipTextRecognizer) {
+    if (mode !== "ocr" || !hasVoltClipTextRecognizer) {
       hideVoltClipTextPreview();
       return;
     }
@@ -154,7 +154,7 @@ export default function ClipInvocationScreen() {
       clearTimeout(timer);
       hideVoltClipTextPreview();
     };
-  }, [mode, ocrImageUri, showMeasuredOcrPreview]);
+  }, [mode, showMeasuredOcrPreview]);
 
   useEffect(() => {
     let mounted = true;
@@ -295,8 +295,6 @@ export default function ClipInvocationScreen() {
 
     setError(null);
     setOcrState("capturing");
-    setOcrPreviewState("idle");
-    hideVoltClipTextPreview();
 
     try {
       const result = await captureAndRecognizeVoltClipText();
