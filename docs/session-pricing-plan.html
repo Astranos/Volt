@@ -1,0 +1,616 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Session Pricing Plan</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #172026;
+        --muted: #5e6b73;
+        --line: #d8e0e4;
+        --panel: #f7f9fa;
+        --accent: #0d7c66;
+        --accent-dark: #095f50;
+        --gold: #b56d16;
+        --red: #b42318;
+        --white: #ffffff;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+        color: var(--ink);
+        background: var(--white);
+        line-height: 1.45;
+      }
+
+      header {
+        border-bottom: 1px solid var(--line);
+        background:
+          linear-gradient(rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.92)),
+          url("data:image/svg+xml,%3Csvg width='1400' height='520' viewBox='0 0 1400 520' xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='1400' height='520' fill='%23edf3f1'/%3E%3Cg fill='none' stroke='%230d7c66' stroke-opacity='0.18' stroke-width='2'%3E%3Cpath d='M80 96h260v112H80zM392 96h180v112H392zM624 96h310v112H624zM986 96h230v112H986zM180 278h210v112H180zM442 278h340v112H442zM834 278h260v112H834z'/%3E%3Cpath d='M340 152h52M572 152h52M934 152h52M390 334h52M782 334h52'/%3E%3C/g%3E%3Cg fill='%23b56d16' fill-opacity='0.22'%3E%3Ccircle cx='1220' cy='126' r='44'/%3E%3Ccircle cx='118' cy='356' r='31'/%3E%3C/g%3E%3C/svg%3E");
+        background-size: cover;
+        background-position: center;
+      }
+
+      .wrap {
+        width: min(1120px, calc(100% - 32px));
+        margin: 0 auto;
+      }
+
+      .hero {
+        min-height: 430px;
+        display: grid;
+        align-content: center;
+        padding: 56px 0 88px;
+      }
+
+      .eyebrow {
+        margin: 0 0 14px;
+        color: var(--accent-dark);
+        font-size: 0.82rem;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        max-width: 780px;
+        margin: 0;
+        font-size: clamp(2.2rem, 6vw, 5.2rem);
+        line-height: 0.95;
+        letter-spacing: 0;
+      }
+
+      .hero p {
+        max-width: 690px;
+        margin: 24px 0 0;
+        color: #344148;
+        font-size: clamp(1.05rem, 2vw, 1.35rem);
+      }
+
+      main {
+        padding: 36px 0 64px;
+      }
+
+      section {
+        padding: 28px 0;
+        border-bottom: 1px solid var(--line);
+      }
+
+      h2 {
+        margin: 0 0 16px;
+        font-size: clamp(1.45rem, 3vw, 2.15rem);
+        line-height: 1.1;
+      }
+
+      h3 {
+        margin: 0 0 8px;
+        font-size: 1.05rem;
+      }
+
+      p {
+        margin: 0 0 12px;
+      }
+
+      .muted {
+        color: var(--muted);
+      }
+
+      .grid {
+        display: grid;
+        gap: 16px;
+      }
+
+      .two {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .three {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .card {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--white);
+        padding: 18px;
+      }
+
+      .band {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 18px;
+      }
+
+      .steps {
+        counter-reset: step;
+        display: grid;
+        gap: 12px;
+        margin-top: 12px;
+      }
+
+      .step {
+        display: grid;
+        grid-template-columns: 36px 1fr;
+        gap: 12px;
+        align-items: start;
+      }
+
+      .step::before {
+        counter-increment: step;
+        content: counter(step);
+        width: 30px;
+        height: 30px;
+        display: grid;
+        place-items: center;
+        border-radius: 50%;
+        background: var(--accent);
+        color: white;
+        font-weight: 800;
+      }
+
+      ul {
+        margin: 10px 0 0;
+        padding-left: 20px;
+      }
+
+      li + li {
+        margin-top: 6px;
+      }
+
+      .calculator {
+        display: grid;
+        grid-template-columns: minmax(280px, 380px) 1fr;
+        gap: 18px;
+        align-items: start;
+      }
+
+      label {
+        display: grid;
+        gap: 6px;
+        margin-bottom: 14px;
+        color: #2d3a40;
+        font-weight: 700;
+        font-size: 0.92rem;
+      }
+
+      input {
+        width: 100%;
+        min-height: 42px;
+        border: 1px solid #b8c5ca;
+        border-radius: 6px;
+        padding: 8px 10px;
+        color: var(--ink);
+        background: white;
+        font: inherit;
+      }
+
+      input:focus {
+        outline: 3px solid rgba(13, 124, 102, 0.18);
+        border-color: var(--accent);
+      }
+
+      .metric-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .metric {
+        min-height: 116px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 14px;
+        background: white;
+      }
+
+      .metric span {
+        display: block;
+        color: var(--muted);
+        font-size: 0.82rem;
+        font-weight: 800;
+        text-transform: uppercase;
+      }
+
+      .metric strong {
+        display: block;
+        margin-top: 10px;
+        font-size: clamp(1.3rem, 2.4vw, 2rem);
+        line-height: 1;
+      }
+
+      .metric small {
+        display: block;
+        margin-top: 8px;
+        color: var(--muted);
+      }
+
+      .formula {
+        font-family:
+          ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+          "Liberation Mono", monospace;
+        color: #26343a;
+        background: #eef4f2;
+        border: 1px solid #cfe0da;
+        border-radius: 6px;
+        padding: 12px;
+        overflow-x: auto;
+        white-space: nowrap;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 12px;
+        font-size: 0.92rem;
+      }
+
+      th,
+      td {
+        border-bottom: 1px solid var(--line);
+        padding: 10px 8px;
+        text-align: right;
+      }
+
+      th:first-child,
+      td:first-child {
+        text-align: left;
+      }
+
+      th {
+        color: #2d3a40;
+        font-size: 0.78rem;
+        text-transform: uppercase;
+      }
+
+      .warn {
+        color: var(--red);
+        font-weight: 800;
+      }
+
+      .good {
+        color: var(--accent-dark);
+        font-weight: 800;
+      }
+
+      .callout {
+        border-left: 4px solid var(--gold);
+        background: #fff8ed;
+        padding: 14px 16px;
+        border-radius: 0 8px 8px 0;
+      }
+
+      @media (max-width: 880px) {
+        .two,
+        .three,
+        .calculator,
+        .metric-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .hero {
+          min-height: 380px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="wrap hero">
+        <p class="eyebrow">Monetization concept</p>
+        <h1>Charge for created sessions after a free allowance.</h1>
+        <p>
+          A usage limit lets new users experience the product before paying,
+          while giving the business a measurable path from activation to
+          recurring revenue.
+        </p>
+      </div>
+    </header>
+
+    <main class="wrap">
+      <section>
+        <h2>Recommended Model</h2>
+        <div class="grid three">
+          <article class="card">
+            <h3>Free allowance</h3>
+            <p class="muted">
+              Each account gets a fixed number of created sessions per month,
+              such as 10 free sessions.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Upgrade trigger</h3>
+            <p class="muted">
+              When the allowance is exhausted, creating another session opens a
+              clear upgrade or credits screen.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Paid access</h3>
+            <p class="muted">
+              Paid users receive a larger monthly session limit, extra credits,
+              or unlimited use subject to fair-use rules.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section>
+        <h2>Plan</h2>
+        <div class="steps">
+          <div class="step">
+            <div>
+              <h3>Define what counts</h3>
+              <p class="muted">
+                Count only successful created sessions. Failed attempts,
+                duplicates, and internal test sessions should not reduce quota.
+              </p>
+            </div>
+          </div>
+          <div class="step">
+            <div>
+              <h3>Track entitlement state</h3>
+              <p class="muted">
+                Store user plan, billing status, period start, period end,
+                sessions created in period, and any purchased credits.
+              </p>
+            </div>
+          </div>
+          <div class="step">
+            <div>
+              <h3>Gate session creation</h3>
+              <p class="muted">
+                Before creating a session, check the user quota. If they are
+                over the limit, return a paywall state instead of creating it.
+              </p>
+            </div>
+          </div>
+          <div class="step">
+            <div>
+              <h3>Connect billing</h3>
+              <p class="muted">
+                Use Stripe subscriptions or credit packs. Sync payment state
+                with webhooks so the app never relies only on client-side state.
+              </p>
+            </div>
+          </div>
+          <div class="step">
+            <div>
+              <h3>Review the numbers</h3>
+              <p class="muted">
+                Track free-to-paid conversion, session volume, gross margin,
+                churn, support issues, and how often users hit the limit.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Interactive Projection</h2>
+        <p class="muted">
+          Adjust the assumptions below. The math updates immediately and uses a
+          simple monthly model.
+        </p>
+
+        <div class="calculator">
+          <aside class="band" aria-label="Projection assumptions">
+            <label>
+              Starting active users
+              <input id="users" type="number" min="0" step="1" value="1000" />
+            </label>
+            <label>
+              Monthly user growth (%)
+              <input id="growth" type="number" min="0" step="0.1" value="12" />
+            </label>
+            <label>
+              Free sessions per user
+              <input id="freeLimit" type="number" min="0" step="1" value="10" />
+            </label>
+            <label>
+              Average sessions per user
+              <input id="avgSessions" type="number" min="0" step="1" value="18" />
+            </label>
+            <label>
+              Free-to-paid conversion (%)
+              <input id="conversion" type="number" min="0" max="100" step="0.1" value="8" />
+            </label>
+            <label>
+              Monthly subscription price ($)
+              <input id="price" type="number" min="0" step="0.01" value="9" />
+            </label>
+            <label>
+              Variable cost per session ($)
+              <input id="cost" type="number" min="0" step="0.001" value="0.04" />
+            </label>
+          </aside>
+
+          <div class="grid">
+            <div class="metric-grid" aria-live="polite">
+              <div class="metric">
+                <span>Users over free limit</span>
+                <strong id="overLimit">0</strong>
+                <small>users likely to see paywall</small>
+              </div>
+              <div class="metric">
+                <span>Paid users</span>
+                <strong id="paidUsers">0</strong>
+                <small>converted from over-limit users</small>
+              </div>
+              <div class="metric">
+                <span>Monthly revenue</span>
+                <strong id="revenue">$0</strong>
+                <small>paid users x price</small>
+              </div>
+              <div class="metric">
+                <span>Gross profit</span>
+                <strong id="profit">$0</strong>
+                <small>revenue minus session cost</small>
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>Current month formula</h3>
+              <div class="formula" id="formula"></div>
+            </div>
+
+            <div class="card">
+              <h3>12-month projection</h3>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Month</th>
+                    <th>Users</th>
+                    <th>Paid</th>
+                    <th>Revenue</th>
+                    <th>Cost</th>
+                    <th>Profit</th>
+                  </tr>
+                </thead>
+                <tbody id="projectionRows"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Decision Notes</h2>
+        <div class="grid two">
+          <div class="callout">
+            <h3>Best first version</h3>
+            <p>
+              Start with a simple subscription: for example, 10 free sessions
+              per month, then $9/month for a higher session limit. It is easier
+              to explain than charging small amounts per session.
+            </p>
+          </div>
+          <div class="card">
+            <h3>Watch-outs</h3>
+            <ul class="muted">
+              <li>Do not charge for failed or accidental sessions.</li>
+              <li>Show usage clearly before the limit is reached.</li>
+              <li>Reset free quota on a predictable monthly schedule.</li>
+              <li>Keep billing checks on the server, not only in the UI.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const ids = [
+        "users",
+        "growth",
+        "freeLimit",
+        "avgSessions",
+        "conversion",
+        "price",
+        "cost",
+      ];
+
+      const fields = Object.fromEntries(
+        ids.map((id) => [id, document.getElementById(id)]),
+      );
+
+      const money = new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: "USD",
+        maximumFractionDigits: 0,
+      });
+
+      const number = new Intl.NumberFormat("en-US", {
+        maximumFractionDigits: 0,
+      });
+
+      function readNumber(id) {
+        const value = Number(fields[id].value);
+        return Number.isFinite(value) ? value : 0;
+      }
+
+      function calculateMonth(userCount) {
+        const freeLimit = readNumber("freeLimit");
+        const avgSessions = readNumber("avgSessions");
+        const conversion = readNumber("conversion") / 100;
+        const price = readNumber("price");
+        const costPerSession = readNumber("cost");
+
+        const excessSessionShare =
+          avgSessions <= 0 ? 0 : Math.max(avgSessions - freeLimit, 0) / avgSessions;
+        const overLimitUsers = userCount * excessSessionShare;
+        const paidUsers = overLimitUsers * conversion;
+        const totalSessions = userCount * avgSessions;
+        const revenue = paidUsers * price;
+        const variableCost = totalSessions * costPerSession;
+        const profit = revenue - variableCost;
+
+        return {
+          overLimitUsers,
+          paidUsers,
+          totalSessions,
+          revenue,
+          variableCost,
+          profit,
+        };
+      }
+
+      function update() {
+        const users = readNumber("users");
+        const growth = readNumber("growth") / 100;
+        const current = calculateMonth(users);
+
+        document.getElementById("overLimit").textContent = number.format(
+          current.overLimitUsers,
+        );
+        document.getElementById("paidUsers").textContent = number.format(
+          current.paidUsers,
+        );
+        document.getElementById("revenue").textContent = money.format(
+          current.revenue,
+        );
+        document.getElementById("profit").textContent = money.format(
+          current.profit,
+        );
+        document.getElementById("profit").className =
+          current.profit >= 0 ? "good" : "warn";
+
+        document.getElementById("formula").textContent =
+          "over_limit_users = users * max(avg_sessions - free_limit, 0) / avg_sessions; " +
+          "paid_users = over_limit_users * conversion_rate; " +
+          "revenue = paid_users * price; " +
+          "gross_profit = revenue - (users * avg_sessions * cost_per_session)";
+
+        const rows = [];
+        for (let month = 1; month <= 12; month += 1) {
+          const monthUsers = users * Math.pow(1 + growth, month - 1);
+          const result = calculateMonth(monthUsers);
+          rows.push(`
+            <tr>
+              <td>Month ${month}</td>
+              <td>${number.format(monthUsers)}</td>
+              <td>${number.format(result.paidUsers)}</td>
+              <td>${money.format(result.revenue)}</td>
+              <td>${money.format(result.variableCost)}</td>
+              <td class="${result.profit >= 0 ? "good" : "warn"}">${money.format(result.profit)}</td>
+            </tr>
+          `);
+        }
+
+        document.getElementById("projectionRows").innerHTML = rows.join("");
+      }
+
+      ids.forEach((id) => fields[id].addEventListener("input", update));
+      update();
+    </script>
+  </body>
+</html>

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import {
+  Animated,
   Linking,
+  PanResponder,
   Platform,
   Pressable,
   ScrollView,
@@ -61,6 +63,7 @@ const modeTitles = {
 const RESULT_SEND_TIMEOUT_MS = 12_000;
 const CLIPBOARD_POLL_MS = 650;
 const stableTopInset = initialWindowMetrics?.insets.top ?? 0;
+const stableBottomInset = initialWindowMetrics?.insets.bottom ?? 0;
 const continuousCorners = Platform.select({ ios: { borderCurve: "continuous" as const }, default: {} }) ?? {};
 const absoluteFillObject = { position: "absolute" as const, top: 0, right: 0, bottom: 0, left: 0 };
 const TextCameraView = VoltClipTextCameraView as ComponentType<{
@@ -95,6 +98,9 @@ export default function ClipInvocationScreen() {
   const windowDimensions = useWindowDimensions();
   const lastOcrClipboardRef = useRef<string | null>(null);
   const lastOcrClipboardChangeCountRef = useRef<number | null>(null);
+  const ocrDrawerProgress = useRef(new Animated.Value(0)).current;
+  const ocrDrawerProgressRef = useRef(0);
+  const ocrDrawerDragStartRef = useRef(0);
   const isOcrMode = mode === "ocr";
   const resetOcrCapture = useCallback(() => {
     setOcrImageUri(null);
@@ -114,6 +120,62 @@ export default function ClipInvocationScreen() {
       (mode !== "ocr" || ocrText.trim()) &&
       (mode !== "barcode" || barcodeCandidate) &&
       (mode !== "dictation" || (dictationFinal && dictationTranscript.trim()))
+  );
+  const ocrDrawerCollapsedHeight = 148;
+  const ocrDrawerExpandedHeight = Math.min(
+    Math.max(windowDimensions.height * 0.58, 360),
+    Math.max(windowDimensions.height - stableTopInset - 110, ocrDrawerCollapsedHeight)
+  );
+  const ocrDrawerCollapsedInset = 7;
+  const ocrDrawerExpandedInset = 7;
+  const ocrDrawerCollapsedRadius = 48;
+  const ocrDrawerExpandedRadius = 48;
+  const ocrDrawerCollapsedBottom = ocrDrawerCollapsedInset;
+  const ocrDrawerExpandedBottom = ocrDrawerExpandedInset;
+  const animateOcrDrawerTo = useCallback(
+    (value: number) => {
+      Animated.spring(ocrDrawerProgress, {
+        toValue: Math.max(0, Math.min(1, value)),
+        damping: 24,
+        mass: 0.9,
+        stiffness: 210,
+        overshootClamping: false,
+        restDisplacementThreshold: 0.4,
+        restSpeedThreshold: 0.4,
+        useNativeDriver: false,
+      }).start();
+    },
+    [ocrDrawerProgress]
+  );
+  const ocrDrawerPanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dy) > 6,
+        onPanResponderTerminationRequest: () => false,
+        onPanResponderGrant: () => {
+          ocrDrawerDragStartRef.current = ocrDrawerProgressRef.current;
+        },
+        onPanResponderMove: (_, gestureState) => {
+          const dragRange = Math.max(ocrDrawerExpandedHeight - ocrDrawerCollapsedHeight, 220);
+          const nextValue = ocrDrawerDragStartRef.current - gestureState.dy / dragRange;
+          ocrDrawerProgress.setValue(Math.max(0, Math.min(1, nextValue)));
+        },
+        onPanResponderRelease: (_, gestureState) => {
+          const isTap = Math.abs(gestureState.dy) < 6 && Math.abs(gestureState.dx) < 6;
+          if (isTap) {
+            animateOcrDrawerTo(ocrDrawerProgressRef.current > 0.5 ? 0 : 1);
+            return;
+          }
+
+          const shouldExpand = gestureState.vy < -0.35 || (gestureState.vy < 0.35 && ocrDrawerProgressRef.current > 0.42);
+          animateOcrDrawerTo(shouldExpand ? 1 : 0);
+        },
+        onPanResponderTerminate: () => {
+          animateOcrDrawerTo(ocrDrawerProgressRef.current > 0.5 ? 1 : 0);
+        },
+      }),
+    [animateOcrDrawerTo, ocrDrawerCollapsedHeight, ocrDrawerExpandedHeight, ocrDrawerProgress]
   );
   const statusText = useMemo(() => {
     if (!session) return "Missing browser session";
@@ -139,7 +201,7 @@ export default function ClipInvocationScreen() {
     return "Browser session found";
   }, [dictationFinal, dictationState, mode, ocrImageUri, ocrPreviewState, ocrState, ocrText, scannerState, sendState, session]);
   const showMeasuredOcrPreview = useCallback(() => {
-    if (mode !== "ocr" || !hasVoltClipTextRecognizer) return;
+    if (mode !== "ocr" || !hasVoltClipTextRecognizer || ocrImageUri) return;
 
     setOcrPreviewState("starting");
     showVoltClipTextPreview({
@@ -149,10 +211,10 @@ export default function ClipInvocationScreen() {
       height: windowDimensions.height,
     });
     setOcrPreviewState("ready");
-  }, [mode, windowDimensions.height, windowDimensions.width]);
+  }, [mode, ocrImageUri, windowDimensions.height, windowDimensions.width]);
 
   useEffect(() => {
-    if (mode !== "ocr" || !hasVoltClipTextRecognizer) {
+    if (mode !== "ocr" || !hasVoltClipTextRecognizer || ocrImageUri) {
       hideVoltClipTextPreview();
       return;
     }
@@ -163,7 +225,7 @@ export default function ClipInvocationScreen() {
       clearTimeout(timer);
       hideVoltClipTextPreview();
     };
-  }, [mode, showMeasuredOcrPreview]);
+  }, [mode, ocrImageUri, showMeasuredOcrPreview]);
 
   useEffect(() => {
     let mounted = true;
@@ -309,6 +371,7 @@ export default function ClipInvocationScreen() {
       const result = await captureAndRecognizeVoltClipText();
       setOcrText(result.text);
       setOcrImageUri(result.imageUri ?? null);
+      hideVoltClipTextPreview();
       setOcrState("ready");
     } catch (captureError) {
       setOcrState("error");
@@ -334,7 +397,7 @@ export default function ClipInvocationScreen() {
       >
         <View style={styles.ocrShutterInner}>
           <Text style={styles.ocrShutterIcon}>
-            {ocrImageUri ? "↻" : isBusy ? "…" : "●"}
+            {isBusy ? "…" : ""}
           </Text>
         </View>
       </Pressable>
@@ -421,6 +484,15 @@ export default function ClipInvocationScreen() {
     };
   }, [mode, ocrImageUri, sendOcrClipboardText, sendState]);
 
+  useEffect(() => {
+    const subscription = ocrDrawerProgress.addListener(({ value }) => {
+      ocrDrawerProgressRef.current = value;
+    });
+    return () => {
+      ocrDrawerProgress.removeListener(subscription);
+    };
+  }, [ocrDrawerProgress]);
+
   async function sendResult() {
     if (!mode || !session) return;
 
@@ -488,14 +560,112 @@ export default function ClipInvocationScreen() {
     }
     return "Ready for the App Clip capture module.";
   })();
+  const ocrBottomSheetAnimatedStyle = {
+    left: ocrDrawerProgress.interpolate({
+      inputRange: [0, 1],
+      outputRange: [ocrDrawerCollapsedInset, ocrDrawerExpandedInset],
+    }),
+    right: ocrDrawerProgress.interpolate({
+      inputRange: [0, 1],
+      outputRange: [ocrDrawerCollapsedInset, ocrDrawerExpandedInset],
+    }),
+    bottom: ocrDrawerProgress.interpolate({
+      inputRange: [0, 1],
+      outputRange: [ocrDrawerCollapsedBottom, ocrDrawerExpandedBottom],
+    }),
+    height: ocrDrawerProgress.interpolate({
+      inputRange: [0, 1],
+      outputRange: [ocrDrawerCollapsedHeight, ocrDrawerExpandedHeight],
+    }),
+    paddingTop: ocrDrawerProgress.interpolate({
+      inputRange: [0, 1],
+      outputRange: [12, 14],
+    }),
+    borderRadius: ocrDrawerProgress.interpolate({
+      inputRange: [0, 1],
+      outputRange: [ocrDrawerCollapsedRadius, ocrDrawerExpandedRadius],
+    }),
+    transform: [
+      {
+        translateY: ocrDrawerProgress.interpolate({
+          inputRange: [0, 1],
+          outputRange: [0, 0],
+        }),
+      },
+    ],
+  };
+  const ocrHintAnimatedStyle = {
+    bottom: ocrDrawerProgress.interpolate({
+      inputRange: [0, 1],
+      outputRange: [ocrDrawerCollapsedBottom + ocrDrawerCollapsedHeight + 12, ocrDrawerExpandedBottom + ocrDrawerExpandedHeight + 12],
+    }),
+    opacity: ocrDrawerProgress.interpolate({
+      inputRange: [0, 0.25],
+      outputRange: [1, 0],
+      extrapolate: "clamp",
+    }),
+  };
+  const ocrFloatingShutterAnimatedStyle = {
+    bottom: ocrDrawerProgress.interpolate({
+      inputRange: [0, 1],
+      outputRange: [ocrDrawerCollapsedBottom + ocrDrawerCollapsedHeight + 62, ocrDrawerExpandedBottom + ocrDrawerExpandedHeight + 62],
+    }),
+    opacity: ocrDrawerProgress.interpolate({
+      inputRange: [0, 0.82, 1],
+      outputRange: [1, 1, 0],
+      extrapolate: "clamp",
+    }),
+  };
+  const ocrExpandedControlsAnimatedStyle = {
+    opacity: ocrDrawerProgress.interpolate({
+      inputRange: [0, 0.35, 1],
+      outputRange: [0, 0, 1],
+      extrapolate: "clamp",
+    }),
+    transform: [
+      {
+        translateY: ocrDrawerProgress.interpolate({
+          inputRange: [0, 1],
+          outputRange: [18, 0],
+        }),
+      },
+    ],
+  };
+  const ocrDrawerHandleAnimatedStyle = {
+    width: ocrDrawerProgress.interpolate({
+      inputRange: [0, 0.5, 1],
+      outputRange: [44, 58, 38],
+      extrapolate: "clamp",
+    }),
+    opacity: ocrDrawerProgress.interpolate({
+      inputRange: [0, 0.5, 1],
+      outputRange: [0.72, 1, 0.66],
+      extrapolate: "clamp",
+    }),
+    transform: [
+      {
+        translateY: ocrDrawerProgress.interpolate({
+          inputRange: [0, 0.55, 1],
+          outputRange: [0, -1, 1],
+          extrapolate: "clamp",
+        }),
+      },
+      {
+        scaleX: ocrDrawerProgress.interpolate({
+          inputRange: [0, 0.5, 1],
+          outputRange: [1, 1.08, 0.92],
+          extrapolate: "clamp",
+        }),
+      },
+    ],
+  };
 
   if (isOcrMode) {
     return (
       <View style={styles.ocrRoot}>
-        <View style={styles.ocrViewfinderShell}>
+        <View style={styles.ocrCameraSurface}>
             {ocrImageUri ? (
               <View style={styles.ocrCapturedSheet}>
-                <View pointerEvents="none" style={styles.ocrCapturedGlassFallback} />
                 <View style={styles.ocrCapturedViewport}>
                   <ScrollView
                     automaticallyAdjustContentInsets={false}
@@ -519,7 +689,6 @@ export default function ClipInvocationScreen() {
               </View>
           ) : hasVoltClipTextRecognizer ? (
             <>
-              <View pointerEvents="none" style={styles.ocrLiquidGlassSheet} />
               {ocrPreviewState === "failed" ? (
                 <View pointerEvents="none" style={styles.ocrPreviewWarning}>
                   <Text style={styles.ocrPreviewWarningText}>Camera preview unavailable</Text>
@@ -549,18 +718,65 @@ export default function ClipInvocationScreen() {
               </View>
             ) : null}
         </View>
-        <View style={styles.ocrBottomSheet}>
-          <View style={styles.ocrBottomControls}>
-            {renderOcrShutter()}
-            <Text style={styles.ocrShutterLabel}>
-              {ocrImageUri
-                ? "Retake text capture"
-                : ocrState === "capturing"
-                  ? "Reading text..."
-                  : "Tap shutter to capture text"}
-            </Text>
+        <Animated.View style={[styles.ocrFloatingShutter, ocrFloatingShutterAnimatedStyle]}>
+          {renderOcrShutter()}
+        </Animated.View>
+        <Animated.View pointerEvents="none" style={[styles.ocrFloatingHint, ocrHintAnimatedStyle]}>
+          <Text style={styles.ocrShutterLabel}>
+            {ocrImageUri
+              ? "Copy selected text to send"
+              : ocrState === "capturing"
+                ? "Reading text..."
+                : "Tap shutter to capture text"}
+          </Text>
+        </Animated.View>
+        <Animated.View {...ocrDrawerPanResponder.panHandlers} style={[styles.ocrBottomSheet, ocrBottomSheetAnimatedStyle]}>
+          <View style={styles.ocrDrawerHandleHitArea}>
+            <Animated.View pointerEvents="none" style={[styles.ocrDrawerHandle, ocrDrawerHandleAnimatedStyle]} />
           </View>
-        </View>
+          <View style={styles.ocrBottomControls}>
+            <View style={styles.ocrQuickControls}>
+              <View style={styles.ocrQuickControl}>
+                <Text style={styles.ocrQuickControlTitle}>Live Text</Text>
+                <Text style={styles.ocrQuickControlValue}>{ocrImageUri ? "Ready" : "Standby"}</Text>
+              </View>
+              <View style={styles.ocrQuickControl}>
+                <Text style={styles.ocrQuickControlTitle}>Browser</Text>
+                <Text style={styles.ocrQuickControlValue}>{session ? "Linked" : "Missing"}</Text>
+              </View>
+            </View>
+            <Animated.View style={[styles.ocrExpandedControls, ocrExpandedControlsAnimatedStyle]}>
+              <Text style={styles.ocrExpandedTitle}>Capture Settings</Text>
+              <View style={styles.ocrSettingRow}>
+                <View>
+                  <Text style={styles.ocrSettingTitle}>Auto-send copied text</Text>
+                  <Text style={styles.ocrSettingText}>Copies from Live Text relay to Chrome.</Text>
+                </View>
+                <View style={styles.ocrSettingPill}>
+                  <Text style={styles.ocrSettingPillText}>On</Text>
+                </View>
+              </View>
+              <View style={styles.ocrSettingRow}>
+                <View>
+                  <Text style={styles.ocrSettingTitle}>Text extraction area</Text>
+                  <Text style={styles.ocrSettingText}>Whole captured frame is selectable.</Text>
+                </View>
+                <View style={styles.ocrSettingPill}>
+                  <Text style={styles.ocrSettingPillText}>Full</Text>
+                </View>
+              </View>
+              <View style={styles.ocrSettingRow}>
+                <View>
+                  <Text style={styles.ocrSettingTitle}>Camera background</Text>
+                  <Text style={styles.ocrSettingText}>Live preview resumes on retake.</Text>
+                </View>
+                <View style={styles.ocrSettingPill}>
+                  <Text style={styles.ocrSettingPillText}>Live</Text>
+                </View>
+              </View>
+            </Animated.View>
+          </View>
+        </Animated.View>
       </View>
     );
   }
@@ -688,69 +904,59 @@ const styles = StyleSheet.create({
     backgroundColor: "transparent",
     paddingTop: stableTopInset + 20,
   },
-  ocrViewfinderShell: {
+  ocrCameraSurface: {
     flex: 1,
-    minHeight: 260,
-    marginHorizontal: 18,
-    borderRadius: 44,
-    ...continuousCorners,
+    minHeight: 280,
     backgroundColor: "transparent",
   },
   ocrBottomSheet: {
-    minHeight: 178,
-    marginTop: 10,
-    paddingTop: 18,
+    position: "absolute",
+    overflow: "hidden",
     paddingHorizontal: 18,
-    paddingBottom: 20,
-    borderTopLeftRadius: 38,
-    borderTopRightRadius: 38,
+    paddingBottom: 16,
     ...continuousCorners,
-    backgroundColor: "rgba(15, 23, 42, 0.58)",
-    borderTopWidth: 1,
-    borderLeftWidth: 1,
-    borderRightWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.18)",
-    shadowColor: "#ffffff",
-    shadowOffset: { width: 0, height: -1 },
-    shadowOpacity: 0.12,
-    shadowRadius: 22,
-  },
-  ocrLiquidGlassSheet: {
-    ...absoluteFillObject,
-    borderRadius: 44,
-    ...continuousCorners,
+    backgroundColor: "rgba(250, 250, 249, 0.18)",
     borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.16)",
-    backgroundColor: "rgba(255, 255, 255, 0.075)",
+    borderColor: "rgba(255, 255, 255, 0.36)",
     shadowColor: "#ffffff",
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.14,
-    shadowRadius: 18,
+    shadowOpacity: 0.2,
+    shadowRadius: 28,
+  },
+  ocrFloatingShutter: {
+    alignItems: "center",
+    left: 0,
+    position: "absolute",
+    right: 0,
+    zIndex: 14,
+  },
+  ocrFloatingHint: {
+    alignItems: "center",
+    left: 0,
+    position: "absolute",
+    right: 0,
+    zIndex: 13,
+  },
+  ocrDrawerHandleHitArea: {
+    alignItems: "center",
+    height: 34,
+    justifyContent: "center",
+    marginBottom: 4,
+  },
+  ocrDrawerHandle: {
+    width: 44,
+    height: 5,
+    borderRadius: 999,
+    backgroundColor: "rgba(255, 255, 255, 0.42)",
   },
   ocrCapturedSheet: {
     ...absoluteFillObject,
-    margin: 8,
-    borderRadius: 38,
-    ...continuousCorners,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.24)",
-    shadowColor: "#000000",
-    shadowOffset: { width: 0, height: 16 },
-    shadowOpacity: 0.32,
-    shadowRadius: 28,
     overflow: "hidden",
-  },
-  ocrCapturedGlassFallback: {
-    ...absoluteFillObject,
-    backgroundColor: "rgba(255, 255, 255, 0.13)",
   },
   ocrCapturedViewport: {
     ...absoluteFillObject,
-    borderRadius: 37,
-    ...continuousCorners,
-    margin: 8,
     overflow: "hidden",
-    backgroundColor: "rgba(28, 25, 23, 0.42)",
+    backgroundColor: "transparent",
   },
   ocrCapturedScroll: {
     flex: 1,
@@ -876,17 +1082,97 @@ const styles = StyleSheet.create({
   },
   ocrBottomControls: {
     alignItems: "center",
-    gap: 10,
-    minHeight: 124,
+    minHeight: 84,
     paddingTop: 0,
     paddingBottom: 0,
+    width: "100%",
+  },
+  ocrQuickControls: {
+    flexDirection: "row",
+    gap: 10,
+    width: "100%",
+  },
+  ocrQuickControl: {
+    flex: 1,
+    minHeight: 58,
+    borderRadius: 24,
+    ...continuousCorners,
+    justifyContent: "center",
+    paddingHorizontal: 14,
+    backgroundColor: "rgba(250, 250, 249, 0.2)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.28)",
+  },
+  ocrQuickControlTitle: {
+    color: "#f5f5f4",
+    fontSize: 13,
+    fontWeight: "900",
+    lineHeight: 16,
+  },
+  ocrQuickControlValue: {
+    color: "rgba(245, 245, 244, 0.72)",
+    fontSize: 12,
+    fontWeight: "800",
+    lineHeight: 15,
+    marginTop: 2,
+  },
+  ocrExpandedControls: {
+    gap: 10,
+    paddingTop: 18,
+    width: "100%",
+  },
+  ocrExpandedTitle: {
+    color: "#f5f5f4",
+    fontSize: 17,
+    fontWeight: "900",
+    lineHeight: 22,
+    paddingHorizontal: 4,
+  },
+  ocrSettingRow: {
+    alignItems: "center",
+    borderRadius: 24,
+    ...continuousCorners,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    minHeight: 72,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: "rgba(250, 250, 249, 0.16)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.22)",
+  },
+  ocrSettingTitle: {
+    color: "#f5f5f4",
+    fontSize: 14,
+    fontWeight: "900",
+    lineHeight: 18,
+  },
+  ocrSettingText: {
+    color: "rgba(245, 245, 244, 0.68)",
+    fontSize: 12,
+    fontWeight: "700",
+    lineHeight: 16,
+    marginTop: 2,
+    maxWidth: 230,
+  },
+  ocrSettingPill: {
+    borderRadius: 999,
+    ...continuousCorners,
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+    backgroundColor: "rgba(250, 250, 249, 0.84)",
+  },
+  ocrSettingPillText: {
+    color: "#1c1917",
+    fontSize: 12,
+    fontWeight: "900",
   },
   ocrShutterButton: {
     alignItems: "center",
     justifyContent: "center",
-    width: 78,
-    height: 78,
-    borderRadius: 39,
+    width: 90,
+    height: 90,
+    borderRadius: 45,
     ...continuousCorners,
     backgroundColor: "rgba(255, 255, 255, 0.16)",
     borderWidth: 1,
@@ -899,9 +1185,9 @@ const styles = StyleSheet.create({
   ocrShutterInner: {
     alignItems: "center",
     justifyContent: "center",
-    width: 58,
-    height: 58,
-    borderRadius: 29,
+    width: 70,
+    height: 70,
+    borderRadius: 35,
     ...continuousCorners,
     backgroundColor: "rgba(250, 250, 249, 0.92)",
     borderWidth: 1,
