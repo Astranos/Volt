@@ -27,7 +27,8 @@ function getModeFromPath(pathname: string) {
 export function parseCaptureInvocation(url: string): CaptureInvocation | null {
   try {
     const parsed = new URL(url);
-    const mode = getModeFromPath(parsed.pathname);
+    const queryMode = getStringParam(parsed.searchParams, "mode") ?? undefined;
+    const mode = isCaptureMode(queryMode) ? queryMode : getModeFromPath(parsed.pathname);
     const sessionId = getStringParam(parsed.searchParams, "session");
 
     if (!mode || !sessionId || !sessionIdPattern.test(sessionId)) return null;

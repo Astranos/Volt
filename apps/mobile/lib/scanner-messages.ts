@@ -34,10 +34,10 @@ export function makeOcrMessage(text: string, insertIntoCursor = true): ScanItem 
   return makeCaptureMessage(text, "live-text", "text", insertIntoCursor);
 }
 
-export function makeDictationMessage(text: string, dictationSessionId: string): ScanItem {
+export function makeDictationMessage(text: string, dictationSessionId: string, phase: "partial" | "final" = "final"): ScanItem {
   return {
     ...makeCaptureMessage(text, "dictation", "text", true),
-    dictationPhase: "final",
+    dictationPhase: phase,
     dictationSessionId,
   };
 }

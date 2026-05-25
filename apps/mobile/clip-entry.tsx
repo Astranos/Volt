@@ -1,6 +1,4 @@
 import { AppRegistry, StatusBar, View } from "react-native";
-import "react-native/Libraries/Renderer/shims/ReactFabric";
-import "react-native/Libraries/Renderer/shims/ReactNative";
 import { initialWindowMetrics, SafeAreaProvider } from "react-native-safe-area-context";
 
 import ClipInvocationScreen from "./app/clip/[mode].clip";

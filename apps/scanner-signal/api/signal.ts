@@ -227,7 +227,7 @@ function isValidResultForMode(mode: ScannerResult["mode"], message: ScannerResul
   return (
     message.kind === "text" &&
     message.format === "dictation" &&
-    message.dictationPhase === "final" &&
+    (message.dictationPhase === "partial" || message.dictationPhase === "final") &&
     typeof message.dictationSessionId === "string" &&
     message.dictationSessionId.length > 0
   );

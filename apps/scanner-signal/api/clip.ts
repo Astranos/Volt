@@ -3,6 +3,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 const CLIP_MODES = new Set(["ocr", "barcode", "dictation", "photo"]);
 const DEFAULT_APP_CLIP_BUNDLE_ID = "com.volt.mobile.Clip";
 const SESSION_ID_PATTERN = /^[a-zA-Z0-9_-]{4,80}$/;
+const APP_STORE_ID_PATTERN = /^\d+$/;
 
 const MODE_COPY = {
   ocr: {
@@ -23,6 +24,11 @@ const MODE_COPY = {
   },
 } as const;
 
+const BASE_COPY = {
+  title: "App Clip",
+  action: "Open Volt from a Chrome pairing QR code.",
+} as const;
+
 function modeFromRequest(request: VercelRequest) {
   const path = request.query.path;
   const value = typeof path === "string" ? path.split("/")[0] : undefined;
@@ -38,21 +44,60 @@ function escapeHtml(value: string) {
     .replace(/'/g, "&#39;");
 }
 
+function originFromRequest(request: VercelRequest) {
+  const host = request.headers["x-forwarded-host"] || request.headers.host;
+  const proto = request.headers["x-forwarded-proto"] || "https";
+  const hostValue = Array.isArray(host) ? host[0] : host;
+  const protoValue = Array.isArray(proto) ? proto[0] : proto;
+
+  return hostValue ? `${protoValue}://${hostValue}` : "https://scanner-signal.vercel.app";
+}
+
+function smartBannerContent({
+  appStoreId,
+  clipBundleId,
+  invocationUrl,
+}: {
+  appStoreId?: string;
+  clipBundleId: string;
+  invocationUrl: string;
+}) {
+  const parts = [];
+  if (appStoreId && APP_STORE_ID_PATTERN.test(appStoreId)) {
+    parts.push(`app-id=${appStoreId}`);
+  }
+  parts.push(`app-clip-bundle-id=${clipBundleId}`);
+  parts.push("app-clip-display=card");
+  parts.push(`app-argument=${invocationUrl}`);
+  return parts.join(", ");
+}
+
 export default function handler(request: VercelRequest, response: VercelResponse) {
   const mode = modeFromRequest(request);
   const session = Array.isArray(request.query.session)
     ? request.query.session[0]
     : request.query.session;
+  const path = Array.isArray(request.query.path) ? request.query.path[0] : request.query.path;
+  const isBaseClipRequest = !mode && !session && (!path || path === "/");
 
-  if (!mode || typeof session !== "string" || !SESSION_ID_PATTERN.test(session)) {
+  if (!isBaseClipRequest && (!mode || typeof session !== "string" || !SESSION_ID_PATTERN.test(session))) {
     response.status(404).send("Not found");
     return;
   }
 
-  const clipBundleId = escapeHtml(process.env.IOS_APP_CLIP_BUNDLE_ID || DEFAULT_APP_CLIP_BUNDLE_ID);
-  const fallbackUrl = escapeHtml(`/clip/${mode}?session=${encodeURIComponent(session)}`);
-  const safeSession = escapeHtml(session);
-  const copy = MODE_COPY[mode];
+  const fallbackPath = mode && session ? `/clip/${mode}?session=${encodeURIComponent(session)}` : "/clip";
+  const fallbackUrl = escapeHtml(fallbackPath);
+  const rawInvocationUrl = `${originFromRequest(request)}${fallbackPath}`;
+  const invocationUrl = escapeHtml(rawInvocationUrl);
+  const bannerContent = escapeHtml(
+    smartBannerContent({
+      appStoreId: process.env.IOS_APP_STORE_ID,
+      clipBundleId: process.env.IOS_APP_CLIP_BUNDLE_ID || DEFAULT_APP_CLIP_BUNDLE_ID,
+      invocationUrl: rawInvocationUrl,
+    })
+  );
+  const safeSession = typeof session === "string" ? escapeHtml(session) : null;
+  const copy = mode ? MODE_COPY[mode] : BASE_COPY;
 
   response.setHeader("Content-Type", "text/html; charset=utf-8");
   response.setHeader("Cache-Control", "no-store");
@@ -61,7 +106,8 @@ export default function handler(request: VercelRequest, response: VercelResponse
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="apple-itunes-app" content="app-clip-bundle-id=${clipBundleId}" />
+    <meta name="apple-itunes-app" content="${bannerContent}" />
+    <link rel="canonical" href="${invocationUrl}" />
     <title>Open Volt ${escapeHtml(copy.title)}</title>
     <style>
       :root {
@@ -138,7 +184,7 @@ export default function handler(request: VercelRequest, response: VercelResponse
       <h1>Volt ${escapeHtml(copy.title)}</h1>
       <p>${escapeHtml(copy.action)}</p>
       <a href="${fallbackUrl}">Open App Clip</a>
-      <div class="session" aria-label="Session code">Session ${safeSession}</div>
+      ${safeSession ? `<div class="session" aria-label="Session code">Session ${safeSession}</div>` : ""}
       <p class="note">Keep the Chrome tab open until the capture is sent. If this page stays open, the App Clip may not be configured for this device or domain yet.</p>
     </main>
   </body>

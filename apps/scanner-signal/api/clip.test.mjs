@@ -3,6 +3,7 @@ import test from "node:test";
 
 import associationHandler, { buildAssociationPayload } from "./apple-app-site-association.ts";
 import clipHandler from "./clip.ts";
+import dictationTokenHandler from "./dictation-token.ts";
 import signalHandler from "./signal.ts";
 
 function makeResponse() {
@@ -36,11 +37,12 @@ function makeResponse() {
   };
 }
 
-function makeRequest({ method = "GET", path, query = {}, body } = {}) {
+function makeRequest({ method = "GET", path, query = {}, body, headers = {} } = {}) {
   return {
     method,
     query: path ? { ...query, path } : query,
     body,
+    headers,
     url: path ? `/api/signal/${path}` : "/api/signal",
   };
 }
@@ -60,10 +62,67 @@ test("clip fallback page preserves App Clip metadata and escapes session values"
   assert.equal(response.headers["content-type"], "text/html; charset=utf-8");
   assert.equal(response.headers["cache-control"], "no-store");
   assert.match(response.body, /app-clip-bundle-id=com\.volt\.mobile\.Clip/);
+  assert.match(response.body, /app-clip-display=card/);
+  assert.match(response.body, /app-argument=https:\/\/scanner-signal\.vercel\.app\/clip\/ocr\?session=abc_123-safe/);
+  assert.match(response.body, /rel="canonical" href="https:\/\/scanner-signal\.vercel\.app\/clip\/ocr\?session=abc_123-safe"/);
   assert.match(response.body, /Volt OCR scanning/);
   assert.match(response.body, /Open App Clip/);
   assert.match(response.body, /href="\/clip\/ocr\?session=abc_123-safe"/);
   assert.match(response.body, /Session abc_123-safe/);
+});
+
+test("clip fallback page includes App Store id in the Smart App Banner when configured", () => {
+  const previousAppStoreId = process.env.IOS_APP_STORE_ID;
+  process.env.IOS_APP_STORE_ID = "1234567890";
+  const response = makeResponse();
+
+  try {
+    clipHandler(
+      makeRequest({
+        path: "barcode",
+        query: { session: "abc123" },
+        headers: {
+          host: "scanner-signal.example",
+          "x-forwarded-proto": "https",
+        },
+      }),
+      response
+    );
+  } finally {
+    if (previousAppStoreId === undefined) {
+      delete process.env.IOS_APP_STORE_ID;
+    } else {
+      process.env.IOS_APP_STORE_ID = previousAppStoreId;
+    }
+  }
+
+  assert.equal(response.statusCode, 200);
+  assert.match(
+    response.body,
+    /content="app-id=1234567890, app-clip-bundle-id=com\.volt\.mobile\.Clip, app-clip-display=card, app-argument=https:\/\/scanner-signal\.example\/clip\/barcode\?session=abc123"/
+  );
+});
+
+test("clip fallback page supports the base /clip URL for App Store Connect prefix validation", () => {
+  const response = makeResponse();
+
+  clipHandler(
+    makeRequest({
+      headers: {
+        host: "scanner-signal.example",
+        "x-forwarded-proto": "https",
+      },
+    }),
+    response
+  );
+
+  assert.equal(response.statusCode, 200);
+  assert.match(response.body, /Volt App Clip/);
+  assert.match(response.body, /app-clip-bundle-id=com\.volt\.mobile\.Clip/);
+  assert.match(response.body, /app-clip-display=card/);
+  assert.match(response.body, /app-argument=https:\/\/scanner-signal\.example\/clip/);
+  assert.match(response.body, /rel="canonical" href="https:\/\/scanner-signal\.example\/clip"/);
+  assert.doesNotMatch(response.body, /Session /);
 });
 
 test("clip fallback page renders mode-specific fallback copy for every App Clip mode", () => {
@@ -312,6 +371,104 @@ test("signal relay rejects App Clip results that do not match their mode contrac
 
     assert.equal(response.statusCode, 400);
     assert.deepEqual(response.body, { error: "Invalid result" });
+  }
+});
+
+test("signal relay accepts live App Clip dictation partial and final results", async () => {
+  const createResponse = makeResponse();
+  await signalHandler(makeRequest({ method: "POST", body: { relay: true, mode: "dictation" } }), createResponse);
+
+  const partialResponse = makeResponse();
+  await signalHandler(
+    makeRequest({
+      method: "POST",
+      path: `${createResponse.body.sessionId}/result`,
+      body: {
+        id: "dictation-partial",
+        mode: "dictation",
+        message: {
+          barcode: "hello wor",
+          dictationPhase: "partial",
+          dictationSessionId: "clip-session",
+          format: "dictation",
+          kind: "text",
+        },
+      },
+    }),
+    partialResponse
+  );
+
+  assert.equal(partialResponse.statusCode, 200);
+
+  const finalResponse = makeResponse();
+  await signalHandler(
+    makeRequest({
+      method: "POST",
+      path: `${createResponse.body.sessionId}/result`,
+      body: {
+        id: "dictation-final",
+        mode: "dictation",
+        message: {
+          barcode: "hello world",
+          dictationPhase: "final",
+          dictationSessionId: "clip-session",
+          format: "dictation",
+          kind: "text",
+        },
+      },
+    }),
+    finalResponse
+  );
+
+  assert.equal(finalResponse.statusCode, 200);
+
+  const getResponse = makeResponse();
+  await signalHandler(makeRequest({ method: "GET", path: `${createResponse.body.sessionId}/result` }), getResponse);
+  assert.equal(getResponse.body.results.length, 2);
+  assert.equal(getResponse.body.results[0].message.dictationPhase, "partial");
+  assert.equal(getResponse.body.results[1].message.dictationPhase, "final");
+});
+
+test("dictation token endpoint creates a realtime transcription client secret", async () => {
+  const originalApiKey = process.env.OPENAI_API_KEY;
+  const originalFetch = globalThis.fetch;
+  process.env.OPENAI_API_KEY = "test-openai-key";
+  globalThis.fetch = async (url, options) => {
+    assert.equal(url, "https://api.openai.com/v1/realtime/client_secrets");
+    assert.equal(options.method, "POST");
+    assert.equal(options.headers.Authorization, "Bearer test-openai-key");
+    const body = JSON.parse(options.body);
+    assert.equal(body.session.type, "transcription");
+    assert.equal(body.session.audio.input.format.rate, 24000);
+    assert.equal(body.session.audio.input.transcription.model, "gpt-4o-transcribe");
+    return Response.json({ session: { client_secret: { value: "ephemeral-token" } } });
+  };
+
+  try {
+    const response = makeResponse();
+    await dictationTokenHandler(makeRequest({ method: "POST", body: { sessionId: "abc12345" } }), response);
+    assert.equal(response.statusCode, 200);
+    assert.deepEqual(response.body, { value: "ephemeral-token" });
+  } finally {
+    if (originalApiKey === undefined) {
+      delete process.env.OPENAI_API_KEY;
+    } else {
+      process.env.OPENAI_API_KEY = originalApiKey;
+    }
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("dictation token endpoint reports missing realtime configuration", async () => {
+  const originalApiKey = process.env.OPENAI_API_KEY;
+  delete process.env.OPENAI_API_KEY;
+  try {
+    const response = makeResponse();
+    await dictationTokenHandler(makeRequest({ method: "POST" }), response);
+    assert.equal(response.statusCode, 500);
+    assert.deepEqual(response.body, { error: "Realtime transcription is not configured" });
+  } finally {
+    if (originalApiKey !== undefined) process.env.OPENAI_API_KEY = originalApiKey;
   }
 });
 

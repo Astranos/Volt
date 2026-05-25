@@ -40,6 +40,7 @@ import {
   type VoltClipBarcodeCandidate,
 } from "../../lib/volt-clip-barcode-scanner";
 import {
+  addVoltClipDictationAudioChunkListener,
   addVoltClipDictationErrorListener,
   addVoltClipDictationFinalListener,
   addVoltClipDictationPartialListener,
@@ -120,6 +121,8 @@ const modeLabels: Record<ScannerCaptureMode, string> = {
 };
 const RESULT_SEND_TIMEOUT_MS = 12_000;
 const CLIPBOARD_POLL_MS = 650;
+const CLIP_DICTATION_TOKEN_URL = SCANNER_SIGNAL_URL.replace("/api/signal", "/api/dictation-token");
+const OPENAI_REALTIME_TRANSCRIPTION_URL = "wss://api.openai.com/v1/realtime?intent=transcription";
 const stableTopInset = initialWindowMetrics?.insets.top ?? 0;
 const stableBottomInset = initialWindowMetrics?.insets.bottom ?? 0;
 const continuousCorners = Platform.select({ ios: { borderCurve: "continuous" as const }, default: {} }) ?? {};
@@ -143,9 +146,12 @@ const LiquidGlassView = Platform.OS === "ios" && UIManager.getViewManagerConfig(
     }>("VoltClipLiquidGlassView")
   : null;
 const AnimatedLiquidGlassView = LiquidGlassView ? Animated.createAnimatedComponent(LiquidGlassView) : null;
+const HeaderWebSocket = WebSocket as unknown as {
+  new (url: string, protocols?: string | string[], options?: { headers?: Record<string, string> }): WebSocket;
+};
 
 function canRequestDictationPermissionAgain(speechStatus: string, microphoneGranted: boolean) {
-  return speechStatus === "notDetermined" || (!microphoneGranted && speechStatus === "authorized");
+  return !microphoneGranted && (speechStatus === "external" || speechStatus === "authorized" || speechStatus === "notDetermined");
 }
 
 function makeTestMessage(mode: ScannerCaptureMode) {
@@ -281,8 +287,13 @@ export default function ClipInvocationScreen() {
     "idle"
   );
   const [dictationTranscript, setDictationTranscript] = useState("");
+  const dictationTranscriptRef = useRef("");
   const [dictationFinal, setDictationFinal] = useState(false);
   const dictationLongPressRef = useRef(false);
+  const dictationStreamSocketRef = useRef<WebSocket | null>(null);
+  const dictationStreamSessionRef = useRef<string | null>(null);
+  const dictationStreamOpenRef = useRef(false);
+  const dictationPendingAudioRef = useRef<string[]>([]);
   const [ocrState, setOcrState] = useState<"idle" | "capturing" | "ready" | "unavailable" | "error">("idle");
   const [ocrPreviewState, setOcrPreviewState] = useState<"idle" | "starting" | "ready" | "failed">("idle");
   const [ocrText, setOcrText] = useState("");
@@ -324,6 +335,7 @@ export default function ClipInvocationScreen() {
     setSessionTarget(null);
     setBarcodeCandidate(null);
     setDictationTranscript("");
+    dictationTranscriptRef.current = "";
     setDictationFinal(false);
     setSendState("idle");
     setOcrImageUri(null);
@@ -729,10 +741,12 @@ export default function ClipInvocationScreen() {
 
     const partialSubscription = addVoltClipDictationPartialListener((transcript) => {
       setDictationTranscript(transcript);
+      dictationTranscriptRef.current = transcript;
       setDictationFinal(false);
     });
     const finalSubscription = addVoltClipDictationFinalListener((transcript) => {
       setDictationTranscript(transcript);
+      dictationTranscriptRef.current = transcript;
       setDictationFinal(true);
       setDictationState("ready");
       void sendRelayMessage("dictation", makeDictationMessage(transcript, `clip-${session}`));
@@ -741,6 +755,21 @@ export default function ClipInvocationScreen() {
       setDictationState("error");
       setError(message);
     });
+    const audioSubscription = addVoltClipDictationAudioChunkListener((audioChunk) => {
+      const payload = JSON.stringify({
+        type: "input_audio_buffer.append",
+        audio: audioChunk.chunk,
+      });
+      const socket = dictationStreamSocketRef.current;
+      if (socket && dictationStreamOpenRef.current) {
+        socket.send(payload);
+        return;
+      }
+      dictationPendingAudioRef.current.push(payload);
+      if (dictationPendingAudioRef.current.length > 48) {
+        dictationPendingAudioRef.current.shift();
+      }
+    });
 
     setDictationState("ready");
 
@@ -748,9 +777,132 @@ export default function ClipInvocationScreen() {
       partialSubscription.remove();
       finalSubscription.remove();
       errorSubscription.remove();
+      audioSubscription.remove();
+      closeDictationStream();
       void stopVoltClipDictation();
     };
   }, [mode, session]);
+
+  function closeDictationStream() {
+    dictationStreamOpenRef.current = false;
+    dictationPendingAudioRef.current = [];
+    const socket = dictationStreamSocketRef.current;
+    dictationStreamSocketRef.current = null;
+    if (socket) {
+      socket.onopen = null;
+      socket.onmessage = null;
+      socket.onerror = null;
+      socket.onclose = null;
+      socket.close();
+    }
+  }
+
+  async function openDictationStream(dictationSessionId: string) {
+    closeDictationStream();
+    dictationStreamSessionRef.current = dictationSessionId;
+
+    const tokenResponse = await fetch(CLIP_DICTATION_TOKEN_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionId: session, dictationSessionId }),
+    });
+    if (!tokenResponse.ok) {
+      throw new Error("Streaming dictation service is unavailable.");
+    }
+    const tokenPayload = await tokenResponse.json();
+    const ephemeralToken = typeof tokenPayload?.value === "string" ? tokenPayload.value : null;
+    if (!ephemeralToken) {
+      throw new Error("Streaming dictation service is unavailable.");
+    }
+
+    return new Promise<void>((resolve, reject) => {
+      const socket = new HeaderWebSocket(OPENAI_REALTIME_TRANSCRIPTION_URL, [], {
+        headers: {
+          Authorization: `Bearer ${ephemeralToken}`,
+          "OpenAI-Beta": "realtime=v1",
+        },
+      });
+      let settled = false;
+      const settle = (callback: () => void) => {
+        if (settled) return;
+        settled = true;
+        callback();
+      };
+
+      socket.onopen = () => {
+        dictationStreamOpenRef.current = true;
+        socket.send(JSON.stringify({
+          type: "session.update",
+          session: {
+            type: "transcription",
+            audio: {
+              input: {
+                format: {
+                  type: "audio/pcm",
+                  rate: 24000,
+                },
+                transcription: {
+                  model: "gpt-4o-transcribe",
+                  language: "en",
+                },
+                turn_detection: {
+                  type: "server_vad",
+                  threshold: 0.5,
+                  prefix_padding_ms: 300,
+                  silence_duration_ms: 500,
+                },
+              },
+            },
+          },
+        }));
+        for (const payload of dictationPendingAudioRef.current.splice(0)) {
+          socket.send(payload);
+        }
+        settle(resolve);
+      };
+
+      socket.onmessage = (event) => {
+        const data = typeof event.data === "string" ? event.data : "";
+        if (!data) return;
+        try {
+          const message = JSON.parse(data) as { type?: string; delta?: string; transcript?: string; error?: string };
+          if (message.type === "conversation.item.input_audio_transcription.delta" && typeof message.delta === "string") {
+            const nextTranscript = `${dictationTranscriptRef.current}${message.delta}`;
+            dictationTranscriptRef.current = nextTranscript;
+            receiveDictationTranscript(nextTranscript, "partial", dictationSessionId);
+          } else if (message.type === "conversation.item.input_audio_transcription.completed" && typeof message.transcript === "string") {
+            dictationTranscriptRef.current = message.transcript;
+            receiveDictationTranscript(message.transcript, "final", dictationSessionId);
+            closeDictationStream();
+          } else if (message.type === "error") {
+            setDictationState("error");
+            setError(message.error || "Streaming dictation failed.");
+            closeDictationStream();
+          }
+        } catch (_error) {}
+      };
+
+      socket.onerror = () => {
+        settle(() => reject(new Error("Streaming dictation service is unavailable.")));
+      };
+      socket.onclose = () => {
+        dictationStreamOpenRef.current = false;
+      };
+
+      dictationStreamSocketRef.current = socket;
+    });
+  }
+
+  function receiveDictationTranscript(text: string, phase: "partial" | "final", dictationSessionId: string) {
+    const transcript = text.trim();
+    if (!transcript) return;
+    setDictationTranscript(transcript);
+    setDictationFinal(phase === "final");
+    if (phase === "final") setDictationState("ready");
+    void sendRelayMessage("dictation", makeDictationMessage(transcript, dictationSessionId, phase), {
+      background: phase === "partial",
+    });
+  }
 
   useEffect(() => {
     if (mode !== "ocr" && mode !== "photo") return;
@@ -772,7 +924,11 @@ export default function ClipInvocationScreen() {
     if (mode !== "dictation") return;
 
     if (dictationState === "recording") {
-      setDictationState("ready");
+      setDictationState("requesting");
+      const socket = dictationStreamSocketRef.current;
+      if (socket && dictationStreamOpenRef.current) {
+        socket.send(JSON.stringify({ type: "input_audio_buffer.commit" }));
+      }
       await stopVoltClipDictation();
       return;
     }
@@ -788,12 +944,15 @@ export default function ClipInvocationScreen() {
       const permissions = await requestVoltClipDictationPermissions();
       if (!permissions.granted) {
         setDictationState("error");
-        setError("Microphone and speech recognition permissions are required.");
+        setError("Microphone permission is required.");
         showDictationPermissionRecovery(permissions.speechStatus, permissions.microphoneGranted);
         return;
       }
 
       setDictationTranscript("");
+      dictationTranscriptRef.current = "";
+      const dictationSessionId = `clip-${session}-${Date.now()}`;
+      await openDictationStream(dictationSessionId);
       const result = await startVoltClipDictation({ addsPunctuation: dictationAddsPunctuation });
       if (!result.running) {
         setDictationState("error");
@@ -802,6 +961,7 @@ export default function ClipInvocationScreen() {
       }
       setDictationState("recording");
     } catch (dictationError) {
+      closeDictationStream();
       setDictationState("error");
       const message = dictationError instanceof Error ? dictationError.message : "Unable to start dictation";
       setError(message);
@@ -820,6 +980,7 @@ export default function ClipInvocationScreen() {
     if (mode !== "dictation" || dictationState === "recording" || dictationState === "requesting" || sendState === "sending") return;
     if (dictationFinal) {
       setDictationTranscript("");
+      dictationTranscriptRef.current = "";
       setDictationFinal(false);
       setSendState("idle");
       setError(null);
@@ -835,6 +996,7 @@ export default function ClipInvocationScreen() {
   function undoDictation() {
     if (mode !== "dictation" || !dictationFinal) return;
     setDictationTranscript("");
+    dictationTranscriptRef.current = "";
     setDictationFinal(false);
     setSendState("idle");
     setError(null);
@@ -844,7 +1006,7 @@ export default function ClipInvocationScreen() {
     const canPromptAgain = canRequestDictationPermissionAgain(speechStatus, microphoneGranted);
     Alert.alert(
       "Enable dictation",
-      "Volt needs microphone and speech recognition access to dictate into Chrome.",
+      "Volt needs microphone access to stream dictation into Chrome.",
       [
         { text: "Cancel", style: "cancel" },
         canPromptAgain
@@ -854,11 +1016,11 @@ export default function ClipInvocationScreen() {
             }
           : {
               text: "Open Settings",
-              onPress: () => {
-                void Linking.openSettings().catch(() => {
-                  setError("Open Settings and allow Microphone and Speech Recognition for Volt.");
-                });
-              },
+	              onPress: () => {
+	                void Linking.openSettings().catch(() => {
+	                  setError("Open Settings and allow Microphone access for Volt.");
+	                });
+	              },
             },
       ]
     );
@@ -1141,10 +1303,16 @@ export default function ClipInvocationScreen() {
     void sendResult();
   }, [barcodeAutoSend, barcodeCandidate, mode, sendState]);
 
-  async function sendRelayMessage(relayMode: ScannerCaptureMode, message: ReturnType<typeof makeBarcodeMessage> | ReturnType<typeof makeDictationMessage> | ReturnType<typeof makePhotoMessage>) {
+  async function sendRelayMessage(
+    relayMode: ScannerCaptureMode,
+    message: ReturnType<typeof makeBarcodeMessage> | ReturnType<typeof makeDictationMessage> | ReturnType<typeof makePhotoMessage>,
+    options: { background?: boolean } = {}
+  ) {
     if (!session) return;
-    setSendState("sending");
-    setError(null);
+    if (!options.background) {
+      setSendState("sending");
+      setError(null);
+    }
     const abortController = new AbortController();
     const timeoutId = setTimeout(() => abortController.abort(), RESULT_SEND_TIMEOUT_MS);
 
@@ -1164,11 +1332,11 @@ export default function ClipInvocationScreen() {
         throw new Error(messageForClipRelayStatus(response.status));
       }
 
-      setSendState("sent");
+      if (!options.background) setSendState("sent");
       if (relayMode === "barcode") {
         void stopVoltClipBarcodeScanner();
       }
-      if (relayMode === "dictation" && "dictationPhase" in message && message.dictationPhase === "final") {
+      if (!options.background && relayMode === "dictation" && "dictationPhase" in message && message.dictationPhase === "final") {
         void stopVoltClipDictation();
       }
     } catch (sendError) {
@@ -1176,12 +1344,14 @@ export default function ClipInvocationScreen() {
         resetToDiscoveryMode("Browser session stopped responding. Scan the Mobile Scanner QR in Chrome to pair again.");
         return;
       }
-      setSendState("error");
-      setError(
-        sendError instanceof Error
-            ? sendError.message
-            : "Unable to send result"
-      );
+      if (!options.background) {
+        setSendState("error");
+        setError(
+          sendError instanceof Error
+              ? sendError.message
+              : "Unable to send result"
+        );
+      }
     } finally {
       clearTimeout(timeoutId);
     }
@@ -1465,6 +1635,7 @@ export default function ClipInvocationScreen() {
     setBarcodeCandidate(null);
     if (nextMode !== "dictation") {
       setDictationTranscript("");
+      dictationTranscriptRef.current = "";
       setDictationFinal(false);
     }
     if (nextMode !== "ocr" && nextMode !== "photo") {

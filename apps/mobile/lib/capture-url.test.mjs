@@ -14,6 +14,17 @@ test("parseCaptureInvocation accepts production App Clip URLs", () => {
   );
 });
 
+test("parseCaptureInvocation accepts Apple default App Clip links from QR scans", () => {
+  assert.deepEqual(
+    parseCaptureInvocation("https://appclip.apple.com/id?p=com.volt.mobile.Clip&mode=barcode&session=session-42"),
+    { mode: "barcode", sessionId: "session-42" }
+  );
+  assert.deepEqual(
+    parseCaptureInvocation("https://appclip.apple.com/id?p=com.volt.mobile.Clip&mode=dictation&session=phone_123"),
+    { mode: "dictation", sessionId: "phone_123" }
+  );
+});
+
 test("parseCaptureInvocation accepts custom scheme paths", () => {
   assert.deepEqual(parseCaptureInvocation("volt://clip/dictation?session=phone_123"), {
     mode: "dictation",

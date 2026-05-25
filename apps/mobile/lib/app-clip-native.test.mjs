@@ -84,7 +84,7 @@ test("App Clip native modules request the permissions required by their capture 
   assert.match(readText(nativeFiles.textRecognizer), /AVCaptureDevice\.requestAccess\(for: \.video\)/);
 
   const dictation = readText(nativeFiles.dictation);
-  assert.match(dictation, /SFSpeechRecognizer\.requestAuthorization/);
+  assert.doesNotMatch(dictation, /SFSpeechRecognizer/);
   assert.match(dictation, /requestRecordPermission/);
 });
 
@@ -96,9 +96,10 @@ test("App Clip subscribes to native capture error events", () => {
   const clipScreen = readText(nativeFiles.clipScreen);
 
   assert.match(barcodeScanner, /\["candidate", "error"\]/);
-  assert.match(dictation, /\["partial", "final", "error"\]/);
+  assert.match(dictation, /\["audioChunk", "error"\]/);
   assert.match(barcodeWrapper, /addVoltClipBarcodeErrorListener/);
   assert.match(dictationWrapper, /addVoltClipDictationErrorListener/);
+  assert.match(dictationWrapper, /addVoltClipDictationAudioChunkListener/);
   assert.match(clipScreen, /addVoltClipBarcodeErrorListener/);
   assert.match(clipScreen, /addVoltClipDictationErrorListener/);
 });
@@ -115,17 +116,19 @@ test("App Clip OCR emits the frozen capture before text recognition completes", 
   assert.match(clipScreen, /setOcrFrozenImageUri\(result\.imageUri\)/);
 });
 
-test("App Clip dictation stops with a final transcript instead of leaving recording pending", () => {
+test("App Clip dictation streams microphone audio instead of using Speech in the clip", () => {
   const dictation = readText(nativeFiles.dictation);
   const clipScreen = readText(nativeFiles.clipScreen);
 
   assert.match(dictation, /AVAudioApplication\.requestRecordPermission/);
   assert.match(dictation, /AVAudioApplication\.shared\.recordPermission/);
-  assert.match(dictation, /private var lastTranscript = ""/);
-  assert.match(dictation, /request\.addsPunctuation = addsPunctuation/);
-  assert.match(dictation, /emitFinalTranscript\(transcript\)/);
-  assert.match(dictation, /recognitionRequest\?\.endAudio\(\)/);
-  assert.doesNotMatch(clipScreen, /dictationPhase: "partial"/);
+  assert.match(dictation, /emitAudioChunk\(buffer: buffer, format: format\)/);
+  assert.match(dictation, /"format": "pcm_s16le"/);
+  assert.match(clipScreen, /CLIP_DICTATION_TOKEN_URL/);
+  assert.match(clipScreen, /OPENAI_REALTIME_TRANSCRIPTION_URL/);
+  assert.match(clipScreen, /type: "input_audio_buffer\.append"/);
+  assert.match(clipScreen, /makeDictationMessage\(transcript, dictationSessionId, phase\)/);
+  assert.doesNotMatch(dictation, /import Speech/);
 });
 
 test("App Clip barcode scanner returns native preview geometry for active code highlighting", () => {
@@ -210,6 +213,7 @@ test("App Clip target bundles the dedicated entry with clip-specific module reso
   assert.match(metroConfig, /`clip\.\$\{extension\}`/);
   assert.match(clipEntry, /from "\.\/app\/clip\/\[mode\]\.clip"/);
   assert.doesNotMatch(clipEntry, /expo-router\/entry/);
+  assert.doesNotMatch(clipEntry, /react-native\/Libraries\//);
 });
 
 test("mobile debug packagers use repo-specific ports outside the shared React Native default range", () => {

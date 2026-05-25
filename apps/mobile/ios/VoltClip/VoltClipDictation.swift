@@ -1,24 +1,19 @@
 import AVFoundation
 import AVFAudio
 import React
-import Speech
 
 @objc(VoltClipDictation)
 class VoltClipDictation: RCTEventEmitter {
   private var audioEngine: AVAudioEngine?
-  private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
-  private var recognitionTask: SFSpeechRecognitionTask?
-  private lazy var recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en_US"))
   private var hasListeners = false
-  private var lastTranscript = ""
-  private var finalTranscriptSent = false
+  private var chunkSequence = 0
 
   override static func requiresMainQueueSetup() -> Bool {
     false
   }
 
   override func supportedEvents() -> [String]! {
-    ["partial", "final", "error"]
+    ["audioChunk", "error"]
   }
 
   override func startObserving() {
@@ -31,59 +26,33 @@ class VoltClipDictation: RCTEventEmitter {
 
   @objc(requestPermissions:rejecter:)
   func requestPermissions(resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) {
-    SFSpeechRecognizer.requestAuthorization { speechStatus in
-      self.requestMicrophonePermission { microphoneGranted in
-        resolve(self.permissionPayload(speechStatus: speechStatus, microphoneGranted: microphoneGranted))
-      }
+    requestMicrophonePermission { microphoneGranted in
+      resolve(self.permissionPayload(microphoneGranted: microphoneGranted))
     }
   }
 
   @objc(currentPermissions:rejecter:)
   func currentPermissions(resolve: @escaping RCTPromiseResolveBlock, rejecter reject: RCTPromiseRejectBlock) {
-    resolve(permissionPayload(
-      speechStatus: SFSpeechRecognizer.authorizationStatus(),
-      microphoneGranted: currentMicrophonePermissionGranted()
-    ))
+    resolve(permissionPayload(microphoneGranted: currentMicrophonePermissionGranted()))
   }
 
   @objc(start:resolver:rejecter:)
   func start(options: NSDictionary?, resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) {
     stopAudio()
-    let addsPunctuation = options?["addsPunctuation"] as? Bool ?? true
-
-    guard SFSpeechRecognizer.authorizationStatus() == .authorized else {
-      reject("dictation_not_authorized", "Speech recognition permission is not authorized.", nil)
-      return
-    }
 
     guard currentMicrophonePermissionGranted() else {
       reject("dictation_microphone_not_authorized", "Microphone permission is not authorized.", nil)
       return
     }
 
-    guard let recognizer else {
-      reject("dictation_unavailable", "Speech recognizer could not be created.", nil)
-      return
-    }
-
     do {
       let audioEngine = AVAudioEngine()
       self.audioEngine = audioEngine
+      chunkSequence = 0
+
       let audioSession = AVAudioSession.sharedInstance()
       try audioSession.setCategory(.playAndRecord, mode: .measurement, options: [.duckOthers, .defaultToSpeaker, .allowBluetoothHFP])
       try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
-
-      let request = SFSpeechAudioBufferRecognitionRequest()
-      request.shouldReportPartialResults = true
-      if #available(iOS 16.0, *) {
-        request.addsPunctuation = addsPunctuation
-      }
-      if recognizer.supportsOnDeviceRecognition {
-        request.requiresOnDeviceRecognition = true
-      }
-      recognitionRequest = request
-      lastTranscript = ""
-      finalTranscriptSent = false
 
       let inputNode = audioEngine.inputNode
       let format = inputNode.outputFormat(forBus: 0)
@@ -92,44 +61,20 @@ class VoltClipDictation: RCTEventEmitter {
         reject("dictation_audio_unavailable", "Microphone input is unavailable.", nil)
         return
       }
+
       inputNode.removeTap(onBus: 0)
-      inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
-        self?.recognitionRequest?.append(buffer)
+      inputNode.installTap(onBus: 0, bufferSize: 2048, format: format) { [weak self] buffer, _ in
+        self?.emitAudioChunk(buffer: buffer, format: format)
       }
 
       audioEngine.prepare()
       try audioEngine.start()
-
-      recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
-        guard let self else { return }
-
-        if let result {
-          let transcript = result.bestTranscription.formattedString.trimmingCharacters(in: .whitespacesAndNewlines)
-          self.lastTranscript = transcript
-          if !transcript.isEmpty && self.hasListeners {
-            if result.isFinal {
-              self.emitFinalTranscript(transcript)
-            } else {
-              self.sendEvent(withName: "partial", body: ["transcript": transcript])
-            }
-          }
-        }
-
-        if let error {
-          self.stopAudioInput()
-          self.resetRecognitionState()
-          if self.hasListeners {
-            self.sendEvent(withName: "error", body: ["message": error.localizedDescription])
-          }
-        }
-
-        if result?.isFinal == true {
-          self.stopAudioInput()
-          self.resetRecognitionState()
-        }
-      }
-
-      resolve(["running": true])
+      resolve([
+        "running": true,
+        "format": "pcm_s16le",
+        "sampleRate": 24000,
+        "channels": 1,
+      ])
     } catch {
       stopAudio()
       reject("dictation_start_failed", error.localizedDescription, error)
@@ -138,21 +83,11 @@ class VoltClipDictation: RCTEventEmitter {
 
   @objc(stop:rejecter:)
   func stop(resolve: @escaping RCTPromiseResolveBlock, rejecter reject: RCTPromiseRejectBlock) {
-    let transcript = lastTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
-    emitFinalTranscript(transcript)
-    recognitionRequest?.endAudio()
-    stopAudioInput()
-    resetRecognitionState()
+    stopAudio()
     resolve(["running": false])
   }
 
   private func stopAudio() {
-    recognitionTask?.cancel()
-    stopAudioInput()
-    resetRecognitionState()
-  }
-
-  private func stopAudioInput() {
     guard let audioEngine else {
       return
     }
@@ -165,28 +100,52 @@ class VoltClipDictation: RCTEventEmitter {
     try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
   }
 
-  private func resetRecognitionState() {
-    recognitionRequest = nil
-    recognitionTask = nil
-    lastTranscript = ""
-  }
-
-  private func emitFinalTranscript(_ transcript: String) {
-    guard !finalTranscriptSent, !transcript.isEmpty, hasListeners else {
+  private func emitAudioChunk(buffer: AVAudioPCMBuffer, format: AVAudioFormat) {
+    guard hasListeners, let channelData = buffer.floatChannelData else {
       return
     }
 
-    finalTranscriptSent = true
-    sendEvent(withName: "final", body: ["transcript": transcript])
+    let frameCount = Int(buffer.frameLength)
+    let channelCount = max(1, Int(format.channelCount))
+    guard frameCount > 0 else {
+      return
+    }
+
+    let outputSampleRate: Double = 24000
+    let inputSampleRate = max(format.sampleRate, outputSampleRate)
+    let outputFrameCount = max(1, Int(Double(frameCount) * outputSampleRate / inputSampleRate))
+
+    var data = Data(capacity: outputFrameCount * 2)
+    for outputFrame in 0..<outputFrameCount {
+      let frame = min(frameCount - 1, Int(Double(outputFrame) * inputSampleRate / outputSampleRate))
+      var sample: Float = 0
+      for channel in 0..<min(channelCount, Int(buffer.format.channelCount)) {
+        sample += channelData[channel][frame]
+      }
+      sample /= Float(channelCount)
+      let clamped = max(-1, min(1, sample))
+      let intSample = Int16(clamped * Float(Int16.max))
+      data.append(UInt8(truncatingIfNeeded: intSample))
+      data.append(UInt8(truncatingIfNeeded: intSample >> 8))
+    }
+
+    chunkSequence += 1
+    sendEvent(
+      withName: "audioChunk",
+      body: [
+        "chunk": data.base64EncodedString(),
+        "format": "pcm_s16le",
+        "sampleRate": outputSampleRate,
+        "channels": 1,
+        "sequence": chunkSequence,
+      ]
+    )
   }
 
-  private func permissionPayload(
-    speechStatus: SFSpeechRecognizerAuthorizationStatus,
-    microphoneGranted: Bool
-  ) -> [String: Any] {
+  private func permissionPayload(microphoneGranted: Bool) -> [String: Any] {
     [
-      "granted": speechStatus == .authorized && microphoneGranted,
-      "speechStatus": speechStatusName(speechStatus),
+      "granted": microphoneGranted,
+      "speechStatus": "external",
       "microphoneGranted": microphoneGranted,
     ]
   }
@@ -215,21 +174,6 @@ class VoltClipDictation: RCTEventEmitter {
 
     AVAudioSession.sharedInstance().requestRecordPermission { granted in
       completeOnMain(granted)
-    }
-  }
-
-  private func speechStatusName(_ status: SFSpeechRecognizerAuthorizationStatus) -> String {
-    switch status {
-    case .authorized:
-      return "authorized"
-    case .denied:
-      return "denied"
-    case .restricted:
-      return "restricted"
-    case .notDetermined:
-      return "notDetermined"
-    @unknown default:
-      return "unknown"
     }
   }
 }

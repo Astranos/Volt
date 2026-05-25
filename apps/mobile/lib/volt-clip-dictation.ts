@@ -6,10 +6,18 @@ export type VoltClipDictationPermissions = {
   microphoneGranted: boolean;
 };
 
+export type VoltClipDictationAudioChunk = {
+  chunk: string;
+  format: "pcm_s16le";
+  sampleRate: number;
+  channels: number;
+  sequence: number;
+};
+
 type VoltClipDictationModule = {
   currentPermissions: () => Promise<VoltClipDictationPermissions>;
   requestPermissions: () => Promise<VoltClipDictationPermissions>;
-  start: (options?: { addsPunctuation?: boolean }) => Promise<{ running: boolean }>;
+  start: (options?: { addsPunctuation?: boolean }) => Promise<{ running: boolean; format?: string; sampleRate?: number; channels?: number }>;
   stop: () => Promise<{ running: boolean }>;
 };
 
@@ -77,5 +85,29 @@ export function addVoltClipDictationErrorListener(listener: (message: string) =>
 
   return eventEmitter.addListener("error", (event: { message?: string }) => {
     listener(typeof event.message === "string" && event.message ? event.message : "Dictation failed.");
+  });
+}
+
+export function addVoltClipDictationAudioChunkListener(listener: (chunk: VoltClipDictationAudioChunk) => void) {
+  if (!eventEmitter) {
+    return { remove() {} };
+  }
+
+  return eventEmitter.addListener("audioChunk", (event: Partial<VoltClipDictationAudioChunk>) => {
+    if (
+      typeof event.chunk === "string" &&
+      event.format === "pcm_s16le" &&
+      typeof event.sampleRate === "number" &&
+      typeof event.channels === "number" &&
+      typeof event.sequence === "number"
+    ) {
+      listener({
+        chunk: event.chunk,
+        format: event.format,
+        sampleRate: event.sampleRate,
+        channels: event.channels,
+        sequence: event.sequence,
+      });
+    }
   });
 }
