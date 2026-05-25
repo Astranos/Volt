@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import {
-  Image,
   Linking,
   Platform,
   Pressable,
@@ -97,6 +96,16 @@ export default function ClipInvocationScreen() {
   const lastOcrClipboardRef = useRef<string | null>(null);
   const lastOcrClipboardChangeCountRef = useRef<number | null>(null);
   const isOcrMode = mode === "ocr";
+  const resetOcrCapture = useCallback(() => {
+    setOcrImageUri(null);
+    setOcrText("");
+    setOcrState("ready");
+    setOcrPreviewState("ready");
+    setSendState("idle");
+    setError(null);
+    lastOcrClipboardRef.current = null;
+    lastOcrClipboardChangeCountRef.current = null;
+  }, []);
   const canSend = Boolean(
     mode &&
       session &&
@@ -307,6 +316,31 @@ export default function ClipInvocationScreen() {
     }
   }
 
+  function renderOcrShutter() {
+    const isBusy = ocrState === "capturing" || sendState === "sending";
+    return (
+      <Pressable
+        accessibilityLabel={ocrImageUri ? "Retake text capture" : "Capture text"}
+        accessibilityRole="button"
+        disabled={isBusy}
+        onPress={() => {
+          if (ocrImageUri) {
+            resetOcrCapture();
+            return;
+          }
+          void captureText();
+        }}
+        style={[styles.ocrShutterButton, isBusy && styles.ocrShutterButtonDisabled]}
+      >
+        <View style={styles.ocrShutterInner}>
+          <Text style={styles.ocrShutterIcon}>
+            {ocrImageUri ? "↻" : isBusy ? "…" : "●"}
+          </Text>
+        </View>
+      </Pressable>
+    );
+  }
+
   const sendOcrClipboardText = useCallback(
     async (text: string) => {
       const value = text.trim();
@@ -458,36 +492,29 @@ export default function ClipInvocationScreen() {
   if (isOcrMode) {
     return (
       <View style={styles.ocrRoot}>
-        <View style={styles.ocrHeader}>
-          <View style={styles.ocrHeaderBrand}>
-            <Image source={require("../../assets/icon.png")} style={styles.ocrLogo} resizeMode="contain" />
-            <Text style={styles.ocrTitle}>{modeTitles.ocr}</Text>
-          </View>
-          <Text numberOfLines={2} style={styles.ocrStatus}>
-            {statusText}
-          </Text>
-        </View>
-
         <View style={styles.ocrViewfinderShell}>
             {ocrImageUri ? (
-              <View style={styles.ocrCapturedViewport}>
-                <ScrollView
-                  automaticallyAdjustContentInsets={false}
-                  bouncesZoom
-                  maximumZoomScale={4}
-                  minimumZoomScale={1}
-                  pinchGestureEnabled
-                  scrollEventThrottle={16}
-                  showsHorizontalScrollIndicator={false}
-                  showsVerticalScrollIndicator={false}
-                  style={styles.ocrCapturedScroll}
-                >
-                  <LiveTextImageView imageUri={ocrImageUri} style={styles.ocrCapturedImage} />
-                </ScrollView>
-                <View pointerEvents="none" style={styles.ocrCopyPrompt}>
-                  <Text numberOfLines={1} style={styles.ocrCopyPromptText}>
-                    Select text and tap Copy to send to browser
-                  </Text>
+              <View style={styles.ocrCapturedSheet}>
+                <View pointerEvents="none" style={styles.ocrCapturedGlassFallback} />
+                <View style={styles.ocrCapturedViewport}>
+                  <ScrollView
+                    automaticallyAdjustContentInsets={false}
+                    bouncesZoom
+                    maximumZoomScale={4}
+                    minimumZoomScale={1}
+                    pinchGestureEnabled
+                    scrollEventThrottle={16}
+                    showsHorizontalScrollIndicator={false}
+                    showsVerticalScrollIndicator={false}
+                    style={styles.ocrCapturedScroll}
+                  >
+                    <LiveTextImageView imageUri={ocrImageUri} style={styles.ocrCapturedImage} />
+                  </ScrollView>
+                  <View pointerEvents="none" style={styles.ocrCopyPrompt}>
+                    <Text numberOfLines={1} style={styles.ocrCopyPromptText}>
+                      Select text and tap Copy to send to browser
+                    </Text>
+                  </View>
                 </View>
               </View>
           ) : hasVoltClipTextRecognizer ? (
@@ -522,40 +549,17 @@ export default function ClipInvocationScreen() {
               </View>
             ) : null}
         </View>
-        <View style={styles.ocrBottomControls}>
-          <Pressable
-            accessibilityRole="button"
-            disabled={ocrState === "capturing" || sendState === "sending"}
-            onPress={() => {
-              if (ocrImageUri) {
-                setOcrImageUri(null);
-                setOcrText("");
-                setOcrState("ready");
-                setOcrPreviewState("starting");
-                setSendState("idle");
-                setError(null);
-                lastOcrClipboardRef.current = null;
-                lastOcrClipboardChangeCountRef.current = null;
-                return;
-              }
-              void captureText();
-            }}
-            style={[
-              styles.ocrShutterButton,
-              (ocrState === "capturing" || sendState === "sending") && styles.ocrShutterButtonDisabled,
-            ]}
-          >
-            <Text style={styles.ocrShutterIcon}>
-              {ocrImageUri ? "↻" : ocrState === "capturing" || sendState === "sending" ? "…" : "●"}
+        <View style={styles.ocrBottomSheet}>
+          <View style={styles.ocrBottomControls}>
+            {renderOcrShutter()}
+            <Text style={styles.ocrShutterLabel}>
+              {ocrImageUri
+                ? "Retake text capture"
+                : ocrState === "capturing"
+                  ? "Reading text..."
+                  : "Tap shutter to capture text"}
             </Text>
-          </Pressable>
-          <Text style={styles.ocrShutterLabel}>
-            {ocrImageUri
-              ? "Retake text capture"
-              : ocrState === "capturing"
-                ? "Reading text..."
-                : "Tap shutter to capture text"}
-          </Text>
+          </View>
         </View>
       </View>
     );
@@ -682,40 +686,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: "100%",
     backgroundColor: "transparent",
-    paddingTop: stableTopInset,
-  },
-  ocrHeader: {
-    minHeight: 70,
-    paddingHorizontal: 18,
-    paddingBottom: 8,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 14,
-  },
-  ocrHeaderBrand: {
-    alignItems: "center",
-    flexDirection: "row",
-    gap: 10,
-    minHeight: 52,
-  },
-  ocrLogo: {
-    height: 34,
-    width: 34,
-  },
-  ocrTitle: {
-    color: "#fafaf9",
-    fontSize: 22,
-    fontWeight: "900",
-  },
-  ocrStatus: {
-    color: "#d6d3d1",
-    flexShrink: 1,
-    fontSize: 13,
-    fontWeight: "700",
-    lineHeight: 17,
-    maxWidth: 170,
-    textAlign: "right",
+    paddingTop: stableTopInset + 20,
   },
   ocrViewfinderShell: {
     flex: 1,
@@ -724,6 +695,25 @@ const styles = StyleSheet.create({
     borderRadius: 44,
     ...continuousCorners,
     backgroundColor: "transparent",
+  },
+  ocrBottomSheet: {
+    minHeight: 178,
+    marginTop: 10,
+    paddingTop: 18,
+    paddingHorizontal: 18,
+    paddingBottom: 20,
+    borderTopLeftRadius: 38,
+    borderTopRightRadius: 38,
+    ...continuousCorners,
+    backgroundColor: "rgba(15, 23, 42, 0.58)",
+    borderTopWidth: 1,
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.18)",
+    shadowColor: "#ffffff",
+    shadowOffset: { width: 0, height: -1 },
+    shadowOpacity: 0.12,
+    shadowRadius: 22,
   },
   ocrLiquidGlassSheet: {
     ...absoluteFillObject,
@@ -737,12 +727,30 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.14,
     shadowRadius: 18,
   },
+  ocrCapturedSheet: {
+    ...absoluteFillObject,
+    margin: 8,
+    borderRadius: 38,
+    ...continuousCorners,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.24)",
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.32,
+    shadowRadius: 28,
+    overflow: "hidden",
+  },
+  ocrCapturedGlassFallback: {
+    ...absoluteFillObject,
+    backgroundColor: "rgba(255, 255, 255, 0.13)",
+  },
   ocrCapturedViewport: {
     ...absoluteFillObject,
-    borderRadius: 31,
+    borderRadius: 37,
     ...continuousCorners,
+    margin: 8,
     overflow: "hidden",
-    backgroundColor: "#1c1917",
+    backgroundColor: "rgba(28, 25, 23, 0.42)",
   },
   ocrCapturedScroll: {
     flex: 1,
@@ -763,9 +771,13 @@ const styles = StyleSheet.create({
     ...continuousCorners,
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(28, 25, 23, 0.78)",
+    backgroundColor: "rgba(255, 255, 255, 0.13)",
     borderWidth: 1,
-    borderColor: "rgba(250, 250, 249, 0.14)",
+    borderColor: "rgba(255, 255, 255, 0.18)",
+    shadowColor: "#ffffff",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
   },
   ocrCopyPromptText: {
     color: "#f5f5f4",
@@ -779,21 +791,25 @@ const styles = StyleSheet.create({
     left: 14,
     right: 14,
     top: 58,
-    borderRadius: 18,
+    borderRadius: 22,
     ...continuousCorners,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    backgroundColor: "rgba(250, 250, 249, 0.94)",
+    backgroundColor: "rgba(255, 255, 255, 0.14)",
     borderWidth: 1,
-    borderColor: "rgba(22, 163, 74, 0.24)",
+    borderColor: "rgba(255, 255, 255, 0.2)",
+    shadowColor: "#ffffff",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
   },
   ocrSentTitle: {
-    color: "#166534",
+    color: "#f0fdf4",
     fontSize: 14,
     fontWeight: "900",
   },
   ocrSentText: {
-    color: "#292524",
+    color: "#f5f5f4",
     fontSize: 13,
     fontWeight: "700",
     lineHeight: 17,
@@ -804,16 +820,20 @@ const styles = StyleSheet.create({
     left: 14,
     right: 14,
     top: 58,
-    borderRadius: 18,
+    borderRadius: 22,
     ...continuousCorners,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    backgroundColor: "rgba(254, 242, 242, 0.96)",
+    backgroundColor: "rgba(255, 255, 255, 0.14)",
     borderWidth: 1,
-    borderColor: "rgba(220, 38, 38, 0.22)",
+    borderColor: "rgba(255, 255, 255, 0.2)",
+    shadowColor: "#ffffff",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
   },
   ocrErrorText: {
-    color: "#991b1b",
+    color: "#fee2e2",
     fontSize: 13,
     fontWeight: "800",
     lineHeight: 17,
@@ -857,9 +877,9 @@ const styles = StyleSheet.create({
   ocrBottomControls: {
     alignItems: "center",
     gap: 10,
-    minHeight: 132,
-    paddingTop: 12,
-    paddingBottom: 18,
+    minHeight: 124,
+    paddingTop: 0,
+    paddingBottom: 0,
   },
   ocrShutterButton: {
     alignItems: "center",
@@ -868,18 +888,33 @@ const styles = StyleSheet.create({
     height: 78,
     borderRadius: 39,
     ...continuousCorners,
-    backgroundColor: "#fafaf9",
-    borderWidth: 5,
-    borderColor: "rgba(250, 250, 249, 0.38)",
+    backgroundColor: "rgba(255, 255, 255, 0.16)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.34)",
+    shadowColor: "#ffffff",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.22,
+    shadowRadius: 18,
+  },
+  ocrShutterInner: {
+    alignItems: "center",
+    justifyContent: "center",
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    ...continuousCorners,
+    backgroundColor: "rgba(250, 250, 249, 0.92)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.75)",
   },
   ocrShutterButtonDisabled: {
     opacity: 0.7,
   },
   ocrShutterIcon: {
     color: "#1c1917",
-    fontSize: 34,
+    fontSize: 31,
     fontWeight: "900",
-    lineHeight: 38,
+    lineHeight: 35,
   },
   ocrShutterLabel: {
     color: "#f5f5f4",
