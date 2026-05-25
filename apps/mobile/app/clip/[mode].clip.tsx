@@ -94,7 +94,6 @@ export default function ClipInvocationScreen() {
   const [ocrText, setOcrText] = useState("");
   const [ocrImageUri, setOcrImageUri] = useState<string | null>(null);
   const windowDimensions = useWindowDimensions();
-  const ocrViewfinderRef = useRef<View>(null);
   const lastOcrClipboardRef = useRef<string | null>(null);
   const lastOcrClipboardChangeCountRef = useRef<number | null>(null);
   const isOcrMode = mode === "ocr";
@@ -130,24 +129,17 @@ export default function ClipInvocationScreen() {
     if (mode === "dictation" && dictationState === "error") return "Dictation failed";
     return "Browser session found";
   }, [dictationFinal, dictationState, mode, ocrImageUri, ocrPreviewState, ocrState, ocrText, scannerState, sendState, session]);
-  const ocrViewfinderHeight = Math.max(
-    260,
-    windowDimensions.height - stableTopInset - 70 - 18 - 132 - 18
-  );
   const showMeasuredOcrPreview = useCallback(() => {
     if (mode !== "ocr" || ocrImageUri || !hasVoltClipTextRecognizer) return;
 
-    ocrViewfinderRef.current?.measureInWindow((x, y, width, height) => {
-      if (width <= 1 || height <= 1) return;
-      showVoltClipTextPreview({
-        x,
-        y,
-        width,
-        height,
-      });
-      setOcrPreviewState("ready");
+    showVoltClipTextPreview({
+      x: 0,
+      y: 0,
+      width: windowDimensions.width,
+      height: windowDimensions.height,
     });
-  }, [mode, ocrImageUri]);
+    setOcrPreviewState("ready");
+  }, [mode, ocrImageUri, windowDimensions.height, windowDimensions.width]);
 
   useEffect(() => {
     if (mode !== "ocr" || ocrImageUri || !hasVoltClipTextRecognizer) {
@@ -475,11 +467,7 @@ export default function ClipInvocationScreen() {
           </Text>
         </View>
 
-        <View
-          ref={ocrViewfinderRef}
-          onLayout={showMeasuredOcrPreview}
-          style={[styles.ocrViewfinderShell, { height: ocrViewfinderHeight }]}
-        >
+        <View style={styles.ocrViewfinderShell}>
           {ocrImageUri ? (
             <View style={styles.ocrCapturedViewport}>
               <ScrollView
@@ -692,7 +680,7 @@ const styles = StyleSheet.create({
   ocrRoot: {
     flex: 1,
     minHeight: "100%",
-    backgroundColor: "#1c1917",
+    backgroundColor: "rgba(5, 5, 5, 0.42)",
     paddingTop: stableTopInset,
   },
   ocrHeader: {
@@ -729,27 +717,36 @@ const styles = StyleSheet.create({
     textAlign: "right",
   },
   ocrViewfinderShell: {
+    flex: 1,
     minHeight: 260,
     marginHorizontal: 18,
     borderRadius: 32,
     ...continuousCorners,
     overflow: "hidden",
-    backgroundColor: "#1c1917",
+    backgroundColor: "rgba(0, 0, 0, 0.08)",
     borderWidth: 1,
-    borderColor: "#57534e",
+    borderColor: "rgba(250, 250, 249, 0.38)",
   },
   ocrCamera: {
     height: "100%",
     width: "100%",
-    backgroundColor: "#111827",
+    borderRadius: 31,
+    ...continuousCorners,
+    backgroundColor: "transparent",
   },
   ocrCameraOverlay: {
     ...absoluteFillObject,
-    borderWidth: 2,
-    borderColor: "rgba(250, 250, 249, 0.28)",
+    borderRadius: 31,
+    ...continuousCorners,
+    borderWidth: 1,
+    borderColor: "rgba(250, 250, 249, 0.42)",
+    backgroundColor: "rgba(0, 0, 0, 0.08)",
   },
   ocrCapturedViewport: {
     ...absoluteFillObject,
+    borderRadius: 31,
+    ...continuousCorners,
+    overflow: "hidden",
     backgroundColor: "#1c1917",
   },
   ocrCapturedScroll: {
@@ -849,9 +846,12 @@ const styles = StyleSheet.create({
   },
   ocrUnavailablePanel: {
     flex: 1,
+    borderRadius: 31,
+    ...continuousCorners,
     alignItems: "center",
     justifyContent: "center",
     padding: 24,
+    backgroundColor: "rgba(0, 0, 0, 0.22)",
   },
   ocrUnavailableText: {
     color: "#fafaf9",

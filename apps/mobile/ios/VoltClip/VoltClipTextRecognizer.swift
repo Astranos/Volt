@@ -123,13 +123,12 @@ class VoltClipTextRecognizer: NSObject, AVCapturePhotoCaptureDelegate {
 
       let overlayView = self.previewOverlayView ?? VoltClipTextCameraView(frame: frame)
       overlayView.isUserInteractionEnabled = false
-      overlayView.layer.cornerRadius = 32
+      overlayView.layer.cornerRadius = 0
       overlayView.frame = frame
       if overlayView.superview !== window {
         overlayView.removeFromSuperview()
-        window.addSubview(overlayView)
+        window.insertSubview(overlayView, at: 0)
       }
-      window.bringSubviewToFront(overlayView)
       self.previewOverlayView = overlayView
       overlayView.startPreviewFromHost()
     }

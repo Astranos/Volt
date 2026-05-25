@@ -8,8 +8,8 @@ import ClipInvocationScreen from "./app/clip/[mode].clip";
 function VoltClipApp() {
   return (
     <SafeAreaProvider initialMetrics={initialWindowMetrics} style={{ flex: 1 }}>
-      <StatusBar barStyle="dark-content" />
-      <View style={{ flex: 1, backgroundColor: "#ffffff" }}>
+      <StatusBar barStyle="light-content" />
+      <View style={{ flex: 1, backgroundColor: "transparent" }}>
         <ClipInvocationScreen />
       </View>
     </SafeAreaProvider>
