@@ -783,7 +783,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       Alert.alert(
         "Text scan unavailable",
         message.includes("doesn't seem to be linked")
-          ? "This dev build does not include the native OCR module yet. Rebuild and reinstall Volt with `pnpm --filter @volt/mobile exec expo run:ios --device \"iPhone 15\" --port 8081`, then reopen it from Metro."
+          ? "This dev build does not include the native OCR module yet. Rebuild and reinstall Volt with `pnpm --filter @volt/mobile exec expo run:ios --device \"iPhone 15\" --port 8090`, then reopen it from Metro."
           : message
       );
     } finally {

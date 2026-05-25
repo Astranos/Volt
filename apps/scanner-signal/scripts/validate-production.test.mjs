@@ -7,7 +7,7 @@ test("assertAssociationPayload accepts environment-backed Apple ids", () => {
   assertAssociationPayload(
     {
       applinks: {
-        details: [{ appIDs: ["TEAM123456.com.example.mobile"] }],
+        details: [],
       },
       appclips: {
         apps: ["TEAM123456.com.example.mobile.Clip"],
@@ -26,10 +26,30 @@ test("assertAssociationPayload rejects stale hard-coded Apple ids", () => {
     assertAssociationPayload(
       {
         applinks: {
-          details: [{ appIDs: ["GB5SPLUARQ.com.volt.mobile"] }],
+          details: [],
         },
         appclips: {
           apps: ["GB5SPLUARQ.com.volt.mobile.Clip"],
+        },
+      },
+      {
+        appClipBundleId: "com.example.mobile.Clip",
+        fullAppBundleId: "com.example.mobile",
+        teamId: "TEAM123456",
+      }
+    )
+  );
+});
+
+test("assertAssociationPayload rejects /clip links assigned to the full app", () => {
+  assert.throws(() =>
+    assertAssociationPayload(
+      {
+        applinks: {
+          details: [{ appIDs: ["TEAM123456.com.example.mobile"] }],
+        },
+        appclips: {
+          apps: ["TEAM123456.com.example.mobile.Clip"],
         },
       },
       {

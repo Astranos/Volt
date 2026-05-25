@@ -14,6 +14,8 @@ const nativeFiles = {
   clipEntitlements: new URL("../ios/VoltClip/VoltClip.entitlements", import.meta.url),
   fullAppInfoPlist: new URL("../ios/Volt/Info.plist", import.meta.url),
   fullAppEntitlements: new URL("../ios/Volt/Volt.entitlements", import.meta.url),
+  fullAppDelegate: new URL("../ios/Volt/AppDelegate.swift", import.meta.url),
+  packageJson: new URL("../package.json", import.meta.url),
   metroConfig: new URL("../metro.config.js", import.meta.url),
   xcodeProject: new URL("../ios/Volt.xcodeproj/project.pbxproj", import.meta.url),
   podfile: new URL("../ios/Podfile", import.meta.url),
@@ -25,6 +27,7 @@ const nativeFiles = {
   barcodeScanner: new URL("../ios/VoltClip/VoltClipBarcodeScanner.swift", import.meta.url),
   dictation: new URL("../ios/VoltClip/VoltClipDictation.swift", import.meta.url),
   textRecognizer: new URL("../ios/VoltClip/VoltClipTextRecognizer.swift", import.meta.url),
+  clipAppDelegate: new URL("../ios/VoltClip/AppDelegate.swift", import.meta.url),
 };
 
 function readText(url) {
@@ -131,6 +134,23 @@ test("App Clip target bundles the dedicated entry with clip-specific module reso
   assert.match(metroConfig, /`clip\.\$\{extension\}`/);
   assert.match(clipEntry, /from "\.\/app\/clip\/\[mode\]\.clip"/);
   assert.doesNotMatch(clipEntry, /expo-router\/entry/);
+});
+
+test("mobile debug packagers use repo-specific ports outside the shared React Native default range", () => {
+  const packageJson = JSON.parse(readText(nativeFiles.packageJson));
+  const fullDelegate = readText(nativeFiles.fullAppDelegate);
+  const clipDelegate = readText(nativeFiles.clipAppDelegate);
+
+  assert.match(packageJson.scripts.dev, /RCT_METRO_PORT=8090/);
+  assert.match(packageJson.scripts.dev, /--port 8090/);
+  assert.match(packageJson.scripts["dev:device"], /RCT_METRO_PORT=8090/);
+  assert.match(packageJson.scripts["dev:device"], /--port 8090/);
+  assert.match(packageJson.scripts["dev:clip"], /RCT_METRO_PORT=8091/);
+  assert.match(packageJson.scripts["dev:clip"], /--port 8091/);
+  assert.ok(fullDelegate.includes('provider.jsLocation = "\\(ip):8090"'));
+  assert.ok(clipDelegate.includes('provider.jsLocation = "\\(ip):8091"'));
+  assert.doesNotMatch(fullDelegate, /:808[0-9]"/);
+  assert.doesNotMatch(clipDelegate, /:808[0-9]"/);
 });
 
 test("App Clip excludes native packages not imported by the dedicated clip entry", () => {

@@ -97,7 +97,7 @@ test("clip fallback rejects missing, unsupported, or invalid-format invocations"
   }
 });
 
-test("apple-app-site-association advertises the full app and App Clip ids", () => {
+test("apple-app-site-association advertises App Clip ids without stealing /clip links for the full app", () => {
   const response = makeResponse();
 
   associationHandler(makeRequest(), response);
@@ -105,14 +105,25 @@ test("apple-app-site-association advertises the full app and App Clip ids", () =
   assert.equal(response.statusCode, 200);
   assert.equal(response.headers["content-type"], "application/json");
   assert.deepEqual(response.body.appclips.apps, ["GB5SPLUARQ.com.volt.mobile.Clip"]);
-  assert.deepEqual(response.body.applinks.details[0].appIDs, ["GB5SPLUARQ.com.volt.mobile"]);
-  assert.deepEqual(response.body.applinks.details[0].components[0]["/"], "/clip/*");
+  assert.deepEqual(response.body.applinks.details, []);
 });
 
 test("apple-app-site-association payload supports environment-backed ids", () => {
   const payload = buildAssociationPayload({
     appClipBundleId: "com.example.mobile.Clip",
     fullAppBundleId: "com.example.mobile",
+    teamId: "TEAM123456",
+  });
+
+  assert.deepEqual(payload.appclips.apps, ["TEAM123456.com.example.mobile.Clip"]);
+  assert.deepEqual(payload.applinks.details, []);
+});
+
+test("apple-app-site-association can opt into full-app /clip universal links", () => {
+  const payload = buildAssociationPayload({
+    appClipBundleId: "com.example.mobile.Clip",
+    fullAppBundleId: "com.example.mobile",
+    includeFullAppClipLinks: true,
     teamId: "TEAM123456",
   });
 

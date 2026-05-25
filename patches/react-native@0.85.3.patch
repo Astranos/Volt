@@ -15,7 +15,7 @@ diff --git a/scripts/codegen/templates/RCTThirdPartyComponentsProviderMM.templat
 index 95115f0f6e96f049fa859b81843d304088434a7b..610d2a98733db19b2fd080a64a82084a1cc0fa2c 100644
 --- a/scripts/codegen/templates/RCTThirdPartyComponentsProviderMM.template
 +++ b/scripts/codegen/templates/RCTThirdPartyComponentsProviderMM.template
-@@ -16,15 +16,13 @@
+@@ -16,14 +16,13 @@
  + (NSDictionary<NSString *, Class<RCTComponentViewProtocol>> *)thirdPartyFabricComponents
  {
 -  static NSDictionary<NSString *, Class<RCTComponentViewProtocol>> *thirdPartyComponents = nil;

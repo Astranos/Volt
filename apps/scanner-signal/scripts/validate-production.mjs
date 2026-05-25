@@ -24,7 +24,10 @@ function assertOk(response, label) {
 
 export function assertAssociationPayload(body, { teamId, fullAppBundleId, appClipBundleId }) {
   assert.deepEqual(body.appclips?.apps, [`${teamId}.${appClipBundleId}`]);
-  assert.deepEqual(body.applinks?.details?.[0]?.appIDs, [`${teamId}.${fullAppBundleId}`]);
+  const fullAppClipLinks = body.applinks?.details?.filter((detail) =>
+    detail?.appIDs?.includes(`${teamId}.${fullAppBundleId}`)
+  );
+  assert.deepEqual(fullAppClipLinks, []);
 }
 
 export function assertClipFallbackHtml(body, { appClipBundleId, session }) {

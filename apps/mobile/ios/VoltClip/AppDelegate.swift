@@ -79,7 +79,7 @@ class ReactNativeDelegate: ExpoReactNativeFactoryDelegate {
       let ip = try? String(contentsOfFile: ipPath, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines),
       !ip.isEmpty
     {
-      provider.jsLocation = "\(ip):8082"
+      provider.jsLocation = "\(ip):8091"
     }
     return provider.jsBundleURL(forBundleRoot: "apps/mobile/clip-entry")
       ?? Bundle.main.url(forResource: "main", withExtension: "jsbundle")

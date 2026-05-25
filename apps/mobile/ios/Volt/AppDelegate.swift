@@ -61,7 +61,14 @@ class ReactNativeDelegate: ExpoReactNativeFactoryDelegate {
 
   override func bundleURL() -> URL? {
 #if DEBUG
-    return RCTBundleURLProvider.sharedSettings().jsBundleURL(forBundleRoot: ".expo/.virtual-metro-entry")
+    let provider = RCTBundleURLProvider.sharedSettings()
+    if let ipPath = Bundle.main.path(forResource: "ip", ofType: "txt"),
+      let ip = try? String(contentsOfFile: ipPath, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines),
+      !ip.isEmpty
+    {
+      provider.jsLocation = "\(ip):8090"
+    }
+    return provider.jsBundleURL(forBundleRoot: ".expo/.virtual-metro-entry")
       ?? Bundle.main.url(forResource: "main", withExtension: "jsbundle")
 #else
     return Bundle.main.url(forResource: "main", withExtension: "jsbundle")
