@@ -182,14 +182,16 @@ test("signal relay creates a session, stores one App Clip result, and reads it b
   assert.match(getResponse.body.result.createdAt, /^\d{4}-\d{2}-\d{2}T/);
 });
 
-test("signal relay requires a capture mode for App Clip sessions", async () => {
-  for (const body of [{ relay: true }, { relay: true, mode: "photos" }]) {
-    const response = makeResponse();
-    await signalHandler(makeRequest({ method: "POST", body }), response);
+test("signal relay supports generic App Clip sessions and rejects unsupported modes", async () => {
+  const genericResponse = makeResponse();
+  await signalHandler(makeRequest({ method: "POST", body: { relay: true } }), genericResponse);
+  assert.equal(genericResponse.statusCode, 200);
+  assert.match(genericResponse.body.sessionId, /^[a-z0-9]+$/);
 
-    assert.equal(response.statusCode, 400);
-    assert.deepEqual(response.body, { error: "Missing mode" });
-  }
+  const unsupportedResponse = makeResponse();
+  await signalHandler(makeRequest({ method: "POST", body: { relay: true, mode: "photos" } }), unsupportedResponse);
+  assert.equal(unsupportedResponse.statusCode, 200);
+  assert.match(unsupportedResponse.body.sessionId, /^[a-z0-9]+$/);
 });
 
 test("signal relay rejects App Clip results that do not match their mode contract", async () => {
@@ -230,7 +232,7 @@ test("signal relay rejects App Clip results that do not match their mode contrac
   }
 });
 
-test("signal relay rejects results for the wrong App Clip mode and does not overwrite the first result", async () => {
+test("signal relay rejects wrong bound modes and queues multiple generic relay results", async () => {
   const createResponse = makeResponse();
   await signalHandler(makeRequest({ method: "POST", body: { relay: true, mode: "barcode" } }), createResponse);
 
@@ -307,8 +309,8 @@ test("signal relay rejects results for the wrong App Clip mode and does not over
     secondResponse
   );
 
-  assert.equal(secondResponse.statusCode, 409);
-  assert.deepEqual(secondResponse.body, { error: "Result already submitted" });
+  assert.equal(secondResponse.statusCode, 200);
+  assert.deepEqual(secondResponse.body, { success: true });
 
   const getResponse = makeResponse();
   await signalHandler(
@@ -319,6 +321,9 @@ test("signal relay rejects results for the wrong App Clip mode and does not over
     getResponse
   );
 
-  assert.equal(getResponse.body.result.id, "first-result");
-  assert.equal(getResponse.body.result.message.barcode, "012345678905");
+  assert.equal(getResponse.body.result.id, "second-result");
+  assert.equal(getResponse.body.result.message.barcode, "999999999999");
+  assert.equal(getResponse.body.results.length, 2);
+  assert.equal(getResponse.body.results[1].id, "second-result");
+  assert.equal(getResponse.body.results[1].message.barcode, "999999999999");
 });
