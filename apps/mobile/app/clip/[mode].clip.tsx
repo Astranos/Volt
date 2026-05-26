@@ -1644,6 +1644,30 @@ export default function ClipInvocationScreen() {
       setOcrText("");
     }
   }, [mode]);
+  const renderClipModeSelector = useCallback(
+    (style?: ViewProps["style"]) => (
+      <View accessibilityRole="tablist" style={[styles.ocrModeOptions, style]}>
+        {clipModes.map((nextMode) => {
+          const selected = mode === nextMode;
+          return (
+            <Pressable
+              accessibilityLabel={`Switch to ${modeLabels[nextMode]}`}
+              accessibilityRole="tab"
+              accessibilityState={{ selected }}
+              key={nextMode}
+              onPress={() => switchClipMode(nextMode)}
+              style={[styles.ocrModeOption, selected && styles.ocrModeOptionActive]}
+            >
+              <Text numberOfLines={1} style={[styles.ocrModeOptionText, selected && styles.ocrModeOptionTextActive]}>
+                {modeLabels[nextMode]}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    ),
+    [mode, switchClipMode],
+  );
   const ocrBottomSheetToneStyle =
     ocrGlassTone === "bright"
       ? styles.ocrBottomSheetBright
@@ -1742,6 +1766,7 @@ export default function ClipInvocationScreen() {
                     {dictationTranscript || "Hold the mic and speak"}
                   </Text>
                 </View>
+                {renderClipModeSelector(styles.ocrDictationSurfaceModeOptions)}
               </View>
             ) : capturedOcrImageUri ? (
               <View style={styles.ocrCapturedSheet}>
@@ -1851,17 +1876,20 @@ export default function ClipInvocationScreen() {
               ]}
             >
               {mode === "dictation" ? (
-                <View style={styles.ocrDictationDestinationCard}>
-                  <Text style={styles.ocrDictationDestinationLabel}>Destination</Text>
-                  <Text numberOfLines={1} style={styles.ocrDictationDestinationTitle}>
-                    {sessionTarget?.tabTitle || sessionTargetHost || "Current Chrome tab"}
-                  </Text>
-                  <Text numberOfLines={1} style={styles.ocrDictationDestinationMeta}>
-                    {(sessionTarget?.browser || "Chrome") + (sessionTargetHost ? ` · ${sessionTargetHost}` : "")}
-                  </Text>
-                  <Text numberOfLines={1} style={styles.ocrDictationDestinationCursor}>
-                    {sessionTarget?.cursor || "Last focused editable field"}
-                  </Text>
+                <View style={styles.ocrCollapsedDictationControls}>
+                  <View style={styles.ocrDictationDestinationCard}>
+                    <Text style={styles.ocrDictationDestinationLabel}>Destination</Text>
+                    <Text numberOfLines={1} style={styles.ocrDictationDestinationTitle}>
+                      {sessionTarget?.tabTitle || sessionTargetHost || "Current Chrome tab"}
+                    </Text>
+                    <Text numberOfLines={1} style={styles.ocrDictationDestinationMeta}>
+                      {(sessionTarget?.browser || "Chrome") + (sessionTargetHost ? ` · ${sessionTargetHost}` : "")}
+                    </Text>
+                    <Text numberOfLines={1} style={styles.ocrDictationDestinationCursor}>
+                      {sessionTarget?.cursor || "Last focused editable field"}
+                    </Text>
+                  </View>
+                  {renderClipModeSelector()}
                 </View>
               ) : (
                 <Animated.View style={[styles.ocrZoomWheel, ocrZoomWheelAnimatedStyle]}>
@@ -2445,6 +2473,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255, 255, 255, 0.12)",
   },
+  ocrDictationSurfaceModeOptions: {
+    marginTop: 18,
+    maxWidth: 360,
+  },
   ocrDictationText: {
     color: "#ffffff",
     fontSize: 24,
@@ -2626,10 +2658,19 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   ocrDictationDestinationCard: {
-    ...absoluteFillObject,
     alignItems: "center",
     justifyContent: "center",
+    minHeight: 72,
     paddingHorizontal: 22,
+    width: "100%",
+  },
+  ocrCollapsedDictationControls: {
+    alignItems: "center",
+    gap: 8,
+    height: "100%",
+    justifyContent: "center",
+    paddingHorizontal: 8,
+    paddingTop: 2,
   },
   ocrDictationDestinationLabel: {
     color: "rgba(245, 245, 244, 0.55)",
@@ -2698,8 +2739,8 @@ const styles = StyleSheet.create({
   ocrModeOptions: {
     flexDirection: "row",
     gap: 6,
-    paddingHorizontal: 4,
-    paddingBottom: 10,
+    paddingHorizontal: 0,
+    paddingBottom: 0,
     width: "100%",
   },
   ocrModeOption: {
@@ -2707,7 +2748,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     ...continuousCorners,
     flex: 1,
-    minHeight: 38,
+    minHeight: 34,
     justifyContent: "center",
     backgroundColor: "rgba(255, 255, 255, 0.1)",
     borderWidth: 1,
@@ -2719,9 +2760,9 @@ const styles = StyleSheet.create({
   },
   ocrModeOptionText: {
     color: "rgba(245, 245, 244, 0.7)",
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "900",
-    lineHeight: 15,
+    lineHeight: 14,
   },
   ocrModeOptionTextActive: {
     color: "#ffffff",

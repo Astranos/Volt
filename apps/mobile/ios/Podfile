@@ -67,6 +67,21 @@ target 'Volt' do
       :mac_catalyst_enabled => false,
       :ccache_enabled => ccache_enabled?(podfile_properties),
     )
+
+    installer.aggregate_targets.each do |aggregate_target|
+      user_project = aggregate_target.user_project
+      next unless user_project
+
+      user_project.targets.each do |target|
+        target.shell_script_build_phases.each do |phase|
+          next unless phase.display_name == '[Expo Dev Launcher] Strip Local Network Keys for Release'
+
+          phase.always_out_of_date = '1'
+        end
+      end
+
+      user_project.save
+    end
   end
 
   post_integrate do |installer|

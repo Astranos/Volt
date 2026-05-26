@@ -63,10 +63,12 @@ const TOAST_TONE_STYLES: Record<
 export default function UnifiedSidepanel() {
   const [activeTool, setActiveTool] =
     useState<SidepanelToolId>("controller-testing");
+  const [menuOpen, setMenuOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const [dropdownWidth, setDropdownWidth] = useState<number>();
   const [toast, setToast] = useState<ActiveToast | null>(null);
   const toastTimer = useRef<number | null>(null);
+  const menuTimer = useRef<number | null>(null);
   const toastCounter = useRef(0);
 
   useEffect(() => {
@@ -92,8 +94,29 @@ export default function UnifiedSidepanel() {
         handler as EventListener,
       );
       if (toastTimer.current) window.clearTimeout(toastTimer.current);
+      if (menuTimer.current) window.clearTimeout(menuTimer.current);
     };
   }, []);
+
+  const clearMenuTimer = () => {
+    if (menuTimer.current) {
+      window.clearTimeout(menuTimer.current);
+      menuTimer.current = null;
+    }
+  };
+
+  const openMenu = () => {
+    clearMenuTimer();
+    setMenuOpen(true);
+  };
+
+  const closeMenuSoon = () => {
+    clearMenuTimer();
+    menuTimer.current = window.setTimeout(() => {
+      setMenuOpen(false);
+      menuTimer.current = null;
+    }, 120);
+  };
 
   // Load the initial tool from storage
   useEffect(() => {
@@ -209,11 +232,14 @@ export default function UnifiedSidepanel() {
     <div className="sidepanel-shell h-full w-full flex flex-col">
       {/* Fixed Header */}
       <div className="flex-none p-2 pb-2 z-10">
-        <DropdownMenu>
+        <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              className="liquid-glass concentric-lg relative flex w-full items-center justify-between overflow-hidden px-4 py-2 text-left text-lg font-semibold text-stone-950 transition focus:outline-none focus:ring-2 focus:ring-primary/40 hover:bg-white/60 dark:text-stone-50 dark:hover:bg-white/5"
+              onPointerEnter={openMenu}
+              onPointerLeave={closeMenuSoon}
+              onFocus={openMenu}
+              className="liquid-glass concentric-lg relative flex w-full min-w-0 items-center justify-between overflow-hidden px-4 py-2 text-left text-lg font-semibold text-stone-950 transition focus:outline-none focus:ring-2 focus:ring-primary/40 hover:bg-white/60 dark:text-stone-50 dark:hover:bg-white/5"
               ref={triggerRef}
             >
               <span className="relative flex min-w-0 flex-1 items-center">
@@ -254,6 +280,9 @@ export default function UnifiedSidepanel() {
           <DropdownMenuContent
             align="start"
             sideOffset={8}
+            onPointerEnter={openMenu}
+            onPointerLeave={closeMenuSoon}
+            onCloseAutoFocus={(event) => event.preventDefault()}
             className="sidepanel-tool-menu liquid-glass concentric-lg p-1"
             style={{
               width: dropdownWidth ? `${dropdownWidth}px` : undefined,
@@ -262,7 +291,10 @@ export default function UnifiedSidepanel() {
             {tools.map((tool) => (
               <DropdownMenuItem
                 key={tool.id}
-                onSelect={() => handleToolChange(tool.id)}
+                onSelect={() => {
+                  handleToolChange(tool.id);
+                  setMenuOpen(false);
+                }}
                 className={cn(
                   "flex items-center gap-3 concentric-md px-3 py-2 text-sm font-medium transition-colors",
                   activeTool === tool.id

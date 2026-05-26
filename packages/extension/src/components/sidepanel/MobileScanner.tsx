@@ -726,7 +726,7 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
   );
 
   return (
-    <div className="sidepanel-shell relative flex h-full flex-col overflow-hidden">
+    <div className="sidepanel-shell relative flex h-full min-w-0 flex-col overflow-hidden">
       <div className="flex-none px-3 pt-3">
         <UnifiedPairingCard
           mode={mode}
@@ -741,7 +741,7 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
         />
       </div>
 
-      <div className="flex-none px-4 pb-2 pt-5">
+      <div className="flex-none min-w-0 px-4 pb-2 pt-5">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             <div className="text-sm font-bold text-stone-900 dark:text-stone-50">
@@ -765,8 +765,8 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
         </div>
       </div>
 
-      <ScrollArea className="min-h-0 flex-1 px-3 pb-3">
-        <div className="space-y-3 pt-1">
+      <ScrollArea className="min-h-0 min-w-0 flex-1 px-3 pb-3 [&>div]:!overflow-x-hidden">
+        <div className="min-w-0 space-y-3 pt-1">
           {clusters.length === 0 ? (
             <EmptyHistory />
           ) : (
@@ -834,8 +834,8 @@ function UnifiedPairingCard({
           : "Generating a new session…";
 
   return (
-    <div className="liquid-glass concentric-xl overflow-hidden p-3.5">
-      <div className="flex items-center justify-between gap-3">
+    <div className="liquid-glass concentric-xl min-w-0 overflow-hidden p-3.5">
+      <div className="flex min-w-0 items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2.5">
           <span className="liquid-glass-soft flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-green-700 dark:text-green-300">
             <Smartphone className="h-4 w-4" />
@@ -849,7 +849,9 @@ function UnifiedPairingCard({
             </div>
           </div>
         </div>
-        <ConnectionPill status={status} error={error} />
+        <div className="min-w-0 shrink">
+          <ConnectionPill status={status} error={error} />
+        </div>
       </div>
 
       <ModeTabNav
@@ -1209,11 +1211,11 @@ function ClusterCard({
     <div
       ref={wrapperRef}
       className={cn(
-        "liquid-glass-soft concentric-lg overflow-hidden",
+        "liquid-glass-soft concentric-lg min-w-0 max-w-full overflow-hidden",
         allEntriesRemoving && "volt-item-exit",
       )}
     >
-      <div className="flex items-center justify-between gap-2 px-3 pt-3">
+      <div className="flex min-w-0 items-center justify-between gap-2 px-3 pt-3">
         <div className="flex min-w-0 items-center gap-2">
           <span
             className={cn(
@@ -1261,7 +1263,7 @@ function ClusterCard({
         </div>
       </div>
 
-      <div className="px-3 pb-3 pt-2">
+      <div className="min-w-0 px-3 pb-3 pt-2">
         {cluster.kind === "photo" ? (
           <div
             className={cn(
@@ -1287,7 +1289,7 @@ function ClusterCard({
             )}
           </div>
         ) : (
-          <div className="space-y-1.5">
+          <div className="min-w-0 space-y-1.5">
             {visibleEntries.map((entry) =>
               entry.type === "scan" ? (
                 <ScanEntryRow
@@ -1335,18 +1337,18 @@ function ScanEntryRow({
   return (
     <div
       className={cn(
-        "group flex items-start gap-2 rounded-2xl bg-white/80 px-3 py-2 ring-1 ring-stone-200/70 transition dark:bg-stone-800/70 dark:ring-stone-700/70",
+        "group flex min-w-0 max-w-full flex-col gap-2 rounded-2xl bg-white/80 px-3 py-2 ring-1 ring-stone-200/70 transition dark:bg-stone-800/70 dark:ring-stone-700/70 min-[360px]:flex-row min-[360px]:items-start",
         entering && "volt-item-enter",
         exiting && "volt-item-exit",
       )}
     >
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 max-w-full flex-1">
         <div
           className={cn(
             "text-[13px] font-semibold leading-snug text-stone-950 dark:text-stone-50",
             isText
               ? "line-clamp-3 break-words"
-              : "truncate font-mono tracking-tight",
+              : "break-all font-mono tracking-tight min-[360px]:truncate",
           )}
           title={scan.barcode}
         >
@@ -1358,7 +1360,7 @@ function ScanEntryRow({
           </div>
         ) : null}
       </div>
-      <div className="flex shrink-0 items-center gap-1 pt-0.5">
+      <div className="flex shrink-0 items-center justify-end gap-1 pt-0.5">
         <button
           type="button"
           onClick={onCopy}

@@ -151,6 +151,18 @@ test("App Clip dictation permission denial offers retry or Settings recovery", (
   assert.match(clipScreen, /canRequestDictationPermissionAgain/);
 });
 
+test("App Clip dictation collapsed controls keep capture mode switching visible", () => {
+  const clipScreen = readText(nativeFiles.clipScreen);
+
+  assert.match(clipScreen, /ocrCollapsedDictationControls/);
+  assert.match(clipScreen, /ocrDictationSurfaceModeOptions/);
+  assert.match(clipScreen, /renderClipModeSelector\(styles\.ocrDictationSurfaceModeOptions\)/);
+  assert.match(clipScreen, /\{renderClipModeSelector\(\)\}/);
+  assert.match(clipScreen, /accessibilityRole="tablist"/);
+  assert.match(clipScreen, /clipModes\.map\(\(nextMode\)/);
+  assert.match(clipScreen, /onPress=\{\(\) => switchClipMode\(nextMode\)\}/);
+});
+
 test("App Clip OCR captured image has stable pan and zoom room for Live Text selection", () => {
   const clipScreen = readText(nativeFiles.clipScreen);
   const liveTextImageView = readText(nativeFiles.liveTextImageView);
