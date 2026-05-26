@@ -361,6 +361,20 @@ export default async function handler(request: VercelRequest, response: VercelRe
 
     if (request.method === "POST" && !isAnswerRoute && !isResultRoute && !isTargetRoute && !isConnectRoute) {
       const offer = request.body?.offer;
+      const isRelaySession = request.body?.relay === true;
+      const relayMode = isCaptureMode(request.body?.mode) ? request.body.mode : undefined;
+      const target = parseSessionTarget(request.body?.target);
+
+      if (isRelaySession) {
+        await saveSession(sessionId, {
+          mode: relayMode,
+          target,
+          createdAt: Date.now(),
+        });
+        response.status(200).json({ sessionId });
+        return;
+      }
+
       if (typeof offer !== "string" || !offer) {
         response.status(400).json({ error: "Missing offer" });
         return;

@@ -58,10 +58,10 @@ test("App Clip Info.plist contains native capture permission strings", () => {
   for (const key of [
     "NSCameraUsageDescription",
     "NSMicrophoneUsageDescription",
-    "NSSpeechRecognitionUsageDescription",
   ]) {
     assert.match(plist, new RegExp(`<key>${key}</key>\\s*<string>[^<]+</string>`));
   }
+  assert.doesNotMatch(plist, /NSSpeechRecognitionUsageDescription/);
 });
 
 test("full app Info.plist keeps matching permission strings for shared capture behavior", () => {
@@ -71,7 +71,6 @@ test("full app Info.plist keeps matching permission strings for shared capture b
   for (const key of [
     "NSCameraUsageDescription",
     "NSMicrophoneUsageDescription",
-    "NSSpeechRecognitionUsageDescription",
   ]) {
     const clipMatch = clipPlist.match(new RegExp(`<key>${key}</key>\\s*<string>([^<]+)</string>`));
     const fullAppMatch = fullAppPlist.match(new RegExp(`<key>${key}</key>\\s*<string>([^<]+)</string>`));

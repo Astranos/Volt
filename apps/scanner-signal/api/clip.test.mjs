@@ -242,6 +242,65 @@ test("signal relay creates a session, stores one App Clip result, and reads it b
   assert.match(getResponse.body.result.createdAt, /^\d{4}-\d{2}-\d{2}T/);
 });
 
+test("signal relay can repair a dropped App Clip session with the same id", async () => {
+  const missingResponse = makeResponse();
+  await signalHandler(
+    makeRequest({
+      method: "POST",
+      path: "repair123/result",
+      body: {
+        id: "missing-session-result",
+        mode: "photo",
+        message: {
+          kind: "photo",
+          id: "photo-1",
+          name: "volt-photo.jpg",
+          mimeType: "image/jpeg",
+          dataUrl: "data:image/jpeg;base64,aGVsbG8=",
+          size: 5,
+        },
+      },
+    }),
+    missingResponse
+  );
+  assert.equal(missingResponse.statusCode, 404);
+
+  const repairResponse = makeResponse();
+  await signalHandler(
+    makeRequest({
+      method: "POST",
+      path: "repair123",
+      body: { relay: true, mode: "photo" },
+    }),
+    repairResponse
+  );
+  assert.equal(repairResponse.statusCode, 200);
+  assert.equal(repairResponse.body.sessionId, "repair123");
+
+  const postResponse = makeResponse();
+  await signalHandler(
+    makeRequest({
+      method: "POST",
+      path: "repair123/result",
+      body: {
+        id: "repaired-session-result",
+        mode: "photo",
+        message: {
+          kind: "photo",
+          id: "photo-2",
+          name: "volt-photo.jpg",
+          mimeType: "image/jpeg",
+          dataUrl: "data:image/jpeg;base64,aGVsbG8=",
+          size: 5,
+        },
+      },
+    }),
+    postResponse
+  );
+  assert.equal(postResponse.statusCode, 200);
+  assert.deepEqual(postResponse.body, { success: true });
+});
+
 test("signal relay stores and updates App Clip session target metadata", async () => {
   const createResponse = makeResponse();
   await signalHandler(
@@ -441,6 +500,7 @@ test("dictation token endpoint creates a realtime transcription client secret", 
     assert.equal(body.session.type, "transcription");
     assert.equal(body.session.audio.input.format.rate, 24000);
     assert.equal(body.session.audio.input.transcription.model, "gpt-4o-transcribe");
+    assert.equal(body.session.audio.input.turn_detection, null);
     return Response.json({ session: { client_secret: { value: "ephemeral-token" } } });
   };
 
