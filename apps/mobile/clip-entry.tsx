@@ -1,7 +1,7 @@
 import { AppRegistry, StatusBar, View } from "react-native";
 import { initialWindowMetrics, SafeAreaProvider } from "react-native-safe-area-context";
 
-import ClipInvocationScreen from "./app/clip/[mode].clip";
+import ClipInvocationScreen from "./clip/InvocationScreen";
 
 function VoltClipApp() {
   return (

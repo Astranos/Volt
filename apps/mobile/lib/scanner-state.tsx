@@ -1,6 +1,6 @@
 import { decode as base64Decode, encode as base64Encode } from "base-64";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useCameraPermissions, type BarcodeScanningResult } from "expo-camera";
+import { useCameraPermissions, type BarcodeScanningResult } from "./expo-camera";
 import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
 import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
@@ -28,6 +28,7 @@ globalThis.atob ??= base64Decode;
 globalThis.btoa ??= base64Encode;
 
 type ConnectionStatus = "idle" | "pairing" | "connected" | "disconnected" | "error";
+type RelayCaptureMode = "ocr" | "barcode" | "dictation" | "photo";
 const PAIRING_SESSION_RETRY_DELAYS_MS = [0, 350, 800, 1400];
 const SETTINGS_STORAGE_KEY = "volt.mobileScanner.settings.v1";
 const PAIRING_SESSION_STORAGE_KEY = "volt.mobileScanner.pairingSession.v1";
@@ -195,10 +196,11 @@ export function ScannerProvider({ children }: PropsWithChildren) {
   const settingsRef = useRef(defaultSettings);
   const scannerFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pairingSessionRef = useRef<string | null>(null);
+  const relaySessionRef = useRef<{ id: string; mode?: RelayCaptureMode } | null>(null);
   const lastOfferRef = useRef<string | null>(null);
   const reconnectingRef = useRef(false);
 
-  const connected = status === "connected" && channelRef.current?.readyState === "open";
+  const connected = status === "connected" && (channelRef.current?.readyState === "open" || Boolean(relaySessionRef.current));
 
   const clearCameraFocus = useCallback(() => {
     setFocusMode("off");
@@ -210,6 +212,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
     peerRef.current?.close();
     channelRef.current = null;
     peerRef.current = null;
+    relaySessionRef.current = null;
   }, []);
 
   const clearStoredPairingSession = useCallback(() => {
@@ -326,8 +329,32 @@ export function ScannerProvider({ children }: PropsWithChildren) {
           if (delayMs) await wait(delayMs);
           const offerResponse = await fetch(`${SCANNER_SIGNAL_URL}/${sessionId}`);
           if (offerResponse.ok) {
-            const payload = await offerResponse.json();
+            const payload = await offerResponse.json() as {
+              mode?: unknown;
+              offer?: unknown;
+            };
             if (typeof payload.offer !== "string" || !payload.offer) {
+              if (
+                payload.mode === "ocr" ||
+                payload.mode === "barcode" ||
+                payload.mode === "dictation" ||
+                payload.mode === "photo"
+              ) {
+                const connectResponse = await fetch(`${SCANNER_SIGNAL_URL}/${sessionId}/connect`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ source: "mobile-app" }),
+                });
+                if (!connectResponse.ok) throw new Error("Failed to join browser capture session");
+
+                closeConnection();
+                relaySessionRef.current = { id: sessionId, mode: payload.mode };
+                pairingSessionRef.current = sessionId;
+                void AsyncStorage.setItem(PAIRING_SESSION_STORAGE_KEY, sessionId);
+                setStatus("connected");
+                return true;
+              }
+
               throw new Error("Invalid pairing session");
             }
 
@@ -443,6 +470,39 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       setScans((current) => [item, ...current].slice(0, 50));
     }
 
+    const relaySession = relaySessionRef.current;
+    if (relaySession) {
+      const mode =
+        item.kind === "barcode"
+          ? "barcode"
+          : item.format === "dictation"
+            ? "dictation"
+            : "ocr";
+      if (!relaySession.mode || relaySession.mode === mode) {
+        const resultResponse = await fetch(`${SCANNER_SIGNAL_URL}/${relaySession.id}/result`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: item.id,
+            mode,
+            message: item,
+          }),
+        });
+
+        if (resultResponse.ok) {
+          if (!isPartialDictation) {
+            await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          }
+          return;
+        }
+
+        setStatus("error");
+        setError("Browser capture session unavailable");
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        return;
+      }
+    }
+
     if (channelRef.current?.readyState === "open") {
       channelRef.current.send(encodeBarcodeMessage(item));
       if (!isPartialDictation) {
@@ -457,7 +517,8 @@ export function ScannerProvider({ children }: PropsWithChildren) {
     if (!cameraRef.current || photoSending) return;
 
     const channel = channelRef.current;
-    if (channel?.readyState !== "open") {
+    const relaySession = relaySessionRef.current;
+    if (channel?.readyState !== "open" && !relaySession) {
       setPhotoError("Pair with Chrome before taking photos.");
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       return;
@@ -505,6 +566,33 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       const mimeType = "image/jpeg";
       const name = `volt-photo-${new Date().toISOString().replace(/[:.]/g, "-")}.jpg`;
       const chunks = squarePhoto.base64.match(new RegExp(`.{1,${PHOTO_CHUNK_SIZE}}`, "g")) ?? [];
+      const photoMessage = {
+        kind: "photo" as const,
+        id,
+        name,
+        mimeType,
+        dataUrl: `data:${mimeType};base64,${squarePhoto.base64}`,
+        size: Math.ceil((squarePhoto.base64.length * 3) / 4),
+        width: squarePhoto.width,
+        height: squarePhoto.height,
+        capturedAt: new Date().toISOString(),
+      };
+
+      if (relaySession) {
+        const resultResponse = await fetch(`${SCANNER_SIGNAL_URL}/${relaySession.id}/result`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id,
+            mode: "photo",
+            message: photoMessage,
+          }),
+        });
+        if (!resultResponse.ok) throw new Error("Browser capture session unavailable.");
+        setPhotoSentAt(new Date().toISOString());
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        return;
+      }
 
       channel.send(
         encodeScannerTransportMessage({
@@ -715,7 +803,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
     const transcript = event.results[0]?.transcript?.trim() ?? "";
     dictationTranscriptRef.current = transcript;
     setDictationTranscript(transcript);
-    if (event.isFinal) sendDictationText(transcript, "final");
+    sendDictationText(transcript, event.isFinal ? "final" : "partial");
   });
 
   useSpeechRecognitionEvent("error", (event) => {
@@ -753,7 +841,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
     setDictating(true);
     ExpoSpeechRecognitionModule.start({
       lang: "en-US",
-      interimResults: false,
+      interimResults: true,
       continuous: false,
       addsPunctuation: settings.dictationPunctuation,
     });

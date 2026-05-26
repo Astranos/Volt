@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { CameraView as ExpoCameraView, type BarcodeScanningResult } from "expo-camera";
+import { CameraView as ExpoCameraView, type BarcodeScanningResult } from "../../lib/expo-camera";
 import { useFocusEffect } from "expo-router";
 import { Alert, Animated, Image, Platform, Pressable, Text, View, type GestureResponderEvent, type LayoutChangeEvent } from "react-native";
 import { useCallback, useMemo, useRef, useState, type ComponentType } from "react";

@@ -19,7 +19,7 @@ const nativeFiles = {
   metroConfig: new URL("../metro.config.js", import.meta.url),
   xcodeProject: new URL("../ios/Volt.xcodeproj/project.pbxproj", import.meta.url),
   podfile: new URL("../ios/Podfile", import.meta.url),
-  clipScreen: new URL("../app/clip/[mode].clip.tsx", import.meta.url),
+  clipScreen: new URL("../clip/InvocationScreen.tsx", import.meta.url),
   barcodeScannerWrapper: new URL("../lib/volt-clip-barcode-scanner.ts", import.meta.url),
   dictationWrapper: new URL("../lib/volt-clip-dictation.ts", import.meta.url),
   scannerMessages: new URL("../lib/scanner-messages.ts", import.meta.url),
@@ -222,7 +222,7 @@ test("App Clip target bundles the dedicated entry with clip-specific module reso
   assert.match(project, /clip-entry\.tsx/);
   assert.match(metroConfig, /process\.env\.BUILDING_FOR_APP_CLIP/);
   assert.match(metroConfig, /`clip\.\$\{extension\}`/);
-  assert.match(clipEntry, /from "\.\/app\/clip\/\[mode\]\.clip"/);
+  assert.match(clipEntry, /from "\.\/clip\/InvocationScreen"/);
   assert.doesNotMatch(clipEntry, /expo-router\/entry/);
   assert.doesNotMatch(clipEntry, /react-native\/Libraries\//);
 });

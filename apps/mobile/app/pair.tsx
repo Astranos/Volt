@@ -34,7 +34,7 @@ export default function PairRoute() {
         await scanner.pairFromUrl(url);
       }
 
-      if (!cancelled) router.replace(destination);
+      if (!cancelled) router.replace(destination as never);
     }
 
     void pairAndOpen();

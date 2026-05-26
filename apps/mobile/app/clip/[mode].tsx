@@ -30,7 +30,7 @@ export default function AppClipInvocationRoute() {
         );
       }
 
-      if (!cancelled) router.replace(destination);
+      if (!cancelled) router.replace(destination as never);
     }
 
     void openMode();

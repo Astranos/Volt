@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { InputLongTextIcon } from "@hugeicons/core-free-icons";
 import { Host, Toggle } from "@expo/ui/swift-ui";
-import { CameraView as ExpoCameraView, type BarcodeScanningResult } from "expo-camera";
+import { CameraView as ExpoCameraView, type BarcodeScanningResult } from "../../lib/expo-camera";
 import { useFocusEffect } from "expo-router";
 import {
   Image,

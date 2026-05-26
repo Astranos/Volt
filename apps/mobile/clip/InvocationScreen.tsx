@@ -20,17 +20,17 @@ import type { ViewProps } from "react-native";
 import type { GestureResponderEvent } from "react-native";
 import { initialWindowMetrics } from "react-native-safe-area-context";
 import { SCANNER_SIGNAL_URL } from "@volt/scanner-protocol";
-import { createBarcodeCandidateGuard } from "../../lib/barcode-candidate-guard";
-import { makeClipRelayResult, messageForClipRelayStatus } from "../../lib/clip-result-relay";
-import { parseCaptureInvocation, type CaptureInvocation } from "../../lib/capture-url";
-import { LiveTextImageView } from "../../lib/live-text-image-view";
+import { createBarcodeCandidateGuard } from "../lib/barcode-candidate-guard";
+import { makeClipRelayResult, messageForClipRelayStatus } from "../lib/clip-result-relay";
+import { parseCaptureInvocation, type CaptureInvocation } from "../lib/capture-url";
+import { LiveTextImageView } from "../lib/live-text-image-view";
 import {
   makeBarcodeMessage,
   makeDictationMessage,
   makePhotoMessage,
   makeOcrMessage,
   type ScannerCaptureMode,
-} from "../../lib/scanner-messages";
+} from "../lib/scanner-messages";
 import {
   addVoltClipBarcodeErrorListener,
   addVoltClipBarcodeCandidateListener,
@@ -38,7 +38,7 @@ import {
   startVoltClipBarcodeScanner,
   stopVoltClipBarcodeScanner,
   type VoltClipBarcodeCandidate,
-} from "../../lib/volt-clip-barcode-scanner";
+} from "../lib/volt-clip-barcode-scanner";
 import {
   addVoltClipDictationAudioChunkListener,
   addVoltClipDictationErrorListener,
@@ -49,12 +49,12 @@ import {
   requestVoltClipDictationPermissions,
   startVoltClipDictation,
   stopVoltClipDictation,
-} from "../../lib/volt-clip-dictation";
+} from "../lib/volt-clip-dictation";
 import {
   getVoltClipClipboardChangeCount,
   getVoltClipClipboardString,
   hasVoltClipClipboard,
-} from "../../lib/volt-clip-clipboard";
+} from "../lib/volt-clip-clipboard";
 import {
   captureAndRecognizeVoltClipText,
   addVoltClipTextCaptureListener,
@@ -66,7 +66,7 @@ import {
   setVoltClipTextCameraZoom,
   showVoltClipTextPreview,
   VoltClipTextCameraView,
-} from "../../lib/volt-clip-text-recognizer";
+} from "../lib/volt-clip-text-recognizer";
 
 const OCR_ZOOM_MIN = 0.5;
 const OCR_ZOOM_DEFAULT = 1;

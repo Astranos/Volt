@@ -1,9 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
-import { CameraView as ExpoCameraView, type BarcodeScanningResult } from "expo-camera";
-import { Pressable, Text, View } from "react-native";
+import { CameraView as ExpoCameraView, type BarcodeScanningResult } from "../../lib/expo-camera";
+import { Animated, Pressable, Text, View } from "react-native";
 import { useEffect, useRef, useState, type ComponentType } from "react";
 import { useScanner } from "../../lib/scanner-state";
-import { Header, PairingPanel, ScreenRoot, styles } from "./index";
+import { Header, PairingPanel, ScreenRoot, ViewfinderSurface, styles } from "./index";
 
 const CameraView = ExpoCameraView as unknown as ComponentType<any>;
 
@@ -22,10 +22,31 @@ export default function DictationTab() {
   const [pairScannerLocked, setPairScannerLocked] = useState(false);
   const [pairScannerError, setPairScannerError] = useState<string | null>(null);
   const pairScannerLockedRef = useRef(false);
+  const pulse = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (connected) void prepareDictation();
   }, [connected, prepareDictation]);
+
+  useEffect(() => {
+    pulse.setValue(0);
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, {
+          duration: dictating ? 560 : 1100,
+          toValue: 1,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulse, {
+          duration: dictating ? 560 : 1100,
+          toValue: 0,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    animation.start();
+    return () => animation.stop();
+  }, [dictating, pulse]);
 
   const openPairScanner = async () => {
     if (!scanner.permission?.granted) {
@@ -99,17 +120,34 @@ export default function DictationTab() {
             )}
           </View>
         ) : (
-          <View style={localStyles.tabPanel}>
-            <View style={localStyles.instructionBlock}>
-              <Text style={localStyles.emptyTitle}>Browser dictation</Text>
-              <Text style={localStyles.emptyText}>
-                Put the cursor anywhere in the browser, then hold the button below to speak directly into that field.
-              </Text>
-              {dictationTranscript || dictationError ? (
-                <Text style={localStyles.transcriptText}>{dictationTranscript || dictationError}</Text>
-              ) : null}
-            </View>
-            <View style={localStyles.bottomSection}>
+          <ViewfinderSurface>
+            <View style={localStyles.dictationBackdrop}>
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  localStyles.micPulse,
+                  {
+                    opacity: pulse.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: dictating ? [0.28, 0.66] : [0.1, 0.22],
+                    }),
+                    transform: [
+                      {
+                        scale: pulse.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: dictating ? [0.92, 1.18] : [0.98, 1.06],
+                        }),
+                      },
+                    ],
+                  },
+                ]}
+              />
+              <View style={localStyles.dictationTopCopy}>
+                <Text style={localStyles.emptyTitle}>Browser dictation</Text>
+                <Text style={localStyles.emptyText}>
+                  Hold to stream speech into the active browser field.
+                </Text>
+              </View>
               <Pressable
                 accessibilityLabel="Hold to speak"
                 disabled={!connected}
@@ -123,12 +161,23 @@ export default function DictationTab() {
               >
                 <Ionicons name={dictating ? "mic" : "mic-outline"} size={54} color="#f0fdf4" />
               </Pressable>
-              <Text style={localStyles.holdLabel}>{dictating ? "Listening" : "Hold to speak"}</Text>
-              <Text style={localStyles.holdHint}>
-                {connected ? "Release to send." : "Pair with Chrome first."}
-              </Text>
+              <View style={localStyles.dictationStatus}>
+                <View style={[localStyles.statusDot, dictating && localStyles.statusDotActive, dictationError && localStyles.statusDotError]} />
+                <Text numberOfLines={1} style={localStyles.holdLabel}>
+                  {dictationError ? "Dictation unavailable" : dictating ? "Listening" : "Hold to speak"}
+                </Text>
+              </View>
+              {dictationTranscript || dictationError ? (
+                <Text numberOfLines={4} style={[localStyles.transcriptText, dictationError && localStyles.transcriptError]}>
+                  {dictationTranscript || dictationError}
+                </Text>
+              ) : (
+                <Text style={localStyles.holdHint}>
+                  Put the cursor in Chrome, then press and hold.
+                </Text>
+              )}
             </View>
-          </View>
+          </ViewfinderSurface>
         )}
       </View>
     </ScreenRoot>
@@ -141,25 +190,40 @@ const localStyles = {
   },
   tabPanel: {
     flex: 1,
-    margin: 18,
-    marginBottom: 0,
-    borderRadius: 28,
+  },
+  dictationBackdrop: {
+    flex: 1,
     alignItems: "center" as const,
-    justifyContent: "space-between" as const,
-    padding: 22,
-    backgroundColor: "#fafaf9",
+    justifyContent: "center" as const,
+    overflow: "hidden" as const,
+    padding: 26,
+    backgroundColor: "#0c1912",
+  },
+  micPulse: {
+    position: "absolute" as const,
+    width: 310,
+    height: 310,
+    borderRadius: 155,
+    backgroundColor: "#22c55e",
+  },
+  dictationTopCopy: {
+    position: "absolute" as const,
+    top: 34,
+    left: 24,
+    right: 24,
+    alignItems: "center" as const,
+  },
+  dictationStatus: {
+    marginTop: 28,
+    minHeight: 38,
+    paddingHorizontal: 16,
+    borderRadius: 19,
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 8,
+    backgroundColor: "rgba(250, 250, 249, 0.12)",
     borderWidth: 1,
-    borderColor: "#e7e5e4",
-  },
-  instructionBlock: {
-    width: "100%" as const,
-    alignItems: "center" as const,
-    paddingTop: 12,
-  },
-  bottomSection: {
-    width: "100%" as const,
-    alignItems: "center" as const,
-    paddingBottom: 18,
+    borderColor: "rgba(250, 250, 249, 0.16)",
   },
   micButton: {
     width: 148,
@@ -168,11 +232,8 @@ const localStyles = {
     alignItems: "center" as const,
     justifyContent: "center" as const,
     backgroundColor: "#16a34a",
-    shadowColor: "#15803d",
-    shadowOpacity: 0.26,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 8,
+    borderWidth: 10,
+    borderColor: "rgba(240, 253, 244, 0.22)",
   },
   micButtonActive: {
     backgroundColor: "#dc2626",
@@ -180,23 +241,39 @@ const localStyles = {
   },
   micButtonDisabled: {
     backgroundColor: "#a8a29e",
-    shadowOpacity: 0.08,
   },
-  emptyTitle: { color: "#1c1917", fontSize: 22, fontWeight: "800" as const, textAlign: "center" as const },
-  emptyText: { color: "#78716c", fontSize: 15, lineHeight: 22, marginTop: 8, textAlign: "center" as const },
+  emptyTitle: { color: "#f0fdf4", fontSize: 22, fontWeight: "800" as const, textAlign: "center" as const },
+  emptyText: { color: "#bbf7d0", fontSize: 15, lineHeight: 22, marginTop: 8, textAlign: "center" as const },
   transcriptText: {
     width: "100%" as const,
-    marginTop: 18,
-    padding: 14,
+    marginTop: 16,
+    minHeight: 74,
+    padding: 16,
     borderRadius: 18,
-    color: "#1c1917",
-    fontSize: 15,
-    lineHeight: 21,
+    color: "#f0fdf4",
+    fontSize: 18,
+    lineHeight: 25,
     textAlign: "center" as const,
-    backgroundColor: "#ffffff",
+    backgroundColor: "rgba(0, 0, 0, 0.28)",
     borderWidth: 1,
-    borderColor: "#e7e5e4",
+    borderColor: "rgba(187, 247, 208, 0.2)",
   },
-  holdLabel: { color: "#1c1917", fontSize: 19, fontWeight: "800" as const, marginTop: 14, textAlign: "center" as const },
-  holdHint: { color: "#78716c", fontSize: 13, marginTop: 5, textAlign: "center" as const },
+  transcriptError: {
+    color: "#fecaca",
+    borderColor: "rgba(248, 113, 113, 0.32)",
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#a8a29e",
+  },
+  statusDotActive: {
+    backgroundColor: "#22c55e",
+  },
+  statusDotError: {
+    backgroundColor: "#ef4444",
+  },
+  holdLabel: { color: "#f0fdf4", fontSize: 15, fontWeight: "800" as const, textAlign: "center" as const },
+  holdHint: { color: "#bbf7d0", fontSize: 14, marginTop: 16, textAlign: "center" as const },
 };
