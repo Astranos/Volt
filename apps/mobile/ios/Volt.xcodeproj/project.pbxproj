@@ -9,31 +9,15 @@
 /* Begin PBXBuildFile section */
 		015CC2342282B7A46C230DCC /* libPods-Volt.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 4131A068EA86235F07C8AE89 /* libPods-Volt.a */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
-		1C9A85EDF2EB2AEC470B58EE /* VoltClipBarcodeScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87AAE823010176EA682A3EF8 /* VoltClipBarcodeScanner.swift */; };
-		248BC634956D266D7D5317EB /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = AD3338631FB875CC118A24D1 /* Expo.plist */; };
-		370389E294E833EF1FDF11AA /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5A184F0A5DD8A81AD4A8B84 /* ExpoModulesProvider.swift */; };
-		3C14A89EF195550FDF8E5664 /* VoltClipTextRecognizer.m in Sources */ = {isa = PBXBuildFile; fileRef = 8C78E3CB0F4CCA44907D5F77 /* VoltClipTextRecognizer.m */; };
 		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
-		444469CDDA33068EC65021D7 /* VoltClipTextRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1B912B7C32F4CDFAA6AB622 /* VoltClipTextRecognizer.swift */; };
-		4F1C0D7C71C04A619E61A101 /* VoltClipTextCameraViewManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 4F1C0D7B71C04A619E61A101 /* VoltClipTextCameraViewManager.m */; };
-		5E2F4B5A2F4E4A9A8A9E1001 /* VoltClipLiquidTabBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E2F4B592F4E4A9A8A9E1001 /* VoltClipLiquidTabBarView.swift */; };
-		5E2F4B5C2F4E4A9A8A9E1001 /* VoltClipLiquidTabBarViewManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 5E2F4B5B2F4E4A9A8A9E1001 /* VoltClipLiquidTabBarViewManager.m */; };
-		6255E961A70D4649B8813AB7 /* VoltClipClipboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6255E95FA70D4649B8813AB7 /* VoltClipClipboard.swift */; };
-		6255E962A70D4649B8813AB7 /* VoltClipClipboard.m in Sources */ = {isa = PBXBuildFile; fileRef = 6255E960A70D4649B8813AB7 /* VoltClipClipboard.m */; };
-		6D55B21D269D79F18C320AE3 /* VoltClipBarcodeScanner.m in Sources */ = {isa = PBXBuildFile; fileRef = 3EB0F83AFD6F9946D831242B /* VoltClipBarcodeScanner.m */; };
-		7059B2631F004960AEE9C790 /* LiveTextImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2A7E5002D7A000100000001 /* LiveTextImageView.swift */; };
-		7059B2641F004960AEE9C790 /* LiveTextImageViewManager.m in Sources */ = {isa = PBXBuildFile; fileRef = F2A7E5022D7A000100000001 /* LiveTextImageViewManager.m */; };
 		7273A85AAE034AC8BAA99594 /* VoltClip.app in Embed App Clips */ = {isa = PBXBuildFile; fileRef = ACA11B7D31CA416C844E9288 /* VoltClip.app */; };
 		821969B05715C8A27536A5B0 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 2F47C4DD7A4804A5FE038807 /* PrivacyInfo.xcprivacy */; };
 		9A94212ABB8ABF424D2C9BD3 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 013766E8A3CBB383D1518830 /* AppDelegate.swift */; };
-		9DAB20B8943AEA8E2DF333D1 /* VoltClipDictation.m in Sources */ = {isa = PBXBuildFile; fileRef = E42D62C6FCF508109B4507E5 /* VoltClipDictation.m */; };
 		AC7AC6ECCE1446F6331DC713 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC612F95403FFD79D2EA2F75 /* ExpoModulesProvider.swift */; };
 		AF4810BC7574DDA14A62B199 /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E73489FC6033D503DB342DB2 /* Images.xcassets */; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
-		C96788B1D17D35B74A8E90D0 /* libPods-VoltClip.a in Frameworks */ = {isa = PBXBuildFile; fileRef = FC02CB680FAB5AF828F1DCF1 /* libPods-VoltClip.a */; };
 		E2F6A9102EEC3A2800D3B901 /* volt.icon in Resources */ = {isa = PBXBuildFile; fileRef = E2F6A90F2EEC3A2800D3B901 /* volt.icon */; };
 		E94F57467C6735ED6D131DA8 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 52C7599C80F9D87BD73166E1 /* SplashScreen.storyboard */; };
-		EFF2B949344974BACC60303E /* VoltClipDictation.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4CF09507444874FEFF8DDC2 /* VoltClipDictation.swift */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
 		F2A7E5012D7A000100000001 /* LiveTextImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2A7E5002D7A000100000001 /* LiveTextImageView.swift */; };
 		F2A7E5032D7A000100000001 /* LiveTextImageViewManager.m in Sources */ = {isa = PBXBuildFile; fileRef = F2A7E5022D7A000100000001 /* LiveTextImageViewManager.m */; };
@@ -75,9 +59,9 @@
 		3EB0F83AFD6F9946D831242B /* VoltClipBarcodeScanner.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; path = VoltClipBarcodeScanner.m; sourceTree = "<group>"; };
 		4131A068EA86235F07C8AE89 /* libPods-Volt.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-Volt.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		4F1C0D7B71C04A619E61A101 /* VoltClipTextCameraViewManager.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; path = VoltClipTextCameraViewManager.m; sourceTree = "<group>"; };
+		52C7599C80F9D87BD73166E1 /* SplashScreen.storyboard */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = file.storyboard; path = SplashScreen.storyboard; sourceTree = "<group>"; };
 		5E2F4B592F4E4A9A8A9E1001 /* VoltClipLiquidTabBarView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VoltClipLiquidTabBarView.swift; sourceTree = "<group>"; };
 		5E2F4B5B2F4E4A9A8A9E1001 /* VoltClipLiquidTabBarViewManager.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; path = VoltClipLiquidTabBarViewManager.m; sourceTree = "<group>"; };
-		52C7599C80F9D87BD73166E1 /* SplashScreen.storyboard */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = file.storyboard; path = SplashScreen.storyboard; sourceTree = "<group>"; };
 		6255E95FA70D4649B8813AB7 /* VoltClipClipboard.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VoltClipClipboard.swift; sourceTree = "<group>"; };
 		6255E960A70D4649B8813AB7 /* VoltClipClipboard.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; path = VoltClipClipboard.m; sourceTree = "<group>"; };
 		77DD4032F491596C787D8B5B /* VoltClip.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = VoltClip.entitlements; sourceTree = "<group>"; };
@@ -87,7 +71,6 @@
 		ACA11B7D31CA416C844E9288 /* VoltClip.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = undefined; name = VoltClip.app; path = VoltClip.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AD3338631FB875CC118A24D1 /* Expo.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
 		B4CF09507444874FEFF8DDC2 /* VoltClipDictation.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VoltClipDictation.swift; sourceTree = "<group>"; };
-		B5A184F0A5DD8A81AD4A8B84 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-VoltClip/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
 		C1B912B7C32F4CDFAA6AB622 /* VoltClipTextRecognizer.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VoltClipTextRecognizer.swift; sourceTree = "<group>"; };
 		DC612F95403FFD79D2EA2F75 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-Volt/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
@@ -117,7 +100,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				C96788B1D17D35B74A8E90D0 /* libPods-VoltClip.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -185,19 +167,10 @@
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
-		346EF41E8A672946847F9CD0 /* VoltClip */ = {
-			isa = PBXGroup;
-			children = (
-				B5A184F0A5DD8A81AD4A8B84 /* ExpoModulesProvider.swift */,
-			);
-			name = VoltClip;
-			sourceTree = "<group>";
-		};
 		4918AD0737E18BDB14B5B297 /* ExpoModulesProviders */ = {
 			isa = PBXGroup;
 			children = (
 				5882C371FDEFED479EA7BCE5 /* Volt */,
-				346EF41E8A672946847F9CD0 /* VoltClip */,
 			);
 			name = ExpoModulesProviders;
 			sourceTree = "<group>";
@@ -292,15 +265,9 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = E03C06C10BB44F18BD2738B0 /* Build configuration list for PBXNativeTarget "VoltClip" */;
 			buildPhases = (
-				A3AA4544FAAB059F8472E1A8 /* [CP] Check Pods Manifest.lock */,
-				533F4B1BFE6646CFA64A32F2 /* Start Packager */,
-				A63654B22379F94CF79CF312 /* [Expo] Configure project */,
 				5B09A0C80A5E45B9AEF98CC4 /* Sources */,
 				BEC85494F5494374868CF548 /* Frameworks */,
 				0A5DE780FC754A14A39CE0A7 /* Resources */,
-				0593183C6A804756A702EF72 /* Bundle React Native code and images */,
-				905CFF7FB130828B47468713 /* [CP] Embed Pods Frameworks */,
-				AAF94EAB39D2613E60C47381 /* [CP] Copy Pods Resources */,
 			);
 			buildRules = (
 			);
@@ -353,7 +320,6 @@
 			files = (
 				AF4810BC7574DDA14A62B199 /* Images.xcassets in Resources */,
 				E94F57467C6735ED6D131DA8 /* SplashScreen.storyboard in Resources */,
-				248BC634956D266D7D5317EB /* Expo.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -388,20 +354,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "if [[ -f \"$PODS_ROOT/../.xcode.env\" ]]; then\n  source \"$PODS_ROOT/../.xcode.env\"\nfi\nif [[ -f \"$PODS_ROOT/../.xcode.env.local\" ]]; then\n  source \"$PODS_ROOT/../.xcode.env.local\"\nfi\n\n# The project root by default is one level up from the ios directory\nexport PROJECT_ROOT=\"$PROJECT_DIR\"/..\n\nif [[ -z \"$ENTRY_FILE\" ]]; then\n  # Set the entry JS file using the bundler's entry resolution.\n  export ENTRY_FILE=\"$(\"$NODE_BINARY\" -e \"require('expo/scripts/resolveAppEntry')\" \"$PROJECT_ROOT\" ios absolute | tail -n 1)\"\nfi\n\nif [[ -z \"$CLI_PATH\" ]]; then\n  # Use Expo CLI\n  export CLI_PATH=\"$(\"$NODE_BINARY\" --print \"require.resolve('@expo/cli', { paths: [require.resolve('expo/package.json')] })\")\"\nfi\nif [[ -z \"$BUNDLE_COMMAND\" ]]; then\n  # Default Expo CLI command for bundling\n  export BUNDLE_COMMAND=\"export:embed\"\nfi\n\n# Source .xcode.env.updates if it exists to allow\n# FORCE_BUNDLING to be unset if needed\nif [[ -f \"$PODS_ROOT/../.xcode.env.updates\" ]]; then\n  source \"$PODS_ROOT/../.xcode.env.updates\"\nfi\n# Source local changes to allow overrides\n# if needed\nif [[ -f \"$PODS_ROOT/../.xcode.env.local\" ]]; then\n  source \"$PODS_ROOT/../.xcode.env.local\"\nfi\n\n`\"$NODE_BINARY\" --print \"require('path').dirname(require.resolve('react-native/package.json')) + '/scripts/react-native-xcode.sh'\"`\n\n";
-		};
-		0593183C6A804756A702EF72 /* Bundle React Native code and images */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputPaths = (
-			);
-			name = "Bundle React Native code and images";
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "export BUILDING_FOR_APP_CLIP=1\nif [[ -f \"$PODS_ROOT/../.xcode.env\" ]]; then\n  source \"$PODS_ROOT/../.xcode.env\"\nfi\nif [[ -f \"$PODS_ROOT/../.xcode.env.local\" ]]; then\n  source \"$PODS_ROOT/../.xcode.env.local\"\nfi\n\n# The project root by default is one level up from the ios directory\nexport PROJECT_ROOT=\"$PROJECT_DIR\"/..\n\nif [[ -f \"$PROJECT_ROOT/.env\" ]]; then\n set -a\n source \"$PROJECT_ROOT/.env\"\n set +a\nfi\n\nif [[ \"$CONFIGURATION\" = *Debug* ]]; then\n  export SKIP_BUNDLING=1\nfi\nif [[ -z \"$ENTRY_FILE\" ]]; then\n  # Set the entry JS file using the bundler's entry resolution.\n  export ENTRY_FILE=\"$PROJECT_ROOT/clip-entry.tsx\"\nfi\n\nif [[ -z \"$CLI_PATH\" ]]; then\n  # Use Expo CLI\n  export CLI_PATH=\"$(\"$NODE_BINARY\" --print \"require.resolve('@expo/cli', { paths: [require.resolve('expo/package.json')] })\")\"\nfi\nif [[ -z \"$BUNDLE_COMMAND\" ]]; then\n  # Default Expo CLI command for bundling\n  export BUNDLE_COMMAND=\"export:embed\"\nfi\n\n`\"$NODE_BINARY\" --print \"require('path').dirname(require.resolve('react-native/package.json')) + '/scripts/react-native-xcode.sh'\"`\n\n";
 		};
 		08A4A3CD28434E44B6B9DE2E /* [CP] Check Pods Manifest.lock */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -475,20 +427,6 @@
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Volt/Pods-Volt-frameworks.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
-		533F4B1BFE6646CFA64A32F2 /* Start Packager */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputPaths = (
-			);
-			name = "Start Packager";
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "if [[ -f \"$PODS_ROOT/../.xcode.env\" ]]; then\n  source \"$PODS_ROOT/../.xcode.env\"\nfi\nif [[ -f \"$PODS_ROOT/../.xcode.env.local\" ]]; then\n  source \"$PODS_ROOT/../.xcode.env.local\"\nfi\n\nexport RCT_METRO_PORT=\"${RCT_METRO_PORT:=8081}\"\necho \"export RCT_METRO_PORT=${RCT_METRO_PORT}\" > `$NODE_BINARY --print \"require('path').dirname(require.resolve('react-native/package.json')) + '/scripts/.packager.env'\"`\nif [ -z \"${RCT_NO_LAUNCH_PACKAGER+xxx}\" ] ; then\n  if nc -w 5 -z localhost ${RCT_METRO_PORT} ; then\n    if ! curl -s \"http://localhost:${RCT_METRO_PORT}/status\" | grep -q \"packager-status:running\" ; then\n      echo \"Port ${RCT_METRO_PORT} already in use, packager is either not running or not running correctly\"\n      exit 2\n    fi\n  else\n    open `$NODE_BINARY --print \"require('path').dirname(require.resolve('expo/package.json')) + '/scripts/launchPackager.command'\"` || echo \"Can't start packager automatically\"\n  fi\nfi\n";
-		};
 		800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
@@ -545,100 +483,6 @@
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-Volt/Pods-Volt-resources.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
-		905CFF7FB130828B47468713 /* [CP] Embed Pods Frameworks */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-VoltClip/Pods-VoltClip-frameworks.sh",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/ExpoModulesJSI/ExpoModulesJSI.framework/ExpoModulesJSI",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/React-Core-prebuilt/React.framework/React",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/ReactNativeDependencies/ReactNativeDependencies.framework/ReactNativeDependencies",
-				"${PODS_XCFRAMEWORKS_BUILD_DIR}/hermes-engine/Pre-built/hermesvm.framework/hermesvm",
-			);
-			name = "[CP] Embed Pods Frameworks";
-			outputPaths = (
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/ExpoModulesJSI.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/React.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/ReactNativeDependencies.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/hermesvm.framework",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-VoltClip/Pods-VoltClip-frameworks.sh\"\n";
-			showEnvVarsInLog = 0;
-		};
-		A3AA4544FAAB059F8472E1A8 /* [CP] Check Pods Manifest.lock */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
-				"${PODS_ROOT}/Manifest.lock",
-			);
-			name = "[CP] Check Pods Manifest.lock";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-				"$(DERIVED_FILE_DIR)/Pods-VoltClip-checkManifestLockResult.txt",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
-			showEnvVarsInLog = 0;
-		};
-		A63654B22379F94CF79CF312 /* [Expo] Configure project */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-				"$(SRCROOT)/.xcode.env",
-				"$(SRCROOT)/.xcode.env.local",
-				"$(SRCROOT)/VoltClip/VoltClip.entitlements",
-				"$(SRCROOT)/Pods/Target Support Files/Pods-VoltClip/expo-configure-project.sh",
-			);
-			name = "[Expo] Configure project";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-				"$(SRCROOT)/Pods/Target Support Files/Pods-VoltClip/ExpoModulesProvider.swift",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "# This script configures Expo modules and generates the modules provider file.\nbash -l -c \"./Pods/Target\\ Support\\ Files/Pods-VoltClip/expo-configure-project.sh\"\n";
-		};
-		AAF94EAB39D2613E60C47381 /* [CP] Copy Pods Resources */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-VoltClip/Pods-VoltClip-resources.sh",
-				"${PODS_CONFIGURATION_BUILD_DIR}/EXConstants/EXConstants.bundle",
-				"${PODS_CONFIGURATION_BUILD_DIR}/EXConstants/ExpoConstants_privacy.bundle",
-				"${PODS_CONFIGURATION_BUILD_DIR}/React-Core/React-Core_privacy.bundle",
-				"${PODS_CONFIGURATION_BUILD_DIR}/React-cxxreact/React-cxxreact_privacy.bundle",
-			);
-			name = "[CP] Copy Pods Resources";
-			outputPaths = (
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/EXConstants.bundle",
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/ExpoConstants_privacy.bundle",
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/React-Core_privacy.bundle",
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/React-cxxreact_privacy.bundle",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-VoltClip/Pods-VoltClip-resources.sh\"\n";
-			showEnvVarsInLog = 0;
-		};
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -657,21 +501,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				370389E294E833EF1FDF11AA /* ExpoModulesProvider.swift in Sources */,
 				9A94212ABB8ABF424D2C9BD3 /* AppDelegate.swift in Sources */,
-				1C9A85EDF2EB2AEC470B58EE /* VoltClipBarcodeScanner.swift in Sources */,
-				6D55B21D269D79F18C320AE3 /* VoltClipBarcodeScanner.m in Sources */,
-				EFF2B949344974BACC60303E /* VoltClipDictation.swift in Sources */,
-				9DAB20B8943AEA8E2DF333D1 /* VoltClipDictation.m in Sources */,
-				6255E961A70D4649B8813AB7 /* VoltClipClipboard.swift in Sources */,
-				6255E962A70D4649B8813AB7 /* VoltClipClipboard.m in Sources */,
-				444469CDDA33068EC65021D7 /* VoltClipTextRecognizer.swift in Sources */,
-				3C14A89EF195550FDF8E5664 /* VoltClipTextRecognizer.m in Sources */,
-				4F1C0D7C71C04A619E61A101 /* VoltClipTextCameraViewManager.m in Sources */,
-				5E2F4B5A2F4E4A9A8A9E1001 /* VoltClipLiquidTabBarView.swift in Sources */,
-				5E2F4B5C2F4E4A9A8A9E1001 /* VoltClipLiquidTabBarViewManager.m in Sources */,
-				7059B2631F004960AEE9C790 /* LiveTextImageView.swift in Sources */,
-				7059B2641F004960AEE9C790 /* LiveTextImageViewManager.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -688,14 +518,13 @@
 /* Begin XCBuildConfiguration section */
 		001DE2C2FF184DCE8E6AC38E /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = F48087982786BD258242E508 /* Pods-VoltClip.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = VoltClip/VoltClip.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 11;
+				CURRENT_PROJECT_VERSION = 14;
 				DEVELOPMENT_TEAM = GB5SPLUARQ;
 				INFOPLIST_FILE = VoltClip/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.4;
@@ -717,7 +546,7 @@
 				CODE_SIGN_ENTITLEMENTS = Volt/Volt.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 14;
 				DEVELOPMENT_TEAM = GB5SPLUARQ;
 				ENABLE_BITCODE = NO;
 				GCC_PREPROCESSOR_DEFINITIONS = (
@@ -757,7 +586,7 @@
 				CODE_SIGN_ENTITLEMENTS = Volt/Volt.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 14;
 				DEVELOPMENT_TEAM = GB5SPLUARQ;
 				INFOPLIST_FILE = Volt/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.4;
@@ -918,14 +747,13 @@
 		};
 		BD757A823CC84559974803D0 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 211B1C5A0E20FF4E85DFC099 /* Pods-VoltClip.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = VoltClip/VoltClip.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 11;
+				CURRENT_PROJECT_VERSION = 14;
 				DEVELOPMENT_TEAM = GB5SPLUARQ;
 				INFOPLIST_FILE = VoltClip/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.4;
