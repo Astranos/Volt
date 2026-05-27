@@ -11,7 +11,7 @@
       "supportsTablet": true,
       "icon": "./assets/volt.icon",
       "bundleIdentifier": "com.volt.mobile",
-      "buildNumber": "17",
+      "buildNumber": "18",
       "associatedDomains": [
         "applinks:scanner-signal.vercel.app",
         "appclips:scanner-signal.vercel.app"

@@ -553,14 +553,18 @@ export function ScannerProvider({ children }: PropsWithChildren) {
         throw new Error("Camera did not return photo data.");
       }
 
-      const cropSize = Math.min(photo.width, photo.height);
+      const normalizedPhoto = await manipulateAsync(photo.uri, [], {
+        compress: 0.92,
+        format: SaveFormat.JPEG,
+      });
+      const cropSize = Math.min(normalizedPhoto.width, normalizedPhoto.height);
       const squarePhoto = await manipulateAsync(
-        photo.uri,
+        normalizedPhoto.uri,
         [
           {
             crop: {
-              originX: Math.max(0, Math.floor((photo.width - cropSize) / 2)),
-              originY: Math.max(0, Math.floor((photo.height - cropSize) / 2)),
+              originX: Math.max(0, Math.floor((normalizedPhoto.width - cropSize) / 2)),
+              originY: Math.max(0, Math.floor((normalizedPhoto.height - cropSize) / 2)),
               width: cropSize,
               height: cropSize,
             },

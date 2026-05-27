@@ -12,7 +12,7 @@ import UniformTypeIdentifiers
 import VisionKit
 
 private let signalBaseURL = URL(string: "https://scanner-signal.vercel.app/api/signal")!
-private let validModes: Set<String> = ["ocr", "barcode", "photo", "dictation"]
+private let validModes: Set<String> = ["ocr", "barcode", "photo"]
 private let clipZoomStops: [CGFloat] = [1, 1.5, 2, 2.5, 3, 3.5, 4]
 // Debug Metro port contract: provider.jsLocation = "\(ip):8091"
 
@@ -64,6 +64,10 @@ private enum ClipMode: String, CaseIterable, Identifiable {
 
   var id: String { rawValue }
 
+  static var appClipModes: [ClipMode] {
+    [.ocr, .barcode, .photo]
+  }
+
   var title: String {
     switch self {
     case .ocr: return "Text"
@@ -111,6 +115,7 @@ private final class ClipModel: ObservableObject {
   @Published var textCaptureShowsCleanedImage = false
   @Published var isExtractingText = false
   @Published var cursorTargetName = "Chrome"
+  @Published var captureControlsRotationDegrees = 0.0
 
   let camera = ClipCamera()
   let dictation = ClipDictation()
@@ -158,6 +163,11 @@ private final class ClipModel: ObservableObject {
     camera.onBarcodeLost = { [weak self] in
       Task { @MainActor in
         self?.scheduleBarcodeCandidateClear(after: 0.35)
+      }
+    }
+    camera.onOrientationChange = { [weak self] degrees in
+      Task { @MainActor in
+        self?.captureControlsRotationDegrees = Double(degrees)
       }
     }
 
@@ -934,6 +944,7 @@ private struct ClipRootView: View {
       Image(systemName: primarySymbol)
         .font(.system(size: 36, weight: .bold))
         .frame(width: 94, height: 94)
+        .rotationEffect(.degrees(model.captureControlsRotationDegrees))
         .contentShape(Circle())
         .overlay {
           if model.mode == .dictation {
@@ -1050,12 +1061,12 @@ private struct GroupedGlassModePicker: View {
   @GestureState private var dragLocationX: CGFloat?
 
   private var selectedIndex: Int {
-    ClipMode.allCases.firstIndex(of: selectedMode) ?? 0
+    ClipMode.appClipModes.firstIndex(of: selectedMode) ?? 0
   }
 
   var body: some View {
     GeometryReader { proxy in
-      let modes = ClipMode.allCases
+      let modes = ClipMode.appClipModes
       let outerInset: CGFloat = 7
       let count = max(CGFloat(modes.count), 1)
       let groupWidth = max(proxy.size.width - outerInset * 2, 1)
@@ -1146,7 +1157,7 @@ private struct GlassModeTabButton: View {
 
 private enum NativeModeTab {
   static func items() -> [UITabBarItem] {
-    ClipMode.allCases.enumerated().map { index, mode in
+    ClipMode.appClipModes.enumerated().map { index, mode in
       let item = UITabBarItem(title: mode.title, image: UIImage(systemName: mode.symbol), tag: index)
       item.accessibilityLabel = mode.title
       return item
@@ -1212,14 +1223,14 @@ private struct NativeLiquidModePicker: UIViewRepresentable {
 
   func updateUIView(_ tabBar: UITabBar, context: Context) {
     context.coordinator.onSelect = onSelect
-    if tabBar.items?.count != ClipMode.allCases.count {
+    if tabBar.items?.count != ClipMode.appClipModes.count {
       tabBar.items = NativeModeTab.items()
     }
     tabBar.selectedItem = tabBar.items?.first(where: { $0.tag == selectedIndex })
   }
 
   private var selectedIndex: Int {
-    ClipMode.allCases.firstIndex(of: selectedMode) ?? 0
+    ClipMode.appClipModes.firstIndex(of: selectedMode) ?? 0
   }
 
   final class Coordinator: NSObject, UITabBarDelegate {
@@ -1230,8 +1241,8 @@ private struct NativeLiquidModePicker: UIViewRepresentable {
     }
 
     func tabBar(_ tabBar: UITabBar, didSelect item: UITabBarItem) {
-      guard ClipMode.allCases.indices.contains(item.tag) else { return }
-      onSelect(ClipMode.allCases[item.tag])
+      guard ClipMode.appClipModes.indices.contains(item.tag) else { return }
+      onSelect(ClipMode.appClipModes[item.tag])
     }
   }
 }
@@ -1858,7 +1869,7 @@ private struct CapturedPhoto {
     }
 
     let outputData = mutableData as Data
-    let outputImage = UIImage(cgImage: croppedImage, scale: 1, orientation: .right)
+    let outputImage = UIImage(cgImage: croppedImage, scale: 1, orientation: .up)
     return CapturedPhoto(
       data: outputData,
       image: croppedImage,
@@ -1930,6 +1941,7 @@ private final class ClipCamera: NSObject, ObservableObject, AVCaptureMetadataOut
   let session = AVCaptureSession()
   var onBarcode: ((BarcodeCandidate) -> Void)?
   var onBarcodeLost: (() -> Void)?
+  var onOrientationChange: ((Int) -> Void)?
 
   private let queue = DispatchQueue(label: "com.volt.clip.native.camera")
   private let photoOutput = AVCapturePhotoOutput()
@@ -1939,6 +1951,24 @@ private final class ClipCamera: NSObject, ObservableObject, AVCaptureMetadataOut
   private var completion: ((Result<CapturedPhoto, Error>) -> Void)?
   private weak var previewView: PreviewView?
   private var barcodeFullFrame = false
+  private var latestDeviceOrientation: UIDeviceOrientation = .portrait
+
+  override init() {
+    super.init()
+    UIDevice.current.beginGeneratingDeviceOrientationNotifications()
+    NotificationCenter.default.addObserver(
+      self,
+      selector: #selector(deviceOrientationDidChange),
+      name: UIDevice.orientationDidChangeNotification,
+      object: nil
+    )
+    updateLatestDeviceOrientation()
+  }
+
+  deinit {
+    NotificationCenter.default.removeObserver(self)
+    UIDevice.current.endGeneratingDeviceOrientationNotifications()
+  }
 
   @MainActor
   func attachPreviewView(_ view: PreviewView) {
@@ -1947,6 +1977,7 @@ private final class ClipCamera: NSObject, ObservableObject, AVCaptureMetadataOut
   }
 
   func start() {
+    emitCurrentOrientation()
     AVCaptureDevice.requestAccess(for: .video) { granted in
       guard granted else { return }
       self.queue.async {
@@ -2054,6 +2085,7 @@ private final class ClipCamera: NSObject, ObservableObject, AVCaptureMetadataOut
           if !self.session.isRunning {
             self.session.startRunning()
           }
+          self.applyCurrentCaptureOrientation()
           self.photoOutput.capturePhoto(with: AVCapturePhotoSettings(), delegate: self)
         } catch {
           completion(.failure(error))
@@ -2175,9 +2207,97 @@ private final class ClipCamera: NSObject, ObservableObject, AVCaptureMetadataOut
       completion = nil
       return
     }
-    let uiImage = UIImage(cgImage: image, scale: 1, orientation: .right)
-    completion?(.success(CapturedPhoto(data: data, image: image, uiImage: uiImage, size: CGSize(width: image.width, height: image.height))))
+    let normalizedImage = normalizeImageOrientation(UIImage(data: data) ?? UIImage(cgImage: image))
+    guard
+      let normalizedCgImage = normalizedImage.cgImage,
+      let normalizedData = normalizedImage.jpegData(compressionQuality: 0.92)
+    else {
+      completion?(.failure(ClipError.message("Unable to prepare the photo.")))
+      completion = nil
+      return
+    }
+    completion?(.success(CapturedPhoto(
+      data: normalizedData,
+      image: normalizedCgImage,
+      uiImage: normalizedImage,
+      size: normalizedImage.size
+    )))
     completion = nil
+  }
+
+  @objc private func deviceOrientationDidChange() {
+    updateLatestDeviceOrientation()
+    applyCurrentCaptureOrientation()
+    emitCurrentOrientation()
+  }
+
+  private func emitCurrentOrientation() {
+    let degrees = rotationDegrees(for: latestDeviceOrientation)
+    DispatchQueue.main.async {
+      self.onOrientationChange?(degrees)
+    }
+  }
+
+  private func updateLatestDeviceOrientation() {
+    let orientation = UIDevice.current.orientation
+    if orientation.isValidInterfaceOrientation {
+      latestDeviceOrientation = orientation
+    }
+  }
+
+  private func rotationDegrees(for orientation: UIDeviceOrientation) -> Int {
+    switch orientation {
+    case .landscapeLeft:
+      return 90
+    case .landscapeRight:
+      return -90
+    case .portraitUpsideDown:
+      return 180
+    default:
+      return 0
+    }
+  }
+
+  private func currentVideoOrientation() -> AVCaptureVideoOrientation {
+    updateLatestDeviceOrientation()
+    switch latestDeviceOrientation {
+    case .portrait:
+      return .portrait
+    case .portraitUpsideDown:
+      return .portraitUpsideDown
+    case .landscapeLeft:
+      return .landscapeRight
+    case .landscapeRight:
+      return .landscapeLeft
+    default:
+      return .portrait
+    }
+  }
+
+  private func applyCurrentCaptureOrientation() {
+    let orientation = currentVideoOrientation()
+    if let connection = photoOutput.connection(with: .video), connection.isVideoOrientationSupported {
+      connection.videoOrientation = orientation
+    }
+    if let connection = metadataOutput.connection(with: .metadata), connection.isVideoOrientationSupported {
+      connection.videoOrientation = orientation
+    }
+  }
+
+  private func normalizeImageOrientation(_ image: UIImage) -> UIImage {
+    if image.imageOrientation == .up {
+      return image
+    }
+
+    let format = UIGraphicsImageRendererFormat()
+    format.scale = image.scale
+    format.opaque = true
+    let renderer = UIGraphicsImageRenderer(size: image.size, format: format)
+    return renderer.image { context in
+      UIColor.white.setFill()
+      context.fill(CGRect(origin: .zero, size: image.size))
+      image.draw(in: CGRect(origin: .zero, size: image.size))
+    }
   }
 
   private func metadataName(_ type: AVMetadataObject.ObjectType) -> String {

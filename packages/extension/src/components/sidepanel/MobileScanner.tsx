@@ -49,7 +49,6 @@ const SCAN_STORAGE_KEY = "volt.mobileScanner.scans";
 const PHOTO_STORAGE_KEY = "volt.mobilePhotos.photos";
 const MAX_SCANS = 100;
 const MAX_PHOTOS = 80;
-const MAX_PERSISTED_PHOTO_BYTES = 6_000_000;
 const CLUSTER_WINDOW_MS = 3 * 60 * 1000;
 const EXIT_ANIMATION_MS = 200;
 
@@ -91,17 +90,14 @@ type Cluster = {
 };
 
 function trimPhotosForStorage(photos: MobilePhoto[]) {
+  return trimPhotosForState(photos).map(({ dataUrl, ...metadata }) => metadata);
+}
+
+function trimPhotosForState(photos: MobilePhoto[]) {
   const trimmed: MobilePhoto[] = [];
-  let totalBytes = 0;
 
   for (const photo of photos.slice(0, MAX_PHOTOS)) {
-    const estimatedBytes = photo.dataUrl?.length ?? 0;
-    if (trimmed.length > 0 && totalBytes + estimatedBytes > MAX_PERSISTED_PHOTO_BYTES) {
-      continue;
-    }
-    const { dataUrl, ...metadata } = photo;
-    trimmed.push(metadata);
-    totalBytes += estimatedBytes;
+    trimmed.push(photo);
   }
 
   return trimmed;
@@ -331,7 +327,7 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
   const addPhoto = useCallback(
     (photo: MobilePhoto) => {
       setPhotos((current) => {
-        const next = trimPhotosForStorage([
+        const next = trimPhotosForState([
           photo,
           ...current.filter((item) => item.id !== photo.id),
         ]);

@@ -186,7 +186,6 @@ class VoltClipLiquidTabBarView: UIView, UITabBarDelegate {
     "ocr": makeItem(title: "OCR", image: "doc.text.viewfinder", selectedImage: "doc.text.viewfinder"),
     "barcode": makeItem(title: "Scanner", image: "barcode.viewfinder", selectedImage: "barcode.viewfinder"),
     "photo": makeItem(title: "Photos", image: "photo.on.rectangle", selectedImage: "photo.fill.on.rectangle.fill"),
-    "dictation": makeItem(title: "Dictation", image: "mic", selectedImage: "mic.fill"),
   ]
 
   override init(frame: CGRect) {
@@ -214,7 +213,7 @@ class VoltClipLiquidTabBarView: UIView, UITabBarDelegate {
     layer.shadowRadius = 18
 
     tabBar.delegate = self
-    tabBar.items = ["ocr", "barcode", "photo", "dictation"].compactMap { modeItems[$0] }
+    tabBar.items = ["ocr", "barcode", "photo"].compactMap { modeItems[$0] }
     tabBar.selectedItem = modeItems["ocr"]
     tabBar.tintColor = .white
     tabBar.unselectedItemTintColor = UIColor.white.withAlphaComponent(0.76)

@@ -1,8 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
-import { CameraView as ExpoCameraView, type BarcodeScanningResult } from "../../lib/expo-camera";
+import { CameraView as ExpoCameraView, type BarcodeScanningResult, type CameraOrientation } from "../../lib/expo-camera";
 import { useFocusEffect } from "expo-router";
 import { Image, Platform, Pressable, Text, View, useWindowDimensions, type GestureResponderEvent } from "react-native";
-import { useCallback, useEffect, useRef, useState, type ComponentType } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useScanner } from "../../lib/scanner-state";
 import {
@@ -31,6 +31,19 @@ function touchDistance(event: GestureResponderEvent) {
   return Math.hypot(first.pageX - second.pageX, first.pageY - second.pageY);
 }
 
+function cameraOrientationRotationDegrees(orientation: CameraOrientation) {
+  switch (orientation) {
+    case "landscapeLeft":
+      return 90;
+    case "landscapeRight":
+      return -90;
+    case "portraitUpsideDown":
+      return 180;
+    default:
+      return 0;
+  }
+}
+
 export default function PhotosTab() {
   const scanner = useScanner();
   const insets = useSafeAreaInsets();
@@ -41,6 +54,7 @@ export default function PhotosTab() {
   const [viewfinderFocused, setViewfinderFocused] = useState(false);
   const [gridVisible, setGridVisible] = useState(true);
   const [showPhotoSent, setShowPhotoSent] = useState(false);
+  const [cameraOrientation, setCameraOrientation] = useState<CameraOrientation>("portrait");
   const pairScannerLockedRef = useRef(false);
   const focusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pinchStartDistanceRef = useRef<number | null>(null);
@@ -97,6 +111,10 @@ export default function PhotosTab() {
   const photoFrameGap = 18;
   const photoFrameSize = Math.max(0, windowWidth - photoFrameGap * 2);
   const photoMaskBorderWidth = Math.max(windowHeight, windowWidth);
+  const controlRotationStyle = useMemo(
+    () => ({ transform: [{ rotate: `${cameraOrientationRotationDegrees(cameraOrientation)}deg` }] }),
+    [cameraOrientation]
+  );
 
   useEffect(() => {
     if (!scanner.photoSentAt) return;
@@ -192,6 +210,10 @@ export default function PhotosTab() {
               autofocus={scanner.focusMode}
               focusPoint={scanner.focusPoint}
               animateShutter
+              responsiveOrientationWhenOrientationLocked={Platform.OS === "ios"}
+              onResponsiveOrientationChanged={({ orientation }: { orientation: CameraOrientation }) => {
+                setCameraOrientation(orientation);
+              }}
               onTouchStart={handleCameraTouchStart}
               onTouchMove={handleCameraTouchMove}
               onTouchEnd={handleCameraTouchEnd}
@@ -225,6 +247,7 @@ export default function PhotosTab() {
             ) : null}
             <CameraControlStack
               leftControls={
+                <View style={controlRotationStyle}>
                   <CameraOverlayButton
                     active={scanner.torch}
                     accessibilityLabel={scanner.torch ? "Turn flash off" : "Turn flash on"}
@@ -236,8 +259,10 @@ export default function PhotosTab() {
                       color={scanner.torch ? "#facc15" : "#fafaf9"}
                     />
                   </CameraOverlayButton>
+                </View>
               }
               rightControls={
+                <View style={controlRotationStyle}>
                   <CameraOverlayButton
                     active={gridVisible}
                     accessibilityLabel={gridVisible ? "Hide photo grid" : "Show photo grid"}
@@ -249,27 +274,30 @@ export default function PhotosTab() {
                       color={gridVisible ? "#86efac" : "#fafaf9"}
                     />
                   </CameraOverlayButton>
+                </View>
               }
               bottom={floatingBottom}
               label={`${(1 + scanner.cameraZoom * 4).toFixed(1)}x`}
               onZoomIn={() => scanner.setCameraZoom((value) => clampZoom(value + zoomStep))}
               onZoomOut={() => scanner.setCameraZoom((value) => clampZoom(value - zoomStep))}
               shutter={
-                <ViewfinderBottomShutter
-                  disabled={scanner.photoSending}
-                  error={scanner.photoError}
-                  icon={scanner.photoSending ? "hourglass-outline" : "camera"}
-                  label="Take and send photo"
-                  onPress={scanner.sendPhotoCapture}
-                  status={
-                    scanner.photoSending
-                      ? "Sending photo..."
-                      : showPhotoSent
-                        ? "Photo sent to browser"
-                        : "Tap shutter to send to Chrome"
-                  }
-                  statusActive={scanner.photoSending}
-                />
+                <View style={controlRotationStyle}>
+                  <ViewfinderBottomShutter
+                    disabled={scanner.photoSending}
+                    error={scanner.photoError}
+                    icon={scanner.photoSending ? "hourglass-outline" : "camera"}
+                    label="Take and send photo"
+                    onPress={scanner.sendPhotoCapture}
+                    status={
+                      scanner.photoSending
+                        ? "Sending photo..."
+                        : showPhotoSent
+                          ? "Photo sent to browser"
+                          : "Tap shutter to send to Chrome"
+                    }
+                    statusActive={scanner.photoSending}
+                  />
+                </View>
               }
             />
           </View>
