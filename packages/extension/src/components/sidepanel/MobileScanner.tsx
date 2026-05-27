@@ -12,6 +12,7 @@ import {
   Download,
   ImagePlus,
   Loader2,
+  QrCode,
   RefreshCw,
   Scan,
   ScanLine,
@@ -868,13 +869,18 @@ function UnifiedPairingCard({
   onForceRestart: () => void;
   onDisconnect: () => void;
 }) {
-  const showQr = status === "waiting" && qrDataUrl;
+  const showQr = Boolean(qrDataUrl) && (status === "waiting" || status === "connected");
   const isCreating = status === "creating";
   const connected = status === "connected";
   const hasError = status === "error";
+  const [qrOpen, setQrOpen] = useState(false);
+
+  useEffect(() => {
+    if (!showQr) setQrOpen(false);
+  }, [showQr]);
 
   const statusCopy = connected
-    ? "Ready for captures"
+    ? "Ready for captures · QR available"
     : showQr
       ? "Waiting for iPhone"
       : isCreating
@@ -921,25 +927,125 @@ function UnifiedPairingCard({
         </div>
       </div>
 
-      {!connected ? (
+      {showQr ? (
         <>
-          <PairingSlot
-            status={status}
-            qrDataUrl={qrDataUrl}
-            error={error}
+          <PairingQrAction
+            connected={connected}
+            onOpen={() => setQrOpen(true)}
           />
           <div className="mt-3">
+            <button
+              type="button"
+              onClick={onForceRestart}
+              className="liquid-glass-soft inline-flex h-9 w-full items-center justify-center gap-2 rounded-full text-xs font-bold text-stone-600 transition hover:text-stone-900 active:scale-[0.99] dark:text-stone-300 dark:hover:text-stone-50"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              Generate a new QR
+            </button>
+          </div>
+          {qrOpen && qrDataUrl ? (
+            <PairingQrOverlay
+              connected={connected}
+              qrDataUrl={qrDataUrl}
+              onClose={() => setQrOpen(false)}
+            />
+          ) : null}
+        </>
+      ) : !connected ? (
+        <PairingSlot
+          status={status}
+          qrDataUrl={qrDataUrl}
+          error={error}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function PairingQrAction({
+  connected,
+  onOpen,
+}: {
+  connected: boolean;
+  onOpen: () => void;
+}) {
+  return (
+    <div className="mt-3 rounded-2xl border border-stone-200/70 bg-white/45 p-3 dark:border-stone-700/70 dark:bg-white/[0.04]">
+      <div className="flex items-center gap-3">
+        <span className="liquid-glass-soft flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-green-700 dark:text-green-300">
+          <QrCode className="h-5 w-5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-xs font-bold text-stone-800 dark:text-stone-100">
+            Pairing QR
+          </div>
+          <p className="mt-0.5 text-[11px] font-medium leading-4 text-stone-500 dark:text-stone-400">
+            {connected
+              ? "Available for reconnecting this session."
+              : "Open it when you are ready to scan."}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onOpen}
+          className="liquid-glass-soft inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-full px-3 text-xs font-bold text-stone-700 transition hover:text-stone-950 active:scale-[0.98] dark:text-stone-200 dark:hover:text-stone-50"
+        >
+          <QrCode className="h-3.5 w-3.5" />
+          Show
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function PairingQrOverlay({
+  connected,
+  qrDataUrl,
+  onClose,
+}: {
+  connected: boolean;
+  qrDataUrl: string;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-stone-950/45 p-4 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Pair iPhone with Volt App Clip"
+      onClick={onClose}
+    >
+      <div
+        className="liquid-glass concentric-xl w-full max-w-[300px] p-4 shadow-2xl"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="truncate text-sm font-bold text-stone-900 dark:text-stone-50">
+              Pair iPhone
+            </div>
+            <div className="truncate text-[11px] font-medium text-stone-500 dark:text-stone-400">
+              {connected ? "Reconnect to this session" : "Scan to open Volt"}
+            </div>
+          </div>
           <button
             type="button"
-            onClick={onForceRestart}
-            className="liquid-glass-soft inline-flex h-9 w-full items-center justify-center gap-2 rounded-full text-xs font-bold text-stone-600 transition hover:text-stone-900 active:scale-[0.99] dark:text-stone-300 dark:hover:text-stone-50"
+            onClick={onClose}
+            aria-label="Close pairing QR"
+            className="liquid-glass-soft inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-stone-600 transition hover:text-stone-950 active:scale-95 dark:text-stone-300 dark:hover:text-stone-50"
           >
-            <RefreshCw className="h-3.5 w-3.5" />
-            Generate a new QR
+            <X className="h-4 w-4" />
           </button>
-          </div>
-        </>
-      ) : null}
+        </div>
+        <QrPanel
+          qrDataUrl={qrDataUrl}
+          hint={
+            connected
+              ? "Scan this QR to reopen or pair the iPhone to this session."
+              : "Scan with the iPhone Camera app to open Volt."
+          }
+        />
+      </div>
     </div>
   );
 }
@@ -953,7 +1059,7 @@ function PairingSlot({
   qrDataUrl: string | null;
   error: string | null;
 }) {
-  const showQr = status === "waiting" && qrDataUrl;
+  const showQr = Boolean(qrDataUrl) && (status === "waiting" || status === "connected");
   const isCreating = status === "creating";
   const connected = status === "connected";
   const hasError = status === "error";
@@ -976,7 +1082,11 @@ function PairingSlot({
         <SlotFader key="qr">
           <QrPanel
             qrDataUrl={qrDataUrl}
-            hint="Scan with the iPhone Camera app to open Volt."
+            hint={
+              connected
+                ? "Scan this QR to reopen or pair the iPhone to this session."
+                : "Scan with the iPhone Camera app to open Volt."
+            }
           />
         </SlotFader>
       ) : null}
@@ -1461,7 +1571,13 @@ function PhotoEntryCard({
               ? `${photo.width}×${photo.height}`
               : "",
             formatPhotoSize(photo.size),
-            photo.downloadFilename ? "Downloaded" : "",
+            photo.status === "download_failed"
+              ? "Retryable"
+              : photo.downloadFilename || photo.status === "browser_received"
+                ? "Downloaded"
+                : photo.status === "available_to_browser"
+                  ? "Downloading"
+                  : "",
           ]
             .filter(Boolean)
             .join(" · ")}

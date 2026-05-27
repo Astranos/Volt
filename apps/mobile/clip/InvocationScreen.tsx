@@ -31,6 +31,7 @@ import {
   makeOcrMessage,
   type ScannerCaptureMode,
 } from "../lib/scanner-messages";
+import { uploadPhotoObjectTransfer } from "../lib/photo-object-transfer";
 import {
   addVoltClipBarcodeErrorListener,
   addVoltClipBarcodeCandidateListener,
@@ -320,6 +321,7 @@ export default function ClipInvocationScreen() {
   const ocrZoomMaxRef = useRef(OCR_ZOOM_MAX);
   const ocrZoomFactorRef = useRef(OCR_ZOOM_DEFAULT);
   const captureInFlightRef = useRef(false);
+  const photoContributorIdRef = useRef(`clip-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`);
   const isOcrMode = Boolean(mode);
   const [ocrAutoTypeCopiedText, setOcrAutoTypeCopiedText] = useState(true);
   const [barcodeInsertIntoCursor, setBarcodeInsertIntoCursor] = useState(true);
@@ -1064,19 +1066,22 @@ export default function ClipInvocationScreen() {
       hideVoltClipTextPreview();
       setOcrState("ready");
       if (mode === "photo" && result.dataUrl) {
-        await sendRelayMessage(
-          "photo",
-          makePhotoMessage({
-            id: `clip-photo-${Date.now()}`,
-            name: `volt-photo-${new Date().toISOString().replace(/[:.]/g, "-")}.jpg`,
-            mimeType: "image/jpeg",
-            dataUrl: result.dataUrl,
-            size: Number(result.size ?? 0),
-            width: result.width ? Number(result.width) : undefined,
-            height: result.height ? Number(result.height) : undefined,
-            capturedAt: new Date().toISOString(),
-          })
-        );
+        if (!session) throw new Error("Browser session unavailable.");
+        setSendState("sending");
+        const capturedAt = new Date().toISOString();
+        await uploadPhotoObjectTransfer({
+          sessionId: session,
+          contributorId: photoContributorIdRef.current,
+          id: `clip-photo-${Date.now()}`,
+          name: `volt-photo-${capturedAt.replace(/[:.]/g, "-")}.jpg`,
+          mimeType: "image/jpeg",
+          dataUrl: result.dataUrl,
+          size: Number(result.size ?? 0),
+          width: result.width ? Number(result.width) : undefined,
+          height: result.height ? Number(result.height) : undefined,
+          capturedAt,
+        });
+        setSendState("sent");
       }
     } catch (captureError) {
       setOcrState("error");

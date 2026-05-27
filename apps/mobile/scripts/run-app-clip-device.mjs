@@ -117,11 +117,36 @@ async function resolveConnectedIphoneId() {
         connection.tunnelState === "connected"
       );
     });
+    const pairedWiredIphones = devices.filter((device) => {
+      const properties = device.deviceProperties || {};
+      const hardware = device.hardwareProperties || {};
+      const connection = device.connectionProperties || {};
+      return (
+        hardware.platform === "iOS" &&
+        properties.name?.toLowerCase().includes("iphone") &&
+        connection.pairingState === "paired" &&
+        connection.transportType === "wired"
+      );
+    });
 
     if (iphones.length === 1) return iphones[0].identifier;
     if (iphones.length > 1) {
       throw new Error(
         `Multiple connected iPhones found. Set VOLT_DEVICE_ID or pass --device. Found: ${iphones
+          .map((device) => `${device.deviceProperties?.name || "iPhone"} (${device.identifier})`)
+          .join(", ")}`
+      );
+    }
+    if (pairedWiredIphones.length === 1) {
+      const device = pairedWiredIphones[0];
+      console.log(
+        `Found paired wired iPhone (${device.deviceProperties?.name || "iPhone"}). Xcode will connect it during build/install.`
+      );
+      return device.identifier;
+    }
+    if (pairedWiredIphones.length > 1) {
+      throw new Error(
+        `Multiple paired wired iPhones found. Set VOLT_DEVICE_ID or pass --device. Found: ${pairedWiredIphones
           .map((device) => `${device.deviceProperties?.name || "iPhone"} (${device.identifier})`)
           .join(", ")}`
       );

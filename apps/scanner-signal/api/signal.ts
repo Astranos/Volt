@@ -1,17 +1,20 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import {
+  PHOTO_RECOVERY_WINDOW_MS,
   SCANNER_SESSION_TTL_MS,
   isCaptureMode,
   isScannerSessionId,
   parseScannerRelayResult,
   parseSessionTarget,
   trimScannerRelayResults,
-  type ScannerRelayResult,
-  type SessionTarget,
-} from "../../../packages/scanner-protocol/src/index.ts";
+} from "./scanner-protocol.js";
+import type { ScannerRelayResult, SessionTarget } from "./scanner-protocol.ts";
+import { createPhotoObjectStore, readMemoryPhotoObject } from "./photo-object-store.js";
 
 const SCANNER_SESSION_TTL_SECONDS = Math.ceil(SCANNER_SESSION_TTL_MS / 1000);
+const PHOTO_RECOVERY_WINDOW_SECONDS = Math.ceil(PHOTO_RECOVERY_WINDOW_MS / 1000);
 const SESSION_KEY_PREFIX = "volt:scanner:session:";
+const MAX_PHOTO_UPLOAD_BYTES = 100 * 1024 * 1024;
 
 type ScannerSession = {
   offer?: string;
@@ -19,9 +22,47 @@ type ScannerSession = {
   result?: ScannerRelayResult;
   results?: ScannerRelayResult[];
   mode?: ScannerRelayResult["mode"];
+  capabilities?: ScannerRelayResult["mode"][];
   target?: SessionTarget;
   connectedAt?: string;
   createdAt: number;
+  browserClaim?: string;
+  photoGrants?: PhotoUploadGrantRecord[];
+  photos?: PhotoTransferRecord[];
+};
+
+type PhotoUploadGrantRecord = {
+  id: string;
+  contributorId: string;
+  filename: string;
+  mimeType: string;
+  size: number;
+  width?: number;
+  height?: number;
+  objectKey: string;
+  expiresAt: string;
+  usedAt?: string;
+  objectUrl?: string;
+};
+
+type PhotoTransferRecord = {
+  id: string;
+  kind: "photo";
+  grantId: string;
+  contributorId: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  width?: number;
+  height?: number;
+  capturedAt: string;
+  objectKey: string;
+  downloadUrl: string;
+  status: "uploaded" | "available_to_browser" | "browser_received" | "download_failed";
+  browserReceivedAt?: string;
+  downloadFailedAt?: string;
+  downloadError?: string;
+  createdAt: string;
 };
 
 const globalState = globalThis as typeof globalThis & {
@@ -106,7 +147,7 @@ async function saveSession(sessionId: string, session: ScannerSession) {
       sessionKey(sessionId),
       JSON.stringify(session),
       "EX",
-      SCANNER_SESSION_TTL_SECONDS,
+      session.photos?.length || session.photoGrants?.length ? PHOTO_RECOVERY_WINDOW_SECONDS : SCANNER_SESSION_TTL_SECONDS,
     ]);
     return;
   }
@@ -171,6 +212,145 @@ function isConnectRequest(request: VercelRequest) {
   return request.url?.endsWith("/connect") ?? false;
 }
 
+function pathParts(request: VercelRequest) {
+  const path = request.query.path;
+  return typeof path === "string" ? path.split("/").filter(Boolean) : [];
+}
+
+function isPhotoGrantRequest(request: VercelRequest) {
+  const parts = pathParts(request);
+  return parts[1] === "photo" && parts[2] === "grant";
+}
+
+function isPhotoUploadRequest(request: VercelRequest) {
+  const parts = pathParts(request);
+  return parts[1] === "photo" && parts[2] === "upload" && typeof parts[3] === "string";
+}
+
+function isPhotoManifestRequest(request: VercelRequest) {
+  const parts = pathParts(request);
+  return parts[1] === "photo" && parts[2] === "manifest";
+}
+
+function isPhotoAckRequest(request: VercelRequest) {
+  const parts = pathParts(request);
+  return parts[1] === "photo" && parts[2] === "ack";
+}
+
+function isPhotoFailureRequest(request: VercelRequest) {
+  const parts = pathParts(request);
+  return parts[1] === "photo" && parts[2] === "failure";
+}
+
+function isPhotoObjectRequest(request: VercelRequest) {
+  const parts = pathParts(request);
+  return parts[0] === "photo" && parts[1] === "object" && typeof parts[2] === "string";
+}
+
+function requestOrigin(request: VercelRequest) {
+  const proto = Array.isArray(request.headers["x-forwarded-proto"])
+    ? request.headers["x-forwarded-proto"][0]
+    : request.headers["x-forwarded-proto"] || "https";
+  const host = Array.isArray(request.headers.host) ? request.headers.host[0] : request.headers.host || "scanner-signal.vercel.app";
+  return `${proto}://${host}`;
+}
+
+function makeId(prefix: string) {
+  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function defaultCapabilities(mode?: ScannerRelayResult["mode"]) {
+  if (mode === "dictation") return ["dictation"] as ScannerRelayResult["mode"][];
+  if (mode) return ["ocr", "barcode", "photo"] as ScannerRelayResult["mode"][];
+  return ["ocr", "barcode", "dictation", "photo"] as ScannerRelayResult["mode"][];
+}
+
+function sanitizePathSegment(value: unknown, fallback: string) {
+  const cleaned = String(value || "")
+    .trim()
+    .replace(/[^\w.\-]+/g, "-")
+    .replace(/^\.+$/, "")
+    .slice(0, 120);
+  return cleaned || fallback;
+}
+
+function normalizeGrantInput(value: unknown) {
+  if (!value || typeof value !== "object") return null;
+  const body = value as Record<string, unknown>;
+  const contributorId = typeof body.contributorId === "string" && body.contributorId ? body.contributorId.slice(0, 120) : "";
+  const filename = sanitizePathSegment(body.filename, "volt-photo.jpg");
+  const mimeType = typeof body.mimeType === "string" && body.mimeType.startsWith("image/") ? body.mimeType.slice(0, 80) : "";
+  const size = typeof body.size === "number" ? body.size : Number(body.size);
+  if (!contributorId || !mimeType || !Number.isFinite(size) || size <= 0 || size > MAX_PHOTO_UPLOAD_BYTES) return null;
+  return {
+    contributorId,
+    filename,
+    mimeType,
+    size,
+    width: typeof body.width === "number" && Number.isFinite(body.width) ? Math.max(0, Math.floor(body.width)) : undefined,
+    height: typeof body.height === "number" && Number.isFinite(body.height) ? Math.max(0, Math.floor(body.height)) : undefined,
+  };
+}
+
+function browserClaimFromRequest(request: VercelRequest) {
+  const header = request.headers["x-volt-browser-claim"];
+  const value = Array.isArray(header) ? header[0] : header;
+  return typeof value === "string" && value ? value : undefined;
+}
+
+function requireBrowserClaim(session: ScannerSession, request: VercelRequest, response: VercelResponse) {
+  const claim = browserClaimFromRequest(request);
+  if (!session.browserClaim || !claim || claim !== session.browserClaim) {
+    response.status(403).json({ error: "Browser claim required" });
+    return false;
+  }
+  return true;
+}
+
+function makePhotoMessage(photo: PhotoTransferRecord) {
+  return {
+    kind: "photo" as const,
+    id: photo.id,
+    name: photo.name,
+    mimeType: photo.mimeType,
+    downloadUrl: photo.downloadUrl,
+    objectKey: photo.objectKey,
+    grantId: photo.grantId,
+    contributorId: photo.contributorId,
+    size: photo.size,
+    width: photo.width,
+    height: photo.height,
+    capturedAt: photo.capturedAt,
+    status: photo.status,
+    browserReceivedAt: photo.browserReceivedAt,
+    downloadFailedAt: photo.downloadFailedAt,
+    downloadError: photo.downloadError,
+  };
+}
+
+async function bodyToBlob(request: VercelRequest, mimeType: string) {
+  const body = request.body;
+  if (body instanceof Blob) return body;
+  if (body instanceof ArrayBuffer) return new Blob([body.slice(0)], { type: mimeType });
+  if (ArrayBuffer.isView(body)) {
+    const bytes = new Uint8Array(body.buffer, body.byteOffset, body.byteLength);
+    const copy = new Uint8Array(bytes.length);
+    copy.set(bytes);
+    return new Blob([copy.buffer], { type: mimeType });
+  }
+  if (typeof body === "string") {
+    const bytes = Uint8Array.from(Buffer.from(body, "base64"));
+    return new Blob([bytes.buffer], { type: mimeType });
+  }
+  if (body && typeof body === "object" && typeof (body as { dataUrl?: unknown }).dataUrl === "string") {
+    const dataUrl = (body as { dataUrl: string }).dataUrl;
+    const base64 = dataUrl.slice(dataUrl.indexOf(",") + 1);
+    const bytes = Uint8Array.from(Buffer.from(base64, "base64"));
+    return new Blob([bytes.buffer], { type: mimeType });
+  }
+  return null;
+}
+
 export default async function handler(request: VercelRequest, response: VercelResponse) {
   setCors(response);
 
@@ -185,14 +365,32 @@ export default async function handler(request: VercelRequest, response: VercelRe
   const isResultAckRoute = isResultAckRequest(request);
   const isTargetRoute = isTargetRequest(request);
   const isConnectRoute = isConnectRequest(request);
+  const isPhotoGrantRoute = isPhotoGrantRequest(request);
+  const isPhotoUploadRoute = isPhotoUploadRequest(request);
+  const isPhotoManifestRoute = isPhotoManifestRequest(request);
+  const isPhotoAckRoute = isPhotoAckRequest(request);
+  const isPhotoFailureRoute = isPhotoFailureRequest(request);
 
   try {
     ensureSignalStorage();
+
+    if (request.method === "GET" && isPhotoObjectRequest(request)) {
+      const key = decodeURIComponent(pathParts(request).slice(2).join("/"));
+      const object = await readMemoryPhotoObject(key);
+      if (!object) {
+        response.status(404).json({ error: "Object not found" });
+        return;
+      }
+      response.setHeader("Content-Type", object.contentType);
+      response.status(200).send(Buffer.from(object.body));
+      return;
+    }
 
     if (request.method === "POST" && !sessionId) {
       const offer = request.body?.offer;
       const isRelaySession = request.body?.relay === true;
       const relayMode = isCaptureMode(request.body?.mode) ? request.body.mode : undefined;
+      const browserClaim = typeof request.body?.browserClaim === "string" && request.body.browserClaim ? request.body.browserClaim : undefined;
       const target = parseSessionTarget(request.body?.target);
       if (!isRelaySession && (typeof offer !== "string" || !offer)) {
         response.status(400).json({ error: "Missing offer" });
@@ -202,10 +400,12 @@ export default async function handler(request: VercelRequest, response: VercelRe
       await saveSession(nextSessionId, {
         offer: typeof offer === "string" ? offer : undefined,
         mode: relayMode,
+        capabilities: defaultCapabilities(relayMode),
         target,
+        browserClaim,
         createdAt: Date.now(),
       });
-      response.status(200).json({ sessionId: nextSessionId });
+      response.status(200).json({ sessionId: nextSessionId, browserClaim });
       return;
     }
 
@@ -219,19 +419,33 @@ export default async function handler(request: VercelRequest, response: VercelRe
       return;
     }
 
-    if (request.method === "POST" && !isAnswerRoute && !isResultRoute && !isTargetRoute && !isConnectRoute) {
+    if (
+      request.method === "POST" &&
+      !isAnswerRoute &&
+      !isResultRoute &&
+      !isTargetRoute &&
+      !isConnectRoute &&
+      !isPhotoGrantRoute &&
+      !isPhotoUploadRoute &&
+      !isPhotoManifestRoute &&
+      !isPhotoAckRoute &&
+      !isPhotoFailureRoute
+    ) {
       const offer = request.body?.offer;
       const isRelaySession = request.body?.relay === true;
       const relayMode = isCaptureMode(request.body?.mode) ? request.body.mode : undefined;
+      const browserClaim = typeof request.body?.browserClaim === "string" && request.body.browserClaim ? request.body.browserClaim : undefined;
       const target = parseSessionTarget(request.body?.target);
 
       if (isRelaySession) {
         await saveSession(sessionId, {
           mode: relayMode,
+          capabilities: defaultCapabilities(relayMode),
           target,
+          browserClaim,
           createdAt: Date.now(),
         });
-        response.status(200).json({ sessionId });
+        response.status(200).json({ sessionId, browserClaim });
         return;
       }
 
@@ -248,6 +462,158 @@ export default async function handler(request: VercelRequest, response: VercelRe
     const session = await getSession(sessionId);
     if (!session) {
       response.status(404).json({ error: "Session not found" });
+      return;
+    }
+
+    if (request.method === "POST" && isPhotoGrantRoute) {
+      if (session.mode && session.mode !== "photo") {
+        response.status(400).json({ error: "Session does not allow photo capture" });
+        return;
+      }
+      const input = normalizeGrantInput(request.body);
+      if (!input) {
+        response.status(400).json({ error: "Invalid photo grant request" });
+        return;
+      }
+      const grantId = makeId("grant");
+      const expiresAt = new Date(Date.now() + PHOTO_RECOVERY_WINDOW_MS).toISOString();
+      const objectKey = [
+        "mobile-scanner",
+        sessionId,
+        grantId,
+        sanitizePathSegment(input.filename, "volt-photo.jpg"),
+      ].join("/");
+      const origin = requestOrigin(request);
+      const grant: PhotoUploadGrantRecord = {
+        id: grantId,
+        contributorId: input.contributorId,
+        filename: input.filename,
+        mimeType: input.mimeType,
+        size: input.size,
+        width: input.width,
+        height: input.height,
+        objectKey,
+        expiresAt,
+      };
+      await saveSession(sessionId, {
+        ...session,
+        mode: session.mode ?? "photo",
+        capabilities: session.capabilities ?? ["photo"],
+        photoGrants: [...(session.photoGrants ?? []), grant],
+      });
+      response.status(200).json({
+        grant: {
+          id: grant.id,
+          uploadUrl: `${origin}/api/signal/${encodeURIComponent(sessionId)}/photo/upload/${encodeURIComponent(grant.id)}`,
+          manifestUrl: `${origin}/api/signal/${encodeURIComponent(sessionId)}/photo/manifest`,
+          expiresAt: grant.expiresAt,
+          objectKey: grant.objectKey,
+          headers: { "Content-Type": grant.mimeType },
+        },
+      });
+      return;
+    }
+
+    if ((request.method === "POST" || request.method === "PUT") && isPhotoUploadRoute) {
+      const grantId = pathParts(request)[3];
+      const grants = session.photoGrants ?? [];
+      const grant = grants.find((item) => item.id === grantId);
+      if (!grant) {
+        response.status(404).json({ error: "Photo upload grant not found" });
+        return;
+      }
+      if (grant.usedAt) {
+        response.status(409).json({ error: "Photo upload grant already used" });
+        return;
+      }
+      if (Date.parse(grant.expiresAt) <= Date.now()) {
+        response.status(410).json({ error: "Photo upload grant expired" });
+        return;
+      }
+      const body = await bodyToBlob(request, grant.mimeType);
+      if (!body || body.size <= 0 || body.size > MAX_PHOTO_UPLOAD_BYTES) {
+        response.status(400).json({ error: "Invalid photo upload body" });
+        return;
+      }
+      const store = await createPhotoObjectStore();
+      const stored = await store.put({ key: grant.objectKey, body, contentType: grant.mimeType });
+      const downloadUrl = stored.url.startsWith("/") ? `${requestOrigin(request)}${stored.url}` : stored.url;
+      const usedAt = new Date().toISOString();
+      const nextGrants = grants.map((item) =>
+        item.id === grant.id ? { ...item, usedAt, objectUrl: downloadUrl } : item
+      );
+      await saveSession(sessionId, { ...session, photoGrants: nextGrants });
+      response.status(200).json({ success: true, grantId: grant.id, objectKey: stored.key, downloadUrl });
+      return;
+    }
+
+    if (request.method === "POST" && isPhotoManifestRoute) {
+      const grantId = typeof request.body?.grantId === "string" ? request.body.grantId : "";
+      const grants = session.photoGrants ?? [];
+      const grant = grants.find((item) => item.id === grantId);
+      if (!grant || !grant.usedAt || !grant.objectUrl) {
+        response.status(400).json({ error: "Photo upload grant has no uploaded object" });
+        return;
+      }
+      const photoId = typeof request.body?.id === "string" && request.body.id ? request.body.id : makeId("photo");
+      const capturedAt = typeof request.body?.capturedAt === "string" ? request.body.capturedAt : new Date().toISOString();
+      const photo: PhotoTransferRecord = {
+        id: photoId,
+        kind: "photo",
+        grantId: grant.id,
+        contributorId: grant.contributorId,
+        name: grant.filename,
+        mimeType: grant.mimeType,
+        size: grant.size,
+        width: grant.width,
+        height: grant.height,
+        capturedAt,
+        objectKey: grant.objectKey,
+        downloadUrl: grant.objectUrl,
+        status: "available_to_browser",
+        createdAt: new Date().toISOString(),
+      };
+      const previous = session.photos ?? [];
+      const photos = [photo, ...previous.filter((item) => item.id !== photo.id)];
+      await saveSession(sessionId, { ...session, mode: session.mode ?? "photo", photos });
+      response.status(200).json({ success: true, photo: makePhotoMessage(photo) });
+      return;
+    }
+
+    if (request.method === "GET" && isPhotoManifestRoute) {
+      if (!requireBrowserClaim(session, request, response)) return;
+      response.status(200).json({ photos: (session.photos ?? []).map(makePhotoMessage) });
+      return;
+    }
+
+    if (request.method === "POST" && isPhotoAckRoute) {
+      if (!requireBrowserClaim(session, request, response)) return;
+      const ids = Array.isArray(request.body?.ids)
+        ? request.body.ids.filter((id: unknown): id is string => typeof id === "string" && id.length > 0)
+        : [];
+      const receivedAt = new Date().toISOString();
+      const photos = (session.photos ?? []).map((photo) =>
+        ids.includes(photo.id)
+          ? { ...photo, status: "browser_received" as const, browserReceivedAt: receivedAt, downloadError: undefined }
+          : photo
+      );
+      await saveSession(sessionId, { ...session, photos });
+      response.status(200).json({ success: true });
+      return;
+    }
+
+    if (request.method === "POST" && isPhotoFailureRoute) {
+      if (!requireBrowserClaim(session, request, response)) return;
+      const id = typeof request.body?.id === "string" ? request.body.id : "";
+      const error = typeof request.body?.error === "string" ? request.body.error.slice(0, 240) : "download_failed";
+      const failedAt = new Date().toISOString();
+      const photos = (session.photos ?? []).map((photo) =>
+        photo.id === id
+          ? { ...photo, status: "download_failed" as const, downloadFailedAt: failedAt, downloadError: error }
+          : photo
+      );
+      await saveSession(sessionId, { ...session, photos });
+      response.status(200).json({ success: true });
       return;
     }
 
@@ -291,6 +657,13 @@ export default async function handler(request: VercelRequest, response: VercelRe
         return;
       }
       if (session.mode && result.mode !== session.mode) {
+        const capabilities = session.capabilities ?? defaultCapabilities(session.mode);
+        if (!capabilities.includes(result.mode)) {
+          response.status(400).json({ error: "Result mode mismatch" });
+          return;
+        }
+      }
+      if (!session.mode && session.capabilities && !session.capabilities.includes(result.mode)) {
         response.status(400).json({ error: "Result mode mismatch" });
         return;
       }
@@ -316,6 +689,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
       response.status(200).json({
         offer: session.offer,
         mode: session.mode,
+        capabilities: session.capabilities ?? defaultCapabilities(session.mode),
         target: session.target ?? null,
         connectedAt: session.connectedAt ?? null,
       });

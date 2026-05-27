@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { isAppClipCaptureMode, isScannerSessionId } from "../../../packages/scanner-protocol/src/index.ts";
+import { isAppClipCaptureMode, isScannerSessionId } from "./scanner-protocol.js";
 
 const DEFAULT_APP_CLIP_BUNDLE_ID = "com.volt.mobile.Clip";
 const APP_STORE_ID_PATTERN = /^\d+$/;

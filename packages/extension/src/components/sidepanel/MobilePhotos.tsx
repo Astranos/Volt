@@ -812,7 +812,13 @@ export default function MobilePhotos({
                         {[
                           photo.width && photo.height ? `${photo.width}×${photo.height}` : "",
                           formatSize(photo.size),
-                          photo.downloadFilename ? "Downloaded" : "",
+                          photo.status === "download_failed"
+                            ? "Retryable"
+                            : photo.downloadFilename || photo.status === "browser_received"
+                              ? "Downloaded"
+                              : photo.status === "available_to_browser"
+                                ? "Downloading"
+                                : "",
                         ]
                           .filter(Boolean)
                           .join(" · ")}

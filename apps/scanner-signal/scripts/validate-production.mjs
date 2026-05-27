@@ -4,7 +4,7 @@ const origin = process.env.SCANNER_SIGNAL_ORIGIN || "https://scanner-signal.verc
 const teamId = process.env.APPLE_TEAM_ID || "GB5SPLUARQ";
 const fullAppBundleId = process.env.IOS_BUNDLE_ID || "com.volt.mobile";
 const appClipBundleId = process.env.IOS_APP_CLIP_BUNDLE_ID || "com.volt.mobile.Clip";
-const clipModes = ["ocr", "barcode", "dictation"];
+const clipModes = ["ocr", "barcode", "photo"];
 
 async function fetchJson(path, options) {
   const response = await fetch(`${origin}${path}`, options);
@@ -98,10 +98,12 @@ async function validateRelayContract() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         id: `production-validation-mismatch-${Date.now()}`,
-        mode: "ocr",
+        mode: "dictation",
         message: {
           barcode: "wrong mode",
-          format: "live-text",
+          dictationPhase: "final",
+          dictationSessionId: "production-validation",
+          format: "dictation",
           insertIntoCursor: true,
           kind: "text",
         },

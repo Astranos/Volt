@@ -33,6 +33,7 @@ type PendingPhoto = PhotoChunkStartMessage & {
 
 type PersistedRelayState = {
   sessionId: string;
+  browserClaim?: string;
   qrCodeUrl: string;
   status: "waiting" | "connected";
   error: null;
@@ -46,6 +47,7 @@ class MobileScannerOffscreenSession {
   private resultPoll: number | null = null;
   private resultPollTimeout: number | null = null;
   private sessionId: string | null = null;
+  private browserClaim: string | null = null;
   private shouldAcceptScannerMessage = createScannerMessageDuplicateGuard();
   private pendingPhotos = new Map<string, PendingPhoto>();
   private seenRelayResultIds = new Set<string>();
@@ -84,6 +86,14 @@ class MobileScannerOffscreenSession {
         this.state.status === "waiting" ||
         this.state.status === "connected")
     ) {
+      if (this.sessionId && mode && mode !== this.state.mode) {
+        this.setState({
+          mode,
+          qrCodeUrl: this.buildPairingUrl(this.sessionId, mode),
+          error: null,
+        });
+        if (target) await this.updateTarget(target);
+      }
       return { ...this.state };
     }
 
@@ -114,6 +124,7 @@ class MobileScannerOffscreenSession {
   async disconnect() {
     await this.restorePromise;
     this.sessionId = null;
+    this.browserClaim = null;
     this.cleanup(true);
     this.seenRelayResultIds.clear();
     await this.clearPersistedSession();
@@ -151,6 +162,7 @@ class MobileScannerOffscreenSession {
       }
 
       this.sessionId = persisted.sessionId;
+      this.browserClaim = typeof persisted.browserClaim === "string" ? persisted.browserClaim : null;
       this.seenRelayResultIds = new Set(
         Array.isArray(persisted.seenResultIds) ? persisted.seenResultIds.filter((id) => typeof id === "string") : [],
       );
@@ -171,6 +183,7 @@ class MobileScannerOffscreenSession {
     const previous = await this.getPersistedRelayState();
     const persisted: PersistedRelayState = {
       sessionId: this.sessionId,
+      browserClaim: this.browserClaim ?? undefined,
       qrCodeUrl: this.state.qrCodeUrl || this.buildPairingUrl(this.sessionId, this.state.mode),
       status: this.state.status,
       error: null,
@@ -321,10 +334,11 @@ class MobileScannerOffscreenSession {
   }
 
   private async createRelaySession(mode: CaptureMode | null, target?: SessionTarget | null) {
+    const browserClaim = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${crypto.randomUUID?.() ?? Math.random().toString(36).slice(2)}`;
     const sessionResponse = await fetch(SCANNER_SIGNAL_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(mode ? { relay: true, mode, target } : { relay: true, target }),
+      body: JSON.stringify(mode ? { relay: true, mode, target, browserClaim } : { relay: true, target, browserClaim }),
     });
 
     if (!sessionResponse.ok) {
@@ -341,11 +355,40 @@ class MobileScannerOffscreenSession {
       );
     }
 
-    const { sessionId } = await sessionResponse.json();
+    const { sessionId, browserClaim: storedBrowserClaim } = await sessionResponse.json();
     if (typeof sessionId !== "string" || !sessionId) {
       throw new Error("Invalid App Clip session");
     }
+    this.browserClaim = typeof storedBrowserClaim === "string" && storedBrowserClaim ? storedBrowserClaim : browserClaim;
     return sessionId;
+  }
+
+  private async fetchPhotoManifest(sessionId: string) {
+    if (!this.browserClaim) return [];
+    const response = await fetch(`${SCANNER_SIGNAL_URL}/${sessionId}/photo/manifest`, {
+      headers: { "X-Volt-Browser-Claim": this.browserClaim },
+    });
+    if (!response.ok) return [];
+    const payload = (await response.json()) as { photos?: PhotoMessage[] };
+    return Array.isArray(payload.photos) ? payload.photos : [];
+  }
+
+  private async acknowledgePhotos(sessionId: string, ids: string[]) {
+    if (!this.browserClaim || ids.length === 0) return;
+    await fetch(`${SCANNER_SIGNAL_URL}/${sessionId}/photo/ack`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Volt-Browser-Claim": this.browserClaim },
+      body: JSON.stringify({ ids }),
+    });
+  }
+
+  private async recordPhotoFailure(sessionId: string, id: string, error: string) {
+    if (!this.browserClaim) return;
+    await fetch(`${SCANNER_SIGNAL_URL}/${sessionId}/photo/failure`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Volt-Browser-Claim": this.browserClaim },
+      body: JSON.stringify({ id, error }),
+    });
   }
 
   private pollForResult(sessionId: string, createdAt = Date.now()) {
@@ -393,29 +436,48 @@ class MobileScannerOffscreenSession {
         }
 
         const resultResponse = await fetch(`${SCANNER_SIGNAL_URL}/${sessionId}/result`);
-        if (!resultResponse.ok) return;
-
-        const payload = (await resultResponse.json()) as {
-          result?: ScannerRelayResult | null;
-          results?: ScannerRelayResult[];
-        };
-        const results = Array.isArray(payload.results) ? payload.results : payload.result ? [payload.result] : [];
-        const unseenResults = results.filter((result) => result?.id && !this.seenRelayResultIds.has(result.id));
-        if (unseenResults.length === 0) return;
-
         let inferredMode: CaptureMode | null = null;
         const photoAckIds: string[] = [];
-        for (const result of unseenResults) {
-          this.seenRelayResultIds.add(result.id);
-          if (isCaptureMode(result.mode)) {
-            inferredMode = result.mode;
+        if (resultResponse.ok) {
+          const payload = (await resultResponse.json()) as {
+            result?: ScannerRelayResult | null;
+            results?: ScannerRelayResult[];
+          };
+          const results = Array.isArray(payload.results) ? payload.results : payload.result ? [payload.result] : [];
+          const unseenResults = results.filter((result) => result?.id && !this.seenRelayResultIds.has(result.id));
+
+          for (const result of unseenResults) {
+            this.seenRelayResultIds.add(result.id);
+            if (isCaptureMode(result.mode)) {
+              inferredMode = result.mode;
+            }
+            if (result.message) {
+              const stored = await this.handleDataChannelMessage(JSON.stringify(result.message));
+              if (stored && result.mode === "photo") photoAckIds.push(result.id);
+            }
           }
-          if (result.message) {
-            const stored = await this.handleDataChannelMessage(JSON.stringify(result.message));
-            if (stored && result.mode === "photo") photoAckIds.push(result.id);
+          await this.acknowledgeRelayResults(sessionId, photoAckIds);
+        }
+
+        const manifestPhotos = await this.fetchPhotoManifest(sessionId);
+        const unseenPhotos = manifestPhotos.filter(
+          (photo) =>
+            photo?.id &&
+            photo.status !== "browser_received" &&
+            !this.seenRelayResultIds.has(`photo:${photo.id}`)
+        );
+        const acknowledgedPhotoIds: string[] = [];
+        for (const photo of unseenPhotos) {
+          const stored = await this.sendPhoto({ ...photo, kind: "photo" });
+          if (stored) {
+            this.seenRelayResultIds.add(`photo:${photo.id}`);
+            acknowledgedPhotoIds.push(photo.id);
+          } else {
+            await this.recordPhotoFailure(sessionId, photo.id, "download_failed");
           }
         }
-        await this.acknowledgeRelayResults(sessionId, photoAckIds);
+        await this.acknowledgePhotos(sessionId, acknowledgedPhotoIds);
+
         const patch: Partial<ScannerState> = { status: "connected", error: null };
         if (inferredMode && inferredMode !== this.state.mode) {
           patch.mode = inferredMode;

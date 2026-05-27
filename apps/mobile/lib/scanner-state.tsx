@@ -23,18 +23,21 @@ import {
   type BarcodeMessage,
 } from "@volt/scanner-protocol";
 import { makeBarcodeMessage, makeCaptureMessage, makeOcrMessage, type ScanItem } from "./scanner-messages";
+import { uploadPhotoObjectTransfer } from "./photo-object-transfer";
 
 globalThis.atob ??= base64Decode;
 globalThis.btoa ??= base64Encode;
 
 type ConnectionStatus = "idle" | "pairing" | "connected" | "disconnected" | "error";
 type RelayCaptureMode = "ocr" | "barcode" | "dictation" | "photo";
+type RelaySession = { id: string; mode?: RelayCaptureMode; capabilities?: RelayCaptureMode[] };
 const PAIRING_SESSION_RETRY_DELAYS_MS = [0, 350, 800, 1400];
 const SETTINGS_STORAGE_KEY = "volt.mobileScanner.settings.v1";
 const PAIRING_SESSION_STORAGE_KEY = "volt.mobileScanner.pairingSession.v1";
 const MULTI_SCAN_WINDOW_MS = 650;
 const CLIPBOARD_POLL_MS = 900;
 const PHOTO_CHUNK_SIZE = 12000;
+const PHOTO_CONTRIBUTOR_KEY = "volt-photo-contributor";
 const OCR_CAPTURE_MAX_DIMENSION = 1800;
 
 export type ScannerSettings = {
@@ -165,6 +168,10 @@ function getOcrResizeAction(photo: { width?: number; height?: number }) {
   };
 }
 
+function createPhotoContributorId() {
+  return `${PHOTO_CONTRIBUTOR_KEY}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 export function ScannerProvider({ children }: PropsWithChildren) {
   const [permission, requestPermission] = useCameraPermissions();
   const [status, setStatus] = useState<ConnectionStatus>("idle");
@@ -202,10 +209,11 @@ export function ScannerProvider({ children }: PropsWithChildren) {
   const settingsRef = useRef(defaultSettings);
   const scannerFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pairingSessionRef = useRef<string | null>(null);
-  const relaySessionRef = useRef<{ id: string; mode?: RelayCaptureMode } | null>(null);
+  const relaySessionRef = useRef<RelaySession | null>(null);
   const lastOfferRef = useRef<string | null>(null);
   const reconnectingRef = useRef(false);
   const photoSendingRef = useRef(false);
+  const photoContributorIdRef = useRef(createPhotoContributorId());
 
   const connected = status === "connected" && (channelRef.current?.readyState === "open" || Boolean(relaySessionRef.current));
 
@@ -337,6 +345,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
           const offerResponse = await fetch(`${SCANNER_SIGNAL_URL}/${sessionId}`);
           if (offerResponse.ok) {
             const payload = await offerResponse.json() as {
+              capabilities?: unknown;
               mode?: unknown;
               offer?: unknown;
             };
@@ -355,7 +364,15 @@ export function ScannerProvider({ children }: PropsWithChildren) {
                 if (!connectResponse.ok) throw new Error("Failed to join browser capture session");
 
                 closeConnection();
-                relaySessionRef.current = { id: sessionId, mode: payload.mode };
+                const capabilities = Array.isArray(payload.capabilities)
+                  ? payload.capabilities.filter((capability): capability is RelayCaptureMode =>
+                      capability === "ocr" ||
+                      capability === "barcode" ||
+                      capability === "dictation" ||
+                      capability === "photo"
+                    )
+                  : undefined;
+                relaySessionRef.current = { id: sessionId, mode: payload.mode, capabilities };
                 pairingSessionRef.current = null;
                 void AsyncStorage.removeItem(PAIRING_SESSION_STORAGE_KEY);
                 setStatus("connected");
@@ -480,8 +497,8 @@ export function ScannerProvider({ children }: PropsWithChildren) {
     const relaySession = relaySessionRef.current;
     if (relaySession) {
       const mode = scannerMessageMode(item);
-      if (relaySession.mode && relaySession.mode !== mode) {
-        setError(`This browser session is waiting for ${relaySession.mode}, not ${mode}.`);
+      if (relaySession.capabilities?.length && !relaySession.capabilities.includes(mode)) {
+        setError(`This browser session does not allow ${mode} capture.`);
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
         return;
       }
@@ -532,9 +549,9 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       return;
     }
 
-    if (relaySession?.mode && relaySession.mode !== "photo") {
+    if (relaySession?.capabilities?.length && !relaySession.capabilities.includes("photo")) {
       photoSendingRef.current = false;
-      setPhotoError(`This browser session is waiting for ${relaySession.mode}, not photo.`);
+      setPhotoError("This browser session does not allow photo capture.");
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       return;
     }
@@ -598,16 +615,18 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       };
 
       if (relaySession) {
-        const resultResponse = await fetch(`${SCANNER_SIGNAL_URL}/${relaySession.id}/result`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            id,
-            mode: "photo",
-            message: photoMessage,
-          }),
+        await uploadPhotoObjectTransfer({
+          sessionId: relaySession.id,
+          contributorId: photoContributorIdRef.current,
+          id,
+          name,
+          mimeType,
+          dataUrl: photoMessage.dataUrl,
+          size: photoMessage.size,
+          width: squarePhoto.width,
+          height: squarePhoto.height,
+          capturedAt: photoMessage.capturedAt,
         });
-        if (!resultResponse.ok) throw new Error("Browser capture session unavailable.");
         setPhotoSentAt(new Date().toISOString());
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         return;

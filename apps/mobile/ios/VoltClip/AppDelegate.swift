@@ -493,10 +493,12 @@ private final class ClipModel: ObservableObject {
       }
     }
     do {
-      let cleaned = try await TextImageEnhancer.cleanedImage(from: photo.image)
+      let reviewAspectRatio = UIScreen.main.bounds.width / UIScreen.main.bounds.height
+      let reviewPhoto = (try? photo.aspectCropped(to: reviewAspectRatio)) ?? photo
+      let cleaned = try await TextImageEnhancer.cleanedImage(from: reviewPhoto.image)
       let text = try await TextRecognizer.recognize(cgImage: cleaned.cgImage)
       lastText = text
-      textCapture = TextCapture(originalImage: photo.uiImage, cleanedImage: cleaned.uiImage)
+      textCapture = TextCapture(originalImage: reviewPhoto.uiImage, cleanedImage: cleaned.uiImage)
       textCaptureShowsCleanedImage = false
       pasteboardChangeCount = UIPasteboard.general.changeCount
       guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -1492,12 +1494,14 @@ private struct TextCaptureReview: UIViewRepresentable {
   }
 }
 
-private final class LiveTextCaptureView: UIView {
+private final class LiveTextCaptureView: UIView, UIScrollViewDelegate {
+  private let scrollView = UIScrollView()
   private let imageView = UIImageView()
   private var analyzer: Any?
   private var interaction: Any?
   private var analysisTask: Task<Void, Never>?
   private var currentImageIdentifier = ""
+  private var currentImage: UIImage?
 
   override init(frame: CGRect) {
     super.init(frame: frame)
@@ -1515,7 +1519,8 @@ private final class LiveTextCaptureView: UIView {
 
   override func layoutSubviews() {
     super.layoutSubviews()
-    imageView.frame = bounds
+    scrollView.frame = bounds
+    configureImageLayout(resetZoom: false)
   }
 
   func setCapture(_ capture: TextCapture, showsCleanedImage: Bool, animated: Bool) {
@@ -1523,6 +1528,7 @@ private final class LiveTextCaptureView: UIView {
     let identifier = "\(ObjectIdentifier(image))-\(showsCleanedImage)"
     guard identifier != currentImageIdentifier else { return }
     currentImageIdentifier = identifier
+    currentImage = image
 
     if animated {
       UIView.transition(with: imageView, duration: 0.36, options: [.transitionCrossDissolve, .allowUserInteraction]) {
@@ -1531,6 +1537,7 @@ private final class LiveTextCaptureView: UIView {
     } else {
       imageView.image = image
     }
+    configureImageLayout(resetZoom: true)
 
     if showsCleanedImage {
       analyze(image)
@@ -1540,9 +1547,20 @@ private final class LiveTextCaptureView: UIView {
   private func setup() {
     backgroundColor = .black
     clipsToBounds = true
-    imageView.contentMode = .scaleAspectFill
+    scrollView.delegate = self
+    scrollView.backgroundColor = .black
+    scrollView.contentInsetAdjustmentBehavior = .never
+    scrollView.bounces = true
+    scrollView.bouncesZoom = true
+    scrollView.minimumZoomScale = 1
+    scrollView.maximumZoomScale = 6
+    scrollView.showsHorizontalScrollIndicator = false
+    scrollView.showsVerticalScrollIndicator = false
+    addSubview(scrollView)
+
+    imageView.contentMode = .scaleAspectFit
     imageView.isUserInteractionEnabled = true
-    addSubview(imageView)
+    scrollView.addSubview(imageView)
 
     if #available(iOS 16.0, *) {
       let liveTextInteraction = ImageAnalysisInteraction()
@@ -1552,6 +1570,45 @@ private final class LiveTextCaptureView: UIView {
       interaction = liveTextInteraction
       analyzer = ImageAnalyzer()
     }
+  }
+
+  func viewForZooming(in scrollView: UIScrollView) -> UIView? {
+    imageView
+  }
+
+  func scrollViewDidZoom(_ scrollView: UIScrollView) {
+    centerImage()
+  }
+
+  private func configureImageLayout(resetZoom: Bool) {
+    guard let image = currentImage, !scrollView.bounds.isEmpty, image.size.width > 0, image.size.height > 0 else {
+      return
+    }
+
+    let boundsSize = scrollView.bounds.size
+    let scale = max(boundsSize.width / image.size.width, boundsSize.height / image.size.height)
+    let fittedSize = CGSize(
+      width: max(1, image.size.width * scale),
+      height: max(1, image.size.height * scale)
+    )
+
+    let zoomScale = resetZoom ? 1 : scrollView.zoomScale
+    scrollView.minimumZoomScale = 1
+    scrollView.maximumZoomScale = 6
+    scrollView.zoomScale = 1
+    imageView.bounds = CGRect(origin: .zero, size: fittedSize)
+    scrollView.contentSize = fittedSize
+    scrollView.zoomScale = min(max(zoomScale, scrollView.minimumZoomScale), scrollView.maximumZoomScale)
+    centerImage()
+  }
+
+  private func centerImage() {
+    let boundsSize = scrollView.bounds.size
+    let contentSize = scrollView.contentSize
+    imageView.center = CGPoint(
+      x: max(contentSize.width, boundsSize.width) / 2,
+      y: max(contentSize.height, boundsSize.height) / 2
+    )
   }
 
   private func analyze(_ image: UIImage) {
@@ -1875,6 +1932,57 @@ private struct CapturedPhoto {
       image: croppedImage,
       uiImage: outputImage,
       size: CGSize(width: side, height: side)
+    )
+  }
+
+  func aspectCropped(to targetAspectRatio: CGFloat) throws -> CapturedPhoto {
+    guard targetAspectRatio > 0 else { return self }
+
+    let sourceWidth = CGFloat(image.width)
+    let sourceHeight = CGFloat(image.height)
+    let sourceAspectRatio = sourceWidth / sourceHeight
+    let cropRect: CGRect
+
+    if sourceAspectRatio > targetAspectRatio {
+      let width = sourceHeight * targetAspectRatio
+      cropRect = CGRect(
+        x: (sourceWidth - width) / 2,
+        y: 0,
+        width: width,
+        height: sourceHeight
+      )
+    } else {
+      let height = sourceWidth / targetAspectRatio
+      cropRect = CGRect(
+        x: 0,
+        y: (sourceHeight - height) / 2,
+        width: sourceWidth,
+        height: height
+      )
+    }
+
+    guard
+      let croppedImage = image.cropping(to: cropRect.integral),
+      let mutableData = CFDataCreateMutable(nil, 0),
+      let destination = CGImageDestinationCreateWithData(mutableData, UTType.jpeg.identifier as CFString, 1, nil)
+    else {
+      throw ClipError.message("Unable to crop the OCR photo.")
+    }
+
+    CGImageDestinationAddImage(destination, croppedImage, [
+      kCGImageDestinationLossyCompressionQuality as String: 0.92,
+    ] as CFDictionary)
+    guard CGImageDestinationFinalize(destination) else {
+      throw ClipError.message("Unable to encode the OCR photo.")
+    }
+
+    let outputData = mutableData as Data
+    let outputImage = UIImage(cgImage: croppedImage, scale: 1, orientation: .up)
+    return CapturedPhoto(
+      data: outputData,
+      image: croppedImage,
+      uiImage: outputImage,
+      size: CGSize(width: croppedImage.width, height: croppedImage.height)
     )
   }
 }
@@ -2207,7 +2315,11 @@ private final class ClipCamera: NSObject, ObservableObject, AVCaptureMetadataOut
       completion = nil
       return
     }
-    let normalizedImage = normalizeImageOrientation(UIImage(data: data) ?? UIImage(cgImage: image))
+    let fallbackOrientation = cgImageOrientation(for: currentVideoOrientation())
+    let imageOrientation = imageOrientation(from: source, fallback: fallbackOrientation)
+    let normalizedImage = normalizeImageOrientation(
+      UIImage(cgImage: image, scale: 1, orientation: uiImageOrientation(from: imageOrientation))
+    )
     guard
       let normalizedCgImage = normalizedImage.cgImage,
       let normalizedData = normalizedImage.jpegData(compressionQuality: 0.92)
@@ -2223,6 +2335,54 @@ private final class ClipCamera: NSObject, ObservableObject, AVCaptureMetadataOut
       size: normalizedImage.size
     )))
     completion = nil
+  }
+
+  private func imageOrientation(from imageSource: CGImageSource, fallback: CGImagePropertyOrientation) -> CGImagePropertyOrientation {
+    guard
+      let properties = CGImageSourceCopyPropertiesAtIndex(imageSource, 0, nil) as? [CFString: Any],
+      let rawValue = properties[kCGImagePropertyOrientation] as? UInt32,
+      let orientation = CGImagePropertyOrientation(rawValue: rawValue)
+    else {
+      return fallback
+    }
+
+    return orientation
+  }
+
+  private func uiImageOrientation(from orientation: CGImagePropertyOrientation) -> UIImage.Orientation {
+    switch orientation {
+    case .up:
+      return .up
+    case .upMirrored:
+      return .upMirrored
+    case .down:
+      return .down
+    case .downMirrored:
+      return .downMirrored
+    case .left:
+      return .left
+    case .leftMirrored:
+      return .leftMirrored
+    case .right:
+      return .right
+    case .rightMirrored:
+      return .rightMirrored
+    }
+  }
+
+  private func cgImageOrientation(for videoOrientation: AVCaptureVideoOrientation) -> CGImagePropertyOrientation {
+    switch videoOrientation {
+    case .portrait:
+      return .right
+    case .portraitUpsideDown:
+      return .left
+    case .landscapeRight:
+      return .up
+    case .landscapeLeft:
+      return .down
+    @unknown default:
+      return .right
+    }
   }
 
   @objc private func deviceOrientationDidChange() {
@@ -2335,7 +2495,7 @@ private enum TextRecognizer {
       request.usesLanguageCorrection = true
       DispatchQueue.global(qos: .userInitiated).async {
         do {
-          try VNImageRequestHandler(cgImage: cgImage, orientation: .right).perform([request])
+          try VNImageRequestHandler(cgImage: cgImage, orientation: .up).perform([request])
         } catch {
           continuation.resume(throwing: error)
         }
@@ -2379,7 +2539,7 @@ private enum TextImageEnhancer {
 
       return EnhancedTextImage(
         cgImage: cgImage,
-        uiImage: UIImage(cgImage: cgImage, scale: 1, orientation: .right)
+        uiImage: UIImage(cgImage: cgImage, scale: 1, orientation: .up)
       )
     }.value
   }

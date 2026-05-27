@@ -23,6 +23,7 @@ export const SCANNER_DATA_CHANNEL = "barcodes";
 export const SCANNER_ICE_GATHERING_TIMEOUT_MS = 5000;
 export const SCANNER_ANSWER_POLL_INTERVAL_MS = 1000;
 export const SCANNER_SESSION_TTL_MS = 30 * 60 * 1000;
+export const PHOTO_RECOVERY_WINDOW_MS = 24 * 60 * 60 * 1000;
 export const SCANNER_SCAN_COOLDOWN_MS = 500;
 export const SCANNER_LOCAL_SESSION_ID = "local";
 export const SCANNER_RESULT_POLL_INTERVAL_MS = 500;
@@ -57,11 +58,19 @@ export interface PhotoMessage {
   id: string;
   name: string;
   mimeType: string;
-  dataUrl: string;
+  dataUrl?: string;
+  downloadUrl?: string;
+  objectKey?: string;
+  grantId?: string;
+  contributorId?: string;
   size: number;
   width?: number;
   height?: number;
   capturedAt?: string;
+  status?: "uploaded" | "available_to_browser" | "browser_received" | "download_failed";
+  browserReceivedAt?: string;
+  downloadFailedAt?: string;
+  downloadError?: string;
 }
 
 export interface PhotoChunkStartMessage {
@@ -107,6 +116,26 @@ export type ScannerRelayResult = {
   mode: CaptureMode;
   message: BarcodeMessage | PhotoMessage;
   createdAt: string;
+  sequence?: number;
+  finalized?: boolean;
+};
+
+export type PhotoUploadGrantRequest = {
+  contributorId: string;
+  filename: string;
+  mimeType: string;
+  size: number;
+  width?: number;
+  height?: number;
+};
+
+export type PhotoUploadGrant = {
+  id: string;
+  uploadUrl: string;
+  manifestUrl: string;
+  expiresAt: string;
+  objectKey: string;
+  headers?: Record<string, string>;
 };
 
 export function isCaptureMode(value: unknown): value is CaptureMode {
@@ -192,7 +221,7 @@ export function decodeScannerTransportMessage(data: string): ScannerTransportMes
         typeof parsed.id !== "string" ||
         typeof parsed.name !== "string" ||
         typeof parsed.mimeType !== "string" ||
-        typeof parsed.dataUrl !== "string" ||
+        (typeof parsed.dataUrl !== "string" && typeof parsed.downloadUrl !== "string") ||
         typeof parsed.size !== "number"
       ) {
         return null;
@@ -203,11 +232,25 @@ export function decodeScannerTransportMessage(data: string): ScannerTransportMes
         id: parsed.id,
         name: parsed.name,
         mimeType: parsed.mimeType,
-        dataUrl: parsed.dataUrl,
+        dataUrl: typeof parsed.dataUrl === "string" ? parsed.dataUrl : undefined,
+        downloadUrl: typeof parsed.downloadUrl === "string" ? parsed.downloadUrl : undefined,
+        objectKey: typeof parsed.objectKey === "string" ? parsed.objectKey : undefined,
+        grantId: typeof parsed.grantId === "string" ? parsed.grantId : undefined,
+        contributorId: typeof parsed.contributorId === "string" ? parsed.contributorId : undefined,
         size: parsed.size,
         width: typeof parsed.width === "number" ? parsed.width : undefined,
         height: typeof parsed.height === "number" ? parsed.height : undefined,
         capturedAt: typeof parsed.capturedAt === "string" ? parsed.capturedAt : undefined,
+        status:
+          parsed.status === "uploaded" ||
+          parsed.status === "available_to_browser" ||
+          parsed.status === "browser_received" ||
+          parsed.status === "download_failed"
+            ? parsed.status
+            : undefined,
+        browserReceivedAt: typeof parsed.browserReceivedAt === "string" ? parsed.browserReceivedAt : undefined,
+        downloadFailedAt: typeof parsed.downloadFailedAt === "string" ? parsed.downloadFailedAt : undefined,
+        downloadError: typeof parsed.downloadError === "string" ? parsed.downloadError : undefined,
       };
     }
 
@@ -294,8 +337,8 @@ function parseRelayMessage(value: unknown): BarcodeMessage | PhotoMessage | null
       typeof message.id !== "string" ||
       typeof message.name !== "string" ||
       typeof message.mimeType !== "string" ||
-      typeof message.dataUrl !== "string" ||
-      !message.dataUrl.startsWith("data:image/") ||
+      (typeof message.dataUrl !== "string" && typeof message.downloadUrl !== "string") ||
+      (typeof message.dataUrl === "string" && !message.dataUrl.startsWith("data:image/")) ||
       typeof message.size !== "number"
     ) {
       return null;
@@ -306,11 +349,25 @@ function parseRelayMessage(value: unknown): BarcodeMessage | PhotoMessage | null
       id: message.id,
       name: message.name,
       mimeType: message.mimeType,
-      dataUrl: message.dataUrl,
+      dataUrl: typeof message.dataUrl === "string" ? message.dataUrl : undefined,
+      downloadUrl: typeof message.downloadUrl === "string" ? message.downloadUrl : undefined,
+      objectKey: typeof message.objectKey === "string" ? message.objectKey : undefined,
+      grantId: typeof message.grantId === "string" ? message.grantId : undefined,
+      contributorId: typeof message.contributorId === "string" ? message.contributorId : undefined,
       size: message.size,
       width: typeof message.width === "number" ? message.width : undefined,
       height: typeof message.height === "number" ? message.height : undefined,
       capturedAt: typeof message.capturedAt === "string" ? message.capturedAt : undefined,
+      status:
+        message.status === "uploaded" ||
+        message.status === "available_to_browser" ||
+        message.status === "browser_received" ||
+        message.status === "download_failed"
+          ? message.status
+          : undefined,
+      browserReceivedAt: typeof message.browserReceivedAt === "string" ? message.browserReceivedAt : undefined,
+      downloadFailedAt: typeof message.downloadFailedAt === "string" ? message.downloadFailedAt : undefined,
+      downloadError: typeof message.downloadError === "string" ? message.downloadError : undefined,
     };
   }
 
@@ -369,9 +426,10 @@ export function trimScannerRelayResults(results: ScannerRelayResult[]) {
     if (trimmed.length >= SCANNER_MAX_SESSION_RESULTS) break;
 
     if (result.message.kind === "photo") {
-      const dataUrlBytes = result.message.dataUrl.length;
+      const dataUrlBytes = result.message.dataUrl?.length ?? 0;
       if (
         trimmed.length > 0 &&
+        dataUrlBytes > 0 &&
         photoDataUrlBytes + dataUrlBytes > SCANNER_MAX_STORED_PHOTO_DATA_URL_BYTES
       ) {
         continue;

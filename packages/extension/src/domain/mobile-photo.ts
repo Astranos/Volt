@@ -7,6 +7,11 @@ export type MobilePhoto = {
   name: string;
   mimeType: string;
   dataUrl?: string;
+  downloadUrl?: string;
+  objectKey?: string;
+  grantId?: string;
+  contributorId?: string;
+  status?: "uploaded" | "available_to_browser" | "browser_received" | "download_failed";
   size: number;
   width?: number;
   height?: number;
@@ -78,8 +83,10 @@ export function normalizeMobilePhoto(photo: unknown): MobilePhoto | null {
   if (
     !photo ||
     typeof photo !== "object" ||
-    typeof (photo as { dataUrl?: unknown }).dataUrl !== "string" ||
-    !(photo as { dataUrl: string }).dataUrl.startsWith("data:image/") ||
+    (typeof (photo as { dataUrl?: unknown }).dataUrl !== "string" &&
+      typeof (photo as { downloadUrl?: unknown }).downloadUrl !== "string") ||
+    (typeof (photo as { dataUrl?: unknown }).dataUrl === "string" &&
+      !(photo as { dataUrl: string }).dataUrl.startsWith("data:image/")) ||
     typeof (photo as { mimeType?: unknown }).mimeType !== "string"
   ) {
     return null;
@@ -100,7 +107,18 @@ export function normalizeMobilePhoto(photo: unknown): MobilePhoto | null {
         ? normalizeImageFilename(clampString(source.name, 120), mimeType)
         : `volt-photo-${id}.${extensionForMimeType(mimeType)}`,
     mimeType: clampString(mimeType, 64),
-    dataUrl: source.dataUrl,
+    dataUrl: typeof source.dataUrl === "string" ? source.dataUrl : undefined,
+    downloadUrl: typeof source.downloadUrl === "string" ? clampString(source.downloadUrl, 1200) : undefined,
+    objectKey: typeof source.objectKey === "string" ? clampString(source.objectKey, 300) : undefined,
+    grantId: typeof source.grantId === "string" ? clampString(source.grantId, 120) : undefined,
+    contributorId: typeof source.contributorId === "string" ? clampString(source.contributorId, 120) : undefined,
+    status:
+      source.status === "uploaded" ||
+      source.status === "available_to_browser" ||
+      source.status === "browser_received" ||
+      source.status === "download_failed"
+        ? source.status
+        : undefined,
     size: Math.max(0, toFiniteNumber(source.size, 0)),
     width: source.width ? Math.max(0, Math.floor(toFiniteNumber(source.width, 0))) : undefined,
     height: source.height ? Math.max(0, Math.floor(toFiniteNumber(source.height, 0))) : undefined,

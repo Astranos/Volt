@@ -160,9 +160,14 @@ export default defineBackground({
     function downloadMobilePhoto(photo) {
       return new Promise((resolve) => {
         const filename = buildMobilePhotoDownloadFilename(photo);
+        const url = photo.dataUrl || photo.downloadUrl;
+        if (!url) {
+          resolve({ success: false, error: "missing_download_url" });
+          return;
+        }
         chrome.downloads.download(
           {
-            url: photo.dataUrl,
+            url,
             filename,
             conflictAction: "uniquify",
             saveAs: false,
@@ -1436,6 +1441,8 @@ export default defineBackground({
           PREVIEW_SOURCE_WINDOW_ID = sender?.tab?.windowId ?? null;
           PREVIEW_OPENED_AT = Date.now();
           PREVIEW_HAS_FOCUSED = false;
+          PREVIEW_FOCUSED_AT = 0;
+          ensureAutoCloseListener();
 
           const width = 1100;
           const height = 800;
@@ -1454,7 +1461,8 @@ export default defineBackground({
             (win) => {
               PREVIEW_POPUP_ID = win?.id || null;
               PREVIEW_OPENED_AT = Date.now();
-              PREVIEW_HAS_FOCUSED = win?.focused === true;
+              PREVIEW_HAS_FOCUSED = false;
+              PREVIEW_FOCUSED_AT = 0;
               log("Preview popup created:", PREVIEW_POPUP_ID);
               sendResponse({ success: true });
             }
@@ -1465,10 +1473,9 @@ export default defineBackground({
           // Auto-dismiss preview when parent window is focused
           if (PREVIEW_POPUP_ID) {
             const senderWindowId = sender?.tab?.windowId ?? null;
-            const elapsed = Date.now() - PREVIEW_OPENED_AT;
             if (
-              senderWindowId === PREVIEW_SOURCE_WINDOW_ID &&
-              (!PREVIEW_HAS_FOCUSED || elapsed < POPUP_FOCUS_GRACE_MS)
+              senderWindowId !== PREVIEW_SOURCE_WINDOW_ID ||
+              !previewPopupCanAutoClose()
             ) {
               sendResponse({ success: true, ignored: "opening_focus_grace" });
               break;
@@ -2078,9 +2085,14 @@ export default defineBackground({
     let PREVIEW_OPENED_AT = 0;
     let PREVIEW_SOURCE_WINDOW_ID = null;
     let PREVIEW_HAS_FOCUSED = false;
+    let PREVIEW_FOCUSED_AT = 0;
+    let CURRENT_TOOL_POPUP_OPENED_AT = 0;
+    let CURRENT_TOOL_POPUP_HAS_FOCUSED = false;
+    let CURRENT_TOOL_POPUP_FOCUSED_AT = 0;
     let AUTOCLOSE_ON_BLUR = true;
     let FOCUS_LISTENER_ATTACHED = false;
-    const POPUP_FOCUS_GRACE_MS = 1200;
+    const POPUP_OPENING_GRACE_MS = 700;
+    const POPUP_FOCUS_ARM_MS = 150;
 
     function clearPreviewPopupState() {
       PREVIEW_POPUP_ID = null;
@@ -2088,6 +2100,49 @@ export default defineBackground({
       PREVIEW_OPENED_AT = 0;
       PREVIEW_SOURCE_WINDOW_ID = null;
       PREVIEW_HAS_FOCUSED = false;
+      PREVIEW_FOCUSED_AT = 0;
+    }
+
+    function markPreviewPopupFocused() {
+      PREVIEW_HAS_FOCUSED = true;
+      PREVIEW_FOCUSED_AT = Date.now();
+    }
+
+    function previewPopupCanAutoClose() {
+      const now = Date.now();
+      return (
+        PREVIEW_HAS_FOCUSED &&
+        now - PREVIEW_OPENED_AT >= POPUP_OPENING_GRACE_MS &&
+        now - PREVIEW_FOCUSED_AT >= POPUP_FOCUS_ARM_MS
+      );
+    }
+
+    function trackCurrentToolPopup(id) {
+      CURRENT_TOOL_POPUP_ID = id || null;
+      CURRENT_TOOL_POPUP_OPENED_AT = Date.now();
+      CURRENT_TOOL_POPUP_HAS_FOCUSED = false;
+      CURRENT_TOOL_POPUP_FOCUSED_AT = 0;
+    }
+
+    function clearCurrentToolPopupState() {
+      CURRENT_TOOL_POPUP_ID = null;
+      CURRENT_TOOL_POPUP_OPENED_AT = 0;
+      CURRENT_TOOL_POPUP_HAS_FOCUSED = false;
+      CURRENT_TOOL_POPUP_FOCUSED_AT = 0;
+    }
+
+    function markCurrentToolPopupFocused() {
+      CURRENT_TOOL_POPUP_HAS_FOCUSED = true;
+      CURRENT_TOOL_POPUP_FOCUSED_AT = Date.now();
+    }
+
+    function currentToolPopupCanAutoClose() {
+      const now = Date.now();
+      return (
+        CURRENT_TOOL_POPUP_HAS_FOCUSED &&
+        now - CURRENT_TOOL_POPUP_OPENED_AT >= POPUP_OPENING_GRACE_MS &&
+        now - CURRENT_TOOL_POPUP_FOCUSED_AT >= POPUP_FOCUS_ARM_MS
+      );
     }
 
     function ensureAutoCloseListener() {
@@ -2097,29 +2152,32 @@ export default defineBackground({
           try {
             if (!AUTOCLOSE_ON_BLUR) return;
             if (PREVIEW_POPUP_ID && winId === PREVIEW_POPUP_ID) {
-              PREVIEW_HAS_FOCUSED = true;
+              markPreviewPopupFocused();
             } else if (
               PREVIEW_POPUP_ID &&
-              PREVIEW_HAS_FOCUSED &&
               winId === PREVIEW_SOURCE_WINDOW_ID &&
-              Date.now() - PREVIEW_OPENED_AT >= POPUP_FOCUS_GRACE_MS
+              previewPopupCanAutoClose()
             ) {
               chrome.windows.remove(PREVIEW_POPUP_ID, () => {});
               clearPreviewPopupState();
+            }
+            if (CURRENT_TOOL_POPUP_ID && winId === CURRENT_TOOL_POPUP_ID) {
+              markCurrentToolPopupFocused();
             }
             // If our popup is open and focus moved to another window (or to none), close it
             if (
               CURRENT_TOOL_POPUP_ID &&
               winId !== CURRENT_TOOL_POPUP_ID &&
-              winId !== chrome.windows.WINDOW_ID_NONE
+              winId !== chrome.windows.WINDOW_ID_NONE &&
+              currentToolPopupCanAutoClose()
             ) {
               chrome.windows.remove(CURRENT_TOOL_POPUP_ID, () => {});
-              CURRENT_TOOL_POPUP_ID = null;
+              clearCurrentToolPopupState();
             }
           } catch (_) {}
         });
         chrome.windows.onRemoved.addListener((winId) => {
-          if (winId === CURRENT_TOOL_POPUP_ID) CURRENT_TOOL_POPUP_ID = null;
+          if (winId === CURRENT_TOOL_POPUP_ID) clearCurrentToolPopupState();
           if (winId === PREVIEW_POPUP_ID) clearPreviewPopupState();
         });
         FOCUS_LISTENER_ATTACHED = true;
@@ -2175,7 +2233,7 @@ export default defineBackground({
                 },
                 (win) => {
                   try {
-                    CURRENT_TOOL_POPUP_ID = win?.id || null;
+                    trackCurrentToolPopup(win?.id);
                     ensureAutoCloseListener();
                   } catch (_) {}
                 }
@@ -2187,7 +2245,7 @@ export default defineBackground({
               { url, type: "popup", focused: true },
               (win) => {
                 try {
-                  CURRENT_TOOL_POPUP_ID = win?.id || null;
+                  trackCurrentToolPopup(win?.id);
                   ensureAutoCloseListener();
                 } catch (_) {}
               }
@@ -2255,12 +2313,13 @@ export default defineBackground({
                     focused: true,
                   },
                   (win) => {
-                    CURRENT_TOOL_POPUP_ID = win?.id || null;
+                    trackCurrentToolPopup(win?.id);
                     ensureAutoCloseListener();
                   }
                 );
               if (CURRENT_TOOL_POPUP_ID) {
                 try {
+                  trackCurrentToolPopup(CURRENT_TOOL_POPUP_ID);
                   chrome.windows.update(
                     CURRENT_TOOL_POPUP_ID,
                     {
@@ -2274,13 +2333,13 @@ export default defineBackground({
                     (updated) => {
                       const err = chrome.runtime.lastError;
                       if (err || !updated) {
-                        CURRENT_TOOL_POPUP_ID = null;
+                        clearCurrentToolPopupState();
                         createWindow();
                       }
                     }
                   );
                 } catch (_) {
-                  CURRENT_TOOL_POPUP_ID = null;
+                  clearCurrentToolPopupState();
                   createWindow();
                 }
               } else {
@@ -2293,7 +2352,7 @@ export default defineBackground({
               { url, type: "popup", focused: true },
               (win) => {
                 try {
-                  CURRENT_TOOL_POPUP_ID = win?.id || null;
+                  trackCurrentToolPopup(win?.id);
                   ensureAutoCloseListener();
                 } catch (_) {}
               }

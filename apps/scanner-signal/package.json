@@ -12,7 +12,9 @@
     "validate:device-evidence-manifest": "node scripts/validate-device-evidence-manifest.mjs",
     "generate:device-evidence-completion-record": "node scripts/generate-device-evidence-completion-record.mjs"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@vercel/blob": "^1.0.2"
+  },
   "devDependencies": {
     "@vercel/node": "^5.5.6",
     "typescript": "^5.9.3"

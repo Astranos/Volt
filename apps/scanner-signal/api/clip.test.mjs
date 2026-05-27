@@ -532,12 +532,12 @@ test("dictation token endpoint reports missing realtime configuration", async ()
   }
 });
 
-test("signal relay rejects wrong bound modes and queues multiple generic relay results", async () => {
+test("signal relay allows capability-bound mode switching and queues multiple generic relay results", async () => {
   const createResponse = makeResponse();
   await signalHandler(makeRequest({ method: "POST", body: { relay: true, mode: "barcode" } }), createResponse);
 
   const ocrResult = {
-    id: "wrong-mode",
+    id: "switched-mode",
     mode: "ocr",
     message: {
       barcode: "words",
@@ -546,18 +546,40 @@ test("signal relay rejects wrong bound modes and queues multiple generic relay r
       kind: "text",
     },
   };
-  const mismatchResponse = makeResponse();
+  const switchResponse = makeResponse();
   await signalHandler(
     makeRequest({
       method: "POST",
       path: `${createResponse.body.sessionId}/result`,
       body: ocrResult,
     }),
-    mismatchResponse
+    switchResponse
   );
 
-  assert.equal(mismatchResponse.statusCode, 400);
-  assert.deepEqual(mismatchResponse.body, { error: "Result mode mismatch" });
+  assert.equal(switchResponse.statusCode, 200);
+
+  const dictationMismatchResponse = makeResponse();
+  await signalHandler(
+    makeRequest({
+      method: "POST",
+      path: `${createResponse.body.sessionId}/result`,
+      body: {
+        id: "wrong-mode",
+        mode: "dictation",
+        message: {
+          barcode: "words",
+          dictationPhase: "final",
+          dictationSessionId: "full-app-only",
+          format: "dictation",
+          kind: "text",
+        },
+      },
+    }),
+    dictationMismatchResponse
+  );
+
+  assert.equal(dictationMismatchResponse.statusCode, 400);
+  assert.deepEqual(dictationMismatchResponse.body, { error: "Result mode mismatch" });
 
   const firstResult = {
     id: "first-result",
@@ -623,9 +645,9 @@ test("signal relay rejects wrong bound modes and queues multiple generic relay r
 
   assert.equal(getResponse.body.result.id, "second-result");
   assert.equal(getResponse.body.result.message.barcode, "999999999999");
-  assert.equal(getResponse.body.results.length, 2);
-  assert.equal(getResponse.body.results[1].id, "second-result");
-  assert.equal(getResponse.body.results[1].message.barcode, "999999999999");
+  assert.equal(getResponse.body.results.length, 3);
+  assert.equal(getResponse.body.results[2].id, "second-result");
+  assert.equal(getResponse.body.results[2].message.barcode, "999999999999");
 });
 
 test("signal relay keeps only one pending photo result and supports browser acknowledgements", async () => {
@@ -690,4 +712,121 @@ test("signal relay keeps only one pending photo result and supports browser ackn
   );
   assert.equal(emptyResponse.body.result, null);
   assert.deepEqual(emptyResponse.body.results, []);
+});
+
+test("photo object transfer issues one grant per photo and requires browser claim for recovery", async () => {
+  const createResponse = makeResponse();
+  await signalHandler(
+    makeRequest({
+      method: "POST",
+      body: { relay: true, mode: "photo", browserClaim: "browser-claim-1" },
+      headers: { host: "scanner-signal.example", "x-forwarded-proto": "https" },
+    }),
+    createResponse
+  );
+
+  const grantResponse = makeResponse();
+  await signalHandler(
+    makeRequest({
+      method: "POST",
+      path: `${createResponse.body.sessionId}/photo/grant`,
+      body: {
+        contributorId: "phone-1",
+        filename: "front label.jpg",
+        mimeType: "image/jpeg",
+        size: 5,
+        width: 100,
+        height: 80,
+      },
+      headers: { host: "scanner-signal.example", "x-forwarded-proto": "https" },
+    }),
+    grantResponse
+  );
+
+  assert.equal(grantResponse.statusCode, 200);
+  assert.match(grantResponse.body.grant.id, /^grant-/);
+  assert.match(grantResponse.body.grant.uploadUrl, /\/photo\/upload\/grant-/);
+  assert.match(grantResponse.body.grant.manifestUrl, /\/photo\/manifest$/);
+
+  const grantId = grantResponse.body.grant.id;
+  const uploadResponse = makeResponse();
+  await signalHandler(
+    makeRequest({
+      method: "POST",
+      path: `${createResponse.body.sessionId}/photo/upload/${grantId}`,
+      body: { dataUrl: "data:image/jpeg;base64,aGVsbG8=" },
+      headers: { host: "scanner-signal.example", "x-forwarded-proto": "https" },
+    }),
+    uploadResponse
+  );
+
+  assert.equal(uploadResponse.statusCode, 200);
+  assert.equal(uploadResponse.body.grantId, grantId);
+  assert.match(uploadResponse.body.downloadUrl, /^https:\/\/scanner-signal\.example\/api\/signal\/photo\/object\//);
+
+  const secondUploadResponse = makeResponse();
+  await signalHandler(
+    makeRequest({
+      method: "POST",
+      path: `${createResponse.body.sessionId}/photo/upload/${grantId}`,
+      body: { dataUrl: "data:image/jpeg;base64,aGVsbG8=" },
+    }),
+    secondUploadResponse
+  );
+  assert.equal(secondUploadResponse.statusCode, 409);
+
+  const manifestResponse = makeResponse();
+  await signalHandler(
+    makeRequest({
+      method: "POST",
+      path: `${createResponse.body.sessionId}/photo/manifest`,
+      body: { id: "photo-1", grantId, capturedAt: "2026-05-27T12:00:00.000Z" },
+    }),
+    manifestResponse
+  );
+  assert.equal(manifestResponse.statusCode, 200);
+  assert.equal(manifestResponse.body.photo.status, "available_to_browser");
+  assert.equal(manifestResponse.body.photo.contributorId, "phone-1");
+
+  const blockedRecoveryResponse = makeResponse();
+  await signalHandler(
+    makeRequest({ method: "GET", path: `${createResponse.body.sessionId}/photo/manifest` }),
+    blockedRecoveryResponse
+  );
+  assert.equal(blockedRecoveryResponse.statusCode, 403);
+
+  const recoveryResponse = makeResponse();
+  await signalHandler(
+    makeRequest({
+      method: "GET",
+      path: `${createResponse.body.sessionId}/photo/manifest`,
+      headers: { "x-volt-browser-claim": "browser-claim-1" },
+    }),
+    recoveryResponse
+  );
+  assert.equal(recoveryResponse.statusCode, 200);
+  assert.equal(recoveryResponse.body.photos[0].id, "photo-1");
+
+  const ackResponse = makeResponse();
+  await signalHandler(
+    makeRequest({
+      method: "POST",
+      path: `${createResponse.body.sessionId}/photo/ack`,
+      body: { ids: ["photo-1"] },
+      headers: { "x-volt-browser-claim": "browser-claim-1" },
+    }),
+    ackResponse
+  );
+  assert.equal(ackResponse.statusCode, 200);
+
+  const afterAckResponse = makeResponse();
+  await signalHandler(
+    makeRequest({
+      method: "GET",
+      path: `${createResponse.body.sessionId}/photo/manifest`,
+      headers: { "x-volt-browser-claim": "browser-claim-1" },
+    }),
+    afterAckResponse
+  );
+  assert.equal(afterAckResponse.body.photos[0].status, "browser_received");
 });

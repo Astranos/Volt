@@ -53,6 +53,8 @@ export default defineContentScript({
     let enabled = true;
     let dismissedUntilRefresh = false;
     let activePopup: Window | null = null;
+    let activePopupOpenedAt = 0;
+    const POPUP_OPENING_GRACE_MS = 700;
     try {
       chrome.storage.sync.get(["cmdkSettings"], (result) => {
         const s = result?.cmdkSettings || {};
@@ -109,6 +111,7 @@ export default defineContentScript({
           "scout_search_popup",
           `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
         );
+        activePopupOpenedAt = Date.now();
       }
     };
 
@@ -1171,7 +1174,10 @@ export default defineContentScript({
       } catch (_) {}
 
       // Also handle legacy window.open popups
-      if (activePopup) {
+      if (
+        activePopup &&
+        Date.now() - activePopupOpenedAt >= POPUP_OPENING_GRACE_MS
+      ) {
         try {
           if (!activePopup.closed) {
             activePopup.close();

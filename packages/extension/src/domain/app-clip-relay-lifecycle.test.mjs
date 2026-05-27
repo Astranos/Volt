@@ -22,7 +22,7 @@ const mobileScannerSource = readFileSync(
 test("App Clip result relay polling has a timeout and clears it on success", () => {
   assert.match(offscreenSource, /const SCANNER_RESULT_TIMEOUT_MS = SCANNER_SESSION_TTL_MS;/);
   assert.match(offscreenSource, /private resultPollTimeout: number \| null = null;/);
-  assert.match(offscreenSource, /JSON\.stringify\(mode \? \{ relay: true, mode, target \} : \{ relay: true, target \}\)/);
+  assert.match(offscreenSource, /JSON\.stringify\(mode \? \{ relay: true, mode, target, browserClaim \} : \{ relay: true, target, browserClaim \}\)/);
   assert.match(offscreenSource, /window\.setTimeout\(\(\) => \{/);
   assert.match(offscreenSource, /App Clip session timed out/);
   assert.match(offscreenSource, /window\.clearTimeout\(this\.resultPollTimeout\)/);
@@ -44,6 +44,14 @@ test("App Clip session target updates are forwarded while a session is active", 
 test("App Clip relay polling marks sessions connected after the App Clip opens them", () => {
   assert.match(offscreenSource, /connectedAt/);
   assert.match(offscreenSource, /fetch\(`\$\{SCANNER_SIGNAL_URL\}\/\$\{sessionId\}`\)/);
+});
+
+test("Mobile Scanner keeps the pairing QR visible for connected sessions", () => {
+  assert.match(
+    mobileScannerSource,
+    /Boolean\(qrDataUrl\) && \(status === "waiting" \|\| status === "connected"\)/
+  );
+  assert.match(mobileScannerSource, /Scan this QR to reopen or pair the iPhone to this session\./);
 });
 
 test("App Clip relay session survives offscreen document recreation", () => {

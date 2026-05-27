@@ -157,6 +157,8 @@ export default defineContentScript({
     let upcValue = null;
     let overlay = null;
     let activePopup = null;
+    let activePopupOpenedAt = 0;
+    const POPUP_OPENING_GRACE_MS = 700;
     let hasLoggedMissingCard = false;
     let lastUrl = location.href;
     let isInitialized = false;
@@ -334,6 +336,7 @@ export default defineContentScript({
               "scout_search_popup",
               `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
             );
+            activePopupOpenedAt = Date.now();
           }
         );
       } catch (_) {
@@ -348,6 +351,7 @@ export default defineContentScript({
           "scout_search_popup",
           `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
         );
+        activePopupOpenedAt = Date.now();
       }
     };
 
@@ -554,7 +558,11 @@ export default defineContentScript({
 
       // Listen for window focus to close popup
       window.addEventListener("focus", () => {
-        if (activePopup && !activePopup.closed) {
+        if (
+          activePopup &&
+          !activePopup.closed &&
+          Date.now() - activePopupOpenedAt >= POPUP_OPENING_GRACE_MS
+        ) {
           activePopup.close();
           activePopup = null;
         }
