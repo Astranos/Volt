@@ -22,7 +22,8 @@ test("App Clip result relay polling has a timeout and clears it on success", () 
 
 test("App Clip QR uses the associated domain invocation URL for local and advanced experiences", () => {
   assert.match(offscreenSource, /const SCANNER_APP_CLIP_BASE_URL = "https:\/\/scanner-signal\.vercel\.app\/clip";/);
-  assert.match(offscreenSource, /return `\$\{SCANNER_APP_CLIP_BASE_URL\}\/\$\{mode\}\?session=\$\{encodedSession\}`;/);
+  assert.match(offscreenSource, /return `\$\{SCANNER_APP_CLIP_BASE_URL\}\?session=\$\{encodedSession\}`;/);
+  assert.doesNotMatch(offscreenSource, /SCANNER_APP_CLIP_BASE_URL\}\/\$\{mode\}/);
   assert.doesNotMatch(offscreenSource, /https:\/\/appclip\.apple\.com\/id/);
 });
 

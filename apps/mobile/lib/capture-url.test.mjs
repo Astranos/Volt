@@ -4,6 +4,9 @@ import test from "node:test";
 import { normalizeCaptureMode, parseCaptureInvocation } from "./capture-url.ts";
 
 test("parseCaptureInvocation accepts production App Clip URLs", () => {
+  assert.deepEqual(parseCaptureInvocation("https://scanner-signal.vercel.app/clip?session=abc_123"), {
+    sessionId: "abc_123",
+  });
   assert.deepEqual(
     parseCaptureInvocation("https://scanner-signal.vercel.app/clip/ocr?session=abc_123"),
     { mode: "ocr", sessionId: "abc_123" }

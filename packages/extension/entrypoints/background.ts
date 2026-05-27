@@ -479,12 +479,10 @@ export default defineBackground({
 
     async function handleScannerStart(message, sendResponse) {
       try {
-        const mode = normalizeMobileCaptureMode(message?.mode);
         const state = await sendScannerOffscreenMessage({
           action: "scannerOffscreenStart",
           force: message?.force === true,
-          mode,
-          target: mode ? await getMobileCaptureTarget() : null,
+          target: await getMobileCaptureTarget(),
         });
         sendResponse({ success: true, state });
       } catch (err) {
@@ -493,17 +491,11 @@ export default defineBackground({
     }
 
     async function handleOpenMobileCapture(message, sender, sendResponse) {
-      const mode = normalizeMobileCaptureMode(message?.mode);
-      if (!mode) {
-        sendResponse({ success: false, error: "invalid_mode" });
-        return;
-      }
-
       try {
         const state = await sendScannerOffscreenMessage({
           action: "scannerOffscreenStart",
           force: false,
-          mode,
+          target: await getMobileCaptureTarget(),
         });
 
         sendResponse(

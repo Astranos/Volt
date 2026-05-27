@@ -80,12 +80,20 @@ export default function handler(request: VercelRequest, response: VercelResponse
   const path = Array.isArray(request.query.path) ? request.query.path[0] : request.query.path;
   const isBaseClipRequest = !mode && !session && (!path || path === "/");
 
-  if (!isBaseClipRequest && (!mode || typeof session !== "string" || !SESSION_ID_PATTERN.test(session))) {
+  if (
+    !isBaseClipRequest &&
+    ((path && !mode) || typeof session !== "string" || !SESSION_ID_PATTERN.test(session))
+  ) {
     response.status(404).send("Not found");
     return;
   }
 
-  const fallbackPath = mode && session ? `/clip/${mode}?session=${encodeURIComponent(session)}` : "/clip";
+  const fallbackPath =
+    session && mode
+      ? `/clip/${mode}?session=${encodeURIComponent(session)}`
+      : session
+        ? `/clip?session=${encodeURIComponent(session)}`
+        : "/clip";
   const fallbackUrl = escapeHtml(fallbackPath);
   const rawInvocationUrl = `${originFromRequest(request)}${fallbackPath}`;
   const invocationUrl = escapeHtml(rawInvocationUrl);

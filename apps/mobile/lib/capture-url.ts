@@ -1,7 +1,7 @@
 export type CaptureMode = "ocr" | "barcode" | "dictation" | "photo";
 
 export type CaptureInvocation = {
-  mode: CaptureMode;
+  mode?: CaptureMode;
   sessionId: string;
 };
 
@@ -31,8 +31,8 @@ export function parseCaptureInvocation(url: string): CaptureInvocation | null {
     const mode = isCaptureMode(queryMode) ? queryMode : getModeFromPath(parsed.pathname);
     const sessionId = getStringParam(parsed.searchParams, "session");
 
-    if (!mode || !sessionId || !sessionIdPattern.test(sessionId)) return null;
-    return { mode, sessionId };
+    if (!sessionId || !sessionIdPattern.test(sessionId)) return null;
+    return mode ? { mode, sessionId } : { sessionId };
   } catch {
     return null;
   }

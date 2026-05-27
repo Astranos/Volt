@@ -698,7 +698,9 @@ export default function ClipInvocationScreen() {
         const nextInvocation = parseCaptureInvocation(candidate.value);
         if (nextInvocation) {
           setInvocation(nextInvocation);
-          setActiveMode(nextInvocation.mode);
+          if (nextInvocation.mode) {
+            setActiveMode(nextInvocation.mode);
+          }
           setBarcodeCandidate(null);
           setError(null);
           setSendState("idle");

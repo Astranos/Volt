@@ -115,7 +115,7 @@ export default function UnifiedSidepanel() {
     menuTimer.current = window.setTimeout(() => {
       setMenuOpen(false);
       menuTimer.current = null;
-    }, 120);
+    }, 350);
   };
 
   // Load the initial tool from storage
@@ -279,7 +279,7 @@ export default function UnifiedSidepanel() {
           </DropdownMenuTrigger>
           <DropdownMenuContent
             align="start"
-            sideOffset={8}
+            sideOffset={2}
             onPointerEnter={openMenu}
             onPointerLeave={closeMenuSoon}
             onCloseAutoFocus={(event) => event.preventDefault()}

@@ -11,14 +11,11 @@ import {
   Copy,
   Download,
   ImagePlus,
-  Images,
   Loader2,
-  Mic,
   RefreshCw,
   Scan,
   ScanLine,
   Smartphone,
-  TextCursorInput,
   Trash2,
   Type,
   Upload,
@@ -59,29 +56,7 @@ type MobileScannerState = {
   status: ScannerConnectionStatus;
   qrCodeUrl: string | null;
   error: string | null;
-  mode: MobileCaptureMode | null;
 };
-
-type MobileCaptureMode = "ocr" | "barcode" | "dictation" | "photo";
-
-const MODE_LABELS: Record<MobileCaptureMode, string> = {
-  ocr: "Text OCR",
-  barcode: "Barcode",
-  dictation: "Dictation",
-  photo: "Photos",
-};
-
-const MODE_OPTIONS: Array<{
-  value: MobileCaptureMode;
-  label: string;
-  description: string;
-  icon: React.ComponentType<{ className?: string }>;
-}> = [
-  { value: "ocr", label: "Text", description: "OCR", icon: TextCursorInput },
-  { value: "barcode", label: "Code", description: "UPC", icon: ScanLine },
-  { value: "dictation", label: "Voice", description: "Speak", icon: Mic },
-  { value: "photo", label: "Photos", description: "Upload", icon: Images },
-];
 
 type ScanRecord = BarcodeMessage & {
   id: string;
@@ -251,7 +226,6 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
   const [scans, setScans] = useState<ScanRecord[]>([]);
   const [photos, setPhotos] = useState<MobilePhoto[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [mode, setMode] = useState<MobileCaptureMode | null>("ocr");
   const [removingIds, setRemovingIds] = useState<Set<string>>(new Set());
   const [enteringIds, setEnteringIds] = useState<Set<string>>(new Set());
   const [collapsedClusters, setCollapsedClusters] = useState<Set<string>>(
@@ -286,7 +260,6 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
     (state: Partial<MobileScannerState> | null | undefined) => {
       if (!state) return;
       if (state.status) setStatus(state.status);
-      if ("mode" in state) setMode(state.mode ?? "ocr");
       setError(state.error ?? null);
 
       if (!state.qrCodeUrl) {
@@ -383,13 +356,12 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
   }, []);
 
   const startSession = useCallback(
-    async (force = false, nextMode = mode) => {
+    async (force = false) => {
       setStatus("creating");
       setError(null);
       const response = await chrome.runtime.sendMessage({
-        action: nextMode ? "scannerStartForMode" : "scannerStart",
+        action: "scannerStart",
         force,
-        mode: nextMode,
       });
       if (response?.state) applyScannerState(response.state);
       if (response?.error) {
@@ -397,16 +369,7 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
         setError(response.error);
       }
     },
-    [applyScannerState, mode],
-  );
-
-  const selectMode = useCallback(
-    (nextMode: MobileCaptureMode) => {
-      if (mode === nextMode) return;
-      setMode(nextMode);
-      void startSession(true, nextMode);
-    },
-    [mode, startSession],
+    [applyScannerState],
   );
 
   const unpair = useCallback(() => {
@@ -719,23 +682,14 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
   const clusters = useMemo(() => buildClusters(entries), [entries]);
 
   const totalCount = entries.length;
-  const modeLabel = mode ? MODE_LABELS[mode] : null;
-  const selectedModeIndex = Math.max(
-    0,
-    MODE_OPTIONS.findIndex((option) => option.value === mode),
-  );
 
   return (
     <div className="sidepanel-shell relative flex h-full min-w-0 flex-col overflow-hidden">
       <div className="flex-none px-3 pt-3">
         <UnifiedPairingCard
-          mode={mode}
-          modeLabel={modeLabel}
           status={status}
           qrDataUrl={qrDataUrl}
           error={error}
-          selectedModeIndex={selectedModeIndex}
-          onSelectMode={selectMode}
           onForceRestart={() => startSession(true)}
           onDisconnect={unpair}
         />
@@ -798,23 +752,15 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
 }
 
 function UnifiedPairingCard({
-  mode,
-  modeLabel,
   status,
   qrDataUrl,
   error,
-  selectedModeIndex,
-  onSelectMode,
   onForceRestart,
   onDisconnect,
 }: {
-  mode: MobileCaptureMode | null;
-  modeLabel: string | null;
   status: ScannerConnectionStatus;
   qrDataUrl: string | null;
   error: string | null;
-  selectedModeIndex: number;
-  onSelectMode: (next: MobileCaptureMode) => void;
   onForceRestart: () => void;
   onDisconnect: () => void;
 }) {
@@ -824,7 +770,7 @@ function UnifiedPairingCard({
   const hasError = status === "error";
 
   const statusCopy = connected
-    ? `Ready for ${modeLabel ?? "App Clip"} captures`
+    ? "Ready for captures"
     : showQr
       ? "Waiting for iPhone"
       : isCreating
@@ -834,10 +780,16 @@ function UnifiedPairingCard({
           : "Generating a new session…";
 
   return (
-    <div className="liquid-glass concentric-xl min-w-0 overflow-hidden p-3.5">
+    <div className={cn(
+      "liquid-glass concentric-xl min-w-0 overflow-hidden",
+      connected ? "p-2.5" : "p-3.5",
+    )}>
       <div className="flex min-w-0 items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2.5">
-          <span className="liquid-glass-soft flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-green-700 dark:text-green-300">
+          <span className={cn(
+            "liquid-glass-soft flex shrink-0 items-center justify-center rounded-full text-green-700 dark:text-green-300",
+            connected ? "h-8 w-8" : "h-9 w-9",
+          )}>
             <Smartphone className="h-4 w-4" />
           </span>
           <div className="min-w-0">
@@ -850,35 +802,29 @@ function UnifiedPairingCard({
           </div>
         </div>
         <div className="min-w-0 shrink">
-          <ConnectionPill status={status} error={error} />
+          {connected ? (
+            <button
+              type="button"
+              onClick={onDisconnect}
+              aria-label="Pair a different iPhone"
+              className="liquid-glass-soft inline-flex h-8 w-8 items-center justify-center rounded-full text-stone-600 transition hover:bg-white/70 hover:text-stone-900 active:scale-95 dark:text-stone-300 dark:hover:bg-white/10 dark:hover:text-stone-50"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+            </button>
+          ) : (
+            <ConnectionPill status={status} error={error} />
+          )}
         </div>
       </div>
 
-      <ModeTabNav
-        options={MODE_OPTIONS}
-        selectedIndex={selectedModeIndex}
-        value={mode}
-        onSelect={onSelectMode}
-      />
-
-      <PairingSlot
-        status={status}
-        qrDataUrl={qrDataUrl}
-        modeLabel={modeLabel}
-        error={error}
-      />
-
-      <div className="mt-3">
-        {connected ? (
-          <button
-            type="button"
-            onClick={onDisconnect}
-            className="liquid-glass-soft inline-flex h-9 w-full items-center justify-center gap-2 rounded-full text-xs font-bold text-stone-700 transition hover:bg-white/70 active:scale-[0.99] dark:text-stone-200 dark:hover:bg-white/10"
-          >
-            <RefreshCw className="h-3.5 w-3.5" />
-            Pair a different iPhone
-          </button>
-        ) : (
+      {!connected ? (
+        <>
+          <PairingSlot
+            status={status}
+            qrDataUrl={qrDataUrl}
+            error={error}
+          />
+          <div className="mt-3">
           <button
             type="button"
             onClick={onForceRestart}
@@ -887,62 +833,9 @@ function UnifiedPairingCard({
             <RefreshCw className="h-3.5 w-3.5" />
             Generate a new QR
           </button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function ModeTabNav({
-  options,
-  selectedIndex,
-  value,
-  onSelect,
-}: {
-  options: typeof MODE_OPTIONS;
-  selectedIndex: number;
-  value: MobileCaptureMode | null;
-  onSelect: (next: MobileCaptureMode) => void;
-}) {
-  return (
-    <div
-      role="tablist"
-      aria-label="Capture mode"
-      className="liquid-glass-soft relative mt-4 flex h-12 rounded-2xl p-1"
-    >
-      <span
-        aria-hidden="true"
-        className="pointer-events-none absolute top-1 bottom-1 rounded-xl bg-white/85 shadow-sm shadow-stone-900/10 ring-1 ring-stone-200/70 transition-transform duration-300 ease-out dark:bg-stone-700/70 dark:shadow-black/40 dark:ring-stone-600/60"
-        style={{
-          left: "0.25rem",
-          width: `calc((100% - 0.5rem) / ${options.length})`,
-          transform: `translateX(calc(${selectedIndex} * 100%))`,
-        }}
-      />
-      {options.map((option) => {
-        const Icon = option.icon;
-        const selected = value === option.value;
-        return (
-          <button
-            key={option.value}
-            type="button"
-            role="tab"
-            aria-selected={selected}
-            onClick={() => onSelect(option.value)}
-            className={cn(
-              "relative z-[1] flex flex-1 min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl px-1 text-center transition active:scale-[0.97]",
-              selected
-                ? "text-stone-950 dark:text-stone-50"
-                : "text-stone-500 hover:text-stone-800 dark:text-stone-400 dark:hover:text-stone-100",
-            )}
-          >
-            <Icon className="h-4 w-4 shrink-0" />
-            <span className="max-w-full truncate text-[11px] font-bold leading-none">
-              {option.label}
-            </span>
-          </button>
-        );
-      })}
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }
@@ -950,12 +843,10 @@ function ModeTabNav({
 function PairingSlot({
   status,
   qrDataUrl,
-  modeLabel,
   error,
 }: {
   status: ScannerConnectionStatus;
   qrDataUrl: string | null;
-  modeLabel: string | null;
   error: string | null;
 }) {
   const showQr = status === "waiting" && qrDataUrl;
@@ -981,18 +872,14 @@ function PairingSlot({
         <SlotFader key="qr">
           <QrPanel
             qrDataUrl={qrDataUrl}
-            hint={
-              modeLabel
-                ? `Scan with the iPhone Camera app for ${modeLabel}.`
-                : "Scan with the iPhone Camera app to open Volt."
-            }
+            hint="Scan with the iPhone Camera app to open Volt."
           />
         </SlotFader>
       ) : null}
 
       {slotKey === "connected" ? (
         <SlotFader key="connected">
-          <ConnectedPanel modeLabel={modeLabel} />
+          <ConnectedPanel />
         </SlotFader>
       ) : null}
 
@@ -1050,7 +937,7 @@ function QrPanel({
   );
 }
 
-function ConnectedPanel({ modeLabel }: { modeLabel: string | null }) {
+function ConnectedPanel() {
   return (
     <div className="flex flex-col items-center text-center">
       <div className="relative">
@@ -1063,9 +950,7 @@ function ConnectedPanel({ modeLabel }: { modeLabel: string | null }) {
         iPhone paired
       </div>
       <p className="mt-1 max-w-[220px] text-[11px] font-medium text-stone-500 dark:text-stone-400">
-        {modeLabel
-          ? `Capture in ${modeLabel} mode — switching here syncs the App Clip.`
-          : "Capture from the App Clip and results land in the history."}
+        Capture from the App Clip and results land in the history.
       </p>
     </div>
   );

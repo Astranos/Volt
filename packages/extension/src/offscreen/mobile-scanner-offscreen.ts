@@ -1,13 +1,5 @@
 const SCANNER_SIGNAL_URL = "https://scanner-signal.vercel.app/api/signal";
 const SCANNER_APP_CLIP_BASE_URL = "https://scanner-signal.vercel.app/clip";
-const SCANNER_APP_PAIR_URL = "volt://pair";
-const SCANNER_ICE_SERVERS = [
-  { urls: "stun:stun.l.google.com:19302" },
-  { urls: "stun:stun1.l.google.com:19302" },
-];
-const SCANNER_DATA_CHANNEL = "barcodes";
-const SCANNER_ICE_GATHERING_TIMEOUT_MS = 5000;
-const SCANNER_ANSWER_POLL_INTERVAL_MS = 1000;
 const SCANNER_RESULT_POLL_INTERVAL_MS = 500;
 const SCANNER_RESULT_TIMEOUT_MS = 30 * 60 * 1000;
 
@@ -179,14 +171,9 @@ function decodeScannerTransportMessage(data: string): ScannerTransportMessage | 
 }
 
 class MobileScannerOffscreenSession {
-  private peerConnection: RTCPeerConnection | null = null;
-  private dataChannel: RTCDataChannel | null = null;
-  private answerPoll: number | null = null;
   private resultPoll: number | null = null;
   private resultPollTimeout: number | null = null;
-  private restartTimer: number | null = null;
   private sessionId: string | null = null;
-  private intentionallyClosing = false;
   private recentMessages = new Map<string, number>();
   private pendingPhotos = new Map<string, PendingPhoto>();
   private seenRelayResultIds = new Set<string>();
@@ -210,11 +197,9 @@ class MobileScannerOffscreenSession {
     });
   }
 
-  async start(force = false, mode: MobileCaptureMode | null = null, target?: SessionTarget | null) {
-    const nextMode = mode ?? this.state.mode;
+  async start(force = false, _mode: MobileCaptureMode | null = null, target?: SessionTarget | null) {
     if (
       !force &&
-      nextMode === this.state.mode &&
       (this.state.status === "creating" ||
         this.state.status === "waiting" ||
         this.state.status === "connected")
@@ -223,65 +208,18 @@ class MobileScannerOffscreenSession {
     }
 
     this.cleanup(true);
-    this.setState({ status: "creating", error: null, qrCodeUrl: null, mode: nextMode });
+    this.setState({ status: "creating", error: null, qrCodeUrl: null, mode: null });
 
     try {
-      if (nextMode) {
-        const sessionId = await this.createRelaySession(nextMode, target);
-        this.sessionId = sessionId;
-        this.setState({
-          status: "waiting",
-          qrCodeUrl: this.buildPairingUrl(sessionId, nextMode),
-          error: null,
-          mode: nextMode,
-        });
-        this.pollForResult(sessionId);
-        return this.getState();
-      }
-
-      const pc = new RTCPeerConnection({ iceServers: SCANNER_ICE_SERVERS });
-      this.peerConnection = pc;
-
-      const dataChannel = pc.createDataChannel(SCANNER_DATA_CHANNEL, {
-        ordered: true,
-      });
-      this.dataChannel = dataChannel;
-
-      dataChannel.onopen = () => this.setState({ status: "connected", error: null });
-      dataChannel.onclose = () => this.restartPairingSoon();
-      dataChannel.onerror = () => {
-        this.setState({ status: "error", error: "Connection error" });
-      };
-      dataChannel.onmessage = (event) => this.handleDataChannelMessage(String(event.data));
-
-      pc.onconnectionstatechange = () => {
-        if (
-          pc.connectionState === "failed" ||
-          pc.connectionState === "disconnected" ||
-          pc.connectionState === "closed"
-        ) {
-          this.restartPairingSoon();
-        }
-      };
-
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      await this.waitForIceGathering(pc);
-
-      if (!pc.localDescription) {
-        throw new Error("Failed to create pairing offer");
-      }
-
-      const sessionId = await this.createSignalingSession(pc.localDescription);
+      const sessionId = await this.createRelaySession(null, target);
       this.sessionId = sessionId;
-      const appPairingUrl = this.buildPairingUrl(sessionId, nextMode);
       this.setState({
         status: "waiting",
-        qrCodeUrl: appPairingUrl,
+        qrCodeUrl: this.buildPairingUrl(sessionId),
         error: null,
-        mode: nextMode,
+        mode: null,
       });
-      this.pollForAnswer(sessionId);
+      this.pollForResult(sessionId);
     } catch (err) {
       this.setState({
         status: "error",
@@ -313,22 +251,12 @@ class MobileScannerOffscreenSession {
     return this.getState();
   }
 
-  private buildPairingUrl(sessionId: string, mode: MobileCaptureMode | null) {
+  private buildPairingUrl(sessionId: string) {
     const encodedSession = encodeURIComponent(sessionId);
-    if (!mode) return `${SCANNER_APP_PAIR_URL}?session=${encodedSession}`;
-    return `${SCANNER_APP_CLIP_BASE_URL}/${mode}?session=${encodedSession}`;
+    return `${SCANNER_APP_CLIP_BASE_URL}?session=${encodedSession}`;
   }
 
-  private cleanup(intentional = true) {
-    this.intentionallyClosing = intentional;
-    if (this.restartTimer) {
-      window.clearTimeout(this.restartTimer);
-      this.restartTimer = null;
-    }
-    if (this.answerPoll) {
-      window.clearInterval(this.answerPoll);
-      this.answerPoll = null;
-    }
+  private cleanup(_intentional = true) {
     if (this.resultPoll) {
       window.clearInterval(this.resultPoll);
       this.resultPoll = null;
@@ -337,23 +265,6 @@ class MobileScannerOffscreenSession {
       window.clearTimeout(this.resultPollTimeout);
       this.resultPollTimeout = null;
     }
-    this.dataChannel?.close();
-    this.peerConnection?.close();
-    this.dataChannel = null;
-    this.peerConnection = null;
-    window.setTimeout(() => {
-      this.intentionallyClosing = false;
-    }, 0);
-  }
-
-  private restartPairingSoon() {
-    if (this.intentionallyClosing || this.restartTimer) return;
-    this.setState({ status: "creating", error: null, qrCodeUrl: null });
-    this.restartTimer = window.setTimeout(() => {
-      this.restartTimer = null;
-      this.cleanup(true);
-      void this.start(true, this.state.mode);
-    }, 500);
   }
 
   private handleDataChannelMessage(rawData: string) {
@@ -449,39 +360,6 @@ class MobileScannerOffscreenSession {
     return false;
   }
 
-  private waitForIceGathering(pc: RTCPeerConnection) {
-    return new Promise<void>((resolve) => {
-      if (pc.iceGatheringState === "complete") {
-        resolve();
-        return;
-      }
-
-      pc.onicegatheringstatechange = () => {
-        if (pc.iceGatheringState === "complete") {
-          pc.onicegatheringstatechange = null;
-          resolve();
-        }
-      };
-      setTimeout(resolve, SCANNER_ICE_GATHERING_TIMEOUT_MS);
-    });
-  }
-
-  private async createSignalingSession(localDescription: RTCSessionDescription) {
-    if (this.sessionId) {
-      try {
-        return await this.postSignalingOffer(
-          `${SCANNER_SIGNAL_URL}/${encodeURIComponent(this.sessionId)}`,
-          localDescription
-        );
-      } catch (error) {
-        console.warn("Failed to refresh scanner pairing session; creating a new one", error);
-        this.sessionId = null;
-      }
-    }
-
-    return this.postSignalingOffer(SCANNER_SIGNAL_URL, localDescription);
-  }
-
   private async createRelaySession(mode: MobileCaptureMode | null, target?: SessionTarget | null) {
     const sessionResponse = await fetch(SCANNER_SIGNAL_URL, {
       method: "POST",
@@ -508,61 +386,6 @@ class MobileScannerOffscreenSession {
       throw new Error("Invalid App Clip session");
     }
     return sessionId;
-  }
-
-  private async postSignalingOffer(
-    sessionUrl: string,
-    localDescription: RTCSessionDescription
-  ) {
-    const sessionResponse = await fetch(sessionUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ offer: JSON.stringify(localDescription) }),
-    });
-
-    if (!sessionResponse.ok) {
-      let details = "";
-      try {
-        const payload = await sessionResponse.json();
-        details =
-          typeof payload?.error === "string" && payload.error
-            ? `: ${payload.error}`
-            : "";
-      } catch (_error) {}
-      throw new Error(
-        `Failed to create pairing session (${sessionResponse.status})${details}`
-      );
-    }
-
-    const { sessionId } = await sessionResponse.json();
-    if (typeof sessionId !== "string" || !sessionId) {
-      throw new Error("Invalid pairing session");
-    }
-    return sessionId;
-  }
-
-  private pollForAnswer(sessionId: string) {
-    this.answerPoll = window.setInterval(async () => {
-      try {
-        const answerResponse = await fetch(`${SCANNER_SIGNAL_URL}/${sessionId}/answer`);
-        if (!answerResponse.ok) return;
-
-        const { answer } = await answerResponse.json();
-        if (typeof answer !== "string" || !answer || !this.peerConnection) {
-          return;
-        }
-
-        await this.peerConnection.setRemoteDescription(JSON.parse(answer));
-        this.setState({ status: "connected", error: null });
-
-        if (this.answerPoll) {
-          window.clearInterval(this.answerPoll);
-          this.answerPoll = null;
-        }
-      } catch (err) {
-        console.error("Failed to apply scanner answer", err);
-      }
-    }, SCANNER_ANSWER_POLL_INTERVAL_MS);
   }
 
   private pollForResult(sessionId: string) {
