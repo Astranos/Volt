@@ -10,6 +10,10 @@ export type VoltClipTextCaptureResult = {
   height?: string;
 };
 
+export type VoltClipDeviceOrientation = {
+  degrees?: number;
+};
+
 type VoltClipTextRecognizerModule = {
   captureAndRecognize: () => Promise<VoltClipTextCaptureResult & { text: string }>;
   focusAt?: (x: number, y: number) => Promise<{ x: number; y: number }>;
@@ -51,6 +55,14 @@ export function addVoltClipTextCaptureListener(listener: (result: VoltClipTextCa
   return eventEmitter.addListener("capture", (event: VoltClipTextCaptureResult & { phase?: string }) => {
     if (event.phase === "captured") listener(event);
   });
+}
+
+export function addVoltClipDeviceOrientationListener(listener: (result: VoltClipDeviceOrientation) => void) {
+  if (!eventEmitter) {
+    return { remove() {} };
+  }
+
+  return eventEmitter.addListener("orientation", listener);
 }
 
 export function showVoltClipTextPreview(frame: { x: number; y: number; width: number; height: number }) {

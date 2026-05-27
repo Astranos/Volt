@@ -30,6 +30,9 @@ importers:
 
   apps/mobile:
     dependencies:
+      '@babel/runtime':
+        specifier: 7.28.2
+        version: 7.28.2
       '@expo/ui':
         specifier: ~56.0.12
         version: 56.0.12(4306548eb2249503ee6e60e0315523e4)
@@ -8898,7 +8901,9 @@ snapshots:
       metro-runtime: 0.84.4
     transitivePeerDependencies:
       - '@babel/core'
+      - bufferutil
       - supports-color
+      - utf-8-validate
 
   '@react-native/normalize-colors@0.85.3': {}
 

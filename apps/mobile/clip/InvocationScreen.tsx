@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType }
 import {
   Alert,
   Animated,
+  Image,
   Linking,
   PanResponder,
   Platform,
@@ -57,6 +58,7 @@ import {
 } from "../lib/volt-clip-clipboard";
 import {
   captureAndRecognizeVoltClipText,
+  addVoltClipDeviceOrientationListener,
   addVoltClipTextCaptureListener,
   focusVoltClipTextCamera,
   hideVoltClipTextPreview,
@@ -299,6 +301,7 @@ export default function ClipInvocationScreen() {
   const [ocrText, setOcrText] = useState("");
   const [ocrImageUri, setOcrImageUri] = useState<string | null>(null);
   const [ocrFrozenImageUri, setOcrFrozenImageUri] = useState<string | null>(null);
+  const [captureControlsRotationDegrees, setCaptureControlsRotationDegrees] = useState(0);
   const windowDimensions = useWindowDimensions();
   const lastOcrClipboardRef = useRef<string | null>(null);
   const lastOcrClipboardChangeCountRef = useRef<number | null>(null);
@@ -909,6 +912,11 @@ export default function ClipInvocationScreen() {
   useEffect(() => {
     if (mode !== "ocr" && mode !== "photo") return;
 
+    const orientationSubscription = addVoltClipDeviceOrientationListener((result) => {
+      if (typeof result.degrees === "number") {
+        setCaptureControlsRotationDegrees(result.degrees);
+      }
+    });
     const subscription = addVoltClipTextCaptureListener((result) => {
       if (result.imageUri) {
         setOcrFrozenImageUri(result.imageUri);
@@ -918,6 +926,7 @@ export default function ClipInvocationScreen() {
     });
 
     return () => {
+      orientationSubscription.remove();
       subscription.remove();
     };
   }, [mode]);
@@ -1156,7 +1165,15 @@ export default function ClipInvocationScreen() {
     }
     return (
       <Pressable
-        accessibilityLabel={capturedOcrImageUri ? "Retake text capture" : "Capture text"}
+        accessibilityLabel={
+          capturedOcrImageUri
+            ? mode === "photo"
+              ? "Capture another photo"
+              : "Retake text capture"
+            : mode === "photo"
+              ? "Capture photo"
+              : "Capture text"
+        }
         accessibilityRole="button"
         disabled={isBusy}
         onPress={() => {
@@ -1171,7 +1188,7 @@ export default function ClipInvocationScreen() {
         <View style={styles.ocrShutterInner}>
           {isBusy ? (
             <Text style={styles.ocrShutterIcon}>...</Text>
-          ) : capturedOcrImageUri && mode === "ocr" ? (
+          ) : capturedOcrImageUri && (mode === "ocr" || mode === "photo") ? (
             renderRefreshIcon()
           ) : (
             <View style={styles.ocrShutterDot} />
@@ -1404,8 +1421,11 @@ export default function ClipInvocationScreen() {
       return "Tap shutter to capture text";
     }
     if (mode === "photo") {
-      if (ocrState === "capturing" || sendState === "sending") return "Sending photo...";
-      if (ocrImageUri) return "Photo sent to Chrome";
+      if (ocrState === "capturing") return "Capturing photo...";
+      if (sendState === "sending") return capturedOcrImageUri ? "Sending this photo to Chrome..." : "Sending photo...";
+      if (sendState === "sent") return "Stored in Chrome. Ready for the next photo.";
+      if (sendState === "error") return "Photo failed. Try again.";
+      if (capturedOcrImageUri) return "Tap shutter for a fresh photo";
       return "Tap shutter to capture photo";
     }
     if (mode === "barcode") return barcodeCandidate ? "Barcode found. Tap shutter to send." : "Center a barcode or QR code";
@@ -1770,6 +1790,34 @@ export default function ClipInvocationScreen() {
                 </View>
                 {renderClipModeSelector(styles.ocrDictationSurfaceModeOptions)}
               </View>
+            ) : capturedOcrImageUri && mode === "photo" ? (
+              <View style={styles.photoCapturedSurface}>
+                <View style={styles.photoCapturedFrame}>
+                  <Image
+                    accessibilityIgnoresInvertColors
+                    source={{ uri: capturedOcrImageUri }}
+                    style={styles.photoCapturedImage}
+                  />
+                  <View
+                    pointerEvents="none"
+                    style={[
+                      styles.photoCapturedStatus,
+                      sendState === "sent" && styles.photoCapturedStatusSent,
+                      sendState === "error" && styles.photoCapturedStatusError,
+                    ]}
+                  >
+                    <Text style={styles.photoCapturedStatusText}>
+                      {sendState === "sending"
+                        ? "Sending to Chrome"
+                        : sendState === "sent"
+                          ? "Stored in Chrome"
+                          : sendState === "error"
+                            ? "Send failed"
+                            : "Ready"}
+                    </Text>
+                  </View>
+                </View>
+              </View>
             ) : capturedOcrImageUri ? (
               <View style={styles.ocrCapturedSheet}>
                 <View style={styles.ocrCapturedViewport}>
@@ -1838,7 +1886,13 @@ export default function ClipInvocationScreen() {
             ) : null}
 
         </View>
-        <Animated.View style={[styles.ocrFloatingShutter, ocrFloatingShutterAnimatedStyle]}>
+        <Animated.View
+          style={[
+            styles.ocrFloatingShutter,
+            ocrFloatingShutterAnimatedStyle,
+            { transform: [{ rotate: `${captureControlsRotationDegrees}deg` }] },
+          ]}
+        >
           {renderOcrShutter()}
         </Animated.View>
         <Animated.View pointerEvents="none" style={[styles.ocrFloatingHint, ocrHintAnimatedStyle]}>
@@ -2307,6 +2361,62 @@ const styles = StyleSheet.create({
   },
   ocrCapturedImage: {
     backgroundColor: "#1c1917",
+  },
+  photoCapturedSurface: {
+    ...absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 24,
+    paddingBottom: 190,
+    paddingTop: stableTopInset + 32,
+  },
+  photoCapturedFrame: {
+    aspectRatio: 1,
+    width: "100%",
+    maxWidth: 390,
+    borderRadius: 34,
+    ...continuousCorners,
+    overflow: "hidden",
+    backgroundColor: "#11100f",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.2)",
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 18 },
+    shadowOpacity: 0.3,
+    shadowRadius: 34,
+  },
+  photoCapturedImage: {
+    height: "100%",
+    width: "100%",
+    resizeMode: "cover",
+  },
+  photoCapturedStatus: {
+    position: "absolute",
+    top: 12,
+    alignSelf: "center",
+    minHeight: 32,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    ...continuousCorners,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(17, 16, 15, 0.52)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.18)",
+  },
+  photoCapturedStatusSent: {
+    backgroundColor: "rgba(20, 83, 45, 0.56)",
+    borderColor: "rgba(134, 239, 172, 0.34)",
+  },
+  photoCapturedStatusError: {
+    backgroundColor: "rgba(127, 29, 29, 0.58)",
+    borderColor: "rgba(252, 165, 165, 0.34)",
+  },
+  photoCapturedStatusText: {
+    color: "#fff7ed",
+    fontSize: 12,
+    fontWeight: "900",
+    lineHeight: 15,
   },
   ocrCopyPrompt: {
     position: "absolute",

@@ -228,6 +228,9 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
   const [error, setError] = useState<string | null>(null);
   const [removingIds, setRemovingIds] = useState<Set<string>>(new Set());
   const [enteringIds, setEnteringIds] = useState<Set<string>>(new Set());
+  const [selectedPhotoIds, setSelectedPhotoIds] = useState<Set<string>>(
+    new Set(),
+  );
   const [collapsedClusters, setCollapsedClusters] = useState<Set<string>>(
     new Set(),
   );
@@ -321,6 +324,20 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
     },
     [markEntering, persistPhotos],
   );
+
+  const selectedPhotos = useMemo(
+    () => photos.filter((photo) => selectedPhotoIds.has(photo.id)),
+    [photos, selectedPhotoIds],
+  );
+
+  const togglePhotoSelection = useCallback((id: string) => {
+    setSelectedPhotoIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
 
   const primeCursorTarget = useCallback(async () => {
     try {
@@ -421,6 +438,12 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
           persistPhotos(next);
           return next;
         });
+        setSelectedPhotoIds((curr) => {
+          if (!curr.has(id)) return curr;
+          const next = new Set(curr);
+          next.delete(id);
+          return next;
+        });
       });
     },
     [persistPhotos, removeWithAnimation],
@@ -439,6 +462,11 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
           setPhotos((curr) => {
             const next = curr.filter((p) => !ids.has(p.id));
             persistPhotos(next);
+            return next;
+          });
+          setSelectedPhotoIds((curr) => {
+            const next = new Set(curr);
+            ids.forEach((id) => next.delete(id));
             return next;
           });
         } else {
@@ -472,6 +500,7 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
     window.setTimeout(() => {
       setScans([]);
       setPhotos([]);
+      setSelectedPhotoIds(new Set());
       persistScans([]);
       persistPhotos([]);
       setRemovingIds(new Set());
@@ -535,8 +564,8 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
     link.click();
   }, []);
 
-  const sendPhotoToTab = useCallback(
-    async (photo: MobilePhoto) => {
+  const sendPhotosToTab = useCallback(
+    async (photosToSend: MobilePhoto[]) => {
       try {
         const [tab] = await chrome.tabs.query({
           active: true,
@@ -549,7 +578,13 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
         const [result] = await chrome.scripting.executeScript({
           target: { tabId: tab.id },
           func: insertPhotosIntoPage,
-          args: [[{ dataUrl: photo.dataUrl, name: photo.name, mimeType: photo.mimeType }]],
+          args: [
+            photosToSend.map((photo) => ({
+              dataUrl: photo.dataUrl,
+              name: photo.name,
+              mimeType: photo.mimeType,
+            })),
+          ],
         });
         const payload = result?.result as
           | { inserted?: boolean; reason?: string }
@@ -563,7 +598,11 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
           );
           return;
         }
-        flashFeedback("Photo dropped into the page!");
+        flashFeedback(
+          photosToSend.length === 1
+            ? "Photo dropped into the page!"
+            : `${photosToSend.length} photos dropped into the page!`,
+        );
       } catch (_err) {
         flashFeedback("Tab access denied", "error");
       }
@@ -571,27 +610,51 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
     [flashFeedback],
   );
 
+  const sendPhotoToTab = useCallback(
+    async (photo: MobilePhoto) => {
+      const photosToSend = selectedPhotoIds.has(photo.id)
+        ? selectedPhotos
+        : [photo];
+      await sendPhotosToTab(photosToSend);
+    },
+    [selectedPhotoIds, selectedPhotos, sendPhotosToTab],
+  );
+
   const handlePhotoDragStart = useCallback(
     (event: React.DragEvent, photo: MobilePhoto) => {
       void prepareActiveTabForPhotoDrop();
+      const dragPhotos = selectedPhotoIds.has(photo.id) ? selectedPhotos : [photo];
+      if (!selectedPhotoIds.has(photo.id)) {
+        setSelectedPhotoIds(new Set([photo.id]));
+      }
       event.dataTransfer.effectAllowed = "copy";
-      event.dataTransfer.setData(PHOTO_DROP_MIME, JSON.stringify([photo]));
-      const file = dataUrlToFile(photo.dataUrl, photo.name, photo.mimeType);
-      if (file) {
+      event.dataTransfer.setData(PHOTO_DROP_MIME, JSON.stringify(dragPhotos));
+      const files = dragPhotos
+        .map((item) => dataUrlToFile(item.dataUrl, item.name, item.mimeType))
+        .filter((file): file is File => Boolean(file));
+      for (const file of files) {
         try {
           event.dataTransfer.items.add(file);
         } catch (_err) {
           // some extension drag contexts reject programmatic file items
         }
       }
-      event.dataTransfer.setData("text/uri-list", photo.dataUrl);
+      event.dataTransfer.setData(
+        "text/uri-list",
+        dragPhotos.map((item) => item.dataUrl).join("\n"),
+      );
       event.dataTransfer.setData(
         "text/html",
-        `<img src="${photo.dataUrl}" alt="${photo.name}">`,
+        dragPhotos
+          .map((item) => `<img src="${item.dataUrl}" alt="${item.name}">`)
+          .join(""),
       );
-      event.dataTransfer.setData("text/plain", photo.name);
+      event.dataTransfer.setData(
+        "text/plain",
+        dragPhotos.map((item) => item.name).join("\n"),
+      );
     },
-    [prepareActiveTabForPhotoDrop],
+    [prepareActiveTabForPhotoDrop, selectedPhotoIds, selectedPhotos],
   );
 
   const toggleCluster = useCallback((key: string) => {
@@ -742,6 +805,8 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
                 onSendPhoto={sendPhotoToTab}
                 onPhotoDragStart={handlePhotoDragStart}
                 onPhotoHover={prepareActiveTabForPhotoDrop}
+                selectedPhotoIds={selectedPhotoIds}
+                onTogglePhotoSelection={togglePhotoSelection}
               />
             ))
           )}
@@ -1039,6 +1104,7 @@ function ClusterCard({
   now,
   removingIds,
   enteringIds,
+  selectedPhotoIds,
   collapsed,
   onToggleCollapse,
   onDeleteCluster,
@@ -1050,11 +1116,13 @@ function ClusterCard({
   onSendPhoto,
   onPhotoDragStart,
   onPhotoHover,
+  onTogglePhotoSelection,
 }: {
   cluster: Cluster;
   now: number;
   removingIds: Set<string>;
   enteringIds: Set<string>;
+  selectedPhotoIds: Set<string>;
   collapsed: boolean;
   onToggleCollapse: () => void;
   onDeleteCluster: () => void;
@@ -1066,6 +1134,7 @@ function ClusterCard({
   onSendPhoto: (photo: MobilePhoto) => void;
   onPhotoDragStart: (event: React.DragEvent, photo: MobilePhoto) => void;
   onPhotoHover: () => void;
+  onTogglePhotoSelection: (id: string) => void;
 }) {
   const meta = CLUSTER_META[cluster.kind];
   const Icon = meta.icon;
@@ -1161,12 +1230,14 @@ function ClusterCard({
                 <PhotoEntryCard
                   key={entry.id}
                   photo={entry.photo}
+                  selected={selectedPhotoIds.has(entry.photo.id)}
                   exiting={removingIds.has(entry.id)}
                   entering={enteringIds.has(entry.id)}
                   onDelete={() => onDeletePhoto(entry.id)}
                   onCopy={() => onCopyPhoto(entry.photo)}
                   onDownload={() => onDownloadPhoto(entry.photo)}
                   onSend={() => onSendPhoto(entry.photo)}
+                  onToggleSelected={() => onTogglePhotoSelection(entry.photo.id)}
                   onDragStart={(event) => onPhotoDragStart(event, entry.photo)}
                   onHover={onPhotoHover}
                 />
@@ -1279,22 +1350,26 @@ function ScanEntryRow({
 
 function PhotoEntryCard({
   photo,
+  selected,
   exiting,
   entering,
   onDelete,
   onCopy,
   onDownload,
   onSend,
+  onToggleSelected,
   onDragStart,
   onHover,
 }: {
   photo: MobilePhoto;
+  selected: boolean;
   exiting: boolean;
   entering: boolean;
   onDelete: () => void;
   onCopy: () => void;
   onDownload: () => void;
   onSend: () => void;
+  onToggleSelected: () => void;
   onDragStart: (event: React.DragEvent) => void;
   onHover: () => void;
 }) {
@@ -1304,13 +1379,28 @@ function PhotoEntryCard({
       onDragStart={onDragStart}
       onMouseEnter={onHover}
       onPointerDown={onHover}
+      onClick={onToggleSelected}
       className={cn(
-        "group relative overflow-hidden rounded-2xl bg-stone-50 ring-1 ring-stone-200/70 transition dark:bg-stone-800/70 dark:ring-stone-700/70",
+        "group relative overflow-hidden rounded-2xl bg-stone-50 ring-1 transition dark:bg-stone-800/70",
+        selected
+          ? "ring-2 ring-green-500 dark:ring-green-300"
+          : "ring-stone-200/70 dark:ring-stone-700/70",
         entering && "volt-item-enter",
         exiting && "volt-item-exit",
         "cursor-grab active:cursor-grabbing",
       )}
     >
+      <span
+        className={cn(
+          "absolute left-1 top-1 z-10 flex h-6 w-6 items-center justify-center rounded-full border text-white shadow-sm transition",
+          selected
+            ? "border-green-500 bg-green-500"
+            : "border-white/80 bg-stone-950/30 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
+        )}
+        aria-hidden="true"
+      >
+        {selected ? <Check className="h-3.5 w-3.5" /> : null}
+      </span>
       <img
         src={photo.dataUrl}
         alt={photo.name}

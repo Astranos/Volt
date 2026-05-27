@@ -1423,17 +1423,17 @@ private struct ViewfinderBackground: View {
     )
     .ignoresSafeArea()
     .overlay {
-      GeometryReader { proxy in
-        Image(systemName: model.mode.symbol)
-          .font(.system(size: 118, weight: .thin))
-          .foregroundStyle(.white.opacity(0.14))
-          .frame(maxWidth: .infinity)
-          .position(
-            x: proxy.size.width / 2,
-            y: model.mode == .dictation
-              ? max(proxy.safeAreaInsets.top + 240, proxy.size.height * 0.42)
-              : proxy.size.height / 2
-          )
+      if model.mode != .dictation {
+        GeometryReader { proxy in
+          Image(systemName: model.mode.symbol)
+            .font(.system(size: 118, weight: .thin))
+            .foregroundStyle(.white.opacity(0.14))
+            .frame(maxWidth: .infinity)
+            .position(
+              x: proxy.size.width / 2,
+              y: proxy.size.height / 2
+            )
+        }
       }
     }
   }
@@ -1736,7 +1736,7 @@ private struct DictationLiveOverlay: View {
           .minimumScaleFactor(0.62)
           .frame(maxWidth: .infinity, alignment: .leading)
           .padding(.horizontal, 28)
-          .padding(.top, proxy.safeAreaInsets.top + 96)
+          .padding(.top, proxy.safeAreaInsets.top + 240)
         Spacer()
       }
     }

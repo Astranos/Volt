@@ -24,17 +24,38 @@ class VoltClipTextRecognizer: RCTEventEmitter, AVCapturePhotoCaptureDelegate, AV
   private var captureTimeoutWorkItem: DispatchWorkItem?
   private let selectionHaptic = UISelectionFeedbackGenerator()
   private var hasListeners = false
+  private var latestDeviceOrientation: UIDeviceOrientation = .portrait
+  private let relayImageMaxDimension: CGFloat = 960
+  private let relayImageCompressionQuality: CGFloat = 0.6
+
+  override init() {
+    super.init()
+    UIDevice.current.beginGeneratingDeviceOrientationNotifications()
+    NotificationCenter.default.addObserver(
+      self,
+      selector: #selector(deviceOrientationDidChange),
+      name: UIDevice.orientationDidChangeNotification,
+      object: nil
+    )
+    updateLatestDeviceOrientation()
+  }
+
+  deinit {
+    NotificationCenter.default.removeObserver(self)
+    UIDevice.current.endGeneratingDeviceOrientationNotifications()
+  }
 
   override static func requiresMainQueueSetup() -> Bool {
     false
   }
 
   override func supportedEvents() -> [String]! {
-    ["capture"]
+    ["capture", "orientation"]
   }
 
   override func startObserving() {
     hasListeners = true
+    emitDeviceOrientation()
   }
 
   override func stopObserving() {
@@ -111,6 +132,7 @@ class VoltClipTextRecognizer: RCTEventEmitter, AVCapturePhotoCaptureDelegate, AV
           }
 
           let settings = AVCapturePhotoSettings()
+          self.applyCurrentCaptureOrientation()
           self.output.capturePhoto(with: settings, delegate: self)
         } catch {
           self.clearPendingCapture()
@@ -270,6 +292,7 @@ class VoltClipTextRecognizer: RCTEventEmitter, AVCapturePhotoCaptureDelegate, AV
     metadataOutput.metadataObjectTypes = supportedMetadataTypes(from: metadataOutput.availableMetadataObjectTypes)
     metadataOutput.rectOfInterest = CGRect(x: 0.18, y: 0.18, width: 0.64, height: 0.64)
     session.commitConfiguration()
+    applyCurrentCaptureOrientation()
     videoDevice = device
     isConfigured = true
   }
@@ -471,11 +494,146 @@ class VoltClipTextRecognizer: RCTEventEmitter, AVCapturePhotoCaptureDelegate, AV
       return
     }
 
-    let imageURL = saveCapturedImage(data)
-    pendingImageData = data
-    pendingImageSize = CGSize(width: cgImage.width, height: cgImage.height)
-    emitCapturedImage(imageURL: imageURL, imageData: data, imageSize: pendingImageSize)
-    recognizeText(in: cgImage, imageURL: imageURL)
+    let fallbackOrientation = cgImageOrientation(for: currentVideoOrientation())
+    let orientation = imageOrientation(from: imageSource, fallback: fallbackOrientation)
+    let relayImage = prepareRelayImage(from: data)
+    let imageURL = saveCapturedImage(relayImage.data)
+    pendingImageData = relayImage.data
+    pendingImageSize = relayImage.size
+    emitCapturedImage(imageURL: imageURL, imageData: relayImage.data, imageSize: relayImage.size)
+    recognizeText(in: cgImage, orientation: orientation, imageURL: imageURL)
+  }
+
+  private func imageOrientation(from imageSource: CGImageSource, fallback: CGImagePropertyOrientation) -> CGImagePropertyOrientation {
+    guard
+      let properties = CGImageSourceCopyPropertiesAtIndex(imageSource, 0, nil) as? [CFString: Any],
+      let rawValue = properties[kCGImagePropertyOrientation] as? UInt32,
+      let orientation = CGImagePropertyOrientation(rawValue: rawValue)
+    else {
+      return fallback
+    }
+
+    return orientation
+  }
+
+  @objc private func deviceOrientationDidChange() {
+    updateLatestDeviceOrientation()
+    applyCurrentCaptureOrientation()
+    emitDeviceOrientation()
+  }
+
+  private func updateLatestDeviceOrientation() {
+    let orientation = UIDevice.current.orientation
+    if orientation.isValidInterfaceOrientation {
+      latestDeviceOrientation = orientation
+    }
+  }
+
+  private func emitDeviceOrientation() {
+    guard hasListeners else {
+      return
+    }
+
+    DispatchQueue.main.async {
+      self.sendEvent(withName: "orientation", body: ["degrees": self.rotationDegrees(for: self.latestDeviceOrientation)])
+    }
+  }
+
+  private func rotationDegrees(for orientation: UIDeviceOrientation) -> Int {
+    switch orientation {
+    case .landscapeLeft:
+      return 90
+    case .landscapeRight:
+      return -90
+    case .portraitUpsideDown:
+      return 180
+    default:
+      return 0
+    }
+  }
+
+  private func currentVideoOrientation() -> AVCaptureVideoOrientation {
+    updateLatestDeviceOrientation()
+    switch latestDeviceOrientation {
+    case .portrait:
+      return .portrait
+    case .portraitUpsideDown:
+      return .portraitUpsideDown
+    case .landscapeLeft:
+      return .landscapeRight
+    case .landscapeRight:
+      return .landscapeLeft
+    default:
+      return .portrait
+    }
+  }
+
+  private func applyCurrentCaptureOrientation() {
+    let orientation = currentVideoOrientation()
+    if let connection = output.connection(with: .video), connection.isVideoOrientationSupported {
+      connection.videoOrientation = orientation
+    }
+    if let connection = metadataOutput.connection(with: .metadata), connection.isVideoOrientationSupported {
+      connection.videoOrientation = orientation
+    }
+  }
+
+  private func cgImageOrientation(for videoOrientation: AVCaptureVideoOrientation) -> CGImagePropertyOrientation {
+    switch videoOrientation {
+    case .portrait:
+      return .right
+    case .portraitUpsideDown:
+      return .left
+    case .landscapeRight:
+      return .up
+    case .landscapeLeft:
+      return .down
+    @unknown default:
+      return .right
+    }
+  }
+
+  private func prepareRelayImage(from data: Data) -> (data: Data, size: CGSize) {
+    guard let image = UIImage(data: data) else {
+      return (data, CGSize.zero)
+    }
+
+    let uprightImage = normalizeImageOrientation(image)
+    let originalSize = uprightImage.size
+    let maxDimension = max(originalSize.width, originalSize.height)
+    let scale = maxDimension > relayImageMaxDimension ? relayImageMaxDimension / maxDimension : 1
+    let outputSize = CGSize(
+      width: max(1, floor(originalSize.width * scale)),
+      height: max(1, floor(originalSize.height * scale))
+    )
+
+    let format = UIGraphicsImageRendererFormat()
+    format.scale = 1
+    format.opaque = true
+    let renderer = UIGraphicsImageRenderer(size: outputSize, format: format)
+    let outputData = renderer.jpegData(withCompressionQuality: relayImageCompressionQuality) { context in
+      UIColor.white.setFill()
+      context.fill(CGRect(origin: .zero, size: outputSize))
+      uprightImage.draw(in: CGRect(origin: .zero, size: outputSize))
+    }
+
+    return (outputData, outputSize)
+  }
+
+  private func normalizeImageOrientation(_ image: UIImage) -> UIImage {
+    if image.imageOrientation == .up {
+      return image
+    }
+
+    let format = UIGraphicsImageRendererFormat()
+    format.scale = image.scale
+    format.opaque = true
+    let renderer = UIGraphicsImageRenderer(size: image.size, format: format)
+    return renderer.image { context in
+      UIColor.white.setFill()
+      context.fill(CGRect(origin: .zero, size: image.size))
+      image.draw(in: CGRect(origin: .zero, size: image.size))
+    }
   }
 
   private func emitCapturedImage(imageURL: URL?, imageData: Data, imageSize: CGSize?) {
@@ -508,7 +666,7 @@ class VoltClipTextRecognizer: RCTEventEmitter, AVCapturePhotoCaptureDelegate, AV
     }
   }
 
-  private func recognizeText(in image: CGImage, imageURL: URL?) {
+  private func recognizeText(in image: CGImage, orientation: CGImagePropertyOrientation, imageURL: URL?) {
     pendingImageURL = imageURL
 
     let request = VNRecognizeTextRequest { [weak self] request, error in
@@ -530,7 +688,7 @@ class VoltClipTextRecognizer: RCTEventEmitter, AVCapturePhotoCaptureDelegate, AV
     request.recognitionLevel = .accurate
     request.usesLanguageCorrection = true
 
-    let handler = VNImageRequestHandler(cgImage: image, orientation: .right, options: [:])
+    let handler = VNImageRequestHandler(cgImage: image, orientation: orientation, options: [:])
     do {
       try handler.perform([request])
     } catch {

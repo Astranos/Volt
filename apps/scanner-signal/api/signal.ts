@@ -4,6 +4,8 @@ const SCANNER_SESSION_TTL_MS = 30 * 60 * 1000;
 const SCANNER_SESSION_TTL_SECONDS = Math.ceil(SCANNER_SESSION_TTL_MS / 1000);
 const SESSION_KEY_PREFIX = "volt:scanner:session:";
 const SESSION_ID_PATTERN = /^[a-zA-Z0-9_-]{4,80}$/;
+const MAX_SESSION_RESULTS = 30;
+const MAX_STORED_PHOTO_DATA_URL_BYTES = 2_500_000;
 
 type ScannerSession = {
   offer?: string;
@@ -169,6 +171,16 @@ function isResultRequest(request: VercelRequest) {
   return request.url?.endsWith("/result") ?? false;
 }
 
+function isResultAckRequest(request: VercelRequest) {
+  const path = request.query.path;
+  if (typeof path === "string") {
+    const parts = path.split("/");
+    return parts[1] === "result" && parts[2] === "ack";
+  }
+
+  return request.url?.endsWith("/result/ack") ?? false;
+}
+
 function isTargetRequest(request: VercelRequest) {
   const path = request.query.path;
   if (typeof path === "string") {
@@ -312,6 +324,30 @@ function parseScannerResult(body: unknown): ScannerResult | null {
   return isValidResultForMode(result.mode, result.message) ? result : null;
 }
 
+function trimScannerResults(results: ScannerResult[]) {
+  const trimmed: ScannerResult[] = [];
+  let photoDataUrlBytes = 0;
+
+  for (const result of [...results].reverse()) {
+    if (trimmed.length >= MAX_SESSION_RESULTS) break;
+
+    if (result.message.kind === "photo") {
+      const dataUrlBytes = result.message.dataUrl.length;
+      if (
+        trimmed.length > 0 &&
+        photoDataUrlBytes + dataUrlBytes > MAX_STORED_PHOTO_DATA_URL_BYTES
+      ) {
+        continue;
+      }
+      photoDataUrlBytes += dataUrlBytes;
+    }
+
+    trimmed.push(result);
+  }
+
+  return trimmed.reverse();
+}
+
 export default async function handler(request: VercelRequest, response: VercelResponse) {
   setCors(response);
 
@@ -323,6 +359,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
   const sessionId = sessionIdFromRequest(request);
   const isAnswerRoute = isAnswerRequest(request);
   const isResultRoute = isResultRequest(request);
+  const isResultAckRoute = isResultAckRequest(request);
   const isTargetRoute = isTargetRequest(request);
   const isConnectRoute = isConnectRequest(request);
 
@@ -405,7 +442,26 @@ export default async function handler(request: VercelRequest, response: VercelRe
       return;
     }
 
-    if (request.method === "POST" && isResultRoute) {
+    if (request.method === "POST" && isResultAckRoute) {
+      const ids = Array.isArray(request.body?.ids)
+        ? request.body.ids.filter((id: unknown): id is string => typeof id === "string" && id.length > 0)
+        : [];
+      if (ids.length === 0) {
+        await saveSession(sessionId, { ...session, result: undefined, results: [] });
+        response.status(200).json({ success: true });
+        return;
+      }
+
+      const acknowledgedIds = new Set(ids);
+      const previousResults = session.results ?? (session.result ? [session.result] : []);
+      const nextResults = previousResults.filter((result) => !acknowledgedIds.has(result.id));
+      const nextLatest = nextResults[nextResults.length - 1];
+      await saveSession(sessionId, { ...session, result: nextLatest, results: nextResults });
+      response.status(200).json({ success: true });
+      return;
+    }
+
+    if (request.method === "POST" && isResultRoute && !isResultAckRoute) {
       const result = parseScannerResult(request.body);
       if (!result) {
         response.status(400).json({ error: "Invalid result" });
@@ -422,13 +478,13 @@ export default async function handler(request: VercelRequest, response: VercelRe
           return;
       }
 
-      const nextResults = [...previousResults, result].slice(-100);
+      const nextResults = result.mode === "photo" ? [result] : trimScannerResults([...previousResults, result]);
       await saveSession(sessionId, { ...session, result, results: nextResults });
       response.status(200).json({ success: true });
       return;
     }
 
-    if (request.method === "GET" && isResultRoute) {
+    if (request.method === "GET" && isResultRoute && !isResultAckRoute) {
       response.status(200).json({ result: session.result ?? null, results: session.results ?? (session.result ? [session.result] : []) });
       return;
     }

@@ -627,3 +627,67 @@ test("signal relay rejects wrong bound modes and queues multiple generic relay r
   assert.equal(getResponse.body.results[1].id, "second-result");
   assert.equal(getResponse.body.results[1].message.barcode, "999999999999");
 });
+
+test("signal relay keeps only one pending photo result and supports browser acknowledgements", async () => {
+  const createResponse = makeResponse();
+  await signalHandler(makeRequest({ method: "POST", body: { relay: true, mode: "photo" } }), createResponse);
+
+  for (let index = 0; index < 2; index += 1) {
+    const response = makeResponse();
+    await signalHandler(
+      makeRequest({
+        method: "POST",
+        path: `${createResponse.body.sessionId}/result`,
+        body: {
+          id: `photo-result-${index}`,
+          mode: "photo",
+          message: {
+            kind: "photo",
+            id: `photo-${index}`,
+            name: `volt-photo-${index}.jpg`,
+            mimeType: "image/jpeg",
+            dataUrl: `data:image/jpeg;base64,${"a".repeat(1000)}`,
+            size: 750,
+          },
+        },
+      }),
+      response
+    );
+    assert.equal(response.statusCode, 200);
+  }
+
+  const getResponse = makeResponse();
+  await signalHandler(
+    makeRequest({
+      method: "GET",
+      path: `${createResponse.body.sessionId}/result`,
+    }),
+    getResponse
+  );
+
+  assert.equal(getResponse.body.result.id, "photo-result-1");
+  assert.equal(getResponse.body.results.length, 1);
+  assert.equal(getResponse.body.results[0].id, "photo-result-1");
+
+  const ackResponse = makeResponse();
+  await signalHandler(
+    makeRequest({
+      method: "POST",
+      path: `${createResponse.body.sessionId}/result/ack`,
+      body: { ids: ["photo-result-1"] },
+    }),
+    ackResponse
+  );
+  assert.equal(ackResponse.statusCode, 200);
+
+  const emptyResponse = makeResponse();
+  await signalHandler(
+    makeRequest({
+      method: "GET",
+      path: `${createResponse.body.sessionId}/result`,
+    }),
+    emptyResponse
+  );
+  assert.equal(emptyResponse.body.result, null);
+  assert.deepEqual(emptyResponse.body.results, []);
+});

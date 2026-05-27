@@ -89,6 +89,7 @@ export default defineBackground({
     const STORAGE_STATS_KEY = "grokStorageStats";
     const MOBILE_SCANNER_STORAGE_KEY = "volt.mobileScanner.scans";
     const MOBILE_PHOTOS_STORAGE_KEY = "volt.mobilePhotos.photos";
+    const MOBILE_RELAY_STATE_STORAGE_KEY = "volt.mobileScanner.relaySession.v1";
     const MOBILE_SCANNER_MAX_SCANS = 100;
     const MOBILE_PHOTOS_MAX_PHOTOS = 80;
     const MOBILE_CAPTURE_MODES = new Set(["ocr", "barcode", "dictation", "photo"]);
@@ -376,19 +377,23 @@ export default defineBackground({
     }
 
     function persistMobilePhoto(photo) {
-      chrome.storage.local.get(
-        { [MOBILE_PHOTOS_STORAGE_KEY]: [] },
-        (stored) => {
-          const current = Array.isArray(stored[MOBILE_PHOTOS_STORAGE_KEY])
-            ? stored[MOBILE_PHOTOS_STORAGE_KEY]
-            : [];
-          const next = [photo, ...current.filter((item) => item?.id !== photo.id)].slice(
-            0,
-            MOBILE_PHOTOS_MAX_PHOTOS
-          );
-          chrome.storage.local.set({ [MOBILE_PHOTOS_STORAGE_KEY]: next });
-        }
-      );
+      return new Promise((resolve) => {
+        chrome.storage.local.get(
+          { [MOBILE_PHOTOS_STORAGE_KEY]: [] },
+          (stored) => {
+            const current = Array.isArray(stored[MOBILE_PHOTOS_STORAGE_KEY])
+              ? stored[MOBILE_PHOTOS_STORAGE_KEY]
+              : [];
+            const next = [photo, ...current.filter((item) => item?.id !== photo.id)].slice(
+              0,
+              MOBILE_PHOTOS_MAX_PHOTOS
+            );
+            chrome.storage.local.set({ [MOBILE_PHOTOS_STORAGE_KEY]: next }, () => {
+              resolve(!chrome.runtime.lastError);
+            });
+          }
+        );
+      });
     }
 
     function broadcastScannerMessage(message) {
@@ -556,12 +561,44 @@ export default defineBackground({
       }
     }
 
-    function handleScannerPhoto(message) {
+    async function handleScannerPhoto(message) {
       const photo = normalizeMobilePhoto(message?.photo);
-      if (!photo) return;
+      if (!photo) return { success: false, error: "invalid_photo" };
 
-      persistMobilePhoto(photo);
+      const persisted = await persistMobilePhoto(photo);
+      if (!persisted) return { success: false, error: "storage_failed" };
       broadcastScannerMessage({ action: "scannerPhoto", photo });
+      return { success: true };
+    }
+
+    function handleScannerRelayStateGet(message, sendResponse) {
+      if (message?.key !== MOBILE_RELAY_STATE_STORAGE_KEY) {
+        sendResponse({ success: false, error: "invalid_key" });
+        return;
+      }
+      chrome.storage.local.get({ [MOBILE_RELAY_STATE_STORAGE_KEY]: null }, (stored) => {
+        sendResponse({ success: true, state: stored[MOBILE_RELAY_STATE_STORAGE_KEY] ?? null });
+      });
+    }
+
+    function handleScannerRelayStateSet(message, sendResponse) {
+      if (message?.key !== MOBILE_RELAY_STATE_STORAGE_KEY || !message?.state) {
+        sendResponse({ success: false, error: "invalid_state" });
+        return;
+      }
+      chrome.storage.local.set({ [MOBILE_RELAY_STATE_STORAGE_KEY]: message.state }, () => {
+        sendResponse({ success: true });
+      });
+    }
+
+    function handleScannerRelayStateRemove(message, sendResponse) {
+      if (message?.key !== MOBILE_RELAY_STATE_STORAGE_KEY) {
+        sendResponse({ success: false, error: "invalid_key" });
+        return;
+      }
+      chrome.storage.local.remove(MOBILE_RELAY_STATE_STORAGE_KEY, () => {
+        sendResponse({ success: true });
+      });
     }
 
     log("Service worker booted", { time: new Date().toISOString() });
@@ -1090,6 +1127,15 @@ export default defineBackground({
       }
 
       switch (message.action) {
+        case "scannerRelayStateGet":
+          handleScannerRelayStateGet(message, sendResponse);
+          return true;
+        case "scannerRelayStateSet":
+          handleScannerRelayStateSet(message, sendResponse);
+          return true;
+        case "scannerRelayStateRemove":
+          handleScannerRelayStateRemove(message, sendResponse);
+          return true;
         case "scannerStart":
           handleScannerStart(message, sendResponse);
           return true;
@@ -1124,9 +1170,8 @@ export default defineBackground({
           sendResponse({ success: true });
           break;
         case "scannerOffscreenPhoto":
-          handleScannerPhoto(message);
-          sendResponse({ success: true });
-          break;
+          handleScannerPhoto(message).then(sendResponse);
+          return true;
         case "csReady":
           log("content script ready", message?.url);
           sendResponse({ ok: true });

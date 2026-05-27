@@ -349,7 +349,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "set -e\nexport BUILDING_FOR_APP_CLIP=1\nexport ENTRY_FILE=clip-entry.tsx\n../node_modules/react-native/scripts/react-native-xcode.sh\n";
+			shellScript = "set -e\nif [ -f \"VoltClip/AppDelegate.swift\" ]; then\n  echo \"Native App Clip target; skipping React Native bundle.\"\n  exit 0\nfi\nexport BUILDING_FOR_APP_CLIP=1\nexport ENTRY_FILE=apps/mobile/clip-entry.tsx\nunset SOURCEMAP_FILE\n../node_modules/react-native/scripts/react-native-xcode.sh\n";
 		};
 		5DA2B0666DF1CAD8E4EC37DA /* [CP] Check Pods Manifest.lock */ = {
 			isa = PBXShellScriptBuildPhase;

@@ -108,11 +108,39 @@ test("App Clip OCR emits the frozen capture before text recognition completes", 
   const textRecognizerWrapper = readText(nativeFiles.textRecognizerWrapper);
   const clipScreen = readText(nativeFiles.clipScreen);
 
-  assert.match(textRecognizer, /supportedEvents\(\).*?\["capture"\]/s);
-  assert.match(textRecognizer, /emitCapturedImage\(imageURL: imageURL, imageData: data, imageSize: pendingImageSize\)/);
-  assert.match(textRecognizer, /recognizeText\(in: cgImage, imageURL: imageURL\)/);
+  assert.match(textRecognizer, /supportedEvents\(\).*?\["capture", "orientation"\]/s);
+  assert.match(textRecognizer, /let relayImage = prepareRelayImage\(from: data\)/);
+  assert.match(textRecognizer, /emitCapturedImage\(imageURL: imageURL, imageData: relayImage\.data, imageSize: relayImage\.size\)/);
+  assert.match(textRecognizer, /recognizeText\(in: cgImage, orientation: orientation, imageURL: imageURL\)/);
+  assert.match(textRecognizer, /relayImageMaxDimension: CGFloat = 960/);
   assert.match(textRecognizerWrapper, /addVoltClipTextCaptureListener/);
   assert.match(clipScreen, /setOcrFrozenImageUri\(result\.imageUri\)/);
+});
+
+test("App Clip photo capture applies physical device orientation before relay normalization", () => {
+  const textRecognizer = readText(nativeFiles.textRecognizer);
+  const textRecognizerWrapper = readText(nativeFiles.textRecognizerWrapper);
+  const clipScreen = readText(nativeFiles.clipScreen);
+
+  assert.match(textRecognizer, /UIDevice\.orientationDidChangeNotification/);
+  assert.match(textRecognizer, /self\.applyCurrentCaptureOrientation\(\)\s*self\.output\.capturePhoto/s);
+  assert.match(textRecognizer, /connection\.videoOrientation = orientation/);
+  assert.match(textRecognizer, /imageOrientation\(from: imageSource, fallback: fallbackOrientation\)/);
+  assert.match(textRecognizer, /cgImageOrientation\(for: currentVideoOrientation\(\)\)/);
+  assert.match(textRecognizerWrapper, /addVoltClipDeviceOrientationListener/);
+  assert.match(clipScreen, /captureControlsRotationDegrees/);
+  assert.match(clipScreen, /rotate: `\$\{captureControlsRotationDegrees\}deg`/);
+});
+
+test("App Clip photo mode keeps the captured photo visible while sending", () => {
+  const clipScreen = readText(nativeFiles.clipScreen);
+
+  assert.match(clipScreen, /capturedOcrImageUri && mode === "photo"/);
+  assert.match(clipScreen, /photoCapturedFrame/);
+  assert.match(clipScreen, /source=\{\{ uri: capturedOcrImageUri \}\}/);
+  assert.match(clipScreen, /Sending this photo to Chrome/);
+  assert.match(clipScreen, /Stored in Chrome\. Ready for the next photo\./);
+  assert.match(clipScreen, /Capture another photo/);
 });
 
 test("App Clip dictation streams microphone audio instead of using Speech in the clip", () => {
