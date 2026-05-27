@@ -539,31 +539,34 @@ export function CameraControlStack({
 }) {
   return (
     <View style={[styles.cameraControlStack, { bottom }]} pointerEvents="box-none">
-      {shutter}
-      <View style={styles.cameraControlRow} pointerEvents="auto">
-        <View style={styles.cameraControlSide}>{leftControls}</View>
-        <View style={styles.zoomPill}>
-          <Pressable
-            accessibilityLabel="Zoom camera out"
-            accessibilityRole="button"
-            hitSlop={6}
-            style={styles.zoomPillButton}
-            onPress={onZoomOut}
-          >
-            <Ionicons name="remove" size={20} color="#fafaf9" />
-          </Pressable>
-          <Text style={styles.zoomPillText}>{label}</Text>
-          <Pressable
-            accessibilityLabel="Zoom camera in"
-            accessibilityRole="button"
-            hitSlop={6}
-            style={styles.zoomPillButton}
-            onPress={onZoomIn}
-          >
-            <Ionicons name="add" size={20} color="#fafaf9" />
-          </Pressable>
+      <View style={styles.liquidControlDrawer} pointerEvents="box-none">
+        <View style={styles.liquidDrawerHandle} />
+        {shutter}
+        <View style={styles.cameraControlRow} pointerEvents="auto">
+          <View style={styles.cameraControlSide}>{leftControls}</View>
+          <View style={styles.zoomPill}>
+            <Pressable
+              accessibilityLabel="Zoom camera out"
+              accessibilityRole="button"
+              hitSlop={6}
+              style={styles.zoomPillButton}
+              onPress={onZoomOut}
+            >
+              <Ionicons name="remove" size={20} color="#fafaf9" />
+            </Pressable>
+            <Text style={styles.zoomPillText}>{label}</Text>
+            <Pressable
+              accessibilityLabel="Zoom camera in"
+              accessibilityRole="button"
+              hitSlop={6}
+              style={styles.zoomPillButton}
+              onPress={onZoomIn}
+            >
+              <Ionicons name="add" size={20} color="#fafaf9" />
+            </Pressable>
+          </View>
+          <View style={styles.cameraControlSide}>{rightControls}</View>
         </View>
-        <View style={styles.cameraControlSide}>{rightControls}</View>
       </View>
     </View>
   );
@@ -847,7 +850,10 @@ export function Header() {
       <View style={styles.headerBrand}>
         <Image source={require("../../assets/volt-logo.png")} style={styles.headerLogo} resizeMode="contain" />
       </View>
-      <Text numberOfLines={1} style={styles.status}>{statusLabel}</Text>
+      <View style={styles.headerStatusPill}>
+        <View style={styles.headerStatusDot} />
+        <Text numberOfLines={1} style={styles.status}>{statusLabel}</Text>
+      </View>
     </View>
   );
 }
@@ -965,16 +971,42 @@ export function OcrBottomControls({
 
 export const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#ffffff" },
-  scannerRoot: { flex: 1, paddingTop: stableTopInset, backgroundColor: "#1c1917" },
+  scannerRoot: { flex: 1, backgroundColor: "#1c1917" },
   header: {
-    height: 70,
+    position: "absolute",
+    top: stableTopInset + 10,
+    left: 14,
+    right: 14,
+    zIndex: 30,
+    height: 48,
     paddingHorizontal: 18,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "#1c1917",
+    borderRadius: 24,
+    ...continuousCorners,
+    backgroundColor: "rgba(28, 25, 23, 0.54)",
+    borderWidth: 1,
+    borderColor: "rgba(250, 250, 249, 0.14)",
   },
-  status: { color: "#d6d3d1", marginLeft: 14, fontSize: 13, lineHeight: 16, maxWidth: 250, textAlign: "right" },
+  headerStatusPill: {
+    minHeight: 30,
+    maxWidth: "72%",
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    ...continuousCorners,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    backgroundColor: "rgba(0, 0, 0, 0.22)",
+  },
+  headerStatusDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: "#86efac",
+  },
+  status: { color: "#f5f5f4", fontSize: 12, lineHeight: 15, maxWidth: 250, textAlign: "right", fontWeight: "700" },
   headerBrand: { height: 51, justifyContent: "center" },
   headerLogo: { width: 32, height: 32 },
   torchButton: {
@@ -993,21 +1025,15 @@ export const styles = StyleSheet.create({
   },
   page: {
     flex: 1,
-    backgroundColor: "#ffffff",
-    borderTopLeftRadius: 36,
-    borderTopRightRadius: 36,
-    ...continuousCorners,
+    backgroundColor: "#1c1917",
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
     overflow: "hidden",
-    shadowColor: "#000000",
-    shadowOpacity: 0.22,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: -3 },
-    elevation: 8,
   },
   disconnectedPage: {
     paddingBottom: 104,
   },
-  content: { flex: 1, paddingTop: 18, paddingBottom: 18 },
+  content: { flex: 1, paddingTop: 0, paddingBottom: 0 },
   viewfinderContent: { paddingTop: 0, paddingBottom: 0, position: "relative" },
   viewfinderShell: {
     flex: 1,
@@ -1031,7 +1057,7 @@ export const styles = StyleSheet.create({
   camera: absoluteFillObject,
   photoNegativeOverlay: {
     ...absoluteFillObject,
-    backgroundColor: "rgba(0, 0, 0, 0.34)",
+    backgroundColor: "rgba(0, 0, 0, 0.18)",
   },
   viewfinderTopRight: {
     position: "absolute",
@@ -1126,17 +1152,43 @@ export const styles = StyleSheet.create({
   },
   cameraControlStack: {
     position: "absolute",
-    left: 18,
-    right: 18,
+    left: 10,
+    right: 10,
     bottom: 0,
     alignItems: "center",
-    gap: 28,
+  },
+  liquidControlDrawer: {
+    width: "100%",
+    minHeight: 174,
+    paddingTop: 10,
+    paddingHorizontal: 12,
+    paddingBottom: 14,
+    borderRadius: 38,
+    ...continuousCorners,
+    alignItems: "center",
+    gap: 18,
+    overflow: "hidden",
+    backgroundColor: "rgba(28, 25, 23, 0.62)",
+    borderWidth: 1,
+    borderColor: "rgba(250, 250, 249, 0.18)",
+    shadowColor: "#000000",
+    shadowOpacity: 0.28,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 12,
+  },
+  liquidDrawerHandle: {
+    width: 44,
+    height: 4,
+    borderRadius: 999,
+    backgroundColor: "rgba(250, 250, 249, 0.34)",
   },
   cameraControlRow: {
     minHeight: 48,
+    width: "100%",
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent: "space-between",
     gap: 10,
   },
   cameraControlSide: {
@@ -1564,7 +1616,7 @@ export const styles = StyleSheet.create({
   },
   photoControls: {
     alignItems: "center",
-    gap: 22,
+    gap: 16,
   },
   photoControlsFloating: {
     position: "absolute",
@@ -1579,7 +1631,7 @@ export const styles = StyleSheet.create({
     paddingVertical: 9,
     borderRadius: 999,
     ...continuousCorners,
-    backgroundColor: "#f5f5f4",
+    backgroundColor: "rgba(250, 250, 249, 0.92)",
     borderWidth: 1,
     borderColor: "#e7e5e4",
     maxWidth: "100%",
@@ -1611,9 +1663,9 @@ export const styles = StyleSheet.create({
     flexShrink: 1,
   },
   shutterRing: {
-    width: 82,
-    height: 82,
-    borderRadius: 41,
+    width: 78,
+    height: 78,
+    borderRadius: 39,
     padding: 5,
     alignItems: "center",
     justifyContent: "center",

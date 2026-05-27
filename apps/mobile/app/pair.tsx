@@ -3,16 +3,17 @@ import { useEffect, useMemo } from "react";
 import { ActivityIndicator, Text, View } from "react-native";
 import { useScanner } from "../lib/scanner-state";
 
-type MobileCaptureMode = "ocr" | "barcode" | "dictation";
+type MobileCaptureMode = "ocr" | "barcode" | "dictation" | "photo";
 
-const modeRoutes: Record<MobileCaptureMode, "/(tabs)" | "/(tabs)/scanner" | "/(tabs)/dictation"> = {
+const modeRoutes: Record<MobileCaptureMode, "/(tabs)" | "/(tabs)/scanner" | "/(tabs)/dictation" | "/(tabs)/photos"> = {
   ocr: "/(tabs)",
   barcode: "/(tabs)/scanner",
   dictation: "/(tabs)/dictation",
+  photo: "/(tabs)/photos",
 };
 
 function isMobileCaptureMode(value: unknown): value is MobileCaptureMode {
-  return value === "ocr" || value === "barcode" || value === "dictation";
+  return value === "ocr" || value === "barcode" || value === "dictation" || value === "photo";
 }
 
 export default function PairRoute() {

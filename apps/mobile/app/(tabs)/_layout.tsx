@@ -6,13 +6,13 @@ export default function TabsLayout() {
   return (
     <NativeTabs
       tintColor="#16a34a"
-      iconColor={{ default: "#78716c", selected: "#16a34a" }}
+      iconColor={{ default: "#d6d3d1", selected: "#86efac" }}
       labelStyle={{
-        default: { color: "#78716c", fontSize: 11, fontWeight: "600" },
-        selected: { color: "#16a34a", fontSize: 11, fontWeight: "600" },
+        default: { color: "#d6d3d1", fontSize: 11, fontWeight: "600" },
+        selected: { color: "#86efac", fontSize: 11, fontWeight: "700" },
       }}
-      backgroundColor="#ffffff"
-      blurEffect="systemChromeMaterialLight"
+      backgroundColor="rgba(28, 25, 23, 0.72)"
+      blurEffect="systemChromeMaterialDark"
       minimizeBehavior="never"
       disableTransparentOnScrollEdge
     >

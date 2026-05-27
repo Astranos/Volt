@@ -1,11 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
-import { CameraView as ExpoCameraView, type BarcodeScanningResult } from "../../lib/expo-camera";
+import type { BarcodeScanningResult } from "../../lib/expo-camera";
 import { Animated, Pressable, Text, View } from "react-native";
-import { useEffect, useRef, useState, type ComponentType } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useScanner } from "../../lib/scanner-state";
-import { Header, PairingPanel, ScreenRoot, ViewfinderSurface, styles } from "./index";
-
-const CameraView = ExpoCameraView as unknown as ComponentType<any>;
+import { DisconnectedPairingView, Header, ScreenRoot, ViewfinderSurface, styles } from "./index";
 
 export default function DictationTab() {
   const scanner = useScanner();
@@ -88,37 +86,13 @@ export default function DictationTab() {
       <Header />
       <View style={[styles.page, !connected ? styles.disconnectedPage : localStyles.dictationPage]}>
         {!connected ? (
-          <View style={styles.content}>
-            {pairScannerOpen ? (
-              <View style={styles.cameraShell}>
-                <CameraView
-                  style={styles.camera}
-                  facing="back"
-                  barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
-                  onBarcodeScanned={pairScannerLocked ? undefined : onPairingQrScanned}
-                />
-                <View style={styles.pairingScanOverlay} pointerEvents="none">
-                  <View style={styles.pairingScanFrame} />
-                </View>
-                <Pressable
-                  style={styles.pairingCloseButton}
-                  onPress={() => {
-                    pairScannerLockedRef.current = false;
-                    setPairScannerLocked(false);
-                    setPairScannerOpen(false);
-                  }}
-                >
-                  <Ionicons name="close" size={18} color="#fafaf9" />
-                </Pressable>
-              </View>
-            ) : (
-              <PairingPanel
-                error={pairScannerError}
-                onOpenScanner={openPairScanner}
-                statusLabel={scanner.statusLabel}
-              />
-            )}
-          </View>
+          <DisconnectedPairingView
+            error={pairScannerError}
+            pairingActive={pairScannerOpen || !!scanner.permission?.granted}
+            pairingLocked={pairScannerLocked}
+            onOpenScanner={openPairScanner}
+            onPairingQrScanned={onPairingQrScanned}
+          />
         ) : (
           <ViewfinderSurface>
             <View style={localStyles.dictationBackdrop}>

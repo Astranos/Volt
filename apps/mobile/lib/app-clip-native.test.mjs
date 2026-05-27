@@ -304,6 +304,16 @@ test("dedicated App Clip JavaScript does not import excluded native packages", (
   }
 });
 
+test("full app pair route accepts every browser relay capture mode", () => {
+  const pairRoute = readText(new URL("../app/pair.tsx", import.meta.url));
+
+  for (const mode of ["ocr", "barcode", "dictation", "photo"]) {
+    assert.match(pairRoute, new RegExp(`value === "${mode}"`));
+  }
+  assert.ok(pairRoute.includes('photo: "/(tabs)/photos"'));
+  assert.match(pairRoute, /volt:\/\/pair\?session=/);
+});
+
 test("App Clip plan links the physical device validation runbook", () => {
   const plan = readText(nativeFiles.appClipPlan);
   const runbook = readText(nativeFiles.deviceValidationRunbook);

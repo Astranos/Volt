@@ -127,6 +127,12 @@ type ScannerState = {
 const ScannerContext = createContext<ScannerState | null>(null);
 const REPEAT_SCAN_COOLDOWN_MS = Math.max(SCANNER_SCAN_COOLDOWN_MS, 1500);
 
+function scannerMessageMode(item: ScanItem) {
+  if (item.kind === "barcode") return "barcode";
+  if (item.format === "dictation") return "dictation";
+  return "ocr";
+}
+
 function getOfferFromUrl(url: string) {
   const parsed = Linking.parse(url);
   const offer = parsed.queryParams?.offer;
@@ -349,8 +355,8 @@ export function ScannerProvider({ children }: PropsWithChildren) {
 
                 closeConnection();
                 relaySessionRef.current = { id: sessionId, mode: payload.mode };
-                pairingSessionRef.current = sessionId;
-                void AsyncStorage.setItem(PAIRING_SESSION_STORAGE_KEY, sessionId);
+                pairingSessionRef.current = null;
+                void AsyncStorage.removeItem(PAIRING_SESSION_STORAGE_KEY);
                 setStatus("connected");
                 return true;
               }
@@ -472,35 +478,34 @@ export function ScannerProvider({ children }: PropsWithChildren) {
 
     const relaySession = relaySessionRef.current;
     if (relaySession) {
-      const mode =
-        item.kind === "barcode"
-          ? "barcode"
-          : item.format === "dictation"
-            ? "dictation"
-            : "ocr";
-      if (!relaySession.mode || relaySession.mode === mode) {
-        const resultResponse = await fetch(`${SCANNER_SIGNAL_URL}/${relaySession.id}/result`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            id: item.id,
-            mode,
-            message: item,
-          }),
-        });
-
-        if (resultResponse.ok) {
-          if (!isPartialDictation) {
-            await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          }
-          return;
-        }
-
-        setStatus("error");
-        setError("Browser capture session unavailable");
+      const mode = scannerMessageMode(item);
+      if (relaySession.mode && relaySession.mode !== mode) {
+        setError(`This browser session is waiting for ${relaySession.mode}, not ${mode}.`);
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
         return;
       }
+
+      const resultResponse = await fetch(`${SCANNER_SIGNAL_URL}/${relaySession.id}/result`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: item.id,
+          mode,
+          message: item,
+        }),
+      });
+
+      if (resultResponse.ok) {
+        if (!isPartialDictation) {
+          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }
+        return;
+      }
+
+      setStatus("error");
+      setError("Browser capture session unavailable");
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      return;
     }
 
     if (channelRef.current?.readyState === "open") {
@@ -520,6 +525,12 @@ export function ScannerProvider({ children }: PropsWithChildren) {
     const relaySession = relaySessionRef.current;
     if (channel?.readyState !== "open" && !relaySession) {
       setPhotoError("Pair with Chrome before taking photos.");
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      return;
+    }
+
+    if (relaySession?.mode && relaySession.mode !== "photo") {
+      setPhotoError(`This browser session is waiting for ${relaySession.mode}, not photo.`);
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       return;
     }

@@ -106,6 +106,7 @@ private final class ClipModel: ObservableObject {
   @Published var dictationTranscript = ""
   @Published var textCapture: TextCapture?
   @Published var textCaptureShowsCleanedImage = false
+  @Published var isExtractingText = false
 
   let camera = ClipCamera()
   let dictation = ClipDictation()
@@ -252,6 +253,10 @@ private final class ClipModel: ObservableObject {
     error = nil
     switch mode {
     case .ocr, .photo, .barcode:
+      guard !isExtractingText, textCapture == nil else {
+        camera.stop()
+        return
+      }
       camera.start()
       camera.setMode(isPairing ? .barcode : mode)
       camera.setBarcodeFullFrame(fullFrameScan || isPairing)
@@ -263,6 +268,7 @@ private final class ClipModel: ObservableObject {
   }
 
   func stopMode() {
+    camera.stop()
     if mode == .dictation {
       dictation.stop()
       dictationRunning = false
@@ -286,6 +292,8 @@ private final class ClipModel: ObservableObject {
           guard let self else { return }
           switch result {
           case .success(let photo):
+            self.isExtractingText = true
+            self.camera.stop()
             await self.prepareTextCapture(photo: photo)
           case .failure(let error):
             self.error = error.localizedDescription
@@ -398,6 +406,10 @@ private final class ClipModel: ObservableObject {
     textCapture = nil
     textCaptureShowsCleanedImage = false
     lastText = ""
+    isExtractingText = false
+    if mode == .ocr {
+      startMode()
+    }
   }
 
   private func scheduleBarcodeCandidateClear(after delay: TimeInterval) {
@@ -411,6 +423,12 @@ private final class ClipModel: ObservableObject {
   }
 
   private func prepareTextCapture(photo: CapturedPhoto) async {
+    defer {
+      isExtractingText = false
+      if mode == .ocr, textCapture == nil {
+        startMode()
+      }
+    }
     do {
       let cleaned = try await TextImageEnhancer.cleanedImage(from: photo.image)
       let text = try await TextRecognizer.recognize(cgImage: cleaned.cgImage)
@@ -624,26 +642,10 @@ private struct ClipRootView: View {
   @ObservedObject var model: ClipModel
   @State private var drawerProgress: CGFloat = 0
   @State private var drawerDragStartProgress: CGFloat?
-  @State private var modeDragTranslation: CGFloat = 0
 
   var body: some View {
     ZStack {
-      if model.mode == .dictation {
-        DictationBackdrop()
-      } else {
-        CameraPreview(camera: model.camera)
-          .ignoresSafeArea()
-        if model.mode == .ocr, let textCapture = model.textCapture {
-          TextCaptureReview(
-            capture: textCapture,
-            showsCleanedImage: model.textCaptureShowsCleanedImage
-          )
-            .ignoresSafeArea()
-            .transition(.opacity)
-        }
-        BarcodeOverlay(candidate: model.barcodeCandidate)
-          .ignoresSafeArea()
-      }
+      ViewfinderBackground(model: model)
 
       VStack(spacing: 0) {
         header
@@ -695,19 +697,12 @@ private struct ClipRootView: View {
     let clampedDrawerProgress = max(0, min(1, drawerProgress))
     let edgeInset = drawerEdgeInset(progress: clampedDrawerProgress)
     let drawerRadius = drawerCornerRadius(progress: clampedDrawerProgress)
-    let topPadding = (model.mode == .dictation ? 18 : 12) + (16 * clampedDrawerProgress)
+    let topPadding = 12 + (16 * clampedDrawerProgress)
     let bottomPadding = 16 + (8 * clampedDrawerProgress)
-    let expandedHeight = expandedControlsHeight(for: model.mode) * clampedDrawerProgress
+    let expandedHeight = expandedControlsHeight * clampedDrawerProgress
 
     return VStack(spacing: 14) {
       drawerHandle(clampedDrawerProgress: clampedDrawerProgress)
-
-      if model.mode == .dictation {
-        Text(dictationDrawerText)
-          .font(.system(size: 20, weight: .semibold))
-          .frame(maxWidth: .infinity, minHeight: 72, alignment: .center)
-          .multilineTextAlignment(.center)
-      }
 
       secondaryControls
 
@@ -729,27 +724,16 @@ private struct ClipRootView: View {
     .padding(.bottom, edgeInset)
   }
 
-  private func expandedControlsHeight(for mode: ClipMode) -> CGFloat {
-    switch mode {
-    case .ocr, .barcode, .photo: return 138
-    case .dictation: return 76
-    }
+  private var expandedControlsHeight: CGFloat {
+    138
   }
 
   private func drawerEdgeInset(progress: CGFloat) -> CGFloat {
-    switch model.mode {
-    case .barcode: return 10 - (2 * progress)
-    case .ocr: return 12 - (2 * progress)
-    case .photo, .dictation: return 14 - (2 * progress)
-    }
+    12 - (2 * progress)
   }
 
   private func drawerCornerRadius(progress: CGFloat) -> CGFloat {
-    switch model.mode {
-    case .barcode: return 54 - (8 * progress)
-    case .ocr: return 56 - (6 * progress)
-    case .photo, .dictation: return 58 - (4 * progress)
-    }
+    56 - (6 * progress)
   }
 
   private func drawerHandle(clampedDrawerProgress: CGFloat) -> some View {
@@ -814,15 +798,12 @@ private struct ClipRootView: View {
         ToggleButton(title: "Light", symbol: "flashlight.on.fill", isOn: model.torchEnabled) {
           model.setTorch(!model.torchEnabled)
         }
+      } else {
+        ToggleButton(title: "Punctuation", symbol: "textformat", isOn: model.dictationAddsPunctuation) {
+          model.dictationAddsPunctuation.toggle()
+        }
       }
     }
-  }
-
-  private var dictationDrawerText: String {
-    if !model.dictationTranscript.isEmpty {
-      return model.dictationTranscript
-    }
-    return model.dictationPressActive ? "Keep holding and speak into the phone" : "Hold the microphone button to start"
   }
 
   private var expandedDrawerControls: some View {
@@ -831,19 +812,28 @@ private struct ClipRootView: View {
         ZoomSlider(factor: model.zoomFactor) { factor in
           model.setZoom(factor)
         }
-        modePicker
-          .padding(.top, 2)
       } else {
-        SettingToggle(
-          title: "Dictation punctuation",
-          text: "Add punctuation to spoken text before sending it to Chrome.",
-          isOn: model.dictationAddsPunctuation
-        ) {
-          model.dictationAddsPunctuation.toggle()
-        }
+        dictationPreview
       }
+      modePicker
+        .padding(.top, 2)
     }
     .padding(.top, 2)
+  }
+
+  private var dictationPreview: some View {
+    Text(dictationDrawerText)
+      .font(.system(size: 16, weight: .semibold))
+      .frame(maxWidth: .infinity, minHeight: 56, alignment: .center)
+      .multilineTextAlignment(.center)
+      .lineLimit(2)
+  }
+
+  private var dictationDrawerText: String {
+    if !model.dictationTranscript.isEmpty {
+      return model.dictationTranscript
+    }
+    return model.dictationPressActive ? "Keep holding and speak into the phone" : "Hold the microphone button to start"
   }
 
   private var shutterButton: some View {
@@ -891,91 +881,13 @@ private struct ClipRootView: View {
   }
 
   private var modePicker: some View {
-    ZStack(alignment: .center) {
-      Capsule()
-        .frame(width: 246, height: 58)
-        .foregroundStyle(.clear)
-        .liquidGlassSurface(shape: Capsule(), intensity: .medium)
-
-      GeometryReader { proxy in
-        let modes = ClipMode.allCases
-        let selectedIndex = CGFloat(modes.firstIndex(of: model.mode) ?? 0)
-        let tabWidth = proxy.size.width / CGFloat(modes.count)
-        let restingX = selectedIndex * tabWidth + 4
-        let draggedX = max(4, min(proxy.size.width - tabWidth + 4, restingX + modeDragTranslation))
-        let stretch = min(26, abs(modeDragTranslation) * 0.20)
-        Capsule()
-          .fill(.white.opacity(0.58))
-          .frame(width: max(0, tabWidth - 8 + stretch), height: 50)
-          .liquidGlassSurface(shape: Capsule(), intensity: .strong, isActive: true)
-          .scaleEffect(x: 1 + min(0.16, abs(modeDragTranslation) / 720), y: 1 - min(0.06, abs(modeDragTranslation) / 1400))
-          .offset(x: draggedX - (modeDragTranslation < 0 ? stretch : 0), y: 10)
-          .animation(.interactiveSpring(response: 0.28, dampingFraction: 0.82), value: model.mode)
-          .animation(.interactiveSpring(response: 0.22, dampingFraction: 0.78), value: modeDragTranslation)
-      }
-      .frame(width: 246, height: 70)
-      .allowsHitTesting(false)
-
-      HStack(spacing: 0) {
-        ForEach(ClipMode.allCases) { mode in
-          Button {
-            model.selectMode(mode)
-          } label: {
-            VStack(spacing: 3) {
-              Image(systemName: mode.symbol)
-                .font(.system(size: 18, weight: .semibold))
-              Text(mode.title)
-                .font(.system(size: 10, weight: .semibold))
-            }
-            .frame(maxWidth: .infinity, minHeight: 58)
-            .foregroundStyle(model.mode == mode ? .black : .white.opacity(0.82))
-            .contentShape(Rectangle())
-          }
-          .buttonStyle(.plain)
-          .accessibilityLabel(mode.title)
-        }
-      }
-      .frame(width: 246, height: 58)
+    NativeLiquidModePicker(selectedMode: model.mode) { mode in
+      model.selectMode(mode)
     }
-    .frame(width: 286, height: 78)
-    .contentShape(Capsule())
-    .gesture(
-      DragGesture(minimumDistance: 2)
-        .onChanged { value in
-          modeDragTranslation = value.translation.width
-        }
-        .onEnded { value in
-          let modes = ClipMode.allCases
-          let currentIndex = modes.firstIndex(of: model.mode) ?? 0
-          let tabWidth = 246 / CGFloat(modes.count)
-          let projectedIndex = CGFloat(currentIndex) + (value.predictedEndTranslation.width / tabWidth)
-          let nextIndex = max(0, min(modes.count - 1, Int(projectedIndex.rounded())))
-          withAnimation(.interactiveSpring(response: 0.28, dampingFraction: 0.82)) {
-            modeDragTranslation = 0
-          }
-          model.selectMode(modes[nextIndex])
-        }
-    )
-  }
-
-  private var legacyModePicker: some View {
-    HStack(spacing: 4) {
-      ForEach(ClipMode.allCases) { mode in
-        Button {
-          model.selectMode(mode)
-        } label: {
-          VStack(spacing: 4) {
-            Image(systemName: mode.symbol)
-              .font(.system(size: 19, weight: .semibold))
-            Text(mode.title)
-              .font(.system(size: 11, weight: .semibold))
-          }
-          .frame(width: 58, height: 56)
-          .foregroundStyle(model.mode == mode ? .black : .white)
-          .background(model.mode == mode ? .white : .white.opacity(0.12), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        }
-      }
-    }
+    .frame(height: 46)
+    .padding(.horizontal, 4)
+    .liquidGlassSurface(shape: Capsule(), intensity: .medium)
+    .accessibilityLabel("Mode")
   }
 
   private var primarySymbol: String {
@@ -1007,6 +919,62 @@ private struct ConcentricLiquidDrawer: View {
         shape.fill(.ultraThinMaterial.opacity(0.18))
       }
       .liquidGlassSurface(shape: shape, intensity: .soft)
+  }
+}
+
+private struct NativeLiquidModePicker: UIViewRepresentable {
+  let selectedMode: ClipMode
+  let onSelect: (ClipMode) -> Void
+
+  func makeCoordinator() -> Coordinator {
+    Coordinator(onSelect: onSelect)
+  }
+
+  func makeUIView(context: Context) -> UISegmentedControl {
+    let control = UISegmentedControl()
+    control.selectedSegmentTintColor = UIColor.white.withAlphaComponent(0.88)
+    control.backgroundColor = UIColor.white.withAlphaComponent(0.08)
+    control.setTitleTextAttributes([
+      .font: UIFont.systemFont(ofSize: 12, weight: .semibold),
+      .foregroundColor: UIColor.white.withAlphaComponent(0.82),
+    ], for: .normal)
+    control.setTitleTextAttributes([
+      .font: UIFont.systemFont(ofSize: 12, weight: .bold),
+      .foregroundColor: UIColor.black,
+    ], for: .selected)
+    control.addTarget(context.coordinator, action: #selector(Coordinator.valueChanged(_:)), for: .valueChanged)
+    configureSegments(control)
+    return control
+  }
+
+  func updateUIView(_ uiView: UISegmentedControl, context: Context) {
+    context.coordinator.onSelect = onSelect
+    if uiView.numberOfSegments != ClipMode.allCases.count {
+      configureSegments(uiView)
+    }
+    uiView.selectedSegmentIndex = ClipMode.allCases.firstIndex(of: selectedMode) ?? UISegmentedControl.noSegment
+  }
+
+  private func configureSegments(_ control: UISegmentedControl) {
+    control.removeAllSegments()
+    for (index, mode) in ClipMode.allCases.enumerated() {
+      control.insertSegment(withTitle: mode.title, at: index, animated: false)
+      control.setWidth(0, forSegmentAt: index)
+    }
+    control.selectedSegmentIndex = ClipMode.allCases.firstIndex(of: selectedMode) ?? UISegmentedControl.noSegment
+  }
+
+  final class Coordinator: NSObject {
+    var onSelect: (ClipMode) -> Void
+
+    init(onSelect: @escaping (ClipMode) -> Void) {
+      self.onSelect = onSelect
+    }
+
+    @objc func valueChanged(_ sender: UISegmentedControl) {
+      guard ClipMode.allCases.indices.contains(sender.selectedSegmentIndex) else { return }
+      onSelect(ClipMode.allCases[sender.selectedSegmentIndex])
+    }
   }
 }
 
@@ -1204,15 +1172,77 @@ private struct ZoomSlider: View {
   }
 }
 
-private struct DictationBackdrop: View {
+private struct ViewfinderBackground: View {
+  @ObservedObject var model: ClipModel
+
   var body: some View {
-    LinearGradient(colors: [.black, Color(red: 0.10, green: 0.12, blue: 0.16)], startPoint: .top, endPoint: .bottom)
-      .ignoresSafeArea()
-      .overlay {
-        Image(systemName: "waveform")
-          .font(.system(size: 120, weight: .thin))
-          .foregroundStyle(.white.opacity(0.16))
+    ZStack {
+      if showsCameraFeed {
+        CameraPreview(camera: model.camera)
+          .ignoresSafeArea()
+      } else {
+        modeBackdrop
       }
+
+      if model.mode == .ocr, let textCapture = model.textCapture {
+        TextCaptureReview(
+          capture: textCapture,
+          showsCleanedImage: model.textCaptureShowsCleanedImage
+        )
+        .ignoresSafeArea()
+        .transition(.opacity)
+      } else if model.mode == .ocr, model.isExtractingText {
+        extractionBackdrop
+      }
+
+      if model.mode == .barcode || model.isPairing {
+        BarcodeOverlay(candidate: model.barcodeCandidate)
+          .ignoresSafeArea()
+      }
+    }
+  }
+
+  private var showsCameraFeed: Bool {
+    model.mode != .dictation && !model.isExtractingText && model.textCapture == nil
+  }
+
+  private var modeBackdrop: some View {
+    LinearGradient(
+      colors: [
+        .black,
+        backdropAccent,
+      ],
+      startPoint: .top,
+      endPoint: .bottom
+    )
+    .ignoresSafeArea()
+    .overlay {
+      Image(systemName: model.mode.symbol)
+        .font(.system(size: 118, weight: .thin))
+        .foregroundStyle(.white.opacity(0.14))
+    }
+  }
+
+  private var extractionBackdrop: some View {
+    VStack(spacing: 16) {
+      ProgressView()
+        .tint(.white)
+      Text("Extracting text")
+        .font(.system(size: 16, weight: .semibold))
+        .foregroundStyle(.white.opacity(0.74))
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .background(.black.opacity(0.36))
+    .ignoresSafeArea()
+  }
+
+  private var backdropAccent: Color {
+    switch model.mode {
+    case .ocr: return Color(red: 0.08, green: 0.13, blue: 0.16)
+    case .barcode: return Color(red: 0.07, green: 0.15, blue: 0.12)
+    case .photo: return Color(red: 0.13, green: 0.10, blue: 0.14)
+    case .dictation: return Color(red: 0.10, green: 0.12, blue: 0.16)
+    }
   }
 }
 
