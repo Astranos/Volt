@@ -8,6 +8,10 @@
 import { defineBackground } from "wxt/utils/define-background";
 import { handleTabMessage } from "../src/background/tab-message-handler";
 import { createSidepanelToolController } from "../src/background/sidepanel-tool-controller";
+import {
+  buildMobilePhotoDownloadFilename,
+  normalizeMobilePhoto,
+} from "../src/domain/mobile-photo";
 import { shouldInsertScannerMessage } from "../src/domain/scanner-message";
 
 export default defineBackground({
@@ -151,87 +155,6 @@ export default defineBackground({
             ? message.scannedAt
             : new Date().toISOString(),
       };
-    }
-
-    function normalizeMobilePhoto(photo) {
-      if (
-        !photo ||
-        typeof photo !== "object" ||
-        typeof photo.dataUrl !== "string" ||
-        !photo.dataUrl.startsWith("data:image/") ||
-        typeof photo.mimeType !== "string"
-      ) {
-        return null;
-      }
-
-      const id =
-        typeof photo.id === "string" && photo.id
-          ? photo.id
-          : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-      const extension = photo.mimeType.includes("png") ? "png" : "jpg";
-
-      return {
-        id,
-        kind: "photo",
-        name:
-          typeof photo.name === "string" && photo.name
-            ? clampString(photo.name, 120)
-            : `volt-photo-${id}.${extension}`,
-        mimeType: clampString(photo.mimeType, 64),
-        dataUrl: photo.dataUrl,
-        size: Math.max(0, toFiniteNumber(photo.size, 0)),
-        width: photo.width ? Math.max(0, Math.floor(toFiniteNumber(photo.width, 0))) : undefined,
-        height: photo.height ? Math.max(0, Math.floor(toFiniteNumber(photo.height, 0))) : undefined,
-        capturedAt:
-          typeof photo.capturedAt === "string"
-            ? photo.capturedAt
-            : new Date().toISOString(),
-        sessionId:
-          typeof photo.sessionId === "string" && photo.sessionId
-            ? clampString(photo.sessionId, 80)
-            : undefined,
-        downloadId: typeof photo.downloadId === "number" ? photo.downloadId : undefined,
-        downloadFilename:
-          typeof photo.downloadFilename === "string" && photo.downloadFilename
-            ? clampString(photo.downloadFilename, 240)
-            : undefined,
-      };
-    }
-
-    function sanitizeDownloadPathSegment(value, fallback) {
-      const cleaned = String(value || "")
-        .trim()
-        .replace(/[<>:"\\|?*\x00-\x1F]+/g, "-")
-        .replace(/^\.+$/, "")
-        .replace(/\/+/g, "-")
-        .replace(/\s+/g, "-")
-        .slice(0, 96);
-      return cleaned || fallback;
-    }
-
-    function extensionForMobilePhoto(photo) {
-      const mimeType = String(photo?.mimeType || "").toLowerCase();
-      if (mimeType.includes("png")) return "png";
-      if (mimeType.includes("webp")) return "webp";
-      if (mimeType.includes("gif")) return "gif";
-      if (mimeType.includes("avif")) return "avif";
-      if (mimeType.includes("heic")) return "heic";
-      if (mimeType.includes("heif")) return "heif";
-      return "jpg";
-    }
-
-    function normalizeMobilePhotoFilename(photo) {
-      const extension = extensionForMobilePhoto(photo);
-      const baseName = sanitizeDownloadPathSegment(photo?.name || photo?.id || "volt-photo", "volt-photo");
-      return /\.(avif|gif|heic|heif|jpe?g|png|webp)$/i.test(baseName)
-        ? baseName.replace(/\.(avif|gif|heic|heif|jpe?g|png|webp)$/i, `.${extension}`)
-        : `${baseName}.${extension}`;
-    }
-
-    function buildMobilePhotoDownloadFilename(photo) {
-      const sessionFolder = sanitizeDownloadPathSegment(photo?.sessionId, "unpaired-session");
-      const filename = normalizeMobilePhotoFilename(photo);
-      return `Volt Photos/${sessionFolder}/${filename}`;
     }
 
     function downloadMobilePhoto(photo) {
@@ -579,6 +502,7 @@ export default defineBackground({
         const state = await sendScannerOffscreenMessage({
           action: "scannerOffscreenStart",
           force: message?.force === true,
+          mode: normalizeMobileCaptureMode(message?.mode),
           target: await getMobileCaptureTarget(),
         });
         sendResponse({ success: true, state });
@@ -592,6 +516,7 @@ export default defineBackground({
         const state = await sendScannerOffscreenMessage({
           action: "scannerOffscreenStart",
           force: false,
+          mode: normalizeMobileCaptureMode(message?.mode),
           target: await getMobileCaptureTarget(),
         });
 

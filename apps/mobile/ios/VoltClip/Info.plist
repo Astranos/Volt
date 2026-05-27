@@ -23,7 +23,7 @@
     <key>CFBundleIdentifier</key>
     <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
     <key>CFBundleVersion</key>
-    <string>18</string>
+    <string>19</string>
     <key>CFBundleExecutable</key>
     <string>$(EXECUTABLE_NAME)</string>
     <key>CFBundlePackageType</key>
@@ -66,6 +66,8 @@
     <string>Volt uses the microphone for hold-to-speak dictation into the paired Chrome browser.</string>
     <key>NSPhotoLibraryUsageDescription</key>
     <string>Volt may request photo library access if an imported image is used for scanning product codes, model numbers, serial numbers, or other text for the paired Chrome extension.</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>Volt uses speech recognition in the full app for dictated text entry. This App Clip does not expose dictation, but includes the description because shared code references speech APIs.</string>
     <key>NSUserActivityTypes</key>
     <array>
       <string>$(PRODUCT_BUNDLE_IDENTIFIER).expo.index_route</string>

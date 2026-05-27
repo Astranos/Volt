@@ -1,8 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { isAppClipCaptureMode, isScannerSessionId } from "../../../packages/scanner-protocol/src/index.ts";
 
-const CLIP_MODES = new Set(["ocr", "barcode", "photo"]);
 const DEFAULT_APP_CLIP_BUNDLE_ID = "com.volt.mobile.Clip";
-const SESSION_ID_PATTERN = /^[a-zA-Z0-9_-]{4,80}$/;
 const APP_STORE_ID_PATTERN = /^\d+$/;
 
 const MODE_COPY = {
@@ -28,7 +27,7 @@ const BASE_COPY = {
 function modeFromRequest(request: VercelRequest) {
   const path = request.query.path;
   const value = typeof path === "string" ? path.split("/")[0] : undefined;
-  return CLIP_MODES.has(value || "") ? value : null;
+  return isAppClipCaptureMode(value) ? value : null;
 }
 
 function escapeHtml(value: string) {
@@ -78,7 +77,7 @@ export default function handler(request: VercelRequest, response: VercelResponse
 
   if (
     !isBaseClipRequest &&
-    ((path && !mode) || typeof session !== "string" || !SESSION_ID_PATTERN.test(session))
+    ((path && !mode) || !isScannerSessionId(session))
   ) {
     response.status(404).send("Not found");
     return;

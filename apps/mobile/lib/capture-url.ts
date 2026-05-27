@@ -1,15 +1,18 @@
-export type CaptureMode = "ocr" | "barcode" | "dictation" | "photo";
+import {
+  isAppClipCaptureMode,
+  isScannerSessionId,
+  type CaptureMode,
+} from "@volt/scanner-protocol";
+
+export type { CaptureMode };
 
 export type CaptureInvocation = {
   mode?: CaptureMode;
   sessionId: string;
 };
 
-const appClipCaptureModes = new Set<CaptureMode>(["ocr", "barcode", "photo"]);
-const sessionIdPattern = /^[a-zA-Z0-9_-]{4,80}$/;
-
 function isCaptureMode(value: string | undefined): value is CaptureMode {
-  return value === "ocr" || value === "barcode" || value === "photo";
+  return isAppClipCaptureMode(value);
 }
 
 function getStringParam(searchParams: URLSearchParams, key: string) {
@@ -31,7 +34,7 @@ export function parseCaptureInvocation(url: string): CaptureInvocation | null {
     const mode = isCaptureMode(queryMode) ? queryMode : getModeFromPath(parsed.pathname);
     const sessionId = getStringParam(parsed.searchParams, "session");
 
-    if (!sessionId || !sessionIdPattern.test(sessionId)) return null;
+    if (!isScannerSessionId(sessionId)) return null;
     return mode ? { mode, sessionId } : { sessionId };
   } catch {
     return null;
@@ -39,5 +42,5 @@ export function parseCaptureInvocation(url: string): CaptureInvocation | null {
 }
 
 export function normalizeCaptureMode(value: unknown): CaptureMode | null {
-  return typeof value === "string" && appClipCaptureModes.has(value as CaptureMode) ? (value as CaptureMode) : null;
+  return isAppClipCaptureMode(value) ? value : null;
 }

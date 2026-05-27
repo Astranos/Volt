@@ -1,56 +1,14 @@
-export const PHOTO_DROP_MIME = "application/x-volt-mobile-photos";
-const IMAGE_FILE_EXTENSIONS = /\.(avif|gif|heic|heif|jpe?g|png|webp)$/i;
+export {
+  PHOTO_DROP_MIME,
+  normalizeImageFilename,
+  normalizeImageMimeType,
+  type MobilePhoto,
+} from "../../domain/mobile-photo";
 
-export type MobilePhoto = {
-  id: string;
-  kind: "photo";
-  name: string;
-  mimeType: string;
-  dataUrl?: string;
-  size: number;
-  width?: number;
-  height?: number;
-  capturedAt?: string;
-  sessionId?: string;
-  downloadId?: number;
-  downloadFilename?: string;
-};
-
-export function normalizeImageMimeType(mimeType: string) {
-  const normalized = mimeType.toLowerCase().trim();
-  if (normalized === "image/jpg") return "image/jpeg";
-  if (
-    normalized === "image/jpeg" ||
-    normalized === "image/png" ||
-    normalized === "image/gif" ||
-    normalized === "image/webp" ||
-    normalized === "image/avif" ||
-    normalized === "image/heic" ||
-    normalized === "image/heif"
-  ) {
-    return normalized;
-  }
-  return "image/jpeg";
-}
-
-export function extensionForMimeType(mimeType: string) {
-  if (mimeType === "image/png") return "png";
-  if (mimeType === "image/gif") return "gif";
-  if (mimeType === "image/webp") return "webp";
-  if (mimeType === "image/avif") return "avif";
-  if (mimeType === "image/heic") return "heic";
-  if (mimeType === "image/heif") return "heif";
-  return "jpg";
-}
-
-export function normalizeImageFilename(filename: string, mimeType: string) {
-  const cleanName = filename.trim().replace(/[^\w.\-]+/g, "-") || "volt-photo";
-  const extension = extensionForMimeType(mimeType);
-  if (IMAGE_FILE_EXTENSIONS.test(cleanName)) {
-    return cleanName.replace(IMAGE_FILE_EXTENSIONS, `.${extension}`);
-  }
-  return `${cleanName}.${extension}`;
-}
+import {
+  normalizeImageFilename,
+  normalizeImageMimeType,
+} from "../../domain/mobile-photo";
 
 export function dataUrlToFile(
   dataUrl: string,

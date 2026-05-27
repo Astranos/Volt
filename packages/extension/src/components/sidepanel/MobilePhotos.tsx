@@ -20,31 +20,21 @@ import {
   QrPairingPanel,
   SecondaryActionButton,
 } from "./mobile-shared";
+import {
+  PHOTO_DROP_MIME,
+  dataUrlToFile,
+  dataUrlToPngBlob,
+  normalizeImageFilename,
+  type MobilePhoto,
+} from "./mobile-photo-helpers";
 
 const STORAGE_KEY = "volt.mobilePhotos.photos";
-const PHOTO_DROP_MIME = "application/x-volt-mobile-photos";
-const IMAGE_FILE_EXTENSIONS = /\.(avif|gif|heic|heif|jpe?g|png|webp)$/i;
 const MAX_PHOTOS = 80;
 
 type MobileScannerState = {
   status: ScannerConnectionStatus;
   qrCodeUrl: string | null;
   error: string | null;
-};
-
-type MobilePhoto = {
-  id: string;
-  kind: "photo";
-  name: string;
-  mimeType: string;
-  dataUrl?: string;
-  size: number;
-  width?: number;
-  height?: number;
-  capturedAt?: string;
-  sessionId?: string;
-  downloadId?: number;
-  downloadFilename?: string;
 };
 
 function trimPhotosForStorage(photos: MobilePhoto[]) {
@@ -59,85 +49,6 @@ function trimPhotosForState(photos: MobilePhoto[]) {
   }
 
   return trimmed;
-}
-
-function dataUrlToFile(dataUrl: string, filename: string, mimeType: string) {
-  const [header, base64] = dataUrl.split(",");
-  if (!header || !base64) return null;
-  const headerMimeType = header.match(/^data:([^;]+)/)?.[1];
-  const normalizedMimeType = normalizeImageMimeType(headerMimeType || mimeType);
-  const normalizedFilename = normalizeImageFilename(filename, normalizedMimeType);
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let index = 0; index < binary.length; index += 1) {
-    bytes[index] = binary.charCodeAt(index);
-  }
-  return new File([bytes], normalizedFilename, {
-    type: normalizedMimeType,
-    lastModified: Date.now(),
-  });
-}
-
-function normalizeImageMimeType(mimeType: string) {
-  const normalized = mimeType.toLowerCase().trim();
-  if (normalized === "image/jpg") return "image/jpeg";
-  if (
-    normalized === "image/jpeg" ||
-    normalized === "image/png" ||
-    normalized === "image/gif" ||
-    normalized === "image/webp" ||
-    normalized === "image/avif" ||
-    normalized === "image/heic" ||
-    normalized === "image/heif"
-  ) {
-    return normalized;
-  }
-  return "image/jpeg";
-}
-
-function extensionForMimeType(mimeType: string) {
-  if (mimeType === "image/png") return "png";
-  if (mimeType === "image/gif") return "gif";
-  if (mimeType === "image/webp") return "webp";
-  if (mimeType === "image/avif") return "avif";
-  if (mimeType === "image/heic") return "heic";
-  if (mimeType === "image/heif") return "heif";
-  return "jpg";
-}
-
-function normalizeImageFilename(filename: string, mimeType: string) {
-  const cleanName = filename.trim().replace(/[^\w.\-]+/g, "-") || "volt-photo";
-  const extension = extensionForMimeType(mimeType);
-  if (IMAGE_FILE_EXTENSIONS.test(cleanName)) {
-    return cleanName.replace(IMAGE_FILE_EXTENSIONS, `.${extension}`);
-  }
-  return `${cleanName}.${extension}`;
-}
-
-async function dataUrlToPngBlob(dataUrl: string) {
-  const image = new Image();
-  image.decoding = "async";
-  const loaded = new Promise<void>((resolve, reject) => {
-    image.onload = () => resolve();
-    image.onerror = () => reject(new Error("Image decode failed"));
-  });
-  image.src = dataUrl;
-  await loaded;
-
-  const canvas = document.createElement("canvas");
-  canvas.width = image.naturalWidth || image.width;
-  canvas.height = image.naturalHeight || image.height;
-  const context = canvas.getContext("2d");
-  if (!context || !canvas.width || !canvas.height) {
-    throw new Error("Image canvas failed");
-  }
-
-  context.drawImage(image, 0, 0);
-  const blob = await new Promise<Blob | null>((resolve) => {
-    canvas.toBlob(resolve, "image/png");
-  });
-  if (!blob) throw new Error("PNG conversion failed");
-  return blob;
 }
 
 function installPhotoDropBridge(dropMime: string) {

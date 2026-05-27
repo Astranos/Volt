@@ -1,8 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
-import type { BarcodeScanningResult } from "../../lib/expo-camera";
 import { Animated, Pressable, Text, View } from "react-native";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { useScanner } from "../../lib/scanner-state";
+import { usePairingScanner } from "../../lib/use-pairing-scanner";
 import { DisconnectedPairingView, Header, ScreenRoot, ViewfinderSurface, styles } from "./index";
 
 export default function DictationTab() {
@@ -16,10 +16,13 @@ export default function DictationTab() {
     startDictation,
     stopDictation,
   } = scanner;
-  const [pairScannerOpen, setPairScannerOpen] = useState(false);
-  const [pairScannerLocked, setPairScannerLocked] = useState(false);
-  const [pairScannerError, setPairScannerError] = useState<string | null>(null);
-  const pairScannerLockedRef = useRef(false);
+  const {
+    openPairScanner,
+    onPairingQrScanned,
+    pairScannerError,
+    pairScannerLocked,
+    pairScannerOpen,
+  } = usePairingScanner();
   const pulse = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -45,41 +48,6 @@ export default function DictationTab() {
     animation.start();
     return () => animation.stop();
   }, [dictating, pulse]);
-
-  const openPairScanner = async () => {
-    if (!scanner.permission?.granted) {
-      const nextPermission = await scanner.requestPermission();
-      if (!nextPermission.granted) {
-        setPairScannerError("Camera permission is required to scan the extension QR.");
-        return;
-      }
-    }
-
-    setPairScannerError(null);
-    setPairScannerLocked(false);
-    pairScannerLockedRef.current = false;
-    setPairScannerOpen(true);
-  };
-
-  const onPairingQrScanned = async ({ data }: BarcodeScanningResult) => {
-    if (pairScannerLockedRef.current) return;
-
-    pairScannerLockedRef.current = true;
-    setPairScannerLocked(true);
-    const accepted = await scanner.pairFromUrl(data.trim());
-
-    if (accepted) {
-      setPairScannerOpen(false);
-      setPairScannerError(null);
-      return;
-    }
-
-    setPairScannerError("That QR code is not a Volt pairing code.");
-    setTimeout(() => {
-      pairScannerLockedRef.current = false;
-      setPairScannerLocked(false);
-    }, 1200);
-  };
 
   return (
     <ScreenRoot>

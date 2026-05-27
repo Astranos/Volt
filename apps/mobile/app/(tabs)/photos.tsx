@@ -1,10 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
-import { CameraView as ExpoCameraView, type BarcodeScanningResult, type CameraOrientation } from "../../lib/expo-camera";
+import { CameraView as ExpoCameraView, type CameraOrientation } from "../../lib/expo-camera";
 import { useFocusEffect } from "expo-router";
 import { Image, Platform, Pressable, Text, View, useWindowDimensions, type GestureResponderEvent } from "react-native";
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useScanner } from "../../lib/scanner-state";
+import { usePairingScanner } from "../../lib/use-pairing-scanner";
 import {
   CameraOverlayButton,
   CameraControlStack,
@@ -48,14 +49,18 @@ export default function PhotosTab() {
   const scanner = useScanner();
   const insets = useSafeAreaInsets();
   const { height: windowHeight, width: windowWidth } = useWindowDimensions();
-  const [pairScannerOpen, setPairScannerOpen] = useState(false);
-  const [pairScannerLocked, setPairScannerLocked] = useState(false);
-  const [pairScannerError, setPairScannerError] = useState<string | null>(null);
+  const {
+    openPairScanner,
+    onPairingQrScanned,
+    pairScannerError,
+    pairScannerLocked,
+    pairScannerOpen,
+    resetPairingScanner,
+  } = usePairingScanner();
   const [viewfinderFocused, setViewfinderFocused] = useState(false);
   const [gridVisible, setGridVisible] = useState(true);
   const [showPhotoSent, setShowPhotoSent] = useState(false);
   const [cameraOrientation, setCameraOrientation] = useState<CameraOrientation>("portrait");
-  const pairScannerLockedRef = useRef(false);
   const focusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pinchStartDistanceRef = useRef<number | null>(null);
   const pinchStartZoomRef = useRef(0);
@@ -65,13 +70,11 @@ export default function PhotosTab() {
       setViewfinderFocused(true);
       return () => {
         setViewfinderFocused(false);
-        setPairScannerOpen(false);
-        setPairScannerLocked(false);
-        pairScannerLockedRef.current = false;
+        resetPairingScanner();
         scanner.clearCameraFocus();
         if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
       };
-    }, [scanner.clearCameraFocus])
+    }, [resetPairingScanner, scanner.clearCameraFocus])
   );
 
   const triggerFocus = useCallback((event: GestureResponderEvent) => {
@@ -123,41 +126,6 @@ export default function PhotosTab() {
     const timer = setTimeout(() => setShowPhotoSent(false), 1700);
     return () => clearTimeout(timer);
   }, [scanner.photoSentAt]);
-
-  const openPairScanner = async () => {
-    if (!scanner.permission?.granted) {
-      const nextPermission = await scanner.requestPermission();
-      if (!nextPermission.granted) {
-        setPairScannerError("Camera permission is required to scan the extension QR.");
-        return;
-      }
-    }
-
-    setPairScannerError(null);
-    setPairScannerLocked(false);
-    pairScannerLockedRef.current = false;
-    setPairScannerOpen(true);
-  };
-
-  const onPairingQrScanned = async ({ data }: BarcodeScanningResult) => {
-    if (pairScannerLockedRef.current) return;
-
-    pairScannerLockedRef.current = true;
-    setPairScannerLocked(true);
-    const accepted = await scanner.pairFromUrl(data.trim());
-
-    if (accepted) {
-      setPairScannerOpen(false);
-      setPairScannerError(null);
-      return;
-    }
-
-    setPairScannerError("That QR code is not a Volt pairing code.");
-    setTimeout(() => {
-      pairScannerLockedRef.current = false;
-      setPairScannerLocked(false);
-    }, 1200);
-  };
 
   if (!scanner.connected) {
     return (

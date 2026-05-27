@@ -2,14 +2,8 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo } from "react";
 import { ActivityIndicator, Text, View } from "react-native";
 import { normalizeCaptureMode } from "../../lib/capture-url";
+import { routeForCaptureMode } from "../../lib/capture-modes";
 import { useScanner } from "../../lib/scanner-state";
-
-const modeRoutes: Record<"ocr" | "barcode" | "dictation" | "photo", "/(tabs)" | "/(tabs)/scanner" | "/(tabs)/dictation" | "/(tabs)/photos"> = {
-  ocr: "/(tabs)",
-  barcode: "/(tabs)/scanner",
-  dictation: "/(tabs)/dictation",
-  photo: "/(tabs)/photos",
-};
 
 export default function AppClipInvocationRoute() {
   const router = useRouter();
@@ -18,7 +12,7 @@ export default function AppClipInvocationRoute() {
   const mode = normalizeCaptureMode(params.mode);
   const session = typeof params.session === "string" ? params.session : null;
 
-  const destination = useMemo(() => (mode ? modeRoutes[mode] : "/(tabs)"), [mode]);
+  const destination = useMemo(() => routeForCaptureMode(mode), [mode]);
 
   useEffect(() => {
     let cancelled = false;

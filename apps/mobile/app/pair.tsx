@@ -1,38 +1,27 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo } from "react";
 import { ActivityIndicator, Text, View } from "react-native";
+import {
+  buildPairUrl,
+  normalizeFullCaptureMode,
+  routeForCaptureMode,
+} from "../lib/capture-modes";
 import { useScanner } from "../lib/scanner-state";
-
-type MobileCaptureMode = "ocr" | "barcode" | "dictation" | "photo";
-
-const modeRoutes: Record<MobileCaptureMode, "/(tabs)" | "/(tabs)/scanner" | "/(tabs)/dictation" | "/(tabs)/photos"> = {
-  ocr: "/(tabs)",
-  barcode: "/(tabs)/scanner",
-  dictation: "/(tabs)/dictation",
-  photo: "/(tabs)/photos",
-};
-
-function isMobileCaptureMode(value: unknown): value is MobileCaptureMode {
-  return value === "ocr" || value === "barcode" || value === "dictation" || value === "photo";
-}
 
 export default function PairRoute() {
   const router = useRouter();
   const scanner = useScanner();
   const params = useLocalSearchParams<{ session?: string; mode?: string }>();
   const session = typeof params.session === "string" ? params.session : null;
-  const mode = isMobileCaptureMode(params.mode) ? params.mode : null;
-  const destination = useMemo(() => (mode ? modeRoutes[mode] : "/(tabs)"), [mode]);
+  const mode = normalizeFullCaptureMode(params.mode);
+  const destination = useMemo(() => routeForCaptureMode(mode), [mode]);
 
   useEffect(() => {
     let cancelled = false;
 
     async function pairAndOpen() {
       if (session) {
-        const url = `volt://pair?session=${encodeURIComponent(session)}${
-          mode ? `&mode=${encodeURIComponent(mode)}` : ""
-        }`;
-        await scanner.pairFromUrl(url);
+        await scanner.pairFromUrl(buildPairUrl(session, mode));
       }
 
       if (!cancelled) router.replace(destination as never);

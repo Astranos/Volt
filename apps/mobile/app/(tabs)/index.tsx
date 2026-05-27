@@ -22,6 +22,7 @@ import { initialWindowMetrics, useSafeAreaInsets } from "react-native-safe-area-
 import { useCallback, useEffect, useRef, useState, type ComponentType, type PropsWithChildren, type ReactNode } from "react";
 import { LiveTextImageView } from "../../lib/live-text-image-view";
 import { useScanner } from "../../lib/scanner-state";
+import { usePairingScanner } from "../../lib/use-pairing-scanner";
 
 const baseFloatingBottom = Platform.select({ ios: 94, default: 86 });
 const CameraView = ExpoCameraView as unknown as ComponentType<any>;
@@ -73,14 +74,18 @@ function InputLongTextHugeIcon({ color }: { color: string }) {
 export default function OcrTab() {
   const scanner = useScanner();
   const insets = useSafeAreaInsets();
-  const [pairScannerOpen, setPairScannerOpen] = useState(false);
-  const [pairScannerLocked, setPairScannerLocked] = useState(false);
-  const [pairScannerError, setPairScannerError] = useState<string | null>(null);
+  const {
+    openPairScanner,
+    onPairingQrScanned,
+    pairScannerError,
+    pairScannerLocked,
+    pairScannerOpen,
+    resetPairingScanner,
+  } = usePairingScanner();
   const [viewfinderFocused, setViewfinderFocused] = useState(false);
   const [capturedViewportSize, setCapturedViewportSize] = useState<{ width: number; height: number } | null>(null);
   const [showTextPrompt, setShowTextPrompt] = useState(false);
   const [cursorToastMessage, setCursorToastMessage] = useState<string | null>(null);
-  const pairScannerLockedRef = useRef(false);
   const focusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const capturedScrollRef = useRef<ScrollView | null>(null);
   const pinchStartDistanceRef = useRef<number | null>(null);
@@ -92,13 +97,11 @@ export default function OcrTab() {
       setViewfinderFocused(true);
       return () => {
         setViewfinderFocused(false);
-        setPairScannerOpen(false);
-        setPairScannerLocked(false);
-        pairScannerLockedRef.current = false;
+        resetPairingScanner();
         scanner.clearCameraFocus();
         if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
       };
-    }, [scanner.clearCameraFocus])
+    }, [resetPairingScanner, scanner.clearCameraFocus])
   );
 
   const triggerFocus = useCallback((event: GestureResponderEvent) => {
@@ -204,41 +207,6 @@ export default function OcrTab() {
     },
     [capturedViewportSize, scanner]
   );
-
-  const openPairScanner = async () => {
-    if (!scanner.permission?.granted) {
-      const nextPermission = await scanner.requestPermission();
-      if (!nextPermission.granted) {
-        setPairScannerError("Camera permission is required to scan the extension QR.");
-        return;
-      }
-    }
-
-    setPairScannerError(null);
-    setPairScannerLocked(false);
-    pairScannerLockedRef.current = false;
-    setPairScannerOpen(true);
-  };
-
-  const onPairingQrScanned = async ({ data }: BarcodeScanningResult) => {
-    if (pairScannerLockedRef.current) return;
-
-    pairScannerLockedRef.current = true;
-    setPairScannerLocked(true);
-    const accepted = await scanner.pairFromUrl(data.trim());
-
-    if (accepted) {
-      setPairScannerOpen(false);
-      setPairScannerError(null);
-      return;
-    }
-
-    setPairScannerError("That QR code is not a Volt pairing code.");
-    setTimeout(() => {
-      pairScannerLockedRef.current = false;
-      setPairScannerLocked(false);
-    }, 1200);
-  };
 
   if (!scanner.connected) {
     return (

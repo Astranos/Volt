@@ -25,6 +25,15 @@ export const SCANNER_ANSWER_POLL_INTERVAL_MS = 1000;
 export const SCANNER_SESSION_TTL_MS = 30 * 60 * 1000;
 export const SCANNER_SCAN_COOLDOWN_MS = 500;
 export const SCANNER_LOCAL_SESSION_ID = "local";
+export const SCANNER_RESULT_POLL_INTERVAL_MS = 500;
+export const SCANNER_SESSION_ID_PATTERN = /^[a-zA-Z0-9_-]{4,80}$/;
+export const SCANNER_MAX_SESSION_RESULTS = 30;
+export const SCANNER_MAX_STORED_PHOTO_DATA_URL_BYTES = 2_500_000;
+
+export type CaptureMode = "ocr" | "barcode" | "dictation" | "photo";
+
+export const CAPTURE_MODES: CaptureMode[] = ["ocr", "barcode", "dictation", "photo"];
+export const APP_CLIP_CAPTURE_MODES: CaptureMode[] = ["ocr", "barcode", "photo"];
 
 export type ScannerConnectionStatus =
   | "disconnected"
@@ -85,6 +94,51 @@ export type ScannerTransportMessage =
   | PhotoChunkStartMessage
   | PhotoChunkMessage
   | PhotoChunkEndMessage;
+
+export type SessionTarget = {
+  browser?: string;
+  tabTitle?: string;
+  url?: string;
+  cursor?: string;
+};
+
+export type ScannerRelayResult = {
+  id: string;
+  mode: CaptureMode;
+  message: BarcodeMessage | PhotoMessage;
+  createdAt: string;
+};
+
+export function isCaptureMode(value: unknown): value is CaptureMode {
+  return value === "ocr" || value === "barcode" || value === "dictation" || value === "photo";
+}
+
+export function isAppClipCaptureMode(value: unknown): value is CaptureMode {
+  return value === "ocr" || value === "barcode" || value === "photo";
+}
+
+export function isScannerSessionId(value: unknown): value is string {
+  return typeof value === "string" && SCANNER_SESSION_ID_PATTERN.test(value);
+}
+
+function clampTargetString(value: unknown, maxLength: number) {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  return trimmed.length > maxLength ? trimmed.slice(0, maxLength) : trimmed;
+}
+
+export function parseSessionTarget(value: unknown): SessionTarget | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const source = value as Record<string, unknown>;
+  const target = {
+    browser: clampTargetString(source.browser, 80),
+    tabTitle: clampTargetString(source.tabTitle, 160),
+    url: clampTargetString(source.url, 600),
+    cursor: clampTargetString(source.cursor, 120),
+  };
+  return Object.values(target).some(Boolean) ? target : undefined;
+}
 
 export function encodePairingPayload(description: ScannerSessionDescription): string {
   return btoa(JSON.stringify(description))
@@ -206,4 +260,162 @@ export function decodeScannerTransportMessage(data: string): ScannerTransportMes
   } catch (_e) {
     return null;
   }
+}
+
+export function isValidResultForMode(mode: CaptureMode, message: BarcodeMessage | PhotoMessage) {
+  if (mode === "photo") {
+    return message.kind === "photo";
+  }
+  if (message.kind === "photo") return false;
+
+  if (mode === "ocr") {
+    return message.kind === "text" && message.format === "live-text";
+  }
+
+  if (mode === "barcode") {
+    return message.kind === "barcode";
+  }
+
+  return (
+    message.kind === "text" &&
+    message.format === "dictation" &&
+    (message.dictationPhase === "partial" || message.dictationPhase === "final") &&
+    typeof message.dictationSessionId === "string" &&
+    message.dictationSessionId.length > 0
+  );
+}
+
+function parseRelayMessage(value: unknown): BarcodeMessage | PhotoMessage | null {
+  if (!value || typeof value !== "object") return null;
+  const message = value as Record<string, unknown>;
+
+  if (message.kind === "photo") {
+    if (
+      typeof message.id !== "string" ||
+      typeof message.name !== "string" ||
+      typeof message.mimeType !== "string" ||
+      typeof message.dataUrl !== "string" ||
+      !message.dataUrl.startsWith("data:image/") ||
+      typeof message.size !== "number"
+    ) {
+      return null;
+    }
+
+    return {
+      kind: "photo",
+      id: message.id,
+      name: message.name,
+      mimeType: message.mimeType,
+      dataUrl: message.dataUrl,
+      size: message.size,
+      width: typeof message.width === "number" ? message.width : undefined,
+      height: typeof message.height === "number" ? message.height : undefined,
+      capturedAt: typeof message.capturedAt === "string" ? message.capturedAt : undefined,
+    };
+  }
+
+  if (typeof message.barcode !== "string" || !message.barcode) return null;
+
+  return {
+    barcode: message.barcode,
+    dictationPhase:
+      message.dictationPhase === "partial" || message.dictationPhase === "final"
+        ? message.dictationPhase
+        : undefined,
+    dictationSessionId:
+      typeof message.dictationSessionId === "string"
+        ? message.dictationSessionId
+        : undefined,
+    format: typeof message.format === "string" ? message.format : undefined,
+    insertIntoCursor:
+      typeof message.insertIntoCursor === "boolean"
+        ? message.insertIntoCursor
+        : undefined,
+    kind: message.kind === "text" ? "text" : "barcode",
+    scannedAt: typeof message.scannedAt === "string" ? message.scannedAt : undefined,
+  };
+}
+
+export function parseScannerRelayResult(
+  body: unknown,
+  createdAt = new Date().toISOString()
+): ScannerRelayResult | null {
+  if (!body || typeof body !== "object") return null;
+  const value = body as {
+    id?: unknown;
+    mode?: unknown;
+    message?: unknown;
+  };
+  const message = parseRelayMessage(value.message);
+  if (typeof value.id !== "string" || !value.id || !isCaptureMode(value.mode) || !message) {
+    return null;
+  }
+
+  const result = {
+    id: value.id,
+    mode: value.mode,
+    message,
+    createdAt,
+  };
+
+  return isValidResultForMode(result.mode, result.message) ? result : null;
+}
+
+export function trimScannerRelayResults(results: ScannerRelayResult[]) {
+  const trimmed: ScannerRelayResult[] = [];
+  let photoDataUrlBytes = 0;
+
+  for (const result of [...results].reverse()) {
+    if (trimmed.length >= SCANNER_MAX_SESSION_RESULTS) break;
+
+    if (result.message.kind === "photo") {
+      const dataUrlBytes = result.message.dataUrl.length;
+      if (
+        trimmed.length > 0 &&
+        photoDataUrlBytes + dataUrlBytes > SCANNER_MAX_STORED_PHOTO_DATA_URL_BYTES
+      ) {
+        continue;
+      }
+      photoDataUrlBytes += dataUrlBytes;
+    }
+
+    trimmed.push(result);
+  }
+
+  return trimmed.reverse();
+}
+
+export function scannerMessageDuplicateKey(message: BarcodeMessage) {
+  return [
+    message.kind ?? "barcode",
+    message.format ?? "",
+    message.barcode.trim().toLowerCase(),
+  ].join(":");
+}
+
+export function createScannerMessageDuplicateGuard(
+  duplicateWindowMs = 1500,
+  retentionMs = 2500,
+  now = () => Date.now()
+) {
+  const recentMessages = new Map<string, number>();
+
+  return (message: BarcodeMessage) => {
+    const timestamp = now();
+    const key = scannerMessageDuplicateKey(message);
+    const lastSeenAt = recentMessages.get(key);
+
+    for (const [recentKey, seenAt] of recentMessages) {
+      if (timestamp - seenAt > retentionMs) {
+        recentMessages.delete(recentKey);
+      }
+    }
+
+    if (lastSeenAt !== undefined && timestamp - lastSeenAt < duplicateWindowMs) {
+      return false;
+    }
+
+    recentMessages.set(key, timestamp);
+    return true;
+  };
 }

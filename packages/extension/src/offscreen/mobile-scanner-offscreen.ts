@@ -1,70 +1,29 @@
-const SCANNER_SIGNAL_URL = "https://scanner-signal.vercel.app/api/signal";
-const SCANNER_APP_CLIP_BASE_URL = "https://scanner-signal.vercel.app/clip";
-const SCANNER_RESULT_POLL_INTERVAL_MS = 500;
-const SCANNER_RESULT_TIMEOUT_MS = 30 * 60 * 1000;
+import {
+  SCANNER_RESULT_POLL_INTERVAL_MS,
+  SCANNER_SESSION_TTL_MS,
+  SCANNER_SIGNAL_URL,
+  createScannerMessageDuplicateGuard,
+  decodeScannerTransportMessage,
+  isAppClipCaptureMode,
+  isCaptureMode,
+  type CaptureMode,
+  type PhotoChunkStartMessage,
+  type PhotoMessage,
+  type ScannerConnectionStatus,
+  type ScannerRelayResult,
+  type SessionTarget,
+} from "../../../scanner-protocol/src";
+
+const SCANNER_APP_CLIP_BASE_URL = SCANNER_SIGNAL_URL.replace("/api/signal", "/clip");
+const SCANNER_RESULT_TIMEOUT_MS = SCANNER_SESSION_TTL_MS;
 const SCANNER_RELAY_STATE_STORAGE_KEY = "volt.mobileScanner.relaySession.v1";
 
 type ScannerState = {
-  status: "disconnected" | "creating" | "waiting" | "connected" | "error";
+  status: ScannerConnectionStatus;
   qrCodeUrl: string | null;
   error: string | null;
-  mode: MobileCaptureMode | null;
+  mode: CaptureMode | null;
 };
-
-type MobileCaptureMode = "ocr" | "barcode" | "dictation" | "photo";
-
-type SessionTarget = {
-  browser?: string;
-  tabTitle?: string;
-  url?: string;
-  cursor?: string;
-};
-
-type BarcodeMessage = {
-  barcode: string;
-  dictationPhase?: "partial" | "final";
-  dictationSessionId?: string;
-  format?: string;
-  insertIntoCursor?: boolean;
-  kind?: "barcode" | "text";
-  scannedAt?: string;
-};
-
-type PhotoMessage = {
-  kind: "photo";
-  id: string;
-  name: string;
-  mimeType: string;
-  dataUrl: string;
-  size: number;
-  width?: number;
-  height?: number;
-  capturedAt?: string;
-};
-
-type PhotoChunkStartMessage = Omit<PhotoMessage, "kind" | "dataUrl"> & {
-  kind: "photo-chunk-start";
-  totalChunks: number;
-};
-
-type PhotoChunkMessage = {
-  kind: "photo-chunk";
-  id: string;
-  index: number;
-  data: string;
-};
-
-type PhotoChunkEndMessage = {
-  kind: "photo-chunk-end";
-  id: string;
-};
-
-type ScannerTransportMessage =
-  | BarcodeMessage
-  | PhotoMessage
-  | PhotoChunkStartMessage
-  | PhotoChunkMessage
-  | PhotoChunkEndMessage;
 
 type PendingPhoto = PhotoChunkStartMessage & {
   chunks: string[];
@@ -72,121 +31,22 @@ type PendingPhoto = PhotoChunkStartMessage & {
   updatedAt: number;
 };
 
-type ScannerRelayResult = {
-  id: string;
-  mode: MobileCaptureMode;
-  message: ScannerTransportMessage;
-  createdAt: string;
-};
-
 type PersistedRelayState = {
   sessionId: string;
   qrCodeUrl: string;
   status: "waiting" | "connected";
   error: null;
-  mode: MobileCaptureMode | null;
+  mode: CaptureMode | null;
   seenResultIds: string[];
   createdAt: number;
   connectedAt?: string | null;
 };
 
-function decodeScannerTransportMessage(data: string): ScannerTransportMessage | null {
-  try {
-    const parsed = JSON.parse(data);
-    if (!parsed || typeof parsed !== "object") return null;
-
-    if (parsed.kind === "photo") {
-      if (
-        typeof parsed.id !== "string" ||
-        typeof parsed.name !== "string" ||
-        typeof parsed.mimeType !== "string" ||
-        typeof parsed.dataUrl !== "string" ||
-        typeof parsed.size !== "number"
-      ) {
-        return null;
-      }
-
-      return {
-        kind: "photo",
-        id: parsed.id,
-        name: parsed.name,
-        mimeType: parsed.mimeType,
-        dataUrl: parsed.dataUrl,
-        size: parsed.size,
-        width: typeof parsed.width === "number" ? parsed.width : undefined,
-        height: typeof parsed.height === "number" ? parsed.height : undefined,
-        capturedAt: typeof parsed.capturedAt === "string" ? parsed.capturedAt : undefined,
-      };
-    }
-
-    if (parsed.kind === "photo-chunk-start") {
-      if (
-        typeof parsed.id !== "string" ||
-        typeof parsed.name !== "string" ||
-        typeof parsed.mimeType !== "string" ||
-        typeof parsed.size !== "number" ||
-        typeof parsed.totalChunks !== "number"
-      ) {
-        return null;
-      }
-
-      return {
-        kind: "photo-chunk-start",
-        id: parsed.id,
-        name: parsed.name,
-        mimeType: parsed.mimeType,
-        size: parsed.size,
-        width: typeof parsed.width === "number" ? parsed.width : undefined,
-        height: typeof parsed.height === "number" ? parsed.height : undefined,
-        capturedAt: typeof parsed.capturedAt === "string" ? parsed.capturedAt : undefined,
-        totalChunks: parsed.totalChunks,
-      };
-    }
-
-    if (parsed.kind === "photo-chunk") {
-      if (
-        typeof parsed.id !== "string" ||
-        typeof parsed.index !== "number" ||
-        typeof parsed.data !== "string"
-      ) {
-        return null;
-      }
-
-      return {
-        kind: "photo-chunk",
-        id: parsed.id,
-        index: parsed.index,
-        data: parsed.data,
-      };
-    }
-
-    if (parsed.kind === "photo-chunk-end") {
-      return typeof parsed.id === "string" ? { kind: "photo-chunk-end", id: parsed.id } : null;
-    }
-
-    if (typeof parsed.barcode !== "string" || !parsed.barcode) {
-      return null;
-    }
-
-    return {
-      barcode: parsed.barcode,
-      dictationPhase: parsed.dictationPhase === "partial" || parsed.dictationPhase === "final" ? parsed.dictationPhase : undefined,
-      dictationSessionId: typeof parsed.dictationSessionId === "string" ? parsed.dictationSessionId : undefined,
-      format: typeof parsed.format === "string" ? parsed.format : undefined,
-      insertIntoCursor: typeof parsed.insertIntoCursor === "boolean" ? parsed.insertIntoCursor : undefined,
-      kind: parsed.kind === "text" ? "text" : "barcode",
-      scannedAt: typeof parsed.scannedAt === "string" ? parsed.scannedAt : undefined,
-    };
-  } catch (_e) {
-    return null;
-  }
-}
-
 class MobileScannerOffscreenSession {
   private resultPoll: number | null = null;
   private resultPollTimeout: number | null = null;
   private sessionId: string | null = null;
-  private recentMessages = new Map<string, number>();
+  private shouldAcceptScannerMessage = createScannerMessageDuplicateGuard();
   private pendingPhotos = new Map<string, PendingPhoto>();
   private seenRelayResultIds = new Set<string>();
   private restorePromise: Promise<void> | null = null;
@@ -216,7 +76,7 @@ class MobileScannerOffscreenSession {
     void this.persistActiveSession().catch(() => {});
   }
 
-  async start(force = false, _mode: MobileCaptureMode | null = null, target?: SessionTarget | null) {
+  async start(force = false, mode: CaptureMode | null = null, target?: SessionTarget | null) {
     await this.restorePromise;
     if (
       !force &&
@@ -232,13 +92,13 @@ class MobileScannerOffscreenSession {
     this.setState({ status: "creating", error: null, qrCodeUrl: null, mode: null });
 
     try {
-      const sessionId = await this.createRelaySession(null, target);
+      const sessionId = await this.createRelaySession(mode, target);
       this.sessionId = sessionId;
       this.setState({
         status: "waiting",
-        qrCodeUrl: this.buildPairingUrl(sessionId),
+        qrCodeUrl: this.buildPairingUrl(sessionId, mode),
         error: null,
-        mode: null,
+        mode,
       });
       this.pollForResult(sessionId);
     } catch (err) {
@@ -296,7 +156,7 @@ class MobileScannerOffscreenSession {
       );
       this.state = {
         status: persisted.connectedAt || persisted.status === "connected" ? "connected" : "waiting",
-        qrCodeUrl: persisted.qrCodeUrl || this.buildPairingUrl(persisted.sessionId),
+        qrCodeUrl: persisted.qrCodeUrl || this.buildPairingUrl(persisted.sessionId, persisted.mode ?? null),
         error: null,
         mode: persisted.mode ?? null,
       };
@@ -311,7 +171,7 @@ class MobileScannerOffscreenSession {
     const previous = await this.getPersistedRelayState();
     const persisted: PersistedRelayState = {
       sessionId: this.sessionId,
-      qrCodeUrl: this.state.qrCodeUrl || this.buildPairingUrl(this.sessionId),
+      qrCodeUrl: this.state.qrCodeUrl || this.buildPairingUrl(this.sessionId, this.state.mode),
       status: this.state.status,
       error: null,
       mode: this.state.mode,
@@ -358,9 +218,11 @@ class MobileScannerOffscreenSession {
     });
   }
 
-  private buildPairingUrl(sessionId: string) {
+  private buildPairingUrl(sessionId: string, mode: CaptureMode | null = null) {
     const encodedSession = encodeURIComponent(sessionId);
-    return `${SCANNER_APP_CLIP_BASE_URL}?session=${encodedSession}`;
+    return mode && isAppClipCaptureMode(mode)
+      ? `${SCANNER_APP_CLIP_BASE_URL}/${encodeURIComponent(mode)}?session=${encodedSession}`
+      : `${SCANNER_APP_CLIP_BASE_URL}?session=${encodedSession}`;
   }
 
   private cleanup(_intentional = true) {
@@ -414,7 +276,7 @@ class MobileScannerOffscreenSession {
       });
     }
 
-    if (data.format !== "dictation" && this.isDuplicateMessage(data)) return false;
+    if (data.format !== "dictation" && !this.shouldAcceptScannerMessage(data)) return false;
     void chrome.runtime.sendMessage({
       action: "scannerOffscreenScan",
       scan: {
@@ -458,30 +320,7 @@ class MobileScannerOffscreenSession {
     }
   }
 
-  private isDuplicateMessage(message: BarcodeMessage) {
-    const now = Date.now();
-    const key = [
-      message.kind || "barcode",
-      message.format || "",
-      message.barcode.trim().toLowerCase(),
-    ].join(":");
-    const lastSeenAt = this.recentMessages.get(key);
-
-    for (const [recentKey, seenAt] of this.recentMessages) {
-      if (now - seenAt > 2500) {
-        this.recentMessages.delete(recentKey);
-      }
-    }
-
-    if (lastSeenAt && now - lastSeenAt < 1500) {
-      return true;
-    }
-
-    this.recentMessages.set(key, now);
-    return false;
-  }
-
-  private async createRelaySession(mode: MobileCaptureMode | null, target?: SessionTarget | null) {
+  private async createRelaySession(mode: CaptureMode | null, target?: SessionTarget | null) {
     const sessionResponse = await fetch(SCANNER_SIGNAL_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -564,17 +403,11 @@ class MobileScannerOffscreenSession {
         const unseenResults = results.filter((result) => result?.id && !this.seenRelayResultIds.has(result.id));
         if (unseenResults.length === 0) return;
 
-        let inferredMode: MobileCaptureMode | null = null;
+        let inferredMode: CaptureMode | null = null;
         const photoAckIds: string[] = [];
         for (const result of unseenResults) {
           this.seenRelayResultIds.add(result.id);
-          if (
-            result.mode &&
-            (result.mode === "ocr" ||
-              result.mode === "barcode" ||
-              result.mode === "dictation" ||
-              result.mode === "photo")
-          ) {
+          if (isCaptureMode(result.mode)) {
             inferredMode = result.mode;
           }
           if (result.message) {

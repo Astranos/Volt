@@ -20,7 +20,7 @@ const mobileScannerSource = readFileSync(
 );
 
 test("App Clip result relay polling has a timeout and clears it on success", () => {
-  assert.match(offscreenSource, /const SCANNER_RESULT_TIMEOUT_MS = 30 \* 60 \* 1000;/);
+  assert.match(offscreenSource, /const SCANNER_RESULT_TIMEOUT_MS = SCANNER_SESSION_TTL_MS;/);
   assert.match(offscreenSource, /private resultPollTimeout: number \| null = null;/);
   assert.match(offscreenSource, /JSON\.stringify\(mode \? \{ relay: true, mode, target \} : \{ relay: true, target \}\)/);
   assert.match(offscreenSource, /window\.setTimeout\(\(\) => \{/);
@@ -29,9 +29,10 @@ test("App Clip result relay polling has a timeout and clears it on success", () 
 });
 
 test("App Clip QR uses the associated domain invocation URL for local and advanced experiences", () => {
-  assert.match(offscreenSource, /const SCANNER_APP_CLIP_BASE_URL = "https:\/\/scanner-signal\.vercel\.app\/clip";/);
-  assert.match(offscreenSource, /return `\$\{SCANNER_APP_CLIP_BASE_URL\}\?session=\$\{encodedSession\}`;/);
-  assert.doesNotMatch(offscreenSource, /SCANNER_APP_CLIP_BASE_URL\}\/\$\{mode\}/);
+  assert.match(offscreenSource, /const SCANNER_APP_CLIP_BASE_URL = SCANNER_SIGNAL_URL\.replace\("\/api\/signal", "\/clip"\);/);
+  assert.match(offscreenSource, /isAppClipCaptureMode\(mode\)/);
+  assert.match(offscreenSource, /`\$\{SCANNER_APP_CLIP_BASE_URL\}\/\$\{encodeURIComponent\(mode\)\}\?session=\$\{encodedSession\}`/);
+  assert.match(offscreenSource, /`\$\{SCANNER_APP_CLIP_BASE_URL\}\?session=\$\{encodedSession\}`/);
   assert.doesNotMatch(offscreenSource, /https:\/\/appclip\.apple\.com\/id/);
 });
 

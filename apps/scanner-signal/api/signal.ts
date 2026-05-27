@@ -1,55 +1,27 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import {
+  SCANNER_SESSION_TTL_MS,
+  isCaptureMode,
+  isScannerSessionId,
+  parseScannerRelayResult,
+  parseSessionTarget,
+  trimScannerRelayResults,
+  type ScannerRelayResult,
+  type SessionTarget,
+} from "../../../packages/scanner-protocol/src/index.ts";
 
-const SCANNER_SESSION_TTL_MS = 30 * 60 * 1000;
 const SCANNER_SESSION_TTL_SECONDS = Math.ceil(SCANNER_SESSION_TTL_MS / 1000);
 const SESSION_KEY_PREFIX = "volt:scanner:session:";
-const SESSION_ID_PATTERN = /^[a-zA-Z0-9_-]{4,80}$/;
-const MAX_SESSION_RESULTS = 30;
-const MAX_STORED_PHOTO_DATA_URL_BYTES = 2_500_000;
 
 type ScannerSession = {
   offer?: string;
   answer?: string;
-  result?: ScannerResult;
-  results?: ScannerResult[];
-  mode?: ScannerResult["mode"];
+  result?: ScannerRelayResult;
+  results?: ScannerRelayResult[];
+  mode?: ScannerRelayResult["mode"];
   target?: SessionTarget;
   connectedAt?: string;
   createdAt: number;
-};
-
-type SessionTarget = {
-  browser?: string;
-  tabTitle?: string;
-  url?: string;
-  cursor?: string;
-};
-
-type ScannerResult = {
-  id: string;
-  mode: "ocr" | "barcode" | "dictation" | "photo";
-  message: (
-    {
-    barcode: string;
-    dictationPhase?: "partial" | "final";
-    dictationSessionId?: string;
-    format?: string;
-    insertIntoCursor?: boolean;
-    kind?: "barcode" | "text";
-    scannedAt?: string;
-    } | {
-      kind: "photo";
-      id: string;
-      name: string;
-      mimeType: string;
-      dataUrl: string;
-      size: number;
-      width?: number;
-      height?: number;
-      capturedAt?: string;
-    }
-  );
-  createdAt: string;
 };
 
 const globalState = globalThis as typeof globalThis & {
@@ -199,155 +171,6 @@ function isConnectRequest(request: VercelRequest) {
   return request.url?.endsWith("/connect") ?? false;
 }
 
-function isCaptureMode(value: unknown): value is ScannerResult["mode"] {
-  return value === "ocr" || value === "barcode" || value === "dictation" || value === "photo";
-}
-
-function clampTargetString(value: unknown, maxLength: number) {
-  if (typeof value !== "string") return undefined;
-  const trimmed = value.trim();
-  if (!trimmed) return undefined;
-  return trimmed.length > maxLength ? trimmed.slice(0, maxLength) : trimmed;
-}
-
-function parseSessionTarget(value: unknown): SessionTarget | undefined {
-  if (!value || typeof value !== "object") return undefined;
-  const source = value as Record<string, unknown>;
-  const target = {
-    browser: clampTargetString(source.browser, 80),
-    tabTitle: clampTargetString(source.tabTitle, 160),
-    url: clampTargetString(source.url, 600),
-    cursor: clampTargetString(source.cursor, 120),
-  };
-  return Object.values(target).some(Boolean) ? target : undefined;
-}
-
-function isValidResultForMode(mode: ScannerResult["mode"], message: ScannerResult["message"]) {
-  if (mode === "photo") {
-    return message.kind === "photo";
-  }
-  if (message.kind === "photo") return false;
-
-  if (mode === "ocr") {
-    return message.kind === "text" && message.format === "live-text";
-  }
-
-  if (mode === "barcode") {
-    return message.kind === "barcode";
-  }
-
-  return (
-    message.kind === "text" &&
-    message.format === "dictation" &&
-    (message.dictationPhase === "partial" || message.dictationPhase === "final") &&
-    typeof message.dictationSessionId === "string" &&
-    message.dictationSessionId.length > 0
-  );
-}
-
-function parseScannerResult(body: unknown): ScannerResult | null {
-  if (!body || typeof body !== "object") return null;
-  const value = body as {
-    id?: unknown;
-    mode?: unknown;
-    message?: unknown;
-  };
-  const message = value.message as ScannerResult["message"] | undefined;
-  if (
-    typeof value.id !== "string" ||
-    !value.id ||
-    !isCaptureMode(value.mode) ||
-    !message ||
-    typeof message !== "object"
-  ) {
-    return null;
-  }
-
-  if (message.kind === "photo") {
-    if (
-      typeof message.id !== "string" ||
-      typeof message.name !== "string" ||
-      typeof message.mimeType !== "string" ||
-      typeof message.dataUrl !== "string" ||
-      !message.dataUrl.startsWith("data:image/") ||
-      typeof message.size !== "number"
-    ) {
-      return null;
-    }
-
-    const result: ScannerResult = {
-      id: value.id,
-      mode: value.mode,
-      message: {
-        kind: "photo",
-        id: message.id,
-        name: message.name,
-        mimeType: message.mimeType,
-        dataUrl: message.dataUrl,
-        size: message.size,
-        width: typeof message.width === "number" ? message.width : undefined,
-        height: typeof message.height === "number" ? message.height : undefined,
-        capturedAt: typeof message.capturedAt === "string" ? message.capturedAt : undefined,
-      },
-      createdAt: new Date().toISOString(),
-    };
-
-    return isValidResultForMode(result.mode, result.message) ? result : null;
-  }
-
-  if (typeof message.barcode !== "string" || !message.barcode) return null;
-
-  const result: ScannerResult = {
-    id: value.id,
-    mode: value.mode,
-    message: {
-      barcode: message.barcode,
-      dictationPhase:
-        message.dictationPhase === "partial" || message.dictationPhase === "final"
-          ? message.dictationPhase
-          : undefined,
-      dictationSessionId:
-        typeof message.dictationSessionId === "string"
-          ? message.dictationSessionId
-          : undefined,
-      format: typeof message.format === "string" ? message.format : undefined,
-      insertIntoCursor:
-        typeof message.insertIntoCursor === "boolean"
-          ? message.insertIntoCursor
-          : undefined,
-      kind: message.kind === "text" ? "text" : "barcode",
-      scannedAt: typeof message.scannedAt === "string" ? message.scannedAt : undefined,
-    },
-    createdAt: new Date().toISOString(),
-  };
-
-  return isValidResultForMode(result.mode, result.message) ? result : null;
-}
-
-function trimScannerResults(results: ScannerResult[]) {
-  const trimmed: ScannerResult[] = [];
-  let photoDataUrlBytes = 0;
-
-  for (const result of [...results].reverse()) {
-    if (trimmed.length >= MAX_SESSION_RESULTS) break;
-
-    if (result.message.kind === "photo") {
-      const dataUrlBytes = result.message.dataUrl.length;
-      if (
-        trimmed.length > 0 &&
-        photoDataUrlBytes + dataUrlBytes > MAX_STORED_PHOTO_DATA_URL_BYTES
-      ) {
-        continue;
-      }
-      photoDataUrlBytes += dataUrlBytes;
-    }
-
-    trimmed.push(result);
-  }
-
-  return trimmed.reverse();
-}
-
 export default async function handler(request: VercelRequest, response: VercelResponse) {
   setCors(response);
 
@@ -391,7 +214,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
       return;
     }
 
-    if (!SESSION_ID_PATTERN.test(sessionId)) {
+    if (!isScannerSessionId(sessionId)) {
       response.status(400).json({ error: "Invalid session" });
       return;
     }
@@ -462,7 +285,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
     }
 
     if (request.method === "POST" && isResultRoute && !isResultAckRoute) {
-      const result = parseScannerResult(request.body);
+      const result = parseScannerRelayResult(request.body);
       if (!result) {
         response.status(400).json({ error: "Invalid result" });
         return;
@@ -478,7 +301,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
           return;
       }
 
-      const nextResults = result.mode === "photo" ? [result] : trimScannerResults([...previousResults, result]);
+      const nextResults = result.mode === "photo" ? [result] : trimScannerRelayResults([...previousResults, result]);
       await saveSession(sessionId, { ...session, result, results: nextResults });
       response.status(200).json({ success: true });
       return;

@@ -61,7 +61,8 @@ test("App Clip Info.plist contains native capture permission strings", () => {
   ]) {
     assert.match(plist, new RegExp(`<key>${key}</key>\\s*<string>[^<]+</string>`));
   }
-  assert.doesNotMatch(plist, /NSSpeechRecognitionUsageDescription/);
+  assert.match(plist, /NSSpeechRecognitionUsageDescription/);
+  assert.match(plist, /does not expose dictation/);
 });
 
 test("full app Info.plist keeps matching permission strings for shared capture behavior", () => {
@@ -326,12 +327,13 @@ test("dedicated App Clip JavaScript does not import excluded native packages", (
 
 test("full app pair route accepts every browser relay capture mode", () => {
   const pairRoute = readText(new URL("../app/pair.tsx", import.meta.url));
+  const captureModes = readText(new URL("./capture-modes.ts", import.meta.url));
 
   for (const mode of ["ocr", "barcode", "dictation", "photo"]) {
-    assert.match(pairRoute, new RegExp(`value === "${mode}"`));
+    assert.match(captureModes, new RegExp(`${mode}:`));
   }
-  assert.ok(pairRoute.includes('photo: "/(tabs)/photos"'));
-  assert.match(pairRoute, /volt:\/\/pair\?session=/);
+  assert.ok(captureModes.includes('photo: "/(tabs)/photos"'));
+  assert.match(pairRoute, /buildPairUrl\(session, mode\)/);
 });
 
 test("native App Clip parser accepts generic browser relay QR sessions", () => {
