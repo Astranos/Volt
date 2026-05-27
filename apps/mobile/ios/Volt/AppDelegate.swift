@@ -7,6 +7,7 @@ import ImageIO
 import Speech
 import SwiftUI
 import UIKit
+import UniformTypeIdentifiers
 @preconcurrency import Vision
 import VisionKit
 
@@ -66,7 +67,7 @@ private enum ClipMode: String, CaseIterable, Identifiable {
     switch self {
     case .ocr: return "Text"
     case .barcode: return "Scan"
-    case .photo: return "Photo"
+    case .photo: return "Photos"
     case .dictation: return "Speak"
     }
   }
@@ -116,6 +117,7 @@ private final class ClipModel: ObservableObject {
   private let notificationHaptic = UINotificationFeedbackGenerator()
   private var pasteboardChangeCount = UIPasteboard.general.changeCount
   private var barcodeCandidateClearTask: Task<Void, Never>?
+  private var dictationPressBlockedUntilRelease = false
 
   init() {
     zoomHaptic.prepare()
@@ -212,8 +214,11 @@ private final class ClipModel: ObservableObject {
 
   func selectMode(_ nextMode: ClipMode) {
     guard mode != nextMode else { return }
+    let previousMode = mode
     selectionFeedback()
-    stopMode()
+    if previousMode == .dictation || nextMode == .dictation || textCapture != nil || isExtractingText {
+      stopMode()
+    }
     mode = nextMode
     barcodeCandidate = nil
     error = nil
@@ -262,8 +267,8 @@ private final class ClipModel: ObservableObject {
         return
       }
       camera.start()
-      camera.setMode(mode)
-      camera.setBarcodeFullFrame(fullFrameScan || (isPairing && mode == .barcode))
+      camera.setMode(isPairing ? .barcode : mode)
+      camera.setBarcodeFullFrame(isPairing || fullFrameScan)
       camera.setTorch(torchEnabled)
       camera.setZoom(zoomFactor)
     case .dictation:
@@ -328,6 +333,13 @@ private final class ClipModel: ObservableObject {
 
   func beginDictationPress() {
     guard mode == .dictation, !dictationPressActive else { return }
+    guard !dictationPressBlockedUntilRelease else { return }
+    guard sessionId != nil else {
+      dictationPressBlockedUntilRelease = true
+      error = "Pair with Chrome before dictating."
+      status = "Scan the Chrome QR to pair first"
+      return
+    }
     dictationPressActive = true
     impactFeedback()
     AudioServicesPlaySystemSound(1113)
@@ -335,6 +347,10 @@ private final class ClipModel: ObservableObject {
   }
 
   func endDictationPress() {
+    if dictationPressBlockedUntilRelease {
+      dictationPressBlockedUntilRelease = false
+      return
+    }
     guard mode == .dictation, dictationPressActive else { return }
     dictationPressActive = false
     AudioServicesPlaySystemSound(1114)
@@ -360,6 +376,7 @@ private final class ClipModel: ObservableObject {
   func startDictation() async {
     guard let sessionId else {
       dictationPressActive = false
+      dictationPressBlockedUntilRelease = true
       error = "Pair with Chrome before dictating."
       return
     }
@@ -376,6 +393,7 @@ private final class ClipModel: ObservableObject {
     } catch {
       dictationRunning = false
       dictationPressActive = false
+      dictationPressBlockedUntilRelease = true
       self.error = error.localizedDescription
     }
   }
@@ -544,16 +562,17 @@ private final class ClipModel: ObservableObject {
 
   private func sendPhoto(_ photo: CapturedPhoto) async {
     do {
-      let base64 = photo.data.base64EncodedString()
+      let squarePhoto = try photo.squareCropped()
+      let base64 = squarePhoto.data.base64EncodedString()
       try await sendResult(mode: .photo, message: [
         "kind": "photo",
         "id": "clip-photo-\(Int(Date().timeIntervalSince1970 * 1000))",
         "name": "volt-photo.jpg",
         "mimeType": "image/jpeg",
         "dataUrl": "data:image/jpeg;base64,\(base64)",
-        "size": photo.data.count,
-        "width": Int(photo.size.width),
-        "height": Int(photo.size.height),
+        "size": squarePhoto.data.count,
+        "width": Int(squarePhoto.size.width),
+        "height": Int(squarePhoto.size.height),
         "capturedAt": ISO8601DateFormatter().string(from: Date()),
       ])
       status = "Sent to Chrome"
@@ -644,8 +663,6 @@ private final class ClipModel: ObservableObject {
 
 private struct ClipRootView: View {
   @ObservedObject var model: ClipModel
-  @State private var drawerProgress: CGFloat = 0
-  @State private var drawerDragStartProgress: CGFloat?
 
   var body: some View {
     ZStack {
@@ -655,14 +672,11 @@ private struct ClipRootView: View {
         Spacer()
         modeHeaderRow
           .padding(.bottom, 14)
-        controlsDrawer
-          .padding(.bottom, 10)
-        modePicker
-          .padding(.horizontal, 2)
+        bottomControlsGlass
       }
       .padding(.horizontal, 18)
       .padding(.top, 16)
-      .padding(.bottom, 0)
+      .padding(.bottom, 18)
     }
     .ignoresSafeArea(.container, edges: .bottom)
     .background(Color.black)
@@ -687,69 +701,38 @@ private struct ClipRootView: View {
     .frame(maxWidth: .infinity, alignment: .leading)
   }
 
-  private var controlsDrawer: some View {
-    let clampedDrawerProgress = max(0, min(1, drawerProgress))
-    let edgeInset = drawerEdgeInset(progress: clampedDrawerProgress)
-    let drawerRadius = drawerCornerRadius(progress: clampedDrawerProgress)
-    let topPadding = 28 + (8 * clampedDrawerProgress)
-    let bottomPadding = 24 + (8 * clampedDrawerProgress)
-    let expandedHeight = expandedControlsHeight * clampedDrawerProgress
-
-    return VStack(spacing: 0) {
-      expandedDrawerControls
-        .frame(height: expandedHeight, alignment: .top)
-        .opacity(clampedDrawerProgress)
-        .clipped()
+  private var controlsPanel: some View {
+    VStack(spacing: 10) {
+      if model.mode != .dictation {
+        ZoomSlider(factor: model.zoomFactor) { factor in
+          model.setZoom(factor)
+        }
+        .transition(.opacity.combined(with: .move(edge: .top)))
+      } else {
+        dictationPreview
+          .transition(.opacity.combined(with: .move(edge: .top)))
+      }
+      secondaryControls
     }
     .padding(.horizontal, 16)
-    .padding(.top, topPadding)
-    .padding(.bottom, bottomPadding)
+    .padding(.top, 30)
+    .padding(.bottom, 20)
+    .frame(maxWidth: .infinity)
+  }
+
+  private var bottomControlsGlass: some View {
+    VStack(spacing: 0) {
+      controlsPanel
+      modePicker
+        .padding(.horizontal, 2)
+        .padding(.top, 6)
+    }
     .frame(maxWidth: .infinity)
     .background {
-      ConcentricLiquidDrawer(cornerRadius: drawerRadius)
+      ConcentricLiquidDrawer(cornerRadius: 52)
     }
-    .contentShape(Rectangle())
-    .simultaneousGesture(drawerDragGesture)
-    .padding(.horizontal, -(18 - edgeInset))
-  }
-
-  private var expandedControlsHeight: CGFloat {
-    118
-  }
-
-  private func drawerEdgeInset(progress: CGFloat) -> CGFloat {
-    12 - (2 * progress)
-  }
-
-  private func drawerCornerRadius(progress: CGFloat) -> CGFloat {
-    56 - (6 * progress)
-  }
-
-  private var drawerDragGesture: some Gesture {
-    DragGesture(minimumDistance: 4, coordinateSpace: .global)
-      .onChanged { value in
-        guard abs(value.translation.height) > abs(value.translation.width) * 0.7 else { return }
-        let startProgress = drawerDragStartProgress ?? drawerProgress
-        if drawerDragStartProgress == nil {
-          drawerDragStartProgress = startProgress
-        }
-        let next = startProgress - value.translation.height / 220
-        drawerProgress = max(0, min(1, next))
-      }
-      .onEnded { value in
-        let startProgress = drawerDragStartProgress ?? drawerProgress
-        drawerDragStartProgress = nil
-        let projected = startProgress - value.predictedEndTranslation.height / 220
-        let current = startProgress - value.translation.height / 220
-        let velocityBias: CGFloat = value.predictedEndTranslation.height < value.translation.height ? 0.08 : -0.08
-        let target: CGFloat = projected + velocityBias > 0.42 || current > 0.52 ? 1 : 0
-        drawerProgress = target
-      }
-  }
-
-  private func toggleDrawer() {
-    let target: CGFloat = drawerProgress > 0.5 ? 0 : 1
-    drawerProgress = target
+    .animation(.smooth(duration: 0.32), value: model.mode)
+    .padding(.horizontal, -2)
   }
 
   private var secondaryControls: some View {
@@ -789,20 +772,6 @@ private struct ClipRootView: View {
         .controlSize(.large)
       }
     }
-  }
-
-  private var expandedDrawerControls: some View {
-    VStack(spacing: 10) {
-      if model.mode != .dictation {
-        ZoomSlider(factor: model.zoomFactor) { factor in
-          model.setZoom(factor)
-        }
-      } else {
-        dictationPreview
-      }
-      secondaryControls
-    }
-    .padding(.top, 2)
   }
 
   private var dictationPreview: some View {
@@ -1070,6 +1039,11 @@ private struct ViewfinderBackground: View {
         BarcodeOverlay(candidate: model.barcodeCandidate)
           .ignoresSafeArea()
       }
+
+      if model.mode == .photo {
+        PhotoSquareOverlay()
+          .ignoresSafeArea()
+      }
     }
   }
 
@@ -1334,6 +1308,74 @@ private struct BarcodeOverlay: View {
   }
 }
 
+private struct PhotoSquareOverlay: View {
+  var body: some View {
+    GeometryReader { proxy in
+      let side = min(proxy.size.width - 48, proxy.size.height * 0.54)
+      let rect = CGRect(
+        x: (proxy.size.width - side) / 2,
+        y: max(proxy.safeAreaInsets.top + 72, (proxy.size.height - side) * 0.18),
+        width: side,
+        height: side
+      )
+      let shape = RoundedRectangle(cornerRadius: 34, style: .continuous)
+
+      ZStack {
+        Color.black.opacity(0.48)
+          .mask {
+            Rectangle()
+              .overlay(alignment: .topLeading) {
+                shape
+                  .frame(width: rect.width, height: rect.height)
+                  .offset(x: rect.minX, y: rect.minY)
+                  .blendMode(.destinationOut)
+              }
+              .compositingGroup()
+          }
+
+        shape
+          .stroke(.white.opacity(0.72), lineWidth: 1.2)
+          .frame(width: rect.width, height: rect.height)
+          .position(x: rect.midX, y: rect.midY)
+
+        shape
+          .stroke(.black.opacity(0.24), lineWidth: 1)
+          .frame(width: rect.width - 6, height: rect.height - 6)
+          .position(x: rect.midX, y: rect.midY)
+
+        PhotoGridLines(cornerRadius: 30)
+          .frame(width: rect.width, height: rect.height)
+          .position(x: rect.midX, y: rect.midY)
+      }
+    }
+    .allowsHitTesting(false)
+  }
+}
+
+private struct PhotoGridLines: View {
+  let cornerRadius: CGFloat
+
+  var body: some View {
+    GeometryReader { proxy in
+      let width = proxy.size.width
+      let height = proxy.size.height
+      let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+
+      Path { path in
+        for index in 1...2 {
+          let offset = CGFloat(index) / 3
+          path.move(to: CGPoint(x: width * offset, y: 0))
+          path.addLine(to: CGPoint(x: width * offset, y: height))
+          path.move(to: CGPoint(x: 0, y: height * offset))
+          path.addLine(to: CGPoint(x: width, y: height * offset))
+        }
+      }
+      .stroke(.white.opacity(0.22), lineWidth: 0.8)
+      .clipShape(shape)
+    }
+  }
+}
+
 private struct NormalizedPoint {
   let x: CGFloat
   let y: CGFloat
@@ -1348,6 +1390,39 @@ private struct CapturedPhoto {
   let image: CGImage
   let uiImage: UIImage
   let size: CGSize
+
+  func squareCropped() throws -> CapturedPhoto {
+    let side = min(image.width, image.height)
+    let cropRect = CGRect(
+      x: (image.width - side) / 2,
+      y: (image.height - side) / 2,
+      width: side,
+      height: side
+    )
+    guard
+      let croppedImage = image.cropping(to: cropRect),
+      let mutableData = CFDataCreateMutable(nil, 0),
+      let destination = CGImageDestinationCreateWithData(mutableData, UTType.jpeg.identifier as CFString, 1, nil)
+    else {
+      throw ClipError.message("Unable to crop the photo.")
+    }
+
+    CGImageDestinationAddImage(destination, croppedImage, [
+      kCGImageDestinationLossyCompressionQuality as String: 0.88,
+    ] as CFDictionary)
+    guard CGImageDestinationFinalize(destination) else {
+      throw ClipError.message("Unable to encode the photo.")
+    }
+
+    let outputData = mutableData as Data
+    let outputImage = UIImage(cgImage: croppedImage, scale: 1, orientation: .right)
+    return CapturedPhoto(
+      data: outputData,
+      image: croppedImage,
+      uiImage: outputImage,
+      size: CGSize(width: side, height: side)
+    )
+  }
 }
 
 private struct BarcodeCandidate: Identifiable {
