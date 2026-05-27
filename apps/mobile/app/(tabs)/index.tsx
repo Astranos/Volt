@@ -256,9 +256,18 @@ export default function OcrTab() {
                   ref={capturedScrollRef}
                   automaticallyAdjustContentInsets={false}
                   bouncesZoom
+                  centerContent
+                  contentInsetAdjustmentBehavior="never"
                   contentContainerStyle={[
                     styles.capturedImageZoomContent,
-                    capturedViewportSize ?? undefined,
+                    capturedViewportSize
+                      ? {
+                          minHeight: capturedViewportSize.height + 240,
+                          minWidth: capturedViewportSize.width,
+                          paddingBottom: 180,
+                          paddingTop: 72,
+                        }
+                      : undefined,
                   ]}
                   maximumZoomScale={4}
                   minimumZoomScale={1}
@@ -1345,7 +1354,7 @@ export const styles = StyleSheet.create({
     flex: 1,
   },
   capturedImageZoomContent: {
-    alignItems: "stretch",
+    alignItems: "center",
     justifyContent: "flex-start",
   },
   ocrCopyPrompt: {

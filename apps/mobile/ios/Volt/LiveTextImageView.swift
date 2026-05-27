@@ -120,7 +120,7 @@ class LiveTextImageView: UIView {
       return image
     }
 
-    return UIImage(cgImage: cgImage, scale: image.scale, orientation: image.imageOrientation)
+    return UIImage(cgImage: cgImage, scale: image.scale, orientation: .up)
   }
 
   private func analyze(_ image: UIImage) {

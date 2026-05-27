@@ -6,15 +6,15 @@ Build one no-install iPhone App Clip for Volt that is launched from the Chrome e
 
 - OCR Scanning
 - Barcode Scanner
-- Dictation
+- Photo Capture
 
-The App Clip is not a replacement for the full mobile app. It is a focused capture surface that pairs to one browser session, captures one result, sends it back to the extension, and gets out of the way.
+The App Clip is not a replacement for the full mobile app. It is a focused capture surface that pairs to one browser session, captures cursor-targeted results or a small photo batch, sends them back to the extension, and gets out of the way. Dictation remains a full mobile app feature, not an App Clip mode.
 
 ## Current State
 
 ### Extension Flow
 
-The extension now has context-menu actions for OCR, barcode, and dictation. Each action:
+The extension now has context-menu actions for OCR, barcode, and photo capture. Each action:
 
 1. Remembers the current editable browser target and selection range.
 2. Starts a scanner session in the offscreen document.
@@ -23,7 +23,7 @@ The extension now has context-menu actions for OCR, barcode, and dictation. Each
 ```text
 https://scanner-signal.vercel.app/clip/ocr?session=SESSION_ID
 https://scanner-signal.vercel.app/clip/barcode?session=SESSION_ID
-https://scanner-signal.vercel.app/clip/dictation?session=SESSION_ID
+https://scanner-signal.vercel.app/clip/photo?session=SESSION_ID
 ```
 
 4. Shows an in-page QR overlay for the user to scan with iPhone.
@@ -87,7 +87,7 @@ Use one App Clip target, not separate App Clips per feature.
 The App Clip reads the invocation URL path:
 
 ```ts
-type AppClipMode = "ocr" | "barcode" | "dictation";
+type AppClipMode = "ocr" | "barcode" | "photo";
 ```
 
 Route mapping:
@@ -95,7 +95,7 @@ Route mapping:
 ```text
 /clip/ocr        -> OCR capture screen
 /clip/barcode    -> barcode scanner screen
-/clip/dictation  -> dictation screen
+/clip/photo      -> photo capture screen
 ```
 
 ### Session Contract
@@ -141,16 +141,17 @@ Barcode:
 }
 ```
 
-Dictation:
+Photo:
 
 ```ts
 {
-  kind: "text",
-  format: "dictation",
-  barcode: transcript,
-  dictationPhase: "final",
-  dictationSessionId,
-  insertIntoCursor: true
+  kind: "photo",
+  id,
+  name,
+  mimeType,
+  downloadUrl,
+  size,
+  capturedAt
 }
 ```
 
@@ -173,7 +174,7 @@ Native Swift modules should own:
 
 - Camera barcode scanning via `AVFoundation`.
 - OCR via `Vision`.
-- Dictation via `Speech` and `AVAudioEngine`.
+- Photo capture via `AVFoundation`.
 
 Do not pull the full Expo camera/OCR/photo stack into the App Clip if native iOS APIs can provide the same behavior with less size risk.
 
@@ -185,9 +186,10 @@ Current flow:
 
 - Extension creates a relay session with the capture mode.
 - Extension renders the mode-specific App Clip URL in the QR overlay.
-- App Clip posts one mode-matched scanner result to `/api/signal/:session/result`.
-- Extension polls the relay result endpoint and routes the message through the existing insertion path.
-- Relay sessions expire after 30 minutes, reject mode mismatches, and keep the first accepted result.
+- App Clip posts OCR and barcode scanner results to `/api/signal/:session/result`.
+- App Clip uploads photo bytes through Photo Object Transfer and posts photo manifests to scanner-signal.
+- Extension polls for cursor-targeted results and photo manifests; text results route through the existing insertion path, while photos are downloaded and shown in the sidepanel gallery.
+- Relay sessions expire after 30 minutes, reject mode mismatches, and keep accepted cursor-targeted results; photo transfer state and uploaded objects remain recoverable for 24 hours.
 
 ## App Clip Package Strategy
 
@@ -1080,16 +1082,14 @@ Avoid:
 
 ### Photos
 
-Default: exclude from App Clip.
+Resolved: include Photo Capture in the App Clip as a small capped batch flow.
 
 Reason:
 
-- Higher payload size.
-- Larger UI.
-- Existing photo chunk transport is more complex.
-- Less aligned with instant App Clip capture.
-
-Photos remain a full app feature.
+- Store workflows need a reliable no-install path for sending product photos to the creating Chrome profile.
+- Browser downloads are the durable completion path, while the sidepanel gallery is the working surface.
+- Photo bytes move through Photo Object Transfer instead of scanner-signal session storage.
+- The App Clip is capped at 10 photos or 100 MB total; the full mobile app can support larger Photo Capture queues.
 
 ## Risks
 
@@ -1142,9 +1142,10 @@ The App Clip implementation is complete when:
 
 - One App Clip target exists and builds.
 - `scanner-signal.vercel.app/clip/:mode` opens the App Clip on iPhone.
-- OCR, barcode, and dictation route to distinct capture screens.
+- OCR, barcode, and photo route to distinct capture screens.
 - Captures send valid scanner protocol messages.
-- Extension inserts results into the original browser cursor target.
+- Extension inserts OCR and barcode results into the original browser cursor target.
+- Extension downloads Photo Capture files to the browser computer and shows them in the Mobile Scanner or Mobile Photos gallery.
 - App Clip size is within Apple requirements.
 - Associated domains and App Store Connect experiences are configured.
 - Full app behavior remains unchanged.

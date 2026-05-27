@@ -1,0 +1,3 @@
+# Photo Object Transfer for Mobile Scanner
+
+Mobile Scanner Photo Capture uses scanner-signal as a short-lived transfer broker, not as the photo byte store. The full mobile app and App Clip receive per-photo upload grants from scanner-signal, upload bytes to Vercel Blob through a small object-store adapter, post photo manifests back to photo-specific session endpoints, and the creating Chrome profile downloads and acknowledges each photo. This keeps the existing `/result` relay for OCR, barcode, and dictation, avoids storing large base64 images in scanner-signal session storage, gives both mobile surfaces one reliability model, supports multi-photo recovery for 24 hours, and keeps browser downloads as the durable completion path.

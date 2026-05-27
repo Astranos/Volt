@@ -194,6 +194,22 @@ test("App Clip OCR captured image has stable pan and zoom room for Live Text sel
   assert.match(liveTextImageView, /contentMode = \.scaleAspectFit/);
 });
 
+test("full app OCR captured image normalizes enhanced Live Text orientation", () => {
+  const liveTextImageView = readText(nativeFiles.liveTextImageView);
+
+  assert.match(liveTextImageView, /UIImage\(cgImage: cgImage, scale: image\.scale, orientation: \.up\)/);
+});
+
+test("full app OCR captured image has stable pan and zoom room for Live Text selection", () => {
+  const ocrScreen = readText(new URL("../app/(tabs)/index.tsx", import.meta.url));
+
+  assert.match(ocrScreen, /bouncesZoom/);
+  assert.match(ocrScreen, /centerContent/);
+  assert.match(ocrScreen, /minHeight: capturedViewportSize\.height \+ 240/);
+  assert.match(ocrScreen, /paddingBottom: 180/);
+  assert.match(ocrScreen, /paddingTop: 72/);
+});
+
 test("App Clip bottom controls use native Liquid Glass with concentric screen corners", () => {
   const clipScreen = readText(nativeFiles.clipScreen);
   const liquidTabBar = readText(nativeFiles.liquidTabBar);

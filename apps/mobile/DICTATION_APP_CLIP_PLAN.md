@@ -1,5 +1,7 @@
 # Dictation App Clip Plan
 
+Status: superseded. Dictation is not an App Clip capture mode. Keep dictation in the full mobile app unless a future decision explicitly reopens App Clip dictation with a non-Speech-framework implementation and a new size/runtime review.
+
 ## Goal
 
 Make the Volt App Clip support the `dictation` mode by reusing the barcode App Clip architecture, but replacing camera capture with native iOS speech recognition. The user scans the App Clip QR code from Chrome, speaks into the iPhone, and the App Clip streams transcript updates back to the browser cursor as dictation is recognized.
