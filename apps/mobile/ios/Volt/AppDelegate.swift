@@ -14,6 +14,7 @@ import VisionKit
 private let signalBaseURL = URL(string: "https://scanner-signal.vercel.app/api/signal")!
 private let validModes: Set<String> = ["ocr", "barcode", "photo", "dictation"]
 private let clipZoomStops: [CGFloat] = [1, 1.5, 2, 2.5, 3, 3.5, 4]
+// Debug Metro port contract: provider.jsLocation = "\(ip):8090"
 
 @UIApplicationMain
 final class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -83,7 +84,7 @@ private enum ClipMode: String, CaseIterable, Identifiable {
 }
 
 private struct ClipInvocation {
-  let mode: ClipMode
+  let mode: ClipMode?
   let sessionId: String
 }
 
@@ -194,7 +195,7 @@ private final class ClipModel: ObservableObject {
       return
     }
 
-    mode = invocation.mode
+    mode = invocation.mode ?? mode
     sessionId = invocation.sessionId
     isPairing = false
     error = nil
@@ -582,7 +583,7 @@ private final class ClipModel: ObservableObject {
   private func barcodeStatusMessage(for candidate: BarcodeCandidate) -> String {
     let value = candidate.value.trimmingCharacters(in: .whitespacesAndNewlines)
     let preview = value.count > 72 ? "\(value.prefix(69))..." : value
-    return preview.isEmpty ? "Barcode in reader" : "\(candidate.format.uppercased()): \(preview)"
+    return preview.isEmpty ? "Barcode in reader" : preview
   }
 
   private func sendDictation(text: String, phase: String, background: Bool) async {
@@ -786,14 +787,12 @@ private final class ClipModel: ObservableObject {
     let modeValue = queryMode ?? (validModes.contains(pathMode ?? "") ? pathMode : nil)
     let session = query.first(where: { $0.name == "session" })?.value
     guard
-      let modeValue,
-      validModes.contains(modeValue),
-      let mode = ClipMode(rawValue: modeValue),
       let session,
       session.range(of: #"^[A-Za-z0-9_-]{4,80}$"#, options: .regularExpression) != nil
     else {
       return nil
     }
+    let mode = modeValue.flatMap { validModes.contains($0) ? ClipMode(rawValue: $0) : nil }
     return ClipInvocation(mode: mode, sessionId: session)
   }
 }
@@ -867,20 +866,16 @@ private struct ClipRootView: View {
     )
 
     return VStack(spacing: 0) {
-      if !model.isPairing {
-        HStack {
-          Spacer()
+      controlsPanel
+      HStack(alignment: .center, spacing: 10) {
+        modePicker
+        if !model.isPairing {
           UnpairGlassButton(action: model.unpair)
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 12)
-        .padding(.bottom, -2)
       }
-      controlsPanel
-      modePicker
-        .padding(.horizontal, 2)
-        .padding(.top, 6)
-        .padding(.bottom, 14)
+        .padding(.horizontal, 14)
+        .padding(.top, 16)
+        .padding(.bottom, 8)
     }
     .frame(maxWidth: .infinity)
     .background {
@@ -976,7 +971,6 @@ private struct ClipRootView: View {
     }
     .frame(maxWidth: 560)
     .frame(maxWidth: .infinity)
-    .padding(.trailing, model.isPairing ? 0 : 92)
     .accessibilityLabel("Mode")
   }
 
@@ -1247,28 +1241,30 @@ private struct UnpairGlassButton: View {
 
   var body: some View {
     Button(action: action) {
-      HStack(spacing: 7) {
+      VStack(spacing: 4) {
         Image(systemName: "link.badge.minus")
-          .font(.system(size: 14, weight: .bold))
+          .font(.system(size: 16, weight: .bold))
         Text("Unpair")
-          .font(.system(size: 12, weight: .bold, design: .rounded))
+          .font(.system(size: 9, weight: .bold, design: .rounded))
           .lineLimit(1)
-          .minimumScaleFactor(0.8)
+          .minimumScaleFactor(0.75)
       }
       .foregroundStyle(.white)
-      .padding(.horizontal, 13)
-      .frame(height: 34)
-      .contentShape(Capsule())
+      .frame(width: 70, height: 54)
+      .contentShape(RoundedRectangle(cornerRadius: 27, style: .continuous))
+      .nativeClearGlassBackground(RoundedRectangle(cornerRadius: 27, style: .continuous))
     }
     .buttonStyle(.plain)
-    .nativeClearGlassBackground(Capsule())
+    .frame(width: 70, height: 76, alignment: .center)
     .background {
-      Capsule()
+      RoundedRectangle(cornerRadius: 27, style: .continuous)
         .fill(Color.red.opacity(0.34))
+        .frame(width: 70, height: 54)
     }
     .overlay {
-      Capsule()
+      RoundedRectangle(cornerRadius: 27, style: .continuous)
         .stroke(Color.red.opacity(0.58), lineWidth: 1.2)
+        .frame(width: 70, height: 54)
     }
     .shadow(color: Color.red.opacity(0.22), radius: 10, y: 3)
     .accessibilityLabel("Unpair from Chrome")
@@ -1427,9 +1423,18 @@ private struct ViewfinderBackground: View {
     )
     .ignoresSafeArea()
     .overlay {
-      Image(systemName: model.mode.symbol)
-        .font(.system(size: 118, weight: .thin))
-        .foregroundStyle(.white.opacity(0.14))
+      GeometryReader { proxy in
+        Image(systemName: model.mode.symbol)
+          .font(.system(size: 118, weight: .thin))
+          .foregroundStyle(.white.opacity(0.14))
+          .frame(maxWidth: .infinity)
+          .position(
+            x: proxy.size.width / 2,
+            y: model.mode == .dictation
+              ? max(proxy.safeAreaInsets.top + 240, proxy.size.height * 0.42)
+              : proxy.size.height / 2
+          )
+      }
     }
   }
 
@@ -1681,21 +1686,6 @@ private struct BarcodeScanGuide: View {
       let rect = barcodeScanRect(in: proxy.size, safeAreaInsets: proxy.safeAreaInsets)
 
       ZStack {
-        if let previewText {
-          Text(previewText)
-            .font(.system(size: 21, weight: .semibold, design: .rounded))
-            .foregroundStyle(.white)
-            .lineLimit(2)
-            .minimumScaleFactor(0.62)
-            .multilineTextAlignment(.center)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .frame(maxWidth: min(proxy.size.width - 48, rect.width + 56))
-            .nativeClearGlassBackground(RoundedRectangle(cornerRadius: 20, style: .continuous))
-            .position(x: rect.midX, y: max(proxy.safeAreaInsets.top + 88, rect.minY - 40))
-            .transition(.opacity.combined(with: .scale(scale: 0.96)))
-        }
-
         RoundedRectangle(cornerRadius: 22, style: .continuous)
           .stroke(.white.opacity(0.76), style: StrokeStyle(lineWidth: 1.4, lineCap: .round))
           .background {
@@ -1711,20 +1701,23 @@ private struct BarcodeScanGuide: View {
             }
             .stroke(.white.opacity(0.22), lineWidth: 1)
           }
+
+        Text("Place barcode inside the frame")
+          .font(.system(size: 14, weight: .semibold, design: .rounded))
+          .foregroundStyle(.white.opacity(candidate == nil ? 0.66 : 0.44))
+          .lineLimit(1)
+          .minimumScaleFactor(0.8)
+          .padding(.horizontal, 14)
+          .padding(.vertical, 7)
+          .background {
+            Capsule()
+              .fill(.black.opacity(0.16))
+          }
+          .position(x: rect.midX, y: min(proxy.size.height - proxy.safeAreaInsets.bottom - 132, rect.maxY + 32))
       }
-      .animation(.smooth(duration: 0.2), value: previewText)
+      .animation(.smooth(duration: 0.2), value: candidate == nil)
     }
     .allowsHitTesting(false)
-  }
-
-  private var previewText: String? {
-    guard let value = candidate?.value.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else {
-      return nil
-    }
-    if value.count <= 96 {
-      return value
-    }
-    return "\(value.prefix(93))..."
   }
 }
 
@@ -1733,17 +1726,19 @@ private struct DictationLiveOverlay: View {
   let isListening: Bool
 
   var body: some View {
-    VStack {
-      Text(displayText)
-        .font(.system(size: 42, weight: .bold, design: .rounded))
-        .foregroundStyle(.white)
-        .multilineTextAlignment(.leading)
-        .lineLimit(4)
-        .minimumScaleFactor(0.62)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 28)
-        .padding(.top, 96)
-      Spacer()
+    GeometryReader { proxy in
+      VStack {
+        Text(displayText)
+          .font(.system(size: 42, weight: .bold, design: .rounded))
+          .foregroundStyle(.white)
+          .multilineTextAlignment(.leading)
+          .lineLimit(4)
+          .minimumScaleFactor(0.62)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .padding(.horizontal, 28)
+          .padding(.top, proxy.safeAreaInsets.top + 96)
+        Spacer()
+      }
     }
   }
 

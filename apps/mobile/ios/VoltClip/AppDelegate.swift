@@ -4,14 +4,17 @@ import AudioToolbox
 import CoreImage
 import CoreImage.CIFilterBuiltins
 import ImageIO
+import Speech
 import SwiftUI
 import UIKit
+import UniformTypeIdentifiers
 @preconcurrency import Vision
 import VisionKit
 
 private let signalBaseURL = URL(string: "https://scanner-signal.vercel.app/api/signal")!
 private let validModes: Set<String> = ["ocr", "barcode", "photo", "dictation"]
 private let clipZoomStops: [CGFloat] = [1, 1.5, 2, 2.5, 3, 3.5, 4]
+// Debug Metro port contract: provider.jsLocation = "\(ip):8091"
 
 @UIApplicationMain
 final class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -65,7 +68,7 @@ private enum ClipMode: String, CaseIterable, Identifiable {
     switch self {
     case .ocr: return "Text"
     case .barcode: return "Scan"
-    case .photo: return "Photo"
+    case .photo: return "Photos"
     case .dictation: return "Speak"
     }
   }
@@ -81,7 +84,7 @@ private enum ClipMode: String, CaseIterable, Identifiable {
 }
 
 private struct ClipInvocation {
-  let mode: ClipMode
+  let mode: ClipMode?
   let sessionId: String
 }
 
@@ -97,7 +100,7 @@ private final class ClipModel: ObservableObject {
   @Published var barcodeCandidate: BarcodeCandidate?
   @Published var torchEnabled = false
   @Published var zoomFactor: CGFloat = 1
-  @Published var autoSendBarcode = true
+  @Published var autoSendBarcode = false
   @Published var fullFrameScan = false
   @Published var insertIntoCursor = true
   @Published var dictationAddsPunctuation = true
@@ -107,6 +110,7 @@ private final class ClipModel: ObservableObject {
   @Published var textCapture: TextCapture?
   @Published var textCaptureShowsCleanedImage = false
   @Published var isExtractingText = false
+  @Published var cursorTargetName = "Chrome"
 
   let camera = ClipCamera()
   let dictation = ClipDictation()
@@ -115,6 +119,9 @@ private final class ClipModel: ObservableObject {
   private let notificationHaptic = UINotificationFeedbackGenerator()
   private var pasteboardChangeCount = UIPasteboard.general.changeCount
   private var barcodeCandidateClearTask: Task<Void, Never>?
+  private var barcodeCandidateSignature: String?
+  private var transientStatusTask: Task<Void, Never>?
+  private var dictationPressBlockedUntilRelease = false
 
   init() {
     zoomHaptic.prepare()
@@ -132,14 +139,19 @@ private final class ClipModel: ObservableObject {
       Task { @MainActor in
         guard let self else { return }
         self.barcodeCandidateClearTask?.cancel()
-        self.barcodeCandidate = candidate
         if self.isPairing {
+          self.barcodeCandidate = candidate
           self.handlePairingCandidate(candidate)
           return
         }
-        self.status = "Code found"
+        let signature = "\(candidate.format):\(candidate.value)"
+        if self.barcodeCandidateSignature != signature {
+          self.barcodeCandidateSignature = signature
+          self.barcodeCandidate = candidate
+          self.status = self.barcodeStatusMessage(for: candidate)
+        }
         if self.autoSendBarcode {
-          await self.sendBarcode(candidate)
+          await self.sendBarcode(candidate, userInitiated: false)
         }
       }
     }
@@ -168,6 +180,7 @@ private final class ClipModel: ObservableObject {
 
   deinit {
     barcodeCandidateClearTask?.cancel()
+    transientStatusTask?.cancel()
     NotificationCenter.default.removeObserver(self)
   }
 
@@ -182,7 +195,7 @@ private final class ClipModel: ObservableObject {
       return
     }
 
-    mode = invocation.mode
+    mode = invocation.mode ?? mode
     sessionId = invocation.sessionId
     isPairing = false
     error = nil
@@ -196,9 +209,11 @@ private final class ClipModel: ObservableObject {
     mode = .barcode
     sessionId = nil
     barcodeCandidate = nil
+    barcodeCandidateSignature = nil
     zoomFactor = 1
     torchEnabled = false
     fullFrameScan = false
+    cursorTargetName = "Chrome"
     error = nil
     status = "Scan the Chrome QR to pair"
     clearTextCapture()
@@ -211,13 +226,22 @@ private final class ClipModel: ObservableObject {
 
   func selectMode(_ nextMode: ClipMode) {
     guard mode != nextMode else { return }
+    let previousMode = mode
     selectionFeedback()
-    stopMode()
+    if previousMode == .dictation || nextMode == .dictation || textCapture != nil || isExtractingText {
+      stopMode()
+    }
     mode = nextMode
     barcodeCandidate = nil
+    barcodeCandidateSignature = nil
     error = nil
     if nextMode != .ocr {
       clearTextCapture()
+    }
+    if sessionId == nil {
+      status = nextMode == .barcode ? "Scan the Chrome QR to pair" : "Pair from Chrome to send results"
+    } else {
+      status = defaultHintStatus()
     }
     startMode()
   }
@@ -237,11 +261,13 @@ private final class ClipModel: ObservableObject {
     guard let sessionId else { return }
     do {
       _ = try await postJSON(path: "\(sessionId)/connect", body: [:])
+      await refreshSessionTarget()
     } catch {
       if let httpError = error as? ClipHTTPStatusError, httpError.statusCode == 404 {
         do {
           try await repairRelaySession(mode: mode)
           _ = try await postJSON(path: "\(sessionId)/connect", body: [:])
+          await refreshSessionTarget()
           return
         } catch {}
       }
@@ -259,11 +285,22 @@ private final class ClipModel: ObservableObject {
       }
       camera.start()
       camera.setMode(isPairing ? .barcode : mode)
-      camera.setBarcodeFullFrame(fullFrameScan || isPairing)
+      camera.setBarcodeFullFrame(isPairing || fullFrameScan)
       camera.setTorch(torchEnabled)
       camera.setZoom(zoomFactor)
     case .dictation:
-      camera.stop()
+      if sessionId == nil || isPairing {
+        camera.start()
+        camera.setMode(.barcode)
+        camera.setBarcodeFullFrame(true)
+        camera.setTorch(torchEnabled)
+        camera.setZoom(zoomFactor)
+      } else {
+        camera.stop()
+        Task {
+          try? await dictation.prepareForUse()
+        }
+      }
     }
   }
 
@@ -278,7 +315,6 @@ private final class ClipModel: ObservableObject {
 
   func capturePrimary() {
     impactFeedback()
-    playCaptureSound()
     switch mode {
     case .ocr:
       if textCapture != nil {
@@ -286,6 +322,7 @@ private final class ClipModel: ObservableObject {
         status = "Ready"
         return
       }
+      playCaptureSound()
       status = "Capturing text"
       camera.capturePhoto { [weak self] result in
         Task { @MainActor in
@@ -301,6 +338,7 @@ private final class ClipModel: ObservableObject {
         }
       }
     case .photo:
+      playCaptureSound()
       status = "Sending photo"
       camera.capturePhoto { [weak self] result in
         Task { @MainActor in
@@ -315,7 +353,8 @@ private final class ClipModel: ObservableObject {
       }
     case .barcode:
       if let barcodeCandidate {
-        Task { await sendBarcode(barcodeCandidate) }
+        playSendSound()
+        Task { await sendBarcode(barcodeCandidate, userInitiated: true) }
       }
     case .dictation:
       break
@@ -324,6 +363,13 @@ private final class ClipModel: ObservableObject {
 
   func beginDictationPress() {
     guard mode == .dictation, !dictationPressActive else { return }
+    guard !dictationPressBlockedUntilRelease else { return }
+    guard sessionId != nil else {
+      dictationPressBlockedUntilRelease = true
+      error = "Pair with Chrome before dictating."
+      status = "Scan the Chrome QR to pair first"
+      return
+    }
     dictationPressActive = true
     impactFeedback()
     AudioServicesPlaySystemSound(1113)
@@ -331,6 +377,10 @@ private final class ClipModel: ObservableObject {
   }
 
   func endDictationPress() {
+    if dictationPressBlockedUntilRelease {
+      dictationPressBlockedUntilRelease = false
+      return
+    }
     guard mode == .dictation, dictationPressActive else { return }
     dictationPressActive = false
     AudioServicesPlaySystemSound(1114)
@@ -339,7 +389,7 @@ private final class ClipModel: ObservableObject {
 
     Task { @MainActor in
       status = "Finishing dictation"
-      let completedText = await dictation.finishAndStop(timeout: 2.0)
+      let completedText = await dictation.finishAndStop(tailDuration: 1.25, timeout: 2.0)
       dictationRunning = false
       let finalText = (completedText ?? dictationTranscript).trimmingCharacters(in: .whitespacesAndNewlines)
       guard !finalText.isEmpty else {
@@ -356,13 +406,14 @@ private final class ClipModel: ObservableObject {
   func startDictation() async {
     guard let sessionId else {
       dictationPressActive = false
+      dictationPressBlockedUntilRelease = true
       error = "Pair with Chrome before dictating."
       return
     }
     do {
       dictationTranscript = ""
       status = "Listening"
-      try await dictation.start(sessionId: sessionId)
+      try await dictation.start(sessionId: sessionId, addsPunctuation: dictationAddsPunctuation)
       guard dictationPressActive else {
         dictation.stop()
         return
@@ -372,6 +423,7 @@ private final class ClipModel: ObservableObject {
     } catch {
       dictationRunning = false
       dictationPressActive = false
+      dictationPressBlockedUntilRelease = true
       self.error = error.localizedDescription
     }
   }
@@ -419,6 +471,7 @@ private final class ClipModel: ObservableObject {
       try? await Task.sleep(nanoseconds: nanoseconds)
       guard !Task.isCancelled else { return }
       barcodeCandidate = nil
+      barcodeCandidateSignature = nil
     }
   }
 
@@ -475,7 +528,7 @@ private final class ClipModel: ObservableObject {
         "kind": "text",
         "scannedAt": ISO8601DateFormatter().string(from: Date()),
       ])
-      status = "Copied text sent to Chrome"
+      showTransientStatus("Copied text sent to Chrome")
       notificationHaptic.notificationOccurred(.success)
       notificationHaptic.prepare()
     } catch {
@@ -489,6 +542,10 @@ private final class ClipModel: ObservableObject {
     AudioServicesPlaySystemSound(1108)
   }
 
+  private func playSendSound() {
+    AudioServicesPlaySystemSound(1004)
+  }
+
   private func impactFeedback() {
     impactHaptic.impactOccurred(intensity: 0.55)
     impactHaptic.prepare()
@@ -499,9 +556,12 @@ private final class ClipModel: ObservableObject {
     zoomHaptic.prepare()
   }
 
-  private func sendBarcode(_ candidate: BarcodeCandidate) async {
+  private func sendBarcode(_ candidate: BarcodeCandidate, userInitiated: Bool) async {
     guard !isSending else { return }
     do {
+      if userInitiated {
+        status = "Sending barcode"
+      }
       try await sendResult(mode: .barcode, message: [
         "barcode": candidate.value,
         "format": candidate.format,
@@ -509,11 +569,21 @@ private final class ClipModel: ObservableObject {
         "kind": "barcode",
         "scannedAt": ISO8601DateFormatter().string(from: Date()),
       ])
-      status = "Sent to Chrome"
-      scheduleBarcodeCandidateClear(after: 0.45)
+      if userInitiated {
+        showTransientStatus("Sent to Chrome")
+        scheduleBarcodeCandidateClear(after: 0.45)
+      } else {
+        status = barcodeStatusMessage(for: candidate)
+      }
     } catch {
       self.error = error.localizedDescription
     }
+  }
+
+  private func barcodeStatusMessage(for candidate: BarcodeCandidate) -> String {
+    let value = candidate.value.trimmingCharacters(in: .whitespacesAndNewlines)
+    let preview = value.count > 72 ? "\(value.prefix(69))..." : value
+    return preview.isEmpty ? "Barcode in reader" : preview
   }
 
   private func sendDictation(text: String, phase: String, background: Bool) async {
@@ -529,7 +599,7 @@ private final class ClipModel: ObservableObject {
         "scannedAt": ISO8601DateFormatter().string(from: Date()),
       ], background: background)
       if !background {
-        status = "Sent to Chrome"
+        showTransientStatus("Sent to Chrome")
       }
     } catch {
       if !background {
@@ -540,21 +610,55 @@ private final class ClipModel: ObservableObject {
 
   private func sendPhoto(_ photo: CapturedPhoto) async {
     do {
-      let base64 = photo.data.base64EncodedString()
+      let squarePhoto = try photo.squareCropped()
+      let base64 = squarePhoto.data.base64EncodedString()
       try await sendResult(mode: .photo, message: [
         "kind": "photo",
         "id": "clip-photo-\(Int(Date().timeIntervalSince1970 * 1000))",
         "name": "volt-photo.jpg",
         "mimeType": "image/jpeg",
         "dataUrl": "data:image/jpeg;base64,\(base64)",
-        "size": photo.data.count,
-        "width": Int(photo.size.width),
-        "height": Int(photo.size.height),
+        "size": squarePhoto.data.count,
+        "width": Int(squarePhoto.size.width),
+        "height": Int(squarePhoto.size.height),
         "capturedAt": ISO8601DateFormatter().string(from: Date()),
       ])
-      status = "Sent to Chrome"
+      showTransientStatus("Sent to Chrome")
     } catch {
       self.error = error.localizedDescription
+    }
+  }
+
+  private func showTransientStatus(_ message: String, duration: TimeInterval = 1.45) {
+    transientStatusTask?.cancel()
+    status = message
+    transientStatusTask = Task { @MainActor in
+      let nanoseconds = UInt64(max(0, duration) * 1_000_000_000)
+      try? await Task.sleep(nanoseconds: nanoseconds)
+      guard !Task.isCancelled, self.status == message else { return }
+      self.status = self.defaultHintStatus()
+    }
+  }
+
+  private func defaultHintStatus() -> String {
+    if sessionId == nil || isPairing {
+      return mode == .barcode ? "Scan the Chrome QR to pair" : "Pair from Chrome to send results"
+    }
+    if mode == .barcode, let barcodeCandidate {
+      return barcodeStatusMessage(for: barcodeCandidate)
+    }
+    if mode == .ocr, textCapture != nil {
+      return "Select text and copy"
+    }
+    switch mode {
+    case .ocr:
+      return "Capture text to send"
+    case .barcode:
+      return "Place a barcode in the reader"
+    case .photo:
+      return "Capture a square photo"
+    case .dictation:
+      return "Hold microphone to start"
     }
   }
 
@@ -581,7 +685,7 @@ private final class ClipModel: ObservableObject {
     do {
       _ = try await postJSON(path: "\(sessionId)/result", body: body)
     } catch {
-      guard let httpError = error as? ClipHTTPStatusError, httpError.statusCode == 404 else {
+      guard let httpError = error as? ClipHTTPStatusError, httpError.shouldRepairRelay else {
         throw error
       }
       try await repairRelaySession(mode: mode)
@@ -597,6 +701,35 @@ private final class ClipModel: ObservableObject {
     ])
   }
 
+  private func refreshSessionTarget() async {
+    guard let sessionId else { return }
+    do {
+      let session = try await getJSON(path: sessionId)
+      if let target = session["target"] as? [String: Any] {
+        cursorTargetName = humanizedTargetName(from: target)
+      }
+    } catch {
+      cursorTargetName = "Chrome"
+    }
+  }
+
+  private func humanizedTargetName(from target: [String: Any]) -> String {
+    if
+      let urlString = target["url"] as? String,
+      let host = URL(string: urlString)?.host?.replacingOccurrences(of: "^www\\.", with: "", options: .regularExpression),
+      !host.isEmpty
+    {
+      return host
+    }
+    if let title = target["tabTitle"] as? String, !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+      return title
+    }
+    if let browser = target["browser"] as? String, !browser.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+      return browser
+    }
+    return "Chrome"
+  }
+
   private func postJSON(path: String, body: [String: Any]) async throws -> [String: Any] {
     let url = signalBaseURL.appendingPathComponent(path)
     var request = URLRequest(url: url)
@@ -608,12 +741,40 @@ private final class ClipModel: ObservableObject {
       throw ClipError.message("Chrome session did not respond.")
     }
     guard (200..<300).contains(http.statusCode) else {
-      if http.statusCode == 404 {
-        throw ClipHTTPStatusError(statusCode: http.statusCode)
-      }
-      throw ClipError.message("Chrome session returned \(http.statusCode).")
+      let message = signalErrorMessage(from: data)
+      print("[VoltSignal] POST \(path) returned \(http.statusCode): \(message ?? "No response body")")
+      throw ClipHTTPStatusError(statusCode: http.statusCode, message: message)
     }
     return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
+  }
+
+  private func getJSON(path: String) async throws -> [String: Any] {
+    let url = signalBaseURL.appendingPathComponent(path)
+    var request = URLRequest(url: url)
+    request.httpMethod = "GET"
+    let (data, response) = try await URLSession.shared.data(for: request)
+    guard let http = response as? HTTPURLResponse else {
+      throw ClipError.message("Chrome session did not respond.")
+    }
+    guard (200..<300).contains(http.statusCode) else {
+      let message = signalErrorMessage(from: data)
+      print("[VoltSignal] GET \(path) returned \(http.statusCode): \(message ?? "No response body")")
+      throw ClipHTTPStatusError(statusCode: http.statusCode, message: message)
+    }
+    return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
+  }
+
+  private func signalErrorMessage(from data: Data) -> String? {
+    guard !data.isEmpty else { return nil }
+    if
+      let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+      let error = object["error"] as? String,
+      !error.isEmpty
+    {
+      return error
+    }
+    let text = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+    return text?.isEmpty == false ? text : nil
   }
 
   private func parseInvocation(url: URL) -> ClipInvocation? {
@@ -626,38 +787,38 @@ private final class ClipModel: ObservableObject {
     let modeValue = queryMode ?? (validModes.contains(pathMode ?? "") ? pathMode : nil)
     let session = query.first(where: { $0.name == "session" })?.value
     guard
-      let modeValue,
-      validModes.contains(modeValue),
-      let mode = ClipMode(rawValue: modeValue),
       let session,
       session.range(of: #"^[A-Za-z0-9_-]{4,80}$"#, options: .regularExpression) != nil
     else {
       return nil
     }
+    let mode = modeValue.flatMap { validModes.contains($0) ? ClipMode(rawValue: $0) : nil }
     return ClipInvocation(mode: mode, sessionId: session)
   }
 }
 
 private struct ClipRootView: View {
   @ObservedObject var model: ClipModel
-  @State private var drawerProgress: CGFloat = 0
-  @State private var drawerDragStartProgress: CGFloat?
 
   var body: some View {
     ZStack {
       ViewfinderBackground(model: model)
 
       VStack(spacing: 0) {
-        header
+        topHintRow
         Spacer()
-        shutterButton
-          .padding(.trailing, 34)
-          .padding(.bottom, 14)
-        controls
       }
       .padding(.horizontal, 18)
       .padding(.top, 16)
-      .padding(.bottom, 0)
+
+      VStack(spacing: 0) {
+        Spacer()
+        shutterButton
+          .padding(.bottom, 16)
+        bottomControlsGlass
+      }
+      .padding(.horizontal, 18)
+      .padding(.bottom, 18)
     }
     .ignoresSafeArea(.container, edges: .bottom)
     .background(Color.black)
@@ -666,227 +827,150 @@ private struct ClipRootView: View {
     .onChange(of: model.mode) { _ in model.startMode() }
   }
 
-  private var header: some View {
-    HStack(alignment: .top, spacing: 12) {
-      VStack(alignment: .leading, spacing: 8) {
-        Text(model.mode.title)
-          .font(.system(size: 30, weight: .bold, design: .rounded))
-        Text(model.error ?? model.status)
-          .font(.system(size: 15, weight: .medium))
-          .foregroundStyle(model.error == nil ? .white.opacity(0.78) : .red.opacity(0.95))
-          .lineLimit(2)
-      }
-      Spacer(minLength: 8)
-      if !model.isPairing {
-        Button(action: model.unpair) {
-          Image(systemName: "link.badge.minus")
-            .font(.system(size: 16, weight: .bold))
-            .frame(width: 42, height: 42)
-            .foregroundStyle(.white)
-            .background(.white.opacity(0.14), in: Circle())
-        }
-        .accessibilityLabel("Unpair from Chrome")
-        .buttonStyle(.plain)
-      }
-    }
-    .frame(maxWidth: .infinity, alignment: .leading)
-    .padding(.top, 8)
+  private var topHintRow: some View {
+    StatusGlassRow(
+      message: statusMessage,
+      isError: model.error != nil,
+      symbol: statusSymbol
+    )
+    .frame(maxWidth: 380)
+    .frame(maxWidth: .infinity, alignment: .center)
   }
 
-  private var controls: some View {
-    let clampedDrawerProgress = max(0, min(1, drawerProgress))
-    let edgeInset = drawerEdgeInset(progress: clampedDrawerProgress)
-    let drawerRadius = drawerCornerRadius(progress: clampedDrawerProgress)
-    let topPadding = 12 + (16 * clampedDrawerProgress)
-    let bottomPadding = 16 + (8 * clampedDrawerProgress)
-    let expandedHeight = expandedControlsHeight * clampedDrawerProgress
-
-    return VStack(spacing: 14) {
-      drawerHandle(clampedDrawerProgress: clampedDrawerProgress)
-
+  private var controlsPanel: some View {
+    VStack(spacing: 10) {
+      if model.mode != .dictation {
+        ZoomSlider(factor: model.zoomFactor) { factor in
+          model.setZoom(factor)
+        }
+        .transition(.opacity.combined(with: .move(edge: .top)))
+      } else {
+        dictationPreview
+          .transition(.opacity.combined(with: .move(edge: .top)))
+      }
       secondaryControls
-
-      expandedDrawerControls
-        .frame(height: expandedHeight, alignment: .top)
-        .opacity(clampedDrawerProgress)
-        .clipped()
     }
     .padding(.horizontal, 16)
-    .padding(.top, topPadding)
-    .padding(.bottom, bottomPadding)
+    .padding(.top, 30)
+    .padding(.bottom, 20)
+    .frame(maxWidth: .infinity)
+  }
+
+  private var bottomControlsGlass: some View {
+    let shape = UnevenRoundedRectangle(
+      topLeadingRadius: 52,
+      bottomLeadingRadius: 48,
+      bottomTrailingRadius: 48,
+      topTrailingRadius: 52,
+      style: .continuous
+    )
+
+    return VStack(spacing: 0) {
+      controlsPanel
+      HStack(alignment: .center, spacing: 10) {
+        modePicker
+        if !model.isPairing {
+          UnpairGlassButton(action: model.unpair)
+        }
+      }
+        .padding(.horizontal, 14)
+        .padding(.top, 16)
+        .padding(.bottom, 8)
+    }
     .frame(maxWidth: .infinity)
     .background {
-      ConcentricLiquidDrawer(cornerRadius: drawerRadius)
+      ConcentricLiquidDrawer(cornerRadius: 52)
     }
-    .contentShape(Rectangle())
-    .simultaneousGesture(drawerDragGesture)
-    .padding(.horizontal, -(18 - edgeInset))
-    .padding(.bottom, edgeInset)
-  }
-
-  private var expandedControlsHeight: CGFloat {
-    138
-  }
-
-  private func drawerEdgeInset(progress: CGFloat) -> CGFloat {
-    12 - (2 * progress)
-  }
-
-  private func drawerCornerRadius(progress: CGFloat) -> CGFloat {
-    56 - (6 * progress)
-  }
-
-  private func drawerHandle(clampedDrawerProgress: CGFloat) -> some View {
-    Capsule()
-      .fill(.white.opacity(0.34))
-      .frame(width: 46, height: 5)
-      .frame(maxWidth: .infinity, minHeight: 28)
-      .contentShape(Rectangle())
-      .padding(.bottom, model.mode == .dictation ? 0 : 2)
-      .onTapGesture {
-        toggleDrawer()
-      }
-      .gesture(
-        drawerDragGesture
-      )
-      .accessibilityLabel(clampedDrawerProgress > 0.5 ? "Collapse controls" : "Expand controls")
-      .accessibilityAddTraits(.isButton)
-  }
-
-  private var drawerDragGesture: some Gesture {
-    DragGesture(minimumDistance: 4, coordinateSpace: .global)
-      .onChanged { value in
-        guard abs(value.translation.height) > abs(value.translation.width) * 0.7 else { return }
-        let startProgress = drawerDragStartProgress ?? drawerProgress
-        if drawerDragStartProgress == nil {
-          drawerDragStartProgress = startProgress
-        }
-        let next = startProgress - value.translation.height / 220
-        drawerProgress = max(0, min(1, next))
-      }
-      .onEnded { value in
-        let startProgress = drawerDragStartProgress ?? drawerProgress
-        drawerDragStartProgress = nil
-        let projected = startProgress - value.predictedEndTranslation.height / 220
-        let current = startProgress - value.translation.height / 220
-        let velocityBias: CGFloat = value.predictedEndTranslation.height < value.translation.height ? 0.08 : -0.08
-        let target: CGFloat = projected + velocityBias > 0.42 || current > 0.52 ? 1 : 0
-        withAnimation(.interactiveSpring(response: 0.24, dampingFraction: 0.82)) {
-          drawerProgress = target
-        }
-      }
-  }
-
-  private func toggleDrawer() {
-    let target: CGFloat = drawerProgress > 0.5 ? 0 : 1
-    withAnimation(.interactiveSpring(response: 0.28, dampingFraction: 0.86)) {
-      drawerProgress = target
-    }
+    .clipShape(shape)
+    .animation(.smooth(duration: 0.32), value: model.mode)
+    .padding(.horizontal, -2)
   }
 
   private var secondaryControls: some View {
     HStack(spacing: 14) {
-      ToggleButton(title: "Type to browser cursor", symbol: "text.cursor", isOn: model.insertIntoCursor) {
+      GlassToggleControl(
+        title: "Type to cursor",
+        systemImage: "text.cursor",
+        isOn: model.insertIntoCursor
+      ) {
         model.insertIntoCursor.toggle()
       }
 
-      if model.mode == .barcode {
-        ToggleButton(title: "Auto", symbol: "bolt.fill", isOn: model.autoSendBarcode) {
-          model.autoSendBarcode.toggle()
-        }
-      } else if model.mode != .dictation {
-        ToggleButton(title: "Light", symbol: "flashlight.on.fill", isOn: model.torchEnabled) {
+      if model.mode != .dictation {
+        GlassToggleControl(
+          title: "Light",
+          systemImage: model.torchEnabled ? "flashlight.on.fill" : "flashlight.off.fill",
+          isOn: model.torchEnabled
+        ) {
           model.setTorch(!model.torchEnabled)
         }
       } else {
-        ToggleButton(title: "Punctuation", symbol: "textformat", isOn: model.dictationAddsPunctuation) {
+        GlassToggleControl(
+          title: "Punctuation",
+          systemImage: "textformat",
+          isOn: model.dictationAddsPunctuation
+        ) {
           model.dictationAddsPunctuation.toggle()
         }
       }
     }
   }
 
-  private var expandedDrawerControls: some View {
-    VStack(spacing: 10) {
-      if model.mode != .dictation {
-        ZoomSlider(factor: model.zoomFactor) { factor in
-          model.setZoom(factor)
-        }
-      } else {
-        dictationPreview
-      }
-      modePicker
-        .padding(.top, 2)
-    }
-    .padding(.top, 2)
-  }
-
   private var dictationPreview: some View {
     Text(dictationDrawerText)
       .font(.system(size: 16, weight: .semibold))
+      .foregroundStyle(.primary)
       .frame(maxWidth: .infinity, minHeight: 56, alignment: .center)
       .multilineTextAlignment(.center)
       .lineLimit(2)
   }
 
   private var dictationDrawerText: String {
-    if !model.dictationTranscript.isEmpty {
-      return model.dictationTranscript
-    }
-    return model.dictationPressActive ? "Keep holding and speak into the phone" : "Hold the microphone button to start"
+    "Writing to \(model.cursorTargetName)"
   }
 
   private var shutterButton: some View {
-    HStack {
-      Spacer()
-      VStack(spacing: 8) {
-        Button(action: model.mode == .dictation ? {} : model.capturePrimary) {
-          ZStack {
+    Button(action: model.mode == .dictation ? {} : model.capturePrimary) {
+      Image(systemName: primarySymbol)
+        .font(.system(size: 36, weight: .bold))
+        .frame(width: 94, height: 94)
+        .contentShape(Circle())
+        .overlay {
+          if model.mode == .dictation {
             Circle()
-              .fill(.white.opacity(model.dictationPressActive ? 0.90 : 0.82))
-              .frame(width: 76, height: 76)
-              .liquidGlassSurface(shape: Circle(), intensity: .strong, isActive: true)
-              .overlay {
-                if model.mode == .dictation {
-                  Circle()
-                    .stroke(.black.opacity(model.dictationPressActive ? 0.32 : 0.16), lineWidth: model.dictationPressActive ? 5 : 2)
-                    .padding(model.dictationPressActive ? 5 : 8)
-                }
-              }
-            Image(systemName: primarySymbol)
-              .font(.system(size: 29, weight: .bold))
-              .foregroundStyle(.black)
+              .stroke(.primary.opacity(model.dictationPressActive ? 0.34 : 0.14), lineWidth: model.dictationPressActive ? 5 : 2)
+              .padding(model.dictationPressActive ? 7 : 10)
           }
-          .scaleEffect(model.dictationPressActive ? 0.94 : 1)
-          .animation(.easeOut(duration: 0.10), value: model.dictationPressActive)
         }
-        .simultaneousGesture(
-          DragGesture(minimumDistance: 0)
-            .onChanged { _ in
-              if model.mode == .dictation {
-                model.beginDictationPress()
-              }
-            }
-            .onEnded { _ in
-              if model.mode == .dictation {
-                model.endDictationPress()
-              }
-            }
-        )
-        .disabled(model.isSending && model.mode != .dictation)
-        .buttonStyle(.plain)
-        .accessibilityLabel(model.mode == .dictation ? "Hold to dictate" : model.mode == .ocr && model.textCapture != nil ? "Retake text capture" : "Capture")
-      }
+        .scaleEffect(model.dictationPressActive ? 0.94 : 1)
+        .animation(.easeOut(duration: 0.10), value: model.dictationPressActive)
     }
+    .simultaneousGesture(
+      DragGesture(minimumDistance: 0)
+        .onChanged { _ in
+          if model.mode == .dictation {
+            model.beginDictationPress()
+          }
+        }
+        .onEnded { _ in
+          if model.mode == .dictation {
+            model.endDictationPress()
+          }
+        }
+    )
+    .disabled(model.isSending && model.mode != .dictation)
+    .buttonStyle(.plain)
+    .nativeClearGlassBackground(Circle())
+    .clipShape(Circle())
+    .accessibilityLabel(model.mode == .dictation ? "Hold to dictate" : model.mode == .ocr && model.textCapture != nil ? "Retake text capture" : "Capture")
   }
 
   private var modePicker: some View {
-    NativeLiquidModePicker(selectedMode: model.mode) { mode in
+    GroupedGlassModePicker(selectedMode: model.mode) { mode in
       model.selectMode(mode)
     }
-    .frame(height: 46)
-    .padding(.horizontal, 4)
-    .liquidGlassSurface(shape: Capsule(), intensity: .medium)
+    .frame(maxWidth: 560)
+    .frame(maxWidth: .infinity)
     .accessibilityLabel("Mode")
   }
 
@@ -896,6 +980,176 @@ private struct ClipRootView: View {
     case .barcode: return "paperplane.fill"
     case .photo: return "camera.fill"
     case .dictation: return model.dictationRunning ? "stop.fill" : "mic.fill"
+    }
+  }
+
+  private var statusSymbol: String {
+    if model.error != nil {
+      return "exclamationmark.triangle.fill"
+    }
+    if model.mode == .barcode, model.barcodeCandidate != nil {
+      return "barcode.viewfinder"
+    }
+    if model.isSending {
+      return "paperplane.fill"
+    }
+    return "info.circle.fill"
+  }
+
+  private var statusMessage: String {
+    if let error = model.error {
+      return error
+    }
+    guard model.mode == .dictation else {
+      return model.status
+    }
+    if model.isSending {
+      return "Sending dictation"
+    }
+    if model.dictationPressActive || model.dictationRunning {
+      return "Listening"
+    }
+    return "Hold microphone to start"
+  }
+}
+
+private struct StatusGlassRow: View {
+  let message: String
+  let isError: Bool
+  let symbol: String
+
+  var body: some View {
+    HStack(spacing: 10) {
+      Image(systemName: symbol)
+        .font(.system(size: 16, weight: .semibold))
+      Text(displayMessage)
+        .font(.system(size: 16, weight: .semibold, design: .rounded))
+        .lineLimit(2)
+        .minimumScaleFactor(0.72)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+    .foregroundStyle(isError ? .red.opacity(0.95) : .white.opacity(0.88))
+    .padding(.horizontal, 16)
+    .padding(.vertical, 12)
+    .frame(maxWidth: .infinity, minHeight: 54, alignment: .leading)
+    .nativeClearGlassBackground(RoundedRectangle(cornerRadius: 27, style: .continuous))
+    .animation(.smooth(duration: 0.22), value: displayMessage)
+    .animation(.smooth(duration: 0.22), value: isError)
+    .accessibilityLabel(displayMessage)
+  }
+
+  private var displayMessage: String {
+    let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
+    return trimmed.isEmpty ? "Ready" : trimmed
+  }
+}
+
+private struct GroupedGlassModePicker: View {
+  let selectedMode: ClipMode
+  let onSelect: (ClipMode) -> Void
+  @GestureState private var dragLocationX: CGFloat?
+
+  private var selectedIndex: Int {
+    ClipMode.allCases.firstIndex(of: selectedMode) ?? 0
+  }
+
+  var body: some View {
+    GeometryReader { proxy in
+      let modes = ClipMode.allCases
+      let outerInset: CGFloat = 7
+      let count = max(CGFloat(modes.count), 1)
+      let groupWidth = max(proxy.size.width - outerInset * 2, 1)
+      let segmentWidth = groupWidth / count
+      let selectedCenterX = outerInset + segmentWidth * (CGFloat(selectedIndex) + 0.5)
+      let minCenterX = outerInset + segmentWidth * 0.5
+      let maxCenterX = outerInset + segmentWidth * (count - 0.5)
+      let activeCenterX = min(max(dragLocationX ?? selectedCenterX, minCenterX), maxCenterX)
+      let isDragging = dragLocationX != nil
+      let grabberWidth = max(segmentWidth * (isDragging ? 1.06 : 0.96), 86)
+      let grabberHeight: CGFloat = isDragging ? 68 : 62
+      let grabberRadius: CGFloat = isDragging ? 32 : 30
+      let grabberOffset = activeCenterX - grabberWidth / 2
+
+      ZStack(alignment: .leading) {
+        RoundedRectangle(cornerRadius: grabberRadius, style: .continuous)
+          .fill(Color.white.opacity(isDragging ? 0.20 : 0.14))
+          .nativeClearGlassBackground(RoundedRectangle(cornerRadius: grabberRadius, style: .continuous))
+          .overlay {
+            RoundedRectangle(cornerRadius: grabberRadius, style: .continuous)
+              .stroke(Color.white.opacity(isDragging ? 0.72 : 0.58), lineWidth: isDragging ? 1.6 : 1.2)
+          }
+          .shadow(color: Color.white.opacity(isDragging ? 0.26 : 0.18), radius: isDragging ? 18 : 12, y: 1)
+          .shadow(color: Color.black.opacity(0.18), radius: isDragging ? 12 : 8, y: 4)
+          .frame(width: grabberWidth, height: grabberHeight)
+          .offset(x: grabberOffset)
+          .animation(.interactiveSpring(response: 0.28, dampingFraction: 0.72), value: selectedIndex)
+          .animation(.interactiveSpring(response: 0.22, dampingFraction: 0.76), value: isDragging)
+
+        HStack(spacing: 0) {
+          ForEach(modes) { mode in
+            GlassModeTabButton(
+              mode: mode,
+              isSelected: selectedMode == mode,
+              action: { onSelect(mode) }
+            )
+            .frame(width: segmentWidth)
+          }
+        }
+        .padding(.horizontal, outerInset)
+        .animation(nil, value: selectedIndex)
+      }
+      .contentShape(Rectangle())
+      .simultaneousGesture(
+        DragGesture(minimumDistance: 0)
+          .updating($dragLocationX) { value, state, _ in
+            state = value.location.x
+          }
+          .onChanged { value in
+            let relativeX = min(max(value.location.x - outerInset, 0), groupWidth - 1)
+            let index = min(max(Int(relativeX / segmentWidth), 0), modes.count - 1)
+            let mode = modes[index]
+            if mode != selectedMode {
+              onSelect(mode)
+            }
+          }
+      )
+    }
+    .frame(maxWidth: .infinity)
+    .frame(height: 76)
+  }
+}
+
+private struct GlassModeTabButton: View {
+  let mode: ClipMode
+  let isSelected: Bool
+  let action: () -> Void
+
+  var body: some View {
+    Button(action: action) {
+      VStack(spacing: 4) {
+        Image(systemName: mode.symbol)
+          .font(.system(size: 20, weight: .semibold))
+        Text(mode.title)
+          .font(.system(size: 10, weight: .bold, design: .rounded))
+          .lineLimit(1)
+          .minimumScaleFactor(0.75)
+      }
+      .frame(maxWidth: .infinity, minHeight: 60)
+      .foregroundStyle(isSelected ? .white : .white.opacity(0.74))
+      .contentShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+    }
+    .buttonStyle(.plain)
+    .accessibilityLabel(mode.title)
+    .accessibilityAddTraits(isSelected ? .isSelected : [])
+  }
+}
+
+private enum NativeModeTab {
+  static func items() -> [UITabBarItem] {
+    ClipMode.allCases.enumerated().map { index, mode in
+      let item = UITabBarItem(title: mode.title, image: UIImage(systemName: mode.symbol), tag: index)
+      item.accessibilityLabel = mode.title
+      return item
     }
   }
 }
@@ -913,12 +1167,18 @@ private struct ConcentricLiquidDrawer: View {
       style: .continuous
     )
 
-    shape
-      .fill(Color.white.opacity(0.11))
-      .background {
-        shape.fill(.ultraThinMaterial.opacity(0.18))
+    Group {
+      if #available(iOS 26.0, *) {
+        Color.clear
+          .glassEffect(.clear, in: shape)
+      } else {
+        shape.fill(.ultraThinMaterial)
       }
-      .liquidGlassSurface(shape: shape, intensity: .soft)
+    }
+    .overlay {
+      shape.stroke(Color(uiColor: .separator).opacity(0.24), lineWidth: 1)
+    }
+    .shadow(color: .black.opacity(0.14), radius: 12, y: 5)
   }
 }
 
@@ -930,205 +1190,136 @@ private struct NativeLiquidModePicker: UIViewRepresentable {
     Coordinator(onSelect: onSelect)
   }
 
-  func makeUIView(context: Context) -> UISegmentedControl {
-    let control = UISegmentedControl()
-    control.selectedSegmentTintColor = UIColor.white.withAlphaComponent(0.88)
-    control.backgroundColor = UIColor.white.withAlphaComponent(0.08)
-    control.setTitleTextAttributes([
-      .font: UIFont.systemFont(ofSize: 12, weight: .semibold),
-      .foregroundColor: UIColor.white.withAlphaComponent(0.82),
-    ], for: .normal)
-    control.setTitleTextAttributes([
-      .font: UIFont.systemFont(ofSize: 12, weight: .bold),
-      .foregroundColor: UIColor.black,
-    ], for: .selected)
-    control.addTarget(context.coordinator, action: #selector(Coordinator.valueChanged(_:)), for: .valueChanged)
-    configureSegments(control)
-    return control
+  func makeUIView(context: Context) -> UITabBar {
+    let tabBar = UITabBar()
+    tabBar.delegate = context.coordinator
+    tabBar.items = NativeModeTab.items()
+    tabBar.itemPositioning = .fill
+    tabBar.isTranslucent = true
+    tabBar.backgroundImage = UIImage()
+    tabBar.shadowImage = UIImage()
+    tabBar.backgroundColor = .clear
+    let appearance = UITabBarAppearance()
+    appearance.configureWithTransparentBackground()
+    appearance.backgroundEffect = nil
+    appearance.backgroundColor = .clear
+    appearance.shadowColor = .clear
+    tabBar.standardAppearance = appearance
+    tabBar.scrollEdgeAppearance = appearance
+    tabBar.selectedItem = tabBar.items?[selectedIndex]
+    return tabBar
   }
 
-  func updateUIView(_ uiView: UISegmentedControl, context: Context) {
+  func updateUIView(_ tabBar: UITabBar, context: Context) {
     context.coordinator.onSelect = onSelect
-    if uiView.numberOfSegments != ClipMode.allCases.count {
-      configureSegments(uiView)
+    if tabBar.items?.count != ClipMode.allCases.count {
+      tabBar.items = NativeModeTab.items()
     }
-    uiView.selectedSegmentIndex = ClipMode.allCases.firstIndex(of: selectedMode) ?? UISegmentedControl.noSegment
+    tabBar.selectedItem = tabBar.items?.first(where: { $0.tag == selectedIndex })
   }
 
-  private func configureSegments(_ control: UISegmentedControl) {
-    control.removeAllSegments()
-    for (index, mode) in ClipMode.allCases.enumerated() {
-      control.insertSegment(withTitle: mode.title, at: index, animated: false)
-      control.setWidth(0, forSegmentAt: index)
-    }
-    control.selectedSegmentIndex = ClipMode.allCases.firstIndex(of: selectedMode) ?? UISegmentedControl.noSegment
+  private var selectedIndex: Int {
+    ClipMode.allCases.firstIndex(of: selectedMode) ?? 0
   }
 
-  final class Coordinator: NSObject {
+  final class Coordinator: NSObject, UITabBarDelegate {
     var onSelect: (ClipMode) -> Void
 
     init(onSelect: @escaping (ClipMode) -> Void) {
       self.onSelect = onSelect
     }
 
-    @objc func valueChanged(_ sender: UISegmentedControl) {
-      guard ClipMode.allCases.indices.contains(sender.selectedSegmentIndex) else { return }
-      onSelect(ClipMode.allCases[sender.selectedSegmentIndex])
+    func tabBar(_ tabBar: UITabBar, didSelect item: UITabBarItem) {
+      guard ClipMode.allCases.indices.contains(item.tag) else { return }
+      onSelect(ClipMode.allCases[item.tag])
     }
   }
 }
 
-private enum LiquidGlassIntensity {
-  case soft
-  case medium
-  case strong
+private struct UnpairGlassButton: View {
+  let action: () -> Void
 
-  var fillOpacity: Double {
-    switch self {
-    case .soft: return 0.10
-    case .medium: return 0.14
-    case .strong: return 0.24
+  var body: some View {
+    Button(action: action) {
+      VStack(spacing: 4) {
+        Image(systemName: "link.badge.minus")
+          .font(.system(size: 16, weight: .bold))
+        Text("Unpair")
+          .font(.system(size: 9, weight: .bold, design: .rounded))
+          .lineLimit(1)
+          .minimumScaleFactor(0.75)
+      }
+      .foregroundStyle(.white)
+      .frame(width: 70, height: 54)
+      .contentShape(RoundedRectangle(cornerRadius: 27, style: .continuous))
+      .nativeClearGlassBackground(RoundedRectangle(cornerRadius: 27, style: .continuous))
     }
+    .buttonStyle(.plain)
+    .frame(width: 70, height: 76, alignment: .center)
+    .background {
+      RoundedRectangle(cornerRadius: 27, style: .continuous)
+        .fill(Color.red.opacity(0.34))
+        .frame(width: 70, height: 54)
+    }
+    .overlay {
+      RoundedRectangle(cornerRadius: 27, style: .continuous)
+        .stroke(Color.red.opacity(0.58), lineWidth: 1.2)
+        .frame(width: 70, height: 54)
+    }
+    .shadow(color: Color.red.opacity(0.22), radius: 10, y: 3)
+    .accessibilityLabel("Unpair from Chrome")
   }
+}
 
-  var strokeOpacity: Double {
-    switch self {
-    case .soft: return 0.34
-    case .medium: return 0.42
-    case .strong: return 0.56
-    }
-  }
+private struct GlassToggleControl: View {
+  let title: String
+  let systemImage: String
+  let isOn: Bool
+  let action: () -> Void
 
-  var shadowOpacity: Double {
-    switch self {
-    case .soft: return 0.18
-    case .medium: return 0.22
-    case .strong: return 0.28
+  var body: some View {
+    Button(action: action) {
+      Label(title, systemImage: systemImage)
+        .font(.system(size: 20, weight: .semibold, design: .rounded))
+        .lineLimit(1)
+        .minimumScaleFactor(0.72)
+        .frame(maxWidth: .infinity, minHeight: 58)
+        .padding(.horizontal, 18)
+        .foregroundStyle(isOn ? .white : .white.opacity(0.62))
+        .contentShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
     }
+    .buttonStyle(.plain)
+    .nativeClearGlassBackground(RoundedRectangle(cornerRadius: 28, style: .continuous))
+    .background {
+      RoundedRectangle(cornerRadius: 28, style: .continuous)
+        .fill(isOn ? Color.white.opacity(0.18) : Color.black.opacity(0.06))
+    }
+    .overlay {
+      RoundedRectangle(cornerRadius: 28, style: .continuous)
+        .stroke(isOn ? Color.white.opacity(0.64) : Color.white.opacity(0.20), lineWidth: isOn ? 1.8 : 1)
+    }
+    .shadow(color: isOn ? .white.opacity(0.12) : .clear, radius: 10, y: 1)
+    .accessibilityAddTraits(isOn ? .isSelected : [])
   }
 }
 
 private extension View {
-  func liquidGlassSurface<GlassShape: InsettableShape>(
-    shape: GlassShape,
-    intensity: LiquidGlassIntensity = .medium,
-    isActive: Bool = false
-  ) -> some View {
-    self
-      .background {
-        shape
-          .fill(.ultraThinMaterial.opacity(isActive ? 0.30 : 0.22))
-          .overlay {
-            shape.fill(Color.white.opacity(isActive ? intensity.fillOpacity + 0.12 : intensity.fillOpacity))
-          }
-      }
-      .overlay(alignment: .topLeading) {
-        shape
-          .fill(
-            LinearGradient(
-              colors: [
-                .white.opacity(isActive ? 0.34 : 0.24),
-                .white.opacity(0.05),
-                .clear,
-              ],
-              startPoint: .topLeading,
-              endPoint: .bottomTrailing
-            )
-          )
-          .blendMode(.screen)
-      }
-      .overlay {
-        shape.stroke(.white.opacity(intensity.strokeOpacity), lineWidth: 1)
-      }
-      .overlay {
-        shape
-          .inset(by: 1.5)
-          .stroke(.black.opacity(0.10), lineWidth: 1)
-          .blendMode(.overlay)
-      }
-      .shadow(color: .black.opacity(intensity.shadowOpacity), radius: isActive ? 18 : 14, x: 0, y: isActive ? 8 : 6)
-  }
-}
-
-private struct SmallControlButton: View {
-  let title: String
-  let meta: String
-  let isActive: Bool
-  var isDisabled = false
-  let action: () -> Void
-
-  var body: some View {
-    Button(action: action) {
-      VStack(spacing: 3) {
-        Text(title)
-          .font(.system(size: 13, weight: .heavy))
-        Text(meta)
-          .font(.system(size: 11, weight: .bold))
-          .opacity(0.68)
-      }
-      .frame(maxWidth: .infinity, minHeight: 58)
-      .foregroundStyle(isActive ? .black : .white)
-      .liquidGlassSurface(
-        shape: RoundedRectangle(cornerRadius: 18, style: .continuous),
-        intensity: isActive ? .strong : .medium,
-        isActive: isActive
-      )
+  @ViewBuilder
+  func nativeGlassControlStyle() -> some View {
+    if #available(iOS 26.0, *) {
+      self.buttonStyle(.glass(.clear.interactive()))
+    } else {
+      self.buttonStyle(.bordered)
     }
-    .buttonStyle(.plain)
-    .disabled(isDisabled)
-    .opacity(isDisabled ? 0.48 : 1)
   }
-}
 
-private struct SettingToggle: View {
-  let title: String
-  let text: String
-  let isOn: Bool
-  let action: () -> Void
-
-  var body: some View {
-    Button(action: action) {
-      HStack(spacing: 12) {
-        VStack(alignment: .leading, spacing: 3) {
-          Text(title)
-            .font(.system(size: 13, weight: .heavy))
-            .foregroundStyle(.white)
-          Text(text)
-            .font(.system(size: 11, weight: .semibold))
-            .foregroundStyle(.white.opacity(0.58))
-            .lineLimit(2)
-        }
-        Spacer(minLength: 8)
-        Toggle("", isOn: .constant(isOn))
-          .labelsHidden()
-          .allowsHitTesting(false)
-      }
-      .padding(12)
-      .liquidGlassSurface(shape: RoundedRectangle(cornerRadius: 18, style: .continuous), intensity: .medium, isActive: isOn)
+  @ViewBuilder
+  func nativeClearGlassBackground<S: Shape>(_ shape: S) -> some View {
+    if #available(iOS 26.0, *) {
+      self.glassEffect(.clear.interactive(), in: shape)
+    } else {
+      self.background(.ultraThinMaterial, in: shape)
     }
-    .buttonStyle(.plain)
-  }
-}
-
-private struct ToggleButton: View {
-  let title: String
-  let symbol: String
-  let isOn: Bool
-  let action: () -> Void
-
-  var body: some View {
-    Button(action: action) {
-      Label(title, systemImage: symbol)
-        .font(.system(size: 14, weight: .semibold))
-        .frame(maxWidth: .infinity, minHeight: 44)
-        .foregroundStyle(isOn ? .black : .white)
-        .liquidGlassSurface(
-          shape: RoundedRectangle(cornerRadius: 14, style: .continuous),
-          intensity: isOn ? .strong : .medium,
-          isActive: isOn
-        )
-    }
-    .buttonStyle(.plain)
   }
 }
 
@@ -1141,29 +1332,29 @@ private struct ZoomSlider: View {
       HStack(spacing: 10) {
         Image(systemName: "minus.magnifyingglass")
           .font(.system(size: 15, weight: .semibold))
-          .foregroundStyle(.white.opacity(0.72))
+          .foregroundStyle(.secondary)
         Slider(value: Binding(get: {
           Double(factor)
         }, set: { value in
           onChange(CGFloat(value))
         }), in: 1...4)
+        .tint(.white.opacity(0.92))
         Image(systemName: "plus.magnifyingglass")
           .font(.system(size: 15, weight: .semibold))
-          .foregroundStyle(.white.opacity(0.72))
+          .foregroundStyle(.secondary)
       }
       .padding(.horizontal, 4)
 
       HStack {
         Text("Zoom")
           .font(.system(size: 12, weight: .bold))
-          .foregroundStyle(.white.opacity(0.66))
+          .foregroundStyle(.secondary)
         Spacer()
         Text(formatZoom(factor))
-          .font(.system(size: 12, weight: .heavy, design: .rounded))
-          .foregroundStyle(.white)
+          .font(.footnote.weight(.semibold))
           .padding(.horizontal, 10)
           .padding(.vertical, 4)
-          .liquidGlassSurface(shape: Capsule(), intensity: .medium)
+          .background(.thinMaterial, in: Capsule())
       }
     }
     .frame(minHeight: 56)
@@ -1199,11 +1390,26 @@ private struct ViewfinderBackground: View {
         BarcodeOverlay(candidate: model.barcodeCandidate)
           .ignoresSafeArea()
       }
+
+      if model.mode == .barcode, !model.isPairing {
+        BarcodeScanGuide(candidate: model.barcodeCandidate)
+          .ignoresSafeArea()
+      }
+
+      if model.mode == .photo {
+        PhotoSquareOverlay()
+          .ignoresSafeArea()
+      }
+
+      if model.mode == .dictation, !showsCameraFeed {
+        DictationLiveOverlay(text: model.dictationTranscript, isListening: model.dictationPressActive)
+          .ignoresSafeArea()
+      }
     }
   }
 
   private var showsCameraFeed: Bool {
-    model.mode != .dictation && !model.isExtractingText && model.textCapture == nil
+    (model.mode != .dictation || model.sessionId == nil || model.isPairing) && !model.isExtractingText && model.textCapture == nil
   }
 
   private var modeBackdrop: some View {
@@ -1217,9 +1423,18 @@ private struct ViewfinderBackground: View {
     )
     .ignoresSafeArea()
     .overlay {
-      Image(systemName: model.mode.symbol)
-        .font(.system(size: 118, weight: .thin))
-        .foregroundStyle(.white.opacity(0.14))
+      GeometryReader { proxy in
+        Image(systemName: model.mode.symbol)
+          .font(.system(size: 118, weight: .thin))
+          .foregroundStyle(.white.opacity(0.14))
+          .frame(maxWidth: .infinity)
+          .position(
+            x: proxy.size.width / 2,
+            y: model.mode == .dictation
+              ? max(proxy.safeAreaInsets.top + 240, proxy.size.height * 0.42)
+              : proxy.size.height / 2
+          )
+      }
     }
   }
 
@@ -1463,6 +1678,147 @@ private struct BarcodeOverlay: View {
   }
 }
 
+private struct BarcodeScanGuide: View {
+  let candidate: BarcodeCandidate?
+
+  var body: some View {
+    GeometryReader { proxy in
+      let rect = barcodeScanRect(in: proxy.size, safeAreaInsets: proxy.safeAreaInsets)
+
+      ZStack {
+        RoundedRectangle(cornerRadius: 22, style: .continuous)
+          .stroke(.white.opacity(0.76), style: StrokeStyle(lineWidth: 1.4, lineCap: .round))
+          .background {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+              .fill(.black.opacity(0.08))
+          }
+          .frame(width: rect.width, height: rect.height)
+          .position(x: rect.midX, y: rect.midY)
+          .overlay {
+            Path { path in
+              path.move(to: CGPoint(x: rect.midX - rect.width * 0.42, y: rect.midY))
+              path.addLine(to: CGPoint(x: rect.midX + rect.width * 0.42, y: rect.midY))
+            }
+            .stroke(.white.opacity(0.22), lineWidth: 1)
+          }
+
+        Text("Place barcode inside the frame")
+          .font(.system(size: 14, weight: .semibold, design: .rounded))
+          .foregroundStyle(.white.opacity(candidate == nil ? 0.66 : 0.44))
+          .lineLimit(1)
+          .minimumScaleFactor(0.8)
+          .padding(.horizontal, 14)
+          .padding(.vertical, 7)
+          .background {
+            Capsule()
+              .fill(.black.opacity(0.16))
+          }
+          .position(x: rect.midX, y: min(proxy.size.height - proxy.safeAreaInsets.bottom - 132, rect.maxY + 32))
+      }
+      .animation(.smooth(duration: 0.2), value: candidate == nil)
+    }
+    .allowsHitTesting(false)
+  }
+}
+
+private struct DictationLiveOverlay: View {
+  let text: String
+  let isListening: Bool
+
+  var body: some View {
+    GeometryReader { proxy in
+      VStack {
+        Text(displayText)
+          .font(.system(size: 42, weight: .bold, design: .rounded))
+          .foregroundStyle(.white)
+          .multilineTextAlignment(.leading)
+          .lineLimit(4)
+          .minimumScaleFactor(0.62)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .padding(.horizontal, 28)
+          .padding(.top, proxy.safeAreaInsets.top + 96)
+        Spacer()
+      }
+    }
+  }
+
+  private var displayText: String {
+    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    if !trimmed.isEmpty {
+      return trimmed
+    }
+    return isListening ? "Listening..." : "Hold to speak"
+  }
+}
+
+private struct PhotoSquareOverlay: View {
+  var body: some View {
+    GeometryReader { proxy in
+      let side = min(proxy.size.width - 48, proxy.size.height * 0.54)
+      let rect = CGRect(
+        x: (proxy.size.width - side) / 2,
+        y: max(proxy.safeAreaInsets.top + 132, (proxy.size.height - side) * 0.26),
+        width: side,
+        height: side
+      )
+      let shape = RoundedRectangle(cornerRadius: 34, style: .continuous)
+
+      ZStack {
+        Color.black.opacity(0.48)
+          .mask {
+            Rectangle()
+              .overlay(alignment: .topLeading) {
+                shape
+                  .frame(width: rect.width, height: rect.height)
+                  .offset(x: rect.minX, y: rect.minY)
+                  .blendMode(.destinationOut)
+              }
+              .compositingGroup()
+          }
+
+        shape
+          .stroke(.white.opacity(0.72), lineWidth: 1.2)
+          .frame(width: rect.width, height: rect.height)
+          .position(x: rect.midX, y: rect.midY)
+
+        shape
+          .stroke(.black.opacity(0.24), lineWidth: 1)
+          .frame(width: rect.width - 6, height: rect.height - 6)
+          .position(x: rect.midX, y: rect.midY)
+
+        PhotoGridLines(cornerRadius: 30)
+          .frame(width: rect.width, height: rect.height)
+          .position(x: rect.midX, y: rect.midY)
+      }
+    }
+    .allowsHitTesting(false)
+  }
+}
+
+private struct PhotoGridLines: View {
+  let cornerRadius: CGFloat
+
+  var body: some View {
+    GeometryReader { proxy in
+      let width = proxy.size.width
+      let height = proxy.size.height
+      let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+
+      Path { path in
+        for index in 1...2 {
+          let offset = CGFloat(index) / 3
+          path.move(to: CGPoint(x: width * offset, y: 0))
+          path.addLine(to: CGPoint(x: width * offset, y: height))
+          path.move(to: CGPoint(x: 0, y: height * offset))
+          path.addLine(to: CGPoint(x: width, y: height * offset))
+        }
+      }
+      .stroke(.white.opacity(0.22), lineWidth: 0.8)
+      .clipShape(shape)
+    }
+  }
+}
+
 private struct NormalizedPoint {
   let x: CGFloat
   let y: CGFloat
@@ -1477,6 +1833,39 @@ private struct CapturedPhoto {
   let image: CGImage
   let uiImage: UIImage
   let size: CGSize
+
+  func squareCropped() throws -> CapturedPhoto {
+    let side = min(image.width, image.height)
+    let cropRect = CGRect(
+      x: (image.width - side) / 2,
+      y: (image.height - side) / 2,
+      width: side,
+      height: side
+    )
+    guard
+      let croppedImage = image.cropping(to: cropRect),
+      let mutableData = CFDataCreateMutable(nil, 0),
+      let destination = CGImageDestinationCreateWithData(mutableData, UTType.jpeg.identifier as CFString, 1, nil)
+    else {
+      throw ClipError.message("Unable to crop the photo.")
+    }
+
+    CGImageDestinationAddImage(destination, croppedImage, [
+      kCGImageDestinationLossyCompressionQuality as String: 0.88,
+    ] as CFDictionary)
+    guard CGImageDestinationFinalize(destination) else {
+      throw ClipError.message("Unable to encode the photo.")
+    }
+
+    let outputData = mutableData as Data
+    let outputImage = UIImage(cgImage: croppedImage, scale: 1, orientation: .right)
+    return CapturedPhoto(
+      data: outputData,
+      image: croppedImage,
+      uiImage: outputImage,
+      size: CGSize(width: side, height: side)
+    )
+  }
 }
 
 private struct BarcodeCandidate: Identifiable {
@@ -1519,6 +1908,22 @@ private func formatZoom(_ factor: CGFloat) -> String {
 
 private func clampedUnit(_ value: CGFloat) -> CGFloat {
   max(0, min(1, value))
+}
+
+private func barcodeScanRect(in size: CGSize, safeAreaInsets: EdgeInsets = EdgeInsets()) -> CGRect {
+  let width = min(size.width - 48, size.width * 0.78)
+  let height = min(max(size.height * 0.14, 96), 148)
+  let top = safeAreaInsets.top + max(108, size.height * 0.20)
+  return CGRect(
+    x: (size.width - width) / 2,
+    y: top,
+    width: width,
+    height: height
+  )
+}
+
+private func barcodeScanRect(in size: CGSize) -> CGRect {
+  barcodeScanRect(in: size, safeAreaInsets: EdgeInsets())
 }
 
 private final class ClipCamera: NSObject, ObservableObject, AVCaptureMetadataOutputObjectsDelegate, AVCapturePhotoCaptureDelegate {
@@ -1591,13 +1996,7 @@ private final class ClipCamera: NSObject, ObservableObject, AVCaptureMetadataOut
       rect = CGRect(x: 0, y: 0, width: 1, height: 1)
     } else {
       let layerBounds = previewLayer.bounds
-      let side = min(layerBounds.width, layerBounds.height) * 0.64
-      let scanRect = CGRect(
-        x: layerBounds.midX - side / 2,
-        y: layerBounds.midY - side / 2,
-        width: side,
-        height: side
-      )
+      let scanRect = barcodeScanRect(in: layerBounds.size)
       rect = previewLayer.metadataOutputRectConverted(fromLayerRect: scanRect)
     }
 
@@ -1872,30 +2271,54 @@ private final class ClipDictation: NSObject {
   var onFinal: ((String) -> Void)?
 
   private let audioEngine = AVAudioEngine()
-  private var webSocket: URLSessionWebSocketTask?
+  private let speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
+  private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
+  private var recognitionTask: SFSpeechRecognitionTask?
   private var transcript = ""
   private var completedTranscript = ""
-  private let dictationTokenURL = URL(string: "https://scanner-signal.vercel.app/api/dictation-token")!
-  private let realtimeURL = URL(string: "wss://api.openai.com/v1/realtime?intent=transcription")!
+  private var isAudioSessionPrepared = false
 
-  func start(sessionId browserSessionId: String) async throws {
+  func prepareForUse() async throws {
     try await requestPermissions()
+    try configureAudioSessionIfNeeded()
+    _ = audioEngine.inputNode.outputFormat(forBus: 0)
+    audioEngine.prepare()
+  }
+
+  func start(sessionId browserSessionId: String, addsPunctuation: Bool) async throws {
     stop()
+    try await prepareForUse()
     transcript = ""
     completedTranscript = ""
 
-    let token = try await fetchEphemeralToken(browserSessionId: browserSessionId)
-    try openRealtimeStream(ephemeralToken: token)
+    let request = SFSpeechAudioBufferRecognitionRequest()
+    request.shouldReportPartialResults = true
+    if #available(iOS 16.0, *) {
+      request.addsPunctuation = addsPunctuation
+    }
+    recognitionRequest = request
 
-    let session = AVAudioSession.sharedInstance()
-    try session.setCategory(.playAndRecord, mode: .measurement, options: [.duckOthers, .defaultToSpeaker, .allowBluetoothHFP])
-    try session.setActive(true, options: .notifyOthersOnDeactivation)
+    recognitionTask = speechRecognizer?.recognitionTask(with: request) { [weak self] result, error in
+      guard let self else { return }
+      if let result {
+        let text = result.bestTranscription.formattedString
+        self.transcript = text
+        self.onPartial?(text)
+        if result.isFinal {
+          self.completedTranscript = text
+          self.onFinal?(text)
+        }
+      }
+      if error != nil, self.completedTranscript.isEmpty {
+        self.completedTranscript = self.transcript
+      }
+    }
 
     let input = audioEngine.inputNode
     let format = input.outputFormat(forBus: 0)
     input.removeTap(onBus: 0)
-    input.installTap(onBus: 0, bufferSize: 2048, format: format) { [weak self] buffer, _ in
-      self?.sendAudioChunk(buffer: buffer, format: format)
+    input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
+      self?.recognitionRequest?.append(buffer)
     }
 
     audioEngine.prepare()
@@ -1903,30 +2326,47 @@ private final class ClipDictation: NSObject {
   }
 
   func stop() {
-    webSocket?.send(.string(#"{"type":"input_audio_buffer.commit"}"#)) { _ in }
     if audioEngine.isRunning {
       audioEngine.stop()
     }
     audioEngine.inputNode.removeTap(onBus: 0)
-    webSocket?.cancel(with: .normalClosure, reason: nil)
-    webSocket = nil
+    recognitionRequest?.endAudio()
+    recognitionTask?.cancel()
+    recognitionTask = nil
+    recognitionRequest = nil
     try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    isAudioSessionPrepared = false
   }
 
-  func finishAndStop(timeout: TimeInterval) async -> String? {
-    webSocket?.send(.string(#"{"type":"input_audio_buffer.commit"}"#)) { _ in }
+  func finishAndStop(tailDuration: TimeInterval, timeout: TimeInterval) async -> String? {
+    let tailNanoseconds = UInt64(max(0, tailDuration) * 1_000_000_000)
+    if tailNanoseconds > 0 {
+      try? await Task.sleep(nanoseconds: tailNanoseconds)
+    }
+
     if audioEngine.isRunning {
       audioEngine.stop()
     }
     audioEngine.inputNode.removeTap(onBus: 0)
+    recognitionRequest?.endAudio()
 
     let completed = await waitForFinalTranscript(timeout: timeout)
-    webSocket?.cancel(with: .normalClosure, reason: nil)
-    webSocket = nil
+    recognitionTask?.finish()
+    recognitionTask = nil
+    recognitionRequest = nil
     try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    isAudioSessionPrepared = false
 
     let completedValue = completed?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     return completedValue.isEmpty ? nil : completedValue
+  }
+
+  private func configureAudioSessionIfNeeded() throws {
+    guard !isAudioSessionPrepared else { return }
+    let session = AVAudioSession.sharedInstance()
+    try session.setCategory(.record, mode: .measurement, options: [.duckOthers, .allowBluetoothHFP])
+    try session.setActive(true, options: .notifyOthersOnDeactivation)
+    isAudioSessionPrepared = true
   }
 
   private func waitForFinalTranscript(timeout: TimeInterval) async -> String? {
@@ -1953,101 +2393,32 @@ private final class ClipDictation: NSObject {
     guard micGranted else {
       throw ClipError.message("Microphone permission is required.")
     }
-  }
-
-  private func fetchEphemeralToken(browserSessionId: String) async throws -> String {
-    var request = URLRequest(url: dictationTokenURL)
-    request.httpMethod = "POST"
-    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-    request.httpBody = try JSONSerialization.data(withJSONObject: [
-      "sessionId": browserSessionId,
-      "dictationSessionId": sessionId,
-    ])
-
-    let (data, response) = try await URLSession.shared.data(for: request)
-    guard let httpResponse = response as? HTTPURLResponse, (200..<300).contains(httpResponse.statusCode) else {
-      throw ClipError.message("Streaming dictation service is unavailable.")
+    let speechStatus = await withCheckedContinuation { continuation in
+      SFSpeechRecognizer.requestAuthorization { continuation.resume(returning: $0) }
     }
-
-    let payload = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
-    guard let value = payload?["value"] as? String, !value.isEmpty else {
-      throw ClipError.message("Streaming dictation service is unavailable.")
+    guard speechStatus == .authorized else {
+      throw ClipError.message("Speech recognition permission is required.")
     }
-    return value
-  }
-
-  private func openRealtimeStream(ephemeralToken: String) throws {
-    var request = URLRequest(url: realtimeURL)
-    request.setValue("Bearer \(ephemeralToken)", forHTTPHeaderField: "Authorization")
-    request.setValue("realtime=v1", forHTTPHeaderField: "OpenAI-Beta")
-
-    let socket = URLSession.shared.webSocketTask(with: request)
-    webSocket = socket
-    socket.resume()
-    socket.send(.string("""
-      {"type":"session.update","session":{"type":"transcription","audio":{"input":{"format":{"type":"audio/pcm","rate":24000},"noise_reduction":{"type":"near_field"},"transcription":{"model":"gpt-4o-transcribe","language":"en"},"turn_detection":null}}}}
-      """)) { _ in }
-    receiveRealtimeMessages(from: socket)
-  }
-
-  private func receiveRealtimeMessages(from socket: URLSessionWebSocketTask) {
-    socket.receive { [weak self, weak socket] result in
-      guard let self, let socket, self.webSocket === socket else { return }
-      if case .success(.string(let text)) = result {
-        self.handleRealtimeMessage(text)
-      }
-      self.receiveRealtimeMessages(from: socket)
+    guard speechRecognizer?.isAvailable == true else {
+      throw ClipError.message("Speech recognition is unavailable.")
     }
-  }
-
-  private func handleRealtimeMessage(_ text: String) {
-    guard
-      let data = text.data(using: .utf8),
-      let message = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
-      let type = message["type"] as? String
-    else { return }
-
-    if type == "conversation.item.input_audio_transcription.delta", let delta = message["delta"] as? String {
-      transcript += delta
-      onPartial?(transcript)
-    } else if type == "conversation.item.input_audio_transcription.completed", let final = message["transcript"] as? String {
-      transcript = final
-      completedTranscript = final
-      onFinal?(final)
-    }
-  }
-
-  private func sendAudioChunk(buffer: AVAudioPCMBuffer, format: AVAudioFormat) {
-    guard let channelData = buffer.floatChannelData, let webSocket else { return }
-    let frameCount = Int(buffer.frameLength)
-    let channelCount = max(1, Int(format.channelCount))
-    guard frameCount > 0 else { return }
-
-    let outputSampleRate: Double = 24000
-    let inputSampleRate = max(format.sampleRate, outputSampleRate)
-    let outputFrameCount = max(1, Int(Double(frameCount) * outputSampleRate / inputSampleRate))
-    var data = Data(capacity: outputFrameCount * 2)
-
-    for outputFrame in 0..<outputFrameCount {
-      let frame = min(frameCount - 1, Int(Double(outputFrame) * inputSampleRate / outputSampleRate))
-      var sample: Float = 0
-      for channel in 0..<min(channelCount, Int(buffer.format.channelCount)) {
-        sample += channelData[channel][frame]
-      }
-      sample /= Float(channelCount)
-      let clamped = max(-1, min(1, sample))
-      let intSample = Int16(clamped * Float(Int16.max))
-      data.append(UInt8(truncatingIfNeeded: intSample))
-      data.append(UInt8(truncatingIfNeeded: intSample >> 8))
-    }
-
-    let payload = #"{"type":"input_audio_buffer.append","audio":"\#(data.base64EncodedString())"}"#
-    webSocket.send(.string(payload)) { _ in }
   }
 }
 
-private struct ClipHTTPStatusError: Error {
+private struct ClipHTTPStatusError: LocalizedError {
   let statusCode: Int
+  let message: String?
+
+  var errorDescription: String? {
+    if let message, !message.isEmpty {
+      return "Chrome session returned \(statusCode): \(message)."
+    }
+    return "Chrome session returned \(statusCode)."
+  }
+
+  var shouldRepairRelay: Bool {
+    statusCode == 404 || (statusCode == 400 && message == "Result mode mismatch")
+  }
 }
 
 private enum ClipError: LocalizedError {

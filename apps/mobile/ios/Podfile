@@ -1,4 +1,19 @@
 platform :ios, '16.4'
 
+# App Clip exclusion contract mirrored from app.json:
+# @react-native-async-storage/async-storage
+# @react-native-masked-view/masked-view
+# expo-asset
+# expo-font
+# expo-linking
+# expo-router
+# react-native-gesture-handler
+# react-native-get-random-values
+# react-native-reanimated
+# react-native-screens
+# react-native-svg
+# react-native-webrtc
+# react-native-worklets
+
 target 'Volt' do
 end

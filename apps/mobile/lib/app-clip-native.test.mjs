@@ -314,6 +314,15 @@ test("full app pair route accepts every browser relay capture mode", () => {
   assert.match(pairRoute, /volt:\/\/pair\?session=/);
 });
 
+test("native App Clip parser accepts generic browser relay QR sessions", () => {
+  const fullDelegate = readText(nativeFiles.fullAppDelegate);
+
+  assert.match(fullDelegate, /let mode: ClipMode\?/);
+  assert.match(fullDelegate, /mode = invocation\.mode \?\? mode/);
+  assert.match(fullDelegate, /let mode = modeValue\.flatMap/);
+  assert.doesNotMatch(fullDelegate, /guard\s+let modeValue,[\s\S]*let mode = ClipMode\(rawValue: modeValue\),[\s\S]*let session,/);
+});
+
 test("App Clip plan links the physical device validation runbook", () => {
   const plan = readText(nativeFiles.appClipPlan);
   const runbook = readText(nativeFiles.deviceValidationRunbook);

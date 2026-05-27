@@ -261,6 +261,7 @@
 				5B09A0C80A5E45B9AEF98CC4 /* Sources */,
 				BEC85494F5494374868CF548 /* Frameworks */,
 				0A5DE780FC754A14A39CE0A7 /* Resources */,
+				9B4D7A0D6F1E4C1AA3D8F901 /* Bundle App Clip React Native code and images */,
 			);
 			buildRules = (
 			);
@@ -331,6 +332,25 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
+		9B4D7A0D6F1E4C1AA3D8F901 /* Bundle App Clip React Native code and images */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Bundle App Clip React Native code and images";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -e\nexport BUILDING_FOR_APP_CLIP=1\nexport ENTRY_FILE=clip-entry.tsx\n../node_modules/react-native/scripts/react-native-xcode.sh\n";
+		};
 		5DA2B0666DF1CAD8E4EC37DA /* [CP] Check Pods Manifest.lock */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
