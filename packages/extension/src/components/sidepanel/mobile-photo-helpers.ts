@@ -6,11 +6,14 @@ export type MobilePhoto = {
   kind: "photo";
   name: string;
   mimeType: string;
-  dataUrl: string;
+  dataUrl?: string;
   size: number;
   width?: number;
   height?: number;
   capturedAt?: string;
+  sessionId?: string;
+  downloadId?: number;
+  downloadFilename?: string;
 };
 
 export function normalizeImageMimeType(mimeType: string) {

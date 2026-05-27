@@ -4,7 +4,26 @@ Download the latest version of the Volt Chrome Extension.
 
 ## Latest Release
 
-### v1.0.29 (Current)
+### v1.0.32 (Current)
+
+**Release Date:** May 27, 2026
+**Download:** [voltextension-1.0.32-chrome.zip](./voltextension-1.0.32-chrome.zip)
+
+**What's New:**
+
+This release improves mobile/App Clip photo capture reliability and stores received photos in Downloads by session folder.
+
+### Changes
+
+- Saves mobile/App Clip photos to `Downloads/Volt Photos/<session-code>/`
+- Stores only lightweight photo metadata in extension storage to avoid quota failures
+- Keeps App Clip dictation out of the App Clip while preserving full mobile app dictation
+- Normalizes UPC-A scans that arrive as EAN-13 with a leading zero
+- Bumped the extension version to `1.0.32`
+
+## Previous Release
+
+### v1.0.29
 
 **Release Date:** May 23, 2026
 **Download:** [voltextension-1.0.29-chrome.zip](./voltextension-1.0.29-chrome.zip)

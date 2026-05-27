@@ -49,6 +49,7 @@ const SCAN_STORAGE_KEY = "volt.mobileScanner.scans";
 const PHOTO_STORAGE_KEY = "volt.mobilePhotos.photos";
 const MAX_SCANS = 100;
 const MAX_PHOTOS = 80;
+const MAX_PERSISTED_PHOTO_BYTES = 6_000_000;
 const CLUSTER_WINDOW_MS = 3 * 60 * 1000;
 const EXIT_ANIMATION_MS = 200;
 
@@ -88,6 +89,23 @@ type Cluster = {
   endAt: number;
   entries: HistoryEntry[];
 };
+
+function trimPhotosForStorage(photos: MobilePhoto[]) {
+  const trimmed: MobilePhoto[] = [];
+  let totalBytes = 0;
+
+  for (const photo of photos.slice(0, MAX_PHOTOS)) {
+    const estimatedBytes = photo.dataUrl?.length ?? 0;
+    if (trimmed.length > 0 && totalBytes + estimatedBytes > MAX_PERSISTED_PHOTO_BYTES) {
+      continue;
+    }
+    const { dataUrl, ...metadata } = photo;
+    trimmed.push(metadata);
+    totalBytes += estimatedBytes;
+  }
+
+  return trimmed;
+}
 
 function installEditableTracker() {
   const root = window as typeof window & {
@@ -256,7 +274,7 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
   }, []);
 
   const persistPhotos = useCallback((nextPhotos: MobilePhoto[]) => {
-    void chrome.storage.local.set({ [PHOTO_STORAGE_KEY]: nextPhotos });
+    void chrome.storage.local.set({ [PHOTO_STORAGE_KEY]: trimPhotosForStorage(nextPhotos) });
   }, []);
 
   const applyScannerState = useCallback(
@@ -313,10 +331,10 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
   const addPhoto = useCallback(
     (photo: MobilePhoto) => {
       setPhotos((current) => {
-        const next = [
+        const next = trimPhotosForStorage([
           photo,
           ...current.filter((item) => item.id !== photo.id),
-        ].slice(0, MAX_PHOTOS);
+        ]);
         persistPhotos(next);
         return next;
       });
@@ -538,6 +556,11 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
   const copyPhoto = useCallback(
     async (photo: MobilePhoto) => {
       try {
+        if (!photo.dataUrl) {
+          await navigator.clipboard.writeText(photo.downloadFilename ?? photo.name);
+          flashFeedback("Saved photo path copied");
+          return;
+        }
         if ("ClipboardItem" in window && navigator.clipboard?.write) {
           const blob = await dataUrlToPngBlob(photo.dataUrl);
           await navigator.clipboard.write([
@@ -558,15 +581,29 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
   );
 
   const downloadPhoto = useCallback((photo: MobilePhoto) => {
+    if (typeof photo.downloadId === "number") {
+      chrome.downloads.show(photo.downloadId);
+      flashFeedback("Showing saved photo");
+      return;
+    }
+    if (!photo.dataUrl) {
+      flashFeedback("Photo is already saved in Downloads", "warning");
+      return;
+    }
     const link = document.createElement("a");
     link.href = photo.dataUrl;
     link.download = normalizeImageFilename(photo.name, photo.mimeType);
     link.click();
-  }, []);
+  }, [flashFeedback]);
 
   const sendPhotosToTab = useCallback(
     async (photosToSend: MobilePhoto[]) => {
       try {
+        const transferablePhotos = photosToSend.filter((photo) => photo.dataUrl);
+        if (!transferablePhotos.length) {
+          flashFeedback("Photo is already saved in Downloads", "warning");
+          return;
+        }
         const [tab] = await chrome.tabs.query({
           active: true,
           currentWindow: true,
@@ -579,8 +616,8 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
           target: { tabId: tab.id },
           func: insertPhotosIntoPage,
           args: [
-            photosToSend.map((photo) => ({
-              dataUrl: photo.dataUrl,
+            transferablePhotos.map((photo) => ({
+              dataUrl: photo.dataUrl!,
               name: photo.name,
               mimeType: photo.mimeType,
             })),
@@ -599,9 +636,9 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
           return;
         }
         flashFeedback(
-          photosToSend.length === 1
+          transferablePhotos.length === 1
             ? "Photo dropped into the page!"
-            : `${photosToSend.length} photos dropped into the page!`,
+            : `${transferablePhotos.length} photos dropped into the page!`,
         );
       } catch (_err) {
         flashFeedback("Tab access denied", "error");
@@ -624,13 +661,19 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
     (event: React.DragEvent, photo: MobilePhoto) => {
       void prepareActiveTabForPhotoDrop();
       const dragPhotos = selectedPhotoIds.has(photo.id) ? selectedPhotos : [photo];
+      const transferablePhotos = dragPhotos.filter((item) => item.dataUrl);
+      if (!transferablePhotos.length) {
+        event.preventDefault();
+        flashFeedback("Photo is already saved in Downloads", "warning");
+        return;
+      }
       if (!selectedPhotoIds.has(photo.id)) {
         setSelectedPhotoIds(new Set([photo.id]));
       }
       event.dataTransfer.effectAllowed = "copy";
-      event.dataTransfer.setData(PHOTO_DROP_MIME, JSON.stringify(dragPhotos));
-      const files = dragPhotos
-        .map((item) => dataUrlToFile(item.dataUrl, item.name, item.mimeType))
+      event.dataTransfer.setData(PHOTO_DROP_MIME, JSON.stringify(transferablePhotos));
+      const files = transferablePhotos
+        .map((item) => dataUrlToFile(item.dataUrl!, item.name, item.mimeType))
         .filter((file): file is File => Boolean(file));
       for (const file of files) {
         try {
@@ -641,20 +684,20 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
       }
       event.dataTransfer.setData(
         "text/uri-list",
-        dragPhotos.map((item) => item.dataUrl).join("\n"),
+        transferablePhotos.map((item) => item.dataUrl!).join("\n"),
       );
       event.dataTransfer.setData(
         "text/html",
-        dragPhotos
+        transferablePhotos
           .map((item) => `<img src="${item.dataUrl}" alt="${item.name}">`)
           .join(""),
       );
       event.dataTransfer.setData(
         "text/plain",
-        dragPhotos.map((item) => item.name).join("\n"),
+        transferablePhotos.map((item) => item.name).join("\n"),
       );
     },
-    [prepareActiveTabForPhotoDrop, selectedPhotoIds, selectedPhotos],
+    [flashFeedback, prepareActiveTabForPhotoDrop, selectedPhotoIds, selectedPhotos],
   );
 
   const toggleCluster = useCallback((key: string) => {
@@ -1401,12 +1444,19 @@ function PhotoEntryCard({
       >
         {selected ? <Check className="h-3.5 w-3.5" /> : null}
       </span>
-      <img
-        src={photo.dataUrl}
-        alt={photo.name}
-        className="aspect-square w-full object-cover"
-        draggable={false}
-      />
+      {photo.dataUrl ? (
+        <img
+          src={photo.dataUrl}
+          alt={photo.name}
+          className="aspect-square w-full object-cover"
+          draggable={false}
+        />
+      ) : (
+        <div className="flex aspect-square w-full flex-col items-center justify-center gap-2 bg-stone-100 px-3 text-center text-stone-500 dark:bg-stone-900 dark:text-stone-300">
+          <Download className="h-7 w-7" />
+          <span className="text-[11px] font-semibold">Saved to Downloads</span>
+        </div>
+      )}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-linear-to-t from-stone-900/85 via-stone-900/35 to-transparent px-2 pb-1.5 pt-6 text-[10px] text-white">
         <div className="truncate font-semibold">{photo.name}</div>
         <div className="truncate text-white/75">
@@ -1415,6 +1465,7 @@ function PhotoEntryCard({
               ? `${photo.width}×${photo.height}`
               : "",
             formatPhotoSize(photo.size),
+            photo.downloadFilename ? "Downloaded" : "",
           ]
             .filter(Boolean)
             .join(" · ")}

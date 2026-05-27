@@ -22,15 +22,14 @@ test("parseCaptureInvocation accepts Apple default App Clip links from QR scans"
     parseCaptureInvocation("https://appclip.apple.com/id?p=com.volt.mobile.Clip&mode=barcode&session=session-42"),
     { mode: "barcode", sessionId: "session-42" }
   );
-  assert.deepEqual(
-    parseCaptureInvocation("https://appclip.apple.com/id?p=com.volt.mobile.Clip&mode=dictation&session=phone_123"),
-    { mode: "dictation", sessionId: "phone_123" }
-  );
+  assert.deepEqual(parseCaptureInvocation("https://appclip.apple.com/id?p=com.volt.mobile.Clip&mode=dictation&session=phone_123"), {
+    sessionId: "phone_123",
+  });
 });
 
 test("parseCaptureInvocation accepts custom scheme paths", () => {
-  assert.deepEqual(parseCaptureInvocation("volt://clip/dictation?session=phone_123"), {
-    mode: "dictation",
+  assert.deepEqual(parseCaptureInvocation("volt://clip/photo?session=phone_123"), {
+    mode: "photo",
     sessionId: "phone_123",
   });
   assert.deepEqual(parseCaptureInvocation("volt://open/clip/barcode?session=phone-123"), {
@@ -58,7 +57,7 @@ test("parseCaptureInvocation rejects invalid or incomplete URLs", () => {
 test("normalizeCaptureMode only returns supported capture modes", () => {
   assert.equal(normalizeCaptureMode("ocr"), "ocr");
   assert.equal(normalizeCaptureMode("barcode"), "barcode");
-  assert.equal(normalizeCaptureMode("dictation"), "dictation");
+  assert.equal(normalizeCaptureMode("dictation"), null);
   assert.equal(normalizeCaptureMode("photo"), "photo");
   assert.equal(normalizeCaptureMode(undefined), null);
 });

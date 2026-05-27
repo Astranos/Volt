@@ -5,11 +5,11 @@ export type CaptureInvocation = {
   sessionId: string;
 };
 
-const captureModes = new Set<CaptureMode>(["ocr", "barcode", "dictation", "photo"]);
+const appClipCaptureModes = new Set<CaptureMode>(["ocr", "barcode", "photo"]);
 const sessionIdPattern = /^[a-zA-Z0-9_-]{4,80}$/;
 
 function isCaptureMode(value: string | undefined): value is CaptureMode {
-  return value === "ocr" || value === "barcode" || value === "dictation" || value === "photo";
+  return value === "ocr" || value === "barcode" || value === "photo";
 }
 
 function getStringParam(searchParams: URLSearchParams, key: string) {
@@ -39,5 +39,5 @@ export function parseCaptureInvocation(url: string): CaptureInvocation | null {
 }
 
 export function normalizeCaptureMode(value: unknown): CaptureMode | null {
-  return typeof value === "string" && captureModes.has(value as CaptureMode) ? (value as CaptureMode) : null;
+  return typeof value === "string" && appClipCaptureModes.has(value as CaptureMode) ? (value as CaptureMode) : null;
 }

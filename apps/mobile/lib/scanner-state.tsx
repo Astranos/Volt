@@ -205,6 +205,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
   const relaySessionRef = useRef<{ id: string; mode?: RelayCaptureMode } | null>(null);
   const lastOfferRef = useRef<string | null>(null);
   const reconnectingRef = useRef(false);
+  const photoSendingRef = useRef(false);
 
   const connected = status === "connected" && (channelRef.current?.readyState === "open" || Boolean(relaySessionRef.current));
 
@@ -519,17 +520,20 @@ export function ScannerProvider({ children }: PropsWithChildren) {
   }, []);
 
   const sendPhotoCapture = useCallback(async () => {
-    if (!cameraRef.current || photoSending) return;
+    if (!cameraRef.current || photoSendingRef.current) return;
+    photoSendingRef.current = true;
 
     const channel = channelRef.current;
     const relaySession = relaySessionRef.current;
     if (channel?.readyState !== "open" && !relaySession) {
+      photoSendingRef.current = false;
       setPhotoError("Pair with Chrome before taking photos.");
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       return;
     }
 
     if (relaySession?.mode && relaySession.mode !== "photo") {
+      photoSendingRef.current = false;
       setPhotoError(`This browser session is waiting for ${relaySession.mode}, not photo.`);
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       return;
@@ -639,9 +643,10 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       setPhotoError(message);
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     } finally {
+      photoSendingRef.current = false;
       setPhotoSending(false);
     }
-  }, [photoSending]);
+  }, []);
 
   const flushScannerItems = useCallback(() => {
     scannerFlushTimerRef.current = null;

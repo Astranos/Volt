@@ -24,6 +24,8 @@ import {
 const STORAGE_KEY = "volt.mobilePhotos.photos";
 const PHOTO_DROP_MIME = "application/x-volt-mobile-photos";
 const IMAGE_FILE_EXTENSIONS = /\.(avif|gif|heic|heif|jpe?g|png|webp)$/i;
+const MAX_PHOTOS = 80;
+const MAX_PERSISTED_PHOTO_BYTES = 6_000_000;
 
 type MobileScannerState = {
   status: ScannerConnectionStatus;
@@ -36,12 +38,32 @@ type MobilePhoto = {
   kind: "photo";
   name: string;
   mimeType: string;
-  dataUrl: string;
+  dataUrl?: string;
   size: number;
   width?: number;
   height?: number;
   capturedAt?: string;
+  sessionId?: string;
+  downloadId?: number;
+  downloadFilename?: string;
 };
+
+function trimPhotosForStorage(photos: MobilePhoto[]) {
+  const trimmed: MobilePhoto[] = [];
+  let totalBytes = 0;
+
+  for (const photo of photos.slice(0, MAX_PHOTOS)) {
+    const estimatedBytes = photo.dataUrl?.length ?? 0;
+    if (trimmed.length > 0 && totalBytes + estimatedBytes > MAX_PERSISTED_PHOTO_BYTES) {
+      continue;
+    }
+    const { dataUrl, ...metadata } = photo;
+    trimmed.push(metadata);
+    totalBytes += estimatedBytes;
+  }
+
+  return trimmed;
+}
 
 function dataUrlToFile(dataUrl: string, filename: string, mimeType: string) {
   const [header, base64] = dataUrl.split(",");
@@ -220,7 +242,8 @@ function installPhotoDropBridge(dropMime: string) {
       }
 
       const files = photos
-        .map((photo) => dataUrlToFileInPage(photo.dataUrl, photo.name, photo.mimeType))
+        .filter((photo) => photo.dataUrl)
+        .map((photo) => dataUrlToFileInPage(photo.dataUrl!, photo.name, photo.mimeType))
         .filter((file): file is File => Boolean(file));
 
       if (files.length === 0) return;
@@ -406,14 +429,14 @@ async function insertPhotosIntoPage(photos: MobilePhoto[]) {
   const files = (
     isShopifyAdmin
       ? await Promise.all(
-          photos.map((photo) =>
-            dataUrlToShopifyJpegFile(photo.dataUrl, photo.name).catch(() =>
-              dataUrlToFileInPage(photo.dataUrl, photo.name, photo.mimeType)
+          photos.filter((photo) => photo.dataUrl).map((photo) =>
+            dataUrlToShopifyJpegFile(photo.dataUrl!, photo.name).catch(() =>
+              dataUrlToFileInPage(photo.dataUrl!, photo.name, photo.mimeType)
             )
           )
         )
-      : photos.map((photo) =>
-          dataUrlToFileInPage(photo.dataUrl, photo.name, photo.mimeType)
+      : photos.filter((photo) => photo.dataUrl).map((photo) =>
+          dataUrlToFileInPage(photo.dataUrl!, photo.name, photo.mimeType)
         )
   ).filter((file): file is File => Boolean(file));
 
@@ -477,7 +500,7 @@ export default function MobilePhotos({
   }, []);
 
   const persistPhotos = useCallback((nextPhotos: MobilePhoto[]) => {
-    void chrome.storage.local.set({ [STORAGE_KEY]: nextPhotos });
+    void chrome.storage.local.set({ [STORAGE_KEY]: trimPhotosForStorage(nextPhotos) });
   }, []);
 
   const applyScannerState = useCallback(
@@ -520,7 +543,7 @@ export default function MobilePhotos({
 
   const addPhoto = useCallback((photo: MobilePhoto) => {
     setPhotos((current) => {
-      const next = [photo, ...current.filter((item) => item.id !== photo.id)].slice(0, 80);
+      const next = trimPhotosForStorage([photo, ...current.filter((item) => item.id !== photo.id)]);
       return next;
     });
   }, []);
@@ -554,6 +577,11 @@ export default function MobilePhotos({
 
   const downloadSelected = useCallback(() => {
     for (const photo of selectedPhotos) {
+      if (typeof photo.downloadId === "number") {
+        chrome.downloads.show(photo.downloadId);
+        continue;
+      }
+      if (!photo.dataUrl) continue;
       const link = document.createElement("a");
       link.href = photo.dataUrl;
       link.download = photo.name;
@@ -564,13 +592,19 @@ export default function MobilePhotos({
   const copySelected = useCallback(async () => {
     if (selectedPhotos.length === 0) return;
 
-    const html = selectedPhotos
+    const transferablePhotos = selectedPhotos.filter((photo) => photo.dataUrl);
+    if (transferablePhotos.length === 0) {
+      setError("Selected photos are already saved in Downloads.");
+      return;
+    }
+
+    const html = transferablePhotos
       .map((photo) => {
         const alt = photo.name.replace(/"/g, "&quot;");
         return `<img src="${photo.dataUrl}" alt="${alt}">`;
       })
       .join("");
-    const plainText = selectedPhotos
+    const plainText = transferablePhotos
       .map((photo) => normalizeImageFilename(photo.name, photo.mimeType))
       .join("\n");
 
@@ -581,8 +615,8 @@ export default function MobilePhotos({
           "text/plain": new Blob([plainText], { type: "text/plain" }),
         };
 
-        if (selectedPhotos.length === 1) {
-          clipboardData["image/png"] = await dataUrlToPngBlob(selectedPhotos[0].dataUrl);
+        if (transferablePhotos.length === 1) {
+          clipboardData["image/png"] = await dataUrlToPngBlob(transferablePhotos[0].dataUrl!);
         }
 
         await navigator.clipboard.write([new ClipboardItem(clipboardData)]);
@@ -630,7 +664,7 @@ export default function MobilePhotos({
       const [result] = await chrome.scripting.executeScript({
         target: { tabId: tab.id },
         func: insertPhotosIntoPage,
-        args: [selectedPhotos],
+        args: [selectedPhotos.filter((photo) => photo.dataUrl)],
       });
 
       const payload = result?.result as
@@ -655,13 +689,19 @@ export default function MobilePhotos({
   const handleDragStart = useCallback(
     (event: React.DragEvent, photo: MobilePhoto) => {
       const dragPhotos = selectedIds.has(photo.id) ? selectedPhotos : [photo];
+      const transferablePhotos = dragPhotos.filter((item) => item.dataUrl);
+      if (!transferablePhotos.length) {
+        event.preventDefault();
+        setError("Selected photos are already saved in Downloads.");
+        return;
+      }
       if (!selectedIds.has(photo.id)) setSelectedIds(new Set([photo.id]));
       void prepareActiveTabForPhotoDrop();
 
       event.dataTransfer.effectAllowed = "copy";
-      event.dataTransfer.setData(PHOTO_DROP_MIME, JSON.stringify(dragPhotos));
-      dragPhotos.forEach((item) => {
-        const file = dataUrlToFile(item.dataUrl, item.name, item.mimeType);
+      event.dataTransfer.setData(PHOTO_DROP_MIME, JSON.stringify(transferablePhotos));
+      transferablePhotos.forEach((item) => {
+        const file = dataUrlToFile(item.dataUrl!, item.name, item.mimeType);
         if (!file) return;
         try {
           event.dataTransfer.items.add(file);
@@ -669,12 +709,12 @@ export default function MobilePhotos({
           // Some Chrome extension drag contexts reject programmatic file items.
         }
       });
-      event.dataTransfer.setData("text/uri-list", dragPhotos.map((item) => item.dataUrl).join("\n"));
+      event.dataTransfer.setData("text/uri-list", transferablePhotos.map((item) => item.dataUrl!).join("\n"));
       event.dataTransfer.setData(
         "text/html",
-        dragPhotos.map((item) => `<img src="${item.dataUrl}" alt="${item.name}">`).join("")
+        transferablePhotos.map((item) => `<img src="${item.dataUrl}" alt="${item.name}">`).join("")
       );
-      event.dataTransfer.setData("text/plain", dragPhotos.map((item) => item.name).join("\n"));
+      event.dataTransfer.setData("text/plain", transferablePhotos.map((item) => item.name).join("\n"));
     },
     [prepareActiveTabForPhotoDrop, selectedIds, selectedPhotos]
   );
@@ -847,17 +887,25 @@ export default function MobilePhotos({
                       selected && "ring-2 ring-green-500 ring-offset-2 ring-offset-white",
                     )}
                   >
-                    <img
-                      src={photo.dataUrl}
-                      alt={photo.name}
-                      className="aspect-square w-full object-cover"
-                    />
+                    {photo.dataUrl ? (
+                      <img
+                        src={photo.dataUrl}
+                        alt={photo.name}
+                        className="aspect-square w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex aspect-square w-full flex-col items-center justify-center gap-2 bg-stone-100 px-3 text-center text-stone-500">
+                        <Download className="h-7 w-7" />
+                        <span className="text-[11px] font-semibold">Saved to Downloads</span>
+                      </div>
+                    )}
                     <div className="absolute inset-x-0 bottom-0 bg-linear-to-t from-stone-900/80 via-stone-900/40 to-transparent px-2.5 pb-1.5 pt-3 text-[11px] text-white">
                       <div className="truncate font-semibold">{photo.name}</div>
                       <div className="truncate opacity-80">
                         {[
                           photo.width && photo.height ? `${photo.width}×${photo.height}` : "",
                           formatSize(photo.size),
+                          photo.downloadFilename ? "Downloaded" : "",
                         ]
                           .filter(Boolean)
                           .join(" · ")}

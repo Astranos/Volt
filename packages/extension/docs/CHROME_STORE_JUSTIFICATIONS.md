@@ -56,7 +56,7 @@
 
 ### downloads
 
-**Justification:** Enables users to download files directly through the extension's interface when explicitly requested, such as exporting search results or saving data from extension features.
+**Justification:** The downloads permission is used to save files that users create or request through Volt. This includes saving photos captured from the paired mobile app/App Clip into the user's Downloads folder, organized under per-session folders, so large image files are stored on the user's computer instead of consuming Chrome extension storage quota. It is also used for explicit file downloads from extension features.
 
 ### favicon
 

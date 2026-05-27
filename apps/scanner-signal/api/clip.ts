@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
-const CLIP_MODES = new Set(["ocr", "barcode", "dictation", "photo"]);
+const CLIP_MODES = new Set(["ocr", "barcode", "photo"]);
 const DEFAULT_APP_CLIP_BUNDLE_ID = "com.volt.mobile.Clip";
 const SESSION_ID_PATTERN = /^[a-zA-Z0-9_-]{4,80}$/;
 const APP_STORE_ID_PATTERN = /^\d+$/;
@@ -13,10 +13,6 @@ const MODE_COPY = {
   barcode: {
     title: "Barcode scanner",
     action: "Scan a UPC, EAN, or QR code with your iPhone camera.",
-  },
-  dictation: {
-    title: "Dictation",
-    action: "Speak a short note and send the final transcript back to Chrome.",
   },
   photo: {
     title: "Photo capture",

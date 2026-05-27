@@ -129,7 +129,6 @@ test("clip fallback page renders mode-specific fallback copy for every App Clip 
   for (const [mode, expectedCopy] of [
     ["ocr", "Scan printed text with your iPhone camera."],
     ["barcode", "Scan a UPC, EAN, or QR code with your iPhone camera."],
-    ["dictation", "Speak a short note and send the final transcript back to Chrome."],
     ["photo", "Capture a photo with your iPhone camera and send it back to Chrome."],
   ]) {
     const response = makeResponse();
@@ -145,6 +144,7 @@ test("clip fallback page renders mode-specific fallback copy for every App Clip 
 test("clip fallback rejects missing, unsupported, or invalid-format invocations", () => {
   for (const request of [
     makeRequest({ path: "photos", query: { session: "abc123" } }),
+    makeRequest({ path: "dictation", query: { session: "abc123" } }),
     makeRequest({ path: "barcode" }),
     makeRequest({ path: "ocr", query: { session: `abc"><script>alert(1)</script>` } }),
     makeRequest({ path: "ocr", query: { session: "abc" } }),

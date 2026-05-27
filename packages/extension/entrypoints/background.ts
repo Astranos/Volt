@@ -92,6 +92,7 @@ export default defineBackground({
     const MOBILE_RELAY_STATE_STORAGE_KEY = "volt.mobileScanner.relaySession.v1";
     const MOBILE_SCANNER_MAX_SCANS = 100;
     const MOBILE_PHOTOS_MAX_PHOTOS = 80;
+    const MOBILE_PHOTOS_MAX_PERSISTED_BYTES = 6_000_000;
     const MOBILE_CAPTURE_MODES = new Set(["ocr", "barcode", "dictation", "photo"]);
     const DEFAULT_STORAGE_STATS = {
       indexedPages: 0,
@@ -185,7 +186,82 @@ export default defineBackground({
           typeof photo.capturedAt === "string"
             ? photo.capturedAt
             : new Date().toISOString(),
+        sessionId:
+          typeof photo.sessionId === "string" && photo.sessionId
+            ? clampString(photo.sessionId, 80)
+            : undefined,
+        downloadId: typeof photo.downloadId === "number" ? photo.downloadId : undefined,
+        downloadFilename:
+          typeof photo.downloadFilename === "string" && photo.downloadFilename
+            ? clampString(photo.downloadFilename, 240)
+            : undefined,
       };
+    }
+
+    function sanitizeDownloadPathSegment(value, fallback) {
+      const cleaned = String(value || "")
+        .trim()
+        .replace(/[<>:"\\|?*\x00-\x1F]+/g, "-")
+        .replace(/^\.+$/, "")
+        .replace(/\/+/g, "-")
+        .replace(/\s+/g, "-")
+        .slice(0, 96);
+      return cleaned || fallback;
+    }
+
+    function extensionForMobilePhoto(photo) {
+      const mimeType = String(photo?.mimeType || "").toLowerCase();
+      if (mimeType.includes("png")) return "png";
+      if (mimeType.includes("webp")) return "webp";
+      if (mimeType.includes("gif")) return "gif";
+      if (mimeType.includes("avif")) return "avif";
+      if (mimeType.includes("heic")) return "heic";
+      if (mimeType.includes("heif")) return "heif";
+      return "jpg";
+    }
+
+    function normalizeMobilePhotoFilename(photo) {
+      const extension = extensionForMobilePhoto(photo);
+      const baseName = sanitizeDownloadPathSegment(photo?.name || photo?.id || "volt-photo", "volt-photo");
+      return /\.(avif|gif|heic|heif|jpe?g|png|webp)$/i.test(baseName)
+        ? baseName.replace(/\.(avif|gif|heic|heif|jpe?g|png|webp)$/i, `.${extension}`)
+        : `${baseName}.${extension}`;
+    }
+
+    function buildMobilePhotoDownloadFilename(photo) {
+      const sessionFolder = sanitizeDownloadPathSegment(photo?.sessionId, "unpaired-session");
+      const filename = normalizeMobilePhotoFilename(photo);
+      return `Volt Photos/${sessionFolder}/${filename}`;
+    }
+
+    function downloadMobilePhoto(photo) {
+      return new Promise((resolve) => {
+        const filename = buildMobilePhotoDownloadFilename(photo);
+        chrome.downloads.download(
+          {
+            url: photo.dataUrl,
+            filename,
+            conflictAction: "uniquify",
+            saveAs: false,
+          },
+          (downloadId) => {
+            if (chrome.runtime.lastError || typeof downloadId !== "number") {
+              resolve({
+                success: false,
+                error: chrome.runtime.lastError?.message || "download_failed",
+              });
+              return;
+            }
+
+            resolve({ success: true, downloadId, filename });
+          }
+        );
+      });
+    }
+
+    function stripMobilePhotoData(photo) {
+      const { dataUrl, ...metadata } = photo;
+      return metadata;
     }
 
     function insertTextAtTrackedEditableFromBackground(value, options = {}) {
@@ -376,6 +452,22 @@ export default defineBackground({
       );
     }
 
+    function trimMobilePhotosForStorage(photos) {
+      const trimmed = [];
+      let totalBytes = 0;
+
+      for (const photo of photos.slice(0, MOBILE_PHOTOS_MAX_PHOTOS)) {
+        const estimatedBytes = typeof photo?.dataUrl === "string" ? photo.dataUrl.length : 0;
+        if (trimmed.length > 0 && totalBytes + estimatedBytes > MOBILE_PHOTOS_MAX_PERSISTED_BYTES) {
+          continue;
+        }
+        trimmed.push(stripMobilePhotoData(photo));
+        totalBytes += estimatedBytes;
+      }
+
+      return trimmed;
+    }
+
     function persistMobilePhoto(photo) {
       return new Promise((resolve) => {
         chrome.storage.local.get(
@@ -384,10 +476,10 @@ export default defineBackground({
             const current = Array.isArray(stored[MOBILE_PHOTOS_STORAGE_KEY])
               ? stored[MOBILE_PHOTOS_STORAGE_KEY]
               : [];
-            const next = [photo, ...current.filter((item) => item?.id !== photo.id)].slice(
-              0,
-              MOBILE_PHOTOS_MAX_PHOTOS
-            );
+            const next = trimMobilePhotosForStorage([
+              photo,
+              ...current.filter((item) => item?.id !== photo.id),
+            ]);
             chrome.storage.local.set({ [MOBILE_PHOTOS_STORAGE_KEY]: next }, () => {
               resolve(!chrome.runtime.lastError);
             });
@@ -565,9 +657,17 @@ export default defineBackground({
       const photo = normalizeMobilePhoto(message?.photo);
       if (!photo) return { success: false, error: "invalid_photo" };
 
-      const persisted = await persistMobilePhoto(photo);
+      const downloadResult = await downloadMobilePhoto(photo);
+      if (!downloadResult.success) return { success: false, error: downloadResult.error || "download_failed" };
+
+      const downloadedPhoto = {
+        ...photo,
+        downloadId: downloadResult.downloadId,
+        downloadFilename: downloadResult.filename,
+      };
+      const persisted = await persistMobilePhoto(downloadedPhoto);
       if (!persisted) return { success: false, error: "storage_failed" };
-      broadcastScannerMessage({ action: "scannerPhoto", photo });
+      broadcastScannerMessage({ action: "scannerPhoto", photo: downloadedPhoto });
       return { success: true };
     }
 

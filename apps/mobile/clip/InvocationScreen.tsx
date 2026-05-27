@@ -27,7 +27,6 @@ import { parseCaptureInvocation, type CaptureInvocation } from "../lib/capture-u
 import { LiveTextImageView } from "../lib/live-text-image-view";
 import {
   makeBarcodeMessage,
-  makeDictationMessage,
   makePhotoMessage,
   makeOcrMessage,
   type ScannerCaptureMode,
@@ -40,17 +39,6 @@ import {
   stopVoltClipBarcodeScanner,
   type VoltClipBarcodeCandidate,
 } from "../lib/volt-clip-barcode-scanner";
-import {
-  addVoltClipDictationAudioChunkListener,
-  addVoltClipDictationErrorListener,
-  addVoltClipDictationFinalListener,
-  addVoltClipDictationPartialListener,
-  getVoltClipDictationPermissions,
-  hasVoltClipDictation,
-  requestVoltClipDictationPermissions,
-  startVoltClipDictation,
-  stopVoltClipDictation,
-} from "../lib/volt-clip-dictation";
 import {
   getVoltClipClipboardChangeCount,
   getVoltClipClipboardString,
@@ -114,7 +102,7 @@ const modeTitles = {
   dictation: "Dictation",
   photo: "Photo Capture",
 };
-const clipModes = ["ocr", "barcode", "photo", "dictation"] as const;
+const clipModes = ["ocr", "barcode", "photo"] as const;
 const modeLabels: Record<ScannerCaptureMode, string> = {
   ocr: "OCR",
   barcode: "Scanner",
@@ -151,6 +139,19 @@ const AnimatedLiquidGlassView = LiquidGlassView ? Animated.createAnimatedCompone
 const HeaderWebSocket = WebSocket as unknown as {
   new (url: string, protocols?: string | string[], options?: { headers?: Record<string, string> }): WebSocket;
 };
+const hasVoltClipDictation = false;
+const addVoltClipDictationAudioChunkListener = (_listener: (audioChunk: { chunk: string }) => void) => ({ remove() {} });
+const addVoltClipDictationErrorListener = (_listener: (message: string) => void) => ({ remove() {} });
+const addVoltClipDictationFinalListener = (_listener: (transcript: string) => void) => ({ remove() {} });
+const addVoltClipDictationPartialListener = (_listener: (transcript: string) => void) => ({ remove() {} });
+const getVoltClipDictationPermissions = async () => ({
+  granted: false,
+  speechStatus: "unavailable",
+  microphoneGranted: false,
+});
+const requestVoltClipDictationPermissions = getVoltClipDictationPermissions;
+const startVoltClipDictation = async (_options: { addsPunctuation: boolean }) => ({ running: false });
+const stopVoltClipDictation = async () => {};
 
 function canRequestDictationPermissionAgain(speechStatus: string, microphoneGranted: boolean) {
   return !microphoneGranted && (speechStatus === "external" || speechStatus === "authorized" || speechStatus === "notDetermined");
@@ -158,7 +159,6 @@ function canRequestDictationPermissionAgain(speechStatus: string, microphoneGran
 
 function makeTestMessage(mode: ScannerCaptureMode) {
   if (mode === "ocr") return makeOcrMessage("hello from Volt Clip");
-  if (mode === "dictation") return makeDictationMessage("hello from Volt Clip", `clip-${Date.now()}`);
   if (mode === "photo") {
     return makePhotoMessage({
       id: `clip-photo-${Date.now()}`,
@@ -269,7 +269,7 @@ function NativeBarcodeHighlight({ candidate }: { candidate: VoltClipBarcodeCandi
 
 export default function ClipInvocationScreen() {
   const [invocation, setInvocation] = useState<CaptureInvocation | null>(null);
-  const initialMode = invocation?.mode ?? "ocr";
+  const initialMode = invocation?.mode === "dictation" ? "photo" : invocation?.mode ?? "ocr";
   const [activeMode, setActiveMode] = useState<ScannerCaptureMode>(initialMode);
   const mode = activeMode;
   const session = invocation?.sessionId ?? "";
@@ -319,6 +319,7 @@ export default function ClipInvocationScreen() {
   const ocrZoomMinRef = useRef(OCR_ZOOM_DEFAULT);
   const ocrZoomMaxRef = useRef(OCR_ZOOM_MAX);
   const ocrZoomFactorRef = useRef(OCR_ZOOM_DEFAULT);
+  const captureInFlightRef = useRef(false);
   const isOcrMode = Boolean(mode);
   const [ocrAutoTypeCopiedText, setOcrAutoTypeCopiedText] = useState(true);
   const [barcodeInsertIntoCursor, setBarcodeInsertIntoCursor] = useState(true);
@@ -754,7 +755,7 @@ export default function ClipInvocationScreen() {
       dictationTranscriptRef.current = transcript;
       setDictationFinal(true);
       setDictationState("ready");
-      void sendRelayMessage("dictation", makeDictationMessage(transcript, `clip-${session}`));
+      return;
     });
     const errorSubscription = addVoltClipDictationErrorListener((message) => {
       setDictationState("error");
@@ -904,9 +905,7 @@ export default function ClipInvocationScreen() {
     setDictationTranscript(transcript);
     setDictationFinal(phase === "final");
     if (phase === "final") setDictationState("ready");
-    void sendRelayMessage("dictation", makeDictationMessage(transcript, dictationSessionId, phase), {
-      background: phase === "partial",
-    });
+    return;
   }
 
   useEffect(() => {
@@ -1038,9 +1037,23 @@ export default function ClipInvocationScreen() {
   }
 
   async function captureText() {
-    if ((mode !== "ocr" && mode !== "photo") || sendState === "sending" || sendState === "sent") return;
+    if (
+      captureInFlightRef.current ||
+      (mode !== "ocr" && mode !== "photo") ||
+      sendState === "sending" ||
+      (mode === "ocr" && sendState === "sent")
+    ) {
+      return;
+    }
+    captureInFlightRef.current = true;
 
     setError(null);
+    if (mode === "photo") {
+      setSendState("idle");
+      setOcrImageUri(null);
+      setOcrFrozenImageUri(null);
+      setOcrText("");
+    }
     setOcrState("capturing");
     hideVoltClipTextPreview();
 
@@ -1068,6 +1081,8 @@ export default function ClipInvocationScreen() {
     } catch (captureError) {
       setOcrState("error");
       setError(captureError instanceof Error ? captureError.message : "Unable to capture text");
+    } finally {
+      captureInFlightRef.current = false;
     }
   }
 
@@ -1178,6 +1193,10 @@ export default function ClipInvocationScreen() {
         disabled={isBusy}
         onPress={() => {
           if (capturedOcrImageUri) {
+            if (mode === "photo") {
+              void captureText();
+              return;
+            }
             resetOcrCapture();
             return;
           }
@@ -1324,7 +1343,7 @@ export default function ClipInvocationScreen() {
 
   async function sendRelayMessage(
     relayMode: ScannerCaptureMode,
-    message: ReturnType<typeof makeBarcodeMessage> | ReturnType<typeof makeDictationMessage> | ReturnType<typeof makePhotoMessage>,
+    message: ReturnType<typeof makeBarcodeMessage> | ReturnType<typeof makeOcrMessage> | ReturnType<typeof makePhotoMessage>,
     options: { background?: boolean } = {}
   ) {
     if (!session) return;
@@ -1384,8 +1403,6 @@ export default function ClipInvocationScreen() {
         ? makeBarcodeMessage(barcodeCandidate.value, barcodeCandidate.format, barcodeInsertIntoCursor)
         : mode === "ocr" && ocrText.trim()
           ? makeOcrMessage(ocrText.trim(), ocrAutoTypeCopiedText)
-        : mode === "dictation" && dictationTranscript.trim()
-          ? makeDictationMessage(dictationTranscript.trim(), `clip-${session}`)
         : makeTestMessage(mode);
 
     await sendRelayMessage(mode, message);
@@ -2157,7 +2174,7 @@ export default function ClipInvocationScreen() {
                 <LiquidTabBarView
                   onModeChange={(event) => {
                     const nextMode = event.nativeEvent?.mode;
-                    if (nextMode === "ocr" || nextMode === "barcode" || nextMode === "photo" || nextMode === "dictation") {
+                    if (nextMode === "ocr" || nextMode === "barcode" || nextMode === "photo") {
                       switchClipMode(nextMode);
                     }
                   }}

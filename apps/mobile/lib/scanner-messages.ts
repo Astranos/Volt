@@ -26,8 +26,26 @@ export function makeCaptureMessage(
   };
 }
 
+export function normalizeBarcodeScan(value: string, format: string) {
+  const trimmedValue = value.trim();
+  const normalizedFormat = format.trim().toLowerCase();
+
+  if (normalizedFormat === "ean13" && /^0\d{12}$/.test(trimmedValue)) {
+    return {
+      value: trimmedValue.slice(1),
+      format: "upc_a",
+    };
+  }
+
+  return {
+    value: trimmedValue,
+    format,
+  };
+}
+
 export function makeBarcodeMessage(value: string, format: string, insertIntoCursor = true): ScanItem {
-  return makeCaptureMessage(value, format, "barcode", insertIntoCursor);
+  const normalized = normalizeBarcodeScan(value, format);
+  return makeCaptureMessage(normalized.value, normalized.format, "barcode", insertIntoCursor);
 }
 
 export function makeOcrMessage(text: string, insertIntoCursor = true): ScanItem {

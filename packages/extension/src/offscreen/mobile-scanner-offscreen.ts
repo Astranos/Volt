@@ -432,6 +432,7 @@ class MobileScannerOffscreenSession {
       photo: {
         ...photo,
         capturedAt: photo.capturedAt || new Date().toISOString(),
+        sessionId: this.sessionId ?? undefined,
       },
     });
     return response?.success === true;

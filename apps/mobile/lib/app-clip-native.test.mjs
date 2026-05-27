@@ -143,19 +143,11 @@ test("App Clip photo mode keeps the captured photo visible while sending", () =>
   assert.match(clipScreen, /Capture another photo/);
 });
 
-test("App Clip dictation streams microphone audio instead of using Speech in the clip", () => {
-  const dictation = readText(nativeFiles.dictation);
+test("App Clip does not expose dictation mode from the dedicated clip entry", () => {
   const clipScreen = readText(nativeFiles.clipScreen);
 
-  assert.match(dictation, /AVAudioApplication\.requestRecordPermission/);
-  assert.match(dictation, /AVAudioApplication\.shared\.recordPermission/);
-  assert.match(dictation, /emitAudioChunk\(buffer: buffer, format: format\)/);
-  assert.match(dictation, /"format": "pcm_s16le"/);
-  assert.match(clipScreen, /CLIP_DICTATION_TOKEN_URL/);
-  assert.match(clipScreen, /OPENAI_REALTIME_TRANSCRIPTION_URL/);
-  assert.match(clipScreen, /type: "input_audio_buffer\.append"/);
-  assert.match(clipScreen, /makeDictationMessage\(transcript, dictationSessionId, phase\)/);
-  assert.doesNotMatch(dictation, /import Speech/);
+  assert.match(clipScreen, /const clipModes = \["ocr", "barcode", "photo"\] as const/);
+  assert.doesNotMatch(clipScreen, /from "\.\.\/lib\/volt-clip-dictation"/);
 });
 
 test("App Clip barcode scanner returns native preview geometry for active code highlighting", () => {
