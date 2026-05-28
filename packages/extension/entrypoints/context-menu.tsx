@@ -528,12 +528,6 @@ export default defineContentScript({
         },
       },
       {
-        id: "mobile",
-        label: "Mobile",
-        icon: Smartphone,
-        onInvoke: openMobileSidepanel,
-      },
-      {
         id: "go-left",
         label: "Go to Previous Tab",
         icon: ChevronLeft,
@@ -669,6 +663,14 @@ export default defineContentScript({
         onInvoke: ({ selection }) =>
           selection &&
           openSearchPopup(buildSearchUrl(SEARCH_URL_TEMPLATES.pricecharting, selection)),
+      },
+      {
+        id: "mobile-scanner",
+        label: "Mobile Scanner",
+        shortcut: "V",
+        description: "Open mobile scanner",
+        icon: Smartphone,
+        onInvoke: openMobileSidepanel,
       },
       {
         id: "settings",
