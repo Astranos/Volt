@@ -2237,24 +2237,82 @@ private final class ClipCamera: NSObject, ObservableObject, AVCaptureMetadataOut
   }
 
   func metadataOutput(_ output: AVCaptureMetadataOutput, didOutput metadataObjects: [AVMetadataObject], from connection: AVCaptureConnection) {
-    guard
-      let object = metadataObjects.compactMap({ $0 as? AVMetadataMachineReadableCodeObject }).first,
-      let value = object.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines),
-      !value.isEmpty
-    else {
+    let candidates = metadataObjects
+      .compactMap { $0 as? AVMetadataMachineReadableCodeObject }
+      .compactMap { barcodeCandidate(from: $0) }
+      .sorted { left, right in
+        if left.score != right.score { return left.score > right.score }
+        return left.candidate.previewBounds.width * left.candidate.previewBounds.height > right.candidate.previewBounds.width * right.candidate.previewBounds.height
+      }
+
+    guard let selected = candidates.first?.candidate else {
       onBarcodeLost?()
       return
     }
 
+    onBarcode?(selected)
+  }
+
+  private func barcodeCandidate(from object: AVMetadataMachineReadableCodeObject) -> (candidate: BarcodeCandidate, score: Int)? {
+    guard
+      let rawValue = object.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines),
+      !rawValue.isEmpty
+    else {
+      return nil
+    }
+
+    let normalized = normalizedBarcode(value: rawValue, type: object.type)
+    guard !isUselessBarcodeValue(normalized.value) else {
+      return nil
+    }
+
     let overlay = normalizedPreviewOverlay(for: object)
-    onBarcode?(
-      BarcodeCandidate(
-        value: value,
-        format: metadataName(object.type),
-        previewBounds: overlay.bounds,
-        previewCorners: overlay.corners
-      )
+    let candidate = BarcodeCandidate(
+      value: normalized.value,
+      format: normalized.format,
+      previewBounds: overlay.bounds,
+      previewCorners: overlay.corners
     )
+
+    return (candidate, barcodeScore(value: normalized.value, format: normalized.format, area: overlay.bounds.width * overlay.bounds.height))
+  }
+
+  private func normalizedBarcode(value: String, type: AVMetadataObject.ObjectType) -> (value: String, format: String) {
+    let format = metadataName(type)
+    if type == .ean13, value.range(of: #"^0\d{12}$"#, options: .regularExpression) != nil {
+      return (String(value.dropFirst()), "upc_a")
+    }
+    return (value, format)
+  }
+
+  private func isUselessBarcodeValue(_ value: String) -> Bool {
+    let digitsOnly = value.allSatisfy { $0.isNumber }
+    if digitsOnly && value.count <= 5 { return true }
+    if digitsOnly, let first = value.first, value.allSatisfy({ $0 == first }) { return true }
+    return false
+  }
+
+  private func barcodeScore(value: String, format: String, area: CGFloat) -> Int {
+    var score = Int(area * 1000)
+    let digitsOnly = value.allSatisfy { $0.isNumber }
+
+    switch format {
+    case "upc_a":
+      score += value.count == 12 ? 1000 : 350
+    case "ean13":
+      score += value.count == 13 ? 900 : 300
+    case "ean8", "upce":
+      score += 650
+    case "code128", "code39", "code93":
+      score += 250
+    default:
+      score += 100
+    }
+
+    if digitsOnly && value.count >= 8 { score += 250 }
+    if digitsOnly && value.count <= 5 { score -= 1000 }
+    if digitsOnly, let first = value.first, value.allSatisfy({ $0 == first }) { score -= 1000 }
+    return score
   }
 
   private func normalizedPreviewOverlay(for object: AVMetadataMachineReadableCodeObject) -> (bounds: CGRect, corners: [NormalizedPoint]) {

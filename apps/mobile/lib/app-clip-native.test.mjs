@@ -164,6 +164,21 @@ test("App Clip barcode scanner returns native preview geometry for active code h
   assert.doesNotMatch(clipScreen, /ocrBarcodeScanLine/);
 });
 
+test("native App Clip barcode scanner normalizes UPC-A and rejects numeric noise", () => {
+  const appDelegate = readText(nativeFiles.clipAppDelegate);
+  const fullAppDelegate = readText(nativeFiles.fullAppDelegate);
+
+  for (const source of [appDelegate, fullAppDelegate]) {
+    assert.match(source, /normalizedBarcode\(value: String, type: AVMetadataObject\.ObjectType\)/);
+    assert.match(source, /type == \.ean13, value\.range\(of: #"\^0\\d\{12\}\$"#/);
+    assert.match(source, /return \(String\(value\.dropFirst\(\)\), "upc_a"\)/);
+    assert.match(source, /isUselessBarcodeValue/);
+    assert.match(source, /digitsOnly && value\.count <= 5/);
+    assert.match(source, /value\.allSatisfy\(\{ \$0 == first \}\)/);
+    assert.match(source, /\.sorted \{ left, right in/);
+  }
+});
+
 test("App Clip dictation permission denial offers retry or Settings recovery", () => {
   const clipScreen = readText(nativeFiles.clipScreen);
 
