@@ -879,6 +879,10 @@ function UnifiedPairingCard({
     if (!showQr) setQrOpen(false);
   }, [showQr]);
 
+  useEffect(() => {
+    if (connected) setQrOpen(false);
+  }, [connected]);
+
   const statusCopy = connected
     ? "Ready for captures · QR available"
     : showQr

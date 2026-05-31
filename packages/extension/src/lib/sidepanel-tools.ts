@@ -2,7 +2,6 @@ import {
   Gamepad2,
   Calculator,
   Layers,
-  ShoppingBag,
   LucideIcon,
   HelpCircle,
   Smartphone,
@@ -12,7 +11,6 @@ export type SidepanelToolId =
   | "controller-testing"
   | "top-offers"
   | "ebay-taxonomy-tool"
-  | "buying-guide"
   | "shopify-help"
   | "mobile-scanner"
   | "mobile-photos";
@@ -43,12 +41,6 @@ export const SIDEPANEL_TOOLS: SidepanelToolMetadata[] = [
     label: "eBay Categories",
     description: "Search eBay categories",
     icon: Layers,
-  },
-  {
-    id: "buying-guide",
-    label: "Buying Guide",
-    description: "View buying requirements and guidelines",
-    icon: ShoppingBag,
   },
   {
     id: "shopify-help",

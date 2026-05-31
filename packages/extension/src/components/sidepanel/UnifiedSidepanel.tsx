@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from "react";
 import ControllerTesting from "./ControllerTesting";
 import TopOffersPage from "./TopOffers";
 import EbayTaxonomyTool from "./EbayTaxonomyTool";
-import BuyingGuide from "./BuyingGuide";
 import ShopifyHelp from "./ShopifyHelp";
 import MobileScanner from "./MobileScanner";
 import {
@@ -68,7 +67,6 @@ export default function UnifiedSidepanel() {
   const [dropdownWidth, setDropdownWidth] = useState<number>();
   const [toast, setToast] = useState<ActiveToast | null>(null);
   const toastTimer = useRef<number | null>(null);
-  const menuTimer = useRef<number | null>(null);
   const toastCounter = useRef(0);
 
   useEffect(() => {
@@ -94,29 +92,8 @@ export default function UnifiedSidepanel() {
         handler as EventListener,
       );
       if (toastTimer.current) window.clearTimeout(toastTimer.current);
-      if (menuTimer.current) window.clearTimeout(menuTimer.current);
     };
   }, []);
-
-  const clearMenuTimer = () => {
-    if (menuTimer.current) {
-      window.clearTimeout(menuTimer.current);
-      menuTimer.current = null;
-    }
-  };
-
-  const openMenu = () => {
-    clearMenuTimer();
-    setMenuOpen(true);
-  };
-
-  const closeMenuSoon = () => {
-    clearMenuTimer();
-    menuTimer.current = window.setTimeout(() => {
-      setMenuOpen(false);
-      menuTimer.current = null;
-    }, 350);
-  };
 
   // Load the initial tool from storage
   useEffect(() => {
@@ -209,7 +186,6 @@ export default function UnifiedSidepanel() {
     "controller-testing": ControllerTesting,
     "top-offers": TopOffersPage,
     "ebay-taxonomy-tool": EbayTaxonomyTool,
-    "buying-guide": BuyingGuide,
     "shopify-help": ShopifyHelp,
     "mobile-scanner": MobileScanner,
     "mobile-photos": MobileScanner,
@@ -236,9 +212,6 @@ export default function UnifiedSidepanel() {
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              onPointerEnter={openMenu}
-              onPointerLeave={closeMenuSoon}
-              onFocus={openMenu}
               className="liquid-glass concentric-lg relative flex w-full min-w-0 items-center justify-between overflow-hidden px-4 py-2 text-left text-lg font-semibold text-stone-950 transition focus:outline-none focus:ring-2 focus:ring-primary/40 hover:bg-white/60 dark:text-stone-50 dark:hover:bg-white/5"
               ref={triggerRef}
             >
@@ -280,8 +253,6 @@ export default function UnifiedSidepanel() {
           <DropdownMenuContent
             align="start"
             sideOffset={2}
-            onPointerEnter={openMenu}
-            onPointerLeave={closeMenuSoon}
             onCloseAutoFocus={(event) => event.preventDefault()}
             className="sidepanel-tool-menu liquid-glass concentric-lg p-1"
             style={{
@@ -296,10 +267,10 @@ export default function UnifiedSidepanel() {
                   setMenuOpen(false);
                 }}
                 className={cn(
-                  "flex items-center gap-3 concentric-md px-3 py-2 text-sm font-medium transition-colors",
+                  "flex items-center gap-3 concentric-md px-3 py-2 text-sm font-medium transition-colors cursor-pointer",
                   activeTool === tool.id
                     ? "bg-primary text-primary-foreground"
-                    : "text-foreground hover:bg-white/45 hover:text-foreground focus:bg-white/45 focus:text-foreground dark:hover:bg-white/10 dark:focus:bg-white/10"
+                    : "text-stone-800 hover:bg-green-100/85 hover:text-stone-950 focus:bg-green-100/85 focus:text-stone-950 data-[highlighted]:bg-green-100/85 data-[highlighted]:text-stone-950 dark:text-stone-100 dark:hover:bg-white/10 dark:hover:text-stone-50 dark:focus:bg-white/10 dark:focus:text-stone-50 dark:data-[highlighted]:bg-white/10 dark:data-[highlighted]:text-stone-50"
                 )}
               >
                 <tool.icon className="h-4 w-4" />

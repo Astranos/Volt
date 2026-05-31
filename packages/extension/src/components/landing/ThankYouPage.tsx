@@ -23,7 +23,6 @@ import {
   Info,
   Layout,
   Calculator,
-  BookOpen,
   Tag,
   HelpCircle,
   List,
@@ -163,13 +162,6 @@ export default function ThankYouPage() {
       description:
         "Automated buyout offer calculations based on projected sell prices with support for custom rate profiles.",
       icon: Calculator,
-    },
-    {
-      id: 9,
-      title: "Buying Guide",
-      description:
-        "Instant access to buying requirements and quality guidelines for games and electronics via live Google Sheets integration.",
-      icon: BookOpen,
     },
     {
       id: 10,
