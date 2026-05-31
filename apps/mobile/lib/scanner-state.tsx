@@ -91,6 +91,7 @@ type ScannerState = {
   clearTextCapture: () => void;
   connected: boolean;
   dictating: boolean;
+  dictationStarting: boolean;
   dictationError: string | null;
   dictationTranscript: string;
   focusMode: "on" | "off";
@@ -187,6 +188,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
   const [textCapture, setTextCapture] = useState<TextCapture | null>(null);
   const [textCaptureResult, setTextCaptureResult] = useState<TextCaptureResult | null>(null);
   const [dictating, setDictating] = useState(false);
+  const [dictationStarting, setDictationStarting] = useState(false);
   const [dictationTranscript, setDictationTranscript] = useState("");
   const [dictationError, setDictationError] = useState<string | null>(null);
   const [photoSending, setPhotoSending] = useState(false);
@@ -204,6 +206,8 @@ export function ScannerProvider({ children }: PropsWithChildren) {
   const dictationSessionIdRef = useRef<string | null>(null);
   const dictationTranscriptRef = useRef("");
   const dictationPermissionGrantedRef = useRef(false);
+  const dictationRequestedRef = useRef(false);
+  const dictationStopRequestedRef = useRef(false);
   const lastTextCaptureClipboardRef = useRef<string | null>(null);
   const pendingScannerItemsRef = useRef<ScanItem[]>([]);
   const settingsRef = useRef(defaultSettings);
@@ -832,11 +836,26 @@ export function ScannerProvider({ children }: PropsWithChildren) {
   }, [sendClipboardTextCapture, textCapture]);
 
   useSpeechRecognitionEvent("start", () => {
+    if (!dictationRequestedRef.current) {
+      ExpoSpeechRecognitionModule.stop();
+      return;
+    }
+    dictationStopRequestedRef.current = false;
+    setDictationStarting(false);
     setDictating(true);
     setDictationError(null);
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   });
 
-  useSpeechRecognitionEvent("end", () => setDictating(false));
+  useSpeechRecognitionEvent("end", () => {
+    if (dictationStopRequestedRef.current) {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+    dictationStopRequestedRef.current = false;
+    dictationRequestedRef.current = false;
+    setDictationStarting(false);
+    setDictating(false);
+  });
 
   useSpeechRecognitionEvent("result", (event) => {
     const transcript = event.results[0]?.transcript?.trim() ?? "";
@@ -846,6 +865,9 @@ export function ScannerProvider({ children }: PropsWithChildren) {
   });
 
   useSpeechRecognitionEvent("error", (event) => {
+    dictationStopRequestedRef.current = false;
+    dictationRequestedRef.current = false;
+    setDictationStarting(false);
     setDictating(false);
     setDictationError(event.message || event.error);
   });
@@ -861,6 +883,8 @@ export function ScannerProvider({ children }: PropsWithChildren) {
 
   const startDictation = useCallback(async () => {
     if (!connected) {
+      setDictationStarting(false);
+      dictationRequestedRef.current = false;
       setDictationError("Pair with Chrome before dictating.");
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       return;
@@ -868,25 +892,34 @@ export function ScannerProvider({ children }: PropsWithChildren) {
 
     if (!dictationPermissionGrantedRef.current) {
       await prepareDictation();
-      if (!dictationPermissionGrantedRef.current) return;
+      if (!dictationPermissionGrantedRef.current) {
+        setDictationStarting(false);
+        dictationRequestedRef.current = false;
+        return;
+      }
     }
 
+    dictationRequestedRef.current = true;
+    dictationStopRequestedRef.current = false;
     lastDictationRef.current = "";
     lastDictationPartialRef.current = "";
     dictationSessionIdRef.current = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     dictationTranscriptRef.current = "";
     setDictationTranscript("");
     setDictationError(null);
-    setDictating(true);
+    setDictationStarting(true);
     ExpoSpeechRecognitionModule.start({
       lang: "en-US",
       interimResults: true,
-      continuous: false,
+      continuous: true,
       addsPunctuation: settings.dictationPunctuation,
     });
   }, [connected, prepareDictation, settings.dictationPunctuation]);
 
   const stopDictation = useCallback(() => {
+    dictationStopRequestedRef.current = true;
+    dictationRequestedRef.current = false;
+    setDictationStarting(false);
     ExpoSpeechRecognitionModule.stop();
   }, []);
 
@@ -941,6 +974,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       clearTextCapture,
       connected,
       dictating,
+      dictationStarting,
       dictationError,
       dictationTranscript,
       focusMode,
@@ -984,6 +1018,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       clearTextCapture,
       connected,
       dictating,
+      dictationStarting,
       dictationError,
       dictationTranscript,
       focusMode,

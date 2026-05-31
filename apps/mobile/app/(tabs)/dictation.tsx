@@ -5,11 +5,14 @@ import { useScanner } from "../../lib/scanner-state";
 import { usePairingScanner } from "../../lib/use-pairing-scanner";
 import { DisconnectedPairingView, Header, ScreenRoot, ViewfinderSurface, styles } from "./index";
 
+const HOLD_TO_DICTATE_DELAY_MS = 220;
+
 export default function DictationTab() {
   const scanner = useScanner();
   const {
     connected,
     dictating,
+    dictationStarting,
     dictationError,
     dictationTranscript,
     prepareDictation,
@@ -24,22 +27,40 @@ export default function DictationTab() {
     pairScannerOpen,
   } = usePairingScanner();
   const pulse = useRef(new Animated.Value(0)).current;
+  const dictationActiveRef = useRef(false);
+  const holdStartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const holdRecordingRef = useRef(false);
+  const toggleRecordingRef = useRef(false);
 
   useEffect(() => {
     if (connected) void prepareDictation();
   }, [connected, prepareDictation]);
 
   useEffect(() => {
+    dictationActiveRef.current = dictating || dictationStarting;
+    if (!dictating && !dictationStarting) {
+      holdRecordingRef.current = false;
+      toggleRecordingRef.current = false;
+    }
+  }, [dictating, dictationStarting]);
+
+  useEffect(() => {
+    return () => {
+      if (holdStartTimerRef.current) clearTimeout(holdStartTimerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
     pulse.setValue(0);
     const animation = Animated.loop(
       Animated.sequence([
         Animated.timing(pulse, {
-          duration: dictating ? 560 : 1100,
+          duration: dictating || dictationStarting ? 560 : 1100,
           toValue: 1,
           useNativeDriver: true,
         }),
         Animated.timing(pulse, {
-          duration: dictating ? 560 : 1100,
+          duration: dictating || dictationStarting ? 560 : 1100,
           toValue: 0,
           useNativeDriver: true,
         }),
@@ -47,7 +68,46 @@ export default function DictationTab() {
     );
     animation.start();
     return () => animation.stop();
-  }, [dictating, pulse]);
+  }, [dictating, dictationStarting, pulse]);
+
+  const dictationActive = dictating || dictationStarting;
+
+  const beginDictationGesture = () => {
+    if (dictationActiveRef.current) return;
+    if (holdStartTimerRef.current) clearTimeout(holdStartTimerRef.current);
+    holdStartTimerRef.current = setTimeout(() => {
+      holdStartTimerRef.current = null;
+      holdRecordingRef.current = true;
+      toggleRecordingRef.current = false;
+      void startDictation();
+    }, HOLD_TO_DICTATE_DELAY_MS);
+  };
+
+  const endDictationGesture = () => {
+    if (holdStartTimerRef.current) {
+      clearTimeout(holdStartTimerRef.current);
+      holdStartTimerRef.current = null;
+      if (dictationActiveRef.current || toggleRecordingRef.current) {
+        toggleRecordingRef.current = false;
+        stopDictation();
+      } else {
+        toggleRecordingRef.current = true;
+        void startDictation();
+      }
+      return;
+    }
+
+    if (holdRecordingRef.current) {
+      holdRecordingRef.current = false;
+      stopDictation();
+      return;
+    }
+
+    if (dictationActiveRef.current || toggleRecordingRef.current) {
+      toggleRecordingRef.current = false;
+      stopDictation();
+    }
+  };
 
   return (
     <ScreenRoot>
@@ -71,13 +131,13 @@ export default function DictationTab() {
                   {
                     opacity: pulse.interpolate({
                       inputRange: [0, 1],
-                      outputRange: dictating ? [0.28, 0.66] : [0.1, 0.22],
+                      outputRange: dictationActive ? [0.28, 0.66] : [0.1, 0.22],
                     }),
                     transform: [
                       {
                         scale: pulse.interpolate({
                           inputRange: [0, 1],
-                          outputRange: dictating ? [0.92, 1.18] : [0.98, 1.06],
+                          outputRange: dictationActive ? [0.92, 1.18] : [0.98, 1.06],
                         }),
                       },
                     ],
@@ -87,26 +147,34 @@ export default function DictationTab() {
               <View style={localStyles.dictationTopCopy}>
                 <Text style={localStyles.emptyTitle}>Browser dictation</Text>
                 <Text style={localStyles.emptyText}>
-                  Hold to stream speech into the active browser field.
+                  Tap to dictate hands-free, or hold for push-to-talk.
                 </Text>
               </View>
               <Pressable
-                accessibilityLabel="Hold to speak"
+                accessibilityLabel="Tap or hold to speak"
                 disabled={!connected}
-                onPressIn={startDictation}
-                onPressOut={stopDictation}
+                onPressIn={beginDictationGesture}
+                onPressOut={endDictationGesture}
                 style={[
                   localStyles.micButton,
                   dictating && localStyles.micButtonActive,
+                  dictationStarting && localStyles.micButtonStarting,
                   !connected && localStyles.micButtonDisabled,
                 ]}
               >
                 <Ionicons name={dictating ? "mic" : "mic-outline"} size={54} color="#f0fdf4" />
               </Pressable>
               <View style={localStyles.dictationStatus}>
-                <View style={[localStyles.statusDot, dictating && localStyles.statusDotActive, dictationError && localStyles.statusDotError]} />
+                <View
+                  style={[
+                    localStyles.statusDot,
+                    dictationStarting && localStyles.statusDotStarting,
+                    dictating && localStyles.statusDotActive,
+                    dictationError && localStyles.statusDotError,
+                  ]}
+                />
                 <Text numberOfLines={1} style={localStyles.holdLabel}>
-                  {dictationError ? "Dictation unavailable" : dictating ? "Listening" : "Hold to speak"}
+                  {dictationError ? "Dictation unavailable" : dictating ? "Listening" : dictationStarting ? "Getting ready" : "Hold to speak"}
                 </Text>
               </View>
               {dictationTranscript || dictationError ? (
@@ -181,6 +249,10 @@ const localStyles = {
     backgroundColor: "#dc2626",
     transform: [{ scale: 1.04 }],
   },
+  micButtonStarting: {
+    backgroundColor: "#d97706",
+    transform: [{ scale: 1.02 }],
+  },
   micButtonDisabled: {
     backgroundColor: "#a8a29e",
   },
@@ -212,6 +284,9 @@ const localStyles = {
   },
   statusDotActive: {
     backgroundColor: "#22c55e",
+  },
+  statusDotStarting: {
+    backgroundColor: "#f59e0b",
   },
   statusDotError: {
     backgroundColor: "#ef4444",

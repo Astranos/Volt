@@ -105,6 +105,7 @@ private final class ClipModel: ObservableObject {
   @Published var insertIntoCursor = true
   @Published var dictationAddsPunctuation = true
   @Published var dictationRunning = false
+  @Published var dictationStarting = false
   @Published var dictationPressActive = false
   @Published var dictationTranscript = ""
   @Published var textCapture: TextCapture?
@@ -115,6 +116,10 @@ private final class ClipModel: ObservableObject {
 
   let camera = ClipCamera()
   let dictation = ClipDictation()
+  var dictationIsActive: Bool {
+    dictationPressActive || dictationStarting || dictationRunning
+  }
+
   private let zoomHaptic = UISelectionFeedbackGenerator()
   private let impactHaptic = UIImpactFeedbackGenerator(style: .light)
   private let notificationHaptic = UINotificationFeedbackGenerator()
@@ -123,6 +128,9 @@ private final class ClipModel: ObservableObject {
   private var barcodeCandidateSignature: String?
   private var transientStatusTask: Task<Void, Never>?
   private var dictationPressBlockedUntilRelease = false
+  private var dictationHoldStartTask: Task<Void, Never>?
+  private var dictationHoldRecording = false
+  private var dictationLatched = false
 
   init() {
     zoomHaptic.prepare()
@@ -377,9 +385,15 @@ private final class ClipModel: ObservableObject {
       return
     }
     dictationPressActive = true
+    dictationHoldRecording = false
     impactFeedback()
-    AudioServicesPlaySystemSound(1113)
-    Task { await startDictation() }
+    dictationHoldStartTask?.cancel()
+    dictationHoldStartTask = Task { @MainActor in
+      try? await Task.sleep(nanoseconds: 220_000_000)
+      guard !Task.isCancelled, dictationPressActive, !dictationLatched, !dictationRunning, !dictationStarting else { return }
+      dictationHoldRecording = true
+      await startDictation()
+    }
   }
 
   func endDictationPress() {
@@ -389,6 +403,27 @@ private final class ClipModel: ObservableObject {
     }
     guard mode == .dictation, dictationPressActive else { return }
     dictationPressActive = false
+    dictationHoldStartTask?.cancel()
+    dictationHoldStartTask = nil
+
+    if dictationHoldRecording {
+      dictationHoldRecording = false
+      finishDictation()
+      return
+    }
+
+    if dictationLatched || dictationRunning || dictationStarting {
+      dictationLatched = false
+      finishDictation()
+      return
+    }
+
+    dictationLatched = true
+    Task { await startDictation() }
+  }
+
+  private func finishDictation() {
+    dictationStarting = false
     AudioServicesPlaySystemSound(1114)
     notificationHaptic.notificationOccurred(.success)
     notificationHaptic.prepare()
@@ -397,6 +432,9 @@ private final class ClipModel: ObservableObject {
       status = "Finishing dictation"
       let completedText = await dictation.finishAndStop(tailDuration: 1.25, timeout: 2.0)
       dictationRunning = false
+      dictationStarting = false
+      dictationHoldRecording = false
+      dictationLatched = false
       let finalText = (completedText ?? dictationTranscript).trimmingCharacters(in: .whitespacesAndNewlines)
       guard !finalText.isEmpty else {
         status = "No dictation captured"
@@ -412,23 +450,36 @@ private final class ClipModel: ObservableObject {
   func startDictation() async {
     guard let sessionId else {
       dictationPressActive = false
+      dictationStarting = false
+      dictationHoldRecording = false
+      dictationLatched = false
       dictationPressBlockedUntilRelease = true
       error = "Pair with Chrome before dictating."
       return
     }
     do {
       dictationTranscript = ""
-      status = "Listening"
+      dictationStarting = true
+      status = "Getting ready"
       try await dictation.start(sessionId: sessionId, addsPunctuation: dictationAddsPunctuation)
-      guard dictationPressActive else {
+      guard dictationPressActive || dictationLatched else {
         dictation.stop()
+        dictationStarting = false
+        dictationHoldRecording = false
         return
       }
+      dictationStarting = false
       dictationRunning = true
       status = "Listening"
+      AudioServicesPlaySystemSound(1113)
+      notificationHaptic.notificationOccurred(.success)
+      notificationHaptic.prepare()
     } catch {
+      dictationStarting = false
       dictationRunning = false
       dictationPressActive = false
+      dictationHoldRecording = false
+      dictationLatched = false
       dictationPressBlockedUntilRelease = true
       self.error = error.localizedDescription
     }
@@ -947,12 +998,12 @@ private struct ClipRootView: View {
         .overlay {
           if model.mode == .dictation {
             Circle()
-              .stroke(.primary.opacity(model.dictationPressActive ? 0.34 : 0.14), lineWidth: model.dictationPressActive ? 5 : 2)
-              .padding(model.dictationPressActive ? 7 : 10)
+              .stroke(.primary.opacity(model.dictationIsActive ? 0.34 : 0.14), lineWidth: model.dictationIsActive ? 5 : 2)
+              .padding(model.dictationIsActive ? 7 : 10)
           }
         }
-        .scaleEffect(model.dictationPressActive ? 0.94 : 1)
-        .animation(.easeOut(duration: 0.10), value: model.dictationPressActive)
+        .scaleEffect(model.dictationIsActive ? 0.94 : 1)
+        .animation(.easeOut(duration: 0.10), value: model.dictationIsActive)
     }
     .simultaneousGesture(
       DragGesture(minimumDistance: 0)
@@ -971,7 +1022,7 @@ private struct ClipRootView: View {
     .buttonStyle(.plain)
     .nativeClearGlassBackground(Circle())
     .clipShape(Circle())
-    .accessibilityLabel(model.mode == .dictation ? "Hold to dictate" : model.mode == .ocr && model.textCapture != nil ? "Retake text capture" : "Capture")
+    .accessibilityLabel(model.mode == .dictation ? "Tap or hold to dictate" : model.mode == .ocr && model.textCapture != nil ? "Retake text capture" : "Capture")
   }
 
   private var modePicker: some View {
@@ -1014,6 +1065,9 @@ private struct ClipRootView: View {
     }
     if model.isSending {
       return "Sending dictation"
+    }
+    if model.dictationStarting {
+      return "Getting ready"
     }
     if model.dictationPressActive || model.dictationRunning {
       return "Listening"
