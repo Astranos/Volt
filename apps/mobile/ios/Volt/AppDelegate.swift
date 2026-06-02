@@ -1037,7 +1037,7 @@ private struct ClipRootView: View {
     )
     .disabled(model.isSending && model.mode != .dictation)
     .buttonStyle(.plain)
-    .nativeClearGlassBackground(Circle())
+    .nativeBlurredGlassBackground(Circle())
     .clipShape(Circle())
     .accessibilityLabel(model.mode == .dictation ? "Tap or hold to dictate" : model.mode == .ocr && model.textCapture != nil ? "Retake text capture" : "Capture")
   }
@@ -1125,7 +1125,7 @@ private struct StatusGlassRow: View {
     .padding(.horizontal, 16)
     .padding(.vertical, 12)
     .frame(maxWidth: .infinity, minHeight: 54, alignment: .leading)
-    .nativeClearGlassBackground(RoundedRectangle(cornerRadius: 27, style: .continuous))
+    .nativeBlurredGlassBackground(RoundedRectangle(cornerRadius: 27, style: .continuous))
     .animation(.smooth(duration: 0.22), value: displayMessage)
     .animation(.smooth(duration: 0.22), value: isError)
     .accessibilityLabel(displayMessage)
@@ -1320,8 +1320,8 @@ private struct CameraModeTextButton: View {
 
   private var blendedTextColor: UIColor {
     let amount = min(max(selectionAmount, 0), 1)
-    let normal = UIColor.white.withAlphaComponent(0.84)
-    let selected = UIColor.systemYellow
+    let normal = UIColor.white.withAlphaComponent(0.46)
+    let selected = UIColor.white
     var normalRed: CGFloat = 0
     var normalGreen: CGFloat = 0
     var normalBlue: CGFloat = 0
@@ -1364,12 +1364,16 @@ private struct ConcentricLiquidDrawer: View {
       style: .continuous
     )
 
-    Group {
+    ZStack {
+      shape
+        .fill(.ultraThinMaterial)
+        .opacity(0.72)
+
       if #available(iOS 26.0, *) {
         Color.clear
           .glassEffect(.clear, in: shape)
       } else {
-        shape.fill(.ultraThinMaterial)
+        shape.fill(.clear)
       }
     }
     .overlay {
@@ -1567,6 +1571,17 @@ private extension View {
       self.glassEffect(.clear.interactive(), in: shape)
     } else {
       self.background(.ultraThinMaterial, in: shape)
+    }
+  }
+
+  @ViewBuilder
+  func nativeBlurredGlassBackground<S: Shape>(_ shape: S) -> some View {
+    if #available(iOS 26.0, *) {
+      self
+        .background(.ultraThinMaterial, in: shape)
+        .glassEffect(.clear.interactive(), in: shape)
+    } else {
+      self.background(.thinMaterial, in: shape)
     }
   }
 }
@@ -2975,7 +2990,7 @@ private final class ClipDictation: NSObject {
   private func configureAudioSessionIfNeeded() throws {
     guard !isAudioSessionPrepared else { return }
     let session = AVAudioSession.sharedInstance()
-    try session.setCategory(.record, mode: .measurement, options: [.duckOthers, .allowBluetoothHFP])
+    try session.setCategory(.playAndRecord, mode: .measurement, options: [.mixWithOthers, .allowBluetoothHFP])
     try session.setActive(true, options: .notifyOthersOnDeactivation)
     isAudioSessionPrepared = true
   }
