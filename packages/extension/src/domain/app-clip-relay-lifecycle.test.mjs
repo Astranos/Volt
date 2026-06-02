@@ -44,6 +44,8 @@ test("App Clip session target updates are forwarded while a session is active", 
 test("App Clip relay polling marks sessions connected after the App Clip opens them", () => {
   assert.match(offscreenSource, /connectedAt/);
   assert.match(offscreenSource, /fetch\(`\$\{SCANNER_SIGNAL_URL\}\/\$\{sessionId\}`\)/);
+  assert.match(offscreenSource, /sessionPayload\.connectedAt !== this\.state\.connectedAt/);
+  assert.match(offscreenSource, /connectedAt: sessionPayload\.connectedAt/);
 });
 
 test("Mobile Scanner keeps the pairing QR visible for connected sessions", () => {
@@ -52,6 +54,16 @@ test("Mobile Scanner keeps the pairing QR visible for connected sessions", () =>
     /Boolean\(qrDataUrl\) && \(status === "waiting" \|\| status === "connected"\)/
   );
   assert.match(mobileScannerSource, /Scan this QR to reopen or pair the iPhone to this session\./);
+});
+
+test("Mobile Scanner closes an open pairing QR when the phone connects", () => {
+  assert.match(mobileScannerSource, /const \[pairingQrOpen, setPairingQrOpen\] = useState\(false\)/);
+  assert.match(mobileScannerSource, /const statusRef = useRef<ScannerConnectionStatus>\("disconnected"\)/);
+  assert.match(mobileScannerSource, /const connectedAtRef = useRef<string \| null>\(null\)/);
+  assert.match(mobileScannerSource, /state\.connectedAt && state\.connectedAt !== connectedAtRef\.current/);
+  assert.match(mobileScannerSource, /state\.status === "connected" && statusRef\.current !== "connected"/);
+  assert.doesNotMatch(mobileScannerSource, /if \(status === "connected"\) setPairingQrOpen\(false\)/);
+  assert.doesNotMatch(mobileScannerSource, /if \(connected\) onQrOpenChange\(false\)/);
 });
 
 test("App Clip relay session survives offscreen document recreation", () => {

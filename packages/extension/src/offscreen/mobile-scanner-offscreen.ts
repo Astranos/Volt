@@ -23,6 +23,7 @@ type ScannerState = {
   qrCodeUrl: string | null;
   error: string | null;
   mode: CaptureMode | null;
+  connectedAt: string | null;
 };
 
 type PendingPhoto = PhotoChunkStartMessage & {
@@ -57,6 +58,7 @@ class MobileScannerOffscreenSession {
     qrCodeUrl: null,
     error: null,
     mode: null,
+    connectedAt: null,
   };
 
   constructor() {
@@ -99,7 +101,7 @@ class MobileScannerOffscreenSession {
 
     await this.clearPersistedSession();
     this.cleanup(true);
-    this.setState({ status: "creating", error: null, qrCodeUrl: null, mode: null });
+    this.setState({ status: "creating", error: null, qrCodeUrl: null, mode: null, connectedAt: null });
 
     try {
       const sessionId = await this.createRelaySession(mode, target);
@@ -109,6 +111,7 @@ class MobileScannerOffscreenSession {
         qrCodeUrl: this.buildPairingUrl(sessionId, mode),
         error: null,
         mode,
+        connectedAt: null,
       });
       this.pollForResult(sessionId);
     } catch (err) {
@@ -128,7 +131,7 @@ class MobileScannerOffscreenSession {
     this.cleanup(true);
     this.seenRelayResultIds.clear();
     await this.clearPersistedSession();
-    this.setState({ status: "disconnected", qrCodeUrl: null, error: null, mode: null });
+    this.setState({ status: "disconnected", qrCodeUrl: null, error: null, mode: null, connectedAt: null });
     return { ...this.state };
   }
 
@@ -171,6 +174,7 @@ class MobileScannerOffscreenSession {
         qrCodeUrl: persisted.qrCodeUrl || this.buildPairingUrl(persisted.sessionId, persisted.mode ?? null),
         error: null,
         mode: persisted.mode ?? null,
+        connectedAt: persisted.connectedAt ?? null,
       };
       this.pollForResult(persisted.sessionId, persisted.createdAt);
     } catch (_error) {
@@ -193,7 +197,9 @@ class MobileScannerOffscreenSession {
         previous?.sessionId === this.sessionId && typeof previous.createdAt === "number"
           ? previous.createdAt
           : Date.now(),
-      connectedAt: previous?.sessionId === this.sessionId ? previous.connectedAt ?? null : null,
+      connectedAt:
+        this.state.connectedAt ??
+        (previous?.sessionId === this.sessionId ? previous.connectedAt ?? null : null),
     };
     await this.setPersistedRelayState(persisted);
   }
@@ -429,8 +435,8 @@ class MobileScannerOffscreenSession {
         const sessionResponse = await fetch(`${SCANNER_SIGNAL_URL}/${sessionId}`);
         if (sessionResponse.ok) {
           const sessionPayload = (await sessionResponse.json()) as { connectedAt?: string | null };
-          if (sessionPayload.connectedAt && this.state.status === "waiting") {
-            this.setState({ status: "connected", error: null });
+          if (sessionPayload.connectedAt && sessionPayload.connectedAt !== this.state.connectedAt) {
+            this.setState({ status: "connected", error: null, connectedAt: sessionPayload.connectedAt });
             void this.markPersistedConnected(sessionPayload.connectedAt).catch(() => {});
           }
         }

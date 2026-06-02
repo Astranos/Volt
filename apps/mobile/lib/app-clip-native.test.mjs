@@ -369,11 +369,71 @@ test("full app pair route accepts every browser relay capture mode", () => {
 
 test("native App Clip parser accepts generic browser relay QR sessions", () => {
   const fullDelegate = readText(nativeFiles.fullAppDelegate);
+  const beginPairing = fullDelegate.match(/func beginPairing\(\) \{[\s\S]*?\n  \}/)?.[0] ?? "";
 
   assert.match(fullDelegate, /let mode: ClipMode\?/);
-  assert.match(fullDelegate, /mode = invocation\.mode \?\? mode/);
+  assert.doesNotMatch(fullDelegate, /mode = invocation\.mode \?\? mode/);
+  assert.match(fullDelegate, /stopMode\(\)[\s\S]*sessionId = invocation\.sessionId[\s\S]*startMode\(\)/);
+  assert.doesNotMatch(beginPairing, /mode = \.barcode/);
   assert.match(fullDelegate, /let mode = modeValue\.flatMap/);
   assert.doesNotMatch(fullDelegate, /guard\s+let modeValue,[\s\S]*let mode = ClipMode\(rawValue: modeValue\),[\s\S]*let session,/);
+});
+
+test("native dictation feedback distinguishes unpaired, tap, hold, and stop states", () => {
+  const fullDelegate = readText(nativeFiles.fullAppDelegate);
+  const clipDelegate = readText(nativeFiles.clipAppDelegate);
+
+  assert.match(fullDelegate, /Pair with Chrome to dictate/);
+  assert.match(fullDelegate, /Tap to start or hold to speak/);
+  assert.match(fullDelegate, /Waiting for dictation/);
+  assert.match(fullDelegate, /Tap stop when done/);
+  assert.match(fullDelegate, /dictationHoldRecording[\s\S]*Release to send/);
+  assert.match(fullDelegate, /finishAndStop\(tailDuration: 0, timeout: 0\.8\)/);
+  assert.doesNotMatch(fullDelegate, /Writing to \\?\#?\(model\.cursorTargetName\)/);
+
+  assert.match(clipDelegate, /Pair with Chrome to dictate/);
+  assert.match(clipDelegate, /finishAndStop\(tailDuration: 0, timeout: 0\.8\)/);
+  assert.doesNotMatch(clipDelegate, /Writing to \\?\#?\(model\.cursorTargetName\)/);
+});
+
+test("mobile mode picker is a small sliding Liquid Glass text strip", () => {
+  const fullDelegate = readText(nativeFiles.fullAppDelegate);
+  const clipDelegate = readText(nativeFiles.clipAppDelegate);
+  const fullModePicker = fullDelegate.match(/private var modePicker: some View \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  const clipModePicker = clipDelegate.match(/private var modePicker: some View \{[\s\S]*?\n  \}/)?.[0] ?? "";
+
+  assert.match(fullModePicker, /CameraModeGlassStrip/);
+  assert.match(clipModePicker, /CameraModeGlassStrip/);
+  assert.match(fullDelegate, /CameraModeTextButton/);
+  assert.match(clipDelegate, /CameraModeTextButton/);
+  assert.match(fullDelegate, /modePickerIsDragging/);
+  assert.match(clipDelegate, /modePickerIsDragging/);
+  assert.match(fullDelegate, /offset\(x: modePickerIsDragging \? 26 : 0\)/);
+  assert.match(clipDelegate, /offset\(x: modePickerIsDragging \? 26 : 0\)/);
+  assert.match(fullDelegate, /Text\(mode\.title\.uppercased\(\)\)/);
+  assert.match(clipDelegate, /Text\(mode\.title\.uppercased\(\)\)/);
+  assert.match(fullDelegate, /LinearGradient\(/);
+  assert.match(clipDelegate, /LinearGradient\(/);
+  assert.match(fullDelegate, /gestureStartIndex/);
+  assert.match(clipDelegate, /gestureStartIndex/);
+  assert.match(fullDelegate, /@State private var dragOffset/);
+  assert.match(clipDelegate, /@State private var dragOffset/);
+  assert.match(fullDelegate, /dragOffset = value\.translation\.width/);
+  assert.match(clipDelegate, /dragOffset = value\.translation\.width/);
+  assert.match(fullDelegate, /rawOffset = -value\.translation\.width \/ itemWidth/);
+  assert.match(clipDelegate, /rawOffset = -value\.translation\.width \/ itemWidth/);
+  assert.match(fullDelegate, /if isDragging \{\s*transaction\.animation = nil/s);
+  assert.match(clipDelegate, /if isDragging \{\s*transaction\.animation = nil/s);
+  assert.match(fullDelegate, /\.font\(\.system\(size: 13/);
+  assert.match(clipDelegate, /\.font\(\.system\(size: 13/);
+  assert.match(fullDelegate, /ConcentricLiquidDrawer\(cornerRadius: 40\)/);
+  assert.match(clipDelegate, /ConcentricLiquidDrawer\(cornerRadius: 40\)/);
+  assert.doesNotMatch(fullModePicker, /GroupedGlassModePicker/);
+  assert.doesNotMatch(clipModePicker, /GroupedGlassModePicker/);
+  assert.doesNotMatch(fullModePicker, /NativeLiquidModePicker/);
+  assert.doesNotMatch(clipModePicker, /NativeLiquidModePicker/);
+  assert.doesNotMatch(fullDelegate, /NativeModeSegmentedPicker/);
+  assert.doesNotMatch(clipDelegate, /NativeModeSegmentedPicker/);
 });
 
 test("App Clip plan links the physical device validation runbook", () => {

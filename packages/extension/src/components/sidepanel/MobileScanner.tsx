@@ -57,6 +57,7 @@ type MobileScannerState = {
   status: ScannerConnectionStatus;
   qrCodeUrl: string | null;
   error: string | null;
+  connectedAt?: string | null;
 };
 
 type ScanRecord = BarcodeMessage & {
@@ -237,7 +238,10 @@ interface MobileScannerProps {
 
 export default function MobileScanner({ onClose: _onClose }: MobileScannerProps) {
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [pairingQrOpen, setPairingQrOpen] = useState(false);
   const [status, setStatus] = useState<ScannerConnectionStatus>("disconnected");
+  const statusRef = useRef<ScannerConnectionStatus>("disconnected");
+  const connectedAtRef = useRef<string | null>(null);
   const [scans, setScans] = useState<ScanRecord[]>([]);
   const [photos, setPhotos] = useState<MobilePhoto[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -274,20 +278,37 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
     void chrome.storage.local.set({ [PHOTO_STORAGE_KEY]: trimPhotosForStorage(nextPhotos) });
   }, []);
 
+  const setScannerStatus = useCallback((nextStatus: ScannerConnectionStatus) => {
+    statusRef.current = nextStatus;
+    setStatus(nextStatus);
+  }, []);
+
   const applyScannerState = useCallback(
     (state: Partial<MobileScannerState> | null | undefined) => {
       if (!state) return;
-      if (state.status) setStatus(state.status);
+      if (state.connectedAt && state.connectedAt !== connectedAtRef.current) {
+        connectedAtRef.current = state.connectedAt;
+        setPairingQrOpen(false);
+      } else if (state.connectedAt === null) {
+        connectedAtRef.current = null;
+      }
+      if (state.status) {
+        if (state.status === "connected" && statusRef.current !== "connected") {
+          setPairingQrOpen(false);
+        }
+        setScannerStatus(state.status);
+      }
       setError(state.error ?? null);
 
       if (!state.qrCodeUrl) {
         setQrDataUrl(null);
+        setPairingQrOpen(false);
         return;
       }
 
       void generateQrCode(state.qrCodeUrl).then(setQrDataUrl);
     },
-    [generateQrCode],
+    [generateQrCode, setScannerStatus],
   );
 
   const markEntering = useCallback((id: string) => {
@@ -389,7 +410,7 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
 
   const startSession = useCallback(
     async (force = false) => {
-      setStatus("creating");
+      setScannerStatus("creating");
       setError(null);
       const response = await chrome.runtime.sendMessage({
         action: "scannerStart",
@@ -397,11 +418,11 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
       });
       if (response?.state) applyScannerState(response.state);
       if (response?.error) {
-        setStatus("error");
+        setScannerStatus("error");
         setError(response.error);
       }
     },
-    [applyScannerState],
+    [applyScannerState, setScannerStatus],
   );
 
   const unpair = useCallback(() => {
@@ -792,7 +813,9 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
         <UnifiedPairingCard
           status={status}
           qrDataUrl={qrDataUrl}
+          qrOpen={pairingQrOpen}
           error={error}
+          onQrOpenChange={setPairingQrOpen}
           onForceRestart={() => startSession(true)}
           onDisconnect={unpair}
         />
@@ -859,13 +882,17 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
 function UnifiedPairingCard({
   status,
   qrDataUrl,
+  qrOpen,
   error,
+  onQrOpenChange,
   onForceRestart,
   onDisconnect,
 }: {
   status: ScannerConnectionStatus;
   qrDataUrl: string | null;
+  qrOpen: boolean;
   error: string | null;
+  onQrOpenChange: (open: boolean) => void;
   onForceRestart: () => void;
   onDisconnect: () => void;
 }) {
@@ -873,15 +900,10 @@ function UnifiedPairingCard({
   const isCreating = status === "creating";
   const connected = status === "connected";
   const hasError = status === "error";
-  const [qrOpen, setQrOpen] = useState(false);
 
   useEffect(() => {
-    if (!showQr) setQrOpen(false);
-  }, [showQr]);
-
-  useEffect(() => {
-    if (connected) setQrOpen(false);
-  }, [connected]);
+    if (!showQr) onQrOpenChange(false);
+  }, [onQrOpenChange, showQr]);
 
   const statusCopy = connected
     ? "Ready for captures · QR available"
@@ -935,7 +957,7 @@ function UnifiedPairingCard({
         <>
           <PairingQrAction
             connected={connected}
-            onOpen={() => setQrOpen(true)}
+            onOpen={() => onQrOpenChange(true)}
           />
           <div className="mt-3">
             <button
@@ -951,7 +973,7 @@ function UnifiedPairingCard({
             <PairingQrOverlay
               connected={connected}
               qrDataUrl={qrDataUrl}
-              onClose={() => setQrOpen(false)}
+              onClose={() => onQrOpenChange(false)}
             />
           ) : null}
         </>

@@ -205,18 +205,18 @@ private final class ClipModel: ObservableObject {
       return
     }
 
-    mode = invocation.mode ?? mode
+    stopMode()
     sessionId = invocation.sessionId
     isPairing = false
     error = nil
     status = "Paired with Chrome"
+    startMode()
     Task { await connect() }
   }
 
   func beginPairing() {
     stopMode()
     isPairing = true
-    mode = .barcode
     sessionId = nil
     barcodeCandidate = nil
     barcodeCandidateSignature = nil
@@ -383,6 +383,8 @@ private final class ClipModel: ObservableObject {
     dictationPressActive = true
     impactFeedback()
     AudioServicesPlaySystemSound(1113)
+    notificationHaptic.notificationOccurred(.success)
+    notificationHaptic.prepare()
     Task { await startDictation() }
   }
 
@@ -396,12 +398,13 @@ private final class ClipModel: ObservableObject {
     AudioServicesPlaySystemSound(1114)
     notificationHaptic.notificationOccurred(.success)
     notificationHaptic.prepare()
+    let fallbackText = dictationTranscript
 
     Task { @MainActor in
-      status = "Finishing dictation"
-      let completedText = await dictation.finishAndStop(tailDuration: 1.25, timeout: 2.0)
       dictationRunning = false
-      let finalText = (completedText ?? dictationTranscript).trimmingCharacters(in: .whitespacesAndNewlines)
+      status = "Sending dictation"
+      let completedText = await dictation.finishAndStop(tailDuration: 0, timeout: 0.8)
+      let finalText = (completedText ?? fallbackText).trimmingCharacters(in: .whitespacesAndNewlines)
       guard !finalText.isEmpty else {
         status = "No dictation captured"
         notificationHaptic.notificationOccurred(.warning)
@@ -670,7 +673,7 @@ private final class ClipModel: ObservableObject {
     case .photo:
       return "Capture a square photo"
     case .dictation:
-      return "Hold microphone to start"
+      return "Hold to speak"
     }
   }
 
@@ -811,6 +814,7 @@ private final class ClipModel: ObservableObject {
 
 private struct ClipRootView: View {
   @ObservedObject var model: ClipModel
+  @State private var modePickerIsDragging = false
 
   var body: some View {
     ZStack {
@@ -863,35 +867,40 @@ private struct ClipRootView: View {
       secondaryControls
     }
     .padding(.horizontal, 16)
-    .padding(.top, 30)
-    .padding(.bottom, 20)
+    .padding(.top, 16)
+    .padding(.bottom, 10)
     .frame(maxWidth: .infinity)
   }
 
   private var bottomControlsGlass: some View {
     let shape = UnevenRoundedRectangle(
-      topLeadingRadius: 52,
-      bottomLeadingRadius: 48,
-      bottomTrailingRadius: 48,
-      topTrailingRadius: 52,
+      topLeadingRadius: 40,
+      bottomLeadingRadius: 36,
+      bottomTrailingRadius: 36,
+      topTrailingRadius: 40,
       style: .continuous
     )
 
     return VStack(spacing: 0) {
       controlsPanel
-      HStack(alignment: .center, spacing: 10) {
+      HStack(alignment: .center, spacing: 8) {
         modePicker
         if !model.isPairing {
           UnpairGlassButton(action: model.unpair)
+            .opacity(modePickerIsDragging ? 0 : 1)
+            .offset(x: modePickerIsDragging ? 26 : 0)
+            .scaleEffect(modePickerIsDragging ? 0.86 : 1)
+            .allowsHitTesting(!modePickerIsDragging)
         }
       }
-        .padding(.horizontal, 14)
-        .padding(.top, 16)
+        .padding(.horizontal, 12)
+        .padding(.top, 6)
         .padding(.bottom, 8)
+        .animation(.smooth(duration: 0.24), value: modePickerIsDragging)
     }
     .frame(maxWidth: .infinity)
     .background {
-      ConcentricLiquidDrawer(cornerRadius: 52)
+      ConcentricLiquidDrawer(cornerRadius: 40)
     }
     .clipShape(shape)
     .animation(.smooth(duration: 0.32), value: model.mode)
@@ -938,7 +947,16 @@ private struct ClipRootView: View {
   }
 
   private var dictationDrawerText: String {
-    "Writing to \(model.cursorTargetName)"
+    if model.sessionId == nil || model.isPairing {
+      return "Pair with Chrome to dictate"
+    }
+    if model.isSending {
+      return "Sending dictation to \(model.cursorTargetName)"
+    }
+    if model.dictationRunning || model.dictationPressActive {
+      return "Listening for dictation"
+    }
+    return "Ready to write to \(model.cursorTargetName)"
   }
 
   private var shutterButton: some View {
@@ -979,7 +997,11 @@ private struct ClipRootView: View {
   }
 
   private var modePicker: some View {
-    GroupedGlassModePicker(selectedMode: model.mode) { mode in
+    CameraModeGlassStrip(
+      modes: ClipMode.appClipModes,
+      selectedMode: model.mode,
+      isDragging: $modePickerIsDragging
+    ) { mode in
       model.selectMode(mode)
     }
     .frame(maxWidth: 560)
@@ -1016,13 +1038,16 @@ private struct ClipRootView: View {
     guard model.mode == .dictation else {
       return model.status
     }
+    if model.sessionId == nil || model.isPairing {
+      return "Pair with Chrome before dictating"
+    }
     if model.isSending {
       return "Sending dictation"
     }
     if model.dictationPressActive || model.dictationRunning {
       return "Listening"
     }
-    return "Hold microphone to start"
+    return "Hold to speak"
   }
 }
 
@@ -1057,103 +1082,207 @@ private struct StatusGlassRow: View {
   }
 }
 
-private struct GroupedGlassModePicker: View {
+private struct CameraModeFramePreferenceKey: PreferenceKey {
+  static var defaultValue: [ClipMode: CGRect] = [:]
+
+  static func reduce(value: inout [ClipMode: CGRect], nextValue: () -> [ClipMode: CGRect]) {
+    value.merge(nextValue(), uniquingKeysWith: { _, next in next })
+  }
+}
+
+private struct CameraModeGlassStrip: View {
+  let modes: [ClipMode]
   let selectedMode: ClipMode
+  @Binding var isDragging: Bool
   let onSelect: (ClipMode) -> Void
-  @GestureState private var dragLocationX: CGFloat?
+  @GestureState private var liveDragOffset: CGFloat = 0
+  @GestureState private var dragIsActive = false
+  @State private var gestureStartIndex: Int?
+  @State private var itemFrames: [ClipMode: CGRect] = [:]
 
   private var selectedIndex: Int {
-    ClipMode.appClipModes.firstIndex(of: selectedMode) ?? 0
+    modes.firstIndex(of: selectedMode) ?? 0
   }
 
   var body: some View {
     GeometryReader { proxy in
-      let modes = ClipMode.appClipModes
-      let outerInset: CGFloat = 7
-      let count = max(CGFloat(modes.count), 1)
-      let groupWidth = max(proxy.size.width - outerInset * 2, 1)
-      let segmentWidth = groupWidth / count
-      let selectedCenterX = outerInset + segmentWidth * (CGFloat(selectedIndex) + 0.5)
-      let minCenterX = outerInset + segmentWidth * 0.5
-      let maxCenterX = outerInset + segmentWidth * (count - 0.5)
-      let activeCenterX = min(max(dragLocationX ?? selectedCenterX, minCenterX), maxCenterX)
-      let isDragging = dragLocationX != nil
-      let grabberWidth = max(segmentWidth * (isDragging ? 1.06 : 0.96), 86)
-      let grabberHeight: CGFloat = isDragging ? 68 : 62
-      let grabberRadius: CGFloat = isDragging ? 32 : 30
-      let grabberOffset = activeCenterX - grabberWidth / 2
+      let itemWidth = max(min(proxy.size.width * 0.26, 104), 72)
+      let centerX = proxy.size.width / 2
+      let startIndex = gestureStartIndex ?? selectedIndex
+      let clampedOffset = dragIsActive ? clampedDragOffset(liveDragOffset, width: itemWidth, startIndex: startIndex) : 0
+      let visualIndex = CGFloat(startIndex) - (clampedOffset / itemWidth)
+      let selectedCenter = itemWidth * (CGFloat(startIndex) + 0.5)
+      let stripOffset = centerX - selectedCenter + clampedOffset
+      let isActivelyDragging = dragIsActive || abs(clampedOffset) > 1
+      let indicatorFrame = indicatorFrame(for: visualIndex, centerX: centerX, itemWidth: itemWidth)
 
-      ZStack(alignment: .leading) {
-        RoundedRectangle(cornerRadius: grabberRadius, style: .continuous)
-          .fill(Color.white.opacity(isDragging ? 0.20 : 0.14))
-          .nativeClearGlassBackground(RoundedRectangle(cornerRadius: grabberRadius, style: .continuous))
-          .overlay {
-            RoundedRectangle(cornerRadius: grabberRadius, style: .continuous)
-              .stroke(Color.white.opacity(isDragging ? 0.72 : 0.58), lineWidth: isDragging ? 1.6 : 1.2)
-          }
-          .shadow(color: Color.white.opacity(isDragging ? 0.26 : 0.18), radius: isDragging ? 18 : 12, y: 1)
-          .shadow(color: Color.black.opacity(0.18), radius: isDragging ? 12 : 8, y: 4)
-          .frame(width: grabberWidth, height: grabberHeight)
-          .offset(x: grabberOffset)
-          .animation(.interactiveSpring(response: 0.28, dampingFraction: 0.72), value: selectedIndex)
-          .animation(.interactiveSpring(response: 0.22, dampingFraction: 0.76), value: isDragging)
+      ZStack {
+        if isActivelyDragging {
+          RoundedRectangle(cornerRadius: 36, style: .continuous)
+            .modeIndicatorGlassBackground(isActive: isActivelyDragging)
+            .frame(width: indicatorFrame.width, height: 44)
+            .position(x: indicatorFrame.midX, y: 25)
+            .transition(.opacity.combined(with: .scale(scale: 0.96)))
+            .animation(nil, value: indicatorFrame.width)
+            .animation(nil, value: indicatorFrame.midX)
+        }
 
         HStack(spacing: 0) {
-          ForEach(modes) { mode in
-            GlassModeTabButton(
+          ForEach(Array(modes.enumerated()), id: \.element.id) { index, mode in
+            CameraModeTextButton(
               mode: mode,
-              isSelected: selectedMode == mode,
+              selectionAmount: selectionAmount(for: index, visualIndex: visualIndex),
               action: { onSelect(mode) }
             )
-            .frame(width: segmentWidth)
+            .frame(width: itemWidth)
           }
         }
-        .padding(.horizontal, outerInset)
-        .animation(nil, value: selectedIndex)
+        .offset(x: stripOffset)
+        .transaction { transaction in
+          if isDragging {
+            transaction.animation = nil
+          }
+        }
       }
       .contentShape(Rectangle())
-      .simultaneousGesture(
-        DragGesture(minimumDistance: 0)
-          .updating($dragLocationX) { value, state, _ in
-            state = value.location.x
+      .mask {
+        LinearGradient(
+          stops: [
+            .init(color: .clear, location: 0),
+            .init(color: .black, location: 0.13),
+            .init(color: .black, location: 0.87),
+            .init(color: .clear, location: 1),
+          ],
+          startPoint: .leading,
+          endPoint: .trailing
+        )
+      }
+      .coordinateSpace(name: "camera-mode-strip")
+      .onPreferenceChange(CameraModeFramePreferenceKey.self) { itemFrames = $0 }
+      .clipped()
+      .highPriorityGesture(
+        DragGesture(minimumDistance: 8)
+          .updating($liveDragOffset) { value, state, _ in
+            let startIndex = gestureStartIndex ?? selectedIndex
+            state = clampedDragOffset(value.translation.width, width: itemWidth, startIndex: startIndex)
+          }
+          .updating($dragIsActive) { _, state, _ in
+            state = true
           }
           .onChanged { value in
-            let relativeX = min(max(value.location.x - outerInset, 0), groupWidth - 1)
-            let index = min(max(Int(relativeX / segmentWidth), 0), modes.count - 1)
-            let mode = modes[index]
-            if mode != selectedMode {
-              onSelect(mode)
+            if !isDragging {
+              isDragging = true
+            }
+            let startIndex = gestureStartIndex ?? selectedIndex
+            if gestureStartIndex == nil {
+              gestureStartIndex = startIndex
+            }
+          }
+          .onEnded { value in
+            let startIndex = gestureStartIndex ?? selectedIndex
+            let finalOffset = clampedDragOffset(
+              dampedFinalOffset(for: value, itemWidth: itemWidth),
+              width: itemWidth,
+              startIndex: startIndex
+            )
+            let rawOffset = -finalOffset / itemWidth
+            let nextIndex = min(max(Int((CGFloat(startIndex) + rawOffset).rounded()), 0), modes.count - 1)
+            if modes.indices.contains(nextIndex), modes[nextIndex] != selectedMode {
+              onSelect(modes[nextIndex])
+            }
+            withAnimation(.interactiveSpring(response: 0.24, dampingFraction: 0.82)) {
+              isDragging = false
+              gestureStartIndex = nil
             }
           }
       )
     }
     .frame(maxWidth: .infinity)
-    .frame(height: 76)
+    .frame(height: 50)
+  }
+
+  private func clampedDragOffset(_ offset: CGFloat, width: CGFloat, startIndex: Int) -> CGFloat {
+    let minOffset = -CGFloat(modes.count - 1 - startIndex) * width
+    let maxOffset = CGFloat(startIndex) * width
+    return min(max(offset, minOffset), maxOffset)
+  }
+
+  private func dampedFinalOffset(for value: DragGesture.Value, itemWidth: CGFloat) -> CGFloat {
+    let velocityTravel = value.predictedEndTranslation.width - value.translation.width
+    let cappedVelocityTravel = min(max(velocityTravel, -itemWidth * 0.42), itemWidth * 0.42)
+    return value.translation.width + (cappedVelocityTravel * 0.28)
+  }
+
+  private func selectionAmount(for index: Int, visualIndex: CGFloat) -> CGFloat {
+    max(0, 1 - min(abs(CGFloat(index) - visualIndex), 1))
+  }
+
+  private func indicatorFrame(for visualIndex: CGFloat, centerX: CGFloat, itemWidth: CGFloat) -> CGRect {
+    let lowerIndex = min(max(Int(floor(visualIndex)), 0), modes.count - 1)
+    let upperIndex = min(lowerIndex + 1, modes.count - 1)
+    let fraction = min(max(visualIndex - CGFloat(lowerIndex), 0), 1)
+    let lowerFrame = itemFrames[modes[lowerIndex]] ?? fallbackIndicatorFrame(index: lowerIndex, centerX: centerX, itemWidth: itemWidth)
+    let upperFrame = itemFrames[modes[upperIndex]] ?? fallbackIndicatorFrame(index: upperIndex, centerX: centerX, itemWidth: itemWidth)
+    let textWidth = lowerFrame.width + ((upperFrame.width - lowerFrame.width) * fraction)
+    let width = max(min(textWidth + 62, itemWidth * 1.56), 84)
+    return CGRect(x: centerX - (width / 2), y: 3, width: width, height: 44)
+  }
+
+  private func fallbackIndicatorFrame(index: Int, centerX: CGFloat, itemWidth: CGFloat) -> CGRect {
+    let width = max(min(itemWidth * 1.18, 122), 84)
+    return CGRect(x: centerX - (width / 2), y: 3, width: width, height: 44)
   }
 }
 
-private struct GlassModeTabButton: View {
+private struct CameraModeTextButton: View {
   let mode: ClipMode
-  let isSelected: Bool
+  let selectionAmount: CGFloat
   let action: () -> Void
 
   var body: some View {
     Button(action: action) {
-      VStack(spacing: 4) {
-        Image(systemName: mode.symbol)
-          .font(.system(size: 20, weight: .semibold))
-        Text(mode.title)
-          .font(.system(size: 10, weight: .bold, design: .rounded))
-          .lineLimit(1)
-          .minimumScaleFactor(0.75)
-      }
-      .frame(maxWidth: .infinity, minHeight: 60)
-      .foregroundStyle(isSelected ? .white : .white.opacity(0.74))
-      .contentShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+      Text(mode.title.uppercased())
+        .font(.system(size: 13, weight: .medium, design: .rounded))
+        .tracking(0.7)
+        .lineLimit(1)
+        .minimumScaleFactor(0.72)
+        .background {
+          GeometryReader { textProxy in
+            Color.clear.preference(
+              key: CameraModeFramePreferenceKey.self,
+              value: [mode: textProxy.frame(in: .named("camera-mode-strip"))]
+            )
+          }
+        }
+        .frame(maxWidth: .infinity, minHeight: 44)
+        .foregroundStyle(Color(uiColor: blendedTextColor))
+        .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
     .accessibilityLabel(mode.title)
-    .accessibilityAddTraits(isSelected ? .isSelected : [])
+    .accessibilityAddTraits(selectionAmount > 0.5 ? .isSelected : [])
+  }
+
+  private var blendedTextColor: UIColor {
+    let amount = min(max(selectionAmount, 0), 1)
+    let normal = UIColor.white.withAlphaComponent(0.84)
+    let selected = UIColor.systemYellow
+    var normalRed: CGFloat = 0
+    var normalGreen: CGFloat = 0
+    var normalBlue: CGFloat = 0
+    var normalAlpha: CGFloat = 0
+    var selectedRed: CGFloat = 0
+    var selectedGreen: CGFloat = 0
+    var selectedBlue: CGFloat = 0
+    var selectedAlpha: CGFloat = 0
+    normal.getRed(&normalRed, green: &normalGreen, blue: &normalBlue, alpha: &normalAlpha)
+    selected.getRed(&selectedRed, green: &selectedGreen, blue: &selectedBlue, alpha: &selectedAlpha)
+    return UIColor(
+      red: normalRed + ((selectedRed - normalRed) * amount),
+      green: normalGreen + ((selectedGreen - normalGreen) * amount),
+      blue: normalBlue + ((selectedBlue - normalBlue) * amount),
+      alpha: normalAlpha + ((selectedAlpha - normalAlpha) * amount)
+    )
   }
 }
 
@@ -1207,19 +1336,37 @@ private struct NativeLiquidModePicker: UIViewRepresentable {
     let tabBar = UITabBar()
     tabBar.delegate = context.coordinator
     tabBar.items = NativeModeTab.items()
+    tabBar.tintColor = .white
+    tabBar.unselectedItemTintColor = UIColor.white.withAlphaComponent(0.72)
     tabBar.itemPositioning = .fill
     tabBar.isTranslucent = true
+    tabBar.clipsToBounds = false
     tabBar.backgroundImage = UIImage()
     tabBar.shadowImage = UIImage()
     tabBar.backgroundColor = .clear
+    tabBar.layer.cornerCurve = .continuous
+    tabBar.layer.shadowColor = UIColor.black.cgColor
+    tabBar.layer.shadowOffset = CGSize(width: 0, height: 6)
+    tabBar.layer.shadowOpacity = 0.20
+    tabBar.layer.shadowRadius = 14
     let appearance = UITabBarAppearance()
     appearance.configureWithTransparentBackground()
-    appearance.backgroundEffect = nil
-    appearance.backgroundColor = .clear
+    appearance.backgroundEffect = UIBlurEffect(style: .systemUltraThinMaterialDark)
+    appearance.backgroundColor = UIColor.black.withAlphaComponent(0.08)
     appearance.shadowColor = .clear
+    configureItemAppearance(appearance.stackedLayoutAppearance)
+    configureItemAppearance(appearance.inlineLayoutAppearance)
+    configureItemAppearance(appearance.compactInlineLayoutAppearance)
     tabBar.standardAppearance = appearance
     tabBar.scrollEdgeAppearance = appearance
     tabBar.selectedItem = tabBar.items?[selectedIndex]
+    tabBar.items?.forEach { item in
+      item.imageInsets = UIEdgeInsets(top: -3, left: 0, bottom: 3, right: 0)
+      item.titlePositionAdjustment = UIOffset(horizontal: 0, vertical: 4)
+    }
+    let panGesture = UIPanGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handlePan(_:)))
+    panGesture.cancelsTouchesInView = false
+    tabBar.addGestureRecognizer(panGesture)
     return tabBar
   }
 
@@ -1237,6 +1384,7 @@ private struct NativeLiquidModePicker: UIViewRepresentable {
 
   final class Coordinator: NSObject, UITabBarDelegate {
     var onSelect: (ClipMode) -> Void
+    private var lastPanTag: Int?
 
     init(onSelect: @escaping (ClipMode) -> Void) {
       self.onSelect = onSelect
@@ -1246,6 +1394,38 @@ private struct NativeLiquidModePicker: UIViewRepresentable {
       guard ClipMode.appClipModes.indices.contains(item.tag) else { return }
       onSelect(ClipMode.appClipModes[item.tag])
     }
+
+    @objc func handlePan(_ gesture: UIPanGestureRecognizer) {
+      guard let tabBar = gesture.view as? UITabBar, let items = tabBar.items, !items.isEmpty else { return }
+      let location = gesture.location(in: tabBar)
+      let index = min(max(Int(location.x / max(tabBar.bounds.width / CGFloat(items.count), 1)), 0), items.count - 1)
+      let item = items[index]
+      guard item.tag != lastPanTag, ClipMode.appClipModes.indices.contains(item.tag) else {
+        if gesture.state == .ended || gesture.state == .cancelled || gesture.state == .failed {
+          lastPanTag = nil
+        }
+        return
+      }
+      lastPanTag = item.tag
+      tabBar.selectedItem = item
+      onSelect(ClipMode.appClipModes[item.tag])
+      if gesture.state == .ended || gesture.state == .cancelled || gesture.state == .failed {
+        lastPanTag = nil
+      }
+    }
+  }
+
+  private func configureItemAppearance(_ itemAppearance: UITabBarItemAppearance) {
+    itemAppearance.normal.iconColor = UIColor.white.withAlphaComponent(0.72)
+    itemAppearance.normal.titleTextAttributes = [
+      .foregroundColor: UIColor.white.withAlphaComponent(0.72),
+      .font: UIFont.systemFont(ofSize: 11, weight: .semibold),
+    ]
+    itemAppearance.selected.iconColor = .white
+    itemAppearance.selected.titleTextAttributes = [
+      .foregroundColor: UIColor.white,
+      .font: UIFont.systemFont(ofSize: 11, weight: .bold),
+    ]
   }
 }
 
@@ -1256,28 +1436,28 @@ private struct UnpairGlassButton: View {
     Button(action: action) {
       VStack(spacing: 4) {
         Image(systemName: "link.badge.minus")
-          .font(.system(size: 16, weight: .bold))
+          .font(.system(size: 14, weight: .bold))
         Text("Unpair")
-          .font(.system(size: 9, weight: .bold, design: .rounded))
+          .font(.system(size: 8, weight: .bold, design: .rounded))
           .lineLimit(1)
           .minimumScaleFactor(0.75)
       }
       .foregroundStyle(.white)
-      .frame(width: 70, height: 54)
-      .contentShape(RoundedRectangle(cornerRadius: 27, style: .continuous))
-      .nativeClearGlassBackground(RoundedRectangle(cornerRadius: 27, style: .continuous))
+      .frame(width: 56, height: 44)
+      .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+      .nativeClearGlassBackground(RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
     .buttonStyle(.plain)
-    .frame(width: 70, height: 76, alignment: .center)
+    .frame(width: 56, height: 50, alignment: .center)
     .background {
-      RoundedRectangle(cornerRadius: 27, style: .continuous)
+      RoundedRectangle(cornerRadius: 22, style: .continuous)
         .fill(Color.red.opacity(0.34))
-        .frame(width: 70, height: 54)
+        .frame(width: 56, height: 44)
     }
     .overlay {
-      RoundedRectangle(cornerRadius: 27, style: .continuous)
+      RoundedRectangle(cornerRadius: 22, style: .continuous)
         .stroke(Color.red.opacity(0.58), lineWidth: 1.2)
-        .frame(width: 70, height: 54)
+        .frame(width: 56, height: 44)
     }
     .shadow(color: Color.red.opacity(0.22), radius: 10, y: 3)
     .accessibilityLabel("Unpair from Chrome")
@@ -1293,22 +1473,22 @@ private struct GlassToggleControl: View {
   var body: some View {
     Button(action: action) {
       Label(title, systemImage: systemImage)
-        .font(.system(size: 20, weight: .semibold, design: .rounded))
+        .font(.system(size: 16, weight: .semibold, design: .rounded))
         .lineLimit(1)
         .minimumScaleFactor(0.72)
-        .frame(maxWidth: .infinity, minHeight: 58)
-        .padding(.horizontal, 18)
+        .frame(maxWidth: .infinity, minHeight: 44)
+        .padding(.horizontal, 14)
         .foregroundStyle(isOn ? .white : .white.opacity(0.62))
-        .contentShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
     .buttonStyle(.plain)
-    .nativeClearGlassBackground(RoundedRectangle(cornerRadius: 28, style: .continuous))
+    .nativeClearGlassBackground(RoundedRectangle(cornerRadius: 22, style: .continuous))
     .background {
-      RoundedRectangle(cornerRadius: 28, style: .continuous)
+      RoundedRectangle(cornerRadius: 22, style: .continuous)
         .fill(isOn ? Color.white.opacity(0.18) : Color.black.opacity(0.06))
     }
     .overlay {
-      RoundedRectangle(cornerRadius: 28, style: .continuous)
+      RoundedRectangle(cornerRadius: 22, style: .continuous)
         .stroke(isOn ? Color.white.opacity(0.64) : Color.white.opacity(0.20), lineWidth: isOn ? 1.8 : 1)
     }
     .shadow(color: isOn ? .white.opacity(0.12) : .clear, radius: 10, y: 1)
@@ -1332,6 +1512,27 @@ private extension View {
       self.glassEffect(.clear.interactive(), in: shape)
     } else {
       self.background(.ultraThinMaterial, in: shape)
+    }
+  }
+
+}
+
+private extension Shape {
+  @ViewBuilder
+  func modeIndicatorGlassBackground(isActive: Bool) -> some View {
+    if #available(iOS 26.0, *) {
+      self
+        .fill(Color.clear)
+        .glassEffect(.clear, in: self)
+        .shadow(color: Color.black.opacity(isActive ? 0.18 : 0.12), radius: isActive ? 12 : 8, y: 4)
+    } else {
+      self
+        .fill(Color.black.opacity(isActive ? 0.24 : 0.18))
+        .background(.ultraThinMaterial, in: self)
+        .overlay {
+          self.stroke(Color.white.opacity(isActive ? 0.48 : 0.32), lineWidth: 1)
+        }
+        .shadow(color: Color.black.opacity(0.20), radius: 12, y: 4)
     }
   }
 }
@@ -1415,7 +1616,12 @@ private struct ViewfinderBackground: View {
       }
 
       if model.mode == .dictation, !showsCameraFeed {
-        DictationLiveOverlay(text: model.dictationTranscript, isListening: model.dictationPressActive)
+        DictationLiveOverlay(
+          text: model.dictationTranscript,
+          isListening: model.dictationPressActive || model.dictationRunning,
+          isPaired: model.sessionId != nil && !model.isPairing,
+          isStarting: model.dictationPressActive && !model.dictationRunning
+        )
           .ignoresSafeArea()
       }
     }
@@ -1792,6 +1998,8 @@ private struct BarcodeScanGuide: View {
 private struct DictationLiveOverlay: View {
   let text: String
   let isListening: Bool
+  let isPaired: Bool
+  let isStarting: Bool
 
   var body: some View {
     GeometryReader { proxy in
@@ -1814,6 +2022,12 @@ private struct DictationLiveOverlay: View {
     let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
     if !trimmed.isEmpty {
       return trimmed
+    }
+    if !isPaired {
+      return "Pair with Chrome to dictate"
+    }
+    if isStarting {
+      return "Waiting for dictation..."
     }
     return isListening ? "Listening..." : "Hold to speak"
   }
