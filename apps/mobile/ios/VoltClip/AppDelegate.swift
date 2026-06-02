@@ -815,6 +815,10 @@ private final class ClipModel: ObservableObject {
 private struct ClipRootView: View {
   @ObservedObject var model: ClipModel
   @State private var modePickerIsDragging = false
+  @State private var bottomSheetExpansion: CGFloat = 0
+  @State private var glassBlurIntensity: CGFloat = 0.72
+  @State private var bottomSheetDragStartExpansion: CGFloat?
+  private let expandedSheetHeight: CGFloat = 86
 
   var body: some View {
     ZStack {
@@ -847,7 +851,8 @@ private struct ClipRootView: View {
     StatusGlassRow(
       message: statusMessage,
       isError: model.error != nil,
-      symbol: statusSymbol
+      symbol: statusSymbol,
+      glassBlurIntensity: glassBlurIntensity
     )
     .frame(maxWidth: 380)
     .frame(maxWidth: .infinity, alignment: .center)
@@ -873,6 +878,7 @@ private struct ClipRootView: View {
   }
 
   private var bottomControlsGlass: some View {
+    let expansion = bottomSheetExpansion
     let shape = UnevenRoundedRectangle(
       topLeadingRadius: 40,
       bottomLeadingRadius: 36,
@@ -882,6 +888,18 @@ private struct ClipRootView: View {
     )
 
     return VStack(spacing: 0) {
+      BlurSheetSlide(progress: expansion)
+        .padding(.top, 8)
+        .padding(.bottom, expansion > 0.02 ? 2 : 0)
+        .frame(height: 28)
+        .contentShape(Rectangle())
+        .simultaneousGesture(bottomSheetResizeGesture)
+
+      expandedControls(progress: expansion)
+        .frame(height: expandedSheetHeight * expansion)
+        .opacity(expansion)
+        .clipped()
+
       controlsPanel
       HStack(alignment: .center, spacing: 8) {
         modePicker
@@ -900,11 +918,72 @@ private struct ClipRootView: View {
     }
     .frame(maxWidth: .infinity)
     .background {
-      ConcentricLiquidDrawer(cornerRadius: 40)
+      ConcentricLiquidDrawer(cornerRadius: 40, blurIntensity: glassBlurIntensity)
     }
     .clipShape(shape)
     .animation(.smooth(duration: 0.32), value: model.mode)
     .padding(.horizontal, -2)
+  }
+
+  private var bottomSheetResizeGesture: some Gesture {
+    DragGesture(minimumDistance: 10)
+      .onChanged { value in
+        guard abs(value.translation.height) > abs(value.translation.width) else { return }
+        if bottomSheetDragStartExpansion == nil {
+          bottomSheetDragStartExpansion = bottomSheetExpansion
+        }
+        let base = bottomSheetDragStartExpansion ?? bottomSheetExpansion
+        var transaction = Transaction()
+        transaction.animation = nil
+        withTransaction(transaction) {
+          bottomSheetExpansion = min(max(base - (value.translation.height / expandedSheetHeight), 0), 1)
+        }
+      }
+      .onEnded { value in
+        guard abs(value.translation.height) > abs(value.translation.width) else { return }
+        let base = bottomSheetDragStartExpansion ?? bottomSheetExpansion
+        let projectedProgress = min(max(base - (value.predictedEndTranslation.height / expandedSheetHeight), 0), 1)
+        withAnimation(.interactiveSpring(response: 0.28, dampingFraction: 0.86)) {
+          bottomSheetExpansion = projectedProgress > 0.42 ? 1 : 0
+        }
+        bottomSheetDragStartExpansion = nil
+      }
+  }
+
+  private func expandedControls(progress: CGFloat) -> some View {
+    VStack(spacing: 8) {
+      HStack(spacing: 10) {
+        Image(systemName: "circle.lefthalf.filled")
+          .font(.system(size: 15, weight: .semibold))
+          .foregroundStyle(.white.opacity(0.62))
+        Slider(value: Binding(get: {
+          Double(glassBlurIntensity)
+        }, set: { value in
+          glassBlurIntensity = CGFloat(value)
+        }), in: 0.25...1)
+        .tint(.white.opacity(0.92))
+        Image(systemName: "circle.inset.filled")
+          .font(.system(size: 15, weight: .semibold))
+          .foregroundStyle(.white.opacity(0.82))
+      }
+
+      HStack {
+        Text("Glass blur")
+          .font(.system(size: 12, weight: .bold, design: .rounded))
+          .foregroundStyle(.white.opacity(0.62))
+        Spacer()
+        Text("\(Int((glassBlurIntensity * 100).rounded()))%")
+          .font(.footnote.weight(.semibold))
+          .padding(.horizontal, 10)
+          .padding(.vertical, 4)
+          .background(.thinMaterial, in: Capsule())
+      }
+    }
+    .padding(.horizontal, 16)
+    .padding(.top, 6)
+    .padding(.bottom, 8)
+    .scaleEffect(0.96 + (0.04 * progress), anchor: .bottom)
+    .accessibilityLabel("Glass blur")
   }
 
   private var secondaryControls: some View {
@@ -991,7 +1070,7 @@ private struct ClipRootView: View {
     )
     .disabled(model.isSending && model.mode != .dictation)
     .buttonStyle(.plain)
-    .nativeBlurredGlassBackground(Circle())
+    .nativeBlurredGlassBackground(Circle(), intensity: glassBlurIntensity)
     .clipShape(Circle())
     .accessibilityLabel(model.mode == .dictation ? "Hold to dictate" : model.mode == .ocr && model.textCapture != nil ? "Retake text capture" : "Capture")
   }
@@ -1055,6 +1134,7 @@ private struct StatusGlassRow: View {
   let message: String
   let isError: Bool
   let symbol: String
+  let glassBlurIntensity: CGFloat
 
   var body: some View {
     HStack(spacing: 10) {
@@ -1070,7 +1150,7 @@ private struct StatusGlassRow: View {
     .padding(.horizontal, 16)
     .padding(.vertical, 12)
     .frame(maxWidth: .infinity, minHeight: 54, alignment: .leading)
-    .nativeBlurredGlassBackground(RoundedRectangle(cornerRadius: 27, style: .continuous))
+    .nativeBlurredGlassBackground(RoundedRectangle(cornerRadius: 27, style: .continuous), intensity: glassBlurIntensity)
     .animation(.smooth(duration: 0.22), value: displayMessage)
     .animation(.smooth(duration: 0.22), value: isError)
     .accessibilityLabel(displayMessage)
@@ -1298,6 +1378,7 @@ private enum NativeModeTab {
 
 private struct ConcentricLiquidDrawer: View {
   let cornerRadius: CGFloat
+  let blurIntensity: CGFloat
 
   var body: some View {
     let bottomRadius = max(44, cornerRadius - 4)
@@ -1312,7 +1393,7 @@ private struct ConcentricLiquidDrawer: View {
     ZStack {
       shape
         .fill(.ultraThinMaterial)
-        .opacity(0.72)
+        .opacity(blurIntensity)
 
       if #available(iOS 26.0, *) {
         Color.clear
@@ -1500,6 +1581,25 @@ private struct GlassToggleControl: View {
   }
 }
 
+private struct BlurSheetSlide: View {
+  let progress: CGFloat
+
+  var body: some View {
+    Capsule()
+      .fill(Color.white.opacity(0.50 + (0.18 * progress)))
+      .frame(width: 54 + (progress * 22), height: 5)
+      .padding(.horizontal, 14)
+      .padding(.vertical, 8)
+      .background(.ultraThinMaterial, in: Capsule())
+      .overlay {
+        Capsule()
+          .stroke(Color.white.opacity(0.20 + (0.18 * progress)), lineWidth: 1)
+      }
+      .opacity(0.48 + (0.52 * progress))
+      .accessibilityHidden(true)
+  }
+}
+
 private extension View {
   @ViewBuilder
   func nativeGlassControlStyle() -> some View {
@@ -1520,13 +1620,22 @@ private extension View {
   }
 
   @ViewBuilder
-  func nativeBlurredGlassBackground<S: Shape>(_ shape: S) -> some View {
+  func nativeBlurredGlassBackground<S: Shape>(_ shape: S, intensity: CGFloat = 0.72) -> some View {
+    let clampedIntensity = min(max(intensity, 0.05), 1)
     if #available(iOS 26.0, *) {
       self
-        .background(.ultraThinMaterial, in: shape)
+        .background {
+          shape
+            .fill(.ultraThinMaterial)
+            .opacity(clampedIntensity)
+        }
         .glassEffect(.clear.interactive(), in: shape)
     } else {
-      self.background(.thinMaterial, in: shape)
+      self.background {
+        shape
+          .fill(.thinMaterial)
+          .opacity(clampedIntensity)
+      }
     }
   }
 
