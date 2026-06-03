@@ -401,11 +401,18 @@ test("native dictation mixes with Bluetooth media playback", () => {
   const clipDelegate = readText(nativeFiles.clipAppDelegate);
   const clipDictationModule = readText(nativeFiles.dictation);
   const nativeDictationSources = [fullDelegate, clipDelegate, clipDictationModule].join("\n");
+  const fullStartMode = fullDelegate.match(/func startMode\(\) \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  const clipStartMode = clipDelegate.match(/func startMode\(\) \{[\s\S]*?\n  \}/)?.[0] ?? "";
 
   assert.doesNotMatch(nativeDictationSources, /duckOthers/);
   assert.doesNotMatch(nativeDictationSources, /allowBluetoothHFP/);
   assert.match(nativeDictationSources, /mixWithOthers/);
   assert.match(nativeDictationSources, /allowBluetoothA2DP/);
+  assert.match(nativeDictationSources, /func preparePermissionsForUse\(\) async throws/);
+  assert.match(fullStartMode, /dictation\.preparePermissionsForUse\(\)/);
+  assert.match(clipStartMode, /dictation\.preparePermissionsForUse\(\)/);
+  assert.doesNotMatch(fullStartMode, /dictation\.prepareForUse\(\)/);
+  assert.doesNotMatch(clipStartMode, /dictation\.prepareForUse\(\)/);
 });
 
 test("mobile mode picker is a small sliding Liquid Glass text strip", () => {

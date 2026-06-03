@@ -62,7 +62,13 @@ export default function PhotosTab() {
   const [gridVisible, setGridVisible] = useState(true);
   const [showPhotoSent, setShowPhotoSent] = useState(false);
   const [cameraOrientation, setCameraOrientation] = useState<CameraOrientation>("portrait");
-  const [viewfinderLayout, setViewfinderLayout] = useState<{ width: number; height: number } | null>(null);
+  const [cameraLayout, setCameraLayout] = useState<{ width: number; height: number } | null>(null);
+  const [photoFrameLayout, setPhotoFrameLayout] = useState<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null>(null);
   const focusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pinchStartDistanceRef = useRef<number | null>(null);
   const pinchStartZoomRef = useRef(0);
@@ -114,27 +120,32 @@ export default function PhotosTab() {
 
   const floatingBottom = Math.max(photoFloatingBottom, insets.bottom + 74);
   const photoFrameGap = 18;
-  const photoFrameSize = Math.max(0, (viewfinderLayout?.width ?? windowWidth) - photoFrameGap * 2);
+  const photoFrameSize = Math.max(0, (cameraLayout?.width ?? windowWidth) - photoFrameGap * 2);
   const photoMaskBorderWidth = Math.max(windowHeight, windowWidth);
   const photoCropFrame = useMemo<PhotoCropFrame | null>(() => {
-    if (!viewfinderLayout || photoFrameSize <= 0) return null;
+    if (!cameraLayout || !photoFrameLayout || photoFrameLayout.width <= 0 || photoFrameLayout.height <= 0) return null;
     return {
-      previewWidth: viewfinderLayout.width,
-      previewHeight: viewfinderLayout.height,
-      frameX: photoFrameGap,
-      frameY: photoFrameGap,
-      frameWidth: photoFrameSize,
-      frameHeight: photoFrameSize,
+      previewWidth: cameraLayout.width,
+      previewHeight: cameraLayout.height,
+      frameX: photoFrameLayout.x,
+      frameY: photoFrameLayout.y,
+      frameWidth: photoFrameLayout.width,
+      frameHeight: photoFrameLayout.height,
     };
-  }, [photoFrameSize, viewfinderLayout]);
+  }, [cameraLayout, photoFrameLayout]);
   const controlRotationStyle = useMemo(
     () => ({ transform: [{ rotate: `${cameraOrientationRotationDegrees(cameraOrientation)}deg` }] }),
     [cameraOrientation]
   );
 
-  const handleViewfinderLayout = useCallback((event: LayoutChangeEvent) => {
+  const handleCameraLayout = useCallback((event: LayoutChangeEvent) => {
     const { height, width } = event.nativeEvent.layout;
-    setViewfinderLayout({ width, height });
+    setCameraLayout({ width, height });
+  }, []);
+
+  const handlePhotoFrameLayout = useCallback((event: LayoutChangeEvent) => {
+    const { height, width, x, y } = event.nativeEvent.layout;
+    setPhotoFrameLayout({ x, y, width, height });
   }, []);
 
   useEffect(() => {
@@ -185,11 +196,12 @@ export default function PhotosTab() {
     <ScreenRoot>
       <Header />
       <View style={styles.page}>
-        <ViewfinderSurface onLayout={handleViewfinderLayout}>
+        <ViewfinderSurface>
           {viewfinderFocused ? (
             <CameraView
               ref={scanner.cameraRef}
               style={styles.camera}
+              onLayout={handleCameraLayout}
               facing="back"
               enableTorch={scanner.torch}
               zoom={scanner.cameraZoom}
@@ -209,6 +221,7 @@ export default function PhotosTab() {
             gap={photoFrameGap}
             gridVisible={gridVisible}
             maskBorderWidth={photoMaskBorderWidth}
+            onFrameLayout={handlePhotoFrameLayout}
             size={photoFrameSize}
           />
           {scanner.focusPoint ? (
@@ -269,7 +282,7 @@ export default function PhotosTab() {
               shutter={
                 <View style={controlRotationStyle}>
                   <ViewfinderBottomShutter
-                    disabled={scanner.photoSending}
+                    disabled={scanner.photoSending || !photoCropFrame}
                     error={scanner.photoError}
                     icon={scanner.photoSending ? "hourglass-outline" : "camera"}
                     label="Take and send photo"
@@ -277,6 +290,8 @@ export default function PhotosTab() {
                     status={
                       scanner.photoSending
                         ? "Sending photo..."
+                        : !photoCropFrame
+                          ? "Preparing camera frame..."
                         : showPhotoSent
                           ? "Photo sent to browser"
                           : "Tap shutter to send to Chrome"
@@ -297,11 +312,13 @@ function PhotoFrameOverlay({
   gap,
   gridVisible,
   maskBorderWidth,
+  onFrameLayout,
   size,
 }: {
   gap: number;
   gridVisible: boolean;
   maskBorderWidth: number;
+  onFrameLayout: (event: LayoutChangeEvent) => void;
   size: number;
 }) {
   return (
@@ -319,7 +336,10 @@ function PhotoFrameOverlay({
           },
         ]}
       />
-      <View style={[localStyles.photoFrameBorder, { top: gap, left: gap, width: size, height: size }]}>
+      <View
+        onLayout={onFrameLayout}
+        style={[localStyles.photoFrameBorder, { top: gap, left: gap, width: size, height: size }]}
+      >
         {gridVisible ? <PhotoGridOverlay /> : null}
       </View>
     </View>

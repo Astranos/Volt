@@ -312,7 +312,7 @@ private final class ClipModel: ObservableObject {
       } else {
         camera.stop()
         Task {
-          try? await dictation.prepareForUse()
+          try? await dictation.preparePermissionsForUse()
         }
       }
     }
@@ -3013,8 +3013,12 @@ private final class ClipDictation: NSObject {
   private var completedTranscript = ""
   private var isAudioSessionPrepared = false
 
-  func prepareForUse() async throws {
+  func preparePermissionsForUse() async throws {
     try await requestPermissions()
+  }
+
+  func prepareForUse() async throws {
+    try await preparePermissionsForUse()
     try configureAudioSessionIfNeeded()
     _ = audioEngine.inputNode.outputFormat(forBus: 0)
     audioEngine.prepare()
