@@ -243,6 +243,27 @@ test("App Clip bottom controls use native Liquid Glass with concentric screen co
   assert.doesNotMatch(liquidTabBar, /VoltClipModeTabButton/);
 });
 
+test("native bottom controls sheet opens with tap and native drag gestures", () => {
+  const fullDelegate = readText(nativeFiles.fullAppDelegate);
+  const clipDelegate = readText(nativeFiles.clipAppDelegate);
+  const nativeDelegates = [fullDelegate, clipDelegate].join("\n");
+
+  assert.match(nativeDelegates, /private func toggleBottomSheetExpansion\(\)/);
+  assert.match(nativeDelegates, /\.onTapGesture\s*\{\s*toggleBottomSheetExpansion\(\)/);
+  assert.match(nativeDelegates, /withAnimation\(\.interactiveSpring\(response: 0\.30, dampingFraction: 0\.88\)\)/);
+  assert.match(nativeDelegates, /bottomSheetExpansion = bottomSheetExpansion > 0\.5 \? 0 : 1/);
+  assert.match(nativeDelegates, /@GestureState private var bottomSheetDragTranslation: CGFloat = 0/);
+  assert.match(nativeDelegates, /private var liveBottomSheetExpansion: CGFloat/);
+  assert.match(nativeDelegates, /clampedBottomSheetExpansion\(bottomSheetExpansion - \(bottomSheetDragTranslation \/ expandedSheetHeight\)\)/);
+  assert.match(nativeDelegates, /private var bottomSheetResizeGesture: some Gesture/);
+  assert.match(nativeDelegates, /DragGesture\(minimumDistance: 10\)/);
+  assert.match(nativeDelegates, /\.gesture\(bottomSheetResizeGesture\)/);
+  assert.match(nativeDelegates, /\.updating\(\$bottomSheetDragTranslation\)/);
+  assert.match(nativeDelegates, /transaction\.disablesAnimations = true/);
+  assert.match(nativeDelegates, /value\.predictedEndTranslation\.height/);
+  assert.doesNotMatch(nativeDelegates, /bottomSheetDragStartExpansion/);
+});
+
 test("App Clip native view wrappers guard unregistered components", () => {
   const textRecognizerWrapper = readText(nativeFiles.textRecognizerWrapper);
 

@@ -817,7 +817,7 @@ private struct ClipRootView: View {
   @State private var modePickerIsDragging = false
   @State private var bottomSheetExpansion: CGFloat = 0
   @State private var glassBlurIntensity: CGFloat = 0.72
-  @State private var bottomSheetDragStartExpansion: CGFloat?
+  @GestureState private var bottomSheetDragTranslation: CGFloat = 0
   private let expandedSheetHeight: CGFloat = 86
 
   var body: some View {
@@ -878,7 +878,7 @@ private struct ClipRootView: View {
   }
 
   private var bottomControlsGlass: some View {
-    let expansion = bottomSheetExpansion
+    let expansion = liveBottomSheetExpansion
     let shape = UnevenRoundedRectangle(
       topLeadingRadius: 40,
       bottomLeadingRadius: 36,
@@ -890,10 +890,13 @@ private struct ClipRootView: View {
     return VStack(spacing: 0) {
       BlurSheetSlide(progress: expansion)
         .padding(.top, 8)
-        .padding(.bottom, expansion > 0.02 ? 2 : 0)
+        .padding(.bottom, 2 * expansion)
         .frame(height: 28)
         .contentShape(Rectangle())
-        .simultaneousGesture(bottomSheetResizeGesture)
+        .onTapGesture {
+          toggleBottomSheetExpansion()
+        }
+        .gesture(bottomSheetResizeGesture)
 
       expandedControls(progress: expansion)
         .frame(height: expandedSheetHeight * expansion)
@@ -922,31 +925,43 @@ private struct ClipRootView: View {
     }
     .clipShape(shape)
     .animation(.smooth(duration: 0.32), value: model.mode)
+    .transaction { transaction in
+      if bottomSheetDragTranslation != 0 {
+        transaction.animation = nil
+        transaction.disablesAnimations = true
+      }
+    }
     .padding(.horizontal, -2)
+  }
+
+  private var liveBottomSheetExpansion: CGFloat {
+    clampedBottomSheetExpansion(bottomSheetExpansion - (bottomSheetDragTranslation / expandedSheetHeight))
+  }
+
+  private func clampedBottomSheetExpansion(_ value: CGFloat) -> CGFloat {
+    min(max(value, 0), 1)
+  }
+
+  private func toggleBottomSheetExpansion() {
+    withAnimation(.interactiveSpring(response: 0.30, dampingFraction: 0.88)) {
+      bottomSheetExpansion = bottomSheetExpansion > 0.5 ? 0 : 1
+    }
   }
 
   private var bottomSheetResizeGesture: some Gesture {
     DragGesture(minimumDistance: 10)
-      .onChanged { value in
+      .updating($bottomSheetDragTranslation) { value, state, transaction in
         guard abs(value.translation.height) > abs(value.translation.width) else { return }
-        if bottomSheetDragStartExpansion == nil {
-          bottomSheetDragStartExpansion = bottomSheetExpansion
-        }
-        let base = bottomSheetDragStartExpansion ?? bottomSheetExpansion
-        var transaction = Transaction()
+        transaction.disablesAnimations = true
         transaction.animation = nil
-        withTransaction(transaction) {
-          bottomSheetExpansion = min(max(base - (value.translation.height / expandedSheetHeight), 0), 1)
-        }
+        state = value.translation.height
       }
       .onEnded { value in
         guard abs(value.translation.height) > abs(value.translation.width) else { return }
-        let base = bottomSheetDragStartExpansion ?? bottomSheetExpansion
-        let projectedProgress = min(max(base - (value.predictedEndTranslation.height / expandedSheetHeight), 0), 1)
+        let projectedProgress = clampedBottomSheetExpansion(bottomSheetExpansion - (value.predictedEndTranslation.height / expandedSheetHeight))
         withAnimation(.interactiveSpring(response: 0.28, dampingFraction: 0.86)) {
           bottomSheetExpansion = projectedProgress > 0.42 ? 1 : 0
         }
-        bottomSheetDragStartExpansion = nil
       }
   }
 
