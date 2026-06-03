@@ -51,7 +51,7 @@ class VoltClipDictation: RCTEventEmitter {
       chunkSequence = 0
 
       let audioSession = AVAudioSession.sharedInstance()
-      try audioSession.setCategory(.playAndRecord, mode: .measurement, options: [.duckOthers, .defaultToSpeaker, .allowBluetoothHFP])
+      try audioSession.setCategory(.playAndRecord, mode: .measurement, options: [.mixWithOthers, .allowBluetoothA2DP])
       try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
 
       let inputNode = audioEngine.inputNode

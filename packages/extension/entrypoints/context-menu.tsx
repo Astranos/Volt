@@ -5,7 +5,6 @@
 import { defineContentScript } from "wxt/utils/define-content-script";
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import QRCode from "qrcode";
 import { initializeSidePanelContext } from "../src/lib/sidepanel-gesture";
 import { buildSearchUrl, SEARCH_URL_TEMPLATES } from "../src/domain/search";
 import {
@@ -113,56 +112,6 @@ export default defineContentScript({
         );
         activePopupOpenedAt = Date.now();
       }
-    };
-
-    const mobileModeLabels: Record<MobileCaptureMode, string> = {
-      ocr: "OCR Scanning",
-      barcode: "Barcode Scanner",
-      dictation: "Dictation",
-    };
-
-    let qrHost: HTMLDivElement | null = null;
-    let qrRoot: Root | null = null;
-
-    const closeMobileCaptureQr = (options: { disconnect?: boolean } = {}) => {
-      qrRoot?.unmount();
-      qrRoot = null;
-      qrHost?.remove();
-      qrHost = null;
-      if (options.disconnect !== false) {
-        try {
-          chrome.runtime.sendMessage({ action: "scannerDisconnect" });
-        } catch (_) {}
-      }
-    };
-
-    const showMobileCaptureQr = async (mode: MobileCaptureMode, url: string) => {
-      closeMobileCaptureQr({ disconnect: false });
-      const qrDataUrl = await QRCode.toDataURL(url, {
-        width: 768,
-        margin: 3,
-        errorCorrectionLevel: "H",
-        color: {
-          dark: "#1c1917",
-          light: "#ffffff",
-        },
-      });
-
-      qrHost = document.createElement("div");
-      qrHost.style.all = "initial";
-      qrHost.style.position = "fixed";
-      qrHost.style.inset = "0";
-      qrHost.style.zIndex = "2147483647";
-      document.documentElement.appendChild(qrHost);
-      qrRoot = createRoot(qrHost);
-      qrRoot.render(
-        <MobileCaptureQrOverlay
-          mode={mode}
-          qrDataUrl={qrDataUrl}
-          url={url}
-          onClose={closeMobileCaptureQr}
-        />
-      );
     };
 
     const buildEbaySoldUrl = (q: string) => {
@@ -401,34 +350,16 @@ export default defineContentScript({
           {
             action: "openMobileCapture",
             mode,
+            surface: "popup",
           },
           (response) => {
             const lastError = chrome.runtime.lastError;
             if (lastError || response?.success === false) {
               log("Mobile capture start failed", lastError || response?.error);
-              return;
-            }
-
-            const url = response?.state?.qrCodeUrl;
-            if (typeof url === "string" && url) {
-              void showMobileCaptureQr(mode, url);
             }
           }
         );
       } catch (_) {}
-    };
-
-    const openMobileSidepanel = () => {
-      primeEditableTarget();
-      try {
-        chrome.runtime.sendMessage({
-          action: "openInSidebar",
-          tool: "mobile-scanner",
-          mode: "open",
-        });
-      } catch (error) {
-        log("Mobile sidepanel open failed", error);
-      }
     };
 
     const quickActions: MenuAction[] = [
@@ -670,7 +601,7 @@ export default defineContentScript({
         shortcut: "V",
         description: "Open mobile scanner",
         icon: Smartphone,
-        onInvoke: openMobileSidepanel,
+        onInvoke: () => openMobileCapture("barcode"),
       },
       {
         id: "settings",
@@ -755,146 +686,6 @@ export default defineContentScript({
     let clickedUrl: string | null = null;
     type CloseMenuOptions = {
       restoreFocus?: boolean;
-    };
-
-    const MobileCaptureQrOverlay: React.FC<{
-      mode: MobileCaptureMode;
-      qrDataUrl: string;
-      url: string;
-      onClose: () => void;
-    }> = ({ mode, qrDataUrl, url, onClose }) => {
-      const label = mobileModeLabels[mode];
-      const [copied, setCopied] = useState(false);
-
-      useEffect(() => {
-        const handleKeyDown = (event: KeyboardEvent) => {
-          if (event.key === "Escape") onClose();
-        };
-        document.addEventListener("keydown", handleKeyDown, true);
-        return () => document.removeEventListener("keydown", handleKeyDown, true);
-      }, [onClose]);
-
-      const copyLink = async () => {
-        try {
-          await navigator.clipboard.writeText(url);
-          setCopied(true);
-          window.setTimeout(() => setCopied(false), 1200);
-        } catch (err) {
-          log("Failed to copy App Clip URL", err);
-        }
-      };
-
-      return (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 2147483647,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            background: "rgba(17,24,39,0.42)",
-            fontFamily:
-              "ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-          }}
-          onClick={onClose}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-label={`Scan with iPhone for ${label}`}
-            onClick={(event) => event.stopPropagation()}
-            style={{
-              width: "min(360px, calc(100vw - 32px))",
-              borderRadius: 14,
-              border: "1px solid #e5e7eb",
-              background: "#ffffff",
-              color: "#111827",
-              boxShadow: "0 24px 70px rgba(0,0,0,0.26)",
-              overflow: "hidden",
-            }}
-          >
-            <div style={{ padding: "16px 18px 10px" }}>
-              <div style={{ fontSize: 15, fontWeight: 800 }}>Scan with iPhone</div>
-              <div style={{ marginTop: 4, fontSize: 13, color: "#6b7280" }}>
-                Open App Clip for {label}
-              </div>
-            </div>
-            <div style={{ padding: "8px 22px 18px" }}>
-              <div
-                style={{
-                  borderRadius: 12,
-                  border: "1px solid #e5e7eb",
-                  background: "#ffffff",
-                  padding: 12,
-                }}
-              >
-                <img
-                  alt={`QR code for ${label}`}
-                  src={qrDataUrl}
-                  style={{ display: "block", width: "100%", height: "auto" }}
-                />
-              </div>
-              <div
-                style={{
-                  marginTop: 12,
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                  fontSize: 11,
-                  color: "#6b7280",
-                }}
-                title={url}
-              >
-                {url}
-              </div>
-            </div>
-            <div
-              style={{
-                display: "flex",
-                gap: 8,
-                justifyContent: "flex-end",
-                borderTop: "1px solid #f3f4f6",
-                padding: 12,
-                background: "#fafafa",
-              }}
-            >
-              <button
-                type="button"
-                onClick={copyLink}
-                style={{
-                  border: "1px solid #d1d5db",
-                  borderRadius: 8,
-                  background: "#ffffff",
-                  color: "#374151",
-                  cursor: "pointer",
-                  fontSize: 13,
-                  fontWeight: 700,
-                  padding: "8px 10px",
-                }}
-              >
-                {copied ? "Copied" : "Copy link"}
-              </button>
-              <button
-                type="button"
-                onClick={onClose}
-                style={{
-                  border: "1px solid #111827",
-                  borderRadius: 8,
-                  background: "#111827",
-                  color: "#ffffff",
-                  cursor: "pointer",
-                  fontSize: 13,
-                  fontWeight: 700,
-                  padding: "8px 10px",
-                }}
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      );
     };
 
     // Menu React component

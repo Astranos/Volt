@@ -1,0 +1,17 @@
+html,
+body {
+  margin: 0;
+  width: 380px;
+  height: 540px;
+  overflow: hidden;
+  color-scheme: light;
+}
+
+body {
+  background: #f8fafc;
+}
+
+#root {
+  width: 100%;
+  height: 100%;
+}

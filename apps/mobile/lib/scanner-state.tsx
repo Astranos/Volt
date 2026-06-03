@@ -24,6 +24,7 @@ import {
 } from "@volt/scanner-protocol";
 import { makeBarcodeMessage, makeCaptureMessage, makeOcrMessage, type ScanItem } from "./scanner-messages";
 import { uploadPhotoObjectTransfer } from "./photo-object-transfer";
+import { cropActionForVisibleFrame, type PhotoCropFrame } from "./photo-crop";
 
 globalThis.atob ??= base64Decode;
 globalThis.btoa ??= base64Encode;
@@ -105,7 +106,7 @@ type ScannerState = {
   requestPermission: ReturnType<typeof useCameraPermissions>[1];
   scans: ScanItem[];
   sendBarcodeScanResult: (result: BarcodeScanningResult) => Promise<void>;
-  sendPhotoCapture: () => Promise<void>;
+  sendPhotoCapture: (cropFrame?: PhotoCropFrame | null) => Promise<void>;
   sendManualText: () => void;
   setCameraZoom: React.Dispatch<React.SetStateAction<number>>;
   setCaptureZoom: React.Dispatch<React.SetStateAction<number>>;
@@ -540,7 +541,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
     }
   }, []);
 
-  const sendPhotoCapture = useCallback(async () => {
+  const sendPhotoCapture = useCallback(async (cropFrame?: PhotoCropFrame | null) => {
     if (!cameraRef.current || photoSendingRef.current) return;
     photoSendingRef.current = true;
 
@@ -578,18 +579,14 @@ export function ScannerProvider({ children }: PropsWithChildren) {
         compress: 0.92,
         format: SaveFormat.JPEG,
       });
-      const cropSize = Math.min(normalizedPhoto.width, normalizedPhoto.height);
+      const cropAction = cropActionForVisibleFrame(
+        { width: normalizedPhoto.width, height: normalizedPhoto.height },
+        cropFrame
+      );
       const squarePhoto = await manipulateAsync(
         normalizedPhoto.uri,
         [
-          {
-            crop: {
-              originX: Math.max(0, Math.floor((normalizedPhoto.width - cropSize) / 2)),
-              originY: Math.max(0, Math.floor((normalizedPhoto.height - cropSize) / 2)),
-              width: cropSize,
-              height: cropSize,
-            },
-          },
+          cropAction,
         ],
         {
           base64: true,

@@ -396,6 +396,18 @@ test("native dictation feedback distinguishes unpaired, tap, hold, and stop stat
   assert.doesNotMatch(clipDelegate, /Writing to \\?\#?\(model\.cursorTargetName\)/);
 });
 
+test("native dictation mixes with Bluetooth media playback", () => {
+  const fullDelegate = readText(nativeFiles.fullAppDelegate);
+  const clipDelegate = readText(nativeFiles.clipAppDelegate);
+  const clipDictationModule = readText(nativeFiles.dictation);
+  const nativeDictationSources = [fullDelegate, clipDelegate, clipDictationModule].join("\n");
+
+  assert.doesNotMatch(nativeDictationSources, /duckOthers/);
+  assert.doesNotMatch(nativeDictationSources, /allowBluetoothHFP/);
+  assert.match(nativeDictationSources, /mixWithOthers/);
+  assert.match(nativeDictationSources, /allowBluetoothA2DP/);
+});
+
 test("mobile mode picker is a small sliding Liquid Glass text strip", () => {
   const fullDelegate = readText(nativeFiles.fullAppDelegate);
   const clipDelegate = readText(nativeFiles.clipAppDelegate);

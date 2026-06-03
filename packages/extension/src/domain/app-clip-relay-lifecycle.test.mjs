@@ -48,22 +48,22 @@ test("App Clip relay polling marks sessions connected after the App Clip opens t
   assert.match(offscreenSource, /connectedAt: sessionPayload\.connectedAt/);
 });
 
-test("Mobile Scanner keeps the pairing QR visible for connected sessions", () => {
-  assert.match(
-    mobileScannerSource,
-    /Boolean\(qrDataUrl\) && \(status === "waiting" \|\| status === "connected"\)/
-  );
-  assert.match(mobileScannerSource, /Scan this QR to reopen or pair the iPhone to this session\./);
+test("Mobile Scanner sidepanel no longer owns the pairing QR surface", () => {
+  assert.doesNotMatch(mobileScannerSource, /QRCode/);
+  assert.doesNotMatch(mobileScannerSource, /qrDataUrl/);
+  assert.doesNotMatch(mobileScannerSource, /pairingQrOpen/);
+  assert.match(mobileScannerSource, /function CompactScannerStatus/);
 });
 
-test("Mobile Scanner closes an open pairing QR when the phone connects", () => {
-  assert.match(mobileScannerSource, /const \[pairingQrOpen, setPairingQrOpen\] = useState\(false\)/);
-  assert.match(mobileScannerSource, /const statusRef = useRef<ScannerConnectionStatus>\("disconnected"\)/);
-  assert.match(mobileScannerSource, /const connectedAtRef = useRef<string \| null>\(null\)/);
-  assert.match(mobileScannerSource, /state\.connectedAt && state\.connectedAt !== connectedAtRef\.current/);
-  assert.match(mobileScannerSource, /state\.status === "connected" && statusRef\.current !== "connected"/);
-  assert.doesNotMatch(mobileScannerSource, /if \(status === "connected"\) setPairingQrOpen\(false\)/);
-  assert.doesNotMatch(mobileScannerSource, /if \(connected\) onQrOpenChange\(false\)/);
+test("Mobile Scanner context menu opens the QR pairing session in an extension popup", () => {
+  assert.match(contextMenuSource, /action: "openMobileCapture"/);
+  assert.match(contextMenuSource, /surface: "popup"/);
+  assert.match(contextMenuSource, /onInvoke: \(\) => openMobileCapture\("barcode"\)/);
+  assert.doesNotMatch(contextMenuSource, /MobileCaptureQrOverlay/);
+  assert.doesNotMatch(contextMenuSource, /openMobileSidepanel/);
+  assert.match(backgroundSource, /mobile-scanner-popup\.html/);
+  assert.match(backgroundSource, /function closeMobileScannerPopup/);
+  assert.match(backgroundSource, /message\?\.state\?\.status === "connected"/);
 });
 
 test("App Clip relay session survives offscreen document recreation", () => {
@@ -87,10 +87,16 @@ test("App Clip photo relay is acknowledged only after extension downloads and st
   assert.match(backgroundSource, /stripMobilePhotoData/);
 });
 
-test("closing the App Clip QR overlay disconnects the scanner session", () => {
-  assert.match(contextMenuSource, /const closeMobileCaptureQr = \(options: \{ disconnect\?: boolean \} = \{\}\) => \{/);
-  assert.match(contextMenuSource, /chrome\.runtime\.sendMessage\(\{ action: "scannerDisconnect" \}\)/);
-  assert.match(contextMenuSource, /closeMobileCaptureQr\(\{ disconnect: false \}\)/);
+test("Mobile Scanner popup entrypoint renders and dismisses the pairing QR", () => {
+  const popupSource = readFileSync(
+    new URL("../../entrypoints/mobile-scanner-popup/main.tsx", import.meta.url),
+    "utf8"
+  );
+  assert.match(popupSource, /QRCode\.toDataURL\(state\.qrCodeUrl/);
+  assert.match(popupSource, /action: "scannerStartForMode"/);
+  assert.match(popupSource, /message\?\.action !== "scannerStateChanged"/);
+  assert.match(popupSource, /state\.status === "connected"/);
+  assert.match(popupSource, /window\.close\(\)/);
 });
 
 test("unified Mobile Scanner can drag the selected photo batch", () => {

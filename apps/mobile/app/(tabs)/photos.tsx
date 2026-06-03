@@ -1,11 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
 import { CameraView as ExpoCameraView, type CameraOrientation } from "../../lib/expo-camera";
 import { useFocusEffect } from "expo-router";
-import { Image, Platform, Pressable, Text, View, useWindowDimensions, type GestureResponderEvent } from "react-native";
+import { Image, Platform, Pressable, Text, View, useWindowDimensions, type GestureResponderEvent, type LayoutChangeEvent } from "react-native";
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useScanner } from "../../lib/scanner-state";
 import { usePairingScanner } from "../../lib/use-pairing-scanner";
+import type { PhotoCropFrame } from "../../lib/photo-crop";
 import {
   CameraOverlayButton,
   CameraControlStack,
@@ -61,6 +62,7 @@ export default function PhotosTab() {
   const [gridVisible, setGridVisible] = useState(true);
   const [showPhotoSent, setShowPhotoSent] = useState(false);
   const [cameraOrientation, setCameraOrientation] = useState<CameraOrientation>("portrait");
+  const [viewfinderLayout, setViewfinderLayout] = useState<{ width: number; height: number } | null>(null);
   const focusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pinchStartDistanceRef = useRef<number | null>(null);
   const pinchStartZoomRef = useRef(0);
@@ -112,12 +114,28 @@ export default function PhotosTab() {
 
   const floatingBottom = Math.max(photoFloatingBottom, insets.bottom + 74);
   const photoFrameGap = 18;
-  const photoFrameSize = Math.max(0, windowWidth - photoFrameGap * 2);
+  const photoFrameSize = Math.max(0, (viewfinderLayout?.width ?? windowWidth) - photoFrameGap * 2);
   const photoMaskBorderWidth = Math.max(windowHeight, windowWidth);
+  const photoCropFrame = useMemo<PhotoCropFrame | null>(() => {
+    if (!viewfinderLayout || photoFrameSize <= 0) return null;
+    return {
+      previewWidth: viewfinderLayout.width,
+      previewHeight: viewfinderLayout.height,
+      frameX: photoFrameGap,
+      frameY: photoFrameGap,
+      frameWidth: photoFrameSize,
+      frameHeight: photoFrameSize,
+    };
+  }, [photoFrameSize, viewfinderLayout]);
   const controlRotationStyle = useMemo(
     () => ({ transform: [{ rotate: `${cameraOrientationRotationDegrees(cameraOrientation)}deg` }] }),
     [cameraOrientation]
   );
+
+  const handleViewfinderLayout = useCallback((event: LayoutChangeEvent) => {
+    const { height, width } = event.nativeEvent.layout;
+    setViewfinderLayout({ width, height });
+  }, []);
 
   useEffect(() => {
     if (!scanner.photoSentAt) return;
@@ -167,7 +185,7 @@ export default function PhotosTab() {
     <ScreenRoot>
       <Header />
       <View style={styles.page}>
-        <ViewfinderSurface>
+        <ViewfinderSurface onLayout={handleViewfinderLayout}>
           {viewfinderFocused ? (
             <CameraView
               ref={scanner.cameraRef}
@@ -255,7 +273,7 @@ export default function PhotosTab() {
                     error={scanner.photoError}
                     icon={scanner.photoSending ? "hourglass-outline" : "camera"}
                     label="Take and send photo"
-                    onPress={scanner.sendPhotoCapture}
+                    onPress={() => scanner.sendPhotoCapture(photoCropFrame)}
                     status={
                       scanner.photoSending
                         ? "Sending photo..."

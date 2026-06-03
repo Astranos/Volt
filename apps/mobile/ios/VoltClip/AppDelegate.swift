@@ -3040,7 +3040,7 @@ private final class ClipDictation: NSObject {
   private func configureAudioSessionIfNeeded() throws {
     guard !isAudioSessionPrepared else { return }
     let session = AVAudioSession.sharedInstance()
-    try session.setCategory(.playAndRecord, mode: .measurement, options: [.mixWithOthers, .allowBluetoothHFP])
+    try session.setCategory(.playAndRecord, mode: .measurement, options: [.mixWithOthers, .allowBluetoothA2DP])
     try session.setActive(true, options: .notifyOthersOnDeactivation)
     isAudioSessionPrepared = true
   }

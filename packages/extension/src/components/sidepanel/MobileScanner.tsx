@@ -6,13 +6,10 @@ import React, {
   useState,
 } from "react";
 import {
-  CheckCircle2,
   ChevronDown,
   Copy,
   Download,
   ImagePlus,
-  Loader2,
-  QrCode,
   RefreshCw,
   Scan,
   ScanLine,
@@ -23,7 +20,6 @@ import {
   X,
   Check,
 } from "lucide-react";
-import QRCode from "qrcode";
 import { cn } from "../../lib/utils";
 import { ConnectionPill } from "./mobile-shared";
 import { ScrollArea } from "../ui/scroll-area";
@@ -237,11 +233,8 @@ interface MobileScannerProps {
 }
 
 export default function MobileScanner({ onClose: _onClose }: MobileScannerProps) {
-  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
-  const [pairingQrOpen, setPairingQrOpen] = useState(false);
   const [status, setStatus] = useState<ScannerConnectionStatus>("disconnected");
   const statusRef = useRef<ScannerConnectionStatus>("disconnected");
-  const connectedAtRef = useRef<string | null>(null);
   const [scans, setScans] = useState<ScanRecord[]>([]);
   const [photos, setPhotos] = useState<MobilePhoto[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -261,15 +254,6 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
     return () => window.clearInterval(interval);
   }, []);
 
-  const generateQrCode = useCallback(async (url: string) => {
-    return QRCode.toDataURL(url, {
-      width: 768,
-      margin: 3,
-      errorCorrectionLevel: "H",
-      color: { dark: "#1c1917", light: "#ffffff" },
-    });
-  }, []);
-
   const persistScans = useCallback((nextScans: ScanRecord[]) => {
     void chrome.storage.local.set({ [SCAN_STORAGE_KEY]: nextScans });
   }, []);
@@ -286,29 +270,12 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
   const applyScannerState = useCallback(
     (state: Partial<MobileScannerState> | null | undefined) => {
       if (!state) return;
-      if (state.connectedAt && state.connectedAt !== connectedAtRef.current) {
-        connectedAtRef.current = state.connectedAt;
-        setPairingQrOpen(false);
-      } else if (state.connectedAt === null) {
-        connectedAtRef.current = null;
-      }
       if (state.status) {
-        if (state.status === "connected" && statusRef.current !== "connected") {
-          setPairingQrOpen(false);
-        }
         setScannerStatus(state.status);
       }
       setError(state.error ?? null);
-
-      if (!state.qrCodeUrl) {
-        setQrDataUrl(null);
-        setPairingQrOpen(false);
-        return;
-      }
-
-      void generateQrCode(state.qrCodeUrl).then(setQrDataUrl);
     },
-    [generateQrCode, setScannerStatus],
+    [setScannerStatus],
   );
 
   const markEntering = useCallback((id: string) => {
@@ -810,12 +777,9 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
   return (
     <div className="sidepanel-shell relative flex h-full min-w-0 flex-col overflow-hidden">
       <div className="flex-none px-3 pt-3">
-        <UnifiedPairingCard
+        <CompactScannerStatus
           status={status}
-          qrDataUrl={qrDataUrl}
-          qrOpen={pairingQrOpen}
           error={error}
-          onQrOpenChange={setPairingQrOpen}
           onForceRestart={() => startSession(true)}
           onDisconnect={unpair}
         />
@@ -879,351 +843,57 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
   );
 }
 
-function UnifiedPairingCard({
+function CompactScannerStatus({
   status,
-  qrDataUrl,
-  qrOpen,
   error,
-  onQrOpenChange,
   onForceRestart,
   onDisconnect,
 }: {
   status: ScannerConnectionStatus;
-  qrDataUrl: string | null;
-  qrOpen: boolean;
   error: string | null;
-  onQrOpenChange: (open: boolean) => void;
   onForceRestart: () => void;
   onDisconnect: () => void;
 }) {
-  const showQr = Boolean(qrDataUrl) && (status === "waiting" || status === "connected");
-  const isCreating = status === "creating";
   const connected = status === "connected";
-  const hasError = status === "error";
-
-  useEffect(() => {
-    if (!showQr) onQrOpenChange(false);
-  }, [onQrOpenChange, showQr]);
-
-  const statusCopy = connected
-    ? "Ready for captures · QR available"
-    : showQr
-      ? "Waiting for iPhone"
-      : isCreating
-        ? "Preparing pairing…"
-        : hasError
-          ? (error ?? "Pairing failed")
-          : "Generating a new session…";
+  const isCreating = status === "creating";
+  const copy =
+    connected
+      ? "Phone connected. Captures land below."
+      : status === "waiting"
+        ? "Pairing QR opens from the context menu popup."
+        : isCreating
+          ? "Preparing mobile scanner session."
+          : status === "error"
+            ? (error ?? "Scanner session needs a restart.")
+            : "Mobile scanner session inactive.";
 
   return (
-    <div className={cn(
-      "liquid-glass concentric-xl min-w-0 overflow-hidden",
-      connected ? "p-2.5" : "p-3.5",
-    )}>
-      <div className="flex min-w-0 items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <span className={cn(
-            "liquid-glass-soft flex shrink-0 items-center justify-center rounded-full text-green-700 dark:text-green-300",
-            connected ? "h-8 w-8" : "h-9 w-9",
-          )}>
-            <Smartphone className="h-4 w-4" />
-          </span>
-          <div className="min-w-0">
-            <div className="truncate text-sm font-bold text-stone-900 dark:text-stone-50">
-              Volt App Clip
-            </div>
-            <div className="truncate text-[11px] font-medium text-stone-500 dark:text-stone-400">
-              {statusCopy}
-            </div>
+    <div className="liquid-glass concentric-xl flex min-w-0 items-center justify-between gap-3 px-3 py-2.5">
+      <div className="flex min-w-0 items-center gap-2.5">
+        <span className="liquid-glass-soft flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-green-700 dark:text-green-300">
+          <Smartphone className="h-4 w-4" />
+        </span>
+        <div className="min-w-0">
+          <div className="truncate text-sm font-bold text-stone-900 dark:text-stone-50">
+            Mobile Scanner
           </div>
-        </div>
-        <div className="min-w-0 shrink">
-          {connected ? (
-            <button
-              type="button"
-              onClick={onDisconnect}
-              aria-label="Pair a different iPhone"
-              className="liquid-glass-soft inline-flex h-8 w-8 items-center justify-center rounded-full text-stone-600 transition hover:bg-white/70 hover:text-stone-900 active:scale-95 dark:text-stone-300 dark:hover:bg-white/10 dark:hover:text-stone-50"
-            >
-              <RefreshCw className="h-3.5 w-3.5" />
-            </button>
-          ) : (
-            <ConnectionPill status={status} error={error} />
-          )}
+          <div className="truncate text-[11px] font-medium text-stone-500 dark:text-stone-400">
+            {copy}
+          </div>
         </div>
       </div>
-
-      {showQr ? (
-        <>
-          <PairingQrAction
-            connected={connected}
-            onOpen={() => onQrOpenChange(true)}
-          />
-          <div className="mt-3">
-            <button
-              type="button"
-              onClick={onForceRestart}
-              className="liquid-glass-soft inline-flex h-9 w-full items-center justify-center gap-2 rounded-full text-xs font-bold text-stone-600 transition hover:text-stone-900 active:scale-[0.99] dark:text-stone-300 dark:hover:text-stone-50"
-            >
-              <RefreshCw className="h-3.5 w-3.5" />
-              Generate a new QR
-            </button>
-          </div>
-          {qrOpen && qrDataUrl ? (
-            <PairingQrOverlay
-              connected={connected}
-              qrDataUrl={qrDataUrl}
-              onClose={() => onQrOpenChange(false)}
-            />
-          ) : null}
-        </>
-      ) : !connected ? (
-        <PairingSlot
-          status={status}
-          qrDataUrl={qrDataUrl}
-          error={error}
-        />
-      ) : null}
-    </div>
-  );
-}
-
-function PairingQrAction({
-  connected,
-  onOpen,
-}: {
-  connected: boolean;
-  onOpen: () => void;
-}) {
-  return (
-    <div className="mt-3 rounded-2xl border border-stone-200/70 bg-white/45 p-3 dark:border-stone-700/70 dark:bg-white/[0.04]">
-      <div className="flex items-center gap-3">
-        <span className="liquid-glass-soft flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-green-700 dark:text-green-300">
-          <QrCode className="h-5 w-5" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-xs font-bold text-stone-800 dark:text-stone-100">
-            Pairing QR
-          </div>
-          <p className="mt-0.5 text-[11px] font-medium leading-4 text-stone-500 dark:text-stone-400">
-            {connected
-              ? "Available for reconnecting this session."
-              : "Open it when you are ready to scan."}
-          </p>
-        </div>
+      <div className="flex shrink-0 items-center gap-2">
+        <ConnectionPill status={status} error={error} />
         <button
           type="button"
-          onClick={onOpen}
-          className="liquid-glass-soft inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-full px-3 text-xs font-bold text-stone-700 transition hover:text-stone-950 active:scale-[0.98] dark:text-stone-200 dark:hover:text-stone-50"
+          onClick={connected ? onDisconnect : onForceRestart}
+          disabled={isCreating}
+          aria-label={connected ? "Disconnect mobile scanner" : "Restart mobile scanner pairing"}
+          className="liquid-glass-soft inline-flex h-8 w-8 items-center justify-center rounded-full text-stone-600 transition hover:text-stone-900 active:scale-95 disabled:opacity-40 dark:text-stone-300 dark:hover:text-stone-50"
         >
-          <QrCode className="h-3.5 w-3.5" />
-          Show
+          {connected ? <X className="h-3.5 w-3.5" /> : <RefreshCw className={cn("h-3.5 w-3.5", isCreating && "animate-spin")} />}
         </button>
       </div>
-    </div>
-  );
-}
-
-function PairingQrOverlay({
-  connected,
-  qrDataUrl,
-  onClose,
-}: {
-  connected: boolean;
-  qrDataUrl: string;
-  onClose: () => void;
-}) {
-  return (
-    <div
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-stone-950/45 p-4 backdrop-blur-sm"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Pair iPhone with Volt App Clip"
-      onClick={onClose}
-    >
-      <div
-        className="liquid-glass concentric-xl w-full max-w-[300px] p-4 shadow-2xl"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <div className="truncate text-sm font-bold text-stone-900 dark:text-stone-50">
-              Pair iPhone
-            </div>
-            <div className="truncate text-[11px] font-medium text-stone-500 dark:text-stone-400">
-              {connected ? "Reconnect to this session" : "Scan to open Volt"}
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close pairing QR"
-            className="liquid-glass-soft inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-stone-600 transition hover:text-stone-950 active:scale-95 dark:text-stone-300 dark:hover:text-stone-50"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-        <QrPanel
-          qrDataUrl={qrDataUrl}
-          hint={
-            connected
-              ? "Scan this QR to reopen or pair the iPhone to this session."
-              : "Scan with the iPhone Camera app to open Volt."
-          }
-        />
-      </div>
-    </div>
-  );
-}
-
-function PairingSlot({
-  status,
-  qrDataUrl,
-  error,
-}: {
-  status: ScannerConnectionStatus;
-  qrDataUrl: string | null;
-  error: string | null;
-}) {
-  const showQr = Boolean(qrDataUrl) && (status === "waiting" || status === "connected");
-  const isCreating = status === "creating";
-  const connected = status === "connected";
-  const hasError = status === "error";
-  const isDisconnected = status === "disconnected";
-
-  // Defer the actual unmount of the QR by one frame so the exit fade plays.
-  const slotKey = showQr
-    ? "qr"
-    : connected
-      ? "connected"
-      : isCreating || isDisconnected
-        ? "loading"
-        : hasError
-          ? "error"
-          : "loading";
-
-  return (
-    <div className="relative mt-3 flex h-[248px] items-center justify-center overflow-hidden">
-      {slotKey === "qr" && qrDataUrl ? (
-        <SlotFader key="qr">
-          <QrPanel
-            qrDataUrl={qrDataUrl}
-            hint={
-              connected
-                ? "Scan this QR to reopen or pair the iPhone to this session."
-                : "Scan with the iPhone Camera app to open Volt."
-            }
-          />
-        </SlotFader>
-      ) : null}
-
-      {slotKey === "connected" ? (
-        <SlotFader key="connected">
-          <ConnectedPanel />
-        </SlotFader>
-      ) : null}
-
-      {slotKey === "loading" ? (
-        <SlotFader key="loading">
-          <LoadingPanel />
-        </SlotFader>
-      ) : null}
-
-      {slotKey === "error" ? (
-        <SlotFader key="error">
-          <ErrorPanel error={error} />
-        </SlotFader>
-      ) : null}
-    </div>
-  );
-}
-
-function SlotFader({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="volt-fade-in absolute inset-0 flex w-full items-center justify-center">
-      {children}
-    </div>
-  );
-}
-
-function QrPanel({
-  qrDataUrl,
-  hint,
-}: {
-  qrDataUrl: string;
-  hint: string;
-}) {
-  return (
-    <div className="flex flex-col items-center">
-      <div className="relative w-full max-w-[200px] overflow-hidden rounded-2xl bg-white p-2.5 ring-1 ring-stone-200 dark:ring-stone-700">
-        <img
-          src={qrDataUrl}
-          alt="Scan this QR code with the iPhone Camera"
-          className="aspect-square w-full rounded-xl"
-        />
-        <div className="absolute left-1/2 top-1/2 flex h-11 w-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-2xl bg-white p-1.5 ring-1 ring-stone-200">
-          <img
-            src={chrome.runtime.getURL("/assets/icons/logo-128.png")}
-            alt=""
-            aria-hidden="true"
-            className="h-full w-full object-contain"
-          />
-        </div>
-      </div>
-      <p className="mt-2.5 max-w-[220px] text-center text-[11px] font-medium text-stone-500 dark:text-stone-400">
-        {hint}
-      </p>
-    </div>
-  );
-}
-
-function ConnectedPanel() {
-  return (
-    <div className="flex flex-col items-center text-center">
-      <div className="relative">
-        <span className="absolute inset-0 rounded-full bg-green-500/30 blur-md" />
-        <span className="relative flex h-14 w-14 items-center justify-center rounded-full bg-green-500 text-white shadow-lg shadow-green-700/30 dark:bg-green-400 dark:text-green-950">
-          <CheckCircle2 className="h-7 w-7" />
-        </span>
-      </div>
-      <div className="mt-3 text-sm font-bold text-stone-900 dark:text-stone-50">
-        iPhone paired
-      </div>
-      <p className="mt-1 max-w-[220px] text-[11px] font-medium text-stone-500 dark:text-stone-400">
-        Capture from the App Clip and results land in the history.
-      </p>
-    </div>
-  );
-}
-
-function LoadingPanel() {
-  return (
-    <div className="flex flex-col items-center text-center">
-      <span className="flex h-14 w-14 items-center justify-center rounded-full bg-stone-100 text-stone-500 dark:bg-stone-800 dark:text-stone-400">
-        <Loader2 className="h-6 w-6 animate-spin" />
-      </span>
-      <div className="mt-3 text-sm font-bold text-stone-700 dark:text-stone-200">
-        Preparing pairing
-      </div>
-      <p className="mt-1 max-w-[220px] text-[11px] font-medium text-stone-500 dark:text-stone-400">
-        A fresh QR code will appear in a moment.
-      </p>
-    </div>
-  );
-}
-
-function ErrorPanel({ error }: { error: string | null }) {
-  return (
-    <div className="flex flex-col items-center text-center">
-      <span className="flex h-14 w-14 items-center justify-center rounded-full bg-red-100 text-red-600 dark:bg-red-950/50 dark:text-red-300">
-        <X className="h-7 w-7" />
-      </span>
-      <div className="mt-3 text-sm font-bold text-stone-900 dark:text-stone-50">
-        Could not pair
-      </div>
-      <p className="mt-1 max-w-[240px] text-[11px] font-medium text-stone-500 dark:text-stone-400">
-        {error ?? "Tap “Generate a new QR” to retry."}
-      </p>
     </div>
   );
 }

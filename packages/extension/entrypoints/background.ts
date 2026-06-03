@@ -192,6 +192,8 @@ export default defineBackground({
       return metadata;
     }
 
+    const liveDictationSourceLengths = new Map();
+
     function insertTextAtTrackedEditableFromBackground(value, options = {}) {
       const root = window;
       const liveSessionId =
@@ -201,6 +203,14 @@ export default defineBackground({
           ? options.dictationPhase
           : null;
       const isLiveDictation = options.format === "dictation" && liveSessionId;
+      const optionSourceLength =
+        typeof options.dictationSourceLength === "number" && options.dictationSourceLength > 0
+          ? options.dictationSourceLength
+          : 0;
+      const dictationResult = () =>
+        isLiveDictation
+          ? { dictationSessionId: liveSessionId, final: livePhase === "final", sourceLength: value.length }
+          : null;
 
       const isEditable = (element) => {
         if (!(element instanceof HTMLElement)) return false;
@@ -222,6 +232,15 @@ export default defineBackground({
             const target = event.target;
             const editableTarget = target instanceof Element ? target : null;
             if (isEditable(editableTarget)) {
+              if (root.__voltLiveDictation?.target !== editableTarget) {
+                root.__voltLiveDictation = root.__voltLiveDictation
+                  ? {
+                      sessionId: root.__voltLiveDictation.sessionId,
+                      sourceStart: root.__voltLiveDictation.sourceLength ?? 0,
+                      sourceLength: root.__voltLiveDictation.sourceLength ?? 0,
+                    }
+                  : null;
+              }
               root.__voltLastEditable = editableTarget;
             }
           },
@@ -238,9 +257,9 @@ export default defineBackground({
         : null;
 
       if (!target) {
-        if (isLiveDictation && livePhase === "partial") return;
+        if (isLiveDictation && livePhase === "partial") return dictationResult();
         navigator.clipboard.writeText(value).catch(() => {});
-        return;
+        return dictationResult();
       }
 
       target.focus();
@@ -255,13 +274,32 @@ export default defineBackground({
           selection.addRange(trackedRange);
         }
         const live = root.__voltLiveDictation;
+        const liveSourceLength =
+          live?.sessionId === liveSessionId && typeof live.sourceLength === "number"
+            ? live.sourceLength
+            : optionSourceLength;
+        const liveSourceStart =
+          live?.sessionId === liveSessionId && typeof live.sourceStart === "number"
+            ? live.sourceStart
+            : 0;
+        const selectionStillAtLiveNode = (() => {
+          if (!selection || !live?.node?.isConnected || selection.rangeCount === 0) return false;
+          const range = selection.getRangeAt(0);
+          return (
+            range.collapsed &&
+            range.startContainer === live.node.parentNode &&
+            range.startOffset === Array.prototype.indexOf.call(live.node.parentNode?.childNodes ?? [], live.node) + 1
+          );
+        })();
         if (
           isLiveDictation &&
           live?.sessionId === liveSessionId &&
           live.target === target &&
-          live.node?.isConnected
+          live.node?.isConnected &&
+          selectionStillAtLiveNode
         ) {
-          live.node.nodeValue = value;
+          live.node.nodeValue = value.slice(liveSourceStart).trimStart();
+          live.sourceLength = value.length;
           const range = document.createRange();
           range.setStartAfter(live.node);
           range.collapse(true);
@@ -269,6 +307,14 @@ export default defineBackground({
           selection?.addRange(range);
           if (livePhase === "final") root.__voltLiveDictation = null;
         } else if (isLiveDictation && selection) {
+          const nextValue = live?.sessionId === liveSessionId ? value.slice(liveSourceLength).trimStart() : value;
+          if (!nextValue) {
+            root.__voltLiveDictation =
+              livePhase === "final"
+                ? null
+                : { sessionId: liveSessionId, sourceStart: value.length, sourceLength: value.length };
+            return dictationResult();
+          }
           const range =
             selection.rangeCount > 0
               ? selection.getRangeAt(0)
@@ -278,20 +324,22 @@ export default defineBackground({
             range.collapse(false);
           }
           range.deleteContents();
-          const node = document.createTextNode(value);
+          const node = document.createTextNode(nextValue);
           range.insertNode(node);
           range.setStartAfter(node);
           range.collapse(true);
           selection.removeAllRanges();
           selection.addRange(range);
           root.__voltLiveDictation =
-            livePhase === "final" ? null : { sessionId: liveSessionId, target, node };
+            livePhase === "final"
+              ? null
+              : { sessionId: liveSessionId, target, node, sourceStart: liveSourceLength, sourceLength: value.length };
         } else {
           document.execCommand("insertText", false, value);
         }
         target.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: value }));
         root.__voltLastEditableRange = null;
-        return;
+        return dictationResult();
       }
 
       const input = target;
@@ -301,13 +349,34 @@ export default defineBackground({
         live?.sessionId === liveSessionId &&
         live.target === input &&
         typeof live.start === "number" &&
-        typeof live.end === "number";
+        typeof live.end === "number" &&
+        input.selectionStart === live.end &&
+        input.selectionEnd === live.end;
       const trackedSelection =
         root.__voltLastEditable === input &&
         root.__voltLastEditableSelection &&
         root.__voltLastEditableSelection.isContentEditable !== true
           ? root.__voltLastEditableSelection
           : null;
+      const liveSourceLength =
+        live?.sessionId === liveSessionId && typeof live.sourceLength === "number"
+          ? live.sourceLength
+          : optionSourceLength;
+      const liveSourceStart =
+        live?.sessionId === liveSessionId && typeof live.sourceStart === "number"
+          ? live.sourceStart
+          : 0;
+      const nextValue =
+        isLiveDictation && live?.sessionId === liveSessionId
+          ? value.slice(replaceLiveInput ? liveSourceStart : liveSourceLength).trimStart()
+          : value;
+      if (isLiveDictation && !nextValue) {
+        root.__voltLiveDictation =
+          livePhase === "final"
+            ? null
+            : { sessionId: liveSessionId, sourceStart: value.length, sourceLength: value.length };
+        return dictationResult();
+      }
       const start = replaceLiveInput
         ? live.start
         : typeof trackedSelection?.start === "number"
@@ -319,10 +388,10 @@ export default defineBackground({
         ? trackedSelection.end
         : input.selectionEnd ?? input.value.length;
       if (typeof input.setRangeText === "function") {
-        input.setRangeText(value, start, end, "end");
+        input.setRangeText(nextValue, start, end, "end");
       } else {
-        input.value = input.value.slice(0, start) + value + input.value.slice(end);
-        input.selectionStart = input.selectionEnd = start + value.length;
+        input.value = input.value.slice(0, start) + nextValue + input.value.slice(end);
+        input.selectionStart = input.selectionEnd = start + nextValue.length;
       }
       if (isLiveDictation) {
         root.__voltLiveDictation =
@@ -332,12 +401,15 @@ export default defineBackground({
                 sessionId: liveSessionId,
                 target: input,
                 start,
-                end: start + value.length,
+                end: start + nextValue.length,
+                sourceStart: replaceLiveInput ? liveSourceStart : liveSourceLength,
+                sourceLength: value.length,
               };
       }
       input.dispatchEvent(new Event("input", { bubbles: true }));
       input.dispatchEvent(new Event("change", { bubbles: true }));
       root.__voltLastEditableSelection = null;
+      return dictationResult();
     }
 
     async function insertScannerText(text, options = {}) {
@@ -352,11 +424,28 @@ export default defineBackground({
           return;
         }
 
-        await chrome.scripting.executeScript({
+        const injectionResults = await chrome.scripting.executeScript({
           target: { tabId: tab.id },
           func: insertTextAtTrackedEditableFromBackground,
-          args: [text, options],
+          args: [
+            text,
+            {
+              ...options,
+              dictationSourceLength:
+                typeof options.dictationSessionId === "string"
+                  ? liveDictationSourceLengths.get(options.dictationSessionId) ?? 0
+                  : 0,
+            },
+          ],
         });
+        const injectionResult = injectionResults?.[0]?.result;
+        if (injectionResult?.dictationSessionId) {
+          if (injectionResult.final) {
+            liveDictationSourceLengths.delete(injectionResult.dictationSessionId);
+          } else if (typeof injectionResult.sourceLength === "number") {
+            liveDictationSourceLengths.set(injectionResult.dictationSessionId, injectionResult.sourceLength);
+          }
+        }
       } catch (err) {
         log("scanner insert fallback", err?.message || err);
         try {
@@ -525,6 +614,10 @@ export default defineBackground({
           target: await getMobileCaptureTarget(),
         });
 
+        if (message?.surface === "popup") {
+          await openMobileScannerPairingPopup(normalizeMobileCaptureMode(message?.mode), state);
+        }
+
         sendResponse(
           state?.qrCodeUrl
             ? { success: true, state }
@@ -642,6 +735,73 @@ export default defineBackground({
       log,
       getFallbackTabIds: () => [currentActiveTabId, lastActiveTabId],
     });
+    let MOBILE_SCANNER_POPUP_ID = null;
+
+    function clearMobileScannerPopupState() {
+      MOBILE_SCANNER_POPUP_ID = null;
+    }
+
+    function closeMobileScannerPopup() {
+      if (!MOBILE_SCANNER_POPUP_ID) return;
+      const windowId = MOBILE_SCANNER_POPUP_ID;
+      MOBILE_SCANNER_POPUP_ID = null;
+      try {
+        chrome.windows.remove(windowId, () => {});
+      } catch (_) {}
+    }
+
+    async function getActiveChromeWindow() {
+      const activeTabId = currentActiveTabId ?? lastActiveTabId;
+      if (activeTabId) {
+        try {
+          const tab = await chrome.tabs.get(activeTabId);
+          if (typeof tab?.windowId === "number") {
+            return await chrome.windows.get(tab.windowId);
+          }
+        } catch (_) {}
+      }
+
+      try {
+        return await chrome.windows.getCurrent();
+      } catch (_) {
+        return null;
+      }
+    }
+
+    async function openMobileScannerPairingPopup(mode, state) {
+      ensureAutoCloseListener();
+      const popupUrl = new URL(chrome.runtime.getURL("mobile-scanner-popup.html"));
+      if (mode) popupUrl.searchParams.set("mode", mode);
+      if (state?.status) popupUrl.searchParams.set("status", state.status);
+
+      closeMobileScannerPopup();
+
+      const width = 380;
+      const height = 540;
+      const activeWindow = await getActiveChromeWindow();
+      const left =
+        typeof activeWindow?.left === "number" && typeof activeWindow?.width === "number"
+          ? Math.round(activeWindow.left + Math.max(0, activeWindow.width - width - 24))
+          : undefined;
+      const top =
+        typeof activeWindow?.top === "number"
+          ? Math.round(activeWindow.top + 72)
+          : undefined;
+
+      const created = await chrome.windows.create({
+        url: popupUrl.href,
+        type: "popup",
+        focused: true,
+        width,
+        height,
+        ...(typeof left === "number" ? { left } : {}),
+        ...(typeof top === "number" ? { top } : {}),
+      });
+
+      if (typeof created?.id === "number") {
+        MOBILE_SCANNER_POPUP_ID = created.id;
+      }
+    }
 
     function getSidePanelState(windowId) {
       return sidepanelTools.getStateForWindow(windowId);
@@ -1175,6 +1335,9 @@ export default defineBackground({
         case "openMobileCapture":
           handleOpenMobileCapture(message, sender, sendResponse);
           return true;
+        case "openMobileCapturePopup":
+          handleOpenMobileCapture({ ...message, surface: "popup" }, sender, sendResponse);
+          return true;
         case "scannerDisconnect":
           handleScannerDisconnect(sendResponse);
           return true;
@@ -1186,6 +1349,9 @@ export default defineBackground({
           sendResponse({ success: true });
           return false;
         case "scannerStateChanged":
+          if (message?.state?.status === "connected") {
+            closeMobileScannerPopup();
+          }
           if (message?.source !== "scanner-background") {
             broadcastScannerMessage({
               action: "scannerStateChanged",
@@ -2179,6 +2345,7 @@ export default defineBackground({
         chrome.windows.onRemoved.addListener((winId) => {
           if (winId === CURRENT_TOOL_POPUP_ID) clearCurrentToolPopupState();
           if (winId === PREVIEW_POPUP_ID) clearPreviewPopupState();
+          if (winId === MOBILE_SCANNER_POPUP_ID) clearMobileScannerPopupState();
         });
         FOCUS_LISTENER_ATTACHED = true;
       } catch (_) {}
