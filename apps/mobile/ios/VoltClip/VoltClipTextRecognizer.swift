@@ -1,18 +1,22 @@
 import AVFoundation
+import CoreImage
 import ImageIO
 import React
 import UIKit
 import Vision
 
 @objc(VoltClipTextRecognizer)
-class VoltClipTextRecognizer: RCTEventEmitter, AVCapturePhotoCaptureDelegate, AVCaptureMetadataOutputObjectsDelegate {
+class VoltClipTextRecognizer: RCTEventEmitter, AVCapturePhotoCaptureDelegate, AVCaptureMetadataOutputObjectsDelegate, AVCaptureVideoDataOutputSampleBufferDelegate {
   static let shared = VoltClipTextRecognizer()
 
   let session = AVCaptureSession()
   private let sessionQueue = DispatchQueue(label: "com.volt.clip.text.session")
+  private let ciContext = CIContext(options: nil)
   private let output = AVCapturePhotoOutput()
   private let metadataOutput = AVCaptureMetadataOutput()
+  private let videoOutput = AVCaptureVideoDataOutput()
   private var videoDevice: AVCaptureDevice?
+  private var latestVideoFrame: CIImage?
   private var isConfigured = false
   private var barcodeCallback: (([String: Any]) -> Void)?
   private var pendingResolve: RCTPromiseResolveBlock?
@@ -192,9 +196,8 @@ class VoltClipTextRecognizer: RCTEventEmitter, AVCapturePhotoCaptureDelegate, AV
             self.session.startRunning()
           }
 
-          let settings = AVCapturePhotoSettings()
           self.applyCurrentCaptureOrientation()
-          self.output.capturePhoto(with: settings, delegate: self)
+          self.finishVideoFramePhotoCapture()
         } catch {
           self.clearPendingCapture()
           reject("photo_capture_failed", error.localizedDescription, error)
@@ -341,7 +344,7 @@ class VoltClipTextRecognizer: RCTEventEmitter, AVCapturePhotoCaptureDelegate, AV
     guard session.canAddInput(input) else {
       throw TextRecognizerError.inputUnavailable
     }
-    guard session.canAddOutput(output), session.canAddOutput(metadataOutput) else {
+    guard session.canAddOutput(output), session.canAddOutput(metadataOutput), session.canAddOutput(videoOutput) else {
       throw TextRecognizerError.outputUnavailable
     }
 
@@ -350,6 +353,12 @@ class VoltClipTextRecognizer: RCTEventEmitter, AVCapturePhotoCaptureDelegate, AV
     session.addInput(input)
     session.addOutput(output)
     session.addOutput(metadataOutput)
+    videoOutput.alwaysDiscardsLateVideoFrames = true
+    videoOutput.videoSettings = [
+      kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
+    ]
+    videoOutput.setSampleBufferDelegate(self, queue: sessionQueue)
+    session.addOutput(videoOutput)
     metadataOutput.metadataObjectTypes = supportedMetadataTypes(from: metadataOutput.availableMetadataObjectTypes)
     metadataOutput.rectOfInterest = CGRect(x: 0.18, y: 0.18, width: 0.64, height: 0.64)
     session.commitConfiguration()
@@ -480,6 +489,14 @@ class VoltClipTextRecognizer: RCTEventEmitter, AVCapturePhotoCaptureDelegate, AV
     }
   }
 
+  func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
+    guard let imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
+      return
+    }
+
+    latestVideoFrame = CIImage(cvPixelBuffer: imageBuffer)
+  }
+
   private func setZoom(factor: CGFloat, resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) {
     sessionQueue.async {
       do {
@@ -605,6 +622,81 @@ class VoltClipTextRecognizer: RCTEventEmitter, AVCapturePhotoCaptureDelegate, AV
     }
   }
 
+  private func finishVideoFramePhotoCapture(retryCount: Int = 0) {
+    guard let sourceImage = latestVideoFrame else {
+      if retryCount < 3 {
+        sessionQueue.asyncAfter(deadline: .now() + 0.08) { [weak self] in
+          self?.finishVideoFramePhotoCapture(retryCount: retryCount + 1)
+        }
+      } else {
+        finishPhotoWithError(code: "photo_capture_failed", message: "Camera preview is not ready yet.", error: nil)
+      }
+      return
+    }
+
+    guard let croppedImage = cropVideoFrameToPreviewRect(sourceImage) else {
+      finishPhotoWithError(code: "photo_capture_failed", message: "Unable to crop the preview frame.", error: nil)
+      return
+    }
+
+    let format = UIGraphicsImageRendererFormat()
+    format.scale = 1
+    format.opaque = true
+    let outputData = UIGraphicsImageRenderer(size: croppedImage.size, format: format).jpegData(withCompressionQuality: 0.72) { context in
+      UIColor.white.setFill()
+      context.fill(CGRect(origin: .zero, size: croppedImage.size))
+      croppedImage.draw(in: CGRect(origin: .zero, size: croppedImage.size))
+    }
+
+    DispatchQueue.main.async {
+      self.pendingPhotoResolve?([
+        "dataUrl": "data:image/jpeg;base64,\(outputData.base64EncodedString())",
+        "size": "\(outputData.count)",
+        "width": "\(Int(croppedImage.size.width))",
+        "height": "\(Int(croppedImage.size.height))",
+      ])
+      self.clearPendingCapture()
+    }
+  }
+
+  private func cropVideoFrameToPreviewRect(_ image: CIImage) -> UIImage? {
+    let cropRect = DispatchQueue.main.sync { () -> CGRect? in
+      guard
+        let previewView = self.previewOverlayView,
+        let previewRect = self.pendingPhotoPreviewRect,
+        previewView.bounds.width > 1,
+        previewView.bounds.height > 1
+      else {
+        return nil
+      }
+
+      let normalizedRect = previewView.metadataOutputRect(fromLayerRect: previewRect)
+      let imageBounds = image.extent
+      return CGRect(
+        x: imageBounds.minX + (normalizedRect.origin.x * imageBounds.width),
+        y: imageBounds.minY + ((1 - normalizedRect.origin.y - normalizedRect.height) * imageBounds.height),
+        width: normalizedRect.width * imageBounds.width,
+        height: normalizedRect.height * imageBounds.height
+      )
+      .integral
+      .intersection(imageBounds)
+    }
+
+    let fallbackSize = min(image.extent.width, image.extent.height)
+    let fallbackRect = CGRect(
+      x: image.extent.midX - (fallbackSize / 2),
+      y: image.extent.midY - (fallbackSize / 2),
+      width: fallbackSize,
+      height: fallbackSize
+    )
+    let resolvedCropRect = (cropRect?.isNull == false && cropRect?.isEmpty == false) ? cropRect! : fallbackRect
+    let cropped = image.cropped(to: resolvedCropRect)
+    guard let cgImage = ciContext.createCGImage(cropped, from: resolvedCropRect) else {
+      return nil
+    }
+    return UIImage(cgImage: cgImage, scale: 1, orientation: .up)
+  }
+
   private func cropImageToPreviewRect(_ image: UIImage) -> UIImage? {
     guard let cgImage = image.cgImage else { return nil }
     let cropRect = DispatchQueue.main.sync { () -> CGRect? in
@@ -715,6 +807,9 @@ class VoltClipTextRecognizer: RCTEventEmitter, AVCapturePhotoCaptureDelegate, AV
       connection.videoOrientation = orientation
     }
     if let connection = metadataOutput.connection(with: .metadata), connection.isVideoOrientationSupported {
+      connection.videoOrientation = orientation
+    }
+    if let connection = videoOutput.connection(with: .video), connection.isVideoOrientationSupported {
       connection.videoOrientation = orientation
     }
   }
