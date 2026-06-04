@@ -40,6 +40,31 @@ test("cropActionForVisibleFrame falls back to a centered square without valid fr
   });
 });
 
+test("cropActionForVisibleFrame can tighten the captured region for wider iOS still output", () => {
+  assert.deepEqual(
+    cropActionForVisibleFrame(
+      { width: 3000, height: 4000 },
+      {
+        previewWidth: 390,
+        previewHeight: 700,
+        frameX: 18,
+        frameY: 18,
+        frameWidth: 354,
+        frameHeight: 354,
+        captureScale: 0.56,
+      }
+    ),
+    {
+      crop: {
+        originX: 933,
+        originY: 547,
+        width: 1132,
+        height: 1132,
+      },
+    }
+  );
+});
+
 test("photo capture uses measured camera and frame layout before sending", () => {
   const photosTab = readFileSync(new URL("../app/(tabs)/photos.tsx", import.meta.url), "utf8");
 
@@ -47,6 +72,7 @@ test("photo capture uses measured camera and frame layout before sending", () =>
   assert.match(photosTab, /const \[photoFrameLayout, setPhotoFrameLayout\]/);
   assert.match(photosTab, /previewWidth: cameraLayout\.width/);
   assert.match(photosTab, /frameX: photoFrameLayout\.x/);
+  assert.match(photosTab, /captureScale: Platform\.OS === "ios" \? iosExpoPreviewCaptureScale : 1/);
   assert.match(photosTab, /onLayout=\{handleCameraLayout\}/);
   assert.match(photosTab, /onFrameLayout=\{handlePhotoFrameLayout\}/);
   assert.match(photosTab, /disabled=\{scanner\.photoSending \|\| !photoCropFrame\}/);

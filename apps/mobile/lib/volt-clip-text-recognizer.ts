@@ -10,12 +10,20 @@ export type VoltClipTextCaptureResult = {
   height?: string;
 };
 
+export type VoltClipPhotoCaptureResult = {
+  dataUrl?: string;
+  size?: string;
+  width?: string;
+  height?: string;
+};
+
 export type VoltClipDeviceOrientation = {
   degrees?: number;
 };
 
 type VoltClipTextRecognizerModule = {
   captureAndRecognize: () => Promise<VoltClipTextCaptureResult & { text: string }>;
+  capturePhotoInPreviewRect?: (x: number, y: number, width: number, height: number) => Promise<VoltClipPhotoCaptureResult>;
   focusAt?: (x: number, y: number) => Promise<{ x: number; y: number }>;
   showPreview?: (x: number, y: number, width: number, height: number) => void;
   hidePreview?: () => void;
@@ -27,7 +35,7 @@ type VoltClipTextRecognizerModule = {
 const nativeModule = NativeModules.VoltClipTextRecognizer as VoltClipTextRecognizerModule | undefined;
 const eventEmitter = nativeModule ? new NativeEventEmitter(nativeModule as never) : null;
 const nativeComponentName = "VoltClipTextCameraView";
-const hasNativeTextCameraView =
+export const hasNativeTextCameraView =
   Platform.OS === "ios" && UIManager.getViewManagerConfig(nativeComponentName) != null;
 
 export const hasVoltClipTextRecognizer = Platform.OS === "ios" && Boolean(nativeModule);
@@ -45,6 +53,14 @@ export function captureAndRecognizeVoltClipText() {
   }
 
   return nativeModule.captureAndRecognize();
+}
+
+export function captureVoltClipPhotoInPreviewRect(frame: { x: number; y: number; width: number; height: number }) {
+  if (!nativeModule?.capturePhotoInPreviewRect) {
+    return Promise.reject(new Error("Volt native photo capture is unavailable."));
+  }
+
+  return nativeModule.capturePhotoInPreviewRect(frame.x, frame.y, frame.width, frame.height);
 }
 
 export function addVoltClipTextCaptureListener(listener: (result: VoltClipTextCaptureResult) => void) {

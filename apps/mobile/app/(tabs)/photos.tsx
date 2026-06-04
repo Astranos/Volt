@@ -6,7 +6,14 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType }
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useScanner } from "../../lib/scanner-state";
 import { usePairingScanner } from "../../lib/use-pairing-scanner";
-import type { PhotoCropFrame } from "../../lib/photo-crop";
+import { type PhotoCropFrame } from "../../lib/photo-crop";
+import {
+  VoltClipTextCameraView,
+  focusVoltClipTextCamera,
+  hasNativeTextCameraView,
+  setVoltClipTextCameraTorch,
+  setVoltClipTextCameraZoom,
+} from "../../lib/volt-clip-text-recognizer";
 import {
   CameraOverlayButton,
   CameraControlStack,
@@ -20,7 +27,9 @@ import {
 
 const photoFloatingBottom = Platform.select({ ios: 94, default: 86 });
 const CameraView = ExpoCameraView as unknown as ComponentType<any>;
+const NativeCameraView = VoltClipTextCameraView as unknown as ComponentType<any>;
 const zoomStep = 0.08;
+const iosExpoPreviewCaptureScale = 0.56;
 
 function clampZoom(value: number) {
   return Math.max(0, Math.min(1, value));
@@ -72,6 +81,7 @@ export default function PhotosTab() {
   const focusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pinchStartDistanceRef = useRef<number | null>(null);
   const pinchStartZoomRef = useRef(0);
+  const useNativePhotoCamera = Platform.OS === "ios" && hasNativeTextCameraView && NativeCameraView;
 
   useFocusEffect(
     useCallback(() => {
@@ -89,10 +99,13 @@ export default function PhotosTab() {
     const { locationX, locationY } = event.nativeEvent;
     scanner.setFocusMode("off");
     scanner.setFocusPoint({ x: locationX, y: locationY });
+    if (useNativePhotoCamera && cameraLayout?.width && cameraLayout.height) {
+      void focusVoltClipTextCamera(locationX / cameraLayout.width, locationY / cameraLayout.height);
+    }
     requestAnimationFrame(() => scanner.setFocusMode("on"));
     if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
     focusTimerRef.current = setTimeout(scanner.clearCameraFocus, 900);
-  }, [scanner]);
+  }, [cameraLayout, scanner, useNativePhotoCamera]);
 
   const handleCameraTouchStart = useCallback(
     (event: GestureResponderEvent) => {
@@ -131,6 +144,7 @@ export default function PhotosTab() {
       frameY: photoFrameLayout.y,
       frameWidth: photoFrameLayout.width,
       frameHeight: photoFrameLayout.height,
+      captureScale: Platform.OS === "ios" ? iosExpoPreviewCaptureScale : 1,
     };
   }, [cameraLayout, photoFrameLayout]);
   const controlRotationStyle = useMemo(
@@ -147,6 +161,16 @@ export default function PhotosTab() {
     const { height, width, x, y } = event.nativeEvent.layout;
     setPhotoFrameLayout({ x, y, width, height });
   }, []);
+
+  useEffect(() => {
+    if (!useNativePhotoCamera || !viewfinderFocused) return;
+    void setVoltClipTextCameraTorch(scanner.torch);
+  }, [scanner.torch, useNativePhotoCamera, viewfinderFocused]);
+
+  useEffect(() => {
+    if (!useNativePhotoCamera || !viewfinderFocused) return;
+    void setVoltClipTextCameraZoom(1 + scanner.cameraZoom * 4);
+  }, [scanner.cameraZoom, useNativePhotoCamera, viewfinderFocused]);
 
   useEffect(() => {
     if (!scanner.photoSentAt) return;
@@ -197,7 +221,16 @@ export default function PhotosTab() {
       <Header />
       <View style={styles.page}>
         <ViewfinderSurface>
-          {viewfinderFocused ? (
+          {viewfinderFocused && useNativePhotoCamera ? (
+            <NativeCameraView
+              ref={scanner.cameraRef}
+              style={styles.camera}
+              onLayout={handleCameraLayout}
+              onTouchStart={handleCameraTouchStart}
+              onTouchMove={handleCameraTouchMove}
+              onTouchEnd={handleCameraTouchEnd}
+            />
+          ) : viewfinderFocused ? (
             <CameraView
               ref={scanner.cameraRef}
               style={styles.camera}

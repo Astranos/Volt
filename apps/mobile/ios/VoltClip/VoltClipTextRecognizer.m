@@ -6,6 +6,13 @@
 RCT_EXTERN_METHOD(captureAndRecognize:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
+RCT_EXTERN_METHOD(capturePhotoInPreviewRect:(nonnull NSNumber *)x
+                  y:(nonnull NSNumber *)y
+                  width:(nonnull NSNumber *)width
+                  height:(nonnull NSNumber *)height
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
 RCT_EXTERN_METHOD(showPreview:(nonnull NSNumber *)x
                   y:(nonnull NSNumber *)y
                   width:(nonnull NSNumber *)width

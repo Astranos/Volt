@@ -863,8 +863,9 @@ private struct ClipRootView: View {
   @State private var modePickerIsDragging = false
   @State private var bottomSheetExpansion: CGFloat = 0
   @State private var glassBlurIntensity: CGFloat = 0.72
+  @State private var glassHue: CGFloat = 0
   @GestureState private var bottomSheetDragTranslation: CGFloat = 0
-  private let expandedSheetHeight: CGFloat = 86
+  private let expandedSheetHeight: CGFloat = 148
 
   var body: some View {
     ZStack {
@@ -889,6 +890,7 @@ private struct ClipRootView: View {
     .ignoresSafeArea(.container, edges: .bottom)
     .background(Color.black)
     .foregroundStyle(.white)
+    .tint(glassControlColor)
     .onAppear { model.startMode() }
     .onChange(of: model.mode) { _ in model.startMode() }
   }
@@ -898,7 +900,8 @@ private struct ClipRootView: View {
       message: statusMessage,
       isError: model.error != nil,
       symbol: statusSymbol,
-      glassBlurIntensity: glassBlurIntensity
+      glassBlurIntensity: glassBlurIntensity,
+      glassTintColor: glassTintColor
     )
     .frame(maxWidth: 380)
     .frame(maxWidth: .infinity, alignment: .center)
@@ -934,7 +937,7 @@ private struct ClipRootView: View {
     )
 
     return VStack(spacing: 0) {
-      BlurSheetSlide(progress: expansion)
+      BlurSheetSlide(progress: expansion, tintColor: glassTintColor)
         .padding(.top, 8)
         .padding(.bottom, 2 * expansion)
         .frame(height: 28)
@@ -967,7 +970,7 @@ private struct ClipRootView: View {
     }
     .frame(maxWidth: .infinity)
     .background {
-      ConcentricLiquidDrawer(cornerRadius: 40, blurIntensity: glassBlurIntensity)
+      ConcentricLiquidDrawer(cornerRadius: 40, blurIntensity: glassBlurIntensity, tintColor: glassTintColor)
     }
     .clipShape(shape)
     .animation(.smooth(duration: 0.32), value: model.mode)
@@ -986,6 +989,24 @@ private struct ClipRootView: View {
 
   private func clampedBottomSheetExpansion(_ value: CGFloat) -> CGFloat {
     min(max(value, 0), 1)
+  }
+
+  private var glassTintIsActive: Bool {
+    glassHue > 0.001
+  }
+
+  private var glassAccentColor: Color? {
+    guard glassTintIsActive else { return nil }
+    return Color(hue: Double(glassHue), saturation: 0.74, brightness: 0.96)
+  }
+
+  private var glassTintColor: Color? {
+    guard glassTintIsActive else { return nil }
+    return Color(hue: Double(glassHue), saturation: 0.52, brightness: 0.88)
+  }
+
+  private var glassControlColor: Color {
+    glassAccentColor ?? .white
   }
 
   private func toggleBottomSheetExpansion() {
@@ -1012,7 +1033,7 @@ private struct ClipRootView: View {
   }
 
   private func expandedControls(progress: CGFloat) -> some View {
-    VStack(spacing: 8) {
+    VStack(spacing: 10) {
       HStack(spacing: 10) {
         Image(systemName: "circle.lefthalf.filled")
           .font(.system(size: 15, weight: .semibold))
@@ -1022,7 +1043,7 @@ private struct ClipRootView: View {
         }, set: { value in
           glassBlurIntensity = CGFloat(value)
         }), in: 0.25...1)
-        .tint(.white.opacity(0.92))
+        .tint(glassControlColor)
         Image(systemName: "circle.inset.filled")
           .font(.system(size: 15, weight: .semibold))
           .foregroundStyle(.white.opacity(0.82))
@@ -1039,12 +1060,45 @@ private struct ClipRootView: View {
           .padding(.vertical, 4)
           .background(.thinMaterial, in: Capsule())
       }
+
+      HStack(spacing: 10) {
+        Image(systemName: "paintpalette")
+          .font(.system(size: 15, weight: .semibold))
+          .foregroundStyle(glassControlColor.opacity(0.78))
+        Slider(value: Binding(get: {
+          Double(glassHue)
+        }, set: { value in
+          glassHue = CGFloat(value)
+        }), in: 0...1)
+        .tint(glassControlColor)
+        Image(systemName: "eyedropper.halffull")
+          .font(.system(size: 15, weight: .semibold))
+          .foregroundStyle(glassControlColor.opacity(0.92))
+      }
+
+      HStack {
+        Text("Color hue")
+          .font(.system(size: 12, weight: .bold, design: .rounded))
+          .foregroundStyle(.white.opacity(0.62))
+        Spacer()
+        Circle()
+          .fill(glassControlColor)
+          .frame(width: 22, height: 22)
+          .overlay {
+            Circle().stroke(.white.opacity(0.36), lineWidth: 1)
+          }
+        Text(glassTintIsActive ? "\(Int((glassHue * 360).rounded()))°" : "Original")
+          .font(.footnote.weight(.semibold))
+          .padding(.horizontal, 10)
+          .padding(.vertical, 4)
+          .background(.thinMaterial, in: Capsule())
+      }
     }
     .padding(.horizontal, 16)
     .padding(.top, 6)
     .padding(.bottom, 8)
     .scaleEffect(0.96 + (0.04 * progress), anchor: .bottom)
-    .accessibilityLabel("Glass blur")
+    .accessibilityLabel("Glass appearance")
   }
 
   private var secondaryControls: some View {
@@ -1052,7 +1106,9 @@ private struct ClipRootView: View {
       GlassToggleControl(
         title: "Type to cursor",
         systemImage: "text.cursor",
-        isOn: model.insertIntoCursor
+        isOn: model.insertIntoCursor,
+        accentColor: glassAccentColor,
+        tintColor: glassTintColor
       ) {
         model.insertIntoCursor.toggle()
       }
@@ -1061,7 +1117,9 @@ private struct ClipRootView: View {
         GlassToggleControl(
           title: "Light",
           systemImage: model.torchEnabled ? "flashlight.on.fill" : "flashlight.off.fill",
-          isOn: model.torchEnabled
+          isOn: model.torchEnabled,
+          accentColor: glassAccentColor,
+          tintColor: glassTintColor
         ) {
           model.setTorch(!model.torchEnabled)
         }
@@ -1069,7 +1127,9 @@ private struct ClipRootView: View {
         GlassToggleControl(
           title: "Punctuation",
           systemImage: "textformat",
-          isOn: model.dictationAddsPunctuation
+          isOn: model.dictationAddsPunctuation,
+          accentColor: glassAccentColor,
+          tintColor: glassTintColor
         ) {
           model.dictationAddsPunctuation.toggle()
         }
@@ -1131,7 +1191,7 @@ private struct ClipRootView: View {
     )
     .disabled(model.isSending && model.mode != .dictation)
     .buttonStyle(.plain)
-    .nativeBlurredGlassBackground(Circle(), intensity: glassBlurIntensity)
+    .nativeBlurredGlassBackground(Circle(), intensity: glassBlurIntensity, tintColor: glassTintColor)
     .clipShape(Circle())
     .accessibilityLabel(model.mode == .dictation ? "Tap or hold to dictate" : model.mode == .ocr && model.textCapture != nil ? "Retake text capture" : "Capture")
   }
@@ -1205,6 +1265,7 @@ private struct StatusGlassRow: View {
   let isError: Bool
   let symbol: String
   let glassBlurIntensity: CGFloat
+  let glassTintColor: Color?
 
   var body: some View {
     HStack(spacing: 10) {
@@ -1220,7 +1281,7 @@ private struct StatusGlassRow: View {
     .padding(.horizontal, 16)
     .padding(.vertical, 12)
     .frame(maxWidth: .infinity, minHeight: 54, alignment: .leading)
-    .nativeBlurredGlassBackground(RoundedRectangle(cornerRadius: 27, style: .continuous), intensity: glassBlurIntensity)
+    .nativeBlurredGlassBackground(RoundedRectangle(cornerRadius: 27, style: .continuous), intensity: glassBlurIntensity, tintColor: glassTintColor)
     .animation(.smooth(duration: 0.22), value: displayMessage)
     .animation(.smooth(duration: 0.22), value: isError)
     .accessibilityLabel(displayMessage)
@@ -1449,6 +1510,7 @@ private enum NativeModeTab {
 private struct ConcentricLiquidDrawer: View {
   let cornerRadius: CGFloat
   let blurIntensity: CGFloat
+  let tintColor: Color?
 
   var body: some View {
     let bottomRadius = max(44, cornerRadius - 4)
@@ -1465,6 +1527,11 @@ private struct ConcentricLiquidDrawer: View {
         .fill(.ultraThinMaterial)
         .opacity(blurIntensity)
 
+      if let tintColor {
+        shape
+          .fill(tintColor.opacity(0.18 + (0.12 * blurIntensity)))
+      }
+
       if #available(iOS 26.0, *) {
         Color.clear
           .glassEffect(.clear, in: shape)
@@ -1473,9 +1540,9 @@ private struct ConcentricLiquidDrawer: View {
       }
     }
     .overlay {
-      shape.stroke(Color(uiColor: .separator).opacity(0.24), lineWidth: 1)
+      shape.stroke(tintColor?.opacity(0.28) ?? Color(uiColor: .separator).opacity(0.24), lineWidth: 1)
     }
-    .shadow(color: .black.opacity(0.14), radius: 12, y: 5)
+    .shadow(color: tintColor?.opacity(0.16) ?? .black.opacity(0.14), radius: 12, y: 5)
   }
 }
 
@@ -1623,9 +1690,15 @@ private struct GlassToggleControl: View {
   let title: String
   let systemImage: String
   let isOn: Bool
+  let accentColor: Color?
+  let tintColor: Color?
   let action: () -> Void
 
   var body: some View {
+    let selectedFill = accentColor?.opacity(0.24) ?? Color.white.opacity(0.18)
+    let selectedStroke = accentColor?.opacity(0.72) ?? Color.white.opacity(0.64)
+    let selectedShadow = accentColor?.opacity(0.20) ?? .white.opacity(0.12)
+
     Button(action: action) {
       Label(title, systemImage: systemImage)
         .font(.system(size: 16, weight: .semibold, design: .rounded))
@@ -1637,33 +1710,42 @@ private struct GlassToggleControl: View {
         .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
     .buttonStyle(.plain)
-    .nativeClearGlassBackground(RoundedRectangle(cornerRadius: 22, style: .continuous))
+    .nativeClearGlassBackground(RoundedRectangle(cornerRadius: 22, style: .continuous), tintColor: tintColor)
     .background {
       RoundedRectangle(cornerRadius: 22, style: .continuous)
-        .fill(isOn ? Color.white.opacity(0.18) : Color.black.opacity(0.06))
+        .fill(isOn ? selectedFill : Color.black.opacity(0.06))
     }
     .overlay {
       RoundedRectangle(cornerRadius: 22, style: .continuous)
-        .stroke(isOn ? Color.white.opacity(0.64) : Color.white.opacity(0.20), lineWidth: isOn ? 1.8 : 1)
+        .stroke(isOn ? selectedStroke : Color.white.opacity(0.20), lineWidth: isOn ? 1.8 : 1)
     }
-    .shadow(color: isOn ? .white.opacity(0.12) : .clear, radius: 10, y: 1)
+    .shadow(color: isOn ? selectedShadow : .clear, radius: 10, y: 1)
     .accessibilityAddTraits(isOn ? .isSelected : [])
   }
 }
 
 private struct BlurSheetSlide: View {
   let progress: CGFloat
+  let tintColor: Color?
 
   var body: some View {
     Capsule()
-      .fill(Color.white.opacity(0.50 + (0.18 * progress)))
+      .fill((tintColor ?? .white).opacity(0.50 + (0.18 * progress)))
       .frame(width: 54 + (progress * 22), height: 5)
       .padding(.horizontal, 14)
       .padding(.vertical, 8)
-      .background(.ultraThinMaterial, in: Capsule())
+      .background {
+        Capsule()
+          .fill(.ultraThinMaterial)
+          .overlay {
+            if let tintColor {
+              Capsule().fill(tintColor.opacity(0.18 + (0.12 * progress)))
+            }
+          }
+      }
       .overlay {
         Capsule()
-          .stroke(Color.white.opacity(0.20 + (0.18 * progress)), lineWidth: 1)
+          .stroke((tintColor ?? .white).opacity(0.20 + (0.18 * progress)), lineWidth: 1)
       }
       .opacity(0.48 + (0.52 * progress))
       .accessibilityHidden(true)
@@ -1681,16 +1763,30 @@ private extension View {
   }
 
   @ViewBuilder
-  func nativeClearGlassBackground<S: Shape>(_ shape: S) -> some View {
+  func nativeClearGlassBackground<S: Shape>(_ shape: S, tintColor: Color? = nil) -> some View {
     if #available(iOS 26.0, *) {
-      self.glassEffect(.clear.interactive(), in: shape)
+      self
+        .background {
+          if let tintColor {
+            shape.fill(tintColor.opacity(0.10))
+          }
+        }
+        .glassEffect(.clear.interactive(), in: shape)
     } else {
-      self.background(.ultraThinMaterial, in: shape)
+      self.background {
+        shape
+          .fill(.ultraThinMaterial)
+          .overlay {
+            if let tintColor {
+              shape.fill(tintColor.opacity(0.14))
+            }
+          }
+      }
     }
   }
 
   @ViewBuilder
-  func nativeBlurredGlassBackground<S: Shape>(_ shape: S, intensity: CGFloat = 0.72) -> some View {
+  func nativeBlurredGlassBackground<S: Shape>(_ shape: S, intensity: CGFloat = 0.72, tintColor: Color? = nil) -> some View {
     let clampedIntensity = min(max(intensity, 0.05), 1)
     if #available(iOS 26.0, *) {
       self
@@ -1698,6 +1794,10 @@ private extension View {
           shape
             .fill(.ultraThinMaterial)
             .opacity(clampedIntensity)
+          if let tintColor {
+            shape
+              .fill(tintColor.opacity(0.16 + (0.12 * clampedIntensity)))
+          }
         }
         .glassEffect(.clear.interactive(), in: shape)
     } else {
@@ -1705,6 +1805,10 @@ private extension View {
         shape
           .fill(.thinMaterial)
           .opacity(clampedIntensity)
+          if let tintColor {
+            shape
+              .fill(tintColor.opacity(0.16 + (0.12 * clampedIntensity)))
+          }
       }
     }
   }

@@ -264,6 +264,41 @@ test("native bottom controls sheet opens with tap and native drag gestures", () 
   assert.doesNotMatch(nativeDelegates, /bottomSheetDragStartExpansion/);
 });
 
+test("native bottom controls sheet has hidden blur and hue appearance controls", () => {
+  const fullDelegate = readText(nativeFiles.fullAppDelegate);
+  const clipDelegate = readText(nativeFiles.clipAppDelegate);
+  const nativeDelegates = [fullDelegate, clipDelegate].join("\n");
+
+  assert.match(nativeDelegates, /@State private var glassBlurIntensity: CGFloat = 0\.72/);
+  assert.match(nativeDelegates, /@State private var glassHue: CGFloat = 0/);
+  assert.match(nativeDelegates, /private let expandedSheetHeight: CGFloat = 148/);
+  assert.match(nativeDelegates, /private var glassTintIsActive: Bool/);
+  assert.match(nativeDelegates, /glassHue > 0\.001/);
+  assert.match(nativeDelegates, /private var glassAccentColor: Color\?/);
+  assert.match(nativeDelegates, /private var glassTintColor: Color\?/);
+  assert.match(nativeDelegates, /guard glassTintIsActive else \{ return nil \}/);
+  assert.match(nativeDelegates, /private var glassControlColor: Color/);
+  assert.match(nativeDelegates, /glassAccentColor \?\? \.white/);
+  assert.match(nativeDelegates, /Color\(hue: Double\(glassHue\), saturation: 0\.74, brightness: 0\.96\)/);
+  assert.match(nativeDelegates, /Color\(hue: Double\(glassHue\), saturation: 0\.52, brightness: 0\.88\)/);
+  assert.match(nativeDelegates, /Text\("Color hue"\)/);
+  assert.match(nativeDelegates, /Text\(glassTintIsActive \? "\\\(Int\(\(glassHue \* 360\)\.rounded\(\)\)\)°" : "Original"\)/);
+  assert.match(nativeDelegates, /Double\(glassHue\)[\s\S]*glassHue = CGFloat\(value\)/);
+  assert.match(nativeDelegates, /\.tint\(glassControlColor\)/);
+  assert.match(nativeDelegates, /accentColor: glassAccentColor/);
+  assert.match(nativeDelegates, /tintColor: glassTintColor/);
+  assert.match(nativeDelegates, /let accentColor: Color\?/);
+  assert.match(nativeDelegates, /let tintColor: Color\?/);
+  assert.match(nativeDelegates, /ConcentricLiquidDrawer\(cornerRadius: 40, blurIntensity: glassBlurIntensity, tintColor: glassTintColor\)/);
+  assert.match(nativeDelegates, /BlurSheetSlide\(progress: expansion, tintColor: glassTintColor\)/);
+  assert.match(nativeDelegates, /nativeBlurredGlassBackground\(Circle\(\), intensity: glassBlurIntensity, tintColor: glassTintColor\)/);
+  assert.match(nativeDelegates, /nativeBlurredGlassBackground\(RoundedRectangle\(cornerRadius: 27, style: \.continuous\), intensity: glassBlurIntensity, tintColor: glassTintColor\)/);
+  assert.match(nativeDelegates, /func nativeClearGlassBackground<S: Shape>\(_ shape: S, tintColor: Color\? = nil\)/);
+  assert.match(nativeDelegates, /func nativeBlurredGlassBackground<S: Shape>\(_ shape: S, intensity: CGFloat = 0\.72, tintColor: Color\? = nil\)/);
+  assert.match(nativeDelegates, /if let tintColor[\s\S]*shape\s*\.fill\(tintColor\.opacity\(0\.16 \+ \(0\.12 \* clampedIntensity\)\)\)/);
+  assert.match(nativeDelegates, /let selectedFill = accentColor\?\.opacity\(0\.24\) \?\? Color\.white\.opacity\(0\.18\)/);
+});
+
 test("App Clip native view wrappers guard unregistered components", () => {
   const textRecognizerWrapper = readText(nativeFiles.textRecognizerWrapper);
 

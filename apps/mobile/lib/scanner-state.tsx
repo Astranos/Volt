@@ -11,7 +11,7 @@ import {
 } from "expo-speech-recognition";
 import { RTCPeerConnection, RTCSessionDescription } from "react-native-webrtc";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type PropsWithChildren } from "react";
-import { Alert, AppState } from "react-native";
+import { Alert, AppState, Platform } from "react-native";
 import {
   decodePairingPayload,
   encodeBarcodeMessage,
@@ -25,6 +25,7 @@ import {
 import { makeBarcodeMessage, makeCaptureMessage, makeOcrMessage, type ScanItem } from "./scanner-messages";
 import { uploadPhotoObjectTransfer } from "./photo-object-transfer";
 import { cropActionForVisibleFrame, type PhotoCropFrame } from "./photo-crop";
+import { captureVoltClipPhotoInPreviewRect, hasVoltClipTextRecognizer } from "./volt-clip-text-recognizer";
 
 globalThis.atob ??= base64Decode;
 globalThis.btoa ??= base64Encode;
@@ -542,7 +543,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
   }, []);
 
   const sendPhotoCapture = useCallback(async (cropFrame?: PhotoCropFrame | null) => {
-    if (!cameraRef.current || photoSendingRef.current) return;
+    if (photoSendingRef.current) return;
     photoSendingRef.current = true;
 
     const channel = channelRef.current;
@@ -566,53 +567,77 @@ export function ScannerProvider({ children }: PropsWithChildren) {
     setPhotoSentAt(null);
 
     try {
-      const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.72,
-        skipProcessing: false,
-      });
+      let photoBase64: string | null = null;
+      let photoWidth: number | undefined;
+      let photoHeight: number | undefined;
 
-      if (!photo.uri || !photo.width || !photo.height) {
-        throw new Error("Camera did not return photo data.");
+      if (Platform.OS === "ios" && cropFrame && hasVoltClipTextRecognizer) {
+        const nativePhoto = await captureVoltClipPhotoInPreviewRect({
+          x: cropFrame.frameX,
+          y: cropFrame.frameY,
+          width: cropFrame.frameWidth,
+          height: cropFrame.frameHeight,
+        });
+        photoBase64 = nativePhoto.dataUrl?.replace(/^data:image\/jpeg;base64,/, "") ?? null;
+        photoWidth = nativePhoto.width ? Number(nativePhoto.width) : undefined;
+        photoHeight = nativePhoto.height ? Number(nativePhoto.height) : undefined;
+      } else {
+        if (!cameraRef.current) {
+          throw new Error("Camera is not ready.");
+        }
+        const photo = await cameraRef.current.takePictureAsync({
+          quality: 0.72,
+          skipProcessing: false,
+        });
+
+        if (!photo.uri || !photo.width || !photo.height) {
+          throw new Error("Camera did not return photo data.");
+        }
+
+        const normalizedPhoto = await manipulateAsync(photo.uri, [], {
+          compress: 0.92,
+          format: SaveFormat.JPEG,
+        });
+        const cropAction = cropActionForVisibleFrame(
+          { width: normalizedPhoto.width, height: normalizedPhoto.height },
+          cropFrame
+        );
+        const squarePhoto = await manipulateAsync(
+          normalizedPhoto.uri,
+          [
+            cropAction,
+          ],
+          {
+            base64: true,
+            compress: 0.72,
+            format: SaveFormat.JPEG,
+          }
+        );
+        photoBase64 = squarePhoto.base64 ?? null;
+        photoWidth = squarePhoto.width;
+        photoHeight = squarePhoto.height;
       }
 
-      const normalizedPhoto = await manipulateAsync(photo.uri, [], {
-        compress: 0.92,
-        format: SaveFormat.JPEG,
-      });
-      const cropAction = cropActionForVisibleFrame(
-        { width: normalizedPhoto.width, height: normalizedPhoto.height },
-        cropFrame
-      );
-      const squarePhoto = await manipulateAsync(
-        normalizedPhoto.uri,
-        [
-          cropAction,
-        ],
-        {
-          base64: true,
-          compress: 0.72,
-          format: SaveFormat.JPEG,
-        }
-      );
-
-      if (!squarePhoto.base64) {
+      if (!photoBase64) {
         throw new Error("Could not prepare square photo data.");
       }
 
       const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
       const mimeType = "image/jpeg";
       const name = `volt-photo-${new Date().toISOString().replace(/[:.]/g, "-")}.jpg`;
-      const chunks = squarePhoto.base64.match(new RegExp(`.{1,${PHOTO_CHUNK_SIZE}}`, "g")) ?? [];
+      const chunks = photoBase64.match(new RegExp(`.{1,${PHOTO_CHUNK_SIZE}}`, "g")) ?? [];
+      const capturedAt = new Date().toISOString();
+      const photoSize = Math.ceil((photoBase64.length * 3) / 4);
       const photoMessage = {
         kind: "photo" as const,
         id,
         name,
         mimeType,
-        dataUrl: `data:${mimeType};base64,${squarePhoto.base64}`,
-        size: Math.ceil((squarePhoto.base64.length * 3) / 4),
-        width: squarePhoto.width,
-        height: squarePhoto.height,
-        capturedAt: new Date().toISOString(),
+        dataUrl: `data:${mimeType};base64,${photoBase64}`,
+        size: photoSize,
+        width: photoWidth,
+        height: photoHeight,
+        capturedAt,
       };
 
       if (relaySession) {
@@ -624,8 +649,8 @@ export function ScannerProvider({ children }: PropsWithChildren) {
           mimeType,
           dataUrl: photoMessage.dataUrl,
           size: photoMessage.size,
-          width: squarePhoto.width,
-          height: squarePhoto.height,
+          width: photoWidth,
+          height: photoHeight,
           capturedAt: photoMessage.capturedAt,
         });
         setPhotoSentAt(new Date().toISOString());
@@ -639,10 +664,10 @@ export function ScannerProvider({ children }: PropsWithChildren) {
           id,
           name,
           mimeType,
-          size: Math.ceil((squarePhoto.base64.length * 3) / 4),
-          width: squarePhoto.width,
-          height: squarePhoto.height,
-          capturedAt: new Date().toISOString(),
+          size: photoSize,
+          width: photoWidth,
+          height: photoHeight,
+          capturedAt,
           totalChunks: chunks.length,
         })
       );

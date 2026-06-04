@@ -5,6 +5,7 @@ export type PhotoCropFrame = {
   frameY: number;
   frameWidth: number;
   frameHeight: number;
+  captureScale?: number;
 };
 
 export type PhotoDimensions = {
@@ -62,13 +63,22 @@ export function cropActionForVisibleFrame(
   const displayedHeight = photo.height * scale;
   const offsetX = (frame.previewWidth - displayedWidth) / 2;
   const offsetY = (frame.previewHeight - displayedHeight) / 2;
+  const requestedCaptureScale = frame.captureScale;
+  const captureScale =
+    typeof requestedCaptureScale === "number" && isPositiveFinite(requestedCaptureScale)
+      ? clamp(requestedCaptureScale, 0.25, 1)
+      : 1;
+  const adjustedFrameWidth = frame.frameWidth * captureScale;
+  const adjustedFrameHeight = frame.frameHeight * captureScale;
+  const adjustedFrameX = frame.frameX + (frame.frameWidth - adjustedFrameWidth) / 2;
+  const adjustedFrameY = frame.frameY + (frame.frameHeight - adjustedFrameHeight) / 2;
 
-  const originX = clamp((frame.frameX - offsetX) / scale, 0, photo.width - 1);
-  const originY = clamp((frame.frameY - offsetY) / scale, 0, photo.height - 1);
+  const originX = clamp((adjustedFrameX - offsetX) / scale, 0, photo.width - 1);
+  const originY = clamp((adjustedFrameY - offsetY) / scale, 0, photo.height - 1);
   const maxWidth = photo.width - originX;
   const maxHeight = photo.height - originY;
-  const width = clamp(frame.frameWidth / scale, 1, maxWidth);
-  const height = clamp(frame.frameHeight / scale, 1, maxHeight);
+  const width = clamp(adjustedFrameWidth / scale, 1, maxWidth);
+  const height = clamp(adjustedFrameHeight / scale, 1, maxHeight);
 
   return {
     crop: {
