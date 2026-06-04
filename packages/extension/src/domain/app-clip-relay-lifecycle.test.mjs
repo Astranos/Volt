@@ -118,3 +118,11 @@ test("unified Mobile Scanner can drag the selected photo batch", () => {
   assert.match(mobileScannerSource, /event\.dataTransfer\.setData\(PHOTO_DROP_MIME, JSON\.stringify\(bridgePayload\)\)/);
   assert.match(mobileScannerSource, /onToggleSelection=\{\(shiftKey\) => onToggleSelection\(entry\.id, shiftKey\)\}/);
 });
+
+test("unified Mobile Scanner copies photos as PNG clipboard items", () => {
+  assert.match(mobileScannerSource, /async function photoToClipboardPngBlob\(photo: MobilePhoto\)/);
+  assert.match(mobileScannerSource, /if \(photo\.blob\) return dataUrlToPngBlob\(await blobToDataUrl\(photo\.blob\)\)/);
+  assert.match(mobileScannerSource, /new ClipboardItem\(\{ "image\/png": blob \}\)/);
+  assert.doesNotMatch(mobileScannerSource, /new ClipboardItem\(\{ \[photo\.blob\.type \|\| photo\.mimeType\]: photo\.blob \}\)/);
+  assert.match(mobileScannerSource, /\[Volt Mobile Scanner\] Photo clipboard copy failed/);
+});

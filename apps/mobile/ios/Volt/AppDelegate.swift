@@ -671,7 +671,7 @@ private final class ClipModel: ObservableObject {
 
   private func sendPhoto(_ photo: CapturedPhoto) async {
     do {
-      let squarePhoto = try photo.squareCropped()
+      let squarePhoto = try photo.cropped(toNormalizedRect: camera.photoViewfinderCropRect())
       let base64 = squarePhoto.data.base64EncodedString()
       try await sendResult(mode: .photo, message: [
         "kind": "photo",
@@ -2338,13 +2338,7 @@ private struct DictationLiveOverlay: View {
 private struct PhotoSquareOverlay: View {
   var body: some View {
     GeometryReader { proxy in
-      let side = min(proxy.size.width - 48, proxy.size.height * 0.54)
-      let rect = CGRect(
-        x: (proxy.size.width - side) / 2,
-        y: max(proxy.safeAreaInsets.top + 132, (proxy.size.height - side) * 0.26),
-        width: side,
-        height: side
-      )
+      let rect = photoSquareRect(in: proxy.size, safeAreaInsets: proxy.safeAreaInsets)
       let shape = RoundedRectangle(cornerRadius: 34, style: .continuous)
 
       ZStack {
@@ -2377,6 +2371,28 @@ private struct PhotoSquareOverlay: View {
     }
     .allowsHitTesting(false)
   }
+}
+
+private func photoSquareRect(in size: CGSize, safeAreaInsets: EdgeInsets) -> CGRect {
+  let side = min(size.width - 48, size.height * 0.54)
+  return CGRect(
+    x: (size.width - side) / 2,
+    y: max(safeAreaInsets.top + 132, (size.height - side) * 0.26),
+    width: side,
+    height: side
+  )
+}
+
+private func photoSquareRect(in size: CGSize, safeAreaInsets: UIEdgeInsets) -> CGRect {
+  photoSquareRect(
+    in: size,
+    safeAreaInsets: EdgeInsets(
+      top: safeAreaInsets.top,
+      leading: safeAreaInsets.left,
+      bottom: safeAreaInsets.bottom,
+      trailing: safeAreaInsets.right
+    )
+  )
 }
 
 private struct PhotoGridLines: View {
@@ -2448,6 +2464,49 @@ private struct CapturedPhoto {
       image: croppedImage,
       uiImage: outputImage,
       size: CGSize(width: side, height: side)
+    )
+  }
+
+  func cropped(toNormalizedRect normalizedRect: CGRect?) throws -> CapturedPhoto {
+    guard let normalizedRect else { return try squareCropped() }
+
+    let sourceWidth = CGFloat(image.width)
+    let sourceHeight = CGFloat(image.height)
+    let cropRect = CGRect(
+      x: normalizedRect.minX * sourceWidth,
+      y: normalizedRect.minY * sourceHeight,
+      width: normalizedRect.width * sourceWidth,
+      height: normalizedRect.height * sourceHeight
+    )
+      .intersection(CGRect(x: 0, y: 0, width: sourceWidth, height: sourceHeight))
+      .integral
+
+    guard cropRect.width > 1, cropRect.height > 1 else {
+      return try squareCropped()
+    }
+
+    guard
+      let croppedImage = image.cropping(to: cropRect),
+      let mutableData = CFDataCreateMutable(nil, 0),
+      let destination = CGImageDestinationCreateWithData(mutableData, UTType.jpeg.identifier as CFString, 1, nil)
+    else {
+      throw ClipError.message("Unable to crop the photo.")
+    }
+
+    CGImageDestinationAddImage(destination, croppedImage, [
+      kCGImageDestinationLossyCompressionQuality as String: 0.88,
+    ] as CFDictionary)
+    guard CGImageDestinationFinalize(destination) else {
+      throw ClipError.message("Unable to encode the photo.")
+    }
+
+    let outputData = mutableData as Data
+    let outputImage = UIImage(cgImage: croppedImage, scale: 1, orientation: .up)
+    return CapturedPhoto(
+      data: outputData,
+      image: croppedImage,
+      uiImage: outputImage,
+      size: CGSize(width: croppedImage.width, height: croppedImage.height)
     )
   }
 
@@ -2659,6 +2718,23 @@ private final class ClipCamera: NSObject, ObservableObject, AVCaptureMetadataOut
     queue.async {
       metadataOutput.rectOfInterest = rect
     }
+  }
+
+  @MainActor
+  func photoViewfinderCropRect() -> CGRect? {
+    guard let previewView, !previewView.bounds.isEmpty else { return nil }
+    let layerRect = photoSquareRect(
+      in: previewView.bounds.size,
+      safeAreaInsets: previewView.safeAreaInsets
+    )
+    let normalizedRect = previewView.previewLayer.metadataOutputRectConverted(fromLayerRect: layerRect)
+    guard normalizedRect.width > 0, normalizedRect.height > 0 else { return nil }
+    return CGRect(
+      x: clampedUnit(normalizedRect.minX),
+      y: clampedUnit(normalizedRect.minY),
+      width: min(1, max(0, normalizedRect.width)),
+      height: min(1, max(0, normalizedRect.height))
+    )
   }
 
   func focus(at devicePoint: CGPoint) {

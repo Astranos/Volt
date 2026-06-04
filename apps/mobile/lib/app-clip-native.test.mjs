@@ -144,6 +144,17 @@ test("App Clip photo mode keeps the captured photo visible while sending", () =>
   assert.match(clipScreen, /Capture another photo/);
 });
 
+test("full app photo relay crops to the visible square viewfinder", () => {
+  const fullAppDelegate = readText(nativeFiles.fullAppDelegate);
+
+  assert.match(fullAppDelegate, /private func photoSquareRect\(in size: CGSize, safeAreaInsets: EdgeInsets\)/);
+  assert.match(fullAppDelegate, /PhotoSquareOverlay[\s\S]*photoSquareRect\(in: proxy\.size, safeAreaInsets: proxy\.safeAreaInsets\)/);
+  assert.match(fullAppDelegate, /func photoViewfinderCropRect\(\) -> CGRect\?/);
+  assert.match(fullAppDelegate, /metadataOutputRectConverted\(fromLayerRect: layerRect\)/);
+  assert.match(fullAppDelegate, /let squarePhoto = try photo\.cropped\(toNormalizedRect: camera\.photoViewfinderCropRect\(\)\)/);
+  assert.doesNotMatch(fullAppDelegate, /let squarePhoto = try photo\.squareCropped\(\)/);
+});
+
 test("App Clip does not expose dictation mode from the dedicated clip entry", () => {
   const clipScreen = readText(nativeFiles.clipScreen);
 

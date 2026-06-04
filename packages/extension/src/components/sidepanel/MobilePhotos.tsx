@@ -517,14 +517,17 @@ export default function MobilePhotos({
 
     try {
       if ("ClipboardItem" in window && navigator.clipboard?.write) {
+        if (transferablePhotos.length === 1) {
+          const pngBlob = await dataUrlToPngBlob(transferablePhotos[0].dataUrl!);
+          await navigator.clipboard.write([new ClipboardItem({ "image/png": pngBlob })]);
+          setError(null);
+          return;
+        }
+
         const clipboardData: Record<string, Blob> = {
           "text/html": new Blob([html], { type: "text/html" }),
           "text/plain": new Blob([plainText], { type: "text/plain" }),
         };
-
-        if (transferablePhotos.length === 1) {
-          clipboardData["image/png"] = await dataUrlToPngBlob(transferablePhotos[0].dataUrl!);
-        }
 
         await navigator.clipboard.write([new ClipboardItem(clipboardData)]);
         setError(null);
@@ -533,11 +536,13 @@ export default function MobilePhotos({
 
       await navigator.clipboard.writeText(plainText);
       setError(null);
-    } catch (_err) {
+    } catch (err) {
+      console.warn("[Volt Mobile Photos] Clipboard copy failed", err);
       try {
         await navigator.clipboard.writeText(plainText);
         setError(null);
-      } catch (_fallbackErr) {
+      } catch (fallbackErr) {
+        console.warn("[Volt Mobile Photos] Clipboard text fallback failed", fallbackErr);
         setError("Could not copy selected photos.");
       }
     }

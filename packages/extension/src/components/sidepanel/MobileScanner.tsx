@@ -88,6 +88,12 @@ type TimelineGroup =
       entries: HydratedMobileScannerPhotoResult[];
     };
 
+async function photoToClipboardPngBlob(photo: MobilePhoto) {
+  if (photo.dataUrl) return dataUrlToPngBlob(photo.dataUrl);
+  if (photo.blob) return dataUrlToPngBlob(await blobToDataUrl(photo.blob));
+  throw new Error("Photo bytes unavailable");
+}
+
 type DeletedSnapshot = {
   results: TimelineEntry[];
   timer: number;
@@ -400,22 +406,16 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
   const copyPhoto = useCallback(
     async (photo: MobilePhoto) => {
       try {
-        if (photo.blob && "ClipboardItem" in window && navigator.clipboard?.write) {
-          await navigator.clipboard.write([
-            new ClipboardItem({ [photo.blob.type || photo.mimeType]: photo.blob }),
-          ]);
-          flashFeedback("Photo copied");
-          return;
-        }
-        if (photo.dataUrl && "ClipboardItem" in window && navigator.clipboard?.write) {
-          const blob = await dataUrlToPngBlob(photo.dataUrl);
+        if ("ClipboardItem" in window && navigator.clipboard?.write) {
+          const blob = await photoToClipboardPngBlob(photo);
           await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
           flashFeedback("Photo copied");
           return;
         }
         await navigator.clipboard.writeText(normalizeImageFilename(photo.name, photo.mimeType));
         flashFeedback("Photo name copied");
-      } catch (_err) {
+      } catch (err) {
+        console.warn("[Volt Mobile Scanner] Photo clipboard copy failed", err);
         flashFeedback("Could not copy photo", "error");
       }
     },
