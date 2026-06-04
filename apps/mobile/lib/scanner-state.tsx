@@ -642,11 +642,6 @@ export function ScannerProvider({ children }: PropsWithChildren) {
         contributorId: photoContributorIdRef.current,
       });
       sendControl({ kind: "photo_manifest", pendingPhotoIds: pendingPhotosRef.current.map((photo) => photo.id) });
-      if (!sessionReadyRef.current) {
-        sessionReadyRef.current = true;
-        setStatus("session_ready");
-        promptForPendingPhotos(pairingSessionRef.current);
-      }
     };
     channel.onmessage = (event: { data: unknown }) => handleControlMessage(parseControlMessage(event.data));
     channel.onclose = () => {
