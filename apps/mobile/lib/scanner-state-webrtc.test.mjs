@@ -20,6 +20,9 @@ test("mobile waits for Chrome session_ready before showing connected", () => {
     postAnswerStart
   );
   assert.match(attachDataChannelSource, /kind: "hello"/);
+  assert.match(attachDataChannelSource, /const handleControlOpen = \(\) =>/);
+  assert.match(attachDataChannelSource, /if \(channel\.readyState === "open"\) handleControlOpen\(\)/);
+  assert.match(attachDataChannelSource, /if \(channel\.readyState === "open"\) handlePhotoOpen\(\)/);
   assert.doesNotMatch(attachDataChannelSource, /setStatus\("session_ready"\)/);
   assert.doesNotMatch(attachDataChannelSource, /sessionReadyRef\.current = true/);
 

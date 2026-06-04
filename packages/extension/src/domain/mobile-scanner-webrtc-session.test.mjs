@@ -34,6 +34,7 @@ test("extension WebRTC session creates offers per join attempt while join window
 test("extension WebRTC session handles handshake, receipts, photo acks, and peer disconnects", () => {
   assert.match(sessionSource, /type: "hello"/);
   assert.match(sessionSource, /type: "session_ready"/);
+  assert.match(sessionSource, /if \(peer\.ready\)/);
   assert.match(sessionSource, /type: "protocol_error"/);
   assert.match(sessionSource, /type: "receipt"/);
   assert.match(sessionSource, /type: "photo_chunk_ack"/);

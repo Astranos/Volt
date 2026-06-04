@@ -260,7 +260,7 @@ export class MobileScannerSession {
   private countConnectedPeers() {
     let count = 0;
     for (const peer of this.peers.values()) {
-      if (peer.ready || peer.control?.readyState === "open" || peer.pc.connectionState === "connected") {
+      if (peer.ready) {
         count += 1;
       }
     }
@@ -421,7 +421,6 @@ export class MobileScannerSession {
     if (!peer || peer.answerApplied) return;
     await peer.pc.setRemoteDescription(answer);
     peer.answerApplied = true;
-    this.setState({ status: "connected", error: null, connectedAt: this.state.connectedAt ?? new Date().toISOString() });
   }
 
   private configureControlChannel(peer: PeerSession, channel: RTCDataChannel) {
@@ -434,7 +433,6 @@ export class MobileScannerSession {
         capabilities: ["text", "barcode", "dictation", "photo", "photo-chunk-ack"],
         sessionId: this.state.sessionId,
       });
-      this.setState({ status: "connected", error: null, connectedAt: this.state.connectedAt ?? new Date().toISOString() });
     };
     channel.onclose = () => this.closePeer(peer.id);
     channel.onerror = () => {

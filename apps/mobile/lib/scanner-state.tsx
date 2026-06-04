@@ -617,19 +617,27 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       photoStatusRef.current = channel.readyState === "open" ? "open" : "opening";
       channel.binaryType = "arraybuffer";
       channel.bufferedAmountLowThreshold = PHOTO_TRANSFER_BUFFERED_AMOUNT_LOW_THRESHOLD;
-      channel.onopen = () => {
+      let photoOpened = false;
+      const handlePhotoOpen = () => {
+        if (photoOpened) return;
+        photoOpened = true;
         photoStatusRef.current = "open";
         void flushPhotoWorker();
       };
+      channel.onopen = handlePhotoOpen;
       channel.onclose = () => {
         photoStatusRef.current = "idle";
       };
+      if (channel.readyState === "open") handlePhotoOpen();
       return;
     }
 
     controlChannelRef.current = channel;
     controlStatusRef.current = channel.readyState === "open" ? "open" : "opening";
-    channel.onopen = () => {
+    let controlOpened = false;
+    const handleControlOpen = () => {
+      if (controlOpened) return;
+      controlOpened = true;
       controlStatusRef.current = "open";
       sendControl({
         kind: "hello",
@@ -643,6 +651,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       });
       sendControl({ kind: "photo_manifest", pendingPhotoIds: pendingPhotosRef.current.map((photo) => photo.id) });
     };
+    channel.onopen = handleControlOpen;
     channel.onmessage = (event: { data: unknown }) => handleControlMessage(parseControlMessage(event.data));
     channel.onclose = () => {
       controlStatusRef.current = "idle";
@@ -660,6 +669,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       setStatus("error");
       setError("Connection lost");
     };
+    if (channel.readyState === "open") handleControlOpen();
   }, [flushPhotoWorker, handleControlMessage, promptForPendingPhotos, sendControl, updatePendingPhotos]);
 
   const postAnswer = useCallback(async (answerUrl: string, answer: unknown) => {
