@@ -23,6 +23,13 @@ const SCANNER_APP_CLIP_BASE_URL = SCANNER_SIGNAL_URL.replace("/api/signal", "/cl
 const SCANNER_RESULT_TIMEOUT_MS = SCANNER_SESSION_TTL_MS;
 const SCANNER_RELAY_STATE_STORAGE_KEY = "volt.mobileScanner.relaySession.v1";
 
+function serializeLogArg(arg: unknown) {
+  if (arg instanceof Error) {
+    return { name: arg.name, message: arg.message, stack: arg.stack };
+  }
+  return arg;
+}
+
 type ScannerState = {
   status: ScannerConnectionStatus;
   qrCodeUrl: string | null;
@@ -75,7 +82,14 @@ class MobileScannerOffscreenSession {
       onState: (state) => this.handleWebRtcState(state),
       onScan: (scan) => this.sendScan(scan),
       onPhoto: (photo) => this.sendPhoto(photo),
-      log: (...args) => console.warn(...args),
+      log: (...args) => {
+        console.warn(...args);
+        void chrome.runtime.sendMessage({
+          action: "scannerDebugLog",
+          source: "scanner-offscreen",
+          args: args.map(serializeLogArg),
+        }).catch(() => {});
+      },
     });
     this.restorePromise = this.restorePersistedSession();
   }

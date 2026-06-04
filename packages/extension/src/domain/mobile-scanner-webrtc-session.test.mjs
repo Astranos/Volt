@@ -31,10 +31,23 @@ test("extension WebRTC session creates offers per join attempt while join window
   assert.match(sessionSource, /join-token\/\$\{encodeURIComponent\(joinWindow\.joinToken\)\}\/revoke/);
 });
 
+test("extension keeps polling existing join attempts after the pairing popup closes", () => {
+  assert.match(sessionSource, /private answerPollJoinWindow: JoinWindow \| null = null/);
+  assert.match(sessionSource, /this\.answerPollJoinWindow = joinWindow/);
+  assert.match(sessionSource, /const joinWindow = this\.joinWindow \?\? this\.answerPollJoinWindow/);
+  assert.match(sessionSource, /const acceptingNewAttempts = this\.joinWindow\?\.joinToken === joinWindow\.joinToken/);
+  assert.match(sessionSource, /if \(!acceptingNewAttempts\) continue/);
+  assert.match(sessionSource, /stopHiddenJoinAttemptPollingIfIdle/);
+  assert.doesNotMatch(sessionSource, /this\.joinWindow = null;\n\s*this\.stopJoinAttemptPolling\(\);/);
+});
+
 test("extension WebRTC session handles handshake, receipts, photo acks, and peer disconnects", () => {
   assert.match(sessionSource, /type: "hello"/);
   assert.match(sessionSource, /type: "session_ready"/);
+  assert.match(sessionSource, /function controlMessageType/);
+  assert.match(sessionSource, /control\?\.kind === "string"/);
   assert.match(sessionSource, /if \(peer\.ready\)/);
+  assert.match(sessionSource, /pc\.connectionState === "connected" && peer\.ready/);
   assert.match(sessionSource, /type: "protocol_error"/);
   assert.match(sessionSource, /type: "receipt"/);
   assert.match(sessionSource, /type: "photo_chunk_ack"/);
@@ -48,6 +61,8 @@ test("offscreen and background route global join-window lifecycle separately fro
   assert.match(offscreenSource, /scannerOffscreenCloseJoinWindow/);
   assert.match(backgroundSource, /case "scannerCloseJoinWindow"/);
   assert.match(backgroundSource, /case "scannerPairingPopupClosed"/);
+  assert.match(backgroundSource, /case "scannerDebugLog"/);
+  assert.match(offscreenSource, /action: "scannerDebugLog"/);
   assert.match(backgroundSource, /handleScannerPairingPopupClosed\(sendResponse\)/);
   assert.doesNotMatch(backgroundSource, /case "scannerDisconnect"[\s\S]{0,120}scannerOffscreenCloseJoinWindow/);
 });

@@ -1379,6 +1379,10 @@ export default defineBackground({
           }
           sendResponse({ success: true });
           break;
+        case "scannerDebugLog":
+          log(...(Array.isArray(message?.args) ? message.args : []));
+          sendResponse({ success: true });
+          break;
         case "scannerOffscreenScan":
           handleScannerScan(message);
           sendResponse({ success: true });

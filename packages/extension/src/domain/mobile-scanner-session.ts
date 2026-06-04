@@ -38,6 +38,7 @@ type JoinAttempt = {
 };
 
 type ControlMessage = {
+  kind?: unknown;
   type?: unknown;
   messageId?: unknown;
   mode?: unknown;
@@ -130,6 +131,14 @@ function normalizeJoinAttempt(value: unknown): { joinAttemptId: string; answer?:
   return { joinAttemptId, answer, hasAnswer: Boolean(answer || attempt.hasAnswer) };
 }
 
+function controlMessageType(control: ControlMessage | null) {
+  return typeof control?.type === "string"
+    ? control.type
+    : typeof control?.kind === "string"
+      ? control.kind
+      : null;
+}
+
 function majorVersion(version: unknown) {
   if (typeof version !== "string") return null;
   const major = Number(version.split(".")[0]);
@@ -162,6 +171,7 @@ function normalizeBarcodePayload(value: unknown): BarcodeMessage | null {
 
 export class MobileScannerSession {
   private answerPoll: SessionTimer | null = null;
+  private answerPollJoinWindow: JoinWindow | null = null;
   private joinWindow: JoinWindow | null = null;
   private peers = new Map<string, PeerSession>();
   private pendingPhotos = new Map<string, PendingPhoto>();
@@ -190,6 +200,11 @@ export class MobileScannerSession {
     try {
       const joinWindow = await this.createJoinWindow(target);
       this.joinWindow = joinWindow;
+      this.answerPollJoinWindow = joinWindow;
+      this.events.log?.("[Volt Scanner Pairing] join window opened", {
+        sessionId: joinWindow.sessionId,
+        tokenTail: joinWindow.joinToken.slice(-6),
+      });
       this.setState({
         status: this.peers.size > 0 ? "connected" : "waiting",
         qrCodeUrl: joinWindow.qrCodeUrl,
@@ -211,12 +226,16 @@ export class MobileScannerSession {
   async closeJoinWindow() {
     const previous = this.joinWindow;
     this.joinWindow = null;
-    this.stopJoinAttemptPolling();
     if (previous) {
       await this.revokeJoinWindow(previous).catch((error) => {
         this.events.log?.("Failed to revoke scanner join window", error);
       });
+      this.events.log?.("[Volt Scanner Pairing] join window closed", {
+        pendingPeers: this.peers.size,
+        tokenTail: previous.joinToken.slice(-6),
+      });
     }
+    this.stopHiddenJoinAttemptPollingIfIdle();
     this.setState({
       status: this.peers.size > 0 ? "connected" : "disconnected",
       qrCodeUrl: null,
@@ -233,6 +252,8 @@ export class MobileScannerSession {
     }
     this.peers.clear();
     this.pendingPhotos.clear();
+    this.answerPollJoinWindow = null;
+    this.stopJoinAttemptPolling();
     this.seenJoinAttempts.clear();
     this.setState({
       status: "disconnected",
@@ -338,8 +359,9 @@ export class MobileScannerSession {
   }
 
   private async fetchJoinAttempts() {
-    const joinWindow = this.joinWindow;
+    const joinWindow = this.joinWindow ?? this.answerPollJoinWindow;
     if (!joinWindow) return;
+    const acceptingNewAttempts = this.joinWindow?.joinToken === joinWindow.joinToken;
     const response = await fetch(
       `${SCANNER_SIGNAL_URL}/join-token/${encodeURIComponent(joinWindow.joinToken)}/attempts`
     );
@@ -354,7 +376,11 @@ export class MobileScannerSession {
       const attempt = normalizeJoinAttempt(rawAttempt);
       if (!attempt) continue;
       if (!this.seenJoinAttempts.has(attempt.joinAttemptId)) {
+        if (!acceptingNewAttempts) continue;
         this.seenJoinAttempts.add(attempt.joinAttemptId);
+        this.events.log?.("[Volt Scanner Pairing] join attempt seen", {
+          joinAttemptId: attempt.joinAttemptId,
+        });
         await this.createPeerOffer(joinWindow, attempt.joinAttemptId);
       }
       const answer = attempt.answer ?? (attempt.hasAnswer ? await this.fetchPeerAnswer(joinWindow, attempt.joinAttemptId) : null);
@@ -362,6 +388,7 @@ export class MobileScannerSession {
         await this.applyPeerAnswer(attempt.joinAttemptId, answer);
       }
     }
+    this.stopHiddenJoinAttemptPollingIfIdle();
   }
 
   private async fetchPeerAnswer(joinWindow: JoinWindow, joinAttemptId: string) {
@@ -374,6 +401,7 @@ export class MobileScannerSession {
   }
 
   private async createPeerOffer(joinWindow: JoinWindow, joinAttemptId: string) {
+    this.events.log?.("[Volt Scanner Pairing] creating WebRTC offer", { joinAttemptId });
     const pc = new RTCPeerConnection({ iceServers: SCANNER_ICE_SERVERS });
     const peer: PeerSession = {
       answerApplied: false,
@@ -391,9 +419,14 @@ export class MobileScannerSession {
     this.configurePhotoChannel(peer, peer.photoTransfer);
 
     pc.onconnectionstatechange = () => {
+      this.events.log?.("[Volt Scanner Pairing] peer connection state", {
+        joinAttemptId,
+        state: pc.connectionState,
+        ready: peer.ready,
+      });
       if (pc.connectionState === "failed" || pc.connectionState === "disconnected" || pc.connectionState === "closed") {
         this.closePeer(joinAttemptId);
-      } else if (pc.connectionState === "connected") {
+      } else if (pc.connectionState === "connected" && peer.ready) {
         this.setState({ status: "connected", error: null, connectedAt: this.state.connectedAt ?? new Date().toISOString() });
       }
     };
@@ -414,6 +447,7 @@ export class MobileScannerSession {
         }),
       }
     );
+    this.events.log?.("[Volt Scanner Pairing] WebRTC offer posted", { joinAttemptId });
   }
 
   private async applyPeerAnswer(joinAttemptId: string, answer: RTCSessionDescriptionInit) {
@@ -421,10 +455,12 @@ export class MobileScannerSession {
     if (!peer || peer.answerApplied) return;
     await peer.pc.setRemoteDescription(answer);
     peer.answerApplied = true;
+    this.events.log?.("[Volt Scanner Pairing] WebRTC answer applied", { joinAttemptId });
   }
 
   private configureControlChannel(peer: PeerSession, channel: RTCDataChannel) {
     channel.onopen = () => {
+      this.events.log?.("[Volt Scanner Pairing] control channel open", { joinAttemptId: peer.id });
       this.sendControl(peer, {
         type: "hello",
         protocolVersion: SCANNER_PROTOCOL_VERSION,
@@ -434,8 +470,12 @@ export class MobileScannerSession {
         sessionId: this.state.sessionId,
       });
     };
-    channel.onclose = () => this.closePeer(peer.id);
+    channel.onclose = () => {
+      this.events.log?.("[Volt Scanner Pairing] control channel closed", { joinAttemptId: peer.id });
+      this.closePeer(peer.id);
+    };
     channel.onerror = () => {
+      this.events.log?.("[Volt Scanner Pairing] control channel error", { joinAttemptId: peer.id });
       this.sendProtocolError(peer, "control_channel_error");
       this.closePeer(peer.id);
     };
@@ -458,8 +498,13 @@ export class MobileScannerSession {
 
   private async handleControlMessage(peer: PeerSession, rawData: string) {
     const control = parseJson(rawData) as ControlMessage | null;
-    if (control?.type === "hello" || control?.type === "capabilities") {
-      const peerMajor = majorVersion(control.protocolVersion ?? control.version);
+    const type = controlMessageType(control);
+    this.events.log?.("[Volt Scanner Pairing] control message received", {
+      joinAttemptId: peer.id,
+      type,
+    });
+    if (type === "hello" || type === "capabilities") {
+      const peerMajor = majorVersion(control?.protocolVersion ?? control?.version);
       if (peerMajor !== majorVersion(SCANNER_PROTOCOL_VERSION)) {
         this.sendProtocolError(peer, "unsupported_protocol_version");
         this.closePeer(peer.id);
@@ -472,24 +517,25 @@ export class MobileScannerSession {
         sessionId: this.state.sessionId,
         capabilities: ["text", "barcode", "dictation", "photo", "photo-chunk-ack"],
       });
+      this.events.log?.("[Volt Scanner Pairing] session_ready sent", { joinAttemptId: peer.id });
       this.setState({ status: "connected", error: null, connectedAt: this.state.connectedAt ?? new Date().toISOString() });
       return;
     }
 
-    if (control?.type === "session_close" || control?.type === "disconnect") {
+    if (type === "session_close" || type === "disconnect") {
       this.closePeer(peer.id);
       return;
     }
 
-    if (control?.type === "photo_chunk_ack" || control?.type === "photo_received" || control?.type === "receipt") {
+    if (type === "photo_chunk_ack" || type === "photo_received" || type === "receipt") {
       return;
     }
 
     const scannerMessage =
-      control?.type === "text_result" ||
-      control?.type === "barcode_result" ||
-      control?.type === "dictation_result" ||
-      control?.type === "capture_result"
+      type === "text_result" ||
+      type === "barcode_result" ||
+      type === "dictation_result" ||
+      type === "capture_result"
         ? normalizeBarcodePayload(control)
         : normalizeBarcodePayload(parseJson(rawData));
 
@@ -515,7 +561,7 @@ export class MobileScannerSession {
       return;
     }
 
-    if (control?.type) return;
+    if (type) return;
     this.sendProtocolError(peer, "invalid_control_message");
   }
 
@@ -604,6 +650,16 @@ export class MobileScannerSession {
       status: this.peers.size > 0 ? "connected" : this.joinWindow ? "waiting" : "disconnected",
       connectedAt: this.peers.size > 0 ? this.state.connectedAt : null,
     });
+    this.stopHiddenJoinAttemptPollingIfIdle();
+  }
+
+  private stopHiddenJoinAttemptPollingIfIdle() {
+    if (this.joinWindow || !this.answerPollJoinWindow) return;
+    for (const peer of this.peers.values()) {
+      if (!peer.answerApplied) return;
+    }
+    this.answerPollJoinWindow = null;
+    this.stopJoinAttemptPolling();
   }
 
   private cleanupStalePhotos() {
