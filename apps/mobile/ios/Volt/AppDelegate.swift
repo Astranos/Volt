@@ -104,6 +104,7 @@ private final class ClipModel: ObservableObject {
   @Published var zoomFactor: CGFloat = 1
   @Published var autoSendBarcode = false
   @Published var fullFrameScan = false
+  @Published var photoGridVisible = true
   @Published var insertIntoCursor = true
   @Published var dictationAddsPunctuation = true
   @Published var dictationRunning = false
@@ -721,8 +722,7 @@ private final class ClipModel: ObservableObject {
 
   private func sendPhoto(_ photo: CapturedPhoto) async {
     do {
-      let imageSize = CGSize(width: photo.image.width, height: photo.image.height)
-      let squarePhoto = try photo.cropped(toNormalizedRect: camera.photoViewfinderCropRect(for: imageSize))
+      let squarePhoto = try photo.cropped(toNormalizedRect: camera.photoViewfinderCropRect())
       let base64 = squarePhoto.data.base64EncodedString()
       try await sendResult(mode: .photo, message: [
         "kind": "photo",
@@ -915,35 +915,67 @@ private struct ClipRootView: View {
   @State private var bottomSheetExpansion: CGFloat = 0
   @State private var glassBlurIntensity: CGFloat = 0.72
   @State private var glassHue: CGFloat = 0
+  @State private var topHintFrame: CGRect = .zero
+  @State private var shutterFrame: CGRect = .zero
   @GestureState private var bottomSheetDragTranslation: CGFloat = 0
-  private let expandedSheetHeight: CGFloat = 148
+  private var expandedSheetHeight: CGFloat {
+    model.mode == .photo ? 204 : 148
+  }
+  private var topHintTopPadding: CGFloat {
+    model.mode == .photo ? 0 : 16
+  }
 
   var body: some View {
-    ZStack {
-      ViewfinderBackground(model: model)
+    GeometryReader { rootProxy in
+      ZStack {
+        ViewfinderBackground(model: model, photoPreviewRect: photoPreviewRect(in: rootProxy.size))
 
-      VStack(spacing: 0) {
-        topHintRow
-        Spacer()
-      }
-      .padding(.horizontal, 18)
-      .padding(.top, 16)
+        VStack(spacing: 0) {
+          topHintRow
+            .captureFrame(in: "clip-root") { topHintFrame = $0 }
+          Spacer()
+        }
+        .padding(.horizontal, 18)
+        .padding(.top, topHintTopPadding)
 
-      VStack(spacing: 0) {
-        Spacer()
-        shutterButton
-          .padding(.bottom, 16)
-        bottomControlsGlass
+        VStack(spacing: 0) {
+          Spacer()
+          shutterButton
+            .captureFrame(in: "clip-root") { shutterFrame = $0 }
+            .padding(.bottom, 16)
+          bottomControlsGlass
+        }
+        .padding(.horizontal, 18)
+        .padding(.bottom, 18)
       }
-      .padding(.horizontal, 18)
-      .padding(.bottom, 18)
+      .coordinateSpace(name: "clip-root")
     }
     .ignoresSafeArea(.container, edges: .bottom)
     .background(Color.black)
     .foregroundStyle(.white)
     .tint(glassControlColor)
     .onAppear { model.startMode() }
-    .onChange(of: model.mode) { _ in model.startMode() }
+  }
+
+  private func photoPreviewRect(in size: CGSize) -> CGRect {
+    let fallback = photoSquareRect(in: size, safeAreaInsets: EdgeInsets())
+    guard topHintFrame.height > 1, shutterFrame.height > 1 else {
+      return fallback
+    }
+
+    let top = topHintFrame.maxY
+    let bottom = shutterFrame.minY
+    guard bottom > top else { return fallback }
+
+    let side = fallback.width
+    let gap = max(0, (bottom - top - side) / 2)
+    let y = min(max(top + gap, top), max(top, bottom - side))
+    return CGRect(
+      x: fallback.minX,
+      y: y,
+      width: side,
+      height: side
+    )
   }
 
   private var topHintRow: some View {
@@ -1085,6 +1117,21 @@ private struct ClipRootView: View {
 
   private func expandedControls(progress: CGFloat) -> some View {
     VStack(spacing: 10) {
+      if model.mode == .photo {
+        HStack(spacing: 10) {
+          GlassToggleControl(
+            title: "Grid",
+            systemImage: model.photoGridVisible ? "grid" : "square",
+            isOn: model.photoGridVisible,
+            accentColor: glassAccentColor,
+            tintColor: glassTintColor
+          ) {
+            model.photoGridVisible.toggle()
+          }
+        }
+        .transition(.opacity.combined(with: .move(edge: .top)))
+      }
+
       HStack(spacing: 10) {
         Image(systemName: "circle.lefthalf.filled")
           .font(.system(size: 15, weight: .semibold))
@@ -1349,6 +1396,28 @@ private struct CameraModeFramePreferenceKey: PreferenceKey {
 
   static func reduce(value: inout [ClipMode: CGRect], nextValue: () -> [ClipMode: CGRect]) {
     value.merge(nextValue(), uniquingKeysWith: { _, next in next })
+  }
+}
+
+private struct ViewFramePreferenceKey: PreferenceKey {
+  static var defaultValue: CGRect = .zero
+
+  static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
+    value = nextValue()
+  }
+}
+
+private extension View {
+  func captureFrame(in coordinateSpaceName: String, onChange: @escaping (CGRect) -> Void) -> some View {
+    background {
+      GeometryReader { proxy in
+        Color.clear.preference(
+          key: ViewFramePreferenceKey.self,
+          value: proxy.frame(in: .named(coordinateSpaceName))
+        )
+      }
+    }
+    .onPreferenceChange(ViewFramePreferenceKey.self, perform: onChange)
   }
 }
 
@@ -1927,11 +1996,12 @@ private struct ZoomSlider: View {
 
 private struct ViewfinderBackground: View {
   @ObservedObject var model: ClipModel
+  let photoPreviewRect: CGRect
 
   var body: some View {
     ZStack {
       if showsCameraFeed {
-        CameraPreview(camera: model.camera)
+        CameraPreview(camera: model.camera, mode: model.mode, photoPreviewRect: photoPreviewRect)
           .ignoresSafeArea()
       } else {
         modeBackdrop
@@ -1959,7 +2029,7 @@ private struct ViewfinderBackground: View {
       }
 
       if model.mode == .photo {
-        PhotoSquareOverlay()
+        PhotoSquareOverlay(rect: photoPreviewRect, gridVisible: model.photoGridVisible)
           .ignoresSafeArea()
       }
 
@@ -2191,25 +2261,40 @@ private final class LiveTextCaptureView: UIView, UIScrollViewDelegate {
 
 private struct CameraPreview: UIViewRepresentable {
   let camera: ClipCamera
+  let mode: ClipMode
+  let photoPreviewRect: CGRect
 
   func makeUIView(context: Context) -> PreviewView {
     let view = PreviewView(camera: camera)
-    view.previewLayer.session = camera.session
+    view.mode = mode
+    view.photoPreviewRect = photoPreviewRect
     camera.attachPreviewView(view)
     return view
   }
 
   func updateUIView(_ uiView: PreviewView, context: Context) {
-    uiView.previewLayer.session = camera.session
     uiView.camera = camera
+    uiView.mode = mode
+    uiView.photoPreviewRect = photoPreviewRect
     camera.attachPreviewView(uiView)
   }
 }
 
 private final class PreviewView: UIView {
-  override class var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
-  var previewLayer: AVCaptureVideoPreviewLayer { layer as! AVCaptureVideoPreviewLayer }
+  let previewLayer = AVCaptureVideoPreviewLayer()
   weak var camera: ClipCamera?
+  var mode: ClipMode = .barcode {
+    didSet {
+      guard oldValue != mode else { return }
+      setNeedsLayout()
+    }
+  }
+  var photoPreviewRect: CGRect = .zero {
+    didSet {
+      guard oldValue != photoPreviewRect else { return }
+      setNeedsLayout()
+    }
+  }
   private let focusRing = UIView()
 
   init(camera: ClipCamera) {
@@ -2230,12 +2315,28 @@ private final class PreviewView: UIView {
 
   override func layoutSubviews() {
     super.layoutSubviews()
+    updatePreviewLayerFrame()
     camera?.updateRectOfInterest(from: previewLayer)
+  }
+
+  override func didMoveToWindow() {
+    super.didMoveToWindow()
+    if window == nil {
+      previewLayer.session = nil
+      camera?.detachPreviewView(self)
+    } else if let camera {
+      camera.attachPreviewView(self)
+    }
   }
 
   override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
     guard let point = touches.first?.location(in: self) else { return }
-    let devicePoint = previewLayer.captureDevicePointConverted(fromLayerPoint: point)
+    let layerPoint = CGPoint(
+      x: point.x - previewLayer.frame.minX,
+      y: point.y - previewLayer.frame.minY
+    )
+    guard previewLayer.bounds.contains(layerPoint) else { return }
+    let devicePoint = previewLayer.captureDevicePointConverted(fromLayerPoint: layerPoint)
     camera?.focus(at: devicePoint)
     showFocusRing(at: point)
   }
@@ -2244,6 +2345,7 @@ private final class PreviewView: UIView {
     previewLayer.videoGravity = .resizeAspectFill
     backgroundColor = .black
     isMultipleTouchEnabled = false
+    layer.addSublayer(previewLayer)
 
     focusRing.isUserInteractionEnabled = false
     focusRing.alpha = 0
@@ -2267,6 +2369,23 @@ private final class PreviewView: UIView {
         self.focusRing.alpha = 0
       }
     }
+  }
+
+  private func updatePreviewLayerFrame() {
+    let nextFrame: CGRect
+    if mode == .photo {
+      nextFrame = photoPreviewRect
+    } else {
+      nextFrame = bounds
+    }
+    guard nextFrame.width > 1, nextFrame.height > 1 else {
+      previewLayer.frame = .zero
+      return
+    }
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
+    previewLayer.frame = nextFrame
+    CATransaction.commit()
   }
 }
 
@@ -2387,35 +2506,18 @@ private struct DictationLiveOverlay: View {
 }
 
 private struct PhotoSquareOverlay: View {
+  let rect: CGRect
+  let gridVisible: Bool
+
   var body: some View {
-    GeometryReader { proxy in
-      let rect = photoSquareRect(in: proxy.size, safeAreaInsets: proxy.safeAreaInsets)
-      let shape = RoundedRectangle(cornerRadius: 34, style: .continuous)
+    ZStack {
+      Rectangle()
+        .stroke(.white.opacity(0.28), lineWidth: 1)
+        .frame(width: rect.width, height: rect.height)
+        .position(x: rect.midX, y: rect.midY)
 
-      ZStack {
-        Color.black.opacity(0.48)
-          .mask {
-            Rectangle()
-              .overlay(alignment: .topLeading) {
-                shape
-                  .frame(width: rect.width, height: rect.height)
-                  .offset(x: rect.minX, y: rect.minY)
-                  .blendMode(.destinationOut)
-              }
-              .compositingGroup()
-          }
-
-        shape
-          .stroke(.white.opacity(0.72), lineWidth: 1.2)
-          .frame(width: rect.width, height: rect.height)
-          .position(x: rect.midX, y: rect.midY)
-
-        shape
-          .stroke(.black.opacity(0.24), lineWidth: 1)
-          .frame(width: rect.width - 6, height: rect.height - 6)
-          .position(x: rect.midX, y: rect.midY)
-
-        PhotoGridLines(cornerRadius: 30)
+      if gridVisible {
+        PhotoGridLines()
           .frame(width: rect.width, height: rect.height)
           .position(x: rect.midX, y: rect.midY)
       }
@@ -2425,7 +2527,7 @@ private struct PhotoSquareOverlay: View {
 }
 
 private func photoSquareRect(in size: CGSize, safeAreaInsets: EdgeInsets) -> CGRect {
-  let side = min(size.width - 48, size.height * 0.54)
+  let side = max(0, min(size.width, size.height * 0.58))
   return CGRect(
     x: (size.width - side) / 2,
     y: max(safeAreaInsets.top + 132, (size.height - side) * 0.26),
@@ -2447,13 +2549,10 @@ private func photoSquareRect(in size: CGSize, safeAreaInsets: UIEdgeInsets) -> C
 }
 
 private struct PhotoGridLines: View {
-  let cornerRadius: CGFloat
-
   var body: some View {
     GeometryReader { proxy in
       let width = proxy.size.width
       let height = proxy.size.height
-      let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
 
       Path { path in
         for index in 1...2 {
@@ -2465,7 +2564,6 @@ private struct PhotoGridLines: View {
         }
       }
       .stroke(.white.opacity(0.22), lineWidth: 0.8)
-      .clipShape(shape)
     }
   }
 }
@@ -2519,7 +2617,9 @@ private struct CapturedPhoto {
   }
 
   func cropped(toNormalizedRect normalizedRect: CGRect?) throws -> CapturedPhoto {
-    guard let normalizedRect else { return try squareCropped() }
+    guard let normalizedRect else {
+      throw ClipError.message("Camera preview bounds are unavailable.")
+    }
 
     let sourceWidth = CGFloat(image.width)
     let sourceHeight = CGFloat(image.height)
@@ -2533,7 +2633,7 @@ private struct CapturedPhoto {
       .integral
 
     guard cropRect.width > 1, cropRect.height > 1 else {
-      return try squareCropped()
+      throw ClipError.message("Camera preview bounds did not map to the captured photo.")
     }
     let side = min(cropRect.width, cropRect.height)
     let squareCropRect = CGRect(
@@ -2715,8 +2815,21 @@ private final class ClipCamera: NSObject, ObservableObject, AVCaptureMetadataOut
 
   @MainActor
   func attachPreviewView(_ view: PreviewView) {
+    if previewView === view, view.previewLayer.session === session {
+      updateRectOfInterest(from: view.previewLayer)
+      return
+    }
+    previewView?.previewLayer.session = nil
     previewView = view
+    view.previewLayer.session = session
     updateRectOfInterest(from: view.previewLayer)
+  }
+
+  @MainActor
+  func detachPreviewView(_ view: PreviewView) {
+    if previewView === view {
+      previewView = nil
+    }
   }
 
   func start() {
@@ -2781,40 +2894,14 @@ private final class ClipCamera: NSObject, ObservableObject, AVCaptureMetadataOut
   }
 
   @MainActor
-  func photoViewfinderCropRect(for imageSize: CGSize) -> CGRect? {
+  func photoViewfinderCropRect() -> CGRect? {
     guard let previewView, !previewView.bounds.isEmpty else { return nil }
-    guard imageSize.width > 0, imageSize.height > 0 else { return nil }
-
-    let previewSize = previewView.bounds.size
-    let layerRect = photoSquareRect(
-      in: previewSize,
-      safeAreaInsets: previewView.safeAreaInsets
-    )
-
-    let scale = max(previewSize.width / imageSize.width, previewSize.height / imageSize.height)
-    guard scale.isFinite, scale > 0 else { return nil }
-
-    let scaledImageSize = CGSize(width: imageSize.width * scale, height: imageSize.height * scale)
-    let imageOriginInLayer = CGPoint(
-      x: (previewSize.width - scaledImageSize.width) / 2,
-      y: (previewSize.height - scaledImageSize.height) / 2
-    )
-    let cropRect = CGRect(
-      x: (layerRect.minX - imageOriginInLayer.x) / scale,
-      y: (layerRect.minY - imageOriginInLayer.y) / scale,
-      width: layerRect.width / scale,
-      height: layerRect.height / scale
-    )
-    let imageBounds = CGRect(origin: .zero, size: imageSize)
-    let clippedCropRect = cropRect.intersection(imageBounds)
-    guard !clippedCropRect.isNull, !clippedCropRect.isEmpty else { return nil }
-
-    return CGRect(
-      x: clampedUnit(clippedCropRect.minX / imageSize.width),
-      y: clampedUnit(clippedCropRect.minY / imageSize.height),
-      width: min(1, max(0, clippedCropRect.width / imageSize.width)),
-      height: min(1, max(0, clippedCropRect.height / imageSize.height))
-    )
+    let previewLayer = previewView.previewLayer
+    guard !previewLayer.bounds.isEmpty else { return nil }
+    let rect = previewLayer.metadataOutputRectConverted(fromLayerRect: previewLayer.bounds)
+      .intersection(CGRect(x: 0, y: 0, width: 1, height: 1))
+    guard !rect.isNull, !rect.isEmpty else { return nil }
+    return rect
   }
 
   func focus(at devicePoint: CGPoint) {
@@ -2866,7 +2953,7 @@ private final class ClipCamera: NSObject, ObservableObject, AVCaptureMetadataOut
             self.session.startRunning()
           }
           self.applyCurrentCaptureOrientation()
-          self.photoOutput.capturePhoto(with: AVCapturePhotoSettings(), delegate: self)
+          self.photoOutput.capturePhoto(with: self.makePhotoSettings(), delegate: self)
         } catch {
           completion(.failure(error))
         }
@@ -2901,6 +2988,32 @@ private final class ClipCamera: NSObject, ObservableObject, AVCaptureMetadataOut
         self.updateRectOfInterest(from: previewLayer)
       }
     }
+  }
+
+  private func makePhotoSettings() -> AVCapturePhotoSettings {
+    let settings = AVCapturePhotoSettings()
+    if let maxDimensions = largestSupportedPhotoDimensions() {
+      settings.maxPhotoDimensions = maxDimensions
+    }
+    if photoOutput.maxPhotoQualityPrioritization.rawValue >= AVCapturePhotoOutput.QualityPrioritization.quality.rawValue {
+      settings.photoQualityPrioritization = .quality
+    }
+    return settings
+  }
+
+  private func largestSupportedPhotoDimensions() -> CMVideoDimensions? {
+    guard let device else { return nil }
+    let outputMaxDimensions = photoOutput.maxPhotoDimensions
+    return device.activeFormat.supportedMaxPhotoDimensions
+      .filter { dimensions in
+        dimensions.width > 0 &&
+          dimensions.height > 0 &&
+          dimensions.width <= outputMaxDimensions.width &&
+          dimensions.height <= outputMaxDimensions.height
+      }
+      .max { left, right in
+        Int64(left.width) * Int64(left.height) < Int64(right.width) * Int64(right.height)
+      }
   }
 
   private func supportedTypes(_ available: [AVMetadataObject.ObjectType]) -> [AVMetadataObject.ObjectType] {
@@ -3171,6 +3284,11 @@ private final class ClipCamera: NSObject, ObservableObject, AVCaptureMetadataOut
     }
     if let connection = metadataOutput.connection(with: .metadata), connection.isVideoOrientationSupported {
       connection.videoOrientation = orientation
+    }
+    DispatchQueue.main.async {
+      if let connection = self.previewView?.previewLayer.connection, connection.isVideoOrientationSupported {
+        connection.videoOrientation = orientation
+      }
     }
   }
 

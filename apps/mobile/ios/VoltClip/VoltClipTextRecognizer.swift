@@ -23,7 +23,6 @@ class VoltClipTextRecognizer: RCTEventEmitter, AVCapturePhotoCaptureDelegate, AV
   private var pendingReject: RCTPromiseRejectBlock?
   private var pendingPhotoResolve: RCTPromiseResolveBlock?
   private var pendingPhotoReject: RCTPromiseRejectBlock?
-  private var pendingPhotoPreviewRect: CGRect?
   private var pendingImageURL: URL?
   private var pendingImageData: Data?
   private var pendingImageSize: CGSize?
@@ -170,7 +169,7 @@ class VoltClipTextRecognizer: RCTEventEmitter, AVCapturePhotoCaptureDelegate, AV
     }
   }
 
-  func capturePhoto(previewRect: CGRect, resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) {
+  func capturePhoto(previewRect _: CGRect, resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) {
     AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
       guard let self else { return }
 
@@ -189,7 +188,6 @@ class VoltClipTextRecognizer: RCTEventEmitter, AVCapturePhotoCaptureDelegate, AV
 
           self.pendingPhotoResolve = resolve
           self.pendingPhotoReject = reject
-          self.pendingPhotoPreviewRect = previewRect
           self.scheduleCaptureTimeout()
 
           if !self.session.isRunning {
@@ -197,7 +195,7 @@ class VoltClipTextRecognizer: RCTEventEmitter, AVCapturePhotoCaptureDelegate, AV
           }
 
           self.applyCurrentCaptureOrientation()
-          self.finishVideoFramePhotoCapture()
+          self.output.capturePhoto(with: self.makePhotoSettings(), delegate: self)
         } catch {
           self.clearPendingCapture()
           reject("photo_capture_failed", error.localizedDescription, error)
@@ -589,7 +587,7 @@ class VoltClipTextRecognizer: RCTEventEmitter, AVCapturePhotoCaptureDelegate, AV
 
   private func finishPhotoCapture(photo: AVCapturePhoto, error: Error?) {
     if let error {
-      finishPhotoWithError(code: "photo_capture_failed", message: error.localizedDescription, error: error)
+      finishVideoFramePhotoCapture(fallbackReason: error.localizedDescription)
       return
     }
 
@@ -598,7 +596,7 @@ class VoltClipTextRecognizer: RCTEventEmitter, AVCapturePhotoCaptureDelegate, AV
       let sourceImage = UIImage(data: data)?.normalizedForVoltRelay(),
       let croppedImage = cropImageToPreviewRect(sourceImage)
     else {
-      finishPhotoWithError(code: "photo_capture_failed", message: "Unable to prepare the captured photo.", error: nil)
+      finishVideoFramePhotoCapture(fallbackReason: "Unable to prepare the captured photo.")
       return
     }
 
@@ -622,20 +620,20 @@ class VoltClipTextRecognizer: RCTEventEmitter, AVCapturePhotoCaptureDelegate, AV
     }
   }
 
-  private func finishVideoFramePhotoCapture(retryCount: Int = 0) {
+  private func finishVideoFramePhotoCapture(fallbackReason: String, retryCount: Int = 0) {
     guard let sourceImage = latestVideoFrame else {
       if retryCount < 3 {
         sessionQueue.asyncAfter(deadline: .now() + 0.08) { [weak self] in
-          self?.finishVideoFramePhotoCapture(retryCount: retryCount + 1)
+          self?.finishVideoFramePhotoCapture(fallbackReason: fallbackReason, retryCount: retryCount + 1)
         }
       } else {
-        finishPhotoWithError(code: "photo_capture_failed", message: "Camera preview is not ready yet.", error: nil)
+        finishPhotoWithError(code: "photo_capture_failed", message: "\(fallbackReason) Preview fallback is not ready yet.", error: nil)
       }
       return
     }
 
     guard let croppedImage = cropVideoFrameToPreviewRect(sourceImage) else {
-      finishPhotoWithError(code: "photo_capture_failed", message: "Unable to crop the preview frame.", error: nil)
+      finishPhotoWithError(code: "photo_capture_failed", message: "\(fallbackReason) Unable to crop the preview fallback frame.", error: nil)
       return
     }
 
@@ -663,14 +661,13 @@ class VoltClipTextRecognizer: RCTEventEmitter, AVCapturePhotoCaptureDelegate, AV
     let cropRect = DispatchQueue.main.sync { () -> CGRect? in
       guard
         let previewView = self.previewOverlayView,
-        let previewRect = self.pendingPhotoPreviewRect,
         previewView.bounds.width > 1,
         previewView.bounds.height > 1
       else {
         return nil
       }
 
-      let normalizedRect = previewView.metadataOutputRect(fromLayerRect: previewRect)
+      let normalizedRect = previewView.metadataOutputRectForBounds()
       let imageBounds = image.extent
       return CGRect(
         x: imageBounds.minX + (normalizedRect.origin.x * imageBounds.width),
@@ -702,14 +699,13 @@ class VoltClipTextRecognizer: RCTEventEmitter, AVCapturePhotoCaptureDelegate, AV
     let cropRect = DispatchQueue.main.sync { () -> CGRect? in
       guard
         let previewView = self.previewOverlayView,
-        let previewRect = self.pendingPhotoPreviewRect,
         previewView.bounds.width > 1,
         previewView.bounds.height > 1
       else {
         return nil
       }
 
-      let normalizedRect = previewView.metadataOutputRect(fromLayerRect: previewRect)
+      let normalizedRect = previewView.metadataOutputRectForBounds()
       let imageWidth = CGFloat(cgImage.width)
       let imageHeight = CGFloat(cgImage.height)
       return CGRect(
@@ -856,6 +852,32 @@ class VoltClipTextRecognizer: RCTEventEmitter, AVCapturePhotoCaptureDelegate, AV
     return (outputData, outputSize)
   }
 
+  private func makePhotoSettings() -> AVCapturePhotoSettings {
+    let settings = AVCapturePhotoSettings()
+    if let maxDimensions = largestSupportedPhotoDimensions() {
+      settings.maxPhotoDimensions = maxDimensions
+    }
+    if output.maxPhotoQualityPrioritization.rawValue >= AVCapturePhotoOutput.QualityPrioritization.quality.rawValue {
+      settings.photoQualityPrioritization = .quality
+    }
+    return settings
+  }
+
+  private func largestSupportedPhotoDimensions() -> CMVideoDimensions? {
+    guard let device = videoDevice else { return nil }
+    let outputMaxDimensions = output.maxPhotoDimensions
+    return device.activeFormat.supportedMaxPhotoDimensions
+      .filter { dimensions in
+        dimensions.width > 0 &&
+          dimensions.height > 0 &&
+          dimensions.width <= outputMaxDimensions.width &&
+          dimensions.height <= outputMaxDimensions.height
+      }
+      .max { left, right in
+        Int64(left.width) * Int64(left.height) < Int64(right.width) * Int64(right.height)
+      }
+  }
+
   private func normalizeImageOrientation(_ image: UIImage) -> UIImage {
     if image.imageOrientation == .up {
       return image
@@ -974,7 +996,12 @@ class VoltClipTextRecognizer: RCTEventEmitter, AVCapturePhotoCaptureDelegate, AV
   private func scheduleCaptureTimeout() {
     captureTimeoutWorkItem?.cancel()
     let timeout = DispatchWorkItem { [weak self] in
-      self?.finishWithError(code: "ocr_capture_timeout", message: "The text capture timed out. Try again.", error: nil)
+      guard let self else { return }
+      if self.pendingPhotoResolve != nil || self.pendingPhotoReject != nil {
+        self.finishPhotoWithError(code: "photo_capture_timeout", message: "The photo capture timed out. Try again.", error: nil)
+      } else {
+        self.finishWithError(code: "ocr_capture_timeout", message: "The text capture timed out. Try again.", error: nil)
+      }
     }
     captureTimeoutWorkItem = timeout
     DispatchQueue.main.asyncAfter(deadline: .now() + 12, execute: timeout)
@@ -987,7 +1014,6 @@ class VoltClipTextRecognizer: RCTEventEmitter, AVCapturePhotoCaptureDelegate, AV
     pendingReject = nil
     pendingPhotoResolve = nil
     pendingPhotoReject = nil
-    pendingPhotoPreviewRect = nil
     pendingImageURL = nil
     pendingImageData = nil
     pendingImageSize = nil
@@ -1058,8 +1084,8 @@ class VoltClipTextCameraView: UIView {
     return previewLayer.captureDevicePointConverted(fromLayerPoint: layerPoint)
   }
 
-  func metadataOutputRect(fromLayerRect rect: CGRect) -> CGRect {
-    previewLayer.metadataOutputRectConverted(fromLayerRect: rect)
+  func metadataOutputRectForBounds() -> CGRect {
+    previewLayer.metadataOutputRectConverted(fromLayerRect: previewLayer.bounds)
   }
 
   func transformedMachineReadableCodeObject(

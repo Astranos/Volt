@@ -29,7 +29,6 @@ const photoFloatingBottom = Platform.select({ ios: 94, default: 86 });
 const CameraView = ExpoCameraView as unknown as ComponentType<any>;
 const NativeCameraView = VoltClipTextCameraView as unknown as ComponentType<any>;
 const zoomStep = 0.08;
-const iosExpoPreviewCaptureScale = 0.56;
 
 function clampZoom(value: number) {
   return Math.max(0, Math.min(1, value));
@@ -144,9 +143,9 @@ export default function PhotosTab() {
       frameY: photoFrameLayout.y,
       frameWidth: photoFrameLayout.width,
       frameHeight: photoFrameLayout.height,
-      captureScale: Platform.OS === "ios" ? iosExpoPreviewCaptureScale : 1,
     };
   }, [cameraLayout, photoFrameLayout]);
+  const photoCaptureReady = useNativePhotoCamera ? photoFrameSize > 0 : !!photoCropFrame;
   const controlRotationStyle = useMemo(
     () => ({ transform: [{ rotate: `${cameraOrientationRotationDegrees(cameraOrientation)}deg` }] }),
     [cameraOrientation]
@@ -224,7 +223,15 @@ export default function PhotosTab() {
           {viewfinderFocused && useNativePhotoCamera ? (
             <NativeCameraView
               ref={scanner.cameraRef}
-              style={styles.camera}
+              style={[
+                localStyles.nativePhotoCamera,
+                {
+                  top: photoFrameGap,
+                  left: photoFrameGap,
+                  width: photoFrameSize,
+                  height: photoFrameSize,
+                },
+              ]}
               onLayout={handleCameraLayout}
               onTouchStart={handleCameraTouchStart}
               onTouchMove={handleCameraTouchMove}
@@ -315,15 +322,15 @@ export default function PhotosTab() {
               shutter={
                 <View style={controlRotationStyle}>
                   <ViewfinderBottomShutter
-                    disabled={scanner.photoSending || !photoCropFrame}
+                    disabled={scanner.photoSending || !photoCaptureReady}
                     error={scanner.photoError}
                     icon={scanner.photoSending ? "hourglass-outline" : "camera"}
                     label="Take and send photo"
-                    onPress={() => scanner.sendPhotoCapture(photoCropFrame)}
+                    onPress={() => scanner.sendPhotoCapture(useNativePhotoCamera ? null : photoCropFrame)}
                     status={
                       scanner.photoSending
                         ? "Sending photo..."
-                        : !photoCropFrame
+                        : !photoCaptureReady
                           ? "Preparing camera frame..."
                         : showPhotoSent
                           ? "Photo sent to browser"
@@ -391,6 +398,9 @@ function PhotoGridOverlay() {
 }
 
 const localStyles = {
+  nativePhotoCamera: {
+    position: "absolute" as const,
+  },
   photoFrameOverlay: {
     position: "absolute" as const,
     top: 0,

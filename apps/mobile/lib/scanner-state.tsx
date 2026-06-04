@@ -1160,12 +1160,12 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       let photoBase64: string | null = null;
       let photoWidth: number | undefined;
       let photoHeight: number | undefined;
-      if (Platform.OS === "ios" && cropFrame && hasVoltClipTextRecognizer) {
+      if (Platform.OS === "ios" && hasVoltClipTextRecognizer) {
         const nativePhoto = await captureVoltClipPhotoInPreviewRect({
-          x: cropFrame.frameX,
-          y: cropFrame.frameY,
-          width: cropFrame.frameWidth,
-          height: cropFrame.frameHeight,
+          x: cropFrame?.frameX ?? 0,
+          y: cropFrame?.frameY ?? 0,
+          width: cropFrame?.frameWidth ?? 0,
+          height: cropFrame?.frameHeight ?? 0,
         });
         photoBase64 = nativePhoto.dataUrl?.replace(/^data:image\/jpeg;base64,/, "") ?? null;
         photoWidth = nativePhoto.width ? Number(nativePhoto.width) : undefined;

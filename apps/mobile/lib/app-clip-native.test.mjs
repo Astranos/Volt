@@ -148,12 +148,41 @@ test("full app photo relay crops to the visible square viewfinder", () => {
   const fullAppDelegate = readText(nativeFiles.fullAppDelegate);
 
   assert.match(fullAppDelegate, /private func photoSquareRect\(in size: CGSize, safeAreaInsets: EdgeInsets\)/);
-  assert.match(fullAppDelegate, /PhotoSquareOverlay[\s\S]*photoSquareRect\(in: proxy\.size, safeAreaInsets: proxy\.safeAreaInsets\)/);
-  assert.match(fullAppDelegate, /func photoViewfinderCropRect\(for imageSize: CGSize\) -> CGRect\?/);
-  assert.match(fullAppDelegate, /let scale = max\(previewSize\.width \/ imageSize\.width, previewSize\.height \/ imageSize\.height\)/);
+  assert.match(fullAppDelegate, /let side = max\(0, min\(size\.width, size\.height \* 0\.58\)\)/);
+  assert.match(fullAppDelegate, /private var topHintTopPadding: CGFloat \{\s*model\.mode == \.photo \? 0 : 16\s*\}/);
+  assert.match(fullAppDelegate, /topHintFrame\.maxY/);
+  assert.match(fullAppDelegate, /shutterFrame\.minY/);
+  assert.match(fullAppDelegate, /let gap = max\(0, \(bottom - top - side\) \/ 2\)/);
+  assert.match(fullAppDelegate, /CameraPreview\(camera: model\.camera, mode: model\.mode, photoPreviewRect: photoPreviewRect\)/);
+  assert.match(fullAppDelegate, /let previewLayer = AVCaptureVideoPreviewLayer\(\)/);
+  assert.match(fullAppDelegate, /nextFrame = photoPreviewRect/);
+  assert.match(fullAppDelegate, /previewLayer\.frame = nextFrame/);
+  assert.match(fullAppDelegate, /PhotoSquareOverlay\(rect: photoPreviewRect, gridVisible: model\.photoGridVisible\)/);
+  assert.match(fullAppDelegate, /GlassToggleControl\(\s*title: "Grid"/);
+  assert.match(fullAppDelegate, /previewLayer\.videoGravity = \.resizeAspectFill/);
+  assert.match(fullAppDelegate, /func photoViewfinderCropRect\(\) -> CGRect\?/);
+  assert.match(fullAppDelegate, /previewLayer\.metadataOutputRectConverted\(fromLayerRect: previewLayer\.bounds\)/);
+  assert.doesNotMatch(fullAppDelegate, /let scale = max\(previewSize\.width \/ imageSize\.width, previewSize\.height \/ imageSize\.height\)/);
+  assert.doesNotMatch(fullAppDelegate, /min\(size\.width - 48, size\.height \* 0\.54\)/);
   assert.match(fullAppDelegate, /let side = min\(cropRect\.width, cropRect\.height\)/);
-  assert.match(fullAppDelegate, /let squarePhoto = try photo\.cropped\(toNormalizedRect: camera\.photoViewfinderCropRect\(for: imageSize\)\)/);
+  assert.match(fullAppDelegate, /let squarePhoto = try photo\.cropped\(toNormalizedRect: camera\.photoViewfinderCropRect\(\)\)/);
   assert.doesNotMatch(fullAppDelegate, /let squarePhoto = try photo\.squareCropped\(\)/);
+});
+
+test("native photo capture requests maximum still dimensions before preview fallback", () => {
+  const fullAppDelegate = readText(nativeFiles.fullAppDelegate);
+  const textRecognizer = readText(nativeFiles.textRecognizer);
+
+  for (const source of [fullAppDelegate, textRecognizer]) {
+    assert.match(source, /AVCapturePhotoSettings\(\)/);
+    assert.match(source, /settings\.maxPhotoDimensions = maxDimensions/);
+    assert.match(source, /activeFormat\.supportedMaxPhotoDimensions/);
+    assert.match(source, /maxPhotoQualityPrioritization[\s\S]*QualityPrioritization\.quality/);
+    assert.match(source, /capturePhoto\(with: self\.makePhotoSettings\(\), delegate: self\)/);
+  }
+
+  assert.match(textRecognizer, /finishVideoFramePhotoCapture\(fallbackReason:/);
+  assert.match(textRecognizer, /previewLayer\.metadataOutputRectConverted\(fromLayerRect: previewLayer\.bounds\)/);
 });
 
 test("full app restores and repairs the last paired relay session after relaunch", () => {
