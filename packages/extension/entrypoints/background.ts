@@ -619,6 +619,7 @@ export default defineBackground({
       try {
         const state = await sendScannerOffscreenMessage({
           action: "scannerOffscreenStart",
+          appClipRelay: message?.appClipRelay === true,
           force: message?.force === true,
           mode: normalizeMobileCaptureMode(message?.mode),
           target: await getMobileCaptureTarget(),
@@ -633,6 +634,7 @@ export default defineBackground({
       try {
         const state = await sendScannerOffscreenMessage({
           action: "scannerOffscreenStart",
+          appClipRelay: message?.surface === "popup",
           force: false,
           mode: normalizeMobileCaptureMode(message?.mode),
           target: await getMobileCaptureTarget(),

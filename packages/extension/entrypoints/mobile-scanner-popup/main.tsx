@@ -63,6 +63,7 @@ function MobileScannerPopup() {
     setState((current) => ({ ...current, status: "creating", error: null }));
     const response = await chrome.runtime.sendMessage({
       action: "scannerStartForMode",
+      appClipRelay: true,
       force,
       mode: requestedMode,
     });
@@ -77,8 +78,8 @@ function MobileScannerPopup() {
     refreshState()
       .then((nextState) => {
         if (cancelled) return;
-        if (!nextState?.qrCodeUrl && nextState?.status !== "connected") {
-          void startSession(false);
+        if (nextState?.status !== "connected") {
+          void startSession(Boolean(nextState?.qrCodeUrl));
         }
       })
       .catch((error) => {
