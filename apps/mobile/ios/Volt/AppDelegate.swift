@@ -14,6 +14,8 @@ import VisionKit
 private let signalBaseURL = URL(string: "https://scanner-signal.vercel.app/api/signal")!
 private let validModes: Set<String> = ["ocr", "barcode", "photo", "dictation"]
 private let clipZoomStops: [CGFloat] = [1, 1.5, 2, 2.5, 3, 3.5, 4]
+private let persistedRelaySessionIdKey = "volt.native.relaySession.id"
+private let persistedRelaySessionModeKey = "volt.native.relaySession.mode"
 // Debug Metro port contract: provider.jsLocation = "\(ip):8090"
 
 @UIApplicationMain
@@ -190,6 +192,10 @@ private final class ClipModel: ObservableObject {
         self.status = "Release to send"
       }
     }
+
+    Task { @MainActor in
+      await restorePersistedRelaySession()
+    }
   }
 
   deinit {
@@ -210,10 +216,14 @@ private final class ClipModel: ObservableObject {
     }
 
     stopMode()
+    if let mode = invocation.mode {
+      self.mode = mode
+    }
     sessionId = invocation.sessionId
     isPairing = false
     error = nil
     status = "Paired with Chrome"
+    persistRelaySession(sessionId: invocation.sessionId, mode: mode)
     startMode()
     Task { await connect() }
   }
@@ -230,6 +240,7 @@ private final class ClipModel: ObservableObject {
     cursorTargetName = "Chrome"
     error = nil
     status = "Scan the Chrome QR to pair"
+    clearPersistedRelaySession()
     clearTextCapture()
     startMode()
   }
@@ -246,6 +257,9 @@ private final class ClipModel: ObservableObject {
       stopMode()
     }
     mode = nextMode
+    if let sessionId, !isPairing {
+      persistRelaySession(sessionId: sessionId, mode: nextMode)
+    }
     barcodeCandidate = nil
     barcodeCandidateSignature = nil
     error = nil
@@ -287,6 +301,42 @@ private final class ClipModel: ObservableObject {
       }
       self.error = "Chrome session is unavailable. Reopen the QR code."
     }
+  }
+
+  private func restorePersistedRelaySession() async {
+    guard sessionId == nil, isPairing else { return }
+    let defaults = UserDefaults.standard
+    guard
+      let persistedSessionId = defaults.string(forKey: persistedRelaySessionIdKey),
+      persistedSessionId.range(of: #"^[A-Za-z0-9_-]{4,80}$"#, options: .regularExpression) != nil
+    else {
+      clearPersistedRelaySession()
+      return
+    }
+
+    let persistedMode = defaults.string(forKey: persistedRelaySessionModeKey).flatMap(ClipMode.init(rawValue:))
+    stopMode()
+    if let persistedMode {
+      mode = persistedMode
+    }
+    sessionId = persistedSessionId
+    isPairing = false
+    error = nil
+    status = "Reconnecting to Chrome"
+    startMode()
+    await connect()
+  }
+
+  private func persistRelaySession(sessionId: String, mode: ClipMode) {
+    let defaults = UserDefaults.standard
+    defaults.set(sessionId, forKey: persistedRelaySessionIdKey)
+    defaults.set(mode.rawValue, forKey: persistedRelaySessionModeKey)
+  }
+
+  private func clearPersistedRelaySession() {
+    let defaults = UserDefaults.standard
+    defaults.removeObject(forKey: persistedRelaySessionIdKey)
+    defaults.removeObject(forKey: persistedRelaySessionModeKey)
   }
 
   func startMode() {

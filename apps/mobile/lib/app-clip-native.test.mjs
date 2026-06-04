@@ -156,6 +156,21 @@ test("full app photo relay crops to the visible square viewfinder", () => {
   assert.doesNotMatch(fullAppDelegate, /let squarePhoto = try photo\.squareCropped\(\)/);
 });
 
+test("full app restores and repairs the last paired relay session after relaunch", () => {
+  const fullAppDelegate = readText(nativeFiles.fullAppDelegate);
+
+  assert.match(fullAppDelegate, /persistedRelaySessionIdKey = "volt\.native\.relaySession\.id"/);
+  assert.match(fullAppDelegate, /persistedRelaySessionModeKey = "volt\.native\.relaySession\.mode"/);
+  assert.match(fullAppDelegate, /Task \{ @MainActor in\s*await restorePersistedRelaySession\(\)\s*\}/);
+  assert.match(fullAppDelegate, /func restorePersistedRelaySession\(\) async/);
+  assert.match(fullAppDelegate, /let defaults = UserDefaults\.standard[\s\S]*defaults\.string\(forKey: persistedRelaySessionIdKey\)/);
+  assert.match(fullAppDelegate, /status = "Reconnecting to Chrome"/);
+  assert.match(fullAppDelegate, /await connect\(\)/);
+  assert.match(fullAppDelegate, /persistRelaySession\(sessionId: invocation\.sessionId, mode: mode\)/);
+  assert.match(fullAppDelegate, /persistRelaySession\(sessionId: sessionId, mode: nextMode\)/);
+  assert.match(fullAppDelegate, /clearPersistedRelaySession\(\)[\s\S]*clearTextCapture\(\)/);
+});
+
 test("App Clip does not expose dictation mode from the dedicated clip entry", () => {
   const clipScreen = readText(nativeFiles.clipScreen);
 

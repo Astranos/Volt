@@ -39,6 +39,7 @@ function normalizeMode(value: string | null): MobileCaptureMode | null {
 function MobileScannerPopup() {
   const searchParams = useMemo(() => new URLSearchParams(window.location.search), []);
   const requestedMode = useMemo(() => normalizeMode(searchParams.get("mode")), [searchParams]);
+  const openedAt = useMemo(() => Date.now(), []);
   const [state, setState] = useState<MobileScannerState>({
     status: "creating",
     qrCodeUrl: null,
@@ -128,9 +129,11 @@ function MobileScannerPopup() {
 
   useEffect(() => {
     if (state.status !== "connected") return;
+    const connectedAt = state.connectedAt ? Date.parse(state.connectedAt) : Number.NaN;
+    if (!Number.isFinite(connectedAt) || connectedAt < openedAt - 1_000) return;
     const timer = window.setTimeout(() => window.close(), 650);
     return () => window.clearTimeout(timer);
-  }, [state.status]);
+  }, [openedAt, state.connectedAt, state.status]);
 
   useEffect(() => {
     if (state.status !== "waiting" || !state.joinWindowExpiresAt) return;

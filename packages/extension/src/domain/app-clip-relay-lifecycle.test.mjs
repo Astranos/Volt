@@ -108,6 +108,8 @@ test("Mobile Scanner popup entrypoint renders and dismisses the pairing QR", () 
   assert.match(popupSource, /message\?\.action !== "scannerStateChanged"/);
   assert.match(popupSource, /scannerPairingPopupClosed/);
   assert.match(popupSource, /state\.status === "connected"/);
+  assert.match(popupSource, /const openedAt = useMemo\(\(\) => Date\.now\(\), \[\]\);/);
+  assert.match(popupSource, /connectedAt < openedAt - 1_000/);
   assert.match(popupSource, /window\.close\(\)/);
 });
 
