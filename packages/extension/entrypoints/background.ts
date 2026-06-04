@@ -217,6 +217,10 @@ export default defineBackground({
         isLiveDictation
           ? { dictationSessionId: liveSessionId, final: livePhase === "final", sourceLength: value.length }
           : null;
+      const liveDictationDelta = (sourceLength) => {
+        const delta = value.slice(sourceLength);
+        return sourceLength > 0 ? delta : delta.trimStart();
+      };
 
       const isEditable = (element) => {
         if (!(element instanceof HTMLElement)) return false;
@@ -304,7 +308,7 @@ export default defineBackground({
           live.node?.isConnected &&
           selectionStillAtLiveNode
         ) {
-          live.node.nodeValue = value.slice(liveSourceStart).trimStart();
+          live.node.nodeValue = liveDictationDelta(liveSourceStart);
           live.sourceLength = value.length;
           const range = document.createRange();
           range.setStartAfter(live.node);
@@ -313,7 +317,7 @@ export default defineBackground({
           selection?.addRange(range);
           if (livePhase === "final") root.__voltLiveDictation = null;
         } else if (isLiveDictation && selection) {
-          const nextValue = live?.sessionId === liveSessionId ? value.slice(liveSourceLength).trimStart() : value;
+          const nextValue = live?.sessionId === liveSessionId ? liveDictationDelta(liveSourceLength) : value;
           if (!nextValue) {
             root.__voltLiveDictation =
               livePhase === "final"
@@ -374,7 +378,7 @@ export default defineBackground({
           : 0;
       const nextValue =
         isLiveDictation && live?.sessionId === liveSessionId
-          ? value.slice(replaceLiveInput ? liveSourceStart : liveSourceLength).trimStart()
+          ? liveDictationDelta(replaceLiveInput ? liveSourceStart : liveSourceLength)
           : value;
       if (isLiveDictation && !nextValue) {
         root.__voltLiveDictation =

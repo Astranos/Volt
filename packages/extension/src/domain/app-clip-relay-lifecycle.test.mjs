@@ -126,3 +126,12 @@ test("unified Mobile Scanner copies photos as PNG clipboard items", () => {
   assert.doesNotMatch(mobileScannerSource, /new ClipboardItem\(\{ \[photo\.blob\.type \|\| photo\.mimeType\]: photo\.blob \}\)/);
   assert.match(mobileScannerSource, /\[Volt Mobile Scanner\] Photo clipboard copy failed/);
 });
+
+test("live dictation insertion preserves spaces between partial deltas", () => {
+  assert.match(backgroundSource, /const liveDictationDelta = \(sourceLength\) => \{/);
+  assert.match(backgroundSource, /return sourceLength > 0 \? delta : delta\.trimStart\(\);/);
+  assert.match(backgroundSource, /live\.node\.nodeValue = liveDictationDelta\(liveSourceStart\);/);
+  assert.match(backgroundSource, /const nextValue = live\?\.sessionId === liveSessionId \? liveDictationDelta\(liveSourceLength\) : value;/);
+  assert.match(backgroundSource, /liveDictationDelta\(replaceLiveInput \? liveSourceStart : liveSourceLength\)/);
+  assert.doesNotMatch(backgroundSource, /value\.slice\(liveSourceLength\)\.trimStart\(\)/);
+});
