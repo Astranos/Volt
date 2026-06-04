@@ -135,6 +135,10 @@ private final class ClipModel: ObservableObject {
   private var dictationPressBlockedUntilRelease = false
   private var dictationHoldStartTask: Task<Void, Never>?
   private var dictationLatched = false
+  private var preservedUnpairMode: ClipMode?
+  private var preservedUnpairTextCapture: TextCapture?
+  private var preservedUnpairTextCaptureShowsCleanedImage = false
+  private var preservedUnpairLastText = ""
   @Published private(set) var dictationHoldRecording = false
 
   init() {
@@ -225,6 +229,7 @@ private final class ClipModel: ObservableObject {
         zoomFactor = 1
       }
     }
+    restorePreservedUnpairStateIfAvailable()
     sessionId = invocation.sessionId
     isPairing = false
     error = nil
@@ -234,8 +239,11 @@ private final class ClipModel: ObservableObject {
     Task { await connect() }
   }
 
-  func beginPairing() {
+  func beginPairing(preservingUnpairState: Bool = false) {
     stopMode()
+    if !preservingUnpairState {
+      clearPreservedUnpairState()
+    }
     isPairing = true
     sessionId = nil
     barcodeCandidate = nil
@@ -252,7 +260,27 @@ private final class ClipModel: ObservableObject {
   }
 
   func unpair() {
-    beginPairing()
+    preservedUnpairMode = mode
+    preservedUnpairTextCapture = textCapture
+    preservedUnpairTextCaptureShowsCleanedImage = textCaptureShowsCleanedImage
+    preservedUnpairLastText = lastText
+    beginPairing(preservingUnpairState: true)
+  }
+
+  private func restorePreservedUnpairStateIfAvailable() {
+    guard let preservedMode = preservedUnpairMode else { return }
+    mode = preservedMode
+    textCapture = preservedUnpairTextCapture
+    textCaptureShowsCleanedImage = preservedUnpairTextCaptureShowsCleanedImage
+    lastText = preservedUnpairLastText
+    clearPreservedUnpairState()
+  }
+
+  private func clearPreservedUnpairState() {
+    preservedUnpairMode = nil
+    preservedUnpairTextCapture = nil
+    preservedUnpairTextCaptureShowsCleanedImage = false
+    preservedUnpairLastText = ""
   }
 
   func selectMode(_ nextMode: ClipMode) {

@@ -307,6 +307,20 @@ export default defineContentScript({
       );
     };
 
+    const describeEditable = (element: HTMLElement) => {
+      const label =
+        element.getAttribute("aria-label") ||
+        element.getAttribute("placeholder") ||
+        element.getAttribute("name") ||
+        element.getAttribute("id") ||
+        (element.tagName === "TEXTAREA"
+          ? "Textarea"
+          : element.isContentEditable
+            ? "Editable text"
+            : "Text input");
+      return String(label).slice(0, 120);
+    };
+
     const primeEditableTarget = () => {
       const root = window as typeof window & {
         __voltLastEditable?: HTMLElement | null;
@@ -341,16 +355,25 @@ export default defineContentScript({
         root.__voltLastEditableRange =
           selection && selection.rangeCount > 0 ? selection.getRangeAt(0).cloneRange() : null;
       }
+
+      return {
+        browser: "Chrome",
+        tabTitle: document.title || "Current tab",
+        url: location.href,
+        cursor: describeEditable(target),
+        updatedAt: Date.now(),
+      };
     };
 
     const openMobileCapture = (mode: MobileCaptureMode) => {
-      primeEditableTarget();
+      const target = primeEditableTarget();
       try {
         chrome.runtime.sendMessage(
           {
             action: "openMobileCapture",
             mode,
             surface: "popup",
+            target,
           },
           (response) => {
             const lastError = chrome.runtime.lastError;

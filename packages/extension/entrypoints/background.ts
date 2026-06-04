@@ -434,20 +434,41 @@ export default defineBackground({
           return;
         }
 
-        const injectionResults = await chrome.scripting.executeScript({
-          target: { tabId: tab.id },
-          func: insertTextAtTrackedEditableFromBackground,
-          args: [
-            text,
-            {
-              ...options,
-              dictationSourceLength:
-                typeof options.dictationSessionId === "string"
-                  ? liveDictationSourceLengths.get(options.dictationSessionId) ?? 0
-                  : 0,
-            },
-          ],
-        });
+        const trackedInsertionTarget = mobileCursorTargetsByTabId.get(tab.id) ?? null;
+        const targetFrameId =
+          typeof trackedInsertionTarget?.frameId === "number"
+            ? trackedInsertionTarget.frameId
+            : null;
+        const injectionTarget =
+          targetFrameId === null
+            ? { tabId: tab.id }
+            : { tabId: tab.id, frameIds: [targetFrameId] };
+        const injectionArgs = [
+          text,
+          {
+            ...options,
+            dictationSourceLength:
+              typeof options.dictationSessionId === "string"
+                ? liveDictationSourceLengths.get(options.dictationSessionId) ?? 0
+                : 0,
+          },
+        ];
+        let injectionResults;
+        try {
+          injectionResults = await chrome.scripting.executeScript({
+            target: injectionTarget,
+            func: insertTextAtTrackedEditableFromBackground,
+            args: injectionArgs,
+          });
+        } catch (frameErr) {
+          if (targetFrameId === null) throw frameErr;
+          log("scanner frame insert fallback", frameErr?.message || frameErr);
+          injectionResults = await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            func: insertTextAtTrackedEditableFromBackground,
+            args: injectionArgs,
+          });
+        }
         const injectionResult = injectionResults?.[0]?.result;
         if (injectionResult?.dictationSessionId) {
           if (injectionResult.final) {
@@ -636,6 +657,9 @@ export default defineBackground({
 
     async function handleOpenMobileCapture(message, sender, sendResponse) {
       try {
+        if (message?.target) {
+          await updateMobileCaptureTarget(message.target, sender);
+        }
         const state = await sendScannerOffscreenMessage({
           action: "scannerOffscreenStart",
           appClipRelay: message?.surface === "popup",

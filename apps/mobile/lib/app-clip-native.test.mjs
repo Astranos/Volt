@@ -52,6 +52,11 @@ function importsPackage(moduleName, packageName) {
   return moduleName === packageName || moduleName.startsWith(`${packageName}/`);
 }
 
+function swiftFunctionBody(source, name) {
+  const match = source.match(new RegExp(`func ${name}\\(\\) \\{([\\s\\S]*?)\\n  \\}`));
+  return match?.[1] ?? "";
+}
+
 test("App Clip Info.plist contains native capture permission strings", () => {
   const plist = readText(nativeFiles.clipInfoPlist);
 
@@ -227,6 +232,26 @@ test("full app restores and repairs the last paired relay session after relaunch
   assert.match(fullAppDelegate, /persistRelaySession\(sessionId: invocation\.sessionId, mode: mode\)/);
   assert.match(fullAppDelegate, /persistRelaySession\(sessionId: sessionId, mode: nextMode\)/);
   assert.match(fullAppDelegate, /clearPersistedRelaySession\(\)[\s\S]*clearTextCapture\(\)/);
+});
+
+test("native unpair enters QR pairing and restores OCR capture review state after pairing", () => {
+  const fullAppDelegate = readText(nativeFiles.fullAppDelegate);
+  const clipAppDelegate = readText(nativeFiles.clipAppDelegate);
+
+  for (const source of [fullAppDelegate, clipAppDelegate]) {
+    const unpairBody = swiftFunctionBody(source, "unpair");
+    assert.match(source, /private var preservedUnpairMode: ClipMode\?/);
+    assert.match(source, /private var preservedUnpairTextCapture: TextCapture\?/);
+    assert.match(source, /func beginPairing\(preservingUnpairState: Bool = false\)/);
+    assert.match(source, /restorePreservedUnpairStateIfAvailable\(\)[\s\S]*sessionId = invocation\.sessionId/);
+    assert.match(source, /private func restorePreservedUnpairStateIfAvailable\(\)/);
+    assert.match(source, /private func clearPreservedUnpairState\(\)/);
+    assert.match(unpairBody, /preservedUnpairMode = mode/);
+    assert.match(unpairBody, /preservedUnpairTextCapture = textCapture/);
+    assert.match(unpairBody, /preservedUnpairLastText = lastText/);
+    assert.match(unpairBody, /beginPairing\(preservingUnpairState: true\)/);
+    assert.doesNotMatch(unpairBody, /clearTextCapture\(\)/);
+  }
 });
 
 test("App Clip does not expose dictation mode from the dedicated clip entry", () => {
