@@ -429,7 +429,7 @@ export class MobileScannerSession {
       this.sendControl(peer, {
         type: "hello",
         protocolVersion: SCANNER_PROTOCOL_VERSION,
-        extensionVersion: "1.0.34",
+        extensionVersion: "1.0.35",
         platform: "chrome-extension",
         capabilities: ["text", "barcode", "dictation", "photo", "photo-chunk-ack"],
         sessionId: this.state.sessionId,
