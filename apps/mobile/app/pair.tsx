@@ -11,8 +11,19 @@ import { useScanner } from "../lib/scanner-state";
 export default function PairRoute() {
   const router = useRouter();
   const scanner = useScanner();
-  const params = useLocalSearchParams<{ session?: string; mode?: string }>();
-  const session = typeof params.session === "string" ? params.session : null;
+  const params = useLocalSearchParams<{ join?: string; joinToken?: string; mode?: string; session?: string; token?: string }>();
+  const joinToken =
+    typeof params.joinToken === "string"
+      ? params.joinToken
+      : typeof params.join === "string"
+        ? params.join
+        : typeof params.token === "string"
+          ? params.token
+          : null;
+  const session =
+    typeof params.session === "string"
+      ? params.session
+      : joinToken;
   const mode = normalizeFullCaptureMode(params.mode);
   const destination = useMemo(() => routeForCaptureMode(mode), [mode]);
 
@@ -21,8 +32,9 @@ export default function PairRoute() {
 
     async function pairAndOpen() {
       if (session) {
-        await scanner.pairFromUrl(buildPairUrl(session, mode));
+        await scanner.pairFromUrl(buildPairUrl(session, mode, joinToken));
       }
+      if (mode) scanner.setActiveMode(mode);
 
       if (!cancelled) router.replace(destination as never);
     }

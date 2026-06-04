@@ -83,8 +83,10 @@ test("App Clip photo relay is acknowledged only after extension downloads and st
   assert.match(offscreenSource, /if \(stored && result\.mode === "photo"\) photoAckIds\.push\(result\.id\)/);
   assert.match(backgroundSource, /async function handleScannerPhoto/);
   assert.match(backgroundSource, /const downloadResult = await downloadMobilePhoto\(photo\)/);
-  assert.match(backgroundSource, /const persisted = await persistMobilePhoto\(downloadedPhoto\)/);
-  assert.match(backgroundSource, /stripMobilePhotoData/);
+  assert.match(backgroundSource, /saveMobileScannerPhoto\(downloadedPhoto\)/);
+  assert.match(backgroundSource, /const persisted = savedPhoto \? true : await persistMobilePhoto\(downloadedPhoto\)/);
+  assert.match(backgroundSource, /const \{ blob, \.\.\.savedPhotoMetadata \} = savedPhoto\?\.photo \?\? \{\}/);
+  assert.match(backgroundSource, /\{ \.\.\.savedPhotoMetadata, dataUrl: downloadedPhoto\.dataUrl \}/);
 });
 
 test("Mobile Scanner popup entrypoint renders and dismisses the pairing QR", () => {
@@ -101,7 +103,8 @@ test("Mobile Scanner popup entrypoint renders and dismisses the pairing QR", () 
 
 test("unified Mobile Scanner can drag the selected photo batch", () => {
   assert.match(mobileScannerSource, /selectedPhotoIds/);
-  assert.match(mobileScannerSource, /const dragPhotos = selectedPhotoIds\.has\(photo\.id\) \? selectedPhotos : \[photo\]/);
-  assert.match(mobileScannerSource, /event\.dataTransfer\.setData\(PHOTO_DROP_MIME, JSON\.stringify\(transferablePhotos\)\)/);
-  assert.match(mobileScannerSource, /transferablePhotos\.map\(\(photo\) =>/);
+  assert.match(mobileScannerSource, /const sourcePhotos = selectedPhotoIds\.has\(photo\.id\) \? selectedPhotos : \[photo\]/);
+  assert.match(mobileScannerSource, /event\.dataTransfer\.items\.add\(file\)/);
+  assert.match(mobileScannerSource, /event\.dataTransfer\.setData\(PHOTO_DROP_MIME, JSON\.stringify\(bridgePayload\)\)/);
+  assert.match(mobileScannerSource, /onToggleSelection=\{\(shiftKey\) => onToggleSelection\(entry\.id, shiftKey\)\}/);
 });

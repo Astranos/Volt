@@ -6,10 +6,14 @@ import React, {
   useState,
 } from "react";
 import {
+  Check,
   ChevronDown,
   Copy,
   Download,
+  Eye,
   ImagePlus,
+  Loader2,
+  Plus,
   RefreshCw,
   Scan,
   ScanLine,
@@ -18,17 +22,30 @@ import {
   Type,
   Upload,
   X,
-  Check,
 } from "lucide-react";
+import type {
+  BarcodeMessage,
+  ScannerConnectionStatus,
+} from "../../../../scanner-protocol/src";
+import {
+  deleteMobileScannerResults,
+  groupPhotoResultsByBatch,
+  listMobileScannerResults,
+  restoreMobileScannerResults,
+  saveMobileScannerPhoto,
+  saveMobileScannerScan,
+  type HydratedMobileScannerPhotoResult,
+  type HydratedMobileScannerResult,
+  type MobileScannerScanResult,
+} from "../../domain/mobile-scanner-results";
 import { cn } from "../../lib/utils";
+import { showSidepanelToast, type SidepanelToastTone } from "../../lib/sidepanel-toast";
 import { ConnectionPill } from "./mobile-shared";
 import { ScrollArea } from "../ui/scroll-area";
 import {
-  showSidepanelToast,
-  type SidepanelToastTone,
-} from "../../lib/sidepanel-toast";
-import {
   PHOTO_DROP_MIME,
+  blobToDataUrl,
+  blobToFile,
   dataUrlToFile,
   dataUrlToPngBlob,
   formatPhotoSize,
@@ -37,69 +54,45 @@ import {
   normalizeImageFilename,
   type MobilePhoto,
 } from "./mobile-photo-helpers";
-import type {
-  BarcodeMessage,
-  ScannerConnectionStatus,
-} from "../../../../scanner-protocol/src";
 
-const SCAN_STORAGE_KEY = "volt.mobileScanner.scans";
-const PHOTO_STORAGE_KEY = "volt.mobilePhotos.photos";
-const MAX_SCANS = 100;
-const MAX_PHOTOS = 80;
-const CLUSTER_WINDOW_MS = 3 * 60 * 1000;
-const EXIT_ANIMATION_MS = 200;
+const EXIT_ANIMATION_MS = 180;
+const UNDO_WINDOW_MS = 7000;
 
 type MobileScannerState = {
   status: ScannerConnectionStatus;
   qrCodeUrl: string | null;
   error: string | null;
   connectedAt?: string | null;
+  connectedPeerCount?: number;
+  transferSummary?: string | null;
 };
 
-type ScanRecord = BarcodeMessage & {
-  id: string;
-  copied?: boolean;
+type TimelineEntry =
+  | MobileScannerScanResult
+  | HydratedMobileScannerPhotoResult;
+
+type TimelineGroup =
+  | {
+      type: "scan";
+      key: string;
+      kind: "text" | "barcode";
+      capturedAt: number;
+      entries: MobileScannerScanResult[];
+    }
+  | {
+      type: "photo";
+      key: string;
+      capturedAt: number;
+      startAt: number;
+      endAt: number;
+      entries: HydratedMobileScannerPhotoResult[];
+    };
+
+type DeletedSnapshot = {
+  results: TimelineEntry[];
+  timer: number;
+  label: string;
 };
-
-type ScanEntry = {
-  type: "scan";
-  id: string;
-  createdAt: number;
-  scan: ScanRecord;
-};
-
-type PhotoEntry = {
-  type: "photo";
-  id: string;
-  createdAt: number;
-  photo: MobilePhoto;
-};
-
-type HistoryEntry = ScanEntry | PhotoEntry;
-
-type ClusterKind = "text" | "barcode" | "photo";
-
-type Cluster = {
-  key: string;
-  kind: ClusterKind;
-  startAt: number;
-  endAt: number;
-  entries: HistoryEntry[];
-};
-
-function trimPhotosForStorage(photos: MobilePhoto[]) {
-  return trimPhotosForState(photos).map(({ dataUrl, ...metadata }) => metadata);
-}
-
-function trimPhotosForState(photos: MobilePhoto[]) {
-  const trimmed: MobilePhoto[] = [];
-
-  for (const photo of photos.slice(0, MAX_PHOTOS)) {
-    trimmed.push(photo);
-  }
-
-  return trimmed;
-}
 
 function installEditableTracker() {
   const root = window as typeof window & {
@@ -109,6 +102,7 @@ function installEditableTracker() {
 
   const isEditable = (element: Element | null): element is HTMLElement => {
     if (!(element instanceof HTMLElement)) return false;
+    if (element.getAttribute("contenteditable") === "false") return false;
     return (
       element.tagName === "INPUT" ||
       element.tagName === "TEXTAREA" ||
@@ -139,93 +133,83 @@ function installEditableTracker() {
           tabTitle: document.title || "Current tab",
           url: location.href,
           cursor: describeEditable(element),
+          updatedAt: Date.now(),
         },
       });
     } catch (_error) {}
   };
 
-  if (isEditable(document.activeElement)) {
-    root.__voltLastEditable = document.activeElement;
-    notifyTarget(document.activeElement);
-  }
+  const track = (target: EventTarget | null) => {
+    const element = target instanceof Element ? target : document.activeElement;
+    const editable =
+      isEditable(element) ? element : isEditable(document.activeElement) ? document.activeElement : null;
+    if (!editable) return;
+    root.__voltLastEditable = editable;
+    notifyTarget(editable);
+  };
+
+  track(document.activeElement);
 
   if (root.__voltEditableTrackerInstalled) return;
-
-  document.addEventListener(
-    "focusin",
-    (event) => {
-      const target = event.target;
-      const editableTarget = target instanceof Element ? target : null;
-      if (isEditable(editableTarget)) {
-        root.__voltLastEditable = editableTarget;
-        notifyTarget(editableTarget);
-      }
-    },
-    true,
-  );
+  document.addEventListener("focusin", (event) => track(event.target), true);
+  document.addEventListener("selectionchange", () => track(document.activeElement), true);
+  document.addEventListener("keyup", (event) => track(event.target), true);
+  document.addEventListener("pointerup", (event) => track(event.target), true);
   root.__voltEditableTrackerInstalled = true;
 }
 
-function entryTimestamp(entry: HistoryEntry): number {
-  if (entry.type === "scan") {
-    const raw = entry.scan.scannedAt;
-    return raw ? new Date(raw).getTime() || entry.createdAt : entry.createdAt;
-  }
-  const raw = entry.photo.capturedAt;
-  return raw ? new Date(raw).getTime() || entry.createdAt : entry.createdAt;
+function timestamp(value: string) {
+  const parsed = new Date(value).getTime();
+  return Number.isFinite(parsed) ? parsed : Date.now();
 }
 
-function entryClusterKind(entry: HistoryEntry): ClusterKind {
-  if (entry.type === "photo") return "photo";
-  return entry.scan.kind === "text" ? "text" : "barcode";
-}
-
-function buildClusters(entries: HistoryEntry[]): Cluster[] {
-  const sorted = [...entries].sort(
-    (a, b) => entryTimestamp(b) - entryTimestamp(a),
-  );
-  const clusters: Cluster[] = [];
-  for (const entry of sorted) {
-    const kind = entryClusterKind(entry);
-    const ts = entryTimestamp(entry);
-    const current = clusters[clusters.length - 1];
-    if (
-      current &&
-      current.kind === kind &&
-      Math.abs(current.endAt - ts) <= CLUSTER_WINDOW_MS
-    ) {
-      current.entries.push(entry);
-      current.startAt = Math.min(current.startAt, ts);
-      current.endAt = Math.max(current.endAt, ts);
-    } else {
-      clusters.push({
-        key: `${kind}-${entry.id}`,
-        kind,
-        startAt: ts,
-        endAt: ts,
-        entries: [entry],
-      });
-    }
-  }
-  return clusters;
-}
-
-function formatRelativeTime(timestamp: number, now: number) {
-  const diff = now - timestamp;
+function formatRelativeTime(value: number, now: number) {
+  const diff = now - value;
   if (diff < 45 * 1000) return "just now";
-  if (diff < 60 * 60 * 1000) {
-    const mins = Math.max(1, Math.round(diff / 60000));
-    return `${mins}m ago`;
-  }
-  if (diff < 24 * 60 * 60 * 1000) {
-    const hours = Math.round(diff / (60 * 60 * 1000));
-    return `${hours}h ago`;
-  }
-  if (diff < 7 * 24 * 60 * 60 * 1000) {
-    const days = Math.round(diff / (24 * 60 * 60 * 1000));
-    return `${days}d ago`;
-  }
-  return new Date(timestamp).toLocaleDateString();
+  if (diff < 60 * 60 * 1000) return `${Math.max(1, Math.round(diff / 60000))}m ago`;
+  if (diff < 24 * 60 * 60 * 1000) return `${Math.round(diff / 3600000)}h ago`;
+  if (diff < 7 * 24 * 60 * 60 * 1000) return `${Math.round(diff / 86400000)}d ago`;
+  return new Date(value).toLocaleDateString();
+}
+
+function createObjectUrl(blob: Blob | undefined) {
+  return blob ? URL.createObjectURL(blob) : undefined;
+}
+
+function hydratePhotoRuntime(photo: MobilePhoto) {
+  const runtimeUrl = photo.dataUrl ?? createObjectUrl(photo.blob);
+  return runtimeUrl ? { ...photo, dataUrl: runtimeUrl } : photo;
+}
+
+function buildTimelineGroups(results: TimelineEntry[]): TimelineGroup[] {
+  const scans = results
+    .filter((result): result is MobileScannerScanResult => result.type === "scan")
+    .map((result): TimelineGroup => ({
+      type: "scan",
+      key: result.id,
+      kind: result.kind,
+      capturedAt: timestamp(result.capturedAt),
+      entries: [result],
+    }));
+  const photoGroups = groupPhotoResultsByBatch(
+    results.filter(
+      (result): result is HydratedMobileScannerPhotoResult =>
+        result.type === "photo",
+    ),
+  ).map((group): TimelineGroup => ({
+    type: "photo",
+    key: group.photoBatchId,
+    capturedAt: group.endAt,
+    startAt: group.startAt,
+    endAt: group.endAt,
+    entries: group.entries as HydratedMobileScannerPhotoResult[],
+  }));
+
+  return [...scans, ...photoGroups].sort((a, b) => b.capturedAt - a.capturedAt);
+}
+
+function photoFromResult(result: HydratedMobileScannerPhotoResult) {
+  return hydratePhotoRuntime(result.photo);
 }
 
 interface MobileScannerProps {
@@ -233,282 +217,36 @@ interface MobileScannerProps {
 }
 
 export default function MobileScanner({ onClose: _onClose }: MobileScannerProps) {
-  const [status, setStatus] = useState<ScannerConnectionStatus>("disconnected");
-  const statusRef = useRef<ScannerConnectionStatus>("disconnected");
-  const [scans, setScans] = useState<ScanRecord[]>([]);
-  const [photos, setPhotos] = useState<MobilePhoto[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const [state, setState] = useState<MobileScannerState>({
+    status: "disconnected",
+    qrCodeUrl: null,
+    error: null,
+  });
+  const [results, setResults] = useState<TimelineEntry[]>([]);
+  const [loadingResults, setLoadingResults] = useState(true);
+  const [selectedPhotoIds, setSelectedPhotoIds] = useState<Set<string>>(new Set());
+  const [collapsedBatchIds, setCollapsedBatchIds] = useState<Set<string>>(new Set());
   const [removingIds, setRemovingIds] = useState<Set<string>>(new Set());
-  const [enteringIds, setEnteringIds] = useState<Set<string>>(new Set());
-  const [selectedPhotoIds, setSelectedPhotoIds] = useState<Set<string>>(
-    new Set(),
+  const [previewPhoto, setPreviewPhoto] = useState<MobilePhoto | null>(null);
+  const [deletedSnapshot, setDeletedSnapshot] = useState<DeletedSnapshot | null>(null);
+  const [now, setNow] = useState(Date.now());
+  const lastSelectedPhotoId = useRef<string | null>(null);
+
+  const photoResults = useMemo(
+    () =>
+      results.filter(
+        (result): result is HydratedMobileScannerPhotoResult =>
+          result.type === "photo",
+      ),
+    [results],
   );
-  const [collapsedClusters, setCollapsedClusters] = useState<Set<string>>(
-    new Set(),
-  );
-  const [now, setNow] = useState(() => Date.now());
-  const initialEntriesLoaded = useRef(false);
-
-  useEffect(() => {
-    const interval = window.setInterval(() => setNow(Date.now()), 30000);
-    return () => window.clearInterval(interval);
-  }, []);
-
-  const persistScans = useCallback((nextScans: ScanRecord[]) => {
-    void chrome.storage.local.set({ [SCAN_STORAGE_KEY]: nextScans });
-  }, []);
-
-  const persistPhotos = useCallback((nextPhotos: MobilePhoto[]) => {
-    void chrome.storage.local.set({ [PHOTO_STORAGE_KEY]: trimPhotosForStorage(nextPhotos) });
-  }, []);
-
-  const setScannerStatus = useCallback((nextStatus: ScannerConnectionStatus) => {
-    statusRef.current = nextStatus;
-    setStatus(nextStatus);
-  }, []);
-
-  const applyScannerState = useCallback(
-    (state: Partial<MobileScannerState> | null | undefined) => {
-      if (!state) return;
-      if (state.status) {
-        setScannerStatus(state.status);
-      }
-      setError(state.error ?? null);
-    },
-    [setScannerStatus],
-  );
-
-  const markEntering = useCallback((id: string) => {
-    setEnteringIds((curr) => {
-      const next = new Set(curr);
-      next.add(id);
-      return next;
-    });
-    window.setTimeout(() => {
-      setEnteringIds((curr) => {
-        if (!curr.has(id)) return curr;
-        const next = new Set(curr);
-        next.delete(id);
-        return next;
-      });
-    }, 320);
-  }, []);
-
-  const addScan = useCallback(
-    (message: BarcodeMessage) => {
-      const scan: ScanRecord = {
-        ...message,
-        id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-        kind: message.kind ?? "barcode",
-        scannedAt: message.scannedAt ?? new Date().toISOString(),
-      };
-
-      setScans((current) => {
-        const next = [scan, ...current].slice(0, MAX_SCANS);
-        persistScans(next);
-        return next;
-      });
-      markEntering(scan.id);
-    },
-    [markEntering, persistScans],
-  );
-
-  const addPhoto = useCallback(
-    (photo: MobilePhoto) => {
-      setPhotos((current) => {
-        const next = trimPhotosForState([
-          photo,
-          ...current.filter((item) => item.id !== photo.id),
-        ]);
-        persistPhotos(next);
-        return next;
-      });
-      markEntering(photo.id);
-    },
-    [markEntering, persistPhotos],
-  );
-
+  const photos = useMemo(() => photoResults.map(photoFromResult), [photoResults]);
+  const photoOrder = useMemo(() => photoResults.map((result) => result.id), [photoResults]);
   const selectedPhotos = useMemo(
     () => photos.filter((photo) => selectedPhotoIds.has(photo.id)),
     [photos, selectedPhotoIds],
   );
-
-  const togglePhotoSelection = useCallback((id: string) => {
-    setSelectedPhotoIds((current) => {
-      const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
-
-  const primeCursorTarget = useCallback(async () => {
-    try {
-      const [tab] = await chrome.tabs.query({
-        active: true,
-        currentWindow: true,
-      });
-      if (!tab?.id) return;
-      await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        func: installEditableTracker,
-      });
-    } catch (_err) {
-      // restricted page – dictation falls back to clipboard
-    }
-  }, []);
-
-  const prepareActiveTabForPhotoDrop = useCallback(async () => {
-    try {
-      const [tab] = await chrome.tabs.query({
-        active: true,
-        currentWindow: true,
-      });
-      if (!tab?.id) return;
-      await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        func: installPhotoDropBridge,
-        args: [PHOTO_DROP_MIME],
-      });
-    } catch (_err) {
-      // restricted page – native drag payload still works
-    }
-  }, []);
-
-  const startSession = useCallback(
-    async (force = false) => {
-      setScannerStatus("creating");
-      setError(null);
-      const response = await chrome.runtime.sendMessage({
-        action: "scannerStart",
-        force,
-      });
-      if (response?.state) applyScannerState(response.state);
-      if (response?.error) {
-        setScannerStatus("error");
-        setError(response.error);
-      }
-    },
-    [applyScannerState, setScannerStatus],
-  );
-
-  const unpair = useCallback(() => {
-    void chrome.runtime
-      .sendMessage({ action: "scannerDisconnect" })
-      .then((response) => {
-        if (response?.state) applyScannerState(response.state);
-      });
-  }, [applyScannerState]);
-
-  const removeWithAnimation = useCallback(
-    (id: string, commit: () => void) => {
-      setRemovingIds((curr) => {
-        const next = new Set(curr);
-        next.add(id);
-        return next;
-      });
-      window.setTimeout(() => {
-        commit();
-        setRemovingIds((curr) => {
-          if (!curr.has(id)) return curr;
-          const next = new Set(curr);
-          next.delete(id);
-          return next;
-        });
-      }, EXIT_ANIMATION_MS);
-    },
-    [],
-  );
-
-  const deleteScan = useCallback(
-    (id: string) => {
-      removeWithAnimation(id, () => {
-        setScans((curr) => {
-          const next = curr.filter((s) => s.id !== id);
-          persistScans(next);
-          return next;
-        });
-      });
-    },
-    [persistScans, removeWithAnimation],
-  );
-
-  const deletePhoto = useCallback(
-    (id: string) => {
-      removeWithAnimation(id, () => {
-        setPhotos((curr) => {
-          const next = curr.filter((p) => p.id !== id);
-          persistPhotos(next);
-          return next;
-        });
-        setSelectedPhotoIds((curr) => {
-          if (!curr.has(id)) return curr;
-          const next = new Set(curr);
-          next.delete(id);
-          return next;
-        });
-      });
-    },
-    [persistPhotos, removeWithAnimation],
-  );
-
-  const deleteCluster = useCallback(
-    (cluster: Cluster) => {
-      const ids = new Set(cluster.entries.map((e) => e.id));
-      setRemovingIds((curr) => {
-        const next = new Set(curr);
-        ids.forEach((id) => next.add(id));
-        return next;
-      });
-      window.setTimeout(() => {
-        if (cluster.kind === "photo") {
-          setPhotos((curr) => {
-            const next = curr.filter((p) => !ids.has(p.id));
-            persistPhotos(next);
-            return next;
-          });
-          setSelectedPhotoIds((curr) => {
-            const next = new Set(curr);
-            ids.forEach((id) => next.delete(id));
-            return next;
-          });
-        } else {
-          setScans((curr) => {
-            const next = curr.filter((s) => !ids.has(s.id));
-            persistScans(next);
-            return next;
-          });
-        }
-        setRemovingIds((curr) => {
-          const next = new Set(curr);
-          ids.forEach((id) => next.delete(id));
-          return next;
-        });
-      }, EXIT_ANIMATION_MS);
-    },
-    [persistPhotos, persistScans],
-  );
-
-  const clearAll = useCallback(() => {
-    const allIds = new Set<string>([
-      ...scans.map((s) => s.id),
-      ...photos.map((p) => p.id),
-    ]);
-    if (allIds.size === 0) return;
-    setRemovingIds((curr) => {
-      const next = new Set(curr);
-      allIds.forEach((id) => next.add(id));
-      return next;
-    });
-    window.setTimeout(() => {
-      setScans([]);
-      setPhotos([]);
-      setSelectedPhotoIds(new Set());
-      persistScans([]);
-      persistPhotos([]);
-      setRemovingIds(new Set());
-    }, EXIT_ANIMATION_MS);
-  }, [persistPhotos, persistScans, photos, scans]);
+  const groups = useMemo(() => buildTimelineGroups(results), [results]);
 
   const flashFeedback = useCallback(
     (message: string, tone: SidepanelToastTone = "success") => {
@@ -517,22 +255,143 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
     [],
   );
 
+  const refreshResults = useCallback(async () => {
+    const loaded = await listMobileScannerResults();
+    setResults(loaded as TimelineEntry[]);
+    setLoadingResults(false);
+  }, []);
+
+  const applyScannerState = useCallback((nextState?: Partial<MobileScannerState> | null) => {
+    if (!nextState) return;
+    setState((current) => ({
+      ...current,
+      ...nextState,
+      error: nextState.error ?? null,
+    }));
+  }, []);
+
+  const primeCursorTarget = useCallback(async () => {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!tab?.id) return;
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id, allFrames: true },
+        func: installEditableTracker,
+      });
+    } catch (_err) {
+      // Restricted Chrome pages fall back to sidepanel-only capture.
+    }
+  }, []);
+
+  const prepareActiveTabForPhotoDrop = useCallback(async () => {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!tab?.id) return;
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: installPhotoDropBridge,
+        args: [PHOTO_DROP_MIME],
+      });
+    } catch (_err) {
+      // Native file drag can still work without the in-page bridge.
+    }
+  }, []);
+
+  const openPairingPopup = useCallback(async () => {
+    try {
+      const response = await chrome.runtime.sendMessage({
+        action: "openMobileCapturePopup",
+        mode: "photo",
+      });
+      if (response?.state) applyScannerState(response.state);
+      if (response?.error) flashFeedback(response.error, "error");
+    } catch (error) {
+      flashFeedback(error instanceof Error ? error.message : "Could not open pairing popup", "error");
+    }
+  }, [applyScannerState, flashFeedback]);
+
+  const restartPairing = useCallback(async () => {
+    setState((current) => ({ ...current, status: "creating", error: null }));
+    try {
+      const response = await chrome.runtime.sendMessage({ action: "scannerStart", force: true });
+      if (response?.state) applyScannerState(response.state);
+      if (response?.error) flashFeedback(response.error, "error");
+    } catch (_err) {
+      flashFeedback("Could not restart scanner session", "error");
+    }
+  }, [applyScannerState, flashFeedback]);
+
+  const disconnect = useCallback(async () => {
+    const response = await chrome.runtime.sendMessage({ action: "scannerDisconnect" });
+    if (response?.state) applyScannerState(response.state);
+  }, [applyScannerState]);
+
+  const deleteResults = useCallback(
+    (ids: string[], label: string) => {
+      if (ids.length === 0) return;
+      const idSet = new Set(ids);
+      const snapshot = results.filter((result) => idSet.has(result.id));
+      if (snapshot.length === 0) return;
+      setRemovingIds((current) => new Set([...current, ...ids]));
+      window.setTimeout(() => {
+        setResults((current) => current.filter((result) => !idSet.has(result.id)));
+        setSelectedPhotoIds((current) => {
+          const next = new Set(current);
+          ids.forEach((id) => next.delete(id));
+          return next;
+        });
+        void deleteMobileScannerResults(ids);
+        if (deletedSnapshot?.timer) window.clearTimeout(deletedSnapshot.timer);
+        const timer = window.setTimeout(() => setDeletedSnapshot(null), UNDO_WINDOW_MS);
+        setDeletedSnapshot({ results: snapshot, timer, label });
+        setRemovingIds((current) => {
+          const next = new Set(current);
+          ids.forEach((id) => next.delete(id));
+          return next;
+        });
+      }, EXIT_ANIMATION_MS);
+    },
+    [deletedSnapshot, results],
+  );
+
+  const undoDelete = useCallback(async () => {
+    if (!deletedSnapshot) return;
+    window.clearTimeout(deletedSnapshot.timer);
+    await restoreMobileScannerResults(deletedSnapshot.results);
+    setDeletedSnapshot(null);
+    await refreshResults();
+    flashFeedback("Restored");
+  }, [deletedSnapshot, flashFeedback, refreshResults]);
+
+  const togglePhotoSelection = useCallback(
+    (id: string, shiftKey = false) => {
+      setSelectedPhotoIds((current) => {
+        const next = new Set(current);
+        if (shiftKey && lastSelectedPhotoId.current) {
+          const anchorIndex = photoOrder.indexOf(lastSelectedPhotoId.current);
+          const targetIndex = photoOrder.indexOf(id);
+          if (anchorIndex >= 0 && targetIndex >= 0) {
+            const [start, end] = [anchorIndex, targetIndex].sort((a, b) => a - b);
+            photoOrder.slice(start, end + 1).forEach((photoId) => next.add(photoId));
+            return next;
+          }
+        }
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        return next;
+      });
+      lastSelectedPhotoId.current = id;
+    },
+    [photoOrder],
+  );
+
   const copyScan = useCallback(
-    async (scan: ScanRecord) => {
+    async (scan: MobileScannerScanResult) => {
       try {
-        await navigator.clipboard.writeText(scan.barcode);
-        setScans((curr) =>
-          curr.map((item) =>
-            item.id === scan.id ? { ...item, copied: true } : item,
-          ),
-        );
-        flashFeedback(
-          scan.kind === "text"
-            ? "Text snippet copied!"
-            : "Code stashed in clipboard",
-        );
+        await navigator.clipboard.writeText(scan.value);
+        flashFeedback(scan.kind === "text" ? "Text copied" : "Barcode copied");
       } catch (_err) {
-        flashFeedback("Clipboard wouldn't budge", "error");
+        flashFeedback("Clipboard write failed", "error");
       }
     },
     [flashFeedback],
@@ -541,247 +400,223 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
   const copyPhoto = useCallback(
     async (photo: MobilePhoto) => {
       try {
-        if (!photo.dataUrl) {
-          await navigator.clipboard.writeText(photo.downloadFilename ?? photo.name);
-          flashFeedback("Saved photo path copied");
-          return;
-        }
-        if ("ClipboardItem" in window && navigator.clipboard?.write) {
-          const blob = await dataUrlToPngBlob(photo.dataUrl);
+        if (photo.blob && "ClipboardItem" in window && navigator.clipboard?.write) {
           await navigator.clipboard.write([
-            new ClipboardItem({ "image/png": blob }),
+            new ClipboardItem({ [photo.blob.type || photo.mimeType]: photo.blob }),
           ]);
-          flashFeedback("Photo on the clipboard");
+          flashFeedback("Photo copied");
           return;
         }
-        await navigator.clipboard.writeText(
-          normalizeImageFilename(photo.name, photo.mimeType),
-        );
+        if (photo.dataUrl && "ClipboardItem" in window && navigator.clipboard?.write) {
+          const blob = await dataUrlToPngBlob(photo.dataUrl);
+          await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+          flashFeedback("Photo copied");
+          return;
+        }
+        await navigator.clipboard.writeText(normalizeImageFilename(photo.name, photo.mimeType));
         flashFeedback("Photo name copied");
       } catch (_err) {
-        flashFeedback("Couldn't copy that photo", "error");
+        flashFeedback("Could not copy photo", "error");
       }
     },
     [flashFeedback],
   );
 
-  const downloadPhoto = useCallback((photo: MobilePhoto) => {
-    if (typeof photo.downloadId === "number") {
-      chrome.downloads.show(photo.downloadId);
-      flashFeedback("Showing saved photo");
-      return;
-    }
-    if (!photo.dataUrl) {
-      flashFeedback("Photo is already saved in Downloads", "warning");
-      return;
-    }
-    const link = document.createElement("a");
-    link.href = photo.dataUrl;
-    link.download = normalizeImageFilename(photo.name, photo.mimeType);
-    link.click();
-  }, [flashFeedback]);
+  const downloadPhoto = useCallback(
+    (photo: MobilePhoto) => {
+      if (typeof photo.downloadId === "number") {
+        chrome.downloads.show(photo.downloadId);
+        return;
+      }
+      const url = photo.dataUrl ?? (photo.blob ? URL.createObjectURL(photo.blob) : null);
+      if (!url) {
+        flashFeedback("Photo bytes unavailable", "warning");
+        return;
+      }
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = normalizeImageFilename(photo.name, photo.mimeType);
+      link.click();
+    },
+    [flashFeedback],
+  );
+
+  const getTransferDataUrl = useCallback(async (photo: MobilePhoto) => {
+    if (photo.dataUrl?.startsWith("data:")) return photo.dataUrl;
+    if (photo.blob) return blobToDataUrl(photo.blob);
+    return null;
+  }, []);
 
   const sendPhotosToTab = useCallback(
     async (photosToSend: MobilePhoto[]) => {
+      const transferable = (
+        await Promise.all(
+          photosToSend.map(async (photo) => {
+            const dataUrl = await getTransferDataUrl(photo);
+            return dataUrl
+              ? { dataUrl, name: photo.name, mimeType: photo.mimeType }
+              : null;
+          }),
+        )
+      ).filter((photo): photo is { dataUrl: string; name: string; mimeType: string } => Boolean(photo));
+
+      if (transferable.length === 0) {
+        flashFeedback("Photo bytes unavailable", "warning");
+        return;
+      }
+
       try {
-        const transferablePhotos = photosToSend.filter((photo) => photo.dataUrl);
-        if (!transferablePhotos.length) {
-          flashFeedback("Photo is already saved in Downloads", "warning");
-          return;
-        }
-        const [tab] = await chrome.tabs.query({
-          active: true,
-          currentWindow: true,
-        });
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
         if (!tab?.id) {
-          flashFeedback("No active tab to receive it", "warning");
+          flashFeedback("No active tab", "warning");
           return;
         }
         const [result] = await chrome.scripting.executeScript({
           target: { tabId: tab.id },
           func: insertPhotosIntoPage,
-          args: [
-            transferablePhotos.map((photo) => ({
-              dataUrl: photo.dataUrl!,
-              name: photo.name,
-              mimeType: photo.mimeType,
-            })),
-          ],
+          args: [transferable],
         });
-        const payload = result?.result as
-          | { inserted?: boolean; reason?: string }
-          | undefined;
+        const payload = result?.result as { inserted?: boolean; reason?: string } | undefined;
         if (!payload?.inserted) {
           flashFeedback(
-            payload?.reason === "no_file_input"
-              ? "No upload field on this page"
-              : "Couldn't drop the photo",
+            payload?.reason === "no_file_input" ? "No upload field on this page" : "Could not insert photos",
             "warning",
           );
           return;
         }
-        flashFeedback(
-          transferablePhotos.length === 1
-            ? "Photo dropped into the page!"
-            : `${transferablePhotos.length} photos dropped into the page!`,
-        );
+        flashFeedback(transferable.length === 1 ? "Photo inserted" : `${transferable.length} photos inserted`);
       } catch (_err) {
         flashFeedback("Tab access denied", "error");
       }
     },
-    [flashFeedback],
+    [flashFeedback, getTransferDataUrl],
   );
 
-  const sendPhotoToTab = useCallback(
-    async (photo: MobilePhoto) => {
-      const photosToSend = selectedPhotoIds.has(photo.id)
-        ? selectedPhotos
-        : [photo];
-      await sendPhotosToTab(photosToSend);
-    },
-    [selectedPhotoIds, selectedPhotos, sendPhotosToTab],
-  );
-
-  const handlePhotoDragStart = useCallback(
+  const dragPhotos = useCallback(
     (event: React.DragEvent, photo: MobilePhoto) => {
       void prepareActiveTabForPhotoDrop();
-      const dragPhotos = selectedPhotoIds.has(photo.id) ? selectedPhotos : [photo];
-      const transferablePhotos = dragPhotos.filter((item) => item.dataUrl);
-      if (!transferablePhotos.length) {
+      const sourcePhotos = selectedPhotoIds.has(photo.id) ? selectedPhotos : [photo];
+      if (!selectedPhotoIds.has(photo.id)) setSelectedPhotoIds(new Set([photo.id]));
+
+      const files = sourcePhotos
+        .map((item) => {
+          if (item.blob) return blobToFile(item.blob, item.name, item.mimeType);
+          if (item.dataUrl?.startsWith("data:")) return dataUrlToFile(item.dataUrl, item.name, item.mimeType);
+          return null;
+        })
+        .filter((file): file is File => Boolean(file));
+
+      if (files.length === 0) {
         event.preventDefault();
-        flashFeedback("Photo is already saved in Downloads", "warning");
+        flashFeedback("Photo bytes unavailable", "warning");
         return;
       }
-      if (!selectedPhotoIds.has(photo.id)) {
-        setSelectedPhotoIds(new Set([photo.id]));
-      }
+
       event.dataTransfer.effectAllowed = "copy";
-      event.dataTransfer.setData(PHOTO_DROP_MIME, JSON.stringify(transferablePhotos));
-      const files = transferablePhotos
-        .map((item) => dataUrlToFile(item.dataUrl!, item.name, item.mimeType))
-        .filter((file): file is File => Boolean(file));
-      for (const file of files) {
+      files.forEach((file) => {
         try {
           event.dataTransfer.items.add(file);
-        } catch (_err) {
-          // some extension drag contexts reject programmatic file items
-        }
+        } catch (_err) {}
+      });
+      const bridgePayload = sourcePhotos
+        .filter((item) => item.dataUrl?.startsWith("data:"))
+        .map((item) => ({
+          dataUrl: item.dataUrl!,
+          name: item.name,
+          mimeType: item.mimeType,
+        }));
+      if (bridgePayload.length > 0) {
+        event.dataTransfer.setData(PHOTO_DROP_MIME, JSON.stringify(bridgePayload));
       }
-      event.dataTransfer.setData(
-        "text/uri-list",
-        transferablePhotos.map((item) => item.dataUrl!).join("\n"),
-      );
-      event.dataTransfer.setData(
-        "text/html",
-        transferablePhotos
-          .map((item) => `<img src="${item.dataUrl}" alt="${item.name}">`)
-          .join(""),
-      );
-      event.dataTransfer.setData(
-        "text/plain",
-        transferablePhotos.map((item) => item.name).join("\n"),
-      );
+      event.dataTransfer.setData("text/plain", files.map((file) => file.name).join("\n"));
     },
     [flashFeedback, prepareActiveTabForPhotoDrop, selectedPhotoIds, selectedPhotos],
   );
 
-  const toggleCluster = useCallback((key: string) => {
-    setCollapsedClusters((curr) => {
-      const next = new Set(curr);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
+  useEffect(() => {
+    const interval = window.setInterval(() => setNow(Date.now()), 30000);
+    return () => window.clearInterval(interval);
   }, []);
 
   useEffect(() => {
-    void chrome.storage.local
-      .get([SCAN_STORAGE_KEY, PHOTO_STORAGE_KEY])
-      .then((stored) => {
-        const savedScans = stored[SCAN_STORAGE_KEY];
-        if (Array.isArray(savedScans)) setScans(savedScans);
-        const savedPhotos = stored[PHOTO_STORAGE_KEY];
-        if (Array.isArray(savedPhotos)) setPhotos(savedPhotos);
-        initialEntriesLoaded.current = true;
-      });
-
+    void refreshResults();
     void primeCursorTarget();
     void chrome.runtime
       .sendMessage({ action: "scannerGetState" })
-      .then((response) => {
-        const state = response?.state as MobileScannerState | undefined;
-        applyScannerState(state);
-        if (!state || state.status === "disconnected" || state.status === "error") {
-          void startSession();
-        }
-      })
-      .catch(() => {
-        void startSession();
-      });
-  }, [applyScannerState, primeCursorTarget, startSession]);
+      .then((response) => applyScannerState(response?.state))
+      .catch(() => applyScannerState({ status: "disconnected", qrCodeUrl: null, error: null }));
+  }, [applyScannerState, primeCursorTarget, refreshResults]);
+
+  useEffect(() => {
+    const onActivated = () => void primeCursorTarget();
+    const onUpdated = (_tabId: number, changeInfo: any, tab: any) => {
+      if (changeInfo.status === "complete" && tab.active) void primeCursorTarget();
+    };
+    const onFocusChanged = (windowId: number) => {
+      if (windowId !== chrome.windows.WINDOW_ID_NONE) void primeCursorTarget();
+    };
+    chrome.tabs.onActivated.addListener(onActivated);
+    chrome.tabs.onUpdated.addListener(onUpdated);
+    chrome.windows.onFocusChanged.addListener(onFocusChanged);
+    return () => {
+      chrome.tabs.onActivated.removeListener(onActivated);
+      chrome.tabs.onUpdated.removeListener(onUpdated);
+      chrome.windows.onFocusChanged.removeListener(onFocusChanged);
+    };
+  }, [primeCursorTarget]);
 
   useEffect(() => {
     const handleMessage = (message: any) => {
       if (message?.action === "scannerStateChanged") {
         applyScannerState(message.state);
-      } else if (message?.action === "scannerScan") {
-        addScan(message.scan);
-      } else if (message?.action === "scannerPhoto") {
-        addPhoto(message.photo);
+        return;
+      }
+      if (message?.action === "scannerScan") {
+        void saveMobileScannerScan(message.scan as BarcodeMessage & { id?: string }).then((saved) => {
+          if (!saved) return;
+          setResults((current) => [saved, ...current.filter((item) => item.id !== saved.id)]);
+        });
+        return;
+      }
+      if (message?.action === "scannerPhoto") {
+        void saveMobileScannerPhoto(message.photo).then((saved) => {
+          if (!saved) return;
+          setResults((current) => [saved, ...current.filter((item) => item.id !== saved.id)] as TimelineEntry[]);
+          void prepareActiveTabForPhotoDrop();
+        });
       }
     };
-
     chrome.runtime.onMessage.addListener(handleMessage);
     return () => chrome.runtime.onMessage.removeListener(handleMessage);
-  }, [addPhoto, addScan, applyScannerState]);
+  }, [applyScannerState, prepareActiveTabForPhotoDrop]);
 
   useEffect(() => {
-    if (photos.length === 0) return;
-    void prepareActiveTabForPhotoDrop();
+    if (photos.length > 0) void prepareActiveTabForPhotoDrop();
   }, [photos.length, prepareActiveTabForPhotoDrop]);
 
-  // Auto-regenerate session whenever no session is active. The brief delay
-  // avoids fighting with intentional rapid state transitions (e.g. on mount).
   useEffect(() => {
-    if (status !== "disconnected") return;
-    const handle = window.setTimeout(() => {
-      void startSession(true);
-    }, 250);
-    return () => window.clearTimeout(handle);
-  }, [status, startSession]);
+    return () => {
+      if (deletedSnapshot?.timer) window.clearTimeout(deletedSnapshot.timer);
+      photos.forEach((photo) => {
+        if (photo.dataUrl?.startsWith("blob:")) URL.revokeObjectURL(photo.dataUrl);
+      });
+    };
+  }, [deletedSnapshot, photos]);
 
-  const entries = useMemo<HistoryEntry[]>(() => {
-    const scanEntries: HistoryEntry[] = scans.map((scan) => ({
-      type: "scan",
-      id: scan.id,
-      createdAt: scan.scannedAt
-        ? new Date(scan.scannedAt).getTime() || Date.now()
-        : Date.now(),
-      scan,
-    }));
-    const photoEntries: HistoryEntry[] = photos.map((photo) => ({
-      type: "photo",
-      id: photo.id,
-      createdAt: photo.capturedAt
-        ? new Date(photo.capturedAt).getTime() || Date.now()
-        : Date.now(),
-      photo,
-    }));
-    return [...scanEntries, ...photoEntries];
-  }, [photos, scans]);
-
-  const clusters = useMemo(() => buildClusters(entries), [entries]);
-
-  const totalCount = entries.length;
+  const totalCount = results.length;
+  const phoneCount = state.connectedPeerCount ?? (state.status === "connected" ? 1 : 0);
 
   return (
     <div className="sidepanel-shell relative flex h-full min-w-0 flex-col overflow-hidden">
       <div className="flex-none px-3 pt-3">
         <CompactScannerStatus
-          status={status}
-          error={error}
-          onForceRestart={() => startSession(true)}
-          onDisconnect={unpair}
+          status={state.status}
+          error={state.error}
+          phoneCount={phoneCount}
+          transferSummary={state.transferSummary}
+          onAddPhone={openPairingPopup}
+          onForceRestart={restartPairing}
+          onDisconnect={disconnect}
         />
       </div>
 
@@ -789,56 +624,95 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             <div className="text-sm font-bold text-stone-900 dark:text-stone-50">
-              History
+              Results
             </div>
             <div className="truncate text-xs text-stone-500 dark:text-stone-400">
               {totalCount === 0
-                ? "Captures and photos land here"
-                : `${totalCount} item${totalCount === 1 ? "" : "s"} from this browser`}
+                ? "Text, barcodes, and received photos land here"
+                : `${totalCount} saved item${totalCount === 1 ? "" : "s"}`}
             </div>
           </div>
           <button
             type="button"
-            onClick={clearAll}
-            disabled={totalCount === 0}
-            aria-label="Clear history"
-            className="liquid-glass-soft inline-flex h-9 w-9 items-center justify-center rounded-full text-stone-600 transition hover:text-stone-900 active:scale-95 disabled:opacity-40 dark:text-stone-300 dark:hover:text-stone-50"
+            onClick={openPairingPopup}
+            className="liquid-glass-soft inline-flex h-9 w-9 items-center justify-center rounded-full text-stone-600 transition hover:text-stone-900 active:scale-95 dark:text-stone-300 dark:hover:text-stone-50"
+            aria-label="Add phone"
           >
-            <Trash2 className="h-4 w-4" />
+            <Plus className="h-4 w-4" />
           </button>
         </div>
       </div>
 
       <ScrollArea className="min-h-0 min-w-0 flex-1 px-3 pb-3 [&>div]:!overflow-x-hidden">
         <div className="min-w-0 space-y-3 pt-1">
-          {clusters.length === 0 ? (
+          {loadingResults ? (
+            <LoadingHistory />
+          ) : groups.length === 0 ? (
             <EmptyHistory />
           ) : (
-            clusters.map((cluster) => (
-              <ClusterCard
-                key={cluster.key}
-                cluster={cluster}
-                now={now}
-                removingIds={removingIds}
-                enteringIds={enteringIds}
-                collapsed={collapsedClusters.has(cluster.key)}
-                onToggleCollapse={() => toggleCluster(cluster.key)}
-                onDeleteCluster={() => deleteCluster(cluster)}
-                onDeleteScan={deleteScan}
-                onDeletePhoto={deletePhoto}
-                onCopyScan={copyScan}
-                onCopyPhoto={copyPhoto}
-                onDownloadPhoto={downloadPhoto}
-                onSendPhoto={sendPhotoToTab}
-                onPhotoDragStart={handlePhotoDragStart}
-                onPhotoHover={prepareActiveTabForPhotoDrop}
-                selectedPhotoIds={selectedPhotoIds}
-                onTogglePhotoSelection={togglePhotoSelection}
-              />
-            ))
+            groups.map((group) =>
+              group.type === "photo" ? (
+                <PhotoBatchCard
+                  key={group.key}
+                  group={group}
+                  now={now}
+                  collapsed={collapsedBatchIds.has(group.key)}
+                  removingIds={removingIds}
+                  selectedPhotoIds={selectedPhotoIds}
+                  onToggleCollapse={() =>
+                    setCollapsedBatchIds((current) => {
+                      const next = new Set(current);
+                      if (next.has(group.key)) next.delete(group.key);
+                      else next.add(group.key);
+                      return next;
+                    })
+                  }
+                  onDeleteBatch={() => deleteResults(group.entries.map((entry) => entry.id), "Photo batch deleted")}
+                  onDeletePhoto={(photoId) => deleteResults([photoId], "Photo deleted")}
+                  onCopyPhoto={copyPhoto}
+                  onDownloadPhoto={downloadPhoto}
+                  onPreviewPhoto={setPreviewPhoto}
+                  onSendPhoto={(photo) => sendPhotosToTab(selectedPhotoIds.has(photo.id) ? selectedPhotos : [photo])}
+                  onDragStart={dragPhotos}
+                  onHover={prepareActiveTabForPhotoDrop}
+                  onToggleSelection={togglePhotoSelection}
+                />
+              ) : (
+                <ScanCard
+                  key={group.key}
+                  group={group}
+                  now={now}
+                  removing={removingIds.has(group.key)}
+                  onCopy={() => copyScan(group.entries[0])}
+                  onDelete={() => deleteResults([group.key], "Result deleted")}
+                />
+              ),
+            )
           )}
         </div>
       </ScrollArea>
+
+      {deletedSnapshot ? (
+        <div className="absolute inset-x-3 bottom-3 z-20 flex items-center justify-between gap-3 rounded-lg bg-stone-950 px-3 py-2 text-xs font-semibold text-white shadow-lg">
+          <span className="truncate">{deletedSnapshot.label}</span>
+          <button
+            type="button"
+            onClick={undoDelete}
+            className="rounded-md bg-white px-2 py-1 text-xs font-bold text-stone-950"
+          >
+            Undo
+          </button>
+        </div>
+      ) : null}
+
+      {previewPhoto ? (
+        <PhotoPreviewDialog
+          photo={previewPhoto}
+          onClose={() => setPreviewPhoto(null)}
+          onCopy={() => copyPhoto(previewPhoto)}
+          onDownload={() => downloadPhoto(previewPhoto)}
+        />
+      ) : null}
     </div>
   );
 }
@@ -846,26 +720,31 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
 function CompactScannerStatus({
   status,
   error,
+  phoneCount,
+  transferSummary,
+  onAddPhone,
   onForceRestart,
   onDisconnect,
 }: {
   status: ScannerConnectionStatus;
   error: string | null;
+  phoneCount: number;
+  transferSummary?: string | null;
+  onAddPhone: () => void;
   onForceRestart: () => void;
   onDisconnect: () => void;
 }) {
   const connected = status === "connected";
-  const isCreating = status === "creating";
-  const copy =
-    connected
-      ? "Phone connected. Captures land below."
-      : status === "waiting"
-        ? "Pairing QR opens from the context menu popup."
-        : isCreating
-          ? "Preparing mobile scanner session."
-          : status === "error"
-            ? (error ?? "Scanner session needs a restart.")
-            : "Mobile scanner session inactive.";
+  const creating = status === "creating";
+  const copy = connected
+    ? `${phoneCount} phone${phoneCount === 1 ? "" : "s"} connected${transferSummary ? ` · ${transferSummary}` : ""}`
+    : status === "waiting"
+      ? "Pairing popup is ready for iPhone."
+      : creating
+        ? "Preparing mobile scanner session."
+        : status === "error"
+          ? (error ?? "Scanner session needs attention.")
+          : "Open the pairing popup to add an iPhone.";
 
   return (
     <div className="liquid-glass concentric-xl flex min-w-0 items-center justify-between gap-3 px-3 py-2.5">
@@ -886,14 +765,31 @@ function CompactScannerStatus({
         <ConnectionPill status={status} error={error} />
         <button
           type="button"
-          onClick={connected ? onDisconnect : onForceRestart}
-          disabled={isCreating}
-          aria-label={connected ? "Disconnect mobile scanner" : "Restart mobile scanner pairing"}
-          className="liquid-glass-soft inline-flex h-8 w-8 items-center justify-center rounded-full text-stone-600 transition hover:text-stone-900 active:scale-95 disabled:opacity-40 dark:text-stone-300 dark:hover:text-stone-50"
+          onClick={onAddPhone}
+          className="liquid-glass-soft inline-flex h-8 w-8 items-center justify-center rounded-full text-stone-600 transition hover:text-stone-900 active:scale-95 dark:text-stone-300 dark:hover:text-stone-50"
+          aria-label="Add phone"
         >
-          {connected ? <X className="h-3.5 w-3.5" /> : <RefreshCw className={cn("h-3.5 w-3.5", isCreating && "animate-spin")} />}
+          <Plus className="h-3.5 w-3.5" />
+        </button>
+        <button
+          type="button"
+          onClick={connected ? onDisconnect : onForceRestart}
+          disabled={creating}
+          className="liquid-glass-soft inline-flex h-8 w-8 items-center justify-center rounded-full text-stone-600 transition hover:text-stone-900 active:scale-95 disabled:opacity-40 dark:text-stone-300 dark:hover:text-stone-50"
+          aria-label={connected ? "Disconnect phones" : "Restart scanner"}
+        >
+          {connected ? <X className="h-3.5 w-3.5" /> : <RefreshCw className={cn("h-3.5 w-3.5", creating && "animate-spin")} />}
         </button>
       </div>
+    </div>
+  );
+}
+
+function LoadingHistory() {
+  return (
+    <div className="liquid-glass-soft concentric-lg flex items-center justify-center gap-2 px-4 py-8 text-xs font-semibold text-stone-500 dark:text-stone-400">
+      <Loader2 className="h-4 w-4 animate-spin" />
+      Loading results
     </div>
   );
 }
@@ -905,318 +801,177 @@ function EmptyHistory() {
         <Scan className="h-5 w-5" />
       </div>
       <p className="text-sm font-semibold text-stone-700 dark:text-stone-200">
-        Nothing here yet
+        No results yet
       </p>
       <p className="mt-1 max-w-[260px] text-xs text-stone-500 dark:text-stone-400">
-        Scan a barcode, capture text, dictate, or send a photo from iPhone.
-        Everything appears in this unified feed.
+        Text captures, barcodes, and fully received photos appear in this timeline.
       </p>
     </div>
   );
 }
 
-const CLUSTER_META: Record<
-  ClusterKind,
-  {
-    label: (count: number) => string;
-    icon: React.ComponentType<{ className?: string }>;
-    accent: string;
-    badgeBg: string;
-  }
-> = {
-  text: {
-    label: (n) => (n === 1 ? "Text capture" : `${n} text captures`),
-    icon: Type,
-    accent: "text-amber-700 dark:text-amber-300",
-    badgeBg: "bg-amber-100/80 dark:bg-amber-500/15",
-  },
-  barcode: {
-    label: (n) => (n === 1 ? "Barcode" : `${n} barcodes`),
-    icon: ScanLine,
-    accent: "text-green-700 dark:text-green-300",
-    badgeBg: "bg-green-100/80 dark:bg-green-500/15",
-  },
-  photo: {
-    label: (n) => (n === 1 ? "Photo" : `${n} photos`),
-    icon: ImagePlus,
-    accent: "text-orange-700 dark:text-orange-300",
-    badgeBg: "bg-orange-100/80 dark:bg-orange-500/15",
-  },
-};
-
-function ClusterCard({
-  cluster,
+function ScanCard({
+  group,
   now,
-  removingIds,
-  enteringIds,
-  selectedPhotoIds,
-  collapsed,
-  onToggleCollapse,
-  onDeleteCluster,
-  onDeleteScan,
-  onDeletePhoto,
-  onCopyScan,
-  onCopyPhoto,
-  onDownloadPhoto,
-  onSendPhoto,
-  onPhotoDragStart,
-  onPhotoHover,
-  onTogglePhotoSelection,
+  removing,
+  onCopy,
+  onDelete,
 }: {
-  cluster: Cluster;
+  group: Extract<TimelineGroup, { type: "scan" }>;
   now: number;
-  removingIds: Set<string>;
-  enteringIds: Set<string>;
-  selectedPhotoIds: Set<string>;
-  collapsed: boolean;
-  onToggleCollapse: () => void;
-  onDeleteCluster: () => void;
-  onDeleteScan: (id: string) => void;
-  onDeletePhoto: (id: string) => void;
-  onCopyScan: (scan: ScanRecord) => void;
-  onCopyPhoto: (photo: MobilePhoto) => void;
-  onDownloadPhoto: (photo: MobilePhoto) => void;
-  onSendPhoto: (photo: MobilePhoto) => void;
-  onPhotoDragStart: (event: React.DragEvent, photo: MobilePhoto) => void;
-  onPhotoHover: () => void;
-  onTogglePhotoSelection: (id: string) => void;
+  removing: boolean;
+  onCopy: () => void;
+  onDelete: () => void;
 }) {
-  const meta = CLUSTER_META[cluster.kind];
-  const Icon = meta.icon;
-  const count = cluster.entries.length;
-  const collapsible = count > 2;
-  const isCollapsed = collapsible && collapsed;
-  const visibleEntries = isCollapsed ? cluster.entries.slice(0, 1) : cluster.entries;
-  const allEntriesRemoving = cluster.entries.every((entry) =>
-    removingIds.has(entry.id),
-  );
-  const wrapperRef = useRef<HTMLDivElement | null>(null);
-  const enterOnMount = cluster.entries.some((entry) =>
-    enteringIds.has(entry.id),
-  );
-  useEffect(() => {
-    if (!enterOnMount) return;
-    const node = wrapperRef.current;
-    if (!node) return;
-    node.classList.add("volt-item-enter");
-    const handle = window.setTimeout(() => {
-      node.classList.remove("volt-item-enter");
-    }, 320);
-    return () => window.clearTimeout(handle);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
+  const scan = group.entries[0];
+  const isText = group.kind === "text";
+  const Icon = isText ? Type : ScanLine;
   return (
-    <div
-      ref={wrapperRef}
-      className={cn(
-        "liquid-glass-soft concentric-lg min-w-0 max-w-full overflow-hidden",
-        allEntriesRemoving && "volt-item-exit",
-      )}
-    >
-      <div className="flex min-w-0 items-center justify-between gap-2 px-3 pt-3">
+    <div className={cn("liquid-glass-soft concentric-lg min-w-0 overflow-hidden px-3 py-3", removing && "volt-item-exit")}>
+      <div className="mb-2 flex min-w-0 items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
-          <span
-            className={cn(
-              "flex h-7 w-7 shrink-0 items-center justify-center rounded-full",
-              meta.badgeBg,
-              meta.accent,
-            )}
-          >
+          <span className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-full", isText ? "bg-amber-100/80 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300" : "bg-green-100/80 text-green-700 dark:bg-green-500/15 dark:text-green-300")}>
             <Icon className="h-3.5 w-3.5" />
           </span>
           <div className="min-w-0">
             <div className="truncate text-xs font-bold text-stone-900 dark:text-stone-100">
-              {meta.label(count)}
+              {isText ? "Text capture" : "Barcode"}
             </div>
             <div className="truncate text-[10px] font-medium text-stone-500 dark:text-stone-400">
-              {formatRelativeTime(cluster.endAt, now)}
+              {formatRelativeTime(group.capturedAt, now)}
+            </div>
+          </div>
+        </div>
+        <button type="button" onClick={onDelete} className="flex h-7 w-7 items-center justify-center rounded-full text-stone-500 transition hover:bg-stone-200 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-700 dark:hover:text-stone-50" aria-label="Delete result">
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      </div>
+      <div className="rounded-lg bg-white/80 px-3 py-2 ring-1 ring-stone-200/70 dark:bg-stone-800/70 dark:ring-stone-700/70">
+        <div className={cn("text-[13px] font-semibold leading-snug text-stone-950 dark:text-stone-50", isText ? "line-clamp-4 break-words" : "break-all font-mono")}>
+          {scan.value}
+        </div>
+        <button type="button" onClick={onCopy} className="mt-2 inline-flex h-7 items-center gap-1 rounded-full bg-stone-100 px-2.5 text-[11px] font-bold text-stone-700 transition hover:bg-stone-200 dark:bg-stone-700 dark:text-stone-100 dark:hover:bg-stone-600">
+          <Copy className="h-3 w-3" />
+          Copy
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function PhotoBatchCard({
+  group,
+  now,
+  collapsed,
+  removingIds,
+  selectedPhotoIds,
+  onToggleCollapse,
+  onDeleteBatch,
+  onDeletePhoto,
+  onCopyPhoto,
+  onDownloadPhoto,
+  onPreviewPhoto,
+  onSendPhoto,
+  onDragStart,
+  onHover,
+  onToggleSelection,
+}: {
+  group: Extract<TimelineGroup, { type: "photo" }>;
+  now: number;
+  collapsed: boolean;
+  removingIds: Set<string>;
+  selectedPhotoIds: Set<string>;
+  onToggleCollapse: () => void;
+  onDeleteBatch: () => void;
+  onDeletePhoto: (photoId: string) => void;
+  onCopyPhoto: (photo: MobilePhoto) => void;
+  onDownloadPhoto: (photo: MobilePhoto) => void;
+  onPreviewPhoto: (photo: MobilePhoto) => void;
+  onSendPhoto: (photo: MobilePhoto) => void;
+  onDragStart: (event: React.DragEvent, photo: MobilePhoto) => void;
+  onHover: () => void;
+  onToggleSelection: (photoId: string, shiftKey: boolean) => void;
+}) {
+  const visibleEntries = collapsed ? group.entries.slice(0, 1) : group.entries;
+  const count = group.entries.length;
+  return (
+    <div className="liquid-glass-soft concentric-lg min-w-0 overflow-hidden">
+      <div className="flex min-w-0 items-center justify-between gap-2 px-3 pt-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-orange-100/80 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300">
+            <ImagePlus className="h-3.5 w-3.5" />
+          </span>
+          <div className="min-w-0">
+            <div className="truncate text-xs font-bold text-stone-900 dark:text-stone-100">
+              {count === 1 ? "Photo batch" : `${count} photo batch`}
+            </div>
+            <div className="truncate text-[10px] font-medium text-stone-500 dark:text-stone-400">
+              {formatRelativeTime(group.endAt, now)}
             </div>
           </div>
         </div>
         <div className="flex items-center gap-1">
-          {collapsible ? (
-            <button
-              type="button"
-              onClick={onToggleCollapse}
-              className="inline-flex h-7 items-center gap-1 rounded-full bg-stone-100 px-2 text-[10px] font-bold text-stone-700 transition hover:bg-stone-200 dark:bg-stone-700 dark:text-stone-100 dark:hover:bg-stone-600"
-              aria-label={isCollapsed ? "Expand group" : "Collapse group"}
-            >
-              <ChevronDown
-                className={cn(
-                  "h-3 w-3 transition-transform",
-                  isCollapsed && "-rotate-90",
-                )}
-              />
-              {isCollapsed ? `+${count - 1}` : "Hide"}
+          {count > 1 ? (
+            <button type="button" onClick={onToggleCollapse} className="inline-flex h-7 items-center gap-1 rounded-full bg-stone-100 px-2 text-[10px] font-bold text-stone-700 transition hover:bg-stone-200 dark:bg-stone-700 dark:text-stone-100 dark:hover:bg-stone-600" aria-label={collapsed ? "Expand photo batch" : "Collapse photo batch"}>
+              <ChevronDown className={cn("h-3 w-3 transition-transform", collapsed && "-rotate-90")} />
+              {collapsed ? `+${count - 1}` : "Hide"}
             </button>
           ) : null}
-          <button
-            type="button"
-            onClick={onDeleteCluster}
-            className="flex h-7 w-7 items-center justify-center rounded-full text-stone-500 transition hover:bg-stone-200 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-700 dark:hover:text-stone-50"
-            aria-label="Delete this group"
-          >
-            <X className="h-3.5 w-3.5" />
+          <button type="button" onClick={onDeleteBatch} className="flex h-7 w-7 items-center justify-center rounded-full text-stone-500 transition hover:bg-stone-200 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-700 dark:hover:text-stone-50" aria-label="Delete photo batch">
+            <Trash2 className="h-3.5 w-3.5" />
           </button>
         </div>
       </div>
 
-      <div className="min-w-0 px-3 pb-3 pt-2">
-        {cluster.kind === "photo" ? (
-          <div
-            className={cn(
-              "grid gap-2",
-              isCollapsed ? "grid-cols-1" : "grid-cols-2",
-            )}
-          >
-            {visibleEntries.map((entry) =>
-              entry.type === "photo" ? (
-                <PhotoEntryCard
-                  key={entry.id}
-                  photo={entry.photo}
-                  selected={selectedPhotoIds.has(entry.photo.id)}
-                  exiting={removingIds.has(entry.id)}
-                  entering={enteringIds.has(entry.id)}
-                  onDelete={() => onDeletePhoto(entry.id)}
-                  onCopy={() => onCopyPhoto(entry.photo)}
-                  onDownload={() => onDownloadPhoto(entry.photo)}
-                  onSend={() => onSendPhoto(entry.photo)}
-                  onToggleSelected={() => onTogglePhotoSelection(entry.photo.id)}
-                  onDragStart={(event) => onPhotoDragStart(event, entry.photo)}
-                  onHover={onPhotoHover}
-                />
-              ) : null,
-            )}
-          </div>
-        ) : (
-          <div className="min-w-0 space-y-1.5">
-            {visibleEntries.map((entry) =>
-              entry.type === "scan" ? (
-                <ScanEntryRow
-                  key={entry.id}
-                  scan={entry.scan}
-                  exiting={removingIds.has(entry.id)}
-                  entering={enteringIds.has(entry.id)}
-                  onCopy={() => onCopyScan(entry.scan)}
-                  onDelete={() => onDeleteScan(entry.id)}
-                />
-              ) : null,
-            )}
-          </div>
-        )}
-
-        {isCollapsed ? (
-          <button
-            type="button"
-            onClick={onToggleCollapse}
-            className="mt-2 inline-flex w-full items-center justify-center gap-1 rounded-full py-1.5 text-[11px] font-bold text-stone-500 transition hover:text-stone-900 dark:text-stone-400 dark:hover:text-stone-100"
-          >
-            Show {count - 1} more
-          </button>
-        ) : null}
+      <div className={cn("grid gap-2 px-3 pb-3 pt-2", collapsed ? "grid-cols-1" : "grid-cols-2")}>
+        {visibleEntries.map((entry) => {
+          const photo = photoFromResult(entry);
+          return (
+            <PhotoTile
+              key={entry.id}
+              photo={photo}
+              selected={selectedPhotoIds.has(entry.id)}
+              exiting={removingIds.has(entry.id)}
+              onDelete={() => onDeletePhoto(entry.id)}
+              onCopy={() => onCopyPhoto(photo)}
+              onDownload={() => onDownloadPhoto(photo)}
+              onPreview={() => onPreviewPhoto(photo)}
+              onSend={() => onSendPhoto(photo)}
+              onDragStart={(event) => onDragStart(event, photo)}
+              onHover={onHover}
+              onToggleSelection={(shiftKey) => onToggleSelection(entry.id, shiftKey)}
+            />
+          );
+        })}
       </div>
     </div>
   );
 }
 
-function ScanEntryRow({
-  scan,
-  exiting,
-  entering,
-  onCopy,
-  onDelete,
-}: {
-  scan: ScanRecord;
-  exiting: boolean;
-  entering: boolean;
-  onCopy: () => void;
-  onDelete: () => void;
-}) {
-  const isText = scan.kind === "text";
-
-  return (
-    <div
-      className={cn(
-        "group flex min-w-0 max-w-full flex-col gap-2 rounded-2xl bg-white/80 px-3 py-2 ring-1 ring-stone-200/70 transition dark:bg-stone-800/70 dark:ring-stone-700/70 min-[360px]:flex-row min-[360px]:items-start",
-        entering && "volt-item-enter",
-        exiting && "volt-item-exit",
-      )}
-    >
-      <div className="min-w-0 max-w-full flex-1">
-        <div
-          className={cn(
-            "text-[13px] font-semibold leading-snug text-stone-950 dark:text-stone-50",
-            isText
-              ? "line-clamp-3 break-words"
-              : "break-all font-mono tracking-tight min-[360px]:truncate",
-          )}
-          title={scan.barcode}
-        >
-          {scan.barcode}
-        </div>
-        {scan.format ? (
-          <div className="mt-0.5 text-[10px] uppercase tracking-wider text-stone-500 dark:text-stone-400">
-            {scan.format}
-          </div>
-        ) : null}
-      </div>
-      <div className="flex shrink-0 items-center justify-end gap-1 pt-0.5">
-        <button
-          type="button"
-          onClick={onCopy}
-          className={cn(
-            "inline-flex h-7 items-center gap-1 rounded-full px-2.5 text-[11px] font-bold transition",
-            scan.copied
-              ? "bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-200"
-              : "bg-stone-100 text-stone-700 hover:bg-stone-200 dark:bg-stone-700 dark:text-stone-100 dark:hover:bg-stone-600",
-          )}
-          aria-label={scan.copied ? "Copied" : "Copy"}
-        >
-          {scan.copied ? (
-            <Check className="h-3 w-3" />
-          ) : (
-            <Copy className="h-3 w-3" />
-          )}
-          {scan.copied ? "Copied" : "Copy"}
-        </button>
-        <button
-          type="button"
-          onClick={onDelete}
-          className="flex h-7 w-7 items-center justify-center rounded-full text-stone-500 transition hover:bg-stone-200 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-700 dark:hover:text-stone-50"
-          aria-label="Delete"
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function PhotoEntryCard({
+function PhotoTile({
   photo,
   selected,
   exiting,
-  entering,
   onDelete,
   onCopy,
   onDownload,
+  onPreview,
   onSend,
-  onToggleSelected,
   onDragStart,
   onHover,
+  onToggleSelection,
 }: {
   photo: MobilePhoto;
   selected: boolean;
   exiting: boolean;
-  entering: boolean;
   onDelete: () => void;
   onCopy: () => void;
   onDownload: () => void;
+  onPreview: () => void;
   onSend: () => void;
-  onToggleSelected: () => void;
   onDragStart: (event: React.DragEvent) => void;
   onHover: () => void;
+  onToggleSelection: (shiftKey: boolean) => void;
 }) {
   return (
     <div
@@ -1224,37 +979,21 @@ function PhotoEntryCard({
       onDragStart={onDragStart}
       onMouseEnter={onHover}
       onPointerDown={onHover}
-      onClick={onToggleSelected}
+      onClick={(event) => onToggleSelection(event.shiftKey)}
       className={cn(
-        "group relative overflow-hidden rounded-2xl bg-stone-50 ring-1 transition dark:bg-stone-800/70",
-        selected
-          ? "ring-2 ring-green-500 dark:ring-green-300"
-          : "ring-stone-200/70 dark:ring-stone-700/70",
-        entering && "volt-item-enter",
+        "group relative aspect-square overflow-hidden rounded-lg bg-stone-50 ring-1 transition dark:bg-stone-800/70",
+        selected ? "ring-2 ring-green-500 dark:ring-green-300" : "ring-stone-200/70 dark:ring-stone-700/70",
         exiting && "volt-item-exit",
         "cursor-grab active:cursor-grabbing",
       )}
     >
-      <span
-        className={cn(
-          "absolute left-1 top-1 z-10 flex h-6 w-6 items-center justify-center rounded-full border text-white shadow-sm transition",
-          selected
-            ? "border-green-500 bg-green-500"
-            : "border-white/80 bg-stone-950/30 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
-        )}
-        aria-hidden="true"
-      >
+      <span className={cn("absolute left-1 top-1 z-10 flex h-6 w-6 items-center justify-center rounded-full border text-white shadow-sm transition", selected ? "border-green-500 bg-green-500" : "border-white/80 bg-stone-950/30 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100")} aria-hidden="true">
         {selected ? <Check className="h-3.5 w-3.5" /> : null}
       </span>
       {photo.dataUrl ? (
-        <img
-          src={photo.dataUrl}
-          alt={photo.name}
-          className="aspect-square w-full object-cover"
-          draggable={false}
-        />
+        <img src={photo.dataUrl} alt={photo.name} className="h-full w-full object-cover" draggable={false} />
       ) : (
-        <div className="flex aspect-square w-full flex-col items-center justify-center gap-2 bg-stone-100 px-3 text-center text-stone-500 dark:bg-stone-900 dark:text-stone-300">
+        <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-stone-100 px-3 text-center text-stone-500 dark:bg-stone-900 dark:text-stone-300">
           <Download className="h-7 w-7" />
           <span className="text-[11px] font-semibold">Saved to Downloads</span>
         </div>
@@ -1262,25 +1001,13 @@ function PhotoEntryCard({
       <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-linear-to-t from-stone-900/85 via-stone-900/35 to-transparent px-2 pb-1.5 pt-6 text-[10px] text-white">
         <div className="truncate font-semibold">{photo.name}</div>
         <div className="truncate text-white/75">
-          {[
-            photo.width && photo.height
-              ? `${photo.width}×${photo.height}`
-              : "",
-            formatPhotoSize(photo.size),
-            photo.status === "download_failed"
-              ? "Retryable"
-              : photo.downloadFilename || photo.status === "browser_received"
-                ? "Downloaded"
-                : photo.status === "available_to_browser"
-                  ? "Downloading"
-                  : "",
-          ]
-            .filter(Boolean)
-            .join(" · ")}
+          {[photo.width && photo.height ? `${photo.width}x${photo.height}` : "", formatPhotoSize(photo.size)].filter(Boolean).join(" · ")}
         </div>
       </div>
-
       <div className="absolute right-1 top-1 flex flex-col gap-1 opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100">
+        <PhotoActionButton onClick={onPreview} label="Preview photo">
+          <Eye className="h-3 w-3" />
+        </PhotoActionButton>
         <PhotoActionButton onClick={onSend} label="Send to active tab">
           <Upload className="h-3 w-3" />
         </PhotoActionButton>
@@ -1319,12 +1046,53 @@ function PhotoActionButton({
       aria-label={label}
       className={cn(
         "flex h-6 w-6 items-center justify-center rounded-full backdrop-blur-md transition",
-        danger
-          ? "bg-red-500/85 text-white hover:bg-red-500"
-          : "bg-white/85 text-stone-900 hover:bg-white",
+        danger ? "bg-red-500/85 text-white hover:bg-red-500" : "bg-white/85 text-stone-900 hover:bg-white",
       )}
     >
       {children}
     </button>
+  );
+}
+
+function PhotoPreviewDialog({
+  photo,
+  onClose,
+  onCopy,
+  onDownload,
+}: {
+  photo: MobilePhoto;
+  onClose: () => void;
+  onCopy: () => void;
+  onDownload: () => void;
+}) {
+  return (
+    <div className="absolute inset-0 z-30 flex flex-col bg-stone-950/92 p-3 text-white backdrop-blur-md">
+      <div className="mb-3 flex flex-none items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="truncate text-sm font-bold">{photo.name}</div>
+          <div className="truncate text-xs text-white/60">
+            {[photo.width && photo.height ? `${photo.width}x${photo.height}` : "", formatPhotoSize(photo.size)].filter(Boolean).join(" · ")}
+          </div>
+        </div>
+        <div className="flex shrink-0 gap-2">
+          <button type="button" onClick={onCopy} className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20" aria-label="Copy photo">
+            <Copy className="h-4 w-4" />
+          </button>
+          <button type="button" onClick={onDownload} className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20" aria-label="Download photo">
+            <Download className="h-4 w-4" />
+          </button>
+          <button type="button" onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-stone-950 transition hover:bg-stone-200" aria-label="Close preview">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+      <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-lg bg-black">
+        {photo.dataUrl ? (
+          <img src={photo.dataUrl} alt={photo.name} className="max-h-full max-w-full object-contain" />
+        ) : (
+          <div className="text-sm font-semibold text-white/70">Preview unavailable</div>
+        )}
+      </div>
+    </div>
   );
 }

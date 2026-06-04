@@ -242,6 +242,228 @@ test("signal relay creates a session, stores one App Clip result, and reads it b
   assert.match(getResponse.body.result.createdAt, /^\d{4}-\d{2}-\d{2}T/);
 });
 
+test("signal join token supports multiple WebRTC attempts with offer and answer polling", async () => {
+  const createResponse = makeResponse();
+  await signalHandler(
+    makeRequest({
+      method: "POST",
+      path: "join-token",
+      body: { browserClaim: "browser-secret", sessionId: "global-session-1", ttlMs: 30_000 },
+      headers: { host: "scanner-signal.example", "x-forwarded-proto": "https" },
+    }),
+    createResponse
+  );
+
+  assert.equal(createResponse.statusCode, 200);
+  assert.equal(createResponse.body.sessionId, "global-session-1");
+  assert.match(createResponse.body.token, /^[a-zA-Z0-9_-]{24,}$/);
+  assert.match(createResponse.body.joinUrl, /^https:\/\/scanner-signal\.example\/api\/signal\/join-token\//);
+
+  const firstAttemptResponse = makeResponse();
+  await signalHandler(
+    makeRequest({
+      method: "POST",
+      path: `join-token/${createResponse.body.token}/attempt`,
+      body: {
+        contributorId: "phone-1",
+        deviceLabel: "Warehouse iPhone",
+        protocolVersion: "1.0.0",
+        capabilities: ["ocr", "barcode", "dictation", "photo"],
+      },
+    }),
+    firstAttemptResponse
+  );
+  assert.equal(firstAttemptResponse.statusCode, 200);
+  assert.equal(firstAttemptResponse.body.attempt.contributorId, "phone-1");
+  assert.equal(firstAttemptResponse.body.attempt.status, "waiting_for_offer");
+
+  const secondAttemptResponse = makeResponse();
+  await signalHandler(
+    makeRequest({
+      method: "POST",
+      path: `join-token/${createResponse.body.token}/attempt`,
+      body: { contributorId: "phone-2" },
+    }),
+    secondAttemptResponse
+  );
+  assert.equal(secondAttemptResponse.statusCode, 200);
+
+  const attemptsResponse = makeResponse();
+  await signalHandler(
+    makeRequest({
+      method: "GET",
+      path: `join-token/${createResponse.body.token}/attempts`,
+      headers: { "x-volt-browser-claim": "browser-secret" },
+    }),
+    attemptsResponse
+  );
+  assert.equal(attemptsResponse.statusCode, 200);
+  assert.equal(attemptsResponse.body.attempts.length, 2);
+
+  const attemptId = firstAttemptResponse.body.attempt.id;
+  const offerResponse = makeResponse();
+  await signalHandler(
+    makeRequest({
+      method: "POST",
+      path: `join-token/${createResponse.body.token}/attempt/${attemptId}/offer`,
+      headers: { "x-volt-browser-claim": "browser-secret" },
+      body: { offer: "chrome-sdp-offer" },
+    }),
+    offerResponse
+  );
+  assert.equal(offerResponse.statusCode, 200);
+  assert.equal(offerResponse.body.attempt.status, "offer_posted");
+
+  const mobilePollResponse = makeResponse();
+  await signalHandler(
+    makeRequest({
+      method: "GET",
+      path: `join-token/${createResponse.body.token}/attempt/${attemptId}/offer`,
+    }),
+    mobilePollResponse
+  );
+  assert.equal(mobilePollResponse.statusCode, 200);
+  assert.equal(mobilePollResponse.body.offer, "chrome-sdp-offer");
+
+  const answerResponse = makeResponse();
+  await signalHandler(
+    makeRequest({
+      method: "POST",
+      path: `join-token/${createResponse.body.token}/attempt/${attemptId}/answer`,
+      body: { answer: "mobile-sdp-answer" },
+    }),
+    answerResponse
+  );
+  assert.equal(answerResponse.statusCode, 200);
+  assert.equal(answerResponse.body.attempt.status, "answer_posted");
+
+  const chromePollResponse = makeResponse();
+  await signalHandler(
+    makeRequest({
+      method: "GET",
+      path: `join-token/${createResponse.body.token}/attempt/${attemptId}/answer`,
+      headers: { "x-volt-browser-claim": "browser-secret" },
+    }),
+    chromePollResponse
+  );
+  assert.equal(chromePollResponse.statusCode, 200);
+  assert.equal(chromePollResponse.body.answer, "mobile-sdp-answer");
+});
+
+test("signal join token revoke and rotate stop old-token joins while allowing a new token", async () => {
+  const createResponse = makeResponse();
+  await signalHandler(
+    makeRequest({
+      method: "POST",
+      path: "join-token",
+      body: { browserClaim: "browser-secret", ttlMs: 30_000 },
+    }),
+    createResponse
+  );
+
+  const forbiddenRevoke = makeResponse();
+  await signalHandler(
+    makeRequest({
+      method: "POST",
+      path: `join-token/${createResponse.body.token}/revoke`,
+      headers: { "x-volt-browser-claim": "wrong" },
+    }),
+    forbiddenRevoke
+  );
+  assert.equal(forbiddenRevoke.statusCode, 403);
+
+  const rotateResponse = makeResponse();
+  await signalHandler(
+    makeRequest({
+      method: "POST",
+      path: `join-token/${createResponse.body.token}/rotate`,
+      headers: { "x-volt-browser-claim": "browser-secret" },
+      body: { graceMs: 0, ttlMs: 30_000 },
+    }),
+    rotateResponse
+  );
+  assert.equal(rotateResponse.statusCode, 200);
+  assert.notEqual(rotateResponse.body.token.token, createResponse.body.token);
+
+  const oldAttemptResponse = makeResponse();
+  await signalHandler(
+    makeRequest({
+      method: "POST",
+      path: `join-token/${createResponse.body.token}/attempt`,
+      body: { contributorId: "late-phone" },
+    }),
+    oldAttemptResponse
+  );
+  assert.equal(oldAttemptResponse.statusCode, 410);
+  assert.deepEqual(oldAttemptResponse.body, { error: "Join token expired" });
+
+  const newAttemptResponse = makeResponse();
+  await signalHandler(
+    makeRequest({
+      method: "POST",
+      path: `join-token/${rotateResponse.body.token.token}/attempt`,
+      body: { contributorId: "fresh-phone" },
+    }),
+    newAttemptResponse
+  );
+  assert.equal(newAttemptResponse.statusCode, 200);
+  assert.equal(newAttemptResponse.body.attempt.contributorId, "fresh-phone");
+
+  const revokeResponse = makeResponse();
+  await signalHandler(
+    makeRequest({
+      method: "POST",
+      path: `join-token/${rotateResponse.body.token.token}/revoke`,
+      headers: { "x-volt-browser-claim": "browser-secret" },
+    }),
+    revokeResponse
+  );
+  assert.equal(revokeResponse.statusCode, 200);
+
+  const revokedAttemptResponse = makeResponse();
+  await signalHandler(
+    makeRequest({
+      method: "POST",
+      path: `join-token/${rotateResponse.body.token.token}/attempt`,
+      body: { contributorId: "blocked-phone" },
+    }),
+    revokedAttemptResponse
+  );
+  assert.equal(revokedAttemptResponse.statusCode, 410);
+  assert.deepEqual(revokedAttemptResponse.body, { error: "Join token revoked" });
+});
+
+test("signal join attempts expire before offer and answer exchange", async () => {
+  const createResponse = makeResponse();
+  await signalHandler(makeRequest({ method: "POST", path: "join-token", body: { browserClaim: "browser-secret" } }), createResponse);
+
+  const attemptResponse = makeResponse();
+  await signalHandler(
+    makeRequest({
+      method: "POST",
+      path: `join-token/${createResponse.body.token}/attempt`,
+      body: { contributorId: "slow-phone", attemptTtlMs: 1 },
+    }),
+    attemptResponse
+  );
+  assert.equal(attemptResponse.statusCode, 200);
+
+  await new Promise((resolve) => setTimeout(resolve, 10));
+
+  const offerResponse = makeResponse();
+  await signalHandler(
+    makeRequest({
+      method: "POST",
+      path: `join-token/${createResponse.body.token}/attempt/${attemptResponse.body.attempt.id}/offer`,
+      headers: { "x-volt-browser-claim": "browser-secret" },
+      body: { offer: "too-late" },
+    }),
+    offerResponse
+  );
+  assert.equal(offerResponse.statusCode, 410);
+  assert.deepEqual(offerResponse.body, { error: "Join attempt expired" });
+});
+
 test("signal relay can repair a dropped App Clip session with the same id", async () => {
   const missingResponse = makeResponse();
   await signalHandler(

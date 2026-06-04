@@ -4,9 +4,11 @@ export const IMAGE_FILE_EXTENSIONS = /\.(avif|gif|heic|heif|jpe?g|png|webp)$/i;
 export type MobilePhoto = {
   id: string;
   kind: "photo";
+  photoBatchId?: string;
   name: string;
   mimeType: string;
   dataUrl?: string;
+  blob?: Blob;
   downloadUrl?: string;
   objectKey?: string;
   grantId?: string;
@@ -102,6 +104,10 @@ export function normalizeMobilePhoto(photo: unknown): MobilePhoto | null {
   return {
     id,
     kind: "photo",
+    photoBatchId:
+      typeof source.photoBatchId === "string" && source.photoBatchId
+        ? clampString(source.photoBatchId, 120)
+        : undefined,
     name:
       typeof source.name === "string" && source.name
         ? normalizeImageFilename(clampString(source.name, 120), mimeType)

@@ -12,6 +12,11 @@ import {
   buildMobilePhotoDownloadFilename,
   normalizeMobilePhoto,
 } from "../src/domain/mobile-photo";
+import {
+  saveMobileScannerPhoto,
+  saveMobileScannerScan,
+  shouldPersistScannerScan,
+} from "../src/domain/mobile-scanner-results";
 import { shouldInsertScannerMessage } from "../src/domain/scanner-message";
 
 export default defineBackground({
@@ -193,6 +198,7 @@ export default defineBackground({
     }
 
     const liveDictationSourceLengths = new Map();
+    const mobileCursorTargetsByTabId = new Map();
 
     function insertTextAtTrackedEditableFromBackground(value, options = {}) {
       const root = window;
@@ -457,16 +463,19 @@ export default defineBackground({
     }
 
     function persistScannerScan(scan) {
-      chrome.storage.local.get(
-        { [MOBILE_SCANNER_STORAGE_KEY]: [] },
-        (stored) => {
-          const current = Array.isArray(stored[MOBILE_SCANNER_STORAGE_KEY])
-            ? stored[MOBILE_SCANNER_STORAGE_KEY]
-            : [];
-          const next = [scan, ...current].slice(0, MOBILE_SCANNER_MAX_SCANS);
-          chrome.storage.local.set({ [MOBILE_SCANNER_STORAGE_KEY]: next });
-        }
-      );
+      void saveMobileScannerScan(scan).catch((error) => {
+        log("scanner IndexedDB scan persist failed", error?.message || error);
+        chrome.storage.local.get(
+          { [MOBILE_SCANNER_STORAGE_KEY]: [] },
+          (stored) => {
+            const current = Array.isArray(stored[MOBILE_SCANNER_STORAGE_KEY])
+              ? stored[MOBILE_SCANNER_STORAGE_KEY]
+              : [];
+            const next = [scan, ...current].slice(0, MOBILE_SCANNER_MAX_SCANS);
+            chrome.storage.local.set({ [MOBILE_SCANNER_STORAGE_KEY]: next });
+          }
+        );
+      });
     }
 
     function trimMobilePhotosForStorage(photos) {
@@ -557,6 +566,15 @@ export default defineBackground({
       try {
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
         if (!tab) return null;
+        const trackedTarget =
+          typeof tab.id === "number" ? mobileCursorTargetsByTabId.get(tab.id) : null;
+        if (trackedTarget) {
+          return {
+            ...trackedTarget,
+            tabTitle: clampString(tab.title || trackedTarget.tabTitle || "Current tab", 160),
+            url: clampString(tab.url || trackedTarget.url || "", 600),
+          };
+        }
         return {
           browser: "Chrome",
           tabTitle: clampString(tab.title || "Current tab", 140),
@@ -571,7 +589,8 @@ export default defineBackground({
       }
     }
 
-    async function updateMobileCaptureTarget(target) {
+    async function updateMobileCaptureTarget(target, sender) {
+      const senderTabId = typeof sender?.tab?.id === "number" ? sender.tab.id : null;
       const normalizedTarget =
         target && typeof target === "object"
           ? {
@@ -579,8 +598,13 @@ export default defineBackground({
               tabTitle: clampString(target.tabTitle || "Current tab", 160),
               url: clampString(target.url || "", 600),
               cursor: clampString(target.cursor || "Last focused editable field", 120),
+              frameId: typeof sender?.frameId === "number" ? sender.frameId : 0,
+              updatedAt: toFiniteNumber(target.updatedAt, Date.now()),
             }
           : await getMobileCaptureTarget();
+      if (senderTabId && normalizedTarget) {
+        mobileCursorTargetsByTabId.set(senderTabId, normalizedTarget);
+      }
       try {
         await sendScannerOffscreenMessage({
           action: "scannerOffscreenUpdateTarget",
@@ -639,6 +663,17 @@ export default defineBackground({
       }
     }
 
+    async function handleScannerCloseJoinWindow(sendResponse) {
+      try {
+        const state = await sendScannerOffscreenMessage({
+          action: "scannerOffscreenCloseJoinWindow",
+        });
+        sendResponse?.({ success: true, state });
+      } catch (err) {
+        sendResponse?.({ success: false, error: String(err?.message || err) });
+      }
+    }
+
     async function handleScannerGetState(sendResponse) {
       try {
         const state = await sendScannerOffscreenMessage({
@@ -656,12 +691,7 @@ export default defineBackground({
     function handleScannerScan(message) {
       const scan = normalizeScannerMessage(message?.scan);
       if (!scan) return;
-      const isPartialDictation =
-        scan.kind === "text" &&
-        scan.format === "dictation" &&
-        scan.dictationPhase === "partial";
-
-      if (!isPartialDictation) {
+      if (shouldPersistScannerScan(scan)) {
         persistScannerScan(scan);
         broadcastScannerMessage({ action: "scannerScan", scan });
       }
@@ -688,9 +718,19 @@ export default defineBackground({
         downloadId: downloadResult.downloadId,
         downloadFilename: downloadResult.filename,
       };
-      const persisted = await persistMobilePhoto(downloadedPhoto);
+      const savedPhoto = await saveMobileScannerPhoto(downloadedPhoto).catch((error) => {
+        log("scanner IndexedDB photo persist failed", error?.message || error);
+        return null;
+      });
+      const persisted = savedPhoto ? true : await persistMobilePhoto(downloadedPhoto);
       if (!persisted) return { success: false, error: "storage_failed" };
-      broadcastScannerMessage({ action: "scannerPhoto", photo: downloadedPhoto });
+      const { blob, ...savedPhotoMetadata } = savedPhoto?.photo ?? {};
+      broadcastScannerMessage({
+        action: "scannerPhoto",
+        photo: savedPhoto
+          ? { ...savedPhotoMetadata, dataUrl: downloadedPhoto.dataUrl }
+          : downloadedPhoto,
+      });
       return { success: true };
     }
 
@@ -836,6 +876,7 @@ export default defineBackground({
         }
         lastActiveTabId = tabId;
         currentActiveTabId = tabId;
+        void updateMobileCaptureTarget(mobileCursorTargetsByTabId.get(tabId) ?? null, null);
       } catch (_) {}
     });
     // Clean up tracking if tabs are closed
@@ -843,6 +884,7 @@ export default defineBackground({
       chrome.tabs.onRemoved.addListener((closedTabId) => {
         if (previousActiveTabId === closedTabId) previousActiveTabId = null;
         if (lastActiveTabId === closedTabId) lastActiveTabId = null;
+        mobileCursorTargetsByTabId.delete(closedTabId);
         if (currentActiveTabId === closedTabId) {
           currentActiveTabId = null;
           try {
@@ -1263,6 +1305,7 @@ export default defineBackground({
           "scannerOffscreenPing",
           "scannerOffscreenStart",
           "scannerOffscreenDisconnect",
+          "scannerOffscreenCloseJoinWindow",
           "scannerOffscreenGetState",
         ].includes(message?.action)
       ) {
@@ -1341,11 +1384,14 @@ export default defineBackground({
         case "scannerDisconnect":
           handleScannerDisconnect(sendResponse);
           return true;
+        case "scannerCloseJoinWindow":
+          handleScannerCloseJoinWindow(sendResponse);
+          return true;
         case "scannerGetState":
           handleScannerGetState(sendResponse);
           return true;
         case "mobileCursorTargetChanged":
-          void updateMobileCaptureTarget(message?.target);
+          void updateMobileCaptureTarget(message?.target, sender);
           sendResponse({ success: true });
           return false;
         case "scannerStateChanged":
@@ -2345,7 +2391,10 @@ export default defineBackground({
         chrome.windows.onRemoved.addListener((winId) => {
           if (winId === CURRENT_TOOL_POPUP_ID) clearCurrentToolPopupState();
           if (winId === PREVIEW_POPUP_ID) clearPreviewPopupState();
-          if (winId === MOBILE_SCANNER_POPUP_ID) clearMobileScannerPopupState();
+          if (winId === MOBILE_SCANNER_POPUP_ID) {
+            clearMobileScannerPopupState();
+            void handleScannerCloseJoinWindow();
+          }
         });
         FOCUS_LISTENER_ATTACHED = true;
       } catch (_) {}

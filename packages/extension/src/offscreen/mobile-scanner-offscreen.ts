@@ -7,12 +7,17 @@ import {
   isAppClipCaptureMode,
   isCaptureMode,
   type CaptureMode,
+  type BarcodeMessage,
   type PhotoChunkStartMessage,
   type PhotoMessage,
   type ScannerConnectionStatus,
   type ScannerRelayResult,
   type SessionTarget,
 } from "../../../scanner-protocol/src";
+import {
+  MobileScannerSession,
+  type MobileScannerSessionState,
+} from "../domain/mobile-scanner-session";
 
 const SCANNER_APP_CLIP_BASE_URL = SCANNER_SIGNAL_URL.replace("/api/signal", "/clip");
 const SCANNER_RESULT_TIMEOUT_MS = SCANNER_SESSION_TTL_MS;
@@ -24,6 +29,9 @@ type ScannerState = {
   error: string | null;
   mode: CaptureMode | null;
   connectedAt: string | null;
+  connectedPeerCount?: number;
+  joinWindowExpiresAt?: string | null;
+  sessionId?: string;
 };
 
 type PendingPhoto = PhotoChunkStartMessage & {
@@ -45,6 +53,7 @@ type PersistedRelayState = {
 };
 
 class MobileScannerOffscreenSession {
+  private webRtcSession: MobileScannerSession;
   private resultPoll: number | null = null;
   private resultPollTimeout: number | null = null;
   private sessionId: string | null = null;
@@ -62,12 +71,38 @@ class MobileScannerOffscreenSession {
   };
 
   constructor() {
+    this.webRtcSession = new MobileScannerSession({
+      onState: (state) => this.handleWebRtcState(state),
+      onScan: (scan) => this.sendScan(scan),
+      onPhoto: (photo) => this.sendPhoto(photo),
+      log: (...args) => console.warn(...args),
+    });
     this.restorePromise = this.restorePersistedSession();
   }
 
   async getState() {
+    if (this.isWebRtcActive()) return { ...this.state };
     await this.restorePromise;
     return { ...this.state };
+  }
+
+  private isWebRtcActive() {
+    return (
+      this.state.sessionId === this.webRtcSession.getState().sessionId ||
+      this.webRtcSession.getState().status !== "disconnected"
+    );
+  }
+
+  private handleWebRtcState(state: MobileScannerSessionState) {
+    this.setState({
+      status: state.status,
+      qrCodeUrl: state.qrCodeUrl,
+      error: state.error,
+      connectedAt: state.connectedAt,
+      connectedPeerCount: state.connectedPeerCount,
+      joinWindowExpiresAt: state.joinWindowExpiresAt,
+      sessionId: state.sessionId,
+    });
   }
 
   private setState(patch: Partial<ScannerState>) {
@@ -81,6 +116,27 @@ class MobileScannerOffscreenSession {
   }
 
   async start(force = false, mode: CaptureMode | null = null, target?: SessionTarget | null) {
+    await this.restorePromise;
+    if (!force) {
+      const webRtcState = this.webRtcSession.getState();
+      if (webRtcState.qrCodeUrl) {
+        this.handleWebRtcState(webRtcState);
+        return { ...this.state, mode };
+      }
+    }
+    const state = await this.webRtcSession.openJoinWindow(target);
+    this.handleWebRtcState(state);
+    this.setState({ mode });
+    return { ...this.state };
+  }
+
+  async closeJoinWindow() {
+    const state = await this.webRtcSession.closeJoinWindow();
+    this.handleWebRtcState(state);
+    return { ...this.state };
+  }
+
+  async startAppClipRelay(force = false, mode: CaptureMode | null = null, target?: SessionTarget | null) {
     await this.restorePromise;
     if (
       !force &&
@@ -126,6 +182,7 @@ class MobileScannerOffscreenSession {
 
   async disconnect() {
     await this.restorePromise;
+    await this.webRtcSession.disconnect();
     this.sessionId = null;
     this.browserClaim = null;
     this.cleanup(true);
@@ -137,6 +194,7 @@ class MobileScannerOffscreenSession {
 
   async updateTarget(target?: SessionTarget | null) {
     await this.restorePromise;
+    if (this.isWebRtcActive()) return this.webRtcSession.updateTarget(target);
     if (!this.sessionId || !target) return this.getState();
     try {
       await fetch(`${SCANNER_SIGNAL_URL}/${encodeURIComponent(this.sessionId)}/target`, {
@@ -305,6 +363,18 @@ class MobileScannerOffscreenSession {
       },
     });
     return true;
+  }
+
+  private async sendScan(data: BarcodeMessage) {
+    const response = await chrome.runtime.sendMessage({
+      action: "scannerOffscreenScan",
+      scan: {
+        ...data,
+        id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        scannedAt: data.scannedAt || new Date().toISOString(),
+      },
+    });
+    return response?.success !== false;
   }
 
   private async sendPhoto(photo: PhotoMessage) {
@@ -506,14 +576,59 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 
   if (message.action === "scannerOffscreenStart") {
+    const startPromise =
+      message.appClipRelay === true
+        ? mobileScannerSession.startAppClipRelay(
+            message.force === true,
+            message.mode === "ocr" || message.mode === "barcode" || message.mode === "dictation" || message.mode === "photo"
+              ? message.mode
+              : null,
+            message.target && typeof message.target === "object" ? message.target : null
+          )
+        : mobileScannerSession.start(
+            message.force === true,
+            message.mode === "ocr" || message.mode === "barcode" || message.mode === "dictation" || message.mode === "photo"
+              ? message.mode
+              : null,
+            message.target && typeof message.target === "object" ? message.target : null
+          );
+    startPromise
+      .then((state) => sendResponse(state))
+      .catch((err) =>
+        sendResponse({
+          status: "error",
+          qrCodeUrl: null,
+          error: err instanceof Error ? err.message : String(err),
+          mode: null,
+        })
+      );
+    return true;
+  }
+
+  if (message.action === "scannerOffscreenStartAppClipRelay") {
     mobileScannerSession
-      .start(
+      .startAppClipRelay(
         message.force === true,
         message.mode === "ocr" || message.mode === "barcode" || message.mode === "dictation" || message.mode === "photo"
           ? message.mode
           : null,
         message.target && typeof message.target === "object" ? message.target : null
       )
+      .then((state) => sendResponse(state))
+      .catch((err) =>
+        sendResponse({
+          status: "error",
+          qrCodeUrl: null,
+          error: err instanceof Error ? err.message : String(err),
+          mode: null,
+        })
+      );
+    return true;
+  }
+
+  if (message.action === "scannerOffscreenCloseJoinWindow") {
+    mobileScannerSession
+      .closeJoinWindow()
       .then((state) => sendResponse(state))
       .catch((err) =>
         sendResponse({

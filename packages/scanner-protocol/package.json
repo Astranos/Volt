@@ -3,6 +3,10 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "scripts": {
+    "test": "node --experimental-strip-types --test src/*.test.mjs",
+    "typecheck": "tsc --noEmit --allowImportingTsExtensions --module NodeNext --moduleResolution NodeNext --target ES2022 src/index.ts"
+  },
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {

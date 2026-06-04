@@ -419,8 +419,11 @@ test("full app pair route accepts every browser relay capture mode", () => {
   for (const mode of ["ocr", "barcode", "dictation", "photo"]) {
     assert.match(captureModes, new RegExp(`${mode}:`));
   }
-  assert.ok(captureModes.includes('photo: "/(tabs)/photos"'));
-  assert.match(pairRoute, /buildPairUrl\(session, mode\)/);
+  assert.ok(captureModes.includes('ocr: "/(tabs)/scanner"'));
+  assert.ok(captureModes.includes('dictation: "/(tabs)/scanner"'));
+  assert.ok(captureModes.includes('photo: "/(tabs)/scanner"'));
+  assert.match(pairRoute, /buildPairUrl\(session, mode, joinToken\)/);
+  assert.match(pairRoute, /scanner\.setActiveMode\(mode\)/);
 });
 
 test("native App Clip parser accepts generic browser relay QR sessions", () => {

@@ -31,6 +31,23 @@ export function dataUrlToFile(
   });
 }
 
+export function blobToFile(blob: Blob, filename: string, mimeType: string) {
+  const normalizedMimeType = normalizeImageMimeType(mimeType || blob.type);
+  return new File([blob], normalizeImageFilename(filename, normalizedMimeType), {
+    type: normalizedMimeType,
+    lastModified: Date.now(),
+  });
+}
+
+export function blobToDataUrl(blob: Blob) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error ?? new Error("Blob read failed"));
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.readAsDataURL(blob);
+  });
+}
+
 export async function dataUrlToPngBlob(dataUrl: string) {
   const image = new Image();
   image.decoding = "async";

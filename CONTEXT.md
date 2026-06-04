@@ -2,6 +2,10 @@
 
 Scout is a Chrome extension and companion web app for resale workflows.
 
+## Current Mobile Scanner Direction
+
+ADR 0002 is the source of truth for the full mobile app scanner flow. The full app pairs through `scanner-signal` join tokens and then sends text, barcode, dictation, and photo results over direct WebRTC data channels only. App Clip relay and photo object transfer remain legacy/App Clip compatibility paths, not the full-app scanner transport.
+
 ## Domain Terms
 
 - Command Menu: the CMDK-powered palette for tabs, quick links, bookmarks, tools, search providers, and history.
