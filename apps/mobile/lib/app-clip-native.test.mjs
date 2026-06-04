@@ -185,6 +185,35 @@ test("native photo capture requests maximum still dimensions before preview fall
   assert.match(textRecognizer, /previewLayer\.metadataOutputRectConverted\(fromLayerRect: previewLayer\.bounds\)/);
 });
 
+test("native camera zoom defaults Photos to 1x and allows ultra-wide slider zoom", () => {
+  const fullAppDelegate = readText(nativeFiles.fullAppDelegate);
+  const textRecognizer = readText(nativeFiles.textRecognizer);
+
+  assert.match(fullAppDelegate, /private let clipZoomStops: \[CGFloat\] = \[0\.5, 1,/);
+  assert.match(fullAppDelegate, /if nextMode == \.photo \{\s*zoomFactor = 1\s*\}/);
+  assert.match(fullAppDelegate, /if mode == \.photo \{\s*zoomFactor = 1\s*\}/);
+  assert.match(fullAppDelegate, /clipMinimumDisplayedZoomFactor: CGFloat = 0\.5/);
+  assert.match(fullAppDelegate, /clipMaximumDisplayedZoomFactor: CGFloat = 4/);
+  assert.match(fullAppDelegate, /Slider\(value: Binding[\s\S]*?\), in: Double\(clipMinimumDisplayedZoomFactor\)\.\.\.Double\(clipMaximumDisplayedZoomFactor\)/);
+  assert.match(fullAppDelegate, /private var requestedZoomFactor: CGFloat = 1/);
+  assert.match(fullAppDelegate, /self\.requestedZoomFactor = factor[\s\S]*self\.applyZoom\(factor\)/);
+  assert.match(fullAppDelegate, /applyZoom\(requestedZoomFactor\)/);
+  assert.match(fullAppDelegate, /let requestedZoom = factor \* wideZoomFactor/);
+  assert.match(fullAppDelegate, /clipMinimumDisplayedZoomFactor \* wideZoomFactor/);
+  assert.match(fullAppDelegate, /clipMaximumDisplayedZoomFactor \* wideZoomFactor/);
+  assert.match(fullAppDelegate, /virtualDeviceSwitchOverVideoZoomFactors/);
+  assert.match(fullAppDelegate, /device\.deviceType == \.builtInTripleCamera \|\| device\.deviceType == \.builtInDualWideCamera/);
+
+  assert.match(textRecognizer, /voltMinimumDisplayedZoomFactor: CGFloat = 0\.5/);
+  assert.match(textRecognizer, /voltMaximumDisplayedZoomFactor: CGFloat = 4/);
+  assert.match(textRecognizer, /private var requestedZoomFactor: CGFloat = 1/);
+  assert.match(textRecognizer, /self\.requestedZoomFactor = factor[\s\S]*try self\.configureIfNeeded\(\)/);
+  assert.match(textRecognizer, /try\? applyZoom\(requestedZoomFactor\)/);
+  assert.match(textRecognizer, /let videoZoom = displayedZoom \* wideZoomFactor/);
+  assert.match(textRecognizer, /device\.activeFormat\.videoMaxZoomFactor \/ wideZoomFactor/);
+  assert.match(textRecognizer, /virtualDeviceSwitchOverVideoZoomFactors/);
+});
+
 test("full app restores and repairs the last paired relay session after relaunch", () => {
   const fullAppDelegate = readText(nativeFiles.fullAppDelegate);
 

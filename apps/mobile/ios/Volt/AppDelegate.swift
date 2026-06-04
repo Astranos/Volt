@@ -13,7 +13,9 @@ import VisionKit
 
 private let signalBaseURL = URL(string: "https://scanner-signal.vercel.app/api/signal")!
 private let validModes: Set<String> = ["ocr", "barcode", "photo", "dictation"]
-private let clipZoomStops: [CGFloat] = [1, 1.5, 2, 2.5, 3, 3.5, 4]
+private let clipMinimumDisplayedZoomFactor: CGFloat = 0.5
+private let clipMaximumDisplayedZoomFactor: CGFloat = 4
+private let clipZoomStops: [CGFloat] = [0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4]
 private let persistedRelaySessionIdKey = "volt.native.relaySession.id"
 private let persistedRelaySessionModeKey = "volt.native.relaySession.mode"
 // Debug Metro port contract: provider.jsLocation = "\(ip):8090"
@@ -219,6 +221,9 @@ private final class ClipModel: ObservableObject {
     stopMode()
     if let mode = invocation.mode {
       self.mode = mode
+      if mode == .photo {
+        zoomFactor = 1
+      }
     }
     sessionId = invocation.sessionId
     isPairing = false
@@ -258,6 +263,9 @@ private final class ClipModel: ObservableObject {
       stopMode()
     }
     mode = nextMode
+    if nextMode == .photo {
+      zoomFactor = 1
+    }
     if let sessionId, !isPairing {
       persistRelaySession(sessionId: sessionId, mode: nextMode)
     }
@@ -1968,7 +1976,7 @@ private struct ZoomSlider: View {
           Double(factor)
         }, set: { value in
           onChange(CGFloat(value))
-        }), in: 1...4)
+        }), in: Double(clipMinimumDisplayedZoomFactor)...Double(clipMaximumDisplayedZoomFactor))
         .tint(.white.opacity(0.92))
         Image(systemName: "plus.magnifyingglass")
           .font(.system(size: 15, weight: .semibold))
@@ -2795,6 +2803,7 @@ private final class ClipCamera: NSObject, ObservableObject, AVCaptureMetadataOut
   private weak var previewView: PreviewView?
   private var barcodeFullFrame = false
   private var latestDeviceOrientation: UIDeviceOrientation = .portrait
+  private var requestedZoomFactor: CGFloat = 1
 
   override init() {
     super.init()
@@ -2931,11 +2940,8 @@ private final class ClipCamera: NSObject, ObservableObject, AVCaptureMetadataOut
 
   func setZoom(_ factor: CGFloat) {
     queue.async {
-      guard let device = self.device else { return }
-      let value = max(device.minAvailableVideoZoomFactor, min(factor, min(4, device.activeFormat.videoMaxZoomFactor)))
-      try? device.lockForConfiguration()
-      device.videoZoomFactor = value
-      device.unlockForConfiguration()
+      self.requestedZoomFactor = factor
+      self.applyZoom(factor)
     }
   }
 
@@ -2983,11 +2989,38 @@ private final class ClipCamera: NSObject, ObservableObject, AVCaptureMetadataOut
     session.commitConfiguration()
     self.device = device
     isConfigured = true
+    applyZoom(requestedZoomFactor)
     DispatchQueue.main.async {
       if let previewLayer = self.previewView?.previewLayer {
         self.updateRectOfInterest(from: previewLayer)
       }
     }
+  }
+
+  private func applyZoom(_ factor: CGFloat) {
+    guard let device else { return }
+    let wideZoomFactor = wideAngleVideoZoomFactor(for: device)
+    let requestedZoom = factor * wideZoomFactor
+    let minZoom = max(device.minAvailableVideoZoomFactor, clipMinimumDisplayedZoomFactor * wideZoomFactor)
+    let maxZoom = min(
+      device.activeFormat.videoMaxZoomFactor,
+      device.maxAvailableVideoZoomFactor,
+      clipMaximumDisplayedZoomFactor * wideZoomFactor
+    )
+    let value = max(minZoom, min(requestedZoom, maxZoom))
+    guard (try? device.lockForConfiguration()) != nil else { return }
+    defer { device.unlockForConfiguration() }
+    device.videoZoomFactor = value
+  }
+
+  private func wideAngleVideoZoomFactor(for device: AVCaptureDevice) -> CGFloat {
+    guard device.deviceType == .builtInTripleCamera || device.deviceType == .builtInDualWideCamera else {
+      return 1
+    }
+    return device.virtualDeviceSwitchOverVideoZoomFactors
+      .map { CGFloat(truncating: $0) }
+      .filter { $0 > 1 }
+      .min() ?? 1
   }
 
   private func makePhotoSettings() -> AVCapturePhotoSettings {

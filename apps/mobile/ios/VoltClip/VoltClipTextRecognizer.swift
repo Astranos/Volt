@@ -5,6 +5,9 @@ import React
 import UIKit
 import Vision
 
+private let voltMinimumDisplayedZoomFactor: CGFloat = 0.5
+private let voltMaximumDisplayedZoomFactor: CGFloat = 4
+
 @objc(VoltClipTextRecognizer)
 class VoltClipTextRecognizer: RCTEventEmitter, AVCapturePhotoCaptureDelegate, AVCaptureMetadataOutputObjectsDelegate, AVCaptureVideoDataOutputSampleBufferDelegate {
   static let shared = VoltClipTextRecognizer()
@@ -28,6 +31,7 @@ class VoltClipTextRecognizer: RCTEventEmitter, AVCapturePhotoCaptureDelegate, AV
   private var pendingImageSize: CGSize?
   fileprivate weak var previewOverlayView: VoltClipTextCameraView?
   private var captureTimeoutWorkItem: DispatchWorkItem?
+  private var requestedZoomFactor: CGFloat = 1
   private let selectionHaptic = UISelectionFeedbackGenerator()
   private var hasListeners = false
   private var latestDeviceOrientation: UIDeviceOrientation = .portrait
@@ -360,9 +364,10 @@ class VoltClipTextRecognizer: RCTEventEmitter, AVCapturePhotoCaptureDelegate, AV
     metadataOutput.metadataObjectTypes = supportedMetadataTypes(from: metadataOutput.availableMetadataObjectTypes)
     metadataOutput.rectOfInterest = CGRect(x: 0.18, y: 0.18, width: 0.64, height: 0.64)
     session.commitConfiguration()
-    applyCurrentCaptureOrientation()
     videoDevice = device
     isConfigured = true
+    _ = try? applyZoom(requestedZoomFactor)
+    applyCurrentCaptureOrientation()
   }
 
   private func supportedMetadataTypes(from availableTypes: [AVMetadataObject.ObjectType]) -> [AVMetadataObject.ObjectType] {
@@ -498,23 +503,53 @@ class VoltClipTextRecognizer: RCTEventEmitter, AVCapturePhotoCaptureDelegate, AV
   private func setZoom(factor: CGFloat, resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) {
     sessionQueue.async {
       do {
+        self.requestedZoomFactor = factor
         try self.configureIfNeeded()
         guard let device = self.videoDevice else {
           reject("ocr_zoom_unavailable", "Camera zoom is not available.", nil)
           return
         }
 
-        let minZoom = max(device.minAvailableVideoZoomFactor, 0.5)
-        let maxZoom = min(device.activeFormat.videoMaxZoomFactor, device.maxAvailableVideoZoomFactor, 4)
-        let clampedZoom = max(minZoom, min(factor, maxZoom))
-        try device.lockForConfiguration()
-        device.videoZoomFactor = clampedZoom
-        device.unlockForConfiguration()
+        let (minZoom, maxZoom) = self.displayedZoomRange(for: device)
+        let clampedZoom = try self.applyZoom(factor) ?? max(minZoom, min(factor, maxZoom))
         resolve(["factor": clampedZoom, "min": minZoom, "max": maxZoom])
       } catch {
         reject("ocr_zoom_failed", error.localizedDescription, error)
       }
     }
+  }
+
+  private func displayedZoomRange(for device: AVCaptureDevice) -> (min: CGFloat, max: CGFloat) {
+    let wideZoomFactor = wideAngleVideoZoomFactor(for: device)
+    let minZoom = max(device.minAvailableVideoZoomFactor / wideZoomFactor, voltMinimumDisplayedZoomFactor)
+    let maxZoom = min(
+      device.activeFormat.videoMaxZoomFactor / wideZoomFactor,
+      device.maxAvailableVideoZoomFactor / wideZoomFactor,
+      voltMaximumDisplayedZoomFactor
+    )
+    return (minZoom, maxZoom)
+  }
+
+  private func applyZoom(_ factor: CGFloat) throws -> CGFloat? {
+    guard let device = videoDevice else { return nil }
+    let wideZoomFactor = wideAngleVideoZoomFactor(for: device)
+    let range = displayedZoomRange(for: device)
+    let displayedZoom = max(range.min, min(factor, range.max))
+    let videoZoom = displayedZoom * wideZoomFactor
+    try device.lockForConfiguration()
+    defer { device.unlockForConfiguration() }
+    device.videoZoomFactor = videoZoom
+    return displayedZoom
+  }
+
+  private func wideAngleVideoZoomFactor(for device: AVCaptureDevice) -> CGFloat {
+    guard device.deviceType == .builtInTripleCamera || device.deviceType == .builtInDualWideCamera else {
+      return 1
+    }
+    return device.virtualDeviceSwitchOverVideoZoomFactors
+      .map { CGFloat(truncating: $0) }
+      .filter { $0 > 1 }
+      .min() ?? 1
   }
 
   private func focusAt(normalizedPoint: CGPoint, resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) {
