@@ -46,6 +46,7 @@ test("offscreen and background route global join-window lifecycle separately fro
   assert.match(offscreenSource, /new MobileScannerSession/);
   assert.match(offscreenSource, /scannerOffscreenCloseJoinWindow/);
   assert.match(backgroundSource, /case "scannerCloseJoinWindow"/);
-  assert.match(backgroundSource, /void handleScannerCloseJoinWindow\(\)/);
+  assert.match(backgroundSource, /case "scannerPairingPopupClosed"/);
+  assert.match(backgroundSource, /handleScannerPairingPopupClosed\(sendResponse\)/);
   assert.doesNotMatch(backgroundSource, /case "scannerDisconnect"[\s\S]{0,120}scannerOffscreenCloseJoinWindow/);
 });

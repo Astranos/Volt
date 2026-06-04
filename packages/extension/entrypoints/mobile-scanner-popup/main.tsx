@@ -130,6 +130,25 @@ function MobileScannerPopup() {
     return () => window.clearTimeout(timer);
   }, [state.status]);
 
+  useEffect(() => {
+    let sent = false;
+    const notifyClosed = () => {
+      if (sent) return;
+      sent = true;
+      try {
+        chrome.runtime.sendMessage({ action: "scannerPairingPopupClosed" });
+      } catch (_error) {}
+    };
+
+    window.addEventListener("pagehide", notifyClosed);
+    window.addEventListener("beforeunload", notifyClosed);
+    return () => {
+      window.removeEventListener("pagehide", notifyClosed);
+      window.removeEventListener("beforeunload", notifyClosed);
+      notifyClosed();
+    };
+  }, []);
+
   const copyLink = useCallback(async () => {
     if (!state.qrCodeUrl) return;
     await navigator.clipboard.writeText(state.qrCodeUrl);

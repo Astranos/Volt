@@ -55,15 +55,17 @@ test("Mobile Scanner sidepanel no longer owns the pairing QR surface", () => {
   assert.match(mobileScannerSource, /function CompactScannerStatus/);
 });
 
-test("Mobile Scanner context menu opens the QR pairing session in an extension popup", () => {
+test("Mobile Scanner context menu opens the QR pairing session in the browser action popup", () => {
   assert.match(contextMenuSource, /action: "openMobileCapture"/);
   assert.match(contextMenuSource, /surface: "popup"/);
   assert.match(contextMenuSource, /onInvoke: \(\) => openMobileCapture\("barcode"\)/);
   assert.doesNotMatch(contextMenuSource, /MobileCaptureQrOverlay/);
   assert.doesNotMatch(contextMenuSource, /openMobileSidepanel/);
   assert.match(backgroundSource, /mobile-scanner-popup\.html/);
-  assert.match(backgroundSource, /function closeMobileScannerPopup/);
-  assert.match(backgroundSource, /message\?\.state\?\.status === "connected"/);
+  assert.match(backgroundSource, /chrome\.action\.setPopup/);
+  assert.match(backgroundSource, /chrome\.action\.openPopup/);
+  assert.doesNotMatch(backgroundSource, /chrome\.windows\.create\(\{\s*url: popupUrl\.href/);
+  assert.match(backgroundSource, /case "scannerPairingPopupClosed"/);
 });
 
 test("App Clip relay session survives offscreen document recreation", () => {
@@ -97,6 +99,7 @@ test("Mobile Scanner popup entrypoint renders and dismisses the pairing QR", () 
   assert.match(popupSource, /QRCode\.toDataURL\(state\.qrCodeUrl/);
   assert.match(popupSource, /action: "scannerStartForMode"/);
   assert.match(popupSource, /message\?\.action !== "scannerStateChanged"/);
+  assert.match(popupSource, /scannerPairingPopupClosed/);
   assert.match(popupSource, /state\.status === "connected"/);
   assert.match(popupSource, /window\.close\(\)/);
 });

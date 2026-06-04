@@ -674,6 +674,11 @@ export default defineBackground({
       }
     }
 
+    async function handleScannerPairingPopupClosed(sendResponse) {
+      await resetMobileScannerActionPopup();
+      await handleScannerCloseJoinWindow(sendResponse);
+    }
+
     async function handleScannerGetState(sendResponse) {
       try {
         const state = await sendScannerOffscreenMessage({
@@ -775,18 +780,9 @@ export default defineBackground({
       log,
       getFallbackTabIds: () => [currentActiveTabId, lastActiveTabId],
     });
-    let MOBILE_SCANNER_POPUP_ID = null;
-
-    function clearMobileScannerPopupState() {
-      MOBILE_SCANNER_POPUP_ID = null;
-    }
-
-    function closeMobileScannerPopup() {
-      if (!MOBILE_SCANNER_POPUP_ID) return;
-      const windowId = MOBILE_SCANNER_POPUP_ID;
-      MOBILE_SCANNER_POPUP_ID = null;
+    async function resetMobileScannerActionPopup() {
       try {
-        chrome.windows.remove(windowId, () => {});
+        await chrome.action.setPopup({ popup: "" });
       } catch (_) {}
     }
 
@@ -809,38 +805,14 @@ export default defineBackground({
     }
 
     async function openMobileScannerPairingPopup(mode, state) {
-      ensureAutoCloseListener();
       const popupUrl = new URL(chrome.runtime.getURL("mobile-scanner-popup.html"));
       if (mode) popupUrl.searchParams.set("mode", mode);
       if (state?.status) popupUrl.searchParams.set("status", state.status);
 
-      closeMobileScannerPopup();
-
-      const width = 380;
-      const height = 540;
-      const activeWindow = await getActiveChromeWindow();
-      const left =
-        typeof activeWindow?.left === "number" && typeof activeWindow?.width === "number"
-          ? Math.round(activeWindow.left + Math.max(0, activeWindow.width - width - 24))
-          : undefined;
-      const top =
-        typeof activeWindow?.top === "number"
-          ? Math.round(activeWindow.top + 72)
-          : undefined;
-
-      const created = await chrome.windows.create({
-        url: popupUrl.href,
-        type: "popup",
-        focused: true,
-        width,
-        height,
-        ...(typeof left === "number" ? { left } : {}),
-        ...(typeof top === "number" ? { top } : {}),
+      await chrome.action.setPopup({
+        popup: `${popupUrl.pathname.replace(/^\//, "")}${popupUrl.search}`,
       });
-
-      if (typeof created?.id === "number") {
-        MOBILE_SCANNER_POPUP_ID = created.id;
-      }
+      await chrome.action.openPopup();
     }
 
     function getSidePanelState(windowId) {
@@ -1387,6 +1359,9 @@ export default defineBackground({
         case "scannerCloseJoinWindow":
           handleScannerCloseJoinWindow(sendResponse);
           return true;
+        case "scannerPairingPopupClosed":
+          handleScannerPairingPopupClosed(sendResponse);
+          return true;
         case "scannerGetState":
           handleScannerGetState(sendResponse);
           return true;
@@ -1395,9 +1370,6 @@ export default defineBackground({
           sendResponse({ success: true });
           return false;
         case "scannerStateChanged":
-          if (message?.state?.status === "connected") {
-            closeMobileScannerPopup();
-          }
           if (message?.source !== "scanner-background") {
             broadcastScannerMessage({
               action: "scannerStateChanged",
@@ -2391,10 +2363,6 @@ export default defineBackground({
         chrome.windows.onRemoved.addListener((winId) => {
           if (winId === CURRENT_TOOL_POPUP_ID) clearCurrentToolPopupState();
           if (winId === PREVIEW_POPUP_ID) clearPreviewPopupState();
-          if (winId === MOBILE_SCANNER_POPUP_ID) {
-            clearMobileScannerPopupState();
-            void handleScannerCloseJoinWindow();
-          }
         });
         FOCUS_LISTENER_ATTACHED = true;
       } catch (_) {}
