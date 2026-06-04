@@ -149,9 +149,10 @@ test("full app photo relay crops to the visible square viewfinder", () => {
 
   assert.match(fullAppDelegate, /private func photoSquareRect\(in size: CGSize, safeAreaInsets: EdgeInsets\)/);
   assert.match(fullAppDelegate, /PhotoSquareOverlay[\s\S]*photoSquareRect\(in: proxy\.size, safeAreaInsets: proxy\.safeAreaInsets\)/);
-  assert.match(fullAppDelegate, /func photoViewfinderCropRect\(\) -> CGRect\?/);
-  assert.match(fullAppDelegate, /metadataOutputRectConverted\(fromLayerRect: layerRect\)/);
-  assert.match(fullAppDelegate, /let squarePhoto = try photo\.cropped\(toNormalizedRect: camera\.photoViewfinderCropRect\(\)\)/);
+  assert.match(fullAppDelegate, /func photoViewfinderCropRect\(for imageSize: CGSize\) -> CGRect\?/);
+  assert.match(fullAppDelegate, /let scale = max\(previewSize\.width \/ imageSize\.width, previewSize\.height \/ imageSize\.height\)/);
+  assert.match(fullAppDelegate, /let side = min\(cropRect\.width, cropRect\.height\)/);
+  assert.match(fullAppDelegate, /let squarePhoto = try photo\.cropped\(toNormalizedRect: camera\.photoViewfinderCropRect\(for: imageSize\)\)/);
   assert.doesNotMatch(fullAppDelegate, /let squarePhoto = try photo\.squareCropped\(\)/);
 });
 

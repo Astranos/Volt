@@ -671,7 +671,8 @@ private final class ClipModel: ObservableObject {
 
   private func sendPhoto(_ photo: CapturedPhoto) async {
     do {
-      let squarePhoto = try photo.cropped(toNormalizedRect: camera.photoViewfinderCropRect())
+      let imageSize = CGSize(width: photo.image.width, height: photo.image.height)
+      let squarePhoto = try photo.cropped(toNormalizedRect: camera.photoViewfinderCropRect(for: imageSize))
       let base64 = squarePhoto.data.base64EncodedString()
       try await sendResult(mode: .photo, message: [
         "kind": "photo",
@@ -2484,9 +2485,18 @@ private struct CapturedPhoto {
     guard cropRect.width > 1, cropRect.height > 1 else {
       return try squareCropped()
     }
+    let side = min(cropRect.width, cropRect.height)
+    let squareCropRect = CGRect(
+      x: cropRect.midX - side / 2,
+      y: cropRect.midY - side / 2,
+      width: side,
+      height: side
+    )
+      .intersection(CGRect(x: 0, y: 0, width: sourceWidth, height: sourceHeight))
+      .integral
 
     guard
-      let croppedImage = image.cropping(to: cropRect),
+      let croppedImage = image.cropping(to: squareCropRect),
       let mutableData = CFDataCreateMutable(nil, 0),
       let destination = CGImageDestinationCreateWithData(mutableData, UTType.jpeg.identifier as CFString, 1, nil)
     else {
@@ -2721,19 +2731,39 @@ private final class ClipCamera: NSObject, ObservableObject, AVCaptureMetadataOut
   }
 
   @MainActor
-  func photoViewfinderCropRect() -> CGRect? {
+  func photoViewfinderCropRect(for imageSize: CGSize) -> CGRect? {
     guard let previewView, !previewView.bounds.isEmpty else { return nil }
+    guard imageSize.width > 0, imageSize.height > 0 else { return nil }
+
+    let previewSize = previewView.bounds.size
     let layerRect = photoSquareRect(
-      in: previewView.bounds.size,
+      in: previewSize,
       safeAreaInsets: previewView.safeAreaInsets
     )
-    let normalizedRect = previewView.previewLayer.metadataOutputRectConverted(fromLayerRect: layerRect)
-    guard normalizedRect.width > 0, normalizedRect.height > 0 else { return nil }
+
+    let scale = max(previewSize.width / imageSize.width, previewSize.height / imageSize.height)
+    guard scale.isFinite, scale > 0 else { return nil }
+
+    let scaledImageSize = CGSize(width: imageSize.width * scale, height: imageSize.height * scale)
+    let imageOriginInLayer = CGPoint(
+      x: (previewSize.width - scaledImageSize.width) / 2,
+      y: (previewSize.height - scaledImageSize.height) / 2
+    )
+    let cropRect = CGRect(
+      x: (layerRect.minX - imageOriginInLayer.x) / scale,
+      y: (layerRect.minY - imageOriginInLayer.y) / scale,
+      width: layerRect.width / scale,
+      height: layerRect.height / scale
+    )
+    let imageBounds = CGRect(origin: .zero, size: imageSize)
+    let clippedCropRect = cropRect.intersection(imageBounds)
+    guard !clippedCropRect.isNull, !clippedCropRect.isEmpty else { return nil }
+
     return CGRect(
-      x: clampedUnit(normalizedRect.minX),
-      y: clampedUnit(normalizedRect.minY),
-      width: min(1, max(0, normalizedRect.width)),
-      height: min(1, max(0, normalizedRect.height))
+      x: clampedUnit(clippedCropRect.minX / imageSize.width),
+      y: clampedUnit(clippedCropRect.minY / imageSize.height),
+      width: min(1, max(0, clippedCropRect.width / imageSize.width)),
+      height: min(1, max(0, clippedCropRect.height / imageSize.height))
     )
   }
 
