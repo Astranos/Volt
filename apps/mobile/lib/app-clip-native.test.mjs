@@ -423,6 +423,9 @@ test("full app pair route accepts every browser relay capture mode", () => {
   assert.ok(captureModes.includes('dictation: "/(tabs)/scanner"'));
   assert.ok(captureModes.includes('photo: "/(tabs)/scanner"'));
   assert.match(pairRoute, /buildPairUrl\(session, mode, joinToken\)/);
+  assert.match(pairRoute, /const paired = await scanner\.pairFromUrl/);
+  assert.match(pairRoute, /if \(!paired\)/);
+  assert.match(pairRoute, /This Chrome pairing code expired/);
   assert.match(pairRoute, /scanner\.setActiveMode\(mode\)/);
 });
 

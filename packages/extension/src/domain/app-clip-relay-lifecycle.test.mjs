@@ -98,6 +98,10 @@ test("Mobile Scanner popup entrypoint renders and dismisses the pairing QR", () 
   );
   assert.match(popupSource, /QRCode\.toDataURL\(state\.qrCodeUrl/);
   assert.match(popupSource, /action: "scannerStartForMode"/);
+  assert.match(popupSource, /joinWindowExpiresAt/);
+  assert.match(popupSource, /Date\.parse\(state\.joinWindowExpiresAt\)/);
+  assert.match(popupSource, /expiresAt - Date\.now\(\) - 5_000/);
+  assert.match(popupSource, /startSession\(true\)/);
   assert.match(popupSource, /message\?\.action !== "scannerStateChanged"/);
   assert.match(popupSource, /scannerPairingPopupClosed/);
   assert.match(popupSource, /state\.status === "connected"/);

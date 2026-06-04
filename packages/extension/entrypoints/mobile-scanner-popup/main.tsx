@@ -19,6 +19,7 @@ type MobileScannerState = {
   qrCodeUrl: string | null;
   error: string | null;
   connectedAt?: string | null;
+  joinWindowExpiresAt?: string | null;
   mode?: MobileCaptureMode | null;
 };
 
@@ -129,6 +130,17 @@ function MobileScannerPopup() {
     const timer = window.setTimeout(() => window.close(), 650);
     return () => window.clearTimeout(timer);
   }, [state.status]);
+
+  useEffect(() => {
+    if (state.status !== "waiting" || !state.joinWindowExpiresAt) return;
+    const expiresAt = Date.parse(state.joinWindowExpiresAt);
+    if (!Number.isFinite(expiresAt)) return;
+    const refreshInMs = Math.max(0, expiresAt - Date.now() - 5_000);
+    const timer = window.setTimeout(() => {
+      void startSession(true);
+    }, refreshInMs);
+    return () => window.clearTimeout(timer);
+  }, [startSession, state.joinWindowExpiresAt, state.status]);
 
   useEffect(() => {
     let sent = false;

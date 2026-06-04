@@ -2,6 +2,7 @@ import {
   SCANNER_APP_PAIR_URL,
   SCANNER_ICE_GATHERING_TIMEOUT_MS,
   SCANNER_ICE_SERVERS,
+  SCANNER_JOIN_TOKEN_TTL_MS,
   SCANNER_RESULT_POLL_INTERVAL_MS,
   SCANNER_SIGNAL_URL,
   createScannerMessageDuplicateGuard,
@@ -19,7 +20,6 @@ import { shouldInsertScannerMessage } from "./scanner-message";
 const SCANNER_CONTROL_CHANNEL = "scanner-control";
 const PHOTO_TRANSFER_CHANNEL = "photo-transfer";
 const SCANNER_PROTOCOL_VERSION = "1.0.0";
-const JOIN_WINDOW_TTL_MS = 30_000;
 
 type SessionTimer = ReturnType<typeof setInterval>;
 
@@ -295,7 +295,7 @@ export class MobileScannerSession {
       webRtcOnly: true,
       role: "browser",
       sessionId,
-      ttlMs: JOIN_WINDOW_TTL_MS,
+      ttlMs: SCANNER_JOIN_TOKEN_TTL_MS,
       target: target ?? undefined,
       capabilities: ["text", "barcode", "dictation", "photo", "photo-chunk-ack"],
     };
@@ -328,7 +328,7 @@ export class MobileScannerSession {
       expiresAt:
         typeof payload.expiresAt === "string"
           ? payload.expiresAt
-          : new Date(Date.now() + JOIN_WINDOW_TTL_MS).toISOString(),
+          : new Date(Date.now() + SCANNER_JOIN_TOKEN_TTL_MS).toISOString(),
     };
   }
 

@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Text, View } from "react-native";
 import {
   buildPairUrl,
@@ -11,6 +11,7 @@ import { useScanner } from "../lib/scanner-state";
 export default function PairRoute() {
   const router = useRouter();
   const scanner = useScanner();
+  const [pairingError, setPairingError] = useState<string | null>(null);
   const params = useLocalSearchParams<{ join?: string; joinToken?: string; mode?: string; session?: string; token?: string }>();
   const joinToken =
     typeof params.joinToken === "string"
@@ -32,7 +33,11 @@ export default function PairRoute() {
 
     async function pairAndOpen() {
       if (session) {
-        await scanner.pairFromUrl(buildPairUrl(session, mode, joinToken));
+        const paired = await scanner.pairFromUrl(buildPairUrl(session, mode, joinToken));
+        if (!paired) {
+          if (!cancelled) setPairingError("This Chrome pairing code expired. Open a fresh QR in the Volt extension and scan it again.");
+          return;
+        }
       }
       if (mode) scanner.setActiveMode(mode);
 
@@ -47,8 +52,8 @@ export default function PairRoute() {
 
   return (
     <View style={styles.root}>
-      <ActivityIndicator color="#16a34a" />
-      <Text style={styles.text}>Opening Volt...</Text>
+      {pairingError ? null : <ActivityIndicator color="#16a34a" />}
+      <Text style={styles.text}>{pairingError ?? "Opening Volt..."}</Text>
     </View>
   );
 }

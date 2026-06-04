@@ -25,6 +25,8 @@ test("extension WebRTC session owns scanner-control and photo-transfer channels"
 test("extension WebRTC session creates offers per join attempt while join window is open", () => {
   assert.match(sessionSource, /openJoinWindow/);
   assert.match(sessionSource, /pollForJoinAttempts/);
+  assert.match(sessionSource, /SCANNER_JOIN_TOKEN_TTL_MS/);
+  assert.doesNotMatch(sessionSource, /const JOIN_WINDOW_TTL_MS = 30_000/);
   assert.match(sessionSource, /createPeerOffer\(joinWindow, attempt\.joinAttemptId\)/);
   assert.match(sessionSource, /join-token\/\$\{encodeURIComponent\(joinWindow\.joinToken\)\}\/attempt\/\$\{encodeURIComponent\(joinAttemptId\)\}\/offer/);
   assert.match(sessionSource, /closeJoinWindow/);
