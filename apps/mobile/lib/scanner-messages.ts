@@ -1,9 +1,27 @@
-import type { BarcodeMessage, PhotoMessage } from "@volt/scanner-protocol";
-
 export type ScannerCaptureMode = "ocr" | "barcode" | "dictation" | "photo";
 
-export type ScanItem = BarcodeMessage & {
+export type ScanItem = {
   id: string;
+  barcode: string;
+  dictationPhase?: "partial" | "final";
+  dictationSessionId?: string;
+  format?: string;
+  insertIntoCursor?: boolean;
+  kind?: "barcode" | "text";
+  scannedAt?: string;
+};
+
+export type PhotoMessage = {
+  kind: "photo";
+  id: string;
+  name: string;
+  mimeType: string;
+  dataUrl?: string;
+  contributorId?: string;
+  size: number;
+  width?: number;
+  height?: number;
+  capturedAt?: string;
 };
 
 function makeScanId() {
@@ -13,7 +31,7 @@ function makeScanId() {
 export function makeCaptureMessage(
   value: string,
   format: string,
-  kind: BarcodeMessage["kind"],
+  kind: ScanItem["kind"],
   insertIntoCursor = true
 ): ScanItem {
   return {

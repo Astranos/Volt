@@ -1,11 +1,12 @@
-import type { BarcodeMessage } from "../../../scanner-protocol/src";
+import type { BarcodeMessage } from "./mobile-scanner-session";
 import { normalizeMobilePhoto, type MobilePhoto } from "./mobile-photo.ts";
 
 export const MOBILE_SCANNER_RESULTS_DB = "volt-mobile-scanner-results";
-export const MOBILE_SCANNER_RESULTS_VERSION = 1;
+export const MOBILE_SCANNER_RESULTS_VERSION = 2;
 export const MOBILE_SCANNER_SESSION_MARKER_KEY =
   "volt.mobileScanner.browserSession.v1";
 export const PHOTO_BATCH_WINDOW_MS = 5 * 60 * 1000;
+export const MOBILE_SCANNER_DELETE_UNDO_WINDOW_MS = 7000;
 export const MAX_SCAN_RESULTS = 100;
 export const MAX_PHOTO_RESULTS = 250;
 
@@ -42,6 +43,12 @@ export type HydratedMobileScannerResult =
 type StoredPhotoBlob = {
   photoId: string;
   blob: Blob;
+};
+
+type DeletedResultMarker = {
+  id: string;
+  deletedAt: string;
+  purgeAt: string;
 };
 
 type ActivePhotoBatch = {
@@ -82,7 +89,15 @@ function normalizeCapturedAt(value: string | undefined) {
 }
 
 function stripPhotoRuntimeFields(photo: MobilePhoto) {
-  const { dataUrl, blob, ...metadata } = photo;
+  const {
+    dataUrl,
+    blob,
+    downloadUrl,
+    objectKey,
+    grantId,
+    status,
+    ...metadata
+  } = photo;
   return metadata;
 }
 
@@ -179,6 +194,10 @@ function openResultsDb(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains("photoBlobs")) {
         db.createObjectStore("photoBlobs", { keyPath: "photoId" });
       }
+      if (!db.objectStoreNames.contains("deletedResults")) {
+        const deletedResults = db.createObjectStore("deletedResults", { keyPath: "id" });
+        deletedResults.createIndex("purgeAt", "purgeAt");
+      }
       if (!db.objectStoreNames.contains("meta")) {
         db.createObjectStore("meta", { keyPath: "key" });
       }
@@ -261,12 +280,27 @@ async function putMeta(transaction: IDBTransaction, meta: MobileScannerMeta) {
   transaction.objectStore("meta").put(meta);
 }
 
+async function purgeExpiredDeletedResults(transaction: IDBTransaction, now = Date.now()) {
+  const deletedStore = transaction.objectStore("deletedResults");
+  const resultsStore = transaction.objectStore("results");
+  const blobStore = transaction.objectStore("photoBlobs");
+  const markers = (await promisifyRequest(deletedStore.getAll())) as DeletedResultMarker[];
+  for (const marker of markers) {
+    if (toTimestamp(marker.purgeAt, 0) > now) continue;
+    resultsStore.delete(marker.id);
+    blobStore.delete(marker.id);
+    deletedStore.delete(marker.id);
+  }
+}
+
 export async function saveMobileScannerScan(scan: BarcodeMessage & { id?: string }) {
   await ensureMobileScannerBrowserSessionStore();
   const result = normalizeScannerScanResult(scan);
   if (!result) return null;
-  await withStore("results", "readwrite", (transaction) => {
+  await withStore(["results", "photoBlobs", "deletedResults"], "readwrite", async (transaction) => {
+    await purgeExpiredDeletedResults(transaction);
     transaction.objectStore("results").put(result);
+    transaction.objectStore("deletedResults").delete(result.id);
   });
   return result;
 }
@@ -288,11 +322,13 @@ export async function saveMobileScannerPhoto(photoInput: unknown) {
     (typeof normalized.dataUrl === "string"
       ? await dataUrlToBlob(normalized.dataUrl)
       : undefined);
+  if (!blob && typeof normalized.dataUrl !== "string") return null;
 
   const result = await withStore(
-    ["results", "photoBlobs", "meta"],
+    ["results", "photoBlobs", "meta", "deletedResults"],
     "readwrite",
     async (transaction) => {
+      await purgeExpiredDeletedResults(transaction);
       const meta = await getMeta(transaction);
       const photoBatchId = resolvePhotoBatchId({
         activeBatch: meta.activePhotoBatch,
@@ -312,6 +348,7 @@ export async function saveMobileScannerPhoto(photoInput: unknown) {
         photo,
       };
       transaction.objectStore("results").put(photoResult);
+      transaction.objectStore("deletedResults").delete(photoResult.id);
       if (blob) {
         transaction.objectStore("photoBlobs").put({
           photoId: normalized.id,
@@ -341,7 +378,7 @@ export async function saveMobileScannerPhoto(photoInput: unknown) {
 export async function listMobileScannerResults() {
   await ensureMobileScannerBrowserSessionStore();
   return withStore(
-    ["results", "photoBlobs"],
+    ["results", "photoBlobs", "deletedResults"],
     "readonly",
     async (transaction) => {
       const rawResults = (await promisifyRequest(
@@ -350,8 +387,13 @@ export async function listMobileScannerResults() {
       const blobRows = (await promisifyRequest(
         transaction.objectStore("photoBlobs").getAll(),
       )) as StoredPhotoBlob[];
+      const deletedRows = (await promisifyRequest(
+        transaction.objectStore("deletedResults").getAll(),
+      )) as DeletedResultMarker[];
       const blobs = new Map(blobRows.map((row) => [row.photoId, row.blob]));
+      const deletedIds = new Set(deletedRows.map((row) => row.id));
       return rawResults
+        .filter((result) => !deletedIds.has(result.id))
         .map((result): HydratedMobileScannerResult => {
           if (result.type === "scan") return result;
           const blob = blobs.get(result.id);
@@ -370,12 +412,13 @@ export async function listMobileScannerResults() {
 
 export async function deleteMobileScannerResults(ids: string[]) {
   if (ids.length === 0) return;
-  await withStore(["results", "photoBlobs"], "readwrite", (transaction) => {
-    const results = transaction.objectStore("results");
-    const blobs = transaction.objectStore("photoBlobs");
+  const deletedAt = new Date().toISOString();
+  const purgeAt = new Date(Date.now() + MOBILE_SCANNER_DELETE_UNDO_WINDOW_MS).toISOString();
+  await withStore(["results", "photoBlobs", "deletedResults"], "readwrite", async (transaction) => {
+    await purgeExpiredDeletedResults(transaction);
+    const deletedResults = transaction.objectStore("deletedResults");
     ids.forEach((id) => {
-      results.delete(id);
-      blobs.delete(id);
+      deletedResults.put({ id, deletedAt, purgeAt } satisfies DeletedResultMarker);
     });
   });
 }
@@ -385,10 +428,13 @@ export async function restoreMobileScannerResults(
 ) {
   if (results.length === 0) return;
   await ensureMobileScannerBrowserSessionStore();
-  await withStore(["results", "photoBlobs"], "readwrite", (transaction) => {
+  await withStore(["results", "photoBlobs", "deletedResults"], "readwrite", async (transaction) => {
+    await purgeExpiredDeletedResults(transaction);
     const resultStore = transaction.objectStore("results");
     const blobStore = transaction.objectStore("photoBlobs");
+    const deletedStore = transaction.objectStore("deletedResults");
     for (const result of results) {
+      deletedStore.delete(result.id);
       if (result.type === "scan") {
         resultStore.put(result);
         continue;
@@ -402,5 +448,11 @@ export async function restoreMobileScannerResults(
         blobStore.put({ photoId: result.id, blob } satisfies StoredPhotoBlob);
       }
     }
+  });
+}
+
+export async function purgeExpiredMobileScannerDeletedResults() {
+  await withStore(["results", "photoBlobs", "deletedResults"], "readwrite", async (transaction) => {
+    await purgeExpiredDeletedResults(transaction);
   });
 }

@@ -1,10 +1,6 @@
 import assert from "node:assert/strict";
 
 const origin = process.env.SCANNER_SIGNAL_ORIGIN || "https://scanner-signal.vercel.app";
-const teamId = process.env.APPLE_TEAM_ID || "GB5SPLUARQ";
-const fullAppBundleId = process.env.IOS_BUNDLE_ID || "com.volt.mobile";
-const appClipBundleId = process.env.IOS_APP_CLIP_BUNDLE_ID || "com.volt.mobile.Clip";
-const clipModes = ["ocr", "barcode", "photo"];
 
 async function fetchJson(path, options) {
   const response = await fetch(`${origin}${path}`, options);
@@ -22,102 +18,108 @@ function assertOk(response, label) {
   assert.equal(response.ok, true, `${label} returned ${response.status}`);
 }
 
-export function assertAssociationPayload(body, { teamId, fullAppBundleId, appClipBundleId }) {
-  assert.deepEqual(body.appclips?.apps, [`${teamId}.${appClipBundleId}`]);
-  const fullAppClipLinks = body.applinks?.details?.filter((detail) =>
-    detail?.appIDs?.includes(`${teamId}.${fullAppBundleId}`)
-  );
-  assert.deepEqual(fullAppClipLinks, []);
+export function assertAssociationPayload(body) {
+  assert.deepEqual(body.appclips?.apps, []);
+  assert.deepEqual(body.applinks?.details, []);
 }
 
-export function assertClipFallbackHtml(body, { appClipBundleId, session }) {
-  assert.match(body, new RegExp(`app-clip-bundle-id=${appClipBundleId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
-  assert.match(body, new RegExp(`Session ${session.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
+export function assertClipObsoleteResponse(response, body) {
+  assert.equal(response.status, 410);
+  assert.match(body, /obsolete/i);
+  assert.doesNotMatch(body, /app-clip-bundle-id/i);
 }
 
 async function validateAssociation() {
   const { response, body } = await fetchJson("/.well-known/apple-app-site-association");
   assertOk(response, "AASA");
   assert.equal(response.headers.get("content-type")?.includes("application/json"), true);
-  assertAssociationPayload(body, { teamId, fullAppBundleId, appClipBundleId });
+  assertAssociationPayload(body);
 }
 
-async function validateClipPages() {
-  for (const mode of clipModes) {
-    const { response, body } = await fetchText(`/clip/${mode}?session=test123`);
-    assertOk(response, `/clip/${mode}`);
-    assert.equal(response.headers.get("cache-control"), "no-store");
-    assertClipFallbackHtml(body, { appClipBundleId, session: "test123" });
-  }
+async function validateClipIsObsolete() {
+  const { response, body } = await fetchText("/clip/ocr?session=test123");
+  assertClipObsoleteResponse(response, body);
 }
 
-async function validateRelayContract() {
-  const { response: createResponse, body: createBody } = await fetchJson("/api/signal", {
+async function validateJoinTokenSignaling() {
+  const sessionId = `production-session-${Date.now()}`;
+  const browserClaim = `browser-${Date.now()}`;
+  const { response: createResponse, body: createBody } = await fetchJson("/api/signal/join-token", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ relay: true, mode: "barcode" }),
+    body: JSON.stringify({ browserClaim, sessionId, ttlMs: 30_000 }),
   });
-  assertOk(createResponse, "relay create");
-  assert.match(createBody.sessionId, /^[a-z0-9]{8}$/);
+  assertOk(createResponse, "join-token create");
+  assert.equal(createBody.sessionId, sessionId);
+  assert.match(createBody.token, /^[a-zA-Z0-9_-]{32,}$/);
 
-  const result = {
-    id: `production-validation-${Date.now()}`,
-    mode: "barcode",
-    message: {
-      barcode: "PRODUCTION-VALIDATION",
-      format: "qr",
-      insertIntoCursor: true,
-      kind: "barcode",
-    },
-  };
-
-  const { response: postResponse, body: postBody } = await fetchJson(
-    `/api/signal/${createBody.sessionId}/result`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(result),
-    }
-  );
-  assertOk(postResponse, "relay post");
-  assert.deepEqual(postBody, { success: true });
-
-  const { response: getResponse, body: getBody } = await fetchJson(
-    `/api/signal/${createBody.sessionId}/result`
-  );
-  assertOk(getResponse, "relay get");
-  assert.equal(getBody.result?.id, result.id);
-  assert.equal(getBody.result?.mode, "barcode");
-  assert.equal(getBody.result?.message?.barcode, "PRODUCTION-VALIDATION");
-  assert.equal(getBody.result?.message?.insertIntoCursor, true);
-
-  const { response: mismatchResponse, body: mismatchBody } = await fetchJson(
-    `/api/signal/${createBody.sessionId}/result`,
+  const { response: attemptResponse, body: attemptBody } = await fetchJson(
+    `/api/signal/join-token/${encodeURIComponent(createBody.token)}/attempt`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        id: `production-validation-mismatch-${Date.now()}`,
-        mode: "dictation",
-        message: {
-          barcode: "wrong mode",
-          dictationPhase: "final",
-          dictationSessionId: "production-validation",
-          format: "dictation",
-          insertIntoCursor: true,
-          kind: "text",
-        },
+        contributorId: "production-validator",
+        deviceLabel: "Production Validator",
+        protocolVersion: "1.0.0",
+        capabilities: ["ocr", "barcode", "dictation", "photo"],
       }),
     }
   );
-  assert.equal(mismatchResponse.status, 400);
-  assert.deepEqual(mismatchBody, { error: "Result mode mismatch" });
+  assertOk(attemptResponse, "join attempt create");
+  assert.equal(attemptBody.attempt?.status, "waiting_for_offer");
+
+  const offer = JSON.stringify({ type: "offer", sdp: "production-validation-offer" });
+  const { response: offerResponse } = await fetchJson(
+    `/api/signal/join-token/${encodeURIComponent(createBody.token)}/attempt/${encodeURIComponent(attemptBody.attempt.id)}/offer`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ browserClaim, offer }),
+    }
+  );
+  assertOk(offerResponse, "offer post");
+
+  const { response: pollOfferResponse, body: pollOfferBody } = await fetchJson(
+    `/api/signal/join-token/${encodeURIComponent(createBody.token)}/attempt/${encodeURIComponent(attemptBody.attempt.id)}/offer`
+  );
+  assertOk(pollOfferResponse, "offer poll");
+  assert.equal(pollOfferBody.offer, offer);
+
+  const answer = JSON.stringify({ type: "answer", sdp: "production-validation-answer" });
+  const { response: answerResponse } = await fetchJson(
+    `/api/signal/join-token/${encodeURIComponent(createBody.token)}/attempt/${encodeURIComponent(attemptBody.attempt.id)}/answer`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ answer }),
+    }
+  );
+  assertOk(answerResponse, "answer post");
+
+  const { response: pollAnswerResponse, body: pollAnswerBody } = await fetchJson(
+    `/api/signal/join-token/${encodeURIComponent(createBody.token)}/attempt/${encodeURIComponent(attemptBody.attempt.id)}/answer`,
+    {
+      headers: { "X-Volt-Browser-Claim": browserClaim },
+    }
+  );
+  assertOk(pollAnswerResponse, "answer poll");
+  assert.equal(pollAnswerBody.answer, answer);
 }
 
-if (process.argv[1] === new URL(import.meta.url).pathname) {
+export async function validateProduction() {
   await validateAssociation();
-  await validateClipPages();
-  await validateRelayContract();
+  await validateClipIsObsolete();
+  await validateJoinTokenSignaling();
+}
 
-  console.log(`Production scanner-signal validation passed for ${origin}`);
+if (import.meta.url === `file://${process.argv[1]}`) {
+  validateProduction()
+    .then(() => {
+      console.log(`scanner-signal production validation passed for ${origin}`);
+    })
+    .catch((error) => {
+      console.error(error);
+      process.exitCode = 1;
+    });
 }

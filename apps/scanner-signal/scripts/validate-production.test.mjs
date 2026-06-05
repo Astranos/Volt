@@ -1,72 +1,51 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { assertAssociationPayload, assertClipFallbackHtml } from "./validate-production.mjs";
+import { assertAssociationPayload, assertClipObsoleteResponse } from "./validate-production.mjs";
 
-test("assertAssociationPayload accepts environment-backed Apple ids", () => {
-  assertAssociationPayload(
-    {
+test("assertAssociationPayload accepts signaling-only Apple association payloads", () => {
+  assertAssociationPayload({
+    applinks: {
+      apps: [],
+      details: [],
+    },
+    appclips: {
+      apps: [],
+    },
+  });
+});
+
+test("assertAssociationPayload rejects App Clip associations", () => {
+  assert.throws(() =>
+    assertAssociationPayload({
       applinks: {
+        apps: [],
         details: [],
       },
       appclips: {
         apps: ["TEAM123456.com.example.mobile.Clip"],
       },
-    },
-    {
-      appClipBundleId: "com.example.mobile.Clip",
-      fullAppBundleId: "com.example.mobile",
-      teamId: "TEAM123456",
-    }
-  );
-});
-
-test("assertAssociationPayload rejects stale hard-coded Apple ids", () => {
-  assert.throws(() =>
-    assertAssociationPayload(
-      {
-        applinks: {
-          details: [],
-        },
-        appclips: {
-          apps: ["GB5SPLUARQ.com.volt.mobile.Clip"],
-        },
-      },
-      {
-        appClipBundleId: "com.example.mobile.Clip",
-        fullAppBundleId: "com.example.mobile",
-        teamId: "TEAM123456",
-      }
-    )
+    })
   );
 });
 
 test("assertAssociationPayload rejects /clip links assigned to the full app", () => {
   assert.throws(() =>
-    assertAssociationPayload(
-      {
-        applinks: {
-          details: [{ appIDs: ["TEAM123456.com.example.mobile"] }],
-        },
-        appclips: {
-          apps: ["TEAM123456.com.example.mobile.Clip"],
-        },
+    assertAssociationPayload({
+      applinks: {
+        apps: [],
+        details: [{ appIDs: ["TEAM123456.com.example.mobile"], components: [{ "/": "/clip/*" }] }],
       },
-      {
-        appClipBundleId: "com.example.mobile.Clip",
-        fullAppBundleId: "com.example.mobile",
-        teamId: "TEAM123456",
-      }
-    )
+      appclips: {
+        apps: [],
+      },
+    })
   );
 });
 
-test("assertClipFallbackHtml accepts configured App Clip metadata and session", () => {
-  assertClipFallbackHtml(
-    '<meta name="apple-itunes-app" content="app-clip-bundle-id=com.example.mobile.Clip" /><div>Session test123</div>',
-    {
-      appClipBundleId: "com.example.mobile.Clip",
-      session: "test123",
-    }
+test("assertClipObsoleteResponse accepts the obsolete scanner response", () => {
+  assertClipObsoleteResponse(
+    { status: 410 },
+    "Volt App Clip scanner links are obsolete. Pair the full mobile app from the Chrome extension QR code."
   );
 });

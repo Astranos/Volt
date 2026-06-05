@@ -1,6 +1,7 @@
-import type { ScannerTransportMessage } from "@volt/scanner-protocol";
-
 import type { CaptureMode } from "./capture-url";
+import type { PhotoMessage, ScanItem } from "./scanner-messages";
+
+export type ScannerTransportMessage = ScanItem | PhotoMessage;
 
 export type ClipRelayResult = {
   id: string;

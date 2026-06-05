@@ -1,4 +1,4 @@
-import type { BarcodeMessage } from "../../../scanner-protocol/src";
+import type { BarcodeMessage } from "./mobile-scanner-session";
 
 export function shouldInsertScannerMessage(message: BarcodeMessage) {
   if (typeof message.insertIntoCursor === "boolean") return message.insertIntoCursor;

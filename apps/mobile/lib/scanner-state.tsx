@@ -9,35 +9,46 @@ import {
   ExpoSpeechRecognitionModule,
   useSpeechRecognitionEvent,
 } from "expo-speech-recognition";
-import { RTCPeerConnection, RTCSessionDescription } from "react-native-webrtc";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type PropsWithChildren } from "react";
 import { Alert, AppState, Platform } from "react-native";
 import {
-  decodePairingPayload,
-  encodeBarcodeMessage,
-  encodeScannerTransportMessage,
-  encodePairingPayload,
+  encodeScannerControlMessage,
+  encodePhotoTransferMessage,
   PHOTO_BATCH_WINDOW_MS,
-  PHOTO_RECOVERY_WINDOW_MS,
   PHOTO_TRANSFER_BUFFERED_AMOUNT_LOW_THRESHOLD,
   PHOTO_TRANSFER_CHUNK_SIZE_BYTES,
   PHOTO_TRANSFER_MAX_BUFFERED_AMOUNT,
   PHOTO_TRANSFER_MAX_IN_FLIGHT_CHUNKS,
   PHOTO_TRANSFER_CHANNEL_LABEL,
   SCANNER_CONTROL_CHANNEL_LABEL,
-  SCANNER_ICE_GATHERING_TIMEOUT_MS,
-  SCANNER_JOIN_ATTEMPT_TTL_MS,
-  SCANNER_PROTOCOL_VERSION,
-  SCANNER_PROTOCOL_MAJOR_VERSION,
   SCANNER_SCAN_COOLDOWN_MS,
-  SCANNER_SIGNAL_URL,
-  SCANNER_STUN_ONLY_RTC_CONFIGURATION,
-  type BarcodeMessage,
   type CaptureMode,
+  type ScannerControlMessage,
 } from "@volt/scanner-protocol";
 import { makeBarcodeMessage, makeCaptureMessage, makeOcrMessage, type ScanItem } from "./scanner-messages";
 import { cropActionForVisibleFrame, type PhotoCropFrame } from "./photo-crop";
+import {
+  buildMobileHelloMessage,
+  createJoinAttempt,
+  createPeerConnectionAnswer,
+  isProtocolMajorCompatible,
+  normalizeScannerControlMessage,
+  parseMobileWebRtcPairingUrl,
+  pollJoinOffer,
+  postPairingAnswer,
+  type NormalizedScannerControlMessage,
+} from "./scanner-pairing-session";
+import {
+  chunkPhotoBase64,
+  compactPendingPhotos,
+  markRetryableAfterDisconnect,
+  pendingPhotoSummaries,
+  type PendingPhoto,
+  type PendingPhotoSummary,
+} from "./photo-retry-queue";
 import { captureVoltClipPhotoInPreviewRect, hasVoltClipTextRecognizer } from "./volt-clip-text-recognizer";
+
+export type { PendingPhotoSummary };
 
 globalThis.atob ??= base64Decode;
 globalThis.btoa ??= base64Encode;
@@ -45,7 +56,7 @@ globalThis.btoa ??= base64Encode;
 type ConnectionStatus = "idle" | "pairing" | "session_ready" | "disconnected" | "error";
 type ScannerMode = CaptureMode;
 type ChannelStatus = "idle" | "opening" | "open";
-type ReceiptStatus = "queued" | "sending" | "sent" | "received" | "failed" | "cancelled";
+type LegacyControlMessage = { kind: string; [key: string]: unknown };
 
 const SETTINGS_STORAGE_KEY = "volt.mobileScanner.settings.v1";
 const PAIRING_SESSION_STORAGE_KEY = "volt.mobileScanner.pairingSession.v2";
@@ -57,7 +68,6 @@ const PHOTO_CONTRIBUTOR_KEY = "volt-photo-contributor";
 const PHOTO_LONG_EDGE = 2200;
 const PHOTO_QUEUE_LOW_STORAGE_BYTES = 35 * 1024 * 1024;
 const REPEAT_SCAN_COOLDOWN_MS = Math.max(SCANNER_SCAN_COOLDOWN_MS, 1500);
-const JOIN_ATTEMPT_POLL_INTERVAL_MS = 650;
 const DATA_CHANNEL_BUFFER_DRAIN_MS = 16;
 
 export type ScannerSettings = {
@@ -77,49 +87,6 @@ type TextCaptureResult = {
   target: string;
   sentAt: string;
 };
-
-export type PendingPhotoSummary = {
-  id: string;
-  name: string;
-  capturedAt: string;
-  size: number;
-  status: ReceiptStatus;
-  progress: number;
-  error?: string;
-};
-
-type PendingPhoto = PendingPhotoSummary & {
-  batchId: string;
-  mimeType: "image/jpeg";
-  dataBase64: string;
-  width?: number;
-  height?: number;
-  createdAt: number;
-  updatedAt: number;
-  totalChunks: number;
-  nextChunkIndex: number;
-};
-
-type JoinAttempt = {
-  attemptId: string;
-  pollUrl?: string;
-  answerUrl?: string;
-};
-
-type ScannerControlMessage =
-  | { kind: "hello"; protocolVersion: string; protocolMajor: number; appVersion: string; platform: string; capabilities: ScannerMode[]; deviceLabel: string; contributorId: string }
-  | { kind: "session_ready"; chromeSessionId?: string; target?: { tabTitle?: string; cursor?: string; browser?: string }; capabilities?: ScannerMode[] }
-  | { kind: "capture_result"; id: string; mode: ScannerMode; message: BarcodeMessage }
-  | { kind: "dictation_stop"; dictationSessionId: string }
-  | { kind: "photo_manifest"; pendingPhotoIds: string[] }
-  | { kind: "photo_chunk_start"; id: string; name: string; mimeType: string; size: number; width?: number; height?: number; capturedAt: string; photoBatchId: string; totalChunks: number; chunkSize: number }
-  | { kind: "photo_chunk_ack"; id: string; chunkIndex: number; totalChunks?: number }
-  | { kind: "photo_chunk_end"; id: string }
-  | { kind: "photo_received"; id: string }
-  | { kind: "photo_cancel"; id: string }
-  | { kind: "photo_rejected"; id: string; reason?: string }
-  | { kind: "receipt"; id: string; saved?: boolean; inserted?: boolean; target?: { tabTitle?: string; cursor?: string } }
-  | { kind: "protocol_error"; message: string };
 
 const defaultSettings: ScannerSettings = {
   autoSendSingleBarcode: true,
@@ -237,78 +204,6 @@ function getPhotoResizeAction(photo: { width?: number; height?: number }) {
   return { resize: { height: Math.round(height * scale), width: Math.round(width * scale) } };
 }
 
-function parseJson(value: string): any | null {
-  try {
-    return JSON.parse(value);
-  } catch {
-    return null;
-  }
-}
-
-function parseControlMessage(data: unknown): ScannerControlMessage | null {
-  if (typeof data !== "string") return null;
-  const parsed = parseJson(data);
-  if (!parsed || typeof parsed !== "object") return null;
-  const message = parsed as Record<string, any>;
-  const kind = typeof message.kind === "string" ? message.kind : typeof message.type === "string" ? message.type : null;
-  if (!kind) return null;
-  if (kind === "hello" && typeof message.protocolMajor !== "number" && typeof message.protocolVersion === "string") {
-    const major = Number(message.protocolVersion.split(".")[0]);
-    if (Number.isFinite(major)) message.protocolMajor = major;
-  }
-  if (kind === "session_ready" && typeof message.chromeSessionId !== "string" && typeof message.sessionId === "string") {
-    message.chromeSessionId = message.sessionId;
-  }
-  if (
-    (kind === "photo_chunk_ack" || kind === "photo_received" || kind === "photo_rejected") &&
-    typeof message.id !== "string" &&
-    typeof message.photoId === "string"
-  ) {
-    message.id = message.photoId;
-  }
-  message.kind = kind;
-  return message as ScannerControlMessage;
-}
-
-function getPairingParams(url: string) {
-  const parsed = Linking.parse(url);
-  const params = parsed.queryParams ?? {};
-  const offer = typeof params.offer === "string" ? params.offer : null;
-  const session = typeof params.session === "string" ? params.session : null;
-  const joinToken =
-    typeof params.join === "string"
-      ? params.join
-      : typeof params.joinToken === "string"
-        ? params.joinToken
-        : typeof params.token === "string"
-          ? params.token
-          : session;
-  return { offer, session, joinToken };
-}
-
-function chunkBase64(data: string, chunkSize = PHOTO_TRANSFER_CHUNK_SIZE_BYTES) {
-  const chunks: string[] = [];
-  for (let index = 0; index < data.length; index += chunkSize) {
-    chunks.push(data.slice(index, index + chunkSize));
-  }
-  return chunks;
-}
-
-function isExpiredPhoto(photo: PendingPhoto, now = Date.now()) {
-  return now - photo.createdAt > PHOTO_RECOVERY_WINDOW_MS;
-}
-
-function compactPendingPhotos(photos: PendingPhoto[]) {
-  return photos.filter((photo) => !isExpiredPhoto(photo) && photo.status !== "received" && photo.status !== "cancelled");
-}
-
-function pendingSummaries(photos: PendingPhoto[]): PendingPhotoSummary[] {
-  return photos
-    .filter((photo) => photo.status !== "received" && photo.status !== "cancelled")
-    .sort((first, second) => second.createdAt - first.createdAt)
-    .map(({ id, name, capturedAt, size, status, progress, error }) => ({ id, name, capturedAt, size, status, progress, error }));
-}
-
 export function ScannerProvider({ children }: PropsWithChildren) {
   const [permission, requestPermission] = useCameraPermissions();
   const [status, setStatus] = useState<ConnectionStatus>("idle");
@@ -382,9 +277,13 @@ export function ScannerProvider({ children }: PropsWithChildren) {
     persistPendingPhotos(updater(pendingPhotosRef.current));
   }, [persistPendingPhotos]);
 
-  const sendControl = useCallback((message: ScannerControlMessage | BarcodeMessage) => {
+  const sendControl = useCallback((message: ScannerControlMessage | LegacyControlMessage) => {
     const channel = controlChannelRef.current;
     if (channel?.readyState !== "open") return false;
+    if ("type" in message && !("kind" in message)) {
+      channel.send(encodeScannerControlMessage(message as ScannerControlMessage));
+      return true;
+    }
     if ("kind" in message) {
       const envelope: Record<string, unknown> = { ...message, type: message.kind };
       if (message.kind === "capture_result") {
@@ -397,8 +296,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       channel.send(JSON.stringify(envelope));
       return true;
     }
-    channel.send(encodeBarcodeMessage(message));
-    return true;
+    return false;
   }, []);
 
   const closeConnection = useCallback(() => {
@@ -433,7 +331,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       while (controlChannelRef.current?.readyState === "open" && (photoChannelRef.current ?? controlChannelRef.current)?.readyState === "open") {
         const next = pendingPhotosRef.current.find((photo) => photo.status === "queued" || photo.status === "failed");
         if (!next) break;
-        const chunks = chunkBase64(next.dataBase64);
+        const chunks = chunkPhotoBase64(next.dataBase64);
         const totalChunks = chunks.length;
         updatePendingPhotos((photos) =>
           photos.map((photo) =>
@@ -443,28 +341,20 @@ export function ScannerProvider({ children }: PropsWithChildren) {
           )
         );
         setPhotoProgressLabel(`Sending 1 of ${totalChunks}`);
-        sendControl({
-          kind: "photo_chunk_start",
-          id: next.id,
-          name: next.name,
-          mimeType: next.mimeType,
-          size: next.size,
-          width: next.width,
-          height: next.height,
-          capturedAt: next.capturedAt,
+        photoChannel.send(encodePhotoTransferMessage({
+          type: "photo_start",
+          messageId: createId("photo-start"),
+          sentAt: new Date().toISOString(),
+          photoId: next.id,
           photoBatchId: next.batchId,
-          totalChunks,
-          chunkSize: PHOTO_TRANSFER_CHUNK_SIZE_BYTES,
-        });
-        photoChannel.send(encodeScannerTransportMessage({
-          kind: "photo-chunk-start",
-          id: next.id,
-          name: next.name,
+          contributorId: photoContributorIdRef.current,
+          filename: next.name,
           mimeType: next.mimeType,
           size: next.size,
-          width: next.width,
-          height: next.height,
+          width: next.width ?? 1,
+          height: next.height ?? 1,
           capturedAt: next.capturedAt,
+          chunkSize: PHOTO_TRANSFER_CHUNK_SIZE_BYTES,
           totalChunks,
         }));
 
@@ -474,7 +364,15 @@ export function ScannerProvider({ children }: PropsWithChildren) {
           while ((photoChannel.bufferedAmount ?? 0) > PHOTO_TRANSFER_MAX_BUFFERED_AMOUNT) {
             await wait(DATA_CHANNEL_BUFFER_DRAIN_MS);
           }
-          photoChannel.send(encodeScannerTransportMessage({ kind: "photo-chunk", id: next.id, index, data: chunks[index] }));
+          photoChannel.send(encodePhotoTransferMessage({
+            type: "photo_chunk",
+            messageId: createId("photo-chunk"),
+            sentAt: new Date().toISOString(),
+            photoId: next.id,
+            chunkIndex: index,
+            totalChunks,
+            data: chunks[index],
+          }));
           const progress = (index + 1) / totalChunks;
           updatePendingPhotos((photos) =>
             photos.map((photo) =>
@@ -489,8 +387,13 @@ export function ScannerProvider({ children }: PropsWithChildren) {
 
         const latest = pendingPhotosRef.current.find((photo) => photo.id === next.id);
         if (!latest || latest.status === "cancelled" || latest.status === "received") continue;
-        sendControl({ kind: "photo_chunk_end", id: next.id });
-        photoChannel.send(encodeScannerTransportMessage({ kind: "photo-chunk-end", id: next.id }));
+        photoChannel.send(encodePhotoTransferMessage({
+          type: "photo_complete",
+          messageId: createId("photo-complete"),
+          sentAt: new Date().toISOString(),
+          photoId: next.id,
+          totalChunks,
+        }));
         updatePendingPhotos((photos) =>
           photos.map((photo) =>
             photo.id === next.id
@@ -553,10 +456,10 @@ export function ScannerProvider({ children }: PropsWithChildren) {
     );
   }, [flushPhotoWorker, updatePendingPhotos]);
 
-  const handleControlMessage = useCallback((message: ScannerControlMessage | null) => {
+  const handleControlMessage = useCallback((message: NormalizedScannerControlMessage | null) => {
     if (!message) return;
     if (message.kind === "hello") {
-      if (message.protocolMajor !== SCANNER_PROTOCOL_MAJOR_VERSION) {
+      if (!isProtocolMajorCompatible(message.protocolMajor)) {
         sendControl({ kind: "protocol_error", message: "Unsupported scanner protocol version." });
         setStatus("error");
         setError("Chrome extension protocol is incompatible. Update Volt on both devices.");
@@ -580,11 +483,12 @@ export function ScannerProvider({ children }: PropsWithChildren) {
     }
     if (message.kind === "photo_chunk_ack") {
       updatePendingPhotos((photos) =>
-        photos.map((photo) =>
-          photo.id === message.id && photo.totalChunks
-            ? { ...photo, progress: Math.max(photo.progress, (message.chunkIndex + 1) / photo.totalChunks), updatedAt: Date.now() }
-            : photo
-        )
+        photos.map((photo) => {
+          const totalChunks = message.totalChunks ?? photo.totalChunks;
+          return photo.id === message.id && totalChunks
+            ? { ...photo, totalChunks, progress: Math.max(photo.progress, (message.chunkIndex + 1) / totalChunks), updatedAt: Date.now() }
+            : photo;
+        })
       );
       return;
     }
@@ -639,30 +543,16 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       if (controlOpened) return;
       controlOpened = true;
       controlStatusRef.current = "open";
-      sendControl({
-        kind: "hello",
-        protocolVersion: SCANNER_PROTOCOL_VERSION,
-        protocolMajor: SCANNER_PROTOCOL_MAJOR_VERSION,
-        appVersion: "0.1.0",
-        platform: Platform.OS,
-        capabilities: ["ocr", "barcode", "dictation", "photo"],
-        deviceLabel: Platform.OS === "ios" ? "iPhone" : "Android",
-        contributorId: photoContributorIdRef.current,
-      });
-      sendControl({ kind: "photo_manifest", pendingPhotoIds: pendingPhotosRef.current.map((photo) => photo.id) });
+      sendControl(buildMobileHelloMessage(photoContributorIdRef.current));
     };
     channel.onopen = handleControlOpen;
-    channel.onmessage = (event: { data: unknown }) => handleControlMessage(parseControlMessage(event.data));
+    channel.onmessage = (event: { data: unknown }) => handleControlMessage(normalizeScannerControlMessage(event.data));
     channel.onclose = () => {
       controlStatusRef.current = "idle";
       sessionReadyRef.current = false;
       setStatus("disconnected");
       updatePendingPhotos((photos) =>
-        photos.map((photo) =>
-          photo.status === "sending" || photo.status === "sent"
-            ? { ...photo, status: "failed", error: "Disconnected before Chrome receipt.", updatedAt: Date.now() }
-            : photo
-        )
+        photos.map((photo) => markRetryableAfterDisconnect(photo))
       );
     };
     channel.onerror = () => {
@@ -672,47 +562,26 @@ export function ScannerProvider({ children }: PropsWithChildren) {
     if (channel.readyState === "open") handleControlOpen();
   }, [flushPhotoWorker, handleControlMessage, promptForPendingPhotos, sendControl, updatePendingPhotos]);
 
-  const postAnswer = useCallback(async (answerUrl: string, answer: unknown) => {
-    const response = await fetch(answerUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ answer: JSON.stringify(answer) }),
-    });
-    if (!response.ok) throw new Error("Failed to send pairing answer");
-  }, []);
-
   const pairWithOffer = useCallback(async (offerCode: string, answerUrl: string, sessionId?: string) => {
     closeConnection();
     setStatus("pairing");
     setError(null);
     try {
       lastOfferRef.current = offerCode;
-      const pc = new RTCPeerConnection(SCANNER_STUN_ONLY_RTC_CONFIGURATION as any);
-      const pcEvents = pc as any;
-      peerRef.current = pc;
-      pcEvents.ondatachannel = (event: any) => attachDataChannel(event.channel);
-      pcEvents.onconnectionstatechange = () => {
-        if (pc.connectionState === "failed") {
-          setStatus("error");
-          setError("Connection failed. Make sure both devices are on the same network.");
-        } else if (pc.connectionState === "disconnected" || pc.connectionState === "closed") {
-          setStatus("disconnected");
-        }
-      };
-      await pc.setRemoteDescription(new RTCSessionDescription(decodePairingPayload(offerCode) as any));
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-      await new Promise<void>((resolve) => {
-        const timeout = setTimeout(resolve, SCANNER_ICE_GATHERING_TIMEOUT_MS);
-        pcEvents.onicecandidate = (event: { candidate: unknown | null }) => {
-          if (!event.candidate) {
-            clearTimeout(timeout);
-            resolve();
+      const { pc, answer } = await createPeerConnectionAnswer({
+        offerCode,
+        attachDataChannel,
+        onConnectionStateChange: (connectionState) => {
+          if (connectionState === "failed") {
+            setStatus("error");
+            setError("Connection failed. Make sure both devices are on the same network.");
+          } else if (connectionState === "disconnected" || connectionState === "closed") {
+            setStatus("disconnected");
           }
-        };
+        },
       });
-      if (!pc.localDescription) throw new Error("Failed to create answer");
-      await postAnswer(answerUrl, pc.localDescription);
+      peerRef.current = pc;
+      await postPairingAnswer(answerUrl, answer);
       if (sessionId) {
         pairingSessionRef.current = sessionId;
         void AsyncStorage.setItem(PAIRING_SESSION_STORAGE_KEY, sessionId);
@@ -725,80 +594,13 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       setError(err instanceof Error ? err.message : "Pairing failed");
       return false;
     }
-  }, [attachDataChannel, clearStoredPairingSession, closeConnection, postAnswer]);
-
-  const createJoinAttempt = useCallback(async (joinToken: string): Promise<JoinAttempt> => {
-    const encodedToken = encodeURIComponent(joinToken);
-    const response = await fetch(`${SCANNER_SIGNAL_URL}/join-token/${encodedToken}/attempt`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contributorId: photoContributorIdRef.current,
-        deviceLabel: Platform.OS === "ios" ? "iPhone" : "Android",
-        protocolVersion: SCANNER_PROTOCOL_VERSION,
-        capabilities: ["ocr", "barcode", "dictation", "photo"],
-      }),
-    }).catch(() => null);
-    if (response?.ok) {
-      const payload = await response.json().catch(() => ({}));
-      const attempt = payload.attempt && typeof payload.attempt === "object" ? payload.attempt : payload;
-      const attemptId =
-        typeof attempt.id === "string"
-          ? attempt.id
-          : typeof attempt.attemptId === "string"
-            ? attempt.attemptId
-            : null;
-      if (attemptId) {
-        return {
-          attemptId,
-          pollUrl: `${SCANNER_SIGNAL_URL}/join-token/${encodedToken}/attempt/${encodeURIComponent(attemptId)}/offer`,
-          answerUrl: `${SCANNER_SIGNAL_URL}/join-token/${encodedToken}/attempt/${encodeURIComponent(attemptId)}/answer`,
-        };
-      }
-    }
-    throw new Error("Could not create join attempt. Reopen the Chrome QR and scan again.");
-  }, []);
-
-  const pollJoinOffer = useCallback(async (joinToken: string, attempt: JoinAttempt) => {
-    const startedAt = Date.now();
-    const encodedToken = encodeURIComponent(joinToken);
-    const encodedAttempt = encodeURIComponent(attempt.attemptId);
-    const pollUrls = [
-      attempt.pollUrl,
-      `${SCANNER_SIGNAL_URL}/join-token/${encodedToken}/attempt/${encodedAttempt}/offer`,
-    ].filter(Boolean) as string[];
-    while (Date.now() - startedAt < SCANNER_JOIN_ATTEMPT_TTL_MS + 2000) {
-      for (const url of pollUrls) {
-        const response = await fetch(url).catch(() => null);
-        if (!response?.ok) continue;
-        const payload = await response.json().catch(() => ({}));
-        const rawOffer = typeof payload.offer === "string" ? payload.offer : typeof payload.sdp === "string" ? payload.sdp : null;
-        if (rawOffer) {
-          const offer = rawOffer.trim().startsWith("{") ? encodePairingPayload(JSON.parse(rawOffer)) : rawOffer;
-          return {
-            offer,
-            answerUrl:
-              attempt.answerUrl ??
-              (typeof payload.answerUrl === "string" ? payload.answerUrl : `${SCANNER_SIGNAL_URL}/join-token/${encodedToken}/attempt/${encodedAttempt}/answer`),
-            sessionId:
-              typeof payload.sessionId === "string"
-                ? payload.sessionId
-                : typeof payload.token?.sessionId === "string"
-                  ? payload.token.sessionId
-                  : joinToken,
-          };
-        }
-      }
-      await wait(JOIN_ATTEMPT_POLL_INTERVAL_MS);
-    }
-    throw new Error("Chrome did not publish an offer in time. Reopen the QR and scan again.");
-  }, []);
+  }, [attachDataChannel, clearStoredPairingSession, closeConnection]);
 
   const pairWithJoinToken = useCallback(async (joinToken: string) => {
     setStatus("pairing");
     setError(null);
     try {
-      const attempt = await createJoinAttempt(joinToken);
+      const attempt = await createJoinAttempt(joinToken, photoContributorIdRef.current);
       const offer = await pollJoinOffer(joinToken, attempt);
       return pairWithOffer(offer.offer, offer.answerUrl, offer.sessionId);
     } catch (err) {
@@ -806,17 +608,13 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       setError(err instanceof Error ? err.message : "Pairing failed");
       return false;
     }
-  }, [createJoinAttempt, pairWithOffer, pollJoinOffer]);
+  }, [pairWithOffer]);
 
   const pairFromUrl = useCallback(async (url: string) => {
-    const { offer, joinToken, session } = getPairingParams(url);
-    if (offer) {
-      const answerUrl = session
-        ? `${SCANNER_SIGNAL_URL}/${encodeURIComponent(session)}/answer`
-        : `${SCANNER_SIGNAL_URL}/answer`;
-      return pairWithOffer(offer, answerUrl, session ?? undefined);
-    }
-    if (joinToken) return pairWithJoinToken(joinToken);
+    const pairing = parseMobileWebRtcPairingUrl(url);
+    if (!pairing) return false;
+    if (pairing.type === "offer") return pairWithOffer(pairing.offer, pairing.answerUrl, pairing.sessionId);
+    if (pairing.type === "join-token") return pairWithJoinToken(pairing.token);
     return false;
   }, [pairWithJoinToken, pairWithOffer]);
 
@@ -910,7 +708,29 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       return;
     }
     const mode = scannerMessageMode(item);
-    const sent = sendControl({ kind: "capture_result", id: item.id, mode, message: item });
+    const sent = isDictation
+      ? sendControl({
+          type: "dictation",
+          messageId: createId("dictation"),
+          sentAt: new Date().toISOString(),
+          dictationSessionId: item.dictationSessionId ?? dictationSessionIdRef.current ?? createId("dictation"),
+          phase: item.dictationPhase ?? "final",
+          text: item.barcode,
+          capturedAt: item.scannedAt ?? new Date().toISOString(),
+          insertIntoCursor: item.insertIntoCursor,
+        })
+      : sendControl({
+          type: "capture_result",
+          messageId: createId("capture"),
+          sentAt: new Date().toISOString(),
+          resultId: item.id,
+          resultKind: mode === "barcode" ? "barcode" : "text",
+          value: item.barcode,
+          format: item.format,
+          capturedAt: item.scannedAt ?? new Date().toISOString(),
+          insertIntoCursor: item.insertIntoCursor,
+          contributorId: photoContributorIdRef.current,
+        });
     if (!sent) {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       return;
@@ -1120,7 +940,17 @@ export function ScannerProvider({ children }: PropsWithChildren) {
     dictationStopRequestedRef.current = true;
     dictationRequestedRef.current = false;
     setDictationStarting(false);
-    if (dictationSessionIdRef.current) sendControl({ kind: "dictation_stop", dictationSessionId: dictationSessionIdRef.current });
+    if (dictationSessionIdRef.current) {
+      sendControl({
+        type: "dictation",
+        messageId: createId("dictation-stop"),
+        sentAt: new Date().toISOString(),
+        dictationSessionId: dictationSessionIdRef.current,
+        phase: "stopped",
+        capturedAt: new Date().toISOString(),
+        insertIntoCursor: true,
+      });
+    }
     ExpoSpeechRecognitionModule.stop();
   }, [sendControl]);
 
@@ -1194,7 +1024,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       const id = createId("photo");
       const capturedAt = new Date(now).toISOString();
       const size = Math.ceil((photoBase64.length * 3) / 4);
-      const chunks = chunkBase64(photoBase64);
+      const chunks = chunkPhotoBase64(photoBase64);
       const photo: PendingPhoto = {
         id,
         batchId,
@@ -1223,9 +1053,18 @@ export function ScannerProvider({ children }: PropsWithChildren) {
   }, [connected, flushPhotoWorker, updatePendingPhotos]);
 
   const cancelPendingPhoto = useCallback((id: string) => {
-    sendControl({ kind: "photo_cancel", id });
+    const photoChannel = photoChannelRef.current;
+    if (photoChannel?.readyState === "open") {
+      photoChannel.send(encodePhotoTransferMessage({
+        type: "photo_cancel",
+        messageId: createId("photo-cancel"),
+        sentAt: new Date().toISOString(),
+        photoId: id,
+        reason: "user_cancelled",
+      }));
+    }
     updatePendingPhotos((photos) => photos.filter((photo) => photo.id !== id));
-  }, [sendControl, updatePendingPhotos]);
+  }, [updatePendingPhotos]);
 
   const retryPendingPhotos = useCallback(() => {
     updatePendingPhotos((photos) =>
@@ -1281,7 +1120,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
     manualText,
     onBarcodeScanned,
     pairFromUrl,
-    pendingPhotos: pendingSummaries(pendingPhotos),
+    pendingPhotos: pendingPhotoSummaries(pendingPhotos),
     permission,
     photoError,
     photoProgressLabel,

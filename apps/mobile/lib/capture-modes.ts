@@ -1,5 +1,4 @@
 import {
-  isAppClipCaptureMode,
   isCaptureMode,
   type CaptureMode,
 } from "@volt/scanner-protocol";
@@ -18,10 +17,6 @@ export const captureModeRoutes: Record<
 
 export function normalizeFullCaptureMode(value: unknown): CaptureMode | null {
   return isCaptureMode(value) ? value : null;
-}
-
-export function normalizeAppClipCaptureMode(value: unknown): CaptureMode | null {
-  return isAppClipCaptureMode(value) ? value : null;
 }
 
 export function routeForCaptureMode(mode: CaptureMode | null | undefined) {

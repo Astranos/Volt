@@ -1,8 +1,8 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Text, View } from "react-native";
+import { buildScannerJoinUrl, SCANNER_APP_PAIR_URL } from "@volt/scanner-protocol";
 import {
-  buildPairUrl,
   normalizeFullCaptureMode,
   routeForCaptureMode,
 } from "../lib/capture-modes";
@@ -12,19 +12,10 @@ export default function PairRoute() {
   const router = useRouter();
   const scanner = useScanner();
   const [pairingError, setPairingError] = useState<string | null>(null);
-  const params = useLocalSearchParams<{ join?: string; joinToken?: string; mode?: string; session?: string; token?: string }>();
-  const joinToken =
-    typeof params.joinToken === "string"
-      ? params.joinToken
-      : typeof params.join === "string"
-        ? params.join
-        : typeof params.token === "string"
-          ? params.token
-          : null;
-  const session =
-    typeof params.session === "string"
-      ? params.session
-      : joinToken;
+  const params = useLocalSearchParams<{ answerUrl?: string; joinAttemptId?: string; mode?: string; offer?: string; sessionId?: string; token?: string }>();
+  const token = typeof params.token === "string" ? params.token : null;
+  const offer = typeof params.offer === "string" ? params.offer : null;
+  const sessionId = typeof params.sessionId === "string" ? params.sessionId : undefined;
   const mode = normalizeFullCaptureMode(params.mode);
   const destination = useMemo(() => routeForCaptureMode(mode), [mode]);
 
@@ -32,8 +23,27 @@ export default function PairRoute() {
     let cancelled = false;
 
     async function pairAndOpen() {
-      if (session) {
-        const paired = await scanner.pairFromUrl(buildPairUrl(session, mode, joinToken));
+      if (token || offer) {
+        let pairUrl: string;
+        if (token) {
+          try {
+            pairUrl = buildScannerJoinUrl({
+              baseUrl: SCANNER_APP_PAIR_URL,
+              token,
+              sessionId,
+              joinAttemptId: typeof params.joinAttemptId === "string" ? params.joinAttemptId : undefined,
+            });
+          } catch {
+            if (!cancelled) setPairingError("This Chrome pairing code is invalid. Open a fresh QR in the Volt extension and scan it again.");
+            return;
+          }
+        } else {
+          const searchParams = new URLSearchParams({ offer: offer! });
+          if (sessionId) searchParams.set("sessionId", sessionId);
+          if (typeof params.answerUrl === "string") searchParams.set("answerUrl", params.answerUrl);
+          pairUrl = `${SCANNER_APP_PAIR_URL}?${searchParams.toString()}`;
+        }
+        const paired = await scanner.pairFromUrl(pairUrl);
         if (!paired) {
           if (!cancelled) setPairingError("This Chrome pairing code expired. Open a fresh QR in the Volt extension and scan it again.");
           return;
@@ -48,7 +58,7 @@ export default function PairRoute() {
     return () => {
       cancelled = true;
     };
-  }, [destination, mode, router, scanner, session]);
+  }, [destination, mode, offer, params.answerUrl, params.joinAttemptId, router, scanner, sessionId, token]);
 
   return (
     <View style={styles.root}>

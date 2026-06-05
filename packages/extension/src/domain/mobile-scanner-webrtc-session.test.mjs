@@ -16,10 +16,12 @@ const backgroundSource = readFileSync(
 );
 
 test("extension WebRTC session owns scanner-control and photo-transfer channels", () => {
-  assert.match(sessionSource, /const SCANNER_CONTROL_CHANNEL = "scanner-control"/);
-  assert.match(sessionSource, /const PHOTO_TRANSFER_CHANNEL = "photo-transfer"/);
-  assert.match(sessionSource, /pc\.createDataChannel\(SCANNER_CONTROL_CHANNEL/);
-  assert.match(sessionSource, /pc\.createDataChannel\(PHOTO_TRANSFER_CHANNEL/);
+  assert.match(sessionSource, /SCANNER_CONTROL_CHANNEL_LABEL/);
+  assert.match(sessionSource, /PHOTO_TRANSFER_CHANNEL_LABEL/);
+  assert.match(sessionSource, /pc\.createDataChannel\(SCANNER_CONTROL_CHANNEL_LABEL/);
+  assert.match(sessionSource, /pc\.createDataChannel\(PHOTO_TRANSFER_CHANNEL_LABEL/);
+  assert.doesNotMatch(sessionSource, /const SCANNER_CONTROL_CHANNEL = "scanner-control"/);
+  assert.doesNotMatch(sessionSource, /const PHOTO_TRANSFER_CHANNEL = "photo-transfer"/);
 });
 
 test("extension WebRTC session creates offers per join attempt while join window is open", () => {
@@ -44,18 +46,20 @@ test("extension keeps polling existing join attempts after the pairing popup clo
 });
 
 test("extension WebRTC session handles handshake, receipts, photo acks, and peer disconnects", () => {
+  assert.match(sessionSource, /decodeScannerControlMessage/);
+  assert.match(sessionSource, /encodeScannerControlMessage/);
+  assert.match(sessionSource, /decodePhotoTransferMessage/);
+  assert.match(sessionSource, /decodePhotoTransferChunkFrame/);
   assert.match(sessionSource, /type: "hello"/);
   assert.match(sessionSource, /type: "session_ready"/);
   assert.match(sessionSource, /function controlMessageType/);
-  assert.match(sessionSource, /control\?\.kind === "string"/);
   assert.match(sessionSource, /if \(peer\.ready\)/);
   assert.match(sessionSource, /pc\.connectionState === "connected" && peer\.ready/);
   assert.match(sessionSource, /type: "protocol_error"/);
-  assert.match(sessionSource, /type: "receipt"/);
+  assert.match(sessionSource, /type: "result_received"/);
   assert.match(sessionSource, /type: "photo_chunk_ack"/);
   assert.match(sessionSource, /type: "photo_received"/);
-  assert.match(sessionSource, /session_close/);
-  assert.match(sessionSource, /disconnect/);
+  assert.match(sessionSource, /session_closed/);
 });
 
 test("offscreen and background route global join-window lifecycle separately from peer disconnect", () => {

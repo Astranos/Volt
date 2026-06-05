@@ -17,6 +17,7 @@ function photoEndpoint(sessionId: string, path: string) {
   return `${SCANNER_SIGNAL_URL}/${encodeURIComponent(sessionId)}/photo/${path}`;
 }
 
+// Historical App Clip-only path. The full mobile app uses WebRTC photo transfer.
 export async function uploadPhotoObjectTransfer(input: UploadPhotoInput) {
   const grantResponse = await fetch(photoEndpoint(input.sessionId, "grant"), {
     method: "POST",

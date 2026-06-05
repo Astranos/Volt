@@ -1,27 +1,62 @@
 import {
+  PHOTO_TRANSFER_CHANNEL_LABEL,
   SCANNER_APP_PAIR_URL,
+  SCANNER_CONTROL_CHANNEL_LABEL,
+  SCANNER_ANSWER_POLL_INTERVAL_MS,
   SCANNER_ICE_GATHERING_TIMEOUT_MS,
   SCANNER_ICE_SERVERS,
   SCANNER_JOIN_TOKEN_TTL_MS,
-  SCANNER_RESULT_POLL_INTERVAL_MS,
+  SCANNER_PROTOCOL_MAJOR_VERSION,
+  SCANNER_PROTOCOL_MINOR_VERSION,
   SCANNER_SIGNAL_URL,
-  createScannerMessageDuplicateGuard,
-  decodeScannerTransportMessage,
+  decodePhotoTransferChunkFrame,
+  decodePhotoTransferMessage,
+  decodeScannerControlMessage,
+  encodeScannerControlMessage,
+  isScannerProtocolVersionSupported,
   isScannerSessionId,
-  type BarcodeMessage,
-  type PhotoChunkStartMessage,
-  type PhotoMessage,
+  scannerControlDuplicateKey,
+  type PhotoTransferBinaryChunkMessage,
+  type PhotoTransferMessage,
+  type PhotoTransferStartMessage,
+  type ScannerControlMessage,
   type ScannerConnectionStatus,
-  type ScannerTransportMessage,
-  type SessionTarget,
 } from "../../../scanner-protocol/src";
 import { shouldInsertScannerMessage } from "./scanner-message";
 
-const SCANNER_CONTROL_CHANNEL = "scanner-control";
-const PHOTO_TRANSFER_CHANNEL = "photo-transfer";
-const SCANNER_PROTOCOL_VERSION = "1.0.0";
-
 type SessionTimer = ReturnType<typeof setInterval>;
+
+export type BarcodeMessage = {
+  id?: string;
+  barcode: string;
+  dictationPhase?: "partial" | "final";
+  dictationSessionId?: string;
+  format?: string;
+  insertIntoCursor?: boolean;
+  kind?: "barcode" | "text";
+  scannedAt?: string;
+};
+
+export type PhotoMessage = {
+  kind: "photo";
+  id: string;
+  name: string;
+  mimeType: string;
+  dataUrl?: string;
+  contributorId?: string;
+  size: number;
+  width?: number;
+  height?: number;
+  capturedAt?: string;
+  photoBatchId?: string;
+};
+
+export type SessionTarget = {
+  browser?: string;
+  tabTitle?: string;
+  url?: string;
+  cursor?: string;
+};
 
 type JoinWindow = {
   expiresAt?: string;
@@ -37,24 +72,6 @@ type JoinAttempt = {
   answer?: unknown;
 };
 
-type ControlMessage = {
-  kind?: unknown;
-  type?: unknown;
-  messageId?: unknown;
-  mode?: unknown;
-  payload?: unknown;
-  protocolVersion?: unknown;
-  version?: unknown;
-  capabilities?: unknown;
-  platform?: unknown;
-  deviceLabel?: unknown;
-  contributorId?: unknown;
-  reason?: unknown;
-  photoId?: unknown;
-  chunkIndex?: unknown;
-  totalChunks?: unknown;
-};
-
 type PeerSession = {
   answerApplied: boolean;
   control: RTCDataChannel | null;
@@ -64,10 +81,15 @@ type PeerSession = {
   ready: boolean;
 };
 
-type PendingPhoto = PhotoChunkStartMessage & {
+type PendingPhoto = PhotoTransferStartMessage & {
   chunks: string[];
   receivedChunks: number;
   updatedAt: number;
+};
+
+const EXTENSION_PROTOCOL_VERSION = {
+  major: SCANNER_PROTOCOL_MAJOR_VERSION,
+  minor: SCANNER_PROTOCOL_MINOR_VERSION,
 };
 
 export type MobileScannerSessionState = {
@@ -101,6 +123,10 @@ function parseJson(data: string) {
   }
 }
 
+function createMessageId(prefix: string) {
+  return createId(prefix).replace(/[^a-zA-Z0-9_-]/g, "_");
+}
+
 function normalizeSessionDescription(value: unknown): RTCSessionDescriptionInit | null {
   const parsed = typeof value === "string" ? parseJson(value) : value;
   if (!parsed || typeof parsed !== "object") return null;
@@ -131,41 +157,47 @@ function normalizeJoinAttempt(value: unknown): { joinAttemptId: string; answer?:
   return { joinAttemptId, answer, hasAnswer: Boolean(answer || attempt.hasAnswer) };
 }
 
-function controlMessageType(control: ControlMessage | null) {
-  return typeof control?.type === "string"
-    ? control.type
-    : typeof control?.kind === "string"
-      ? control.kind
-      : null;
+function controlMessageType(rawData: string) {
+  const parsed = parseJson(rawData);
+  if (!parsed || typeof parsed !== "object") return null;
+  const type = (parsed as { type?: unknown }).type;
+  return typeof type === "string" ? type : null;
 }
 
-function majorVersion(version: unknown) {
-  if (typeof version !== "string") return null;
-  const major = Number(version.split(".")[0]);
-  return Number.isFinite(major) ? major : null;
+function protocolVersionFromRawControl(rawData: string) {
+  const parsed = parseJson(rawData);
+  if (!parsed || typeof parsed !== "object") return null;
+  const record = parsed as { peer?: unknown; protocolVersion?: unknown; version?: unknown };
+  if (record.peer && typeof record.peer === "object") {
+    return (record.peer as { protocolVersion?: unknown }).protocolVersion ?? null;
+  }
+  return record.protocolVersion ?? record.version ?? null;
 }
 
-function normalizeBarcodePayload(value: unknown): BarcodeMessage | null {
-  const candidate =
-    value && typeof value === "object" && "payload" in value
-      ? (value as { payload?: unknown }).payload
-      : value;
-  if (!candidate || typeof candidate !== "object") return null;
-  const message = candidate as Record<string, unknown>;
-  if (typeof message.barcode !== "string" || !message.barcode) return null;
+function scanFromControlMessage(message: ScannerControlMessage): (BarcodeMessage & { id?: string }) | null {
+  if (message.type === "capture_result") {
+    return {
+      id: message.resultId,
+      barcode: message.value,
+      format: message.format,
+      insertIntoCursor: message.insertIntoCursor,
+      kind: message.resultKind,
+      scannedAt: message.capturedAt,
+    };
+  }
+
+  if (message.type !== "dictation") return null;
+  if (message.phase !== "partial" && message.phase !== "final") return null;
+  if (typeof message.text !== "string" || !message.text) return null;
   return {
-    barcode: message.barcode,
-    dictationPhase:
-      message.dictationPhase === "partial" || message.dictationPhase === "final"
-        ? message.dictationPhase
-        : undefined,
-    dictationSessionId:
-      typeof message.dictationSessionId === "string" ? message.dictationSessionId : undefined,
-    format: typeof message.format === "string" ? message.format : undefined,
-    insertIntoCursor:
-      typeof message.insertIntoCursor === "boolean" ? message.insertIntoCursor : undefined,
-    kind: message.kind === "text" ? "text" : "barcode",
-    scannedAt: typeof message.scannedAt === "string" ? message.scannedAt : undefined,
+    id: message.messageId,
+    barcode: message.text,
+    dictationPhase: message.phase,
+    dictationSessionId: message.dictationSessionId,
+    format: "dictation",
+    insertIntoCursor: message.insertIntoCursor,
+    kind: "text",
+    scannedAt: message.capturedAt,
   };
 }
 
@@ -176,7 +208,7 @@ export class MobileScannerSession {
   private peers = new Map<string, PeerSession>();
   private pendingPhotos = new Map<string, PendingPhoto>();
   private seenJoinAttempts = new Set<string>();
-  private shouldAcceptScannerMessage = createScannerMessageDuplicateGuard();
+  private seenControlMessages = new Set<string>();
   private state: MobileScannerSessionState;
 
   constructor(private readonly events: MobileScannerSessionEvents) {
@@ -346,7 +378,7 @@ export class MobileScannerSession {
       void this.fetchJoinAttempts().catch((error) => {
         this.events.log?.("Failed to poll scanner join attempts", error);
       });
-    }, SCANNER_RESULT_POLL_INTERVAL_MS);
+    }, SCANNER_ANSWER_POLL_INTERVAL_MS);
     void this.fetchJoinAttempts().catch((error) => {
       this.events.log?.("Failed to poll scanner join attempts", error);
     });
@@ -413,8 +445,8 @@ export class MobileScannerSession {
     };
     this.peers.set(joinAttemptId, peer);
 
-    peer.control = pc.createDataChannel(SCANNER_CONTROL_CHANNEL, { ordered: true });
-    peer.photoTransfer = pc.createDataChannel(PHOTO_TRANSFER_CHANNEL, { ordered: true });
+    peer.control = pc.createDataChannel(SCANNER_CONTROL_CHANNEL_LABEL, { ordered: true });
+    peer.photoTransfer = pc.createDataChannel(PHOTO_TRANSFER_CHANNEL_LABEL, { ordered: true });
     this.configureControlChannel(peer, peer.control);
     this.configurePhotoChannel(peer, peer.photoTransfer);
 
@@ -443,7 +475,7 @@ export class MobileScannerSession {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           offer: JSON.stringify(pc.localDescription),
-          channels: [SCANNER_CONTROL_CHANNEL, PHOTO_TRANSFER_CHANNEL],
+          channels: [SCANNER_CONTROL_CHANNEL_LABEL, PHOTO_TRANSFER_CHANNEL_LABEL],
         }),
       }
     );
@@ -463,11 +495,15 @@ export class MobileScannerSession {
       this.events.log?.("[Volt Scanner Pairing] control channel open", { joinAttemptId: peer.id });
       this.sendControl(peer, {
         type: "hello",
-        protocolVersion: SCANNER_PROTOCOL_VERSION,
-        extensionVersion: "1.0.35",
-        platform: "chrome-extension",
-        capabilities: ["text", "barcode", "dictation", "photo", "photo-chunk-ack"],
-        sessionId: this.state.sessionId,
+        messageId: createMessageId("control"),
+        sentAt: new Date().toISOString(),
+        peer: {
+          protocolVersion: EXTENSION_PROTOCOL_VERSION,
+          extensionVersion: "1.0.35",
+          platform: "chrome_extension",
+          capabilities: ["ocr", "barcode", "dictation", "photo", "cursor_insert", "sidepanel_results"],
+          chromeSessionId: this.state.sessionId,
+        },
       });
     };
     channel.onclose = () => {
@@ -476,7 +512,7 @@ export class MobileScannerSession {
     };
     channel.onerror = () => {
       this.events.log?.("[Volt Scanner Pairing] control channel error", { joinAttemptId: peer.id });
-      this.sendProtocolError(peer, "control_channel_error");
+      this.sendProtocolError(peer, "invalid_message");
       this.closePeer(peer.id);
     };
     channel.onmessage = (event) => {
@@ -497,98 +533,101 @@ export class MobileScannerSession {
   }
 
   private async handleControlMessage(peer: PeerSession, rawData: string) {
-    const control = parseJson(rawData) as ControlMessage | null;
-    const type = controlMessageType(control);
+    const type = controlMessageType(rawData);
     this.events.log?.("[Volt Scanner Pairing] control message received", {
       joinAttemptId: peer.id,
       type,
     });
-    if (type === "hello" || type === "capabilities") {
-      const peerMajor = majorVersion(control?.protocolVersion ?? control?.version);
-      if (peerMajor !== majorVersion(SCANNER_PROTOCOL_VERSION)) {
-        this.sendProtocolError(peer, "unsupported_protocol_version");
+
+    const control = decodeScannerControlMessage(rawData);
+    if (!control) {
+      if (type === "hello" && !isScannerProtocolVersionSupported(protocolVersionFromRawControl(rawData))) {
+        this.sendProtocolError(peer, "unsupported_protocol", type);
         this.closePeer(peer.id);
         return;
       }
+      if (type) return;
+      this.sendProtocolError(peer, "invalid_message");
+      return;
+    }
+
+    if (control.type === "hello") {
       peer.ready = true;
       this.sendControl(peer, {
         type: "session_ready",
-        protocolVersion: SCANNER_PROTOCOL_VERSION,
-        sessionId: this.state.sessionId,
-        capabilities: ["text", "barcode", "dictation", "photo", "photo-chunk-ack"],
+        messageId: createMessageId("control"),
+        sentAt: new Date().toISOString(),
+        peer: {
+          protocolVersion: EXTENSION_PROTOCOL_VERSION,
+          extensionVersion: "1.0.35",
+          platform: "chrome_extension",
+          capabilities: ["ocr", "barcode", "dictation", "photo", "cursor_insert", "sidepanel_results"],
+          chromeSessionId: this.state.sessionId,
+        },
       });
       this.events.log?.("[Volt Scanner Pairing] session_ready sent", { joinAttemptId: peer.id });
       this.setState({ status: "connected", error: null, connectedAt: this.state.connectedAt ?? new Date().toISOString() });
       return;
     }
 
-    if (type === "session_close" || type === "disconnect") {
+    if (control.type === "session_closed") {
       this.closePeer(peer.id);
       return;
     }
 
-    if (type === "photo_chunk_ack" || type === "photo_received" || type === "receipt") {
+    if (
+      control.type === "result_received" ||
+      control.type === "photo_chunk_ack" ||
+      control.type === "photo_received" ||
+      control.type === "photo_rejected" ||
+      control.type === "protocol_error" ||
+      control.type === "mode_changed" ||
+      control.type === "session_ready"
+    ) {
       return;
     }
 
-    const scannerMessage =
-      type === "text_result" ||
-      type === "barcode_result" ||
-      type === "dictation_result" ||
-      type === "capture_result"
-        ? normalizeBarcodePayload(control)
-        : normalizeBarcodePayload(parseJson(rawData));
-
+    const scannerMessage = scanFromControlMessage(control);
     if (scannerMessage) {
-      const accepted =
-        scannerMessage.format === "dictation" || this.shouldAcceptScannerMessage(scannerMessage);
+      const duplicateKey = scannerControlDuplicateKey(control);
+      const accepted = scannerMessage.format === "dictation" || !this.seenControlMessages.has(duplicateKey);
+      if (accepted) this.seenControlMessages.add(duplicateKey);
       const stored = accepted ? await this.events.onScan(scannerMessage) : true;
+      const insertedIntoCursor = shouldInsertScannerMessage(scannerMessage);
       if (shouldInsertScannerMessage(scannerMessage)) {
         this.events.onInsert?.(scannerMessage.barcode, scannerMessage);
       }
       this.sendControl(peer, {
-        type: "receipt",
-        messageId: typeof control?.messageId === "string" ? control.messageId : undefined,
-        status: stored ? "received" : "rejected",
-        kind: scannerMessage.kind ?? "barcode",
+        type: "result_received",
+        messageId: createMessageId("control"),
+        sentAt: new Date().toISOString(),
+        resultId: control.type === "capture_result" ? control.resultId : control.messageId,
+        savedToResults: stored,
+        insertedIntoCursor,
       });
       return;
     }
-
-    const transportMessage = decodeScannerTransportMessage(rawData);
-    if (transportMessage) {
-      await this.handleTransportMessage(peer, transportMessage);
-      return;
-    }
-
-    if (type) return;
-    this.sendProtocolError(peer, "invalid_control_message");
   }
 
   private async handlePhotoTransferMessage(peer: PeerSession, data: unknown) {
     if (typeof data === "string") {
-      const message = decodeScannerTransportMessage(data);
-      if (message) await this.handleTransportMessage(peer, message);
+      const message = decodePhotoTransferMessage(data);
+      if (message) await this.handlePhotoTransferProtocolMessage(peer, message);
       return;
     }
     if (data instanceof ArrayBuffer) {
-      this.events.log?.("Ignoring unframed binary photo transfer", data.byteLength);
+      const message = decodePhotoTransferChunkFrame(data);
+      if (message) await this.handlePhotoTransferProtocolMessage(peer, message);
     }
   }
 
-  private async handleTransportMessage(peer: PeerSession, data: ScannerTransportMessage) {
-    if (data.kind === "photo") {
-      const stored = await this.events.onPhoto({
-        ...data,
-        capturedAt: data.capturedAt || new Date().toISOString(),
-      });
-      if (stored) this.sendPhotoReceived(peer, data.id);
-      return;
-    }
-
-    if (data.kind === "photo-chunk-start") {
+  private async handlePhotoTransferProtocolMessage(
+    peer: PeerSession,
+    data: PhotoTransferMessage | PhotoTransferBinaryChunkMessage,
+  ) {
+    if (data.type === "photo_start") {
       this.cleanupStalePhotos();
-      this.pendingPhotos.set(data.id, {
+      this.pendingPhotos.set(data.photoId, {
         ...data,
         chunks: Array.from({ length: data.totalChunks }),
         receivedChunks: 0,
@@ -597,46 +636,77 @@ export class MobileScannerSession {
       return;
     }
 
-    if (data.kind === "photo-chunk") {
-      const pending = this.pendingPhotos.get(data.id);
-      if (!pending || data.index < 0 || data.index >= pending.totalChunks) return;
-      if (!pending.chunks[data.index]) pending.receivedChunks += 1;
-      pending.chunks[data.index] = data.data;
+    if (data.type === "photo_chunk") {
+      const pending = this.pendingPhotos.get(data.photoId);
+      if (!pending || data.chunkIndex < 0 || data.chunkIndex >= pending.totalChunks) return;
+      if (!pending.chunks[data.chunkIndex]) pending.receivedChunks += 1;
+      pending.chunks[data.chunkIndex] =
+        typeof data.data === "string"
+          ? data.data
+          : btoa(String.fromCharCode(...data.data));
       pending.updatedAt = Date.now();
       this.sendControl(peer, {
         type: "photo_chunk_ack",
-        photoId: data.id,
-        chunkIndex: data.index,
+        messageId: createMessageId("control"),
+        sentAt: new Date().toISOString(),
+        photoId: data.photoId,
+        chunkIndex: data.chunkIndex,
         totalChunks: pending.totalChunks,
       });
       return;
     }
 
-    if (data.kind === "photo-chunk-end") {
-      const pending = this.pendingPhotos.get(data.id);
+    if (data.type === "photo_complete") {
+      const pending = this.pendingPhotos.get(data.photoId);
       if (!pending || pending.receivedChunks !== pending.totalChunks) return;
-      this.pendingPhotos.delete(data.id);
-      const { chunks, receivedChunks, totalChunks, updatedAt, kind, ...photo } = pending;
+      this.pendingPhotos.delete(data.photoId);
       const stored = await this.events.onPhoto({
-        ...photo,
         kind: "photo",
-        dataUrl: `data:${pending.mimeType};base64,${chunks.join("")}`,
-      });
-      if (stored) this.sendPhotoReceived(peer, data.id);
+        id: pending.photoId,
+        name: pending.filename,
+        mimeType: pending.mimeType,
+        size: pending.size,
+        width: pending.width,
+        height: pending.height,
+        capturedAt: pending.capturedAt,
+        contributorId: pending.contributorId,
+        dataUrl: `data:${pending.mimeType};base64,${pending.chunks.join("")}`,
+        photoBatchId: pending.photoBatchId,
+      } as PhotoMessage & { photoBatchId: string });
+      if (stored) this.sendPhotoReceived(peer, pending.photoId, pending.photoBatchId, pending.size);
+      return;
+    }
+
+    if (data.type === "photo_cancel") {
+      this.pendingPhotos.delete(data.photoId);
     }
   }
 
-  private sendPhotoReceived(peer: PeerSession, photoId: string) {
-    this.sendControl(peer, { type: "photo_received", photoId });
+  private sendPhotoReceived(peer: PeerSession, photoId: string, photoBatchId = "default", size = 1) {
+    this.sendControl(peer, {
+      type: "photo_received",
+      messageId: createMessageId("control"),
+      sentAt: new Date().toISOString(),
+      photoId,
+      photoBatchId,
+      storedAt: new Date().toISOString(),
+      size: Math.max(1, size),
+    });
   }
 
-  private sendProtocolError(peer: PeerSession, reason: string) {
-    this.sendControl(peer, { type: "protocol_error", reason });
+  private sendProtocolError(peer: PeerSession, code: "unsupported_protocol" | "invalid_message", receivedType?: string) {
+    this.sendControl(peer, {
+      type: "protocol_error",
+      messageId: createMessageId("control"),
+      sentAt: new Date().toISOString(),
+      code,
+      receivedType,
+    });
   }
 
-  private sendControl(peer: PeerSession, message: Record<string, unknown>) {
+  private sendControl(peer: PeerSession, message: ScannerControlMessage) {
     if (peer.control?.readyState !== "open") return;
-    peer.control.send(JSON.stringify(message));
+    peer.control.send(encodeScannerControlMessage(message));
   }
 
   private closePeer(joinAttemptId: string) {

@@ -1,5 +1,7 @@
 # App Clip Permissions And React Native Layering
 
+Obsolete for the active full-app scanner architecture. ADR 0002 makes the v1 scanner mobile-app-only WebRTC; this note remains historical App Clip debugging context only.
+
 This note is for agents debugging App Clip permissions, especially dictation, camera, native prompts, and native components layered under React Native UI.
 
 ## Key Finding

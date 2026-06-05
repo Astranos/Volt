@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   PHOTO_BATCH_WINDOW_MS,
+  MOBILE_SCANNER_DELETE_UNDO_WINDOW_MS,
   groupPhotoResultsByBatch,
   normalizeScannerScanResult,
   resolvePhotoBatchId,
@@ -88,3 +89,6 @@ test("photo batch grouping sorts entries inside each batch newest first", () => 
   assert.deepEqual(groups[0].entries.map((entry) => entry.id), ["new", "old"]);
 });
 
+test("results model owns the delete undo window used by the sidepanel", () => {
+  assert.equal(MOBILE_SCANNER_DELETE_UNDO_WINDOW_MS, 7000);
+});

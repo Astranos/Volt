@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { shouldInsertScannerMessage } from "./scanner-message.ts";
 
-test("shouldInsertScannerMessage honors explicit App Clip cursor insertion flags", () => {
+test("shouldInsertScannerMessage honors explicit cursor insertion flags", () => {
   assert.equal(
     shouldInsertScannerMessage({
       barcode: "012345678905",

@@ -1,5 +1,7 @@
 # App Clip Liquid Glass, Expo UI, and Expo SDK 56
 
+Obsolete for the active full-app scanner architecture. ADR 0002 makes the v1 scanner mobile-app-only WebRTC; this note remains historical App Clip UI context only.
+
 This note is for agents working on the Volt App Clip control drawer, bottom mode navigation, or iOS 26 Liquid Glass behavior.
 
 ## Current Stack
@@ -124,7 +126,7 @@ Fix:
 - Check `apps/mobile/clip-entry.tsx` and `apps/mobile/app/clip/[mode].clip.tsx` imports.
 - Check `apps/mobile/app.json` `react-native-app-clip.excludedPackages`.
 - Run `pnpm --filter @volt/mobile test:clip`.
-- Run `pnpm --filter @volt/mobile preflight:clip` when validating size-sensitive changes.
+- The retired `preflight:clip` script is no longer available; this note is historical only.
 
 ### Metro warns about React Native deep imports
 
@@ -147,4 +149,3 @@ cd apps/mobile/ios && xcodebuild -workspace Volt.xcworkspace -scheme VoltClip -c
 ```
 
 For release or size-sensitive work, also run the App Clip preflight flow documented in `apps/mobile/APP_CLIP_IMPLEMENTATION_PLAN.md`.
-

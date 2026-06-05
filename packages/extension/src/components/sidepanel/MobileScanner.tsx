@@ -23,14 +23,13 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import type {
-  BarcodeMessage,
-  ScannerConnectionStatus,
-} from "../../../../scanner-protocol/src";
+import type { ScannerConnectionStatus } from "../../../../scanner-protocol/src";
 import {
   deleteMobileScannerResults,
   groupPhotoResultsByBatch,
   listMobileScannerResults,
+  MOBILE_SCANNER_DELETE_UNDO_WINDOW_MS,
+  purgeExpiredMobileScannerDeletedResults,
   restoreMobileScannerResults,
   saveMobileScannerPhoto,
   saveMobileScannerScan,
@@ -38,6 +37,7 @@ import {
   type HydratedMobileScannerResult,
   type MobileScannerScanResult,
 } from "../../domain/mobile-scanner-results";
+import type { BarcodeMessage } from "../../domain/mobile-scanner-session";
 import { cn } from "../../lib/utils";
 import { showSidepanelToast, type SidepanelToastTone } from "../../lib/sidepanel-toast";
 import { ConnectionPill } from "./mobile-shared";
@@ -56,7 +56,7 @@ import {
 } from "./mobile-photo-helpers";
 
 const EXIT_ANIMATION_MS = 180;
-const UNDO_WINDOW_MS = 7000;
+const UNDO_WINDOW_MS = MOBILE_SCANNER_DELETE_UNDO_WINDOW_MS;
 
 type MobileScannerState = {
   status: ScannerConnectionStatus;
@@ -348,7 +348,10 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
         });
         void deleteMobileScannerResults(ids);
         if (deletedSnapshot?.timer) window.clearTimeout(deletedSnapshot.timer);
-        const timer = window.setTimeout(() => setDeletedSnapshot(null), UNDO_WINDOW_MS);
+        const timer = window.setTimeout(() => {
+          setDeletedSnapshot(null);
+          void purgeExpiredMobileScannerDeletedResults();
+        }, UNDO_WINDOW_MS);
         setDeletedSnapshot({ results: snapshot, timer, label });
         setRemovingIds((current) => {
           const next = new Set(current);

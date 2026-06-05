@@ -5,17 +5,13 @@
   "main": "expo-router/entry",
   "scripts": {
     "dev": "RCT_METRO_PORT=8090 expo start --port 8090",
-    "dev:clip": "BUILDING_FOR_APP_CLIP=1 RCT_METRO_PORT=8091 expo start --dev-client --host lan --port 8091",
     "dev:device": "RCT_METRO_PORT=8090 expo start --dev-client --host tunnel --port 8090",
     "android": "expo run:android",
     "ios": "node scripts/run-ios-device.mjs",
     "ios:device": "node scripts/run-ios-device.mjs",
     "ios:device:release": "node scripts/run-ios-device.mjs --release",
-    "clip:device": "node scripts/run-app-clip-device.mjs",
     "web": "expo start --web",
-    "apply:clip-completion-record": "node scripts/apply-app-clip-completion-record.mjs",
-    "preflight:clip": "node scripts/app-clip-preflight.mjs",
-    "test:clip": "node --experimental-default-type=module --test lib/*.test.mjs scripts/*.test.mjs",
+    "test:clip": "node --experimental-default-type=module --test lib/*.test.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

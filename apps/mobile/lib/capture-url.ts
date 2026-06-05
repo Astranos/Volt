@@ -1,5 +1,5 @@
 import {
-  isAppClipCaptureMode,
+  isCaptureMode as isSharedCaptureMode,
   isScannerSessionId,
   type CaptureMode,
 } from "@volt/scanner-protocol";
@@ -12,7 +12,7 @@ export type CaptureInvocation = {
 };
 
 function isCaptureMode(value: string | undefined): value is CaptureMode {
-  return isAppClipCaptureMode(value);
+  return isSharedCaptureMode(value);
 }
 
 function getStringParam(searchParams: URLSearchParams, key: string) {
@@ -42,5 +42,5 @@ export function parseCaptureInvocation(url: string): CaptureInvocation | null {
 }
 
 export function normalizeCaptureMode(value: unknown): CaptureMode | null {
-  return isAppClipCaptureMode(value) ? value : null;
+  return isSharedCaptureMode(value) ? value : null;
 }
