@@ -3,48 +3,29 @@ import test from "node:test";
 
 import { normalizeCaptureMode, parseCaptureInvocation } from "./capture-url.ts";
 
-test("parseCaptureInvocation accepts legacy capture URLs as full-app invocations", () => {
-  assert.deepEqual(parseCaptureInvocation("https://scanner-signal.vercel.app/clip?session=abc_123"), {
-    sessionId: "abc_123",
-  });
-  assert.deepEqual(
-    parseCaptureInvocation("https://scanner-signal.vercel.app/clip/ocr?session=abc_123"),
-    { mode: "ocr", sessionId: "abc_123" }
-  );
-  assert.deepEqual(
-    parseCaptureInvocation("https://scanner-signal.vercel.app/clip/barcode?session=session-42"),
-    { mode: "barcode", sessionId: "session-42" }
-  );
-});
-
 test("parseCaptureInvocation accepts full-app links with all capture modes", () => {
   assert.deepEqual(
-    parseCaptureInvocation("https://appclip.apple.com/id?p=com.volt.mobile.Clip&mode=barcode&session=session-42"),
+    parseCaptureInvocation("volt://pair?mode=barcode&session=session-42"),
     { mode: "barcode", sessionId: "session-42" }
   );
-  assert.deepEqual(parseCaptureInvocation("https://appclip.apple.com/id?p=com.volt.mobile.Clip&mode=dictation&session=phone_123"), {
+  assert.deepEqual(parseCaptureInvocation("volt://pair?mode=dictation&session=phone_123"), {
     mode: "dictation",
     sessionId: "phone_123",
   });
 });
 
-test("parseCaptureInvocation accepts custom scheme paths", () => {
-  assert.deepEqual(parseCaptureInvocation("volt://clip/photo?session=phone_123"), {
+test("parseCaptureInvocation accepts full-app custom scheme paths", () => {
+  assert.deepEqual(parseCaptureInvocation("volt://photo?session=phone_123"), {
     mode: "photo",
     sessionId: "phone_123",
-  });
-  assert.deepEqual(parseCaptureInvocation("volt://open/clip/barcode?session=phone-123"), {
-    mode: "barcode",
-    sessionId: "phone-123",
   });
 });
 
 test("parseCaptureInvocation rejects invalid or incomplete URLs", () => {
   assert.equal(parseCaptureInvocation("not a url"), null);
-  assert.deepEqual(parseCaptureInvocation("https://scanner-signal.vercel.app/clip/photo?session=abcd"), {
-    mode: "photo",
-    sessionId: "abcd",
-  });
+  assert.equal(parseCaptureInvocation("https://scanner-signal.vercel.app/clip/photo?session=abcd"), null);
+  assert.equal(parseCaptureInvocation("https://example.com/photo?mode=barcode&session=session-42"), null);
+  assert.equal(parseCaptureInvocation("volt://clip/photo?session=phone_123"), null);
   assert.equal(parseCaptureInvocation("https://scanner-signal.vercel.app/clip/ocr"), null);
   assert.equal(parseCaptureInvocation("https://scanner-signal.vercel.app/clip/ocr?session=%20"), null);
   assert.equal(parseCaptureInvocation("https://scanner-signal.vercel.app/clip/ocr?session=abc"), null);

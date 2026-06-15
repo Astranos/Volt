@@ -89,15 +89,7 @@ function normalizeCapturedAt(value: string | undefined) {
 }
 
 function stripPhotoRuntimeFields(photo: MobilePhoto) {
-  const {
-    dataUrl,
-    blob,
-    downloadUrl,
-    objectKey,
-    grantId,
-    status,
-    ...metadata
-  } = photo;
+  const { dataUrl, blob, ...metadata } = photo;
   return metadata;
 }
 

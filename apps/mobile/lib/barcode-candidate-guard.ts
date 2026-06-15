@@ -1,13 +1,16 @@
-import type { VoltClipBarcodeCandidate } from "./volt-clip-barcode-scanner";
+export type BarcodeCandidate = {
+  format: string;
+  value: string;
+};
 
-export function barcodeCandidateKey(candidate: VoltClipBarcodeCandidate) {
+export function barcodeCandidateKey(candidate: BarcodeCandidate) {
   return `${candidate.format.trim().toLowerCase()}:${candidate.value.trim().toLowerCase()}`;
 }
 
 export function createBarcodeCandidateGuard(windowMs = 1500, now = () => Date.now()) {
   const recentCandidates = new Map<string, number>();
 
-  return (candidate: VoltClipBarcodeCandidate) => {
+  return (candidate: BarcodeCandidate) => {
     const timestamp = now();
     const key = barcodeCandidateKey(candidate);
     const lastSeenAt = recentCandidates.get(key);

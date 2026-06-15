@@ -64,7 +64,6 @@ function MobileScannerPopup() {
     setState((current) => ({ ...current, status: "creating", error: null }));
     const response = await chrome.runtime.sendMessage({
       action: "scannerStartForMode",
-      appClipRelay: true,
       force,
       mode: requestedMode,
     });

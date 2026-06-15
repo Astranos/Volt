@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vercel dev",
     "build": "echo 'No build step required'",
-    "test:clip": "node --experimental-strip-types --test api/*.test.mjs scripts/validate-production.test.mjs",
+    "test:signal": "node --experimental-strip-types --test api/*.test.mjs scripts/validate-production.test.mjs",
     "validate:production": "node scripts/validate-production.mjs"
   },
   "devDependencies": {

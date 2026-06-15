@@ -20,18 +20,28 @@ function getStringParam(searchParams: URLSearchParams, key: string) {
   return value?.trim() || null;
 }
 
-function getModeFromPath(pathname: string) {
-  const parts = pathname.split("/").filter(Boolean);
-  const clipIndex = parts.indexOf("clip");
-  const candidate = clipIndex >= 0 ? parts[clipIndex + 1] : parts[0];
-  return isCaptureMode(candidate) ? candidate : null;
+function isSupportedCaptureUrl(parsed: URL) {
+  return parsed.protocol === "volt:" || parsed.hostname === "scanner-signal.vercel.app";
+}
+
+function getModeFromUrl(parsed: URL): CaptureMode | null | undefined {
+  const parts = [
+    ...(parsed.protocol === "volt:" && parsed.hostname ? [parsed.hostname] : []),
+    ...parsed.pathname.split("/").filter(Boolean),
+  ];
+  if (parts[0] === "clip") return null;
+  const candidate = parts[0];
+  return isCaptureMode(candidate) ? candidate : undefined;
 }
 
 export function parseCaptureInvocation(url: string): CaptureInvocation | null {
   try {
     const parsed = new URL(url);
+    if (!isSupportedCaptureUrl(parsed)) return null;
+    const pathMode = getModeFromUrl(parsed);
+    if (pathMode === null) return null;
     const queryMode = getStringParam(parsed.searchParams, "mode") ?? undefined;
-    const mode = isCaptureMode(queryMode) ? queryMode : getModeFromPath(parsed.pathname);
+    const mode = isCaptureMode(queryMode) ? queryMode : pathMode;
     const sessionId = getStringParam(parsed.searchParams, "session");
 
     if (!isScannerSessionId(sessionId)) return null;

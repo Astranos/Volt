@@ -98,7 +98,6 @@ export default defineBackground({
     const STORAGE_STATS_KEY = "grokStorageStats";
     const MOBILE_SCANNER_STORAGE_KEY = "volt.mobileScanner.scans";
     const MOBILE_PHOTOS_STORAGE_KEY = "volt.mobilePhotos.photos";
-    const MOBILE_RELAY_STATE_STORAGE_KEY = "volt.mobileScanner.relaySession.v1";
     const MOBILE_SCANNER_MAX_SCANS = 100;
     const MOBILE_PHOTOS_MAX_PHOTOS = 80;
     const MOBILE_PHOTOS_MAX_PERSISTED_BYTES = 6_000_000;
@@ -165,14 +164,13 @@ export default defineBackground({
     function downloadMobilePhoto(photo) {
       return new Promise((resolve) => {
         const filename = buildMobilePhotoDownloadFilename(photo);
-        const url = photo.dataUrl || photo.downloadUrl;
-        if (!url) {
-          resolve({ success: false, error: "missing_download_url" });
+        if (!photo.dataUrl) {
+          resolve({ success: false, error: "missing_photo_data" });
           return;
         }
         chrome.downloads.download(
           {
-            url,
+            url: photo.dataUrl,
             filename,
             conflictAction: "uniquify",
             saveAs: false,
@@ -644,7 +642,6 @@ export default defineBackground({
       try {
         const state = await sendScannerOffscreenMessage({
           action: "scannerOffscreenStart",
-          appClipRelay: message?.appClipRelay === true,
           force: message?.force === true,
           mode: normalizeMobileCaptureMode(message?.mode),
           target: await getMobileCaptureTarget(),
@@ -662,7 +659,6 @@ export default defineBackground({
         }
         const state = await sendScannerOffscreenMessage({
           action: "scannerOffscreenStart",
-          appClipRelay: message?.surface === "popup",
           force: false,
           mode: normalizeMobileCaptureMode(message?.mode),
           target: await getMobileCaptureTarget(),
@@ -675,7 +671,7 @@ export default defineBackground({
         sendResponse(
           state?.qrCodeUrl
             ? { success: true, state }
-            : { success: false, state, error: "missing_app_clip_url" }
+            : { success: false, state, error: "missing_pairing_url" }
         );
       } catch (err) {
         sendResponse({ success: false, error: String(err?.message || err) });
@@ -767,36 +763,6 @@ export default defineBackground({
           : downloadedPhoto,
       });
       return { success: true };
-    }
-
-    function handleScannerRelayStateGet(message, sendResponse) {
-      if (message?.key !== MOBILE_RELAY_STATE_STORAGE_KEY) {
-        sendResponse({ success: false, error: "invalid_key" });
-        return;
-      }
-      chrome.storage.local.get({ [MOBILE_RELAY_STATE_STORAGE_KEY]: null }, (stored) => {
-        sendResponse({ success: true, state: stored[MOBILE_RELAY_STATE_STORAGE_KEY] ?? null });
-      });
-    }
-
-    function handleScannerRelayStateSet(message, sendResponse) {
-      if (message?.key !== MOBILE_RELAY_STATE_STORAGE_KEY || !message?.state) {
-        sendResponse({ success: false, error: "invalid_state" });
-        return;
-      }
-      chrome.storage.local.set({ [MOBILE_RELAY_STATE_STORAGE_KEY]: message.state }, () => {
-        sendResponse({ success: true });
-      });
-    }
-
-    function handleScannerRelayStateRemove(message, sendResponse) {
-      if (message?.key !== MOBILE_RELAY_STATE_STORAGE_KEY) {
-        sendResponse({ success: false, error: "invalid_key" });
-        return;
-      }
-      chrome.storage.local.remove(MOBILE_RELAY_STATE_STORAGE_KEY, () => {
-        sendResponse({ success: true });
-      });
     }
 
     log("Service worker booted", { time: new Date().toISOString() });
@@ -1362,15 +1328,6 @@ export default defineBackground({
       }
 
       switch (message.action) {
-        case "scannerRelayStateGet":
-          handleScannerRelayStateGet(message, sendResponse);
-          return true;
-        case "scannerRelayStateSet":
-          handleScannerRelayStateSet(message, sendResponse);
-          return true;
-        case "scannerRelayStateRemove":
-          handleScannerRelayStateRemove(message, sendResponse);
-          return true;
         case "scannerStart":
           handleScannerStart(message, sendResponse);
           return true;

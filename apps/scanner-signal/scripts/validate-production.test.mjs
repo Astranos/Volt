@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { assertAssociationPayload, assertClipObsoleteResponse } from "./validate-production.mjs";
+import { assertAssociationPayload } from "./validate-production.mjs";
 
 test("assertAssociationPayload accepts signaling-only Apple association payloads", () => {
   assertAssociationPayload({
@@ -9,13 +9,10 @@ test("assertAssociationPayload accepts signaling-only Apple association payloads
       apps: [],
       details: [],
     },
-    appclips: {
-      apps: [],
-    },
   });
 });
 
-test("assertAssociationPayload rejects App Clip associations", () => {
+test("assertAssociationPayload rejects appclips associations", () => {
   assert.throws(() =>
     assertAssociationPayload({
       applinks: {
@@ -23,7 +20,7 @@ test("assertAssociationPayload rejects App Clip associations", () => {
         details: [],
       },
       appclips: {
-        apps: ["TEAM123456.com.example.mobile.Clip"],
+        apps: ["TEAM123456.com.example.mobile.Scanner"],
       },
     })
   );
@@ -36,16 +33,6 @@ test("assertAssociationPayload rejects /clip links assigned to the full app", ()
         apps: [],
         details: [{ appIDs: ["TEAM123456.com.example.mobile"], components: [{ "/": "/clip/*" }] }],
       },
-      appclips: {
-        apps: [],
-      },
     })
-  );
-});
-
-test("assertClipObsoleteResponse accepts the obsolete scanner response", () => {
-  assertClipObsoleteResponse(
-    { status: 410 },
-    "Volt App Clip scanner links are obsolete. Pair the full mobile app from the Chrome extension QR code."
   );
 });

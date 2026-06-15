@@ -4,10 +4,10 @@
   "type": "module",
   "scripts": {
     "dev:extension": "pnpm --filter @volt/extension dev",
-    "dev:mobile": "pnpm --filter @volt/mobile dev",
+    "dev:mobile": "pnpm --filter @volt/mobile ios:sim",
     "dev:web": "pnpm --filter @volt/web dev",
     "build:extension": "pnpm --filter @volt/extension build",
-    "typecheck:mobile": "pnpm --filter @volt/mobile typecheck",
+    "build:mobile": "pnpm --filter @volt/mobile build:ios",
     "build:web": "pnpm --filter @volt/web build",
     "build": "pnpm -r build",
     "zip:extension": "pnpm --filter @volt/extension zip"

@@ -2,65 +2,16 @@
   "name": "@volt/mobile",
   "private": true,
   "version": "0.1.0",
-  "main": "expo-router/entry",
   "scripts": {
-    "dev": "RCT_METRO_PORT=8090 expo start --port 8090",
-    "dev:device": "RCT_METRO_PORT=8090 expo start --dev-client --host tunnel --port 8090",
-    "android": "expo run:android",
-    "ios": "node scripts/run-ios-device.mjs",
-    "ios:device": "node scripts/run-ios-device.mjs",
-    "ios:device:release": "node scripts/run-ios-device.mjs --release",
-    "web": "expo start --web",
-    "test:clip": "node --experimental-default-type=module --test lib/*.test.mjs",
-    "typecheck": "tsc --noEmit"
-  },
-  "dependencies": {
-    "@babel/runtime": "7.28.2",
-    "@expo/ui": "~56.0.12",
-    "@expo/vector-icons": "^15.0.3",
-    "@hugeicons/core-free-icons": "^4.1.4",
-    "@react-native-async-storage/async-storage": "2.2.0",
-    "@react-native-ml-kit/text-recognition": "^2.0.0",
-    "@volt/scanner-protocol": "workspace:*",
-    "base-64": "^1.0.0",
-    "expo": "~56.0.4",
-    "expo-build-properties": "^56.0.13",
-    "expo-camera": "~56.0.7",
-    "expo-clipboard": "~56.0.3",
-    "expo-constants": "~56.0.14",
-    "expo-font": "~56.0.5",
-    "expo-haptics": "~56.0.3",
-    "expo-image-manipulator": "~56.0.13",
-    "expo-linking": "~56.0.11",
-    "expo-router": "~56.2.5",
-    "expo-speech-recognition": "^56.0.0",
-    "expo-status-bar": "~56.0.4",
-    "react": "19.2.3",
-    "react-native": "0.85.3",
-    "react-native-app-clip": "0.8.0",
-    "react-native-get-random-values": "~1.11.0",
-    "react-native-safe-area-context": "~5.7.0",
-    "react-native-screens": "~4.25.1",
-    "react-native-svg": "15.15.5",
-    "react-native-webrtc": "^124.0.6"
-  },
-  "devDependencies": {
-    "@react-native-community/cli": "20.1.3",
-    "@types/react": "~19.2.15",
-    "typescript": "~6.0.3"
-  },
-  "expo": {
-    "doctor": {
-      "appConfigFieldsNotSyncedCheck": {
-        "enabled": false
-      },
-      "reactNativeDirectoryCheck": {
-        "exclude": [
-          "@react-native-ml-kit/text-recognition",
-          "expo-modules-jsi",
-          "react-native-webrtc"
-        ]
-      }
-    }
+    "build": "pnpm run build:ios",
+    "build:ios": "xcodebuild -project ios/Volt.xcodeproj -scheme Volt -configuration Debug -destination 'generic/platform=iOS Simulator' build",
+    "build:ios:release": "xcodebuild -project ios/Volt.xcodeproj -scheme Volt -configuration Release -destination 'generic/platform=iOS' build",
+    "clean:ios": "xcodebuild -project ios/Volt.xcodeproj -scheme Volt clean",
+    "ios": "pnpm run ios:sim",
+    "ios:sim": "node scripts/ios-build-install-launch.mjs",
+    "ios:sim:release": "node scripts/ios-build-install-launch.mjs --release",
+    "ios:device": "node scripts/ios-build-install-launch.mjs --device",
+    "ios:device:release": "node scripts/ios-build-install-launch.mjs --device --release",
+    "open:xcode": "open ios/Volt.xcodeproj"
   }
 }

@@ -51,7 +51,7 @@ test("Expo photo fallback uses measured camera and frame layout before sending",
   assert.doesNotMatch(photosTab, /captureScale:/);
   assert.match(photosTab, /onLayout=\{handleCameraLayout\}/);
   assert.match(photosTab, /onFrameLayout=\{handlePhotoFrameLayout\}/);
-  assert.match(photosTab, /const photoCaptureReady = useNativePhotoCamera \? photoFrameSize > 0 : !!photoCropFrame/);
+  assert.match(photosTab, /const photoCaptureReady = !!photoCropFrame/);
   assert.match(photosTab, /disabled=\{scanner\.photoSending \|\| !photoCaptureReady\}/);
-  assert.match(photosTab, /scanner\.sendPhotoCapture\(useNativePhotoCamera \? null : photoCropFrame\)/);
+  assert.match(photosTab, /scanner\.sendPhotoCapture\(photoCropFrame\)/);
 });

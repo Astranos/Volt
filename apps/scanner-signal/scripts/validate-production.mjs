@@ -8,25 +8,13 @@ async function fetchJson(path, options) {
   return { response, body };
 }
 
-async function fetchText(path, options) {
-  const response = await fetch(`${origin}${path}`, options);
-  const body = await response.text();
-  return { response, body };
-}
-
 function assertOk(response, label) {
   assert.equal(response.ok, true, `${label} returned ${response.status}`);
 }
 
 export function assertAssociationPayload(body) {
-  assert.deepEqual(body.appclips?.apps, []);
   assert.deepEqual(body.applinks?.details, []);
-}
-
-export function assertClipObsoleteResponse(response, body) {
-  assert.equal(response.status, 410);
-  assert.match(body, /obsolete/i);
-  assert.doesNotMatch(body, /app-clip-bundle-id/i);
+  assert.equal(Object.hasOwn(body, "appclips"), false);
 }
 
 async function validateAssociation() {
@@ -34,11 +22,6 @@ async function validateAssociation() {
   assertOk(response, "AASA");
   assert.equal(response.headers.get("content-type")?.includes("application/json"), true);
   assertAssociationPayload(body);
-}
-
-async function validateClipIsObsolete() {
-  const { response, body } = await fetchText("/clip/ocr?session=test123");
-  assertClipObsoleteResponse(response, body);
 }
 
 async function validateJoinTokenSignaling() {
@@ -109,7 +92,6 @@ async function validateJoinTokenSignaling() {
 
 export async function validateProduction() {
   await validateAssociation();
-  await validateClipIsObsolete();
   await validateJoinTokenSignaling();
 }
 

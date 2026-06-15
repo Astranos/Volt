@@ -6,9 +6,6 @@ export function buildAssociationPayload() {
       apps: [],
       details: [],
     },
-    appclips: {
-      apps: [],
-    },
   };
 }
 

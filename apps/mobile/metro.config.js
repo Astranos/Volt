@@ -20,11 +20,4 @@ config.resolver.extraNodeModules = {
   "react-native-webrtc": path.resolve(projectRoot, "node_modules/react-native-webrtc"),
 };
 
-if (process.env.BUILDING_FOR_APP_CLIP) {
-  config.resolver.sourceExts = [
-    ...config.resolver.sourceExts.map((extension) => `clip.${extension}`),
-    ...config.resolver.sourceExts,
-  ];
-}
-
 module.exports = config;

@@ -7,493 +7,323 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		014C9270B05F08B2BF84AFB7 /* libPods-Volt.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 4131A068EA86235F07C8AE89 /* libPods-Volt.a */; };
-		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
-		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
-		7273A85AAE034AC8BAA99594 /* VoltClip.app in Embed App Clips */ = {isa = PBXBuildFile; fileRef = ACA11B7D31CA416C844E9288 /* VoltClip.app */; };
-		821969B05715C8A27536A5B0 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 2F47C4DD7A4804A5FE038807 /* PrivacyInfo.xcprivacy */; };
-		9A94212ABB8ABF424D2C9BD3 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 013766E8A3CBB383D1518830 /* AppDelegate.swift */; };
-		AF4810BC7574DDA14A62B199 /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E73489FC6033D503DB342DB2 /* Images.xcassets */; };
-		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
-		E2F6A9102EEC3A2800D3B901 /* volt.icon in Resources */ = {isa = PBXBuildFile; fileRef = E2F6A90F2EEC3A2800D3B901 /* volt.icon */; };
-		E94F57467C6735ED6D131DA8 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 52C7599C80F9D87BD73166E1 /* SplashScreen.storyboard */; };
-		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
+		100000000000000000000001 /* VoltApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000001 /* VoltApp.swift */; };
+		100000000000000000000002 /* CaptureMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000002 /* CaptureMode.swift */; };
+		100000000000000000000003 /* ScanResult.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000003 /* ScanResult.swift */; };
+		100000000000000000000004 /* PairingSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000004 /* PairingSession.swift */; };
+		100000000000000000000005 /* PairingURLParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000005 /* PairingURLParser.swift */; };
+		100000000000000000000006 /* CameraModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000006 /* CameraModel.swift */; };
+		100000000000000000000007 /* TextRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000007 /* TextRecognizer.swift */; };
+		100000000000000000000008 /* DictationModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000008 /* DictationModel.swift */; };
+		100000000000000000000009 /* ScannerStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000009 /* ScannerStore.swift */; };
+		10000000000000000000000A /* CameraPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000000A /* CameraPreview.swift */; };
+		10000000000000000000000B /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000000B /* RootView.swift */; };
+		10000000000000000000000C /* ScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000000C /* ScannerView.swift */; };
+		10000000000000000000000D /* DictationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000000D /* DictationView.swift */; };
+		10000000000000000000000E /* ResultsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000000E /* ResultsView.swift */; };
+		10000000000000000000000F /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000000F /* Images.xcassets */; };
+		100000000000000000000010 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000010 /* SplashScreen.storyboard */; };
+		100000000000000000000011 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000011 /* PrivacyInfo.xcprivacy */; };
+		100000000000000000000012 /* ScannerConnectionStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000016 /* ScannerConnectionStatus.swift */; };
+		100000000000000000000013 /* ScannerPeerTarget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000017 /* ScannerPeerTarget.swift */; };
+		100000000000000000000014 /* ScannerProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000018 /* ScannerProtocol.swift */; };
+		100000000000000000000015 /* ScannerSignalingClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000019 /* ScannerSignalingClient.swift */; };
+		100000000000000000000016 /* ScannerWebRTCConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000001A /* ScannerWebRTCConnection.swift */; };
+		100000000000000000000017 /* WebRTC.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 20000000000000000000001B /* WebRTC.xcframework */; };
+		100000000000000000000018 /* WebRTC.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 20000000000000000000001B /* WebRTC.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
-/* Begin PBXContainerItemProxy section */
-		4121292D4A3E45FD9F7FCFB7 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 83CBB9F71A601CBA00E9B192 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 3E1AD583DCC7482C8788B21F;
-			remoteInfo = VoltClip;
-		};
-/* End PBXContainerItemProxy section */
-
 /* Begin PBXCopyFilesBuildPhase section */
-		A825157731524E0BA1EA9574 /* Embed App Clips */ = {
+		710000000000000000000001 /* Embed Frameworks */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
-			dstPath = "$(CONTENTS_FOLDER_PATH)/AppClips";
-			dstSubfolderSpec = 16;
+			dstPath = "";
+			dstSubfolderSpec = 10;
 			files = (
-				7273A85AAE034AC8BAA99594 /* VoltClip.app in Embed App Clips */,
+				100000000000000000000018 /* WebRTC.xcframework in Embed Frameworks */,
 			);
-			name = "Embed App Clips";
+			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		013766E8A3CBB383D1518830 /* AppDelegate.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
-		068F79DB4BF81F67BB85C2FF /* Pods-Volt.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Volt.debug.xcconfig"; path = "Target Support Files/Pods-Volt/Pods-Volt.debug.xcconfig"; sourceTree = "<group>"; };
-		13B07F961A680F5B00A75B9A /* Volt.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Volt.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = Volt/Images.xcassets; sourceTree = "<group>"; };
-		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = Volt/Info.plist; sourceTree = "<group>"; };
-		19E9CE1E49A8906BC6491E2D /* Pods-Volt.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Volt.release.xcconfig"; path = "Target Support Files/Pods-Volt/Pods-Volt.release.xcconfig"; sourceTree = "<group>"; };
-		211B1C5A0E20FF4E85DFC099 /* Pods-VoltClip.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-VoltClip.release.xcconfig"; path = "Target Support Files/Pods-VoltClip/Pods-VoltClip.release.xcconfig"; sourceTree = "<group>"; };
-		2F47C4DD7A4804A5FE038807 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = Volt/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
-		3EB0F83AFD6F9946D831242B /* VoltClipBarcodeScanner.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; path = VoltClipBarcodeScanner.m; sourceTree = "<group>"; };
-		4131A068EA86235F07C8AE89 /* libPods-Volt.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-Volt.a"; sourceTree = BUILT_PRODUCTS_DIR; };
-		4F1C0D7B71C04A619E61A101 /* VoltClipTextCameraViewManager.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; path = VoltClipTextCameraViewManager.m; sourceTree = "<group>"; };
-		52C7599C80F9D87BD73166E1 /* SplashScreen.storyboard */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = file.storyboard; path = SplashScreen.storyboard; sourceTree = "<group>"; };
-		5E2F4B592F4E4A9A8A9E1001 /* VoltClipLiquidTabBarView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VoltClipLiquidTabBarView.swift; sourceTree = "<group>"; };
-		5E2F4B5B2F4E4A9A8A9E1001 /* VoltClipLiquidTabBarViewManager.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; path = VoltClipLiquidTabBarViewManager.m; sourceTree = "<group>"; };
-		6255E95FA70D4649B8813AB7 /* VoltClipClipboard.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VoltClipClipboard.swift; sourceTree = "<group>"; };
-		6255E960A70D4649B8813AB7 /* VoltClipClipboard.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; path = VoltClipClipboard.m; sourceTree = "<group>"; };
-		77DD4032F491596C787D8B5B /* VoltClip.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = VoltClip.entitlements; sourceTree = "<group>"; };
-		87AAE823010176EA682A3EF8 /* VoltClipBarcodeScanner.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VoltClipBarcodeScanner.swift; sourceTree = "<group>"; };
-		8C78E3CB0F4CCA44907D5F77 /* VoltClipTextRecognizer.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; path = VoltClipTextRecognizer.m; sourceTree = "<group>"; };
-		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = Volt/SplashScreen.storyboard; sourceTree = "<group>"; };
-		ACA11B7D31CA416C844E9288 /* VoltClip.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = undefined; name = VoltClip.app; path = VoltClip.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		AD3338631FB875CC118A24D1 /* Expo.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
-		B4CF09507444874FEFF8DDC2 /* VoltClipDictation.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VoltClipDictation.swift; sourceTree = "<group>"; };
-		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
-		C1B912B7C32F4CDFAA6AB622 /* VoltClipTextRecognizer.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VoltClipTextRecognizer.swift; sourceTree = "<group>"; };
-		DC612F95403FFD79D2EA2F75 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-Volt/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
-		E2F6A90F2EEC3A2800D3B901 /* volt.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; name = volt.icon; path = ../assets/volt.icon; sourceTree = "<group>"; };
-		E42D62C6FCF508109B4507E5 /* VoltClipDictation.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; path = VoltClipDictation.m; sourceTree = "<group>"; };
-		E73489FC6033D503DB342DB2 /* Images.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; path = Images.xcassets; sourceTree = "<group>"; };
-		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
-		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = Volt/AppDelegate.swift; sourceTree = "<group>"; };
-		F11748442D0722820044C1D9 /* Volt-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "Volt-Bridging-Header.h"; path = "Volt/Volt-Bridging-Header.h"; sourceTree = "<group>"; };
-		F24DD958AF11BB6CCC603710 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		F2A7E5002D7A000100000001 /* LiveTextImageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LiveTextImageView.swift; path = Volt/LiveTextImageView.swift; sourceTree = "<group>"; };
-		F2A7E5022D7A000100000001 /* LiveTextImageViewManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = LiveTextImageViewManager.m; path = Volt/LiveTextImageViewManager.m; sourceTree = "<group>"; };
-		F48087982786BD258242E508 /* Pods-VoltClip.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-VoltClip.debug.xcconfig"; path = "Target Support Files/Pods-VoltClip/Pods-VoltClip.debug.xcconfig"; sourceTree = "<group>"; };
-		FC02CB680FAB5AF828F1DCF1 /* libPods-VoltClip.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-VoltClip.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		200000000000000000000001 /* VoltApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoltApp.swift; sourceTree = "<group>"; };
+		200000000000000000000002 /* CaptureMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureMode.swift; sourceTree = "<group>"; };
+		200000000000000000000003 /* ScanResult.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanResult.swift; sourceTree = "<group>"; };
+		200000000000000000000004 /* PairingSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingSession.swift; sourceTree = "<group>"; };
+		200000000000000000000005 /* PairingURLParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingURLParser.swift; sourceTree = "<group>"; };
+		200000000000000000000006 /* CameraModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraModel.swift; sourceTree = "<group>"; };
+		200000000000000000000007 /* TextRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextRecognizer.swift; sourceTree = "<group>"; };
+		200000000000000000000008 /* DictationModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationModel.swift; sourceTree = "<group>"; };
+		200000000000000000000009 /* ScannerStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannerStore.swift; sourceTree = "<group>"; };
+		20000000000000000000000A /* CameraPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraPreview.swift; sourceTree = "<group>"; };
+		20000000000000000000000B /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		20000000000000000000000C /* ScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannerView.swift; sourceTree = "<group>"; };
+		20000000000000000000000D /* DictationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationView.swift; sourceTree = "<group>"; };
+		20000000000000000000000E /* ResultsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResultsView.swift; sourceTree = "<group>"; };
+		20000000000000000000000F /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Images.xcassets; sourceTree = "<group>"; };
+		200000000000000000000010 /* SplashScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = SplashScreen.storyboard; sourceTree = "<group>"; };
+		200000000000000000000011 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		200000000000000000000013 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		200000000000000000000014 /* Volt.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Volt.entitlements; sourceTree = "<group>"; };
+		200000000000000000000015 /* Volt.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Volt.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		200000000000000000000016 /* ScannerConnectionStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannerConnectionStatus.swift; sourceTree = "<group>"; };
+		200000000000000000000017 /* ScannerPeerTarget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannerPeerTarget.swift; sourceTree = "<group>"; };
+		200000000000000000000018 /* ScannerProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannerProtocol.swift; sourceTree = "<group>"; };
+		200000000000000000000019 /* ScannerSignalingClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannerSignalingClient.swift; sourceTree = "<group>"; };
+		20000000000000000000001A /* ScannerWebRTCConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannerWebRTCConnection.swift; sourceTree = "<group>"; };
+		20000000000000000000001B /* WebRTC.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = WebRTC.xcframework; path = Pods/JitsiWebRTC/WebRTC.xcframework; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		13B07F8C1A680F5B00A75B9A /* Frameworks */ = {
+		300000000000000000000001 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				014C9270B05F08B2BF84AFB7 /* libPods-Volt.a in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		BEC85494F5494374868CF548 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
+				100000000000000000000017 /* WebRTC.xcframework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		06CF7E20381E10447B42B633 /* VoltClip */ = {
+		400000000000000000000001 = {
 			isa = PBXGroup;
 			children = (
-				1CB9A42B61192963B14DD16B /* Supporting */,
-				013766E8A3CBB383D1518830 /* AppDelegate.swift */,
-				E73489FC6033D503DB342DB2 /* Images.xcassets */,
-				52C7599C80F9D87BD73166E1 /* SplashScreen.storyboard */,
-				F24DD958AF11BB6CCC603710 /* Info.plist */,
-				77DD4032F491596C787D8B5B /* VoltClip.entitlements */,
-				87AAE823010176EA682A3EF8 /* VoltClipBarcodeScanner.swift */,
-				3EB0F83AFD6F9946D831242B /* VoltClipBarcodeScanner.m */,
-				B4CF09507444874FEFF8DDC2 /* VoltClipDictation.swift */,
-				E42D62C6FCF508109B4507E5 /* VoltClipDictation.m */,
-				6255E95FA70D4649B8813AB7 /* VoltClipClipboard.swift */,
-				6255E960A70D4649B8813AB7 /* VoltClipClipboard.m */,
-				C1B912B7C32F4CDFAA6AB622 /* VoltClipTextRecognizer.swift */,
-				8C78E3CB0F4CCA44907D5F77 /* VoltClipTextRecognizer.m */,
-				4F1C0D7B71C04A619E61A101 /* VoltClipTextCameraViewManager.m */,
-				5E2F4B592F4E4A9A8A9E1001 /* VoltClipLiquidTabBarView.swift */,
-				5E2F4B5B2F4E4A9A8A9E1001 /* VoltClipLiquidTabBarViewManager.m */,
+				400000000000000000000003 /* Volt */,
+				20000000000000000000001B /* WebRTC.xcframework */,
+				400000000000000000000002 /* Products */,
 			);
-			name = VoltClip;
-			path = VoltClip;
 			sourceTree = "<group>";
 		};
-		13B07FAE1A68108700A75B9A /* Volt */ = {
+		400000000000000000000002 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				F11748412D0307B40044C1D9 /* AppDelegate.swift */,
-				F2A7E5002D7A000100000001 /* LiveTextImageView.swift */,
-				F2A7E5022D7A000100000001 /* LiveTextImageViewManager.m */,
-				F11748442D0722820044C1D9 /* Volt-Bridging-Header.h */,
-				BB2F792B24A3F905000567C9 /* Supporting */,
-				E2F6A90F2EEC3A2800D3B901 /* volt.icon */,
-				13B07FB51A68108700A75B9A /* Images.xcassets */,
-				13B07FB61A68108700A75B9A /* Info.plist */,
-				AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */,
-				2F47C4DD7A4804A5FE038807 /* PrivacyInfo.xcprivacy */,
-			);
-			name = Volt;
-			sourceTree = "<group>";
-		};
-		1CB9A42B61192963B14DD16B /* Supporting */ = {
-			isa = PBXGroup;
-			children = (
-				AD3338631FB875CC118A24D1 /* Expo.plist */,
-			);
-			name = Supporting;
-			path = Supporting;
-			sourceTree = "<group>";
-		};
-		2D16E6871FA4F8E400B85C8A /* Frameworks */ = {
-			isa = PBXGroup;
-			children = (
-				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
-				4131A068EA86235F07C8AE89 /* libPods-Volt.a */,
-				FC02CB680FAB5AF828F1DCF1 /* libPods-VoltClip.a */,
-			);
-			name = Frameworks;
-			sourceTree = "<group>";
-		};
-		4918AD0737E18BDB14B5B297 /* ExpoModulesProviders */ = {
-			isa = PBXGroup;
-			children = (
-				5882C371FDEFED479EA7BCE5 /* Volt */,
-			);
-			name = ExpoModulesProviders;
-			sourceTree = "<group>";
-		};
-		5882C371FDEFED479EA7BCE5 /* Volt */ = {
-			isa = PBXGroup;
-			children = (
-				DC612F95403FFD79D2EA2F75 /* ExpoModulesProvider.swift */,
-			);
-			name = Volt;
-			sourceTree = "<group>";
-		};
-		832341AE1AAA6A7D00B99B32 /* Libraries */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			name = Libraries;
-			sourceTree = "<group>";
-		};
-		83CBB9F61A601CBA00E9B192 = {
-			isa = PBXGroup;
-			children = (
-				13B07FAE1A68108700A75B9A /* Volt */,
-				832341AE1AAA6A7D00B99B32 /* Libraries */,
-				83CBBA001A601CBA00E9B192 /* Products */,
-				2D16E6871FA4F8E400B85C8A /* Frameworks */,
-				AC7B7563A26B6F1A0483B954 /* Pods */,
-				4918AD0737E18BDB14B5B297 /* ExpoModulesProviders */,
-				06CF7E20381E10447B42B633 /* VoltClip */,
-			);
-			indentWidth = 2;
-			sourceTree = "<group>";
-			tabWidth = 2;
-			usesTabs = 0;
-		};
-		83CBBA001A601CBA00E9B192 /* Products */ = {
-			isa = PBXGroup;
-			children = (
-				13B07F961A680F5B00A75B9A /* Volt.app */,
+				200000000000000000000015 /* Volt.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
 		};
-		AC7B7563A26B6F1A0483B954 /* Pods */ = {
+		400000000000000000000003 /* Volt */ = {
 			isa = PBXGroup;
 			children = (
-				068F79DB4BF81F67BB85C2FF /* Pods-Volt.debug.xcconfig */,
-				19E9CE1E49A8906BC6491E2D /* Pods-Volt.release.xcconfig */,
-				F48087982786BD258242E508 /* Pods-VoltClip.debug.xcconfig */,
-				211B1C5A0E20FF4E85DFC099 /* Pods-VoltClip.release.xcconfig */,
+				400000000000000000000004 /* App */,
+				400000000000000000000005 /* Models */,
+				400000000000000000000006 /* Services */,
+				400000000000000000000007 /* Views */,
+				20000000000000000000000F /* Images.xcassets */,
+				200000000000000000000010 /* SplashScreen.storyboard */,
+				200000000000000000000011 /* PrivacyInfo.xcprivacy */,
+				200000000000000000000013 /* Info.plist */,
+				200000000000000000000014 /* Volt.entitlements */,
 			);
-			path = Pods;
+			path = Volt;
 			sourceTree = "<group>";
 		};
-		BB2F792B24A3F905000567C9 /* Supporting */ = {
+		400000000000000000000004 /* App */ = {
 			isa = PBXGroup;
 			children = (
-				BB2F792C24A3F905000567C9 /* Expo.plist */,
+				200000000000000000000001 /* VoltApp.swift */,
 			);
-			name = Supporting;
-			path = Volt/Supporting;
+			path = App;
+			sourceTree = "<group>";
+		};
+		400000000000000000000005 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				200000000000000000000002 /* CaptureMode.swift */,
+				200000000000000000000003 /* ScanResult.swift */,
+				200000000000000000000004 /* PairingSession.swift */,
+				200000000000000000000016 /* ScannerConnectionStatus.swift */,
+				200000000000000000000017 /* ScannerPeerTarget.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		400000000000000000000006 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				200000000000000000000005 /* PairingURLParser.swift */,
+				200000000000000000000006 /* CameraModel.swift */,
+				200000000000000000000007 /* TextRecognizer.swift */,
+				200000000000000000000008 /* DictationModel.swift */,
+				200000000000000000000009 /* ScannerStore.swift */,
+				200000000000000000000018 /* ScannerProtocol.swift */,
+				200000000000000000000019 /* ScannerSignalingClient.swift */,
+				20000000000000000000001A /* ScannerWebRTCConnection.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		400000000000000000000007 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				20000000000000000000000A /* CameraPreview.swift */,
+				20000000000000000000000B /* RootView.swift */,
+				20000000000000000000000C /* ScannerView.swift */,
+				20000000000000000000000D /* DictationView.swift */,
+				20000000000000000000000E /* ResultsView.swift */,
+			);
+			path = Views;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		13B07F861A680F5B00A75B9A /* Volt */ = {
+		500000000000000000000001 /* Volt */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "Volt" */;
+			buildConfigurationList = 900000000000000000000001 /* Build configuration list for PBXNativeTarget "Volt" */;
 			buildPhases = (
-				5DA2B0666DF1CAD8E4EC37DA /* [CP] Check Pods Manifest.lock */,
-				13B07F871A680F5B00A75B9A /* Sources */,
-				13B07F8C1A680F5B00A75B9A /* Frameworks */,
-				13B07F8E1A680F5B00A75B9A /* Resources */,
-				A825157731524E0BA1EA9574 /* Embed App Clips */,
+				600000000000000000000001 /* Sources */,
+				300000000000000000000001 /* Frameworks */,
+				700000000000000000000001 /* Resources */,
+				710000000000000000000001 /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
 			dependencies = (
-				717A6F1C38A94058B9C2D21B /* PBXTargetDependency */,
 			);
 			name = Volt;
 			productName = Volt;
-			productReference = 13B07F961A680F5B00A75B9A /* Volt.app */;
+			productReference = 200000000000000000000015 /* Volt.app */;
 			productType = "com.apple.product-type.application";
-		};
-		3E1AD583DCC7482C8788B21F /* VoltClip */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = E03C06C10BB44F18BD2738B0 /* Build configuration list for PBXNativeTarget "VoltClip" */;
-			buildPhases = (
-				5B09A0C80A5E45B9AEF98CC4 /* Sources */,
-				BEC85494F5494374868CF548 /* Frameworks */,
-				0A5DE780FC754A14A39CE0A7 /* Resources */,
-				9B4D7A0D6F1E4C1AA3D8F901 /* Bundle App Clip React Native code and images */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			name = VoltClip;
-			productName = VoltClip;
-			productReference = ACA11B7D31CA416C844E9288 /* VoltClip.app */;
-			productType = "com.apple.product-type.application.on-demand-install-capable";
 		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
-		83CBB9F71A601CBA00E9B192 /* Project object */ = {
+		800000000000000000000001 /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
-				LastUpgradeCheck = 1130;
+				LastSwiftUpdateCheck = 2650;
+				LastUpgradeCheck = 2650;
 				TargetAttributes = {
-					13B07F861A680F5B00A75B9A = {
-						LastSwiftMigration = 1250;
-					};
-					3E1AD583DCC7482C8788B21F = {
-						LastSwiftMigration = 1250;
+					500000000000000000000001 = {
+						CreatedOnToolsVersion = 26.5;
 					};
 				};
 			};
-			buildConfigurationList = 83CBB9FA1A601CBA00E9B192 /* Build configuration list for PBXProject "Volt" */;
-			compatibilityVersion = "Xcode 3.2";
+			buildConfigurationList = 900000000000000000000004 /* Build configuration list for PBXProject "Volt" */;
+			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				en,
 				Base,
 			);
-			mainGroup = 83CBB9F61A601CBA00E9B192;
-			productRefGroup = 83CBBA001A601CBA00E9B192 /* Products */;
+			mainGroup = 400000000000000000000001;
+			productRefGroup = 400000000000000000000002 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				13B07F861A680F5B00A75B9A /* Volt */,
-				3E1AD583DCC7482C8788B21F /* VoltClip */,
+				500000000000000000000001 /* Volt */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		0A5DE780FC754A14A39CE0A7 /* Resources */ = {
+		700000000000000000000001 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				AF4810BC7574DDA14A62B199 /* Images.xcassets in Resources */,
-				E94F57467C6735ED6D131DA8 /* SplashScreen.storyboard in Resources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		13B07F8E1A680F5B00A75B9A /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				BB2F792D24A3F905000567C9 /* Expo.plist in Resources */,
-				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
-				3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */,
-				E2F6A9102EEC3A2800D3B901 /* volt.icon in Resources */,
-				821969B05715C8A27536A5B0 /* PrivacyInfo.xcprivacy in Resources */,
+				10000000000000000000000F /* Images.xcassets in Resources */,
+				100000000000000000000010 /* SplashScreen.storyboard in Resources */,
+				100000000000000000000011 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
 
-/* Begin PBXShellScriptBuildPhase section */
-		9B4D7A0D6F1E4C1AA3D8F901 /* Bundle App Clip React Native code and images */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-			);
-			name = "Bundle App Clip React Native code and images";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "set -e\nif [ -f \"VoltClip/AppDelegate.swift\" ]; then\n  echo \"Native App Clip target; skipping React Native bundle.\"\n  exit 0\nfi\nexport BUILDING_FOR_APP_CLIP=1\nexport ENTRY_FILE=apps/mobile/clip-entry.tsx\nunset SOURCEMAP_FILE\n../node_modules/react-native/scripts/react-native-xcode.sh\n";
-		};
-		5DA2B0666DF1CAD8E4EC37DA /* [CP] Check Pods Manifest.lock */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
-				"${PODS_ROOT}/Manifest.lock",
-			);
-			name = "[CP] Check Pods Manifest.lock";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-				"$(DERIVED_FILE_DIR)/Pods-Volt-checkManifestLockResult.txt",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
-			showEnvVarsInLog = 0;
-		};
-/* End PBXShellScriptBuildPhase section */
-
 /* Begin PBXSourcesBuildPhase section */
-		13B07F871A680F5B00A75B9A /* Sources */ = {
+		600000000000000000000001 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		5B09A0C80A5E45B9AEF98CC4 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				9A94212ABB8ABF424D2C9BD3 /* AppDelegate.swift in Sources */,
+				100000000000000000000001 /* VoltApp.swift in Sources */,
+				100000000000000000000002 /* CaptureMode.swift in Sources */,
+				100000000000000000000003 /* ScanResult.swift in Sources */,
+				100000000000000000000004 /* PairingSession.swift in Sources */,
+				100000000000000000000005 /* PairingURLParser.swift in Sources */,
+				100000000000000000000006 /* CameraModel.swift in Sources */,
+				100000000000000000000007 /* TextRecognizer.swift in Sources */,
+				100000000000000000000008 /* DictationModel.swift in Sources */,
+				100000000000000000000009 /* ScannerStore.swift in Sources */,
+				10000000000000000000000A /* CameraPreview.swift in Sources */,
+				10000000000000000000000B /* RootView.swift in Sources */,
+				10000000000000000000000C /* ScannerView.swift in Sources */,
+				10000000000000000000000D /* DictationView.swift in Sources */,
+				10000000000000000000000E /* ResultsView.swift in Sources */,
+				100000000000000000000012 /* ScannerConnectionStatus.swift in Sources */,
+				100000000000000000000013 /* ScannerPeerTarget.swift in Sources */,
+				100000000000000000000014 /* ScannerProtocol.swift in Sources */,
+				100000000000000000000015 /* ScannerSignalingClient.swift in Sources */,
+				100000000000000000000016 /* ScannerWebRTCConnection.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
-/* Begin PBXTargetDependency section */
-		717A6F1C38A94058B9C2D21B /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 3E1AD583DCC7482C8788B21F /* VoltClip */;
-			targetProxy = 4121292D4A3E45FD9F7FCFB7 /* PBXContainerItemProxy */;
-		};
-/* End PBXTargetDependency section */
-
 /* Begin XCBuildConfiguration section */
-		001DE2C2FF184DCE8E6AC38E /* Debug */ = {
+		900000000000000000000002 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
-				CODE_SIGN_ENTITLEMENTS = VoltClip/VoltClip.entitlements;
-				CODE_SIGN_IDENTITY = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 14;
-				DEVELOPMENT_TEAM = GB5SPLUARQ;
-				INFOPLIST_FILE = VoltClip/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 16.4;
-				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_DEBUG";
-				PRODUCT_BUNDLE_IDENTIFIER = com.volt.mobile.Clip;
-				PRODUCT_NAME = "Volt Clip";
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				VERSIONING_SYSTEM = "apple-generic";
-			};
-			name = Debug;
-		};
-		13B07F941A680F5B00A75B9A /* Debug */ = {
-			isa = XCBuildConfiguration;
-			baseConfigurationReference = 068F79DB4BF81F67BB85C2FF /* Pods-Volt.debug.xcconfig */;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = volt;
-				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = Volt/Volt.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 14;
+				CURRENT_PROJECT_VERSION = 20;
 				DEVELOPMENT_TEAM = GB5SPLUARQ;
-				ENABLE_BITCODE = NO;
-				GCC_PREPROCESSOR_DEFINITIONS = (
-					"$(inherited)",
-					"FB_SONARKIT_ENABLED=1",
-				);
+				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Volt/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 16.4;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
-				OTHER_LDFLAGS = "$(inherited)";
+				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.volt.mobile;
 				PRODUCT_NAME = Volt;
-				PROVISIONING_PROFILE_SPECIFIER = "";
-				SWIFT_OBJC_BRIDGING_HEADER = "Volt/Volt-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				VERSIONING_SYSTEM = "apple-generic";
 			};
 			name = Debug;
 		};
-		13B07F951A680F5B00A75B9A /* Release */ = {
+		900000000000000000000003 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 19E9CE1E49A8906BC6491E2D /* Pods-Volt.release.xcconfig */;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = volt;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = Volt/Volt.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 14;
+				CURRENT_PROJECT_VERSION = 20;
 				DEVELOPMENT_TEAM = GB5SPLUARQ;
+				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Volt/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 16.4;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
-				OTHER_LDFLAGS = "$(inherited)";
+				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.volt.mobile;
 				PRODUCT_NAME = Volt;
-				PROVISIONING_PROFILE_SPECIFIER = "";
-				SWIFT_OBJC_BRIDGING_HEADER = "Volt/Volt-Bridging-Header.h";
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
 				VERSIONING_SYSTEM = "apple-generic";
 			};
 			name = Release;
 		};
-		83CBBA201A601CBA00E9B192 /* Debug */ = {
+		900000000000000000000005 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
-				CLANG_CXX_LANGUAGE_STANDARD = "c++20";
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
 				CLANG_CXX_LIBRARY = "libc++";
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
@@ -503,6 +333,7 @@
 				CLANG_WARN_CONSTANT_CONVERSION = YES;
 				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
 				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
 				CLANG_WARN_EMPTY_BODY = YES;
 				CLANG_WARN_ENUM_CONVERSION = YES;
 				CLANG_WARN_INFINITE_RECURSION = YES;
@@ -511,16 +342,17 @@
 				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
 				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
 				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
 				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
 				CLANG_WARN_STRICT_PROTOTYPES = YES;
 				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
-				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
-				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
 				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
-				GCC_C_LANGUAGE_STANDARD = gnu99;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_OPTIMIZATION_LEVEL = 0;
@@ -528,43 +360,27 @@
 					"DEBUG=1",
 					"$(inherited)",
 				);
-				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
 				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
 				GCC_WARN_UNDECLARED_SELECTOR = YES;
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 16.4;
-				LD_RUNPATH_SEARCH_PATHS = (
-					/usr/lib/swift,
-					"$(inherited)",
-				);
-				LIBRARY_SEARCH_PATHS = "$(SDKROOT)/usr/lib/swift\"$(inherited)\"";
-				MTL_ENABLE_DEBUG_INFO = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
-				OTHER_CFLAGS = (
-					"$(inherited)",
-					"-DRCT_REMOVE_LEGACY_ARCH=1",
-				);
-				OTHER_CPLUSPLUSFLAGS = (
-					"$(inherited)",
-					"-DRCT_REMOVE_LEGACY_ARCH=1",
-				);
-				REACT_NATIVE_PATH = "${PODS_ROOT}/../../../../node_modules/.pnpm/react-native@0.85.3_patch_hash=8b9512811b3fe1361d86adcd86379aa923a46f0a6666f8a215381b76_ac30b4be04924549997240c74bf16c7b/node_modules/react-native";
 				SDKROOT = iphoneos;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DEBUG";
-				SWIFT_ENABLE_EXPLICIT_MODULES = NO;
-				USE_HERMES = true;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 			};
 			name = Debug;
 		};
-		83CBBA211A601CBA00E9B192 /* Release */ = {
+		900000000000000000000006 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
-				CLANG_CXX_LANGUAGE_STANDARD = "c++20";
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
 				CLANG_CXX_LIBRARY = "libc++";
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
@@ -574,6 +390,7 @@
 				CLANG_WARN_CONSTANT_CONVERSION = YES;
 				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
 				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
 				CLANG_WARN_EMPTY_BODY = YES;
 				CLANG_WARN_ENUM_CONVERSION = YES;
 				CLANG_WARN_INFINITE_RECURSION = YES;
@@ -582,16 +399,17 @@
 				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
 				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
 				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
 				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
 				CLANG_WARN_STRICT_PROTOTYPES = YES;
 				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
-				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
-				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
-				COPY_PHASE_STRIP = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				GCC_C_LANGUAGE_STANDARD = gnu99;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
 				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
@@ -599,81 +417,36 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 16.4;
-				LD_RUNPATH_SEARCH_PATHS = (
-					/usr/lib/swift,
-					"$(inherited)",
-				);
-				LIBRARY_SEARCH_PATHS = "$(SDKROOT)/usr/lib/swift\"$(inherited)\"";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
-				OTHER_CFLAGS = (
-					"$(inherited)",
-					"-DRCT_REMOVE_LEGACY_ARCH=1",
-				);
-				OTHER_CPLUSPLUSFLAGS = (
-					"$(inherited)",
-					"-DRCT_REMOVE_LEGACY_ARCH=1",
-				);
-				REACT_NATIVE_PATH = "${PODS_ROOT}/../../../../node_modules/.pnpm/react-native@0.85.3_patch_hash=8b9512811b3fe1361d86adcd86379aa923a46f0a6666f8a215381b76_ac30b4be04924549997240c74bf16c7b/node_modules/react-native";
+				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
-				SWIFT_ENABLE_EXPLICIT_MODULES = NO;
-				USE_HERMES = true;
-				VALIDATE_PRODUCT = YES;
-			};
-			name = Release;
-		};
-		BD757A823CC84559974803D0 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CLANG_ENABLE_MODULES = YES;
-				CODE_SIGN_ENTITLEMENTS = VoltClip/VoltClip.entitlements;
-				CODE_SIGN_IDENTITY = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 14;
-				DEVELOPMENT_TEAM = GB5SPLUARQ;
-				INFOPLIST_FILE = VoltClip/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 16.4;
-				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_RELEASE";
-				PRODUCT_BUNDLE_IDENTIFIER = com.volt.mobile.Clip;
-				PRODUCT_NAME = "Volt Clip";
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				VERSIONING_SYSTEM = "apple-generic";
+				SWIFT_COMPILATION_MODE = wholemodule;
 			};
 			name = Release;
 		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "Volt" */ = {
+		900000000000000000000001 /* Build configuration list for PBXNativeTarget "Volt" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				13B07F941A680F5B00A75B9A /* Debug */,
-				13B07F951A680F5B00A75B9A /* Release */,
+				900000000000000000000002 /* Debug */,
+				900000000000000000000003 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
+			defaultConfigurationName = Debug;
 		};
-		83CBB9FA1A601CBA00E9B192 /* Build configuration list for PBXProject "Volt" */ = {
+		900000000000000000000004 /* Build configuration list for PBXProject "Volt" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				83CBBA201A601CBA00E9B192 /* Debug */,
-				83CBBA211A601CBA00E9B192 /* Release */,
+				900000000000000000000005 /* Debug */,
+				900000000000000000000006 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		E03C06C10BB44F18BD2738B0 /* Build configuration list for PBXNativeTarget "VoltClip" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				001DE2C2FF184DCE8E6AC38E /* Debug */,
-				BD757A823CC84559974803D0 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
+			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
 	};
-	rootObject = 83CBB9F71A601CBA00E9B192 /* Project object */;
+	rootObject = 800000000000000000000001 /* Project object */;
 }

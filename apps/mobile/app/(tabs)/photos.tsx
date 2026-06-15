@@ -8,13 +8,6 @@ import { useScanner } from "../../lib/scanner-state";
 import { usePairingScanner } from "../../lib/use-pairing-scanner";
 import { type PhotoCropFrame } from "../../lib/photo-crop";
 import {
-  VoltClipTextCameraView,
-  focusVoltClipTextCamera,
-  hasNativeTextCameraView,
-  setVoltClipTextCameraTorch,
-  setVoltClipTextCameraZoom,
-} from "../../lib/volt-clip-text-recognizer";
-import {
   CameraOverlayButton,
   CameraControlStack,
   DisconnectedPairingView,
@@ -27,7 +20,6 @@ import {
 
 const photoFloatingBottom = Platform.select({ ios: 94, default: 86 });
 const CameraView = ExpoCameraView as unknown as ComponentType<any>;
-const NativeCameraView = VoltClipTextCameraView as unknown as ComponentType<any>;
 const zoomStep = 0.08;
 
 function clampZoom(value: number) {
@@ -80,7 +72,6 @@ export default function PhotosTab() {
   const focusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pinchStartDistanceRef = useRef<number | null>(null);
   const pinchStartZoomRef = useRef(0);
-  const useNativePhotoCamera = Platform.OS === "ios" && hasNativeTextCameraView && NativeCameraView;
 
   useFocusEffect(
     useCallback(() => {
@@ -98,13 +89,10 @@ export default function PhotosTab() {
     const { locationX, locationY } = event.nativeEvent;
     scanner.setFocusMode("off");
     scanner.setFocusPoint({ x: locationX, y: locationY });
-    if (useNativePhotoCamera && cameraLayout?.width && cameraLayout.height) {
-      void focusVoltClipTextCamera(locationX / cameraLayout.width, locationY / cameraLayout.height);
-    }
     requestAnimationFrame(() => scanner.setFocusMode("on"));
     if (focusTimerRef.current) clearTimeout(focusTimerRef.current);
     focusTimerRef.current = setTimeout(scanner.clearCameraFocus, 900);
-  }, [cameraLayout, scanner, useNativePhotoCamera]);
+  }, [scanner]);
 
   const handleCameraTouchStart = useCallback(
     (event: GestureResponderEvent) => {
@@ -145,7 +133,7 @@ export default function PhotosTab() {
       frameHeight: photoFrameLayout.height,
     };
   }, [cameraLayout, photoFrameLayout]);
-  const photoCaptureReady = useNativePhotoCamera ? photoFrameSize > 0 : !!photoCropFrame;
+  const photoCaptureReady = !!photoCropFrame;
   const controlRotationStyle = useMemo(
     () => ({ transform: [{ rotate: `${cameraOrientationRotationDegrees(cameraOrientation)}deg` }] }),
     [cameraOrientation]
@@ -160,16 +148,6 @@ export default function PhotosTab() {
     const { height, width, x, y } = event.nativeEvent.layout;
     setPhotoFrameLayout({ x, y, width, height });
   }, []);
-
-  useEffect(() => {
-    if (!useNativePhotoCamera || !viewfinderFocused) return;
-    void setVoltClipTextCameraTorch(scanner.torch);
-  }, [scanner.torch, useNativePhotoCamera, viewfinderFocused]);
-
-  useEffect(() => {
-    if (!useNativePhotoCamera || !viewfinderFocused) return;
-    void setVoltClipTextCameraZoom(1 + scanner.cameraZoom * 4);
-  }, [scanner.cameraZoom, useNativePhotoCamera, viewfinderFocused]);
 
   useEffect(() => {
     if (!scanner.photoSentAt) return;
@@ -220,24 +198,7 @@ export default function PhotosTab() {
       <Header />
       <View style={styles.page}>
         <ViewfinderSurface>
-          {viewfinderFocused && useNativePhotoCamera ? (
-            <NativeCameraView
-              ref={scanner.cameraRef}
-              style={[
-                localStyles.nativePhotoCamera,
-                {
-                  top: photoFrameGap,
-                  left: photoFrameGap,
-                  width: photoFrameSize,
-                  height: photoFrameSize,
-                },
-              ]}
-              onLayout={handleCameraLayout}
-              onTouchStart={handleCameraTouchStart}
-              onTouchMove={handleCameraTouchMove}
-              onTouchEnd={handleCameraTouchEnd}
-            />
-          ) : viewfinderFocused ? (
+          {viewfinderFocused ? (
             <CameraView
               ref={scanner.cameraRef}
               style={styles.camera}
@@ -326,7 +287,7 @@ export default function PhotosTab() {
                     error={scanner.photoError}
                     icon={scanner.photoSending ? "hourglass-outline" : "camera"}
                     label="Take and send photo"
-                    onPress={() => scanner.sendPhotoCapture(useNativePhotoCamera ? null : photoCropFrame)}
+                    onPress={() => scanner.sendPhotoCapture(photoCropFrame)}
                     status={
                       scanner.photoSending
                         ? "Sending photo..."
@@ -398,9 +359,6 @@ function PhotoGridOverlay() {
 }
 
 const localStyles = {
-  nativePhotoCamera: {
-    position: "absolute" as const,
-  },
   photoFrameOverlay: {
     position: "absolute" as const,
     top: 0,

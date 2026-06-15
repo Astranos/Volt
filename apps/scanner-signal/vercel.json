@@ -5,10 +5,6 @@
       "destination": "/api/signal?path=:path*"
     },
     {
-      "source": "/clip/:path*",
-      "destination": "/api/clip?path=:path*"
-    },
-    {
       "source": "/.well-known/apple-app-site-association",
       "destination": "/api/apple-app-site-association"
     },

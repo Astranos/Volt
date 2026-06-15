@@ -46,7 +46,6 @@ import {
   type PendingPhoto,
   type PendingPhotoSummary,
 } from "./photo-retry-queue";
-import { captureVoltClipPhotoInPreviewRect, hasVoltClipTextRecognizer } from "./volt-clip-text-recognizer";
 
 export type { PendingPhotoSummary };
 
@@ -990,32 +989,20 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       let photoBase64: string | null = null;
       let photoWidth: number | undefined;
       let photoHeight: number | undefined;
-      if (Platform.OS === "ios" && hasVoltClipTextRecognizer) {
-        const nativePhoto = await captureVoltClipPhotoInPreviewRect({
-          x: cropFrame?.frameX ?? 0,
-          y: cropFrame?.frameY ?? 0,
-          width: cropFrame?.frameWidth ?? 0,
-          height: cropFrame?.frameHeight ?? 0,
-        });
-        photoBase64 = nativePhoto.dataUrl?.replace(/^data:image\/jpeg;base64,/, "") ?? null;
-        photoWidth = nativePhoto.width ? Number(nativePhoto.width) : undefined;
-        photoHeight = nativePhoto.height ? Number(nativePhoto.height) : undefined;
-      } else {
-        if (!cameraRef.current) throw new Error("Camera is not ready.");
-        const photo = await cameraRef.current.takePictureAsync({ quality: 0.82, skipProcessing: false });
-        if (!photo.uri || !photo.width || !photo.height) throw new Error("Camera did not return photo data.");
-        const normalizedPhoto = await manipulateAsync(photo.uri, [], { compress: 0.92, format: SaveFormat.JPEG });
-        const cropAction = cropActionForVisibleFrame({ width: normalizedPhoto.width, height: normalizedPhoto.height }, cropFrame);
-        const resizeAction = getPhotoResizeAction(normalizedPhoto);
-        const preparedPhoto = await manipulateAsync(
-          normalizedPhoto.uri,
-          [cropAction, resizeAction].filter(Boolean) as NonNullable<ReturnType<typeof getPhotoResizeAction>>[],
-          { base64: true, compress: 0.76, format: SaveFormat.JPEG }
-        );
-        photoBase64 = preparedPhoto.base64 ?? null;
-        photoWidth = preparedPhoto.width;
-        photoHeight = preparedPhoto.height;
-      }
+      if (!cameraRef.current) throw new Error("Camera is not ready.");
+      const capturedPhoto = await cameraRef.current.takePictureAsync({ quality: 0.82, skipProcessing: false });
+      if (!capturedPhoto.uri || !capturedPhoto.width || !capturedPhoto.height) throw new Error("Camera did not return photo data.");
+      const normalizedPhoto = await manipulateAsync(capturedPhoto.uri, [], { compress: 0.92, format: SaveFormat.JPEG });
+      const cropAction = cropActionForVisibleFrame({ width: normalizedPhoto.width, height: normalizedPhoto.height }, cropFrame);
+      const resizeAction = getPhotoResizeAction(normalizedPhoto);
+      const preparedPhoto = await manipulateAsync(
+        normalizedPhoto.uri,
+        [cropAction, resizeAction].filter(Boolean) as NonNullable<ReturnType<typeof getPhotoResizeAction>>[],
+        { base64: true, compress: 0.76, format: SaveFormat.JPEG }
+      );
+      photoBase64 = preparedPhoto.base64 ?? null;
+      photoWidth = preparedPhoto.width;
+      photoHeight = preparedPhoto.height;
       if (!photoBase64) throw new Error("Could not prepare photo data.");
       const now = Date.now();
       const existingBatch = activePhotoBatchRef.current;
@@ -1025,7 +1012,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       const capturedAt = new Date(now).toISOString();
       const size = Math.ceil((photoBase64.length * 3) / 4);
       const chunks = chunkPhotoBase64(photoBase64);
-      const photo: PendingPhoto = {
+      const pendingPhoto: PendingPhoto = {
         id,
         batchId,
         name: `volt-photo-${capturedAt.replace(/[:.]/g, "-")}.jpg`,
@@ -1042,7 +1029,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
         status: "queued",
         progress: 0,
       };
-      updatePendingPhotos((photos) => [photo, ...photos]);
+      updatePendingPhotos((photos) => [pendingPhoto, ...photos]);
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       if (connected) void flushPhotoWorker();
     } catch (err) {
