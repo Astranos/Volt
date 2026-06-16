@@ -25,8 +25,8 @@ export default function TabsLayout() {
         <NativeTabs.Trigger.Label>Scanner</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="photos" disableScrollToTop>
-        <NativeTabs.Trigger.Icon sf={{ default: "photo.on.rectangle", selected: "photo.fill.on.rectangle.fill" }} />
-        <NativeTabs.Trigger.Label>Photos</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf={{ default: "square.and.arrow.up", selected: "square.and.arrow.up" }} />
+        <NativeTabs.Trigger.Label>Upload</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="dictation" disableScrollToTop>
         <NativeTabs.Trigger.Icon sf={{ default: "mic", selected: "mic.fill" }} />

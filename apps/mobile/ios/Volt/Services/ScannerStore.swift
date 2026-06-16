@@ -169,6 +169,45 @@ final class ScannerStore {
         await sendPhoto(preparedImage, resultId: photoResult.id)
     }
 
+    func uploadPhotos(_ images: [UIImage]) async {
+        guard !images.isEmpty else { return }
+        guard connectionStatus.isConnected else {
+            statusText = "Pair with Chrome before uploading."
+            return
+        }
+
+        let now = Date.now
+        let batch = ScannerProtocol.makeMessageId("upload-batch")
+        photoBatch = (batch, now.addingTimeInterval(5 * 60))
+        statusText = "Preparing \(images.count) upload\(images.count == 1 ? "" : "s")"
+
+        for (index, image) in images.enumerated() {
+            let preparedImage = image
+                .normalizedForProcessing()
+                .resized(maxLongEdge: photoLongEdge)
+            let capturedAt = now.addingTimeInterval(Double(index) / 1000)
+            let photoResult = ScanResult(
+                kind: .photo,
+                value: "Upload \(index + 1)",
+                format: preparedImage.sizeDescription,
+                capturedAt: capturedAt,
+                deliveryState: .sending,
+                imageData: preparedImage.previewJPEGData()
+            )
+            results.insert(photoResult, at: 0)
+            statusText = "Uploading \(index + 1) of \(images.count)"
+            await sendPhoto(
+                preparedImage,
+                resultId: photoResult.id,
+                batchId: batch,
+                filename: "volt-upload-\(Int(capturedAt.timeIntervalSince1970))-\(index + 1).jpg",
+                capturedAt: capturedAt
+            )
+        }
+
+        statusText = "Uploaded \(images.count) photo\(images.count == 1 ? "" : "s")"
+    }
+
     func capturePhoto() async {
         await capture()
     }
@@ -363,19 +402,25 @@ final class ScannerStore {
         }
     }
 
-    private func sendPhoto(_ image: UIImage, resultId: ScanResult.ID) async {
+    private func sendPhoto(
+        _ image: UIImage,
+        resultId: ScanResult.ID,
+        batchId: String? = nil,
+        filename: String? = nil,
+        capturedAt: Date? = nil
+    ) async {
         guard connectionStatus.isConnected else { return }
         guard let data = image.jpegData(compressionQuality: 0.76) else {
             statusText = "Could not prepare photo"
             updateResultDeliveryState(id: resultId, state: .failed)
             return
         }
-        let now = Date.now
-        let batch = currentPhotoBatch(now: now)
+        let now = capturedAt ?? Date.now
+        let batch = batchId ?? currentPhotoBatch(now: now)
         let payload = ScannerProtocol.PhotoPayload(
             id: ScannerProtocol.makeMessageId("photo"),
             batchId: batch,
-            filename: "volt-photo-\(Int(now.timeIntervalSince1970)).jpg",
+            filename: filename ?? "volt-photo-\(Int(now.timeIntervalSince1970)).jpg",
             data: data,
             width: Int(image.size.width),
             height: Int(image.size.height),

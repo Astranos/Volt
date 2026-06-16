@@ -48,6 +48,12 @@
         }
       ],
       [
+        "expo-image-picker",
+        {
+          "photosPermission": "Volt uses selected photos to upload camera roll images to the paired Chrome extension."
+        }
+      ],
+      [
         "expo-speech-recognition",
         {
           "microphonePermission": "Volt uses the microphone for hold-to-speak dictation into the paired Chrome browser.",

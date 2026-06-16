@@ -6,6 +6,7 @@ export type PhotoReceiptStatus = "queued" | "sending" | "sent" | "received" | "f
 
 export type PendingPhotoSummary = {
   id: string;
+  batchId: string;
   name: string;
   capturedAt: string;
   size: number;
@@ -46,7 +47,16 @@ export function pendingPhotoSummaries(photos: PendingPhoto[]): PendingPhotoSumma
   return photos
     .filter((photo) => photo.status !== "received" && photo.status !== "cancelled")
     .sort((first, second) => second.createdAt - first.createdAt)
-    .map(({ id, name, capturedAt, size, status, progress, error }) => ({ id, name, capturedAt, size, status, progress, error }));
+    .map(({ id, batchId, name, capturedAt, size, status, progress, error }) => ({
+      id,
+      batchId,
+      name,
+      capturedAt,
+      size,
+      status,
+      progress,
+      error,
+    }));
 }
 
 export function markRetryableAfterDisconnect(photo: PendingPhoto, message = "Disconnected before Chrome receipt."): PendingPhoto {

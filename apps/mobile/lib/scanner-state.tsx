@@ -4,6 +4,7 @@ import { useCameraPermissions, type BarcodeScanningResult } from "./expo-camera"
 import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
 import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
+import type { ImagePickerAsset } from "expo-image-picker";
 import * as Linking from "expo-linking";
 import {
   ExpoSpeechRecognitionModule,
@@ -144,6 +145,7 @@ type ScannerState = {
   scans: ScanItem[];
   sendBarcodeScanResult: (result: BarcodeScanningResult) => Promise<void>;
   sendPhotoCapture: (cropFrame?: PhotoCropFrame | null) => Promise<void>;
+  sendPhotoLibraryAssets: (assets: ImagePickerAsset[]) => Promise<number>;
   sendManualText: () => void;
   sendTextCapture: (text: string) => Promise<void>;
   setActiveMode: React.Dispatch<React.SetStateAction<ScannerMode>>;
@@ -177,6 +179,13 @@ function createId(prefix: string) {
 
 function createPhotoContributorId() {
   return `${PHOTO_CONTRIBUTOR_KEY}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function jpegUploadName(name: string | null | undefined, capturedAt: string, fallbackId: string) {
+  const baseName = name?.trim()
+    ? name.trim().replace(/\.[a-z0-9]+$/i, "")
+    : `volt-upload-${capturedAt.replace(/[:.]/g, "-")}-${fallbackId.slice(-6)}`;
+  return `${baseName}.jpg`;
 }
 
 function scannerMessageMode(item: ScanItem): ScannerMode {
@@ -978,6 +987,106 @@ export function ScannerProvider({ children }: PropsWithChildren) {
     setCaptureZoom(1);
   }, []);
 
+  const createRollingPhotoBatchId = useCallback((now: number, forceNew = false) => {
+    const existingBatch = activePhotoBatchRef.current;
+    const batchId =
+      !forceNew && existingBatch && existingBatch.expiresAt > now
+        ? existingBatch.id
+        : createId(forceNew ? "upload-batch" : "batch");
+    activePhotoBatchRef.current = { id: batchId, expiresAt: now + PHOTO_BATCH_WINDOW_MS };
+    return batchId;
+  }, []);
+
+  const queuePreparedPhoto = useCallback(async ({
+    batchId,
+    capturedAt,
+    height,
+    name,
+    now,
+    uri,
+    width,
+  }: {
+    batchId: string;
+    capturedAt: string;
+    height?: number;
+    name?: string | null;
+    now: number;
+    uri: string;
+    width?: number;
+  }) => {
+    const resizeAction = getPhotoResizeAction({ width, height });
+    const preparedPhoto = await manipulateAsync(
+      uri,
+      [resizeAction].filter(Boolean) as NonNullable<ReturnType<typeof getPhotoResizeAction>>[],
+      { base64: true, compress: 0.76, format: SaveFormat.JPEG }
+    );
+    const photoBase64 = preparedPhoto.base64 ?? null;
+    if (!photoBase64) throw new Error("Could not prepare photo data.");
+    const id = createId("photo");
+    const size = Math.ceil((photoBase64.length * 3) / 4);
+    const chunks = chunkPhotoBase64(photoBase64);
+    return {
+      id,
+      batchId,
+      name: jpegUploadName(name, capturedAt, id),
+      mimeType: "image/jpeg",
+      dataBase64: photoBase64,
+      capturedAt,
+      size,
+      width: preparedPhoto.width,
+      height: preparedPhoto.height,
+      createdAt: now,
+      updatedAt: now,
+      totalChunks: chunks.length,
+      nextChunkIndex: 0,
+      status: "queued" as const,
+      progress: 0,
+    } satisfies PendingPhoto;
+  }, []);
+
+  const sendPhotoLibraryAssets = useCallback(async (assets: ImagePickerAsset[]) => {
+    const imageAssets = assets.filter((asset) => asset.uri);
+    if (!imageAssets.length) return 0;
+    setPhotoError(null);
+    if (pendingPhotosRef.current.reduce((size, photo) => size + photo.size, 0) > PHOTO_QUEUE_LOW_STORAGE_BYTES) {
+      setPhotoError("Storage is getting tight. Let pending photos deliver before uploading more.");
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      return 0;
+    }
+    const batchStartedAt = Date.now();
+    const batchId = createRollingPhotoBatchId(batchStartedAt, true);
+    const queuedPhotos: PendingPhoto[] = [];
+    setPhotoProgressLabel(`Queueing ${imageAssets.length} upload${imageAssets.length === 1 ? "" : "s"}`);
+    try {
+      for (let index = 0; index < imageAssets.length; index += 1) {
+        const asset = imageAssets[index];
+        const now = batchStartedAt + index;
+        const capturedAt = new Date(now).toISOString();
+        setPhotoProgressLabel(`Preparing ${index + 1} of ${imageAssets.length}`);
+        queuedPhotos.push(await queuePreparedPhoto({
+          batchId,
+          capturedAt,
+          height: asset.height,
+          name: asset.fileName ?? asset.assetId,
+          now,
+          uri: asset.uri,
+          width: asset.width,
+        }));
+      }
+      updatePendingPhotos((photos) => [...queuedPhotos, ...photos]);
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      if (connected) void flushPhotoWorker();
+      return queuedPhotos.length;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not queue selected photos.";
+      setPhotoError(message);
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      return queuedPhotos.length;
+    } finally {
+      setPhotoProgressLabel(null);
+    }
+  }, [connected, createRollingPhotoBatchId, flushPhotoWorker, queuePreparedPhoto, updatePendingPhotos]);
+
   const sendPhotoCapture = useCallback(async (cropFrame?: PhotoCropFrame | null) => {
     setPhotoError(null);
     if (pendingPhotosRef.current.reduce((size, photo) => size + photo.size, 0) > PHOTO_QUEUE_LOW_STORAGE_BYTES) {
@@ -1005,9 +1114,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       photoHeight = preparedPhoto.height;
       if (!photoBase64) throw new Error("Could not prepare photo data.");
       const now = Date.now();
-      const existingBatch = activePhotoBatchRef.current;
-      const batchId = existingBatch && existingBatch.expiresAt > now ? existingBatch.id : createId("batch");
-      activePhotoBatchRef.current = { id: batchId, expiresAt: now + PHOTO_BATCH_WINDOW_MS };
+      const batchId = createRollingPhotoBatchId(now);
       const id = createId("photo");
       const capturedAt = new Date(now).toISOString();
       const size = Math.ceil((photoBase64.length * 3) / 4);
@@ -1037,7 +1144,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       setPhotoError(message);
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     }
-  }, [connected, flushPhotoWorker, updatePendingPhotos]);
+  }, [connected, createRollingPhotoBatchId, flushPhotoWorker, updatePendingPhotos]);
 
   const cancelPendingPhoto = useCallback((id: string) => {
     const photoChannel = photoChannelRef.current;
@@ -1120,6 +1227,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
     scans,
     sendBarcodeScanResult,
     sendPhotoCapture,
+    sendPhotoLibraryAssets,
     sendManualText,
     sendTextCapture,
     setActiveMode,
@@ -1170,6 +1278,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
     scans,
     sendBarcodeScanResult,
     sendPhotoCapture,
+    sendPhotoLibraryAssets,
     sendManualText,
     sendTextCapture,
     setSetting,

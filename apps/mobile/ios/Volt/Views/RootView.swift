@@ -14,9 +14,9 @@ struct RootView: View {
                 .tabItem { Label("Dictate", systemImage: "mic") }
                 .tag(AppSection.dictation)
 
-            ResultsView()
-                .tabItem { Label("Results", systemImage: "list.bullet") }
-                .tag(AppSection.results)
+            UploadView()
+                .tabItem { Label("Upload", systemImage: "square.and.arrow.up") }
+                .tag(AppSection.upload)
 
             PairingSessionsView {
                 selectedTab = .scan
@@ -43,7 +43,7 @@ struct RootView: View {
             break
         case .dictation:
             store.activeMode = .dictation
-        case .results:
+        case .upload:
             break
         }
 
@@ -61,5 +61,5 @@ private enum AppSection: Hashable {
     case scan
     case sessions
     case dictation
-    case results
+    case upload
 }

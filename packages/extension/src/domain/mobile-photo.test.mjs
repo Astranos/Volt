@@ -40,14 +40,15 @@ test("normalizeMobilePhoto validates and completes captured photo metadata", () 
   assert.ok(photo?.capturedAt);
 });
 
-test("buildMobilePhotoDownloadFilename groups photos by scanner session", () => {
+test("buildMobilePhotoDownloadFilename groups photos by scanner session and batch", () => {
   assert.equal(
     buildMobilePhotoDownloadFilename({
       id: "photo-1",
       name: "front label",
       mimeType: "image/webp",
+      photoBatchId: "batch/456",
       sessionId: "abc/123",
     }),
-    "Volt Photos/abc-123/front-label.webp"
+    "Volt Photos/abc-123/batch-456/front-label.webp"
   );
 });

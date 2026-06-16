@@ -58,6 +58,7 @@ test("pendingPhotoSummaries expose retry queue UI state without payload bytes", 
     ["newer", "older"]
   );
   assert.equal("dataBase64" in summaries[0], false);
+  assert.equal(summaries[0].batchId, "batch-1");
   assert.equal(summaries[1].error, "Disconnected");
 });
 
@@ -66,4 +67,3 @@ test("markRetryableAfterDisconnect fails sending and sent photos only", () => {
   assert.equal(markRetryableAfterDisconnect(photo({ status: "sending" })).status, "failed");
   assert.equal(markRetryableAfterDisconnect(photo({ status: "sent" })).status, "failed");
 });
-

@@ -13,5 +13,9 @@
     "ios:device": "node scripts/ios-build-install-launch.mjs --device",
     "ios:device:release": "node scripts/ios-build-install-launch.mjs --device --release",
     "open:xcode": "open ios/Volt.xcodeproj"
+  },
+  "dependencies": {
+    "@volt/scanner-protocol": "workspace:*",
+    "expo-image-picker": "^56.0.18"
   }
 }
