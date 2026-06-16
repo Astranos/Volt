@@ -1,4 +1,6 @@
 import Observation
+import CoreImage
+import CoreImage.CIFilterBuiltins
 import UIKit
 
 @MainActor
@@ -19,6 +21,7 @@ final class ScannerStore {
     var targetHint = "Tap Pair to reconnect or scan the Chrome QR once."
     var ocrReviewImage: UIImage?
     var ocrReviewText = ""
+    var ocrTextRegions: [RecognizedTextRegion] = []
     var isRecognizingText = false
 
     let camera = CameraModel()
@@ -97,17 +100,26 @@ final class ScannerStore {
         defer { isRecognizingText = false }
         guard let image = await camera.capturePhoto() else { return }
 
-        let preparedImage = image
-            .normalizedForProcessing()
+        let normalizedImage = image.normalizedForProcessing()
+        let preparedImage = normalizedImage
+            .croppedToVisiblePreview(
+                previewSize: camera.previewLayer.bounds.size,
+                zoomFactor: camera.zoomFactor
+            )
+            .cleanedForOCR()
             .resized(maxLongEdge: ocrCaptureMaxDimension)
         ocrReviewImage = preparedImage
         do {
-            ocrReviewText = try await TextRecognizer.recognizeText(in: preparedImage)
+            ocrTextRegions = try await TextRecognizer.recognizeTextRegions(in: preparedImage)
+            ocrReviewText = ocrTextRegions.map(\.text).joined(separator: "\n")
             if handlePairingValue(ocrReviewText) {
                 clearOcrReview()
+            } else if ocrTextRegions.isEmpty {
+                statusText = "No text found"
             }
         } catch {
             ocrReviewText = ""
+            ocrTextRegions = []
             statusText = error.localizedDescription
         }
     }
@@ -115,21 +127,21 @@ final class ScannerStore {
     func clearOcrReview() {
         ocrReviewImage = nil
         ocrReviewText = ""
-    }
-
-    func copyOcrReviewText() {
-        let text = ocrReviewText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
-        if handlePairingValue(text) { return }
-        UIPasteboard.general.string = text
-        statusText = "Copied text"
+        ocrTextRegions = []
     }
 
     func sendOcrReviewText() {
         let text = ocrReviewText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         if handlePairingValue(text) { return }
-        let result = ScanResult(kind: .text, value: text, format: "live-text")
+        sendRecognizedText(text, format: "live-text")
+    }
+
+    func sendRecognizedText(_ text: String, format: String = "ocr-region") {
+        let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        if handlePairingValue(text) { return }
+        let result = ScanResult(kind: .text, value: text, format: format)
         results.insert(result, at: 0)
         sendCaptureResult(result, insertIntoCursor: true)
         statusText = connectionStatus.isConnected ? "Text sent" : "Text saved"
@@ -389,6 +401,42 @@ private extension UIImage {
         return UIImage(cgImage: cropped, scale: scale, orientation: .up)
     }
 
+    func croppedToVisiblePreview(previewSize: CGSize, zoomFactor: CGFloat) -> UIImage {
+        guard let cgImage,
+              previewSize.width > 0,
+              previewSize.height > 0,
+              size.width > 0,
+              size.height > 0
+        else { return self }
+
+        let previewAspectRatio = previewSize.width / previewSize.height
+        let imageAspectRatio = size.width / size.height
+        let aspectFillSize: CGSize
+
+        if imageAspectRatio > previewAspectRatio {
+            aspectFillSize = CGSize(width: size.height * previewAspectRatio, height: size.height)
+        } else {
+            aspectFillSize = CGSize(width: size.width, height: size.width / previewAspectRatio)
+        }
+
+        let effectiveZoomFactor = max(zoomFactor, 1)
+        let cropSize = CGSize(
+            width: max(1, aspectFillSize.width / effectiveZoomFactor),
+            height: max(1, aspectFillSize.height / effectiveZoomFactor)
+        )
+        let cropOrigin = CGPoint(
+            x: max(0, (size.width - cropSize.width) / 2),
+            y: max(0, (size.height - cropSize.height) / 2)
+        )
+        let cropRect = CGRect(origin: cropOrigin, size: cropSize)
+            .applying(CGAffineTransform(scaleX: scale, y: scale))
+            .integral
+            .intersection(CGRect(x: 0, y: 0, width: cgImage.width, height: cgImage.height))
+
+        guard !cropRect.isNull, let cropped = cgImage.cropping(to: cropRect) else { return self }
+        return UIImage(cgImage: cropped, scale: scale, orientation: .up)
+    }
+
     func resized(maxLongEdge: CGFloat) -> UIImage {
         let longEdge = max(size.width, size.height)
         guard longEdge > maxLongEdge else { return self }
@@ -400,5 +448,28 @@ private extension UIImage {
         return renderer.image { _ in
             draw(in: CGRect(origin: .zero, size: targetSize))
         }
+    }
+
+    func cleanedForOCR() -> UIImage {
+        guard let ciImage = CIImage(image: self) else { return self }
+
+        let colorControls = CIFilter.colorControls()
+        colorControls.inputImage = ciImage
+        colorControls.saturation = 0
+        colorControls.contrast = 1.22
+        colorControls.brightness = 0.03
+
+        let sharpen = CIFilter.sharpenLuminance()
+        sharpen.inputImage = colorControls.outputImage
+        sharpen.sharpness = 0.45
+
+        guard
+            let output = sharpen.outputImage,
+            let cgImage = CIContext(options: [.useSoftwareRenderer: false]).createCGImage(output, from: output.extent)
+        else {
+            return self
+        }
+
+        return UIImage(cgImage: cgImage, scale: scale, orientation: .up)
     }
 }

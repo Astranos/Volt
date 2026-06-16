@@ -151,15 +151,23 @@ final class CameraModel: NSObject {
         sessionQueue.async { [weak self] in
             do {
                 try videoDevice.lockForConfiguration()
+                defer { videoDevice.unlockForConfiguration() }
                 if videoDevice.isFocusPointOfInterestSupported {
                     videoDevice.focusPointOfInterest = point
-                    videoDevice.focusMode = .autoFocus
+                    if videoDevice.isFocusModeSupported(.autoFocus) {
+                        videoDevice.focusMode = .autoFocus
+                    } else if videoDevice.isFocusModeSupported(.continuousAutoFocus) {
+                        videoDevice.focusMode = .continuousAutoFocus
+                    }
                 }
                 if videoDevice.isExposurePointOfInterestSupported {
                     videoDevice.exposurePointOfInterest = point
-                    videoDevice.exposureMode = .continuousAutoExposure
+                    if videoDevice.isExposureModeSupported(.autoExpose) {
+                        videoDevice.exposureMode = .autoExpose
+                    } else if videoDevice.isExposureModeSupported(.continuousAutoExposure) {
+                        videoDevice.exposureMode = .continuousAutoExposure
+                    }
                 }
-                videoDevice.unlockForConfiguration()
             } catch {
                 Task { @MainActor in
                     self?.errorMessage = error.localizedDescription

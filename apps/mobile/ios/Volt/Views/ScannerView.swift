@@ -122,29 +122,37 @@ struct CaptureSessionView: View {
     @Environment(ScannerStore.self) private var store
     @Binding var isPresented: Bool
     @State private var gridVisible = true
+    @State private var selectedTextRegion: RecognizedTextRegion?
 
     var body: some View {
         @Bindable var store = store
 
         ZStack {
             if let reviewImage = store.ocrReviewImage {
-                OcrReviewLayer(image: reviewImage)
+                OcrReviewLayer(
+                    image: reviewImage,
+                    regions: store.ocrTextRegions,
+                    selectedRegion: selectedTextRegion,
+                    onSelectRegion: { selectedTextRegion = $0 }
+                )
                     .ignoresSafeArea()
             } else {
                 ScannerCameraLayer(gridVisible: gridVisible)
                     .ignoresSafeArea()
             }
+
         }
         .background(.black)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if store.ocrReviewImage != nil {
-                ReviewCaptureDock(
-                    statusText: store.connectionStatus.isConnected ? "Ready to send" : "Review capture",
-                    text: $store.ocrReviewText,
-                    onRetake: store.clearOcrReview,
-                    onCopy: store.copyOcrReviewText,
-                    onSend: {
-                        store.sendOcrReviewText()
+                OcrReviewControls(
+                    regionCount: store.ocrTextRegions.count,
+                    onRetake: {
+                        selectedTextRegion = nil
+                        store.clearOcrReview()
+                    },
+                    onFinish: {
+                        selectedTextRegion = nil
                         store.clearOcrReview()
                         isPresented = false
                     }
@@ -177,6 +185,26 @@ struct CaptureSessionView: View {
                     }
                 )
             }
+        }
+        .confirmationDialog(
+            selectedTextRegion?.text ?? "Text",
+            isPresented: Binding(
+                get: { selectedTextRegion != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        selectedTextRegion = nil
+                    }
+                }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Send", systemImage: "paperplane.fill") {
+                guard let selectedTextRegion else { return }
+                store.sendRecognizedText(selectedTextRegion.text)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(selectedTextRegion?.text ?? "")
         }
         .onAppear {
             store.activeMode = .ocr
@@ -408,16 +436,34 @@ struct SessionIconButton: View {
 
 struct ScannerCameraLayer: View {
     @Environment(ScannerStore.self) private var store
+    @State private var focusPoint: CGPoint?
     var gridVisible = false
 
     var body: some View {
         Group {
             if store.camera.authorizationStatus == .authorized {
-                CameraPreview(previewLayer: store.camera.previewLayer) { point in
-                    store.camera.focus(at: point)
+                CameraPreview(previewLayer: store.camera.previewLayer) { devicePoint, layerPoint in
+                    focusPoint = layerPoint
+                    store.camera.focus(at: devicePoint)
+                    Task {
+                        try? await Task.sleep(for: .milliseconds(750))
+                        await MainActor.run {
+                            if focusPoint == layerPoint {
+                                focusPoint = nil
+                            }
+                        }
+                    }
                 }
                     .overlay(alignment: .center) {
                         CaptureGuideOverlay(mode: store.activeMode, gridVisible: gridVisible)
+                            .allowsHitTesting(false)
+                    }
+                    .overlay(alignment: .topLeading) {
+                        if let focusPoint {
+                            FocusReticle()
+                                .position(focusPoint)
+                                .allowsHitTesting(false)
+                        }
                     }
             } else {
                 ContentUnavailableView(
@@ -427,6 +473,20 @@ struct ScannerCameraLayer: View {
                 )
             }
         }
+    }
+}
+
+struct FocusReticle: View {
+    var body: some View {
+        RoundedRectangle(cornerRadius: 6, style: .continuous)
+            .stroke(.yellow, lineWidth: 2)
+            .frame(width: 74, height: 74)
+            .overlay {
+                Circle()
+                    .fill(.yellow)
+                    .frame(width: 8, height: 8)
+            }
+            .transition(.scale.combined(with: .opacity))
     }
 }
 
@@ -535,7 +595,6 @@ struct ReviewCaptureDock: View {
     let statusText: String
     @Binding var text: String
     let onRetake: () -> Void
-    let onCopy: () -> Void
     let onSend: () -> Void
 
     private var hasText: Bool {
@@ -570,11 +629,6 @@ struct ReviewCaptureDock: View {
                 Button("Retake", systemImage: "arrow.clockwise", action: onRetake)
                     .buttonStyle(.bordered)
                     .tint(.white)
-
-                Button("Copy", systemImage: "doc.on.doc", action: onCopy)
-                    .buttonStyle(.bordered)
-                    .tint(.white)
-                    .disabled(!hasText)
 
                 Button("Send", systemImage: "paperplane.fill", action: onSend)
                     .buttonStyle(.borderedProminent)
@@ -619,21 +673,191 @@ struct LatestCaptureStrip: View {
     }
 }
 
-struct OcrReviewLayer: View {
-    let image: UIImage
+struct OcrReviewControls: View {
+    let regionCount: Int
+    let onRetake: () -> Void
+    let onFinish: () -> Void
 
     var body: some View {
-        ZStack {
-            Color.black
+        VStack(spacing: 12) {
+            Text("Tap highlighted text")
+                .font(.subheadline.bold())
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
 
-            Image(uiImage: image)
-                .resizable()
-                .scaledToFit()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(.top, 48)
-                .padding(.horizontal, 12)
-                .padding(.bottom, 250)
+            HStack(spacing: 12) {
+                Button(action: onRetake) {
+                    Label("Retake", systemImage: "arrow.clockwise")
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.white)
+                        .frame(minWidth: 104, minHeight: 48)
+                        .background(.black.opacity(0.54), in: Capsule())
+                }
+
+                Spacer()
+
+                Label("\(regionCount)", systemImage: "text.viewfinder")
+                    .font(.subheadline.monospacedDigit().bold())
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 14)
+                    .frame(minHeight: 48)
+                    .background(.black.opacity(0.54), in: Capsule())
+                    .overlay {
+                        Capsule().stroke(.white.opacity(0.14), lineWidth: 1)
+                    }
+                    .accessibilityLabel("\(regionCount) recognized text regions")
+
+                Spacer()
+
+                Button(action: onFinish) {
+                    Label("Finish", systemImage: "checkmark")
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.white)
+                        .frame(minWidth: 104, minHeight: 48)
+                        .background(.black.opacity(0.54), in: Capsule())
+                }
+            }
         }
+        .padding(.horizontal, 18)
+        .padding(.top, 18)
+        .padding(.bottom, 22)
+        .background {
+            LinearGradient(
+                colors: [.black.opacity(0), .black.opacity(0.78), .black.opacity(0.94)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea(edges: .bottom)
+        }
+    }
+}
+
+struct OcrReviewLayer: View {
+    let image: UIImage
+    let regions: [RecognizedTextRegion]
+    let selectedRegion: RecognizedTextRegion?
+    let onSelectRegion: (RecognizedTextRegion) -> Void
+    @State private var baseScale: CGFloat = 1
+    @State private var gestureScale: CGFloat = 1
+    @State private var baseOffset: CGSize = .zero
+    @State private var gestureOffset: CGSize = .zero
+
+    private var currentScale: CGFloat {
+        min(max(baseScale * gestureScale, 1), 4)
+    }
+
+    private var currentOffset: CGSize {
+        currentScale > 1
+            ? CGSize(width: baseOffset.width + gestureOffset.width, height: baseOffset.height + gestureOffset.height)
+            : .zero
+    }
+
+    var body: some View {
+        GeometryReader { proxy in
+            let imageRect = aspectFitRect(for: image.size, in: proxy.size)
+
+            ZStack {
+                Color.black
+
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                ForEach(regions) { region in
+                    let rect = viewRect(for: region.boundingBox, in: imageRect)
+
+                    Button {
+                        onSelectRegion(region)
+                    } label: {
+                        RoundedRectangle(cornerRadius: max(4, min(rect.height * 0.22, 10)), style: .continuous)
+                            .fill(fillStyle(for: region))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: max(4, min(rect.height * 0.22, 10)), style: .continuous)
+                                    .stroke(strokeStyle(for: region), lineWidth: 1.5)
+                            }
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .frame(width: max(rect.width, 28), height: max(rect.height, 28))
+                    .position(x: rect.midX, y: rect.midY)
+                    .accessibilityLabel(region.text)
+                    .accessibilityHint("Copy or send recognized text")
+                }
+            }
+            .frame(width: proxy.size.width, height: proxy.size.height)
+            .scaleEffect(currentScale)
+            .offset(currentOffset)
+            .simultaneousGesture(magnificationGesture)
+            .simultaneousGesture(dragGesture)
+        }
+    }
+
+    private var magnificationGesture: some Gesture {
+        MagnificationGesture()
+            .onChanged { value in
+                gestureScale = value
+            }
+            .onEnded { value in
+                baseScale = min(max(baseScale * value, 1), 4)
+                gestureScale = 1
+                if baseScale == 1 {
+                    baseOffset = .zero
+                    gestureOffset = .zero
+                }
+            }
+    }
+
+    private var dragGesture: some Gesture {
+        DragGesture()
+            .onChanged { value in
+                guard currentScale > 1 else { return }
+                gestureOffset = value.translation
+            }
+            .onEnded { value in
+                guard currentScale > 1 else {
+                    baseOffset = .zero
+                    gestureOffset = .zero
+                    return
+                }
+                baseOffset = CGSize(
+                    width: baseOffset.width + value.translation.width,
+                    height: baseOffset.height + value.translation.height
+                )
+                gestureOffset = .zero
+            }
+    }
+
+    private func fillStyle(for region: RecognizedTextRegion) -> Color {
+        selectedRegion?.id == region.id ? .blue.opacity(0.34) : .yellow.opacity(0.24)
+    }
+
+    private func strokeStyle(for region: RecognizedTextRegion) -> Color {
+        selectedRegion?.id == region.id ? .blue.opacity(0.92) : .yellow.opacity(0.9)
+    }
+
+    private func aspectFitRect(for imageSize: CGSize, in containerSize: CGSize) -> CGRect {
+        guard imageSize.width > 0, imageSize.height > 0, containerSize.width > 0, containerSize.height > 0 else {
+            return .zero
+        }
+
+        let scale = min(containerSize.width / imageSize.width, containerSize.height / imageSize.height)
+        let size = CGSize(width: imageSize.width * scale, height: imageSize.height * scale)
+        return CGRect(
+            x: (containerSize.width - size.width) / 2,
+            y: (containerSize.height - size.height) / 2,
+            width: size.width,
+            height: size.height
+        )
+    }
+
+    private func viewRect(for normalizedRect: CGRect, in imageRect: CGRect) -> CGRect {
+        CGRect(
+            x: imageRect.minX + normalizedRect.minX * imageRect.width,
+            y: imageRect.minY + (1 - normalizedRect.maxY) * imageRect.height,
+            width: normalizedRect.width * imageRect.width,
+            height: normalizedRect.height * imageRect.height
+        ).insetBy(dx: -3, dy: -3)
     }
 }
 
@@ -673,10 +897,7 @@ struct CaptureGuideOverlay: View {
                         }
                         .position(x: targetZone.midX, y: targetZone.midY)
                 case .ocr:
-                    RoundedRectangle(cornerRadius: 18)
-                        .stroke(.white.opacity(0.62), lineWidth: 2)
-                        .frame(width: guideSize.width, height: guideSize.height)
-                        .position(x: targetZone.midX, y: targetZone.midY)
+                    EmptyView()
                 case .dictation:
                     EmptyView()
                 }

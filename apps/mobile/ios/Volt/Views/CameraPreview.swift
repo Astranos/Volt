@@ -3,7 +3,7 @@ import SwiftUI
 
 struct CameraPreview: UIViewRepresentable {
     let previewLayer: AVCaptureVideoPreviewLayer
-    var onTap: ((CGPoint) -> Void)?
+    var onTap: ((CGPoint, CGPoint) -> Void)?
 
     func makeUIView(context: Context) -> PreviewLayerHostView {
         let view = PreviewLayerHostView()
@@ -20,7 +20,7 @@ struct CameraPreview: UIViewRepresentable {
 
 final class PreviewLayerHostView: UIView {
     private weak var previewLayer: AVCaptureVideoPreviewLayer?
-    var onTap: ((CGPoint) -> Void)?
+    var onTap: ((CGPoint, CGPoint) -> Void)?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -48,6 +48,7 @@ final class PreviewLayerHostView: UIView {
     @objc private func handleTap(_ recognizer: UITapGestureRecognizer) {
         guard let previewLayer else { return }
         let layerPoint = recognizer.location(in: self)
-        onTap?(previewLayer.captureDevicePointConverted(fromLayerPoint: layerPoint))
+        let devicePoint = previewLayer.captureDevicePointConverted(fromLayerPoint: layerPoint)
+        onTap?(devicePoint, layerPoint)
     }
 }
