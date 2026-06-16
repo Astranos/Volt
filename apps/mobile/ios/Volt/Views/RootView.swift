@@ -2,52 +2,55 @@ import SwiftUI
 
 struct RootView: View {
     @Environment(ScannerStore.self) private var store
-    @State private var selectedTab = AppTab.scan
+    @State private var selectedTab = AppSection.scan
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            ScannerView(mode: .ocr)
-                .tabItem { Label("Scan", systemImage: "viewfinder") }
-                .tag(AppTab.scan)
-
-            ScannerView(mode: .barcode)
-                .tabItem { Label("Barcode", systemImage: "barcode.viewfinder") }
-                .tag(AppTab.barcode)
-
-            ScannerView(mode: .photo)
-                .tabItem { Label("Photo", systemImage: "camera") }
-                .tag(AppTab.photo)
+            ScannerView()
+                .tabItem { Label("Capture", systemImage: "camera") }
+                .tag(AppSection.scan)
 
             DictationView()
                 .tabItem { Label("Dictate", systemImage: "mic") }
-                .tag(AppTab.dictation)
+                .tag(AppSection.dictation)
 
             ResultsView()
                 .tabItem { Label("Results", systemImage: "list.bullet") }
-                .tag(AppTab.results)
+                .tag(AppSection.results)
         }
-        .onChange(of: selectedTab) {
-            switch selectedTab {
-            case .scan:
+        .onChange(of: selectedTab) { oldValue, newValue in
+            applySelectedTab(from: oldValue, to: newValue)
+        }
+        .task {
+            await store.camera.requestAccess()
+            applySelectedTab(from: nil, to: selectedTab)
+        }
+    }
+
+    private func applySelectedTab(from oldTab: AppSection?, to newTab: AppSection) {
+        switch newTab {
+        case .scan:
+            if store.activeMode == .dictation {
                 store.activeMode = .ocr
-            case .barcode:
-                store.activeMode = .barcode
-            case .photo:
-                store.activeMode = .photo
-            case .dictation:
-                store.activeMode = .dictation
-                store.camera.stop()
-            case .results:
-                store.camera.stop()
             }
+        case .dictation:
+            store.activeMode = .dictation
+        case .results:
+            break
+        }
+
+        if newTab == .scan {
+            if oldTab != .scan {
+                store.camera.start()
+            }
+        } else if oldTab == .scan {
+            store.camera.stop()
         }
     }
 }
 
-private enum AppTab: Hashable {
+private enum AppSection: Hashable {
     case scan
-    case barcode
-    case photo
     case dictation
     case results
 }

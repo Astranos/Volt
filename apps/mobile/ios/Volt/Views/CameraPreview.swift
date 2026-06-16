@@ -2,24 +2,32 @@ import AVFoundation
 import SwiftUI
 
 struct CameraPreview: UIViewRepresentable {
-    let session: AVCaptureSession
+    let previewLayer: AVCaptureVideoPreviewLayer
 
-    func makeUIView(context: Context) -> PreviewView {
-        let view = PreviewView()
-        view.videoPreviewLayer.session = session
-        view.videoPreviewLayer.videoGravity = .resizeAspectFill
+    func makeUIView(context: Context) -> PreviewLayerHostView {
+        let view = PreviewLayerHostView()
+        view.install(previewLayer)
         return view
     }
 
-    func updateUIView(_ uiView: PreviewView, context: Context) {}
+    func updateUIView(_ uiView: PreviewLayerHostView, context: Context) {
+        uiView.install(previewLayer)
+    }
 }
 
-final class PreviewView: UIView {
-    override class var layerClass: AnyClass {
-        AVCaptureVideoPreviewLayer.self
+final class PreviewLayerHostView: UIView {
+    private weak var previewLayer: AVCaptureVideoPreviewLayer?
+
+    func install(_ layer: AVCaptureVideoPreviewLayer) {
+        guard previewLayer !== layer else { return }
+        layer.removeFromSuperlayer()
+        self.layer.addSublayer(layer)
+        previewLayer = layer
+        setNeedsLayout()
     }
 
-    var videoPreviewLayer: AVCaptureVideoPreviewLayer {
-        layer as! AVCaptureVideoPreviewLayer
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        previewLayer?.frame = bounds
     }
 }

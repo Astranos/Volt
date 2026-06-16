@@ -1,4 +1,4 @@
-import AVFoundation
+@preconcurrency import AVFoundation
 import Observation
 import UIKit
 
@@ -6,15 +6,24 @@ import UIKit
 @Observable
 final class CameraModel: NSObject {
     let session = AVCaptureSession()
+    let previewLayer = AVCaptureVideoPreviewLayer()
     private let metadataOutput = AVCaptureMetadataOutput()
     private let photoOutput = AVCapturePhotoOutput()
     private var photoContinuation: CheckedContinuation<UIImage?, Never>?
+    private let sessionQueue = DispatchQueue(label: "com.volt.mobile.camera-session")
+    private let metadataQueue = DispatchQueue(label: "com.volt.mobile.camera-metadata")
 
     var authorizationStatus = AVCaptureDevice.authorizationStatus(for: .video)
     var lastBarcode: String?
     var lastBarcodeFormat: String?
     var lastPhoto: UIImage?
     var errorMessage: String?
+
+    override init() {
+        super.init()
+        previewLayer.session = session
+        previewLayer.videoGravity = .resizeAspectFill
+    }
 
     func requestAccess() async {
         if authorizationStatus == .notDetermined {
@@ -29,14 +38,21 @@ final class CameraModel: NSObject {
     func start() {
         guard authorizationStatus == .authorized else { return }
         configureIfNeeded()
-        if !session.isRunning {
-            session.startRunning()
+        let session = session
+        sessionQueue.async {
+            if !session.isRunning {
+                session.startRunning()
+            }
         }
     }
 
     func stop() {
-        guard session.isRunning else { return }
-        session.stopRunning()
+        let session = session
+        sessionQueue.async {
+            if session.isRunning {
+                session.stopRunning()
+            }
+        }
     }
 
     func capturePhoto() async -> UIImage? {
@@ -64,14 +80,34 @@ final class CameraModel: NSObject {
         session.addInput(input)
         if session.canAddOutput(metadataOutput) {
             session.addOutput(metadataOutput)
-            metadataOutput.setMetadataObjectsDelegate(self, queue: .main)
-            metadataOutput.metadataObjectTypes = metadataOutput.availableMetadataObjectTypes
+            metadataOutput.setMetadataObjectsDelegate(self, queue: metadataQueue)
+            metadataOutput.metadataObjectTypes = supportedBarcodeTypes.filter {
+                metadataOutput.availableMetadataObjectTypes.contains($0)
+            }
         }
         if session.canAddOutput(photoOutput) {
             session.addOutput(photoOutput)
         }
 
         session.commitConfiguration()
+    }
+
+    private var supportedBarcodeTypes: [AVMetadataObject.ObjectType] {
+        [
+            .aztec,
+            .code128,
+            .code39,
+            .code39Mod43,
+            .code93,
+            .dataMatrix,
+            .ean13,
+            .ean8,
+            .interleaved2of5,
+            .itf14,
+            .pdf417,
+            .qr,
+            .upce
+        ]
     }
 }
 
@@ -81,14 +117,39 @@ extension CameraModel: AVCaptureMetadataOutputObjectsDelegate {
         didOutput metadataObjects: [AVMetadataObject],
         from connection: AVCaptureConnection
     ) {
-        guard let object = metadataObjects.compactMap({ $0 as? AVMetadataMachineReadableCodeObject }).first,
+        guard let object = metadataObjects
+            .compactMap({ $0 as? AVMetadataMachineReadableCodeObject })
+            .filter({ $0.stringValue?.isEmpty == false })
+            .sorted(by: barcodePrioritySort)
+            .first,
               let value = object.stringValue
         else { return }
 
         let format = object.type.rawValue
         Task { @MainActor in
+            guard lastBarcode != value || lastBarcodeFormat != format else { return }
             lastBarcode = value
             lastBarcodeFormat = format
+        }
+    }
+
+    private nonisolated func barcodePrioritySort(
+        _ lhs: AVMetadataMachineReadableCodeObject,
+        _ rhs: AVMetadataMachineReadableCodeObject
+    ) -> Bool {
+        barcodePriority(lhs.type) < barcodePriority(rhs.type)
+    }
+
+    private nonisolated func barcodePriority(_ type: AVMetadataObject.ObjectType) -> Int {
+        switch type {
+        case .ean13, .ean8, .upce:
+            0
+        case .code128, .code39, .code39Mod43, .code93, .interleaved2of5, .itf14:
+            1
+        case .qr, .pdf417, .aztec, .dataMatrix:
+            2
+        default:
+            3
         }
     }
 }

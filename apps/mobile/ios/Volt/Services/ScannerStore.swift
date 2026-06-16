@@ -4,6 +4,9 @@ import UIKit
 @MainActor
 @Observable
 final class ScannerStore {
+    private let ocrCaptureMaxDimension: CGFloat = 1800
+    private let photoLongEdge: CGFloat = 2200
+
     var activeMode: CaptureMode = .ocr
     var pairingSession: PairingSession?
     var connectionStatus: ScannerConnectionStatus = .idle
@@ -11,6 +14,9 @@ final class ScannerStore {
     var results: [ScanResult] = []
     var statusText = "Not paired"
     var targetHint = "Scan the QR code from the Chrome extension."
+    var ocrReviewImage: UIImage?
+    var ocrReviewText = ""
+    var isRecognizingText = false
 
     let camera = CameraModel()
     let dictation = DictationModel()
@@ -43,6 +49,7 @@ final class ScannerStore {
     }
 
     func saveBarcodeIfNeeded() {
+        guard activeMode == .barcode else { return }
         guard let value = camera.lastBarcode, !value.isEmpty else { return }
         let now = Date.now
         if lastBarcodeValue == value,
@@ -58,25 +65,71 @@ final class ScannerStore {
         sendCaptureResult(result, insertIntoCursor: true)
     }
 
-    func capturePhoto() async {
-        guard let image = await camera.capturePhoto() else { return }
-        let photoResult = ScanResult(kind: .photo, value: "Photo captured", format: image.sizeDescription)
-        results.insert(photoResult, at: 0)
-
-        if activeMode == .ocr {
-            do {
-                let text = try await TextRecognizer.recognizeText(in: image)
-                if !text.isEmpty {
-                    let result = ScanResult(kind: .text, value: text, format: "live-text")
-                    results.insert(result, at: 0)
-                    sendCaptureResult(result, insertIntoCursor: true)
-                }
-            } catch {
-                statusText = error.localizedDescription
-            }
-        } else {
-            await sendPhoto(image)
+    func capture() async {
+        switch activeMode {
+        case .ocr:
+            await captureTextForReview()
+        case .barcode:
+            saveBarcodeIfNeeded()
+        case .photo:
+            await captureSquarePhoto()
+        case .dictation:
+            break
         }
+    }
+
+    func captureTextForReview() async {
+        guard !isRecognizingText else { return }
+        isRecognizingText = true
+        defer { isRecognizingText = false }
+        guard let image = await camera.capturePhoto() else { return }
+
+        let preparedImage = image
+            .normalizedForProcessing()
+            .resized(maxLongEdge: ocrCaptureMaxDimension)
+        ocrReviewImage = preparedImage
+        do {
+            ocrReviewText = try await TextRecognizer.recognizeText(in: preparedImage)
+        } catch {
+            ocrReviewText = ""
+            statusText = error.localizedDescription
+        }
+    }
+
+    func clearOcrReview() {
+        ocrReviewImage = nil
+        ocrReviewText = ""
+    }
+
+    func copyOcrReviewText() {
+        let text = ocrReviewText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        UIPasteboard.general.string = text
+        statusText = "Copied text"
+    }
+
+    func sendOcrReviewText() {
+        let text = ocrReviewText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        let result = ScanResult(kind: .text, value: text, format: "live-text")
+        results.insert(result, at: 0)
+        sendCaptureResult(result, insertIntoCursor: true)
+        statusText = connectionStatus.isConnected ? "Text sent" : "Text saved"
+    }
+
+    func captureSquarePhoto() async {
+        guard let image = await camera.capturePhoto() else { return }
+        let preparedImage = image
+            .normalizedForProcessing()
+            .centerSquareCropped()
+            .resized(maxLongEdge: photoLongEdge)
+        let photoResult = ScanResult(kind: .photo, value: "Square photo captured", format: preparedImage.sizeDescription)
+        results.insert(photoResult, at: 0)
+        await sendPhoto(preparedImage)
+    }
+
+    func capturePhoto() async {
+        await capture()
     }
 
     func commitDictation() {
@@ -224,5 +277,41 @@ final class ScannerStore {
 private extension UIImage {
     var sizeDescription: String {
         "\(Int(size.width)) x \(Int(size.height))"
+    }
+
+    func normalizedForProcessing() -> UIImage {
+        guard imageOrientation != .up else { return self }
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = scale
+        let renderer = UIGraphicsImageRenderer(size: size, format: format)
+        return renderer.image { _ in
+            draw(in: CGRect(origin: .zero, size: size))
+        }
+    }
+
+    func centerSquareCropped() -> UIImage {
+        guard let cgImage else { return self }
+        let side = min(cgImage.width, cgImage.height)
+        let rect = CGRect(
+            x: (cgImage.width - side) / 2,
+            y: (cgImage.height - side) / 2,
+            width: side,
+            height: side
+        )
+        guard let cropped = cgImage.cropping(to: rect) else { return self }
+        return UIImage(cgImage: cropped, scale: scale, orientation: .up)
+    }
+
+    func resized(maxLongEdge: CGFloat) -> UIImage {
+        let longEdge = max(size.width, size.height)
+        guard longEdge > maxLongEdge else { return self }
+        let ratio = maxLongEdge / longEdge
+        let targetSize = CGSize(width: size.width * ratio, height: size.height * ratio)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let renderer = UIGraphicsImageRenderer(size: targetSize, format: format)
+        return renderer.image { _ in
+            draw(in: CGRect(origin: .zero, size: targetSize))
+        }
     }
 }
