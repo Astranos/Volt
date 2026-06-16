@@ -173,17 +173,31 @@ final class ScannerStore {
         await capture()
     }
 
+    func startDictation() async {
+        guard connectionStatus.isConnected else { return }
+        dictation.clearTranscript()
+        beginDictationSession()
+        await dictation.start()
+    }
+
+    func finishDictation() {
+        dictation.stop()
+        commitDictation()
+    }
+
     func commitDictation() {
         let text = dictation.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
-        let result = ScanResult(kind: .dictation, value: text, format: "dictation", deliveryState: initialDeliveryState)
-        results.insert(result, at: 0)
-        sendDictation(text, phase: "final")
+        if !text.isEmpty {
+            let result = ScanResult(kind: .dictation, value: text, format: "dictation", deliveryState: initialDeliveryState)
+            results.insert(result, at: 0)
+            sendDictation(text, phase: "final")
+        }
         sendDictation(nil, phase: "stopped")
         dictationSessionId = nil
     }
 
     func beginDictationSession() {
+        dictation.clearTranscript()
         dictationSessionId = ScannerProtocol.makeMessageId("dictation")
         sendDictation(nil, phase: "started")
     }

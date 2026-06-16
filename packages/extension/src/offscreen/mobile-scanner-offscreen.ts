@@ -26,6 +26,7 @@ type ScannerState = {
   connectedPeerCount?: number;
   joinWindowExpiresAt?: string | null;
   sessionId?: string;
+  target?: SessionTarget | null;
 };
 
 function normalizeCaptureMode(value: unknown): CaptureMode | null {
@@ -77,6 +78,7 @@ class MobileScannerOffscreenSession {
       connectedPeerCount: state.connectedPeerCount,
       joinWindowExpiresAt: state.joinWindowExpiresAt,
       sessionId: state.sessionId,
+      target: state.target,
     });
   }
 

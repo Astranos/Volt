@@ -100,6 +100,7 @@ export type MobileScannerSessionState = {
   connectedPeerCount: number;
   joinWindowExpiresAt: string | null;
   sessionId: string;
+  target: SessionTarget | null;
 };
 
 export type MobileScannerSessionEvents = {
@@ -209,6 +210,7 @@ export class MobileScannerSession {
   private pendingPhotos = new Map<string, PendingPhoto>();
   private seenJoinAttempts = new Set<string>();
   private seenControlMessages = new Set<string>();
+  private target: SessionTarget | null = null;
   private state: MobileScannerSessionState;
 
   constructor(private readonly events: MobileScannerSessionEvents) {
@@ -220,6 +222,7 @@ export class MobileScannerSession {
       connectedPeerCount: 0,
       joinWindowExpiresAt: null,
       sessionId: createId("global-session"),
+      target: null,
     };
   }
 
@@ -228,7 +231,8 @@ export class MobileScannerSession {
   }
 
   async openJoinWindow(target?: SessionTarget | null) {
-    this.setState({ status: this.peers.size > 0 ? "connected" : "creating", error: null });
+    this.target = target ?? this.target;
+    this.setState({ status: this.peers.size > 0 ? "connected" : "creating", error: null, target: this.target });
     try {
       const joinWindow = await this.createJoinWindow(target);
       this.joinWindow = joinWindow;
@@ -297,7 +301,14 @@ export class MobileScannerSession {
     return this.getState();
   }
 
-  async updateTarget(_target?: SessionTarget | null) {
+  async updateTarget(target?: SessionTarget | null) {
+    this.target = target ?? null;
+    this.setState({ target: this.target });
+    for (const peer of this.peers.values()) {
+      if (peer.ready) {
+        this.sendSessionReady(peer);
+      }
+    }
     return this.getState();
   }
 
@@ -362,6 +373,32 @@ export class MobileScannerSession {
           ? payload.expiresAt
           : new Date(Date.now() + SCANNER_JOIN_TOKEN_TTL_MS).toISOString(),
     };
+  }
+
+  private cursorTargetSummary() {
+    if (!this.target) return undefined;
+    return {
+      tabTitle: this.target.tabTitle,
+      url: this.target.url,
+      label: this.target.cursor,
+      hasCursorTarget: Boolean(this.target.cursor),
+    };
+  }
+
+  private sendSessionReady(peer: PeerSession) {
+    this.sendControl(peer, {
+      type: "session_ready",
+      messageId: createMessageId("control"),
+      sentAt: new Date().toISOString(),
+      peer: {
+        protocolVersion: EXTENSION_PROTOCOL_VERSION,
+        extensionVersion: "1.0.35",
+        platform: "chrome_extension",
+        capabilities: ["ocr", "barcode", "dictation", "photo", "cursor_insert", "sidepanel_results"],
+        chromeSessionId: this.state.sessionId,
+      },
+      cursorTarget: this.cursorTargetSummary(),
+    });
   }
 
   private async revokeJoinWindow(joinWindow: JoinWindow) {
@@ -553,18 +590,7 @@ export class MobileScannerSession {
 
     if (control.type === "hello") {
       peer.ready = true;
-      this.sendControl(peer, {
-        type: "session_ready",
-        messageId: createMessageId("control"),
-        sentAt: new Date().toISOString(),
-        peer: {
-          protocolVersion: EXTENSION_PROTOCOL_VERSION,
-          extensionVersion: "1.0.35",
-          platform: "chrome_extension",
-          capabilities: ["ocr", "barcode", "dictation", "photo", "cursor_insert", "sidepanel_results"],
-          chromeSessionId: this.state.sessionId,
-        },
-      });
+      this.sendSessionReady(peer);
       this.events.log?.("[Volt Scanner Pairing] session_ready sent", { joinAttemptId: peer.id });
       this.setState({ status: "connected", error: null, connectedAt: this.state.connectedAt ?? new Date().toISOString() });
       return;

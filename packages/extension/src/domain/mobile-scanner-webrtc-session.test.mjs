@@ -62,6 +62,15 @@ test("extension WebRTC session handles handshake, receipts, photo acks, and peer
   assert.match(sessionSource, /session_closed/);
 });
 
+test("extension forwards current Chrome input target to connected mobile peers", () => {
+  assert.match(sessionSource, /async updateTarget\(target\?: SessionTarget \| null\)/);
+  assert.match(sessionSource, /this\.target = target \?\? null/);
+  assert.match(sessionSource, /for \(const peer of this\.peers\.values\(\)\)/);
+  assert.match(sessionSource, /this\.sendSessionReady\(peer\)/);
+  assert.match(sessionSource, /label: this\.target\.cursor/);
+  assert.match(offscreenSource, /scannerOffscreenUpdateTarget/);
+});
+
 test("offscreen and background route global join-window lifecycle separately from peer disconnect", () => {
   assert.match(offscreenSource, /new MobileScannerSession/);
   assert.match(offscreenSource, /scannerOffscreenCloseJoinWindow/);

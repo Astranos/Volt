@@ -75,6 +75,21 @@ test("round-trips scanner-control messages", () => {
 
   assert.deepEqual(stripUndefined(decodeScannerControlMessage(encodeScannerControlMessage(hello))), hello);
 
+  const sessionReady = {
+    type: "session_ready",
+    messageId: "m-ready",
+    sentAt: now,
+    peer,
+    cursorTarget: {
+      tabTitle: "Product Admin",
+      url: "https://example.com/products/1",
+      label: "SKU",
+      hasCursorTarget: true,
+    },
+  };
+
+  assert.deepEqual(stripUndefined(decodeScannerControlMessage(encodeScannerControlMessage(sessionReady))), sessionReady);
+
   const result = {
     type: "capture_result",
     messageId: "m2",
