@@ -7,7 +7,6 @@ import {
   Layers,
   Search as SearchIcon,
   Bookmark,
-  Gamepad2,
   Shield,
   TrendingUp,
   ScanLine,
@@ -276,35 +275,6 @@ export default function SettingsPage() {
           }
         });
       });
-    });
-  };
-
-  const handleControllerThresholdChange = (
-    type: "light" | "medium",
-    value: number
-  ) => {
-    const newThresholds = {
-      ...settings.controllerTesting,
-      lightThreshold:
-        type === "light"
-          ? value
-          : settings.controllerTesting?.lightThreshold ?? 0.1,
-      mediumThreshold:
-        type === "medium"
-          ? value
-          : settings.controllerTesting?.mediumThreshold ?? 0.25,
-    };
-
-    const newSettings = {
-      ...settings,
-      controllerTesting: newThresholds,
-    };
-    setSettings(newSettings);
-
-    // Auto-save
-    chrome.storage.sync.set({ cmdkSettings: newSettings }, () => {
-      setIsSaved(true);
-      setTimeout(() => setIsSaved(false), 2000);
     });
   };
 
@@ -821,11 +791,6 @@ export default function SettingsPage() {
       label: "Search Providers",
       description: "Google, YouTube, Amazon, and other search engines",
     },
-    ebayCategories: {
-      key: "ebayCategories" as const,
-      label: "eBay Categories",
-      description: "Live eBay category suggestions as you type",
-    },
   };
 
   const sources = settings.sourceOrder
@@ -908,13 +873,6 @@ export default function SettingsPage() {
             >
               <Shield className="w-4 h-4" />
               Shopify Guardrails
-            </a>
-            <a
-              href="#controller"
-              className="flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg hover:bg-muted/50 transition-colors text-foreground"
-            >
-              <Gamepad2 className="w-4 h-4" />
-              Controller Testing
             </a>
             <a
               href="#ebay"
@@ -1473,116 +1431,6 @@ export default function SettingsPage() {
             </div>
           </section>
 
-          {/* Controller Testing Section */}
-          <section id="controller" className="scroll-mt-20">
-            <div className="mb-6">
-              <h2 className="text-2xl font-bold mb-2">Controller Testing</h2>
-              <p className="text-muted-foreground">
-                Adjust color change thresholds for controller input
-                visualization
-              </p>
-            </div>
-
-            <div className="bg-card rounded-xl border border-border shadow-lg overflow-hidden">
-              <div className="p-8">
-                <div className="space-y-6">
-                  <div className="p-4 bg-muted/20 rounded-lg border border-border/50">
-                    <p className="text-sm text-muted-foreground mb-4">
-                      Set the thresholds at which controller inputs change
-                      color:
-                      <span className="block mt-2 text-xs">
-                        <span className="inline-block w-3 h-3 bg-green-500 rounded-full mr-1"></span>{" "}
-                        Green: Below light threshold
-                        <span className="inline-block w-3 h-3 bg-orange-500 rounded-full ml-3 mr-1"></span>{" "}
-                        Orange: Between light and medium
-                        <span className="inline-block w-3 h-3 bg-red-500 rounded-full ml-3 mr-1"></span>{" "}
-                        Red: Above medium threshold
-                      </span>
-                    </p>
-                  </div>
-
-                  {/* Light Threshold */}
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h3 className="font-semibold text-base">
-                          Light Input Threshold
-                        </h3>
-                        <p className="text-sm text-muted-foreground">
-                          Green → Orange transition point
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="text-sm font-mono font-medium px-3 py-1 bg-muted rounded-lg">
-                          {(
-                            settings.controllerTesting?.lightThreshold ?? 0.1
-                          ).toFixed(2)}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="range"
-                        min="0.05"
-                        max="0.5"
-                        step="0.05"
-                        value={
-                          settings.controllerTesting?.lightThreshold ?? 0.1
-                        }
-                        onChange={(e) =>
-                          handleControllerThresholdChange(
-                            "light",
-                            parseFloat(e.target.value)
-                          )
-                        }
-                        className="flex-1 h-2 bg-muted rounded-lg appearance-none cursor-pointer"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Medium Threshold */}
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h3 className="font-semibold text-base">
-                          Medium Input Threshold
-                        </h3>
-                        <p className="text-sm text-muted-foreground">
-                          Orange → Red transition point
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="text-sm font-mono font-medium px-3 py-1 bg-muted rounded-lg">
-                          {(
-                            settings.controllerTesting?.mediumThreshold ?? 0.25
-                          ).toFixed(2)}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="range"
-                        min="0.1"
-                        max="0.9"
-                        step="0.05"
-                        value={
-                          settings.controllerTesting?.mediumThreshold ?? 0.25
-                        }
-                        onChange={(e) =>
-                          handleControllerThresholdChange(
-                            "medium",
-                            parseFloat(e.target.value)
-                          )
-                        }
-                        className="flex-1 h-2 bg-muted rounded-lg appearance-none cursor-pointer"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </section>
-
           {/* eBay Price Summary Section */}
           <section id="ebay" className="scroll-mt-20">
             <div className="mb-6">
@@ -1743,7 +1591,6 @@ export default function SettingsPage() {
                         • Search tools: Google UPC/MPN, eBay Sold, UPCItemDB,
                         PriceCharting
                       </p>
-                      <p>• Controller testing tool access</p>
                       <p>• Ctrl+Right-click to show native menu instead</p>
                       <p>
                         • Click dismiss button to disable until page refresh

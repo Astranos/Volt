@@ -12,12 +12,17 @@ final class CameraModel: NSObject {
     private var photoContinuation: CheckedContinuation<UIImage?, Never>?
     private let sessionQueue = DispatchQueue(label: "com.volt.mobile.camera-session")
     private let metadataQueue = DispatchQueue(label: "com.volt.mobile.camera-metadata")
+    private var videoDevice: AVCaptureDevice?
 
     var authorizationStatus = AVCaptureDevice.authorizationStatus(for: .video)
     var lastBarcode: String?
     var lastBarcodeFormat: String?
     var lastPhoto: UIImage?
     var errorMessage: String?
+    var torchEnabled = false
+    var zoomFactor: CGFloat = 1
+    var minZoomFactor: CGFloat = 1
+    var maxZoomFactor: CGFloat = 1
 
     override init() {
         super.init()
@@ -78,6 +83,10 @@ final class CameraModel: NSObject {
         }
 
         session.addInput(input)
+        videoDevice = camera
+        minZoomFactor = camera.minAvailableVideoZoomFactor
+        maxZoomFactor = min(camera.maxAvailableVideoZoomFactor, 6)
+        zoomFactor = max(camera.minAvailableVideoZoomFactor, min(camera.videoZoomFactor, maxZoomFactor))
         if session.canAddOutput(metadataOutput) {
             session.addOutput(metadataOutput)
             metadataOutput.setMetadataObjectsDelegate(self, queue: metadataQueue)
@@ -90,6 +99,73 @@ final class CameraModel: NSObject {
         }
 
         session.commitConfiguration()
+    }
+
+    func setTorchEnabled(_ enabled: Bool) {
+        guard let videoDevice, videoDevice.hasTorch else { return }
+        sessionQueue.async { [weak self] in
+            do {
+                try videoDevice.lockForConfiguration()
+                if enabled {
+                    try videoDevice.setTorchModeOn(level: AVCaptureDevice.maxAvailableTorchLevel)
+                } else {
+                    videoDevice.torchMode = .off
+                }
+                videoDevice.unlockForConfiguration()
+                Task { @MainActor in
+                    self?.torchEnabled = videoDevice.torchMode == .on
+                }
+            } catch {
+                Task { @MainActor in
+                    self?.errorMessage = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    func setZoomFactor(_ factor: CGFloat) {
+        guard let videoDevice else { return }
+        let clampedFactor = max(minZoomFactor, min(maxZoomFactor, factor))
+        sessionQueue.async { [weak self] in
+            do {
+                try videoDevice.lockForConfiguration()
+                videoDevice.videoZoomFactor = clampedFactor
+                videoDevice.unlockForConfiguration()
+                Task { @MainActor in
+                    self?.zoomFactor = clampedFactor
+                }
+            } catch {
+                Task { @MainActor in
+                    self?.errorMessage = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    func adjustZoom(by delta: CGFloat) {
+        setZoomFactor(zoomFactor + delta)
+    }
+
+    func focus(at point: CGPoint) {
+        guard let videoDevice else { return }
+        sessionQueue.async { [weak self] in
+            do {
+                try videoDevice.lockForConfiguration()
+                if videoDevice.isFocusPointOfInterestSupported {
+                    videoDevice.focusPointOfInterest = point
+                    videoDevice.focusMode = .autoFocus
+                }
+                if videoDevice.isExposurePointOfInterestSupported {
+                    videoDevice.exposurePointOfInterest = point
+                    videoDevice.exposureMode = .continuousAutoExposure
+                }
+                videoDevice.unlockForConfiguration()
+            } catch {
+                Task { @MainActor in
+                    self?.errorMessage = error.localizedDescription
+                }
+            }
+        }
     }
 
     private var supportedBarcodeTypes: [AVMetadataObject.ObjectType] {

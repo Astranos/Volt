@@ -1,6 +1,6 @@
 {
   "name": "@volt/extension",
-  "description": "A versatile Chrome extension with command palette, controller testing, and multi-provider search capabilities.",
+  "description": "A versatile Chrome extension with command palette, mobile scanner pairing, and multi-provider search capabilities.",
   "private": true,
   "version": "1.0.35",
   "type": "module",

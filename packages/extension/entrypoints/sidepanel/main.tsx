@@ -12,7 +12,7 @@ import "./sidepanel.css";
 
 // Initialize the sidepanel
 const initSidepanel = () => {
-  const container = document.getElementById("controller-testing-container");
+  const container = document.getElementById("volt-sidepanel-container");
   if (!container) {
     console.error("Sidepanel container not found");
     return;

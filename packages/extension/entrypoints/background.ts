@@ -31,10 +31,9 @@ export default defineBackground({
      * This lite service worker handles:
      * - Extension installation and startup
      * - Message routing between content scripts and popup
-     * - Side panel state management per window for controller testing
+     * - Side panel state management per window
      * - Basic storage configuration
      * - Tab communication and injection
-     * - Controller detection and testing
      */
 
     // Paymore extension background service worker (MV3) with verbose debug logging
@@ -88,10 +87,6 @@ export default defineBackground({
     }
 
 
-    // Track controller connection state
-    let CONTROLLER_CONNECTED = false;
-    let CONTROLLER_CHECK_INTERVAL = null;
-    let LAST_CONTROLLER_COUNT = 0;
     let OFFSCREEN_CREATE_PROMISE = null;
 
     const OFFSCREEN_DOCUMENT_PATH = "offscreen.html";
@@ -702,7 +697,16 @@ export default defineBackground({
 
     async function handleScannerPairingPopupClosed(sendResponse) {
       await resetMobileScannerActionPopup();
-      await handleScannerCloseJoinWindow(sendResponse);
+      try {
+        const state = await sendScannerOffscreenMessage({
+          action: "scannerOffscreenGetState",
+        });
+        sendResponse?.({ success: true, state });
+        return;
+      } catch (error) {
+        log("Failed to inspect scanner state on popup close", error?.message || error);
+      }
+      sendResponse?.({ success: true });
     }
 
     async function handleScannerGetState(sendResponse) {
@@ -808,7 +812,12 @@ export default defineBackground({
       await chrome.action.setPopup({
         popup: `${popupUrl.pathname.replace(/^\//, "")}${popupUrl.search}`,
       });
-      await chrome.action.openPopup();
+      try {
+        await chrome.action.openPopup();
+      } catch (error) {
+        await resetMobileScannerActionPopup();
+        throw error;
+      }
     }
 
     function getSidePanelState(windowId) {
@@ -870,9 +879,11 @@ export default defineBackground({
 
     // Listen for extension icon click
     chrome.action.onClicked.addListener((tab) => {
-      if (tab.id) {
-        toggleSidePanelForTab(tab.id);
-      }
+      void handleOpenMobileCapture(
+        { action: "openMobileCapture", mode: "barcode", surface: "popup" },
+        { tab },
+        () => {}
+      );
     });
 
     // Listen for keyboard commands
@@ -882,17 +893,6 @@ export default defineBackground({
         openOptionsPage().catch((error) =>
           log("openOptions command handler error", error)
         );
-      } else if (command === "open-controller-testing") {
-        log("Controller testing shortcut triggered");
-        // Open the controller testing sidepanel
-        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-          const active = tabs && tabs[0];
-          if (active?.id) {
-            toggleSidePanelForTab(active.id, "controller-testing");
-          } else {
-            log("open-controller-testing: no active tab id");
-          }
-        });
       } else if (command === "reopen-last-tab") {
         log("Reopen last tab command triggered");
         // Get the most recently closed tab and restore it
@@ -1108,8 +1108,7 @@ export default defineBackground({
     });
 
     /**
-     * Handles extension startup and initializes controller detection
-     * Loads debug configuration and starts controller functionality
+     * Handles extension startup and loads debug configuration.
      */
     chrome.runtime.onStartup?.addListener(() => {
       log("onStartup");
@@ -1117,8 +1116,6 @@ export default defineBackground({
         DEBUG = !!cfg.debugLogs;
         log("Debug flag loaded", DEBUG);
       });
-      // Start controller detection
-      startControllerDetection();
     });
 
     /**
@@ -1576,27 +1573,6 @@ export default defineBackground({
           sendResponse({ success: true });
           break;
         }
-        case "getControllerStatus":
-          // Hook for future background gamepad monitoring
-          sendResponse({ connected: false, name: null });
-          break;
-        case "triggerControllerTest":
-          openControllerTest();
-          sendResponse({ success: true });
-          break;
-        case "checkControllerStatus":
-          // Check current controller status
-          checkForControllers();
-          sendResponse({ success: true, connected: CONTROLLER_CONNECTED });
-          break;
-        case "enableControllerDetection":
-          startControllerDetection();
-          sendResponse({ success: true });
-          break;
-        case "disableControllerDetection":
-          stopControllerDetection();
-          sendResponse({ success: true });
-          break;
         case "openPreviewPopup": {
           const url = message?.url;
           if (!url) {
@@ -1808,7 +1784,7 @@ export default defineBackground({
           sendResponse({ pong: true, time: Date.now() });
           break;
         case "toggleSidepanelTool": {
-          const tool = message?.tool || "controller-testing";
+          const tool = message?.tool || "mobile-scanner";
           toggleSidePanelForTab(sender?.tab?.id, tool);
           sendResponse({ success: true });
           break;
@@ -2149,19 +2125,6 @@ export default defineBackground({
       });
     }
 
-    function openControllerTest() {
-      log("Opening Controller Test");
-      // Use sidebar instead of action popup
-      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-        const active = tabs && tabs[0];
-        if (active?.id) {
-          toggleSidePanelForTab(active.id, "controller-testing");
-        } else {
-          log("openControllerTest: no active tab id");
-        }
-      });
-    }
-
     function goBackToPOS() {
       log("Going back to POS tab");
 
@@ -2219,8 +2182,6 @@ export default defineBackground({
 
     function toolToPath(tool) {
       switch (tool) {
-        case "controller-testing":
-          return "/tools/controller-testing";
         case "upc-search":
           return "/tools/upc-search";
         case "scout":
@@ -2647,187 +2608,5 @@ export default defineBackground({
       }
     }
 
-    /**
-     * Starts monitoring for gamepad connections using offscreen document
-     */
-    async function startControllerDetection() {
-      log("Starting improved controller detection");
-
-      // Clear any existing interval
-      if (CONTROLLER_CHECK_INTERVAL) {
-        clearInterval(CONTROLLER_CHECK_INTERVAL);
-      }
-
-      // Create offscreen document for reliable gamepad detection
-      const offscreenCreated = await createOffscreenDocument();
-      if (!offscreenCreated) {
-        log(
-          "Failed to create offscreen document, controller detection may not work reliably"
-        );
-        // Fall back to the old method
-        startFallbackControllerDetection();
-        return;
-      }
-
-      // Initial check
-      checkForControllersWithOffscreen();
-
-      // Set up periodic checking
-      CONTROLLER_CHECK_INTERVAL = setInterval(() => {
-        checkForControllersWithOffscreen();
-      }, 1000); // Check every second for better responsiveness
-    }
-
-    /**
-     * Fallback controller detection method for when offscreen fails
-     */
-    function startFallbackControllerDetection() {
-      log("Using fallback controller detection");
-
-      // Set up periodic checking with the old method
-      CONTROLLER_CHECK_INTERVAL = setInterval(() => {
-        checkForControllersFallback();
-      }, 2000);
-    }
-
-    /**
-     * Checks for connected gamepads using offscreen document
-     */
-    async function checkForControllersWithOffscreen() {
-      try {
-        // Get the active tab
-        const tabs = await chrome.tabs.query({
-          active: true,
-          currentWindow: true,
-        });
-        if (tabs.length === 0) return;
-
-        const activeTab = tabs[0];
-
-        // Send message to offscreen document to check for gamepads
-        const response = await chrome.runtime.sendMessage({
-          action: "checkGamepads",
-        });
-
-        if (response && response.success) {
-          const { connectedCount, controllerInfo } = response.data;
-
-          // Check if a new controller was connected
-          if (connectedCount > LAST_CONTROLLER_COUNT && connectedCount > 0) {
-            log(`New controller detected: ${controllerInfo?.id || "Unknown"}`);
-            LAST_CONTROLLER_COUNT = connectedCount;
-            CONTROLLER_CONNECTED = true;
-
-            // Controller detected but sidepanel auto-open is disabled
-            log("Controller connected, but sidepanel auto-open is disabled");
-          } else if (connectedCount === 0 && LAST_CONTROLLER_COUNT > 0) {
-            log("All controllers disconnected");
-            LAST_CONTROLLER_COUNT = 0;
-            CONTROLLER_CONNECTED = false;
-          }
-        }
-      } catch (error) {
-        log("Error in checkForControllersWithOffscreen:", error);
-        // Fall back to the old method
-        if (CONTROLLER_CHECK_INTERVAL) {
-          clearInterval(CONTROLLER_CHECK_INTERVAL);
-          startFallbackControllerDetection();
-        }
-      }
-    }
-
-    /**
-     * Fallback method to check for connected gamepads
-     */
-    function checkForControllersFallback() {
-      try {
-        // Get the active tab
-        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-          if (tabs.length === 0) return;
-
-          const activeTab = tabs[0];
-
-          // Inject a content script to check for gamepads
-          chrome.scripting.executeScript(
-            {
-              target: { tabId: activeTab.id },
-              func: () => {
-                // This function runs in the content script context
-                const gamepads = navigator.getGamepads?.() || [];
-                let connectedCount = 0;
-                let controllerInfo = null;
-
-                for (let i = 0; i < gamepads.length; i++) {
-                  if (gamepads[i]) {
-                    connectedCount++;
-                    if (!controllerInfo) {
-                      controllerInfo = {
-                        index: i,
-                        id: gamepads[i].id,
-                        mapping: gamepads[i].mapping,
-                      };
-                    }
-                  }
-                }
-
-                return {
-                  connectedCount,
-                  controllerInfo,
-                };
-              },
-            },
-            (result) => {
-              if (chrome.runtime.lastError) {
-                log(
-                  "Error checking for controllers:",
-                  chrome.runtime.lastError
-                );
-                return;
-              }
-
-              if (result && result.length > 0) {
-                const { connectedCount, controllerInfo } = result[0].result;
-
-                // Check if a new controller was connected
-                if (
-                  connectedCount > LAST_CONTROLLER_COUNT &&
-                  connectedCount > 0
-                ) {
-                  log(
-                    `New controller detected: ${
-                      controllerInfo?.id || "Unknown"
-                    }`
-                  );
-                  LAST_CONTROLLER_COUNT = connectedCount;
-                  CONTROLLER_CONNECTED = true;
-
-                  // Controller detected but sidepanel auto-open is disabled
-                  log(
-                    "Controller connected, but sidepanel auto-open is disabled"
-                  );
-                } else if (connectedCount === 0 && LAST_CONTROLLER_COUNT > 0) {
-                  log("All controllers disconnected");
-                  LAST_CONTROLLER_COUNT = 0;
-                  CONTROLLER_CONNECTED = false;
-                }
-              }
-            }
-          );
-        });
-      } catch (error) {
-        log("Error in checkForControllersFallback:", error);
-      }
-    }
-
-    /**
-     * Stops the controller detection interval
-     */
-    function stopControllerDetection() {
-      if (CONTROLLER_CHECK_INTERVAL) {
-        clearInterval(CONTROLLER_CHECK_INTERVAL);
-        CONTROLLER_CHECK_INTERVAL = null;
-        log("Stopped controller detection");
-      }
-    }
   },
 });

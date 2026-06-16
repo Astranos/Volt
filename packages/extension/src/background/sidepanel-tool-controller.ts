@@ -128,8 +128,8 @@ export function createSidepanelToolController({
 
   function toggleForWindow(windowId: unknown, tool?: string, mode = "toggle") {
     if (!tool) {
-      chromeApi.storage.local.get({ sidePanelTool: "controller-testing" }, (res) => {
-        toggleForWindow(windowId, res.sidePanelTool || "controller-testing", mode);
+      chromeApi.storage.local.get({ sidePanelTool: "mobile-scanner" }, (res) => {
+        toggleForWindow(windowId, res.sidePanelTool || "mobile-scanner", mode);
       });
       return;
     }

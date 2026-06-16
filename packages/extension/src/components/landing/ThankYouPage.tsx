@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from "react";
 import {
   Command,
   MousePointer,
-  Gamepad2,
   Settings,
   Keyboard,
   Search,
@@ -23,7 +22,6 @@ import {
   Info,
   Layout,
   Calculator,
-  Tag,
   HelpCircle,
   List,
 } from "lucide-react";
@@ -149,26 +147,11 @@ export default function ThankYouPage() {
       image: "/assets/images/shopify-buttons.png",
     },
     {
-      id: 7,
-      title: "Controller Testing",
-      description:
-        "Built-in controller testing with color visuals for indications of problems with the controller.",
-      icon: Gamepad2,
-      image: "/assets/images/controller-testing.png",
-    },
-    {
       id: 8,
       title: "Top Offer Calculator",
       description:
         "Automated buyout offer calculations based on projected sell prices with support for custom rate profiles.",
       icon: Calculator,
-    },
-    {
-      id: 10,
-      title: "eBay Categories",
-      description:
-        "Quickly find correct eBay Taxonomy categories for accurate product listing.",
-      icon: Tag,
     },
     {
       id: 11,

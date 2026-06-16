@@ -1,14 +1,25 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { randomBytes } from "node:crypto";
-import {
-  SCANNER_JOIN_ATTEMPT_TTL_MS,
-  SCANNER_JOIN_TOKEN_GRACE_MS,
-  SCANNER_JOIN_TOKEN_TTL_MS,
-  SCANNER_SESSION_TTL_MS,
-  isScannerJoinAttemptId,
-  isScannerJoinToken,
-  isScannerSessionId,
-} from "../../../packages/scanner-protocol/src/index.ts";
+
+const SCANNER_SESSION_TTL_MS = 12 * 60 * 60 * 1000;
+const SCANNER_JOIN_ATTEMPT_TTL_MS = 30 * 1000;
+const SCANNER_JOIN_TOKEN_TTL_MS = 12 * 60 * 60 * 1000;
+const SCANNER_JOIN_TOKEN_GRACE_MS = 10 * 1000;
+const SCANNER_SESSION_ID_PATTERN = /^[a-zA-Z0-9_-]{4,80}$/;
+const SCANNER_JOIN_TOKEN_PATTERN = /^[a-zA-Z0-9_-]{32,160}$/;
+const SCANNER_JOIN_ATTEMPT_ID_PATTERN = /^[a-zA-Z0-9_-]{12,80}$/;
+
+function isScannerSessionId(value: unknown): value is string {
+  return typeof value === "string" && SCANNER_SESSION_ID_PATTERN.test(value);
+}
+
+function isScannerJoinToken(value: unknown): value is string {
+  return typeof value === "string" && SCANNER_JOIN_TOKEN_PATTERN.test(value);
+}
+
+function isScannerJoinAttemptId(value: unknown): value is string {
+  return typeof value === "string" && SCANNER_JOIN_ATTEMPT_ID_PATTERN.test(value);
+}
 
 const JOIN_TOKEN_KEY_PREFIX = "volt:scanner:join-token:";
 

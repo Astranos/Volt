@@ -478,7 +478,7 @@ button {
   display: none;
 }
 
-#controller-testing-container {
+#volt-sidepanel-container {
   height: calc(100% - 56px);
   width: 100%;
   display: block;

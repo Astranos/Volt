@@ -394,13 +394,12 @@ export function CMDKPalette({
       }
     } else if (value.startsWith("tool-")) {
       const toolId = value.replace("tool-", "");
-      if (toolId === "controller-testing") {
-        // Send message to open controller testing in sidebar and await ack before closing
+      if (toolId === "mobile-scanner") {
         try {
           const response = await new Promise<any>((resolve) => {
             try {
               chrome.runtime.sendMessage(
-                { action: "openInSidebar", tool: "controller-testing" },
+                { action: "openInSidebar", tool: "mobile-scanner" },
                 (resp: any) => resolve(resp)
               );
             } catch (err) {
@@ -499,7 +498,7 @@ export function CMDKPalette({
       : filterHistory(history, search);
 
   // Filter tools by search (only show specific tools in command palette)
-  const commandPaletteToolIds: SidepanelToolId[] = ["controller-testing"];
+  const commandPaletteToolIds: SidepanelToolId[] = ["mobile-scanner"];
 
   const filteredTools =
     activeProvider || !enabledSources.tools

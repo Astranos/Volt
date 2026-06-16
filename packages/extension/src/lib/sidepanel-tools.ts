@@ -1,16 +1,12 @@
 import {
-  Gamepad2,
   Calculator,
-  Layers,
   LucideIcon,
   HelpCircle,
   Smartphone,
 } from "lucide-react";
 
 export type SidepanelToolId =
-  | "controller-testing"
   | "top-offers"
-  | "ebay-taxonomy-tool"
   | "shopify-help"
   | "mobile-scanner"
   | "mobile-photos";
@@ -25,22 +21,10 @@ export interface SidepanelToolMetadata {
 
 export const SIDEPANEL_TOOLS: SidepanelToolMetadata[] = [
   {
-    id: "controller-testing",
-    label: "Controller Testing",
-    description: "Open controller testing in the sidepanel",
-    icon: Gamepad2,
-  },
-  {
     id: "top-offers",
     label: "Top Offer Calculator",
     description: "Open top offer calculator in the sidepanel",
     icon: Calculator,
-  },
-  {
-    id: "ebay-taxonomy-tool",
-    label: "eBay Categories",
-    description: "Search eBay categories",
-    icon: Layers,
   },
   {
     id: "shopify-help",

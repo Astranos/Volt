@@ -6,9 +6,17 @@ struct RootView: View {
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            ScannerView()
+            ScannerView {
+                selectedTab = .sessions
+            }
                 .tabItem { Label("Capture", systemImage: "camera") }
                 .tag(AppSection.scan)
+
+            PairingSessionsView {
+                selectedTab = .scan
+            }
+                .tabItem { Label("Sessions", systemImage: "link") }
+                .tag(AppSection.sessions)
 
             DictationView()
                 .tabItem { Label("Dictate", systemImage: "mic") }
@@ -33,6 +41,8 @@ struct RootView: View {
             if store.activeMode == .dictation {
                 store.activeMode = .ocr
             }
+        case .sessions:
+            break
         case .dictation:
             store.activeMode = .dictation
         case .results:
@@ -51,6 +61,7 @@ struct RootView: View {
 
 private enum AppSection: Hashable {
     case scan
+    case sessions
     case dictation
     case results
 }

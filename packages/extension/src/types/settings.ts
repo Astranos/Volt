@@ -45,7 +45,6 @@ export interface CmdkSettings {
     quickLinks: boolean;
     tools: boolean;
     searchProviders: boolean;
-    ebayCategories: boolean;
   };
   sourceOrder: string[];
   enabledSearchProviders: Record<string, boolean>;
@@ -55,11 +54,6 @@ export interface CmdkSettings {
   };
   newTabOverride?: {
     enabled?: boolean;
-  };
-  controllerTesting?: {
-    lightThreshold?: number;
-    mediumThreshold?: number;
-    autoStart?: boolean;
   };
   ebaySummary?: {
     enabled?: boolean;

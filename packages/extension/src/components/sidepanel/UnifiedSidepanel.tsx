@@ -1,7 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import ControllerTesting from "./ControllerTesting";
 import TopOffersPage from "./TopOffers";
-import EbayTaxonomyTool from "./EbayTaxonomyTool";
 import ShopifyHelp from "./ShopifyHelp";
 import MobileScanner from "./MobileScanner";
 import {
@@ -61,7 +59,7 @@ const TOAST_TONE_STYLES: Record<
 
 export default function UnifiedSidepanel() {
   const [activeTool, setActiveTool] =
-    useState<SidepanelToolId>("controller-testing");
+    useState<SidepanelToolId>("mobile-scanner");
   const [menuOpen, setMenuOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const [dropdownWidth, setDropdownWidth] = useState<number>();
@@ -99,12 +97,12 @@ export default function UnifiedSidepanel() {
   useEffect(() => {
     if (typeof chrome !== "undefined" && chrome.storage) {
       chrome.storage.local.get(
-        { sidePanelTool: "controller-testing" },
+        { sidePanelTool: "mobile-scanner" },
         (result: { sidePanelTool?: string }) => {
           const storedTool = result.sidePanelTool;
           const tool = storedTool && isSidepanelToolId(storedTool)
             ? storedTool
-            : "controller-testing";
+            : "mobile-scanner";
           setActiveTool(tool);
         }
       );
@@ -116,7 +114,7 @@ export default function UnifiedSidepanel() {
           const newTool = typeof storedTool === "string" &&
             isSidepanelToolId(storedTool)
             ? storedTool
-            : "controller-testing";
+            : "mobile-scanner";
           setActiveTool(newTool);
         }
       };
@@ -183,9 +181,7 @@ export default function UnifiedSidepanel() {
     SidepanelToolId,
     React.ComponentType<{ onClose?: () => void }>
   > = {
-    "controller-testing": ControllerTesting,
     "top-offers": TopOffersPage,
-    "ebay-taxonomy-tool": EbayTaxonomyTool,
     "shopify-help": ShopifyHelp,
     "mobile-scanner": MobileScanner,
     "mobile-photos": MobileScanner,
@@ -197,7 +193,7 @@ export default function UnifiedSidepanel() {
   }));
 
   const ActiveComponent =
-    tools.find((t) => t.id === activeTool)?.component || ControllerTesting;
+    tools.find((t) => t.id === activeTool)?.component || MobileScanner;
 
   const activeToolMeta = tools.find((t) => t.id === activeTool) || tools[0];
 
@@ -212,7 +208,7 @@ export default function UnifiedSidepanel() {
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              className="liquid-glass concentric-lg relative flex w-full min-w-0 items-center justify-between overflow-hidden px-4 py-2 text-left text-lg font-semibold text-stone-950 transition focus:outline-none focus:ring-2 focus:ring-primary/40 hover:bg-white/60 dark:text-stone-50 dark:hover:bg-white/5"
+              className="liquid-glass concentric-lg relative flex w-full min-w-0 items-center justify-between gap-2 overflow-hidden px-3 py-1.5 text-left text-sm font-semibold text-stone-950 transition focus:outline-none focus:ring-2 focus:ring-primary/40 hover:bg-white/60 dark:text-stone-50 dark:hover:bg-white/5"
               ref={triggerRef}
             >
               <span className="relative flex min-w-0 flex-1 items-center">
@@ -225,20 +221,20 @@ export default function UnifiedSidepanel() {
                   )}
                   aria-hidden={toast ? "true" : undefined}
                 >
-                  <activeToolMeta.icon className="h-5 w-5 shrink-0" />
-                  <span className="truncate">{activeToolMeta.label}</span>
+                  <activeToolMeta.icon className="h-4 w-4 shrink-0" />
+                  <span className="whitespace-normal break-words leading-tight">{activeToolMeta.label}</span>
                 </span>
                 {toast && ToastIcon ? (
                   <span
                     key={toast.id}
                     aria-live="polite"
                     className={cn(
-                      "volt-toast-enter absolute inset-y-0 left-0 flex min-w-0 items-center gap-2 text-base font-bold",
+                      "volt-toast-enter absolute inset-y-0 left-0 flex min-w-0 items-center gap-2 text-sm font-bold",
                       toneStyles?.text,
                     )}
                   >
-                    <ToastIcon className="h-5 w-5 shrink-0" />
-                    <span className="truncate">{toast.message}</span>
+                    <ToastIcon className="h-4 w-4 shrink-0" />
+                    <span className="whitespace-normal break-words leading-tight">{toast.message}</span>
                   </span>
                 ) : null}
               </span>
@@ -284,7 +280,7 @@ export default function UnifiedSidepanel() {
       {/* Main content - Flex 1 to take remaining space, overflow hidden to prevent double scrollbars */}
       <div className="flex-1 overflow-hidden">
         <ActiveComponent
-          onClose={() => handleToolChange("controller-testing")}
+          onClose={() => handleToolChange("mobile-scanner")}
         />
       </div>
     </div>

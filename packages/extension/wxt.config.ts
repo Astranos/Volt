@@ -12,11 +12,6 @@ export default defineConfig({
     content_scripts: [
       {
         matches: ["<all_urls>"],
-        js: ["controller-activity.js"],
-        run_at: "document_idle",
-      },
-      {
-        matches: ["<all_urls>"],
         js: ["context-menu.js"],
         run_at: "document_idle",
         all_frames: true,
@@ -51,7 +46,7 @@ export default defineConfig({
     name: "Volt",
     version: "1.0.35",
     description:
-      "A versatile Chrome extension with command palette, controller testing, and multi-provider search capabilities.",
+      "A versatile Chrome extension with command palette, mobile scanner pairing, and multi-provider search capabilities.",
     permissions: [
       "storage",
       "tabs",
@@ -117,13 +112,6 @@ export default defineConfig({
           mac: "Command+Shift+K",
         },
         description: "Open Volt Command Palette",
-      },
-      "open-controller-testing": {
-        suggested_key: {
-          default: "Ctrl+Shift+G",
-          mac: "Command+Shift+G",
-        },
-        description: "Open Controller Testing",
       },
       "open-options": {
         suggested_key: {

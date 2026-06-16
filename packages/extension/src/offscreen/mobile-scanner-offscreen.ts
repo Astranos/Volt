@@ -204,41 +204,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true;
   }
 
-  if (message.action === "checkGamepads") {
-    try {
-      const gamepads = navigator.getGamepads?.() || [];
-      let connectedCount = 0;
-      let controllerInfo = null;
-
-      for (let i = 0; i < gamepads.length; i++) {
-        if (gamepads[i]) {
-          connectedCount++;
-          if (!controllerInfo) {
-            controllerInfo = {
-              index: i,
-              id: gamepads[i]?.id,
-              mapping: gamepads[i]?.mapping,
-            };
-          }
-        }
-      }
-
-      sendResponse({
-        success: true,
-        data: {
-          connectedCount,
-          controllerInfo,
-        },
-      });
-    } catch (error) {
-      sendResponse({
-        success: false,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-    return false;
-  }
-
   if (message.action === "copyToClipboard") {
     try {
       const text = message.text;

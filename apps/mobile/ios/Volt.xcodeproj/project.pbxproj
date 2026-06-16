@@ -31,6 +31,8 @@
 		100000000000000000000016 /* ScannerWebRTCConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000001A /* ScannerWebRTCConnection.swift */; };
 		100000000000000000000017 /* WebRTC.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 20000000000000000000001B /* WebRTC.xcframework */; };
 		100000000000000000000018 /* WebRTC.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 20000000000000000000001B /* WebRTC.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		100000000000000000000019 /* PairedScannerSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000001C /* PairedScannerSession.swift */; };
+		10000000000000000000001A /* PairingSessionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000001D /* PairingSessionsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -74,6 +76,8 @@
 		200000000000000000000019 /* ScannerSignalingClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannerSignalingClient.swift; sourceTree = "<group>"; };
 		20000000000000000000001A /* ScannerWebRTCConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannerWebRTCConnection.swift; sourceTree = "<group>"; };
 		20000000000000000000001B /* WebRTC.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = WebRTC.xcframework; path = Pods/JitsiWebRTC/WebRTC.xcframework; sourceTree = SOURCE_ROOT; };
+		20000000000000000000001C /* PairedScannerSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairedScannerSession.swift; sourceTree = "<group>"; };
+		20000000000000000000001D /* PairingSessionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingSessionsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -135,6 +139,7 @@
 				200000000000000000000002 /* CaptureMode.swift */,
 				200000000000000000000003 /* ScanResult.swift */,
 				200000000000000000000004 /* PairingSession.swift */,
+				20000000000000000000001C /* PairedScannerSession.swift */,
 				200000000000000000000016 /* ScannerConnectionStatus.swift */,
 				200000000000000000000017 /* ScannerPeerTarget.swift */,
 			);
@@ -162,6 +167,7 @@
 				20000000000000000000000A /* CameraPreview.swift */,
 				20000000000000000000000B /* RootView.swift */,
 				20000000000000000000000C /* ScannerView.swift */,
+				20000000000000000000001D /* PairingSessionsView.swift */,
 				20000000000000000000000D /* DictationView.swift */,
 				20000000000000000000000E /* ResultsView.swift */,
 			);
@@ -251,10 +257,12 @@
 				10000000000000000000000A /* CameraPreview.swift in Sources */,
 				10000000000000000000000B /* RootView.swift in Sources */,
 				10000000000000000000000C /* ScannerView.swift in Sources */,
+				10000000000000000000001A /* PairingSessionsView.swift in Sources */,
 				10000000000000000000000D /* DictationView.swift in Sources */,
 				10000000000000000000000E /* ResultsView.swift in Sources */,
 				100000000000000000000012 /* ScannerConnectionStatus.swift in Sources */,
 				100000000000000000000013 /* ScannerPeerTarget.swift in Sources */,
+				100000000000000000000019 /* PairedScannerSession.swift in Sources */,
 				100000000000000000000014 /* ScannerProtocol.swift in Sources */,
 				100000000000000000000015 /* ScannerSignalingClient.swift in Sources */,
 				100000000000000000000016 /* ScannerWebRTCConnection.swift in Sources */,

@@ -15,6 +15,7 @@ export type MobilePhoto = {
   height?: number;
   capturedAt?: string;
   sessionId?: string;
+  status?: "available_to_browser" | "browser_received" | "download_failed";
   downloadId?: number;
   downloadFilename?: string;
 };
@@ -119,6 +120,12 @@ export function normalizeMobilePhoto(photo: unknown): MobilePhoto | null {
     sessionId:
       typeof source.sessionId === "string" && source.sessionId
         ? clampString(source.sessionId, 80)
+        : undefined,
+    status:
+      source.status === "available_to_browser" ||
+      source.status === "browser_received" ||
+      source.status === "download_failed"
+        ? source.status
         : undefined,
     downloadId: typeof source.downloadId === "number" ? source.downloadId : undefined,
     downloadFilename:

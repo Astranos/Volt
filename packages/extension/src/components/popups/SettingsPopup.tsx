@@ -111,11 +111,6 @@ export default function SettingsPopup() {
       label: "Search Providers",
       description: "Google, YouTube, Amazon, and other search engines",
     },
-    ebayCategories: {
-      key: "ebayCategories" as const,
-      label: "eBay Categories",
-      description: "Live eBay category suggestions as you type",
-    },
   };
 
   const sources = settings.sourceOrder

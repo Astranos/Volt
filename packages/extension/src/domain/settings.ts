@@ -9,12 +9,10 @@ export const DEFAULT_SETTINGS: CmdkSettings = {
     quickLinks: true,
     tools: true,
     searchProviders: true,
-    ebayCategories: true,
   },
   sourceOrder: [
     "tabs",
     "quickLinks",
-    "ebayCategories",
     "bookmarks",
     "tools",
     "searchProviders",
@@ -43,11 +41,6 @@ export const DEFAULT_SETTINGS: CmdkSettings = {
   },
   newTabOverride: {
     enabled: true,
-  },
-  controllerTesting: {
-    lightThreshold: 0.1,
-    mediumThreshold: 0.25,
-    autoStart: true,
   },
   bookmarkFolderIds: [],
   ebaySummary: {
@@ -104,10 +97,6 @@ export function mergeSettings(stored?: Partial<CmdkSettings>): CmdkSettings {
     newTabOverride: {
       ...(DEFAULT_SETTINGS.newTabOverride || {}),
       ...(stored.newTabOverride || {}),
-    },
-    controllerTesting: {
-      ...(DEFAULT_SETTINGS.controllerTesting || {}),
-      ...(stored.controllerTesting || {}),
     },
     bookmarkFolderIds: stored.bookmarkFolderIds
       ? [...stored.bookmarkFolderIds]
@@ -171,7 +160,6 @@ export function structuredCloneSettings(settings: CmdkSettings): CmdkSettings {
     bookmarkFolderIds: [...(settings.bookmarkFolderIds || [])],
     shopifyButtons: { ...(settings.shopifyButtons || {}) },
     newTabOverride: { ...(settings.newTabOverride || {}) },
-    controllerTesting: { ...(settings.controllerTesting || {}) },
     ebaySummary: { ...(settings.ebaySummary || {}) },
     upcHighlighter: { ...(settings.upcHighlighter || {}) },
     csvLinks: { ...(settings.csvLinks || {}) },
