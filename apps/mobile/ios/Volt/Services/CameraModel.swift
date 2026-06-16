@@ -146,6 +146,31 @@ final class CameraModel: NSObject {
         setZoomFactor(zoomFactor + delta)
     }
 
+    func scaleZoom(by scale: CGFloat) {
+        guard let videoDevice else { return }
+        sessionQueue.async { [weak self] in
+            do {
+                try videoDevice.lockForConfiguration()
+                let maxZoomFactor = min(videoDevice.maxAvailableVideoZoomFactor, 6)
+                let clampedFactor = max(
+                    videoDevice.minAvailableVideoZoomFactor,
+                    min(maxZoomFactor, videoDevice.videoZoomFactor * scale)
+                )
+                videoDevice.videoZoomFactor = clampedFactor
+                videoDevice.unlockForConfiguration()
+                Task { @MainActor in
+                    self?.minZoomFactor = videoDevice.minAvailableVideoZoomFactor
+                    self?.maxZoomFactor = maxZoomFactor
+                    self?.zoomFactor = clampedFactor
+                }
+            } catch {
+                Task { @MainActor in
+                    self?.errorMessage = error.localizedDescription
+                }
+            }
+        }
+    }
+
     func focus(at point: CGPoint) {
         guard let videoDevice else { return }
         sessionQueue.async { [weak self] in

@@ -4,28 +4,34 @@ import SwiftUI
 struct CameraPreview: UIViewRepresentable {
     let previewLayer: AVCaptureVideoPreviewLayer
     var onTap: ((CGPoint, CGPoint) -> Void)?
+    var onPinch: ((CGFloat) -> Void)?
 
     func makeUIView(context: Context) -> PreviewLayerHostView {
         let view = PreviewLayerHostView()
         view.install(previewLayer)
         view.onTap = onTap
+        view.onPinch = onPinch
         return view
     }
 
     func updateUIView(_ uiView: PreviewLayerHostView, context: Context) {
         uiView.install(previewLayer)
         uiView.onTap = onTap
+        uiView.onPinch = onPinch
     }
 }
 
 final class PreviewLayerHostView: UIView {
     private weak var previewLayer: AVCaptureVideoPreviewLayer?
     var onTap: ((CGPoint, CGPoint) -> Void)?
+    var onPinch: ((CGFloat) -> Void)?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
         let tapRecognizer = UITapGestureRecognizer(target: self, action: #selector(handleTap(_:)))
         addGestureRecognizer(tapRecognizer)
+        let pinchRecognizer = UIPinchGestureRecognizer(target: self, action: #selector(handlePinch(_:)))
+        addGestureRecognizer(pinchRecognizer)
     }
 
     required init?(coder: NSCoder) {
@@ -50,5 +56,11 @@ final class PreviewLayerHostView: UIView {
         let layerPoint = recognizer.location(in: self)
         let devicePoint = previewLayer.captureDevicePointConverted(fromLayerPoint: layerPoint)
         onTap?(devicePoint, layerPoint)
+    }
+
+    @objc private func handlePinch(_ recognizer: UIPinchGestureRecognizer) {
+        guard recognizer.state == .began || recognizer.state == .changed else { return }
+        onPinch?(recognizer.scale)
+        recognizer.scale = 1
     }
 }

@@ -103,8 +103,7 @@ final class ScannerStore {
         let normalizedImage = image.normalizedForProcessing()
         let preparedImage = normalizedImage
             .croppedToVisiblePreview(
-                previewSize: camera.previewLayer.bounds.size,
-                zoomFactor: camera.zoomFactor
+                previewSize: camera.previewLayer.bounds.size
             )
             .cleanedForOCR()
             .resized(maxLongEdge: ocrCaptureMaxDimension)
@@ -401,7 +400,7 @@ private extension UIImage {
         return UIImage(cgImage: cropped, scale: scale, orientation: .up)
     }
 
-    func croppedToVisiblePreview(previewSize: CGSize, zoomFactor: CGFloat) -> UIImage {
+    func croppedToVisiblePreview(previewSize: CGSize) -> UIImage {
         guard let cgImage,
               previewSize.width > 0,
               previewSize.height > 0,
@@ -419,16 +418,11 @@ private extension UIImage {
             aspectFillSize = CGSize(width: size.width, height: size.width / previewAspectRatio)
         }
 
-        let effectiveZoomFactor = max(zoomFactor, 1)
-        let cropSize = CGSize(
-            width: max(1, aspectFillSize.width / effectiveZoomFactor),
-            height: max(1, aspectFillSize.height / effectiveZoomFactor)
-        )
         let cropOrigin = CGPoint(
-            x: max(0, (size.width - cropSize.width) / 2),
-            y: max(0, (size.height - cropSize.height) / 2)
+            x: max(0, (size.width - aspectFillSize.width) / 2),
+            y: max(0, (size.height - aspectFillSize.height) / 2)
         )
-        let cropRect = CGRect(origin: cropOrigin, size: cropSize)
+        let cropRect = CGRect(origin: cropOrigin, size: aspectFillSize)
             .applying(CGAffineTransform(scaleX: scale, y: scale))
             .integral
             .intersection(CGRect(x: 0, y: 0, width: cgImage.width, height: cgImage.height))

@@ -187,7 +187,7 @@ struct CaptureSessionView: View {
             }
         }
         .confirmationDialog(
-            selectedTextRegion?.text ?? "Text",
+            "Extracted Text",
             isPresented: Binding(
                 get: { selectedTextRegion != nil },
                 set: { isPresented in
@@ -442,7 +442,9 @@ struct ScannerCameraLayer: View {
     var body: some View {
         Group {
             if store.camera.authorizationStatus == .authorized {
-                CameraPreview(previewLayer: store.camera.previewLayer) { devicePoint, layerPoint in
+                CameraPreview(
+                    previewLayer: store.camera.previewLayer,
+                    onTap: { devicePoint, layerPoint in
                     focusPoint = layerPoint
                     store.camera.focus(at: devicePoint)
                     Task {
@@ -453,7 +455,11 @@ struct ScannerCameraLayer: View {
                             }
                         }
                     }
-                }
+                    },
+                    onPinch: { scale in
+                        store.camera.scaleZoom(by: scale)
+                    }
+                )
                     .overlay(alignment: .center) {
                         CaptureGuideOverlay(mode: store.activeMode, gridVisible: gridVisible)
                             .allowsHitTesting(false)
