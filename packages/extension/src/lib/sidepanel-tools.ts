@@ -22,8 +22,8 @@ export interface SidepanelToolMetadata {
 export const SIDEPANEL_TOOLS: SidepanelToolMetadata[] = [
   {
     id: "top-offers",
-    label: "Top Offer Calculator",
-    description: "Open top offer calculator in the sidepanel",
+    label: "Offer Calculator",
+    description: "Open offer calculator in the sidepanel",
     icon: Calculator,
   },
   {

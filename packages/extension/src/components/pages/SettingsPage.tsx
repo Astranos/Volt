@@ -907,7 +907,7 @@ export default function SettingsPage() {
               className="flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg hover:bg-muted/50 transition-colors text-foreground"
             >
               <MapPin className="w-4 h-4" />
-              Top Offers
+              Offers
             </a>
           </nav>
 
@@ -1588,7 +1588,7 @@ export default function SettingsPage() {
                         • Quick actions: Copy, Paste, Open in New Tab, Save As
                       </p>
                       <p>
-                        • Search tools: Google UPC/MPN, eBay Sold, UPCItemDB,
+                        • Search tools: Google UPC, eBay Sold, UPCItemDB,
                         PriceCharting
                       </p>
                       <p>• Ctrl+Right-click to show native menu instead</p>
@@ -1748,13 +1748,13 @@ export default function SettingsPage() {
             </div>
           </section>
 
-          {/* Top Offers Section */}
+          {/* Offers Section */}
           <section id="topoffers" className="scroll-mt-20">
             <div className="mb-6 flex items-center justify-between">
               <div>
-                <h2 className="text-2xl font-bold mb-2">Top Offers</h2>
+                <h2 className="text-2xl font-bold mb-2">Offers</h2>
                 <p className="text-muted-foreground">
-                  Configure settings for the Top Offers calculator
+                  Configure settings for the Offer Calculator
                 </p>
               </div>
               <button
@@ -1983,7 +1983,7 @@ export default function SettingsPage() {
                 <div>
                   <h3 className="font-semibold text-lg mb-4">Checkout Rate</h3>
                   <p className="text-sm text-muted-foreground mb-4">
-                    Set the percentage used for the "Top Offer (Checkout)" calculation. This rate applies to all amounts.
+                    Set the percentage used for the "Checkout Offer" max calculation. This rate applies to all amounts.
                   </p>
                   <div className="grid grid-cols-12 gap-4 items-center">
                     <div className="col-span-5 text-sm font-medium pl-2">

@@ -22,6 +22,7 @@ import {
   ScanText,
   Mic,
   Smartphone,
+  Calculator,
 } from "lucide-react";
 
 /**
@@ -385,6 +386,12 @@ export default defineContentScript({
       } catch (_) {}
     };
 
+    const openSidepanelTool = (tool: string) => {
+      try {
+        chrome.runtime.sendMessage({ action: "openInSidebar", tool, mode: "open" });
+      } catch (_) {}
+    };
+
     const quickActions: MenuAction[] = [
       {
         id: "copy",
@@ -573,26 +580,6 @@ export default defineContentScript({
           ),
       },
       {
-        id: "mpn-google",
-        label: "Google for MPN",
-        shortcut: "M",
-        description: "Find manufacturer part numbers on Google",
-        icon: Search,
-        requiresSelection: true,
-        getUrl: (s) =>
-          `https://www.google.com/search?q=${encodeURIComponent(
-            "MPN for " + s
-          )}`,
-        onInvoke: ({ selection }) =>
-          selection &&
-          openSearchPopup(
-            `https://www.google.com/search?q=${encodeURIComponent(
-              "MPN for " + selection
-            )}`
-          ),
-      },
-
-      {
         id: "upcitemdb",
         label: "Search UPCItemDB",
         shortcut: "U",
@@ -625,6 +612,14 @@ export default defineContentScript({
         description: "Open mobile scanner",
         icon: Smartphone,
         onInvoke: () => openMobileCapture("barcode"),
+      },
+      {
+        id: "offer-calculator",
+        label: "Offer Calculator",
+        shortcut: "O",
+        description: "Open offer calculator in the sidepanel",
+        icon: Calculator,
+        onInvoke: () => openSidepanelTool("top-offers"),
       },
       {
         id: "settings",

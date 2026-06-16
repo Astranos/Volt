@@ -2,15 +2,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Input } from "../ui/input";
-import { Check } from "lucide-react";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "../ui/tooltip";
+import { Calculator, Check, Settings } from "lucide-react";
 import SidepanelLayout from "./SidepanelLayout";
+import { cn } from "../../lib/utils";
 import type {
   SyncStorageChanges,
   SyncStorageResult,
@@ -21,15 +15,88 @@ import {
   formatCurrency,
 } from "../../domain/top-offers";
 
-// Top Offer Calculator Component
+type OfferResult = {
+  id: string;
+  label: string;
+  startingValue: number;
+  maxValue: number;
+};
+
+function OfferResultCard({
+  offer,
+  copied,
+  onCopy,
+}: {
+  offer: OfferResult;
+  copied: string | null;
+  onCopy: (amount: number, id: string) => void;
+}) {
+  const startingId = `${offer.id}-starting`;
+  const maxId = `${offer.id}-max`;
+
+  return (
+    <div className="liquid-glass concentric-lg select-none p-3.5">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="text-sm font-bold text-stone-900 dark:text-stone-50">
+          {offer.label}
+        </div>
+        <div className="rounded-full bg-green-500/12 px-2 py-0.5 text-[11px] font-bold text-green-700 dark:text-green-300">
+          Cash guide
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={() => onCopy(offer.startingValue, startingId)}
+          className="liquid-glass-soft concentric-md min-h-20 px-3 py-3 text-left transition hover:bg-white/60 active:scale-[0.99] dark:hover:bg-white/10"
+        >
+          <div className="text-[11px] font-bold uppercase tracking-normal text-stone-500 dark:text-stone-400">
+            Start
+          </div>
+          <div className="mt-1 text-[28px] font-bold leading-none text-green-700 dark:text-green-300">
+            ${formatCurrency(offer.startingValue)}
+          </div>
+          {copied === startingId && (
+            <div className="mt-2 flex items-center gap-1 text-xs font-bold text-green-700 dark:text-green-300">
+              <Check className="h-3 w-3" />
+              Copied
+            </div>
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={() => onCopy(offer.maxValue, maxId)}
+          className="liquid-glass-soft concentric-md min-h-20 px-3 py-3 text-left transition hover:bg-white/60 active:scale-[0.99] dark:hover:bg-white/10"
+        >
+          <div className="text-[11px] font-bold uppercase tracking-normal text-stone-500 dark:text-stone-400">
+            Max
+          </div>
+          <div className="mt-1 text-[28px] font-bold leading-none text-green-700 dark:text-green-300">
+            ${formatCurrency(offer.maxValue)}
+          </div>
+          {copied === maxId && (
+            <div className="mt-2 flex items-center gap-1 text-xs font-bold text-green-700 dark:text-green-300">
+              <Check className="h-3 w-3" />
+              Copied
+            </div>
+          )}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function TopOfferCalculator() {
   const [projectionAmount, setProjectionAmount] = useState("");
   const [topOffersSettings, setTopOffersSettings] = useState<TopOffersSettings>(
     {}
   );
   const [results, setResults] = useState({
+    startingOffer: 0,
     topOffer: 0,
+    startingOfferPremium: 0,
     topOfferPremium: 0,
+    startingOfferCheckout: 0,
     topOfferCheckout: 0,
   });
   const [customOfferResults, setCustomOfferResults] = useState<
@@ -89,8 +156,11 @@ function TopOfferCalculator() {
     const calculated = calculateTopOfferResults(projection, topOffersSettings);
 
     setResults({
+      startingOffer: calculated.startingOffer,
       topOffer: calculated.topOffer,
+      startingOfferPremium: calculated.startingOfferPremium,
       topOfferPremium: calculated.topOfferPremium,
+      startingOfferCheckout: calculated.startingOfferCheckout,
       topOfferCheckout: calculated.topOfferCheckout,
     });
     setCustomOfferResults(calculated.customOffers);
@@ -107,76 +177,59 @@ function TopOfferCalculator() {
   };
 
   return (
-    <SidepanelLayout>
-      <div className="p-4 space-y-4">
-        <div className="space-y-4">
-          <div>
-            <Input
+    <SidepanelLayout className="bg-transparent">
+      <div className="space-y-4 px-3 pb-4 pt-3">
+        <div className="liquid-glass concentric-xl p-3">
+          <label className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-normal text-stone-500 dark:text-stone-400">
+            <Calculator className="h-3.5 w-3.5" />
+            Projected sale price
+          </label>
+          <div className="liquid-glass-soft concentric-lg flex h-14 items-center gap-2 px-3 transition focus-within:ring-2 focus-within:ring-green-500/50">
+            <span className="text-lg font-bold text-stone-400 dark:text-stone-500">$</span>
+            <input
               type="text"
+              inputMode="decimal"
               value={projectionAmount}
               onChange={(e) => handleProjectionChange(e.target.value)}
-              className="text-lg h-12 bg-slate-50 focus:bg-white"
-              placeholder="Enter Projection"
+              className="h-full min-w-0 flex-1 bg-transparent text-2xl font-bold text-stone-950 outline-none placeholder:text-stone-400 dark:text-stone-50 dark:placeholder:text-stone-600"
+              placeholder="0"
             />
           </div>
+        </div>
 
-          <div className="grid grid-cols-1 gap-3">
-            <div
-              onClick={() => handleCopy(results.topOffer, "standard")}
-              className="text-center p-4 bg-secondary/50 rounded-lg border border-border/50 cursor-pointer hover:bg-secondary transition-colors select-none"
-            >
-              <div className="text-3xl font-bold text-primary">
-                ${formatCurrency(results.topOffer)}
-              </div>
-              <div className="text-sm text-muted-foreground mt-1 flex items-center justify-center gap-1.5">
-                {copied === "standard" ? (
-                  <>
-                    <Check className="h-3.5 w-3.5 text-green-500" />
-                    <span className="text-green-500 font-medium">Copied!</span>
-                  </>
-                ) : (
-                  "Top Offer"
-                )}
-              </div>
-            </div>
+        <div className="space-y-3">
+            <OfferResultCard
+              offer={{
+                id: "standard",
+                label: "Offer",
+                startingValue: results.startingOffer,
+                maxValue: results.topOffer,
+              }}
+              copied={copied}
+              onCopy={handleCopy}
+            />
 
-            <div
-              onClick={() => handleCopy(results.topOfferPremium, "premium")}
-              className="text-center p-4 bg-secondary/50 rounded-lg border border-border/50 cursor-pointer hover:bg-secondary transition-colors select-none"
-            >
-              <div className="text-3xl font-bold text-primary">
-                ${formatCurrency(results.topOfferPremium)}
-              </div>
-              <div className="text-sm text-muted-foreground mt-1 flex items-center justify-center gap-1.5">
-                {copied === "premium" ? (
-                  <>
-                    <Check className="h-3.5 w-3.5 text-green-500" />
-                    <span className="text-green-500 font-medium">Copied!</span>
-                  </>
-                ) : (
-                  "Top Offer (Premium)"
-                )}
-              </div>
-            </div>
+            <OfferResultCard
+              offer={{
+                id: "premium",
+                label: "Premium Offer",
+                startingValue: results.startingOfferPremium,
+                maxValue: results.topOfferPremium,
+              }}
+              copied={copied}
+              onCopy={handleCopy}
+            />
 
-            <div
-              onClick={() => handleCopy(results.topOfferCheckout, "checkout")}
-              className="text-center p-4 bg-secondary/50 rounded-lg border border-border/50 cursor-pointer hover:bg-secondary transition-colors select-none"
-            >
-              <div className="text-3xl font-bold text-primary">
-                ${formatCurrency(results.topOfferCheckout)}
-              </div>
-              <div className="text-sm text-muted-foreground mt-1 flex items-center justify-center gap-1.5">
-                {copied === "checkout" ? (
-                  <>
-                    <Check className="h-3.5 w-3.5 text-green-500" />
-                    <span className="text-green-500 font-medium">Copied!</span>
-                  </>
-                ) : (
-                  "Top Offer (Checkout)"
-                )}
-              </div>
-            </div>
+            <OfferResultCard
+              offer={{
+                id: "checkout",
+                label: "Checkout Offer",
+                startingValue: results.startingOfferCheckout,
+                maxValue: results.topOfferCheckout,
+              }}
+              copied={copied}
+              onCopy={handleCopy}
+            />
 
             {/* Custom Offers */}
             {(topOffersSettings.customOffers || []).map((offer) => {
@@ -186,16 +239,16 @@ function TopOfferCalculator() {
                 <div
                   key={offer.id}
                   onClick={() => handleCopy(value, offer.id)}
-                  className="text-center p-4 bg-secondary/50 rounded-lg border border-border/50 cursor-pointer hover:bg-secondary transition-colors select-none"
+                  className="liquid-glass concentric-lg cursor-pointer p-3.5 text-center transition hover:bg-white/60 active:scale-[0.99] dark:hover:bg-white/10"
                 >
-                  <div className="text-3xl font-bold text-primary">
+                  <div className="text-[28px] font-bold leading-none text-green-700 dark:text-green-300">
                     ${formatCurrency(value)}
                   </div>
-                  <div className="text-sm text-muted-foreground mt-1 flex items-center justify-center gap-1.5">
+                  <div className="mt-2 flex items-center justify-center gap-1.5 text-xs font-bold text-stone-500 dark:text-stone-400">
                     {copied === offer.id ? (
                       <>
-                        <Check className="h-3.5 w-3.5 text-green-500" />
-                        <span className="text-green-500 font-medium">
+                        <Check className="h-3.5 w-3.5 text-green-700 dark:text-green-300" />
+                        <span className="text-green-700 dark:text-green-300">
                           Copied!
                         </span>
                       </>
@@ -206,26 +259,17 @@ function TopOfferCalculator() {
                 </div>
               );
             })}
-          </div>
-
-          {/* Customize Button */}
-          <div className="pt-2 border-t border-border/50">
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={openSettings}
-                    className="w-full h-9 px-2 text-muted-foreground hover:text-foreground hover:bg-muted/80 rounded-md transition-colors flex items-center justify-center gap-1.5 text-sm"
-                  >
-                    <span>Customize</span>
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent className="border-border bg-popover text-popover-foreground">
-                  <p>Customize</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
+          <button
+            type="button"
+            onClick={openSettings}
+            className={cn(
+              "liquid-glass-soft concentric-lg flex h-11 w-full items-center justify-center gap-2 text-sm font-bold text-stone-700 transition",
+              "hover:bg-white/70 active:scale-[0.99] dark:text-stone-200 dark:hover:bg-white/10",
+            )}
+          >
+            <Settings className="h-4 w-4" />
+            Customize
+          </button>
         </div>
       </div>
     </SidepanelLayout>

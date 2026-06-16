@@ -106,7 +106,7 @@ All toolbar tools are searchable in CMDK. Press Enter to open in the sidebar:
 
 - Controller Testing
 - Help Center
-- Top Offers
+- Offer Calculator
 - Checkout Prices
 - Minimum Requirements
 - Price Charting

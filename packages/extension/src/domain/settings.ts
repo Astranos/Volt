@@ -1,5 +1,8 @@
 import type { CmdkSettings } from "../types/settings";
-import { DEFAULT_TOP_OFFERS_SETTINGS } from "./top-offers";
+import {
+  DEFAULT_TOP_OFFERS_SETTINGS,
+  migrateDefaultTopOfferRates,
+} from "./top-offers";
 
 export const DEFAULT_SETTINGS: CmdkSettings = {
   enabledSources: {
@@ -75,6 +78,8 @@ export function mergeSettings(stored?: Partial<CmdkSettings>): CmdkSettings {
     }
   }
 
+  const customRates = migrateDefaultTopOfferRates(stored.topOffers?.customRates);
+
   return {
     ...DEFAULT_SETTINGS,
     ...stored,
@@ -123,23 +128,23 @@ export function mergeSettings(stored?: Partial<CmdkSettings>): CmdkSettings {
       customRates: {
         standard: {
           ...DEFAULT_SETTINGS.topOffers!.customRates!.standard,
-          ...(stored.topOffers?.customRates?.standard || {}),
+          ...customRates.standard,
           rules:
-            stored.topOffers?.customRates?.standard?.rules ||
+            customRates.standard.rules ||
             DEFAULT_SETTINGS.topOffers!.customRates!.standard.rules,
         },
         premium: {
           ...DEFAULT_SETTINGS.topOffers!.customRates!.premium,
-          ...(stored.topOffers?.customRates?.premium || {}),
+          ...customRates.premium,
           rules:
-            stored.topOffers?.customRates?.premium?.rules ||
+            customRates.premium.rules ||
             DEFAULT_SETTINGS.topOffers!.customRates!.premium.rules,
         },
         checkout: {
           ...(DEFAULT_SETTINGS.topOffers!.customRates!.checkout || {}),
-          ...(stored.topOffers?.customRates?.checkout || {}),
+          ...(customRates.checkout || {}),
           percentage:
-            stored.topOffers?.customRates?.checkout?.percentage ??
+            customRates.checkout?.percentage ??
             DEFAULT_SETTINGS.topOffers!.customRates!.checkout!.percentage,
         },
       },

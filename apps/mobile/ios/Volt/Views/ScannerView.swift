@@ -174,7 +174,7 @@ struct CaptureSessionView: View {
                 )
             } else {
                 CameraSessionControls(
-                    activeMode: store.activeMode,
+                    activeMode: $store.activeMode,
                     torchEnabled: store.camera.torchEnabled,
                     zoomLabel: String(format: "%.1fx", Double(store.camera.zoomFactor)),
                     gridVisible: gridVisible,
@@ -196,7 +196,7 @@ struct CaptureSessionView: View {
                         gridVisible.toggle()
                     },
                     onCapture: {
-                        Task { await store.captureTextForReview() }
+                        Task { await store.capture() }
                     }
                 )
             }
@@ -212,7 +212,7 @@ struct CaptureSessionView: View {
 }
 
 struct CameraSessionControls: View {
-    let activeMode: CaptureMode
+    @Binding var activeMode: CaptureMode
     let torchEnabled: Bool
     let zoomLabel: String
     let gridVisible: Bool
@@ -228,7 +228,7 @@ struct CameraSessionControls: View {
         VStack(spacing: 12) {
             cameraToolsRow
 
-            Text("Hold document in frame")
+            Text(captureHint)
                 .font(.subheadline.bold())
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
@@ -250,13 +250,30 @@ struct CameraSessionControls: View {
 
                 shutterButton
             }
+            .frame(height: 96)
+
+            Picker("Capture mode", selection: $activeMode) {
+                Text("Text").tag(CaptureMode.ocr)
+                Text("Barcodes").tag(CaptureMode.barcode)
+                Text("Photos").tag(CaptureMode.photo)
+            }
+            .pickerStyle(.segmented)
+            .controlSize(.large)
+            .tint(.blue)
+            .colorScheme(.light)
+            .padding(4)
+            .frame(maxWidth: 360)
+            .background(.white.opacity(0.92), in: Capsule())
+            .overlay {
+                Capsule().stroke(.white.opacity(0.35), lineWidth: 1)
+            }
         }
         .padding(.horizontal, 18)
-        .padding(.top, 14)
-        .padding(.bottom, 10)
+        .padding(.top, 18)
+        .padding(.bottom, 22)
         .background {
             LinearGradient(
-                colors: [.black.opacity(0), .black.opacity(0.74), .black.opacity(0.9)],
+                colors: [.black.opacity(0), .black.opacity(0.78), .black.opacity(0.94)],
                 startPoint: .top,
                 endPoint: .bottom
             )
@@ -327,6 +344,51 @@ struct CameraSessionControls: View {
         }
     }
 
+    private var captureHint: String {
+        switch activeMode {
+        case .ocr:
+            "Hold document in frame"
+        case .barcode:
+            "Center barcode in frame"
+        case .photo:
+            "Frame photo"
+        case .dictation:
+            "Capture"
+        }
+    }
+
+    private var shutterSymbol: String {
+        if isRecognizingText {
+            return "hourglass"
+        }
+        switch activeMode {
+        case .ocr:
+            return "doc.viewfinder"
+        case .barcode:
+            return "barcode.viewfinder"
+        case .photo:
+            return "camera.viewfinder"
+        case .dictation:
+            return "doc.viewfinder"
+        }
+    }
+
+    private var shutterAccessibilityLabel: String {
+        if isRecognizingText {
+            return "Capturing document"
+        }
+        switch activeMode {
+        case .ocr:
+            return "Capture text"
+        case .barcode:
+            return "Capture barcode"
+        case .photo:
+            return "Capture photo"
+        case .dictation:
+            return "Capture"
+        }
+    }
+
     private var shutterButton: some View {
         Button(action: onCapture) {
             ZStack {
@@ -336,13 +398,13 @@ struct CameraSessionControls: View {
                 Circle()
                     .stroke(.white.opacity(0.52), lineWidth: 4)
                     .frame(width: 92, height: 92)
-                Image(systemName: isRecognizingText ? "hourglass" : "doc.viewfinder")
+                Image(systemName: shutterSymbol)
                     .font(.system(size: 30, weight: .semibold))
                     .foregroundStyle(.black)
             }
         }
         .disabled(isRecognizingText)
-        .accessibilityLabel(isRecognizingText ? "Capturing document" : "Capture document")
+        .accessibilityLabel(shutterAccessibilityLabel)
     }
 }
 
@@ -604,36 +666,40 @@ struct CaptureGuideOverlay: View {
 
     var body: some View {
         GeometryReader { proxy in
-            let side = min(proxy.size.width - 48, proxy.size.height * 0.58)
+            let targetZone = captureTargetZone(in: proxy)
+            let guideSize = guideSize(for: mode, in: targetZone, screenWidth: proxy.size.width)
 
             ZStack {
                 switch mode {
                 case .barcode:
                     RoundedRectangle(cornerRadius: 16)
                         .stroke(.green, lineWidth: 3)
-                        .frame(width: min(proxy.size.width - 64, 340), height: 190)
+                        .frame(width: guideSize.width, height: guideSize.height)
                         .overlay {
                             Rectangle()
                                 .fill(.green.opacity(0.75))
                                 .frame(height: 2)
                                 .padding(.horizontal, 16)
                         }
+                        .position(x: targetZone.midX, y: targetZone.midY)
                 case .photo:
                     RoundedRectangle(cornerRadius: 24)
                         .stroke(.white.opacity(0.72), lineWidth: 1.2)
                         .background(.black.opacity(0.08), in: RoundedRectangle(cornerRadius: 24))
-                        .frame(width: side, height: side)
+                        .frame(width: guideSize.width, height: guideSize.height)
                         .overlay {
                             if gridVisible {
                                 SquareGrid()
                                     .clipShape(RoundedRectangle(cornerRadius: 24))
-                                    .frame(width: side, height: side)
+                                    .frame(width: guideSize.width, height: guideSize.height)
                             }
                         }
+                        .position(x: targetZone.midX, y: targetZone.midY)
                 case .ocr:
                     RoundedRectangle(cornerRadius: 18)
                         .stroke(.white.opacity(0.62), lineWidth: 2)
-                        .frame(width: min(proxy.size.width - 48, 360), height: min(proxy.size.height * 0.56, 420))
+                        .frame(width: guideSize.width, height: guideSize.height)
+                        .position(x: targetZone.midX, y: targetZone.midY)
                 case .dictation:
                     EmptyView()
                 }
@@ -641,6 +707,39 @@ struct CaptureGuideOverlay: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .allowsHitTesting(false)
+    }
+
+    private func captureTargetZone(in proxy: GeometryProxy) -> CGRect {
+        let topInset = proxy.safeAreaInsets.top
+        let bottomInset = proxy.safeAreaInsets.bottom
+        let top = topInset + 88
+        let reservedControlsHeight: CGFloat = 318 + bottomInset
+        let bottom = max(top + 220, proxy.size.height - reservedControlsHeight)
+
+        return CGRect(
+            x: 24,
+            y: top,
+            width: max(0, proxy.size.width - 48),
+            height: max(220, bottom - top)
+        )
+    }
+
+    private func guideSize(for mode: CaptureMode, in targetZone: CGRect, screenWidth: CGFloat) -> CGSize {
+        switch mode {
+        case .ocr:
+            let width = min(targetZone.width, 360)
+            let height = min(targetZone.height * 0.9, width * 1.28)
+            return CGSize(width: width, height: max(260, height))
+        case .barcode:
+            let width = min(targetZone.width, 360)
+            let height = min(max(targetZone.height * 0.34, 128), 176)
+            return CGSize(width: width, height: height)
+        case .photo:
+            let side = min(targetZone.width, targetZone.height * 0.84, 360)
+            return CGSize(width: side, height: side)
+        case .dictation:
+            return .zero
+        }
     }
 }
 

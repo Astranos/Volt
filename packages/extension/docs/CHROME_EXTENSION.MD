@@ -11,7 +11,7 @@ Key Features:
 - **eBay Summary** - Get a quick summary when viewing search results on eBay.
 - **Shopify Buttons** - Instantly check market pricing for items when viewing in Shopify.
 - **Controller Testing** - Built-in controller testing with color visuals for indications of problems with the controller.
-- **Top Offer Calculator** - Automated buyout offer calculations based on projected sell prices with support for custom rate profiles.
+- **Offer Calculator** - Automated buyout offer calculations based on projected sell prices with support for custom rate profiles.
 - **eBay Categories** - Quickly find correct eBay Taxonomy categories for accurate product listing.
 - **Cost Breakdown** - Detailed profit margin analysis and cost distribution for inventory items.
 - **Shopify Help** - Reference guide for Shopify tags and sales channel optimization.

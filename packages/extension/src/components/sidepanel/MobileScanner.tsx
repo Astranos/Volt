@@ -750,38 +750,44 @@ function CompactScannerStatus({
           : "Open the pairing popup to add an iPhone.";
 
   return (
-    <div className="liquid-glass concentric-xl flex min-w-0 items-center justify-between gap-3 px-3 py-2.5">
-      <div className="flex min-w-0 items-center gap-2.5">
-        <span className="liquid-glass-soft flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-green-700 dark:text-green-300">
+    <div className="liquid-glass concentric-xl flex min-w-0 flex-col gap-3 px-3.5 py-3">
+      <div className="flex min-w-0 items-start gap-3">
+        <span className="liquid-glass-soft flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-green-700 dark:text-green-300">
           <Smartphone className="h-4 w-4" />
         </span>
-        <div className="min-w-0">
-          <div className="truncate text-sm font-bold text-stone-900 dark:text-stone-50">
+        <div className="min-w-0 flex-1">
+          <div className="text-[15px] font-bold leading-tight text-stone-900 dark:text-stone-50">
             Mobile Scanner
           </div>
-          <div className="truncate text-[11px] font-medium text-stone-500 dark:text-stone-400">
+          <div className="mt-1 text-xs font-medium leading-snug text-stone-500 dark:text-stone-400">
             {copy}
           </div>
         </div>
+        <div className="shrink-0">
+          <ConnectionPill status={status} error={error} />
+        </div>
       </div>
-      <div className="flex shrink-0 items-center gap-2">
-        <ConnectionPill status={status} error={error} />
+      <div className="grid grid-cols-2 gap-2">
         <button
           type="button"
           onClick={onAddPhone}
-          className="liquid-glass-soft inline-flex h-8 w-8 items-center justify-center rounded-full text-stone-600 transition hover:text-stone-900 active:scale-95 dark:text-stone-300 dark:hover:text-stone-50"
-          aria-label="Add phone"
+          className="liquid-glass-soft inline-flex h-10 min-w-0 items-center justify-center gap-2 rounded-full px-3 text-xs font-bold text-stone-700 transition hover:text-stone-950 active:scale-[0.99] dark:text-stone-200 dark:hover:text-stone-50"
         >
-          <Plus className="h-3.5 w-3.5" />
+          <Plus className="h-3.5 w-3.5 shrink-0" />
+          <span className="truncate">Add iPhone</span>
         </button>
         <button
           type="button"
           onClick={connected ? onDisconnect : onForceRestart}
           disabled={creating}
-          className="liquid-glass-soft inline-flex h-8 w-8 items-center justify-center rounded-full text-stone-600 transition hover:text-stone-900 active:scale-95 disabled:opacity-40 dark:text-stone-300 dark:hover:text-stone-50"
-          aria-label={connected ? "Disconnect phones" : "Restart scanner"}
+          className="liquid-glass-soft inline-flex h-10 min-w-0 items-center justify-center gap-2 rounded-full px-3 text-xs font-bold text-stone-700 transition hover:text-stone-950 active:scale-[0.99] disabled:opacity-40 dark:text-stone-200 dark:hover:text-stone-50"
         >
-          {connected ? <X className="h-3.5 w-3.5" /> : <RefreshCw className={cn("h-3.5 w-3.5", creating && "animate-spin")} />}
+          {connected ? (
+            <X className="h-3.5 w-3.5 shrink-0" />
+          ) : (
+            <RefreshCw className={cn("h-3.5 w-3.5 shrink-0", creating && "animate-spin")} />
+          )}
+          <span className="truncate">{connected ? "Disconnect" : "Restart"}</span>
         </button>
       </div>
     </div>

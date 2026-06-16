@@ -203,25 +203,25 @@ export default function UnifiedSidepanel() {
   return (
     <div className="sidepanel-shell h-full w-full flex flex-col">
       {/* Fixed Header */}
-      <div className="flex-none p-2 pb-2 z-10">
+      <div className="flex-none p-3 pb-3 z-10">
         <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              className="liquid-glass concentric-lg relative flex w-full min-w-0 items-center justify-between gap-2 overflow-hidden px-3 py-1.5 text-left text-sm font-semibold text-stone-950 transition focus:outline-none focus:ring-2 focus:ring-primary/40 hover:bg-white/60 dark:text-stone-50 dark:hover:bg-white/5"
+              className="liquid-glass concentric-lg relative flex min-h-14 w-full min-w-0 items-center justify-between gap-3 overflow-hidden px-4 py-3 text-left text-base font-semibold text-stone-950 transition focus:outline-none focus:ring-2 focus:ring-primary/40 hover:bg-white/60 dark:text-stone-50 dark:hover:bg-white/5"
               ref={triggerRef}
             >
               <span className="relative flex min-w-0 flex-1 items-center">
                 <span
                   className={cn(
-                    "flex min-w-0 items-center gap-2 transition-all duration-200 ease-out",
+                    "flex min-w-0 items-center gap-3 transition-all duration-200 ease-out",
                     toast
                       ? "-translate-y-1 opacity-0"
                       : "translate-y-0 opacity-100",
                   )}
                   aria-hidden={toast ? "true" : undefined}
                 >
-                  <activeToolMeta.icon className="h-4 w-4 shrink-0" />
+                  <activeToolMeta.icon className="h-5 w-5 shrink-0" />
                   <span className="whitespace-normal break-words leading-tight">{activeToolMeta.label}</span>
                 </span>
                 {toast && ToastIcon ? (
@@ -229,18 +229,18 @@ export default function UnifiedSidepanel() {
                     key={toast.id}
                     aria-live="polite"
                     className={cn(
-                      "volt-toast-enter absolute inset-y-0 left-0 flex min-w-0 items-center gap-2 text-sm font-bold",
+	                      "volt-toast-enter absolute inset-y-0 left-0 flex min-w-0 items-center gap-3 text-base font-bold",
                       toneStyles?.text,
                     )}
                   >
-                    <ToastIcon className="h-4 w-4 shrink-0" />
+                    <ToastIcon className="h-5 w-5 shrink-0" />
                     <span className="whitespace-normal break-words leading-tight">{toast.message}</span>
                   </span>
                 ) : null}
               </span>
               <ChevronDown
                 className={cn(
-                  "h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200",
+                  "h-5 w-5 shrink-0 text-muted-foreground transition-transform duration-200",
                   toast && "scale-90 opacity-60",
                 )}
               />
@@ -248,9 +248,9 @@ export default function UnifiedSidepanel() {
           </DropdownMenuTrigger>
           <DropdownMenuContent
             align="start"
-            sideOffset={2}
+	            sideOffset={6}
             onCloseAutoFocus={(event) => event.preventDefault()}
-            className="sidepanel-tool-menu liquid-glass concentric-lg p-1"
+	            className="sidepanel-tool-menu liquid-glass concentric-lg p-1.5"
             style={{
               width: dropdownWidth ? `${dropdownWidth}px` : undefined,
             }}
@@ -263,13 +263,13 @@ export default function UnifiedSidepanel() {
                   setMenuOpen(false);
                 }}
                 className={cn(
-                  "flex items-center gap-3 concentric-md px-3 py-2 text-sm font-medium transition-colors cursor-pointer",
+                  "flex items-center gap-3 concentric-md px-3.5 py-3 text-sm font-medium transition-colors cursor-pointer",
                   activeTool === tool.id
                     ? "bg-primary text-primary-foreground"
                     : "text-stone-800 hover:bg-green-100/85 hover:text-stone-950 focus:bg-green-100/85 focus:text-stone-950 data-[highlighted]:bg-green-100/85 data-[highlighted]:text-stone-950 dark:text-stone-100 dark:hover:bg-white/10 dark:hover:text-stone-50 dark:focus:bg-white/10 dark:focus:text-stone-50 dark:data-[highlighted]:bg-white/10 dark:data-[highlighted]:text-stone-50"
                 )}
               >
-                <tool.icon className="h-4 w-4" />
+                <tool.icon className="h-5 w-5" />
                 <span>{tool.label}</span>
               </DropdownMenuItem>
             ))}

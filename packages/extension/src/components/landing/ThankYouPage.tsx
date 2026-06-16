@@ -148,7 +148,7 @@ export default function ThankYouPage() {
     },
     {
       id: 8,
-      title: "Top Offer Calculator",
+      title: "Offer Calculator",
       description:
         "Automated buyout offer calculations based on projected sell prices with support for custom rate profiles.",
       icon: Calculator,
