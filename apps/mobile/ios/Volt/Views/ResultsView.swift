@@ -6,16 +6,7 @@ struct ResultsView: View {
     var body: some View {
         NavigationStack {
             List(store.results) { result in
-                VStack(alignment: .leading, spacing: 6) {
-                    Label(result.kind.rawValue.capitalized, systemImage: symbol(for: result.kind))
-                        .font(.headline)
-                    Text(result.value)
-                        .font(.body)
-                        .textSelection(.enabled)
-                    Text(result.format)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                CapturedResultRow(result: result)
                 .padding(.vertical, 4)
             }
             .overlay {
@@ -24,15 +15,6 @@ struct ResultsView: View {
                 }
             }
             .navigationTitle("Results")
-        }
-    }
-
-    private func symbol(for kind: ScanResult.Kind) -> String {
-        switch kind {
-        case .barcode: "barcode"
-        case .text: "doc.text"
-        case .photo: "photo"
-        case .dictation: "mic"
         }
     }
 }

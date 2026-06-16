@@ -71,7 +71,13 @@ final class ScannerStore {
 
         lastBarcodeValue = value
         lastBarcodeSentAt = now
-        let result = ScanResult(kind: .barcode, value: value, format: normalizedBarcodeFormat(camera.lastBarcodeFormat ?? "barcode"), capturedAt: now)
+        let result = ScanResult(
+            kind: .barcode,
+            value: value,
+            format: normalizedBarcodeFormat(camera.lastBarcodeFormat ?? "barcode"),
+            capturedAt: now,
+            deliveryState: initialDeliveryState
+        )
         results.insert(result, at: 0)
         sendCaptureResult(result, insertIntoCursor: true)
     }
@@ -140,7 +146,7 @@ final class ScannerStore {
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
         if handlePairingValue(text) { return }
-        let result = ScanResult(kind: .text, value: text, format: format)
+        let result = ScanResult(kind: .text, value: text, format: format, deliveryState: initialDeliveryState)
         results.insert(result, at: 0)
         sendCaptureResult(result, insertIntoCursor: true)
         statusText = connectionStatus.isConnected ? "Text sent" : "Text saved"
@@ -152,9 +158,15 @@ final class ScannerStore {
             .normalizedForProcessing()
             .centerSquareCropped()
             .resized(maxLongEdge: photoLongEdge)
-        let photoResult = ScanResult(kind: .photo, value: "Square photo captured", format: preparedImage.sizeDescription)
+        let photoResult = ScanResult(
+            kind: .photo,
+            value: "Photo",
+            format: preparedImage.sizeDescription,
+            deliveryState: initialDeliveryState,
+            imageData: preparedImage.previewJPEGData()
+        )
         results.insert(photoResult, at: 0)
-        await sendPhoto(preparedImage)
+        await sendPhoto(preparedImage, resultId: photoResult.id)
     }
 
     func capturePhoto() async {
@@ -164,7 +176,7 @@ final class ScannerStore {
     func commitDictation() {
         let text = dictation.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
-        let result = ScanResult(kind: .dictation, value: text, format: "dictation")
+        let result = ScanResult(kind: .dictation, value: text, format: "dictation", deliveryState: initialDeliveryState)
         results.insert(result, at: 0)
         sendDictation(text, phase: "final")
         sendDictation(nil, phase: "stopped")
@@ -302,7 +314,9 @@ final class ScannerStore {
                 insertIntoCursor: insertIntoCursor,
                 contributorId: contributorId
             ))
+            updateResultDeliveryState(id: result.id, state: .sent)
         } catch {
+            updateResultDeliveryState(id: result.id, state: .failed)
             applyConnectionStatus(.error(error.localizedDescription))
         }
     }
@@ -323,10 +337,11 @@ final class ScannerStore {
         }
     }
 
-    private func sendPhoto(_ image: UIImage) async {
+    private func sendPhoto(_ image: UIImage, resultId: ScanResult.ID) async {
         guard connectionStatus.isConnected else { return }
         guard let data = image.jpegData(compressionQuality: 0.76) else {
             statusText = "Could not prepare photo"
+            updateResultDeliveryState(id: resultId, state: .failed)
             return
         }
         let now = Date.now
@@ -342,10 +357,21 @@ final class ScannerStore {
         )
         do {
             try await connection.sendPhoto(payload)
+            updateResultDeliveryState(id: resultId, state: .sent)
             statusText = "Photo sent"
         } catch {
+            updateResultDeliveryState(id: resultId, state: .failed)
             applyConnectionStatus(.error(error.localizedDescription))
         }
+    }
+
+    private var initialDeliveryState: ScanResult.DeliveryState {
+        connectionStatus.isConnected ? .sending : .saved
+    }
+
+    private func updateResultDeliveryState(id: ScanResult.ID, state: ScanResult.DeliveryState) {
+        guard let index = results.firstIndex(where: { $0.id == id }) else { return }
+        results[index].deliveryState = state
     }
 
     private func currentPhotoBatch(now: Date) -> String {
@@ -375,6 +401,10 @@ final class ScannerStore {
 private extension UIImage {
     var sizeDescription: String {
         "\(Int(size.width)) x \(Int(size.height))"
+    }
+
+    func previewJPEGData() -> Data? {
+        resized(maxLongEdge: 640).jpegData(compressionQuality: 0.72)
     }
 
     func normalizedForProcessing() -> UIImage {

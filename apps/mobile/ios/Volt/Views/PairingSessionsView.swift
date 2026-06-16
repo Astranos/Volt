@@ -82,7 +82,7 @@ struct PairingSessionsView: View {
             .foregroundStyle(.white)
             .padding(18)
             .frame(maxWidth: .infinity)
-            .background(.blue, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .background(.green, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         }
         .buttonStyle(.plain)
         .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))

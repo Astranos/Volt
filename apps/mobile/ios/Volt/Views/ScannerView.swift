@@ -79,7 +79,7 @@ struct ScannerView: View {
             .foregroundStyle(.white)
             .padding(18)
             .frame(maxWidth: .infinity)
-            .background(.blue, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .background(.green, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         }
         .buttonStyle(.plain)
     }
@@ -264,7 +264,7 @@ struct CameraSessionControls: View {
             }
             .pickerStyle(.segmented)
             .controlSize(.large)
-            .tint(.blue)
+            .tint(.green)
             .colorScheme(.light)
             .padding(4)
             .frame(maxWidth: 360)
@@ -500,28 +500,71 @@ struct CapturedResultRow: View {
     let result: ScanResult
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: symbol)
-                .font(.headline)
-                .foregroundStyle(.tint)
-                .frame(width: 26)
+        HStack(alignment: .top, spacing: 12) {
+            preview
 
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title)
-                    .font(.subheadline.weight(.semibold))
-                Text(result.value)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(title)
+                        .font(.subheadline.weight(.semibold))
+                    Spacer(minLength: 0)
+                    deliveryBadge
+                }
+
+                Text(primaryText)
+                    .font(result.kind == .barcode ? .callout.monospaced() : .callout)
+                    .foregroundStyle(.primary)
+                    .lineLimit(result.kind == .photo ? 1 : 4)
                     .textSelection(.enabled)
-                Text(result.format)
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
+
+                HStack(spacing: 8) {
+                    Label(result.format, systemImage: "info.circle")
+                    Text(result.capturedAt, format: .dateTime.hour().minute())
+                }
+                .font(.caption2)
+                .foregroundStyle(.secondary)
             }
 
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private var preview: some View {
+        if result.kind == .photo, let imageData = result.imageData, let image = UIImage(data: imageData) {
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFill()
+                .frame(width: 72, height: 72)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(.quaternary, lineWidth: 1)
+                }
+        } else {
+            Image(systemName: symbol)
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(iconColor)
+                .frame(width: 44, height: 44)
+                .background(iconColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+    }
+
+    private var deliveryBadge: some View {
+        Label(result.deliveryState.label, systemImage: deliverySymbol)
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(deliveryColor)
+            .lineLimit(1)
+    }
+
+    private var primaryText: String {
+        switch result.kind {
+        case .photo:
+            result.imageData == nil ? "Photo preview unavailable" : "Captured photo preview"
+        default:
+            result.value
+        }
     }
 
     private var title: String {
@@ -533,12 +576,39 @@ struct CapturedResultRow: View {
         }
     }
 
+    private var iconColor: Color {
+        switch result.kind {
+        case .barcode: .green
+        case .text: .green
+        case .photo: .purple
+        case .dictation: .orange
+        }
+    }
+
     private var symbol: String {
         switch result.kind {
         case .barcode: "barcode"
         case .text: "doc.text"
         case .photo: "photo"
         case .dictation: "mic"
+        }
+    }
+
+    private var deliverySymbol: String {
+        switch result.deliveryState {
+        case .saved: "tray"
+        case .sending: "paperplane"
+        case .sent: "paperplane.fill"
+        case .failed: "exclamationmark.triangle.fill"
+        }
+    }
+
+    private var deliveryColor: Color {
+        switch result.deliveryState {
+        case .saved: .secondary
+        case .sending: .green
+        case .sent: .green
+        case .failed: .red
         }
     }
 }
@@ -638,7 +708,7 @@ struct ReviewCaptureDock: View {
 
                 Button("Send", systemImage: "paperplane.fill", action: onSend)
                     .buttonStyle(.borderedProminent)
-                    .tint(.blue)
+                    .tint(.green)
                     .disabled(!hasText)
             }
             .frame(maxWidth: .infinity, alignment: .trailing)
@@ -835,11 +905,11 @@ struct OcrReviewLayer: View {
     }
 
     private func fillStyle(for region: RecognizedTextRegion) -> Color {
-        selectedRegion?.id == region.id ? .blue.opacity(0.34) : .yellow.opacity(0.24)
+        selectedRegion?.id == region.id ? .green.opacity(0.34) : .yellow.opacity(0.24)
     }
 
     private func strokeStyle(for region: RecognizedTextRegion) -> Color {
-        selectedRegion?.id == region.id ? .blue.opacity(0.92) : .yellow.opacity(0.9)
+        selectedRegion?.id == region.id ? .green.opacity(0.92) : .yellow.opacity(0.9)
     }
 
     private func aspectFitRect(for imageSize: CGSize, in containerSize: CGSize) -> CGRect {

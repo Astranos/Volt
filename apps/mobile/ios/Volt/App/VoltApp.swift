@@ -8,6 +8,7 @@ struct VoltApp: App {
         WindowGroup {
             RootView()
                 .environment(scannerStore)
+                .tint(.green)
                 .onOpenURL { url in
                     scannerStore.handleIncomingURL(url)
                 }
