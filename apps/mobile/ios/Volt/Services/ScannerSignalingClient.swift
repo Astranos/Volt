@@ -19,7 +19,11 @@ struct ScannerSignalingClient {
         ])
 
         let (data, response) = try await URLSession.shared.data(for: request)
-        guard (response as? HTTPURLResponse)?.statusCode == 200 else {
+        let statusCode = (response as? HTTPURLResponse)?.statusCode
+        guard statusCode == 200 else {
+            if statusCode == 410 {
+                throw ScannerPairingError.joinTokenExpired
+            }
             throw ScannerPairingError.requestFailed
         }
         let payload = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
@@ -50,7 +54,11 @@ struct ScannerSignalingClient {
         let deadline = ContinuousClock.now + ScannerProtocol.joinAttemptTTL
         while ContinuousClock.now < deadline {
             let (data, response) = try await URLSession.shared.data(from: attempt.pollURL)
-            if (response as? HTTPURLResponse)?.statusCode == 200,
+            let statusCode = (response as? HTTPURLResponse)?.statusCode
+            if statusCode == 410 {
+                throw ScannerPairingError.joinTokenExpired
+            }
+            if statusCode == 200,
                let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                let offer = payload["offer"] as? String ?? payload["sdp"] as? String {
                 return (offer.trimmedPairingPayload, attempt.answerURL, payload["sessionId"] as? String ?? attempt.sessionId ?? token)
@@ -69,7 +77,11 @@ struct ScannerSignalingClient {
         ])
 
         let (_, response) = try await URLSession.shared.data(for: request)
-        guard (response as? HTTPURLResponse)?.statusCode == 200 else {
+        let statusCode = (response as? HTTPURLResponse)?.statusCode
+        guard statusCode == 200 else {
+            if statusCode == 410 {
+                throw ScannerPairingError.joinTokenExpired
+            }
             throw ScannerPairingError.requestFailed
         }
     }

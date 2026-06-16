@@ -215,6 +215,7 @@ enum ScannerPairingError: LocalizedError {
     case couldNotCreatePeer
     case channelNotOpen
     case chromeTimedOut
+    case joinTokenExpired
     case requestFailed
 
     var errorDescription: String? {
@@ -227,6 +228,7 @@ enum ScannerPairingError: LocalizedError {
         case .couldNotCreatePeer: "Could not create a WebRTC connection."
         case .channelNotOpen: "Pair with Chrome before sending."
         case .chromeTimedOut: "Chrome did not respond in time. Reopen the QR and scan again."
+        case .joinTokenExpired: "This Chrome pairing session expired. Scan the QR again."
         case .requestFailed: "The scanner signaling service did not accept the request."
         }
     }

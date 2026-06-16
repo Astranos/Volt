@@ -3,7 +3,6 @@ import SwiftUI
 struct PairingSessionsView: View {
     @Environment(ScannerStore.self) private var store
     @State private var isPairingScannerPresented = false
-    let showScanner: () -> Void
 
     var body: some View {
         NavigationStack {
@@ -23,7 +22,6 @@ struct PairingSessionsView: View {
                         ForEach(store.pairedSessions) { session in
                             Button {
                                 store.reconnect(to: session)
-                                showScanner()
                             } label: {
                                 PairedSessionRow(session: session)
                             }
@@ -51,6 +49,9 @@ struct PairingSessionsView: View {
             }
             .fullScreenCover(isPresented: $isPairingScannerPresented) {
                 PairingScanSessionView(isPresented: $isPairingScannerPresented)
+            }
+            .onAppear {
+                store.pruneExpiredPairedSessions()
             }
         }
     }
@@ -96,7 +97,7 @@ private struct PairingScanSessionView: View {
 
     var body: some View {
         ZStack {
-            ScannerCameraLayer()
+            ScannerCameraLayer(guideVisible: false)
                 .ignoresSafeArea()
         }
         .background(.black)

@@ -46,6 +46,7 @@ final class ScannerStore {
     private var lastBarcodeSentAt: Date?
     private var photoBatch: (id: String, expiresAt: Date)?
     private var dictationSessionId: String?
+    private var lastAutomaticReconnectAt: Date?
 
     func handleIncomingURL(_ url: URL) {
         let parsed = PairingURLParser.parse(url)
@@ -192,7 +193,8 @@ final class ScannerStore {
                 format: preparedImage.sizeDescription,
                 capturedAt: capturedAt,
                 deliveryState: .sending,
-                imageData: preparedImage.previewJPEGData()
+                imageData: preparedImage.previewJPEGData(),
+                batchId: batch
             )
             results.insert(photoResult, at: 0)
             statusText = "Uploading \(index + 1) of \(images.count)"
@@ -242,6 +244,14 @@ final class ScannerStore {
     }
 
     func reconnect(to pairedSession: PairedScannerSession) {
+        pruneExpiredPairedSessions()
+        guard !pairedSession.isExpired() else {
+            removePairedSession(pairedSession)
+            statusText = "Session expired"
+            targetHint = "Scan the Chrome QR again to create a new pairing."
+            return
+        }
+
         let session = pairedSession.pairingSession
         pairingSession = session
         peerTarget = ScannerPeerTarget(
@@ -254,8 +264,35 @@ final class ScannerStore {
         Task { await pair(with: session) }
     }
 
+    func reconnectToMostRecentPairedSessionIfNeeded() {
+        switch connectionStatus {
+        case .idle, .disconnected, .error:
+            break
+        case .pairing, .waitingForChrome, .connected:
+            return
+        }
+
+        let now = Date.now
+        if let lastAutomaticReconnectAt,
+           now.timeIntervalSince(lastAutomaticReconnectAt) < 15 {
+            return
+        }
+
+        pruneExpiredPairedSessions(now: now)
+        guard let latestSession = pairedSessions.first else { return }
+        lastAutomaticReconnectAt = now
+        reconnect(to: latestSession)
+    }
+
     func removePairedSession(_ pairedSession: PairedScannerSession) {
         pairedSessions.removeAll { $0.id == pairedSession.id }
+        persistPairedSessions()
+    }
+
+    func pruneExpiredPairedSessions(now: Date = .now) {
+        let activeSessions = pairedSessions.filter { !$0.isExpired(at: now) }
+        guard activeSessions.count != pairedSessions.count else { return }
+        pairedSessions = activeSessions
         persistPairedSessions()
     }
 
@@ -280,6 +317,9 @@ final class ScannerStore {
             connection.close()
             try await connection.pair(with: session)
         } catch {
+            if case ScannerPairingError.joinTokenExpired = error, let token = session.token {
+                removePairedSession(withToken: token)
+            }
             applyConnectionStatus(.error(error.localizedDescription))
         }
     }
@@ -330,12 +370,22 @@ final class ScannerStore {
             pairedSessions = []
             return
         }
-        pairedSessions = decoded.sorted { $0.lastConnectedAt > $1.lastConnectedAt }
+        pairedSessions = decoded
+            .filter { !$0.isExpired() }
+            .sorted { $0.lastConnectedAt > $1.lastConnectedAt }
+        if pairedSessions.count != decoded.count {
+            persistPairedSessions()
+        }
     }
 
     private func persistPairedSessions() {
         guard let data = try? JSONEncoder().encode(pairedSessions) else { return }
         UserDefaults.standard.set(data, forKey: Self.pairedSessionsStorageKey)
+    }
+
+    private func removePairedSession(withToken token: String) {
+        pairedSessions.removeAll { $0.token == token }
+        persistPairedSessions()
     }
 
     private func saveCurrentPairingSession() {
@@ -351,6 +401,7 @@ final class ScannerStore {
         )
         pairedSessions.removeAll { $0.id == pairedSession.id || $0.token == token }
         pairedSessions.insert(pairedSession, at: 0)
+        pruneExpiredPairedSessions()
         persistPairedSessions()
     }
 

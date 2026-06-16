@@ -443,6 +443,7 @@ struct ScannerCameraLayer: View {
     @Environment(ScannerStore.self) private var store
     @State private var focusPoint: CGPoint?
     var gridVisible = false
+    var guideVisible = true
     private let photoControlsReservedHeight: CGFloat = 318
 
     var body: some View {
@@ -459,8 +460,10 @@ struct ScannerCameraLayer: View {
                             cameraPreview
                                 .ignoresSafeArea()
                                 .overlay(alignment: .center) {
-                                    CaptureGuideOverlay(mode: store.activeMode, gridVisible: gridVisible)
-                                        .allowsHitTesting(false)
+                                    if guideVisible {
+                                        CaptureGuideOverlay(mode: store.activeMode, gridVisible: gridVisible)
+                                            .allowsHitTesting(false)
+                                    }
                                 }
                         }
                     }

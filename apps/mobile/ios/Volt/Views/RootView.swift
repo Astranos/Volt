@@ -2,6 +2,7 @@ import SwiftUI
 
 struct RootView: View {
     @Environment(ScannerStore.self) private var store
+    @Environment(\.scenePhase) private var scenePhase
     @State private var selectedTab = AppSection.scan
 
     var body: some View {
@@ -18,9 +19,7 @@ struct RootView: View {
                 .tabItem { Label("Upload", systemImage: "square.and.arrow.up") }
                 .tag(AppSection.upload)
 
-            PairingSessionsView {
-                selectedTab = .scan
-            }
+            PairingSessionsView()
                 .tabItem { Label("Sessions", systemImage: "link") }
                 .tag(AppSection.sessions)
         }
@@ -29,7 +28,13 @@ struct RootView: View {
         }
         .task {
             await store.camera.requestAccess()
+            store.reconnectToMostRecentPairedSessionIfNeeded()
             applySelectedTab(from: nil, to: selectedTab)
+        }
+        .onChange(of: scenePhase) { _, newValue in
+            if newValue == .active {
+                store.reconnectToMostRecentPairedSessionIfNeeded()
+            }
         }
     }
 

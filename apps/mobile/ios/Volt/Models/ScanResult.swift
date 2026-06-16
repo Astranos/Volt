@@ -31,6 +31,7 @@ struct ScanResult: Identifiable, Equatable {
     let capturedAt: Date
     var deliveryState: DeliveryState
     var imageData: Data?
+    var batchId: String?
 
     init(
         id: UUID = UUID(),
@@ -39,7 +40,8 @@ struct ScanResult: Identifiable, Equatable {
         format: String,
         capturedAt: Date = .now,
         deliveryState: DeliveryState = .saved,
-        imageData: Data? = nil
+        imageData: Data? = nil,
+        batchId: String? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -48,5 +50,6 @@ struct ScanResult: Identifiable, Equatable {
         self.capturedAt = capturedAt
         self.deliveryState = deliveryState
         self.imageData = imageData
+        self.batchId = batchId
     }
 }
