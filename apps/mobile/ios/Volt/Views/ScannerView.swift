@@ -4,11 +4,9 @@ struct ScannerView: View {
     @Environment(ScannerStore.self) private var store
     @State private var isCaptureSessionPresented = false
     let showsCameraLayer: Bool
-    let showPairingSessions: () -> Void
 
-    init(showsCameraLayer: Bool = true, showPairingSessions: @escaping () -> Void = {}) {
+    init(showsCameraLayer: Bool = true) {
         self.showsCameraLayer = showsCameraLayer
-        self.showPairingSessions = showPairingSessions
     }
 
     var body: some View {
@@ -23,19 +21,6 @@ struct ScannerView: View {
             }
             .background(Color(.systemGroupedBackground))
             .navigationTitle("Capture")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        if store.connectionStatus.isConnected {
-                            store.unpair()
-                        } else {
-                            showPairingSessions()
-                        }
-                    } label: {
-                        Label(pairingButtonTitle, systemImage: pairingButtonSymbol)
-                    }
-                }
-            }
             .fullScreenCover(isPresented: $isCaptureSessionPresented) {
                 CaptureSessionView(isPresented: $isCaptureSessionPresented)
             }
@@ -129,14 +114,6 @@ struct ScannerView: View {
                 }
             }
         }
-    }
-
-    private var pairingButtonTitle: String {
-        store.connectionStatus.isConnected ? "Unpair" : "Pair"
-    }
-
-    private var pairingButtonSymbol: String {
-        store.connectionStatus.isConnected ? "link.badge.minus" : "link.badge.plus"
     }
 
 }

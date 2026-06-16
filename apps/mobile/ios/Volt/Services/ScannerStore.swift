@@ -73,6 +73,11 @@ final class ScannerStore {
         sendCaptureResult(result, insertIntoCursor: true)
     }
 
+    func pairScannedBarcodeIfNeeded() {
+        guard let value = camera.lastBarcode, !value.isEmpty else { return }
+        _ = handlePairingValue(value)
+    }
+
     func capture() async {
         switch activeMode {
         case .ocr:

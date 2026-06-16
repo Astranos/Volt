@@ -6,17 +6,9 @@ struct RootView: View {
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            ScannerView {
-                selectedTab = .sessions
-            }
+            ScannerView()
                 .tabItem { Label("Capture", systemImage: "camera") }
                 .tag(AppSection.scan)
-
-            PairingSessionsView {
-                selectedTab = .scan
-            }
-                .tabItem { Label("Sessions", systemImage: "link") }
-                .tag(AppSection.sessions)
 
             DictationView()
                 .tabItem { Label("Dictate", systemImage: "mic") }
@@ -25,6 +17,12 @@ struct RootView: View {
             ResultsView()
                 .tabItem { Label("Results", systemImage: "list.bullet") }
                 .tag(AppSection.results)
+
+            PairingSessionsView {
+                selectedTab = .scan
+            }
+                .tabItem { Label("Sessions", systemImage: "link") }
+                .tag(AppSection.sessions)
         }
         .onChange(of: selectedTab) { oldValue, newValue in
             applySelectedTab(from: oldValue, to: newValue)
