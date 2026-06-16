@@ -1,7 +1,9 @@
 import Foundation
 
 struct ScannerPeerTarget: Equatable {
+    var chromeSessionId: String?
     var tabTitle: String?
+    var tabURL: String?
     var cursorLabel: String?
     var browser: String?
 

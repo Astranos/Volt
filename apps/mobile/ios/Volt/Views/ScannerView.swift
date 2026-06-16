@@ -107,7 +107,12 @@ struct ScannerView: View {
             } else {
                 VStack(spacing: 10) {
                     ForEach(store.results) { result in
-                        CapturedResultRow(result: result)
+                        CapturedResultRow(
+                            result: result,
+                            onDelete: {
+                                store.removeResult(id: result.id)
+                            }
+                        )
                             .padding(14)
                             .background(.background, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                     }
@@ -438,39 +443,28 @@ struct ScannerCameraLayer: View {
     @Environment(ScannerStore.self) private var store
     @State private var focusPoint: CGPoint?
     var gridVisible = false
+    private let photoControlsReservedHeight: CGFloat = 318
 
     var body: some View {
         Group {
             if store.camera.authorizationStatus == .authorized {
-                CameraPreview(
-                    previewLayer: store.camera.previewLayer,
-                    onTap: { devicePoint, layerPoint in
-                    focusPoint = layerPoint
-                    store.camera.focus(at: devicePoint)
-                    Task {
-                        try? await Task.sleep(for: .milliseconds(750))
-                        await MainActor.run {
-                            if focusPoint == layerPoint {
-                                focusPoint = nil
-                            }
+                GeometryReader { proxy in
+                    ZStack(alignment: .top) {
+                        Color.black
+                            .ignoresSafeArea()
+
+                        if store.activeMode == .photo {
+                            photoPreview(in: proxy)
+                        } else {
+                            cameraPreview
+                                .ignoresSafeArea()
+                                .overlay(alignment: .center) {
+                                    CaptureGuideOverlay(mode: store.activeMode, gridVisible: gridVisible)
+                                        .allowsHitTesting(false)
+                                }
                         }
                     }
-                    },
-                    onPinch: { scale in
-                        store.camera.scaleZoom(by: scale)
-                    }
-                )
-                    .overlay(alignment: .center) {
-                        CaptureGuideOverlay(mode: store.activeMode, gridVisible: gridVisible)
-                            .allowsHitTesting(false)
-                    }
-                    .overlay(alignment: .topLeading) {
-                        if let focusPoint {
-                            FocusReticle()
-                                .position(focusPoint)
-                                .allowsHitTesting(false)
-                        }
-                    }
+                }
             } else {
                 ContentUnavailableView(
                     "Camera Access Required",
@@ -479,6 +473,59 @@ struct ScannerCameraLayer: View {
                 )
             }
         }
+    }
+
+    private var cameraPreview: some View {
+        CameraPreview(
+            previewLayer: store.camera.previewLayer,
+            onTap: { devicePoint, layerPoint in
+                focusPoint = layerPoint
+                store.camera.focus(at: devicePoint)
+                Task {
+                    try? await Task.sleep(for: .milliseconds(750))
+                    await MainActor.run {
+                        if focusPoint == layerPoint {
+                            focusPoint = nil
+                        }
+                    }
+                }
+            },
+            onPinch: { scale in
+                store.camera.scaleZoom(by: scale)
+            }
+        )
+        .overlay(alignment: .topLeading) {
+            if let focusPoint {
+                FocusReticle()
+                    .position(focusPoint)
+                    .allowsHitTesting(false)
+            }
+        }
+    }
+
+    private func photoPreview(in proxy: GeometryProxy) -> some View {
+        let topInset = proxy.safeAreaInsets.top
+        let bottomInset = proxy.safeAreaInsets.bottom
+        let availableHeight = max(0, proxy.size.height - topInset - bottomInset - photoControlsReservedHeight)
+        let side = min(proxy.size.width, availableHeight)
+        let topOffset = topInset + max(0, (availableHeight - side) / 2)
+
+        return cameraPreview
+            .frame(width: side, height: side)
+            .clipped()
+            .overlay {
+                if gridVisible {
+                    SquareGrid()
+                        .allowsHitTesting(false)
+                }
+            }
+            .overlay {
+                Rectangle()
+                    .stroke(.white.opacity(0.28), lineWidth: 1)
+                    .allowsHitTesting(false)
+            }
+            .frame(maxWidth: .infinity, alignment: .center)
+            .padding(.top, topOffset)
     }
 }
 
@@ -498,6 +545,7 @@ struct FocusReticle: View {
 
 struct CapturedResultRow: View {
     let result: ScanResult
+    var onDelete: (() -> Void)?
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -511,11 +559,7 @@ struct CapturedResultRow: View {
                     deliveryBadge
                 }
 
-                Text(primaryText)
-                    .font(result.kind == .barcode ? .callout.monospaced() : .callout)
-                    .foregroundStyle(.primary)
-                    .lineLimit(result.kind == .photo ? 1 : 4)
-                    .textSelection(.enabled)
+                resultContent
 
                 HStack(spacing: 8) {
                     Label(result.format, systemImage: "info.circle")
@@ -526,28 +570,59 @@ struct CapturedResultRow: View {
             }
 
             Spacer(minLength: 0)
+
+            if let onDelete {
+                Button(role: .destructive, action: onDelete) {
+                    Image(systemName: "trash")
+                        .font(.system(size: 16, weight: .semibold))
+                        .frame(width: 44, height: 44)
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel("Delete \(title)")
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            if let onDelete {
+                Button(role: .destructive, action: onDelete) {
+                    Label("Delete", systemImage: "trash")
+                }
+            }
+        }
     }
 
     @ViewBuilder
     private var preview: some View {
-        if result.kind == .photo, let imageData = result.imageData, let image = UIImage(data: imageData) {
-            Image(uiImage: image)
-                .resizable()
-                .scaledToFill()
-                .frame(width: 72, height: 72)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(.quaternary, lineWidth: 1)
-                }
+        if result.kind == .photo, let imageData = result.imageData, UIImage(data: imageData) != nil {
+            EmptyView()
         } else {
             Image(systemName: symbol)
                 .font(.title3.weight(.semibold))
                 .foregroundStyle(iconColor)
                 .frame(width: 44, height: 44)
                 .background(iconColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+    }
+
+    @ViewBuilder
+    private var resultContent: some View {
+        if result.kind == .photo, let imageData = result.imageData, let image = UIImage(data: imageData) {
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFill()
+                .frame(maxWidth: 180)
+                .aspectRatio(1, contentMode: .fit)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(.quaternary, lineWidth: 1)
+                }
+        } else {
+            Text(primaryText)
+                .font(result.kind == .barcode ? .callout.monospaced() : .callout)
+                .foregroundStyle(.primary)
+                .lineLimit(4)
+                .textSelection(.enabled)
         }
     }
 
@@ -561,7 +636,7 @@ struct CapturedResultRow: View {
     private var primaryText: String {
         switch result.kind {
         case .photo:
-            result.imageData == nil ? "Photo preview unavailable" : "Captured photo preview"
+            result.imageData == nil ? "Photo preview unavailable" : result.value
         default:
             result.value
         }

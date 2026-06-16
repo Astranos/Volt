@@ -46,6 +46,7 @@ enum ScannerProtocol {
 
         struct CursorTarget: Decodable, Equatable {
             let tabTitle: String?
+            let url: String?
             let label: String?
             let hasCursorTarget: Bool?
         }

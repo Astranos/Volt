@@ -156,7 +156,7 @@ final class ScannerStore {
         guard let image = await camera.capturePhoto() else { return }
         let preparedImage = image
             .normalizedForProcessing()
-            .centerSquareCropped()
+            .croppedToVisiblePreview(previewSize: camera.previewLayer.bounds.size)
             .resized(maxLongEdge: photoLongEdge)
         let photoResult = ScanResult(
             kind: .photo,
@@ -192,7 +192,9 @@ final class ScannerStore {
         let session = pairedSession.pairingSession
         pairingSession = session
         peerTarget = ScannerPeerTarget(
+            chromeSessionId: pairedSession.sessionId,
             tabTitle: pairedSession.displayName,
+            tabURL: nil,
             cursorLabel: nil,
             browser: "Chrome"
         )
@@ -202,6 +204,14 @@ final class ScannerStore {
     func removePairedSession(_ pairedSession: PairedScannerSession) {
         pairedSessions.removeAll { $0.id == pairedSession.id }
         persistPairedSessions()
+    }
+
+    func removeResult(id: ScanResult.ID) {
+        results.removeAll { $0.id == id }
+    }
+
+    func removeResults(at offsets: IndexSet) {
+        results.remove(atOffsets: offsets)
     }
 
     func unpair() {
@@ -250,7 +260,9 @@ final class ScannerStore {
             self.activeMode = activeMode
         }
         peerTarget = ScannerPeerTarget(
+            chromeSessionId: message.peer?.chromeSessionId,
             tabTitle: message.cursorTarget?.tabTitle,
+            tabURL: message.cursorTarget?.url,
             cursorLabel: message.cursorTarget?.label,
             browser: "Chrome"
         )
