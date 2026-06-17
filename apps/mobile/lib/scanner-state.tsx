@@ -480,7 +480,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       sessionReadyRef.current = true;
       setStatus("session_ready");
       setError(null);
-      setTargetHint(message.target?.tabTitle || message.target?.cursor || message.target?.browser || null);
+      setTargetHint(message.sessionLabel || message.target?.tabTitle || message.target?.cursor || message.target?.browser || null);
       promptForPendingPhotos(message.chromeSessionId ?? pairingSessionRef.current);
       void flushPhotoWorker();
       return;

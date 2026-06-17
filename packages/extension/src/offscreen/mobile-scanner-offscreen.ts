@@ -5,6 +5,7 @@ import type {
 import {
   MobileScannerSession,
   type BarcodeMessage,
+  type ExtensionIdentity,
   type MobileScannerSessionState,
   type PhotoMessage,
   type SessionTarget,
@@ -27,6 +28,7 @@ type ScannerState = {
   joinWindowExpiresAt?: string | null;
   sessionId?: string;
   target?: SessionTarget | null;
+  extensionIdentity?: ExtensionIdentity | null;
 };
 
 function normalizeCaptureMode(value: unknown): CaptureMode | null {
@@ -79,6 +81,7 @@ class MobileScannerOffscreenSession {
       joinWindowExpiresAt: state.joinWindowExpiresAt,
       sessionId: state.sessionId,
       target: state.target,
+      extensionIdentity: state.extensionIdentity,
     });
   }
 
@@ -121,6 +124,12 @@ class MobileScannerOffscreenSession {
 
   async updateTarget(target?: SessionTarget | null) {
     await this.webRtcSession.updateTarget(target);
+    return this.getState();
+  }
+
+  async updateExtensionIdentity(identity?: ExtensionIdentity | null) {
+    const state = await this.webRtcSession.updateExtensionIdentity(identity);
+    this.handleWebRtcState(state);
     return this.getState();
   }
 
@@ -193,6 +202,18 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.action === "scannerOffscreenUpdateTarget") {
     mobileScannerSession
       .updateTarget(normalizeTarget(message.target))
+      .then((state) => sendResponse(state))
+      .catch((err) => sendScannerError(sendResponse, err));
+    return true;
+  }
+
+  if (message.action === "scannerOffscreenUpdateExtensionIdentity") {
+    mobileScannerSession
+      .updateExtensionIdentity(
+        message.identity && typeof message.identity === "object"
+          ? (message.identity as ExtensionIdentity)
+          : null,
+      )
       .then((state) => sendResponse(state))
       .catch((err) => sendScannerError(sendResponse, err));
     return true;

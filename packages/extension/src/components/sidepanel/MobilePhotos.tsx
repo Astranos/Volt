@@ -51,6 +51,17 @@ function trimPhotosForState(photos: MobilePhoto[]) {
   return trimmed;
 }
 
+function setPhotoDragImage(event: React.DragEvent, photo: MobilePhoto) {
+  if (!photo.dataUrl) return;
+  const image = new Image();
+  image.src = photo.dataUrl;
+  image.alt = photo.name;
+  image.className = "pointer-events-none fixed -left-[9999px] top-0 h-28 w-28 rounded-lg object-cover";
+  document.body.append(image);
+  event.dataTransfer.setDragImage(image, 56, 56);
+  window.setTimeout(() => image.remove(), 0);
+}
+
 function installPhotoDropBridge(dropMime: string) {
   const root = window as typeof window & {
     __voltPhotoDropBridgeInstalled?: boolean;
@@ -611,6 +622,7 @@ export default function MobilePhotos({
       void prepareActiveTabForPhotoDrop();
 
       event.dataTransfer.effectAllowed = "copy";
+      setPhotoDragImage(event, transferablePhotos[0]);
       event.dataTransfer.setData(PHOTO_DROP_MIME, JSON.stringify(transferablePhotos));
       transferablePhotos.forEach((item) => {
         const file = dataUrlToFile(item.dataUrl!, item.name, item.mimeType);
@@ -626,7 +638,6 @@ export default function MobilePhotos({
         "text/html",
         transferablePhotos.map((item) => `<img src="${item.dataUrl}" alt="${item.name}">`).join("")
       );
-      event.dataTransfer.setData("text/plain", transferablePhotos.map((item) => item.name).join("\n"));
     },
     [prepareActiveTabForPhotoDrop, selectedIds, selectedPhotos]
   );
@@ -803,7 +814,8 @@ export default function MobilePhotos({
                       <img
                         src={photo.dataUrl}
                         alt={photo.name}
-                        className="aspect-square w-full object-cover"
+                        className="pointer-events-none aspect-square w-full object-cover"
+                        draggable={false}
                       />
                     ) : (
                       <div className="flex aspect-square w-full flex-col items-center justify-center gap-2 bg-stone-100 px-3 text-center text-stone-500">

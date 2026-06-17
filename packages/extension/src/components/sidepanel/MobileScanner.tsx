@@ -187,6 +187,17 @@ function hydratePhotoRuntime(photo: MobilePhoto) {
   return runtimeUrl ? { ...photo, dataUrl: runtimeUrl } : photo;
 }
 
+function setPhotoDragImage(event: React.DragEvent, photo: MobilePhoto) {
+  if (!photo.dataUrl) return;
+  const image = new Image();
+  image.src = photo.dataUrl;
+  image.alt = photo.name;
+  image.className = "pointer-events-none fixed -left-[9999px] top-0 h-28 w-28 rounded-lg object-cover";
+  document.body.append(image);
+  event.dataTransfer.setDragImage(image, 56, 56);
+  window.setTimeout(() => image.remove(), 0);
+}
+
 function buildTimelineGroups(results: TimelineEntry[]): TimelineGroup[] {
   const scans = results
     .filter((result): result is MobileScannerScanResult => result.type === "scan")
@@ -516,6 +527,7 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
       }
 
       event.dataTransfer.effectAllowed = "copy";
+      setPhotoDragImage(event, sourcePhotos[0]);
       files.forEach((file) => {
         try {
           event.dataTransfer.items.add(file);
@@ -531,7 +543,6 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
       if (bridgePayload.length > 0) {
         event.dataTransfer.setData(PHOTO_DROP_MIME, JSON.stringify(bridgePayload));
       }
-      event.dataTransfer.setData("text/plain", files.map((file) => file.name).join("\n"));
     },
     [flashFeedback, prepareActiveTabForPhotoDrop, selectedPhotoIds, selectedPhotos],
   );
@@ -1000,7 +1011,7 @@ function PhotoTile({
         {selected ? <Check className="h-3.5 w-3.5" /> : null}
       </span>
       {photo.dataUrl ? (
-        <img src={photo.dataUrl} alt={photo.name} className="h-full w-full object-cover" draggable={false} />
+        <img src={photo.dataUrl} alt={photo.name} className="pointer-events-none h-full w-full object-cover" draggable={false} />
       ) : (
         <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-stone-100 px-3 text-center text-stone-500 dark:bg-stone-900 dark:text-stone-300">
           <Download className="h-7 w-7" />

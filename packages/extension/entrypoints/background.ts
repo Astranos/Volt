@@ -633,6 +633,18 @@ export default defineBackground({
       }
     }
 
+    async function handleScannerIdentityUpdated(message, sendResponse) {
+      try {
+        const state = await sendScannerOffscreenMessage({
+          action: "scannerOffscreenUpdateExtensionIdentity",
+          identity: message?.identity,
+        });
+        sendResponse({ success: true, state });
+      } catch (err) {
+        sendResponse({ success: false, error: String(err?.message || err) });
+      }
+    }
+
     async function handleScannerStart(message, sendResponse) {
       try {
         const state = await sendScannerOffscreenMessage({
@@ -1272,6 +1284,7 @@ export default defineBackground({
           "scannerOffscreenDisconnect",
           "scannerOffscreenCloseJoinWindow",
           "scannerOffscreenGetState",
+          "scannerOffscreenUpdateExtensionIdentity",
         ].includes(message?.action)
       ) {
         return false;
@@ -1348,6 +1361,9 @@ export default defineBackground({
           return true;
         case "scannerGetState":
           handleScannerGetState(sendResponse);
+          return true;
+        case "scannerUpdateExtensionIdentity":
+          handleScannerIdentityUpdated(message, sendResponse);
           return true;
         case "mobileCursorTargetChanged":
           void updateMobileCaptureTarget(message?.target, sender);

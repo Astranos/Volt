@@ -24,7 +24,7 @@ export type MobilePairingUrl =
 
 export type NormalizedScannerControlMessage =
   | { kind: "hello"; protocolMajor: number }
-  | { kind: "session_ready"; chromeSessionId?: string; target?: { tabTitle?: string; cursor?: string; browser?: string } }
+  | { kind: "session_ready"; chromeSessionId?: string; sessionLabel?: string; target?: { tabTitle?: string; cursor?: string; browser?: string } }
   | { kind: "receipt"; id: string; saved?: boolean; inserted?: boolean; target?: { tabTitle?: string; cursor?: string } }
   | { kind: "photo_chunk_ack"; id: string; chunkIndex: number; totalChunks?: number }
   | { kind: "photo_received"; id: string; photoBatchId?: string }
@@ -154,6 +154,7 @@ function normalizeSharedControlMessage(message: ScannerControlMessage): Normaliz
     return {
       kind: "session_ready",
       chromeSessionId: message.peer.chromeSessionId,
+      sessionLabel: message.peer.deviceLabel,
       target: {
         tabTitle: message.cursorTarget?.tabTitle,
         cursor: message.cursorTarget?.label,
@@ -317,4 +318,3 @@ export async function createPeerConnectionAnswer({
 export function isProtocolMajorCompatible(protocolMajor: number) {
   return protocolMajor === SCANNER_PROTOCOL_MAJOR_VERSION;
 }
-

@@ -2,10 +2,8 @@ import {
   PHOTO_TRANSFER_CHANNEL_LABEL,
   SCANNER_APP_PAIR_URL,
   SCANNER_CONTROL_CHANNEL_LABEL,
-  SCANNER_ANSWER_POLL_INTERVAL_MS,
   SCANNER_ICE_GATHERING_TIMEOUT_MS,
   SCANNER_ICE_SERVERS,
-  SCANNER_JOIN_TOKEN_TTL_MS,
   SCANNER_PROTOCOL_MAJOR_VERSION,
   SCANNER_PROTOCOL_MINOR_VERSION,
   SCANNER_SIGNAL_URL,
@@ -24,7 +22,17 @@ import {
 } from "../../../scanner-protocol/src";
 import { shouldInsertScannerMessage } from "./scanner-message";
 
-type SessionTimer = ReturnType<typeof setInterval>;
+type SessionTimer = ReturnType<typeof setTimeout>;
+
+const JOIN_WINDOW_TTL_MS = 2 * 60 * 1000;
+const HIDDEN_JOIN_ATTEMPT_POLL_GRACE_MS = 60 * 1000;
+const JOIN_ATTEMPT_INITIAL_POLL_INTERVAL_MS = 1000;
+const JOIN_ATTEMPT_MAX_POLL_INTERVAL_MS = 10 * 1000;
+
+export const MOBILE_SCANNER_IDENTITY_STORAGE_KEYS = {
+  installId: "volt.mobileScanner.extensionInstallId",
+  sessionLabel: "volt.mobileScanner.sessionLabel",
+} as const;
 
 export type BarcodeMessage = {
   id?: string;
@@ -56,6 +64,11 @@ export type SessionTarget = {
   tabTitle?: string;
   url?: string;
   cursor?: string;
+};
+
+export type ExtensionIdentity = {
+  installId: string;
+  sessionLabel: string;
 };
 
 type JoinWindow = {
@@ -101,6 +114,7 @@ export type MobileScannerSessionState = {
   joinWindowExpiresAt: string | null;
   sessionId: string;
   target: SessionTarget | null;
+  extensionIdentity: ExtensionIdentity | null;
 };
 
 export type MobileScannerSessionEvents = {
@@ -114,6 +128,79 @@ export type MobileScannerSessionEvents = {
 function createId(prefix: string) {
   const random = crypto.randomUUID?.() ?? Math.random().toString(36).slice(2);
   return `${prefix}-${Date.now().toString(36)}-${random}`;
+}
+
+function normalizeIdentityLabel(value: unknown) {
+  const label = typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";
+  return label.slice(0, 80);
+}
+
+function defaultSessionLabel() {
+  const platform =
+    (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData?.platform ||
+    navigator.platform ||
+    "";
+  if (/mac/i.test(platform)) return "Chrome on Mac";
+  if (/win/i.test(platform)) return "Chrome on Windows";
+  if (/linux|cros/i.test(platform)) return "Chrome on Linux";
+  return "Chrome session";
+}
+
+function storageLocalGet(keys: string[]) {
+  const chromeApi = globalThis as typeof globalThis & { chrome?: typeof chrome };
+  if (chromeApi.chrome?.storage?.local?.get) {
+    return chromeApi.chrome.storage.local.get(keys) as Promise<Record<string, unknown>>;
+  }
+  const fallback: Record<string, unknown> = {};
+  try {
+    for (const key of keys) {
+      fallback[key] = globalThis.localStorage?.getItem(key) ?? undefined;
+    }
+  } catch (_error) {}
+  return Promise.resolve(fallback);
+}
+
+function storageLocalSet(values: Record<string, unknown>) {
+  const chromeApi = globalThis as typeof globalThis & { chrome?: typeof chrome };
+  if (chromeApi.chrome?.storage?.local?.set) {
+    return chromeApi.chrome.storage.local.set(values) as Promise<void>;
+  }
+  try {
+    for (const [key, value] of Object.entries(values)) {
+      if (typeof value === "string") {
+        globalThis.localStorage?.setItem(key, value);
+      }
+    }
+  } catch (_error) {}
+  return Promise.resolve();
+}
+
+export async function getMobileScannerExtensionIdentity(): Promise<ExtensionIdentity> {
+  const keys = MOBILE_SCANNER_IDENTITY_STORAGE_KEYS;
+  const stored = await storageLocalGet([keys.installId, keys.sessionLabel]);
+  const storedInstallId = stored[keys.installId];
+  const installId = isScannerSessionId(storedInstallId) ? storedInstallId : createId("chrome-install");
+  const sessionLabel = normalizeIdentityLabel(stored[keys.sessionLabel]) || defaultSessionLabel();
+
+  if (installId !== storedInstallId || sessionLabel !== stored[keys.sessionLabel]) {
+    await storageLocalSet({
+      [keys.installId]: installId,
+      [keys.sessionLabel]: sessionLabel,
+    });
+  }
+
+  return { installId, sessionLabel };
+}
+
+export async function saveMobileScannerSessionLabel(label: string): Promise<ExtensionIdentity> {
+  const sessionLabel = normalizeIdentityLabel(label) || defaultSessionLabel();
+  const identity = await getMobileScannerExtensionIdentity();
+  const nextIdentity = { ...identity, sessionLabel };
+  await storageLocalSet({
+    [MOBILE_SCANNER_IDENTITY_STORAGE_KEYS.installId]: nextIdentity.installId,
+    [MOBILE_SCANNER_IDENTITY_STORAGE_KEYS.sessionLabel]: nextIdentity.sessionLabel,
+  });
+  return nextIdentity;
 }
 
 function parseJson(data: string) {
@@ -205,6 +292,8 @@ function scanFromControlMessage(message: ScannerControlMessage): (BarcodeMessage
 export class MobileScannerSession {
   private answerPoll: SessionTimer | null = null;
   private answerPollJoinWindow: JoinWindow | null = null;
+  private answerPollDelayMs = JOIN_ATTEMPT_INITIAL_POLL_INTERVAL_MS;
+  private hiddenPollingExpiresAt: number | null = null;
   private joinWindow: JoinWindow | null = null;
   private peers = new Map<string, PeerSession>();
   private pendingPhotos = new Map<string, PendingPhoto>();
@@ -223,6 +312,7 @@ export class MobileScannerSession {
       joinWindowExpiresAt: null,
       sessionId: createId("global-session"),
       target: null,
+      extensionIdentity: null,
     };
   }
 
@@ -234,9 +324,11 @@ export class MobileScannerSession {
     this.target = target ?? this.target;
     this.setState({ status: this.peers.size > 0 ? "connected" : "creating", error: null, target: this.target });
     try {
+      const extensionIdentity = await this.refreshExtensionIdentity();
       const joinWindow = await this.createJoinWindow(target);
       this.joinWindow = joinWindow;
       this.answerPollJoinWindow = joinWindow;
+      this.hiddenPollingExpiresAt = null;
       this.events.log?.("[Volt Scanner Pairing] join window opened", {
         sessionId: joinWindow.sessionId,
         tokenTail: joinWindow.joinToken.slice(-6),
@@ -246,6 +338,7 @@ export class MobileScannerSession {
         qrCodeUrl: joinWindow.qrCodeUrl,
         error: null,
         joinWindowExpiresAt: joinWindow.expiresAt ?? null,
+        extensionIdentity,
       });
       this.pollForJoinAttempts();
     } catch (err) {
@@ -262,6 +355,9 @@ export class MobileScannerSession {
   async closeJoinWindow() {
     const previous = this.joinWindow;
     this.joinWindow = null;
+    if (previous) {
+      this.hiddenPollingExpiresAt = Date.now() + HIDDEN_JOIN_ATTEMPT_POLL_GRACE_MS;
+    }
     if (previous) {
       await this.revokeJoinWindow(previous).catch((error) => {
         this.events.log?.("Failed to revoke scanner join window", error);
@@ -289,6 +385,7 @@ export class MobileScannerSession {
     this.peers.clear();
     this.pendingPhotos.clear();
     this.answerPollJoinWindow = null;
+    this.hiddenPollingExpiresAt = null;
     this.stopJoinAttemptPolling();
     this.seenJoinAttempts.clear();
     this.setState({
@@ -304,6 +401,18 @@ export class MobileScannerSession {
   async updateTarget(target?: SessionTarget | null) {
     this.target = target ?? null;
     this.setState({ target: this.target });
+    for (const peer of this.peers.values()) {
+      if (peer.ready) {
+        this.sendSessionReady(peer);
+      }
+    }
+    return this.getState();
+  }
+
+  async updateExtensionIdentity(identity?: ExtensionIdentity | null) {
+    const nextIdentity = identity ?? await getMobileScannerExtensionIdentity();
+    this.state.sessionId = nextIdentity.installId;
+    this.setState({ extensionIdentity: nextIdentity });
     for (const peer of this.peers.values()) {
       if (peer.ready) {
         this.sendSessionReady(peer);
@@ -331,6 +440,13 @@ export class MobileScannerSession {
     return count;
   }
 
+  private async refreshExtensionIdentity() {
+    const extensionIdentity = await getMobileScannerExtensionIdentity();
+    this.state.sessionId = extensionIdentity.installId;
+    this.setState({ extensionIdentity });
+    return extensionIdentity;
+  }
+
   private async createJoinWindow(target?: SessionTarget | null): Promise<JoinWindow> {
     const sessionId = isScannerSessionId(this.state.sessionId) ? this.state.sessionId : createId("global-session");
     const body = {
@@ -338,8 +454,9 @@ export class MobileScannerSession {
       webRtcOnly: true,
       role: "browser",
       sessionId,
-      ttlMs: SCANNER_JOIN_TOKEN_TTL_MS,
+      ttlMs: JOIN_WINDOW_TTL_MS,
       target: target ?? undefined,
+      deviceLabel: this.state.extensionIdentity?.sessionLabel,
       capabilities: ["text", "barcode", "dictation", "photo", "photo-chunk-ack"],
     };
     const response = await fetch(`${SCANNER_SIGNAL_URL}/join-token`, {
@@ -362,7 +479,7 @@ export class MobileScannerSession {
     const qrCodeUrl =
       typeof payload.qrCodeUrl === "string" && payload.qrCodeUrl
         ? payload.qrCodeUrl
-        : `${SCANNER_APP_PAIR_URL}?session=${encodeURIComponent(returnedSessionId)}&joinToken=${encodeURIComponent(returnedJoinToken)}&transport=webrtc`;
+        : `${SCANNER_APP_PAIR_URL}?sessionId=${encodeURIComponent(returnedSessionId)}&session=${encodeURIComponent(returnedSessionId)}&token=${encodeURIComponent(returnedJoinToken)}&joinToken=${encodeURIComponent(returnedJoinToken)}&transport=webrtc&label=${encodeURIComponent(this.state.extensionIdentity?.sessionLabel ?? "")}`;
     this.state.sessionId = returnedSessionId;
     return {
       sessionId: returnedSessionId,
@@ -371,7 +488,7 @@ export class MobileScannerSession {
       expiresAt:
         typeof payload.expiresAt === "string"
           ? payload.expiresAt
-          : new Date(Date.now() + SCANNER_JOIN_TOKEN_TTL_MS).toISOString(),
+          : new Date(Date.now() + JOIN_WINDOW_TTL_MS).toISOString(),
     };
   }
 
@@ -386,6 +503,7 @@ export class MobileScannerSession {
   }
 
   private sendSessionReady(peer: PeerSession) {
+    const identity = this.state.extensionIdentity;
     this.sendControl(peer, {
       type: "session_ready",
       messageId: createMessageId("control"),
@@ -396,6 +514,7 @@ export class MobileScannerSession {
         platform: "chrome_extension",
         capabilities: ["ocr", "barcode", "dictation", "photo", "cursor_insert", "sidepanel_results"],
         chromeSessionId: this.state.sessionId,
+        deviceLabel: identity?.sessionLabel,
       },
       cursorTarget: this.cursorTargetSummary(),
     });
@@ -411,30 +530,62 @@ export class MobileScannerSession {
 
   private pollForJoinAttempts() {
     this.stopJoinAttemptPolling();
-    this.answerPoll = setInterval(() => {
-      void this.fetchJoinAttempts().catch((error) => {
-        this.events.log?.("Failed to poll scanner join attempts", error);
-      });
-    }, SCANNER_ANSWER_POLL_INTERVAL_MS);
-    void this.fetchJoinAttempts().catch((error) => {
-      this.events.log?.("Failed to poll scanner join attempts", error);
-    });
+    this.answerPollDelayMs = JOIN_ATTEMPT_INITIAL_POLL_INTERVAL_MS;
+    this.scheduleJoinAttemptPoll(0);
   }
 
   private stopJoinAttemptPolling() {
     if (!this.answerPoll) return;
-    clearInterval(this.answerPoll);
+    clearTimeout(this.answerPoll);
     this.answerPoll = null;
+  }
+
+  private shouldContinueJoinAttemptPolling() {
+    if (this.joinWindow) return true;
+    if (!this.answerPollJoinWindow) return false;
+    return this.hiddenPollingExpiresAt === null || this.hiddenPollingExpiresAt > Date.now();
+  }
+
+  private scheduleJoinAttemptPoll(delayMs: number) {
+    if (!this.shouldContinueJoinAttemptPolling()) {
+      this.answerPollJoinWindow = null;
+      this.hiddenPollingExpiresAt = null;
+      return;
+    }
+    this.answerPoll = setTimeout(() => {
+      this.answerPoll = null;
+      void this.fetchJoinAttempts()
+        .then((hadActivity) => {
+          if (!this.shouldContinueJoinAttemptPolling()) {
+            this.answerPollJoinWindow = null;
+            this.hiddenPollingExpiresAt = null;
+            return;
+          }
+          this.answerPollDelayMs = hadActivity
+            ? JOIN_ATTEMPT_INITIAL_POLL_INTERVAL_MS
+            : Math.min(
+                Math.ceil(this.answerPollDelayMs * 1.5),
+                JOIN_ATTEMPT_MAX_POLL_INTERVAL_MS,
+              );
+          this.scheduleJoinAttemptPoll(this.answerPollDelayMs);
+        })
+        .catch((error) => {
+          this.events.log?.("Failed to poll scanner join attempts", error);
+          this.answerPollDelayMs = JOIN_ATTEMPT_MAX_POLL_INTERVAL_MS;
+          this.scheduleJoinAttemptPoll(this.answerPollDelayMs);
+        });
+    }, delayMs);
   }
 
   private async fetchJoinAttempts() {
     const joinWindow = this.joinWindow ?? this.answerPollJoinWindow;
-    if (!joinWindow) return;
+    if (!joinWindow) return false;
+    let hadActivity = false;
     const acceptingNewAttempts = this.joinWindow?.joinToken === joinWindow.joinToken;
     const response = await fetch(
       `${SCANNER_SIGNAL_URL}/join-token/${encodeURIComponent(joinWindow.joinToken)}/attempts`
     );
-    if (!response.ok) return;
+    if (!response.ok) return false;
     const payload = (await response.json()) as { joinAttempts?: unknown[]; attempts?: unknown[] };
     const attempts = Array.isArray(payload.joinAttempts)
       ? payload.joinAttempts
@@ -451,13 +602,17 @@ export class MobileScannerSession {
           joinAttemptId: attempt.joinAttemptId,
         });
         await this.createPeerOffer(joinWindow, attempt.joinAttemptId);
+        hadActivity = true;
       }
+      if (this.peers.get(attempt.joinAttemptId)?.answerApplied) continue;
       const answer = attempt.answer ?? (attempt.hasAnswer ? await this.fetchPeerAnswer(joinWindow, attempt.joinAttemptId) : null);
       if (answer) {
         await this.applyPeerAnswer(attempt.joinAttemptId, answer);
+        hadActivity = true;
       }
     }
     this.stopHiddenJoinAttemptPollingIfIdle();
+    return hadActivity;
   }
 
   private async fetchPeerAnswer(joinWindow: JoinWindow, joinAttemptId: string) {
@@ -497,6 +652,7 @@ export class MobileScannerSession {
         this.closePeer(joinAttemptId);
       } else if (pc.connectionState === "connected" && peer.ready) {
         this.setState({ status: "connected", error: null, connectedAt: this.state.connectedAt ?? new Date().toISOString() });
+        void this.closeJoinWindow();
       }
     };
 
@@ -540,6 +696,7 @@ export class MobileScannerSession {
           platform: "chrome_extension",
           capabilities: ["ocr", "barcode", "dictation", "photo", "cursor_insert", "sidepanel_results"],
           chromeSessionId: this.state.sessionId,
+          deviceLabel: this.state.extensionIdentity?.sessionLabel,
         },
       });
     };
@@ -593,6 +750,7 @@ export class MobileScannerSession {
       this.sendSessionReady(peer);
       this.events.log?.("[Volt Scanner Pairing] session_ready sent", { joinAttemptId: peer.id });
       this.setState({ status: "connected", error: null, connectedAt: this.state.connectedAt ?? new Date().toISOString() });
+      void this.closeJoinWindow();
       return;
     }
 
@@ -751,10 +909,17 @@ export class MobileScannerSession {
 
   private stopHiddenJoinAttemptPollingIfIdle() {
     if (this.joinWindow || !this.answerPollJoinWindow) return;
+    if (this.hiddenPollingExpiresAt !== null && this.hiddenPollingExpiresAt <= Date.now()) {
+      this.answerPollJoinWindow = null;
+      this.hiddenPollingExpiresAt = null;
+      this.stopJoinAttemptPolling();
+      return;
+    }
     for (const peer of this.peers.values()) {
       if (!peer.answerApplied) return;
     }
     this.answerPollJoinWindow = null;
+    this.hiddenPollingExpiresAt = null;
     this.stopJoinAttemptPolling();
   }
 

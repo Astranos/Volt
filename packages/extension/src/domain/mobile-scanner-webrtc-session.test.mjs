@@ -27,7 +27,7 @@ test("extension WebRTC session owns scanner-control and photo-transfer channels"
 test("extension WebRTC session creates offers per join attempt while join window is open", () => {
   assert.match(sessionSource, /openJoinWindow/);
   assert.match(sessionSource, /pollForJoinAttempts/);
-  assert.match(sessionSource, /SCANNER_JOIN_TOKEN_TTL_MS/);
+  assert.match(sessionSource, /JOIN_WINDOW_TTL_MS = 2 \* 60 \* 1000/);
   assert.doesNotMatch(sessionSource, /const JOIN_WINDOW_TTL_MS = 30_000/);
   assert.match(sessionSource, /createPeerOffer\(joinWindow, attempt\.joinAttemptId\)/);
   assert.match(sessionSource, /join-token\/\$\{encodeURIComponent\(joinWindow\.joinToken\)\}\/attempt\/\$\{encodeURIComponent\(joinAttemptId\)\}\/offer/);
@@ -35,12 +35,14 @@ test("extension WebRTC session creates offers per join attempt while join window
   assert.match(sessionSource, /join-token\/\$\{encodeURIComponent\(joinWindow\.joinToken\)\}\/revoke/);
 });
 
-test("extension keeps polling existing join attempts after the pairing popup closes", () => {
+test("extension bounds hidden join-attempt polling after the pairing popup closes", () => {
   assert.match(sessionSource, /private answerPollJoinWindow: JoinWindow \| null = null/);
   assert.match(sessionSource, /this\.answerPollJoinWindow = joinWindow/);
+  assert.match(sessionSource, /HIDDEN_JOIN_ATTEMPT_POLL_GRACE_MS = 60 \* 1000/);
   assert.match(sessionSource, /const joinWindow = this\.joinWindow \?\? this\.answerPollJoinWindow/);
   assert.match(sessionSource, /const acceptingNewAttempts = this\.joinWindow\?\.joinToken === joinWindow\.joinToken/);
   assert.match(sessionSource, /if \(!acceptingNewAttempts\) continue/);
+  assert.match(sessionSource, /JOIN_ATTEMPT_MAX_POLL_INTERVAL_MS = 10 \* 1000/);
   assert.match(sessionSource, /stopHiddenJoinAttemptPollingIfIdle/);
   assert.doesNotMatch(sessionSource, /this\.joinWindow = null;\n\s*this\.stopJoinAttemptPolling\(\);/);
 });

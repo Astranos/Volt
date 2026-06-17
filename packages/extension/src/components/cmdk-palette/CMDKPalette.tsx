@@ -662,7 +662,7 @@ export function CMDKPalette({
             }
             className="cmdk-input"
             autoFocus
-            onKeyDown={(e) => {
+            onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
               if (e.key === "Enter") {
                 // Only handle Enter for search providers or empty searches WITHOUT user navigation
                 if (activeProvider && providerQuery.trim()) {

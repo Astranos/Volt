@@ -42,6 +42,7 @@ enum ScannerProtocol {
     struct SessionReady: Decodable, Equatable {
         struct Peer: Decodable, Equatable {
             let chromeSessionId: String?
+            let deviceLabel: String?
         }
 
         struct CursorTarget: Decodable, Equatable {

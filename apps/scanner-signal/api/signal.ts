@@ -3,7 +3,7 @@ import { randomBytes } from "node:crypto";
 
 const SCANNER_SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const SCANNER_JOIN_ATTEMPT_TTL_MS = 30 * 1000;
-const SCANNER_JOIN_TOKEN_TTL_MS = 12 * 60 * 60 * 1000;
+const SCANNER_JOIN_TOKEN_TTL_MS = 5 * 60 * 1000;
 const SCANNER_JOIN_TOKEN_GRACE_MS = 10 * 1000;
 const SCANNER_SESSION_ID_PATTERN = /^[a-zA-Z0-9_-]{4,80}$/;
 const SCANNER_JOIN_TOKEN_PATTERN = /^[a-zA-Z0-9_-]{32,160}$/;
@@ -83,11 +83,10 @@ async function redisCommand<T>(command: unknown[]) {
     body: JSON.stringify(command),
   });
 
-  if (!result.ok) {
-    throw new Error(`Redis command failed with ${result.status}`);
-  }
-
   const payload = (await result.json()) as { result?: T; error?: string };
+  if (!result.ok) {
+    throw new Error(`Redis command failed with ${result.status}: ${payload.error ?? "unknown error"}`);
+  }
   if (payload.error) {
     throw new Error(payload.error);
   }
@@ -341,7 +340,6 @@ async function handleJoinTokenRoute(request: VercelRequest, response: VercelResp
 
   if (request.method === "GET" && parts[2] === "attempts" && parts.length === 3) {
     if (!requireJoinTokenBrowserClaim(record, request, response)) return true;
-    await saveJoinToken(record);
     response.status(200).json({ attempts: record.attempts.map(publicAttempt) });
     return true;
   }
@@ -437,8 +435,6 @@ async function handleJoinTokenRoute(request: VercelRequest, response: VercelResp
 
   if (route === "answer" && request.method === "GET" && parts.length === 5) {
     if (!requireJoinTokenBrowserClaim(record, request, response)) return true;
-    const nextRecord = { ...record, attempts: record.attempts.map((item) => (item.id === attemptId ? normalizedAttempt : item)) };
-    await saveJoinToken(nextRecord);
     response.status(200).json({ answer: normalizedAttempt.answer ?? null, attempt: publicAttempt(normalizedAttempt) });
     return true;
   }

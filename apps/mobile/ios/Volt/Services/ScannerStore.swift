@@ -256,6 +256,7 @@ final class ScannerStore {
         pairingSession = session
         peerTarget = ScannerPeerTarget(
             chromeSessionId: pairedSession.sessionId,
+            sessionLabel: pairedSession.displayName,
             tabTitle: pairedSession.displayName,
             tabURL: nil,
             cursorLabel: nil,
@@ -354,6 +355,7 @@ final class ScannerStore {
         }
         peerTarget = ScannerPeerTarget(
             chromeSessionId: message.peer?.chromeSessionId,
+            sessionLabel: message.peer?.deviceLabel,
             tabTitle: message.cursorTarget?.tabTitle,
             tabURL: message.cursorTarget?.url,
             cursorLabel: message.cursorTarget?.label,
@@ -390,7 +392,7 @@ final class ScannerStore {
 
     private func saveCurrentPairingSession() {
         guard let pairingSession, let token = pairingSession.token else { return }
-        let displayName = peerTarget?.tabTitle ?? pairingSession.sessionId ?? "Chrome session"
+        let displayName = peerTarget?.sessionLabel ?? peerTarget?.tabTitle ?? pairingSession.sessionId ?? "Chrome session"
         let pairedSession = PairedScannerSession(
             id: pairingSession.sessionId ?? token,
             token: token,

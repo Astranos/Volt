@@ -1,14 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { CheckCircle2, Copy, Loader2, RefreshCw, Smartphone, X } from "lucide-react";
+import { CheckCircle2, Copy, Loader2, Pencil, RefreshCw, Smartphone, X } from "lucide-react";
 import QRCode from "qrcode";
 import type { ScannerConnectionStatus } from "../../../scanner-protocol/src";
 import {
-  ConnectionPill,
   PrimaryActionButton,
   QrPairingPanel,
   SecondaryActionButton,
 } from "../../src/components/sidepanel/mobile-shared";
+import {
+  getMobileScannerExtensionIdentity,
+  saveMobileScannerSessionLabel,
+  type ExtensionIdentity,
+} from "../../src/domain/mobile-scanner-session";
 import "../sidepanel/sidepanel.css";
 import "./mobile-scanner-popup.css";
 
@@ -21,6 +25,7 @@ type MobileScannerState = {
   connectedAt?: string | null;
   joinWindowExpiresAt?: string | null;
   mode?: MobileCaptureMode | null;
+  extensionIdentity?: ExtensionIdentity | null;
 };
 
 const modeLabels: Record<MobileCaptureMode, string> = {
@@ -48,6 +53,9 @@ function MobileScannerPopup() {
   });
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [sessionLabel, setSessionLabel] = useState("");
+  const [identityLoaded, setIdentityLoaded] = useState(false);
+  const [labelSaved, setLabelSaved] = useState(false);
 
   const applyScannerState = useCallback((nextState: Partial<MobileScannerState> | null | undefined) => {
     if (!nextState) return;
@@ -60,8 +68,20 @@ function MobileScannerPopup() {
     return response?.state as MobileScannerState | undefined;
   }, [applyScannerState]);
 
+  const saveSessionLabel = useCallback(async () => {
+    const identity = await saveMobileScannerSessionLabel(sessionLabel);
+    setSessionLabel(identity.sessionLabel);
+    setLabelSaved(true);
+    window.setTimeout(() => setLabelSaved(false), 1000);
+    await chrome.runtime
+      .sendMessage({ action: "scannerUpdateExtensionIdentity", identity })
+      .catch(() => {});
+    return identity;
+  }, [sessionLabel]);
+
   const startSession = useCallback(async (force = false) => {
     setState((current) => ({ ...current, status: "creating", error: null }));
+    await saveSessionLabel();
     const response = await chrome.runtime.sendMessage({
       action: "scannerStartForMode",
       force,
@@ -71,7 +91,37 @@ function MobileScannerPopup() {
     if (response?.error) {
       setState((current) => ({ ...current, status: "error", error: response.error }));
     }
-  }, [applyScannerState, requestedMode]);
+  }, [applyScannerState, requestedMode, saveSessionLabel]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void getMobileScannerExtensionIdentity()
+      .then((identity) => {
+        if (cancelled) return;
+        setSessionLabel(identity.sessionLabel);
+        setIdentityLoaded(true);
+        void chrome.runtime
+          .sendMessage({ action: "scannerUpdateExtensionIdentity", identity })
+          .catch(() => {});
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSessionLabel("Chrome session");
+          setIdentityLoaded(true);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!identityLoaded) return;
+    const timer = window.setTimeout(() => {
+      void saveSessionLabel().catch(() => {});
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [identityLoaded, saveSessionLabel]);
 
   useEffect(() => {
     let cancelled = false;
@@ -189,10 +239,34 @@ function MobileScannerPopup() {
             <div className="truncate text-xs font-medium text-stone-500">{subtitle}</div>
           </div>
         </div>
-        <ConnectionPill status={state.status} error={state.error} />
+        <PopupStatus status={state.status} />
       </header>
 
       <main className="flex min-h-0 flex-1 flex-col items-center justify-center px-5 py-4">
+        <div className="mb-4 w-full max-w-[280px]">
+          <label className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-stone-500">
+            <Pencil className="h-3 w-3" />
+            Chrome session name
+          </label>
+          <input
+            value={sessionLabel}
+            onChange={(event) => setSessionLabel(event.target.value)}
+            onBlur={() => void saveSessionLabel().catch(() => {})}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.currentTarget.blur();
+              }
+            }}
+            disabled={!identityLoaded}
+            maxLength={80}
+            className="h-10 w-full rounded-lg border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-900 outline-none transition focus:border-green-500 focus:ring-2 focus:ring-green-500/20 disabled:opacity-60"
+            placeholder="Chrome session"
+            aria-label="Chrome session name"
+          />
+          <div className="mt-1 min-h-4 text-[11px] font-medium text-stone-500">
+            {labelSaved ? "Saved for future QR sessions" : "Reused by this browser profile"}
+          </div>
+        </div>
         {showQr && qrDataUrl ? (
           <QrPairingPanel
             qrDataUrl={qrDataUrl}
@@ -242,6 +316,32 @@ function MobileScannerPopup() {
         </PrimaryActionButton>
       </footer>
     </div>
+  );
+}
+
+function PopupStatus({ status }: { status: ScannerConnectionStatus }) {
+  const label =
+    status === "connected"
+      ? "Connected"
+      : status === "waiting"
+        ? "Ready"
+        : status === "creating"
+          ? "Creating"
+          : status === "error"
+            ? "Error"
+            : "Idle";
+  const tone =
+    status === "connected"
+      ? "bg-green-100 text-green-700"
+      : status === "error"
+        ? "bg-red-100 text-red-700"
+        : status === "waiting"
+          ? "bg-amber-100 text-amber-700"
+          : "bg-stone-100 text-stone-600";
+  return (
+    <span className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold ${tone}`}>
+      {label}
+    </span>
   );
 }
 

@@ -33,53 +33,52 @@ function OfferResultCard({
 }) {
   const startingId = `${offer.id}-starting`;
   const maxId = `${offer.id}-max`;
+  const renderCopyValue = (amount: number, id: string) =>
+    copied === id ? (
+      <span className="inline-flex min-w-0 items-center gap-1 text-sm font-bold text-green-700 dark:text-green-300">
+        <Check className="h-4 w-4 shrink-0" />
+        Copied
+      </span>
+    ) : (
+      <span className="min-w-0 text-[24px] font-bold leading-tight tabular-nums text-green-700 [overflow-wrap:anywhere] dark:text-green-300">
+        ${formatCurrency(amount)}
+      </span>
+    );
 
   return (
-    <div className="liquid-glass concentric-lg select-none p-3.5">
+    <div className="liquid-glass concentric-lg min-w-0 select-none p-3.5">
       <div className="mb-3 flex items-center justify-between gap-3">
-        <div className="text-sm font-bold text-stone-900 dark:text-stone-50">
+        <div className="min-w-0 truncate text-sm font-bold text-stone-900 dark:text-stone-50">
           {offer.label}
         </div>
-        <div className="rounded-full bg-green-500/12 px-2 py-0.5 text-[11px] font-bold text-green-700 dark:text-green-300">
+        <div className="shrink-0 rounded-full bg-green-500/12 px-2 py-0.5 text-[11px] font-bold text-green-700 dark:text-green-300">
           Cash guide
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid min-w-0 grid-cols-2 gap-2">
         <button
           type="button"
           onClick={() => onCopy(offer.startingValue, startingId)}
-          className="liquid-glass-soft concentric-md min-h-20 px-3 py-3 text-left transition hover:bg-white/60 active:scale-[0.99] dark:hover:bg-white/10"
+          className="liquid-glass-soft concentric-md flex min-h-24 min-w-0 flex-col px-3 py-3 text-left transition hover:bg-white/60 active:scale-[0.99] dark:hover:bg-white/10"
         >
           <div className="text-[11px] font-bold uppercase tracking-normal text-stone-500 dark:text-stone-400">
             Start
           </div>
-          <div className="mt-1 text-[28px] font-bold leading-none text-green-700 dark:text-green-300">
-            ${formatCurrency(offer.startingValue)}
+          <div className="mt-1 flex min-h-8 min-w-0 flex-1 items-center">
+            {renderCopyValue(offer.startingValue, startingId)}
           </div>
-          {copied === startingId && (
-            <div className="mt-2 flex items-center gap-1 text-xs font-bold text-green-700 dark:text-green-300">
-              <Check className="h-3 w-3" />
-              Copied
-            </div>
-          )}
         </button>
         <button
           type="button"
           onClick={() => onCopy(offer.maxValue, maxId)}
-          className="liquid-glass-soft concentric-md min-h-20 px-3 py-3 text-left transition hover:bg-white/60 active:scale-[0.99] dark:hover:bg-white/10"
+          className="liquid-glass-soft concentric-md flex min-h-24 min-w-0 flex-col px-3 py-3 text-left transition hover:bg-white/60 active:scale-[0.99] dark:hover:bg-white/10"
         >
           <div className="text-[11px] font-bold uppercase tracking-normal text-stone-500 dark:text-stone-400">
             Max
           </div>
-          <div className="mt-1 text-[28px] font-bold leading-none text-green-700 dark:text-green-300">
-            ${formatCurrency(offer.maxValue)}
+          <div className="mt-1 flex min-h-8 min-w-0 flex-1 items-center">
+            {renderCopyValue(offer.maxValue, maxId)}
           </div>
-          {copied === maxId && (
-            <div className="mt-2 flex items-center gap-1 text-xs font-bold text-green-700 dark:text-green-300">
-              <Check className="h-3 w-3" />
-              Copied
-            </div>
-          )}
         </button>
       </div>
     </div>
@@ -236,27 +235,28 @@ function TopOfferCalculator() {
               const result = customOfferResults.find((r) => r.id === offer.id);
               const value = result?.value ?? 0;
               return (
-                <div
+                <button
+                  type="button"
                   key={offer.id}
                   onClick={() => handleCopy(value, offer.id)}
-                  className="liquid-glass concentric-lg cursor-pointer p-3.5 text-center transition hover:bg-white/60 active:scale-[0.99] dark:hover:bg-white/10"
+                  className="liquid-glass concentric-lg flex min-h-[92px] w-full min-w-0 cursor-pointer flex-col items-center justify-center p-3.5 text-center transition hover:bg-white/60 active:scale-[0.99] dark:hover:bg-white/10"
                 >
-                  <div className="text-[28px] font-bold leading-none text-green-700 dark:text-green-300">
-                    ${formatCurrency(value)}
-                  </div>
-                  <div className="mt-2 flex items-center justify-center gap-1.5 text-xs font-bold text-stone-500 dark:text-stone-400">
+                  <div className="flex h-9 max-w-full items-center justify-center">
                     {copied === offer.id ? (
-                      <>
-                        <Check className="h-3.5 w-3.5 text-green-700 dark:text-green-300" />
-                        <span className="text-green-700 dark:text-green-300">
-                          Copied!
-                        </span>
-                      </>
+                      <span className="inline-flex items-center justify-center gap-1.5 text-sm font-bold text-green-700 dark:text-green-300">
+                        <Check className="h-4 w-4 shrink-0" />
+                        Copied
+                      </span>
                     ) : (
-                      offer.name
+                      <span className="max-w-full text-[24px] font-bold leading-tight tabular-nums text-green-700 [overflow-wrap:anywhere] dark:text-green-300">
+                        ${formatCurrency(value)}
+                      </span>
                     )}
                   </div>
-                </div>
+                  <div className="mt-1 max-w-full truncate text-xs font-bold text-stone-500 dark:text-stone-400">
+                    {offer.name}
+                  </div>
+                </button>
               );
             })}
           <button
