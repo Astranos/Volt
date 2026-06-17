@@ -237,7 +237,7 @@ private struct PhotoUploadBatchCard: View {
 
                 Spacer(minLength: 8)
 
-                UploadDeliveryBadge(state: batch.deliveryState)
+                DeliveryBadge(state: batch.deliveryState)
 
                 Button(role: .destructive, action: onDelete) {
                     Image(systemName: "trash")
@@ -309,7 +309,7 @@ private struct PhotoUploadThumbnail: View {
     }
 }
 
-private struct UploadDeliveryBadge: View {
+struct DeliveryBadge: View {
     let state: ScanResult.DeliveryState
 
     var body: some View {

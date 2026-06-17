@@ -382,6 +382,38 @@ final class ScannerStore {
         results.removeAll { $0.id == id }
     }
 
+    func resendResultToChrome(id: ScanResult.ID) async {
+        guard let result = results.first(where: { $0.id == id }) else { return }
+        guard connectionStatus.isConnected else {
+            statusText = "Pair with Chrome before resending."
+            targetHint = Self.disconnectedPairingHint
+            return
+        }
+
+        updateResultDeliveryState(id: id, state: .sending)
+        switch result.kind {
+        case .barcode, .text:
+            sendCaptureResult(result, insertIntoCursor: true)
+            statusText = result.kind == .barcode ? "Barcode resent" : "Text resent"
+        case .photo:
+            guard let imageData = result.imageData, let image = UIImage(data: imageData) else {
+                updateResultDeliveryState(id: id, state: .failed)
+                statusText = "Photo preview unavailable"
+                return
+            }
+            await sendPhoto(
+                image,
+                resultId: id,
+                filename: "volt-photo-resend-\(Int(Date.now.timeIntervalSince1970)).jpg",
+                capturedAt: result.capturedAt
+            )
+        case .dictation:
+            sendDictation(result.value, phase: "final")
+            updateResultDeliveryState(id: id, state: .sent)
+            statusText = "Dictation resent"
+        }
+    }
+
     func removeResults(at offsets: IndexSet) {
         results.remove(atOffsets: offsets)
     }

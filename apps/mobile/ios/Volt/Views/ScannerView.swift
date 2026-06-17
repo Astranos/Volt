@@ -91,6 +91,10 @@ struct ScannerView: View {
                     ForEach(captureResults) { result in
                         CapturedResultRow(
                             result: result,
+                            canResend: store.connectionStatus.isConnected,
+                            onResend: {
+                                Task { await store.resendResultToChrome(id: result.id) }
+                            },
                             onDelete: {
                                 store.removeResult(id: result.id)
                             }
@@ -634,6 +638,8 @@ struct BarcodeDetectionReticle: View {
 
 struct CapturedResultRow: View {
     let result: ScanResult
+    let canResend: Bool
+    let onResend: () -> Void
     var onDelete: (() -> Void)?
 
     var body: some View {
@@ -645,7 +651,7 @@ struct CapturedResultRow: View {
                     Text(title)
                         .font(.subheadline.weight(.semibold))
                     Spacer(minLength: 0)
-                    deliveryBadge
+                    DeliveryBadge(state: result.deliveryState)
                 }
 
                 resultContent
@@ -660,17 +666,35 @@ struct CapturedResultRow: View {
 
             Spacer(minLength: 0)
 
-            if let onDelete {
-                Button(role: .destructive, action: onDelete) {
-                    Image(systemName: "trash")
+            VStack(spacing: 6) {
+                Button(action: onResend) {
+                    Label("Resend \(title) to Chrome", systemImage: result.deliveryState == .sending ? "hourglass" : "paperplane")
+                        .labelStyle(.iconOnly)
                         .font(.system(size: 16, weight: .semibold))
                         .frame(width: 44, height: 44)
                 }
                 .buttonStyle(.borderless)
-                .accessibilityLabel("Delete \(title)")
+                .disabled(!canResend || result.deliveryState == .sending)
+
+                if let onDelete {
+                    Button(role: .destructive, action: onDelete) {
+                        Label("Delete \(title)", systemImage: "trash")
+                            .labelStyle(.iconOnly)
+                            .font(.system(size: 16, weight: .semibold))
+                            .frame(width: 44, height: 44)
+                    }
+                    .buttonStyle(.borderless)
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .swipeActions(edge: .leading, allowsFullSwipe: true) {
+            Button(action: onResend) {
+                Label("Resend", systemImage: "paperplane")
+            }
+            .tint(.green)
+            .disabled(!canResend || result.deliveryState == .sending)
+        }
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             if let onDelete {
                 Button(role: .destructive, action: onDelete) {
@@ -715,13 +739,6 @@ struct CapturedResultRow: View {
         }
     }
 
-    private var deliveryBadge: some View {
-        Label(result.deliveryState.label, systemImage: deliverySymbol)
-            .font(.caption2.weight(.semibold))
-            .foregroundStyle(deliveryColor)
-            .lineLimit(1)
-    }
-
     private var primaryText: String {
         switch result.kind {
         case .photo:
@@ -758,23 +775,6 @@ struct CapturedResultRow: View {
         }
     }
 
-    private var deliverySymbol: String {
-        switch result.deliveryState {
-        case .saved: "tray"
-        case .sending: "paperplane"
-        case .sent: "paperplane.fill"
-        case .failed: "exclamationmark.triangle.fill"
-        }
-    }
-
-    private var deliveryColor: Color {
-        switch result.deliveryState {
-        case .saved: .secondary
-        case .sending: .green
-        case .sent: .green
-        case .failed: .red
-        }
-    }
 }
 
 struct CaptureDock: View {
