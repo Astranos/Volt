@@ -356,18 +356,8 @@ struct CameraSessionControls: View {
     }
 
     private var trailingSlot: some View {
-        Group {
-            if activeMode == .photo {
-                Text(gridVisible ? "Grid on" : "Grid off")
-                    .font(.subheadline.bold())
-                    .foregroundStyle(.white.opacity(0.86))
-                    .frame(minWidth: 88, minHeight: 48)
-                    .background(.black.opacity(0.38), in: Capsule())
-            } else {
-                Color.clear
-                    .frame(width: 88, height: 48)
-            }
-        }
+        Color.clear
+            .frame(width: 88, height: 48)
     }
 
     private var captureHint: String {
@@ -492,6 +482,7 @@ struct ScannerCameraLayer: View {
     var gridVisible = false
     var guideVisible = true
     var barcodeDetectionLabel: String?
+    private let photoHeaderClearance: CGFloat = 48
     private let photoControlsReservedHeight: CGFloat = 318
 
     var body: some View {
@@ -567,7 +558,7 @@ struct ScannerCameraLayer: View {
     }
 
     private func photoPreview(in proxy: GeometryProxy) -> some View {
-        let topInset = proxy.safeAreaInsets.top
+        let topInset = proxy.safeAreaInsets.top + photoHeaderClearance
         let bottomInset = proxy.safeAreaInsets.bottom
         let availableHeight = max(0, proxy.size.height - topInset - bottomInset - photoControlsReservedHeight)
         let side = min(proxy.size.width, availableHeight)
