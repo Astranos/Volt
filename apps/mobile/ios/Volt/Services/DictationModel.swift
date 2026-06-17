@@ -29,7 +29,7 @@ final class DictationModel: NSObject {
     }
 
     nonisolated private static func requestSpeechAccess() async -> Bool {
-        await withCheckedContinuation { continuation in
+        await withCheckedContinuation(isolation: nil) { continuation in
             SFSpeechRecognizer.requestAuthorization { status in
                 continuation.resume(returning: status == .authorized)
             }
@@ -73,21 +73,14 @@ final class DictationModel: NSObject {
             return
         }
         input.removeTap(onBus: 0)
-        input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak request] buffer, _ in
-            request?.append(buffer)
-        }
+        Self.installAudioTap(on: input, format: format, request: request)
 
-        recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
-            Task { @MainActor in
-                guard self?.sessionToken == token else { return }
-                if let text = result?.bestTranscription.formattedString {
-                    self?.transcript = text
-                }
-                if error != nil || result?.isFinal == true {
-                    self?.stop()
-                }
-            }
-        }
+        recognitionTask = Self.makeRecognitionTask(
+            recognizer: recognizer,
+            request: request,
+            owner: self,
+            token: token
+        )
 
         do {
             audioEngine.prepare()
@@ -110,5 +103,36 @@ final class DictationModel: NSObject {
         request = nil
         isRecording = false
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    }
+
+    nonisolated private static func installAudioTap(
+        on input: AVAudioNode,
+        format: AVAudioFormat,
+        request: SFSpeechAudioBufferRecognitionRequest
+    ) {
+        input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak request] buffer, _ in
+            request?.append(buffer)
+        }
+    }
+
+    nonisolated private static func makeRecognitionTask(
+        recognizer: SFSpeechRecognizer,
+        request: SFSpeechAudioBufferRecognitionRequest,
+        owner: DictationModel,
+        token: UUID
+    ) -> SFSpeechRecognitionTask {
+        recognizer.recognitionTask(with: request) { [weak owner] result, error in
+            let text = result?.bestTranscription.formattedString
+            let shouldStop = error != nil || result?.isFinal == true
+            Task { @MainActor in
+                guard owner?.sessionToken == token else { return }
+                if let text {
+                    owner?.transcript = text
+                }
+                if shouldStop {
+                    owner?.stop()
+                }
+            }
+        }
     }
 }

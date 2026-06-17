@@ -160,6 +160,69 @@ export function installPhotoDropBridge(dropMime: string) {
     });
   };
 
+  const dataUrlToShopifyJpegFile = async (
+    dataUrl: string,
+    filename: string,
+  ) => {
+    const image = new Image();
+    image.decoding = "async";
+    const loaded = new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error("Image decode failed"));
+    });
+    image.src = dataUrl;
+    await loaded;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = image.naturalWidth || image.width;
+    canvas.height = image.naturalHeight || image.height;
+    const context = canvas.getContext("2d");
+    if (!context || !canvas.width || !canvas.height) {
+      throw new Error("Image canvas failed");
+    }
+
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(image, 0, 0);
+
+    const blob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob(resolve, "image/jpeg", 0.92);
+    });
+    if (!blob) throw new Error("JPEG conversion failed");
+
+    return new File(
+      [blob],
+      normalizeImageFilenameInPage(filename, "image/jpeg"),
+      {
+        type: "image/jpeg",
+        lastModified: Date.now(),
+      },
+    );
+  };
+
+  const isVisible = (element: Element) => {
+    const rect = element.getBoundingClientRect();
+    const style = window.getComputedStyle(element);
+    return (
+      rect.width > 0 &&
+      rect.height > 0 &&
+      style.visibility !== "hidden" &&
+      style.display !== "none"
+    );
+  };
+
+  const acceptsImages = (input: HTMLInputElement) => {
+    const accept = input.accept.toLowerCase();
+    return (
+      !accept ||
+      accept.includes("image") ||
+      accept.includes(".jpg") ||
+      accept.includes(".jpeg") ||
+      accept.includes(".png") ||
+      accept.includes(".webp")
+    );
+  };
+
   const findFileInput = (target: EventTarget | null) => {
     const element = target instanceof Element ? target : document.activeElement;
     const closestInput = element?.closest?.("input[type='file']");
@@ -173,9 +236,59 @@ export function installPhotoDropBridge(dropMime: string) {
     );
     if (localInput instanceof HTMLInputElement) return localInput;
 
-    return document.querySelector(
-      "input[type='file']",
-    ) as HTMLInputElement | null;
+    const fileInputs = Array.from(
+      document.querySelectorAll<HTMLInputElement>("input[type='file']"),
+    );
+    const shopifyMediaInput = fileInputs.find((input) => {
+      const field = [
+        input.accept,
+        input.name,
+        input.id,
+        input.getAttribute("aria-label") ?? "",
+        input
+          .closest("[data-testid], [data-polaris-dropzone], form, section")
+          ?.textContent ?? "",
+      ]
+        .join(" ")
+        .toLowerCase();
+      return (
+        acceptsImages(input) &&
+        (field.includes("image") ||
+          field.includes("media") ||
+          field.includes("photo") ||
+          field.includes("file upload"))
+      );
+    });
+
+    return (
+      shopifyMediaInput ??
+      fileInputs.find(
+        (input) => acceptsImages(input) && input.multiple && isVisible(input),
+      ) ??
+      fileInputs.find((input) => acceptsImages(input) && isVisible(input)) ??
+      fileInputs.find((input) => acceptsImages(input) && input.multiple) ??
+      fileInputs.find(acceptsImages) ??
+      fileInputs.find((input) => input.multiple && isVisible(input)) ??
+      fileInputs.find((input) => isVisible(input)) ??
+      fileInputs.find((input) => input.multiple) ??
+      fileInputs[0] ??
+      null
+    );
+  };
+
+  const dispatchFileDrop = (
+    target: Element,
+    transfer: DataTransfer,
+  ) => {
+    for (const type of ["dragenter", "dragover", "drop"]) {
+      target.dispatchEvent(
+        new DragEvent(type, {
+          bubbles: true,
+          cancelable: true,
+          dataTransfer: transfer,
+        }),
+      );
+    }
   };
 
   document.addEventListener(
@@ -193,9 +306,13 @@ export function installPhotoDropBridge(dropMime: string) {
 
   document.addEventListener(
     "drop",
-    (event) => {
+    async (event) => {
       const rawPayload = event.dataTransfer?.getData(dropMime);
       if (!rawPayload) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
 
       type DropPayload = {
         dataUrl: string;
@@ -211,19 +328,32 @@ export function installPhotoDropBridge(dropMime: string) {
         return;
       }
 
-      const files = photos
-        .map((photo) =>
-          dataUrlToFileInPage(photo.dataUrl, photo.name, photo.mimeType),
-        )
-        .filter((file): file is File => Boolean(file));
+      const isShopifyAdmin =
+        location.hostname === "admin.shopify.com" ||
+        location.hostname.endsWith(".myshopify.com");
+      const files = (
+        isShopifyAdmin
+          ? await Promise.all(
+              photos.map((photo) =>
+                dataUrlToShopifyJpegFile(photo.dataUrl, photo.name).catch(
+                  () =>
+                    dataUrlToFileInPage(
+                      photo.dataUrl,
+                      photo.name,
+                      photo.mimeType,
+                    ),
+                ),
+              ),
+            )
+          : photos.map((photo) =>
+              dataUrlToFileInPage(photo.dataUrl, photo.name, photo.mimeType),
+            )
+      ).filter((file): file is File => Boolean(file));
 
       if (files.length === 0) return;
 
       const transfer = new DataTransfer();
       files.forEach((file) => transfer.items.add(file));
-
-      event.preventDefault();
-      event.stopPropagation();
 
       const target = event.target instanceof Element ? event.target : document.body;
       const fileInput = findFileInput(target);
@@ -231,15 +361,18 @@ export function installPhotoDropBridge(dropMime: string) {
         fileInput.files = transfer.files;
         fileInput.dispatchEvent(new Event("input", { bubbles: true }));
         fileInput.dispatchEvent(new Event("change", { bubbles: true }));
+        dispatchFileDrop(fileInput, transfer);
       }
 
-      target.dispatchEvent(
-        new DragEvent("drop", {
-          bubbles: true,
-          cancelable: true,
-          dataTransfer: transfer,
-        }),
-      );
+      const dropTarget =
+        fileInput?.closest(
+          "[data-polaris-dropzone], [data-testid], label, form, [role='button'], div",
+        ) ??
+        target.closest?.(
+          "[data-polaris-dropzone], [data-testid], label, form, [role='button'], div",
+        ) ??
+        target;
+      if (dropTarget !== fileInput) dispatchFileDrop(dropTarget, transfer);
     },
     true,
   );

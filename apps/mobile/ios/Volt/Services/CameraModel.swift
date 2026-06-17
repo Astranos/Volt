@@ -17,6 +17,8 @@ final class CameraModel: NSObject {
     var authorizationStatus = AVCaptureDevice.authorizationStatus(for: .video)
     var lastBarcode: String?
     var lastBarcodeFormat: String?
+    var detectedBarcodeBounds: CGRect?
+    var detectedBarcodeFormat: String?
     var lastPhoto: UIImage?
     var errorMessage: String?
     var torchEnabled = false
@@ -52,12 +54,20 @@ final class CameraModel: NSObject {
     }
 
     func stop() {
+        clearDetectedBarcode()
         let session = session
         sessionQueue.async {
             if session.isRunning {
                 session.stopRunning()
             }
         }
+    }
+
+    func clearDetectedBarcode() {
+        lastBarcode = nil
+        lastBarcodeFormat = nil
+        detectedBarcodeBounds = nil
+        detectedBarcodeFormat = nil
     }
 
     func capturePhoto() async -> UIImage? {
@@ -232,13 +242,22 @@ extension CameraModel: AVCaptureMetadataOutputObjectsDelegate {
             .sorted(by: barcodePrioritySort)
             .first,
               let value = object.stringValue
-        else { return }
+        else {
+            Task { @MainActor in
+                detectedBarcodeBounds = nil
+                detectedBarcodeFormat = nil
+            }
+            return
+        }
 
         let format = object.type.rawValue
         Task { @MainActor in
-            guard lastBarcode != value || lastBarcodeFormat != format else { return }
-            lastBarcode = value
-            lastBarcodeFormat = format
+            detectedBarcodeBounds = previewLayer.transformedMetadataObject(for: object)?.bounds
+            detectedBarcodeFormat = format
+            if lastBarcode != value || lastBarcodeFormat != format {
+                lastBarcode = value
+                lastBarcodeFormat = format
+            }
         }
     }
 

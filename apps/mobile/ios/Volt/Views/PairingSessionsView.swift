@@ -38,14 +38,9 @@ struct PairingSessionsView: View {
                 }
             }
             .navigationTitle("Sessions")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    if store.connectionStatus.isConnected {
-                        Button("Unpair", systemImage: "link.badge.minus") {
-                            store.unpair()
-                        }
-                    }
-                }
+                ScannerConnectionToolbar()
             }
             .fullScreenCover(isPresented: $isPairingScannerPresented) {
                 PairingScanSessionView(isPresented: $isPairingScannerPresented)
@@ -97,7 +92,13 @@ private struct PairingScanSessionView: View {
 
     var body: some View {
         ZStack {
-            ScannerCameraLayer(guideVisible: false)
+            ScannerCameraLayer(
+                guideVisible: false,
+                barcodeDetectionLabel: PairingScanStatusMessage.detail(
+                    connectionStatus: store.connectionStatus,
+                    isCodeDetected: store.camera.detectedBarcodeBounds != nil
+                )
+            )
                 .ignoresSafeArea()
         }
         .background(.black)
@@ -105,6 +106,8 @@ private struct PairingScanSessionView: View {
             PairingScanControls(
                 statusText: store.statusText,
                 targetHint: store.targetHint,
+                connectionStatus: store.connectionStatus,
+                isCodeDetected: store.camera.detectedBarcodeBounds != nil,
                 onFinish: {
                     isPresented = false
                 }
@@ -112,8 +115,7 @@ private struct PairingScanSessionView: View {
         }
         .onAppear {
             store.activeMode = .barcode
-            store.camera.lastBarcode = nil
-            store.camera.lastBarcodeFormat = nil
+            store.camera.clearDetectedBarcode()
             store.camera.start()
         }
         .onDisappear {
@@ -136,6 +138,8 @@ private struct PairingScanSessionView: View {
 private struct PairingScanControls: View {
     let statusText: String
     let targetHint: String
+    let connectionStatus: ScannerConnectionStatus
+    let isCodeDetected: Bool
     let onFinish: () -> Void
 
     var body: some View {
@@ -152,14 +156,36 @@ private struct PairingScanControls: View {
                 .lineLimit(2)
                 .frame(maxWidth: .infinity)
 
+            HStack(spacing: 8) {
+                PairingProgressStep(
+                    title: "Find",
+                    systemImage: isCodeDetected ? "viewfinder.circle.fill" : "viewfinder.circle",
+                    isActive: isCodeDetected,
+                    isComplete: isCodeDetected
+                )
+                PairingProgressStep(
+                    title: "Read",
+                    systemImage: hasReadCode ? "qrcode.viewfinder" : "qrcode",
+                    isActive: hasReadCode,
+                    isComplete: hasReadCode
+                )
+                PairingProgressStep(
+                    title: "Connect",
+                    systemImage: connectionSymbol,
+                    isActive: isConnecting || connectionStatus.isConnected,
+                    isComplete: connectionStatus.isConnected
+                )
+            }
+
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(statusText)
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.white)
-                    Text("Center the Chrome pairing QR in the frame.")
+                    Text(statusDetail)
                         .font(.footnote)
                         .foregroundStyle(.white.opacity(0.66))
+                        .lineLimit(2)
                 }
 
                 Spacer(minLength: 12)
@@ -185,6 +211,83 @@ private struct PairingScanControls: View {
             )
             .ignoresSafeArea(edges: .bottom)
         }
+    }
+
+    private var hasReadCode: Bool {
+        switch connectionStatus {
+        case .pairing, .waitingForChrome, .connected:
+            true
+        case .idle, .disconnected, .error:
+            isCodeDetected && statusText != "Not paired"
+        }
+    }
+
+    private var isConnecting: Bool {
+        switch connectionStatus {
+        case .pairing, .waitingForChrome:
+            true
+        case .idle, .connected, .disconnected, .error:
+            false
+        }
+    }
+
+    private var connectionSymbol: String {
+        switch connectionStatus {
+        case .connected:
+            "checkmark.circle.fill"
+        case .error:
+            "exclamationmark.triangle.fill"
+        case .pairing, .waitingForChrome:
+            "arrow.triangle.2.circlepath.circle.fill"
+        case .idle, .disconnected:
+            "link.circle"
+        }
+    }
+
+    private var statusDetail: String {
+        PairingScanStatusMessage.detail(
+            connectionStatus: connectionStatus,
+            isCodeDetected: isCodeDetected
+        )
+    }
+}
+
+private enum PairingScanStatusMessage {
+    static func detail(connectionStatus: ScannerConnectionStatus, isCodeDetected: Bool) -> String {
+        switch connectionStatus {
+        case .idle, .disconnected:
+            isCodeDetected ? "Hold steady while the QR is read." : "Center the Chrome pairing QR in the frame."
+        case .pairing:
+            "QR accepted. Starting the pairing request."
+        case .waitingForChrome:
+            "Chrome received the request and is creating the connection."
+        case .connected:
+            "Ready to send captures back to the browser."
+        case .error:
+            "Try refreshing the Chrome QR and scan it again."
+        }
+    }
+}
+
+private struct PairingProgressStep: View {
+    let title: String
+    let systemImage: String
+    let isActive: Bool
+    let isComplete: Bool
+
+    var body: some View {
+        Label(title, systemImage: systemImage)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(isActive ? .white : .white.opacity(0.52))
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            .frame(maxWidth: .infinity, minHeight: 34)
+            .padding(.horizontal, 8)
+            .background(.white.opacity(isActive ? 0.18 : 0.08), in: Capsule())
+            .overlay {
+                Capsule().stroke(.white.opacity(isComplete ? 0.45 : 0.12), lineWidth: 1)
+            }
+            .accessibilityLabel("\(title) \(isComplete ? "complete" : isActive ? "active" : "pending")")
     }
 }
 

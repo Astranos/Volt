@@ -184,3 +184,119 @@ private struct PairingStatusToast: View {
         return .primary
     }
 }
+
+struct ScannerConnectionToolbar: ToolbarContent {
+    @Environment(ScannerStore.self) private var store
+
+    var body: some ToolbarContent {
+        ToolbarItem(placement: .principal) {
+            if store.connectionStatus.isConnected {
+                ConnectedSessionHeader(name: connectedSessionName)
+            }
+        }
+
+        ToolbarItem(placement: .topBarTrailing) {
+            Menu {
+                if store.connectionStatus.isConnected {
+                    Section("Connected Session") {
+                        Text(connectedSessionName)
+                        Text(connectedSessionId)
+                    }
+                }
+
+                Text(store.targetHint)
+
+                if store.connectionStatus.isConnected {
+                    Button("Unpair", systemImage: "link.badge.minus") {
+                        store.unpair()
+                    }
+                }
+            } label: {
+                Label(statusLabel, systemImage: statusSymbol)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(statusColor)
+                    .lineLimit(1)
+            }
+            .accessibilityLabel("\(statusLabel). \(store.targetHint)")
+        }
+    }
+
+    private var statusLabel: String {
+        if store.connectionStatus.isConnected {
+            return "Connected"
+        }
+        return store.statusText
+    }
+
+    private var connectedSessionName: String {
+        if let sessionLabel = store.peerTarget?.sessionLabel, !sessionLabel.isEmpty {
+            return sessionLabel
+        }
+        if let savedLabel = savedSessionLabel, !savedLabel.isEmpty {
+            return savedLabel
+        }
+        if let displayName = store.peerTarget?.displayText, !displayName.isEmpty {
+            return displayName
+        }
+        return "Chrome"
+    }
+
+    private var savedSessionLabel: String? {
+        store.pairedSessions.first { pairedSession in
+            pairedSession.sessionId == store.peerTarget?.chromeSessionId
+                || pairedSession.sessionId == store.pairingSession?.sessionId
+                || pairedSession.token == store.pairingSession?.token
+        }?.displayName
+    }
+
+    private var connectedSessionId: String {
+        if let sessionId = store.peerTarget?.chromeSessionId, !sessionId.isEmpty {
+            return sessionId
+        }
+        if let sessionId = store.pairingSession?.sessionId, !sessionId.isEmpty {
+            return sessionId
+        }
+        return "Unknown session id"
+    }
+
+    private var statusSymbol: String {
+        switch store.connectionStatus {
+        case .connected:
+            "checkmark.circle.fill"
+        case .pairing, .waitingForChrome:
+            "dot.radiowaves.left.and.right"
+        case .error:
+            "exclamationmark.triangle.fill"
+        case .idle, .disconnected:
+            "link"
+        }
+    }
+
+    private var statusColor: Color {
+        switch store.connectionStatus {
+        case .connected:
+            .green
+        case .pairing, .waitingForChrome:
+            .orange
+        case .error:
+            .red
+        case .idle, .disconnected:
+            .secondary
+        }
+    }
+}
+
+private struct ConnectedSessionHeader: View {
+    let name: String
+
+    var body: some View {
+        Label(name, systemImage: "desktopcomputer")
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(.primary)
+            .lineLimit(1)
+            .minimumScaleFactor(0.82)
+            .frame(maxWidth: 220)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Connected session \(name)")
+    }
+}

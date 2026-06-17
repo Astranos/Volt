@@ -542,6 +542,11 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
         }));
       if (bridgePayload.length > 0) {
         event.dataTransfer.setData(PHOTO_DROP_MIME, JSON.stringify(bridgePayload));
+        event.dataTransfer.setData("text/uri-list", bridgePayload.map((item) => item.dataUrl).join("\n"));
+        event.dataTransfer.setData(
+          "text/html",
+          bridgePayload.map((item) => `<img src="${item.dataUrl}" alt="${item.name}">`).join(""),
+        );
       }
     },
     [flashFeedback, prepareActiveTabForPhotoDrop, selectedPhotoIds, selectedPhotos],

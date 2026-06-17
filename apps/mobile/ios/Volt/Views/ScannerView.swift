@@ -9,11 +9,14 @@ struct ScannerView: View {
         self.showsCameraLayer = showsCameraLayer
     }
 
+    private var captureResults: [ScanResult] {
+        store.results.filter { $0.source == .capture }
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    captureHeader
                     startCaptureButton
                     previousCaptures
                 }
@@ -21,33 +24,16 @@ struct ScannerView: View {
             }
             .background(Color(.systemGroupedBackground))
             .navigationTitle("Capture")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ScannerConnectionToolbar()
+            }
             .fullScreenCover(isPresented: $isCaptureSessionPresented) {
                 CaptureSessionView(isPresented: $isCaptureSessionPresented)
             }
             .onAppear {
                 store.activeMode = .ocr
             }
-        }
-    }
-
-    private var captureHeader: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                Circle()
-                    .fill(store.connectionStatus.isConnected ? .green : .orange)
-                    .frame(width: 9, height: 9)
-                Text(store.connectionStatus.isConnected ? "Paired to Chrome" : "Not paired")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.secondary)
-            }
-
-            Text("Documents")
-                .font(.largeTitle.weight(.bold))
-
-            Text(store.connectionStatus.isConnected ? store.targetHint : "Start a full-screen capture session. Pair when you want text sent directly to Chrome.")
-                .font(.body)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -66,7 +52,7 @@ struct ScannerView: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Start Capture")
                         .font(.title3.weight(.bold))
-                    Text("Open the camera without tabs or extra controls.")
+                    Text("Use the camera to capture text, barcodes, or photos.")
                         .font(.subheadline)
                         .foregroundStyle(.white.opacity(0.78))
                 }
@@ -90,12 +76,12 @@ struct ScannerView: View {
                 Text("Previously Captured")
                     .font(.headline)
                 Spacer()
-                Text("\(store.results.count)")
+                Text("\(captureResults.count)")
                     .font(.subheadline.monospacedDigit())
                     .foregroundStyle(.secondary)
             }
 
-            if store.results.isEmpty {
+            if captureResults.isEmpty {
                 ContentUnavailableView(
                     "No Captures Yet",
                     systemImage: "doc.text.magnifyingglass",
@@ -106,7 +92,7 @@ struct ScannerView: View {
                 .background(.background, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             } else {
                 VStack(spacing: 10) {
-                    ForEach(store.results) { result in
+                    ForEach(captureResults) { result in
                         CapturedResultRow(
                             result: result,
                             onDelete: {
@@ -444,6 +430,7 @@ struct ScannerCameraLayer: View {
     @State private var focusPoint: CGPoint?
     var gridVisible = false
     var guideVisible = true
+    var barcodeDetectionLabel: String?
     private let photoControlsReservedHeight: CGFloat = 318
 
     var body: some View {
@@ -504,6 +491,18 @@ struct ScannerCameraLayer: View {
                     .allowsHitTesting(false)
             }
         }
+        .overlay(alignment: .topLeading) {
+            if let barcodeBounds = store.camera.detectedBarcodeBounds,
+               barcodeBounds.width > 0,
+               barcodeBounds.height > 0 {
+                BarcodeDetectionReticle(
+                    bounds: barcodeBounds,
+                    format: store.camera.detectedBarcodeFormat,
+                    labelOverride: barcodeDetectionLabel
+                )
+                    .allowsHitTesting(false)
+            }
+        }
     }
 
     private func photoPreview(in proxy: GeometryProxy) -> some View {
@@ -543,6 +542,41 @@ struct FocusReticle: View {
                     .frame(width: 8, height: 8)
             }
             .transition(.scale.combined(with: .opacity))
+    }
+}
+
+struct BarcodeDetectionReticle: View {
+    let bounds: CGRect
+    let format: String?
+    let labelOverride: String?
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(.green, lineWidth: 3)
+                .shadow(color: .black.opacity(0.42), radius: 3, y: 1)
+
+            Text(label)
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(.black)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(.green, in: Capsule())
+                .offset(x: 8, y: -28)
+        }
+        .frame(width: max(42, bounds.width), height: max(42, bounds.height))
+        .position(x: bounds.midX, y: bounds.midY)
+        .transition(.opacity.combined(with: .scale(scale: 0.96)))
+        .animation(.easeOut(duration: 0.12), value: bounds)
+        .accessibilityHidden(true)
+    }
+
+    private var label: String {
+        if let labelOverride, !labelOverride.isEmpty {
+            return labelOverride
+        }
+        guard let format else { return "Code" }
+        return format.localizedCaseInsensitiveContains("qr") ? "QR found" : "Code found"
     }
 }
 

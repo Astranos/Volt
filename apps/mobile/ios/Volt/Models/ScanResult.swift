@@ -8,6 +8,12 @@ struct ScanResult: Identifiable, Equatable {
         case dictation
     }
 
+    enum Source: String {
+        case capture
+        case dictation
+        case upload
+    }
+
     enum DeliveryState: String {
         case saved
         case sending
@@ -26,6 +32,7 @@ struct ScanResult: Identifiable, Equatable {
 
     let id: UUID
     let kind: Kind
+    let source: Source
     let value: String
     let format: String
     let capturedAt: Date
@@ -36,6 +43,7 @@ struct ScanResult: Identifiable, Equatable {
     init(
         id: UUID = UUID(),
         kind: Kind,
+        source: Source = .capture,
         value: String,
         format: String,
         capturedAt: Date = .now,
@@ -45,6 +53,7 @@ struct ScanResult: Identifiable, Equatable {
     ) {
         self.id = id
         self.kind = kind
+        self.source = source
         self.value = value
         self.format = format
         self.capturedAt = capturedAt

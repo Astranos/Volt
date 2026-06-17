@@ -8,8 +8,6 @@ struct DictationView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     DictationConnectionCard(
-                        statusText: store.statusText,
-                        isConnected: store.connectionStatus.isConnected,
                         chromeSession: chromeSession,
                         chromePage: chromePage,
                         cursorTarget: cursorTarget
@@ -29,6 +27,10 @@ struct DictationView: View {
                 .padding()
             }
             .navigationTitle("Dictate")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ScannerConnectionToolbar()
+            }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 DictationStartAccessory(
                     isRecording: store.dictation.isRecording,
@@ -86,20 +88,17 @@ struct DictationView: View {
 }
 
 private struct DictationConnectionCard: View {
-    let statusText: String
-    let isConnected: Bool
     let chromeSession: String
     let chromePage: String
     let cursorTarget: String
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Label(isConnected ? "Connected Chrome Session" : "Chrome Session", systemImage: isConnected ? "checkmark.circle.fill" : "link")
+            Label("Chrome Session", systemImage: "desktopcomputer")
                 .font(.headline)
-                .foregroundStyle(isConnected ? .green : .secondary)
+                .foregroundStyle(.secondary)
 
             VStack(spacing: 12) {
-                DictationDetailRow(title: "Status", value: statusText, systemImage: "dot.radiowaves.left.and.right")
                 DictationDetailRow(title: "Session", value: chromeSession, systemImage: "desktopcomputer")
                 DictationDetailRow(title: "Chrome Page", value: chromePage, systemImage: "globe")
                 DictationDetailRow(title: "Typing Into", value: cursorTarget, systemImage: "cursorarrow")
@@ -107,7 +106,7 @@ private struct DictationConnectionCard: View {
         }
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.background.secondary, in: RoundedRectangle(cornerRadius: 8))
+        .background(.background.secondary, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 }
 
@@ -153,7 +152,7 @@ private struct DictationTranscriptCard: View {
         }
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.background.secondary, in: RoundedRectangle(cornerRadius: 8))
+        .background(.background.secondary, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 }
 
@@ -181,9 +180,9 @@ private struct DictationStartAccessory: View {
                 .font(.headline)
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity, minHeight: 52)
-                .background(isConnected || isRecording ? Color.accentColor : Color.secondary, in: RoundedRectangle(cornerRadius: 8))
+                .background(isConnected || isRecording ? Color.accentColor : Color.secondary, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
                 .opacity(isConnected || isRecording ? 1 : 0.55)
-                .contentShape(RoundedRectangle(cornerRadius: 8))
+                .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
                 .gesture(pressGesture)
                 .accessibilityAddTraits(.isButton)
                 .accessibilityLabel(isRecording ? "Stop Dictation" : "Start Dictation")

@@ -302,6 +302,15 @@ async function dataUrlToBlob(dataUrl: string) {
   return response.blob();
 }
 
+async function blobToDataUrl(blob: Blob) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error ?? new Error("Blob read failed"));
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.readAsDataURL(blob);
+  });
+}
+
 export async function saveMobileScannerPhoto(photoInput: unknown) {
   await ensureMobileScannerBrowserSessionStore();
   const normalized = normalizeMobilePhoto(photoInput);
@@ -362,6 +371,7 @@ export async function saveMobileScannerPhoto(photoInput: unknown) {
     ...result,
     photo: {
       ...result.photo,
+      dataUrl: normalized.dataUrl,
       blob,
     },
   } satisfies HydratedMobileScannerPhotoResult;
@@ -384,20 +394,27 @@ export async function listMobileScannerResults() {
       )) as DeletedResultMarker[];
       const blobs = new Map(blobRows.map((row) => [row.photoId, row.blob]));
       const deletedIds = new Set(deletedRows.map((row) => row.id));
-      return rawResults
-        .filter((result) => !deletedIds.has(result.id))
-        .map((result): HydratedMobileScannerResult => {
-          if (result.type === "scan") return result;
-          const blob = blobs.get(result.id);
-          return {
-            ...result,
-            photo: {
-              ...result.photo,
-              blob,
-            },
-          };
-        })
-        .sort((a, b) => toTimestamp(b.capturedAt) - toTimestamp(a.capturedAt));
+      const hydratedResults = await Promise.all(
+        rawResults
+          .filter((result) => !deletedIds.has(result.id))
+          .map(async (result): Promise<HydratedMobileScannerResult> => {
+            if (result.type === "scan") return result;
+            const blob = blobs.get(result.id);
+            return {
+              ...result,
+              photo: {
+                ...result.photo,
+                dataUrl: blob
+                  ? await blobToDataUrl(blob).catch(() => undefined)
+                  : undefined,
+                blob,
+              },
+            };
+          }),
+      );
+      return hydratedResults.sort(
+        (a, b) => toTimestamp(b.capturedAt) - toTimestamp(a.capturedAt),
+      );
     },
   );
 }

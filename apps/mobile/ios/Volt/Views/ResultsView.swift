@@ -9,7 +9,7 @@ struct UploadView: View {
     @State private var expandedBatchIds: Set<String> = []
 
     private var recentPhotoResults: [ScanResult] {
-        store.results.filter { $0.kind == .photo }
+        store.results.filter { $0.kind == .photo && $0.source == .upload }
     }
 
     private var recentUploadBatches: [PhotoUploadBatch] {
@@ -27,7 +27,6 @@ struct UploadView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    uploadHeader
                     uploadButton
                     statusPanel
                     recentUploads
@@ -36,6 +35,10 @@ struct UploadView: View {
             }
             .background(Color(.systemGroupedBackground))
             .navigationTitle("Upload")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ScannerConnectionToolbar()
+            }
             .onChange(of: selectedItems) { _, newItems in
                 guard !newItems.isEmpty else { return }
                 Task {
@@ -43,27 +46,6 @@ struct UploadView: View {
                     selectedItems = []
                 }
             }
-        }
-    }
-
-    private var uploadHeader: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                Circle()
-                    .fill(store.connectionStatus.isConnected ? .green : .orange)
-                    .frame(width: 9, height: 9)
-                Text(store.connectionStatus.isConnected ? "Paired to Chrome" : "Not paired")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.secondary)
-            }
-
-            Text("Upload photos")
-                .font(.largeTitle.weight(.bold))
-
-            Text(store.connectionStatus.isConnected ? "Choose camera roll photos to send to the connected Chrome sidebar as one batch." : "Pair with Chrome before uploading camera roll photos.")
-                .font(.body)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -85,7 +67,7 @@ struct UploadView: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(isPreparing ? "Preparing uploads" : "Choose Photos")
                         .font(.title3.weight(.bold))
-                    Text("Photos are grouped into one Chrome batch.")
+                    Text("Select photos from your library and send them to Chrome.")
                         .font(.subheadline)
                         .foregroundStyle(.white.opacity(0.78))
                 }
@@ -107,7 +89,7 @@ struct UploadView: View {
 
     private var statusPanel: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label(store.statusText, systemImage: store.connectionStatus.isConnected ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+            Label(store.connectionStatus.isConnected ? "Ready to upload" : "Upload unavailable", systemImage: store.connectionStatus.isConnected ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
                 .font(.headline)
                 .foregroundStyle(store.connectionStatus.isConnected ? .green : .orange)
 

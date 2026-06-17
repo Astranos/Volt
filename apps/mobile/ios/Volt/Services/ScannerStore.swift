@@ -47,6 +47,9 @@ final class ScannerStore {
     private var photoBatch: (id: String, expiresAt: Date)?
     private var dictationSessionId: String?
     private var lastAutomaticReconnectAt: Date?
+    private var lastPairingCandidateValue: String?
+    @ObservationIgnored private let pairingImpactFeedback = UIImpactFeedbackGenerator(style: .medium)
+    @ObservationIgnored private let pairingNotificationFeedback = UINotificationFeedbackGenerator()
 
     func handleIncomingURL(_ url: URL) {
         let parsed = PairingURLParser.parse(url)
@@ -85,7 +88,13 @@ final class ScannerStore {
 
     func pairScannedBarcodeIfNeeded() {
         guard let value = camera.lastBarcode, !value.isEmpty else { return }
-        _ = handlePairingValue(value)
+        guard lastPairingCandidateValue != value else { return }
+        lastPairingCandidateValue = value
+        pairingImpactFeedback.impactOccurred(intensity: 0.72)
+        if !handlePairingValue(value) {
+            statusText = isDetectedQRCode ? "QR code found" : "Barcode found"
+            targetHint = "That code is not a Chrome scanner pairing QR."
+        }
     }
 
     func capture() async {
@@ -189,6 +198,7 @@ final class ScannerStore {
             let capturedAt = now.addingTimeInterval(Double(index) / 1000)
             let photoResult = ScanResult(
                 kind: .photo,
+                source: .upload,
                 value: "Upload \(index + 1)",
                 format: preparedImage.sizeDescription,
                 capturedAt: capturedAt,
@@ -229,7 +239,7 @@ final class ScannerStore {
     func commitDictation() {
         let text = dictation.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
         if !text.isEmpty {
-            let result = ScanResult(kind: .dictation, value: text, format: "dictation", deliveryState: initialDeliveryState)
+            let result = ScanResult(kind: .dictation, source: .dictation, value: text, format: "dictation", deliveryState: initialDeliveryState)
             results.insert(result, at: 0)
             sendDictation(text, phase: "final")
         }
@@ -332,20 +342,24 @@ final class ScannerStore {
             statusText = "Not paired"
             targetHint = "Tap Pair to reconnect or scan the Chrome QR once."
         case .pairing:
-            statusText = "Pairing with Chrome"
-            targetHint = "Keep the Chrome scanner panel open."
+            statusText = "QR read"
+            targetHint = "Creating the secure Chrome connection..."
+            pairingImpactFeedback.impactOccurred(intensity: 0.85)
         case .waitingForChrome:
-            statusText = "Waiting for Chrome"
-            targetHint = "Chrome is opening a secure scanner channel."
+            statusText = "Chrome is responding"
+            targetHint = "Waiting for the browser to finish the WebRTC handshake."
+            pairingImpactFeedback.impactOccurred(intensity: 0.55)
         case .connected:
             statusText = "Connected to Chrome"
             targetHint = peerTarget?.displayText ?? "Ready to send captures."
+            pairingNotificationFeedback.notificationOccurred(.success)
         case .disconnected:
             statusText = "Disconnected"
             targetHint = "Tap Pair to reconnect to a saved computer."
         case .error(let message):
             statusText = "Pairing failed"
             targetHint = message
+            pairingNotificationFeedback.notificationOccurred(.error)
         }
     }
 
@@ -353,9 +367,15 @@ final class ScannerStore {
         if let activeMode = message.activeMode {
             self.activeMode = activeMode
         }
+        let chromeSessionId = message.peer?.chromeSessionId ?? pairingSession?.sessionId
+        let sessionLabel = firstNonEmpty(
+            message.peer?.deviceLabel,
+            peerTarget?.sessionLabel,
+            savedSessionLabel(sessionId: chromeSessionId, token: pairingSession?.token)
+        )
         peerTarget = ScannerPeerTarget(
-            chromeSessionId: message.peer?.chromeSessionId,
-            sessionLabel: message.peer?.deviceLabel,
+            chromeSessionId: chromeSessionId,
+            sessionLabel: sessionLabel,
             tabTitle: message.cursorTarget?.tabTitle,
             tabURL: message.cursorTarget?.url,
             cursorLabel: message.cursorTarget?.label,
@@ -363,6 +383,19 @@ final class ScannerStore {
         )
         saveCurrentPairingSession()
         applyConnectionStatus(.connected)
+    }
+
+    private func savedSessionLabel(sessionId: String?, token: String?) -> String? {
+        pairedSessions.first { pairedSession in
+            pairedSession.sessionId == sessionId || pairedSession.token == token
+        }?.displayName
+    }
+
+    private func firstNonEmpty(_ values: String?...) -> String? {
+        values.first { value in
+            guard let value else { return false }
+            return !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        } ?? nil
     }
 
     private func loadPairedSessions() {
@@ -417,6 +450,10 @@ final class ScannerStore {
         }
         Task { await pair(with: session) }
         return true
+    }
+
+    private var isDetectedQRCode: Bool {
+        normalizedBarcodeFormat(camera.detectedBarcodeFormat ?? camera.lastBarcodeFormat ?? "").contains("qr")
     }
 
     private func sendCaptureResult(_ result: ScanResult, insertIntoCursor: Bool) {
