@@ -81,6 +81,15 @@ type DurablePairingCredential = {
   lastConnectedAt: string;
 };
 
+type WebPushSubscriptionRecord = {
+  endpoint: string;
+  expirationTime?: number | null;
+  keys: {
+    auth: string;
+    p256dh: string;
+  };
+};
+
 type JoinWindow = {
   expiresAt?: string;
   joinToken: string;
@@ -176,7 +185,16 @@ function storageLocalGet(keys: string[]) {
   const fallback: Record<string, unknown> = {};
   try {
     for (const key of keys) {
-      fallback[key] = globalThis.localStorage?.getItem(key) ?? undefined;
+      const storedValue = globalThis.localStorage?.getItem(key);
+      if (storedValue === null || typeof storedValue === "undefined") {
+        fallback[key] = undefined;
+        continue;
+      }
+      try {
+        fallback[key] = JSON.parse(storedValue);
+      } catch (_error) {
+        fallback[key] = storedValue;
+      }
     }
   } catch (_error) {}
   return Promise.resolve(fallback);
@@ -189,8 +207,12 @@ function storageLocalSet(values: Record<string, unknown>) {
   }
   try {
     for (const [key, value] of Object.entries(values)) {
-      if (typeof value === "string") {
+      if (typeof value === "undefined") {
+        globalThis.localStorage?.removeItem(key);
+      } else if (typeof value === "string") {
         globalThis.localStorage?.setItem(key, value);
+      } else {
+        globalThis.localStorage?.setItem(key, JSON.stringify(value));
       }
     }
   } catch (_error) {}
@@ -236,6 +258,27 @@ async function saveDurablePairing(pairing: DurablePairingCredential) {
     ...pairings.filter((item) => item.pairingId !== pairing.pairingId && item.browserSessionId !== pairing.browserSessionId),
   ].slice(0, 12);
   await storageLocalSet({ [key]: nextPairings });
+}
+
+async function getMobileScannerPushSubscription(): Promise<WebPushSubscriptionRecord | null> {
+  const chromeApi = globalThis as typeof globalThis & { chrome?: typeof chrome };
+  if (!chromeApi.chrome?.runtime?.sendMessage) return null;
+  try {
+    const response = await chromeApi.chrome.runtime.sendMessage({
+      action: "scannerGetPushSubscription",
+    });
+    const subscription = response?.subscription;
+    if (
+      subscription &&
+      typeof subscription.endpoint === "string" &&
+      subscription.keys &&
+      typeof subscription.keys.auth === "string" &&
+      typeof subscription.keys.p256dh === "string"
+    ) {
+      return subscription;
+    }
+  } catch (_error) {}
+  return null;
 }
 
 export async function getMobileScannerExtensionIdentity(): Promise<ExtensionIdentity> {
@@ -387,6 +430,9 @@ export class MobileScannerSession {
         this.events.log?.("Failed to load scanner extension identity", error);
       },
     );
+    void this.refreshDurablePairingRegistrations().catch((error) => {
+      this.events.log?.("Failed to refresh scanner pairing registrations", error);
+    });
     this.scheduleReconnectPoll(RECONNECT_POLL_INTERVAL_MS);
   }
 
@@ -490,6 +536,11 @@ export class MobileScannerSession {
         this.sendSessionReady(peer);
       }
     }
+    return this.getState();
+  }
+
+  async pollReconnectRequestsNow() {
+    await this.pollReconnectRequests();
     return this.getState();
   }
 
@@ -623,7 +674,22 @@ export class MobileScannerSession {
     return pairing;
   }
 
-  private async registerPairing(pairing: DurablePairingCredential) {
+  private async refreshDurablePairingRegistrations() {
+    await this.identityReady;
+    const pairings = await loadDurablePairings();
+    if (pairings.length === 0) return;
+    const pushSubscription = await getMobileScannerPushSubscription();
+    await Promise.all(
+      pairings.map((pairing) =>
+        this.registerPairing(pairing, pushSubscription).catch((error) => {
+          this.events.log?.("Failed to refresh scanner pairing registration", error);
+        }),
+      ),
+    );
+  }
+
+  private async registerPairing(pairing: DurablePairingCredential, pushSubscription?: WebPushSubscriptionRecord | null) {
+    const subscription = pushSubscription ?? await getMobileScannerPushSubscription();
     await fetch(`${SCANNER_SIGNAL_URL}/pairings`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -632,6 +698,7 @@ export class MobileScannerSession {
         pairingSecret: pairing.pairingSecret,
         browserSessionId: pairing.browserSessionId,
         displayName: pairing.displayName,
+        pushSubscription: subscription ?? undefined,
       }),
     });
   }
@@ -653,15 +720,30 @@ export class MobileScannerSession {
   private async pollReconnectRequests() {
     await this.identityReady;
     const sessionId = this.state.sessionId;
-    if (!isScannerSessionId(sessionId)) return;
+    if (!isScannerSessionId(sessionId)) {
+      this.events.log?.("[Volt Scanner Reconnect] poll skipped: invalid session id", { sessionId });
+      return;
+    }
     const pairings = await loadDurablePairings();
     const pairingById = new Map(pairings.map((pairing) => [pairing.pairingId, pairing]));
-    if (pairingById.size === 0) return;
+    if (pairingById.size === 0) {
+      this.events.log?.("[Volt Scanner Reconnect] poll skipped: no durable pairings", { sessionId });
+      return;
+    }
 
     const response = await fetch(`${SCANNER_SIGNAL_URL}/pairings/reconnect-requests?sessionId=${encodeURIComponent(sessionId)}`);
+    this.events.log?.("[Volt Scanner Reconnect] reconnect requests fetched", {
+      sessionId,
+      status: response.status,
+      pairingCount: pairingById.size,
+    });
     if (!response.ok) return;
     const payload = (await response.json()) as { requests?: unknown[] };
     const requests = Array.isArray(payload.requests) ? payload.requests : [];
+    this.events.log?.("[Volt Scanner Reconnect] reconnect requests decoded", {
+      sessionId,
+      requestCount: requests.length,
+    });
     for (const rawRequest of requests) {
       if (!rawRequest || typeof rawRequest !== "object") continue;
       const request = rawRequest as { pairingId?: unknown; requestId?: unknown };
@@ -670,6 +752,11 @@ export class MobileScannerSession {
       if (!pairing) continue;
       const key = `${request.pairingId}:${request.requestId}`;
       if (this.seenReconnectRequests.has(key)) continue;
+      this.events.log?.("[Volt Scanner Reconnect] answering reconnect request", {
+        sessionId,
+        pairingId: request.pairingId,
+        requestId: request.requestId,
+      });
       await this.answerReconnectRequest(pairing, request.requestId);
       this.seenReconnectRequests.add(key);
     }
@@ -701,6 +788,11 @@ export class MobileScannerSession {
         }),
       }
     );
+    this.events.log?.("[Volt Scanner Reconnect] join window posted", {
+      pairingId: pairing.pairingId,
+      requestId,
+      sessionId: joinWindow.sessionId,
+    });
   }
 
   private async revokeJoinWindow(joinWindow: JoinWindow) {

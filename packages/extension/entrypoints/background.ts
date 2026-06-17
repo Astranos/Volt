@@ -18,6 +18,7 @@ import {
   shouldPersistScannerScan,
 } from "../src/domain/mobile-scanner-results";
 import { shouldInsertScannerMessage } from "../src/domain/scanner-message";
+import { SCANNER_SIGNAL_URL } from "../../scanner-protocol/src";
 
 export default defineBackground({
   main() {
@@ -88,11 +89,13 @@ export default defineBackground({
 
 
     let OFFSCREEN_CREATE_PROMISE = null;
+    let SCANNER_PUSH_SUBSCRIPTION_PROMISE = null;
 
     const OFFSCREEN_DOCUMENT_PATH = "offscreen.html";
     const STORAGE_STATS_KEY = "grokStorageStats";
     const MOBILE_SCANNER_STORAGE_KEY = "volt.mobileScanner.scans";
     const MOBILE_PHOTOS_STORAGE_KEY = "volt.mobilePhotos.photos";
+    const SCANNER_RECONNECT_ALARM_NAME = "volt.mobileScanner.reconnectPoll";
     const MOBILE_SCANNER_MAX_SCANS = 100;
     const MOBILE_PHOTOS_MAX_PHOTOS = 80;
     const MOBILE_PHOTOS_MAX_PERSISTED_BYTES = 6_000_000;
@@ -544,6 +547,90 @@ export default defineBackground({
       void ensureScannerOffscreenDocument().catch((error) => {
         log("Failed to bootstrap scanner reconnect listener", reason, error?.message || error);
       });
+    }
+
+    async function pollScannerReconnectRequests(reason = "startup") {
+      log("[Volt Scanner Reconnect] poll requested", { reason });
+      const offscreenReady = await ensureScannerOffscreenDocument();
+      if (!offscreenReady) {
+        log("[Volt Scanner Reconnect] offscreen not ready", { reason });
+        return false;
+      }
+
+      try {
+        const response = await chrome.runtime.sendMessage({
+          action: "scannerOffscreenPollReconnectRequests",
+          reason,
+        });
+        log("[Volt Scanner Reconnect] poll completed", {
+          reason,
+          status: response?.status,
+          error: response?.error,
+          sessionId: response?.sessionId,
+          connectedPeerCount: response?.connectedPeerCount,
+        });
+        return response?.status !== "error";
+      } catch (error) {
+        log("Failed to poll scanner reconnect requests", reason, error?.message || error);
+        return false;
+      }
+    }
+
+    function ensureScannerReconnectAlarm() {
+      try {
+        chrome.alarms?.create?.(SCANNER_RECONNECT_ALARM_NAME, {
+          delayInMinutes: 0.1,
+          periodInMinutes: 0.5,
+        });
+      } catch (error) {
+        log("Failed to create scanner reconnect alarm", error?.message || error);
+      }
+    }
+
+    function base64UrlToUint8Array(value) {
+      const padding = "=".repeat((4 - (value.length % 4)) % 4);
+      const base64 = `${value}${padding}`.replace(/-/g, "+").replace(/_/g, "/");
+      const raw = atob(base64);
+      const output = new Uint8Array(raw.length);
+      for (let index = 0; index < raw.length; index += 1) {
+        output[index] = raw.charCodeAt(index);
+      }
+      return output;
+    }
+
+    async function getScannerPushSubscription() {
+      if (SCANNER_PUSH_SUBSCRIPTION_PROMISE) return SCANNER_PUSH_SUBSCRIPTION_PROMISE;
+
+      SCANNER_PUSH_SUBSCRIPTION_PROMISE = getScannerPushSubscriptionOnce().finally(() => {
+        SCANNER_PUSH_SUBSCRIPTION_PROMISE = null;
+      });
+      return SCANNER_PUSH_SUBSCRIPTION_PROMISE;
+    }
+
+    async function getScannerPushSubscriptionOnce() {
+      try {
+        const pushManager = globalThis.registration?.pushManager;
+        if (!pushManager) return null;
+
+        const existing = await pushManager.getSubscription();
+        if (existing) return existing.toJSON();
+
+        const keyResponse = await fetch(`${SCANNER_SIGNAL_URL}/push/public-key`);
+        if (!keyResponse.ok) return null;
+        const keyPayload = await keyResponse.json();
+        const publicKey =
+          typeof keyPayload?.publicKey === "string" ? keyPayload.publicKey : "";
+        if (!publicKey) return null;
+
+        const subscription = await pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: base64UrlToUint8Array(publicKey),
+        });
+        return subscription.toJSON();
+      } catch (error) {
+        log("Failed to create scanner push subscription", error?.message || error);
+        return null;
+      }
     }
 
     async function pingScannerOffscreen() {
@@ -1109,6 +1196,7 @@ export default defineBackground({
       }
 
       bootstrapScannerReconnectListener("installed");
+      ensureScannerReconnectAlarm();
     });
 
     /**
@@ -1120,10 +1208,26 @@ export default defineBackground({
         DEBUG = !!cfg.debugLogs;
         log("Debug flag loaded", DEBUG);
       });
-      bootstrapScannerReconnectListener("startup");
+      void pollScannerReconnectRequests("startup");
+      ensureScannerReconnectAlarm();
     });
 
-    bootstrapScannerReconnectListener("background-main");
+    void pollScannerReconnectRequests("background-main");
+    ensureScannerReconnectAlarm();
+
+    chrome.alarms?.onAlarm?.addListener((alarm) => {
+      if (alarm?.name !== SCANNER_RECONNECT_ALARM_NAME) return;
+      void pollScannerReconnectRequests("alarm");
+    });
+
+    self.addEventListener("push", (event) => {
+      let payload = null;
+      try {
+        payload = event.data?.json?.() ?? null;
+      } catch (_error) {}
+      log("[Volt Scanner Reconnect] push event received", { payload });
+      event.waitUntil(pollScannerReconnectRequests("push"));
+    });
 
     /**
      * Handles extension context invalidation and recovery
@@ -1359,6 +1463,11 @@ export default defineBackground({
           return true;
         case "scannerUpdateExtensionIdentity":
           handleScannerIdentityUpdated(message, sendResponse);
+          return true;
+        case "scannerGetPushSubscription":
+          getScannerPushSubscription()
+            .then((subscription) => sendResponse({ success: true, subscription }))
+            .catch((err) => sendResponse({ success: false, error: String(err?.message || err) }));
           return true;
         case "mobileCursorTargetChanged":
           void updateMobileCaptureTarget(message?.target, sender);

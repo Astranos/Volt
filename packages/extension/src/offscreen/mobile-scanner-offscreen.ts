@@ -133,6 +133,12 @@ class MobileScannerOffscreenSession {
     return this.getState();
   }
 
+  async pollReconnectRequestsNow() {
+    const state = await this.webRtcSession.pollReconnectRequestsNow();
+    this.handleWebRtcState(state);
+    return this.getState();
+  }
+
   private async sendScan(data: BarcodeMessage) {
     const response = await chrome.runtime.sendMessage({
       action: "scannerOffscreenScan",
@@ -215,6 +221,25 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           : null,
       )
       .then((state) => sendResponse(state))
+      .catch((err) => sendScannerError(sendResponse, err));
+    return true;
+  }
+
+  if (message.action === "scannerOffscreenPollReconnectRequests") {
+    console.warn("[Volt Scanner Reconnect] offscreen poll requested", {
+      reason: message.reason,
+    });
+    mobileScannerSession
+      .pollReconnectRequestsNow()
+      .then((state) => {
+        console.warn("[Volt Scanner Reconnect] offscreen poll completed", {
+          reason: message.reason,
+          status: state.status,
+          sessionId: state.sessionId,
+          connectedPeerCount: state.connectedPeerCount,
+        });
+        sendResponse(state);
+      })
       .catch((err) => sendScannerError(sendResponse, err));
     return true;
   }

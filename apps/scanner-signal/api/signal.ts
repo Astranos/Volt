@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { randomBytes } from "node:crypto";
+import webPush from "web-push";
 
 const SCANNER_SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const SCANNER_JOIN_ATTEMPT_TTL_MS = 30 * 1000;
@@ -76,10 +77,20 @@ type PairingRecord = {
   displayName?: string;
   phoneDeviceId?: string;
   phoneLabel?: string;
+  pushSubscription?: WebPushSubscriptionRecord;
   createdAt: number;
   lastSeenAt: number;
   expiresAt: number;
   reconnectRequests: ReconnectRequestRecord[];
+};
+
+type WebPushSubscriptionRecord = {
+  endpoint: string;
+  expirationTime?: number | null;
+  keys: {
+    auth: string;
+    p256dh: string;
+  };
 };
 
 const globalState = globalThis as typeof globalThis & {
@@ -92,6 +103,9 @@ const memoryPairings = (globalState.__voltScannerPairings ??= new Map<string, Pa
 const redisUrl = process.env.KV_REST_API_URL ?? process.env.UPSTASH_REDIS_REST_URL;
 const redisToken = process.env.KV_REST_API_TOKEN ?? process.env.UPSTASH_REDIS_REST_TOKEN;
 const isVercelProduction = process.env.VERCEL === "1";
+const vapidPublicKey = process.env.SCANNER_PUSH_VAPID_PUBLIC_KEY;
+const vapidPrivateKey = process.env.SCANNER_PUSH_VAPID_PRIVATE_KEY;
+const vapidSubject = process.env.SCANNER_PUSH_VAPID_SUBJECT ?? "mailto:scanner-signal@volt.local";
 
 function hasRedisStorage() {
   return Boolean(redisUrl && redisToken);
@@ -266,6 +280,76 @@ function stringArrayFromBody(value: unknown, maxItems = 20, maxLength = 80) {
   return strings.length ? strings : undefined;
 }
 
+function normalizePushSubscription(value: unknown): WebPushSubscriptionRecord | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const record = value as Partial<WebPushSubscriptionRecord>;
+  const keys = record.keys as Partial<WebPushSubscriptionRecord["keys"]> | undefined;
+  if (
+    typeof record.endpoint !== "string" ||
+    !record.endpoint.startsWith("https://") ||
+    record.endpoint.length > 2000 ||
+    !keys ||
+    typeof keys.auth !== "string" ||
+    typeof keys.p256dh !== "string" ||
+    keys.auth.length > 500 ||
+    keys.p256dh.length > 500
+  ) {
+    return undefined;
+  }
+
+  return {
+    endpoint: record.endpoint,
+    expirationTime: typeof record.expirationTime === "number" ? record.expirationTime : null,
+    keys: {
+      auth: keys.auth,
+      p256dh: keys.p256dh,
+    },
+  };
+}
+
+function hasWebPushConfig() {
+  return Boolean(vapidPublicKey && vapidPrivateKey);
+}
+
+async function sendReconnectWakePush(pairing: PairingRecord, requestId: string) {
+  if (!hasWebPushConfig()) {
+    console.info("[scanner-signal] Reconnect wake push skipped: VAPID is not configured", {
+      pairingId: pairing.id,
+      requestId,
+    });
+    return;
+  }
+  if (!pairing.pushSubscription) {
+    console.info("[scanner-signal] Reconnect wake push skipped: pairing has no push subscription", {
+      pairingId: pairing.id,
+      requestId,
+      browserSessionId: pairing.browserSessionId,
+    });
+    return;
+  }
+
+  try {
+    webPush.setVapidDetails(vapidSubject, vapidPublicKey!, vapidPrivateKey!);
+    await webPush.sendNotification(
+      pairing.pushSubscription,
+      JSON.stringify({
+        type: "scanner_reconnect_requested",
+        pairingId: pairing.id,
+        requestId,
+        browserSessionId: pairing.browserSessionId,
+      }),
+      { TTL: Math.ceil(SCANNER_RECONNECT_REQUEST_TTL_MS / 1000) }
+    );
+    console.info("[scanner-signal] Reconnect wake push sent", {
+      pairingId: pairing.id,
+      requestId,
+      browserSessionId: pairing.browserSessionId,
+    });
+  } catch (error) {
+    console.warn("[scanner-signal] Failed to send reconnect wake push", error);
+  }
+}
+
 function iso(timestamp: number) {
   return new Date(timestamp).toISOString();
 }
@@ -278,6 +362,11 @@ function tokenRouteParts(request: VercelRequest) {
 function pairingRouteParts(request: VercelRequest) {
   const parts = pathParts(request);
   return parts[0] === "pairings" ? parts : [];
+}
+
+function pushRouteParts(request: VercelRequest) {
+  const parts = pathParts(request);
+  return parts[0] === "push" ? parts : [];
 }
 
 function isTokenActiveForNewAttempt(record: JoinTokenRecord, now = Date.now()) {
@@ -622,6 +711,13 @@ async function handlePairingRoute(request: VercelRequest, response: VercelRespon
       response.status(409).json({ error: "Pairing already exists" });
       return true;
     }
+    const pushSubscription = normalizePushSubscription(request.body?.pushSubscription);
+    console.info("[scanner-signal] Pairing registration", {
+      pairingId,
+      browserSessionId,
+      hasPushSubscription: Boolean(pushSubscription ?? existing?.pushSubscription),
+      receivedPushSubscription: Boolean(pushSubscription),
+    });
 
     const record: PairingRecord = {
       id: pairingId,
@@ -630,6 +726,7 @@ async function handlePairingRoute(request: VercelRequest, response: VercelRespon
       displayName: stringFromBody(request.body?.displayName, 120),
       phoneDeviceId: stringFromBody(request.body?.phoneDeviceId, 120),
       phoneLabel: stringFromBody(request.body?.phoneLabel, 120),
+      pushSubscription: pushSubscription ?? existing?.pushSubscription,
       createdAt: existing?.createdAt ?? now,
       lastSeenAt: now,
       expiresAt: now + SCANNER_PAIRING_TTL_MS,
@@ -696,6 +793,7 @@ async function handlePairingRoute(request: VercelRequest, response: VercelRespon
       reconnectRequests: [...record.reconnectRequests, reconnectRequest],
     };
     await savePairing(nextRecord);
+    await sendReconnectWakePush(nextRecord, reconnectRequest.id);
     response.status(200).json({
       pairingId: record.id,
       browserSessionId: record.browserSessionId,
@@ -768,6 +866,23 @@ async function handlePairingRoute(request: VercelRequest, response: VercelRespon
   return true;
 }
 
+async function handlePushRoute(request: VercelRequest, response: VercelResponse) {
+  const parts = pushRouteParts(request);
+  if (parts.length === 0) return false;
+
+  if (request.method === "GET" && parts[1] === "public-key" && parts.length === 2) {
+    if (!vapidPublicKey) {
+      response.status(404).json({ error: "Web Push is not configured" });
+      return true;
+    }
+    response.status(200).json({ publicKey: vapidPublicKey });
+    return true;
+  }
+
+  response.status(404).json({ error: "Not found" });
+  return true;
+}
+
 export default async function handler(request: VercelRequest, response: VercelResponse) {
   setCors(response);
 
@@ -780,6 +895,10 @@ export default async function handler(request: VercelRequest, response: VercelRe
     ensureSignalStorage();
 
     if (await handleJoinTokenRoute(request, response)) {
+      return;
+    }
+
+    if (await handlePushRoute(request, response)) {
       return;
     }
 

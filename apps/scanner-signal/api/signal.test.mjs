@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import associationHandler, { buildAssociationPayload } from "./apple-app-site-association.ts";
 import signalHandler from "./signal.ts";
+
+const signalSource = readFileSync(new URL("./signal.ts", import.meta.url), "utf8");
 
 function makeResponse() {
   return {
@@ -339,4 +342,13 @@ test("signal durable pairings broker fresh reconnect join windows", async () => 
 
   assert.equal(pollResponse.statusCode, 200);
   assert.equal(pollResponse.body.request.joinToken, joinToken);
+});
+
+test("signal supports Web Push wake subscriptions for durable reconnect", () => {
+  assert.match(signalSource, /import webPush from "web-push"/);
+  assert.match(signalSource, /SCANNER_PUSH_VAPID_PUBLIC_KEY/);
+  assert.match(signalSource, /function normalizePushSubscription/);
+  assert.match(signalSource, /pushSubscription: pushSubscription \?\? existing\?\.pushSubscription/);
+  assert.match(signalSource, /await sendReconnectWakePush\(nextRecord, reconnectRequest\.id\)/);
+  assert.match(signalSource, /parts\[1\] === "public-key"/);
 });

@@ -45,7 +45,7 @@ struct ScannerSignalingClient {
 
     func requestReconnect(pairingId: String, pairingSecret: String) async throws -> ReconnectJoinWindow {
         let requestId = try await createReconnectRequest(pairingId: pairingId, pairingSecret: pairingSecret)
-        let deadline = ContinuousClock.now + ScannerProtocol.joinAttemptTTL
+        let deadline = ContinuousClock.now + ScannerProtocol.reconnectRequestTTL
         let statusURL = ScannerProtocol.signalURL
             .appending(path: "pairings")
             .appending(path: pairingId)

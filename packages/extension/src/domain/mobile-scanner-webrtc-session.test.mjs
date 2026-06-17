@@ -14,6 +14,10 @@ const backgroundSource = readFileSync(
   new URL("../../entrypoints/background.ts", import.meta.url),
   "utf8"
 );
+const wxtConfigSource = readFileSync(
+  new URL("../../wxt.config.ts", import.meta.url),
+  "utf8"
+);
 const pairingPopupSource = readFileSync(
   new URL("../../entrypoints/mobile-scanner-popup/main.tsx", import.meta.url),
   "utf8"
@@ -94,12 +98,41 @@ test("extension hydrates persisted identity before polling reconnect requests", 
   assert.match(sessionSource, /const response = await fetch\(`\$\{SCANNER_SIGNAL_URL\}\/pairings\/reconnect-requests\?sessionId=\$\{encodeURIComponent\(sessionId\)\}`\)/);
 });
 
+test("offscreen localStorage fallback persists durable pairing arrays", () => {
+  assert.match(sessionSource, /JSON\.parse\(storedValue\)/);
+  assert.match(sessionSource, /globalThis\.localStorage\?\.setItem\(key, JSON\.stringify\(value\)\)/);
+  assert.match(sessionSource, /globalThis\.localStorage\?\.removeItem\(key\)/);
+});
+
 test("extension boots offscreen reconnect polling without opening scanner UI", () => {
+  assert.match(wxtConfigSource, /"alarms"/);
+  assert.match(wxtConfigSource, /"notifications"/);
+  assert.match(backgroundSource, /SCANNER_RECONNECT_ALARM_NAME = "volt\.mobileScanner\.reconnectPoll"/);
+  assert.match(backgroundSource, /function ensureScannerReconnectAlarm\(\)/);
+  assert.match(backgroundSource, /chrome\.alarms\?\.create\?\.\(SCANNER_RECONNECT_ALARM_NAME/);
+  assert.match(backgroundSource, /async function pollScannerReconnectRequests\(reason = "startup"\)/);
+  assert.match(backgroundSource, /action: "scannerOffscreenPollReconnectRequests"/);
+  assert.match(backgroundSource, /self\.addEventListener\("push"/);
+  assert.match(backgroundSource, /event\.waitUntil\(pollScannerReconnectRequests\("push"\)\)/);
+  assert.match(backgroundSource, /pollScannerReconnectRequests\("push"\)/);
+  assert.match(backgroundSource, /async function getScannerPushSubscriptionOnce\(\)/);
+  assert.match(backgroundSource, /pushManager\.subscribe/);
+  assert.match(backgroundSource, /case "scannerGetPushSubscription"/);
   assert.match(backgroundSource, /function bootstrapScannerReconnectListener\(reason = "startup"\)/);
   assert.match(backgroundSource, /void ensureScannerOffscreenDocument\(\)\.catch/);
   assert.match(backgroundSource, /bootstrapScannerReconnectListener\("installed"\)/);
-  assert.match(backgroundSource, /bootstrapScannerReconnectListener\("startup"\)/);
-  assert.match(backgroundSource, /bootstrapScannerReconnectListener\("background-main"\)/);
+  assert.match(backgroundSource, /pollScannerReconnectRequests\("startup"\)/);
+  assert.match(backgroundSource, /pollScannerReconnectRequests\("background-main"\)/);
+  assert.match(backgroundSource, /chrome\.alarms\?\.onAlarm\?\.addListener/);
+  assert.match(backgroundSource, /pollScannerReconnectRequests\("alarm"\)/);
+  assert.match(offscreenSource, /scannerOffscreenPollReconnectRequests/);
+  assert.match(offscreenSource, /offscreen poll requested/);
+  assert.match(sessionSource, /async pollReconnectRequestsNow\(\)/);
+  assert.match(sessionSource, /async function getMobileScannerPushSubscription\(\)/);
+  assert.match(sessionSource, /action: "scannerGetPushSubscription"/);
+  assert.match(sessionSource, /pushSubscription: subscription \?\? undefined/);
+  assert.match(sessionSource, /reconnect requests fetched/);
+  assert.match(sessionSource, /join window posted/);
 });
 
 test("extension retries reconnect requests until join-window posting succeeds", () => {

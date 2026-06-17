@@ -14,6 +14,10 @@ const scannerSignalingSwiftSource = readFileSync(
   new URL("../ios/Volt/Services/ScannerSignalingClient.swift", import.meta.url),
   "utf8"
 );
+const scannerProtocolSwiftSource = readFileSync(
+  new URL("../ios/Volt/Services/ScannerProtocol.swift", import.meta.url),
+  "utf8"
+);
 
 test("mobile waits for Chrome session_ready before showing connected", () => {
   const attachDataChannelStart = scannerStateSource.indexOf("const attachDataChannel = useCallback");
@@ -68,4 +72,10 @@ test("native saved-session reconnect re-registers durable pairing before request
   assert.match(scannerStoreSwiftSource, /pairingSecret: secret/);
   assert.match(scannerSignalingSwiftSource, /func registerPairing\(\n\s+pairingId: String,/);
   assert.match(scannerSignalingSwiftSource, /guard \(response as\? HTTPURLResponse\)\?\.statusCode == 200 else/);
+});
+
+test("native saved-session reconnect waits longer than QR pairing for sleeping Chrome extensions", () => {
+  assert.match(scannerProtocolSwiftSource, /static let joinAttemptTTL: Duration = \.seconds\(32\)/);
+  assert.match(scannerProtocolSwiftSource, /static let reconnectRequestTTL: Duration = \.seconds\(95\)/);
+  assert.match(scannerSignalingSwiftSource, /let deadline = ContinuousClock\.now \+ ScannerProtocol\.reconnectRequestTTL/);
 });

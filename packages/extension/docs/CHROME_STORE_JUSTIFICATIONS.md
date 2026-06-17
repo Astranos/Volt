@@ -6,6 +6,10 @@
 
 **Justification:** The activeTab permission allows the extension to access the currently active tab when the user explicitly interacts with the extension. This is used to provide context-aware functionality and display relevant information about the current page when the user opens the sidepanel or popup.
 
+### alarms
+
+**Justification:** The alarms permission is used to periodically wake the extension's background service worker so the paired mobile scanner can reconnect to a previously authorized Chrome session after Chrome or the mobile app is closed and reopened. The alarm only starts local extension maintenance needed for saved mobile scanner pairings; it does not collect browsing activity or trigger user-facing actions without an existing pairing.
+
 ### bookmarks
 
 **Justification:** The bookmarks permission is used to allow users to access and search through their browser bookmarks directly from the extension's command palette. This provides a quick way to navigate to bookmarked pages without leaving the current context.
@@ -25,6 +29,10 @@
 ### history
 
 **Justification:** The history permission enables the extension to search through browser history in the command palette, helping users quickly find and revisit previously viewed pages without disrupting their workflow.
+
+### notifications
+
+**Justification:** The notifications permission is required by Chrome for extension service workers to use the Web Push API. Volt uses Web Push only to wake the background service worker when the paired mobile scanner requests reconnection to a previously authorized Chrome session. The push payload is limited to scanner reconnect metadata and does not display promotional notifications or collect browsing activity.
 
 ### sessions
 
