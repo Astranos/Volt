@@ -374,6 +374,78 @@ export default defineContentScript({
       };
     };
 
+    const installMobileCursorTargetTracker = () => {
+      const root = window as typeof window & {
+        __voltLastEditable?: HTMLElement | null;
+        __voltLastEditableSelection?: {
+          start?: number | null;
+          end?: number | null;
+          isContentEditable?: boolean;
+        } | null;
+        __voltLastEditableRange?: Range | null;
+        __voltLiveDictation?: {
+          sessionId?: string;
+          sourceLength?: number;
+        } | null;
+        __voltEditableTrackerInstalled?: boolean;
+      };
+
+      if (root.__voltEditableTrackerInstalled) return;
+
+      const rememberEditable = (editable: HTMLElement) => {
+        if (root.__voltLiveDictation && root.__voltLastEditable !== editable) {
+          root.__voltLiveDictation = {
+            sessionId: root.__voltLiveDictation.sessionId,
+            sourceLength: root.__voltLiveDictation.sourceLength ?? 0,
+          };
+        }
+
+        root.__voltLastEditable = editable;
+        if (editable instanceof HTMLInputElement || editable instanceof HTMLTextAreaElement) {
+          root.__voltLastEditableSelection = {
+            start: editable.selectionStart,
+            end: editable.selectionEnd,
+            isContentEditable: false,
+          };
+          root.__voltLastEditableRange = null;
+        } else {
+          root.__voltLastEditableSelection = { isContentEditable: true };
+          const selection = window.getSelection();
+          root.__voltLastEditableRange =
+            selection && selection.rangeCount > 0 ? selection.getRangeAt(0).cloneRange() : null;
+        }
+
+        try {
+          chrome.runtime.sendMessage({
+            action: "mobileCursorTargetChanged",
+            target: {
+              browser: "Chrome",
+              tabTitle: document.title || "Current tab",
+              url: location.href,
+              cursor: describeEditable(editable),
+              updatedAt: Date.now(),
+            },
+          });
+        } catch (_) {}
+      };
+
+      const track = (target: EventTarget | null) => {
+        const element = target instanceof Element ? target : document.activeElement;
+        const editable =
+          isEditable(element) ? element : isEditable(document.activeElement) ? document.activeElement : null;
+        if (editable) rememberEditable(editable);
+      };
+
+      track(document.activeElement);
+      document.addEventListener("focusin", (event) => track(event.target), true);
+      document.addEventListener("selectionchange", () => track(document.activeElement), true);
+      document.addEventListener("keyup", (event) => track(event.target), true);
+      document.addEventListener("pointerup", (event) => track(event.target), true);
+      root.__voltEditableTrackerInstalled = true;
+    };
+
+    installMobileCursorTargetTracker();
+
     const openMobileCapture = (mode: MobileCaptureMode) => {
       const target = primeEditableTarget();
       try {

@@ -19,6 +19,8 @@ test("scanner text insertion targets the tracked iframe when the cursor is insid
   assert.match(contextMenuSource, /allFrames: true/);
   assert.match(contextMenuSource, /const target = primeEditableTarget\(\)/);
   assert.match(contextMenuSource, /target,/);
+  assert.match(contextMenuSource, /installMobileCursorTargetTracker\(\)/);
+  assert.match(contextMenuSource, /mobileCursorTargetChanged/);
   assert.match(backgroundSource, /updateMobileCaptureTarget\(message\.target, sender\)/);
   assert.match(backgroundSource, /mobileCursorTargetsByTabId\.get\(tab\.id\)/);
   assert.match(backgroundSource, /trackedInsertionTarget\?\.frameId/);
@@ -32,4 +34,11 @@ test("scanner text insertion supports iframe rich text documents", () => {
   assert.match(backgroundSource, /document\.designMode\?\.toLowerCase\(\) === "on"/);
   assert.match(backgroundSource, /const isRichEditable = \(element\) =>/);
   assert.match(mobileScannerSource, /__voltLastEditableRange/);
+});
+
+test("scanner text insertion uses React-compatible input events", () => {
+  assert.match(backgroundSource, /const setNativeTextControlValue = \(input, nextValue\) =>/);
+  assert.match(backgroundSource, /Object\.getOwnPropertyDescriptor\(prototype, "value"\)\?\.set/);
+  assert.match(backgroundSource, /new InputEvent\("beforeinput"/);
+  assert.match(backgroundSource, /composed: true/);
 });

@@ -237,6 +237,42 @@ export default defineBackground({
         (document.designMode?.toLowerCase() === "on" &&
           (element === document.body || element === document.documentElement));
 
+      const dispatchTextInputEvents = (element, text, inputType = "insertText") => {
+        try {
+          element.dispatchEvent(
+            new InputEvent("beforeinput", {
+              bubbles: true,
+              cancelable: true,
+              composed: true,
+              inputType,
+              data: text,
+            })
+          );
+        } catch (_) {}
+        try {
+          element.dispatchEvent(
+            new InputEvent("input", {
+              bubbles: true,
+              composed: true,
+              inputType,
+              data: text,
+            })
+          );
+        } catch (_) {
+          element.dispatchEvent(new Event("input", { bubbles: true, composed: true }));
+        }
+      };
+
+      const setNativeTextControlValue = (input, nextValue) => {
+        const prototype =
+          input instanceof HTMLTextAreaElement
+            ? HTMLTextAreaElement.prototype
+            : HTMLInputElement.prototype;
+        const setter = Object.getOwnPropertyDescriptor(prototype, "value")?.set;
+        if (setter) setter.call(input, nextValue);
+        else input.value = nextValue;
+      };
+
       if (isEditable(document.activeElement)) {
         root.__voltLastEditable = document.activeElement;
       }
@@ -322,6 +358,7 @@ export default defineBackground({
           selection?.removeAllRanges();
           selection?.addRange(range);
           if (livePhase === "final") root.__voltLiveDictation = null;
+          dispatchTextInputEvents(target, live.node.nodeValue || "", "insertReplacementText");
         } else if (isLiveDictation && selection) {
           const nextValue = live?.sessionId === liveSessionId ? liveDictationDelta(liveSourceLength) : value;
           if (!nextValue) {
@@ -350,10 +387,12 @@ export default defineBackground({
             livePhase === "final"
               ? null
               : { sessionId: liveSessionId, target, node, sourceStart: liveSourceLength, sourceLength: value.length };
+          dispatchTextInputEvents(target, nextValue, "insertText");
         } else {
           document.execCommand("insertText", false, value);
+          dispatchTextInputEvents(target, value, "insertText");
         }
-        target.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: value }));
+        target.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
         root.__voltLastEditableRange = null;
         return dictationResult();
       }
@@ -403,12 +442,9 @@ export default defineBackground({
         : typeof trackedSelection?.end === "number"
         ? trackedSelection.end
         : input.selectionEnd ?? input.value.length;
-      if (typeof input.setRangeText === "function") {
-        input.setRangeText(nextValue, start, end, "end");
-      } else {
-        input.value = input.value.slice(0, start) + nextValue + input.value.slice(end);
-        input.selectionStart = input.selectionEnd = start + nextValue.length;
-      }
+      const replacementEnd = start + nextValue.length;
+      setNativeTextControlValue(input, input.value.slice(0, start) + nextValue + input.value.slice(end));
+      input.selectionStart = input.selectionEnd = replacementEnd;
       if (isLiveDictation) {
         root.__voltLiveDictation =
           livePhase === "final"
@@ -417,13 +453,13 @@ export default defineBackground({
                 sessionId: liveSessionId,
                 target: input,
                 start,
-                end: start + nextValue.length,
+                end: replacementEnd,
                 sourceStart: replaceLiveInput ? liveSourceStart : liveSourceLength,
                 sourceLength: value.length,
               };
       }
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-      input.dispatchEvent(new Event("change", { bubbles: true }));
+      dispatchTextInputEvents(input, nextValue, replaceLiveInput ? "insertReplacementText" : "insertText");
+      input.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
       root.__voltLastEditableSelection = null;
       return dictationResult();
     }
