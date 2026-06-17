@@ -97,6 +97,8 @@ function TopOfferCalculator() {
     topOfferPremium: 0,
     startingOfferCheckout: 0,
     topOfferCheckout: 0,
+    startingOfferNewCustomer: 0,
+    topOfferNewCustomer: 0,
   });
   const [customOfferResults, setCustomOfferResults] = useState<
     { id: string; name: string; value: number }[]
@@ -161,6 +163,8 @@ function TopOfferCalculator() {
       topOfferPremium: calculated.topOfferPremium,
       startingOfferCheckout: calculated.startingOfferCheckout,
       topOfferCheckout: calculated.topOfferCheckout,
+      startingOfferNewCustomer: calculated.startingOfferNewCustomer,
+      topOfferNewCustomer: calculated.topOfferNewCustomer,
     });
     setCustomOfferResults(calculated.customOffers);
   };
@@ -225,6 +229,17 @@ function TopOfferCalculator() {
                 label: "Checkout Offer",
                 startingValue: results.startingOfferCheckout,
                 maxValue: results.topOfferCheckout,
+              }}
+              copied={copied}
+              onCopy={handleCopy}
+            />
+
+            <OfferResultCard
+              offer={{
+                id: "new-customer",
+                label: "New Customer Offer",
+                startingValue: results.startingOfferNewCustomer,
+                maxValue: results.topOfferNewCustomer,
               }}
               copied={copied}
               onCopy={handleCopy}

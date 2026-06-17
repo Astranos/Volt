@@ -42,8 +42,10 @@ test("calculateTopOfferResults follows the all-customer max cash guide", () => {
       topOffer: 300,
       startingOfferPremium: 330,
       topOfferPremium: 360,
-      startingOfferCheckout: 390,
-      topOfferCheckout: 480,
+      startingOfferCheckout: 300,
+      topOfferCheckout: 390,
+      startingOfferNewCustomer: 300,
+      topOfferNewCustomer: 360,
       customOffers: [],
     }
   );
@@ -55,8 +57,27 @@ test("calculateTopOfferResults follows the all-customer max cash guide", () => {
       topOffer: 45,
       startingOfferPremium: 35,
       topOfferPremium: 45,
-      startingOfferCheckout: 95,
-      topOfferCheckout: 120,
+      startingOfferCheckout: 45,
+      topOfferCheckout: 95,
+      startingOfferNewCustomer: 45,
+      topOfferNewCustomer: 65,
+      customOffers: [],
+    }
+  );
+});
+
+test("calculateTopOfferResults matches the Google Sheet top-offer row", () => {
+  assert.deepEqual(
+    calculateTopOfferResults(250),
+    {
+      startingOffer: 75,
+      topOffer: 100,
+      startingOfferPremium: 110,
+      topOfferPremium: 125,
+      startingOfferCheckout: 100,
+      topOfferCheckout: 160,
+      startingOfferNewCustomer: 100,
+      topOfferNewCustomer: 135,
       customOffers: [],
     }
   );
@@ -73,5 +94,8 @@ test("legacy default offer rates migrate to the current guide", () => {
     calculateTopOfferResults(250, { customRates: LEGACY_CUSTOM_RATES }).topOffer,
     100
   );
+  assert.equal(
+    calculateTopOfferResults(250, { customRates: LEGACY_CUSTOM_RATES }).topOfferCheckout,
+    160
+  );
 });
-

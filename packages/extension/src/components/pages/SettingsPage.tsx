@@ -1983,7 +1983,7 @@ export default function SettingsPage() {
                 <div>
                   <h3 className="font-semibold text-lg mb-4">Checkout Rate</h3>
                   <p className="text-sm text-muted-foreground mb-4">
-                    Set the percentage used for the "Checkout Offer" max calculation. This rate applies to all amounts.
+                    Set the percentage used for the "Checkout Offer" top calculation. The starting value uses the standard top-offer guide.
                   </p>
                   <div className="grid grid-cols-12 gap-4 items-center">
                     <div className="col-span-5 text-sm font-medium pl-2">
@@ -1995,7 +1995,7 @@ export default function SettingsPage() {
                         step="0.01"
                         value={
                           settings.topOffers?.customRates?.checkout
-                            ?.percentage ?? 0.8
+                            ?.percentage ?? DEFAULT_CUSTOM_RATES.checkout!.percentage
                         }
                         onChange={(e) =>
                           handleUpdateCheckoutRate(parseFloat(e.target.value))

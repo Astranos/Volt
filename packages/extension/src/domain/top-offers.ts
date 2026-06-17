@@ -40,8 +40,17 @@ export const DEFAULT_PREMIUM_STARTING_RULES: RateRule[] = [
 ];
 
 export const DEFAULT_PREMIUM_STARTING_DEFAULT_PERCENTAGE = 0.65;
-export const DEFAULT_CHECKOUT_STARTING_PERCENTAGE = 0.65;
-export const DEFAULT_CHECKOUT_PERCENTAGE = 0.8;
+export const DEFAULT_CHECKOUT_PERCENTAGE = 0.65;
+
+export const DEFAULT_NEW_CUSTOMER_RULES: RateRule[] = [
+  { threshold: 50, percentage: 0.3 },
+  { threshold: 100, percentage: 0.35 },
+  { threshold: 250, percentage: 0.45 },
+  { threshold: 500, percentage: 0.55 },
+  { threshold: 750, percentage: 0.6 },
+];
+
+export const DEFAULT_NEW_CUSTOMER_DEFAULT_PERCENTAGE = 0.7;
 
 const LEGACY_STANDARD_RULES: RateRule[] = [
   { threshold: 50, percentage: 0.2 },
@@ -63,6 +72,7 @@ const LEGACY_PREMIUM_RULES: RateRule[] = [
 ];
 
 const LEGACY_PREMIUM_DEFAULT_PERCENTAGE = 0.7;
+const LEGACY_CHECKOUT_PERCENTAGE = 0.8;
 
 export const DEFAULT_CUSTOM_RATES: CustomRates = {
   standard: {
@@ -136,12 +146,19 @@ export function migrateDefaultTopOfferRates(customRates?: CustomRates): CustomRa
     Math.abs(
       customRates.premium.defaultPercentage - LEGACY_PREMIUM_DEFAULT_PERCENTAGE
     ) < 0.001;
+  const isLegacyCheckoutDefault =
+    Math.abs(
+      (customRates.checkout?.percentage ?? LEGACY_CHECKOUT_PERCENTAGE) -
+        LEGACY_CHECKOUT_PERCENTAGE
+    ) < 0.001;
 
   return {
     ...customRates,
     standard: isLegacyStandard ? DEFAULT_CUSTOM_RATES.standard : customRates.standard,
     premium: isLegacyPremium ? DEFAULT_CUSTOM_RATES.premium : customRates.premium,
-    checkout: customRates.checkout ?? DEFAULT_CUSTOM_RATES.checkout,
+    checkout: isLegacyCheckoutDefault
+      ? DEFAULT_CUSTOM_RATES.checkout
+      : customRates.checkout ?? DEFAULT_CUSTOM_RATES.checkout,
   };
 }
 
@@ -194,8 +211,26 @@ export function calculateTopOfferCheckout(projection: number, customRates?: Cust
   return floorToMultiple(projection * checkoutRate);
 }
 
-export function calculateStartingOfferCheckout(projection: number): number {
-  return floorToMultiple(projection * DEFAULT_CHECKOUT_STARTING_PERCENTAGE);
+export function calculateStartingOfferCheckout(
+  projection: number,
+  customRates?: CustomRates
+): number {
+  return calculateTopOffer(projection, customRates);
+}
+
+export function calculateTopOfferNewCustomer(projection: number): number {
+  return calculateFromRules(
+    projection,
+    DEFAULT_NEW_CUSTOMER_RULES,
+    DEFAULT_NEW_CUSTOMER_DEFAULT_PERCENTAGE
+  );
+}
+
+export function calculateStartingOfferNewCustomer(
+  projection: number,
+  customRates?: CustomRates
+): number {
+  return calculateTopOffer(projection, customRates);
 }
 
 export function calculateCustomOffer(projection: number, offer: CustomOffer): number {
@@ -211,8 +246,10 @@ export function calculateTopOfferResults(projection: number, settings: TopOffers
     topOffer: calculateTopOffer(projection, customRates),
     startingOfferPremium: calculateStartingOfferPremium(projection),
     topOfferPremium: calculateTopOfferPremium(projection, customRates),
-    startingOfferCheckout: calculateStartingOfferCheckout(projection),
+    startingOfferCheckout: calculateStartingOfferCheckout(projection, customRates),
     topOfferCheckout: calculateTopOfferCheckout(projection, customRates),
+    startingOfferNewCustomer: calculateStartingOfferNewCustomer(projection, customRates),
+    topOfferNewCustomer: calculateTopOfferNewCustomer(projection),
     customOffers: customOffers.map((offer) => ({
       id: offer.id,
       name: offer.name,
