@@ -26,15 +26,18 @@ struct RootView: View {
         }
         .overlay(alignment: .top) {
             if let pairingToast {
-                PairingStatusToast(toast: pairingToast)
+                PairingStatusToast(toast: pairingToast, action: pairingToast.actionTitle == nil ? nil : {
+                    store.cancelAutomaticReconnect()
+                    self.pairingToast = nil
+                })
                     .padding(.horizontal, 16)
                     .padding(.top, 10)
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
         .animation(.spring(response: 0.28, dampingFraction: 0.86), value: pairingToast?.id)
-        .onChange(of: selectedTab) { oldValue, newValue in
-            applySelectedTab(from: oldValue, to: newValue)
+        .onChange(of: selectedTab) { _, newValue in
+            applySelectedTab(newValue)
         }
         .onChange(of: store.connectionStatus) { _, newValue in
             showPairingToast(for: newValue)
@@ -49,7 +52,7 @@ struct RootView: View {
         .task {
             await store.camera.requestAccess()
             store.reconnectToMostRecentPairedSessionIfNeeded()
-            applySelectedTab(from: nil, to: selectedTab)
+            applySelectedTab(selectedTab)
         }
         .onChange(of: scenePhase) { _, newValue in
             if newValue == .active {
@@ -58,7 +61,8 @@ struct RootView: View {
         }
     }
 
-    private func applySelectedTab(from oldTab: AppSection?, to newTab: AppSection) {
+    private func applySelectedTab(_ newTab: AppSection) {
+        store.selectedSection = newTab
         switch newTab {
         case .scan:
             if store.activeMode == .dictation {
@@ -71,14 +75,6 @@ struct RootView: View {
         case .upload:
             break
         }
-
-        if newTab == .scan {
-            if oldTab != .scan {
-                store.camera.start()
-            }
-        } else if oldTab == .scan {
-            store.camera.stop()
-        }
     }
 
     private func showPairingToast(for status: ScannerConnectionStatus) {
@@ -89,7 +85,9 @@ struct RootView: View {
                 message: store.peerTarget?.displayText ?? "Trying to open the scanner channel.",
                 systemImage: "link",
                 showsProgress: true,
-                duration: nil
+                duration: nil,
+                actionTitle: store.canCancelAutomaticReconnect ? "Cancel" : nil,
+                actionSystemImage: store.canCancelAutomaticReconnect ? "xmark" : nil
             )
         case .waitingForChrome:
             pairingToast = PairingStatusToastModel(
@@ -97,7 +95,9 @@ struct RootView: View {
                 message: "Finishing the secure scanner handshake.",
                 systemImage: "desktopcomputer",
                 showsProgress: true,
-                duration: nil
+                duration: nil,
+                actionTitle: store.canCancelAutomaticReconnect ? "Cancel" : nil,
+                actionSystemImage: store.canCancelAutomaticReconnect ? "xmark" : nil
             )
         case .connected:
             pairingToast = PairingStatusToastModel(
@@ -121,7 +121,7 @@ struct RootView: View {
     }
 }
 
-private enum AppSection: Hashable {
+enum AppSection: Hashable {
     case scan
     case sessions
     case dictation
@@ -135,10 +135,31 @@ private struct PairingStatusToastModel: Equatable {
     let systemImage: String
     let showsProgress: Bool
     let duration: Duration?
+    let actionTitle: String?
+    let actionSystemImage: String?
+
+    init(
+        title: String,
+        message: String,
+        systemImage: String,
+        showsProgress: Bool,
+        duration: Duration?,
+        actionTitle: String? = nil,
+        actionSystemImage: String? = nil
+    ) {
+        self.title = title
+        self.message = message
+        self.systemImage = systemImage
+        self.showsProgress = showsProgress
+        self.duration = duration
+        self.actionTitle = actionTitle
+        self.actionSystemImage = actionSystemImage
+    }
 }
 
 private struct PairingStatusToast: View {
     let toast: PairingStatusToastModel
+    let action: (() -> Void)?
 
     var body: some View {
         HStack(spacing: 12) {
@@ -165,12 +186,22 @@ private struct PairingStatusToast: View {
             }
 
             Spacer(minLength: 0)
+
+            if let actionTitle = toast.actionTitle, let action {
+                Button(action: action) {
+                    Label(actionTitle, systemImage: toast.actionSystemImage ?? "xmark")
+                        .labelStyle(.titleAndIcon)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .accessibilityLabel(actionTitle)
+            }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .shadow(color: .black.opacity(0.16), radius: 18, y: 8)
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: action == nil ? .combine : .contain)
         .accessibilityLabel("\(toast.title). \(toast.message)")
     }
 
@@ -189,6 +220,7 @@ enum ScannerTabLayout {
     static let stackSpacing: CGFloat = 18
     static let contentPadding: CGFloat = 20
     static let topPadding: CGFloat = 8
+    static let bottomAccessoryContentPadding: CGFloat = 84
     static let primaryActionCornerRadius: CGFloat = 22
     static let disabledPrimaryActionOpacity = 0.68
 

@@ -12,8 +12,6 @@ struct PairingSessionsView: View {
                         isPairingScannerPresented = true
                     }
 
-                    scanChromeQRButton
-
                     if store.pairedSessions.isEmpty {
                         ContentUnavailableView(
                             "No Paired Sessions",
@@ -32,6 +30,7 @@ struct PairingSessionsView: View {
                 }
                 .padding(ScannerTabLayout.contentPadding)
                 .padding(.top, ScannerTabLayout.topPadding)
+                .padding(.bottom, ScannerTabLayout.bottomAccessoryContentPadding)
 
                 if !store.pairedSessions.isEmpty {
                     pairedSessionsList
@@ -46,7 +45,18 @@ struct PairingSessionsView: View {
             .onAppear {
                 store.pruneExpiredPairedSessions()
             }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                ScanChromeQRAccessory(
+                    statusText: "Ready to scan a Chrome pairing QR",
+                    onScan: startPairingScan
+                )
+            }
         }
+    }
+
+    private func startPairingScan() {
+        store.activeMode = .barcode
+        isPairingScannerPresented = true
     }
 
     private var pairedSessionsList: some View {
@@ -80,36 +90,36 @@ struct PairingSessionsView: View {
         .background(ScannerTabLayout.background)
     }
 
-    private var scanChromeQRButton: some View {
-        Button {
-            store.activeMode = .barcode
-            isPairingScannerPresented = true
-        } label: {
-            HStack(spacing: 14) {
-                Image(systemName: "qrcode.viewfinder")
-                    .font(.system(size: 28, weight: .semibold))
-                    .frame(width: 54, height: 54)
-                    .background(.white.opacity(0.18), in: Circle())
+}
 
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Scan Chrome QR")
-                        .font(.title3.weight(.bold))
-                    Text("Open the camera to add a Chrome session.")
-                        .font(.subheadline)
-                        .foregroundStyle(.white.opacity(0.78))
-                }
+private struct ScanChromeQRAccessory: View {
+    let statusText: String
+    let onScan: () -> Void
 
-                Spacer()
+    var body: some View {
+        VStack(spacing: 10) {
+            Text(statusText)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
 
-                Image(systemName: "chevron.right")
-                    .font(.headline.weight(.semibold))
+            Button(action: onScan) {
+                Label("Scan Chrome QR", systemImage: "qrcode.viewfinder")
+                    .font(.headline)
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity, minHeight: 52)
+                    .background(
+                        ScannerTabLayout.primaryActionBackground(isEnabled: true),
+                        in: RoundedRectangle(cornerRadius: ScannerTabLayout.primaryActionCornerRadius, style: .continuous)
+                    )
             }
-            .foregroundStyle(.white)
-            .padding(18)
-            .frame(maxWidth: .infinity)
-            .background(.green, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
+        .padding(.horizontal)
+        .padding(.top, 12)
+        .padding(.bottom, 10)
+        .background(.bar)
     }
 }
 

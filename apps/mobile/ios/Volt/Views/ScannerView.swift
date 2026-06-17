@@ -22,12 +22,11 @@ struct ScannerView: View {
                         isPairingScannerPresented = true
                     }
 
-                    startCaptureButton
-                    connectionStatusPanel
                     previousCaptures
                 }
                 .padding(ScannerTabLayout.contentPadding)
                 .padding(.top, ScannerTabLayout.topPadding)
+                .padding(.bottom, ScannerTabLayout.bottomAccessoryContentPadding)
             }
             .background(ScannerTabLayout.background)
             .navigationTitle("Capture")
@@ -41,65 +40,30 @@ struct ScannerView: View {
             .onAppear {
                 store.activeMode = .ocr
             }
-        }
-    }
-
-    private var startCaptureButton: some View {
-        let isConnected = store.connectionStatus.isConnected
-
-        return Button {
-            guard isConnected else { return }
-            store.clearOcrReview()
-            store.activeMode = .ocr
-            isCaptureSessionPresented = true
-        } label: {
-            HStack(spacing: 14) {
-                Image(systemName: "doc.viewfinder")
-                    .font(.system(size: 28, weight: .semibold))
-                    .frame(width: 54, height: 54)
-                    .background(.white.opacity(0.18), in: Circle())
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Start Capture")
-                        .font(.title3.weight(.bold))
-                    Text("Use the camera to capture text, barcodes, or photos.")
-                        .font(.subheadline)
-                        .foregroundStyle(.white.opacity(0.78))
-                }
-
-                Spacer()
-
-                Image(systemName: "chevron.right")
-                    .font(.headline.weight(.semibold))
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                CaptureStartAccessory(
+                    isConnected: store.connectionStatus.isConnected,
+                    statusText: captureStatusText,
+                    targetHint: store.targetHint,
+                    onStart: startCapture
+                )
             }
-            .foregroundStyle(.white)
-            .padding(18)
-            .frame(maxWidth: .infinity)
-            .background(
-                ScannerTabLayout.primaryActionBackground(isEnabled: isConnected),
-                in: RoundedRectangle(cornerRadius: ScannerTabLayout.primaryActionCornerRadius, style: .continuous)
-            )
-            .opacity(isConnected ? 1 : ScannerTabLayout.disabledPrimaryActionOpacity)
         }
-        .buttonStyle(.plain)
-        .disabled(!isConnected)
-        .accessibilityHint(isConnected ? "Opens the camera capture session." : store.targetHint)
     }
 
-    private var connectionStatusPanel: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label(store.connectionStatus.isConnected ? "Ready to capture" : "Capture unavailable", systemImage: store.connectionStatus.isConnected ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
-                .font(.headline)
-                .foregroundStyle(store.connectionStatus.isConnected ? .green : .orange)
-
-            Text(store.targetHint)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+    private var captureStatusText: String {
+        if store.connectionStatus.isConnected {
+            "Ready to capture into Chrome"
+        } else {
+            store.targetHint
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.background, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+
+    private func startCapture() {
+        guard store.connectionStatus.isConnected else { return }
+        store.clearOcrReview()
+        store.activeMode = .ocr
+        isCaptureSessionPresented = true
     }
 
     private var previousCaptures: some View {
@@ -139,6 +103,42 @@ struct ScannerView: View {
         }
     }
 
+}
+
+private struct CaptureStartAccessory: View {
+    let isConnected: Bool
+    let statusText: String
+    let targetHint: String
+    let onStart: () -> Void
+
+    var body: some View {
+        VStack(spacing: 10) {
+            Text(statusText)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+
+            Button(action: onStart) {
+                Label("Start Capture", systemImage: "doc.viewfinder")
+                    .font(.headline)
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity, minHeight: 52)
+                    .background(
+                        ScannerTabLayout.primaryActionBackground(isEnabled: isConnected),
+                        in: RoundedRectangle(cornerRadius: ScannerTabLayout.primaryActionCornerRadius, style: .continuous)
+                    )
+                    .opacity(isConnected ? 1 : ScannerTabLayout.disabledPrimaryActionOpacity)
+            }
+            .buttonStyle(.plain)
+            .disabled(!isConnected)
+            .accessibilityHint(isConnected ? "Opens the camera capture session." : targetHint)
+        }
+        .padding(.horizontal)
+        .padding(.top, 12)
+        .padding(.bottom, 10)
+        .background(.bar)
+    }
 }
 
 struct CaptureSessionView: View {

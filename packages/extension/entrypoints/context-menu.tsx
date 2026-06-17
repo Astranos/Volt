@@ -300,10 +300,15 @@ export default defineContentScript({
 
     const isEditable = (element: Element | null): element is HTMLElement => {
       if (!(element instanceof HTMLElement)) return false;
+      if (element.getAttribute("contenteditable") === "false") return false;
+      const isDesignModeEditable =
+        document.designMode?.toLowerCase() === "on" &&
+        (element === document.body || element === document.documentElement);
       return (
         element.tagName === "INPUT" ||
         element.tagName === "TEXTAREA" ||
-        element.isContentEditable
+        element.isContentEditable ||
+        isDesignModeEditable
       );
     };
 
@@ -313,6 +318,10 @@ export default defineContentScript({
         element.getAttribute("placeholder") ||
         element.getAttribute("name") ||
         element.getAttribute("id") ||
+        (document.designMode?.toLowerCase() === "on" &&
+        (element === document.body || element === document.documentElement)
+          ? "Rich text editor"
+          : "") ||
         (element.tagName === "TEXTAREA"
           ? "Textarea"
           : element.isContentEditable

@@ -220,12 +220,22 @@ export default defineBackground({
 
       const isEditable = (element) => {
         if (!(element instanceof HTMLElement)) return false;
+        if (element.getAttribute("contenteditable") === "false") return false;
+        const isDesignModeEditable =
+          document.designMode?.toLowerCase() === "on" &&
+          (element === document.body || element === document.documentElement);
         return (
           element.tagName === "INPUT" ||
           element.tagName === "TEXTAREA" ||
-          element.isContentEditable
+          element.isContentEditable ||
+          isDesignModeEditable
         );
       };
+
+      const isRichEditable = (element) =>
+        element?.isContentEditable ||
+        (document.designMode?.toLowerCase() === "on" &&
+          (element === document.body || element === document.documentElement));
 
       if (isEditable(document.activeElement)) {
         root.__voltLastEditable = document.activeElement;
@@ -269,7 +279,7 @@ export default defineBackground({
       }
 
       target.focus();
-      if (target.isContentEditable) {
+      if (isRichEditable(target)) {
         const selection = window.getSelection();
         const trackedRange =
           root.__voltLastEditable === target && root.__voltLastEditableRange?.commonAncestorContainer?.isConnected

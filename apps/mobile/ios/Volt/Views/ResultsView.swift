@@ -32,12 +32,11 @@ struct UploadView: View {
                         isPairingScannerPresented = true
                     }
 
-                    uploadButton
-                    statusPanel
                     recentUploads
                 }
                 .padding(ScannerTabLayout.contentPadding)
                 .padding(.top, ScannerTabLayout.topPadding)
+                .padding(.bottom, ScannerTabLayout.bottomAccessoryContentPadding)
             }
             .background(ScannerTabLayout.background)
             .navigationTitle("Upload")
@@ -52,64 +51,29 @@ struct UploadView: View {
                     selectedItems = []
                 }
             }
-        }
-    }
-
-    private var uploadButton: some View {
-        let isConnected = store.connectionStatus.isConnected
-        let isPreparing = isPreparingUploads
-
-        return PhotosPicker(
-            selection: $selectedItems,
-            maxSelectionCount: 30,
-            matching: .images
-        ) {
-            HStack(spacing: 14) {
-                Image(systemName: isPreparing ? "hourglass" : "photo.on.rectangle.angled")
-                    .font(.system(size: 28, weight: .semibold))
-                    .frame(width: 54, height: 54)
-                    .background(.white.opacity(0.18), in: Circle())
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(isPreparing ? "Preparing uploads" : "Choose Photos")
-                        .font(.title3.weight(.bold))
-                    Text("Select photos from your library and send them to Chrome.")
-                        .font(.subheadline)
-                        .foregroundStyle(.white.opacity(0.78))
-                }
-
-                Spacer()
-
-                Image(systemName: "chevron.right")
-                    .font(.headline.weight(.semibold))
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                UploadStartAccessory(
+                    selectedItems: $selectedItems,
+                    isConnected: store.connectionStatus.isConnected,
+                    isPreparing: isPreparingUploads,
+                    statusText: uploadStatusText,
+                    showsError: uploadError != nil,
+                    targetHint: uploadError ?? store.targetHint
+                )
             }
-            .foregroundStyle(.white)
-            .padding(18)
-            .frame(maxWidth: .infinity)
-            .background(
-                ScannerTabLayout.primaryActionBackground(isEnabled: isConnected),
-                in: RoundedRectangle(cornerRadius: ScannerTabLayout.primaryActionCornerRadius, style: .continuous)
-            )
-            .opacity((isConnected && !isPreparing) ? 1 : ScannerTabLayout.disabledPrimaryActionOpacity)
         }
-        .buttonStyle(.plain)
-        .disabled(!isConnected || isPreparing)
     }
 
-    private var statusPanel: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label(store.connectionStatus.isConnected ? "Ready to upload" : "Upload unavailable", systemImage: store.connectionStatus.isConnected ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
-                .font(.headline)
-                .foregroundStyle(store.connectionStatus.isConnected ? .green : .orange)
-
-            Text(uploadError ?? store.targetHint)
-                .font(.subheadline)
-                .foregroundStyle(uploadError == nil ? Color.secondary : Color.red)
-                .fixedSize(horizontal: false, vertical: true)
+    private var uploadStatusText: String {
+        if let uploadError {
+            uploadError
+        } else if isPreparingUploads {
+            "Preparing uploads..."
+        } else if store.connectionStatus.isConnected {
+            "Ready to upload to Chrome"
+        } else {
+            store.targetHint
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.background, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 
     private var recentUploads: some View {
@@ -182,6 +146,48 @@ struct UploadView: View {
         }
 
         await store.uploadPhotos(images)
+    }
+}
+
+private struct UploadStartAccessory: View {
+    @Binding var selectedItems: [PhotosPickerItem]
+    let isConnected: Bool
+    let isPreparing: Bool
+    let statusText: String
+    let showsError: Bool
+    let targetHint: String
+
+    var body: some View {
+        VStack(spacing: 10) {
+            Text(statusText)
+                .font(.footnote)
+                .foregroundStyle(showsError ? .red : .secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+
+            PhotosPicker(
+                selection: $selectedItems,
+                maxSelectionCount: 30,
+                matching: .images
+            ) {
+                Label(isPreparing ? "Preparing Uploads" : "Choose Photos", systemImage: isPreparing ? "hourglass" : "photo.on.rectangle.angled")
+                    .font(.headline)
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity, minHeight: 52)
+                    .background(
+                        ScannerTabLayout.primaryActionBackground(isEnabled: isConnected && !isPreparing),
+                        in: RoundedRectangle(cornerRadius: ScannerTabLayout.primaryActionCornerRadius, style: .continuous)
+                    )
+                    .opacity((isConnected && !isPreparing) ? 1 : ScannerTabLayout.disabledPrimaryActionOpacity)
+            }
+            .buttonStyle(.plain)
+            .disabled(!isConnected || isPreparing)
+            .accessibilityHint(isConnected && !isPreparing ? "Opens the photo picker." : targetHint)
+        }
+        .padding(.horizontal)
+        .padding(.top, 12)
+        .padding(.bottom, 10)
+        .background(.bar)
     }
 }
 

@@ -37,9 +37,6 @@ final class CameraModel: NSObject {
             _ = await AVCaptureDevice.requestAccess(for: .video)
             authorizationStatus = AVCaptureDevice.authorizationStatus(for: .video)
         }
-        if authorizationStatus == .authorized {
-            configureIfNeeded()
-        }
     }
 
     func start() {

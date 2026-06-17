@@ -103,16 +103,30 @@ type DeletedSnapshot = {
 function installEditableTracker() {
   const root = window as typeof window & {
     __voltLastEditable?: HTMLElement | null;
+    __voltLastEditableSelection?: {
+      start?: number | null;
+      end?: number | null;
+      isContentEditable?: boolean;
+    } | null;
+    __voltLastEditableRange?: Range | null;
+    __voltLiveDictation?: {
+      sessionId?: string;
+      sourceLength?: number;
+    } | null;
     __voltEditableTrackerInstalled?: boolean;
   };
 
   const isEditable = (element: Element | null): element is HTMLElement => {
     if (!(element instanceof HTMLElement)) return false;
     if (element.getAttribute("contenteditable") === "false") return false;
+    const isDesignModeEditable =
+      document.designMode?.toLowerCase() === "on" &&
+      (element === document.body || element === document.documentElement);
     return (
       element.tagName === "INPUT" ||
       element.tagName === "TEXTAREA" ||
-      element.isContentEditable
+      element.isContentEditable ||
+      isDesignModeEditable
     );
   };
 
@@ -122,6 +136,10 @@ function installEditableTracker() {
       element.getAttribute("placeholder") ||
       element.getAttribute("name") ||
       element.getAttribute("id") ||
+      (document.designMode?.toLowerCase() === "on" &&
+      (element === document.body || element === document.documentElement)
+        ? "Rich text editor"
+        : "") ||
       (element.tagName === "TEXTAREA"
         ? "Textarea"
         : element.isContentEditable
@@ -150,7 +168,26 @@ function installEditableTracker() {
     const editable =
       isEditable(element) ? element : isEditable(document.activeElement) ? document.activeElement : null;
     if (!editable) return;
+    if (root.__voltLiveDictation && root.__voltLastEditable !== editable) {
+      root.__voltLiveDictation = {
+        sessionId: root.__voltLiveDictation.sessionId,
+        sourceLength: root.__voltLiveDictation.sourceLength ?? 0,
+      };
+    }
     root.__voltLastEditable = editable;
+    if (editable instanceof HTMLInputElement || editable instanceof HTMLTextAreaElement) {
+      root.__voltLastEditableSelection = {
+        start: editable.selectionStart,
+        end: editable.selectionEnd,
+        isContentEditable: false,
+      };
+      root.__voltLastEditableRange = null;
+    } else {
+      root.__voltLastEditableSelection = { isContentEditable: true };
+      const selection = window.getSelection();
+      root.__voltLastEditableRange =
+        selection && selection.rangeCount > 0 ? selection.getRangeAt(0).cloneRange() : null;
+    }
     notifyTarget(editable);
   };
 

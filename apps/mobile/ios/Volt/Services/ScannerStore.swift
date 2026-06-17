@@ -14,10 +14,12 @@ final class ScannerStore {
     private let dictationRequestLimit: Duration = .seconds(55)
 
     var activeMode: CaptureMode = .ocr
+    var selectedSection: AppSection = .scan
     var pairingSession: PairingSession?
     var pairedSessions: [PairedScannerSession] = []
     var connectionStatus: ScannerConnectionStatus = .idle
     var peerTarget: ScannerPeerTarget?
+    var canCancelAutomaticReconnect = false
     var results: [ScanResult] = []
     var statusText = "Not paired"
     var targetHint = ScannerStore.disconnectedPairingHint
@@ -58,8 +60,12 @@ final class ScannerStore {
     private var dictationStartToken: UUID?
     private var shouldStopDictationAfterStart = false
     @ObservationIgnored private var dictationLimitTask: Task<Void, Never>?
+    private var dictationTargetKey: String?
     private var lastAutomaticReconnectAt: Date?
+    private var activeAutomaticReconnectToken: UUID?
+    private var preservesAutomaticReconnectOnNextDisconnect = false
     private var lastPairingCandidateValue: String?
+    @ObservationIgnored private var reconnectTask: Task<Void, Never>?
     @ObservationIgnored private let pairingImpactFeedback = UIImpactFeedbackGenerator(style: .medium)
     @ObservationIgnored private let pairingNotificationFeedback = UINotificationFeedbackGenerator()
     @ObservationIgnored private let dictationImpactFeedback = UIImpactFeedbackGenerator(style: .light)
@@ -246,7 +252,7 @@ final class ScannerStore {
         _ = await dictation.requestAccess()
     }
 
-    func startDictation() async {
+    func startDictation(allowsFeedback: Bool = true) async {
         guard connectionStatus.isConnected else { return }
         let startToken = UUID()
         dictationStartToken = startToken
@@ -256,7 +262,9 @@ final class ScannerStore {
         await dictation.start()
         guard dictationStartToken == startToken else { return }
         if dictation.isRecording {
-            dictationNotificationFeedback.notificationOccurred(.success)
+            if allowsFeedback {
+                dictationNotificationFeedback.notificationOccurred(.success)
+            }
             scheduleDictationRequestLimit(for: startToken)
             if shouldStopDictationAfterStart {
                 finishDictation()
@@ -305,7 +313,11 @@ final class ScannerStore {
         sendDictation(nil, phase: "started")
     }
 
-    func reconnect(to pairedSession: PairedScannerSession, reportsErrors: Bool = true) {
+    func reconnect(to pairedSession: PairedScannerSession, reportsErrors: Bool = true, isAutomatic: Bool = false) {
+        reconnectTask?.cancel()
+        let automaticToken = isAutomatic ? UUID() : nil
+        activeAutomaticReconnectToken = automaticToken
+        canCancelAutomaticReconnect = isAutomatic
         peerTarget = ScannerPeerTarget(
             chromeSessionId: pairedSession.browserSessionId,
             sessionLabel: pairedSession.displayName,
@@ -314,7 +326,13 @@ final class ScannerStore {
             cursorLabel: nil,
             browser: "Chrome"
         )
-        Task { await reconnectWithSavedPairing(pairedSession, reportsErrors: reportsErrors) }
+        reconnectTask = Task { [weak self] in
+            await self?.reconnectWithSavedPairing(
+                pairedSession,
+                reportsErrors: reportsErrors,
+                automaticToken: automaticToken
+            )
+        }
     }
 
     func reconnectToMostRecentPairedSessionIfNeeded() {
@@ -333,7 +351,21 @@ final class ScannerStore {
 
         guard let latestSession = pairedSessions.first else { return }
         lastAutomaticReconnectAt = now
-        reconnect(to: latestSession, reportsErrors: false)
+        reconnect(to: latestSession, reportsErrors: false, isAutomatic: true)
+    }
+
+    func cancelAutomaticReconnect() {
+        guard canCancelAutomaticReconnect else { return }
+        reconnectTask?.cancel()
+        reconnectTask = nil
+        activeAutomaticReconnectToken = nil
+        canCancelAutomaticReconnect = false
+        lastAutomaticReconnectAt = .now
+        pairingSession = nil
+        connection.close()
+        connectionStatus = .disconnected
+        statusText = "Reconnect canceled"
+        targetHint = Self.disconnectedPairingHint
     }
 
     func removePairedSession(_ pairedSession: PairedScannerSession) {
@@ -364,14 +396,24 @@ final class ScannerStore {
 
     private func pair(with session: PairingSession) async {
         do {
+            let shouldRestoreAutomaticReconnect = canCancelAutomaticReconnect
+            preservesAutomaticReconnectOnNextDisconnect = shouldRestoreAutomaticReconnect
             connection.close()
+            if shouldRestoreAutomaticReconnect {
+                canCancelAutomaticReconnect = true
+            }
             try await connection.pair(with: session)
         } catch {
             applyConnectionStatus(.error(error.localizedDescription))
         }
     }
 
-    private func reconnectWithSavedPairing(_ pairedSession: PairedScannerSession, reportsErrors: Bool) async {
+    private func reconnectWithSavedPairing(
+        _ pairedSession: PairedScannerSession,
+        reportsErrors: Bool,
+        automaticToken: UUID?
+    ) async {
+        guard isReconnectCurrent(automaticToken) else { return }
         guard let secret = PairingSecretStore.secret(pairingId: pairedSession.id) else {
             removePairedSession(pairedSession)
             if reportsErrors {
@@ -383,6 +425,7 @@ final class ScannerStore {
         }
 
         do {
+            guard isReconnectCurrent(automaticToken) else { return }
             applyConnectionStatus(.pairing)
             try await signaling.registerPairing(
                 pairingId: pairedSession.id,
@@ -391,7 +434,9 @@ final class ScannerStore {
                 displayName: pairedSession.displayName,
                 phoneDeviceId: contributorId
             )
+            guard isReconnectCurrent(automaticToken) else { return }
             let joinWindow = try await signaling.requestReconnect(pairingId: pairedSession.id, pairingSecret: secret)
+            guard isReconnectCurrent(automaticToken) else { return }
             let session = PairingSession(
                 token: joinWindow.token,
                 sessionId: joinWindow.sessionId ?? pairedSession.browserSessionId,
@@ -402,7 +447,9 @@ final class ScannerStore {
             )
             pairingSession = session
             await pair(with: session)
+            guard isReconnectCurrent(automaticToken) else { return }
         } catch {
+            guard isReconnectCurrent(automaticToken) else { return }
             if reportsErrors {
                 applyConnectionStatus(.error(error.localizedDescription))
             } else {
@@ -411,7 +458,16 @@ final class ScannerStore {
         }
     }
 
+    private func isReconnectCurrent(_ automaticToken: UUID?) -> Bool {
+        guard !Task.isCancelled else { return false }
+        guard let automaticToken else { return true }
+        return canCancelAutomaticReconnect && activeAutomaticReconnectToken == automaticToken
+    }
+
     private func applyAutomaticReconnectUnavailable(for pairedSession: PairedScannerSession) {
+        canCancelAutomaticReconnect = false
+        activeAutomaticReconnectToken = nil
+        reconnectTask = nil
         connectionStatus = .disconnected
         statusText = "Chrome not reachable"
         targetHint = "Open \(pairedSession.displayName) in Chrome to reconnect, or tap the session button to try again."
@@ -421,6 +477,8 @@ final class ScannerStore {
         connectionStatus = status
         switch status {
         case .idle:
+            canCancelAutomaticReconnect = false
+            activeAutomaticReconnectToken = nil
             statusText = "Not paired"
             targetHint = Self.disconnectedPairingHint
         case .pairing:
@@ -432,13 +490,25 @@ final class ScannerStore {
             targetHint = "Waiting for the browser to finish the WebRTC handshake."
             pairingImpactFeedback.impactOccurred(intensity: 0.55)
         case .connected:
+            canCancelAutomaticReconnect = false
+            activeAutomaticReconnectToken = nil
             statusText = "Connected to Chrome"
             targetHint = peerTarget?.displayText ?? "Ready to send captures."
             pairingNotificationFeedback.notificationOccurred(.success)
         case .disconnected:
+            if preservesAutomaticReconnectOnNextDisconnect {
+                preservesAutomaticReconnectOnNextDisconnect = false
+                statusText = "Reconnecting to Chrome"
+                targetHint = peerTarget?.displayText ?? "Opening the saved Chrome scanner session."
+                return
+            }
+            canCancelAutomaticReconnect = false
+            activeAutomaticReconnectToken = nil
             statusText = "Disconnected"
             targetHint = Self.disconnectedPairingHint
         case .error(let message):
+            canCancelAutomaticReconnect = false
+            activeAutomaticReconnectToken = nil
             statusText = "Pairing failed"
             targetHint = message
             pairingNotificationFeedback.notificationOccurred(.error)
@@ -456,7 +526,8 @@ final class ScannerStore {
             peerTarget?.sessionLabel,
             savedSessionLabel(sessionId: chromeSessionId)
         )
-        peerTarget = ScannerPeerTarget(
+        let previousPeerTarget = peerTarget
+        let nextPeerTarget = ScannerPeerTarget(
             chromeSessionId: chromeSessionId,
             sessionLabel: sessionLabel,
             tabTitle: message.cursorTarget?.tabTitle,
@@ -464,8 +535,10 @@ final class ScannerStore {
             cursorLabel: message.cursorTarget?.label,
             browser: "Chrome"
         )
+        peerTarget = nextPeerTarget
         saveCurrentPairingSession(message: message)
         applyConnectionStatus(.connected)
+        resetDictationForTargetChangeIfNeeded(from: previousPeerTarget, to: nextPeerTarget)
     }
 
     private func savedSessionLabel(sessionId: String?) -> String? {
@@ -486,6 +559,47 @@ final class ScannerStore {
         guard !text.isEmpty, text != lastDictationPartialText, dictationSessionId != nil else { return }
         lastDictationPartialText = text
         sendDictation(text, phase: "partial")
+    }
+
+    private func resetDictationForTargetChangeIfNeeded(from previousTarget: ScannerPeerTarget?, to nextTarget: ScannerPeerTarget) {
+        let nextKey = dictationTargetKey(for: nextTarget)
+        defer { dictationTargetKey = nextKey }
+        guard let previousTarget else { return }
+        guard dictationTargetKey(for: previousTarget) != nextKey else { return }
+
+        lastDictationPartialText = ""
+        let hadDictationState = dictation.isStarting || dictation.isRecording || !dictation.transcript.isEmpty || dictationSessionId != nil
+        guard hadDictationState else { return }
+
+        if dictation.isRecording || dictation.isStarting {
+            stopDictationForTargetChange()
+            Task { await startDictation(allowsFeedback: selectedSection == .dictation) }
+        } else {
+            dictation.clearTranscript()
+            dictationSessionId = nil
+        }
+    }
+
+    private func stopDictationForTargetChange() {
+        dictationStartToken = nil
+        shouldStopDictationAfterStart = false
+        cancelDictationRequestLimit()
+        dictation.stop()
+        sendDictation(nil, phase: "stopped")
+        dictationSessionId = nil
+    }
+
+    private func dictationTargetKey(for target: ScannerPeerTarget) -> String {
+        [
+            target.chromeSessionId,
+            target.tabURL,
+            target.tabTitle,
+            target.cursorLabel,
+        ]
+            .map { value in
+                value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            }
+            .joined(separator: "\u{1F}")
     }
 
     private func scheduleDictationRequestLimit(for token: UUID) {

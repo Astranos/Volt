@@ -31,23 +31,7 @@
 		B00000000000000000000016 /* ScannerWebRTCConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000001A /* ScannerWebRTCConnection.swift */; };
 		B00000000000000000000019 /* PairedScannerSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000001C /* PairedScannerSession.swift */; };
 		B0000000000000000000001A /* PairingSessionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000001D /* PairingSessionsView.swift */; };
-		B0000000000000000000001B /* WebRTC.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = C0000000000000000000001E /* WebRTC.xcframework */; };
-		B0000000000000000000001C /* WebRTC.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = C0000000000000000000001E /* WebRTC.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
-
-/* Begin PBXCopyFilesBuildPhase section */
-		H10000000000000000000001 /* Embed Frameworks */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = "";
-			dstSubfolderSpec = 10;
-			files = (
-				B0000000000000000000001C /* WebRTC.xcframework in Embed Frameworks */,
-			);
-			name = "Embed Frameworks";
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		C00000000000000000000001 /* VoltApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoltApp.swift; sourceTree = "<group>"; };
@@ -77,7 +61,6 @@
 		C0000000000000000000001A /* ScannerWebRTCConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannerWebRTCConnection.swift; sourceTree = "<group>"; };
 		C0000000000000000000001C /* PairedScannerSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairedScannerSession.swift; sourceTree = "<group>"; };
 		C0000000000000000000001D /* PairingSessionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingSessionsView.swift; sourceTree = "<group>"; };
-		C0000000000000000000001E /* WebRTC.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = WebRTC.xcframework; path = Pods/JitsiWebRTC/WebRTC.xcframework; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -85,7 +68,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				B0000000000000000000001B /* WebRTC.xcframework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -96,7 +78,6 @@
 			isa = PBXGroup;
 			children = (
 				E00000000000000000000003 /* Volt */,
-				C0000000000000000000001E /* WebRTC.xcframework */,
 				E00000000000000000000002 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -184,7 +165,6 @@
 				G00000000000000000000001 /* Sources */,
 				D00000000000000000000001 /* Frameworks */,
 				H00000000000000000000001 /* Resources */,
-				H10000000000000000000001 /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
