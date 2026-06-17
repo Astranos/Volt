@@ -94,6 +94,21 @@ test("extension hydrates persisted identity before polling reconnect requests", 
   assert.match(sessionSource, /const response = await fetch\(`\$\{SCANNER_SIGNAL_URL\}\/pairings\/reconnect-requests\?sessionId=\$\{encodeURIComponent\(sessionId\)\}`\)/);
 });
 
+test("extension boots offscreen reconnect polling without opening scanner UI", () => {
+  assert.match(backgroundSource, /function bootstrapScannerReconnectListener\(reason = "startup"\)/);
+  assert.match(backgroundSource, /void ensureScannerOffscreenDocument\(\)\.catch/);
+  assert.match(backgroundSource, /bootstrapScannerReconnectListener\("installed"\)/);
+  assert.match(backgroundSource, /bootstrapScannerReconnectListener\("startup"\)/);
+  assert.match(backgroundSource, /bootstrapScannerReconnectListener\("background-main"\)/);
+});
+
+test("extension retries reconnect requests until join-window posting succeeds", () => {
+  const answerStart = sessionSource.indexOf("await this.answerReconnectRequest(pairing, request.requestId);");
+  const seenStart = sessionSource.indexOf("this.seenReconnectRequests.add(key);", answerStart);
+  assert.ok(answerStart > -1);
+  assert.ok(seenStart > answerStart);
+});
+
 test("offscreen and background route global join-window lifecycle separately from peer disconnect", () => {
   assert.match(offscreenSource, /new MobileScannerSession/);
   assert.match(offscreenSource, /scannerOffscreenCloseJoinWindow/);

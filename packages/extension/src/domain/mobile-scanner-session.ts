@@ -670,8 +670,8 @@ export class MobileScannerSession {
       if (!pairing) continue;
       const key = `${request.pairingId}:${request.requestId}`;
       if (this.seenReconnectRequests.has(key)) continue;
-      this.seenReconnectRequests.add(key);
       await this.answerReconnectRequest(pairing, request.requestId);
+      this.seenReconnectRequests.add(key);
     }
   }
 

@@ -540,6 +540,12 @@ export default defineBackground({
       } catch (_) {}
     }
 
+    function bootstrapScannerReconnectListener(reason = "startup") {
+      void ensureScannerOffscreenDocument().catch((error) => {
+        log("Failed to bootstrap scanner reconnect listener", reason, error?.message || error);
+      });
+    }
+
     async function pingScannerOffscreen() {
       try {
         const response = await chrome.runtime.sendMessage({
@@ -1101,6 +1107,8 @@ export default defineBackground({
           active: true,
         });
       }
+
+      bootstrapScannerReconnectListener("installed");
     });
 
     /**
@@ -1112,7 +1120,10 @@ export default defineBackground({
         DEBUG = !!cfg.debugLogs;
         log("Debug flag loaded", DEBUG);
       });
+      bootstrapScannerReconnectListener("startup");
     });
+
+    bootstrapScannerReconnectListener("background-main");
 
     /**
      * Handles extension context invalidation and recovery

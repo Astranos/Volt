@@ -6,7 +6,7 @@ struct PairingSessionsView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
                 VStack(alignment: .leading, spacing: ScannerTabLayout.stackSpacing) {
                     ScannerSectionHeader(title: "Sessions") {
                         isPairingScannerPresented = true
@@ -28,31 +28,14 @@ struct PairingSessionsView: View {
                             .font(.headline)
                             .foregroundStyle(.secondary)
                             .padding(.horizontal, 2)
-
-                        ForEach(store.pairedSessions) { session in
-                            Button {
-                                store.reconnect(to: session)
-                            } label: {
-                                PairedSessionRow(session: session)
-                            }
-                            .buttonStyle(.plain)
-                            .padding(14)
-                            .background(.background, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                            .contextMenu {
-                                Button("Forget", systemImage: "trash", role: .destructive) {
-                                    store.removePairedSession(session)
-                                }
-                            }
-                            .swipeActions {
-                                Button("Forget", systemImage: "trash", role: .destructive) {
-                                    store.removePairedSession(session)
-                                }
-                            }
-                        }
                     }
                 }
                 .padding(ScannerTabLayout.contentPadding)
                 .padding(.top, ScannerTabLayout.topPadding)
+
+                if !store.pairedSessions.isEmpty {
+                    pairedSessionsList
+                }
             }
             .background(ScannerTabLayout.background)
             .navigationTitle("Sessions")
@@ -64,6 +47,37 @@ struct PairingSessionsView: View {
                 store.pruneExpiredPairedSessions()
             }
         }
+    }
+
+    private var pairedSessionsList: some View {
+        List {
+            ForEach(store.pairedSessions) { session in
+                Button {
+                    store.reconnect(to: session)
+                } label: {
+                    PairedSessionRow(session: session)
+                        .padding(14)
+                        .background(.background, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .listRowInsets(EdgeInsets(top: 5, leading: ScannerTabLayout.contentPadding, bottom: 5, trailing: ScannerTabLayout.contentPadding))
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+                .contextMenu {
+                    Button("Forget", systemImage: "trash", role: .destructive) {
+                        store.removePairedSession(session)
+                    }
+                }
+                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                    Button("Forget", systemImage: "trash", role: .destructive) {
+                        store.removePairedSession(session)
+                    }
+                }
+            }
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(ScannerTabLayout.background)
     }
 
     private var scanChromeQRButton: some View {
