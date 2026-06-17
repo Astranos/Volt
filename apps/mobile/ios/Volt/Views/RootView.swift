@@ -12,13 +12,13 @@ struct RootView: View {
                 .tabItem { Label("Capture", systemImage: "camera") }
                 .tag(AppSection.scan)
 
-            DictationView()
-                .tabItem { Label("Dictate", systemImage: "mic") }
-                .tag(AppSection.dictation)
-
             UploadView()
                 .tabItem { Label("Upload", systemImage: "square.and.arrow.up") }
                 .tag(AppSection.upload)
+
+            DictationView()
+                .tabItem { Label("Dictate", systemImage: "mic") }
+                .tag(AppSection.dictation)
 
             PairingSessionsView()
                 .tabItem { Label("Sessions", systemImage: "link") }
@@ -185,47 +185,79 @@ private struct PairingStatusToast: View {
     }
 }
 
-struct ScannerConnectionToolbar: ToolbarContent {
+enum ScannerTabLayout {
+    static let stackSpacing: CGFloat = 18
+    static let contentPadding: CGFloat = 20
+    static let topPadding: CGFloat = 8
+    static let primaryActionCornerRadius: CGFloat = 22
+    static let disabledPrimaryActionOpacity = 0.68
+
+    static var background: Color {
+        Color(.systemGroupedBackground)
+    }
+
+    static func primaryActionBackground(isEnabled: Bool) -> Color {
+        isEnabled ? .green : .gray
+    }
+}
+
+struct ScannerSectionHeader: View {
     @Environment(ScannerStore.self) private var store
+    let title: String
+    let onPair: () -> Void
 
-    var body: some ToolbarContent {
-        ToolbarItem(placement: .principal) {
-            if store.connectionStatus.isConnected {
-                ConnectedSessionHeader(name: connectedSessionName)
-            }
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 16) {
+            Text(title)
+                .font(.largeTitle.bold())
+                .lineLimit(1)
+                .minimumScaleFactor(0.82)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            connectionControl
         }
+        .accessibilityElement(children: .contain)
+    }
 
-        ToolbarItem(placement: .topBarTrailing) {
+    @ViewBuilder
+    private var connectionControl: some View {
+        if store.connectionStatus.isConnected {
             Menu {
-                if store.connectionStatus.isConnected {
-                    Section("Connected Session") {
-                        Text(connectedSessionName)
-                        Text(connectedSessionId)
-                    }
+                Section("Connected Session") {
+                    Text(connectedSessionName)
+                    Text(connectedSessionId)
                 }
 
                 Text(store.targetHint)
 
-                if store.connectionStatus.isConnected {
-                    Button("Unpair", systemImage: "link.badge.minus") {
-                        store.unpair()
-                    }
+                Button("Unpair", systemImage: "link.badge.minus") {
+                    store.unpair()
                 }
             } label: {
-                Label(statusLabel, systemImage: statusSymbol)
-                    .font(.subheadline.weight(.semibold))
+                Text(connectedSessionName)
+                    .font(.headline)
+                    .foregroundStyle(.green)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.76)
+                    .padding(.horizontal, 18)
+                    .frame(minHeight: 44)
+                    .background(.regularMaterial, in: Capsule())
+            }
+            .accessibilityLabel("Connected to \(connectedSessionName). \(store.targetHint)")
+        } else {
+            Button {
+                onPair()
+            } label: {
+                Label("Pair", systemImage: "qrcode.viewfinder")
+                    .font(.headline)
                     .foregroundStyle(statusColor)
                     .lineLimit(1)
+                    .padding(.horizontal, 18)
+                    .frame(minHeight: 44)
+                    .background(.regularMaterial, in: Capsule())
             }
-            .accessibilityLabel("\(statusLabel). \(store.targetHint)")
+            .accessibilityLabel("Pair. \(store.targetHint)")
         }
-    }
-
-    private var statusLabel: String {
-        if store.connectionStatus.isConnected {
-            return "Connected"
-        }
-        return store.statusText
     }
 
     private var connectedSessionName: String {
@@ -258,19 +290,6 @@ struct ScannerConnectionToolbar: ToolbarContent {
         return "Unknown session id"
     }
 
-    private var statusSymbol: String {
-        switch store.connectionStatus {
-        case .connected:
-            "checkmark.circle.fill"
-        case .pairing, .waitingForChrome:
-            "dot.radiowaves.left.and.right"
-        case .error:
-            "exclamationmark.triangle.fill"
-        case .idle, .disconnected:
-            "link"
-        }
-    }
-
     private var statusColor: Color {
         switch store.connectionStatus {
         case .connected:
@@ -282,20 +301,5 @@ struct ScannerConnectionToolbar: ToolbarContent {
         case .idle, .disconnected:
             .secondary
         }
-    }
-}
-
-private struct ConnectedSessionHeader: View {
-    let name: String
-
-    var body: some View {
-        Label(name, systemImage: "desktopcomputer")
-            .font(.subheadline.weight(.semibold))
-            .foregroundStyle(.primary)
-            .lineLimit(1)
-            .minimumScaleFactor(0.82)
-            .frame(maxWidth: 220)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Connected session \(name)")
     }
 }

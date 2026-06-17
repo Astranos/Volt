@@ -7,6 +7,7 @@ struct UploadView: View {
     @State private var isPreparingUploads = false
     @State private var uploadError: String?
     @State private var expandedBatchIds: Set<String> = []
+    @State private var isPairingScannerPresented = false
 
     private var recentPhotoResults: [ScanResult] {
         store.results.filter { $0.kind == .photo && $0.source == .upload }
@@ -26,18 +27,23 @@ struct UploadView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: ScannerTabLayout.stackSpacing) {
+                    ScannerSectionHeader(title: "Upload") {
+                        isPairingScannerPresented = true
+                    }
+
                     uploadButton
                     statusPanel
                     recentUploads
                 }
-                .padding(20)
+                .padding(ScannerTabLayout.contentPadding)
+                .padding(.top, ScannerTabLayout.topPadding)
             }
-            .background(Color(.systemGroupedBackground))
+            .background(ScannerTabLayout.background)
             .navigationTitle("Upload")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ScannerConnectionToolbar()
+            .toolbar(.hidden, for: .navigationBar)
+            .fullScreenCover(isPresented: $isPairingScannerPresented) {
+                PairingScanSessionView(isPresented: $isPairingScannerPresented)
             }
             .onChange(of: selectedItems) { _, newItems in
                 guard !newItems.isEmpty else { return }
@@ -80,8 +86,11 @@ struct UploadView: View {
             .foregroundStyle(.white)
             .padding(18)
             .frame(maxWidth: .infinity)
-            .background(isConnected ? .green : .gray, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-            .opacity(isPreparing ? 0.68 : 1)
+            .background(
+                ScannerTabLayout.primaryActionBackground(isEnabled: isConnected),
+                in: RoundedRectangle(cornerRadius: ScannerTabLayout.primaryActionCornerRadius, style: .continuous)
+            )
+            .opacity((isConnected && !isPreparing) ? 1 : ScannerTabLayout.disabledPrimaryActionOpacity)
         }
         .buttonStyle(.plain)
         .disabled(!isConnected || isPreparing)

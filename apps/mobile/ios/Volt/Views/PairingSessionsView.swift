@@ -6,19 +6,29 @@ struct PairingSessionsView: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                Section {
-                    scanChromeQRButton
-                }
+            ScrollView {
+                VStack(alignment: .leading, spacing: ScannerTabLayout.stackSpacing) {
+                    ScannerSectionHeader(title: "Sessions") {
+                        isPairingScannerPresented = true
+                    }
 
-                if store.pairedSessions.isEmpty {
-                    ContentUnavailableView(
-                        "No Paired Sessions",
-                        systemImage: "link",
-                        description: Text("Pair once from the Chrome QR code, then reconnect to that computer from here.")
-                    )
-                } else {
-                    Section {
+                    scanChromeQRButton
+
+                    if store.pairedSessions.isEmpty {
+                        ContentUnavailableView(
+                            "No Paired Sessions",
+                            systemImage: "link",
+                            description: Text("Pair once from the Chrome QR code, then reconnect to that computer from here.")
+                        )
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 34)
+                        .background(.background, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    } else {
+                        Text("Previously Paired")
+                            .font(.headline)
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 2)
+
                         ForEach(store.pairedSessions) { session in
                             Button {
                                 store.reconnect(to: session)
@@ -26,22 +36,27 @@ struct PairingSessionsView: View {
                                 PairedSessionRow(session: session)
                             }
                             .buttonStyle(.plain)
+                            .padding(14)
+                            .background(.background, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                            .contextMenu {
+                                Button("Forget", systemImage: "trash", role: .destructive) {
+                                    store.removePairedSession(session)
+                                }
+                            }
                             .swipeActions {
                                 Button("Forget", systemImage: "trash", role: .destructive) {
                                     store.removePairedSession(session)
                                 }
                             }
                         }
-                    } header: {
-                        Text("Previously Paired")
                     }
                 }
+                .padding(ScannerTabLayout.contentPadding)
+                .padding(.top, ScannerTabLayout.topPadding)
             }
+            .background(ScannerTabLayout.background)
             .navigationTitle("Sessions")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ScannerConnectionToolbar()
-            }
+            .toolbar(.hidden, for: .navigationBar)
             .fullScreenCover(isPresented: $isPairingScannerPresented) {
                 PairingScanSessionView(isPresented: $isPairingScannerPresented)
             }
@@ -81,12 +96,10 @@ struct PairingSessionsView: View {
             .background(.green, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         }
         .buttonStyle(.plain)
-        .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
-        .listRowBackground(Color.clear)
     }
 }
 
-private struct PairingScanSessionView: View {
+struct PairingScanSessionView: View {
     @Environment(ScannerStore.self) private var store
     @Binding var isPresented: Bool
 

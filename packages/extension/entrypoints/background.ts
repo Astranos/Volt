@@ -943,7 +943,6 @@ export default defineBackground({
     try {
       const EBAY_SOLD_BASE =
         "https://www.ebay.com/sch/i.html?_nkw=iphone+15&_sacat=0&_from=R40&_dmd=2&rt=nc&LH_Sold=1&LH_Complete=1";
-      const UPC_LOOKUP_BASE = "https://www.upcitemdb.com/upc/";
       const GOOGLE_UPC_BASE = "https://www.google.com/search?q=";
       const PRICE_CHARTING_BASE =
         "https://www.pricecharting.com/search-products?type=prices&q=grand+theft+auto&go=Go";
@@ -972,11 +971,6 @@ export default defineBackground({
         chrome.contextMenus.create({
           id: "pm-search-google-mpn",
           title: "Search for MPN on Google",
-          contexts: ["selection"],
-        });
-        chrome.contextMenus.create({
-          id: "pm-search-upc",
-          title: "Search on UPCItemDB",
           contexts: ["selection"],
         });
         chrome.contextMenus.create({
@@ -1012,16 +1006,6 @@ export default defineBackground({
             } catch (_) {
               log("Failed to open eBay search for selection", selection);
             }
-          }
-          return;
-        }
-
-        if (info.menuItemId === "pm-search-upc") {
-          try {
-            const url = `${UPC_LOOKUP_BASE}${encodeURIComponent(selection)}`;
-            chrome.tabs.create({ url });
-          } catch (err) {
-            log("Failed to open UPC search for selection", selection);
           }
           return;
         }

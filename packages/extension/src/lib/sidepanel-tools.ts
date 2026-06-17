@@ -1,13 +1,11 @@
 import {
   Calculator,
   LucideIcon,
-  HelpCircle,
   Smartphone,
 } from "lucide-react";
 
 export type SidepanelToolId =
   | "top-offers"
-  | "shopify-help"
   | "mobile-scanner"
   | "mobile-photos";
 
@@ -25,12 +23,6 @@ export const SIDEPANEL_TOOLS: SidepanelToolMetadata[] = [
     label: "Offer Calculator",
     description: "Open offer calculator in the sidepanel",
     icon: Calculator,
-  },
-  {
-    id: "shopify-help",
-    label: "Shopify Help",
-    description: "View Shopify tags and sales channels guide",
-    icon: HelpCircle,
   },
   {
     id: "mobile-scanner",

@@ -19,7 +19,7 @@ final class ScannerStore {
     var peerTarget: ScannerPeerTarget?
     var results: [ScanResult] = []
     var statusText = "Not paired"
-    var targetHint = "Tap Pair to reconnect or scan the Chrome QR once."
+    var targetHint = ScannerStore.disconnectedPairingHint
     var ocrReviewImage: UIImage?
     var ocrReviewText = ""
     var ocrTextRegions: [RecognizedTextRegion] = []
@@ -28,6 +28,8 @@ final class ScannerStore {
     let camera = CameraModel()
     let dictation = DictationModel()
     let contributorId = ScannerProtocol.makeContributorId()
+
+    static let disconnectedPairingHint = "Use the Pair button next to the section title to connect to Chrome."
 
     init() {
         loadPairedSessions()
@@ -255,7 +257,7 @@ final class ScannerStore {
         sendDictation(nil, phase: "started")
     }
 
-    func reconnect(to pairedSession: PairedScannerSession) {
+    func reconnect(to pairedSession: PairedScannerSession, reportsErrors: Bool = true) {
         peerTarget = ScannerPeerTarget(
             chromeSessionId: pairedSession.browserSessionId,
             sessionLabel: pairedSession.displayName,
@@ -264,14 +266,14 @@ final class ScannerStore {
             cursorLabel: nil,
             browser: "Chrome"
         )
-        Task { await reconnectWithSavedPairing(pairedSession) }
+        Task { await reconnectWithSavedPairing(pairedSession, reportsErrors: reportsErrors) }
     }
 
     func reconnectToMostRecentPairedSessionIfNeeded() {
         switch connectionStatus {
-        case .idle, .disconnected, .error:
+        case .idle, .disconnected:
             break
-        case .pairing, .waitingForChrome, .connected:
+        case .pairing, .waitingForChrome, .connected, .error:
             return
         }
 
@@ -283,7 +285,7 @@ final class ScannerStore {
 
         guard let latestSession = pairedSessions.first else { return }
         lastAutomaticReconnectAt = now
-        reconnect(to: latestSession)
+        reconnect(to: latestSession, reportsErrors: false)
     }
 
     func removePairedSession(_ pairedSession: PairedScannerSession) {
@@ -321,10 +323,14 @@ final class ScannerStore {
         }
     }
 
-    private func reconnectWithSavedPairing(_ pairedSession: PairedScannerSession) async {
+    private func reconnectWithSavedPairing(_ pairedSession: PairedScannerSession, reportsErrors: Bool) async {
         guard let secret = PairingSecretStore.secret(pairingId: pairedSession.id) else {
             removePairedSession(pairedSession)
-            applyConnectionStatus(.error("Pairing secret missing. Scan the Chrome QR again."))
+            if reportsErrors {
+                applyConnectionStatus(.error("Pairing secret missing. Scan the Chrome QR again."))
+            } else {
+                applyAutomaticReconnectUnavailable(for: pairedSession)
+            }
             return
         }
 
@@ -342,8 +348,18 @@ final class ScannerStore {
             pairingSession = session
             await pair(with: session)
         } catch {
-            applyConnectionStatus(.error(error.localizedDescription))
+            if reportsErrors {
+                applyConnectionStatus(.error(error.localizedDescription))
+            } else {
+                applyAutomaticReconnectUnavailable(for: pairedSession)
+            }
         }
+    }
+
+    private func applyAutomaticReconnectUnavailable(for pairedSession: PairedScannerSession) {
+        connectionStatus = .disconnected
+        statusText = "Chrome not reachable"
+        targetHint = "Open \(pairedSession.displayName) in Chrome to reconnect, or tap the session button to try again."
     }
 
     private func applyConnectionStatus(_ status: ScannerConnectionStatus) {
@@ -351,7 +367,7 @@ final class ScannerStore {
         switch status {
         case .idle:
             statusText = "Not paired"
-            targetHint = "Tap Pair to reconnect or scan the Chrome QR once."
+            targetHint = Self.disconnectedPairingHint
         case .pairing:
             statusText = "QR read"
             targetHint = "Creating the secure Chrome connection..."
@@ -366,7 +382,7 @@ final class ScannerStore {
             pairingNotificationFeedback.notificationOccurred(.success)
         case .disconnected:
             statusText = "Disconnected"
-            targetHint = "Tap Pair to reconnect to a saved computer."
+            targetHint = Self.disconnectedPairingHint
         case .error(let message):
             statusText = "Pairing failed"
             targetHint = message

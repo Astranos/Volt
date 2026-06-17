@@ -2,11 +2,16 @@ import SwiftUI
 
 struct DictationView: View {
     @Environment(ScannerStore.self) private var store
+    @State private var isPairingScannerPresented = false
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: ScannerTabLayout.stackSpacing) {
+                    ScannerSectionHeader(title: "Dictate") {
+                        isPairingScannerPresented = true
+                    }
+
                     DictationConnectionCard(
                         chromeSession: chromeSession,
                         chromePage: chromePage,
@@ -24,12 +29,14 @@ struct DictationView: View {
                             .foregroundStyle(.red)
                     }
                 }
-                .padding()
+                .padding(ScannerTabLayout.contentPadding)
+                .padding(.top, ScannerTabLayout.topPadding)
             }
+            .background(ScannerTabLayout.background)
             .navigationTitle("Dictate")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ScannerConnectionToolbar()
+            .toolbar(.hidden, for: .navigationBar)
+            .fullScreenCover(isPresented: $isPairingScannerPresented) {
+                PairingScanSessionView(isPresented: $isPairingScannerPresented)
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 DictationStartAccessory(
@@ -186,6 +193,7 @@ private struct DictationStartAccessory: View {
                 .gesture(pressGesture)
                 .accessibilityAddTraits(.isButton)
                 .accessibilityLabel(isRecording ? "Stop Dictation" : "Start Dictation")
+                .accessibilityHint(isConnected || isRecording ? "" : statusText)
         }
         .padding(.horizontal)
         .padding(.top, 12)

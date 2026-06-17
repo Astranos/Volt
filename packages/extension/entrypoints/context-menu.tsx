@@ -9,7 +9,6 @@ import { initializeSidePanelContext } from "../src/lib/sidepanel-gesture";
 import { buildSearchUrl, SEARCH_URL_TEMPLATES } from "../src/domain/search";
 import {
   Search,
-  Barcode,
   PackageSearch,
   TrendingUp,
   Copy,
@@ -577,20 +576,6 @@ export default defineContentScript({
             `https://www.google.com/search?q=${encodeURIComponent(
               "UPC for " + selection
             )}`
-          ),
-      },
-      {
-        id: "upcitemdb",
-        label: "Search UPCItemDB",
-        shortcut: "U",
-        description: "Look up product information by UPC",
-        icon: Barcode,
-        requiresSelection: true,
-        getUrl: (s) => `https://www.upcitemdb.com/upc/${encodeURIComponent(s)}`,
-        onInvoke: ({ selection }) =>
-          selection &&
-          openSearchPopup(
-            `https://www.upcitemdb.com/upc/${encodeURIComponent(selection)}`
           ),
       },
       {

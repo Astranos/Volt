@@ -1,20 +1,12 @@
 import React, { useState, useEffect, useRef } from "react";
 import TopOffersPage from "./TopOffers";
-import ShopifyHelp from "./ShopifyHelp";
 import MobileScanner from "./MobileScanner";
 import {
   AlertTriangle,
   CheckCircle2,
-  ChevronDown,
   Info,
   XCircle,
 } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "../ui/dropdown-menu";
 import { cn } from "../../lib/utils";
 import {
   SIDEPANEL_TOOLS,
@@ -60,9 +52,6 @@ const TOAST_TONE_STYLES: Record<
 export default function UnifiedSidepanel() {
   const [activeTool, setActiveTool] =
     useState<SidepanelToolId>("mobile-scanner");
-  const [menuOpen, setMenuOpen] = useState(false);
-  const triggerRef = useRef<HTMLButtonElement | null>(null);
-  const [dropdownWidth, setDropdownWidth] = useState<number>();
   const [toast, setToast] = useState<ActiveToast | null>(null);
   const toastTimer = useRef<number | null>(null);
   const toastCounter = useRef(0);
@@ -135,54 +124,11 @@ export default function UnifiedSidepanel() {
     }
   };
 
-  // Send ready message to background
-  useEffect(() => {
-    try {
-      // Only send if runtime is available
-      if (chrome?.runtime?.id) {
-        // We don't strictly need to notify background on every render,
-        // but if we do, use a known action or ignore the error.
-        // For now, we can remove this message if it's not handled.
-        /*
-        chrome.runtime.sendMessage({
-          action: "sidepanelReady",
-          tool: activeTool,
-          timestamp: Date.now(),
-        });
-        */
-      }
-    } catch (e) {
-      console.error("Error sending sidepanel ready message:", e);
-    }
-  }, [activeTool]);
-
-  useEffect(() => {
-    const updateWidth = () => {
-      if (triggerRef.current) {
-        setDropdownWidth(triggerRef.current.getBoundingClientRect().width);
-      }
-    };
-
-    updateWidth();
-
-    if (typeof ResizeObserver !== "undefined" && triggerRef.current) {
-      const observer = new ResizeObserver(() => updateWidth());
-      observer.observe(triggerRef.current);
-      return () => observer.disconnect();
-    }
-
-    window.addEventListener("resize", updateWidth);
-    return () => {
-      window.removeEventListener("resize", updateWidth);
-    };
-  }, []);
-
   const componentMap: Record<
     SidepanelToolId,
     React.ComponentType<{ onClose?: () => void }>
   > = {
     "top-offers": TopOffersPage,
-    "shopify-help": ShopifyHelp,
     "mobile-scanner": MobileScanner,
     "mobile-photos": MobileScanner,
   };
@@ -194,8 +140,10 @@ export default function UnifiedSidepanel() {
 
   const ActiveComponent =
     tools.find((t) => t.id === activeTool)?.component || MobileScanner;
-
-  const activeToolMeta = tools.find((t) => t.id === activeTool) || tools[0];
+  const activeToolIndex = Math.max(
+    0,
+    tools.findIndex((tool) => tool.id === activeTool),
+  );
 
   const toneStyles = toast ? TOAST_TONE_STYLES[toast.tone] : null;
   const ToastIcon = toneStyles?.icon;
@@ -203,78 +151,62 @@ export default function UnifiedSidepanel() {
   return (
     <div className="sidepanel-shell h-full w-full flex flex-col">
       {/* Fixed Header */}
-      <div className="flex-none p-3 pb-3 z-10">
-        <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              className="liquid-glass concentric-lg relative flex min-h-14 w-full min-w-0 items-center justify-between gap-3 overflow-hidden px-4 py-3 text-left text-base font-semibold text-stone-950 transition focus:outline-none focus:ring-2 focus:ring-primary/40 hover:bg-white/60 dark:text-stone-50 dark:hover:bg-white/5"
-              ref={triggerRef}
-            >
-              <span className="relative flex min-w-0 flex-1 items-center">
-                <span
-                  className={cn(
-                    "flex min-w-0 items-center gap-3 transition-all duration-200 ease-out",
-                    toast
-                      ? "-translate-y-1 opacity-0"
-                      : "translate-y-0 opacity-100",
-                  )}
-                  aria-hidden={toast ? "true" : undefined}
-                >
-                  <activeToolMeta.icon className="h-5 w-5 shrink-0" />
-                  <span className="whitespace-normal break-words leading-tight">{activeToolMeta.label}</span>
-                </span>
-                {toast && ToastIcon ? (
-                  <span
-                    key={toast.id}
-                    aria-live="polite"
-                    className={cn(
-	                      "volt-toast-enter absolute inset-y-0 left-0 flex min-w-0 items-center gap-3 text-base font-bold",
-                      toneStyles?.text,
-                    )}
-                  >
-                    <ToastIcon className="h-5 w-5 shrink-0" />
-                    <span className="whitespace-normal break-words leading-tight">{toast.message}</span>
-                  </span>
-                ) : null}
-              </span>
-              <ChevronDown
-                className={cn(
-                  "h-5 w-5 shrink-0 text-muted-foreground transition-transform duration-200",
-                  toast && "scale-90 opacity-60",
-                )}
-              />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent
-            align="start"
-	            sideOffset={6}
-            onCloseAutoFocus={(event) => event.preventDefault()}
-	            className="sidepanel-tool-menu liquid-glass concentric-lg p-1.5"
-            style={{
-              width: dropdownWidth ? `${dropdownWidth}px` : undefined,
-            }}
+      <div className="sidepanel-tool-switch-wrap">
+        <div className="sidepanel-tool-switch">
+          <div
+            role="radiogroup"
+            aria-label="Sidepanel tool"
+            className={cn(
+              "sidepanel-tool-options",
+              toast ? "-translate-y-1 opacity-0" : "translate-y-0 opacity-100",
+            )}
+            aria-hidden={toast ? "true" : undefined}
           >
+            <span
+              className="sidepanel-tool-indicator"
+              style={{
+                width: `calc((100% - ${(tools.length - 1) * 0.25}rem) / ${tools.length})`,
+                transform: `translateX(calc(${activeToolIndex} * (100% + 0.25rem)))`,
+              }}
+            />
             {tools.map((tool) => (
-              <DropdownMenuItem
+              <button
                 key={tool.id}
-                onSelect={() => {
-                  handleToolChange(tool.id);
-                  setMenuOpen(false);
-                }}
+                type="button"
+                role="radio"
+                aria-checked={activeTool === tool.id}
+                aria-label={tool.label}
+                onClick={() => handleToolChange(tool.id)}
                 className={cn(
-                  "flex items-center gap-3 concentric-md px-3.5 py-3 text-sm font-medium transition-colors cursor-pointer",
-                  activeTool === tool.id
-                    ? "bg-primary text-primary-foreground"
-                    : "text-stone-800 hover:bg-green-100/85 hover:text-stone-950 focus:bg-green-100/85 focus:text-stone-950 data-[highlighted]:bg-green-100/85 data-[highlighted]:text-stone-950 dark:text-stone-100 dark:hover:bg-white/10 dark:hover:text-stone-50 dark:focus:bg-white/10 dark:focus:text-stone-50 dark:data-[highlighted]:bg-white/10 dark:data-[highlighted]:text-stone-50"
+                  "sidepanel-tool-option",
+                  activeTool === tool.id && "is-active",
                 )}
               >
-                <tool.icon className="h-5 w-5" />
-                <span>{tool.label}</span>
-              </DropdownMenuItem>
+                <tool.icon
+                  className="sidepanel-tool-option-icon"
+                />
+                <span className="sidepanel-tool-option-label">
+                  {tool.id === "top-offers" ? "Offer Calculator" : "Scanner"}
+                </span>
+              </button>
             ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+          </div>
+          <span className="pointer-events-none absolute inset-1.5 flex min-w-0 items-center px-3">
+            {toast && ToastIcon ? (
+              <span
+                key={toast.id}
+                aria-live="polite"
+                className={cn(
+                  "volt-toast-enter flex min-w-0 items-center gap-3 text-base font-bold",
+                  toneStyles?.text,
+                )}
+              >
+                <ToastIcon className="h-5 w-5 shrink-0" />
+                <span className="whitespace-normal break-words leading-tight">{toast.message}</span>
+              </span>
+            ) : null}
+          </span>
+        </div>
       </div>
 
       {/* Main content - Flex 1 to take remaining space, overflow hidden to prevent double scrollbars */}

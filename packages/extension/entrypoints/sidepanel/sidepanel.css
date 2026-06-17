@@ -222,6 +222,131 @@ body {
   -webkit-backdrop-filter: blur(18px) saturate(1.24);
 }
 
+.sidepanel-tool-switch-wrap {
+  box-sizing: border-box;
+  flex: none;
+  padding: 12px 16px 12px;
+  position: relative;
+  z-index: 10;
+}
+
+.sidepanel-tool-switch {
+  --tool-switch-bg: var(--glass-bg-soft);
+  --tool-switch-border: var(--glass-border-soft);
+  --tool-switch-active-bg: linear-gradient(135deg, #22c55e, #86efac);
+  --tool-switch-active-text: #052e16;
+  --tool-switch-active-icon: #065f46;
+  --tool-switch-inactive-text: #44403c;
+  --tool-switch-inactive-icon: #78716c;
+  --tool-switch-hover-bg: rgba(255, 255, 255, 0.55);
+  --tool-switch-hover-text: #1c1917;
+  align-items: center;
+  background: var(--tool-switch-bg);
+  border: 1px solid var(--tool-switch-border);
+  border-radius: var(--glass-radius-lg);
+  box-shadow: var(--glass-shadow-soft);
+  color: var(--tool-switch-inactive-text);
+  display: flex;
+  margin: 0 auto;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  padding: 4px;
+  position: relative;
+  width: 100%;
+  backdrop-filter: blur(18px) saturate(1.24);
+  -webkit-backdrop-filter: blur(18px) saturate(1.24);
+}
+
+.sidepanel-tool-options {
+  display: grid;
+  gap: 0.25rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  min-width: 0;
+  position: relative;
+  transition: opacity 200ms ease-out, transform 200ms ease-out;
+  width: 100%;
+}
+
+.sidepanel-tool-indicator {
+  background: var(--tool-switch-active-bg);
+  border-radius: 17px;
+  bottom: 0;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.38),
+    0 10px 24px rgba(34, 197, 94, 0.24);
+  left: 0;
+  pointer-events: none;
+  position: absolute;
+  top: 0;
+  transition: transform 300ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  will-change: transform;
+}
+
+.sidepanel-tool-option {
+  align-items: center;
+  border-radius: 17px;
+  color: var(--tool-switch-inactive-text);
+  display: flex;
+  font-size: 13px;
+  font-weight: 700;
+  gap: 6px;
+  justify-content: center;
+  min-height: 44px;
+  min-width: 0;
+  padding: 0 8px;
+  position: relative;
+  transition: background-color 180ms ease, color 180ms ease;
+  z-index: 1;
+}
+
+.sidepanel-tool-option:hover:not(.is-active) {
+  background: var(--tool-switch-hover-bg);
+  color: var(--tool-switch-hover-text);
+}
+
+.sidepanel-tool-option:focus-visible {
+  outline: 2px solid rgba(52, 211, 153, 0.55);
+  outline-offset: 2px;
+}
+
+.sidepanel-tool-option.is-active {
+  color: var(--tool-switch-active-text);
+}
+
+.sidepanel-tool-option-icon {
+  color: var(--tool-switch-inactive-icon);
+  flex-shrink: 0;
+  height: 15px;
+  transition: color 180ms ease;
+  width: 15px;
+}
+
+.sidepanel-tool-option-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidepanel-tool-option.is-active .sidepanel-tool-option-icon {
+  color: var(--tool-switch-active-icon);
+}
+
+@media (prefers-color-scheme: dark) {
+  .sidepanel-tool-switch {
+    --tool-switch-bg: rgba(34, 30, 28, 0.72);
+    --tool-switch-border: rgba(255, 255, 255, 0.13);
+    --tool-switch-active-bg: linear-gradient(135deg, #22c55e, #86efac);
+    --tool-switch-active-text: #052e16;
+    --tool-switch-active-icon: #065f46;
+    --tool-switch-inactive-text: #f5f5f4;
+    --tool-switch-inactive-icon: #a8a29e;
+    --tool-switch-hover-bg: rgba(255, 255, 255, 0.1);
+    --tool-switch-hover-text: #ffffff;
+  }
+}
+
 .sidepanel-tool-menu {
   max-width: calc(100vw - 16px);
   transform-origin: top center;

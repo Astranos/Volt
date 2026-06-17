@@ -3,6 +3,7 @@ import SwiftUI
 struct ScannerView: View {
     @Environment(ScannerStore.self) private var store
     @State private var isCaptureSessionPresented = false
+    @State private var isPairingScannerPresented = false
     let showsCameraLayer: Bool
 
     init(showsCameraLayer: Bool = true) {
@@ -16,20 +17,26 @@ struct ScannerView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
+                VStack(alignment: .leading, spacing: ScannerTabLayout.stackSpacing) {
+                    ScannerSectionHeader(title: "Capture") {
+                        isPairingScannerPresented = true
+                    }
+
                     startCaptureButton
+                    connectionStatusPanel
                     previousCaptures
                 }
-                .padding(20)
+                .padding(ScannerTabLayout.contentPadding)
+                .padding(.top, ScannerTabLayout.topPadding)
             }
-            .background(Color(.systemGroupedBackground))
+            .background(ScannerTabLayout.background)
             .navigationTitle("Capture")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ScannerConnectionToolbar()
-            }
+            .toolbar(.hidden, for: .navigationBar)
             .fullScreenCover(isPresented: $isCaptureSessionPresented) {
                 CaptureSessionView(isPresented: $isCaptureSessionPresented)
+            }
+            .fullScreenCover(isPresented: $isPairingScannerPresented) {
+                PairingScanSessionView(isPresented: $isPairingScannerPresented)
             }
             .onAppear {
                 store.activeMode = .ocr
@@ -38,7 +45,10 @@ struct ScannerView: View {
     }
 
     private var startCaptureButton: some View {
-        Button {
+        let isConnected = store.connectionStatus.isConnected
+
+        return Button {
+            guard isConnected else { return }
             store.clearOcrReview()
             store.activeMode = .ocr
             isCaptureSessionPresented = true
@@ -65,9 +75,31 @@ struct ScannerView: View {
             .foregroundStyle(.white)
             .padding(18)
             .frame(maxWidth: .infinity)
-            .background(.green, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .background(
+                ScannerTabLayout.primaryActionBackground(isEnabled: isConnected),
+                in: RoundedRectangle(cornerRadius: ScannerTabLayout.primaryActionCornerRadius, style: .continuous)
+            )
+            .opacity(isConnected ? 1 : ScannerTabLayout.disabledPrimaryActionOpacity)
         }
         .buttonStyle(.plain)
+        .disabled(!isConnected)
+        .accessibilityHint(isConnected ? "Opens the camera capture session." : store.targetHint)
+    }
+
+    private var connectionStatusPanel: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(store.connectionStatus.isConnected ? "Ready to capture" : "Capture unavailable", systemImage: store.connectionStatus.isConnected ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                .font(.headline)
+                .foregroundStyle(store.connectionStatus.isConnected ? .green : .orange)
+
+            Text(store.targetHint)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.background, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 
     private var previousCaptures: some View {
@@ -134,6 +166,14 @@ struct CaptureSessionView: View {
 
         }
         .background(.black)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if store.ocrReviewImage == nil {
+                CameraSessionHeader(onFinish: {
+                    store.clearOcrReview()
+                    isPresented = false
+                })
+            }
+        }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if store.ocrReviewImage != nil {
                 OcrReviewControls(
@@ -155,10 +195,6 @@ struct CaptureSessionView: View {
                     zoomLabel: String(format: "%.1fx", Double(store.camera.zoomFactor)),
                     gridVisible: gridVisible,
                     isRecognizingText: store.isRecognizingText,
-                    onFinish: {
-                        store.clearOcrReview()
-                        isPresented = false
-                    },
                     onToggleTorch: {
                         store.camera.setTorchEnabled(!store.camera.torchEnabled)
                     },
@@ -213,7 +249,6 @@ struct CameraSessionControls: View {
     let zoomLabel: String
     let gridVisible: Bool
     let isRecognizingText: Bool
-    let onFinish: () -> Void
     let onToggleTorch: () -> Void
     let onZoomOut: () -> Void
     let onZoomIn: () -> Void
@@ -231,13 +266,8 @@ struct CameraSessionControls: View {
 
             ZStack {
                 HStack {
-                    Button(action: onFinish) {
-                        Text("Finish")
-                            .font(.subheadline.bold())
-                            .foregroundStyle(.white)
-                            .frame(minWidth: 88, minHeight: 48)
-                            .background(.black.opacity(0.54), in: Capsule())
-                    }
+                    Color.clear
+                        .frame(width: 88, height: 48)
 
                     Spacer()
 
@@ -401,6 +431,37 @@ struct CameraSessionControls: View {
         }
         .disabled(isRecognizingText)
         .accessibilityLabel(shutterAccessibilityLabel)
+    }
+}
+
+struct CameraSessionHeader: View {
+    let onFinish: () -> Void
+
+    var body: some View {
+        HStack {
+            Spacer()
+
+            Button("End session", systemImage: "xmark", action: onFinish)
+                .font(.subheadline.bold())
+                .foregroundStyle(.white)
+                .padding(.horizontal, 14)
+                .frame(minHeight: 44)
+                .background(.black.opacity(0.58), in: Capsule())
+                .overlay {
+                    Capsule().stroke(.white.opacity(0.14), lineWidth: 1)
+                }
+        }
+        .padding(.horizontal, 18)
+        .padding(.top, 8)
+        .padding(.bottom, 10)
+        .background {
+            LinearGradient(
+                colors: [.black.opacity(0.72), .black.opacity(0)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea(edges: .top)
+        }
     }
 }
 
