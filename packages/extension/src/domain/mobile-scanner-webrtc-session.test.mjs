@@ -14,6 +14,10 @@ const backgroundSource = readFileSync(
   new URL("../../entrypoints/background.ts", import.meta.url),
   "utf8"
 );
+const pairingPopupSource = readFileSync(
+  new URL("../../entrypoints/mobile-scanner-popup/main.tsx", import.meta.url),
+  "utf8"
+);
 
 test("extension WebRTC session owns scanner-control and photo-transfer channels", () => {
   assert.match(sessionSource, /SCANNER_CONTROL_CHANNEL_LABEL/);
@@ -45,6 +49,16 @@ test("extension bounds hidden join-attempt polling after the pairing popup close
   assert.match(sessionSource, /JOIN_ATTEMPT_MAX_POLL_INTERVAL_MS = 10 \* 1000/);
   assert.match(sessionSource, /stopHiddenJoinAttemptPollingIfIdle/);
   assert.doesNotMatch(sessionSource, /this\.joinWindow = null;\n\s*this\.stopJoinAttemptPolling\(\);/);
+});
+
+test("pairing popup reuses an active QR when opened from Add iPhone", () => {
+  assert.match(pairingPopupSource, /const ensureJoinWindow = useCallback/);
+  assert.match(pairingPopupSource, /if \(currentState\?\.qrCodeUrl\) return;/);
+  assert.match(pairingPopupSource, /void ensureJoinWindow\(nextState\);/);
+  assert.match(pairingPopupSource, /onClick=\{\(\) => startSession\(true\)\}/);
+  assert.match(pairingPopupSource, /void startSession\(true\);/);
+  assert.doesNotMatch(pairingPopupSource, /void startSession\(false\);/);
+  assert.doesNotMatch(pairingPopupSource, /startSession\(Boolean\(nextState\?\.qrCodeUrl\)\)/);
 });
 
 test("extension WebRTC session handles handshake, receipts, photo acks, and peer disconnects", () => {

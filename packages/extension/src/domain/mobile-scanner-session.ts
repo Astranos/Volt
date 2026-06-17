@@ -357,8 +357,6 @@ export class MobileScannerSession {
     this.joinWindow = null;
     if (previous) {
       this.hiddenPollingExpiresAt = Date.now() + HIDDEN_JOIN_ATTEMPT_POLL_GRACE_MS;
-    }
-    if (previous) {
       await this.revokeJoinWindow(previous).catch((error) => {
         this.events.log?.("Failed to revoke scanner join window", error);
       });

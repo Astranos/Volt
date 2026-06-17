@@ -5,7 +5,6 @@ import QRCode from "qrcode";
 import type { ScannerConnectionStatus } from "../../../scanner-protocol/src";
 import {
   PrimaryActionButton,
-  QrPairingPanel,
   SecondaryActionButton,
 } from "../../src/components/sidepanel/mobile-shared";
 import {
@@ -93,6 +92,11 @@ function MobileScannerPopup() {
     }
   }, [applyScannerState, requestedMode, saveSessionLabel]);
 
+  const ensureJoinWindow = useCallback(async (currentState?: MobileScannerState) => {
+    if (currentState?.qrCodeUrl) return;
+    await startSession(false);
+  }, [startSession]);
+
   useEffect(() => {
     let cancelled = false;
     void getMobileScannerExtensionIdentity()
@@ -129,7 +133,7 @@ function MobileScannerPopup() {
       .then((nextState) => {
         if (cancelled) return;
         if (nextState?.status !== "connected") {
-          void startSession(Boolean(nextState?.qrCodeUrl));
+          void ensureJoinWindow(nextState);
         }
       })
       .catch((error) => {
@@ -144,7 +148,7 @@ function MobileScannerPopup() {
     return () => {
       cancelled = true;
     };
-  }, [refreshState, startSession]);
+  }, [ensureJoinWindow, refreshState]);
 
   useEffect(() => {
     const listener = (message: any) => {
@@ -242,36 +246,34 @@ function MobileScannerPopup() {
         <PopupStatus status={state.status} />
       </header>
 
-      <main className="flex min-h-0 flex-1 flex-col items-center justify-center px-5 py-4">
-        <div className="mb-4 w-full max-w-[280px]">
-          <label className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-stone-500">
-            <Pencil className="h-3 w-3" />
-            Chrome session name
-          </label>
-          <input
-            value={sessionLabel}
-            onChange={(event) => setSessionLabel(event.target.value)}
-            onBlur={() => void saveSessionLabel().catch(() => {})}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.currentTarget.blur();
-              }
-            }}
-            disabled={!identityLoaded}
-            maxLength={80}
-            className="h-10 w-full rounded-lg border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-900 outline-none transition focus:border-green-500 focus:ring-2 focus:ring-green-500/20 disabled:opacity-60"
-            placeholder="Chrome session"
-            aria-label="Chrome session name"
-          />
-          <div className="mt-1 min-h-4 text-[11px] font-medium text-stone-500">
-            {labelSaved ? "Saved for future QR sessions" : "Reused by this browser profile"}
-          </div>
+      <section className="flex flex-none flex-col gap-1 border-b border-stone-200 bg-white px-5 py-2">
+        <label className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-stone-500">
+          <Pencil className="h-3 w-3" />
+          Chrome session name
+        </label>
+        <input
+          value={sessionLabel}
+          onChange={(event) => setSessionLabel(event.target.value)}
+          onBlur={() => void saveSessionLabel().catch(() => {})}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.currentTarget.blur();
+            }
+          }}
+          disabled={!identityLoaded}
+          maxLength={80}
+          className="h-9 w-full rounded-lg border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-900 outline-none transition focus:border-green-500 focus:ring-2 focus:ring-green-500/20 disabled:opacity-60"
+          placeholder="Chrome session"
+          aria-label="Chrome session name"
+        />
+        <div className="min-h-3 text-[11px] font-medium leading-3 text-stone-500">
+          {labelSaved ? "Saved for future QR sessions" : "Reused by this browser profile"}
         </div>
+      </section>
+
+      <main className="flex min-h-0 flex-1 flex-col items-center justify-center px-5 py-4">
         {showQr && qrDataUrl ? (
-          <QrPairingPanel
-            qrDataUrl={qrDataUrl}
-            hint="Scan with the iPhone Camera app to open Volt. This popup closes after the phone connects."
-          />
+          <PopupQrCode qrDataUrl={qrDataUrl} />
         ) : state.status === "connected" ? (
           <div className="flex flex-col items-center text-center">
             <span className="flex h-16 w-16 items-center justify-center rounded-full bg-green-500 text-white">
@@ -315,6 +317,18 @@ function MobileScannerPopup() {
           New QR
         </PrimaryActionButton>
       </footer>
+    </div>
+  );
+}
+
+function PopupQrCode({ qrDataUrl }: { qrDataUrl: string }) {
+  return (
+    <div className="popup-qr-frame">
+      <img
+        src={qrDataUrl}
+        alt="Scan this QR code with the Volt mobile app"
+        className="popup-qr-image"
+      />
     </div>
   );
 }
