@@ -27,7 +27,7 @@ struct RootView: View {
         .overlay(alignment: .top) {
             if let pairingToast {
                 PairingStatusToast(toast: pairingToast, action: pairingToast.actionTitle == nil ? nil : {
-                    store.cancelAutomaticReconnect()
+                    store.cancelReconnect()
                     self.pairingToast = nil
                 })
                     .padding(.horizontal, 16)
@@ -86,8 +86,8 @@ struct RootView: View {
                 systemImage: "link",
                 showsProgress: true,
                 duration: nil,
-                actionTitle: store.canCancelAutomaticReconnect ? "Cancel" : nil,
-                actionSystemImage: store.canCancelAutomaticReconnect ? "xmark" : nil
+                actionTitle: store.canCancelReconnect ? "Cancel" : nil,
+                actionSystemImage: store.canCancelReconnect ? "xmark" : nil
             )
         case .waitingForChrome:
             pairingToast = PairingStatusToastModel(
@@ -96,8 +96,8 @@ struct RootView: View {
                 systemImage: "desktopcomputer",
                 showsProgress: true,
                 duration: nil,
-                actionTitle: store.canCancelAutomaticReconnect ? "Cancel" : nil,
-                actionSystemImage: store.canCancelAutomaticReconnect ? "xmark" : nil
+                actionTitle: store.canCancelReconnect ? "Cancel" : nil,
+                actionSystemImage: store.canCancelReconnect ? "xmark" : nil
             )
         case .connected:
             pairingToast = PairingStatusToastModel(

@@ -67,26 +67,26 @@ test("photo batch ids reuse the active rolling five minute batch", () => {
   assert.match(nextBatchId, /^photo-batch-/);
 });
 
-test("photo batch grouping sorts entries inside each batch newest first", () => {
+test("photo batch grouping preserves upload order inside each batch", () => {
   const groups = groupPhotoResultsByBatch([
     {
       type: "photo",
-      id: "old",
+      id: "first",
       photoBatchId: "batch-1",
       capturedAt: "2026-06-03T15:00:00.000Z",
-      photo: { id: "old", kind: "photo", photoBatchId: "batch-1", name: "old.jpg", mimeType: "image/jpeg", size: 1 },
+      photo: { id: "first", kind: "photo", photoBatchId: "batch-1", name: "first.jpg", mimeType: "image/jpeg", size: 1 },
     },
     {
       type: "photo",
-      id: "new",
+      id: "second",
       photoBatchId: "batch-1",
       capturedAt: "2026-06-03T15:01:00.000Z",
-      photo: { id: "new", kind: "photo", photoBatchId: "batch-1", name: "new.jpg", mimeType: "image/jpeg", size: 1 },
+      photo: { id: "second", kind: "photo", photoBatchId: "batch-1", name: "second.jpg", mimeType: "image/jpeg", size: 1 },
     },
   ]);
 
   assert.equal(groups.length, 1);
-  assert.deepEqual(groups[0].entries.map((entry) => entry.id), ["new", "old"]);
+  assert.deepEqual(groups[0].entries.map((entry) => entry.id), ["first", "second"]);
 });
 
 test("results model owns the delete undo window used by the sidepanel", () => {

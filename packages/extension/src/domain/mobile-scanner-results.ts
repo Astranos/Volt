@@ -157,7 +157,7 @@ export function groupPhotoResultsByBatch(
   return Array.from(groups.entries()).map(([photoBatchId, entries]) => ({
     photoBatchId,
     entries: entries.sort(
-      (a, b) => toTimestamp(b.capturedAt) - toTimestamp(a.capturedAt),
+      (a, b) => toTimestamp(a.capturedAt) - toTimestamp(b.capturedAt),
     ),
     startAt: Math.min(...entries.map((entry) => toTimestamp(entry.capturedAt))),
     endAt: Math.max(...entries.map((entry) => toTimestamp(entry.capturedAt))),

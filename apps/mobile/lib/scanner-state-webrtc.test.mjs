@@ -18,6 +18,18 @@ const scannerProtocolSwiftSource = readFileSync(
   new URL("../ios/Volt/Services/ScannerProtocol.swift", import.meta.url),
   "utf8"
 );
+const rootViewSwiftSource = readFileSync(
+  new URL("../ios/Volt/Views/RootView.swift", import.meta.url),
+  "utf8"
+);
+const scannerViewSwiftSource = readFileSync(
+  new URL("../ios/Volt/Views/ScannerView.swift", import.meta.url),
+  "utf8"
+);
+const dictationViewSwiftSource = readFileSync(
+  new URL("../ios/Volt/Views/DictationView.swift", import.meta.url),
+  "utf8"
+);
 
 test("mobile waits for Chrome session_ready before showing connected", () => {
   const attachDataChannelStart = scannerStateSource.indexOf("const attachDataChannel = useCallback");
@@ -78,4 +90,43 @@ test("native saved-session reconnect waits longer than QR pairing for sleeping C
   assert.match(scannerProtocolSwiftSource, /static let joinAttemptTTL: Duration = \.seconds\(32\)/);
   assert.match(scannerProtocolSwiftSource, /static let reconnectRequestTTL: Duration = \.seconds\(95\)/);
   assert.match(scannerSignalingSwiftSource, /let deadline = ContinuousClock\.now \+ ScannerProtocol\.reconnectRequestTTL/);
+});
+
+test("native saved-session reconnect toast can cancel manual previous-session taps", () => {
+  const reconnectStart = scannerStoreSwiftSource.indexOf("func reconnect(to pairedSession:");
+  const reconnectEnd = scannerStoreSwiftSource.indexOf("func reconnectToMostRecentPairedSessionIfNeeded", reconnectStart);
+  const reconnectSource = scannerStoreSwiftSource.slice(reconnectStart, reconnectEnd);
+
+  assert.ok(reconnectStart > -1);
+  assert.match(reconnectSource, /canCancelReconnect = true/);
+  assert.doesNotMatch(reconnectSource, /canCancelReconnect = isAutomatic/);
+  assert.match(scannerStoreSwiftSource, /func cancelReconnect\(\)/);
+  assert.match(rootViewSwiftSource, /store\.cancelReconnect\(\)/);
+  assert.match(rootViewSwiftSource, /actionTitle: store\.canCancelReconnect \? "Cancel" : nil/);
+});
+
+test("native capture session dismisses when the paired scanner disconnects", () => {
+  assert.match(scannerViewSwiftSource, /CaptureSessionView\(isPresented: \$isCaptureSessionPresented\)/);
+  assert.match(scannerViewSwiftSource, /store\.connectionStatus\.isConnected/);
+  assert.match(scannerViewSwiftSource, /\.onChange\(of: store\.connectionStatus\)/);
+  assert.match(scannerViewSwiftSource, /guard !status\.isConnected else \{ return \}/);
+  assert.match(scannerViewSwiftSource, /isPresented = false/);
+});
+
+test("native scanner normalizes UPC-A barcodes and upload filenames preserve selection order", () => {
+  assert.match(scannerStoreSwiftSource, /normalizedBarcodeScan\(value: value, format: camera\.lastBarcodeFormat \?\? "barcode"\)/);
+  assert.match(scannerStoreSwiftSource, /trimmedValue\.count == 13/);
+  assert.match(scannerStoreSwiftSource, /trimmedValue\.first == "0"/);
+  assert.match(scannerStoreSwiftSource, /return \(String\(trimmedValue\.dropFirst\(\)\), "upc_a"\)/);
+  assert.match(scannerStoreSwiftSource, /String\(format: "%03d", index \+ 1\)/);
+  assert.match(scannerStoreSwiftSource, /filename: uploadFilename\(index: index, capturedAt: capturedAt\)/);
+});
+
+test("native dictation keeps listening briefly after user stop actions", () => {
+  assert.match(scannerStoreSwiftSource, /private let dictationReleaseGraceDelay: Duration = \.milliseconds\(1500\)/);
+  assert.match(scannerStoreSwiftSource, /func finishDictationAfterGrace\(\)/);
+  assert.match(scannerStoreSwiftSource, /try\? await Task\.sleep\(for: delay\)/);
+  assert.match(scannerStoreSwiftSource, /cancelDictationGraceStop\(\)/);
+  assert.match(dictationViewSwiftSource, /private func stopDictation\(\) \{\s*store\.finishDictationAfterGrace\(\)\s*\}/);
+  assert.match(dictationViewSwiftSource, /holdEndAction: stopDictation/);
 });

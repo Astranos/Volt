@@ -107,7 +107,7 @@ struct DictationView: View {
     }
 
     private func stopDictation() {
-        store.finishDictation()
+        store.finishDictationAfterGrace()
     }
 }
 

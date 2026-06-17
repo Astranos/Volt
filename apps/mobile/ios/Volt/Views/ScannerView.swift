@@ -241,6 +241,12 @@ struct CaptureSessionView: View {
             store.activeMode = .ocr
             store.camera.start()
         }
+        .onChange(of: store.connectionStatus) { _, status in
+            guard !status.isConnected else { return }
+            selectedTextRegion = nil
+            store.clearOcrReview()
+            isPresented = false
+        }
         .onDisappear {
             store.camera.stop()
         }

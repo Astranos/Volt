@@ -12,6 +12,7 @@ final class ScannerStore {
     private let ocrCaptureMaxDimension: CGFloat = 1800
     private let photoLongEdge: CGFloat = 2200
     private let dictationRequestLimit: Duration = .seconds(55)
+    private let dictationReleaseGraceDelay: Duration = .milliseconds(1500)
 
     var activeMode: CaptureMode = .ocr
     var selectedSection: AppSection = .scan
@@ -19,7 +20,7 @@ final class ScannerStore {
     var pairedSessions: [PairedScannerSession] = []
     var connectionStatus: ScannerConnectionStatus = .idle
     var peerTarget: ScannerPeerTarget?
-    var canCancelAutomaticReconnect = false
+    var canCancelReconnect = false
     var results: [ScanResult] = []
     var statusText = "Not paired"
     var targetHint = ScannerStore.disconnectedPairingHint
@@ -63,9 +64,10 @@ final class ScannerStore {
     private var dictationTargetKey: String?
     private var lastAutomaticReconnectAt: Date?
     private var activeAutomaticReconnectToken: UUID?
-    private var preservesAutomaticReconnectOnNextDisconnect = false
+    private var preservesReconnectCancelOnNextDisconnect = false
     private var lastPairingCandidateValue: String?
     @ObservationIgnored private var reconnectTask: Task<Void, Never>?
+    @ObservationIgnored private var dictationGraceStopTask: Task<Void, Never>?
     @ObservationIgnored private let pairingImpactFeedback = UIImpactFeedbackGenerator(style: .medium)
     @ObservationIgnored private let pairingNotificationFeedback = UINotificationFeedbackGenerator()
     @ObservationIgnored private let dictationImpactFeedback = UIImpactFeedbackGenerator(style: .light)
@@ -86,19 +88,20 @@ final class ScannerStore {
         guard let value = camera.lastBarcode, !value.isEmpty else { return }
         if handlePairingValue(value) { return }
         guard activeMode == .barcode else { return }
+        let normalized = normalizedBarcodeScan(value: value, format: camera.lastBarcodeFormat ?? "barcode")
         let now = Date.now
-        if lastBarcodeValue == value,
+        if lastBarcodeValue == normalized.value,
            let lastBarcodeSentAt,
            now.timeIntervalSince(lastBarcodeSentAt) < 1.5 {
             return
         }
 
-        lastBarcodeValue = value
+        lastBarcodeValue = normalized.value
         lastBarcodeSentAt = now
         let result = ScanResult(
             kind: .barcode,
-            value: value,
-            format: normalizedBarcodeFormat(camera.lastBarcodeFormat ?? "barcode"),
+            value: normalized.value,
+            format: normalized.format,
             capturedAt: now,
             deliveryState: initialDeliveryState
         )
@@ -236,7 +239,7 @@ final class ScannerStore {
                 preparedImage,
                 resultId: photoResult.id,
                 batchId: batch,
-                filename: "volt-upload-\(Int(capturedAt.timeIntervalSince1970))-\(index + 1).jpg",
+                filename: uploadFilename(index: index, capturedAt: capturedAt),
                 capturedAt: capturedAt
             )
         }
@@ -254,6 +257,7 @@ final class ScannerStore {
 
     func startDictation(allowsFeedback: Bool = true) async {
         guard connectionStatus.isConnected else { return }
+        cancelDictationGraceStop()
         let startToken = UUID()
         dictationStartToken = startToken
         shouldStopDictationAfterStart = false
@@ -279,6 +283,7 @@ final class ScannerStore {
     }
 
     func finishDictation() {
+        cancelDictationGraceStop()
         guard dictation.isRecording else {
             shouldStopDictationAfterStart = true
             return
@@ -292,6 +297,20 @@ final class ScannerStore {
             dictationImpactFeedback.impactOccurred(intensity: 0.7)
         }
         commitDictation()
+    }
+
+    func finishDictationAfterGrace() {
+        guard dictation.isRecording || dictation.isStarting else { return }
+        dictationGraceStopTask?.cancel()
+        let delay = dictationReleaseGraceDelay
+        dictationGraceStopTask = Task { [weak self] in
+            try? await Task.sleep(for: delay)
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                self?.dictationGraceStopTask = nil
+                self?.finishDictation()
+            }
+        }
     }
 
     func commitDictation() {
@@ -317,7 +336,7 @@ final class ScannerStore {
         reconnectTask?.cancel()
         let automaticToken = isAutomatic ? UUID() : nil
         activeAutomaticReconnectToken = automaticToken
-        canCancelAutomaticReconnect = isAutomatic
+        canCancelReconnect = true
         peerTarget = ScannerPeerTarget(
             chromeSessionId: pairedSession.browserSessionId,
             sessionLabel: pairedSession.displayName,
@@ -354,13 +373,17 @@ final class ScannerStore {
         reconnect(to: latestSession, reportsErrors: false, isAutomatic: true)
     }
 
-    func cancelAutomaticReconnect() {
-        guard canCancelAutomaticReconnect else { return }
+    func cancelReconnect() {
+        guard canCancelReconnect else { return }
+        let wasAutomaticReconnect = activeAutomaticReconnectToken != nil
         reconnectTask?.cancel()
         reconnectTask = nil
         activeAutomaticReconnectToken = nil
-        canCancelAutomaticReconnect = false
-        lastAutomaticReconnectAt = .now
+        canCancelReconnect = false
+        preservesReconnectCancelOnNextDisconnect = false
+        if wasAutomaticReconnect {
+            lastAutomaticReconnectAt = .now
+        }
         pairingSession = nil
         connection.close()
         connectionStatus = .disconnected
@@ -428,14 +451,15 @@ final class ScannerStore {
 
     private func pair(with session: PairingSession) async {
         do {
-            let shouldRestoreAutomaticReconnect = canCancelAutomaticReconnect
-            preservesAutomaticReconnectOnNextDisconnect = shouldRestoreAutomaticReconnect
+            let shouldRestoreReconnectCancel = canCancelReconnect
+            preservesReconnectCancelOnNextDisconnect = shouldRestoreReconnectCancel
             connection.close()
-            if shouldRestoreAutomaticReconnect {
-                canCancelAutomaticReconnect = true
+            if shouldRestoreReconnectCancel {
+                canCancelReconnect = true
             }
             try await connection.pair(with: session)
         } catch {
+            guard !Task.isCancelled else { return }
             applyConnectionStatus(.error(error.localizedDescription))
         }
     }
@@ -493,11 +517,11 @@ final class ScannerStore {
     private func isReconnectCurrent(_ automaticToken: UUID?) -> Bool {
         guard !Task.isCancelled else { return false }
         guard let automaticToken else { return true }
-        return canCancelAutomaticReconnect && activeAutomaticReconnectToken == automaticToken
+        return canCancelReconnect && activeAutomaticReconnectToken == automaticToken
     }
 
     private func applyAutomaticReconnectUnavailable(for pairedSession: PairedScannerSession) {
-        canCancelAutomaticReconnect = false
+        canCancelReconnect = false
         activeAutomaticReconnectToken = nil
         reconnectTask = nil
         connectionStatus = .disconnected
@@ -509,8 +533,9 @@ final class ScannerStore {
         connectionStatus = status
         switch status {
         case .idle:
-            canCancelAutomaticReconnect = false
+            canCancelReconnect = false
             activeAutomaticReconnectToken = nil
+            preservesReconnectCancelOnNextDisconnect = false
             statusText = "Not paired"
             targetHint = Self.disconnectedPairingHint
         case .pairing:
@@ -522,25 +547,28 @@ final class ScannerStore {
             targetHint = "Waiting for the browser to finish the WebRTC handshake."
             pairingImpactFeedback.impactOccurred(intensity: 0.55)
         case .connected:
-            canCancelAutomaticReconnect = false
+            canCancelReconnect = false
             activeAutomaticReconnectToken = nil
+            preservesReconnectCancelOnNextDisconnect = false
             statusText = "Connected to Chrome"
             targetHint = peerTarget?.displayText ?? "Ready to send captures."
             pairingNotificationFeedback.notificationOccurred(.success)
         case .disconnected:
-            if preservesAutomaticReconnectOnNextDisconnect {
-                preservesAutomaticReconnectOnNextDisconnect = false
+            if preservesReconnectCancelOnNextDisconnect {
+                preservesReconnectCancelOnNextDisconnect = false
                 statusText = "Reconnecting to Chrome"
                 targetHint = peerTarget?.displayText ?? "Opening the saved Chrome scanner session."
                 return
             }
-            canCancelAutomaticReconnect = false
+            canCancelReconnect = false
             activeAutomaticReconnectToken = nil
+            preservesReconnectCancelOnNextDisconnect = false
             statusText = "Disconnected"
             targetHint = Self.disconnectedPairingHint
         case .error(let message):
-            canCancelAutomaticReconnect = false
+            canCancelReconnect = false
             activeAutomaticReconnectToken = nil
+            preservesReconnectCancelOnNextDisconnect = false
             statusText = "Pairing failed"
             targetHint = message
             pairingNotificationFeedback.notificationOccurred(.error)
@@ -615,6 +643,7 @@ final class ScannerStore {
     private func stopDictationForTargetChange() {
         dictationStartToken = nil
         shouldStopDictationAfterStart = false
+        cancelDictationGraceStop()
         cancelDictationRequestLimit()
         dictation.stop()
         sendDictation(nil, phase: "stopped")
@@ -651,6 +680,11 @@ final class ScannerStore {
     private func cancelDictationRequestLimit() {
         dictationLimitTask?.cancel()
         dictationLimitTask = nil
+    }
+
+    private func cancelDictationGraceStop() {
+        dictationGraceStopTask?.cancel()
+        dictationGraceStopTask = nil
     }
 
     private func loadPairedSessions() {
@@ -804,6 +838,24 @@ final class ScannerStore {
             return "qr"
         }
         return rawValue.replacing("org.iso.", with: "")
+    }
+
+    private func normalizedBarcodeScan(value: String, format: String) -> (value: String, format: String) {
+        let trimmedValue = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedFormat = normalizedBarcodeFormat(format)
+        if normalizedFormat == "ean13",
+           trimmedValue.count == 13,
+           trimmedValue.first == "0",
+           trimmedValue.allSatisfy(\.isNumber) {
+            return (String(trimmedValue.dropFirst()), "upc_a")
+        }
+        return (trimmedValue, normalizedFormat)
+    }
+
+    private func uploadFilename(index: Int, capturedAt: Date) -> String {
+        let uploadNumber = String(format: "%03d", index + 1)
+        let timestampMs = Int(capturedAt.timeIntervalSince1970 * 1000)
+        return "volt-upload-\(uploadNumber)-\(timestampMs).jpg"
     }
 }
 
