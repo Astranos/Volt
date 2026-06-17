@@ -7,42 +7,39 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		100000000000000000000001 /* VoltApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000001 /* VoltApp.swift */; };
-		100000000000000000000002 /* CaptureMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000002 /* CaptureMode.swift */; };
-		100000000000000000000003 /* ScanResult.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000003 /* ScanResult.swift */; };
-		100000000000000000000004 /* PairingSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000004 /* PairingSession.swift */; };
-		100000000000000000000005 /* PairingURLParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000005 /* PairingURLParser.swift */; };
-		100000000000000000000006 /* CameraModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000006 /* CameraModel.swift */; };
-		100000000000000000000007 /* TextRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000007 /* TextRecognizer.swift */; };
-		100000000000000000000008 /* DictationModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000008 /* DictationModel.swift */; };
-		100000000000000000000009 /* ScannerStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000009 /* ScannerStore.swift */; };
-		10000000000000000000000A /* CameraPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000000A /* CameraPreview.swift */; };
-		10000000000000000000000B /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000000B /* RootView.swift */; };
-		10000000000000000000000C /* ScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000000C /* ScannerView.swift */; };
-		10000000000000000000000D /* DictationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000000D /* DictationView.swift */; };
-		10000000000000000000000E /* ResultsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000000E /* ResultsView.swift */; };
-		10000000000000000000000F /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000000F /* Images.xcassets */; };
-		100000000000000000000010 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000010 /* SplashScreen.storyboard */; };
-		100000000000000000000011 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000011 /* PrivacyInfo.xcprivacy */; };
-		100000000000000000000012 /* ScannerConnectionStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000016 /* ScannerConnectionStatus.swift */; };
-		100000000000000000000013 /* ScannerPeerTarget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000017 /* ScannerPeerTarget.swift */; };
-		100000000000000000000014 /* ScannerProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000018 /* ScannerProtocol.swift */; };
-		100000000000000000000015 /* ScannerSignalingClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000019 /* ScannerSignalingClient.swift */; };
-		100000000000000000000016 /* ScannerWebRTCConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000001A /* ScannerWebRTCConnection.swift */; };
-		100000000000000000000017 /* WebRTC.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 20000000000000000000001B /* WebRTC.xcframework */; };
-		100000000000000000000018 /* WebRTC.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 20000000000000000000001B /* WebRTC.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
-		100000000000000000000019 /* PairedScannerSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000001C /* PairedScannerSession.swift */; };
-		10000000000000000000001A /* PairingSessionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000001D /* PairingSessionsView.swift */; };
+		B00000000000000000000001 /* VoltApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000001 /* VoltApp.swift */; };
+		B00000000000000000000002 /* CaptureMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000002 /* CaptureMode.swift */; };
+		B00000000000000000000003 /* ScanResult.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000003 /* ScanResult.swift */; };
+		B00000000000000000000004 /* PairingSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000004 /* PairingSession.swift */; };
+		B00000000000000000000005 /* PairingURLParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000005 /* PairingURLParser.swift */; };
+		B00000000000000000000006 /* CameraModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000006 /* CameraModel.swift */; };
+		B00000000000000000000007 /* TextRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000007 /* TextRecognizer.swift */; };
+		B00000000000000000000008 /* DictationModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000008 /* DictationModel.swift */; };
+		B00000000000000000000009 /* ScannerStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000009 /* ScannerStore.swift */; };
+		B0000000000000000000000A /* CameraPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000000A /* CameraPreview.swift */; };
+		B0000000000000000000000B /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000000B /* RootView.swift */; };
+		B0000000000000000000000C /* ScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000000C /* ScannerView.swift */; };
+		B0000000000000000000000D /* DictationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000000D /* DictationView.swift */; };
+		B0000000000000000000000E /* ResultsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000000E /* ResultsView.swift */; };
+		B0000000000000000000000F /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000000F /* Images.xcassets */; };
+		B00000000000000000000010 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000010 /* SplashScreen.storyboard */; };
+		B00000000000000000000011 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000011 /* PrivacyInfo.xcprivacy */; };
+		B00000000000000000000012 /* ScannerConnectionStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000016 /* ScannerConnectionStatus.swift */; };
+		B00000000000000000000013 /* ScannerPeerTarget.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000017 /* ScannerPeerTarget.swift */; };
+		B00000000000000000000014 /* ScannerProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000018 /* ScannerProtocol.swift */; };
+		B00000000000000000000015 /* ScannerSignalingClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000019 /* ScannerSignalingClient.swift */; };
+		B00000000000000000000016 /* ScannerWebRTCConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000001A /* ScannerWebRTCConnection.swift */; };
+		B00000000000000000000019 /* PairedScannerSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000001C /* PairedScannerSession.swift */; };
+		B0000000000000000000001A /* PairingSessionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000001D /* PairingSessionsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
-		710000000000000000000001 /* Embed Frameworks */ = {
+		H10000000000000000000001 /* Embed Frameworks */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
 			dstPath = "";
 			dstSubfolderSpec = 10;
 			files = (
-				100000000000000000000018 /* WebRTC.xcframework in Embed Frameworks */,
 			);
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -50,126 +47,123 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		200000000000000000000001 /* VoltApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoltApp.swift; sourceTree = "<group>"; };
-		200000000000000000000002 /* CaptureMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureMode.swift; sourceTree = "<group>"; };
-		200000000000000000000003 /* ScanResult.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanResult.swift; sourceTree = "<group>"; };
-		200000000000000000000004 /* PairingSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingSession.swift; sourceTree = "<group>"; };
-		200000000000000000000005 /* PairingURLParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingURLParser.swift; sourceTree = "<group>"; };
-		200000000000000000000006 /* CameraModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraModel.swift; sourceTree = "<group>"; };
-		200000000000000000000007 /* TextRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextRecognizer.swift; sourceTree = "<group>"; };
-		200000000000000000000008 /* DictationModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationModel.swift; sourceTree = "<group>"; };
-		200000000000000000000009 /* ScannerStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannerStore.swift; sourceTree = "<group>"; };
-		20000000000000000000000A /* CameraPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraPreview.swift; sourceTree = "<group>"; };
-		20000000000000000000000B /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
-		20000000000000000000000C /* ScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannerView.swift; sourceTree = "<group>"; };
-		20000000000000000000000D /* DictationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationView.swift; sourceTree = "<group>"; };
-		20000000000000000000000E /* ResultsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResultsView.swift; sourceTree = "<group>"; };
-		20000000000000000000000F /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Images.xcassets; sourceTree = "<group>"; };
-		200000000000000000000010 /* SplashScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = SplashScreen.storyboard; sourceTree = "<group>"; };
-		200000000000000000000011 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
-		200000000000000000000013 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		200000000000000000000014 /* Volt.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Volt.entitlements; sourceTree = "<group>"; };
-		200000000000000000000015 /* Volt.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Volt.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		200000000000000000000016 /* ScannerConnectionStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannerConnectionStatus.swift; sourceTree = "<group>"; };
-		200000000000000000000017 /* ScannerPeerTarget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannerPeerTarget.swift; sourceTree = "<group>"; };
-		200000000000000000000018 /* ScannerProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannerProtocol.swift; sourceTree = "<group>"; };
-		200000000000000000000019 /* ScannerSignalingClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannerSignalingClient.swift; sourceTree = "<group>"; };
-		20000000000000000000001A /* ScannerWebRTCConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannerWebRTCConnection.swift; sourceTree = "<group>"; };
-		20000000000000000000001B /* WebRTC.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = WebRTC.xcframework; path = Pods/JitsiWebRTC/WebRTC.xcframework; sourceTree = SOURCE_ROOT; };
-		20000000000000000000001C /* PairedScannerSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairedScannerSession.swift; sourceTree = "<group>"; };
-		20000000000000000000001D /* PairingSessionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingSessionsView.swift; sourceTree = "<group>"; };
+		C00000000000000000000001 /* VoltApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoltApp.swift; sourceTree = "<group>"; };
+		C00000000000000000000002 /* CaptureMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureMode.swift; sourceTree = "<group>"; };
+		C00000000000000000000003 /* ScanResult.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanResult.swift; sourceTree = "<group>"; };
+		C00000000000000000000004 /* PairingSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingSession.swift; sourceTree = "<group>"; };
+		C00000000000000000000005 /* PairingURLParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingURLParser.swift; sourceTree = "<group>"; };
+		C00000000000000000000006 /* CameraModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraModel.swift; sourceTree = "<group>"; };
+		C00000000000000000000007 /* TextRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextRecognizer.swift; sourceTree = "<group>"; };
+		C00000000000000000000008 /* DictationModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationModel.swift; sourceTree = "<group>"; };
+		C00000000000000000000009 /* ScannerStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannerStore.swift; sourceTree = "<group>"; };
+		C0000000000000000000000A /* CameraPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraPreview.swift; sourceTree = "<group>"; };
+		C0000000000000000000000B /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		C0000000000000000000000C /* ScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannerView.swift; sourceTree = "<group>"; };
+		C0000000000000000000000D /* DictationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationView.swift; sourceTree = "<group>"; };
+		C0000000000000000000000E /* ResultsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResultsView.swift; sourceTree = "<group>"; };
+		C0000000000000000000000F /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Images.xcassets; sourceTree = "<group>"; };
+		C00000000000000000000010 /* SplashScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = SplashScreen.storyboard; sourceTree = "<group>"; };
+		C00000000000000000000011 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		C00000000000000000000013 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		C00000000000000000000014 /* Volt.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Volt.entitlements; sourceTree = "<group>"; };
+		C00000000000000000000015 /* Volt.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Volt.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		C00000000000000000000016 /* ScannerConnectionStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannerConnectionStatus.swift; sourceTree = "<group>"; };
+		C00000000000000000000017 /* ScannerPeerTarget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannerPeerTarget.swift; sourceTree = "<group>"; };
+		C00000000000000000000018 /* ScannerProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannerProtocol.swift; sourceTree = "<group>"; };
+		C00000000000000000000019 /* ScannerSignalingClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannerSignalingClient.swift; sourceTree = "<group>"; };
+		C0000000000000000000001A /* ScannerWebRTCConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannerWebRTCConnection.swift; sourceTree = "<group>"; };
+		C0000000000000000000001C /* PairedScannerSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairedScannerSession.swift; sourceTree = "<group>"; };
+		C0000000000000000000001D /* PairingSessionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingSessionsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		300000000000000000000001 /* Frameworks */ = {
+		D00000000000000000000001 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				100000000000000000000017 /* WebRTC.xcframework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		400000000000000000000001 = {
+		E00000000000000000000001 = {
 			isa = PBXGroup;
 			children = (
-				400000000000000000000003 /* Volt */,
-				20000000000000000000001B /* WebRTC.xcframework */,
-				400000000000000000000002 /* Products */,
+				E00000000000000000000003 /* Volt */,
+				E00000000000000000000002 /* Products */,
 			);
 			sourceTree = "<group>";
 		};
-		400000000000000000000002 /* Products */ = {
+		E00000000000000000000002 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				200000000000000000000015 /* Volt.app */,
+				C00000000000000000000015 /* Volt.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
 		};
-		400000000000000000000003 /* Volt */ = {
+		E00000000000000000000003 /* Volt */ = {
 			isa = PBXGroup;
 			children = (
-				400000000000000000000004 /* App */,
-				400000000000000000000005 /* Models */,
-				400000000000000000000006 /* Services */,
-				400000000000000000000007 /* Views */,
-				20000000000000000000000F /* Images.xcassets */,
-				200000000000000000000010 /* SplashScreen.storyboard */,
-				200000000000000000000011 /* PrivacyInfo.xcprivacy */,
-				200000000000000000000013 /* Info.plist */,
-				200000000000000000000014 /* Volt.entitlements */,
+				E00000000000000000000004 /* App */,
+				E00000000000000000000005 /* Models */,
+				E00000000000000000000006 /* Services */,
+				E00000000000000000000007 /* Views */,
+				C0000000000000000000000F /* Images.xcassets */,
+				C00000000000000000000010 /* SplashScreen.storyboard */,
+				C00000000000000000000011 /* PrivacyInfo.xcprivacy */,
+				C00000000000000000000013 /* Info.plist */,
+				C00000000000000000000014 /* Volt.entitlements */,
 			);
 			path = Volt;
 			sourceTree = "<group>";
 		};
-		400000000000000000000004 /* App */ = {
+		E00000000000000000000004 /* App */ = {
 			isa = PBXGroup;
 			children = (
-				200000000000000000000001 /* VoltApp.swift */,
+				C00000000000000000000001 /* VoltApp.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
 		};
-		400000000000000000000005 /* Models */ = {
+		E00000000000000000000005 /* Models */ = {
 			isa = PBXGroup;
 			children = (
-				200000000000000000000002 /* CaptureMode.swift */,
-				200000000000000000000003 /* ScanResult.swift */,
-				200000000000000000000004 /* PairingSession.swift */,
-				20000000000000000000001C /* PairedScannerSession.swift */,
-				200000000000000000000016 /* ScannerConnectionStatus.swift */,
-				200000000000000000000017 /* ScannerPeerTarget.swift */,
+				C00000000000000000000002 /* CaptureMode.swift */,
+				C00000000000000000000003 /* ScanResult.swift */,
+				C00000000000000000000004 /* PairingSession.swift */,
+				C0000000000000000000001C /* PairedScannerSession.swift */,
+				C00000000000000000000016 /* ScannerConnectionStatus.swift */,
+				C00000000000000000000017 /* ScannerPeerTarget.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
 		};
-		400000000000000000000006 /* Services */ = {
+		E00000000000000000000006 /* Services */ = {
 			isa = PBXGroup;
 			children = (
-				200000000000000000000005 /* PairingURLParser.swift */,
-				200000000000000000000006 /* CameraModel.swift */,
-				200000000000000000000007 /* TextRecognizer.swift */,
-				200000000000000000000008 /* DictationModel.swift */,
-				200000000000000000000009 /* ScannerStore.swift */,
-				200000000000000000000018 /* ScannerProtocol.swift */,
-				200000000000000000000019 /* ScannerSignalingClient.swift */,
-				20000000000000000000001A /* ScannerWebRTCConnection.swift */,
+				C00000000000000000000005 /* PairingURLParser.swift */,
+				C00000000000000000000006 /* CameraModel.swift */,
+				C00000000000000000000007 /* TextRecognizer.swift */,
+				C00000000000000000000008 /* DictationModel.swift */,
+				C00000000000000000000009 /* ScannerStore.swift */,
+				C00000000000000000000018 /* ScannerProtocol.swift */,
+				C00000000000000000000019 /* ScannerSignalingClient.swift */,
+				C0000000000000000000001A /* ScannerWebRTCConnection.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
 		};
-		400000000000000000000007 /* Views */ = {
+		E00000000000000000000007 /* Views */ = {
 			isa = PBXGroup;
 			children = (
-				20000000000000000000000A /* CameraPreview.swift */,
-				20000000000000000000000B /* RootView.swift */,
-				20000000000000000000000C /* ScannerView.swift */,
-				20000000000000000000001D /* PairingSessionsView.swift */,
-				20000000000000000000000D /* DictationView.swift */,
-				20000000000000000000000E /* ResultsView.swift */,
+				C0000000000000000000000A /* CameraPreview.swift */,
+				C0000000000000000000000B /* RootView.swift */,
+				C0000000000000000000000C /* ScannerView.swift */,
+				C0000000000000000000001D /* PairingSessionsView.swift */,
+				C0000000000000000000000D /* DictationView.swift */,
+				C0000000000000000000000E /* ResultsView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -177,14 +171,14 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		500000000000000000000001 /* Volt */ = {
+		F00000000000000000000001 /* Volt */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 900000000000000000000001 /* Build configuration list for PBXNativeTarget "Volt" */;
+			buildConfigurationList = J00000000000000000000001 /* Build configuration list for PBXNativeTarget "Volt" */;
 			buildPhases = (
-				600000000000000000000001 /* Sources */,
-				300000000000000000000001 /* Frameworks */,
-				700000000000000000000001 /* Resources */,
-				710000000000000000000001 /* Embed Frameworks */,
+				G00000000000000000000001 /* Sources */,
+				D00000000000000000000001 /* Frameworks */,
+				H00000000000000000000001 /* Resources */,
+				H10000000000000000000001 /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
@@ -192,24 +186,24 @@
 			);
 			name = Volt;
 			productName = Volt;
-			productReference = 200000000000000000000015 /* Volt.app */;
+			productReference = C00000000000000000000015 /* Volt.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
-		800000000000000000000001 /* Project object */ = {
+		I00000000000000000000001 /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
 				LastSwiftUpdateCheck = 2650;
 				LastUpgradeCheck = 2650;
 				TargetAttributes = {
-					500000000000000000000001 = {
+					F00000000000000000000001 = {
 						CreatedOnToolsVersion = 26.5;
 					};
 				};
 			};
-			buildConfigurationList = 900000000000000000000004 /* Build configuration list for PBXProject "Volt" */;
+			buildConfigurationList = J00000000000000000000004 /* Build configuration list for PBXProject "Volt" */;
 			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -217,70 +211,70 @@
 				en,
 				Base,
 			);
-			mainGroup = 400000000000000000000001;
-			productRefGroup = 400000000000000000000002 /* Products */;
+			mainGroup = E00000000000000000000001;
+			productRefGroup = E00000000000000000000002 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				500000000000000000000001 /* Volt */,
+				F00000000000000000000001 /* Volt */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		700000000000000000000001 /* Resources */ = {
+		H00000000000000000000001 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				10000000000000000000000F /* Images.xcassets in Resources */,
-				100000000000000000000010 /* SplashScreen.storyboard in Resources */,
-				100000000000000000000011 /* PrivacyInfo.xcprivacy in Resources */,
+				B0000000000000000000000F /* Images.xcassets in Resources */,
+				B00000000000000000000010 /* SplashScreen.storyboard in Resources */,
+				B00000000000000000000011 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		600000000000000000000001 /* Sources */ = {
+		G00000000000000000000001 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				100000000000000000000001 /* VoltApp.swift in Sources */,
-				100000000000000000000002 /* CaptureMode.swift in Sources */,
-				100000000000000000000003 /* ScanResult.swift in Sources */,
-				100000000000000000000004 /* PairingSession.swift in Sources */,
-				100000000000000000000005 /* PairingURLParser.swift in Sources */,
-				100000000000000000000006 /* CameraModel.swift in Sources */,
-				100000000000000000000007 /* TextRecognizer.swift in Sources */,
-				100000000000000000000008 /* DictationModel.swift in Sources */,
-				100000000000000000000009 /* ScannerStore.swift in Sources */,
-				10000000000000000000000A /* CameraPreview.swift in Sources */,
-				10000000000000000000000B /* RootView.swift in Sources */,
-				10000000000000000000000C /* ScannerView.swift in Sources */,
-				10000000000000000000001A /* PairingSessionsView.swift in Sources */,
-				10000000000000000000000D /* DictationView.swift in Sources */,
-				10000000000000000000000E /* ResultsView.swift in Sources */,
-				100000000000000000000012 /* ScannerConnectionStatus.swift in Sources */,
-				100000000000000000000013 /* ScannerPeerTarget.swift in Sources */,
-				100000000000000000000019 /* PairedScannerSession.swift in Sources */,
-				100000000000000000000014 /* ScannerProtocol.swift in Sources */,
-				100000000000000000000015 /* ScannerSignalingClient.swift in Sources */,
-				100000000000000000000016 /* ScannerWebRTCConnection.swift in Sources */,
+				B00000000000000000000001 /* VoltApp.swift in Sources */,
+				B00000000000000000000002 /* CaptureMode.swift in Sources */,
+				B00000000000000000000003 /* ScanResult.swift in Sources */,
+				B00000000000000000000004 /* PairingSession.swift in Sources */,
+				B00000000000000000000005 /* PairingURLParser.swift in Sources */,
+				B00000000000000000000006 /* CameraModel.swift in Sources */,
+				B00000000000000000000007 /* TextRecognizer.swift in Sources */,
+				B00000000000000000000008 /* DictationModel.swift in Sources */,
+				B00000000000000000000009 /* ScannerStore.swift in Sources */,
+				B0000000000000000000000A /* CameraPreview.swift in Sources */,
+				B0000000000000000000000B /* RootView.swift in Sources */,
+				B0000000000000000000000C /* ScannerView.swift in Sources */,
+				B0000000000000000000001A /* PairingSessionsView.swift in Sources */,
+				B0000000000000000000000D /* DictationView.swift in Sources */,
+				B0000000000000000000000E /* ResultsView.swift in Sources */,
+				B00000000000000000000012 /* ScannerConnectionStatus.swift in Sources */,
+				B00000000000000000000013 /* ScannerPeerTarget.swift in Sources */,
+				B00000000000000000000019 /* PairedScannerSession.swift in Sources */,
+				B00000000000000000000014 /* ScannerProtocol.swift in Sources */,
+				B00000000000000000000015 /* ScannerSignalingClient.swift in Sources */,
+				B00000000000000000000016 /* ScannerWebRTCConnection.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
-		900000000000000000000002 /* Debug */ = {
+		J00000000000000000000002 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = Volt/Volt.entitlements;
-				CODE_SIGN_IDENTITY = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 20;
+				CODE_SIGN_IDENTITY = "Apple Distribution";
+				CODE_SIGN_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 23;
 				DEVELOPMENT_TEAM = GB5SPLUARQ;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Volt/Info.plist;
@@ -292,6 +286,7 @@
 				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.volt.mobile;
 				PRODUCT_NAME = Volt;
+				PROVISIONING_PROFILE_SPECIFIER = "*[expo] com.volt.mobile AppStore 2026-05-25T23:25:44.484Z";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -299,15 +294,15 @@
 			};
 			name = Debug;
 		};
-		900000000000000000000003 /* Release */ = {
+		J00000000000000000000003 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = Volt/Volt.entitlements;
-				CODE_SIGN_IDENTITY = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 20;
+				CODE_SIGN_IDENTITY = "Apple Distribution";
+				CODE_SIGN_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 23;
 				DEVELOPMENT_TEAM = GB5SPLUARQ;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Volt/Info.plist;
@@ -319,6 +314,7 @@
 				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.volt.mobile;
 				PRODUCT_NAME = Volt;
+				PROVISIONING_PROFILE_SPECIFIER = "*[expo] com.volt.mobile AppStore 2026-05-25T23:25:44.484Z";
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				VALIDATE_PRODUCT = YES;
@@ -326,7 +322,7 @@
 			};
 			name = Release;
 		};
-		900000000000000000000005 /* Debug */ = {
+		J00000000000000000000005 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -383,7 +379,7 @@
 			};
 			name = Debug;
 		};
-		900000000000000000000006 /* Release */ = {
+		J00000000000000000000006 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -436,25 +432,25 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		900000000000000000000001 /* Build configuration list for PBXNativeTarget "Volt" */ = {
+		J00000000000000000000001 /* Build configuration list for PBXNativeTarget "Volt" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				900000000000000000000002 /* Debug */,
-				900000000000000000000003 /* Release */,
+				J00000000000000000000002 /* Debug */,
+				J00000000000000000000003 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
 		};
-		900000000000000000000004 /* Build configuration list for PBXProject "Volt" */ = {
+		J00000000000000000000004 /* Build configuration list for PBXProject "Volt" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				900000000000000000000005 /* Debug */,
-				900000000000000000000006 /* Release */,
+				J00000000000000000000005 /* Debug */,
+				J00000000000000000000006 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
 	};
-	rootObject = 800000000000000000000001 /* Project object */;
+	rootObject = I00000000000000000000001 /* Project object */;
 }
