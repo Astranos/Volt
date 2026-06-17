@@ -80,6 +80,12 @@ test("round-trips scanner-control messages", () => {
     messageId: "m-ready",
     sentAt: now,
     peer,
+    pairing: {
+      pairingId: "pairing_test_12345",
+      pairingSecret: "abcdefghijklmnopqrstuvwxyzABCDEFGH123456",
+      browserSessionId: "session_1234",
+      displayName: "Chrome on Mac",
+    },
     cursorTarget: {
       tabTitle: "Product Admin",
       url: "https://example.com/products/1",

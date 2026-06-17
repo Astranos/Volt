@@ -130,6 +130,13 @@ export type ScannerCursorTargetSummary = {
   hasCursorTarget: boolean;
 };
 
+export type ScannerDurablePairing = {
+  pairingId: string;
+  pairingSecret: string;
+  browserSessionId: string;
+  displayName?: string;
+};
+
 export type ScannerControlHelloMessage = {
   type: "hello";
   messageId: string;
@@ -143,6 +150,7 @@ export type ScannerControlSessionReadyMessage = {
   sentAt: string;
   peer: ScannerPeerInfo;
   activeMode?: ScannerMode;
+  pairing?: ScannerDurablePairing;
   cursorTarget?: ScannerCursorTargetSummary;
 };
 
@@ -456,6 +464,23 @@ function parseCursorTarget(value: unknown): ScannerCursorTargetSummary | undefin
   };
 }
 
+function parseDurablePairing(value: unknown): ScannerDurablePairing | undefined {
+  if (!isRecord(value)) return undefined;
+  if (
+    !isNonEmptyString(value.pairingId) ||
+    !isScannerJoinToken(value.pairingSecret) ||
+    !isScannerSessionId(value.browserSessionId)
+  ) {
+    return undefined;
+  }
+  return {
+    pairingId: value.pairingId,
+    pairingSecret: value.pairingSecret,
+    browserSessionId: value.browserSessionId,
+    displayName: optionalString(value.displayName),
+  };
+}
+
 function isScannerMode(value: unknown): value is ScannerMode {
   return isCaptureMode(value);
 }
@@ -540,6 +565,7 @@ export function decodeScannerControlMessage(data: string): ScannerControlMessage
       ...base,
       peer,
       activeMode,
+      pairing: parseDurablePairing(parsed.pairing),
       cursorTarget: parseCursorTarget(parsed.cursorTarget),
     };
   }

@@ -32,6 +32,7 @@ const JOIN_ATTEMPT_MAX_POLL_INTERVAL_MS = 10 * 1000;
 export const MOBILE_SCANNER_IDENTITY_STORAGE_KEYS = {
   installId: "volt.mobileScanner.extensionInstallId",
   sessionLabel: "volt.mobileScanner.sessionLabel",
+  pairings: "volt.mobileScanner.pairedBrowsers.v1",
 } as const;
 
 export type BarcodeMessage = {
@@ -71,6 +72,15 @@ export type ExtensionIdentity = {
   sessionLabel: string;
 };
 
+type DurablePairingCredential = {
+  pairingId: string;
+  pairingSecret: string;
+  browserSessionId: string;
+  displayName: string;
+  createdAt: string;
+  lastConnectedAt: string;
+};
+
 type JoinWindow = {
   expiresAt?: string;
   joinToken: string;
@@ -105,6 +115,8 @@ const EXTENSION_PROTOCOL_VERSION = {
   minor: SCANNER_PROTOCOL_MINOR_VERSION,
 };
 
+const RECONNECT_POLL_INTERVAL_MS = 5000;
+
 export type MobileScannerSessionState = {
   status: ScannerConnectionStatus;
   qrCodeUrl: string | null;
@@ -128,6 +140,16 @@ export type MobileScannerSessionEvents = {
 function createId(prefix: string) {
   const random = crypto.randomUUID?.() ?? Math.random().toString(36).slice(2);
   return `${prefix}-${Date.now().toString(36)}-${random}`;
+}
+
+function createSecret(byteLength = 32) {
+  const bytes = new Uint8Array(byteLength);
+  crypto.getRandomValues(bytes);
+  let value = "";
+  for (const byte of bytes) {
+    value += String.fromCharCode(byte);
+  }
+  return btoa(value).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
 function normalizeIdentityLabel(value: unknown) {
@@ -173,6 +195,47 @@ function storageLocalSet(values: Record<string, unknown>) {
     }
   } catch (_error) {}
   return Promise.resolve();
+}
+
+function normalizePairingCredential(value: unknown): DurablePairingCredential | null {
+  if (!value || typeof value !== "object") return null;
+  const record = value as Partial<DurablePairingCredential>;
+  if (
+    typeof record.pairingId !== "string" ||
+    typeof record.pairingSecret !== "string" ||
+    typeof record.browserSessionId !== "string" ||
+    typeof record.displayName !== "string" ||
+    typeof record.createdAt !== "string" ||
+    typeof record.lastConnectedAt !== "string"
+  ) {
+    return null;
+  }
+  return {
+    pairingId: record.pairingId,
+    pairingSecret: record.pairingSecret,
+    browserSessionId: record.browserSessionId,
+    displayName: record.displayName,
+    createdAt: record.createdAt,
+    lastConnectedAt: record.lastConnectedAt,
+  };
+}
+
+async function loadDurablePairings() {
+  const key = MOBILE_SCANNER_IDENTITY_STORAGE_KEYS.pairings;
+  const stored = await storageLocalGet([key]);
+  const value = stored[key];
+  if (!Array.isArray(value)) return [];
+  return value.map(normalizePairingCredential).filter((item): item is DurablePairingCredential => !!item);
+}
+
+async function saveDurablePairing(pairing: DurablePairingCredential) {
+  const key = MOBILE_SCANNER_IDENTITY_STORAGE_KEYS.pairings;
+  const pairings = await loadDurablePairings();
+  const nextPairings = [
+    pairing,
+    ...pairings.filter((item) => item.pairingId !== pairing.pairingId && item.browserSessionId !== pairing.browserSessionId),
+  ].slice(0, 12);
+  await storageLocalSet({ [key]: nextPairings });
 }
 
 export async function getMobileScannerExtensionIdentity(): Promise<ExtensionIdentity> {
@@ -296,7 +359,10 @@ export class MobileScannerSession {
   private hiddenPollingExpiresAt: number | null = null;
   private joinWindow: JoinWindow | null = null;
   private peers = new Map<string, PeerSession>();
+  private peerPairings = new Map<string, DurablePairingCredential>();
   private pendingPhotos = new Map<string, PendingPhoto>();
+  private reconnectPoll: SessionTimer | null = null;
+  private seenReconnectRequests = new Set<string>();
   private seenJoinAttempts = new Set<string>();
   private seenControlMessages = new Set<string>();
   private target: SessionTarget | null = null;
@@ -314,6 +380,7 @@ export class MobileScannerSession {
       target: null,
       extensionIdentity: null,
     };
+    this.scheduleReconnectPoll(RECONNECT_POLL_INTERVAL_MS);
   }
 
   getState() {
@@ -502,6 +569,7 @@ export class MobileScannerSession {
 
   private sendSessionReady(peer: PeerSession) {
     const identity = this.state.extensionIdentity;
+    const pairing = this.ensurePairingForPeer(peer);
     this.sendControl(peer, {
       type: "session_ready",
       messageId: createMessageId("control"),
@@ -514,8 +582,117 @@ export class MobileScannerSession {
         chromeSessionId: this.state.sessionId,
         deviceLabel: identity?.sessionLabel,
       },
+      pairing: {
+        pairingId: pairing.pairingId,
+        pairingSecret: pairing.pairingSecret,
+        browserSessionId: pairing.browserSessionId,
+        displayName: pairing.displayName,
+      },
       cursorTarget: this.cursorTargetSummary(),
     });
+  }
+
+  private ensurePairingForPeer(peer: PeerSession) {
+    const existing = this.peerPairings.get(peer.id);
+    if (existing) return existing;
+
+    const now = new Date().toISOString();
+    const displayName = this.state.extensionIdentity?.sessionLabel ?? "Chrome session";
+    const pairing: DurablePairingCredential = {
+      pairingId: createId("pairing").replace(/[^a-zA-Z0-9_-]/g, "_"),
+      pairingSecret: createSecret(32),
+      browserSessionId: this.state.sessionId,
+      displayName,
+      createdAt: now,
+      lastConnectedAt: now,
+    };
+    this.peerPairings.set(peer.id, pairing);
+    void saveDurablePairing(pairing).catch((error) => {
+      this.events.log?.("Failed to save scanner pairing", error);
+    });
+    void this.registerPairing(pairing).catch((error) => {
+      this.events.log?.("Failed to register scanner pairing", error);
+    });
+    return pairing;
+  }
+
+  private async registerPairing(pairing: DurablePairingCredential) {
+    await fetch(`${SCANNER_SIGNAL_URL}/pairings`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        pairingId: pairing.pairingId,
+        pairingSecret: pairing.pairingSecret,
+        browserSessionId: pairing.browserSessionId,
+        displayName: pairing.displayName,
+      }),
+    });
+  }
+
+  private scheduleReconnectPoll(delayMs: number) {
+    if (this.reconnectPoll) return;
+    this.reconnectPoll = setTimeout(() => {
+      this.reconnectPoll = null;
+      void this.pollReconnectRequests()
+        .catch((error) => {
+          this.events.log?.("Failed to poll scanner reconnect requests", error);
+        })
+        .finally(() => {
+          this.scheduleReconnectPoll(RECONNECT_POLL_INTERVAL_MS);
+        });
+    }, delayMs);
+  }
+
+  private async pollReconnectRequests() {
+    const sessionId = this.state.sessionId;
+    if (!isScannerSessionId(sessionId)) return;
+    const pairings = await loadDurablePairings();
+    const pairingById = new Map(pairings.map((pairing) => [pairing.pairingId, pairing]));
+    if (pairingById.size === 0) return;
+
+    const response = await fetch(`${SCANNER_SIGNAL_URL}/pairings/reconnect-requests?sessionId=${encodeURIComponent(sessionId)}`);
+    if (!response.ok) return;
+    const payload = (await response.json()) as { requests?: unknown[] };
+    const requests = Array.isArray(payload.requests) ? payload.requests : [];
+    for (const rawRequest of requests) {
+      if (!rawRequest || typeof rawRequest !== "object") continue;
+      const request = rawRequest as { pairingId?: unknown; requestId?: unknown };
+      if (typeof request.pairingId !== "string" || typeof request.requestId !== "string") continue;
+      const pairing = pairingById.get(request.pairingId);
+      if (!pairing) continue;
+      const key = `${request.pairingId}:${request.requestId}`;
+      if (this.seenReconnectRequests.has(key)) continue;
+      this.seenReconnectRequests.add(key);
+      await this.answerReconnectRequest(pairing, request.requestId);
+    }
+  }
+
+  private async answerReconnectRequest(pairing: DurablePairingCredential, requestId: string) {
+    const joinWindow = await this.createJoinWindow(this.target);
+    this.joinWindow = joinWindow;
+    this.answerPollJoinWindow = joinWindow;
+    this.hiddenPollingExpiresAt = null;
+    this.setState({
+      status: this.peers.size > 0 ? "connected" : "waiting",
+      qrCodeUrl: joinWindow.qrCodeUrl,
+      error: null,
+      joinWindowExpiresAt: joinWindow.expiresAt ?? null,
+    });
+    this.pollForJoinAttempts();
+
+    await fetch(
+      `${SCANNER_SIGNAL_URL}/pairings/${encodeURIComponent(pairing.pairingId)}/reconnect/${encodeURIComponent(requestId)}/join-window`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Volt-Pairing-Secret": pairing.pairingSecret },
+        body: JSON.stringify({
+          pairingSecret: pairing.pairingSecret,
+          joinUrl: joinWindow.qrCodeUrl,
+          joinToken: joinWindow.joinToken,
+          sessionId: joinWindow.sessionId,
+        }),
+      }
+    );
   }
 
   private async revokeJoinWindow(joinWindow: JoinWindow) {
@@ -895,6 +1072,7 @@ export class MobileScannerSession {
     const peer = this.peers.get(joinAttemptId);
     if (!peer) return;
     this.peers.delete(joinAttemptId);
+    this.peerPairings.delete(joinAttemptId);
     peer.control?.close();
     peer.photoTransfer?.close();
     peer.pc.close();

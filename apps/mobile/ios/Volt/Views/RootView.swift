@@ -243,9 +243,8 @@ struct ScannerConnectionToolbar: ToolbarContent {
 
     private var savedSessionLabel: String? {
         store.pairedSessions.first { pairedSession in
-            pairedSession.sessionId == store.peerTarget?.chromeSessionId
-                || pairedSession.sessionId == store.pairingSession?.sessionId
-                || pairedSession.token == store.pairingSession?.token
+            pairedSession.browserSessionId == store.peerTarget?.chromeSessionId
+                || pairedSession.browserSessionId == store.pairingSession?.sessionId
         }?.displayName
     }
 

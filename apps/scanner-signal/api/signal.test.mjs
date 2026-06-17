@@ -244,3 +244,84 @@ test("signal can revoke and rotate visible join tokens", async () => {
   assert.equal(revokeResponse.body.success, true);
   assert.match(revokeResponse.body.revokedAt, /^\d{4}-\d{2}-\d{2}T/);
 });
+
+test("signal durable pairings broker fresh reconnect join windows", async () => {
+  const pairingId = "pairing_test_12345";
+  const pairingSecret = "abcdefghijklmnopqrstuvwxyzABCDEFGH123456";
+  const browserSessionId = "global-session-reconnect";
+
+  const registerResponse = makeResponse();
+  await signalHandler(
+    makeRequest({
+      method: "POST",
+      path: "pairings",
+      body: {
+        pairingId,
+        pairingSecret,
+        browserSessionId,
+        displayName: "Chrome on Mac",
+      },
+    }),
+    registerResponse
+  );
+
+  assert.equal(registerResponse.statusCode, 200);
+  assert.equal(registerResponse.body.pairingId, pairingId);
+
+  const reconnectResponse = makeResponse();
+  await signalHandler(
+    makeRequest({
+      method: "POST",
+      path: `pairings/${pairingId}/reconnect`,
+      body: { pairingSecret },
+    }),
+    reconnectResponse
+  );
+
+  assert.equal(reconnectResponse.statusCode, 200);
+  assert.equal(reconnectResponse.body.request.status, "waiting_for_browser");
+
+  const pendingResponse = makeResponse();
+  await signalHandler(
+    makeRequest({
+      path: "pairings/reconnect-requests",
+      query: { sessionId: browserSessionId },
+    }),
+    pendingResponse
+  );
+
+  assert.equal(pendingResponse.statusCode, 200);
+  assert.equal(pendingResponse.body.requests.length, 1);
+  assert.equal(pendingResponse.body.requests[0].pairingId, pairingId);
+
+  const joinToken = "abcdefghijklmnopqrstuvwxyzABCDEFGH1234567890";
+  const joinWindowResponse = makeResponse();
+  await signalHandler(
+    makeRequest({
+      method: "POST",
+      path: `pairings/${pairingId}/reconnect/${reconnectResponse.body.request.id}/join-window`,
+      body: {
+        pairingSecret,
+        joinUrl: `volt://pair?token=${joinToken}&sessionId=${browserSessionId}`,
+        joinToken,
+        sessionId: browserSessionId,
+      },
+    }),
+    joinWindowResponse
+  );
+
+  assert.equal(joinWindowResponse.statusCode, 200);
+  assert.equal(joinWindowResponse.body.request.status, "join_window_ready");
+
+  const pollResponse = makeResponse();
+  await signalHandler(
+    makeRequest({
+      path: `pairings/${pairingId}/reconnect/${reconnectResponse.body.request.id}`,
+      body: { pairingSecret },
+    }),
+    pollResponse
+  );
+
+  assert.equal(pollResponse.statusCode, 200);
+  assert.equal(pollResponse.body.request.joinToken, joinToken);
+});

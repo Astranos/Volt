@@ -5,9 +5,12 @@ const SCANNER_SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const SCANNER_JOIN_ATTEMPT_TTL_MS = 30 * 1000;
 const SCANNER_JOIN_TOKEN_TTL_MS = 5 * 60 * 1000;
 const SCANNER_JOIN_TOKEN_GRACE_MS = 10 * 1000;
+const SCANNER_PAIRING_TTL_MS = 180 * 24 * 60 * 60 * 1000;
+const SCANNER_RECONNECT_REQUEST_TTL_MS = 2 * 60 * 1000;
 const SCANNER_SESSION_ID_PATTERN = /^[a-zA-Z0-9_-]{4,80}$/;
 const SCANNER_JOIN_TOKEN_PATTERN = /^[a-zA-Z0-9_-]{32,160}$/;
 const SCANNER_JOIN_ATTEMPT_ID_PATTERN = /^[a-zA-Z0-9_-]{12,80}$/;
+const SCANNER_PAIRING_ID_PATTERN = /^[a-zA-Z0-9_-]{12,120}$/;
 
 function isScannerSessionId(value: unknown): value is string {
   return typeof value === "string" && SCANNER_SESSION_ID_PATTERN.test(value);
@@ -21,7 +24,12 @@ function isScannerJoinAttemptId(value: unknown): value is string {
   return typeof value === "string" && SCANNER_JOIN_ATTEMPT_ID_PATTERN.test(value);
 }
 
+function isScannerPairingId(value: unknown): value is string {
+  return typeof value === "string" && SCANNER_PAIRING_ID_PATTERN.test(value);
+}
+
 const JOIN_TOKEN_KEY_PREFIX = "volt:scanner:join-token:";
+const PAIRING_KEY_PREFIX = "volt:scanner:pairing:";
 
 type JoinAttemptRecord = {
   id: string;
@@ -50,11 +58,37 @@ type JoinTokenRecord = {
   attempts: JoinAttemptRecord[];
 };
 
+type ReconnectRequestRecord = {
+  id: string;
+  createdAt: number;
+  expiresAt: number;
+  status: "waiting_for_browser" | "join_window_ready" | "expired";
+  joinUrl?: string;
+  joinToken?: string;
+  sessionId?: string;
+  answeredAt?: number;
+};
+
+type PairingRecord = {
+  id: string;
+  secret: string;
+  browserSessionId: string;
+  displayName?: string;
+  phoneDeviceId?: string;
+  phoneLabel?: string;
+  createdAt: number;
+  lastSeenAt: number;
+  expiresAt: number;
+  reconnectRequests: ReconnectRequestRecord[];
+};
+
 const globalState = globalThis as typeof globalThis & {
   __voltScannerJoinTokens?: Map<string, JoinTokenRecord>;
+  __voltScannerPairings?: Map<string, PairingRecord>;
 };
 
 const memoryJoinTokens = (globalState.__voltScannerJoinTokens ??= new Map<string, JoinTokenRecord>());
+const memoryPairings = (globalState.__voltScannerPairings ??= new Map<string, PairingRecord>());
 const redisUrl = process.env.KV_REST_API_URL ?? process.env.UPSTASH_REDIS_REST_URL;
 const redisToken = process.env.KV_REST_API_TOKEN ?? process.env.UPSTASH_REDIS_REST_TOKEN;
 const isVercelProduction = process.env.VERCEL === "1";
@@ -98,6 +132,10 @@ function joinTokenKey(token: string) {
   return `${JOIN_TOKEN_KEY_PREFIX}${token}`;
 }
 
+function pairingKey(pairingId: string) {
+  return `${PAIRING_KEY_PREFIX}${pairingId}`;
+}
+
 function setCors(response: VercelResponse) {
   response.setHeader("Access-Control-Allow-Origin", "*");
   response.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
@@ -110,6 +148,15 @@ function cleanupMemoryJoinTokens() {
   for (const [token, record] of memoryJoinTokens.entries()) {
     if (record.graceExpiresAt < now && record.attempts.every((attempt) => attempt.expiresAt < now)) {
       memoryJoinTokens.delete(token);
+    }
+  }
+}
+
+function cleanupMemoryPairings() {
+  const now = Date.now();
+  for (const [pairingId, record] of memoryPairings.entries()) {
+    if (record.expiresAt < now) {
+      memoryPairings.delete(pairingId);
     }
   }
 }
@@ -137,6 +184,50 @@ async function saveJoinToken(record: JoinTokenRecord) {
 
   cleanupMemoryJoinTokens();
   memoryJoinTokens.set(record.token, record);
+}
+
+async function getPairing(pairingId: string) {
+  if (hasRedisStorage()) {
+    const rawPairing = await redisCommand<string | null>(["GET", pairingKey(pairingId)]);
+    return rawPairing ? (JSON.parse(rawPairing) as PairingRecord) : undefined;
+  }
+
+  cleanupMemoryPairings();
+  return memoryPairings.get(pairingId);
+}
+
+async function savePairing(record: PairingRecord) {
+  const now = Date.now();
+  const requestExpiry = Math.max(0, ...record.reconnectRequests.map((request) => request.expiresAt));
+  const expiresAt = Math.max(record.expiresAt, requestExpiry);
+  const ttlSeconds = Math.max(1, Math.ceil((expiresAt - now) / 1000));
+
+  if (hasRedisStorage()) {
+    await redisCommand<string>(["SET", pairingKey(record.id), JSON.stringify(record), "EX", ttlSeconds]);
+    return;
+  }
+
+  cleanupMemoryPairings();
+  memoryPairings.set(record.id, record);
+}
+
+async function getPairingsForBrowserSession(browserSessionId: string) {
+  if (hasRedisStorage()) {
+    const keys = await redisCommand<string[]>(["KEYS", `${PAIRING_KEY_PREFIX}*`]);
+    const records: PairingRecord[] = [];
+    for (const key of keys ?? []) {
+      const rawPairing = await redisCommand<string | null>(["GET", key]);
+      if (!rawPairing) continue;
+      const pairing = JSON.parse(rawPairing) as PairingRecord;
+      if (pairing.browserSessionId === browserSessionId) {
+        records.push(pairing);
+      }
+    }
+    return records;
+  }
+
+  cleanupMemoryPairings();
+  return [...memoryPairings.values()].filter((pairing) => pairing.browserSessionId === browserSessionId);
 }
 
 function pathParts(request: VercelRequest) {
@@ -184,6 +275,11 @@ function tokenRouteParts(request: VercelRequest) {
   return parts[0] === "join-token" ? parts : [];
 }
 
+function pairingRouteParts(request: VercelRequest) {
+  const parts = pathParts(request);
+  return parts[0] === "pairings" ? parts : [];
+}
+
 function isTokenActiveForNewAttempt(record: JoinTokenRecord, now = Date.now()) {
   return !record.revokedAt && record.expiresAt > now;
 }
@@ -197,6 +293,22 @@ function normalizeJoinAttempt(record: JoinAttemptRecord, now = Date.now()): Join
 
 function normalizeJoinToken(record: JoinTokenRecord, now = Date.now()): JoinTokenRecord {
   return { ...record, attempts: record.attempts.map((attempt) => normalizeJoinAttempt(attempt, now)) };
+}
+
+function normalizeReconnectRequest(record: ReconnectRequestRecord, now = Date.now()): ReconnectRequestRecord {
+  if (record.expiresAt <= now && record.status === "waiting_for_browser") {
+    return { ...record, status: "expired" };
+  }
+  return record;
+}
+
+function normalizePairing(record: PairingRecord, now = Date.now()): PairingRecord {
+  return {
+    ...record,
+    reconnectRequests: record.reconnectRequests
+      .map((request) => normalizeReconnectRequest(request, now))
+      .filter((request) => request.expiresAt > now || request.status === "join_window_ready"),
+  };
 }
 
 function publicToken(record: JoinTokenRecord) {
@@ -225,6 +337,46 @@ function publicAttempt(attempt: JoinAttemptRecord) {
     hasOffer: Boolean(attempt.offer),
     hasAnswer: Boolean(attempt.answer),
   };
+}
+
+function publicReconnectRequest(request: ReconnectRequestRecord) {
+  return {
+    id: request.id,
+    status: request.status,
+    createdAt: iso(request.createdAt),
+    expiresAt: iso(request.expiresAt),
+    joinUrl: request.joinUrl,
+    joinToken: request.joinToken,
+    sessionId: request.sessionId,
+    answeredAt: request.answeredAt ? iso(request.answeredAt) : undefined,
+  };
+}
+
+function publicPendingReconnectRequest(pairing: PairingRecord, request: ReconnectRequestRecord) {
+  return {
+    pairingId: pairing.id,
+    requestId: request.id,
+    browserSessionId: pairing.browserSessionId,
+    displayName: pairing.displayName,
+    phoneDeviceId: pairing.phoneDeviceId,
+    phoneLabel: pairing.phoneLabel,
+    createdAt: iso(request.createdAt),
+    expiresAt: iso(request.expiresAt),
+  };
+}
+
+function pairingSecretFromRequest(request: VercelRequest) {
+  const header = request.headers["x-volt-pairing-secret"];
+  const value = Array.isArray(header) ? header[0] : header;
+  return typeof value === "string" && value ? value : stringFromBody(request.body?.pairingSecret, 240);
+}
+
+function requirePairingSecret(record: PairingRecord, request: VercelRequest, response: VercelResponse) {
+  if (pairingSecretFromRequest(request) !== record.secret) {
+    response.status(403).json({ error: "Pairing secret required" });
+    return false;
+  }
+  return true;
 }
 
 function browserClaimFromRequest(request: VercelRequest) {
@@ -443,6 +595,179 @@ async function handleJoinTokenRoute(request: VercelRequest, response: VercelResp
   return true;
 }
 
+async function handlePairingRoute(request: VercelRequest, response: VercelResponse) {
+  const parts = pairingRouteParts(request);
+  if (parts.length === 0) return false;
+
+  if (request.method === "POST" && parts.length === 1) {
+    const pairingId = stringFromBody(request.body?.pairingId, 120) ?? makeSecretId(18);
+    const pairingSecret = stringFromBody(request.body?.pairingSecret, 240) ?? makeSecretId(32);
+    const browserSessionId = stringFromBody(request.body?.browserSessionId ?? request.body?.sessionId, 120);
+    if (!isScannerPairingId(pairingId)) {
+      response.status(400).json({ error: "Invalid pairing id" });
+      return true;
+    }
+    if (!isScannerJoinToken(pairingSecret)) {
+      response.status(400).json({ error: "Invalid pairing secret" });
+      return true;
+    }
+    if (!isScannerSessionId(browserSessionId)) {
+      response.status(400).json({ error: "Invalid browser session id" });
+      return true;
+    }
+
+    const now = Date.now();
+    const existing = await getPairing(pairingId);
+    if (existing && existing.secret !== pairingSecret) {
+      response.status(409).json({ error: "Pairing already exists" });
+      return true;
+    }
+
+    const record: PairingRecord = {
+      id: pairingId,
+      secret: pairingSecret,
+      browserSessionId,
+      displayName: stringFromBody(request.body?.displayName, 120),
+      phoneDeviceId: stringFromBody(request.body?.phoneDeviceId, 120),
+      phoneLabel: stringFromBody(request.body?.phoneLabel, 120),
+      createdAt: existing?.createdAt ?? now,
+      lastSeenAt: now,
+      expiresAt: now + SCANNER_PAIRING_TTL_MS,
+      reconnectRequests: existing?.reconnectRequests ?? [],
+    };
+    await savePairing(record);
+    response.status(200).json({
+      pairingId: record.id,
+      browserSessionId: record.browserSessionId,
+      displayName: record.displayName,
+      expiresAt: iso(record.expiresAt),
+    });
+    return true;
+  }
+
+  if (request.method === "GET" && parts[1] === "reconnect-requests" && parts.length === 2) {
+    const browserSessionId = stringFromBody(request.query.sessionId, 120);
+    if (!isScannerSessionId(browserSessionId)) {
+      response.status(400).json({ error: "Invalid browser session id" });
+      return true;
+    }
+    const pending: Array<ReturnType<typeof publicPendingReconnectRequest>> = [];
+    const now = Date.now();
+    for (const record of await getPairingsForBrowserSession(browserSessionId)) {
+      const pairing = normalizePairing(record, now);
+      if (pairing.reconnectRequests.length !== record.reconnectRequests.length) {
+        await savePairing(pairing);
+      }
+      for (const reconnectRequest of pairing.reconnectRequests) {
+        if (reconnectRequest.status === "waiting_for_browser") {
+          pending.push(publicPendingReconnectRequest(pairing, reconnectRequest));
+        }
+      }
+    }
+    response.status(200).json({ requests: pending });
+    return true;
+  }
+
+  const pairingId = parts[1];
+  if (!isScannerPairingId(pairingId)) {
+    response.status(400).json({ error: "Invalid pairing id" });
+    return true;
+  }
+
+  const existing = await getPairing(pairingId);
+  if (!existing) {
+    response.status(404).json({ error: "Pairing not found" });
+    return true;
+  }
+  const record = normalizePairing(existing);
+
+  if (request.method === "POST" && parts[2] === "reconnect" && parts.length === 3) {
+    if (!requirePairingSecret(record, request, response)) return true;
+    const now = Date.now();
+    const reconnectRequest: ReconnectRequestRecord = {
+      id: makeSecretId(18),
+      createdAt: now,
+      expiresAt: now + SCANNER_RECONNECT_REQUEST_TTL_MS,
+      status: "waiting_for_browser",
+    };
+    const nextRecord = {
+      ...record,
+      lastSeenAt: now,
+      reconnectRequests: [...record.reconnectRequests, reconnectRequest],
+    };
+    await savePairing(nextRecord);
+    response.status(200).json({
+      pairingId: record.id,
+      browserSessionId: record.browserSessionId,
+      request: publicReconnectRequest(reconnectRequest),
+    });
+    return true;
+  }
+
+  if (parts[2] !== "reconnect" || !isScannerJoinAttemptId(parts[3])) {
+    response.status(404).json({ error: "Not found" });
+    return true;
+  }
+
+  const requestId = parts[3];
+  const reconnectRequest = record.reconnectRequests.find((item) => item.id === requestId);
+  if (!reconnectRequest) {
+    response.status(404).json({ error: "Reconnect request not found" });
+    return true;
+  }
+  const normalizedRequest = normalizeReconnectRequest(reconnectRequest);
+
+  if (request.method === "GET" && parts.length === 4) {
+    if (!requirePairingSecret(record, request, response)) return true;
+    if (normalizedRequest.status === "expired") {
+      await savePairing({
+        ...record,
+        reconnectRequests: record.reconnectRequests.map((item) => (item.id === requestId ? normalizedRequest : item)),
+      });
+    }
+    response.status(200).json({ request: publicReconnectRequest(normalizedRequest) });
+    return true;
+  }
+
+  if (request.method === "POST" && parts[4] === "join-window" && parts.length === 5) {
+    if (!requirePairingSecret(record, request, response)) return true;
+    if (normalizedRequest.status === "expired") {
+      await savePairing({
+        ...record,
+        reconnectRequests: record.reconnectRequests.map((item) => (item.id === requestId ? normalizedRequest : item)),
+      });
+      response.status(410).json({ error: "Reconnect request expired" });
+      return true;
+    }
+    const joinUrl = stringFromBody(request.body?.joinUrl, 1000);
+    const joinToken = stringFromBody(request.body?.joinToken, 240);
+    const sessionId = stringFromBody(request.body?.sessionId, 120) ?? record.browserSessionId;
+    if (!joinUrl || !isScannerJoinToken(joinToken) || !isScannerSessionId(sessionId)) {
+      response.status(400).json({ error: "Invalid join window" });
+      return true;
+    }
+    const now = Date.now();
+    const nextRequest: ReconnectRequestRecord = {
+      ...normalizedRequest,
+      status: "join_window_ready",
+      joinUrl,
+      joinToken,
+      sessionId,
+      answeredAt: now,
+    };
+    await savePairing({
+      ...record,
+      lastSeenAt: now,
+      reconnectRequests: record.reconnectRequests.map((item) => (item.id === requestId ? nextRequest : item)),
+    });
+    response.status(200).json({ success: true, request: publicReconnectRequest(nextRequest) });
+    return true;
+  }
+
+  response.status(404).json({ error: "Not found" });
+  return true;
+}
+
 export default async function handler(request: VercelRequest, response: VercelResponse) {
   setCors(response);
 
@@ -455,6 +780,10 @@ export default async function handler(request: VercelRequest, response: VercelRe
     ensureSignalStorage();
 
     if (await handleJoinTokenRoute(request, response)) {
+      return;
+    }
+
+    if (await handlePairingRoute(request, response)) {
       return;
     }
 

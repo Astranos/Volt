@@ -45,6 +45,13 @@ enum ScannerProtocol {
             let deviceLabel: String?
         }
 
+        struct Pairing: Decodable, Equatable {
+            let pairingId: String
+            let pairingSecret: String
+            let browserSessionId: String
+            let displayName: String?
+        }
+
         struct CursorTarget: Decodable, Equatable {
             let tabTitle: String?
             let url: String?
@@ -54,6 +61,7 @@ enum ScannerProtocol {
 
         let peer: Peer?
         let activeMode: CaptureMode?
+        let pairing: Pairing?
         let cursorTarget: CursorTarget?
     }
 

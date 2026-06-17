@@ -1,12 +1,13 @@
 import Observation
 import CoreImage
 import CoreImage.CIFilterBuiltins
+import Security
 import UIKit
 
 @MainActor
 @Observable
 final class ScannerStore {
-    private static let pairedSessionsStorageKey = "volt.pairedScannerSessions.v1"
+    private static let pairedSessionsStorageKey = "volt.pairedScannerSessions.v2"
 
     private let ocrCaptureMaxDimension: CGFloat = 1800
     private let photoLongEdge: CGFloat = 2200
@@ -42,6 +43,7 @@ final class ScannerStore {
         }
         return connection
     }()
+    @ObservationIgnored private let signaling = ScannerSignalingClient()
     private var lastBarcodeValue: String?
     private var lastBarcodeSentAt: Date?
     private var photoBatch: (id: String, expiresAt: Date)?
@@ -254,25 +256,15 @@ final class ScannerStore {
     }
 
     func reconnect(to pairedSession: PairedScannerSession) {
-        pruneExpiredPairedSessions()
-        guard !pairedSession.isExpired() else {
-            removePairedSession(pairedSession)
-            statusText = "Session expired"
-            targetHint = "Scan the Chrome QR again to create a new pairing."
-            return
-        }
-
-        let session = pairedSession.pairingSession
-        pairingSession = session
         peerTarget = ScannerPeerTarget(
-            chromeSessionId: pairedSession.sessionId,
+            chromeSessionId: pairedSession.browserSessionId,
             sessionLabel: pairedSession.displayName,
             tabTitle: pairedSession.displayName,
             tabURL: nil,
             cursorLabel: nil,
             browser: "Chrome"
         )
-        Task { await pair(with: session) }
+        Task { await reconnectWithSavedPairing(pairedSession) }
     }
 
     func reconnectToMostRecentPairedSessionIfNeeded() {
@@ -289,7 +281,6 @@ final class ScannerStore {
             return
         }
 
-        pruneExpiredPairedSessions(now: now)
         guard let latestSession = pairedSessions.first else { return }
         lastAutomaticReconnectAt = now
         reconnect(to: latestSession)
@@ -297,14 +288,12 @@ final class ScannerStore {
 
     func removePairedSession(_ pairedSession: PairedScannerSession) {
         pairedSessions.removeAll { $0.id == pairedSession.id }
+        PairingSecretStore.delete(pairingId: pairedSession.id)
         persistPairedSessions()
     }
 
     func pruneExpiredPairedSessions(now: Date = .now) {
-        let activeSessions = pairedSessions.filter { !$0.isExpired(at: now) }
-        guard activeSessions.count != pairedSessions.count else { return }
-        pairedSessions = activeSessions
-        persistPairedSessions()
+        _ = now
     }
 
     func removeResult(id: ScanResult.ID) {
@@ -328,9 +317,31 @@ final class ScannerStore {
             connection.close()
             try await connection.pair(with: session)
         } catch {
-            if case ScannerPairingError.joinTokenExpired = error, let token = session.token {
-                removePairedSession(withToken: token)
-            }
+            applyConnectionStatus(.error(error.localizedDescription))
+        }
+    }
+
+    private func reconnectWithSavedPairing(_ pairedSession: PairedScannerSession) async {
+        guard let secret = PairingSecretStore.secret(pairingId: pairedSession.id) else {
+            removePairedSession(pairedSession)
+            applyConnectionStatus(.error("Pairing secret missing. Scan the Chrome QR again."))
+            return
+        }
+
+        do {
+            applyConnectionStatus(.pairing)
+            let joinWindow = try await signaling.requestReconnect(pairingId: pairedSession.id, pairingSecret: secret)
+            let session = PairingSession(
+                token: joinWindow.token,
+                sessionId: joinWindow.sessionId ?? pairedSession.browserSessionId,
+                attemptId: nil,
+                offer: nil,
+                answerURL: nil,
+                sourceURL: joinWindow.sourceURL
+            )
+            pairingSession = session
+            await pair(with: session)
+        } catch {
             applyConnectionStatus(.error(error.localizedDescription))
         }
     }
@@ -367,11 +378,12 @@ final class ScannerStore {
         if let activeMode = message.activeMode {
             self.activeMode = activeMode
         }
-        let chromeSessionId = message.peer?.chromeSessionId ?? pairingSession?.sessionId
+        let chromeSessionId = message.peer?.chromeSessionId ?? message.pairing?.browserSessionId ?? pairingSession?.sessionId
         let sessionLabel = firstNonEmpty(
             message.peer?.deviceLabel,
+            message.pairing?.displayName,
             peerTarget?.sessionLabel,
-            savedSessionLabel(sessionId: chromeSessionId, token: pairingSession?.token)
+            savedSessionLabel(sessionId: chromeSessionId)
         )
         peerTarget = ScannerPeerTarget(
             chromeSessionId: chromeSessionId,
@@ -381,13 +393,13 @@ final class ScannerStore {
             cursorLabel: message.cursorTarget?.label,
             browser: "Chrome"
         )
-        saveCurrentPairingSession()
+        saveCurrentPairingSession(message: message)
         applyConnectionStatus(.connected)
     }
 
-    private func savedSessionLabel(sessionId: String?, token: String?) -> String? {
+    private func savedSessionLabel(sessionId: String?) -> String? {
         pairedSessions.first { pairedSession in
-            pairedSession.sessionId == sessionId || pairedSession.token == token
+            pairedSession.browserSessionId == sessionId
         }?.displayName
     }
 
@@ -406,11 +418,7 @@ final class ScannerStore {
             return
         }
         pairedSessions = decoded
-            .filter { !$0.isExpired() }
             .sorted { $0.lastConnectedAt > $1.lastConnectedAt }
-        if pairedSessions.count != decoded.count {
-            persistPairedSessions()
-        }
     }
 
     private func persistPairedSessions() {
@@ -418,26 +426,23 @@ final class ScannerStore {
         UserDefaults.standard.set(data, forKey: Self.pairedSessionsStorageKey)
     }
 
-    private func removePairedSession(withToken token: String) {
-        pairedSessions.removeAll { $0.token == token }
-        persistPairedSessions()
-    }
-
-    private func saveCurrentPairingSession() {
-        guard let pairingSession, let token = pairingSession.token else { return }
-        let displayName = peerTarget?.sessionLabel ?? peerTarget?.tabTitle ?? pairingSession.sessionId ?? "Chrome session"
+    private func saveCurrentPairingSession(message: ScannerProtocol.SessionReady) {
+        guard let pairing = message.pairing else { return }
+        let displayName = peerTarget?.sessionLabel ?? peerTarget?.tabTitle ?? pairing.displayName ?? pairing.browserSessionId
+        PairingSecretStore.save(pairing.pairingSecret, pairingId: pairing.pairingId)
         let pairedSession = PairedScannerSession(
-            id: pairingSession.sessionId ?? token,
-            token: token,
-            sessionId: pairingSession.sessionId,
-            sourceURL: pairingSession.sourceURL,
+            id: pairing.pairingId,
+            browserSessionId: pairing.browserSessionId,
             displayName: displayName,
+            pairedAt: pairedSessions.first { $0.id == pairing.pairingId }?.pairedAt ?? .now,
             lastConnectedAt: .now
         )
-        pairedSessions.removeAll { $0.id == pairedSession.id || $0.token == token }
+        pairedSessions.removeAll { $0.id == pairedSession.id || $0.browserSessionId == pairedSession.browserSessionId }
         pairedSessions.insert(pairedSession, at: 0)
-        pruneExpiredPairedSessions()
         persistPairedSessions()
+        Task {
+            await signaling.registerPairing(pairing, phoneDeviceId: contributorId)
+        }
     }
 
     private func handlePairingValue(_ value: String) -> Bool {
@@ -656,5 +661,48 @@ private extension UIImage {
         }
 
         return UIImage(cgImage: cgImage, scale: scale, orientation: .up)
+    }
+}
+
+private enum PairingSecretStore {
+    private static let service = "com.volt.scanner.pairing"
+
+    static func save(_ secret: String, pairingId: String) {
+        guard let data = secret.data(using: .utf8) else { return }
+        delete(pairingId: pairingId)
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: pairingId,
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+        ]
+        SecItemAdd(query as CFDictionary, nil)
+    }
+
+    static func secret(pairingId: String) -> String? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: pairingId,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+        ]
+        var item: CFTypeRef?
+        guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
+              let data = item as? Data
+        else {
+            return nil
+        }
+        return String(data: data, encoding: .utf8)
+    }
+
+    static func delete(pairingId: String) {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: pairingId,
+        ]
+        SecItemDelete(query as CFDictionary)
     }
 }

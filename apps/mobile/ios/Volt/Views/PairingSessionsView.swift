@@ -308,12 +308,10 @@ private struct PairedSessionRow: View {
                 Text(session.lastConnectedAt, format: .relative(presentation: .named))
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                if let sessionId = session.sessionId {
-                    Text(sessionId)
-                        .font(.caption2.monospaced())
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
+                Text(session.browserSessionId)
+                    .font(.caption2.monospaced())
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
 
             Spacer()
