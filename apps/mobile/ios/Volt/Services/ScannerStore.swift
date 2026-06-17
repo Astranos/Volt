@@ -529,7 +529,7 @@ final class ScannerStore {
         targetHint = "Open \(pairedSession.displayName) in Chrome to reconnect, or tap the session button to try again."
     }
 
-    private func applyConnectionStatus(_ status: ScannerConnectionStatus) {
+    private func applyConnectionStatus(_ status: ScannerConnectionStatus, allowsConnectedFeedback: Bool = true) {
         connectionStatus = status
         switch status {
         case .idle:
@@ -552,7 +552,9 @@ final class ScannerStore {
             preservesReconnectCancelOnNextDisconnect = false
             statusText = "Connected to Chrome"
             targetHint = peerTarget?.displayText ?? "Ready to send captures."
-            pairingNotificationFeedback.notificationOccurred(.success)
+            if allowsConnectedFeedback {
+                pairingNotificationFeedback.notificationOccurred(.success)
+            }
         case .disconnected:
             if preservesReconnectCancelOnNextDisconnect {
                 preservesReconnectCancelOnNextDisconnect = false
@@ -579,6 +581,7 @@ final class ScannerStore {
         if let activeMode = message.activeMode {
             self.activeMode = activeMode
         }
+        let wasConnected = connectionStatus.isConnected
         let chromeSessionId = message.peer?.chromeSessionId ?? message.pairing?.browserSessionId ?? pairingSession?.sessionId
         let sessionLabel = firstNonEmpty(
             message.peer?.deviceLabel,
@@ -595,9 +598,18 @@ final class ScannerStore {
             cursorLabel: message.cursorTarget?.label,
             browser: "Chrome"
         )
+        let didChangeChromeInputTarget: Bool
+        if let previousPeerTarget {
+            didChangeChromeInputTarget = wasConnected && dictationTargetKey(for: previousPeerTarget) != dictationTargetKey(for: nextPeerTarget)
+        } else {
+            didChangeChromeInputTarget = false
+        }
         peerTarget = nextPeerTarget
         saveCurrentPairingSession(message: message)
-        applyConnectionStatus(.connected)
+        applyConnectionStatus(
+            .connected,
+            allowsConnectedFeedback: !didChangeChromeInputTarget || selectedSection == .dictation
+        )
         resetDictationForTargetChangeIfNeeded(from: previousPeerTarget, to: nextPeerTarget)
     }
 

@@ -604,12 +604,18 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
   }, [applyScannerState, primeCursorTarget, refreshResults]);
 
   useEffect(() => {
-    const onActivated = () => void primeCursorTarget();
+    const prepareActiveTab = () => {
+      void primeCursorTarget();
+      if (photos.length > 0) void prepareActiveTabForPhotoDrop();
+    };
+    const onActivated = () => prepareActiveTab();
     const onUpdated = (_tabId: number, changeInfo: any, tab: any) => {
-      if (changeInfo.status === "complete" && tab.active) void primeCursorTarget();
+      if (tab.active && (changeInfo.status === "complete" || changeInfo.url)) {
+        prepareActiveTab();
+      }
     };
     const onFocusChanged = (windowId: number) => {
-      if (windowId !== chrome.windows.WINDOW_ID_NONE) void primeCursorTarget();
+      if (windowId !== chrome.windows.WINDOW_ID_NONE) prepareActiveTab();
     };
     chrome.tabs.onActivated.addListener(onActivated);
     chrome.tabs.onUpdated.addListener(onUpdated);
@@ -619,7 +625,7 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
       chrome.tabs.onUpdated.removeListener(onUpdated);
       chrome.windows.onFocusChanged.removeListener(onFocusChanged);
     };
-  }, [primeCursorTarget]);
+  }, [photos.length, prepareActiveTabForPhotoDrop, primeCursorTarget]);
 
   useEffect(() => {
     const handleMessage = (message: any) => {

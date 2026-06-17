@@ -130,3 +130,11 @@ test("native dictation keeps listening briefly after user stop actions", () => {
   assert.match(dictationViewSwiftSource, /private func stopDictation\(\) \{\s*store\.finishDictationAfterGrace\(\)\s*\}/);
   assert.match(dictationViewSwiftSource, /holdEndAction: stopDictation/);
 });
+
+test("native Chrome input-change haptics are gated to the Dictate tab", () => {
+  assert.match(scannerStoreSwiftSource, /private func applyConnectionStatus\(_ status: ScannerConnectionStatus, allowsConnectedFeedback: Bool = true\)/);
+  assert.match(scannerStoreSwiftSource, /if allowsConnectedFeedback \{\s*pairingNotificationFeedback\.notificationOccurred\(\.success\)\s*\}/);
+  assert.match(scannerStoreSwiftSource, /let didChangeChromeInputTarget: Bool/);
+  assert.match(scannerStoreSwiftSource, /wasConnected && dictationTargetKey\(for: previousPeerTarget\) != dictationTargetKey\(for: nextPeerTarget\)/);
+  assert.match(scannerStoreSwiftSource, /allowsConnectedFeedback: !didChangeChromeInputTarget \|\| selectedSection == \.dictation/);
+});
