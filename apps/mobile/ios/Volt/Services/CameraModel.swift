@@ -23,8 +23,12 @@ final class CameraModel: NSObject {
     var errorMessage: String?
     var torchEnabled = false
     var zoomFactor: CGFloat = 1
+    var displayZoomFactor: CGFloat = 1
+    var zoomDisplayLabel = "1x"
     var minZoomFactor: CGFloat = 1
     var maxZoomFactor: CGFloat = 1
+    var minDisplayZoomFactor: CGFloat = 1
+    var maxDisplayZoomFactor: CGFloat = 1
 
     override init() {
         super.init()
@@ -80,7 +84,7 @@ final class CameraModel: NSObject {
         session.sessionPreset = .photo
 
         guard
-            let camera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back),
+            let camera = Self.bestBackCamera(),
             let input = try? AVCaptureDeviceInput(device: camera),
             session.canAddInput(input)
         else {
@@ -91,9 +95,7 @@ final class CameraModel: NSObject {
 
         session.addInput(input)
         videoDevice = camera
-        minZoomFactor = camera.minAvailableVideoZoomFactor
-        maxZoomFactor = min(camera.maxAvailableVideoZoomFactor, 6)
-        zoomFactor = max(camera.minAvailableVideoZoomFactor, min(camera.videoZoomFactor, maxZoomFactor))
+        updateZoomState(for: camera, rawZoomFactor: camera.videoZoomFactor)
         if session.canAddOutput(metadataOutput) {
             session.addOutput(metadataOutput)
             metadataOutput.setMetadataObjectsDelegate(self, queue: metadataQueue)
@@ -106,6 +108,19 @@ final class CameraModel: NSObject {
         }
 
         session.commitConfiguration()
+    }
+
+    private static func bestBackCamera() -> AVCaptureDevice? {
+        let preferredDeviceTypes: [AVCaptureDevice.DeviceType] = [
+            .builtInTripleCamera,
+            .builtInDualWideCamera,
+            .builtInDualCamera,
+            .builtInWideAngleCamera
+        ]
+
+        return preferredDeviceTypes.lazy.compactMap {
+            AVCaptureDevice.default($0, for: .video, position: .back)
+        }.first
     }
 
     func setTorchEnabled(_ enabled: Bool) {
@@ -132,14 +147,14 @@ final class CameraModel: NSObject {
 
     func setZoomFactor(_ factor: CGFloat) {
         guard let videoDevice else { return }
-        let clampedFactor = max(minZoomFactor, min(maxZoomFactor, factor))
+        let clampedFactor = clampedRawZoomFactor(factor, for: videoDevice)
         sessionQueue.async { [weak self] in
             do {
                 try videoDevice.lockForConfiguration()
                 videoDevice.videoZoomFactor = clampedFactor
                 videoDevice.unlockForConfiguration()
                 Task { @MainActor in
-                    self?.zoomFactor = clampedFactor
+                    self?.updateZoomState(for: videoDevice, rawZoomFactor: clampedFactor)
                 }
             } catch {
                 Task { @MainActor in
@@ -150,7 +165,12 @@ final class CameraModel: NSObject {
     }
 
     func adjustZoom(by delta: CGFloat) {
-        setZoomFactor(zoomFactor + delta)
+        setDisplayZoomFactor(displayZoomFactor + delta)
+    }
+
+    private func setDisplayZoomFactor(_ factor: CGFloat) {
+        guard let videoDevice else { return }
+        setZoomFactor(factor / displayZoomFactorMultiplier(for: videoDevice))
     }
 
     func scaleZoom(by scale: CGFloat) {
@@ -158,17 +178,12 @@ final class CameraModel: NSObject {
         sessionQueue.async { [weak self] in
             do {
                 try videoDevice.lockForConfiguration()
-                let maxZoomFactor = min(videoDevice.maxAvailableVideoZoomFactor, 6)
-                let clampedFactor = max(
-                    videoDevice.minAvailableVideoZoomFactor,
-                    min(maxZoomFactor, videoDevice.videoZoomFactor * scale)
-                )
+                let clampedFactor = self?.clampedRawZoomFactor(videoDevice.videoZoomFactor * scale, for: videoDevice)
+                    ?? videoDevice.videoZoomFactor
                 videoDevice.videoZoomFactor = clampedFactor
                 videoDevice.unlockForConfiguration()
                 Task { @MainActor in
-                    self?.minZoomFactor = videoDevice.minAvailableVideoZoomFactor
-                    self?.maxZoomFactor = maxZoomFactor
-                    self?.zoomFactor = clampedFactor
+                    self?.updateZoomState(for: videoDevice, rawZoomFactor: clampedFactor)
                 }
             } catch {
                 Task { @MainActor in
@@ -176,6 +191,33 @@ final class CameraModel: NSObject {
                 }
             }
         }
+    }
+
+    nonisolated private func clampedRawZoomFactor(_ factor: CGFloat, for device: AVCaptureDevice) -> CGFloat {
+        let maxDisplayZoomFactor: CGFloat = 6
+        let displayMultiplier = displayZoomFactorMultiplier(for: device)
+        let displayLimitedMaxZoomFactor = maxDisplayZoomFactor / displayMultiplier
+        let maxZoomFactor = min(device.maxAvailableVideoZoomFactor, displayLimitedMaxZoomFactor)
+        return max(device.minAvailableVideoZoomFactor, min(maxZoomFactor, factor))
+    }
+
+    nonisolated private func displayZoomFactorMultiplier(for device: AVCaptureDevice) -> CGFloat {
+        max(device.displayVideoZoomFactorMultiplier, .leastNonzeroMagnitude)
+    }
+
+    private func updateZoomState(for device: AVCaptureDevice, rawZoomFactor: CGFloat) {
+        let clampedFactor = clampedRawZoomFactor(rawZoomFactor, for: device)
+        let displayMultiplier = displayZoomFactorMultiplier(for: device)
+        let displayFactor = clampedFactor * displayMultiplier
+
+        minZoomFactor = device.minAvailableVideoZoomFactor
+        maxZoomFactor = clampedRawZoomFactor(device.maxAvailableVideoZoomFactor, for: device)
+        zoomFactor = clampedFactor
+        minDisplayZoomFactor = minZoomFactor * displayMultiplier
+        maxDisplayZoomFactor = maxZoomFactor * displayMultiplier
+        displayZoomFactor = displayFactor
+        let roundedDisplayFactor = (Double(displayFactor) * 10).rounded() / 10
+        zoomDisplayLabel = "\(roundedDisplayFactor.formatted(.number.precision(.fractionLength(0...1))))x"
     }
 
     func focus(at point: CGPoint) {

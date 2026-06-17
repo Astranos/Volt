@@ -192,7 +192,7 @@ struct CaptureSessionView: View {
                 CameraSessionControls(
                     activeMode: $store.activeMode,
                     torchEnabled: store.camera.torchEnabled,
-                    zoomLabel: String(format: "%.1fx", Double(store.camera.zoomFactor)),
+                    zoomLabel: store.camera.zoomDisplayLabel,
                     gridVisible: gridVisible,
                     isRecognizingText: store.isRecognizingText,
                     onToggleTorch: {
