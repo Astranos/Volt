@@ -90,15 +90,19 @@ final class ScannerStore {
         sendCaptureResult(result, insertIntoCursor: true)
     }
 
-    func pairScannedBarcodeIfNeeded() {
-        guard let value = camera.lastBarcode, !value.isEmpty else { return }
-        guard lastPairingCandidateValue != value else { return }
+    @discardableResult
+    func pairScannedBarcodeIfNeeded() -> Bool {
+        guard let value = camera.lastBarcode, !value.isEmpty else { return false }
+        guard lastPairingCandidateValue != value else { return false }
         lastPairingCandidateValue = value
         pairingImpactFeedback.impactOccurred(intensity: 0.72)
-        if !handlePairingValue(value) {
-            statusText = isDetectedQRCode ? "QR code found" : "Barcode found"
-            targetHint = "That code is not a Chrome scanner pairing QR."
+        if handlePairingValue(value) {
+            return true
         }
+
+        statusText = isDetectedQRCode ? "QR code found" : "Barcode found"
+        targetHint = "That code is not a Chrome scanner pairing QR."
+        return false
     }
 
     func capture() async {
@@ -336,6 +340,13 @@ final class ScannerStore {
 
         do {
             applyConnectionStatus(.pairing)
+            try await signaling.registerPairing(
+                pairingId: pairedSession.id,
+                pairingSecret: secret,
+                browserSessionId: pairedSession.browserSessionId,
+                displayName: pairedSession.displayName,
+                phoneDeviceId: contributorId
+            )
             let joinWindow = try await signaling.requestReconnect(pairingId: pairedSession.id, pairingSecret: secret)
             let session = PairingSession(
                 token: joinWindow.token,
@@ -457,7 +468,7 @@ final class ScannerStore {
         pairedSessions.insert(pairedSession, at: 0)
         persistPairedSessions()
         Task {
-            await signaling.registerPairing(pairing, phoneDeviceId: contributorId)
+            try? await signaling.registerPairing(pairing, phoneDeviceId: contributorId)
         }
     }
 

@@ -6,6 +6,14 @@ const scannerStateSource = readFileSync(
   new URL("./scanner-state.tsx", import.meta.url),
   "utf8"
 );
+const scannerStoreSwiftSource = readFileSync(
+  new URL("../ios/Volt/Services/ScannerStore.swift", import.meta.url),
+  "utf8"
+);
+const scannerSignalingSwiftSource = readFileSync(
+  new URL("../ios/Volt/Services/ScannerSignalingClient.swift", import.meta.url),
+  "utf8"
+);
 
 test("mobile waits for Chrome session_ready before showing connected", () => {
   const attachDataChannelStart = scannerStateSource.indexOf("const attachDataChannel = useCallback");
@@ -46,4 +54,18 @@ test("mobile photo delivery stays on WebRTC retry queue primitives", () => {
   assert.match(scannerStateSource, /photo_received/);
   assert.match(scannerStateSource, /markRetryableAfterDisconnect/);
   assert.doesNotMatch(scannerStateSource, /uploadPhotoObjectTransfer/);
+});
+
+test("native saved-session reconnect re-registers durable pairing before requesting reconnect", () => {
+  const reconnectStart = scannerStoreSwiftSource.indexOf("private func reconnectWithSavedPairing");
+  const requestReconnectStart = scannerStoreSwiftSource.indexOf("let joinWindow = try await signaling.requestReconnect", reconnectStart);
+  const registerStart = scannerStoreSwiftSource.indexOf("try await signaling.registerPairing", reconnectStart);
+
+  assert.ok(reconnectStart > -1);
+  assert.ok(registerStart > reconnectStart);
+  assert.ok(requestReconnectStart > registerStart);
+  assert.match(scannerStoreSwiftSource, /browserSessionId: pairedSession\.browserSessionId/);
+  assert.match(scannerStoreSwiftSource, /pairingSecret: secret/);
+  assert.match(scannerSignalingSwiftSource, /func registerPairing\(\n\s+pairingId: String,/);
+  assert.match(scannerSignalingSwiftSource, /guard \(response as\? HTTPURLResponse\)\?\.statusCode == 200 else/);
 });

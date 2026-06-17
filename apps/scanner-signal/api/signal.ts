@@ -139,7 +139,7 @@ function pairingKey(pairingId: string) {
 function setCors(response: VercelResponse) {
   response.setHeader("Access-Control-Allow-Origin", "*");
   response.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  response.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Volt-Browser-Claim");
+  response.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Volt-Browser-Claim, X-Volt-Pairing-Secret");
   response.setHeader("Cache-Control", "no-store");
 }
 

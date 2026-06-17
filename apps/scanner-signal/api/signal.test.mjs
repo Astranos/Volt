@@ -84,6 +84,21 @@ test("signal rejects legacy HTTPS result and photo object transfer endpoints", a
   }
 });
 
+test("signal CORS allows reconnect pairing secret header", async () => {
+  const response = makeResponse();
+
+  await signalHandler(
+    makeRequest({
+      method: "OPTIONS",
+      path: "pairings/pairing_test_12345/reconnect/request_12345",
+    }),
+    response
+  );
+
+  assert.equal(response.statusCode, 204);
+  assert.match(response.headers["access-control-allow-headers"], /X-Volt-Pairing-Secret/);
+});
+
 test("signal join token supports multiple WebRTC attempts with offer and answer polling", async () => {
   const createResponse = makeResponse();
   await signalHandler(

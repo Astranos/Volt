@@ -138,7 +138,9 @@ struct PairingScanSessionView: View {
             }
         }
         .onChange(of: store.camera.lastBarcode) { _, _ in
-            store.pairScannedBarcodeIfNeeded()
+            if store.pairScannedBarcodeIfNeeded() {
+                isPresented = false
+            }
         }
         .onChange(of: store.connectionStatus) { _, newValue in
             if newValue.isConnected {

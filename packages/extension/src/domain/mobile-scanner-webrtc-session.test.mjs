@@ -87,6 +87,13 @@ test("extension forwards current Chrome input target to connected mobile peers",
   assert.match(offscreenSource, /scannerOffscreenUpdateTarget/);
 });
 
+test("extension hydrates persisted identity before polling reconnect requests", () => {
+  assert.match(sessionSource, /private identityReady: Promise<void>/);
+  assert.match(sessionSource, /this\.identityReady = this\.refreshExtensionIdentity\(\)\.then/);
+  assert.match(sessionSource, /private async pollReconnectRequests\(\) \{\n\s+await this\.identityReady;/);
+  assert.match(sessionSource, /const response = await fetch\(`\$\{SCANNER_SIGNAL_URL\}\/pairings\/reconnect-requests\?sessionId=\$\{encodeURIComponent\(sessionId\)\}`\)/);
+});
+
 test("offscreen and background route global join-window lifecycle separately from peer disconnect", () => {
   assert.match(offscreenSource, /new MobileScannerSession/);
   assert.match(offscreenSource, /scannerOffscreenCloseJoinWindow/);

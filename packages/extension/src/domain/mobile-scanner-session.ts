@@ -362,6 +362,7 @@ export class MobileScannerSession {
   private peerPairings = new Map<string, DurablePairingCredential>();
   private pendingPhotos = new Map<string, PendingPhoto>();
   private reconnectPoll: SessionTimer | null = null;
+  private identityReady: Promise<void>;
   private seenReconnectRequests = new Set<string>();
   private seenJoinAttempts = new Set<string>();
   private seenControlMessages = new Set<string>();
@@ -380,6 +381,12 @@ export class MobileScannerSession {
       target: null,
       extensionIdentity: null,
     };
+    this.identityReady = this.refreshExtensionIdentity().then(
+      () => {},
+      (error) => {
+        this.events.log?.("Failed to load scanner extension identity", error);
+      },
+    );
     this.scheduleReconnectPoll(RECONNECT_POLL_INTERVAL_MS);
   }
 
@@ -644,6 +651,7 @@ export class MobileScannerSession {
   }
 
   private async pollReconnectRequests() {
+    await this.identityReady;
     const sessionId = this.state.sessionId;
     if (!isScannerSessionId(sessionId)) return;
     const pairings = await loadDurablePairings();

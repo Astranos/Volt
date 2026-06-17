@@ -8,20 +8,39 @@ struct ScannerSignalingClient {
         let sourceURL: URL
     }
 
-    func registerPairing(_ pairing: ScannerProtocol.SessionReady.Pairing, phoneDeviceId: String) async {
+    func registerPairing(_ pairing: ScannerProtocol.SessionReady.Pairing, phoneDeviceId: String) async throws {
+        try await registerPairing(
+            pairingId: pairing.pairingId,
+            pairingSecret: pairing.pairingSecret,
+            browserSessionId: pairing.browserSessionId,
+            displayName: pairing.displayName ?? "Chrome session",
+            phoneDeviceId: phoneDeviceId
+        )
+    }
+
+    func registerPairing(
+        pairingId: String,
+        pairingSecret: String,
+        browserSessionId: String,
+        displayName: String,
+        phoneDeviceId: String
+    ) async throws {
         let phoneLabel = await MainActor.run { UIDevice.current.name }
         var request = URLRequest(url: ScannerProtocol.signalURL.appending(path: "pairings"))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try? JSONSerialization.data(withJSONObject: [
-            "pairingId": pairing.pairingId,
-            "pairingSecret": pairing.pairingSecret,
-            "browserSessionId": pairing.browserSessionId,
-            "displayName": pairing.displayName ?? "Chrome session",
+            "pairingId": pairingId,
+            "pairingSecret": pairingSecret,
+            "browserSessionId": browserSessionId,
+            "displayName": displayName,
             "phoneDeviceId": phoneDeviceId,
             "phoneLabel": phoneLabel,
         ])
-        _ = try? await URLSession.shared.data(for: request)
+        let (_, response) = try await URLSession.shared.data(for: request)
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else {
+            throw ScannerPairingError.requestFailed
+        }
     }
 
     func requestReconnect(pairingId: String, pairingSecret: String) async throws -> ReconnectJoinWindow {
