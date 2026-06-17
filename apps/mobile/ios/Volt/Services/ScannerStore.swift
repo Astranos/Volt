@@ -11,6 +11,7 @@ final class ScannerStore {
 
     private let ocrCaptureMaxDimension: CGFloat = 1800
     private let photoLongEdge: CGFloat = 2200
+    private let dictationRequestLimit: Duration = .seconds(55)
 
     var activeMode: CaptureMode = .ocr
     var pairingSession: PairingSession?
@@ -33,6 +34,9 @@ final class ScannerStore {
 
     init() {
         loadPairedSessions()
+        dictation.onTranscriptChange = { [weak self] text in
+            self?.handleDictationTranscriptChange(text)
+        }
     }
 
     @ObservationIgnored private lazy var connection: ScannerWebRTCConnection = {
@@ -50,10 +54,16 @@ final class ScannerStore {
     private var lastBarcodeSentAt: Date?
     private var photoBatch: (id: String, expiresAt: Date)?
     private var dictationSessionId: String?
+    private var lastDictationPartialText = ""
+    private var dictationStartToken: UUID?
+    private var shouldStopDictationAfterStart = false
+    @ObservationIgnored private var dictationLimitTask: Task<Void, Never>?
     private var lastAutomaticReconnectAt: Date?
     private var lastPairingCandidateValue: String?
     @ObservationIgnored private let pairingImpactFeedback = UIImpactFeedbackGenerator(style: .medium)
     @ObservationIgnored private let pairingNotificationFeedback = UINotificationFeedbackGenerator()
+    @ObservationIgnored private let dictationImpactFeedback = UIImpactFeedbackGenerator(style: .light)
+    @ObservationIgnored private let dictationNotificationFeedback = UINotificationFeedbackGenerator()
 
     func handleIncomingURL(_ url: URL) {
         let parsed = PairingURLParser.parse(url)
@@ -232,15 +242,47 @@ final class ScannerStore {
         await capture()
     }
 
+    func prepareDictation() async {
+        _ = await dictation.requestAccess()
+    }
+
     func startDictation() async {
         guard connectionStatus.isConnected else { return }
+        let startToken = UUID()
+        dictationStartToken = startToken
+        shouldStopDictationAfterStart = false
         dictation.clearTranscript()
         beginDictationSession()
         await dictation.start()
+        guard dictationStartToken == startToken else { return }
+        if dictation.isRecording {
+            dictationNotificationFeedback.notificationOccurred(.success)
+            scheduleDictationRequestLimit(for: startToken)
+            if shouldStopDictationAfterStart {
+                finishDictation()
+            }
+        } else {
+            cancelDictationRequestLimit()
+            sendDictation(nil, phase: "stopped")
+            dictationSessionId = nil
+            lastDictationPartialText = ""
+            dictationNotificationFeedback.notificationOccurred(.error)
+        }
     }
 
     func finishDictation() {
+        guard dictation.isRecording else {
+            shouldStopDictationAfterStart = true
+            return
+        }
+        dictationStartToken = nil
+        shouldStopDictationAfterStart = false
+        cancelDictationRequestLimit()
+        let wasRecording = dictation.isRecording
         dictation.stop()
+        if wasRecording {
+            dictationImpactFeedback.impactOccurred(intensity: 0.7)
+        }
         commitDictation()
     }
 
@@ -253,11 +295,13 @@ final class ScannerStore {
         }
         sendDictation(nil, phase: "stopped")
         dictationSessionId = nil
+        lastDictationPartialText = ""
     }
 
     func beginDictationSession() {
         dictation.clearTranscript()
         dictationSessionId = ScannerProtocol.makeMessageId("dictation")
+        lastDictationPartialText = ""
         sendDictation(nil, phase: "started")
     }
 
@@ -435,6 +479,32 @@ final class ScannerStore {
             guard let value else { return false }
             return !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         } ?? nil
+    }
+
+    private func handleDictationTranscriptChange(_ text: String) {
+        let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty, text != lastDictationPartialText, dictationSessionId != nil else { return }
+        lastDictationPartialText = text
+        sendDictation(text, phase: "partial")
+    }
+
+    private func scheduleDictationRequestLimit(for token: UUID) {
+        cancelDictationRequestLimit()
+        let limit = dictationRequestLimit
+        dictationLimitTask = Task { [weak self] in
+            try? await Task.sleep(for: limit)
+            await MainActor.run {
+                guard let self, self.dictationStartToken == token, self.dictation.isRecording else { return }
+                self.statusText = "Dictation stopped"
+                self.targetHint = "Start again to continue dictating."
+                self.finishDictation()
+            }
+        }
+    }
+
+    private func cancelDictationRequestLimit() {
+        dictationLimitTask?.cancel()
+        dictationLimitTask = nil
     }
 
     private func loadPairedSessions() {

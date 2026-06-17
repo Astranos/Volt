@@ -20,6 +20,7 @@ struct DictationView: View {
 
                     DictationTranscriptCard(
                         transcript: store.dictation.transcript,
+                        isStarting: store.dictation.isStarting,
                         isRecording: store.dictation.isRecording
                     )
 
@@ -41,12 +42,16 @@ struct DictationView: View {
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 DictationStartAccessory(
                     isRecording: store.dictation.isRecording,
+                    isStarting: store.dictation.isStarting,
                     isConnected: store.connectionStatus.isConnected,
-                    statusText: store.connectionStatus.isConnected ? "Ready to dictate into Chrome" : store.targetHint,
+                    statusText: dictationStatusText,
                     toggleAction: toggleDictation,
                     holdStartAction: startDictation,
                     holdEndAction: stopDictation
                 )
+            }
+            .task {
+                await store.prepareDictation()
             }
         }
     }
@@ -75,6 +80,18 @@ struct DictationView: View {
             return cursorLabel
         }
         return "No text input focused"
+    }
+
+    private var dictationStatusText: String {
+        if store.dictation.isStarting {
+            "Starting microphone..."
+        } else if store.dictation.isRecording {
+            "Listening"
+        } else if store.connectionStatus.isConnected {
+            "Ready to dictate into Chrome"
+        } else {
+            store.targetHint
+        }
     }
 
     private func toggleDictation() {
@@ -145,11 +162,12 @@ private struct DictationDetailRow: View {
 
 private struct DictationTranscriptCard: View {
     let transcript: String
+    let isStarting: Bool
     let isRecording: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label(isRecording ? "Listening" : "Transcript", systemImage: isRecording ? "waveform" : "text.quote")
+            Label(transcriptTitle, systemImage: transcriptIcon)
                 .font(.headline)
 
             Text(transcript.isEmpty ? "Dictated text will appear here while you speak." : transcript)
@@ -161,19 +179,41 @@ private struct DictationTranscriptCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.background.secondary, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
+
+    private var transcriptTitle: String {
+        if isRecording {
+            "Listening"
+        } else if isStarting {
+            "Starting"
+        } else {
+            "Transcript"
+        }
+    }
+
+    private var transcriptIcon: String {
+        if isRecording || isStarting {
+            "waveform"
+        } else {
+            "text.quote"
+        }
+    }
 }
 
 private struct DictationStartAccessory: View {
     let isRecording: Bool
+    let isStarting: Bool
     let isConnected: Bool
     let statusText: String
     let toggleAction: () -> Void
     let holdStartAction: () -> Void
     let holdEndAction: () -> Void
     @State private var pressStart: Date?
-    @State private var didStartFromHold = false
+    @State private var didStartRecordingFromPress = false
 
-    private let holdDelay: Duration = .milliseconds(260)
+    private let pushToTalkThreshold: TimeInterval = 0.35
+    private let pressFeedback = UIImpactFeedbackGenerator(style: .medium)
+    private let startFeedback = UIImpactFeedbackGenerator(style: .heavy)
+    private let stopFeedback = UINotificationFeedbackGenerator()
 
     var body: some View {
         VStack(spacing: 10) {
@@ -183,17 +223,17 @@ private struct DictationStartAccessory: View {
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity)
 
-            Label(isRecording ? "Stop Dictation" : "Start Dictation", systemImage: isRecording ? "stop.fill" : "mic.fill")
+            Label(buttonTitle, systemImage: buttonIcon)
                 .font(.headline)
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity, minHeight: 52)
-                .background(isConnected || isRecording ? Color.accentColor : Color.secondary, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-                .opacity(isConnected || isRecording ? 1 : 0.55)
+                .background(buttonColor, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .opacity(isConnected || isRecording || isStarting ? 1 : 0.55)
                 .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
                 .gesture(pressGesture)
                 .accessibilityAddTraits(.isButton)
-                .accessibilityLabel(isRecording ? "Stop Dictation" : "Start Dictation")
-                .accessibilityHint(isConnected || isRecording ? "" : statusText)
+                .accessibilityLabel(buttonTitle)
+                .accessibilityHint(isConnected || isRecording || isStarting ? "" : statusText)
         }
         .padding(.horizontal)
         .padding(.top, 12)
@@ -201,21 +241,64 @@ private struct DictationStartAccessory: View {
         .background(.bar)
     }
 
+    private var buttonColor: Color {
+        if isRecording {
+            .red
+        } else if isStarting {
+            .orange
+        } else if isConnected {
+            .accentColor
+        } else {
+            .secondary
+        }
+    }
+
+    private var buttonTitle: String {
+        if isRecording {
+            "Stop Dictation"
+        } else if isStarting {
+            "Starting Dictation"
+        } else {
+            "Start Dictation"
+        }
+    }
+
+    private var buttonIcon: String {
+        if isRecording {
+            "stop.fill"
+        } else if isStarting {
+            "waveform"
+        } else {
+            "mic.fill"
+        }
+    }
+
     private var pressGesture: some Gesture {
         DragGesture(minimumDistance: 0)
             .onChanged { _ in
-                guard isConnected || isRecording else { return }
+                guard isConnected || isRecording || isStarting else { return }
                 if pressStart == nil {
                     pressStart = .now
-                    scheduleHoldStart()
+                    pressFeedback.impactOccurred(intensity: 1)
+                    if !isRecording && !isStarting {
+                        didStartRecordingFromPress = true
+                        startFeedback.impactOccurred(intensity: 1)
+                        holdStartAction()
+                    }
                 }
             }
             .onEnded { _ in
-                guard isConnected || isRecording else {
+                guard isConnected || isRecording || isStarting else {
                     resetPress()
                     return
                 }
-                if didStartFromHold {
+                if didStartRecordingFromPress {
+                    if shouldStopAfterPress {
+                        stopFeedback.notificationOccurred(.success)
+                        holdEndAction()
+                    }
+                } else if isRecording {
+                    stopFeedback.notificationOccurred(.success)
                     holdEndAction()
                 } else {
                     toggleAction()
@@ -224,19 +307,13 @@ private struct DictationStartAccessory: View {
             }
     }
 
-    private func scheduleHoldStart() {
-        Task {
-            try? await Task.sleep(for: holdDelay)
-            await MainActor.run {
-                guard pressStart != nil, !didStartFromHold, isConnected, !isRecording else { return }
-                didStartFromHold = true
-                holdStartAction()
-            }
-        }
+    private var shouldStopAfterPress: Bool {
+        guard let pressStart else { return false }
+        return Date.now.timeIntervalSince(pressStart) >= pushToTalkThreshold
     }
 
     private func resetPress() {
         pressStart = nil
-        didStartFromHold = false
+        didStartRecordingFromPress = false
     }
 }
