@@ -149,9 +149,9 @@ export default function UnifiedSidepanel() {
   const ToastIcon = toneStyles?.icon;
 
   return (
-    <div className="sidepanel-shell h-full w-full flex flex-col">
+    <div className="sidepanel-shell sidepanel-frame h-full w-full flex flex-col">
       {/* Fixed Header */}
-      <div className="sidepanel-tool-switch-wrap">
+      <div className="sidepanel-tool-switch-wrap sidepanel-tool-header">
         <div className="sidepanel-tool-switch">
           <div
             role="radiogroup"
@@ -163,11 +163,10 @@ export default function UnifiedSidepanel() {
             aria-hidden={toast ? "true" : undefined}
           >
             <span
-              className="sidepanel-tool-indicator"
-              style={{
-                width: `calc((100% - ${(tools.length - 1) * 0.25}rem) / ${tools.length})`,
-                transform: `translateX(calc(${activeToolIndex} * (100% + 0.25rem)))`,
-              }}
+              className={cn(
+                "sidepanel-tool-indicator",
+                activeToolIndex === 0 ? "is-left" : "is-right",
+              )}
             />
             {tools.map((tool) => (
               <button
@@ -186,7 +185,7 @@ export default function UnifiedSidepanel() {
                   className="sidepanel-tool-option-icon"
                 />
                 <span className="sidepanel-tool-option-label">
-                  {tool.id === "top-offers" ? "Offer Calculator" : "Scanner"}
+                  {tool.label}
                 </span>
               </button>
             ))}
@@ -210,7 +209,7 @@ export default function UnifiedSidepanel() {
       </div>
 
       {/* Main content - Flex 1 to take remaining space, overflow hidden to prevent double scrollbars */}
-      <div className="flex-1 overflow-hidden">
+      <div className="sidepanel-content-frame flex-1 overflow-hidden">
         <ActiveComponent
           onClose={() => handleToolChange("mobile-scanner")}
         />

@@ -9,8 +9,8 @@ import { initializeSidePanelContext } from "../src/lib/sidepanel-gesture";
 import EbaySummary from "../src/components/content/EbaySummary";
 
 /**
- * Adds an inline summary to eBay search result pages showing
- * the current search context (Sold vs Active, Condition).
+ * Adds a fixed pricing guardrail to eBay search result pages when
+ * the user is viewing active or completed asking prices.
  *
  * This script runs on eBay search pages (https://www.ebay.com/sch/*).
  */
@@ -53,85 +53,125 @@ export default defineContentScript({
       style.id = STYLE_ID;
       style.textContent = `
         #${SUMMARY_ID} {
-          width: 100%;
-          padding: 12px 16px;
-          padding-right: 110px; /* Make space for buttons */
-          border-radius: 10px;
-          margin: 12px 0 0 0;
+          position: fixed;
+          top: 96px;
+          right: 18px;
+          z-index: 2147483647;
+          width: min(360px, calc(100vw - 32px));
+          min-height: 112px;
+          padding: 16px 48px 16px 16px;
+          border-radius: 16px;
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
           color: #0f172a;
-          box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05);
-          position: relative;
+          box-shadow: 0 18px 48px rgba(15, 23, 42, 0.18), 0 4px 14px rgba(15, 23, 42, 0.12);
           box-sizing: border-box;
-          display: flex;
-          flex-direction: row;
-          align-items: center;
-          flex-wrap: wrap;
+          display: grid;
+          grid-template-columns: 36px minmax(0, 1fr);
           gap: 12px;
+          overflow: hidden;
+          isolation: isolate;
+          backdrop-filter: blur(18px);
+          -webkit-backdrop-filter: blur(18px);
         }
-        
-        /* Green theme for Sold Listings */
-        #${SUMMARY_ID}.volt-state-sold {
-          border: 1px solid #16a34a; /* Green-600 */
-          background: #f0fdf4; /* Green-50 */
+
+        #${SUMMARY_ID}::before {
+          content: "";
+          position: absolute;
+          inset: 0;
+          z-index: -1;
+          background: linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.9));
         }
-        
-        /* Orange theme for Active/Completed Listings (Warning) */
+
+        #${SUMMARY_ID}::after {
+          content: "";
+          position: absolute;
+          left: 0;
+          top: 0;
+          bottom: 0;
+          width: 5px;
+        }
+
         #${SUMMARY_ID}.volt-state-active {
-          border: 1px solid #f97316; /* Orange-500 */
-          background: #fff7ed; /* Orange-50 */
+          border: 1px solid rgba(234, 88, 12, 0.38);
+        }
+
+        #${SUMMARY_ID}.volt-state-active::after {
+          background: #ea580c;
+        }
+
+        #${SUMMARY_ID} .volt-ebay-summary__status-icon {
+          width: 36px;
+          height: 36px;
+          border-radius: 12px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin-top: 2px;
+        }
+
+        #${SUMMARY_ID}.volt-state-active .volt-ebay-summary__status-icon {
+          color: #c2410c;
+          background: rgba(249, 115, 22, 0.14);
+        }
+
+        #${SUMMARY_ID} .volt-ebay-summary__body {
+          min-width: 0;
         }
 
         #${SUMMARY_ID} .volt-ebay-summary__title {
-          font-size: 16px;
+          font-size: 14px;
           margin: 0;
-          font-weight: 700;
-          color: #1e293b;
+          font-weight: 800;
+          color: #0f172a;
           display: flex;
           align-items: center;
-          gap: 6px;
-          white-space: nowrap;
-          flex-shrink: 0;
+          gap: 7px;
+          letter-spacing: 0;
+          line-height: 1.2;
         }
         #${SUMMARY_ID} .volt-ebay-summary__title img {
-          width: 20px;
-          height: 20px;
+          width: 18px;
+          height: 18px;
+          border-radius: 4px;
         }
         #${SUMMARY_ID} .volt-ebay-summary__content {
-          font-size: 15px;
-          color: #334155;
-          line-height: 1.5;
-          display: inline;
-        }
-        #${SUMMARY_ID} .volt-ebay-summary__content strong {
-          color: #0f172a;
-          font-weight: 700;
-        }
-
-        #${SUMMARY_ID} .volt-ebay-summary__links {
-          display: inline;
-          margin-left: 6px;
+          margin: 6px 0 0;
+          font-size: 13px;
           color: #475569;
+          line-height: 1.4;
         }
-        #${SUMMARY_ID} .volt-ebay-summary__links a {
-          color: #15803d; /* Green-700 */
-          text-decoration: underline;
-          font-weight: 600;
+        #${SUMMARY_ID} .volt-ebay-summary__primary {
+          margin-top: 12px;
+          height: 34px;
+          border: 0;
+          border-radius: 9px;
+          padding: 0 12px;
+          background: #0f172a;
+          color: #ffffff;
+          font-size: 12px;
+          font-weight: 800;
+          line-height: 1;
           cursor: pointer;
+          box-shadow: 0 8px 18px rgba(15, 23, 42, 0.18);
+          transition: transform 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
         }
-        #${SUMMARY_ID} .volt-ebay-summary__links a:hover {
-          color: #166534; /* Green-800 */
+        #${SUMMARY_ID} .volt-ebay-summary__primary:hover {
+          background: #1e293b;
+          box-shadow: 0 10px 22px rgba(15, 23, 42, 0.22);
+        }
+        #${SUMMARY_ID} .volt-ebay-summary__primary:active {
+          transform: translateY(1px);
         }
 
         #${SUMMARY_ID} .volt-ebay-summary__dismiss {
           position: absolute;
-          top: 12px;
-          right: 12px;
-          background: rgba(0, 0, 0, 0.05);
+          top: 10px;
+          right: 10px;
+          background: rgba(15, 23, 42, 0.06);
           border: none;
-          border-radius: 6px;
-          width: 24px;
-          height: 24px;
+          border-radius: 8px;
+          width: 28px;
+          height: 28px;
           cursor: pointer;
           display: flex;
           align-items: center;
@@ -147,39 +187,15 @@ export default defineContentScript({
           color: #dc2626;
         }
         
-        #${SUMMARY_ID} .volt-ebay-summary__sidepanel {
-          position: absolute;
-          top: 12px;
-          right: 76px;
-          background: rgba(0, 0, 0, 0.05);
-          border: none;
-          border-radius: 6px;
-          width: 24px;
-          height: 24px;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 16px;
-          line-height: 1;
-          color: #64748b;
-          transition: all 0.2s ease;
-          z-index: 10;
-        }
-        #${SUMMARY_ID} .volt-ebay-summary__sidepanel:hover {
-          background: rgba(59, 130, 246, 0.1);
-          color: #2563eb;
-        }
-        
         #${SUMMARY_ID} .volt-ebay-summary__settings {
           position: absolute;
-          top: 12px;
-          right: 44px;
-          background: rgba(0, 0, 0, 0.05);
+          top: 44px;
+          right: 10px;
+          background: rgba(15, 23, 42, 0.06);
           border: none;
-          border-radius: 6px;
-          width: 24px;
-          height: 24px;
+          border-radius: 8px;
+          width: 28px;
+          height: 28px;
           cursor: pointer;
           display: flex;
           align-items: center;
@@ -194,41 +210,18 @@ export default defineContentScript({
           background: rgba(59, 130, 246, 0.1);
           color: #2563eb;
         }
+
+        @media (max-width: 640px) {
+          #${SUMMARY_ID} {
+            top: auto;
+            right: 12px;
+            bottom: 14px;
+            left: 12px;
+            width: auto;
+          }
+        }
       `;
       document.head.appendChild(style);
-    };
-
-    const findInsertionPoint = () => {
-      // 1. Try to find the carousel element (User request)
-      const carouselAnswer = document.querySelector(
-        ".srp-river-answer--NAVIGATION_ANSWER_COLLAPSIBLE_CAROUSEL"
-      );
-      if (carouselAnswer && carouselAnswer.parentElement) {
-        return {
-          parent: carouselAnswer.parentElement,
-          reference: carouselAnswer.nextSibling,
-        };
-      }
-
-      // 2. Try to find the srp-controls__row-2 element
-      const srpControlsRow2 = document.querySelector(".srp-controls__row-2");
-      if (srpControlsRow2) {
-        return { parent: srpControlsRow2, reference: null };
-      }
-
-      // 3. Fallback: Insert before the results river
-      const river = document.getElementById("srp-river-results");
-      if (river && river.parentElement) {
-        return { parent: river.parentElement, reference: river };
-      }
-
-      // 4. Last resort: Insert at the top of the main content
-      const main = document.getElementById("mainContent");
-      if (main) {
-        return { parent: main, reference: null };
-      }
-
-      return null;
     };
 
     const ensureContainer = () => {
@@ -238,23 +231,12 @@ export default defineContentScript({
         return container;
       }
 
-      // Find where to insert
-      const insertionPoint = findInsertionPoint();
-      if (!insertionPoint) {
-        log("✗ Cannot insert summary - no suitable parent found");
-        return null;
-      }
-
       // Create container
       container = document.createElement("div");
       container.id = CONTAINER_ID;
 
-      // Insert into DOM
-      if (insertionPoint.reference) {
-        insertionPoint.parent.insertBefore(container, insertionPoint.reference);
-      } else {
-        insertionPoint.parent.appendChild(container);
-      }
+      // Keep the overlay out of eBay's page flow so loading it never shifts results.
+      document.body.appendChild(container);
 
       log("✓ Summary container inserted");
       return container;

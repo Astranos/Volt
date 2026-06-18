@@ -40,13 +40,13 @@ function OfferResultCard({
         Copied
       </span>
     ) : (
-      <span className="min-w-0 text-[24px] font-bold leading-tight tabular-nums text-green-700 [overflow-wrap:anywhere] dark:text-green-300">
+      <span className="top-offers-amount min-w-0 font-bold leading-tight tabular-nums text-green-700 [overflow-wrap:anywhere] dark:text-green-300">
         ${formatCurrency(amount)}
       </span>
     );
 
   return (
-    <div className="liquid-glass concentric-lg min-w-0 select-none p-3.5">
+    <div className="top-offers-card top-offers-result-card min-w-0 select-none">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div className="min-w-0 truncate text-sm font-bold text-stone-900 dark:text-stone-50">
           {offer.label}
@@ -59,7 +59,7 @@ function OfferResultCard({
         <button
           type="button"
           onClick={() => onCopy(offer.startingValue, startingId)}
-          className="liquid-glass-soft concentric-md flex min-h-24 min-w-0 flex-col px-3 py-3 text-left transition hover:bg-white/60 active:scale-[0.99] dark:hover:bg-white/10"
+          className="top-offers-value-button flex min-w-0 flex-col text-left transition active:scale-[0.99]"
         >
           <div className="text-[11px] font-bold uppercase tracking-normal text-stone-500 dark:text-stone-400">
             Start
@@ -71,7 +71,7 @@ function OfferResultCard({
         <button
           type="button"
           onClick={() => onCopy(offer.maxValue, maxId)}
-          className="liquid-glass-soft concentric-md flex min-h-24 min-w-0 flex-col px-3 py-3 text-left transition hover:bg-white/60 active:scale-[0.99] dark:hover:bg-white/10"
+          className="top-offers-value-button flex min-w-0 flex-col text-left transition active:scale-[0.99]"
         >
           <div className="text-[11px] font-bold uppercase tracking-normal text-stone-500 dark:text-stone-400">
             Max
@@ -180,27 +180,27 @@ function TopOfferCalculator() {
   };
 
   return (
-    <SidepanelLayout className="bg-transparent">
-      <div className="space-y-4 px-3 pb-4 pt-3">
-        <div className="liquid-glass concentric-xl p-3">
+    <SidepanelLayout className="top-offers-root bg-transparent">
+      <div className="top-offers-content">
+        <div className="top-offers-input-card">
           <label className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-normal text-stone-500 dark:text-stone-400">
             <Calculator className="h-3.5 w-3.5" />
             Projected sale price
           </label>
-          <div className="liquid-glass-soft concentric-lg flex h-14 items-center gap-2 px-3 transition focus-within:ring-2 focus-within:ring-green-500/50">
+          <div className="top-offers-input-shell flex items-center gap-2 transition focus-within:ring-2 focus-within:ring-green-500/40">
             <span className="text-lg font-bold text-stone-400 dark:text-stone-500">$</span>
             <input
               type="text"
               inputMode="decimal"
               value={projectionAmount}
               onChange={(e) => handleProjectionChange(e.target.value)}
-              className="h-full min-w-0 flex-1 bg-transparent text-2xl font-bold text-stone-950 outline-none placeholder:text-stone-400 dark:text-stone-50 dark:placeholder:text-stone-600"
+              className="top-offers-input h-full min-w-0 flex-1 bg-transparent font-bold text-stone-950 outline-none placeholder:text-stone-400 dark:text-stone-50 dark:placeholder:text-stone-600"
               placeholder="0"
             />
           </div>
         </div>
 
-        <div className="space-y-3">
+        <div className="top-offers-results-list">
             <OfferResultCard
               offer={{
                 id: "standard",
@@ -254,7 +254,7 @@ function TopOfferCalculator() {
                   type="button"
                   key={offer.id}
                   onClick={() => handleCopy(value, offer.id)}
-                  className="liquid-glass concentric-lg flex min-h-[92px] w-full min-w-0 cursor-pointer flex-col items-center justify-center p-3.5 text-center transition hover:bg-white/60 active:scale-[0.99] dark:hover:bg-white/10"
+                  className="top-offers-card top-offers-custom-card flex w-full min-w-0 cursor-pointer flex-col items-center justify-center text-center transition active:scale-[0.99]"
                 >
                   <div className="flex h-9 max-w-full items-center justify-center">
                     {copied === offer.id ? (
@@ -263,7 +263,7 @@ function TopOfferCalculator() {
                         Copied
                       </span>
                     ) : (
-                      <span className="max-w-full text-[24px] font-bold leading-tight tabular-nums text-green-700 [overflow-wrap:anywhere] dark:text-green-300">
+                      <span className="top-offers-amount max-w-full font-bold leading-tight tabular-nums text-green-700 [overflow-wrap:anywhere] dark:text-green-300">
                         ${formatCurrency(value)}
                       </span>
                     )}
@@ -278,8 +278,8 @@ function TopOfferCalculator() {
             type="button"
             onClick={openSettings}
             className={cn(
-              "liquid-glass-soft concentric-lg flex h-11 w-full items-center justify-center gap-2 text-sm font-bold text-stone-700 transition",
-              "hover:bg-white/70 active:scale-[0.99] dark:text-stone-200 dark:hover:bg-white/10",
+              "top-offers-secondary-action flex h-11 w-full items-center justify-center gap-2 text-sm font-bold transition",
+              "active:scale-[0.99]",
             )}
           >
             <Settings className="h-4 w-4" />

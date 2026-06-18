@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useCallback } from "react";
-import { Settings, X } from "lucide-react";
+import React, { useCallback, useEffect, useState } from "react";
+import { AlertTriangle, Settings, X } from "lucide-react";
 import type { SyncStorageResult } from "../../types/settings";
 
 type ListingState = "sold" | "completed" | "active" | "unknown";
@@ -10,7 +10,6 @@ interface EbaySummaryProps {
 
 const EbaySummary: React.FC<EbaySummaryProps> = ({ onDismiss }) => {
   const [listingState, setListingState] = useState<ListingState>("active");
-  const [conditionText, setConditionText] = useState<string>("All Conditions");
   const [isEnabled, setIsEnabled] = useState<boolean>(true);
   const [iconUrl, setIconUrl] = useState<string>("");
 
@@ -35,51 +34,12 @@ const EbaySummary: React.FC<EbaySummaryProps> = ({ onDismiss }) => {
     }
   }, []);
 
-  // Get conditions text from URL
-  const getConditionsText = useCallback(
-    (conditionParam: string | null): string => {
-      if (!conditionParam) return "All Conditions";
-
-      const decoded = decodeURIComponent(conditionParam);
-      const codes = decoded.split("|");
-
-      const labels = new Set<string>();
-
-      codes.forEach((code) => {
-        if (["1000", "3", "10"].includes(code)) labels.add("New");
-        else if (["1500", "1750"].includes(code)) labels.add("Open Box");
-        else if (code >= "2000" && code <= "2500") labels.add("Refurbished");
-        else if (["3000", "4", "5000", "6000"].includes(code))
-          labels.add("Used");
-        else if (["7000"].includes(code)) labels.add("Broken");
-        else labels.add("Other");
-      });
-
-      if (labels.size === 0) return "All Conditions";
-
-      const labelArray = Array.from(labels);
-      if (labelArray.length <= 2) {
-        return labelArray.join(" & ");
-      }
-      return labelArray.join(", ");
-    },
-    []
-  );
-
   // Update state from URL
   useEffect(() => {
     const updateState = () => {
       const state = getListingState();
       setListingState((prev) => {
         if (prev !== state) return state;
-        return prev;
-      });
-
-      const url = new URL(window.location.href);
-      const conditionParam = url.searchParams.get("LH_ItemCondition");
-      const newConditionText = getConditionsText(conditionParam);
-      setConditionText((prev) => {
-        if (prev !== newConditionText) return newConditionText;
         return prev;
       });
     };
@@ -97,7 +57,7 @@ const EbaySummary: React.FC<EbaySummaryProps> = ({ onDismiss }) => {
       window.removeEventListener("popstate", handlePopState);
       clearInterval(interval);
     };
-  }, [getListingState, getConditionsText]);
+  }, [getListingState]);
 
   // Check if feature is enabled
   useEffect(() => {
@@ -152,168 +112,41 @@ const EbaySummary: React.FC<EbaySummaryProps> = ({ onDismiss }) => {
     window.location.href = currentUrl.toString();
   }, []);
 
-  const handleFilter = useCallback((conditionCode: string | null) => {
-    const currentUrl = new URL(window.location.href);
-    if (conditionCode) {
-      currentUrl.searchParams.set("LH_ItemCondition", conditionCode);
-    } else {
-      currentUrl.searchParams.delete("LH_ItemCondition");
-    }
-    window.location.href = currentUrl.toString();
-  }, []);
-
-  if (!isEnabled) {
+  if (!isEnabled || listingState === "sold") {
     return null;
   }
 
-  const isSold = listingState === "sold";
-  let listingType = "Active Listings";
-  if (listingState === "sold") listingType = "Sold Listings";
-  else if (listingState === "completed")
-    listingType = "Completed Listings (Sold & Unsold)";
-
-  const stateClass = isSold ? "volt-state-sold" : "volt-state-active";
+  const message = listingState === "completed"
+    ? "Completed results can include unsold items. Use sold listings for real pricing."
+    : "Active listings are asking prices, not market comps. Switch to sold listings before pricing.";
 
   return (
     <section
       id="volt-ebay-summary"
-      className={`volt-ebay-summary ${stateClass}`}
+      className="volt-ebay-summary volt-state-active"
+      aria-live="polite"
     >
-      <h2 className="volt-ebay-summary__title">
-        {iconUrl && <img src={iconUrl} alt="Volt Logo" />}
-        eBay Summary
-      </h2>
-      <div className="volt-ebay-summary__content">
-        You are currently viewing <strong>{listingType}</strong> for{" "}
-        <strong>{conditionText}</strong> items.
-        {isSold ? (
-          <>
-            {conditionText === "All Conditions" && (
-              <span className="volt-ebay-summary__links">
-                {" "}
-                Filter by{" "}
-                <a
-                  onClick={(e) => {
-                    e.preventDefault();
-                    handleFilter("3000");
-                  }}
-                >
-                  Used
-                </a>
-                ,{" "}
-                <a
-                  onClick={(e) => {
-                    e.preventDefault();
-                    handleFilter("1000");
-                  }}
-                >
-                  New
-                </a>
-                , or{" "}
-                <a
-                  onClick={(e) => {
-                    e.preventDefault();
-                    handleFilter("7000");
-                  }}
-                >
-                  Broken
-                </a>
-                .
-              </span>
-            )}
-            {conditionText.includes("New") && (
-              <span className="volt-ebay-summary__links">
-                {" "}
-                Switch to{" "}
-                <a
-                  onClick={(e) => {
-                    e.preventDefault();
-                    handleFilter("3000");
-                  }}
-                >
-                  Used
-                </a>{" "}
-                or{" "}
-                <a
-                  onClick={(e) => {
-                    e.preventDefault();
-                    handleFilter("7000");
-                  }}
-                >
-                  Broken
-                </a>
-                .
-              </span>
-            )}
-            {conditionText.includes("Used") && (
-              <span className="volt-ebay-summary__links">
-                {" "}
-                Switch to{" "}
-                <a
-                  onClick={(e) => {
-                    e.preventDefault();
-                    handleFilter("1000");
-                  }}
-                >
-                  New
-                </a>{" "}
-                or{" "}
-                <a
-                  onClick={(e) => {
-                    e.preventDefault();
-                    handleFilter("7000");
-                  }}
-                >
-                  Broken
-                </a>
-                .
-              </span>
-            )}
-            {(conditionText.includes("For Parts") ||
-              conditionText.includes("Broken")) && (
-              <span className="volt-ebay-summary__links">
-                {" "}
-                Switch to{" "}
-                <a
-                  onClick={(e) => {
-                    e.preventDefault();
-                    handleFilter("1000");
-                  }}
-                >
-                  New
-                </a>{" "}
-                or{" "}
-                <a
-                  onClick={(e) => {
-                    e.preventDefault();
-                    handleFilter("3000");
-                  }}
-                >
-                  Used
-                </a>
-                .
-              </span>
-            )}
-          </>
-        ) : (
-          <span className="volt-ebay-summary__links">
-            {" "}
-            Ready to analyze prices?{" "}
-            <a
-              onClick={(e) => {
-                e.preventDefault();
-                handleSwitchToSold();
-              }}
-            >
-              Switch to Sold Listings
-            </a>
-            .
-          </span>
-        )}
+      <div className="volt-ebay-summary__status-icon" aria-hidden="true">
+        <AlertTriangle size={20} />
+      </div>
+      <div className="volt-ebay-summary__body">
+        <h2 className="volt-ebay-summary__title">
+          {iconUrl && <img src={iconUrl} alt="" />}
+          Active listing warning
+        </h2>
+        <p className="volt-ebay-summary__content">{message}</p>
+        <button
+          className="volt-ebay-summary__primary"
+          type="button"
+          onClick={handleSwitchToSold}
+        >
+          View sold listings
+        </button>
       </div>
       <button
         className="volt-ebay-summary__settings"
         onClick={handleSettings}
+        type="button"
         title="Settings"
       >
         <Settings size={14} />
@@ -321,6 +154,7 @@ const EbaySummary: React.FC<EbaySummaryProps> = ({ onDismiss }) => {
       <button
         className="volt-ebay-summary__dismiss"
         onClick={onDismiss}
+        type="button"
         title="Dismiss"
       >
         <X size={16} />

@@ -10,6 +10,10 @@ const mobileScannerSource = readFileSync(
   new URL("../components/sidepanel/MobileScanner.tsx", import.meta.url),
   "utf8"
 );
+const mobilePhotosSource = readFileSync(
+  new URL("../components/sidepanel/MobilePhotos.tsx", import.meta.url),
+  "utf8"
+);
 const mobilePhotoHelpersSource = readFileSync(
   new URL("../components/sidepanel/mobile-photo-helpers.ts", import.meta.url),
   "utf8"
@@ -66,6 +70,14 @@ test("photo drag bridge sends scanner photos as Shopify-compatible files", () =>
   assert.match(mobilePhotoHelpersSource, /fileInput\.files = transfer\.files/);
   assert.match(mobilePhotoHelpersSource, /fileInput\.dispatchEvent\(new Event\("change"/);
   assert.match(mobilePhotoHelpersSource, /\[data-polaris-dropzone\]/);
+});
+
+test("legacy Mobile Photos sidepanel uses shared Shopify-aware drag helpers", () => {
+  assert.match(mobilePhotosSource, /installPhotoDropBridge/);
+  assert.match(mobilePhotosSource, /insertPhotosIntoPage/);
+  assert.match(mobilePhotosSource, /event\.dataTransfer\.items\.add\(file\)/);
+  assert.doesNotMatch(mobilePhotosSource, /function installPhotoDropBridge\(dropMime: string\)/);
+  assert.doesNotMatch(mobilePhotosSource, /async function insertPhotosIntoPage\(photos: MobilePhoto\[\]\)/);
 });
 
 test("persisted scanner photos hydrate data URLs for reliable page drag payloads", () => {

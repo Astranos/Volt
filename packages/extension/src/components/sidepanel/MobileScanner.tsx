@@ -11,6 +11,7 @@ import {
   Copy,
   Download,
   Eye,
+  FolderOpen,
   ImagePlus,
   Loader2,
   Plus,
@@ -266,6 +267,10 @@ function photoFromResult(result: HydratedMobileScannerPhotoResult) {
   return hydratePhotoRuntime(result.photo);
 }
 
+function firstDownloadedPhoto(photos: MobilePhoto[]) {
+  return photos.find((photo) => typeof photo.downloadId === "number");
+}
+
 interface MobileScannerProps {
   onClose?: () => void;
 }
@@ -279,7 +284,7 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
   const [results, setResults] = useState<TimelineEntry[]>([]);
   const [loadingResults, setLoadingResults] = useState(true);
   const [selectedPhotoIds, setSelectedPhotoIds] = useState<Set<string>>(new Set());
-  const [collapsedBatchIds, setCollapsedBatchIds] = useState<Set<string>>(new Set());
+  const [expandedBatchIds, setExpandedBatchIds] = useState<Set<string>>(new Set());
   const [removingIds, setRemovingIds] = useState<Set<string>>(new Set());
   const [previewPhoto, setPreviewPhoto] = useState<MobilePhoto | null>(null);
   const [deletedSnapshot, setDeletedSnapshot] = useState<DeletedSnapshot | null>(null);
@@ -492,6 +497,35 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
     [flashFeedback],
   );
 
+  const openDownloadedPhotoFolder = useCallback(
+    (photo: MobilePhoto | undefined, fallbackMessage: string) => {
+      if (typeof photo?.downloadId === "number") {
+        chrome.downloads.show(photo.downloadId);
+        return;
+      }
+      chrome.downloads.showDefaultFolder();
+      flashFeedback(fallbackMessage, "warning");
+    },
+    [flashFeedback],
+  );
+
+  const openVoltDownloadsFolder = useCallback(() => {
+    openDownloadedPhotoFolder(
+      firstDownloadedPhoto(photos),
+      "No downloaded Volt photos yet",
+    );
+  }, [openDownloadedPhotoFolder, photos]);
+
+  const openBatchDownloadsFolder = useCallback(
+    (entries: HydratedMobileScannerPhotoResult[]) => {
+      openDownloadedPhotoFolder(
+        firstDownloadedPhoto(entries.map(photoFromResult)),
+        "No downloaded photos in this batch",
+      );
+    },
+    [openDownloadedPhotoFolder],
+  );
+
   const getTransferDataUrl = useCallback(async (photo: MobilePhoto) => {
     if (photo.dataUrl?.startsWith("data:")) return photo.dataUrl;
     if (photo.blob) return blobToDataUrl(photo.blob);
@@ -543,12 +577,15 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
     [flashFeedback, getTransferDataUrl],
   );
 
-  const dragPhotos = useCallback(
-    (event: React.DragEvent, photo: MobilePhoto) => {
-      void prepareActiveTabForPhotoDrop();
-      const sourcePhotos = selectedPhotoIds.has(photo.id) ? selectedPhotos : [photo];
-      if (!selectedPhotoIds.has(photo.id)) setSelectedPhotoIds(new Set([photo.id]));
-
+  const writePhotoDragData = useCallback(
+    (event: React.DragEvent, sourcePhotos: MobilePhoto[]) => {
+      const bridgePayload = sourcePhotos
+        .filter((item) => item.dataUrl?.startsWith("data:"))
+        .map((item) => ({
+          dataUrl: item.dataUrl!,
+          name: item.name,
+          mimeType: item.mimeType,
+        }));
       const files = sourcePhotos
         .map((item) => {
           if (item.blob) return blobToFile(item.blob, item.name, item.mimeType);
@@ -557,7 +594,7 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
         })
         .filter((file): file is File => Boolean(file));
 
-      if (files.length === 0) {
+      if (bridgePayload.length === 0 && files.length === 0) {
         event.preventDefault();
         flashFeedback("Photo bytes unavailable", "warning");
         return;
@@ -570,13 +607,6 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
           event.dataTransfer.items.add(file);
         } catch (_err) {}
       });
-      const bridgePayload = sourcePhotos
-        .filter((item) => item.dataUrl?.startsWith("data:"))
-        .map((item) => ({
-          dataUrl: item.dataUrl!,
-          name: item.name,
-          mimeType: item.mimeType,
-        }));
       if (bridgePayload.length > 0) {
         event.dataTransfer.setData(PHOTO_DROP_MIME, JSON.stringify(bridgePayload));
         event.dataTransfer.setData("text/uri-list", bridgePayload.map((item) => item.dataUrl).join("\n"));
@@ -586,7 +616,26 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
         );
       }
     },
-    [flashFeedback, prepareActiveTabForPhotoDrop, selectedPhotoIds, selectedPhotos],
+    [flashFeedback],
+  );
+
+  const dragPhotos = useCallback(
+    (event: React.DragEvent, photo: MobilePhoto) => {
+      void prepareActiveTabForPhotoDrop();
+      const sourcePhotos = selectedPhotoIds.has(photo.id) ? selectedPhotos : [photo];
+      if (!selectedPhotoIds.has(photo.id)) setSelectedPhotoIds(new Set([photo.id]));
+      writePhotoDragData(event, sourcePhotos);
+    },
+    [prepareActiveTabForPhotoDrop, selectedPhotoIds, selectedPhotos, writePhotoDragData],
+  );
+
+  const dragPhotoBatch = useCallback(
+    (event: React.DragEvent, entries: HydratedMobileScannerPhotoResult[]) => {
+      void prepareActiveTabForPhotoDrop();
+      setSelectedPhotoIds(new Set(entries.map((entry) => entry.id)));
+      writePhotoDragData(event, entries.map(photoFromResult));
+    },
+    [prepareActiveTabForPhotoDrop, writePhotoDragData],
   );
 
   useEffect(() => {
@@ -670,7 +719,7 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
 
   return (
     <div className="sidepanel-shell relative flex h-full min-w-0 flex-col overflow-hidden">
-      <div className="flex-none px-3 pt-3">
+      <div className="sidepanel-scanner-status-wrap flex-none px-3 pt-3">
         <CompactScannerStatus
           status={state.status}
           error={state.error}
@@ -682,13 +731,13 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
         />
       </div>
 
-      <div className="flex-none min-w-0 px-4 pb-2 pt-5">
+      <div className="sidepanel-results-header flex-none min-w-0 px-4 pb-2 pt-5">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <div className="text-sm font-bold text-stone-900 dark:text-stone-50">
+            <div className="sidepanel-results-title text-sm font-bold text-stone-900 dark:text-stone-50">
               Results
             </div>
-            <div className="truncate text-xs text-stone-500 dark:text-stone-400">
+            <div className="sidepanel-results-copy truncate text-xs text-stone-500 dark:text-stone-400">
               {totalCount === 0
                 ? "Text, barcodes, and received photos land here"
                 : `${totalCount} saved item${totalCount === 1 ? "" : "s"}`}
@@ -696,11 +745,11 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
           </div>
           <button
             type="button"
-            onClick={openPairingPopup}
-            className="liquid-glass-soft inline-flex h-9 w-9 items-center justify-center rounded-full text-stone-600 transition hover:text-stone-900 active:scale-95 dark:text-stone-300 dark:hover:text-stone-50"
-            aria-label="Add phone"
+            onClick={openVoltDownloadsFolder}
+            className="sidepanel-results-folder liquid-glass-soft inline-flex h-9 w-9 items-center justify-center rounded-full text-stone-600 transition hover:text-stone-900 active:scale-95 dark:text-stone-300 dark:hover:text-stone-50"
+            aria-label="Open Volt Photos folder"
           >
-            <Plus className="h-4 w-4" />
+            <FolderOpen className="h-4 w-4" />
           </button>
         </div>
       </div>
@@ -718,17 +767,18 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
                   key={group.key}
                   group={group}
                   now={now}
-                  collapsed={collapsedBatchIds.has(group.key)}
+                  collapsed={!expandedBatchIds.has(group.key)}
                   removingIds={removingIds}
                   selectedPhotoIds={selectedPhotoIds}
                   onToggleCollapse={() =>
-                    setCollapsedBatchIds((current) => {
+                    setExpandedBatchIds((current) => {
                       const next = new Set(current);
                       if (next.has(group.key)) next.delete(group.key);
                       else next.add(group.key);
                       return next;
                     })
                   }
+                  onOpenBatchFolder={() => openBatchDownloadsFolder(group.entries)}
                   onDeleteBatch={() => deleteResults(group.entries.map((entry) => entry.id), "Photo batch deleted")}
                   onDeletePhoto={(photoId) => deleteResults([photoId], "Photo deleted")}
                   onCopyPhoto={copyPhoto}
@@ -736,6 +786,7 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
                   onPreviewPhoto={setPreviewPhoto}
                   onSendPhoto={(photo) => sendPhotosToTab(selectedPhotoIds.has(photo.id) ? selectedPhotos : [photo])}
                   onDragStart={dragPhotos}
+                  onBatchDragStart={(event) => dragPhotoBatch(event, group.entries)}
                   onHover={prepareActiveTabForPhotoDrop}
                   onToggleSelection={togglePhotoSelection}
                 />
@@ -809,16 +860,16 @@ function CompactScannerStatus({
           : "Open the pairing popup to add an iPhone.";
 
   return (
-    <div className="liquid-glass concentric-xl flex min-w-0 flex-col gap-3 px-3.5 py-3">
+    <div className="sidepanel-scanner-card liquid-glass concentric-xl flex min-w-0 flex-col gap-3 px-3.5 py-3">
       <div className="flex min-w-0 items-start gap-3">
-        <span className="liquid-glass-soft flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-green-700 dark:text-green-300">
+        <span className="sidepanel-scanner-icon liquid-glass-soft flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-green-700 dark:text-green-300">
           <Smartphone className="h-4 w-4" />
         </span>
         <div className="min-w-0 flex-1">
-          <div className="text-[15px] font-bold leading-tight text-stone-900 dark:text-stone-50">
+          <div className="sidepanel-scanner-title text-[15px] font-bold leading-tight text-stone-900 dark:text-stone-50">
             Mobile Scanner
           </div>
-          <div className="mt-1 text-xs font-medium leading-snug text-stone-500 dark:text-stone-400">
+          <div className="sidepanel-scanner-copy mt-1 text-xs font-medium leading-snug text-stone-500 dark:text-stone-400">
             {copy}
           </div>
         </div>
@@ -826,11 +877,11 @@ function CompactScannerStatus({
           <ConnectionPill status={status} error={error} />
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-2">
+      <div className="sidepanel-scanner-actions grid grid-cols-2 gap-2">
         <button
           type="button"
           onClick={onAddPhone}
-          className="liquid-glass-soft inline-flex h-10 min-w-0 items-center justify-center gap-2 rounded-full px-3 text-xs font-bold text-stone-700 transition hover:text-stone-950 active:scale-[0.99] dark:text-stone-200 dark:hover:text-stone-50"
+          className="sidepanel-scanner-action liquid-glass-soft inline-flex h-10 min-w-0 items-center justify-center gap-2 rounded-full px-3 text-xs font-bold text-stone-700 transition hover:text-stone-950 active:scale-[0.99] dark:text-stone-200 dark:hover:text-stone-50"
         >
           <Plus className="h-3.5 w-3.5 shrink-0" />
           <span className="truncate">Add iPhone</span>
@@ -839,7 +890,7 @@ function CompactScannerStatus({
           type="button"
           onClick={connected ? onDisconnect : onForceRestart}
           disabled={creating}
-          className="liquid-glass-soft inline-flex h-10 min-w-0 items-center justify-center gap-2 rounded-full px-3 text-xs font-bold text-stone-700 transition hover:text-stone-950 active:scale-[0.99] disabled:opacity-40 dark:text-stone-200 dark:hover:text-stone-50"
+          className="sidepanel-scanner-action liquid-glass-soft inline-flex h-10 min-w-0 items-center justify-center gap-2 rounded-full px-3 text-xs font-bold text-stone-700 transition hover:text-stone-950 active:scale-[0.99] disabled:opacity-40 dark:text-stone-200 dark:hover:text-stone-50"
         >
           {connected ? (
             <X className="h-3.5 w-3.5 shrink-0" />
@@ -864,7 +915,7 @@ function LoadingHistory() {
 
 function EmptyHistory() {
   return (
-    <div className="liquid-glass-soft concentric-lg flex flex-col items-center border border-dashed border-stone-300/70 px-4 py-9 text-center dark:border-stone-700/70">
+    <div className="sidepanel-empty-history liquid-glass-soft concentric-lg flex flex-col items-center border border-dashed border-stone-300/70 px-4 py-9 text-center dark:border-stone-700/70">
       <div className="liquid-glass-soft mb-3 flex h-12 w-12 items-center justify-center rounded-full text-stone-400 dark:text-stone-500">
         <Scan className="h-5 w-5" />
       </div>
@@ -934,6 +985,7 @@ function PhotoBatchCard({
   removingIds,
   selectedPhotoIds,
   onToggleCollapse,
+  onOpenBatchFolder,
   onDeleteBatch,
   onDeletePhoto,
   onCopyPhoto,
@@ -941,6 +993,7 @@ function PhotoBatchCard({
   onPreviewPhoto,
   onSendPhoto,
   onDragStart,
+  onBatchDragStart,
   onHover,
   onToggleSelection,
 }: {
@@ -950,6 +1003,7 @@ function PhotoBatchCard({
   removingIds: Set<string>;
   selectedPhotoIds: Set<string>;
   onToggleCollapse: () => void;
+  onOpenBatchFolder: () => void;
   onDeleteBatch: () => void;
   onDeletePhoto: (photoId: string) => void;
   onCopyPhoto: (photo: MobilePhoto) => void;
@@ -957,10 +1011,12 @@ function PhotoBatchCard({
   onPreviewPhoto: (photo: MobilePhoto) => void;
   onSendPhoto: (photo: MobilePhoto) => void;
   onDragStart: (event: React.DragEvent, photo: MobilePhoto) => void;
+  onBatchDragStart: (event: React.DragEvent) => void;
   onHover: () => void;
   onToggleSelection: (photoId: string, shiftKey: boolean) => void;
 }) {
-  const visibleEntries = collapsed ? group.entries.slice(0, 1) : group.entries;
+  const collapsedPreviewEntries = group.entries.slice(0, 4);
+  const visibleEntries = collapsed ? collapsedPreviewEntries : group.entries;
   const count = group.entries.length;
   return (
     <div className="liquid-glass-soft concentric-lg min-w-0 overflow-hidden">
@@ -979,38 +1035,121 @@ function PhotoBatchCard({
           </div>
         </div>
         <div className="flex items-center gap-1">
-          {count > 1 ? (
-            <button type="button" onClick={onToggleCollapse} className="inline-flex h-7 items-center gap-1 rounded-full bg-stone-100 px-2 text-[10px] font-bold text-stone-700 transition hover:bg-stone-200 dark:bg-stone-700 dark:text-stone-100 dark:hover:bg-stone-600" aria-label={collapsed ? "Expand photo batch" : "Collapse photo batch"}>
-              <ChevronDown className={cn("h-3 w-3 transition-transform", collapsed && "-rotate-90")} />
-              {collapsed ? `+${count - 1}` : "Hide"}
-            </button>
-          ) : null}
+          <button type="button" onClick={onToggleCollapse} className="inline-flex h-8 items-center gap-1.5 rounded-full bg-stone-100 px-2.5 text-[11px] font-bold text-stone-700 transition hover:bg-stone-200 dark:bg-stone-700 dark:text-stone-100 dark:hover:bg-stone-600" aria-label={collapsed ? "Expand photo batch" : "Collapse photo batch"}>
+            <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", collapsed && "-rotate-90")} />
+            {collapsed ? (count > 1 ? `+${count - 1}` : "Show") : "Hide"}
+          </button>
+          <button type="button" onClick={onOpenBatchFolder} className="flex h-7 w-7 items-center justify-center rounded-full text-stone-500 transition hover:bg-stone-200 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-700 dark:hover:text-stone-50" aria-label="Open photo batch folder">
+            <FolderOpen className="h-3.5 w-3.5" />
+          </button>
           <button type="button" onClick={onDeleteBatch} className="flex h-7 w-7 items-center justify-center rounded-full text-stone-500 transition hover:bg-stone-200 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-700 dark:hover:text-stone-50" aria-label="Delete photo batch">
             <Trash2 className="h-3.5 w-3.5" />
           </button>
         </div>
       </div>
 
-      <div className={cn("grid gap-2 px-3 pb-3 pt-2", collapsed ? "grid-cols-1" : "grid-cols-2")}>
-        {visibleEntries.map((entry) => {
+      {collapsed ? (
+        <CollapsedPhotoBatchPreview
+          entries={visibleEntries}
+          totalCount={count}
+          selectedPhotoIds={selectedPhotoIds}
+          removingIds={removingIds}
+          onDragStart={onBatchDragStart}
+          onHover={onHover}
+          onToggleCollapse={onToggleCollapse}
+        />
+      ) : (
+        <div className="grid grid-cols-2 gap-2 px-3 pb-3 pt-2">
+          {visibleEntries.map((entry) => {
+            const photo = photoFromResult(entry);
+            return (
+              <PhotoTile
+                key={entry.id}
+                photo={photo}
+                selected={selectedPhotoIds.has(entry.id)}
+                exiting={removingIds.has(entry.id)}
+                onDelete={() => onDeletePhoto(entry.id)}
+                onCopy={() => onCopyPhoto(photo)}
+                onDownload={() => onDownloadPhoto(photo)}
+                onPreview={() => onPreviewPhoto(photo)}
+                onSend={() => onSendPhoto(photo)}
+                onDragStart={(event) => onDragStart(event, photo)}
+                onHover={onHover}
+                onToggleSelection={(shiftKey) => onToggleSelection(entry.id, shiftKey)}
+              />
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CollapsedPhotoBatchPreview({
+  entries,
+  totalCount,
+  selectedPhotoIds,
+  removingIds,
+  onDragStart,
+  onHover,
+  onToggleCollapse,
+}: {
+  entries: HydratedMobileScannerPhotoResult[];
+  totalCount: number;
+  selectedPhotoIds: Set<string>;
+  removingIds: Set<string>;
+  onDragStart: (event: React.DragEvent) => void;
+  onHover: () => void;
+  onToggleCollapse: () => void;
+}) {
+  return (
+    <div
+      draggable
+      onDragStart={onDragStart}
+      onMouseEnter={onHover}
+      onPointerDown={onHover}
+      className="group mx-3 mb-3 mt-2 cursor-grab rounded-lg bg-stone-50/70 p-1 ring-1 ring-stone-200/70 active:cursor-grabbing dark:bg-stone-800/55 dark:ring-stone-700/70"
+      aria-label={`Drag ${totalCount} photo batch`}
+    >
+      <div className="grid grid-cols-4 gap-1">
+        {entries.map((entry, index) => {
           const photo = photoFromResult(entry);
+          const hiddenCount = totalCount - entries.length;
+          const showOverflow = index === entries.length - 1 && hiddenCount > 0;
           return (
-            <PhotoTile
+            <button
               key={entry.id}
-              photo={photo}
-              selected={selectedPhotoIds.has(entry.id)}
-              exiting={removingIds.has(entry.id)}
-              onDelete={() => onDeletePhoto(entry.id)}
-              onCopy={() => onCopyPhoto(photo)}
-              onDownload={() => onDownloadPhoto(photo)}
-              onPreview={() => onPreviewPhoto(photo)}
-              onSend={() => onSendPhoto(photo)}
-              onDragStart={(event) => onDragStart(event, photo)}
-              onHover={onHover}
-              onToggleSelection={(shiftKey) => onToggleSelection(entry.id, shiftKey)}
-            />
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onToggleCollapse();
+              }}
+              className={cn(
+                "relative aspect-square min-w-0 overflow-hidden rounded-md bg-stone-100 ring-1 ring-inset transition dark:bg-stone-900",
+                selectedPhotoIds.has(entry.id) ? "ring-green-500 dark:ring-green-300" : "ring-stone-200/80 dark:ring-stone-700",
+                removingIds.has(entry.id) && "volt-item-exit",
+              )}
+              aria-label="Expand photo batch"
+            >
+              {photo.dataUrl ? (
+                <img src={photo.dataUrl} alt={photo.name} className="h-full w-full object-cover" draggable={false} />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-stone-500 dark:text-stone-400">
+                  <Download className="h-4 w-4" />
+                </div>
+              )}
+              {showOverflow ? (
+                <span className="absolute inset-0 flex items-center justify-center bg-stone-950/62 text-xs font-bold text-white">
+                  +{hiddenCount}
+                </span>
+              ) : null}
+            </button>
           );
         })}
+      </div>
+      <div className="pointer-events-none mt-1.5 flex items-center justify-between px-1 text-[10px] font-semibold text-stone-500 dark:text-stone-400">
+        <span>Drag batch</span>
+        <span>{totalCount} photos</span>
       </div>
     </div>
   );
