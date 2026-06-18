@@ -3,8 +3,11 @@ import test from "node:test";
 
 import {
   PHOTO_TRANSFER_CHANNEL_LABEL,
+  SCANNER_JOIN_TOKEN_TTL_MS,
+  SCANNER_PAIRING_TTL_MS,
   SCANNER_CONTROL_CHANNEL_LABEL,
   SCANNER_PROTOCOL_VERSION,
+  SCANNER_RECONNECT_REQUEST_TTL_MS,
   buildScannerJoinUrl,
   decodePhotoTransferMessage,
   decodePhotoTransferChunkFrame,
@@ -14,8 +17,15 @@ import {
   encodeScannerControlMessage,
   isScannerJoinAttemptId,
   isScannerJoinToken,
+  isScannerPairingId,
   isScannerProtocolVersionSupported,
+  normalizeScannerJoinAttempt,
+  normalizeScannerPairing,
   parseScannerJoinUrl,
+  publicPendingScannerReconnectRequest,
+  publicScannerJoinAttempt,
+  publicScannerJoinToken,
+  publicScannerReconnectRequest,
   photoTransferDuplicateKey,
   scannerControlDuplicateKey,
 } from "./index.ts";
@@ -44,6 +54,9 @@ test("exports ADR 0002 channel labels and version support", () => {
   assert.equal(SCANNER_CONTROL_CHANNEL_LABEL, "scanner-control");
   assert.equal(PHOTO_TRANSFER_CHANNEL_LABEL, "photo-transfer");
   assert.equal(SCANNER_PROTOCOL_VERSION, "1.0.0");
+  assert.equal(SCANNER_JOIN_TOKEN_TTL_MS, 5 * 60 * 1000);
+  assert.equal(SCANNER_PAIRING_TTL_MS, 180 * 24 * 60 * 60 * 1000);
+  assert.equal(SCANNER_RECONNECT_REQUEST_TTL_MS, 2 * 60 * 1000);
   assert.equal(isScannerProtocolVersionSupported({ major: 1, minor: 0 }), true);
   assert.equal(isScannerProtocolVersionSupported({ major: 2, minor: 0 }), false);
 });
@@ -63,6 +76,98 @@ test("validates join tokens, join attempt ids, and join URLs", () => {
     joinAttemptId,
   });
   assert.equal(parseScannerJoinUrl("volt://pair?token=bad"), null);
+});
+
+test("validates durable pairing ids and exposes signal response DTO helpers", () => {
+  assert.equal(isScannerPairingId("pairing_test_12345"), true);
+  assert.equal(isScannerPairingId("short"), false);
+
+  const attempt = {
+    id: joinAttemptId,
+    createdAt: Date.parse(now),
+    expiresAt: Date.parse(now) - 1,
+    status: "waiting_for_offer",
+    contributorId,
+    offer: "offer-sdp",
+  };
+  const expiredAttempt = normalizeScannerJoinAttempt(attempt, Date.parse(now));
+  assert.equal(expiredAttempt.status, "expired");
+  assert.deepEqual(publicScannerJoinAttempt(expiredAttempt), {
+    id: joinAttemptId,
+    status: "expired",
+    contributorId,
+    deviceLabel: undefined,
+    protocolVersion: undefined,
+    capabilities: undefined,
+    createdAt: now,
+    expiresAt: "2026-06-03T11:59:59.999Z",
+    offeredAt: undefined,
+    answeredAt: undefined,
+    hasOffer: true,
+    hasAnswer: false,
+  });
+
+  assert.deepEqual(
+    publicScannerJoinToken({
+      token,
+      sessionId,
+      createdAt: Date.parse(now),
+      expiresAt: Date.parse(now) + 1000,
+      graceExpiresAt: Date.parse(now) + 2000,
+      attempts: [attempt],
+    }),
+    {
+      token,
+      sessionId,
+      expiresAt: "2026-06-03T12:00:01.000Z",
+      graceExpiresAt: "2026-06-03T12:00:02.000Z",
+      revokedAt: undefined,
+      rotatedTo: undefined,
+    }
+  );
+
+  const pairing = normalizeScannerPairing(
+    {
+      id: "pairing_test_12345",
+      secret: "abcdefghijklmnopqrstuvwxyzABCDEFGH123456",
+      browserSessionId: sessionId,
+      displayName: "Chrome on Mac",
+      phoneDeviceId: "phone_1234",
+      createdAt: Date.parse(now),
+      lastSeenAt: Date.parse(now),
+      expiresAt: Date.parse(now) + 100_000,
+      reconnectRequests: [
+        {
+          id: "request_12345",
+          createdAt: Date.parse(now),
+          expiresAt: Date.parse(now) + 30_000,
+          status: "waiting_for_browser",
+        },
+      ],
+    },
+    Date.parse(now)
+  );
+  assert.equal(pairing.reconnectRequests.length, 1);
+  assert.deepEqual(publicScannerReconnectRequest(pairing.reconnectRequests[0]), {
+    id: "request_12345",
+    status: "waiting_for_browser",
+    createdAt: now,
+    expiresAt: "2026-06-03T12:00:30.000Z",
+    joinUrl: undefined,
+    joinToken: undefined,
+    sessionId: undefined,
+    answeredAt: undefined,
+  });
+  assert.deepEqual(publicPendingScannerReconnectRequest(pairing, pairing.reconnectRequests[0]), {
+    pairingId: "pairing_test_12345",
+    requestId: "request_12345",
+    browserSessionId: sessionId,
+    displayName: "Chrome on Mac",
+    phoneDeviceId: "phone_1234",
+    phoneLabel: undefined,
+    createdAt: now,
+    expiresAt: "2026-06-03T12:00:30.000Z",
+  });
 });
 
 test("round-trips scanner-control messages", () => {

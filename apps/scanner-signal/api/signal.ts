@@ -2,96 +2,43 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { randomBytes } from "node:crypto";
 import webPush from "web-push";
 
-const SCANNER_SESSION_TTL_MS = 12 * 60 * 60 * 1000;
-const SCANNER_JOIN_ATTEMPT_TTL_MS = 30 * 1000;
-const SCANNER_JOIN_TOKEN_TTL_MS = 5 * 60 * 1000;
-const SCANNER_JOIN_TOKEN_GRACE_MS = 10 * 1000;
-const SCANNER_PAIRING_TTL_MS = 180 * 24 * 60 * 60 * 1000;
-const SCANNER_RECONNECT_REQUEST_TTL_MS = 2 * 60 * 1000;
-const SCANNER_SESSION_ID_PATTERN = /^[a-zA-Z0-9_-]{4,80}$/;
-const SCANNER_JOIN_TOKEN_PATTERN = /^[a-zA-Z0-9_-]{32,160}$/;
-const SCANNER_JOIN_ATTEMPT_ID_PATTERN = /^[a-zA-Z0-9_-]{12,80}$/;
-const SCANNER_PAIRING_ID_PATTERN = /^[a-zA-Z0-9_-]{12,120}$/;
-
-function isScannerSessionId(value: unknown): value is string {
-  return typeof value === "string" && SCANNER_SESSION_ID_PATTERN.test(value);
-}
-
-function isScannerJoinToken(value: unknown): value is string {
-  return typeof value === "string" && SCANNER_JOIN_TOKEN_PATTERN.test(value);
-}
-
-function isScannerJoinAttemptId(value: unknown): value is string {
-  return typeof value === "string" && SCANNER_JOIN_ATTEMPT_ID_PATTERN.test(value);
-}
-
-function isScannerPairingId(value: unknown): value is string {
-  return typeof value === "string" && SCANNER_PAIRING_ID_PATTERN.test(value);
-}
+import {
+  SCANNER_JOIN_ATTEMPT_TTL_MS,
+  SCANNER_JOIN_TOKEN_GRACE_MS,
+  SCANNER_JOIN_TOKEN_TTL_MS,
+  SCANNER_PAIRING_TTL_MS,
+  SCANNER_RECONNECT_REQUEST_TTL_MS,
+  SCANNER_SESSION_TTL_MS,
+  type PublicPendingScannerReconnectRequest,
+  type ScannerJoinAttemptRecord,
+  type ScannerJoinTokenRecord,
+  type ScannerPairingRecord,
+  type ScannerReconnectRequestRecord,
+  type ScannerWebPushSubscription,
+  isScannerJoinAttemptId,
+  isScannerJoinToken,
+  isScannerJoinTokenActiveForNewAttempt,
+  isScannerPairingId,
+  isScannerSessionId,
+  normalizeScannerJoinAttempt,
+  normalizeScannerJoinToken,
+  normalizeScannerPairing,
+  normalizeScannerReconnectRequest,
+  publicPendingScannerReconnectRequest,
+  publicScannerJoinAttempt,
+  publicScannerJoinToken,
+  publicScannerReconnectRequest,
+  scannerSignalIso,
+} from "../../../packages/scanner-protocol/src/index.ts";
 
 const JOIN_TOKEN_KEY_PREFIX = "volt:scanner:join-token:";
 const PAIRING_KEY_PREFIX = "volt:scanner:pairing:";
 
-type JoinAttemptRecord = {
-  id: string;
-  createdAt: number;
-  expiresAt: number;
-  status: "waiting_for_offer" | "offer_posted" | "answer_posted" | "expired";
-  contributorId?: string;
-  deviceLabel?: string;
-  protocolVersion?: string;
-  capabilities?: string[];
-  offer?: string;
-  answer?: string;
-  offeredAt?: number;
-  answeredAt?: number;
-};
-
-type JoinTokenRecord = {
-  token: string;
-  sessionId: string;
-  browserClaim?: string;
-  createdAt: number;
-  expiresAt: number;
-  graceExpiresAt: number;
-  revokedAt?: number;
-  rotatedTo?: string;
-  attempts: JoinAttemptRecord[];
-};
-
-type ReconnectRequestRecord = {
-  id: string;
-  createdAt: number;
-  expiresAt: number;
-  status: "waiting_for_browser" | "join_window_ready" | "expired";
-  joinUrl?: string;
-  joinToken?: string;
-  sessionId?: string;
-  answeredAt?: number;
-};
-
-type PairingRecord = {
-  id: string;
-  secret: string;
-  browserSessionId: string;
-  displayName?: string;
-  phoneDeviceId?: string;
-  phoneLabel?: string;
-  pushSubscription?: WebPushSubscriptionRecord;
-  createdAt: number;
-  lastSeenAt: number;
-  expiresAt: number;
-  reconnectRequests: ReconnectRequestRecord[];
-};
-
-type WebPushSubscriptionRecord = {
-  endpoint: string;
-  expirationTime?: number | null;
-  keys: {
-    auth: string;
-    p256dh: string;
-  };
-};
+type JoinAttemptRecord = ScannerJoinAttemptRecord;
+type JoinTokenRecord = ScannerJoinTokenRecord;
+type ReconnectRequestRecord = ScannerReconnectRequestRecord;
+type PairingRecord = ScannerPairingRecord;
+type WebPushSubscriptionRecord = ScannerWebPushSubscription;
 
 const globalState = globalThis as typeof globalThis & {
   __voltScannerJoinTokens?: Map<string, JoinTokenRecord>;
@@ -244,6 +191,14 @@ async function getPairingsForBrowserSession(browserSessionId: string) {
   return [...memoryPairings.values()].filter((pairing) => pairing.browserSessionId === browserSessionId);
 }
 
+const signalStorage = {
+  getJoinToken,
+  saveJoinToken,
+  getPairing,
+  savePairing,
+  getPairingsForBrowserSession,
+};
+
 function pathParts(request: VercelRequest) {
   const path = request.query.path;
   return typeof path === "string" ? path.split("/").filter(Boolean) : [];
@@ -350,10 +305,6 @@ async function sendReconnectWakePush(pairing: PairingRecord, requestId: string) 
   }
 }
 
-function iso(timestamp: number) {
-  return new Date(timestamp).toISOString();
-}
-
 function tokenRouteParts(request: VercelRequest) {
   const parts = pathParts(request);
   return parts[0] === "join-token" ? parts : [];
@@ -367,91 +318,6 @@ function pairingRouteParts(request: VercelRequest) {
 function pushRouteParts(request: VercelRequest) {
   const parts = pathParts(request);
   return parts[0] === "push" ? parts : [];
-}
-
-function isTokenActiveForNewAttempt(record: JoinTokenRecord, now = Date.now()) {
-  return !record.revokedAt && record.expiresAt > now;
-}
-
-function normalizeJoinAttempt(record: JoinAttemptRecord, now = Date.now()): JoinAttemptRecord {
-  if (record.expiresAt <= now && record.status !== "answer_posted") {
-    return { ...record, status: "expired" };
-  }
-  return record;
-}
-
-function normalizeJoinToken(record: JoinTokenRecord, now = Date.now()): JoinTokenRecord {
-  return { ...record, attempts: record.attempts.map((attempt) => normalizeJoinAttempt(attempt, now)) };
-}
-
-function normalizeReconnectRequest(record: ReconnectRequestRecord, now = Date.now()): ReconnectRequestRecord {
-  if (record.expiresAt <= now && record.status === "waiting_for_browser") {
-    return { ...record, status: "expired" };
-  }
-  return record;
-}
-
-function normalizePairing(record: PairingRecord, now = Date.now()): PairingRecord {
-  return {
-    ...record,
-    reconnectRequests: record.reconnectRequests
-      .map((request) => normalizeReconnectRequest(request, now))
-      .filter((request) => request.expiresAt > now || request.status === "join_window_ready"),
-  };
-}
-
-function publicToken(record: JoinTokenRecord) {
-  return {
-    token: record.token,
-    sessionId: record.sessionId,
-    expiresAt: iso(record.expiresAt),
-    graceExpiresAt: iso(record.graceExpiresAt),
-    revokedAt: record.revokedAt ? iso(record.revokedAt) : undefined,
-    rotatedTo: record.rotatedTo,
-  };
-}
-
-function publicAttempt(attempt: JoinAttemptRecord) {
-  return {
-    id: attempt.id,
-    status: attempt.status,
-    contributorId: attempt.contributorId,
-    deviceLabel: attempt.deviceLabel,
-    protocolVersion: attempt.protocolVersion,
-    capabilities: attempt.capabilities,
-    createdAt: iso(attempt.createdAt),
-    expiresAt: iso(attempt.expiresAt),
-    offeredAt: attempt.offeredAt ? iso(attempt.offeredAt) : undefined,
-    answeredAt: attempt.answeredAt ? iso(attempt.answeredAt) : undefined,
-    hasOffer: Boolean(attempt.offer),
-    hasAnswer: Boolean(attempt.answer),
-  };
-}
-
-function publicReconnectRequest(request: ReconnectRequestRecord) {
-  return {
-    id: request.id,
-    status: request.status,
-    createdAt: iso(request.createdAt),
-    expiresAt: iso(request.expiresAt),
-    joinUrl: request.joinUrl,
-    joinToken: request.joinToken,
-    sessionId: request.sessionId,
-    answeredAt: request.answeredAt ? iso(request.answeredAt) : undefined,
-  };
-}
-
-function publicPendingReconnectRequest(pairing: PairingRecord, request: ReconnectRequestRecord) {
-  return {
-    pairingId: pairing.id,
-    requestId: request.id,
-    browserSessionId: pairing.browserSessionId,
-    displayName: pairing.displayName,
-    phoneDeviceId: pairing.phoneDeviceId,
-    phoneLabel: pairing.phoneLabel,
-    createdAt: iso(request.createdAt),
-    expiresAt: iso(request.expiresAt),
-  };
 }
 
 function pairingSecretFromRequest(request: VercelRequest) {
@@ -508,9 +374,9 @@ async function handleJoinTokenRoute(request: VercelRequest, response: VercelResp
       graceExpiresAt: now + tokenTtlMs + graceMs,
       attempts: [],
     };
-    await saveJoinToken(record);
+    await signalStorage.saveJoinToken(record);
     response.status(200).json({
-      ...publicToken(record),
+      ...publicScannerJoinToken(record),
       browserClaim,
       joinUrl: `${requestOrigin(request)}/api/signal/join-token/${encodeURIComponent(token)}`,
     });
@@ -523,18 +389,18 @@ async function handleJoinTokenRoute(request: VercelRequest, response: VercelResp
     return true;
   }
 
-  const existing = await getJoinToken(token);
+  const existing = await signalStorage.getJoinToken(token);
   if (!existing) {
     response.status(404).json({ error: "Join token not found" });
     return true;
   }
-  const record = normalizeJoinToken(existing);
+  const record = normalizeScannerJoinToken(existing);
 
   if (request.method === "GET" && parts.length === 2) {
     response.status(200).json({
-      ...publicToken(record),
-      active: isTokenActiveForNewAttempt(record),
-      attempts: record.attempts.map(publicAttempt),
+      ...publicScannerJoinToken(record),
+      active: isScannerJoinTokenActiveForNewAttempt(record),
+      attempts: record.attempts.map(publicScannerJoinAttempt),
     });
     return true;
   }
@@ -543,8 +409,8 @@ async function handleJoinTokenRoute(request: VercelRequest, response: VercelResp
     if (!requireJoinTokenBrowserClaim(record, request, response)) return true;
     const now = Date.now();
     const revoked = { ...record, revokedAt: record.revokedAt ?? now, graceExpiresAt: Math.max(record.graceExpiresAt, now) };
-    await saveJoinToken(revoked);
-    response.status(200).json({ success: true, ...publicToken(revoked) });
+    await signalStorage.saveJoinToken(revoked);
+    response.status(200).json({ success: true, ...publicScannerJoinToken(revoked) });
     return true;
   }
 
@@ -569,11 +435,11 @@ async function handleJoinTokenRoute(request: VercelRequest, response: VercelResp
       expiresAt: Math.min(record.expiresAt, now + graceMs),
       graceExpiresAt: Math.max(record.graceExpiresAt, now + graceMs),
     };
-    await saveJoinToken(previousRecord);
-    await saveJoinToken(nextRecord);
+    await signalStorage.saveJoinToken(previousRecord);
+    await signalStorage.saveJoinToken(nextRecord);
     response.status(200).json({
-      previous: publicToken(previousRecord),
-      token: publicToken(nextRecord),
+      previous: publicScannerJoinToken(previousRecord),
+      token: publicScannerJoinToken(nextRecord),
       joinUrl: `${requestOrigin(request)}/api/signal/join-token/${encodeURIComponent(nextToken)}`,
     });
     return true;
@@ -581,12 +447,12 @@ async function handleJoinTokenRoute(request: VercelRequest, response: VercelResp
 
   if (request.method === "GET" && parts[2] === "attempts" && parts.length === 3) {
     if (!requireJoinTokenBrowserClaim(record, request, response)) return true;
-    response.status(200).json({ attempts: record.attempts.map(publicAttempt) });
+    response.status(200).json({ attempts: record.attempts.map(publicScannerJoinAttempt) });
     return true;
   }
 
   if (request.method === "POST" && parts[2] === "attempt" && parts.length === 3) {
-    if (!isTokenActiveForNewAttempt(record)) {
+    if (!isScannerJoinTokenActiveForNewAttempt(record)) {
       response.status(410).json({ error: record.revokedAt ? "Join token revoked" : "Join token expired" });
       return true;
     }
@@ -603,8 +469,8 @@ async function handleJoinTokenRoute(request: VercelRequest, response: VercelResp
       capabilities: stringArrayFromBody(request.body?.capabilities),
     };
     const nextRecord = { ...record, attempts: [...record.attempts, attempt] };
-    await saveJoinToken(nextRecord);
-    response.status(200).json({ attempt: publicAttempt(attempt), token: publicToken(nextRecord) });
+    await signalStorage.saveJoinToken(nextRecord);
+    response.status(200).json({ attempt: publicScannerJoinAttempt(attempt), token: publicScannerJoinToken(nextRecord) });
     return true;
   }
 
@@ -620,13 +486,16 @@ async function handleJoinTokenRoute(request: VercelRequest, response: VercelResp
     response.status(404).json({ error: "Join attempt not found" });
     return true;
   }
-  const normalizedAttempt = normalizeJoinAttempt(attempt);
+  const normalizedAttempt = normalizeScannerJoinAttempt(attempt);
   const attemptExpired = normalizedAttempt.status === "expired";
 
   if (route === "offer" && request.method === "POST" && parts.length === 5) {
     if (!requireJoinTokenBrowserClaim(record, request, response)) return true;
     if (attemptExpired) {
-      await saveJoinToken({ ...record, attempts: record.attempts.map((item) => (item.id === attemptId ? normalizedAttempt : item)) });
+      await signalStorage.saveJoinToken({
+        ...record,
+        attempts: record.attempts.map((item) => (item.id === attemptId ? normalizedAttempt : item)),
+      });
       response.status(410).json({ error: "Join attempt expired" });
       return true;
     }
@@ -637,24 +506,36 @@ async function handleJoinTokenRoute(request: VercelRequest, response: VercelResp
     }
     const now = Date.now();
     const nextAttempt = { ...normalizedAttempt, offer, offeredAt: now, status: "offer_posted" as const };
-    await saveJoinToken({ ...record, attempts: record.attempts.map((item) => (item.id === attemptId ? nextAttempt : item)) });
-    response.status(200).json({ success: true, attempt: publicAttempt(nextAttempt) });
+    await signalStorage.saveJoinToken({
+      ...record,
+      attempts: record.attempts.map((item) => (item.id === attemptId ? nextAttempt : item)),
+    });
+    response.status(200).json({ success: true, attempt: publicScannerJoinAttempt(nextAttempt) });
     return true;
   }
 
   if (route === "offer" && request.method === "GET" && parts.length === 5) {
     if (attemptExpired) {
-      await saveJoinToken({ ...record, attempts: record.attempts.map((item) => (item.id === attemptId ? normalizedAttempt : item)) });
+      await signalStorage.saveJoinToken({
+        ...record,
+        attempts: record.attempts.map((item) => (item.id === attemptId ? normalizedAttempt : item)),
+      });
       response.status(410).json({ error: "Join attempt expired" });
       return true;
     }
-    response.status(200).json({ offer: normalizedAttempt.offer ?? null, attempt: publicAttempt(normalizedAttempt) });
+    response.status(200).json({
+      offer: normalizedAttempt.offer ?? null,
+      attempt: publicScannerJoinAttempt(normalizedAttempt),
+    });
     return true;
   }
 
   if (route === "answer" && request.method === "POST" && parts.length === 5) {
     if (attemptExpired) {
-      await saveJoinToken({ ...record, attempts: record.attempts.map((item) => (item.id === attemptId ? normalizedAttempt : item)) });
+      await signalStorage.saveJoinToken({
+        ...record,
+        attempts: record.attempts.map((item) => (item.id === attemptId ? normalizedAttempt : item)),
+      });
       response.status(410).json({ error: "Join attempt expired" });
       return true;
     }
@@ -669,14 +550,20 @@ async function handleJoinTokenRoute(request: VercelRequest, response: VercelResp
     }
     const now = Date.now();
     const nextAttempt = { ...normalizedAttempt, answer, answeredAt: now, status: "answer_posted" as const };
-    await saveJoinToken({ ...record, attempts: record.attempts.map((item) => (item.id === attemptId ? nextAttempt : item)) });
-    response.status(200).json({ success: true, attempt: publicAttempt(nextAttempt) });
+    await signalStorage.saveJoinToken({
+      ...record,
+      attempts: record.attempts.map((item) => (item.id === attemptId ? nextAttempt : item)),
+    });
+    response.status(200).json({ success: true, attempt: publicScannerJoinAttempt(nextAttempt) });
     return true;
   }
 
   if (route === "answer" && request.method === "GET" && parts.length === 5) {
     if (!requireJoinTokenBrowserClaim(record, request, response)) return true;
-    response.status(200).json({ answer: normalizedAttempt.answer ?? null, attempt: publicAttempt(normalizedAttempt) });
+    response.status(200).json({
+      answer: normalizedAttempt.answer ?? null,
+      attempt: publicScannerJoinAttempt(normalizedAttempt),
+    });
     return true;
   }
 
@@ -706,7 +593,7 @@ async function handlePairingRoute(request: VercelRequest, response: VercelRespon
     }
 
     const now = Date.now();
-    const existing = await getPairing(pairingId);
+    const existing = await signalStorage.getPairing(pairingId);
     if (existing && existing.secret !== pairingSecret) {
       response.status(409).json({ error: "Pairing already exists" });
       return true;
@@ -732,12 +619,12 @@ async function handlePairingRoute(request: VercelRequest, response: VercelRespon
       expiresAt: now + SCANNER_PAIRING_TTL_MS,
       reconnectRequests: existing?.reconnectRequests ?? [],
     };
-    await savePairing(record);
+    await signalStorage.savePairing(record);
     response.status(200).json({
       pairingId: record.id,
       browserSessionId: record.browserSessionId,
       displayName: record.displayName,
-      expiresAt: iso(record.expiresAt),
+      expiresAt: scannerSignalIso(record.expiresAt),
     });
     return true;
   }
@@ -748,16 +635,16 @@ async function handlePairingRoute(request: VercelRequest, response: VercelRespon
       response.status(400).json({ error: "Invalid browser session id" });
       return true;
     }
-    const pending: Array<ReturnType<typeof publicPendingReconnectRequest>> = [];
+    const pending: PublicPendingScannerReconnectRequest[] = [];
     const now = Date.now();
-    for (const record of await getPairingsForBrowserSession(browserSessionId)) {
-      const pairing = normalizePairing(record, now);
+    for (const record of await signalStorage.getPairingsForBrowserSession(browserSessionId)) {
+      const pairing = normalizeScannerPairing(record, now);
       if (pairing.reconnectRequests.length !== record.reconnectRequests.length) {
-        await savePairing(pairing);
+        await signalStorage.savePairing(pairing);
       }
       for (const reconnectRequest of pairing.reconnectRequests) {
         if (reconnectRequest.status === "waiting_for_browser") {
-          pending.push(publicPendingReconnectRequest(pairing, reconnectRequest));
+          pending.push(publicPendingScannerReconnectRequest(pairing, reconnectRequest));
         }
       }
     }
@@ -771,12 +658,12 @@ async function handlePairingRoute(request: VercelRequest, response: VercelRespon
     return true;
   }
 
-  const existing = await getPairing(pairingId);
+  const existing = await signalStorage.getPairing(pairingId);
   if (!existing) {
     response.status(404).json({ error: "Pairing not found" });
     return true;
   }
-  const record = normalizePairing(existing);
+  const record = normalizeScannerPairing(existing);
 
   if (request.method === "POST" && parts[2] === "reconnect" && parts.length === 3) {
     if (!requirePairingSecret(record, request, response)) return true;
@@ -792,12 +679,12 @@ async function handlePairingRoute(request: VercelRequest, response: VercelRespon
       lastSeenAt: now,
       reconnectRequests: [...record.reconnectRequests, reconnectRequest],
     };
-    await savePairing(nextRecord);
+    await signalStorage.savePairing(nextRecord);
     await sendReconnectWakePush(nextRecord, reconnectRequest.id);
     response.status(200).json({
       pairingId: record.id,
       browserSessionId: record.browserSessionId,
-      request: publicReconnectRequest(reconnectRequest),
+      request: publicScannerReconnectRequest(reconnectRequest),
     });
     return true;
   }
@@ -813,24 +700,24 @@ async function handlePairingRoute(request: VercelRequest, response: VercelRespon
     response.status(404).json({ error: "Reconnect request not found" });
     return true;
   }
-  const normalizedRequest = normalizeReconnectRequest(reconnectRequest);
+  const normalizedRequest = normalizeScannerReconnectRequest(reconnectRequest);
 
   if (request.method === "GET" && parts.length === 4) {
     if (!requirePairingSecret(record, request, response)) return true;
     if (normalizedRequest.status === "expired") {
-      await savePairing({
+      await signalStorage.savePairing({
         ...record,
         reconnectRequests: record.reconnectRequests.map((item) => (item.id === requestId ? normalizedRequest : item)),
       });
     }
-    response.status(200).json({ request: publicReconnectRequest(normalizedRequest) });
+    response.status(200).json({ request: publicScannerReconnectRequest(normalizedRequest) });
     return true;
   }
 
   if (request.method === "POST" && parts[4] === "join-window" && parts.length === 5) {
     if (!requirePairingSecret(record, request, response)) return true;
     if (normalizedRequest.status === "expired") {
-      await savePairing({
+      await signalStorage.savePairing({
         ...record,
         reconnectRequests: record.reconnectRequests.map((item) => (item.id === requestId ? normalizedRequest : item)),
       });
@@ -853,12 +740,12 @@ async function handlePairingRoute(request: VercelRequest, response: VercelRespon
       sessionId,
       answeredAt: now,
     };
-    await savePairing({
+    await signalStorage.savePairing({
       ...record,
       lastSeenAt: now,
       reconnectRequests: record.reconnectRequests.map((item) => (item.id === requestId ? nextRequest : item)),
     });
-    response.status(200).json({ success: true, request: publicReconnectRequest(nextRequest) });
+    response.status(200).json({ success: true, request: publicScannerReconnectRequest(nextRequest) });
     return true;
   }
 

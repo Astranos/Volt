@@ -35,8 +35,10 @@ export const SCANNER_ICE_GATHERING_TIMEOUT_MS = 5000;
 export const SCANNER_ANSWER_POLL_INTERVAL_MS = 1000;
 export const SCANNER_SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 export const SCANNER_JOIN_ATTEMPT_TTL_MS = 30 * 1000;
-export const SCANNER_JOIN_TOKEN_TTL_MS = 12 * 60 * 60 * 1000;
+export const SCANNER_JOIN_TOKEN_TTL_MS = 5 * 60 * 1000;
 export const SCANNER_JOIN_TOKEN_GRACE_MS = 10 * 1000;
+export const SCANNER_PAIRING_TTL_MS = 180 * 24 * 60 * 60 * 1000;
+export const SCANNER_RECONNECT_REQUEST_TTL_MS = 2 * 60 * 1000;
 export const PHOTO_BATCH_WINDOW_MS = 5 * 60 * 1000;
 export const PHOTO_TRANSFER_CHUNK_SIZE_BYTES = 64 * 1024;
 export const PHOTO_TRANSFER_MAX_IN_FLIGHT_CHUNKS = 8;
@@ -48,6 +50,7 @@ export const SCANNER_SESSION_ID_PATTERN = /^[a-zA-Z0-9_-]{4,80}$/;
 export const SCANNER_JOIN_TOKEN_PATTERN = /^[a-zA-Z0-9_-]{32,160}$/;
 export const SCANNER_JOIN_ATTEMPT_ID_PATTERN = /^[a-zA-Z0-9_-]{12,80}$/;
 export const SCANNER_CONTRIBUTOR_ID_PATTERN = /^[a-zA-Z0-9_-]{8,80}$/;
+export const SCANNER_PAIRING_ID_PATTERN = /^[a-zA-Z0-9_-]{12,120}$/;
 
 export type CaptureMode = "ocr" | "barcode" | "dictation" | "photo";
 
@@ -315,6 +318,117 @@ export type ScannerJoinUrlParts = {
   joinAttemptId?: string;
 };
 
+export type ScannerJoinAttemptStatus = "waiting_for_offer" | "offer_posted" | "answer_posted" | "expired";
+
+export type ScannerJoinAttemptRecord = {
+  id: string;
+  createdAt: number;
+  expiresAt: number;
+  status: ScannerJoinAttemptStatus;
+  contributorId?: string;
+  deviceLabel?: string;
+  protocolVersion?: string;
+  capabilities?: string[];
+  offer?: string;
+  answer?: string;
+  offeredAt?: number;
+  answeredAt?: number;
+};
+
+export type ScannerJoinTokenRecord = {
+  token: string;
+  sessionId: string;
+  browserClaim?: string;
+  createdAt: number;
+  expiresAt: number;
+  graceExpiresAt: number;
+  revokedAt?: number;
+  rotatedTo?: string;
+  attempts: ScannerJoinAttemptRecord[];
+};
+
+export type ScannerReconnectRequestStatus = "waiting_for_browser" | "join_window_ready" | "expired";
+
+export type ScannerReconnectRequestRecord = {
+  id: string;
+  createdAt: number;
+  expiresAt: number;
+  status: ScannerReconnectRequestStatus;
+  joinUrl?: string;
+  joinToken?: string;
+  sessionId?: string;
+  answeredAt?: number;
+};
+
+export type ScannerWebPushSubscription = {
+  endpoint: string;
+  expirationTime?: number | null;
+  keys: {
+    auth: string;
+    p256dh: string;
+  };
+};
+
+export type ScannerPairingRecord = {
+  id: string;
+  secret: string;
+  browserSessionId: string;
+  displayName?: string;
+  phoneDeviceId?: string;
+  phoneLabel?: string;
+  pushSubscription?: ScannerWebPushSubscription;
+  createdAt: number;
+  lastSeenAt: number;
+  expiresAt: number;
+  reconnectRequests: ScannerReconnectRequestRecord[];
+};
+
+export type PublicScannerJoinToken = {
+  token: string;
+  sessionId: string;
+  expiresAt: string;
+  graceExpiresAt: string;
+  revokedAt?: string;
+  rotatedTo?: string;
+};
+
+export type PublicScannerJoinAttempt = {
+  id: string;
+  status: ScannerJoinAttemptStatus;
+  contributorId?: string;
+  deviceLabel?: string;
+  protocolVersion?: string;
+  capabilities?: string[];
+  createdAt: string;
+  expiresAt: string;
+  offeredAt?: string;
+  answeredAt?: string;
+  hasOffer: boolean;
+  hasAnswer: boolean;
+};
+
+export type PublicScannerReconnectRequest = {
+  id: string;
+  status: ScannerReconnectRequestStatus;
+  createdAt: string;
+  expiresAt: string;
+  joinUrl?: string;
+  joinToken?: string;
+  sessionId?: string;
+  answeredAt?: string;
+};
+
+export type PublicPendingScannerReconnectRequest = {
+  pairingId: string;
+  requestId: string;
+  browserSessionId: string;
+  displayName?: string;
+  phoneDeviceId?: string;
+  phoneLabel?: string;
+  createdAt: string;
+  expiresAt: string;
+};
+
 const CONTROL_MESSAGE_TYPES = new Set([
   "hello",
   "session_ready",
@@ -412,6 +526,110 @@ export function isScannerJoinAttemptId(value: unknown): value is string {
 
 export function isScannerContributorId(value: unknown): value is string {
   return typeof value === "string" && SCANNER_CONTRIBUTOR_ID_PATTERN.test(value);
+}
+
+export function isScannerPairingId(value: unknown): value is string {
+  return typeof value === "string" && SCANNER_PAIRING_ID_PATTERN.test(value);
+}
+
+export function scannerSignalIso(timestamp: number) {
+  return new Date(timestamp).toISOString();
+}
+
+export function isScannerJoinTokenActiveForNewAttempt(record: ScannerJoinTokenRecord, now = Date.now()) {
+  return !record.revokedAt && record.expiresAt > now;
+}
+
+export function normalizeScannerJoinAttempt(
+  record: ScannerJoinAttemptRecord,
+  now = Date.now()
+): ScannerJoinAttemptRecord {
+  if (record.expiresAt <= now && record.status !== "answer_posted") {
+    return { ...record, status: "expired" };
+  }
+  return record;
+}
+
+export function normalizeScannerJoinToken(record: ScannerJoinTokenRecord, now = Date.now()): ScannerJoinTokenRecord {
+  return { ...record, attempts: record.attempts.map((attempt) => normalizeScannerJoinAttempt(attempt, now)) };
+}
+
+export function normalizeScannerReconnectRequest(
+  record: ScannerReconnectRequestRecord,
+  now = Date.now()
+): ScannerReconnectRequestRecord {
+  if (record.expiresAt <= now && record.status === "waiting_for_browser") {
+    return { ...record, status: "expired" };
+  }
+  return record;
+}
+
+export function normalizeScannerPairing(record: ScannerPairingRecord, now = Date.now()): ScannerPairingRecord {
+  return {
+    ...record,
+    reconnectRequests: record.reconnectRequests
+      .map((request) => normalizeScannerReconnectRequest(request, now))
+      .filter((request) => request.expiresAt > now || request.status === "join_window_ready"),
+  };
+}
+
+export function publicScannerJoinToken(record: ScannerJoinTokenRecord): PublicScannerJoinToken {
+  return {
+    token: record.token,
+    sessionId: record.sessionId,
+    expiresAt: scannerSignalIso(record.expiresAt),
+    graceExpiresAt: scannerSignalIso(record.graceExpiresAt),
+    revokedAt: record.revokedAt ? scannerSignalIso(record.revokedAt) : undefined,
+    rotatedTo: record.rotatedTo,
+  };
+}
+
+export function publicScannerJoinAttempt(attempt: ScannerJoinAttemptRecord): PublicScannerJoinAttempt {
+  return {
+    id: attempt.id,
+    status: attempt.status,
+    contributorId: attempt.contributorId,
+    deviceLabel: attempt.deviceLabel,
+    protocolVersion: attempt.protocolVersion,
+    capabilities: attempt.capabilities,
+    createdAt: scannerSignalIso(attempt.createdAt),
+    expiresAt: scannerSignalIso(attempt.expiresAt),
+    offeredAt: attempt.offeredAt ? scannerSignalIso(attempt.offeredAt) : undefined,
+    answeredAt: attempt.answeredAt ? scannerSignalIso(attempt.answeredAt) : undefined,
+    hasOffer: Boolean(attempt.offer),
+    hasAnswer: Boolean(attempt.answer),
+  };
+}
+
+export function publicScannerReconnectRequest(
+  request: ScannerReconnectRequestRecord
+): PublicScannerReconnectRequest {
+  return {
+    id: request.id,
+    status: request.status,
+    createdAt: scannerSignalIso(request.createdAt),
+    expiresAt: scannerSignalIso(request.expiresAt),
+    joinUrl: request.joinUrl,
+    joinToken: request.joinToken,
+    sessionId: request.sessionId,
+    answeredAt: request.answeredAt ? scannerSignalIso(request.answeredAt) : undefined,
+  };
+}
+
+export function publicPendingScannerReconnectRequest(
+  pairing: ScannerPairingRecord,
+  request: ScannerReconnectRequestRecord
+): PublicPendingScannerReconnectRequest {
+  return {
+    pairingId: pairing.id,
+    requestId: request.id,
+    browserSessionId: pairing.browserSessionId,
+    displayName: pairing.displayName,
+    phoneDeviceId: pairing.phoneDeviceId,
+    phoneLabel: pairing.phoneLabel,
+    createdAt: scannerSignalIso(request.createdAt),
+    expiresAt: scannerSignalIso(request.expiresAt),
+  };
 }
 
 export function buildScannerJoinUrl(parts: ScannerJoinUrlParts): string {

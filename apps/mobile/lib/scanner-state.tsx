@@ -6,12 +6,8 @@ import * as Haptics from "expo-haptics";
 import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
 import type { ImagePickerAsset } from "expo-image-picker";
 import * as Linking from "expo-linking";
-import {
-  ExpoSpeechRecognitionModule,
-  useSpeechRecognitionEvent,
-} from "expo-speech-recognition";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type PropsWithChildren } from "react";
-import { Alert, AppState, Platform } from "react-native";
+import { Alert, AppState } from "react-native";
 import {
   encodeScannerControlMessage,
   encodePhotoTransferMessage,
@@ -27,7 +23,7 @@ import {
   type ScannerControlMessage,
 } from "@volt/scanner-protocol";
 import { makeBarcodeMessage, makeCaptureMessage, makeOcrMessage, type ScanItem } from "./scanner-messages";
-import { cropActionForVisibleFrame, type PhotoCropFrame } from "./photo-crop";
+import type { PhotoCropFrame } from "./photo-crop";
 import {
   buildMobileHelloMessage,
   createJoinAttempt,
@@ -47,6 +43,16 @@ import {
   type PendingPhoto,
   type PendingPhotoSummary,
 } from "./photo-retry-queue";
+import { createId, createPhotoContributorId } from "./scanner-ids";
+import { useScannerSettings, type ScannerSettings } from "./scanner-settings";
+import { useScannerDictation } from "./scanner-dictation";
+import {
+  getOcrResizeAction,
+  jpegUploadName,
+  PHOTO_QUEUE_LOW_STORAGE_BYTES,
+  prepareCapturedPendingPhoto,
+  preparePendingPhoto,
+} from "./scanner-photo-queue";
 
 export type { PendingPhotoSummary };
 
@@ -58,25 +64,12 @@ type ScannerMode = CaptureMode;
 type ChannelStatus = "idle" | "opening" | "open";
 type LegacyControlMessage = { kind: string; [key: string]: unknown };
 
-const SETTINGS_STORAGE_KEY = "volt.mobileScanner.settings.v1";
 const PAIRING_SESSION_STORAGE_KEY = "volt.mobileScanner.pairingSession.v2";
 const PENDING_PHOTOS_STORAGE_KEY = "volt.mobileScanner.pendingPhotos.v1";
 const MULTI_SCAN_WINDOW_MS = 650;
 const CLIPBOARD_POLL_MS = 900;
-const OCR_CAPTURE_MAX_DIMENSION = 1800;
-const PHOTO_CONTRIBUTOR_KEY = "volt-photo-contributor";
-const PHOTO_LONG_EDGE = 2200;
-const PHOTO_QUEUE_LOW_STORAGE_BYTES = 35 * 1024 * 1024;
 const REPEAT_SCAN_COOLDOWN_MS = Math.max(SCANNER_SCAN_COOLDOWN_MS, 1500);
 const DATA_CHANNEL_BUFFER_DRAIN_MS = 16;
-
-export type ScannerSettings = {
-  autoSendSingleBarcode: boolean;
-  confirmMultipleBarcodes: boolean;
-  dictationPunctuation: boolean;
-  ocrInsertIntoCursor: boolean;
-  scannerInsertIntoCursor: boolean;
-};
 
 type TextCapture = {
   photoUri: string;
@@ -86,14 +79,6 @@ type TextCaptureResult = {
   text: string;
   target: string;
   sentAt: string;
-};
-
-const defaultSettings: ScannerSettings = {
-  autoSendSingleBarcode: true,
-  confirmMultipleBarcodes: true,
-  dictationPunctuation: true,
-  ocrInsertIntoCursor: false,
-  scannerInsertIntoCursor: true,
 };
 
 export const barcodeTypes = [
@@ -173,43 +158,10 @@ function wait(delayMs: number) {
   return new Promise((resolve) => setTimeout(resolve, delayMs));
 }
 
-function createId(prefix: string) {
-  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-}
-
-function createPhotoContributorId() {
-  return `${PHOTO_CONTRIBUTOR_KEY}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-}
-
-function jpegUploadName(name: string | null | undefined, capturedAt: string, fallbackId: string) {
-  const baseName = name?.trim()
-    ? name.trim().replace(/\.[a-z0-9]+$/i, "")
-    : `volt-upload-${capturedAt.replace(/[:.]/g, "-")}-${fallbackId.slice(-6)}`;
-  return `${baseName}.jpg`;
-}
-
 function scannerMessageMode(item: ScanItem): ScannerMode {
   if (item.kind === "barcode") return "barcode";
   if (item.format === "dictation") return "dictation";
   return "ocr";
-}
-
-function getOcrResizeAction(photo: { width?: number; height?: number }) {
-  const { height, width } = photo;
-  if (!width || !height) return null;
-  const maxDimension = Math.max(width, height);
-  if (maxDimension <= OCR_CAPTURE_MAX_DIMENSION) return null;
-  const scale = OCR_CAPTURE_MAX_DIMENSION / maxDimension;
-  return { resize: { height: Math.round(height * scale), width: Math.round(width * scale) } };
-}
-
-function getPhotoResizeAction(photo: { width?: number; height?: number }) {
-  const { height, width } = photo;
-  if (!width || !height) return null;
-  const maxDimension = Math.max(width, height);
-  if (maxDimension <= PHOTO_LONG_EDGE) return null;
-  const scale = PHOTO_LONG_EDGE / maxDimension;
-  return { resize: { height: Math.round(height * scale), width: Math.round(width * scale) } };
 }
 
 export function ScannerProvider({ children }: PropsWithChildren) {
@@ -227,16 +179,12 @@ export function ScannerProvider({ children }: PropsWithChildren) {
   const [recognizingText, setRecognizingText] = useState(false);
   const [textCapture, setTextCapture] = useState<TextCapture | null>(null);
   const [textCaptureResult, setTextCaptureResult] = useState<TextCaptureResult | null>(null);
-  const [dictating, setDictating] = useState(false);
-  const [dictationStarting, setDictationStarting] = useState(false);
-  const [dictationTranscript, setDictationTranscript] = useState("");
-  const [dictationError, setDictationError] = useState<string | null>(null);
   const [photoSending, setPhotoSending] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [photoSentAt, setPhotoSentAt] = useState<string | null>(null);
   const [photoProgressLabel, setPhotoProgressLabel] = useState<string | null>(null);
   const [pendingPhotos, setPendingPhotos] = useState<PendingPhoto[]>([]);
-  const [settings, setSettings] = useState<ScannerSettings>(defaultSettings);
+  const { loadSettings, settings, settingsRef, setSetting } = useScannerSettings();
   const [targetHint, setTargetHint] = useState<string | null>(null);
 
   const peerRef = useRef<any>(null);
@@ -253,14 +201,6 @@ export function ScannerProvider({ children }: PropsWithChildren) {
   const lastSentScanRef = useRef<{ key: string; at: number } | null>(null);
   const pendingScannerItemsRef = useRef<ScanItem[]>([]);
   const scannerFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const settingsRef = useRef(defaultSettings);
-  const lastDictationRef = useRef("");
-  const lastDictationPartialRef = useRef("");
-  const dictationSessionIdRef = useRef<string | null>(null);
-  const dictationTranscriptRef = useRef("");
-  const dictationPermissionGrantedRef = useRef(false);
-  const dictationRequestedRef = useRef(false);
-  const dictationStopRequestedRef = useRef(false);
   const lastTextCaptureClipboardRef = useRef<string | null>(null);
   const photoContributorIdRef = useRef(createPhotoContributorId());
   const activePhotoBatchRef = useRef<{ id: string; expiresAt: number } | null>(null);
@@ -640,22 +580,14 @@ export function ScannerProvider({ children }: PropsWithChildren) {
   }, [pairWithJoinToken]);
 
   useEffect(() => {
-    AsyncStorage.getItem(SETTINGS_STORAGE_KEY)
-      .then((rawValue) => {
-        if (!rawValue) return;
-        const parsed = JSON.parse(rawValue) as Partial<ScannerSettings>;
-        const nextSettings = { ...defaultSettings, ...parsed };
-        settingsRef.current = nextSettings;
-        setSettings(nextSettings);
-      })
-      .catch(() => {});
+    void loadSettings();
     AsyncStorage.getItem(PENDING_PHOTOS_STORAGE_KEY)
       .then((rawValue) => {
         const parsed = rawValue ? JSON.parse(rawValue) : [];
         if (Array.isArray(parsed)) persistPendingPhotos(parsed as PendingPhoto[]);
       })
       .catch(() => persistPendingPhotos([]));
-  }, [persistPendingPhotos]);
+  }, [loadSettings, persistPendingPhotos]);
 
   useEffect(() => () => closeConnection(), [closeConnection]);
 
@@ -685,15 +617,6 @@ export function ScannerProvider({ children }: PropsWithChildren) {
     return () => subscription.remove();
   }, [flushPhotoWorker, persistPendingPhotos, reconnectToStoredSession, status]);
 
-  const setSetting = useCallback(<Key extends keyof ScannerSettings>(key: Key, value: ScannerSettings[Key]) => {
-    setSettings((current) => {
-      const next = { ...current, [key]: value };
-      settingsRef.current = next;
-      void AsyncStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(next));
-      return next;
-    });
-  }, []);
-
   const clearCameraFocus = useCallback(() => {
     setFocusMode("off");
     setFocusPoint(null);
@@ -721,7 +644,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
           type: "dictation",
           messageId: createId("dictation"),
           sentAt: new Date().toISOString(),
-          dictationSessionId: item.dictationSessionId ?? dictationSessionIdRef.current ?? createId("dictation"),
+          dictationSessionId: item.dictationSessionId ?? createId("dictation"),
           phase: item.dictationPhase ?? "final",
           text: item.barcode,
           capturedAt: item.scannedAt ?? new Date().toISOString(),
@@ -745,6 +668,45 @@ export function ScannerProvider({ children }: PropsWithChildren) {
     }
     if (!isPartialDictation) await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   }, [sendControl]);
+
+  const sendDictation = useCallback(({ phase, sessionId, text }: {
+    phase: "partial" | "final" | "stopped";
+    sessionId: string;
+    text?: string;
+  }) => {
+    if (phase === "stopped") {
+      sendControl({
+        type: "dictation",
+        messageId: createId("dictation-stop"),
+        sentAt: new Date().toISOString(),
+        dictationSessionId: sessionId,
+        phase: "stopped",
+        capturedAt: new Date().toISOString(),
+        insertIntoCursor: true,
+      });
+      return;
+    }
+    if (!text) return;
+    void sendScan({
+      ...makeCaptureMessage(text, "dictation", "text", true),
+      dictationPhase: phase,
+      dictationSessionId: sessionId,
+    });
+  }, [sendControl, sendScan]);
+
+  const {
+    dictating,
+    dictationError,
+    dictationStarting,
+    dictationTranscript,
+    prepareDictation,
+    startDictation,
+    stopDictation,
+  } = useScannerDictation({
+    connected,
+    dictationPunctuation: settings.dictationPunctuation,
+    sendDictation,
+  });
 
   const flushScannerItems = useCallback(() => {
     scannerFlushTimerRef.current = null;
@@ -850,118 +812,6 @@ export function ScannerProvider({ children }: PropsWithChildren) {
     };
   }, [sendClipboardTextCapture, textCapture]);
 
-  const sendDictationText = useCallback((text: string, phase: "partial" | "final") => {
-    const value = text.trim();
-    if (!value) return;
-    const sessionId = dictationSessionIdRef.current ?? createId("dictation");
-    dictationSessionIdRef.current = sessionId;
-    if (phase === "partial") {
-      if (value === lastDictationPartialRef.current) return;
-      lastDictationPartialRef.current = value;
-    } else {
-      if (value === lastDictationRef.current) return;
-      lastDictationRef.current = value;
-    }
-    void sendScan({
-      ...makeCaptureMessage(value, "dictation", "text", true),
-      dictationPhase: phase,
-      dictationSessionId: sessionId,
-    });
-  }, [sendScan]);
-
-  useSpeechRecognitionEvent("start", () => {
-    if (!dictationRequestedRef.current) {
-      ExpoSpeechRecognitionModule.stop();
-      return;
-    }
-    dictationStopRequestedRef.current = false;
-    setDictationStarting(false);
-    setDictating(true);
-    setDictationError(null);
-    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  });
-
-  useSpeechRecognitionEvent("end", () => {
-    if (dictationStopRequestedRef.current) void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    dictationStopRequestedRef.current = false;
-    dictationRequestedRef.current = false;
-    setDictationStarting(false);
-    setDictating(false);
-  });
-
-  useSpeechRecognitionEvent("result", (event) => {
-    const transcript = event.results[0]?.transcript?.trim() ?? "";
-    dictationTranscriptRef.current = transcript;
-    setDictationTranscript(transcript);
-    if (event.isFinal) sendDictationText(transcript, "final");
-  });
-
-  useSpeechRecognitionEvent("error", (event) => {
-    dictationStopRequestedRef.current = false;
-    dictationRequestedRef.current = false;
-    setDictationStarting(false);
-    setDictating(false);
-    setDictationError(event.message || event.error);
-  });
-
-  const prepareDictation = useCallback(async () => {
-    if (dictationPermissionGrantedRef.current) return;
-    const permissions = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
-    dictationPermissionGrantedRef.current = permissions.granted;
-    if (!permissions.granted) setDictationError("Microphone and speech recognition permissions are required.");
-  }, []);
-
-  const startDictation = useCallback(async () => {
-    if (!connected) {
-      setDictationStarting(false);
-      dictationRequestedRef.current = false;
-      setDictationError("Pair with Chrome before dictating.");
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      return;
-    }
-    if (!dictationPermissionGrantedRef.current) {
-      await prepareDictation();
-      if (!dictationPermissionGrantedRef.current) {
-        setDictationStarting(false);
-        dictationRequestedRef.current = false;
-        return;
-      }
-    }
-    dictationRequestedRef.current = true;
-    dictationStopRequestedRef.current = false;
-    lastDictationRef.current = "";
-    lastDictationPartialRef.current = "";
-    dictationSessionIdRef.current = createId("dictation");
-    dictationTranscriptRef.current = "";
-    setDictationTranscript("");
-    setDictationError(null);
-    setDictationStarting(true);
-    ExpoSpeechRecognitionModule.start({
-      lang: "en-US",
-      interimResults: true,
-      continuous: true,
-      addsPunctuation: settings.dictationPunctuation,
-    });
-  }, [connected, prepareDictation, settings.dictationPunctuation]);
-
-  const stopDictation = useCallback(() => {
-    dictationStopRequestedRef.current = true;
-    dictationRequestedRef.current = false;
-    setDictationStarting(false);
-    if (dictationSessionIdRef.current) {
-      sendControl({
-        type: "dictation",
-        messageId: createId("dictation-stop"),
-        sentAt: new Date().toISOString(),
-        dictationSessionId: dictationSessionIdRef.current,
-        phase: "stopped",
-        capturedAt: new Date().toISOString(),
-        insertIntoCursor: true,
-      });
-    }
-    ExpoSpeechRecognitionModule.stop();
-  }, [sendControl]);
-
   const captureText = useCallback(async () => {
     if (!cameraRef.current || recognizingText) return;
     setRecognizingText(true);
@@ -997,53 +847,6 @@ export function ScannerProvider({ children }: PropsWithChildren) {
     return batchId;
   }, []);
 
-  const queuePreparedPhoto = useCallback(async ({
-    batchId,
-    capturedAt,
-    height,
-    name,
-    now,
-    uri,
-    width,
-  }: {
-    batchId: string;
-    capturedAt: string;
-    height?: number;
-    name?: string | null;
-    now: number;
-    uri: string;
-    width?: number;
-  }) => {
-    const resizeAction = getPhotoResizeAction({ width, height });
-    const preparedPhoto = await manipulateAsync(
-      uri,
-      [resizeAction].filter(Boolean) as NonNullable<ReturnType<typeof getPhotoResizeAction>>[],
-      { base64: true, compress: 0.76, format: SaveFormat.JPEG }
-    );
-    const photoBase64 = preparedPhoto.base64 ?? null;
-    if (!photoBase64) throw new Error("Could not prepare photo data.");
-    const id = createId("photo");
-    const size = Math.ceil((photoBase64.length * 3) / 4);
-    const chunks = chunkPhotoBase64(photoBase64);
-    return {
-      id,
-      batchId,
-      name: jpegUploadName(name, capturedAt, id),
-      mimeType: "image/jpeg",
-      dataBase64: photoBase64,
-      capturedAt,
-      size,
-      width: preparedPhoto.width,
-      height: preparedPhoto.height,
-      createdAt: now,
-      updatedAt: now,
-      totalChunks: chunks.length,
-      nextChunkIndex: 0,
-      status: "queued" as const,
-      progress: 0,
-    } satisfies PendingPhoto;
-  }, []);
-
   const sendPhotoLibraryAssets = useCallback(async (assets: ImagePickerAsset[]) => {
     const imageAssets = assets.filter((asset) => asset.uri);
     if (!imageAssets.length) return 0;
@@ -1063,15 +866,19 @@ export function ScannerProvider({ children }: PropsWithChildren) {
         const now = batchStartedAt + index;
         const capturedAt = new Date(now).toISOString();
         setPhotoProgressLabel(`Preparing ${index + 1} of ${imageAssets.length}`);
-        queuedPhotos.push(await queuePreparedPhoto({
+        const pendingPhoto = await preparePendingPhoto({
           batchId,
           capturedAt,
           height: asset.height,
-          name: asset.fileName ?? asset.assetId,
+          name: asset.fileName ?? asset.assetId ?? "",
           now,
           uri: asset.uri,
           width: asset.width,
-        }));
+        });
+        queuedPhotos.push({
+          ...pendingPhoto,
+          name: jpegUploadName(asset.fileName ?? asset.assetId, capturedAt, pendingPhoto.id),
+        });
       }
       updatePendingPhotos((photos) => [...queuedPhotos, ...photos]);
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -1085,7 +892,7 @@ export function ScannerProvider({ children }: PropsWithChildren) {
     } finally {
       setPhotoProgressLabel(null);
     }
-  }, [connected, createRollingPhotoBatchId, flushPhotoWorker, queuePreparedPhoto, updatePendingPhotos]);
+  }, [connected, createRollingPhotoBatchId, flushPhotoWorker, updatePendingPhotos]);
 
   const sendPhotoCapture = useCallback(async (cropFrame?: PhotoCropFrame | null) => {
     setPhotoError(null);
@@ -1095,47 +902,11 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       return;
     }
     try {
-      let photoBase64: string | null = null;
-      let photoWidth: number | undefined;
-      let photoHeight: number | undefined;
       if (!cameraRef.current) throw new Error("Camera is not ready.");
       const capturedPhoto = await cameraRef.current.takePictureAsync({ quality: 0.82, skipProcessing: false });
-      if (!capturedPhoto.uri || !capturedPhoto.width || !capturedPhoto.height) throw new Error("Camera did not return photo data.");
-      const normalizedPhoto = await manipulateAsync(capturedPhoto.uri, [], { compress: 0.92, format: SaveFormat.JPEG });
-      const cropAction = cropActionForVisibleFrame({ width: normalizedPhoto.width, height: normalizedPhoto.height }, cropFrame);
-      const resizeAction = getPhotoResizeAction(normalizedPhoto);
-      const preparedPhoto = await manipulateAsync(
-        normalizedPhoto.uri,
-        [cropAction, resizeAction].filter(Boolean) as NonNullable<ReturnType<typeof getPhotoResizeAction>>[],
-        { base64: true, compress: 0.76, format: SaveFormat.JPEG }
-      );
-      photoBase64 = preparedPhoto.base64 ?? null;
-      photoWidth = preparedPhoto.width;
-      photoHeight = preparedPhoto.height;
-      if (!photoBase64) throw new Error("Could not prepare photo data.");
       const now = Date.now();
       const batchId = createRollingPhotoBatchId(now);
-      const id = createId("photo");
-      const capturedAt = new Date(now).toISOString();
-      const size = Math.ceil((photoBase64.length * 3) / 4);
-      const chunks = chunkPhotoBase64(photoBase64);
-      const pendingPhoto: PendingPhoto = {
-        id,
-        batchId,
-        name: `volt-photo-${capturedAt.replace(/[:.]/g, "-")}.jpg`,
-        mimeType: "image/jpeg",
-        dataBase64: photoBase64,
-        capturedAt,
-        size,
-        width: photoWidth,
-        height: photoHeight,
-        createdAt: now,
-        updatedAt: now,
-        totalChunks: chunks.length,
-        nextChunkIndex: 0,
-        status: "queued",
-        progress: 0,
-      };
+      const pendingPhoto = await prepareCapturedPendingPhoto({ batchId, cropFrame, capturedPhoto, now });
       updatePendingPhotos((photos) => [pendingPhoto, ...photos]);
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       if (connected) void flushPhotoWorker();

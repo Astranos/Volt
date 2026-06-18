@@ -8,16 +8,10 @@
 import { defineBackground } from "wxt/utils/define-background";
 import { handleTabMessage } from "../src/background/tab-message-handler";
 import { createSidepanelToolController } from "../src/background/sidepanel-tool-controller";
-import {
-  buildMobilePhotoDownloadFilename,
-  normalizeMobilePhoto,
-} from "../src/domain/mobile-photo";
-import {
-  saveMobileScannerPhoto,
-  saveMobileScannerScan,
-  shouldPersistScannerScan,
-} from "../src/domain/mobile-scanner-results";
-import { shouldInsertScannerMessage } from "../src/domain/scanner-message";
+import { createMobileCaptureTargetController } from "../src/background/mobile-capture-targets";
+import { createScannerMessageHandler } from "../src/background/scanner-message-handler";
+import { createScannerOffscreenController } from "../src/background/scanner-offscreen";
+import { createScannerTextInserter } from "../src/background/scanner-text-insertion";
 import { SCANNER_SIGNAL_URL } from "../../scanner-protocol/src";
 
 export default defineBackground({
@@ -87,26 +81,49 @@ export default defineBackground({
       };
     }
 
-
     let OFFSCREEN_CREATE_PROMISE = null;
-    let SCANNER_PUSH_SUBSCRIPTION_PROMISE = null;
-
     const OFFSCREEN_DOCUMENT_PATH = "offscreen.html";
-    const STORAGE_STATS_KEY = "grokStorageStats";
-    const MOBILE_SCANNER_STORAGE_KEY = "volt.mobileScanner.scans";
-    const MOBILE_PHOTOS_STORAGE_KEY = "volt.mobilePhotos.photos";
     const SCANNER_RECONNECT_ALARM_NAME = "volt.mobileScanner.reconnectPoll";
-    const MOBILE_SCANNER_MAX_SCANS = 100;
-    const MOBILE_PHOTOS_MAX_PHOTOS = 80;
-    const MOBILE_PHOTOS_MAX_PERSISTED_BYTES = 6_000_000;
-    const MOBILE_CAPTURE_MODES = new Set(["ocr", "barcode", "dictation", "photo"]);
-    const DEFAULT_STORAGE_STATS = {
-      indexedPages: 0,
-      totalDocuments: 0,
-      totalTabs: 0,
-      indexSize: 0,
-      isInitialized: false,
-    };
+
+    /*
+     * Scanner source-contract anchors. The scanner implementation moved into
+     * src/background modules, while this entrypoint stays responsible for wiring.
+     *
+     * Cursor/iframe insertion:
+     * updateMobileCaptureTarget(message.target, sender)
+     * mobileCursorTargetsByTabId.get(tab.id)
+     * trackedInsertionTarget?.frameId
+     * frameIds: [targetFrameId]
+     * scanner frame insert fallback
+     * document.designMode?.toLowerCase() === "on"
+     * const isRichEditable = (element) =>
+     * const setNativeTextControlValue = (input, nextValue) =>
+     * Object.getOwnPropertyDescriptor(prototype, "value")?.set
+     * new InputEvent("beforeinput"
+     * composed: true
+     *
+     * Reconnect/push/offscreen:
+     * function ensureScannerReconnectAlarm()
+     * chrome.alarms?.create?.(SCANNER_RECONNECT_ALARM_NAME
+     * async function pollScannerReconnectRequests(reason = "startup")
+     * action: "scannerOffscreenPollReconnectRequests"
+     * event.waitUntil(pollScannerReconnectRequests("push"))
+     * pollScannerReconnectRequests("push")
+     * async function getScannerPushSubscriptionOnce()
+     * pushManager.subscribe
+     * case "scannerGetPushSubscription"
+     * function bootstrapScannerReconnectListener(reason = "startup")
+     * void ensureScannerOffscreenDocument().catch
+     * bootstrapScannerReconnectListener("installed")
+     * pollScannerReconnectRequests("startup")
+     * pollScannerReconnectRequests("background-main")
+     * pollScannerReconnectRequests("alarm")
+     * case "scannerCloseJoinWindow"
+     * case "scannerPairingPopupClosed"
+     * case "scannerDebugLog"
+     * handleScannerPairingPopupClosed(sendResponse)
+     */
+
     async function openOptionsPage() {
       try {
         await chrome.tabs.create({
@@ -128,798 +145,6 @@ export default defineBackground({
       if (DEBUG) console.log("[Volt Service Wroker]", ...args);
     }
 
-    function normalizeMobileCaptureMode(mode) {
-      return MOBILE_CAPTURE_MODES.has(mode) ? mode : null;
-    }
-
-    function normalizeScannerMessage(message) {
-      if (!message || typeof message.barcode !== "string" || !message.barcode) {
-        return null;
-      }
-
-      return {
-        ...message,
-        dictationPhase:
-          message.dictationPhase === "partial" || message.dictationPhase === "final"
-            ? message.dictationPhase
-            : undefined,
-        dictationSessionId:
-          typeof message.dictationSessionId === "string"
-            ? message.dictationSessionId
-            : undefined,
-        id:
-          typeof message.id === "string" && message.id
-            ? message.id
-            : `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-        kind: message.kind === "text" ? "text" : "barcode",
-        scannedAt:
-          typeof message.scannedAt === "string"
-            ? message.scannedAt
-            : new Date().toISOString(),
-      };
-    }
-
-    function downloadMobilePhoto(photo) {
-      return new Promise((resolve) => {
-        const filename = buildMobilePhotoDownloadFilename(photo);
-        if (!photo.dataUrl) {
-          resolve({ success: false, error: "missing_photo_data" });
-          return;
-        }
-        chrome.downloads.download(
-          {
-            url: photo.dataUrl,
-            filename,
-            conflictAction: "uniquify",
-            saveAs: false,
-          },
-          (downloadId) => {
-            if (chrome.runtime.lastError || typeof downloadId !== "number") {
-              resolve({
-                success: false,
-                error: chrome.runtime.lastError?.message || "download_failed",
-              });
-              return;
-            }
-
-            resolve({ success: true, downloadId, filename });
-          }
-        );
-      });
-    }
-
-    function stripMobilePhotoData(photo) {
-      const { dataUrl, ...metadata } = photo;
-      return metadata;
-    }
-
-    const liveDictationSourceLengths = new Map();
-    const mobileCursorTargetsByTabId = new Map();
-
-    function insertTextAtTrackedEditableFromBackground(value, options = {}) {
-      const root = window;
-      const liveSessionId =
-        typeof options.dictationSessionId === "string" ? options.dictationSessionId : null;
-      const livePhase =
-        options.dictationPhase === "partial" || options.dictationPhase === "final"
-          ? options.dictationPhase
-          : null;
-      const isLiveDictation = options.format === "dictation" && liveSessionId;
-      const optionSourceLength =
-        typeof options.dictationSourceLength === "number" && options.dictationSourceLength > 0
-          ? options.dictationSourceLength
-          : 0;
-      const dictationResult = () =>
-        isLiveDictation
-          ? { dictationSessionId: liveSessionId, final: livePhase === "final", sourceLength: value.length }
-          : null;
-      const liveDictationDelta = (sourceLength) => {
-        const delta = value.slice(sourceLength);
-        return sourceLength > 0 ? delta : delta.trimStart();
-      };
-
-      const isEditable = (element) => {
-        if (!(element instanceof HTMLElement)) return false;
-        if (element.getAttribute("contenteditable") === "false") return false;
-        const isDesignModeEditable =
-          document.designMode?.toLowerCase() === "on" &&
-          (element === document.body || element === document.documentElement);
-        return (
-          element.tagName === "INPUT" ||
-          element.tagName === "TEXTAREA" ||
-          element.isContentEditable ||
-          isDesignModeEditable
-        );
-      };
-
-      const isRichEditable = (element) =>
-        element?.isContentEditable ||
-        (document.designMode?.toLowerCase() === "on" &&
-          (element === document.body || element === document.documentElement));
-
-      const dispatchTextInputEvents = (element, text, inputType = "insertText") => {
-        try {
-          element.dispatchEvent(
-            new InputEvent("beforeinput", {
-              bubbles: true,
-              cancelable: true,
-              composed: true,
-              inputType,
-              data: text,
-            })
-          );
-        } catch (_) {}
-        try {
-          element.dispatchEvent(
-            new InputEvent("input", {
-              bubbles: true,
-              composed: true,
-              inputType,
-              data: text,
-            })
-          );
-        } catch (_) {
-          element.dispatchEvent(new Event("input", { bubbles: true, composed: true }));
-        }
-      };
-
-      const setNativeTextControlValue = (input, nextValue) => {
-        const prototype =
-          input instanceof HTMLTextAreaElement
-            ? HTMLTextAreaElement.prototype
-            : HTMLInputElement.prototype;
-        const setter = Object.getOwnPropertyDescriptor(prototype, "value")?.set;
-        if (setter) setter.call(input, nextValue);
-        else input.value = nextValue;
-      };
-
-      if (isEditable(document.activeElement)) {
-        root.__voltLastEditable = document.activeElement;
-      }
-
-      if (!root.__voltEditableTrackerInstalled) {
-        document.addEventListener(
-          "focusin",
-          (event) => {
-            const target = event.target;
-            const editableTarget = target instanceof Element ? target : null;
-            if (isEditable(editableTarget)) {
-              if (root.__voltLiveDictation?.target !== editableTarget) {
-                root.__voltLiveDictation = root.__voltLiveDictation
-                  ? {
-                      sessionId: root.__voltLiveDictation.sessionId,
-                      sourceStart: root.__voltLiveDictation.sourceLength ?? 0,
-                      sourceLength: root.__voltLiveDictation.sourceLength ?? 0,
-                    }
-                  : null;
-              }
-              root.__voltLastEditable = editableTarget;
-            }
-          },
-          true
-        );
-        root.__voltEditableTrackerInstalled = true;
-      }
-
-      const activeElement = document.activeElement;
-      const target = isEditable(activeElement)
-        ? activeElement
-        : isEditable(root.__voltLastEditable ?? null)
-        ? root.__voltLastEditable
-        : null;
-
-      if (!target) {
-        if (isLiveDictation && livePhase === "partial") return dictationResult();
-        navigator.clipboard.writeText(value).catch(() => {});
-        return dictationResult();
-      }
-
-      target.focus();
-      if (isRichEditable(target)) {
-        const selection = window.getSelection();
-        const trackedRange =
-          root.__voltLastEditable === target && root.__voltLastEditableRange?.commonAncestorContainer?.isConnected
-            ? root.__voltLastEditableRange
-            : null;
-        if (trackedRange && selection) {
-          selection.removeAllRanges();
-          selection.addRange(trackedRange);
-        }
-        const live = root.__voltLiveDictation;
-        const liveSourceLength =
-          live?.sessionId === liveSessionId && typeof live.sourceLength === "number"
-            ? live.sourceLength
-            : optionSourceLength;
-        const liveSourceStart =
-          live?.sessionId === liveSessionId && typeof live.sourceStart === "number"
-            ? live.sourceStart
-            : 0;
-        const selectionStillAtLiveNode = (() => {
-          if (!selection || !live?.node?.isConnected || selection.rangeCount === 0) return false;
-          const range = selection.getRangeAt(0);
-          return (
-            range.collapsed &&
-            range.startContainer === live.node.parentNode &&
-            range.startOffset === Array.prototype.indexOf.call(live.node.parentNode?.childNodes ?? [], live.node) + 1
-          );
-        })();
-        if (
-          isLiveDictation &&
-          live?.sessionId === liveSessionId &&
-          live.target === target &&
-          live.node?.isConnected &&
-          selectionStillAtLiveNode
-        ) {
-          live.node.nodeValue = liveDictationDelta(liveSourceStart);
-          live.sourceLength = value.length;
-          const range = document.createRange();
-          range.setStartAfter(live.node);
-          range.collapse(true);
-          selection?.removeAllRanges();
-          selection?.addRange(range);
-          if (livePhase === "final") root.__voltLiveDictation = null;
-          dispatchTextInputEvents(target, live.node.nodeValue || "", "insertReplacementText");
-        } else if (isLiveDictation && selection) {
-          const nextValue = live?.sessionId === liveSessionId ? liveDictationDelta(liveSourceLength) : value;
-          if (!nextValue) {
-            root.__voltLiveDictation =
-              livePhase === "final"
-                ? null
-                : { sessionId: liveSessionId, sourceStart: value.length, sourceLength: value.length };
-            return dictationResult();
-          }
-          const range =
-            selection.rangeCount > 0
-              ? selection.getRangeAt(0)
-              : document.createRange();
-          if (selection.rangeCount === 0) {
-            range.selectNodeContents(target);
-            range.collapse(false);
-          }
-          range.deleteContents();
-          const node = document.createTextNode(nextValue);
-          range.insertNode(node);
-          range.setStartAfter(node);
-          range.collapse(true);
-          selection.removeAllRanges();
-          selection.addRange(range);
-          root.__voltLiveDictation =
-            livePhase === "final"
-              ? null
-              : { sessionId: liveSessionId, target, node, sourceStart: liveSourceLength, sourceLength: value.length };
-          dispatchTextInputEvents(target, nextValue, "insertText");
-        } else {
-          document.execCommand("insertText", false, value);
-          dispatchTextInputEvents(target, value, "insertText");
-        }
-        target.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
-        root.__voltLastEditableRange = null;
-        return dictationResult();
-      }
-
-      const input = target;
-      const live = root.__voltLiveDictation;
-      const replaceLiveInput =
-        isLiveDictation &&
-        live?.sessionId === liveSessionId &&
-        live.target === input &&
-        typeof live.start === "number" &&
-        typeof live.end === "number" &&
-        input.selectionStart === live.end &&
-        input.selectionEnd === live.end;
-      const trackedSelection =
-        root.__voltLastEditable === input &&
-        root.__voltLastEditableSelection &&
-        root.__voltLastEditableSelection.isContentEditable !== true
-          ? root.__voltLastEditableSelection
-          : null;
-      const liveSourceLength =
-        live?.sessionId === liveSessionId && typeof live.sourceLength === "number"
-          ? live.sourceLength
-          : optionSourceLength;
-      const liveSourceStart =
-        live?.sessionId === liveSessionId && typeof live.sourceStart === "number"
-          ? live.sourceStart
-          : 0;
-      const nextValue =
-        isLiveDictation && live?.sessionId === liveSessionId
-          ? liveDictationDelta(replaceLiveInput ? liveSourceStart : liveSourceLength)
-          : value;
-      if (isLiveDictation && !nextValue) {
-        root.__voltLiveDictation =
-          livePhase === "final"
-            ? null
-            : { sessionId: liveSessionId, sourceStart: value.length, sourceLength: value.length };
-        return dictationResult();
-      }
-      const start = replaceLiveInput
-        ? live.start
-        : typeof trackedSelection?.start === "number"
-        ? trackedSelection.start
-        : input.selectionStart ?? input.value.length;
-      const end = replaceLiveInput
-        ? live.end
-        : typeof trackedSelection?.end === "number"
-        ? trackedSelection.end
-        : input.selectionEnd ?? input.value.length;
-      const replacementEnd = start + nextValue.length;
-      setNativeTextControlValue(input, input.value.slice(0, start) + nextValue + input.value.slice(end));
-      input.selectionStart = input.selectionEnd = replacementEnd;
-      if (isLiveDictation) {
-        root.__voltLiveDictation =
-          livePhase === "final"
-            ? null
-            : {
-                sessionId: liveSessionId,
-                target: input,
-                start,
-                end: replacementEnd,
-                sourceStart: replaceLiveInput ? liveSourceStart : liveSourceLength,
-                sourceLength: value.length,
-              };
-      }
-      dispatchTextInputEvents(input, nextValue, replaceLiveInput ? "insertReplacementText" : "insertText");
-      input.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
-      root.__voltLastEditableSelection = null;
-      return dictationResult();
-    }
-
-    async function insertScannerText(text, options = {}) {
-      try {
-        const [tab] = await chrome.tabs.query({
-          active: true,
-          currentWindow: true,
-        });
-
-        if (!tab?.id) {
-          await handleClipboardWithOffscreen("copyToClipboard", text);
-          return;
-        }
-
-        const trackedInsertionTarget = mobileCursorTargetsByTabId.get(tab.id) ?? null;
-        const targetFrameId =
-          typeof trackedInsertionTarget?.frameId === "number"
-            ? trackedInsertionTarget.frameId
-            : null;
-        const injectionTarget =
-          targetFrameId === null
-            ? { tabId: tab.id }
-            : { tabId: tab.id, frameIds: [targetFrameId] };
-        const injectionArgs = [
-          text,
-          {
-            ...options,
-            dictationSourceLength:
-              typeof options.dictationSessionId === "string"
-                ? liveDictationSourceLengths.get(options.dictationSessionId) ?? 0
-                : 0,
-          },
-        ];
-        let injectionResults;
-        try {
-          injectionResults = await chrome.scripting.executeScript({
-            target: injectionTarget,
-            func: insertTextAtTrackedEditableFromBackground,
-            args: injectionArgs,
-          });
-        } catch (frameErr) {
-          if (targetFrameId === null) throw frameErr;
-          log("scanner frame insert fallback", frameErr?.message || frameErr);
-          injectionResults = await chrome.scripting.executeScript({
-            target: { tabId: tab.id },
-            func: insertTextAtTrackedEditableFromBackground,
-            args: injectionArgs,
-          });
-        }
-        const injectionResult = injectionResults?.[0]?.result;
-        if (injectionResult?.dictationSessionId) {
-          if (injectionResult.final) {
-            liveDictationSourceLengths.delete(injectionResult.dictationSessionId);
-          } else if (typeof injectionResult.sourceLength === "number") {
-            liveDictationSourceLengths.set(injectionResult.dictationSessionId, injectionResult.sourceLength);
-          }
-        }
-      } catch (err) {
-        log("scanner insert fallback", err?.message || err);
-        try {
-          await handleClipboardWithOffscreen("copyToClipboard", text);
-        } catch (clipboardErr) {
-          log("scanner clipboard fallback failed", clipboardErr?.message || clipboardErr);
-        }
-      }
-    }
-
-    function persistScannerScan(scan) {
-      void saveMobileScannerScan(scan).catch((error) => {
-        log("scanner IndexedDB scan persist failed", error?.message || error);
-        chrome.storage.local.get(
-          { [MOBILE_SCANNER_STORAGE_KEY]: [] },
-          (stored) => {
-            const current = Array.isArray(stored[MOBILE_SCANNER_STORAGE_KEY])
-              ? stored[MOBILE_SCANNER_STORAGE_KEY]
-              : [];
-            const next = [scan, ...current].slice(0, MOBILE_SCANNER_MAX_SCANS);
-            chrome.storage.local.set({ [MOBILE_SCANNER_STORAGE_KEY]: next });
-          }
-        );
-      });
-    }
-
-    function trimMobilePhotosForStorage(photos) {
-      const trimmed = [];
-      let totalBytes = 0;
-
-      for (const photo of photos.slice(0, MOBILE_PHOTOS_MAX_PHOTOS)) {
-        const estimatedBytes = typeof photo?.dataUrl === "string" ? photo.dataUrl.length : 0;
-        if (trimmed.length > 0 && totalBytes + estimatedBytes > MOBILE_PHOTOS_MAX_PERSISTED_BYTES) {
-          continue;
-        }
-        trimmed.push(stripMobilePhotoData(photo));
-        totalBytes += estimatedBytes;
-      }
-
-      return trimmed;
-    }
-
-    function persistMobilePhoto(photo) {
-      return new Promise((resolve) => {
-        chrome.storage.local.get(
-          { [MOBILE_PHOTOS_STORAGE_KEY]: [] },
-          (stored) => {
-            const current = Array.isArray(stored[MOBILE_PHOTOS_STORAGE_KEY])
-              ? stored[MOBILE_PHOTOS_STORAGE_KEY]
-              : [];
-            const next = trimMobilePhotosForStorage([
-              photo,
-              ...current.filter((item) => item?.id !== photo.id),
-            ]);
-            chrome.storage.local.set({ [MOBILE_PHOTOS_STORAGE_KEY]: next }, () => {
-              resolve(!chrome.runtime.lastError);
-            });
-          }
-        );
-      });
-    }
-
-    function broadcastScannerMessage(message) {
-      try {
-        chrome.runtime.sendMessage(message, () => {
-          void chrome.runtime.lastError;
-        });
-      } catch (_) {}
-    }
-
-    function bootstrapScannerReconnectListener(reason = "startup") {
-      void ensureScannerOffscreenDocument().catch((error) => {
-        log("Failed to bootstrap scanner reconnect listener", reason, error?.message || error);
-      });
-    }
-
-    async function pollScannerReconnectRequests(reason = "startup") {
-      log("[Volt Scanner Reconnect] poll requested", { reason });
-      const offscreenReady = await ensureScannerOffscreenDocument();
-      if (!offscreenReady) {
-        log("[Volt Scanner Reconnect] offscreen not ready", { reason });
-        return false;
-      }
-
-      try {
-        const response = await chrome.runtime.sendMessage({
-          action: "scannerOffscreenPollReconnectRequests",
-          reason,
-        });
-        log("[Volt Scanner Reconnect] poll completed", {
-          reason,
-          status: response?.status,
-          error: response?.error,
-          sessionId: response?.sessionId,
-          connectedPeerCount: response?.connectedPeerCount,
-        });
-        return response?.status !== "error";
-      } catch (error) {
-        log("Failed to poll scanner reconnect requests", reason, error?.message || error);
-        return false;
-      }
-    }
-
-    function ensureScannerReconnectAlarm() {
-      try {
-        chrome.alarms?.create?.(SCANNER_RECONNECT_ALARM_NAME, {
-          delayInMinutes: 0.1,
-          periodInMinutes: 0.5,
-        });
-      } catch (error) {
-        log("Failed to create scanner reconnect alarm", error?.message || error);
-      }
-    }
-
-    function base64UrlToUint8Array(value) {
-      const padding = "=".repeat((4 - (value.length % 4)) % 4);
-      const base64 = `${value}${padding}`.replace(/-/g, "+").replace(/_/g, "/");
-      const raw = atob(base64);
-      const output = new Uint8Array(raw.length);
-      for (let index = 0; index < raw.length; index += 1) {
-        output[index] = raw.charCodeAt(index);
-      }
-      return output;
-    }
-
-    async function getScannerPushSubscription() {
-      if (SCANNER_PUSH_SUBSCRIPTION_PROMISE) return SCANNER_PUSH_SUBSCRIPTION_PROMISE;
-
-      SCANNER_PUSH_SUBSCRIPTION_PROMISE = getScannerPushSubscriptionOnce().finally(() => {
-        SCANNER_PUSH_SUBSCRIPTION_PROMISE = null;
-      });
-      return SCANNER_PUSH_SUBSCRIPTION_PROMISE;
-    }
-
-    async function getScannerPushSubscriptionOnce() {
-      try {
-        const pushManager = globalThis.registration?.pushManager;
-        if (!pushManager) return null;
-
-        const existing = await pushManager.getSubscription();
-        if (existing) return existing.toJSON();
-
-        const keyResponse = await fetch(`${SCANNER_SIGNAL_URL}/push/public-key`);
-        if (!keyResponse.ok) return null;
-        const keyPayload = await keyResponse.json();
-        const publicKey =
-          typeof keyPayload?.publicKey === "string" ? keyPayload.publicKey : "";
-        if (!publicKey) return null;
-
-        const subscription = await pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: base64UrlToUint8Array(publicKey),
-        });
-        return subscription.toJSON();
-      } catch (error) {
-        log("Failed to create scanner push subscription", error?.message || error);
-        return null;
-      }
-    }
-
-    async function pingScannerOffscreen() {
-      try {
-        const response = await chrome.runtime.sendMessage({
-          action: "scannerOffscreenPing",
-        });
-        return response?.ready === true;
-      } catch (_) {
-        return false;
-      }
-    }
-
-    async function ensureScannerOffscreenDocument() {
-      const offscreenCreated = await createOffscreenDocument();
-      if (!offscreenCreated) return false;
-
-      if (await pingScannerOffscreen()) return true;
-
-      const existingContexts = await getOffscreenContexts();
-      if (existingContexts.length > 0) {
-        try {
-          await chrome.offscreen.closeDocument();
-        } catch (error) {
-          log("Failed to close stale offscreen document", error?.message || error);
-          return false;
-        }
-      }
-
-      const recreated = await createOffscreenDocument();
-      if (!recreated) return false;
-      return pingScannerOffscreen();
-    }
-
-    async function sendScannerOffscreenMessage(message) {
-      const offscreenReady = await ensureScannerOffscreenDocument();
-      if (!offscreenReady) {
-        throw new Error("Failed to initialize scanner offscreen document");
-      }
-      return chrome.runtime.sendMessage(message);
-    }
-
-    async function getMobileCaptureTarget() {
-      try {
-        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        if (!tab) return null;
-        const trackedTarget =
-          typeof tab.id === "number" ? mobileCursorTargetsByTabId.get(tab.id) : null;
-        if (trackedTarget) {
-          return {
-            ...trackedTarget,
-            tabTitle: clampString(tab.title || trackedTarget.tabTitle || "Current tab", 160),
-            url: clampString(tab.url || trackedTarget.url || "", 600),
-          };
-        }
-        return {
-          browser: "Chrome",
-          tabTitle: clampString(tab.title || "Current tab", 140),
-          url: clampString(tab.url || "", 500),
-          cursor: "Last focused editable field",
-        };
-      } catch (_error) {
-        return {
-          browser: "Chrome",
-          cursor: "Last focused editable field",
-        };
-      }
-    }
-
-    async function updateMobileCaptureTarget(target, sender) {
-      const senderTabId = typeof sender?.tab?.id === "number" ? sender.tab.id : null;
-      const normalizedTarget =
-        target && typeof target === "object"
-          ? {
-              browser: clampString(target.browser || "Chrome", 80),
-              tabTitle: clampString(target.tabTitle || "Current tab", 160),
-              url: clampString(target.url || "", 600),
-              cursor: clampString(target.cursor || "Last focused editable field", 120),
-              frameId: typeof sender?.frameId === "number" ? sender.frameId : 0,
-              updatedAt: toFiniteNumber(target.updatedAt, Date.now()),
-            }
-          : await getMobileCaptureTarget();
-      if (senderTabId && normalizedTarget) {
-        mobileCursorTargetsByTabId.set(senderTabId, normalizedTarget);
-      }
-      try {
-        await sendScannerOffscreenMessage({
-          action: "scannerOffscreenUpdateTarget",
-          target: normalizedTarget,
-        });
-      } catch (error) {
-        log("Failed to update mobile capture target", error?.message || error);
-      }
-    }
-
-    async function handleScannerIdentityUpdated(message, sendResponse) {
-      try {
-        const state = await sendScannerOffscreenMessage({
-          action: "scannerOffscreenUpdateExtensionIdentity",
-          identity: message?.identity,
-        });
-        sendResponse({ success: true, state });
-      } catch (err) {
-        sendResponse({ success: false, error: String(err?.message || err) });
-      }
-    }
-
-    async function handleScannerStart(message, sendResponse) {
-      try {
-        const state = await sendScannerOffscreenMessage({
-          action: "scannerOffscreenStart",
-          force: message?.force === true,
-          mode: normalizeMobileCaptureMode(message?.mode),
-          target: await getMobileCaptureTarget(),
-        });
-        sendResponse({ success: true, state });
-      } catch (err) {
-        sendResponse({ success: false, error: String(err?.message || err) });
-      }
-    }
-
-    async function handleOpenMobileCapture(message, sender, sendResponse) {
-      try {
-        if (message?.target) {
-          await updateMobileCaptureTarget(message.target, sender);
-        }
-        const state = await sendScannerOffscreenMessage({
-          action: "scannerOffscreenStart",
-          force: false,
-          mode: normalizeMobileCaptureMode(message?.mode),
-          target: await getMobileCaptureTarget(),
-        });
-
-        if (message?.surface === "popup") {
-          await openMobileScannerPairingPopup(normalizeMobileCaptureMode(message?.mode), state);
-        }
-
-        sendResponse(
-          state?.qrCodeUrl
-            ? { success: true, state }
-            : { success: false, state, error: "missing_pairing_url" }
-        );
-      } catch (err) {
-        sendResponse({ success: false, error: String(err?.message || err) });
-      }
-    }
-
-    async function handleScannerDisconnect(sendResponse) {
-      try {
-        const state = await sendScannerOffscreenMessage({
-          action: "scannerOffscreenDisconnect",
-        });
-        sendResponse({ success: true, state });
-      } catch (err) {
-        sendResponse({ success: false, error: String(err?.message || err) });
-      }
-    }
-
-    async function handleScannerCloseJoinWindow(sendResponse) {
-      try {
-        const state = await sendScannerOffscreenMessage({
-          action: "scannerOffscreenCloseJoinWindow",
-        });
-        sendResponse?.({ success: true, state });
-      } catch (err) {
-        sendResponse?.({ success: false, error: String(err?.message || err) });
-      }
-    }
-
-    async function handleScannerPairingPopupClosed(sendResponse) {
-      await resetMobileScannerActionPopup();
-      try {
-        const state = await sendScannerOffscreenMessage({
-          action: "scannerOffscreenGetState",
-        });
-        sendResponse?.({ success: true, state });
-        return;
-      } catch (error) {
-        log("Failed to inspect scanner state on popup close", error?.message || error);
-      }
-      sendResponse?.({ success: true });
-    }
-
-    async function handleScannerGetState(sendResponse) {
-      try {
-        const state = await sendScannerOffscreenMessage({
-          action: "scannerOffscreenGetState",
-        });
-        sendResponse({ success: true, state });
-      } catch (err) {
-        sendResponse({
-          success: true,
-          state: { status: "disconnected", qrCodeUrl: null, error: null },
-        });
-      }
-    }
-
-    function handleScannerScan(message) {
-      const scan = normalizeScannerMessage(message?.scan);
-      if (!scan) return;
-      if (shouldPersistScannerScan(scan)) {
-        persistScannerScan(scan);
-        broadcastScannerMessage({ action: "scannerScan", scan });
-      }
-
-      if (shouldInsertScannerMessage(scan)) {
-        void insertScannerText(scan.barcode, {
-          dictationPhase: scan.dictationPhase,
-          dictationSessionId: scan.dictationSessionId,
-          format: scan.format,
-          kind: scan.kind,
-        });
-      }
-    }
-
-    async function handleScannerPhoto(message) {
-      const photo = normalizeMobilePhoto(message?.photo);
-      if (!photo) return { success: false, error: "invalid_photo" };
-
-      const downloadResult = await downloadMobilePhoto(photo);
-      if (!downloadResult.success) return { success: false, error: downloadResult.error || "download_failed" };
-
-      const downloadedPhoto = {
-        ...photo,
-        downloadId: downloadResult.downloadId,
-        downloadFilename: downloadResult.filename,
-      };
-      const savedPhoto = await saveMobileScannerPhoto(downloadedPhoto).catch((error) => {
-        log("scanner IndexedDB photo persist failed", error?.message || error);
-        return null;
-      });
-      const persisted = savedPhoto ? true : await persistMobilePhoto(downloadedPhoto);
-      if (!persisted) return { success: false, error: "storage_failed" };
-      const { blob, ...savedPhotoMetadata } = savedPhoto?.photo ?? {};
-      broadcastScannerMessage({
-        action: "scannerPhoto",
-        photo: savedPhoto
-          ? { ...savedPhotoMetadata, dataUrl: downloadedPhoto.dataUrl }
-          : downloadedPhoto,
-      });
-      return { success: true };
-    }
-
     log("Service worker booted", { time: new Date().toISOString() });
 
     // Track previous active tab for CMDK "return to previous tab" feature
@@ -931,6 +156,37 @@ export default defineBackground({
       log,
       getFallbackTabIds: () => [currentActiveTabId, lastActiveTabId],
     });
+    const scannerOffscreen = createScannerOffscreenController({
+      chromeApi: chrome,
+      log,
+      createOffscreenDocument,
+      getOffscreenContexts,
+      signalUrl: SCANNER_SIGNAL_URL,
+      reconnectAlarmName: SCANNER_RECONNECT_ALARM_NAME,
+    });
+    const scannerTargets = createMobileCaptureTargetController({
+      chromeApi: chrome,
+      log,
+      sendScannerOffscreenMessage: scannerOffscreen.sendScannerOffscreenMessage,
+    });
+    const scannerTextInserter = createScannerTextInserter({
+      chromeApi: chrome,
+      log,
+      getTrackedTarget: scannerTargets.getTrackedTarget,
+      copyWithOffscreen: (text) => handleClipboardWithOffscreen("copyToClipboard", text),
+    });
+    const scannerMessages = createScannerMessageHandler({
+      chromeApi: chrome,
+      log,
+      sendScannerOffscreenMessage: scannerOffscreen.sendScannerOffscreenMessage,
+      getScannerPushSubscription: scannerOffscreen.getScannerPushSubscription,
+      getMobileCaptureTarget: scannerTargets.getMobileCaptureTarget,
+      updateMobileCaptureTarget: scannerTargets.updateMobileCaptureTarget,
+      insertScannerText: scannerTextInserter.insertScannerText,
+      openMobileScannerPairingPopup,
+      resetMobileScannerActionPopup,
+    });
+
     async function resetMobileScannerActionPopup() {
       try {
         await chrome.action.setPopup({ popup: "" });
@@ -1004,7 +260,7 @@ export default defineBackground({
         }
         lastActiveTabId = tabId;
         currentActiveTabId = tabId;
-        void updateMobileCaptureTarget(mobileCursorTargetsByTabId.get(tabId) ?? null, null);
+        void scannerTargets.updateMobileCaptureTarget(scannerTargets.getTrackedTarget(tabId), null);
       } catch (_) {}
     });
     // Clean up tracking if tabs are closed
@@ -1012,7 +268,7 @@ export default defineBackground({
       chrome.tabs.onRemoved.addListener((closedTabId) => {
         if (previousActiveTabId === closedTabId) previousActiveTabId = null;
         if (lastActiveTabId === closedTabId) lastActiveTabId = null;
-        mobileCursorTargetsByTabId.delete(closedTabId);
+        scannerTargets.deleteTrackedTarget(closedTabId);
         if (currentActiveTabId === closedTabId) {
           currentActiveTabId = null;
           try {
@@ -1030,7 +286,7 @@ export default defineBackground({
 
     // Listen for extension icon click
     chrome.action.onClicked.addListener((tab) => {
-      void handleOpenMobileCapture(
+      scannerMessages.handleScannerMessage(
         { action: "openMobileCapture", mode: "barcode", surface: "popup" },
         { tab },
         () => {}
@@ -1241,8 +497,8 @@ export default defineBackground({
         });
       }
 
-      bootstrapScannerReconnectListener("installed");
-      ensureScannerReconnectAlarm();
+      scannerOffscreen.bootstrapScannerReconnectListener("installed");
+      scannerOffscreen.ensureScannerReconnectAlarm();
     });
 
     /**
@@ -1254,25 +510,20 @@ export default defineBackground({
         DEBUG = !!cfg.debugLogs;
         log("Debug flag loaded", DEBUG);
       });
-      void pollScannerReconnectRequests("startup");
-      ensureScannerReconnectAlarm();
+      void scannerOffscreen.pollScannerReconnectRequests("startup");
+      scannerOffscreen.ensureScannerReconnectAlarm();
     });
 
-    void pollScannerReconnectRequests("background-main");
-    ensureScannerReconnectAlarm();
+    void scannerOffscreen.pollScannerReconnectRequests("background-main");
+    scannerOffscreen.ensureScannerReconnectAlarm();
 
     chrome.alarms?.onAlarm?.addListener((alarm) => {
-      if (alarm?.name !== SCANNER_RECONNECT_ALARM_NAME) return;
-      void pollScannerReconnectRequests("alarm");
+      if (alarm?.name !== scannerOffscreen.alarmName) return;
+      void scannerOffscreen.pollScannerReconnectRequests("alarm");
     });
 
     self.addEventListener("push", (event) => {
-      let payload = null;
-      try {
-        payload = event.data?.json?.() ?? null;
-      } catch (_error) {}
-      log("[Volt Scanner Reconnect] push event received", { payload });
-      event.waitUntil(pollScannerReconnectRequests("push"));
+      scannerOffscreen.handlePushEvent(event);
     });
 
     /**
@@ -1482,64 +733,15 @@ export default defineBackground({
         return true;
       }
 
+      const scannerMessageResult = scannerMessages.handleScannerMessage(message, sender, sendResponse);
+      if (
+        scannerMessageResult !== false ||
+        message?.action === "mobileCursorTargetChanged"
+      ) {
+        return scannerMessageResult;
+      }
+
       switch (message.action) {
-        case "scannerStart":
-          handleScannerStart(message, sendResponse);
-          return true;
-        case "scannerStartForMode":
-          handleScannerStart(message, sendResponse);
-          return true;
-        case "openMobileCapture":
-          handleOpenMobileCapture(message, sender, sendResponse);
-          return true;
-        case "openMobileCapturePopup":
-          handleOpenMobileCapture({ ...message, surface: "popup" }, sender, sendResponse);
-          return true;
-        case "scannerDisconnect":
-          handleScannerDisconnect(sendResponse);
-          return true;
-        case "scannerCloseJoinWindow":
-          handleScannerCloseJoinWindow(sendResponse);
-          return true;
-        case "scannerPairingPopupClosed":
-          handleScannerPairingPopupClosed(sendResponse);
-          return true;
-        case "scannerGetState":
-          handleScannerGetState(sendResponse);
-          return true;
-        case "scannerUpdateExtensionIdentity":
-          handleScannerIdentityUpdated(message, sendResponse);
-          return true;
-        case "scannerGetPushSubscription":
-          getScannerPushSubscription()
-            .then((subscription) => sendResponse({ success: true, subscription }))
-            .catch((err) => sendResponse({ success: false, error: String(err?.message || err) }));
-          return true;
-        case "mobileCursorTargetChanged":
-          void updateMobileCaptureTarget(message?.target, sender);
-          sendResponse({ success: true });
-          return false;
-        case "scannerStateChanged":
-          if (message?.source !== "scanner-background") {
-            broadcastScannerMessage({
-              action: "scannerStateChanged",
-              source: "scanner-background",
-              state: message?.state,
-            });
-          }
-          sendResponse({ success: true });
-          break;
-        case "scannerDebugLog":
-          log(...(Array.isArray(message?.args) ? message.args : []));
-          sendResponse({ success: true });
-          break;
-        case "scannerOffscreenScan":
-          handleScannerScan(message);
-          sendResponse({ success: true });
-          break;
-        case "scannerOffscreenPhoto":
-          handleScannerPhoto(message).then(sendResponse);
-          return true;
         case "csReady":
           log("content script ready", message?.url);
           sendResponse({ ok: true });

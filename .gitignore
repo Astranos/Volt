@@ -17,6 +17,10 @@ stats-*.json
 web-ext.config.ts
 apps/scanner-signal/.tmp/
 apps/mobile/.tmp/
+apps/web/dist/
+graphify-out/
+packages/extension/docs/examples/
+packages/extension/releases/*.zip
 
 # Editor directories and files
 .vscode/*
