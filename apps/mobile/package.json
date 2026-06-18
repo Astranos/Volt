@@ -5,9 +5,9 @@
   "version": "0.1.0",
   "scripts": {
     "build": "pnpm run build:ios",
-    "build:ios": "xcodebuild -project ios/Volt.xcodeproj -scheme Volt -configuration Debug -destination 'generic/platform=iOS Simulator' build",
-    "build:ios:release": "xcodebuild -project ios/Volt.xcodeproj -scheme Volt -configuration Release -destination 'generic/platform=iOS' build",
-    "clean:ios": "xcodebuild -project ios/Volt.xcodeproj -scheme Volt clean",
+    "build:ios": "xcodebuild -workspace ios/Volt.xcworkspace -scheme Volt -configuration Debug -destination 'generic/platform=iOS Simulator' build",
+    "build:ios:release": "xcodebuild -workspace ios/Volt.xcworkspace -scheme Volt -configuration Release -destination 'generic/platform=iOS' build",
+    "clean:ios": "xcodebuild -workspace ios/Volt.xcworkspace -scheme Volt clean",
     "ios": "pnpm run ios:sim",
     "ios:sim": "node scripts/ios-build-install-launch.mjs",
     "ios:sim:release": "node scripts/ios-build-install-launch.mjs --release",

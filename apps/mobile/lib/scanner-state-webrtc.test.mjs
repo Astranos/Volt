@@ -6,8 +6,20 @@ const scannerStateSource = readFileSync(
   new URL("./scanner-state.tsx", import.meta.url),
   "utf8"
 );
+const scannerPhotoTransferSource = readFileSync(
+  new URL("./scanner-photo-transfer.ts", import.meta.url),
+  "utf8"
+);
 const scannerStoreSwiftSource = readFileSync(
   new URL("../ios/Volt/Services/ScannerStore.swift", import.meta.url),
+  "utf8"
+);
+const scannerStoreCaptureActionsSwiftSource = readFileSync(
+  new URL("../ios/Volt/Services/ScannerStoreCaptureActions.swift", import.meta.url),
+  "utf8"
+);
+const scannerStoreDictationSwiftSource = readFileSync(
+  new URL("../ios/Volt/Services/ScannerStoreDictation.swift", import.meta.url),
   "utf8"
 );
 const scannerSignalingSwiftSource = readFileSync(
@@ -24,6 +36,10 @@ const rootViewSwiftSource = readFileSync(
 );
 const scannerViewSwiftSource = readFileSync(
   new URL("../ios/Volt/Views/ScannerView.swift", import.meta.url),
+  "utf8"
+);
+const captureSessionViewSwiftSource = readFileSync(
+  new URL("../ios/Volt/Views/CaptureSessionView.swift", import.meta.url),
   "utf8"
 );
 const dictationViewSwiftSource = readFileSync(
@@ -65,10 +81,12 @@ test("full app pairing accepts only WebRTC pairing URL shapes", () => {
 });
 
 test("mobile photo delivery stays on WebRTC retry queue primitives", () => {
-  assert.match(scannerStateSource, /chunkPhotoBase64\(next\.dataBase64\)/);
-  assert.match(scannerStateSource, /photo_chunk_ack/);
+  assert.match(scannerStateSource, /usePhotoTransferQueue/);
+  assert.match(scannerPhotoTransferSource, /chunkPhotoBase64\(next\.dataBase64\)/);
+  assert.match(scannerPhotoTransferSource, /handlePhotoChunkAck/);
   assert.match(scannerStateSource, /photo_received/);
-  assert.match(scannerStateSource, /markRetryableAfterDisconnect/);
+  assert.match(scannerPhotoTransferSource, /markRetryableAfterDisconnect/);
+  assert.doesNotMatch(scannerStateSource, /LegacyControlMessage/);
   assert.doesNotMatch(scannerStateSource, /uploadPhotoObjectTransfer/);
 });
 
@@ -108,44 +126,39 @@ test("native saved-session reconnect toast can cancel manual previous-session ta
 test("native capture session dismisses when the paired scanner disconnects", () => {
   assert.match(scannerViewSwiftSource, /CaptureSessionView\(isPresented: \$isCaptureSessionPresented\)/);
   assert.match(scannerViewSwiftSource, /store\.connectionStatus\.isConnected/);
-  assert.match(scannerViewSwiftSource, /\.onChange\(of: store\.connectionStatus\)/);
-  assert.match(scannerViewSwiftSource, /guard !status\.isConnected else \{ return \}/);
-  assert.match(scannerViewSwiftSource, /isPresented = false/);
+  assert.match(captureSessionViewSwiftSource, /\.onChange\(of: store\.connectionStatus\)/);
+  assert.match(captureSessionViewSwiftSource, /guard !status\.isConnected else \{ return \}/);
+  assert.match(captureSessionViewSwiftSource, /isPresented = false/);
 });
 
 test("native OCR review stops the live camera until retake", () => {
-  const captureSessionStart = scannerViewSwiftSource.indexOf("struct CaptureSessionView");
-  const cameraControlsStart = scannerViewSwiftSource.indexOf("struct CameraSessionControls", captureSessionStart);
-  const captureSessionSource = scannerViewSwiftSource.slice(captureSessionStart, cameraControlsStart);
-
-  assert.ok(captureSessionStart > -1);
-  assert.ok(cameraControlsStart > captureSessionStart);
-  assert.match(captureSessionSource, /\.onChange\(of: store\.ocrReviewImage != nil\)/);
-  assert.match(captureSessionSource, /syncCameraForOcrReview\(isReviewingOcr: store\.ocrReviewImage != nil\)/);
-  assert.match(captureSessionSource, /private func syncCameraForOcrReview\(isReviewingOcr: Bool\)/);
-  assert.match(captureSessionSource, /if isReviewingOcr \{\s*store\.camera\.stop\(\)\s*\} else \{\s*store\.camera\.start\(\)\s*\}/);
+  assert.match(captureSessionViewSwiftSource, /struct CaptureSessionView/);
+  assert.match(captureSessionViewSwiftSource, /\.onChange\(of: store\.ocrReviewImage != nil\)/);
+  assert.match(captureSessionViewSwiftSource, /syncCameraForOcrReview\(isReviewingOcr: store\.ocrReviewImage != nil\)/);
+  assert.match(captureSessionViewSwiftSource, /private func syncCameraForOcrReview\(isReviewingOcr: Bool\)/);
+  assert.match(captureSessionViewSwiftSource, /if isReviewingOcr \{\s*store\.camera\.stop\(\)\s*\} else \{\s*store\.camera\.start\(\)\s*\}/);
 });
 
 test("native scanner normalizes UPC-A barcodes and upload filenames preserve selection order", () => {
-  assert.match(scannerStoreSwiftSource, /normalizedBarcodeScan\(value: value, format: camera\.lastBarcodeFormat \?\? "barcode"\)/);
-  assert.match(scannerStoreSwiftSource, /trimmedValue\.count == 13/);
-  assert.match(scannerStoreSwiftSource, /trimmedValue\.first == "0"/);
-  assert.match(scannerStoreSwiftSource, /return \(String\(trimmedValue\.dropFirst\(\)\), "upc_a"\)/);
-  assert.match(scannerStoreSwiftSource, /String\(format: "%03d", index \+ 1\)/);
-  assert.match(scannerStoreSwiftSource, /filename: uploadFilename\(index: index, capturedAt: capturedAt\)/);
+  assert.match(scannerStoreCaptureActionsSwiftSource, /normalizedBarcodeScan\(value: value, format: camera\.lastBarcodeFormat \?\? "barcode"\)/);
+  assert.match(scannerStoreCaptureActionsSwiftSource, /trimmedValue\.count == 13/);
+  assert.match(scannerStoreCaptureActionsSwiftSource, /trimmedValue\.first == "0"/);
+  assert.match(scannerStoreCaptureActionsSwiftSource, /return \(String\(trimmedValue\.dropFirst\(\)\), "upc_a"\)/);
+  assert.match(scannerStoreCaptureActionsSwiftSource, /String\(format: "%03d", index \+ 1\)/);
+  assert.match(scannerStoreCaptureActionsSwiftSource, /filename: uploadFilename\(index: index, capturedAt: capturedAt\)/);
 });
 
 test("native dictation keeps listening briefly after user stop actions", () => {
-  assert.match(scannerStoreSwiftSource, /private let dictationReleaseGraceDelay: Duration = \.milliseconds\(1500\)/);
-  assert.match(scannerStoreSwiftSource, /func finishDictationAfterGrace\(\)/);
-  assert.match(scannerStoreSwiftSource, /try\? await Task\.sleep\(for: delay\)/);
-  assert.match(scannerStoreSwiftSource, /cancelDictationGraceStop\(\)/);
+  assert.match(scannerStoreSwiftSource, /let dictationReleaseGraceDelay: Duration = \.milliseconds\(1500\)/);
+  assert.match(scannerStoreDictationSwiftSource, /func finishDictationAfterGrace\(\)/);
+  assert.match(scannerStoreDictationSwiftSource, /try\? await Task\.sleep\(for: delay\)/);
+  assert.match(scannerStoreDictationSwiftSource, /cancelDictationGraceStop\(\)/);
   assert.match(dictationViewSwiftSource, /private func stopDictation\(\) \{\s*store\.finishDictationAfterGrace\(\)\s*\}/);
   assert.match(dictationViewSwiftSource, /holdEndAction: stopDictation/);
 });
 
 test("native Chrome input-change haptics are gated to the Dictate tab", () => {
-  assert.match(scannerStoreSwiftSource, /private func applyConnectionStatus\(_ status: ScannerConnectionStatus, allowsConnectedFeedback: Bool = true\)/);
+  assert.match(scannerStoreSwiftSource, /func applyConnectionStatus\(_ status: ScannerConnectionStatus, allowsConnectedFeedback: Bool = true\)/);
   assert.match(scannerStoreSwiftSource, /if allowsConnectedFeedback \{\s*pairingNotificationFeedback\.notificationOccurred\(\.success\)\s*\}/);
   assert.match(scannerStoreSwiftSource, /let didChangeChromeInputTarget: Bool/);
   assert.match(scannerStoreSwiftSource, /wasConnected && dictationTargetKey\(for: previousPeerTarget\) != dictationTargetKey\(for: nextPeerTarget\)/);

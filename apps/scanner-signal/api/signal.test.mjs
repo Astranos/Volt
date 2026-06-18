@@ -5,7 +5,8 @@ import test from "node:test";
 import associationHandler, { buildAssociationPayload } from "./apple-app-site-association.ts";
 import signalHandler from "./signal.ts";
 
-const signalSource = readFileSync(new URL("./signal.ts", import.meta.url), "utf8");
+const pushSource = readFileSync(new URL("./scanner-signal/push.ts", import.meta.url), "utf8");
+const routesSource = readFileSync(new URL("./scanner-signal/routes.ts", import.meta.url), "utf8");
 
 function makeResponse() {
   return {
@@ -345,10 +346,10 @@ test("signal durable pairings broker fresh reconnect join windows", async () => 
 });
 
 test("signal supports Web Push wake subscriptions for durable reconnect", () => {
-  assert.match(signalSource, /import webPush from "web-push"/);
-  assert.match(signalSource, /SCANNER_PUSH_VAPID_PUBLIC_KEY/);
-  assert.match(signalSource, /function normalizePushSubscription/);
-  assert.match(signalSource, /pushSubscription: pushSubscription \?\? existing\?\.pushSubscription/);
-  assert.match(signalSource, /await sendReconnectWakePush\(nextRecord, reconnectRequest\.id\)/);
-  assert.match(signalSource, /parts\[1\] === "public-key"/);
+  assert.match(pushSource, /import webPush from "web-push"/);
+  assert.match(pushSource, /SCANNER_PUSH_VAPID_PUBLIC_KEY/);
+  assert.match(pushSource, /function normalizePushSubscription/);
+  assert.match(routesSource, /pushSubscription,/);
+  assert.match(routesSource, /await sendReconnectWakePush\(nextRecord, reconnectRequest\.id\)/);
+  assert.match(routesSource, /parts\[1\] === "public-key"/);
 });

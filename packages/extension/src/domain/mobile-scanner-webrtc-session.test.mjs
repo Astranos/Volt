@@ -6,6 +6,22 @@ const sessionSource = readFileSync(
   new URL("./mobile-scanner-session.ts", import.meta.url),
   "utf8"
 );
+const identitySource = readFileSync(
+  new URL("./mobile-scanner-identity.ts", import.meta.url),
+  "utf8"
+);
+const peerConnectionSource = readFileSync(
+  new URL("./mobile-scanner-peer-connection.ts", import.meta.url),
+  "utf8"
+);
+const photoReceiverSource = readFileSync(
+  new URL("./mobile-scanner-photo-receiver.ts", import.meta.url),
+  "utf8"
+);
+const signalClientSource = readFileSync(
+  new URL("./mobile-scanner-signal-client.ts", import.meta.url),
+  "utf8"
+);
 const offscreenSource = readFileSync(
   new URL("../offscreen/mobile-scanner-offscreen.ts", import.meta.url),
   "utf8"
@@ -24,12 +40,12 @@ const pairingPopupSource = readFileSync(
 );
 
 test("extension WebRTC session owns scanner-control and photo-transfer channels", () => {
-  assert.match(sessionSource, /SCANNER_CONTROL_CHANNEL_LABEL/);
-  assert.match(sessionSource, /PHOTO_TRANSFER_CHANNEL_LABEL/);
-  assert.match(sessionSource, /pc\.createDataChannel\(SCANNER_CONTROL_CHANNEL_LABEL/);
-  assert.match(sessionSource, /pc\.createDataChannel\(PHOTO_TRANSFER_CHANNEL_LABEL/);
-  assert.doesNotMatch(sessionSource, /const SCANNER_CONTROL_CHANNEL = "scanner-control"/);
-  assert.doesNotMatch(sessionSource, /const PHOTO_TRANSFER_CHANNEL = "photo-transfer"/);
+  assert.match(peerConnectionSource, /SCANNER_CONTROL_CHANNEL_LABEL/);
+  assert.match(peerConnectionSource, /PHOTO_TRANSFER_CHANNEL_LABEL/);
+  assert.match(peerConnectionSource, /pc\.createDataChannel\(SCANNER_CONTROL_CHANNEL_LABEL/);
+  assert.match(peerConnectionSource, /pc\.createDataChannel\(PHOTO_TRANSFER_CHANNEL_LABEL/);
+  assert.doesNotMatch(peerConnectionSource, /const SCANNER_CONTROL_CHANNEL = "scanner-control"/);
+  assert.doesNotMatch(peerConnectionSource, /const PHOTO_TRANSFER_CHANNEL = "photo-transfer"/);
 });
 
 test("extension WebRTC session creates offers per join attempt while join window is open", () => {
@@ -38,9 +54,9 @@ test("extension WebRTC session creates offers per join attempt while join window
   assert.match(sessionSource, /JOIN_WINDOW_TTL_MS = 2 \* 60 \* 1000/);
   assert.doesNotMatch(sessionSource, /const JOIN_WINDOW_TTL_MS = 30_000/);
   assert.match(sessionSource, /createPeerOffer\(joinWindow, attempt\.joinAttemptId\)/);
-  assert.match(sessionSource, /join-token\/\$\{encodeURIComponent\(joinWindow\.joinToken\)\}\/attempt\/\$\{encodeURIComponent\(joinAttemptId\)\}\/offer/);
+  assert.match(signalClientSource, /join-token\/\$\{encodeURIComponent\(joinWindow\.joinToken\)\}\/attempt\/\$\{encodeURIComponent\(joinAttemptId\)\}\/offer/);
   assert.match(sessionSource, /closeJoinWindow/);
-  assert.match(sessionSource, /join-token\/\$\{encodeURIComponent\(joinWindow\.joinToken\)\}\/revoke/);
+  assert.match(signalClientSource, /join-token\/\$\{encodeURIComponent\(joinWindow\.joinToken\)\}\/revoke/);
 });
 
 test("extension bounds hidden join-attempt polling after the pairing popup closes", () => {
@@ -68,40 +84,40 @@ test("pairing popup reuses an active QR when opened from Add iPhone", () => {
 test("extension WebRTC session handles handshake, receipts, photo acks, and peer disconnects", () => {
   assert.match(sessionSource, /decodeScannerControlMessage/);
   assert.match(sessionSource, /encodeScannerControlMessage/);
-  assert.match(sessionSource, /decodePhotoTransferMessage/);
-  assert.match(sessionSource, /decodePhotoTransferChunkFrame/);
+  assert.match(photoReceiverSource, /decodePhotoTransferMessage/);
+  assert.match(photoReceiverSource, /decodePhotoTransferChunkFrame/);
   assert.match(sessionSource, /type: "hello"/);
   assert.match(sessionSource, /type: "session_ready"/);
   assert.match(sessionSource, /function controlMessageType/);
   assert.match(sessionSource, /if \(peer\.ready\)/);
-  assert.match(sessionSource, /pc\.connectionState === "connected" && peer\.ready/);
+  assert.match(peerConnectionSource, /pc\.connectionState === "connected" && peer\.ready/);
   assert.match(sessionSource, /type: "protocol_error"/);
   assert.match(sessionSource, /type: "result_received"/);
-  assert.match(sessionSource, /type: "photo_chunk_ack"/);
-  assert.match(sessionSource, /type: "photo_received"/);
+  assert.match(photoReceiverSource, /type: "photo_chunk_ack"/);
+  assert.match(photoReceiverSource, /type: "photo_received"/);
   assert.match(sessionSource, /session_closed/);
 });
 
 test("extension forwards current Chrome input target to connected mobile peers", () => {
   assert.match(sessionSource, /async updateTarget\(target\?: SessionTarget \| null\)/);
   assert.match(sessionSource, /this\.target = target \?\? null/);
-  assert.match(sessionSource, /for \(const peer of this\.peers\.values\(\)\)/);
+  assert.match(sessionSource, /for \(const peer of this\.peerConnections\.peers\.values\(\)\)/);
   assert.match(sessionSource, /this\.sendSessionReady\(peer\)/);
   assert.match(sessionSource, /label: this\.target\.cursor/);
   assert.match(offscreenSource, /scannerOffscreenUpdateTarget/);
 });
 
 test("extension hydrates persisted identity before polling reconnect requests", () => {
-  assert.match(sessionSource, /private identityReady: Promise<void>/);
+  assert.match(sessionSource, /private (readonly )?identityReady: Promise<void>/);
   assert.match(sessionSource, /this\.identityReady = this\.refreshExtensionIdentity\(\)\.then/);
   assert.match(sessionSource, /private async pollReconnectRequests\(\) \{\n\s+await this\.identityReady;/);
-  assert.match(sessionSource, /const response = await fetch\(`\$\{SCANNER_SIGNAL_URL\}\/pairings\/reconnect-requests\?sessionId=\$\{encodeURIComponent\(sessionId\)\}`\)/);
+  assert.match(signalClientSource, /const response = await fetch\(`\$\{SCANNER_SIGNAL_URL\}\/pairings\/reconnect-requests\?sessionId=\$\{encodeURIComponent\(sessionId\)\}`\)/);
 });
 
 test("offscreen localStorage fallback persists durable pairing arrays", () => {
-  assert.match(sessionSource, /JSON\.parse\(storedValue\)/);
-  assert.match(sessionSource, /globalThis\.localStorage\?\.setItem\(key, JSON\.stringify\(value\)\)/);
-  assert.match(sessionSource, /globalThis\.localStorage\?\.removeItem\(key\)/);
+  assert.match(identitySource, /JSON\.parse\(storedValue\)/);
+  assert.match(identitySource, /globalThis\.localStorage\?\.setItem\(key, JSON\.stringify\(value\)\)/);
+  assert.match(identitySource, /globalThis\.localStorage\?\.removeItem\(key\)/);
 });
 
 test("extension boots offscreen reconnect polling without opening scanner UI", () => {
@@ -128,9 +144,9 @@ test("extension boots offscreen reconnect polling without opening scanner UI", (
   assert.match(offscreenSource, /scannerOffscreenPollReconnectRequests/);
   assert.match(offscreenSource, /offscreen poll requested/);
   assert.match(sessionSource, /async pollReconnectRequestsNow\(\)/);
-  assert.match(sessionSource, /async function getMobileScannerPushSubscription\(\)/);
-  assert.match(sessionSource, /action: "scannerGetPushSubscription"/);
-  assert.match(sessionSource, /pushSubscription: subscription \?\? undefined/);
+  assert.match(identitySource, /async function getMobileScannerPushSubscription\(\)/);
+  assert.match(identitySource, /action: "scannerGetPushSubscription"/);
+  assert.match(signalClientSource, /pushSubscription: pushSubscription \?\? undefined/);
   assert.match(sessionSource, /reconnect requests fetched/);
   assert.match(sessionSource, /join window posted/);
 });

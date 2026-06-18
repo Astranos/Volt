@@ -2,7 +2,6 @@
  * Volt Chrome Extension Background Service Worker
  * Migrated to WXT background entrypoint.
  */
-// @ts-nocheck
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* global chrome */
 import { defineBackground } from "wxt/utils/define-background";
@@ -13,6 +12,41 @@ import { createScannerMessageHandler } from "../src/background/scanner-message-h
 import { createScannerOffscreenController } from "../src/background/scanner-offscreen";
 import { createScannerTextInserter } from "../src/background/scanner-text-insertion";
 import { SCANNER_SIGNAL_URL } from "../../scanner-protocol/src";
+
+type MessageRecord = Record<string, any>;
+type SendResponse = (response?: any) => void;
+type PanelState = { open: boolean; tool: string | null };
+type RuntimePath =
+  | `/install.html${string}`
+  | `/mobile-scanner-popup.html${string}`
+  | `/offscreen.html${string}`
+  | `/options.html${string}`;
+type OffscreenContext = { documentUrl?: string };
+type AnchorPoint = { x?: unknown; y?: unknown };
+type SidePanelWithClose = typeof chrome.sidePanel & {
+  close?: (options: { windowId: number }, callback?: () => void) => void;
+};
+type WindowUpdateProperties = Parameters<typeof chrome.windows.update>[1];
+type OffscreenCreateParameters = Parameters<typeof chrome.offscreen.createDocument>[0];
+
+type ServiceWorkerClient = { url: string };
+declare const clients:
+  | {
+      matchAll: () => Promise<ServiceWorkerClient[]>;
+    }
+  | undefined;
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function asMessageRecord(message: unknown): MessageRecord {
+  return message && typeof message === "object" ? (message as MessageRecord) : {};
+}
+
+function runtimeUrl(path: RuntimePath): string {
+  return chrome.runtime.getURL(path);
+}
 
 export default defineBackground({
   main() {
@@ -37,21 +71,22 @@ export default defineBackground({
     let DEBUG = true;
 
     const MAX_PENDING_PC_ITEMS = 250;
+    const sidePanelApi = chrome.sidePanel as SidePanelWithClose;
 
-    function clampString(value, maxLength = 300) {
+    function clampString(value: unknown, maxLength = 300) {
       const str = typeof value === "string" ? value : "";
       return str.length > maxLength ? str.slice(0, maxLength) : str;
     }
 
-    function toFiniteNumber(value, fallback = 0) {
+    function toFiniteNumber(value: unknown, fallback = 0) {
       const num = typeof value === "number" ? value : Number(value);
       return Number.isFinite(num) ? num : fallback;
     }
 
-    function sanitizePriceChartingDetails(details) {
+    function sanitizePriceChartingDetails(details: unknown) {
       if (!details || typeof details !== "object") return null;
       const entries = Object.entries(details).slice(0, 20);
-      const sanitized = {};
+      const sanitized: Record<string, string> = {};
       entries.forEach(([rawKey, rawValue]) => {
         const key = clampString(rawKey, 64).trim();
         if (!key) return;
@@ -60,28 +95,29 @@ export default defineBackground({
       return Object.keys(sanitized).length > 0 ? sanitized : null;
     }
 
-    function sanitizePriceChartingItem(item) {
+    function sanitizePriceChartingItem(item: unknown) {
       if (!item || typeof item !== "object") return null;
-      const price = Math.max(0, toFiniteNumber(item.price, 0));
-      const quantity = Math.max(1, Math.floor(toFiniteNumber(item.quantity, 1)));
+      const candidate = item as MessageRecord;
+      const price = Math.max(0, toFiniteNumber(candidate.price, 0));
+      const quantity = Math.max(1, Math.floor(toFiniteNumber(candidate.quantity, 1)));
       return {
         id:
-          clampString(item.id, 64) ||
+          clampString(candidate.id, 64) ||
           `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        title: clampString(item.title, 220),
-        console: clampString(item.console, 120),
+        title: clampString(candidate.title, 220),
+        console: clampString(candidate.console, 120),
         price,
-        condition: clampString(item.condition, 64),
-        url: clampString(item.url, 500),
-        saleTitle: clampString(item.saleTitle, 220),
-        upc: clampString(item.upc, 64),
-        imageUrl: clampString(item.imageUrl, 500),
-        details: sanitizePriceChartingDetails(item.details),
+        condition: clampString(candidate.condition, 64),
+        url: clampString(candidate.url, 500),
+        saleTitle: clampString(candidate.saleTitle, 220),
+        upc: clampString(candidate.upc, 64),
+        imageUrl: clampString(candidate.imageUrl, 500),
+        details: sanitizePriceChartingDetails(candidate.details),
         quantity,
       };
     }
 
-    let OFFSCREEN_CREATE_PROMISE = null;
+    let OFFSCREEN_CREATE_PROMISE: Promise<boolean> | null = null;
     const OFFSCREEN_DOCUMENT_PATH = "offscreen.html";
     const SCANNER_RECONNECT_ALARM_NAME = "volt.mobileScanner.reconnectPoll";
 
@@ -127,7 +163,7 @@ export default defineBackground({
     async function openOptionsPage() {
       try {
         await chrome.tabs.create({
-          url: chrome.runtime.getURL("options.html"),
+          url: runtimeUrl("/options.html"),
           active: true,
         });
         return true;
@@ -141,16 +177,16 @@ export default defineBackground({
      * Logs debug messages when DEBUG mode is enabled
      * @param {...any} args - Arguments to log
      */
-    function log(...args) {
+    function log(...args: any[]) {
       if (DEBUG) console.log("[Volt Service Wroker]", ...args);
     }
 
     log("Service worker booted", { time: new Date().toISOString() });
 
     // Track previous active tab for CMDK "return to previous tab" feature
-    let previousActiveTabId = null;
-    let lastActiveTabId = null;
-    let currentActiveTabId = null;
+    let previousActiveTabId: number | null = null;
+    let lastActiveTabId: number | null = null;
+    let currentActiveTabId: number | null = null;
     const sidepanelTools = createSidepanelToolController({
       chromeApi: chrome,
       log,
@@ -211,10 +247,11 @@ export default defineBackground({
       }
     }
 
-    async function openMobileScannerPairingPopup(mode, state) {
-      const popupUrl = new URL(chrome.runtime.getURL("mobile-scanner-popup.html"));
+    async function openMobileScannerPairingPopup(mode: string | null, state: unknown) {
+      const popupUrl = new URL(runtimeUrl("/mobile-scanner-popup.html"));
+      const stateRecord = asMessageRecord(state);
       if (mode) popupUrl.searchParams.set("mode", mode);
-      if (state?.status) popupUrl.searchParams.set("status", state.status);
+      if (stateRecord.status) popupUrl.searchParams.set("status", String(stateRecord.status));
 
       await chrome.action.setPopup({
         popup: `${popupUrl.pathname.replace(/^\//, "")}${popupUrl.search}`,
@@ -227,19 +264,19 @@ export default defineBackground({
       }
     }
 
-    function getSidePanelState(windowId) {
+    function getSidePanelState(windowId: number) {
       return sidepanelTools.getStateForWindow(windowId);
     }
 
-    function setSidePanelState(windowId, nextState) {
+    function setSidePanelState(windowId: number, nextState: PanelState) {
       sidepanelTools.setStateForWindow(windowId, nextState);
     }
 
-    function toggleSidePanelForWindow(windowId, tool, mode = "toggle") {
+    function toggleSidePanelForWindow(windowId: number, tool: string, mode = "toggle") {
       sidepanelTools.toggleForWindow(windowId, tool, mode);
     }
 
-    function toggleSidePanelForTab(tabId, tool, mode = "toggle") {
+    function toggleSidePanelForTab(tabId: number | null | undefined, tool: string, mode = "toggle") {
       sidepanelTools.toggleForTab(tabId, tool, mode);
     }
 
@@ -374,7 +411,7 @@ export default defineBackground({
           contexts: ["selection"],
         });
       } catch (e) {
-        log("contextMenus.create error", e?.message || e);
+        log("contextMenus.create error", errorMessage(e));
       }
 
       chrome.contextMenus.onClicked.addListener((info, _tab) => {
@@ -492,7 +529,7 @@ export default defineBackground({
       if (details.reason === "install") {
         log("First installation detected, opening install page");
         chrome.tabs.create({
-          url: chrome.runtime.getURL("install.html"),
+          url: runtimeUrl("/install.html"),
           active: true,
         });
       }
@@ -522,8 +559,8 @@ export default defineBackground({
       void scannerOffscreen.pollScannerReconnectRequests("alarm");
     });
 
-    self.addEventListener("push", (event) => {
-      scannerOffscreen.handlePushEvent(event);
+    self.addEventListener("push", (event: Event) => {
+      scannerOffscreen.handlePushEvent(event as Parameters<typeof scannerOffscreen.handlePushEvent>[0]);
     });
 
     /**
@@ -554,7 +591,7 @@ export default defineBackground({
      * Creates a new tab if no injectable tab is available
      * @param {Object} message - Message to send to the tab
      */
-    function sendToActiveTab(message) {
+    function sendToActiveTab(message: MessageRecord) {
       log("sendToActiveTab", message);
       chrome.tabs.query({ lastFocusedWindow: true }, (tabs) => {
         const isInjectable = (u = "") => /^(https?:|file:|ftp:)/.test(u);
@@ -568,7 +605,7 @@ export default defineBackground({
           log("No injectable tab in currentWindow; creating a new one");
           chrome.tabs.create({ url: "https://example.com" }, (newTab) => {
             chrome.tabs.onUpdated.addListener(function listener(tabId, info) {
-              if (tabId === newTab.id && info.status === "complete") {
+              if (typeof newTab.id === "number" && tabId === newTab.id && info.status === "complete") {
                 chrome.tabs.onUpdated.removeListener(listener);
                 deliverToTab(newTab.id, message);
               }
@@ -579,7 +616,9 @@ export default defineBackground({
 
         // Allow localhost/127.0.0.1 during development
 
-        deliverToTab(target.id, message);
+        if (typeof target.id === "number") {
+          deliverToTab(target.id, message);
+        }
       });
     }
 
@@ -599,7 +638,7 @@ export default defineBackground({
      * Ensures content scripts declared in the manifest are injected.
      * @param {number} tabId - Target tab ID
      */
-    function injectManifestContentScripts(tabId) {
+    function injectManifestContentScripts(tabId: number) {
       const entries = getManifestContentScripts();
       entries.forEach((entry) => {
         const target = { tabId, allFrames: Boolean(entry.all_frames) };
@@ -622,9 +661,9 @@ export default defineBackground({
      * @param {number} tabId - Target tab ID
      * @param {Object} message - Message to deliver
      */
-    function deliverToTab(tabId, message) {
-      const trySend = (attempt) => {
-        chrome.tabs.sendMessage(tabId, message, (response) => {
+    function deliverToTab(tabId: number, message: MessageRecord) {
+      const trySend = (attempt: number) => {
+        chrome.tabs.sendMessage(tabId, message, (response: unknown) => {
           const lastErr = chrome.runtime.lastError;
           if (lastErr) {
             log(`send attempt ${attempt} failed`, lastErr.message);
@@ -656,7 +695,7 @@ export default defineBackground({
     /**
      * Helper to handle clipboard via offscreen document
      */
-    async function handleClipboardWithOffscreen(action, text) {
+    async function handleClipboardWithOffscreen(action: string, text?: string) {
       // Create offscreen document if needed
       const offscreenCreated = await createOffscreenDocument();
       if (!offscreenCreated) {
@@ -672,7 +711,8 @@ export default defineBackground({
       });
     }
 
-    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    chrome.runtime.onMessage.addListener((rawMessage, sender, sendResponse) => {
+      const message = asMessageRecord(rawMessage);
       if (
         [
           "scannerOffscreenPing",
@@ -704,7 +744,9 @@ export default defineBackground({
         chrome.storage.local.get(
           { scout_pricecharting_pending_items: [] },
           (result) => {
-            const pendingItems = result.scout_pricecharting_pending_items || [];
+            const pendingItems = Array.isArray(result.scout_pricecharting_pending_items)
+              ? result.scout_pricecharting_pending_items
+              : [];
             pendingItems.push(sanitizedItem);
             if (pendingItems.length > MAX_PENDING_PC_ITEMS) {
               pendingItems.splice(
@@ -848,7 +890,7 @@ export default defineBackground({
             chrome.tabs.get(tabId, (tab) => {
               if (tab?.windowId) {
                 try {
-                  chrome.sidePanel.close({ windowId: tab.windowId }, () => {
+                  sidePanelApi.close?.({ windowId: tab.windowId }, () => {
                     const err = chrome.runtime.lastError;
                     if (err) {
                       log("sidePanel close error", err.message);
@@ -861,7 +903,7 @@ export default defineBackground({
                     }
                   });
                 } catch (e) {
-                  log("sidePanel close error", e?.message || e);
+                  log("sidePanel close error", errorMessage(e));
                 }
               } else {
                 log("closeSidebar missing windowId for tab", tabId);
@@ -873,7 +915,7 @@ export default defineBackground({
               const active = tabs && tabs[0];
               if (active?.windowId) {
                 try {
-                  chrome.sidePanel.close({ windowId: active.windowId }, () => {
+                  sidePanelApi.close?.({ windowId: active.windowId }, () => {
                     const err = chrome.runtime.lastError;
                     if (err) {
                       log("sidePanel close error", err.message);
@@ -886,7 +928,7 @@ export default defineBackground({
                     }
                   });
                 } catch (e) {
-                  log("sidePanel close error", e?.message || e);
+                  log("sidePanel close error", errorMessage(e));
                 }
               } else {
                 log("closeSidebar missing windowId");
@@ -956,7 +998,7 @@ export default defineBackground({
             clearPreviewPopupState();
           }
 
-          PREVIEW_SOURCE_TAB_ID = sender?.tab?.id;
+          PREVIEW_SOURCE_TAB_ID = sender?.tab?.id ?? null;
           PREVIEW_SOURCE_WINDOW_ID = sender?.tab?.windowId ?? null;
           PREVIEW_OPENED_AT = Date.now();
           PREVIEW_HAS_FOCUSED = false;
@@ -1038,8 +1080,8 @@ export default defineBackground({
         case "open-settings": {
           const section = message?.section || "";
           const url = section
-            ? chrome.runtime.getURL(`options.html#${section}`)
-            : chrome.runtime.getURL("options.html");
+            ? runtimeUrl(`/options.html#${encodeURIComponent(String(section))}`)
+            : runtimeUrl("/options.html");
           chrome.tabs.create({ url, active: true }, (tab) => {
             sendResponse({ success: true, tabId: tab?.id });
           });
@@ -1055,10 +1097,14 @@ export default defineBackground({
             if (tabs.length > 0) {
               const activeTab = tabs[0];
               // Send message to content script to get webpage data
+              if (typeof activeTab.id !== "number") {
+                sendResponse({ success: false, error: "No active tab found" });
+                return;
+              }
               chrome.tabs.sendMessage(
                 activeTab.id,
                 { action: "GET_WEBPAGE_CONTEXT" },
-                (response) => {
+                (response: any) => {
                   if (chrome.runtime.lastError) {
                     log(
                       "Error getting webpage context:",
@@ -1353,9 +1399,12 @@ export default defineBackground({
           chrome.storage.local.get(
             { disabledSites: [], globalEnabled: true },
             (cfg) => {
+              const disabledSites = Array.isArray(cfg.disabledSites)
+                ? cfg.disabledSites.filter((site): site is string => typeof site === "string")
+                : [];
               const isDisabled =
                 !cfg.globalEnabled ||
-                cfg.disabledSites.some((site) => {
+                disabledSites.some((site) => {
                   // Simple domain matching (can be enhanced with wildcard support)
                   return domain === site || domain.endsWith("." + site);
                 });
@@ -1364,7 +1413,7 @@ export default defineBackground({
                 success: true,
                 disabled: isDisabled,
                 globalEnabled: cfg.globalEnabled,
-                disabledSites: cfg.disabledSites,
+                disabledSites,
               });
             }
           );
@@ -1382,10 +1431,12 @@ export default defineBackground({
             chrome.tabs.query({}, (tabs) => {
               tabs.forEach((t) => {
                 try {
-                  chrome.tabs.sendMessage(t.id, {
-                    action: "pm-settings-changed",
-                    disabledSites: sites,
-                  });
+                  if (typeof t.id === "number") {
+                    chrome.tabs.sendMessage(t.id, {
+                      action: "pm-settings-changed",
+                      disabledSites: sites,
+                    });
+                  }
                 } catch (_) {}
               });
             });
@@ -1404,16 +1455,19 @@ export default defineBackground({
           }
 
           chrome.storage.local.get({ disabledSites: [] }, (cfg) => {
-            let updatedSites;
+            const disabledSites = Array.isArray(cfg.disabledSites)
+              ? cfg.disabledSites.filter((site): site is string => typeof site === "string")
+              : [];
+            let updatedSites: string[];
 
             if (enabled) {
               // Remove domain from disabled list
-              updatedSites = cfg.disabledSites.filter(
+              updatedSites = disabledSites.filter(
                 (site) => site !== domain
               );
             } else {
               // Add domain to disabled list
-              updatedSites = [...cfg.disabledSites, domain];
+              updatedSites = [...disabledSites, domain];
             }
 
             chrome.storage.local.set({ disabledSites: updatedSites }, () => {
@@ -1421,10 +1475,12 @@ export default defineBackground({
               chrome.tabs.query({}, (tabs) => {
                 tabs.forEach((t) => {
                   try {
-                    chrome.tabs.sendMessage(t.id, {
-                      action: "pm-settings-changed",
-                      disabledSites: updatedSites,
-                    });
+                    if (typeof t.id === "number") {
+                      chrome.tabs.sendMessage(t.id, {
+                        action: "pm-settings-changed",
+                        disabledSites: updatedSites,
+                      });
+                    }
                   } catch (_) {}
                 });
               });
@@ -1461,18 +1517,17 @@ export default defineBackground({
 
         const tab = win.tabs[0];
         const tabId = tab.id;
-
-        // Try to move it back to the source window if possible,
-        // otherwise just move it to the last focused window
-        const targetWindowId = PREVIEW_SOURCE_TAB_ID
-          ? null
-          : chrome.windows.WINDOW_ID_CURRENT;
+        if (typeof tabId !== "number") {
+          log("Preview tab missing id");
+          PREVIEW_POPUP_ID = null;
+          return;
+        }
 
         if (PREVIEW_SOURCE_TAB_ID) {
           chrome.tabs.get(PREVIEW_SOURCE_TAB_ID, (sourceTab) => {
             const windowId =
               sourceTab?.windowId || chrome.windows.WINDOW_ID_CURRENT;
-            chrome.tabs.move(tabId, { windowId, index: -1 }, (movedTab) => {
+            chrome.tabs.move(tabId, { windowId, index: -1 }, () => {
               chrome.tabs.update(tabId, { active: true });
               chrome.windows.update(windowId, { focused: true });
               PREVIEW_POPUP_ID = null;
@@ -1512,6 +1567,10 @@ export default defineBackground({
 
           const targetTab = sortedTabs[0];
           log("Found POS tab:", targetTab.id, targetTab.url);
+          if (typeof targetTab.id !== "number" || typeof targetTab.windowId !== "number") {
+            log("POS tab missing id/windowId");
+            return;
+          }
 
           // Activate and focus the POS tab
           chrome.tabs.update(targetTab.id, { active: true });
@@ -1521,7 +1580,7 @@ export default defineBackground({
           chrome.tabs.query(
             { active: true, currentWindow: true },
             (activeTabs) => {
-              if (activeTabs.length > 0) {
+              if (activeTabs.length > 0 && typeof activeTabs[0].id === "number") {
                 chrome.tabs.remove(activeTabs[0].id);
               }
             }
@@ -1537,7 +1596,7 @@ export default defineBackground({
       });
     }
 
-    function arrayBufferToBase64(buffer) {
+    function arrayBufferToBase64(buffer: ArrayBuffer) {
       let binary = "";
       const bytes = new Uint8Array(buffer);
       const len = bytes.byteLength;
@@ -1548,7 +1607,7 @@ export default defineBackground({
       return btoa(binary);
     }
 
-    function toolToPath(tool) {
+    function toolToPath(tool: string) {
       switch (tool) {
         case "upc-search":
           return "/tools/upc-search";
@@ -1573,7 +1632,7 @@ export default defineBackground({
       }
     }
 
-    function openInActionPopup(tool) {
+    function openInActionPopup(tool: string) {
       log("openInActionPopup redirecting to sidepanel", { tool });
       chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
         const active = tabs && tabs[0];
@@ -1583,11 +1642,11 @@ export default defineBackground({
       });
     }
 
-    let CURRENT_TOOL_POPUP_ID = null;
-    let PREVIEW_POPUP_ID = null;
-    let PREVIEW_SOURCE_TAB_ID = null;
+    let CURRENT_TOOL_POPUP_ID: number | null = null;
+    let PREVIEW_POPUP_ID: number | null = null;
+    let PREVIEW_SOURCE_TAB_ID: number | null = null;
     let PREVIEW_OPENED_AT = 0;
-    let PREVIEW_SOURCE_WINDOW_ID = null;
+    let PREVIEW_SOURCE_WINDOW_ID: number | null = null;
     let PREVIEW_HAS_FOCUSED = false;
     let PREVIEW_FOCUSED_AT = 0;
     let CURRENT_TOOL_POPUP_OPENED_AT = 0;
@@ -1621,8 +1680,8 @@ export default defineBackground({
       );
     }
 
-    function trackCurrentToolPopup(id) {
-      CURRENT_TOOL_POPUP_ID = id || null;
+    function trackCurrentToolPopup(id: number | undefined) {
+      CURRENT_TOOL_POPUP_ID = typeof id === "number" ? id : null;
       CURRENT_TOOL_POPUP_OPENED_AT = Date.now();
       CURRENT_TOOL_POPUP_HAS_FOCUSED = false;
       CURRENT_TOOL_POPUP_FOCUSED_AT = 0;
@@ -1688,7 +1747,7 @@ export default defineBackground({
       } catch (_) {}
     }
 
-    function openToolInCenteredWindow(tool, percent) {
+    function openToolInCenteredWindow(tool: string, percent: number) {
       chrome.storage.local.get(
         {
           toolsPassword: "",
@@ -1701,15 +1760,16 @@ export default defineBackground({
           }pm_popup=1`;
 
           // Add password to all tool URLs if configured
-          if (cfg?.toolsPassword) {
+          const toolsPassword = typeof cfg?.toolsPassword === "string" ? cfg.toolsPassword : "";
+          if (toolsPassword) {
             try {
               const u = new URL(url);
-              u.searchParams.set("password", cfg.toolsPassword);
+              u.searchParams.set("password", toolsPassword);
               url = u.href;
             } catch (_) {
               url = `${url}${
                 url.includes("?") ? "&" : "?"
-              }password=${encodeURIComponent(cfg.toolsPassword)}`;
+              }password=${encodeURIComponent(toolsPassword)}`;
             }
           }
           try {
@@ -1744,7 +1804,7 @@ export default defineBackground({
               );
             });
           } catch (e) {
-            log("openToolInCenteredWindow error", e?.message || e);
+            log("openToolInCenteredWindow error", errorMessage(e));
             chrome.windows.create(
               { url, type: "popup", focused: true },
               (win) => {
@@ -1759,7 +1819,7 @@ export default defineBackground({
       );
     }
 
-    function openToolNear(tool, anchor, percent) {
+    function openToolNear(tool: string, anchor: AnchorPoint, percent: number) {
       chrome.storage.local.get(
         {
           toolsPassword: "",
@@ -1772,15 +1832,16 @@ export default defineBackground({
           }pm_window=1`;
 
           // Add password to all tool URLs if configured
-          if (cfg?.toolsPassword) {
+          const toolsPassword = typeof cfg?.toolsPassword === "string" ? cfg.toolsPassword : "";
+          if (toolsPassword) {
             try {
               const u = new URL(url);
-              u.searchParams.set("password", cfg.toolsPassword);
+              u.searchParams.set("password", toolsPassword);
               url = u.href;
             } catch (_) {
               url = `${url}${
                 url.includes("?") ? "&" : "?"
-              }password=${encodeURIComponent(cfg.toolsPassword)}`;
+              }password=${encodeURIComponent(toolsPassword)}`;
             }
           }
           const ax = Math.max(0, Number(anchor?.x || 0));
@@ -1851,7 +1912,7 @@ export default defineBackground({
               }
             });
           } catch (e) {
-            log("openToolNear error", e?.message || e);
+            log("openToolNear error", errorMessage(e));
             chrome.windows.create(
               { url, type: "popup", focused: true },
               (win) => {
@@ -1866,18 +1927,18 @@ export default defineBackground({
       );
     }
 
-    function resizeFocusedPopup(width, height) {
+    function resizeFocusedPopup(width: number | null, height: number | null) {
       try {
         chrome.windows.getCurrent((win) => {
           if (!win || win.type !== "popup") return;
-          const update = {};
+          const update: WindowUpdateProperties = {};
           if (width && Number.isFinite(width)) update.width = Math.floor(width);
           if (height && Number.isFinite(height))
             update.height = Math.floor(height);
-          if (Object.keys(update).length) chrome.windows.update(win.id, update);
+          if (Object.keys(update).length && typeof win.id === "number") chrome.windows.update(win.id, update);
         });
       } catch (e) {
-        log("resizeFocusedPopup error", e?.message || e);
+        log("resizeFocusedPopup error", errorMessage(e));
       }
     }
 
@@ -1896,9 +1957,9 @@ export default defineBackground({
       return OFFSCREEN_CREATE_PROMISE;
     }
 
-    async function getOffscreenContexts() {
+    async function getOffscreenContexts(): Promise<OffscreenContext[]> {
       if (!chrome.runtime.getContexts) {
-        const matchedClients = await clients.matchAll();
+        const matchedClients = await clients?.matchAll?.() ?? [];
         return matchedClients
           .filter((client) => client.url.includes(chrome.runtime.id))
           .map((client) => ({ documentUrl: client.url }));
@@ -1910,7 +1971,7 @@ export default defineBackground({
     }
 
     async function createOffscreenDocumentOnce() {
-      const offscreenUrl = chrome.runtime.getURL(OFFSCREEN_DOCUMENT_PATH);
+      const offscreenUrl = runtimeUrl("/offscreen.html");
       const existingContexts = await getOffscreenContexts();
       const matchingContext = existingContexts.find(
         (context) => context.documentUrl === offscreenUrl
@@ -1929,7 +1990,7 @@ export default defineBackground({
       }
 
       try {
-        const createOptions = {
+        const createOptions: OffscreenCreateParameters = {
           url: OFFSCREEN_DOCUMENT_PATH,
           reasons: ["DOM_SCRAPING", "CLIPBOARD", "WEB_RTC"],
           justification:
@@ -1939,7 +2000,7 @@ export default defineBackground({
           await chrome.offscreen.createDocument(createOptions);
         } catch (reasonError) {
           if (
-            String(reasonError?.message || reasonError).includes(
+            errorMessage(reasonError).includes(
               "Only a single offscreen document"
             )
           ) {
@@ -1949,7 +2010,7 @@ export default defineBackground({
 
           log(
             "Offscreen create with extended reasons failed, retrying with DOM_SCRAPING",
-            reasonError?.message || reasonError
+            errorMessage(reasonError)
           );
           try {
             await chrome.offscreen.createDocument({
@@ -1958,7 +2019,7 @@ export default defineBackground({
             });
           } catch (fallbackError) {
             if (
-              String(fallbackError?.message || fallbackError).includes(
+              errorMessage(fallbackError).includes(
                 "Only a single offscreen document"
               )
             ) {

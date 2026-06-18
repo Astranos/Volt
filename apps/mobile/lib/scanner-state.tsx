@@ -10,12 +10,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { Alert, AppState } from "react-native";
 import {
   encodeScannerControlMessage,
-  encodePhotoTransferMessage,
   PHOTO_BATCH_WINDOW_MS,
   PHOTO_TRANSFER_BUFFERED_AMOUNT_LOW_THRESHOLD,
-  PHOTO_TRANSFER_CHUNK_SIZE_BYTES,
-  PHOTO_TRANSFER_MAX_BUFFERED_AMOUNT,
-  PHOTO_TRANSFER_MAX_IN_FLIGHT_CHUNKS,
   PHOTO_TRANSFER_CHANNEL_LABEL,
   SCANNER_CONTROL_CHANNEL_LABEL,
   SCANNER_SCAN_COOLDOWN_MS,
@@ -36,9 +32,6 @@ import {
   type NormalizedScannerControlMessage,
 } from "./scanner-pairing-session";
 import {
-  chunkPhotoBase64,
-  compactPendingPhotos,
-  markRetryableAfterDisconnect,
   pendingPhotoSummaries,
   type PendingPhoto,
   type PendingPhotoSummary,
@@ -53,6 +46,7 @@ import {
   prepareCapturedPendingPhoto,
   preparePendingPhoto,
 } from "./scanner-photo-queue";
+import { usePhotoTransferQueue } from "./scanner-photo-transfer";
 
 export type { PendingPhotoSummary };
 
@@ -62,14 +56,11 @@ globalThis.btoa ??= base64Encode;
 type ConnectionStatus = "idle" | "pairing" | "session_ready" | "disconnected" | "error";
 type ScannerMode = CaptureMode;
 type ChannelStatus = "idle" | "opening" | "open";
-type LegacyControlMessage = { kind: string; [key: string]: unknown };
 
 const PAIRING_SESSION_STORAGE_KEY = "volt.mobileScanner.pairingSession.v2";
-const PENDING_PHOTOS_STORAGE_KEY = "volt.mobileScanner.pendingPhotos.v1";
 const MULTI_SCAN_WINDOW_MS = 650;
 const CLIPBOARD_POLL_MS = 900;
 const REPEAT_SCAN_COOLDOWN_MS = Math.max(SCANNER_SCAN_COOLDOWN_MS, 1500);
-const DATA_CHANNEL_BUFFER_DRAIN_MS = 16;
 
 type TextCapture = {
   photoUri: string;
@@ -154,10 +145,6 @@ type ScannerState = {
 
 const ScannerContext = createContext<ScannerState | null>(null);
 
-function wait(delayMs: number) {
-  return new Promise((resolve) => setTimeout(resolve, delayMs));
-}
-
 function scannerMessageMode(item: ScanItem): ScannerMode {
   if (item.kind === "barcode") return "barcode";
   if (item.format === "dictation") return "dictation";
@@ -179,11 +166,6 @@ export function ScannerProvider({ children }: PropsWithChildren) {
   const [recognizingText, setRecognizingText] = useState(false);
   const [textCapture, setTextCapture] = useState<TextCapture | null>(null);
   const [textCaptureResult, setTextCaptureResult] = useState<TextCaptureResult | null>(null);
-  const [photoSending, setPhotoSending] = useState(false);
-  const [photoError, setPhotoError] = useState<string | null>(null);
-  const [photoSentAt, setPhotoSentAt] = useState<string | null>(null);
-  const [photoProgressLabel, setPhotoProgressLabel] = useState<string | null>(null);
-  const [pendingPhotos, setPendingPhotos] = useState<PendingPhoto[]>([]);
   const { loadSettings, settings, settingsRef, setSetting } = useScannerSettings();
   const [targetHint, setTargetHint] = useState<string | null>(null);
 
@@ -204,52 +186,46 @@ export function ScannerProvider({ children }: PropsWithChildren) {
   const lastTextCaptureClipboardRef = useRef<string | null>(null);
   const photoContributorIdRef = useRef(createPhotoContributorId());
   const activePhotoBatchRef = useRef<{ id: string; expiresAt: number } | null>(null);
-  const photoSendingWorkerRef = useRef(false);
-  const pendingPhotosRef = useRef<PendingPhoto[]>([]);
   const promptedPendingSessionRef = useRef<string | null>(null);
-  const receiptTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
+  const {
+    cancelPendingPhoto,
+    clearReceiptTimeouts,
+    flushPhotoWorker,
+    handlePhotoChunkAck,
+    handlePhotoReceived,
+    handlePhotoRejected,
+    loadPendingPhotos,
+    markPhotosRetryableAfterDisconnect,
+    pendingPhotos,
+    pendingPhotosRef,
+    persistPendingPhotos,
+    photoError,
+    photoProgressLabel,
+    photoSending,
+    photoSentAt,
+    retryPendingPhotos,
+    setPhotoError,
+    setPhotoProgressLabel,
+    updatePendingPhotos,
+  } = usePhotoTransferQueue({
+    controlChannelRef,
+    photoChannelRef,
+    photoContributorIdRef,
+    sessionReadyRef,
+  });
 
   const connected = status === "session_ready" && controlChannelRef.current?.readyState === "open";
 
-  const persistPendingPhotos = useCallback((photos: PendingPhoto[]) => {
-    const compacted = compactPendingPhotos(photos);
-    pendingPhotosRef.current = compacted;
-    setPendingPhotos(compacted);
-    AsyncStorage.setItem(PENDING_PHOTOS_STORAGE_KEY, JSON.stringify(compacted)).catch((storageError) => {
-      setPhotoError("Low storage. Delivered photos are still safe, but queued retry copies may need cleanup.");
-      console.warn("Failed to persist pending photos", storageError);
-    });
-  }, []);
-
-  const updatePendingPhotos = useCallback((updater: (photos: PendingPhoto[]) => PendingPhoto[]) => {
-    persistPendingPhotos(updater(pendingPhotosRef.current));
-  }, [persistPendingPhotos]);
-
-  const sendControl = useCallback((message: ScannerControlMessage | LegacyControlMessage) => {
+  const sendControl = useCallback((message: ScannerControlMessage) => {
     const channel = controlChannelRef.current;
     if (channel?.readyState !== "open") return false;
-    if ("type" in message && !("kind" in message)) {
-      channel.send(encodeScannerControlMessage(message as ScannerControlMessage));
-      return true;
-    }
-    if ("kind" in message) {
-      const envelope: Record<string, unknown> = { ...message, type: message.kind };
-      if (message.kind === "capture_result") {
-        envelope.payload = message.message;
-        envelope.messageId = message.id;
-      }
-      if ("id" in message && typeof message.id === "string") {
-        envelope.photoId = message.id;
-      }
-      channel.send(JSON.stringify(envelope));
-      return true;
-    }
-    return false;
+    channel.send(encodeScannerControlMessage(message));
+    return true;
   }, []);
 
   const closeConnection = useCallback(() => {
-    for (const timeout of receiptTimeoutsRef.current.values()) clearTimeout(timeout);
-    receiptTimeoutsRef.current.clear();
+    clearReceiptTimeouts();
     controlChannelRef.current?.close();
     photoChannelRef.current?.close();
     peerRef.current?.close();
@@ -259,123 +235,12 @@ export function ScannerProvider({ children }: PropsWithChildren) {
     controlStatusRef.current = "idle";
     photoStatusRef.current = "idle";
     sessionReadyRef.current = false;
-  }, []);
+  }, [clearReceiptTimeouts]);
 
   const clearStoredPairingSession = useCallback(() => {
     pairingSessionRef.current = null;
     void AsyncStorage.removeItem(PAIRING_SESSION_STORAGE_KEY);
   }, []);
-
-  const flushPhotoWorker = useCallback(async () => {
-    if (photoSendingWorkerRef.current) return;
-    const control = controlChannelRef.current;
-    const photoChannel = photoChannelRef.current ?? controlChannelRef.current;
-    if (control?.readyState !== "open" || photoChannel?.readyState !== "open" || !sessionReadyRef.current) return;
-
-    photoSendingWorkerRef.current = true;
-    setPhotoSending(true);
-    setPhotoError(null);
-    try {
-      while (controlChannelRef.current?.readyState === "open" && (photoChannelRef.current ?? controlChannelRef.current)?.readyState === "open") {
-        const next = pendingPhotosRef.current.find((photo) => photo.status === "queued" || photo.status === "failed");
-        if (!next) break;
-        const chunks = chunkPhotoBase64(next.dataBase64);
-        const totalChunks = chunks.length;
-        updatePendingPhotos((photos) =>
-          photos.map((photo) =>
-            photo.id === next.id
-              ? { ...photo, status: "sending", error: undefined, totalChunks, nextChunkIndex: 0, progress: 0, updatedAt: Date.now() }
-              : photo
-          )
-        );
-        setPhotoProgressLabel(`Sending 1 of ${totalChunks}`);
-        photoChannel.send(encodePhotoTransferMessage({
-          type: "photo_start",
-          messageId: createId("photo-start"),
-          sentAt: new Date().toISOString(),
-          photoId: next.id,
-          photoBatchId: next.batchId,
-          contributorId: photoContributorIdRef.current,
-          filename: next.name,
-          mimeType: next.mimeType,
-          size: next.size,
-          width: next.width ?? 1,
-          height: next.height ?? 1,
-          capturedAt: next.capturedAt,
-          chunkSize: PHOTO_TRANSFER_CHUNK_SIZE_BYTES,
-          totalChunks,
-        }));
-
-        for (let index = 0; index < chunks.length; index += 1) {
-          const current = pendingPhotosRef.current.find((photo) => photo.id === next.id);
-          if (!current || current.status === "cancelled" || current.status === "received") break;
-          while ((photoChannel.bufferedAmount ?? 0) > PHOTO_TRANSFER_MAX_BUFFERED_AMOUNT) {
-            await wait(DATA_CHANNEL_BUFFER_DRAIN_MS);
-          }
-          photoChannel.send(encodePhotoTransferMessage({
-            type: "photo_chunk",
-            messageId: createId("photo-chunk"),
-            sentAt: new Date().toISOString(),
-            photoId: next.id,
-            chunkIndex: index,
-            totalChunks,
-            data: chunks[index],
-          }));
-          const progress = (index + 1) / totalChunks;
-          updatePendingPhotos((photos) =>
-            photos.map((photo) =>
-              photo.id === next.id
-                ? { ...photo, nextChunkIndex: index + 1, progress, updatedAt: Date.now() }
-                : photo
-            )
-          );
-          setPhotoProgressLabel(`Sending ${index + 1} of ${totalChunks}`);
-          if ((index + 1) % PHOTO_TRANSFER_MAX_IN_FLIGHT_CHUNKS === 0) await wait(DATA_CHANNEL_BUFFER_DRAIN_MS);
-        }
-
-        const latest = pendingPhotosRef.current.find((photo) => photo.id === next.id);
-        if (!latest || latest.status === "cancelled" || latest.status === "received") continue;
-        photoChannel.send(encodePhotoTransferMessage({
-          type: "photo_complete",
-          messageId: createId("photo-complete"),
-          sentAt: new Date().toISOString(),
-          photoId: next.id,
-          totalChunks,
-        }));
-        updatePendingPhotos((photos) =>
-          photos.map((photo) =>
-            photo.id === next.id
-              ? { ...photo, status: "sent", progress: 1, updatedAt: Date.now() }
-              : photo
-          )
-        );
-        const receiptTimeout = setTimeout(() => {
-          updatePendingPhotos((photos) =>
-            photos.map((photo) =>
-              photo.id === next.id && photo.status === "sent"
-                ? { ...photo, status: "failed", error: "Waiting for Chrome receipt. Will retry when connected.", updatedAt: Date.now() }
-                : photo
-            )
-          );
-        }, 30000);
-        receiptTimeoutsRef.current.set(next.id, receiptTimeout);
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Photo transfer paused.";
-      setPhotoError(message);
-      updatePendingPhotos((photos) =>
-        photos.map((photo) =>
-          photo.status === "sending" || photo.status === "sent"
-            ? { ...photo, status: "failed", error: message, updatedAt: Date.now() }
-            : photo
-        )
-      );
-    } finally {
-      photoSendingWorkerRef.current = false;
-      setPhotoSending(false);
-      setPhotoProgressLabel(null);
-    }
-  }, [sendControl, updatePendingPhotos]);
 
   const promptForPendingPhotos = useCallback((sessionId: string | null) => {
     if (!sessionId || promptedPendingSessionRef.current === sessionId) return;
@@ -408,7 +273,13 @@ export function ScannerProvider({ children }: PropsWithChildren) {
     if (!message) return;
     if (message.kind === "hello") {
       if (!isProtocolMajorCompatible(message.protocolMajor)) {
-        sendControl({ kind: "protocol_error", message: "Unsupported scanner protocol version." });
+        sendControl({
+          type: "protocol_error",
+          messageId: createId("protocol-error"),
+          sentAt: new Date().toISOString(),
+          code: "unsupported_protocol",
+          detail: "Unsupported scanner protocol version.",
+        });
         setStatus("error");
         setError("Chrome extension protocol is incompatible. Update Volt on both devices.");
         closeConnection();
@@ -430,36 +301,17 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       return;
     }
     if (message.kind === "photo_chunk_ack") {
-      updatePendingPhotos((photos) =>
-        photos.map((photo) => {
-          const totalChunks = message.totalChunks ?? photo.totalChunks;
-          return photo.id === message.id && totalChunks
-            ? { ...photo, totalChunks, progress: Math.max(photo.progress, (message.chunkIndex + 1) / totalChunks), updatedAt: Date.now() }
-            : photo;
-        })
-      );
+      handlePhotoChunkAck(message);
       return;
     }
     if (message.kind === "photo_received") {
-      const timeout = receiptTimeoutsRef.current.get(message.id);
-      if (timeout) clearTimeout(timeout);
-      receiptTimeoutsRef.current.delete(message.id);
-      updatePendingPhotos((photos) => photos.filter((photo) => photo.id !== message.id));
-      setPhotoSentAt(new Date().toISOString());
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      handlePhotoReceived(message.id);
       return;
     }
     if (message.kind === "photo_rejected") {
-      updatePendingPhotos((photos) =>
-        photos.map((photo) =>
-          photo.id === message.id
-            ? { ...photo, status: "failed", error: message.reason || "Chrome storage is full. Free space, then retry.", updatedAt: Date.now() }
-            : photo
-        )
-      );
-      setPhotoError(message.reason || "Chrome storage is full. Free space, then retry.");
+      handlePhotoRejected(message.id, message.reason);
     }
-  }, [closeConnection, flushPhotoWorker, promptForPendingPhotos, sendControl, updatePendingPhotos]);
+  }, [closeConnection, flushPhotoWorker, handlePhotoChunkAck, handlePhotoReceived, handlePhotoRejected, promptForPendingPhotos, sendControl]);
 
   const attachDataChannel = useCallback((channel: any) => {
     if (!channel) return;
@@ -499,16 +351,14 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       controlStatusRef.current = "idle";
       sessionReadyRef.current = false;
       setStatus("disconnected");
-      updatePendingPhotos((photos) =>
-        photos.map((photo) => markRetryableAfterDisconnect(photo))
-      );
+      markPhotosRetryableAfterDisconnect();
     };
     channel.onerror = () => {
       setStatus("error");
       setError("Connection lost");
     };
     if (channel.readyState === "open") handleControlOpen();
-  }, [flushPhotoWorker, handleControlMessage, promptForPendingPhotos, sendControl, updatePendingPhotos]);
+  }, [flushPhotoWorker, handleControlMessage, markPhotosRetryableAfterDisconnect, sendControl]);
 
   const pairWithOffer = useCallback(async (offerCode: string, answerUrl: string, sessionId?: string) => {
     closeConnection();
@@ -581,13 +431,8 @@ export function ScannerProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     void loadSettings();
-    AsyncStorage.getItem(PENDING_PHOTOS_STORAGE_KEY)
-      .then((rawValue) => {
-        const parsed = rawValue ? JSON.parse(rawValue) : [];
-        if (Array.isArray(parsed)) persistPendingPhotos(parsed as PendingPhoto[]);
-      })
-      .catch(() => persistPendingPhotos([]));
-  }, [loadSettings, persistPendingPhotos]);
+    void loadPendingPhotos();
+  }, [loadPendingPhotos, loadSettings]);
 
   useEffect(() => () => closeConnection(), [closeConnection]);
 
@@ -916,31 +761,6 @@ export function ScannerProvider({ children }: PropsWithChildren) {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     }
   }, [connected, createRollingPhotoBatchId, flushPhotoWorker, updatePendingPhotos]);
-
-  const cancelPendingPhoto = useCallback((id: string) => {
-    const photoChannel = photoChannelRef.current;
-    if (photoChannel?.readyState === "open") {
-      photoChannel.send(encodePhotoTransferMessage({
-        type: "photo_cancel",
-        messageId: createId("photo-cancel"),
-        sentAt: new Date().toISOString(),
-        photoId: id,
-        reason: "user_cancelled",
-      }));
-    }
-    updatePendingPhotos((photos) => photos.filter((photo) => photo.id !== id));
-  }, [updatePendingPhotos]);
-
-  const retryPendingPhotos = useCallback(() => {
-    updatePendingPhotos((photos) =>
-      photos.map((photo) =>
-        photo.status === "failed" || photo.status === "sent"
-          ? { ...photo, status: "queued", error: undefined, progress: 0, nextChunkIndex: 0, updatedAt: Date.now() }
-          : photo
-      )
-    );
-    void flushPhotoWorker();
-  }, [flushPhotoWorker, updatePendingPhotos]);
 
   const statusLabel = useMemo(() => {
     if (status === "session_ready") return "Connected to Chrome";
