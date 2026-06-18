@@ -113,6 +113,19 @@ test("native capture session dismisses when the paired scanner disconnects", () 
   assert.match(scannerViewSwiftSource, /isPresented = false/);
 });
 
+test("native OCR review stops the live camera until retake", () => {
+  const captureSessionStart = scannerViewSwiftSource.indexOf("struct CaptureSessionView");
+  const cameraControlsStart = scannerViewSwiftSource.indexOf("struct CameraSessionControls", captureSessionStart);
+  const captureSessionSource = scannerViewSwiftSource.slice(captureSessionStart, cameraControlsStart);
+
+  assert.ok(captureSessionStart > -1);
+  assert.ok(cameraControlsStart > captureSessionStart);
+  assert.match(captureSessionSource, /\.onChange\(of: store\.ocrReviewImage != nil\)/);
+  assert.match(captureSessionSource, /syncCameraForOcrReview\(isReviewingOcr: store\.ocrReviewImage != nil\)/);
+  assert.match(captureSessionSource, /private func syncCameraForOcrReview\(isReviewingOcr: Bool\)/);
+  assert.match(captureSessionSource, /if isReviewingOcr \{\s*store\.camera\.stop\(\)\s*\} else \{\s*store\.camera\.start\(\)\s*\}/);
+});
+
 test("native scanner normalizes UPC-A barcodes and upload filenames preserve selection order", () => {
   assert.match(scannerStoreSwiftSource, /normalizedBarcodeScan\(value: value, format: camera\.lastBarcodeFormat \?\? "barcode"\)/);
   assert.match(scannerStoreSwiftSource, /trimmedValue\.count == 13/);

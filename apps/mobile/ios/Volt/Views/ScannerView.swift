@@ -239,7 +239,10 @@ struct CaptureSessionView: View {
         }
         .onAppear {
             store.activeMode = .ocr
-            store.camera.start()
+            syncCameraForOcrReview(isReviewingOcr: store.ocrReviewImage != nil)
+        }
+        .onChange(of: store.ocrReviewImage != nil) { _, isReviewingOcr in
+            syncCameraForOcrReview(isReviewingOcr: isReviewingOcr)
         }
         .onChange(of: store.connectionStatus) { _, status in
             guard !status.isConnected else { return }
@@ -249,6 +252,14 @@ struct CaptureSessionView: View {
         }
         .onDisappear {
             store.camera.stop()
+        }
+    }
+
+    private func syncCameraForOcrReview(isReviewingOcr: Bool) {
+        if isReviewingOcr {
+            store.camera.stop()
+        } else {
+            store.camera.start()
         }
     }
 }
