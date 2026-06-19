@@ -6,7 +6,7 @@ Volt was made to speed up buying and listing electronic devices for resale. The 
 
 ## Current Version
 
-`1.0.39`
+`1.0.40`
 
 The extension manifest version lives in [wxt.config.ts](wxt.config.ts), and the package version lives in [package.json](package.json). Keep them in sync for release builds.
 

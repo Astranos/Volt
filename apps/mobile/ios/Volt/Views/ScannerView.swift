@@ -3,7 +3,6 @@ import SwiftUI
 struct ScannerView: View {
     @Environment(ScannerStore.self) private var store
     @State private var isCaptureSessionPresented = false
-    @State private var isPairingScannerPresented = false
     @State private var isSessionsPresented = false
     let showsCameraLayer: Bool
 
@@ -21,14 +20,10 @@ struct ScannerView: View {
                 VStack(alignment: .leading, spacing: ScannerTabLayout.stackSpacing) {
                     ScannerSectionHeader(
                         title: "Capture",
-                        onPair: {
-                            isPairingScannerPresented = true
-                        }
-                    ) {
-                        ScannerSessionsButton {
+                        onConnectionControlTapped: {
                             isSessionsPresented = true
                         }
-                    }
+                    )
 
                     previousCaptures
                 }
@@ -41,9 +36,6 @@ struct ScannerView: View {
             .toolbar(.hidden, for: .navigationBar)
             .fullScreenCover(isPresented: $isCaptureSessionPresented) {
                 CaptureSessionView(isPresented: $isCaptureSessionPresented)
-            }
-            .fullScreenCover(isPresented: $isPairingScannerPresented) {
-                PairingScanSessionView(isPresented: $isPairingScannerPresented)
             }
             .sheet(isPresented: $isSessionsPresented) {
                 PairingSessionsView()

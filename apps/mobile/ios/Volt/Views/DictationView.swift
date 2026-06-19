@@ -2,7 +2,6 @@ import SwiftUI
 
 struct DictationView: View {
     @Environment(ScannerStore.self) private var store
-    @State private var isPairingScannerPresented = false
     @State private var isSessionsPresented = false
 
     var body: some View {
@@ -10,11 +9,7 @@ struct DictationView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: ScannerTabLayout.stackSpacing) {
                     ScannerSectionHeader(title: "Dictate") {
-                        isPairingScannerPresented = true
-                    } trailingAccessory: {
-                        ScannerSessionsButton {
-                            isSessionsPresented = true
-                        }
+                        isSessionsPresented = true
                     }
 
                     DictationConnectionCard(
@@ -41,9 +36,6 @@ struct DictationView: View {
             .background(ScannerTabLayout.background)
             .navigationTitle("Dictate")
             .toolbar(.hidden, for: .navigationBar)
-            .fullScreenCover(isPresented: $isPairingScannerPresented) {
-                PairingScanSessionView(isPresented: $isPairingScannerPresented)
-            }
             .sheet(isPresented: $isSessionsPresented) {
                 PairingSessionsView()
                     .presentationDetents([.medium, .large])

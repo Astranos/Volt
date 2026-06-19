@@ -9,7 +9,7 @@ Keep these two versions identical:
 - `packages/extension/package.json`
 - `packages/extension/wxt.config.ts`, under `manifest.version`
 
-Current version: `1.0.39`.
+Current version: `1.0.40`.
 
 ## Build And Test
 

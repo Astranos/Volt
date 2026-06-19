@@ -8,9 +8,7 @@ struct PairingSessionsView: View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 0) {
                 VStack(alignment: .leading, spacing: ScannerTabLayout.stackSpacing) {
-                    ScannerSectionHeader(title: "Sessions") {
-                        isPairingScannerPresented = true
-                    }
+                    sessionsHeader
 
                     if store.pairedSessions.isEmpty {
                         ContentUnavailableView(
@@ -45,15 +43,59 @@ struct PairingSessionsView: View {
             .onAppear {
                 store.pruneExpiredPairedSessions()
             }
-            .safeAreaInset(edge: .bottom, spacing: 0) {
+            .overlay(alignment: .bottom) {
                 ScanChromeQRAccessory(onScan: startPairingScan)
             }
         }
     }
 
+    private var sessionsHeader: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text("Sessions")
+                .font(.largeTitle.bold())
+                .lineLimit(1)
+                .minimumScaleFactor(0.82)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            Button {
+                if store.connectionStatus.isConnected {
+                    store.unpair()
+                } else {
+                    startPairingScan()
+                }
+            } label: {
+                Label(pairingButtonTitle, systemImage: pairingButtonSystemImage)
+                    .font(.headline)
+                    .foregroundStyle(pairingButtonColor)
+                    .lineLimit(1)
+                    .padding(.horizontal, 18)
+                    .frame(minHeight: 44)
+                    .background(.regularMaterial, in: Capsule())
+            }
+            .accessibilityLabel(pairingButtonAccessibilityLabel)
+        }
+        .accessibilityElement(children: .contain)
+    }
+
     private func startPairingScan() {
         store.activeMode = .barcode
         isPairingScannerPresented = true
+    }
+
+    private var pairingButtonTitle: String {
+        store.connectionStatus.isConnected ? "Unpair" : "Pair"
+    }
+
+    private var pairingButtonSystemImage: String {
+        store.connectionStatus.isConnected ? "xmark.circle.fill" : "qrcode.viewfinder"
+    }
+
+    private var pairingButtonColor: Color {
+        store.connectionStatus.isConnected ? .red : .secondary
+    }
+
+    private var pairingButtonAccessibilityLabel: String {
+        store.connectionStatus.isConnected ? "Unpair from Chrome" : "Pair with Chrome"
     }
 
     private var pairedSessionsList: some View {
@@ -85,6 +127,7 @@ struct PairingSessionsView: View {
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .background(ScannerTabLayout.background)
+        .safeAreaPadding(.bottom, ScannerTabLayout.bottomAccessoryContentPadding)
     }
 
 }
@@ -106,10 +149,14 @@ private struct ScanChromeQRAccessory: View {
             }
             .buttonStyle(.plain)
         }
+        .ignoresSafeArea(edges: .bottom)
         .padding(.horizontal)
         .padding(.top, 10)
-        .padding(.bottom, 10)
-        .background(.bar)
+        .background {
+            Rectangle()
+                .fill(.bar)
+                .ignoresSafeArea(edges: .bottom)
+        }
     }
 }
 

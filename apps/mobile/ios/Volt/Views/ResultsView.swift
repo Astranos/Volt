@@ -7,7 +7,6 @@ struct UploadView: View {
     @State private var isPreparingUploads = false
     @State private var uploadError: String?
     @State private var expandedBatchIds: Set<String> = []
-    @State private var isPairingScannerPresented = false
     @State private var isSessionsPresented = false
 
     private var recentPhotoResults: [ScanResult] {
@@ -30,11 +29,7 @@ struct UploadView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: ScannerTabLayout.stackSpacing) {
                     ScannerSectionHeader(title: "Upload") {
-                        isPairingScannerPresented = true
-                    } trailingAccessory: {
-                        ScannerSessionsButton {
-                            isSessionsPresented = true
-                        }
+                        isSessionsPresented = true
                     }
 
                     recentUploads
@@ -46,9 +41,6 @@ struct UploadView: View {
             .background(ScannerTabLayout.background)
             .navigationTitle("Upload")
             .toolbar(.hidden, for: .navigationBar)
-            .fullScreenCover(isPresented: $isPairingScannerPresented) {
-                PairingScanSessionView(isPresented: $isPairingScannerPresented)
-            }
             .sheet(isPresented: $isSessionsPresented) {
                 PairingSessionsView()
                     .presentationDetents([.medium, .large])

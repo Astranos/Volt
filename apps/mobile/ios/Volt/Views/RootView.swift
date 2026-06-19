@@ -4,7 +4,12 @@ struct RootView: View {
     @Environment(ScannerStore.self) private var store
     @Environment(\.scenePhase) private var scenePhase
     @State private var selectedTab = AppSection.scan
-    @State private var pairingToast: PairingStatusToastModel?
+    @State private var isConnectionSheetPresented = false
+    @State private var connectionSheetStatus: PairingStatusSheetModel?
+    @State private var connectionSheetDetent = RootView.connectionStatusDetent
+    @State private var keepsConnectionSheetOpenForSessions = false
+
+    private static let connectionStatusDetent = PresentationDetent.height(112)
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -20,30 +25,30 @@ struct RootView: View {
                 .tabItem { Label("Dictate", systemImage: "mic") }
                 .tag(AppSection.dictation)
         }
-        .overlay(alignment: .top) {
-            if let pairingToast {
-                PairingStatusToast(toast: pairingToast, action: pairingToast.actionTitle == nil ? nil : {
-                    store.cancelReconnect()
-                    self.pairingToast = nil
-                })
-                    .padding(.horizontal, 16)
-                    .padding(.top, 10)
-                    .transition(.move(edge: .top).combined(with: .opacity))
+        .sheet(isPresented: $isConnectionSheetPresented, onDismiss: resetConnectionSheetPresentation) {
+            if connectionSheetDetent == Self.connectionStatusDetent, let connectionSheetStatus {
+                PairingStatusSheet(sheet: connectionSheetStatus) {
+                    showSessionsFromConnectionSheet(cancelingReconnect: true)
+                }
+                .presentationDetents([Self.connectionStatusDetent, .medium, .large], selection: $connectionSheetDetent)
+                .presentationDragIndicator(.visible)
+                .interactiveDismissDisabled(connectionSheetStatus.isProgressing)
+                .onChange(of: connectionSheetDetent) { _, newValue in
+                    if newValue != Self.connectionStatusDetent {
+                        showSessionsFromConnectionSheet(cancelingReconnect: connectionSheetStatus.canCancel)
+                    }
+                }
+            } else {
+                PairingSessionsView()
+                    .presentationDetents([.medium, .large], selection: $connectionSheetDetent)
+                    .presentationDragIndicator(.visible)
             }
         }
-        .animation(.spring(response: 0.28, dampingFraction: 0.86), value: pairingToast?.id)
         .onChange(of: selectedTab) { _, newValue in
             applySelectedTab(newValue)
         }
         .onChange(of: store.connectionStatus) { _, newValue in
-            showPairingToast(for: newValue)
-        }
-        .task(id: pairingToast?.id) {
-            guard let toast = pairingToast, let duration = toast.duration else { return }
-            try? await Task.sleep(for: duration)
-            if pairingToast?.id == toast.id {
-                pairingToast = nil
-            }
+            showPairingSheet(for: newValue)
         }
         .task {
             await store.camera.requestAccess()
@@ -71,47 +76,60 @@ struct RootView: View {
         }
     }
 
-    private func showPairingToast(for status: ScannerConnectionStatus) {
+    private func showPairingSheet(for status: ScannerConnectionStatus) {
         switch status {
         case .pairing:
-            pairingToast = PairingStatusToastModel(
+            guard !keepsConnectionSheetOpenForSessions else { return }
+            connectionSheetStatus = PairingStatusSheetModel(
                 title: "Pairing with Chrome",
                 message: store.peerTarget?.displayText ?? "Trying to open the scanner channel.",
                 systemImage: "link",
-                showsProgress: true,
-                duration: nil,
-                actionTitle: store.canCancelReconnect ? "Cancel" : nil,
-                actionSystemImage: store.canCancelReconnect ? "xmark" : nil
+                isProgressing: true,
+                canCancel: store.canCancelReconnect
             )
+            connectionSheetDetent = Self.connectionStatusDetent
+            isConnectionSheetPresented = true
         case .waitingForChrome:
-            pairingToast = PairingStatusToastModel(
+            guard !keepsConnectionSheetOpenForSessions else { return }
+            connectionSheetStatus = PairingStatusSheetModel(
                 title: "Waiting for Chrome",
                 message: "Finishing the secure scanner handshake.",
                 systemImage: "desktopcomputer",
-                showsProgress: true,
-                duration: nil,
-                actionTitle: store.canCancelReconnect ? "Cancel" : nil,
-                actionSystemImage: store.canCancelReconnect ? "xmark" : nil
+                isProgressing: true,
+                canCancel: store.canCancelReconnect
             )
+            connectionSheetDetent = Self.connectionStatusDetent
+            isConnectionSheetPresented = true
         case .connected:
-            pairingToast = PairingStatusToastModel(
-                title: "Connected to Chrome",
-                message: store.peerTarget?.displayText ?? "Ready to send captures.",
-                systemImage: "checkmark.circle.fill",
-                showsProgress: false,
-                duration: .seconds(2)
-            )
-        case .error(let message):
-            pairingToast = PairingStatusToastModel(
-                title: "Pairing failed",
-                message: message,
-                systemImage: "exclamationmark.triangle.fill",
-                showsProgress: false,
-                duration: .seconds(4)
-            )
-        case .idle, .disconnected:
-            pairingToast = nil
+            keepsConnectionSheetOpenForSessions = false
+            connectionSheetStatus = nil
+            isConnectionSheetPresented = false
+        case .idle, .disconnected, .error:
+            if keepsConnectionSheetOpenForSessions {
+                connectionSheetStatus = nil
+                connectionSheetDetent = .medium
+                isConnectionSheetPresented = true
+            } else {
+                connectionSheetStatus = nil
+                isConnectionSheetPresented = false
+            }
         }
+    }
+
+    private func showSessionsFromConnectionSheet(cancelingReconnect: Bool) {
+        keepsConnectionSheetOpenForSessions = true
+        connectionSheetStatus = nil
+        connectionSheetDetent = .medium
+        if cancelingReconnect {
+            store.cancelReconnect()
+        }
+        isConnectionSheetPresented = true
+    }
+
+    private func resetConnectionSheetPresentation() {
+        keepsConnectionSheetOpenForSessions = false
+        connectionSheetStatus = nil
+        connectionSheetDetent = Self.connectionStatusDetent
     }
 }
 
@@ -121,58 +139,52 @@ enum AppSection: Hashable {
     case upload
 }
 
-private struct PairingStatusToastModel: Equatable {
+private struct PairingStatusSheetModel: Identifiable, Equatable {
     let id = UUID()
     let title: String
     let message: String
     let systemImage: String
-    let showsProgress: Bool
-    let duration: Duration?
-    let actionTitle: String?
-    let actionSystemImage: String?
+    let isProgressing: Bool
+    let canCancel: Bool
 
     init(
         title: String,
         message: String,
         systemImage: String,
-        showsProgress: Bool,
-        duration: Duration?,
-        actionTitle: String? = nil,
-        actionSystemImage: String? = nil
+        isProgressing: Bool,
+        canCancel: Bool
     ) {
         self.title = title
         self.message = message
         self.systemImage = systemImage
-        self.showsProgress = showsProgress
-        self.duration = duration
-        self.actionTitle = actionTitle
-        self.actionSystemImage = actionSystemImage
+        self.isProgressing = isProgressing
+        self.canCancel = canCancel
     }
 }
 
-private struct PairingStatusToast: View {
-    let toast: PairingStatusToastModel
-    let action: (() -> Void)?
+private struct PairingStatusSheet: View {
+    let sheet: PairingStatusSheetModel
+    let onCancel: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
-            if toast.showsProgress {
+        HStack(spacing: 14) {
+            if sheet.isProgressing {
                 ProgressView()
                     .controlSize(.small)
                     .tint(.primary)
-                    .frame(width: 24, height: 24)
+                    .frame(width: 28, height: 28)
             } else {
-                Image(systemName: toast.systemImage)
+                Image(systemName: sheet.systemImage)
                     .font(.title3.weight(.semibold))
-                    .foregroundStyle(iconStyle)
-                    .frame(width: 24, height: 24)
+                    .foregroundStyle(.primary)
+                    .frame(width: 28, height: 28)
             }
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(toast.title)
+                Text(sheet.title)
                     .font(.subheadline.weight(.semibold))
                     .lineLimit(1)
-                Text(toast.message)
+                Text(sheet.message)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
@@ -180,32 +192,25 @@ private struct PairingStatusToast: View {
 
             Spacer(minLength: 0)
 
-            if let actionTitle = toast.actionTitle, let action {
-                Button(action: action) {
-                    Label(actionTitle, systemImage: toast.actionSystemImage ?? "xmark")
+            if sheet.canCancel {
+                Button(role: .cancel, action: onCancel) {
+                    Label("Cancel", systemImage: "xmark")
+                        .font(.headline)
+                        .foregroundStyle(.red)
                         .labelStyle(.titleAndIcon)
+                        .frame(minHeight: 44)
                 }
                 .buttonStyle(.bordered)
-                .controlSize(.small)
-                .accessibilityLabel(actionTitle)
+                .controlSize(.regular)
+                .tint(.red)
+                .accessibilityLabel("Cancel reconnect")
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .shadow(color: .black.opacity(0.16), radius: 18, y: 8)
-        .accessibilityElement(children: action == nil ? .combine : .contain)
-        .accessibilityLabel("\(toast.title). \(toast.message)")
-    }
-
-    private var iconStyle: Color {
-        if toast.systemImage == "checkmark.circle.fill" {
-            return .green
-        }
-        if toast.systemImage == "exclamationmark.triangle.fill" {
-            return .orange
-        }
-        return .primary
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
+        .padding(.bottom, 16)
+        .accessibilityElement(children: sheet.canCancel ? .contain : .combine)
+        .accessibilityLabel("\(sheet.title). \(sheet.message)")
     }
 }
 
@@ -229,16 +234,16 @@ enum ScannerTabLayout {
 struct ScannerSectionHeader<TrailingAccessory: View>: View {
     @Environment(ScannerStore.self) private var store
     let title: String
-    let onPair: () -> Void
+    let onConnectionControlTapped: () -> Void
     @ViewBuilder let trailingAccessory: () -> TrailingAccessory
 
     init(
         title: String,
-        onPair: @escaping () -> Void,
+        onConnectionControlTapped: @escaping () -> Void,
         @ViewBuilder trailingAccessory: @escaping () -> TrailingAccessory
     ) {
         self.title = title
-        self.onPair = onPair
+        self.onConnectionControlTapped = onConnectionControlTapped
         self.trailingAccessory = trailingAccessory
     }
 
@@ -260,17 +265,8 @@ struct ScannerSectionHeader<TrailingAccessory: View>: View {
     @ViewBuilder
     private var connectionControl: some View {
         if store.connectionStatus.isConnected {
-            Menu {
-                Section("Connected Session") {
-                    Text(connectedSessionName)
-                    Text(connectedSessionId)
-                }
-
-                Text(store.targetHint)
-
-                Button("Unpair", systemImage: "link.badge.minus") {
-                    store.unpair()
-                }
+            Button {
+                onConnectionControlTapped()
             } label: {
                 Text(connectedSessionName)
                     .font(.headline)
@@ -281,12 +277,12 @@ struct ScannerSectionHeader<TrailingAccessory: View>: View {
                     .frame(minHeight: 44)
                     .background(.regularMaterial, in: Capsule())
             }
-            .accessibilityLabel("Connected to \(connectedSessionName). \(store.targetHint)")
+            .accessibilityLabel("Connected to \(connectedSessionName). Open sessions.")
         } else {
             Button {
-                onPair()
+                onConnectionControlTapped()
             } label: {
-                Label("Pair", systemImage: "qrcode.viewfinder")
+                Label("Connect", systemImage: "desktopcomputer")
                     .font(.headline)
                     .foregroundStyle(statusColor)
                     .lineLimit(1)
@@ -294,7 +290,7 @@ struct ScannerSectionHeader<TrailingAccessory: View>: View {
                     .frame(minHeight: 44)
                     .background(.regularMaterial, in: Capsule())
             }
-            .accessibilityLabel("Pair. \(store.targetHint)")
+            .accessibilityLabel("Connect. Open sessions.")
         }
     }
 
@@ -318,16 +314,6 @@ struct ScannerSectionHeader<TrailingAccessory: View>: View {
         }?.displayName
     }
 
-    private var connectedSessionId: String {
-        if let sessionId = store.peerTarget?.chromeSessionId, !sessionId.isEmpty {
-            return sessionId
-        }
-        if let sessionId = store.pairingSession?.sessionId, !sessionId.isEmpty {
-            return sessionId
-        }
-        return "Unknown session id"
-    }
-
     private var statusColor: Color {
         switch store.connectionStatus {
         case .connected:
@@ -343,25 +329,9 @@ struct ScannerSectionHeader<TrailingAccessory: View>: View {
 }
 
 extension ScannerSectionHeader where TrailingAccessory == EmptyView {
-    init(title: String, onPair: @escaping () -> Void) {
-        self.init(title: title, onPair: onPair) {
+    init(title: String, onConnectionControlTapped: @escaping () -> Void) {
+        self.init(title: title, onConnectionControlTapped: onConnectionControlTapped) {
             EmptyView()
         }
-    }
-}
-
-struct ScannerSessionsButton: View {
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Label("Sessions", systemImage: "link")
-                .font(.headline)
-                .labelStyle(.iconOnly)
-                .foregroundStyle(.secondary)
-                .frame(width: 44, height: 44)
-                .background(.regularMaterial, in: Circle())
-        }
-        .accessibilityLabel("Previous sessions")
     }
 }
