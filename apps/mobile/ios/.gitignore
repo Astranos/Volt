@@ -23,8 +23,5 @@ DerivedData
 project.xcworkspace
 .xcode.env.local
 
-# Bundle artifacts
-*.jsbundle
-
 # CocoaPods
 /Pods/

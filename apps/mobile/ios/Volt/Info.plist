@@ -53,12 +53,6 @@
     <string>Volt may request photo library access if an imported image is used for scanning product codes, model numbers, serial numbers, or other text for the paired Chrome extension.</string>
     <key>NSSpeechRecognitionUsageDescription</key>
     <string>Volt uses speech recognition to turn dictated speech into text for the paired Chrome browser.</string>
-    <key>NSUserActivityTypes</key>
-    <array>
-      <string>$(PRODUCT_BUNDLE_IDENTIFIER).expo.index_route</string>
-    </array>
-    <key>RCTNewArchEnabled</key>
-    <true/>
     <key>UILaunchStoryboardName</key>
     <string>SplashScreen</string>
     <key>UIRequiredDeviceCapabilities</key>

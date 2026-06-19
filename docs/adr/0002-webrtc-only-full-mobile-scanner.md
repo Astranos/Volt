@@ -14,7 +14,7 @@ Volt needs a full iPhone mobile app flow that pairs with the Chrome extension an
 - sidepanel results that can be previewed, selected, and dragged into pages
 - local retry for photos when WebRTC disconnects
 
-App Clip is out of scope for this flow. The App Clip lifecycle is a poor fit for persistent retry queues, direct WebRTC transfer, pause/resume after app backgrounding, and multi-photo progress. The v1 target is iPhone only, using the full Expo SDK 56 mobile app and a dev client for native modules such as `react-native-webrtc`.
+App Clip is out of scope for this flow. The App Clip lifecycle is a poor fit for persistent retry queues, direct WebRTC transfer, pause/resume after app backgrounding, and multi-photo progress. The v1 target is iPhone only, using the native Swift app and direct WebRTC through the native `JitsiWebRTC` pod.
 
 ## Decision
 
