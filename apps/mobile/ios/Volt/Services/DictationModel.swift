@@ -136,15 +136,15 @@ final class DictationModel: NSObject {
     ) -> SFSpeechRecognitionTask {
         recognizer.recognitionTask(with: request) { [weak owner] result, error in
             let text = result?.bestTranscription.formattedString
-            let shouldStop = error != nil || result?.isFinal == true
+            let errorMessage = error?.localizedDescription
             Task { @MainActor in
                 guard owner?.sessionToken == token else { return }
                 if let text {
                     owner?.transcript = text
                     owner?.onTranscriptChange?(text)
                 }
-                if shouldStop {
-                    owner?.stop()
+                if let errorMessage, owner?.isRecording == true {
+                    owner?.errorMessage = errorMessage
                 }
             }
         }

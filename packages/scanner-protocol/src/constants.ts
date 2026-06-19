@@ -26,7 +26,7 @@ export const SCANNER_STUN_ONLY_RTC_CONFIGURATION = {
   iceTransportPolicy: "all" as const,
 };
 
-export const SCANNER_ICE_GATHERING_TIMEOUT_MS = 5000;
+export const SCANNER_ICE_GATHERING_TIMEOUT_MS = 2000;
 export const SCANNER_ANSWER_POLL_INTERVAL_MS = 1000;
 export const SCANNER_SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 export const SCANNER_JOIN_ATTEMPT_TTL_MS = 30 * 1000;

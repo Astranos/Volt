@@ -14,6 +14,10 @@ const scannerStoreDictationSwiftSource = readFileSync(
   new URL("../ios/Volt/Services/ScannerStoreDictation.swift", import.meta.url),
   "utf8"
 );
+const dictationModelSwiftSource = readFileSync(
+  new URL("../ios/Volt/Services/DictationModel.swift", import.meta.url),
+  "utf8"
+);
 const scannerSignalingSwiftSource = readFileSync(
   new URL("../ios/Volt/Services/ScannerSignalingClient.swift", import.meta.url),
   "utf8"
@@ -72,6 +76,7 @@ test("native saved-session reconnect re-registers durable pairing before request
 test("native saved-session reconnect waits longer than QR pairing for sleeping Chrome extensions", () => {
   assert.match(scannerProtocolSwiftSource, /static let joinAttemptTTL: Duration = \.seconds\(32\)/);
   assert.match(scannerProtocolSwiftSource, /static let reconnectRequestTTL: Duration = \.seconds\(95\)/);
+  assert.match(scannerProtocolSwiftSource, /static let iceGatheringTimeout: Duration = \.seconds\(2\)/);
   assert.match(scannerSignalingSwiftSource, /let deadline = ContinuousClock\.now \+ ScannerProtocol\.reconnectRequestTTL/);
 });
 
@@ -152,6 +157,15 @@ test("native dictation keeps listening briefly after user stop actions", () => {
   assert.match(scannerStoreDictationSwiftSource, /cancelDictationGraceStop\(\)/);
   assert.match(dictationViewSwiftSource, /private func stopDictation\(\) \{\s*store\.finishDictationAfterGrace\(\)\s*\}/);
   assert.match(dictationViewSwiftSource, /holdEndAction: stopDictation/);
+});
+
+test("native dictation recognition results do not automatically stop recording", () => {
+  const recognitionTaskStart = dictationModelSwiftSource.indexOf("nonisolated private static func makeRecognitionTask");
+  const recognitionTaskSource = dictationModelSwiftSource.slice(recognitionTaskStart);
+
+  assert.ok(recognitionTaskStart > -1);
+  assert.doesNotMatch(recognitionTaskSource, /result\?\.isFinal[\s\S]*owner\?\.stop\(\)/);
+  assert.doesNotMatch(recognitionTaskSource, /error\s*!=\s*nil[\s\S]*owner\?\.stop\(\)/);
 });
 
 test("native Chrome input-change haptics are gated to the Dictate tab", () => {

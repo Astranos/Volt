@@ -199,7 +199,7 @@ export class MobileScannerSignalClient {
   }
 
   async postReconnectJoinWindow(pairing: DurablePairingCredential, requestId: string, joinWindow: JoinWindow) {
-    await fetch(
+    const response = await fetch(
       `${SCANNER_SIGNAL_URL}/pairings/${encodeURIComponent(pairing.pairingId)}/reconnect/${encodeURIComponent(requestId)}/join-window`,
       {
         method: "POST",
@@ -212,5 +212,8 @@ export class MobileScannerSignalClient {
         }),
       }
     );
+    if (!response.ok) {
+      throw new Error(`Failed to post scanner reconnect join window (${response.status})`);
+    }
   }
 }

@@ -1,0 +1,66 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  --color-volt-green: #21c55d;
+  --color-volt-ink: #080808;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: #ffffff;
+  color: #080808;
+  font-family: var(--font-sans);
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+::selection {
+  background: #080808;
+  color: #ffffff;
+}
+
+.landing-grid {
+  background-image:
+    linear-gradient(to right, rgba(8, 8, 8, 0.08) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(8, 8, 8, 0.08) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+.dark-grid {
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.12) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.12) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+.scan-beam {
+  animation: scan-beam 2.8s ease-in-out infinite;
+}
+
+@keyframes scan-beam {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.35;
+  }
+
+  50% {
+    transform: translateY(132px);
+    opacity: 1;
+  }
+}

@@ -10,7 +10,7 @@ enum ScannerProtocol {
     static let joinAttemptTTL: Duration = .seconds(32)
     static let reconnectRequestTTL: Duration = .seconds(95)
     static let joinAttemptPollInterval: Duration = .milliseconds(650)
-    static let iceGatheringTimeout: Duration = .seconds(5)
+    static let iceGatheringTimeout: Duration = .seconds(2)
 
     struct ProtocolVersion: Codable, Equatable {
         let major: Int

@@ -159,6 +159,7 @@ test("extension retries reconnect requests until join-window posting succeeds", 
   const seenStart = sessionSource.indexOf("this.seenReconnectRequests.add(key);", answerStart);
   assert.ok(answerStart > -1);
   assert.ok(seenStart > answerStart);
+  assert.match(signalClientSource, /if \(!response\.ok\) \{/);
 });
 
 test("offscreen and background route global join-window lifecycle separately from peer disconnect", () => {
