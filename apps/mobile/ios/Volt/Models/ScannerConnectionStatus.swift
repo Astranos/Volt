@@ -11,4 +11,8 @@ enum ScannerConnectionStatus: Equatable {
     var isConnected: Bool {
         if case .connected = self { true } else { false }
     }
+
+    var isConnecting: Bool {
+        self == .pairing || self == .waitingForChrome
+    }
 }

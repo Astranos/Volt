@@ -8,9 +8,12 @@ struct DictationView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: ScannerTabLayout.stackSpacing) {
-                    ScannerSectionHeader(title: "Dictate") {
-                        isSessionsPresented = true
-                    }
+                    ScannerSectionHeader(
+                        title: "Dictate",
+                        onConnectionControlTapped: {
+                            isSessionsPresented = true
+                        }
+                    )
 
                     DictationConnectionCard(
                         chromeSession: chromeSession,
@@ -285,11 +288,13 @@ private struct DictationStartAccessory: View {
                 guard isConnected || isRecording || isStarting else { return }
                 if pressStart == nil {
                     pressStart = .now
-                    pressFeedback.impactOccurred(intensity: 1)
                     if !isRecording && !isStarting {
                         didStartRecordingFromPress = true
+                        startFeedback.prepare()
                         startFeedback.impactOccurred(intensity: 1)
                         holdStartAction()
+                    } else {
+                        pressFeedback.impactOccurred(intensity: 1)
                     }
                 }
             }

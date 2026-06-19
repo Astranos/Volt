@@ -167,7 +167,11 @@ final class ScannerStore {
     }
 
     func cancelReconnect() {
-        guard canCancelReconnect else { return }
+        cancelConnectionAttempt()
+    }
+
+    func cancelConnectionAttempt() {
+        guard canCancelReconnect || reconnectTask != nil || connectionStatus.isConnecting else { return }
         let wasAutomaticReconnect = activeAutomaticReconnectToken != nil
         reconnectTask?.cancel()
         reconnectTask = nil
@@ -180,7 +184,7 @@ final class ScannerStore {
         pairingSession = nil
         connection.close()
         connectionStatus = .disconnected
-        statusText = "Reconnect canceled"
+        statusText = "Connection canceled"
         targetHint = Self.disconnectedPairingHint
     }
 

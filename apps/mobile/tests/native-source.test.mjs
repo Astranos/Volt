@@ -30,6 +30,10 @@ const rootViewSwiftSource = readFileSync(
   new URL("../ios/Volt/Views/RootView.swift", import.meta.url),
   "utf8"
 );
+const pairingSessionsViewSwiftSource = readFileSync(
+  new URL("../ios/Volt/Views/PairingSessionsView.swift", import.meta.url),
+  "utf8"
+);
 const scannerViewSwiftSource = readFileSync(
   new URL("../ios/Volt/Views/ScannerView.swift", import.meta.url),
   "utf8"
@@ -89,8 +93,30 @@ test("native saved-session reconnect toast can cancel manual previous-session ta
   assert.match(reconnectSource, /canCancelReconnect = true/);
   assert.doesNotMatch(reconnectSource, /canCancelReconnect = isAutomatic/);
   assert.match(scannerStoreSwiftSource, /func cancelReconnect\(\)/);
-  assert.match(rootViewSwiftSource, /store\.cancelReconnect\(\)/);
-  assert.match(rootViewSwiftSource, /actionTitle: store\.canCancelReconnect \? "Cancel" : nil/);
+  assert.match(scannerStoreSwiftSource, /func cancelConnectionAttempt\(\)/);
+  assert.match(scannerStoreSwiftSource, /connectionStatus\.isConnecting/);
+  assert.match(rootViewSwiftSource, /store\.cancelConnectionAttempt\(\)/);
+  assert.match(rootViewSwiftSource, /canCancel: true/);
+  assert.match(rootViewSwiftSource, /if sheet\.canCancel \{\s*Button\(role: \.cancel, action: onCancel\)/);
+});
+
+test("native connection sheet is always visible while connecting and user dismissal cancels", () => {
+  assert.match(rootViewSwiftSource, /\.sheet\(isPresented: \$isConnectionSheetPresented, onDismiss: handleConnectionSheetDismiss\)/);
+  assert.doesNotMatch(rootViewSwiftSource, /interactiveDismissDisabled\(connectionSheetStatus\.isProgressing\)/);
+  assert.match(rootViewSwiftSource, /case \.pairing:\s*keepsConnectionSheetOpenForSessions = false[\s\S]*isConnectionSheetPresented = true/);
+  assert.match(rootViewSwiftSource, /case \.waitingForChrome:\s*keepsConnectionSheetOpenForSessions = false[\s\S]*isConnectionSheetPresented = true/);
+  assert.match(rootViewSwiftSource, /private func handleConnectionSheetDismiss\(\) \{[\s\S]*if isConnectionAttemptVisible \{\s*store\.cancelConnectionAttempt\(\)\s*\}[\s\S]*resetConnectionSheetPresentation\(\)/);
+  assert.match(rootViewSwiftSource, /private var isConnectionAttemptVisible: Bool \{[\s\S]*case \.pairing, \.waitingForChrome:/);
+});
+
+test("native saved-session taps intentionally dismiss sessions before reconnect sheet returns", () => {
+  assert.match(rootViewSwiftSource, /PairingSessionsView \{\s*beginReconnectFromConnectionSheetSessions\(\)\s*\}/);
+  assert.match(rootViewSwiftSource, /@State private var allowsNextConnectionSheetDismissal = false/);
+  assert.match(rootViewSwiftSource, /private func beginReconnectFromConnectionSheetSessions\(\) \{\s*allowsNextConnectionSheetDismissal = true\s*keepsConnectionSheetOpenForSessions = false\s*connectionSheetStatus = nil\s*connectionSheetDetent = Self\.connectionStatusDetent\s*\}/);
+  assert.match(rootViewSwiftSource, /private func handleConnectionSheetDismiss\(\) \{\s*if allowsNextConnectionSheetDismissal \{\s*allowsNextConnectionSheetDismissal = false\s*resetConnectionSheetPresentation\(\)\s*showPairingSheet\(for: store\.connectionStatus\)\s*return\s*\}/);
+  assert.match(pairingSessionsViewSwiftSource, /let onReconnectStarted: \(\) -> Void/);
+  assert.match(pairingSessionsViewSwiftSource, /init\(onReconnectStarted: @escaping \(\) -> Void = \{\}\)/);
+  assert.match(pairingSessionsViewSwiftSource, /Button \{\s*onReconnectStarted\(\)\s*store\.reconnect\(to: session\)\s*dismiss\(\)/);
 });
 
 test("native capture session recovers pairing instead of dismissing when the scanner disconnects", () => {
@@ -108,14 +134,17 @@ test("native capture session recovers pairing instead of dismissing when the sca
   assert.doesNotMatch(recoverySource, /isPresented = false/);
 });
 
-test("native capture owns the sessions accessory instead of leaking it into the shared section header", () => {
+test("native screens use the shared header connection control without extra session accessories", () => {
   assert.match(rootViewSwiftSource, /struct ScannerSectionHeader<TrailingAccessory: View>: View/);
   assert.match(rootViewSwiftSource, /trailingAccessory\(\)/);
   assert.doesNotMatch(rootViewSwiftSource, /onSessions/);
-  assert.match(rootViewSwiftSource, /struct ScannerSessionsButton: View/);
-  assert.match(scannerViewSwiftSource, /ScannerSectionHeader\(\s*title: "Capture",[\s\S]*\) \{\s*ScannerSessionsButton/);
-  assert.match(dictationViewSwiftSource, /ScannerSectionHeader\(title: "Dictate"[\s\S]*trailingAccessory: \{\s*ScannerSessionsButton/);
-  assert.match(uploadViewSwiftSource, /ScannerSectionHeader\(title: "Upload"[\s\S]*trailingAccessory: \{\s*ScannerSessionsButton/);
+  assert.doesNotMatch(rootViewSwiftSource, /struct ScannerSessionsButton: View/);
+  assert.match(scannerViewSwiftSource, /ScannerSectionHeader\(\s*title: "Capture",\s*onConnectionControlTapped:/);
+  assert.match(dictationViewSwiftSource, /ScannerSectionHeader\(\s*title: "Dictate",\s*onConnectionControlTapped:/);
+  assert.match(uploadViewSwiftSource, /ScannerSectionHeader\(\s*title: "Upload",\s*onConnectionControlTapped:/);
+  assert.doesNotMatch(scannerViewSwiftSource, /trailingAccessory: \{\s*ScannerSessionsButton/);
+  assert.doesNotMatch(dictationViewSwiftSource, /trailingAccessory: \{\s*ScannerSessionsButton/);
+  assert.doesNotMatch(uploadViewSwiftSource, /trailingAccessory: \{\s*ScannerSessionsButton/);
 });
 
 test("native OCR review stops the live camera until retake", () => {
@@ -157,6 +186,15 @@ test("native dictation keeps listening briefly after user stop actions", () => {
   assert.match(scannerStoreDictationSwiftSource, /cancelDictationGraceStop\(\)/);
   assert.match(dictationViewSwiftSource, /private func stopDictation\(\) \{\s*store\.finishDictationAfterGrace\(\)\s*\}/);
   assert.match(dictationViewSwiftSource, /holdEndAction: stopDictation/);
+});
+
+test("native dictation start gesture emits a dedicated start haptic", () => {
+  const pressGestureStart = dictationViewSwiftSource.indexOf("private var pressGesture");
+  const pressGestureSource = dictationViewSwiftSource.slice(pressGestureStart);
+
+  assert.ok(pressGestureStart > -1);
+  assert.match(pressGestureSource, /if !isRecording && !isStarting \{[\s\S]*startFeedback\.prepare\(\)[\s\S]*startFeedback\.impactOccurred\(intensity: 1\)[\s\S]*holdStartAction\(\)/);
+  assert.doesNotMatch(pressGestureSource, /pressFeedback\.impactOccurred\(intensity: 1\)[\s\S]*if !isRecording && !isStarting/);
 });
 
 test("native dictation recognition results do not automatically stop recording", () => {

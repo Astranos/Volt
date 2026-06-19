@@ -28,9 +28,12 @@ struct UploadView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: ScannerTabLayout.stackSpacing) {
-                    ScannerSectionHeader(title: "Upload") {
-                        isSessionsPresented = true
-                    }
+                    ScannerSectionHeader(
+                        title: "Upload",
+                        onConnectionControlTapped: {
+                            isSessionsPresented = true
+                        }
+                    )
 
                     recentUploads
                 }

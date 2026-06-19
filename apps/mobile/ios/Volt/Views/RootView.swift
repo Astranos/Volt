@@ -8,6 +8,7 @@ struct RootView: View {
     @State private var connectionSheetStatus: PairingStatusSheetModel?
     @State private var connectionSheetDetent = RootView.connectionStatusDetent
     @State private var keepsConnectionSheetOpenForSessions = false
+    @State private var allowsNextConnectionSheetDismissal = false
 
     private static let connectionStatusDetent = PresentationDetent.height(112)
 
@@ -25,21 +26,22 @@ struct RootView: View {
                 .tabItem { Label("Dictate", systemImage: "mic") }
                 .tag(AppSection.dictation)
         }
-        .sheet(isPresented: $isConnectionSheetPresented, onDismiss: resetConnectionSheetPresentation) {
+        .sheet(isPresented: $isConnectionSheetPresented, onDismiss: handleConnectionSheetDismiss) {
             if connectionSheetDetent == Self.connectionStatusDetent, let connectionSheetStatus {
                 PairingStatusSheet(sheet: connectionSheetStatus) {
-                    showSessionsFromConnectionSheet(cancelingReconnect: true)
+                    showSessionsFromConnectionSheet(cancelingConnectionAttempt: true)
                 }
                 .presentationDetents([Self.connectionStatusDetent, .medium, .large], selection: $connectionSheetDetent)
                 .presentationDragIndicator(.visible)
-                .interactiveDismissDisabled(connectionSheetStatus.isProgressing)
                 .onChange(of: connectionSheetDetent) { _, newValue in
                     if newValue != Self.connectionStatusDetent {
-                        showSessionsFromConnectionSheet(cancelingReconnect: connectionSheetStatus.canCancel)
+                        showSessionsFromConnectionSheet(cancelingConnectionAttempt: connectionSheetStatus.isProgressing)
                     }
                 }
             } else {
-                PairingSessionsView()
+                PairingSessionsView {
+                    beginReconnectFromConnectionSheetSessions()
+                }
                     .presentationDetents([.medium, .large], selection: $connectionSheetDetent)
                     .presentationDragIndicator(.visible)
             }
@@ -79,24 +81,24 @@ struct RootView: View {
     private func showPairingSheet(for status: ScannerConnectionStatus) {
         switch status {
         case .pairing:
-            guard !keepsConnectionSheetOpenForSessions else { return }
+            keepsConnectionSheetOpenForSessions = false
             connectionSheetStatus = PairingStatusSheetModel(
                 title: "Pairing with Chrome",
                 message: store.peerTarget?.displayText ?? "Trying to open the scanner channel.",
                 systemImage: "link",
                 isProgressing: true,
-                canCancel: store.canCancelReconnect
+                canCancel: true
             )
             connectionSheetDetent = Self.connectionStatusDetent
             isConnectionSheetPresented = true
         case .waitingForChrome:
-            guard !keepsConnectionSheetOpenForSessions else { return }
+            keepsConnectionSheetOpenForSessions = false
             connectionSheetStatus = PairingStatusSheetModel(
                 title: "Waiting for Chrome",
                 message: "Finishing the secure scanner handshake.",
                 systemImage: "desktopcomputer",
                 isProgressing: true,
-                canCancel: store.canCancelReconnect
+                canCancel: true
             )
             connectionSheetDetent = Self.connectionStatusDetent
             isConnectionSheetPresented = true
@@ -116,17 +118,47 @@ struct RootView: View {
         }
     }
 
-    private func showSessionsFromConnectionSheet(cancelingReconnect: Bool) {
+    private func showSessionsFromConnectionSheet(cancelingConnectionAttempt: Bool) {
         keepsConnectionSheetOpenForSessions = true
         connectionSheetStatus = nil
         connectionSheetDetent = .medium
-        if cancelingReconnect {
-            store.cancelReconnect()
+        if cancelingConnectionAttempt {
+            store.cancelConnectionAttempt()
         }
         isConnectionSheetPresented = true
     }
 
+    private func handleConnectionSheetDismiss() {
+        if allowsNextConnectionSheetDismissal {
+            allowsNextConnectionSheetDismissal = false
+            resetConnectionSheetPresentation()
+            showPairingSheet(for: store.connectionStatus)
+            return
+        }
+
+        if isConnectionAttemptVisible {
+            store.cancelConnectionAttempt()
+        }
+        resetConnectionSheetPresentation()
+    }
+
+    private var isConnectionAttemptVisible: Bool {
+        switch store.connectionStatus {
+        case .pairing, .waitingForChrome:
+            return connectionSheetStatus?.isProgressing == true
+        case .idle, .connected, .disconnected, .error:
+            return false
+        }
+    }
+
     private func resetConnectionSheetPresentation() {
+        keepsConnectionSheetOpenForSessions = false
+        connectionSheetStatus = nil
+        connectionSheetDetent = Self.connectionStatusDetent
+    }
+
+    private func beginReconnectFromConnectionSheetSessions() {
+        allowsNextConnectionSheetDismissal = true
         keepsConnectionSheetOpenForSessions = false
         connectionSheetStatus = nil
         connectionSheetDetent = Self.connectionStatusDetent

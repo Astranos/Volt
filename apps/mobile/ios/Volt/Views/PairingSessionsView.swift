@@ -2,7 +2,13 @@ import SwiftUI
 
 struct PairingSessionsView: View {
     @Environment(ScannerStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
     @State private var isPairingScannerPresented = false
+    let onReconnectStarted: () -> Void
+
+    init(onReconnectStarted: @escaping () -> Void = {}) {
+        self.onReconnectStarted = onReconnectStarted
+    }
 
     var body: some View {
         NavigationStack {
@@ -102,7 +108,9 @@ struct PairingSessionsView: View {
         List {
             ForEach(store.pairedSessions) { session in
                 Button {
+                    onReconnectStarted()
                     store.reconnect(to: session)
+                    dismiss()
                 } label: {
                     PairedSessionRow(session: session)
                         .padding(14)
