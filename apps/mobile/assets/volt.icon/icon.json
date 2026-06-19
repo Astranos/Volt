@@ -17,17 +17,17 @@
             {
               "value" : {
                 "linear-gradient" : [
-                  "display-p3:0.19384,0.66548,0.19388,1.00000",
-                  "display-p3:0.00008,0.52412,0.00012,1.00000"
+                  "display-p3:0.96324,1.00000,0.91912,1.00000",
+                  "display-p3:0.19384,0.66548,0.19388,1.00000"
                 ],
                 "orientation" : {
                   "start" : {
-                    "x" : 0.3869396830734154,
-                    "y" : 1.4136283549983564
+                    "x" : -1.0220332794033906,
+                    "y" : 2.4594149910303886
                   },
                   "stop" : {
-                    "x" : 0.6586676498579377,
-                    "y" : -0.44834909727049854
+                    "x" : 0.380353566604321,
+                    "y" : 1.1498923872369082
                   }
                 }
               }
@@ -35,7 +35,20 @@
             {
               "appearance" : "tinted",
               "value" : {
-                "automatic-gradient" : "display-p3:0.00008,0.52412,0.00012,1.00000"
+                "linear-gradient" : [
+                  "display-p3:0.19384,0.66548,0.19388,1.00000",
+                  "display-p3:0.00008,0.52412,0.00012,1.00000"
+                ],
+                "orientation" : {
+                  "start" : {
+                    "x" : 0.5,
+                    "y" : 0
+                  },
+                  "stop" : {
+                    "x" : 0.5,
+                    "y" : 0.7
+                  }
+                }
               }
             }
           ],
@@ -43,7 +56,15 @@
           "hidden" : false,
           "image-name" : "logo-hd.png",
           "name" : "logo-hd",
-          "opacity" : 1,
+          "opacity-specializations" : [
+            {
+              "value" : 1
+            },
+            {
+              "appearance" : "tinted",
+              "value" : 1
+            }
+          ],
           "position" : {
             "scale" : 0.77,
             "translation-in-points" : [

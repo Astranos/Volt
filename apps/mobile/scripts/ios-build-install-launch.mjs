@@ -4,15 +4,16 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
-const args = new Set(process.argv.slice(2));
+const forwardedArgs = process.argv.slice(2).filter((arg) => arg !== "--");
+const args = new Set(forwardedArgs);
 const getArg = (name, fallback) => {
   const prefix = `${name}=`;
-  const value = process.argv.slice(2).find((arg) => arg.startsWith(prefix));
+  const value = forwardedArgs.find((arg) => arg.startsWith(prefix));
   return value ? value.slice(prefix.length) : fallback;
 };
 
 const configuration = args.has("--release") ? "Release" : "Debug";
-const project = "ios/Volt.xcodeproj";
+const workspace = "ios/Volt.xcworkspace";
 const scheme = "Volt";
 const bundleId = "com.volt.mobile";
 const derivedData = path.resolve("ios/build");
@@ -46,14 +47,15 @@ function bootSimulator(udid) {
 }
 
 function build(destination) {
-  run("xcodebuild", [
-    "-project", project,
+  const commandArgs = [
+    "-workspace", workspace,
     "-scheme", scheme,
     "-configuration", configuration,
     "-derivedDataPath", derivedData,
     "-destination", destination,
-    "build",
-  ]);
+  ];
+  if (mode === "device") commandArgs.push("-allowProvisioningUpdates");
+  run("xcodebuild", [...commandArgs, "build"]);
 }
 
 if (mode === "simulator") {

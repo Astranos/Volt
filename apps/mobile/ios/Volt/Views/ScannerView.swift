@@ -4,6 +4,7 @@ struct ScannerView: View {
     @Environment(ScannerStore.self) private var store
     @State private var isCaptureSessionPresented = false
     @State private var isPairingScannerPresented = false
+    @State private var isSessionsPresented = false
     let showsCameraLayer: Bool
 
     init(showsCameraLayer: Bool = true) {
@@ -18,9 +19,15 @@ struct ScannerView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: ScannerTabLayout.stackSpacing) {
-                    ScannerSectionHeader(title: "Capture") {
-                        isPairingScannerPresented = true
-                    }
+                    ScannerSectionHeader(
+                        title: "Capture",
+                        onPair: {
+                            isPairingScannerPresented = true
+                        },
+                        onSessions: {
+                            isSessionsPresented = true
+                        }
+                    )
 
                     previousCaptures
                 }
@@ -36,6 +43,11 @@ struct ScannerView: View {
             }
             .fullScreenCover(isPresented: $isPairingScannerPresented) {
                 PairingScanSessionView(isPresented: $isPairingScannerPresented)
+            }
+            .sheet(isPresented: $isSessionsPresented) {
+                PairingSessionsView()
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
             }
             .onAppear {
                 store.activeMode = .ocr

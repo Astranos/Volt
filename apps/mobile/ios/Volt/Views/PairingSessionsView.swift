@@ -30,7 +30,7 @@ struct PairingSessionsView: View {
                 }
                 .padding(ScannerTabLayout.contentPadding)
                 .padding(.top, ScannerTabLayout.topPadding)
-                .padding(.bottom, ScannerTabLayout.bottomAccessoryContentPadding)
+                .padding(.bottom, store.pairedSessions.isEmpty ? ScannerTabLayout.bottomAccessoryContentPadding : 0)
 
                 if !store.pairedSessions.isEmpty {
                     pairedSessionsList
@@ -46,10 +46,7 @@ struct PairingSessionsView: View {
                 store.pruneExpiredPairedSessions()
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                ScanChromeQRAccessory(
-                    statusText: "Ready to scan a Chrome pairing QR",
-                    onScan: startPairingScan
-                )
+                ScanChromeQRAccessory(onScan: startPairingScan)
             }
         }
     }
@@ -93,17 +90,10 @@ struct PairingSessionsView: View {
 }
 
 private struct ScanChromeQRAccessory: View {
-    let statusText: String
     let onScan: () -> Void
 
     var body: some View {
-        VStack(spacing: 10) {
-            Text(statusText)
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: .infinity)
-
+        VStack(spacing: 0) {
             Button(action: onScan) {
                 Label("Scan Chrome QR", systemImage: "qrcode.viewfinder")
                     .font(.headline)
@@ -117,7 +107,7 @@ private struct ScanChromeQRAccessory: View {
             .buttonStyle(.plain)
         }
         .padding(.horizontal)
-        .padding(.top, 12)
+        .padding(.top, 10)
         .padding(.bottom, 10)
         .background(.bar)
     }
@@ -129,20 +119,13 @@ struct PairingScanSessionView: View {
 
     var body: some View {
         ZStack {
-            ScannerCameraLayer(
-                guideVisible: false,
-                barcodeDetectionLabel: PairingScanStatusMessage.detail(
-                    connectionStatus: store.connectionStatus,
-                    isCodeDetected: store.camera.detectedBarcodeBounds != nil
-                )
-            )
+            ScannerCameraLayer(guideVisible: false)
                 .ignoresSafeArea()
         }
         .background(.black)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             PairingScanControls(
                 statusText: store.statusText,
-                targetHint: store.targetHint,
                 connectionStatus: store.connectionStatus,
                 isCodeDetected: store.camera.detectedBarcodeBounds != nil,
                 onFinish: {
@@ -176,7 +159,6 @@ struct PairingScanSessionView: View {
 
 private struct PairingScanControls: View {
     let statusText: String
-    let targetHint: String
     let connectionStatus: ScannerConnectionStatus
     let isCodeDetected: Bool
     let onFinish: () -> Void
@@ -187,34 +169,6 @@ private struct PairingScanControls: View {
                 .font(.headline)
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
-
-            Text(targetHint)
-                .font(.subheadline)
-                .foregroundStyle(.white.opacity(0.76))
-                .multilineTextAlignment(.center)
-                .lineLimit(2)
-                .frame(maxWidth: .infinity)
-
-            HStack(spacing: 8) {
-                PairingProgressStep(
-                    title: "Find",
-                    systemImage: isCodeDetected ? "viewfinder.circle.fill" : "viewfinder.circle",
-                    isActive: isCodeDetected,
-                    isComplete: isCodeDetected
-                )
-                PairingProgressStep(
-                    title: "Read",
-                    systemImage: hasReadCode ? "qrcode.viewfinder" : "qrcode",
-                    isActive: hasReadCode,
-                    isComplete: hasReadCode
-                )
-                PairingProgressStep(
-                    title: "Connect",
-                    systemImage: connectionSymbol,
-                    isActive: isConnecting || connectionStatus.isConnected,
-                    isComplete: connectionStatus.isConnected
-                )
-            }
 
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
@@ -252,37 +206,6 @@ private struct PairingScanControls: View {
         }
     }
 
-    private var hasReadCode: Bool {
-        switch connectionStatus {
-        case .pairing, .waitingForChrome, .connected:
-            true
-        case .idle, .disconnected, .error:
-            isCodeDetected && statusText != "Not paired"
-        }
-    }
-
-    private var isConnecting: Bool {
-        switch connectionStatus {
-        case .pairing, .waitingForChrome:
-            true
-        case .idle, .connected, .disconnected, .error:
-            false
-        }
-    }
-
-    private var connectionSymbol: String {
-        switch connectionStatus {
-        case .connected:
-            "checkmark.circle.fill"
-        case .error:
-            "exclamationmark.triangle.fill"
-        case .pairing, .waitingForChrome:
-            "arrow.triangle.2.circlepath.circle.fill"
-        case .idle, .disconnected:
-            "link.circle"
-        }
-    }
-
     private var statusDetail: String {
         PairingScanStatusMessage.detail(
             connectionStatus: connectionStatus,
@@ -305,28 +228,6 @@ private enum PairingScanStatusMessage {
         case .error:
             "Try refreshing the Chrome QR and scan it again."
         }
-    }
-}
-
-private struct PairingProgressStep: View {
-    let title: String
-    let systemImage: String
-    let isActive: Bool
-    let isComplete: Bool
-
-    var body: some View {
-        Label(title, systemImage: systemImage)
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(isActive ? .white : .white.opacity(0.52))
-            .lineLimit(1)
-            .minimumScaleFactor(0.8)
-            .frame(maxWidth: .infinity, minHeight: 34)
-            .padding(.horizontal, 8)
-            .background(.white.opacity(isActive ? 0.18 : 0.08), in: Capsule())
-            .overlay {
-                Capsule().stroke(.white.opacity(isComplete ? 0.45 : 0.12), lineWidth: 1)
-            }
-            .accessibilityLabel("\(title) \(isComplete ? "complete" : isActive ? "active" : "pending")")
     }
 }
 

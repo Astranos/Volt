@@ -19,10 +19,6 @@ struct RootView: View {
             DictationView()
                 .tabItem { Label("Dictate", systemImage: "mic") }
                 .tag(AppSection.dictation)
-
-            PairingSessionsView()
-                .tabItem { Label("Sessions", systemImage: "link") }
-                .tag(AppSection.sessions)
         }
         .overlay(alignment: .top) {
             if let pairingToast {
@@ -68,8 +64,6 @@ struct RootView: View {
             if store.activeMode == .dictation {
                 store.activeMode = .ocr
             }
-        case .sessions:
-            break
         case .dictation:
             store.activeMode = .dictation
         case .upload:
@@ -123,7 +117,6 @@ struct RootView: View {
 
 enum AppSection: Hashable {
     case scan
-    case sessions
     case dictation
     case upload
 }
@@ -237,14 +230,29 @@ struct ScannerSectionHeader: View {
     @Environment(ScannerStore.self) private var store
     let title: String
     let onPair: () -> Void
+    var onSessions: (() -> Void)? = nil
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 16) {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
             Text(title)
                 .font(.largeTitle.bold())
                 .lineLimit(1)
                 .minimumScaleFactor(0.82)
                 .frame(maxWidth: .infinity, alignment: .leading)
+
+            if let onSessions {
+                Button {
+                    onSessions()
+                } label: {
+                    Label("Sessions", systemImage: "link")
+                        .font(.headline)
+                        .labelStyle(.iconOnly)
+                        .foregroundStyle(.secondary)
+                        .frame(width: 44, height: 44)
+                        .background(.regularMaterial, in: Circle())
+                }
+                .accessibilityLabel("Previous sessions")
+            }
 
             connectionControl
         }

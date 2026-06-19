@@ -5,7 +5,6 @@ struct ScannerCameraLayer: View {
     @State private var focusPoint: CGPoint?
     var gridVisible = false
     var guideVisible = true
-    var barcodeDetectionLabel: String?
     private let photoHeaderClearance: CGFloat = 48
     private let photoControlsReservedHeight: CGFloat = 318
 
@@ -73,8 +72,7 @@ struct ScannerCameraLayer: View {
                barcodeBounds.height > 0 {
                 BarcodeDetectionReticle(
                     bounds: barcodeBounds,
-                    format: store.camera.detectedBarcodeFormat,
-                    labelOverride: barcodeDetectionLabel
+                    format: store.camera.detectedBarcodeFormat
                 )
                     .allowsHitTesting(false)
             }
@@ -124,33 +122,19 @@ struct FocusReticle: View {
 struct BarcodeDetectionReticle: View {
     let bounds: CGRect
     let format: String?
-    let labelOverride: String?
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(.green, lineWidth: 3)
-                .shadow(color: .black.opacity(0.42), radius: 3, y: 1)
-
-            Text(label)
-                .font(.caption2.weight(.bold))
-                .foregroundStyle(.black)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(.green, in: Capsule())
-                .offset(x: 8, y: -28)
-        }
-        .frame(width: max(42, bounds.width), height: max(42, bounds.height))
-        .position(x: bounds.midX, y: bounds.midY)
-        .transition(.opacity.combined(with: .scale(scale: 0.96)))
-        .animation(.easeOut(duration: 0.12), value: bounds)
-        .accessibilityHidden(true)
+        RoundedRectangle(cornerRadius: 12, style: .continuous)
+            .stroke(.green, lineWidth: 3)
+            .shadow(color: .black.opacity(0.42), radius: 3, y: 1)
+            .frame(width: max(42, bounds.width), height: max(42, bounds.height))
+            .position(x: bounds.midX, y: bounds.midY)
+            .transition(.opacity.combined(with: .scale(scale: 0.96)))
+            .animation(.easeOut(duration: 0.12), value: bounds)
+            .accessibilityLabel(accessibilityLabel)
     }
 
-    private var label: String {
-        if let labelOverride, !labelOverride.isEmpty {
-            return labelOverride
-        }
+    private var accessibilityLabel: String {
         guard let format else { return "Code" }
         return format.localizedCaseInsensitiveContains("qr") ? "QR found" : "Code found"
     }
