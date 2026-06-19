@@ -296,13 +296,11 @@ The mutation observer uses debouncing (300ms delay) to avoid excessive calls and
 
 ## Testing
 
-A test script is available at `../volt/test-google-inputs.js` that can be used to verify the detection functionality:
-
-1. Navigate to a Shopify product admin page
-2. Open the browser console
-3. Copy and paste the test script content
-4. Press Enter to run the script
-5. Check for orange borders and notification popups
+1. Navigate to a Shopify product admin page with Google-related product metafields
+2. Leave at least one Google-related field empty
+3. Confirm the empty field is highlighted and the warning notification appears
+4. Fill the field and save
+5. Confirm the warning clears after the Shopify UI updates
 
 ## Configuration
 

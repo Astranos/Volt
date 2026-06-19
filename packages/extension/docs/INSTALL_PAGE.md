@@ -101,11 +101,10 @@ Replace `[EXTENSION_ID]` with the actual ID of your installed extension.
 To test the install page functionality:
 
 1. Load the extension in developer mode
-2. Open the browser console
-3. Run the test script:
-   ```javascript
-   // Copy and paste the contents of test-install.js in the console
-   ```
+2. Open `chrome-extension://[EXTENSION_ID]/install.html`
+3. Confirm the page renders the install content and primary call to action
+4. Open `chrome-extension://[EXTENSION_ID]/options.html`
+5. Confirm the landing/options page links back to the install flow where expected
 
 ## Building
 

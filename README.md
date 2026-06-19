@@ -77,6 +77,8 @@ The root `pnpm build` command includes the native mobile build and requires Xcod
 ## Documentation
 
 - [Project context](CONTEXT.md)
+- [Maintainability notes](docs/maintainability.md)
+- [Deferred App Clip photo capture](docs/deferred-app-clip.md)
 - [Architecture decisions](docs/adr)
 - [Chrome extension README](packages/extension/README.md)
 - [Contributor guide](CONTRIBUTING.md)
