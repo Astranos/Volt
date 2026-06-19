@@ -315,6 +315,16 @@ extension ScannerStore {
         }
     }
 
+    func showCaptureTypingFallbackToast(for result: ScanResult) {
+        guard result.source == .capture else { return }
+        captureDeliveryToast = CaptureDeliveryToast(
+            title: "Failed to type",
+            message: "\(captureDeliveryMessage(for: result)) was saved to Chrome sidepanel results.",
+            systemImage: "exclamationmark.triangle.fill",
+            tone: .failure
+        )
+    }
+
     private func captureDeliveryMessage(for result: ScanResult) -> String {
         switch result.kind {
         case .barcode:

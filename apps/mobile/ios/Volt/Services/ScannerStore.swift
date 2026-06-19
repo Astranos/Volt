@@ -349,7 +349,7 @@ final class ScannerStore {
         saveCurrentPairingSession(message: message)
         applyConnectionStatus(
             .connected,
-            allowsConnectedFeedback: !didChangeChromeInputTarget || selectedSection == .dictation
+            allowsConnectedFeedback: !wasConnected || (didChangeChromeInputTarget && selectedSection == .dictation)
         )
         resetDictationForTargetChangeIfNeeded(from: previousPeerTarget, to: nextPeerTarget)
     }
@@ -370,7 +370,11 @@ final class ScannerStore {
 
         if receipt.insertedIntoCursor == false {
             results[index].deliveryState = .failed
-            showCaptureDeliveryToast(for: results[index], state: .failed)
+            if receipt.savedToResults {
+                showCaptureTypingFallbackToast(for: results[index])
+            } else {
+                showCaptureDeliveryToast(for: results[index], state: .failed)
+            }
             statusText = "Chrome received text"
             targetHint = "Chrome saved it, but no focused cursor target was available."
             return

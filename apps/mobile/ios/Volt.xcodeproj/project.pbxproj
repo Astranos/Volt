@@ -25,6 +25,7 @@
 		B0000000000000000000000F /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000000F /* Images.xcassets */; };
 		B00000000000000000000010 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000010 /* SplashScreen.storyboard */; };
 		B00000000000000000000011 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000011 /* PrivacyInfo.xcprivacy */; };
+		B0000000000000000000001B /* volt.icon in Resources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000001B /* volt.icon */; };
 		B00000000000000000000012 /* ScannerConnectionStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000016 /* ScannerConnectionStatus.swift */; };
 		B00000000000000000000013 /* ScannerPeerTarget.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000017 /* ScannerPeerTarget.swift */; };
 		B00000000000000000000014 /* ScannerProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000018 /* ScannerProtocol.swift */; };
@@ -73,6 +74,7 @@
 		C00000000000000000000018 /* ScannerProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannerProtocol.swift; sourceTree = "<group>"; };
 		C00000000000000000000019 /* ScannerSignalingClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannerSignalingClient.swift; sourceTree = "<group>"; };
 		C0000000000000000000001A /* ScannerWebRTCConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannerWebRTCConnection.swift; sourceTree = "<group>"; };
+		C0000000000000000000001B /* volt.icon */ = {isa = PBXFileReference; explicitFileType = "com.apple.iconcomposer.icon"; path = volt.icon; sourceTree = "<group>"; };
 		C0000000000000000000001C /* PairedScannerSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairedScannerSession.swift; sourceTree = "<group>"; };
 		C0000000000000000000001D /* PairingSessionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingSessionsView.swift; sourceTree = "<group>"; };
 		C10000000000000000000001 /* ScannerStoreCaptureActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannerStoreCaptureActions.swift; sourceTree = "<group>"; };
@@ -149,6 +151,7 @@
 				C00000000000000000000011 /* PrivacyInfo.xcprivacy */,
 				C00000000000000000000013 /* Info.plist */,
 				C00000000000000000000014 /* Volt.entitlements */,
+				C0000000000000000000001B /* volt.icon */,
 			);
 			path = Volt;
 			sourceTree = "<group>";
@@ -275,6 +278,7 @@
 				B0000000000000000000000F /* Images.xcassets in Resources */,
 				B00000000000000000000010 /* SplashScreen.storyboard in Resources */,
 				B00000000000000000000011 /* PrivacyInfo.xcprivacy in Resources */,
+				B0000000000000000000001B /* volt.icon in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -369,7 +373,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 577C15430A95FB0B1F9D6C10 /* Pods-Volt.debug.xcconfig */;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = volt;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = Volt/Volt.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
@@ -398,7 +402,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = C2FE1E81FC70D4D44558094E /* Pods-Volt.release.xcconfig */;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = volt;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = Volt/Volt.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Distribution";

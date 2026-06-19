@@ -10,6 +10,11 @@ struct OcrReviewLayer: View {
     @State private var baseOffset: CGSize = .zero
     @State private var gestureOffset: CGSize = .zero
     @State private var isMagnifying = false
+    @State private var isPanning = false
+    @State private var lastPanEndedAt = Date.distantPast
+
+    private let minimumTapTargetSize: CGFloat = 28
+    private let panSelectionSuppression: TimeInterval = 0.24
 
     private var currentScale: CGFloat {
         min(max(baseScale * gestureScale, 1), 4)
@@ -34,18 +39,25 @@ struct OcrReviewLayer: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                 ForEach(regions) { region in
-                    let rect = viewRect(for: region.boundingBox, in: imageRect)
+                    let points = viewPoints(for: region.quadrilateral, in: imageRect)
+                    let bounds = boundingRect(for: points)
+                    let tapTargetSize = tapTargetSize(for: bounds)
+                    let shape = OcrRegionShape(points: points)
 
-                    RoundedRectangle(cornerRadius: max(4, min(rect.height * 0.22, 10)), style: .continuous)
+                    shape
                         .fill(fillStyle(for: region))
                         .overlay {
-                            RoundedRectangle(cornerRadius: max(4, min(rect.height * 0.22, 10)), style: .continuous)
-                                .stroke(strokeStyle(for: region), lineWidth: 1.5)
+                            shape.stroke(strokeStyle(for: region), lineWidth: 1.5 / currentScale)
                         }
+                        .allowsHitTesting(false)
+                        .frame(width: proxy.size.width, height: proxy.size.height)
+
+                    Rectangle()
+                        .fill(.clear)
                         .contentShape(Rectangle())
                         .simultaneousGesture(selectionGesture(for: region))
-                        .frame(width: max(rect.width, 28), height: max(rect.height, 28))
-                        .position(x: rect.midX, y: rect.midY)
+                        .frame(width: tapTargetSize.width, height: tapTargetSize.height)
+                        .position(x: bounds.midX, y: bounds.midY)
                         .accessibilityLabel(region.text)
                         .accessibilityHint("Copy or send recognized text")
                 }
@@ -79,6 +91,9 @@ struct OcrReviewLayer: View {
         DragGesture()
             .onChanged { value in
                 guard currentScale > 1 else { return }
+                if abs(value.translation.width) > 8 || abs(value.translation.height) > 8 {
+                    isPanning = true
+                }
                 gestureOffset = value.translation
             }
             .onEnded { value in
@@ -87,11 +102,15 @@ struct OcrReviewLayer: View {
                     gestureOffset = .zero
                     return
                 }
+                if isPanning || abs(value.translation.width) > 8 || abs(value.translation.height) > 8 {
+                    lastPanEndedAt = Date()
+                }
                 baseOffset = CGSize(
                     width: baseOffset.width + value.translation.width,
                     height: baseOffset.height + value.translation.height
                 )
                 gestureOffset = .zero
+                isPanning = false
             }
     }
 
@@ -99,6 +118,8 @@ struct OcrReviewLayer: View {
         DragGesture(minimumDistance: 0)
             .onEnded { value in
                 guard !isMagnifying else { return }
+                guard !isPanning else { return }
+                guard Date().timeIntervalSince(lastPanEndedAt) > panSelectionSuppression else { return }
                 guard abs(value.translation.width) <= 6, abs(value.translation.height) <= 6 else { return }
                 onSelectRegion(region)
             }
@@ -127,12 +148,58 @@ struct OcrReviewLayer: View {
         )
     }
 
-    private func viewRect(for normalizedRect: CGRect, in imageRect: CGRect) -> CGRect {
-        CGRect(
-            x: imageRect.minX + normalizedRect.minX * imageRect.width,
-            y: imageRect.minY + (1 - normalizedRect.maxY) * imageRect.height,
-            width: normalizedRect.width * imageRect.width,
-            height: normalizedRect.height * imageRect.height
-        ).insetBy(dx: -3, dy: -3)
+    private func viewPoints(for quadrilateral: TextQuadrilateral, in imageRect: CGRect) -> [CGPoint] {
+        quadrilateral.points.map { point in
+            CGPoint(
+                x: imageRect.minX + point.x * imageRect.width,
+                y: imageRect.minY + (1 - point.y) * imageRect.height
+            )
+        }
+    }
+
+    private func boundingRect(for points: [CGPoint]) -> CGRect {
+        guard let first = points.first else { return .zero }
+
+        var minX = first.x
+        var maxX = first.x
+        var minY = first.y
+        var maxY = first.y
+
+        for point in points.dropFirst() {
+            minX = min(minX, point.x)
+            maxX = max(maxX, point.x)
+            minY = min(minY, point.y)
+            maxY = max(maxY, point.y)
+        }
+
+        return CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
+            .insetBy(dx: -targetPadding, dy: -targetPadding)
+    }
+
+    private var targetPadding: CGFloat {
+        3 / currentScale
+    }
+
+    private func tapTargetSize(for rect: CGRect) -> CGSize {
+        CGSize(
+            width: max(rect.width, minimumTapTargetSize / currentScale),
+            height: max(rect.height, minimumTapTargetSize / currentScale)
+        )
+    }
+}
+
+private struct OcrRegionShape: Shape {
+    let points: [CGPoint]
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        guard let first = points.first else { return path }
+
+        path.move(to: first)
+        for point in points.dropFirst() {
+            path.addLine(to: point)
+        }
+        path.closeSubpath()
+        return path
     }
 }

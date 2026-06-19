@@ -10,7 +10,7 @@ I built Volt to make buying and listing electronic devices for resale faster and
 | --- | --- |
 | `packages/extension` | Chrome extension built with WXT, React, and TypeScript. |
 | `packages/scanner-protocol` | Shared scanner protocol constants, message types, and validation helpers. |
-| `apps/mobile` | Expo/React Native iOS scanner app with native Swift components. |
+| `apps/mobile` | Native SwiftUI iOS scanner app. |
 | `apps/web` | Vite web app used for scanner pairing and web flows. |
 | `apps/scanner-signal` | Vercel-hosted signaling API for scanner sessions, push, and dictation tokens. |
 
@@ -47,6 +47,18 @@ Run the mobile app on a simulator:
 pnpm dev:mobile
 ```
 
+Build, install, and launch the mobile app on a paired iPhone:
+
+```sh
+pnpm --filter @volt/mobile ios:device -- --id=<device-id>
+```
+
+Find the device id with:
+
+```sh
+xcrun devicectl list devices
+```
+
 For a native iOS compile check, use:
 
 ```sh
@@ -73,6 +85,12 @@ pnpm zip:extension
 ```
 
 The root `pnpm build` command includes the native mobile build and requires Xcode.
+
+For App Store Connect releases, export a signed native IPA with Xcode, then use EAS as the submission transport:
+
+```sh
+pnpm exec eas submit -p ios --profile production --path <path-to-ipa>
+```
 
 ## Documentation
 

@@ -34,6 +34,14 @@ const captureSessionViewSwiftSource = readFileSync(
   new URL("../ios/Volt/Views/CaptureSessionView.swift", import.meta.url),
   "utf8"
 );
+const ocrReviewLayerSwiftSource = readFileSync(
+  new URL("../ios/Volt/Views/OcrReviewLayer.swift", import.meta.url),
+  "utf8"
+);
+const textRecognizerSwiftSource = readFileSync(
+  new URL("../ios/Volt/Services/TextRecognizer.swift", import.meta.url),
+  "utf8"
+);
 const dictationViewSwiftSource = readFileSync(
   new URL("../ios/Volt/Views/DictationView.swift", import.meta.url),
   "utf8"
@@ -113,6 +121,21 @@ test("native OCR review stops the live camera until retake", () => {
   assert.match(captureSessionViewSwiftSource, /if isReviewingOcr \{\s*store\.camera\.stop\(\)\s*\} else \{\s*store\.camera\.start\(\)\s*\}/);
 });
 
+test("native OCR review separates pan gestures from selectable text targets", () => {
+  assert.match(ocrReviewLayerSwiftSource, /@State private var isPanning = false/);
+  assert.match(ocrReviewLayerSwiftSource, /lastPanEndedAt = Date\(\)/);
+  assert.match(ocrReviewLayerSwiftSource, /Date\(\)\.timeIntervalSince\(lastPanEndedAt\) > panSelectionSuppression/);
+  assert.match(ocrReviewLayerSwiftSource, /minimumTapTargetSize \/ currentScale/);
+});
+
+test("native OCR review renders Vision quadrilaterals for angled text", () => {
+  assert.match(textRecognizerSwiftSource, /struct TextQuadrilateral: Equatable/);
+  assert.match(textRecognizerSwiftSource, /init\(observation: VNRectangleObservation\)/);
+  assert.match(textRecognizerSwiftSource, /quadrilateral: TextQuadrilateral\(observation: observation\)/);
+  assert.match(ocrReviewLayerSwiftSource, /OcrRegionShape\(points: points\)/);
+  assert.match(ocrReviewLayerSwiftSource, /viewPoints\(for: region\.quadrilateral/);
+});
+
 test("native scanner normalizes UPC-A barcodes and upload filenames preserve selection order", () => {
   assert.match(scannerStoreCaptureActionsSwiftSource, /normalizedBarcodeScan\(value: value, format: camera\.lastBarcodeFormat \?\? "barcode"\)/);
   assert.match(scannerStoreCaptureActionsSwiftSource, /trimmedValue\.count == 13/);
@@ -136,7 +159,8 @@ test("native Chrome input-change haptics are gated to the Dictate tab", () => {
   assert.match(scannerStoreSwiftSource, /if allowsConnectedFeedback \{\s*pairingNotificationFeedback\.notificationOccurred\(\.success\)\s*\}/);
   assert.match(scannerStoreSwiftSource, /let didChangeChromeInputTarget: Bool/);
   assert.match(scannerStoreSwiftSource, /wasConnected && dictationTargetKey\(for: previousPeerTarget\) != dictationTargetKey\(for: nextPeerTarget\)/);
-  assert.match(scannerStoreSwiftSource, /allowsConnectedFeedback: !didChangeChromeInputTarget \|\| selectedSection == \.dictation/);
+  assert.match(scannerStoreSwiftSource, /allowsConnectedFeedback: !wasConnected \|\| \(didChangeChromeInputTarget && selectedSection == \.dictation\)/);
+  assert.doesNotMatch(scannerStoreSwiftSource, /allowsConnectedFeedback: !didChangeChromeInputTarget \|\| selectedSection == \.dictation/);
   assert.match(scannerViewSwiftSource, /\.onAppear \{\s*store\.selectedSection = \.scan\s*store\.activeMode = \.ocr\s*\}/);
   assert.match(dictationViewSwiftSource, /\.onAppear \{\s*store\.selectedSection = \.dictation\s*store\.activeMode = \.dictation\s*\}/);
   assert.match(uploadViewSwiftSource, /\.onAppear \{\s*store\.selectedSection = \.upload\s*\}/);
@@ -152,5 +176,9 @@ test("native scanner handles Chrome result receipts for cursor insertion feedbac
   assert.match(scannerWebRTCConnectionSwiftSource, /ScannerProtocol\.parseResultReceived\(rawValue\)/);
   assert.match(scannerStoreSwiftSource, /func applyResultReceived\(_ receipt: ScannerProtocol\.ResultReceived\)/);
   assert.match(scannerStoreSwiftSource, /receipt\.insertedIntoCursor == false/);
+  assert.match(scannerStoreSwiftSource, /if receipt\.savedToResults \{\s*showCaptureTypingFallbackToast\(for: results\[index\]\)\s*\} else \{\s*showCaptureDeliveryToast\(for: results\[index\], state: \.failed\)\s*\}/);
+  assert.match(scannerStoreCaptureActionsSwiftSource, /func showCaptureTypingFallbackToast\(for result: ScanResult\)/);
+  assert.match(scannerStoreCaptureActionsSwiftSource, /title: "Failed to type"/);
+  assert.match(scannerStoreCaptureActionsSwiftSource, /was saved to Chrome sidepanel results/);
   assert.match(scannerStoreSwiftSource, /Chrome saved it, but no focused cursor target was available\./);
 });

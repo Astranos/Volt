@@ -184,7 +184,6 @@ final class ScannerWebRTCConnection: NSObject {
     private func handleControlMessage(_ rawValue: String) {
         if let sessionReady = ScannerProtocol.parseSessionReady(rawValue) {
             onSessionReady?(sessionReady)
-            onStatusChange?(.connected)
             return
         }
         if let resultReceived = ScannerProtocol.parseResultReceived(rawValue) {

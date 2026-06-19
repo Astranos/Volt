@@ -1,3 +1,25 @@
 {
-  "expo": {}
+  "expo": {
+    "name": "Volt",
+    "slug": "volt",
+    "owner": "juanquenga",
+    "version": "0.1.0",
+    "ios": {
+      "bundleIdentifier": "com.volt.mobile",
+      "buildNumber": "35",
+      "entitlements": {
+        "com.apple.developer.associated-domains": [
+          "applinks:scanner-signal.vercel.app"
+        ]
+      },
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "927c91fe-e1b0-468c-b99f-c957173b806d"
+      }
+    }
+  }
 }
