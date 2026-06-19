@@ -29,6 +29,7 @@ final class CameraModel: NSObject {
     var maxZoomFactor: CGFloat = 1
     var minDisplayZoomFactor: CGFloat = 1
     var maxDisplayZoomFactor: CGFloat = 1
+    private var barcodeGuideRect: CGRect?
 
     override init() {
         super.init()
@@ -69,6 +70,10 @@ final class CameraModel: NSObject {
         lastBarcodeFormat = nil
         detectedBarcodeBounds = nil
         detectedBarcodeFormat = nil
+    }
+
+    func updateBarcodeGuideRect(_ rect: CGRect?) {
+        barcodeGuideRect = rect
     }
 
     func capturePhoto() async -> UIImage? {
@@ -269,29 +274,36 @@ final class CameraModel: NSObject {
     }
 }
 
+private final class BarcodeMetadataObjects: @unchecked Sendable {
+    let objects: [AVMetadataMachineReadableCodeObject]
+
+    init(_ objects: [AVMetadataMachineReadableCodeObject]) {
+        self.objects = objects
+    }
+}
+
 extension CameraModel: AVCaptureMetadataOutputObjectsDelegate {
     nonisolated func metadataOutput(
         _ output: AVCaptureMetadataOutput,
         didOutput metadataObjects: [AVMetadataObject],
         from connection: AVCaptureConnection
     ) {
-        guard let object = metadataObjects
-            .compactMap({ $0 as? AVMetadataMachineReadableCodeObject })
-            .filter({ $0.stringValue?.isEmpty == false })
-            .sorted(by: barcodePrioritySort)
-            .first,
-              let value = object.stringValue
-        else {
-            Task { @MainActor in
+        let objects = metadataObjects
+            .compactMap { $0 as? AVMetadataMachineReadableCodeObject }
+            .filter { $0.stringValue?.isEmpty == false }
+        let metadata = BarcodeMetadataObjects(objects)
+
+        Task { @MainActor in
+            guard let candidate = bestBarcodeCandidate(from: metadata.objects),
+                  let value = candidate.object.stringValue
+            else {
                 detectedBarcodeBounds = nil
                 detectedBarcodeFormat = nil
+                return
             }
-            return
-        }
 
-        let format = object.type.rawValue
-        Task { @MainActor in
-            detectedBarcodeBounds = previewLayer.transformedMetadataObject(for: object)?.bounds
+            let format = candidate.object.type.rawValue
+            detectedBarcodeBounds = candidate.bounds
             detectedBarcodeFormat = format
             if lastBarcode != value || lastBarcodeFormat != format {
                 lastBarcode = value
@@ -300,14 +312,56 @@ extension CameraModel: AVCaptureMetadataOutputObjectsDelegate {
         }
     }
 
-    private nonisolated func barcodePrioritySort(
-        _ lhs: AVMetadataMachineReadableCodeObject,
-        _ rhs: AVMetadataMachineReadableCodeObject
-    ) -> Bool {
-        barcodePriority(lhs.type) < barcodePriority(rhs.type)
+    private func bestBarcodeCandidate(
+        from objects: [AVMetadataMachineReadableCodeObject]
+    ) -> (object: AVMetadataMachineReadableCodeObject, bounds: CGRect)? {
+        let candidates = objects.compactMap { object -> (object: AVMetadataMachineReadableCodeObject, bounds: CGRect)? in
+            guard let transformed = previewLayer.transformedMetadataObject(for: object),
+                  transformed.bounds.width > 0,
+                  transformed.bounds.height > 0
+            else { return nil }
+            return (object, transformed.bounds)
+        }
+
+        guard let guideRect = barcodeGuideRect, guideRect.width > 0, guideRect.height > 0 else {
+            return candidates.sorted(by: barcodePrioritySort).first
+        }
+
+        let guidedCandidates = candidates.filter { candidate in
+            guideRect.contains(CGPoint(x: candidate.bounds.midX, y: candidate.bounds.midY))
+                || barcodeGuideOverlapRatio(candidate.bounds, guideRect) >= 0.1
+        }
+
+        return guidedCandidates.sorted { lhs, rhs in
+            let lhsDistance = abs(lhs.bounds.midY - guideRect.midY)
+            let rhsDistance = abs(rhs.bounds.midY - guideRect.midY)
+            if lhsDistance != rhsDistance {
+                return lhsDistance < rhsDistance
+            }
+            return barcodePrioritySort(lhs, rhs)
+        }.first
     }
 
-    private nonisolated func barcodePriority(_ type: AVMetadataObject.ObjectType) -> Int {
+    private func barcodeGuideOverlapRatio(_ bounds: CGRect, _ guideRect: CGRect) -> CGFloat {
+        let intersection = bounds.intersection(guideRect)
+        guard !intersection.isNull else { return 0 }
+        let boundsArea = max(bounds.width * bounds.height, .leastNonzeroMagnitude)
+        return (intersection.width * intersection.height) / boundsArea
+    }
+
+    private func barcodePrioritySort(
+        _ lhs: (object: AVMetadataMachineReadableCodeObject, bounds: CGRect),
+        _ rhs: (object: AVMetadataMachineReadableCodeObject, bounds: CGRect)
+    ) -> Bool {
+        let lhsPriority = barcodePriority(lhs.object.type)
+        let rhsPriority = barcodePriority(rhs.object.type)
+        if lhsPriority != rhsPriority {
+            return lhsPriority < rhsPriority
+        }
+        return lhs.bounds.width * lhs.bounds.height > rhs.bounds.width * rhs.bounds.height
+    }
+
+    private func barcodePriority(_ type: AVMetadataObject.ObjectType) -> Int {
         switch type {
         case .ean13, .ean8, .upce:
             0

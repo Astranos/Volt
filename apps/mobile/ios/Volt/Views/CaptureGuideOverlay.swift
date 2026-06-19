@@ -6,8 +6,11 @@ struct CaptureGuideOverlay: View {
 
     var body: some View {
         GeometryReader { proxy in
-            let targetZone = captureTargetZone(in: proxy)
-            let guideSize = guideSize(for: mode, in: targetZone, screenWidth: proxy.size.width)
+            let targetZone = CaptureGuideGeometry.captureTargetZone(
+                in: proxy.size,
+                safeAreaInsets: proxy.safeAreaInsets
+            )
+            let guideSize = CaptureGuideGeometry.guideSize(for: mode, in: targetZone)
 
             ZStack {
                 switch mode {
@@ -45,23 +48,36 @@ struct CaptureGuideOverlay: View {
         }
         .allowsHitTesting(false)
     }
+}
 
-    private func captureTargetZone(in proxy: GeometryProxy) -> CGRect {
-        let topInset = proxy.safeAreaInsets.top
-        let bottomInset = proxy.safeAreaInsets.bottom
+enum CaptureGuideGeometry {
+    static func guideRect(for mode: CaptureMode, in size: CGSize, safeAreaInsets: EdgeInsets) -> CGRect {
+        let targetZone = captureTargetZone(in: size, safeAreaInsets: safeAreaInsets)
+        let guideSize = guideSize(for: mode, in: targetZone)
+        return CGRect(
+            x: targetZone.midX - guideSize.width / 2,
+            y: targetZone.midY - guideSize.height / 2,
+            width: guideSize.width,
+            height: guideSize.height
+        )
+    }
+
+    static func captureTargetZone(in size: CGSize, safeAreaInsets: EdgeInsets) -> CGRect {
+        let topInset = safeAreaInsets.top
+        let bottomInset = safeAreaInsets.bottom
         let top = topInset + 88
         let reservedControlsHeight: CGFloat = 318 + bottomInset
-        let bottom = max(top + 220, proxy.size.height - reservedControlsHeight)
+        let bottom = max(top + 220, size.height - reservedControlsHeight)
 
         return CGRect(
             x: 24,
             y: top,
-            width: max(0, proxy.size.width - 48),
+            width: max(0, size.width - 48),
             height: max(220, bottom - top)
         )
     }
 
-    private func guideSize(for mode: CaptureMode, in targetZone: CGRect, screenWidth: CGFloat) -> CGSize {
+    static func guideSize(for mode: CaptureMode, in targetZone: CGRect) -> CGSize {
         switch mode {
         case .ocr:
             let width = min(targetZone.width, 360)

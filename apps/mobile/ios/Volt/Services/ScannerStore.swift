@@ -89,6 +89,9 @@ final class ScannerStore {
     @ObservationIgnored let pairingNotificationFeedback = UINotificationFeedbackGenerator()
     @ObservationIgnored let dictationImpactFeedback = UIImpactFeedbackGenerator(style: .light)
     @ObservationIgnored let dictationNotificationFeedback = UINotificationFeedbackGenerator()
+    @ObservationIgnored let captureSuccessFeedback = UINotificationFeedbackGenerator()
+    @ObservationIgnored let captureFailureFeedback = UINotificationFeedbackGenerator()
+    @ObservationIgnored let captureFailureImpactFeedback = UIImpactFeedbackGenerator(style: .heavy)
 
     func handleIncomingURL(_ url: URL) {
         let parsed = PairingURLParser.parse(url)
@@ -370,6 +373,7 @@ final class ScannerStore {
 
         if receipt.insertedIntoCursor == false {
             results[index].deliveryState = .failed
+            playCaptureFailureFeedback()
             if receipt.savedToResults {
                 showCaptureTypingFallbackToast(for: results[index])
             } else {
@@ -386,11 +390,19 @@ final class ScannerStore {
             showCaptureDeliveryToast(for: results[index], state: results[index].deliveryState)
         }
         if receipt.insertedIntoCursor == true {
+            captureSuccessFeedback.notificationOccurred(.success)
             statusText = results[index].kind == .barcode ? "Barcode inserted" : "Text inserted"
             if let cursorLabel = receipt.cursorTarget?.label, !cursorLabel.isEmpty {
                 targetHint = "Inserted into \(cursorLabel)."
             }
+        } else if !receipt.savedToResults {
+            playCaptureFailureFeedback()
         }
+    }
+
+    func playCaptureFailureFeedback() {
+        captureFailureImpactFeedback.impactOccurred(intensity: 1)
+        captureFailureFeedback.notificationOccurred(.error)
     }
 
 }

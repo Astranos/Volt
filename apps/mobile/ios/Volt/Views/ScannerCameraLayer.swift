@@ -21,6 +21,18 @@ struct ScannerCameraLayer: View {
                         } else {
                             cameraPreview
                                 .ignoresSafeArea()
+                                .onAppear {
+                                    updateBarcodeGuideRect(in: proxy)
+                                }
+                                .onChange(of: proxy.size) { _, _ in
+                                    updateBarcodeGuideRect(in: proxy)
+                                }
+                                .onChange(of: store.activeMode) { _, _ in
+                                    updateBarcodeGuideRect(in: proxy)
+                                }
+                                .onChange(of: guideVisible) { _, _ in
+                                    updateBarcodeGuideRect(in: proxy)
+                                }
                                 .overlay(alignment: .center) {
                                     if guideVisible {
                                         CaptureGuideOverlay(mode: store.activeMode, gridVisible: gridVisible)
@@ -38,6 +50,21 @@ struct ScannerCameraLayer: View {
                 )
             }
         }
+    }
+
+    private func updateBarcodeGuideRect(in proxy: GeometryProxy) {
+        guard guideVisible, store.activeMode == .barcode else {
+            store.camera.updateBarcodeGuideRect(nil)
+            return
+        }
+
+        store.camera.updateBarcodeGuideRect(
+            CaptureGuideGeometry.guideRect(
+                for: .barcode,
+                in: proxy.size,
+                safeAreaInsets: proxy.safeAreaInsets
+            )
+        )
     }
 
     private var cameraPreview: some View {

@@ -240,10 +240,10 @@ extension ScannerStore {
                 insertIntoCursor: insertIntoCursor,
                 contributorId: contributorId
             ))
-            updateResultDeliveryState(id: result.id, state: .sent)
-            showCaptureDeliveryToast(for: result, state: .sent)
+            updateResultDeliveryState(id: result.id, state: .sending)
         } catch {
             updateResultDeliveryState(id: result.id, state: .failed)
+            playCaptureFailureFeedback()
             showCaptureDeliveryToast(for: result, state: .failed)
             applyConnectionStatus(.error(error.localizedDescription))
         }
