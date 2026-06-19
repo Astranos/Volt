@@ -226,11 +226,21 @@ enum ScannerTabLayout {
     }
 }
 
-struct ScannerSectionHeader: View {
+struct ScannerSectionHeader<TrailingAccessory: View>: View {
     @Environment(ScannerStore.self) private var store
     let title: String
     let onPair: () -> Void
-    var onSessions: (() -> Void)? = nil
+    @ViewBuilder let trailingAccessory: () -> TrailingAccessory
+
+    init(
+        title: String,
+        onPair: @escaping () -> Void,
+        @ViewBuilder trailingAccessory: @escaping () -> TrailingAccessory
+    ) {
+        self.title = title
+        self.onPair = onPair
+        self.trailingAccessory = trailingAccessory
+    }
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
@@ -240,19 +250,7 @@ struct ScannerSectionHeader: View {
                 .minimumScaleFactor(0.82)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-            if let onSessions {
-                Button {
-                    onSessions()
-                } label: {
-                    Label("Sessions", systemImage: "link")
-                        .font(.headline)
-                        .labelStyle(.iconOnly)
-                        .foregroundStyle(.secondary)
-                        .frame(width: 44, height: 44)
-                        .background(.regularMaterial, in: Circle())
-                }
-                .accessibilityLabel("Previous sessions")
-            }
+            trailingAccessory()
 
             connectionControl
         }
@@ -340,6 +338,14 @@ struct ScannerSectionHeader: View {
             .red
         case .idle, .disconnected:
             .secondary
+        }
+    }
+}
+
+extension ScannerSectionHeader where TrailingAccessory == EmptyView {
+    init(title: String, onPair: @escaping () -> Void) {
+        self.init(title: title, onPair: onPair) {
+            EmptyView()
         }
     }
 }

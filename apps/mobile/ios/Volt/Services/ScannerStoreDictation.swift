@@ -18,7 +18,7 @@ extension ScannerStore {
         await dictation.start()
         guard dictationStartToken == startToken else { return }
         if dictation.isRecording {
-            if allowsFeedback {
+            if allowsDictationFeedback(allowsFeedback) {
                 dictationNotificationFeedback.notificationOccurred(.success)
             }
             scheduleDictationRequestLimit(for: startToken)
@@ -30,7 +30,9 @@ extension ScannerStore {
             sendDictation(nil, phase: "stopped")
             dictationSessionId = nil
             lastDictationPartialText = ""
-            dictationNotificationFeedback.notificationOccurred(.error)
+            if allowsDictationFeedback(allowsFeedback) {
+                dictationNotificationFeedback.notificationOccurred(.error)
+            }
         }
     }
 
@@ -45,7 +47,7 @@ extension ScannerStore {
         cancelDictationRequestLimit()
         let wasRecording = dictation.isRecording
         dictation.stop()
-        if wasRecording {
+        if wasRecording, allowsDictationFeedback() {
             dictationImpactFeedback.impactOccurred(intensity: 0.7)
         }
         commitDictation()
@@ -155,6 +157,10 @@ extension ScannerStore {
     func cancelDictationGraceStop() {
         dictationGraceStopTask?.cancel()
         dictationGraceStopTask = nil
+    }
+
+    func allowsDictationFeedback(_ requested: Bool = true) -> Bool {
+        requested && selectedSection == .dictation
     }
 
     func sendDictation(_ text: String?, phase: String) {

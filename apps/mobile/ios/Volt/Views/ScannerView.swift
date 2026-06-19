@@ -23,11 +23,12 @@ struct ScannerView: View {
                         title: "Capture",
                         onPair: {
                             isPairingScannerPresented = true
-                        },
-                        onSessions: {
+                        }
+                    ) {
+                        SessionsButton {
                             isSessionsPresented = true
                         }
-                    )
+                    }
 
                     previousCaptures
                 }
@@ -119,6 +120,22 @@ struct ScannerView: View {
         }
     }
 
+}
+
+private struct SessionsButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Label("Sessions", systemImage: "link")
+                .font(.headline)
+                .labelStyle(.iconOnly)
+                .foregroundStyle(.secondary)
+                .frame(width: 44, height: 44)
+                .background(.regularMaterial, in: Circle())
+        }
+        .accessibilityLabel("Previous sessions")
+    }
 }
 
 private struct CaptureStartAccessory: View {

@@ -123,12 +123,27 @@ test("native saved-session reconnect toast can cancel manual previous-session ta
   assert.match(rootViewSwiftSource, /actionTitle: store\.canCancelReconnect \? "Cancel" : nil/);
 });
 
-test("native capture session dismisses when the paired scanner disconnects", () => {
+test("native capture session recovers pairing instead of dismissing when the scanner disconnects", () => {
   assert.match(scannerViewSwiftSource, /CaptureSessionView\(isPresented: \$isCaptureSessionPresented\)/);
   assert.match(scannerViewSwiftSource, /store\.connectionStatus\.isConnected/);
   assert.match(captureSessionViewSwiftSource, /\.onChange\(of: store\.connectionStatus\)/);
-  assert.match(captureSessionViewSwiftSource, /guard !status\.isConnected else \{ return \}/);
-  assert.match(captureSessionViewSwiftSource, /isPresented = false/);
+  assert.match(captureSessionViewSwiftSource, /handleConnectionStatusChange\(status\)/);
+  assert.match(captureSessionViewSwiftSource, /store\.recoverMostRecentPairedSession\(\)/);
+  assert.match(captureSessionViewSwiftSource, /PairingSessionsView\(\)/);
+  assert.match(scannerStoreSwiftSource, /func recoverMostRecentPairedSession\(\) -> Bool/);
+  assert.match(scannerStoreSwiftSource, /lastAutomaticReconnectAt = nil/);
+  const recoveryStart = captureSessionViewSwiftSource.indexOf("private func handleConnectionStatusChange");
+  const recoverySource = captureSessionViewSwiftSource.slice(recoveryStart);
+  assert.ok(recoveryStart > -1);
+  assert.doesNotMatch(recoverySource, /isPresented = false/);
+});
+
+test("native capture owns the sessions accessory instead of leaking it into the shared section header", () => {
+  assert.match(rootViewSwiftSource, /struct ScannerSectionHeader<TrailingAccessory: View>: View/);
+  assert.match(rootViewSwiftSource, /trailingAccessory\(\)/);
+  assert.doesNotMatch(rootViewSwiftSource, /onSessions/);
+  assert.match(scannerViewSwiftSource, /SessionsButton/);
+  assert.match(scannerViewSwiftSource, /ScannerSectionHeader\(\s*title: "Capture",[\s\S]*\) \{\s*SessionsButton/);
 });
 
 test("native OCR review stops the live camera until retake", () => {
@@ -163,4 +178,7 @@ test("native Chrome input-change haptics are gated to the Dictate tab", () => {
   assert.match(scannerStoreSwiftSource, /let didChangeChromeInputTarget: Bool/);
   assert.match(scannerStoreSwiftSource, /wasConnected && dictationTargetKey\(for: previousPeerTarget\) != dictationTargetKey\(for: nextPeerTarget\)/);
   assert.match(scannerStoreSwiftSource, /allowsConnectedFeedback: !didChangeChromeInputTarget \|\| selectedSection == \.dictation/);
+  assert.match(scannerStoreDictationSwiftSource, /func allowsDictationFeedback\(_ requested: Bool = true\) -> Bool \{\s*requested && selectedSection == \.dictation\s*\}/);
+  assert.match(scannerStoreDictationSwiftSource, /if allowsDictationFeedback\(allowsFeedback\) \{\s*dictationNotificationFeedback\.notificationOccurred\(\.success\)\s*\}/);
+  assert.match(scannerStoreDictationSwiftSource, /if wasRecording, allowsDictationFeedback\(\) \{\s*dictationImpactFeedback\.impactOccurred\(intensity: 0\.7\)\s*\}/);
 });

@@ -5,6 +5,7 @@ struct CaptureSessionView: View {
     @Binding var isPresented: Bool
     @State private var gridVisible = true
     @State private var selectedTextRegion: RecognizedTextRegion?
+    @State private var isConnectionRecoveryPresented = false
 
     var body: some View {
         @Bindable var store = store
@@ -92,6 +93,11 @@ struct CaptureSessionView: View {
         } message: {
             Text(selectedTextRegion?.text ?? "")
         }
+        .sheet(isPresented: $isConnectionRecoveryPresented) {
+            PairingSessionsView()
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
         .onAppear {
             store.activeMode = .ocr
             syncCameraForOcrReview(isReviewingOcr: store.ocrReviewImage != nil)
@@ -100,10 +106,7 @@ struct CaptureSessionView: View {
             syncCameraForOcrReview(isReviewingOcr: isReviewingOcr)
         }
         .onChange(of: store.connectionStatus) { _, status in
-            guard !status.isConnected else { return }
-            selectedTextRegion = nil
-            store.clearOcrReview()
-            isPresented = false
+            handleConnectionStatusChange(status)
         }
         .onDisappear {
             store.camera.stop()
@@ -115,6 +118,25 @@ struct CaptureSessionView: View {
             store.camera.stop()
         } else {
             store.camera.start()
+        }
+    }
+
+    private func handleConnectionStatusChange(_ status: ScannerConnectionStatus) {
+        if status.isConnected {
+            isConnectionRecoveryPresented = false
+            return
+        }
+
+        selectedTextRegion = nil
+        store.clearOcrReview()
+
+        switch status {
+        case .idle, .disconnected, .error:
+            isConnectionRecoveryPresented = !store.recoverMostRecentPairedSession()
+        case .pairing, .waitingForChrome:
+            isConnectionRecoveryPresented = false
+        case .connected:
+            break
         }
     }
 }

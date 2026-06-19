@@ -125,6 +125,27 @@ final class ScannerStore {
         reconnect(to: latestSession, reportsErrors: false, isAutomatic: true)
     }
 
+    @discardableResult
+    func recoverMostRecentPairedSession() -> Bool {
+        switch connectionStatus {
+        case .idle, .disconnected, .error:
+            break
+        case .pairing, .waitingForChrome, .connected:
+            return true
+        }
+
+        let now = Date.now
+        if let lastAutomaticReconnectAt,
+           now.timeIntervalSince(lastAutomaticReconnectAt) < 15 {
+            return false
+        }
+
+        guard let latestSession = pairedSessions.first else { return false }
+        lastAutomaticReconnectAt = now
+        reconnect(to: latestSession, reportsErrors: false, isAutomatic: true)
+        return true
+    }
+
     func cancelReconnect() {
         guard canCancelReconnect else { return }
         let wasAutomaticReconnect = activeAutomaticReconnectToken != nil
@@ -251,6 +272,7 @@ final class ScannerStore {
         case .connected:
             canCancelReconnect = false
             activeAutomaticReconnectToken = nil
+            lastAutomaticReconnectAt = nil
             preservesReconnectCancelOnNextDisconnect = false
             statusText = "Connected to Chrome"
             targetHint = peerTarget?.displayText ?? "Ready to send captures."
