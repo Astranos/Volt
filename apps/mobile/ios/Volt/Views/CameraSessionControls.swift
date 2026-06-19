@@ -1,6 +1,9 @@
 import SwiftUI
 
 struct CameraSessionControls: View {
+    private let sideToolSlotWidth: CGFloat = 64
+    private let toolRowMaxWidth: CGFloat = 380
+
     @Binding var activeMode: CaptureMode
     let torchEnabled: Bool
     let zoomLabel: String
@@ -11,9 +14,10 @@ struct CameraSessionControls: View {
     let onZoomIn: () -> Void
     let onToggleGrid: () -> Void
     let onCapture: () -> Void
+    let onFinish: () -> Void
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 10) {
             cameraToolsRow
 
             Text(captureHint)
@@ -50,10 +54,21 @@ struct CameraSessionControls: View {
             .overlay {
                 Capsule().stroke(.white.opacity(0.35), lineWidth: 1)
             }
+
+            Button("End session", systemImage: "xmark", action: onFinish)
+                .font(.subheadline.bold())
+                .foregroundStyle(.white)
+                .padding(.horizontal, 14)
+                .frame(minHeight: 40)
+                .background(.black.opacity(0.58), in: Capsule())
+                .overlay {
+                    Capsule().stroke(.white.opacity(0.14), lineWidth: 1)
+                }
+                .padding(.top, 14)
         }
         .padding(.horizontal, 18)
-        .padding(.top, 18)
-        .padding(.bottom, 22)
+        .padding(.top, 12)
+        .padding(.bottom, 12)
         .background {
             LinearGradient(
                 colors: [.black.opacity(0), .black.opacity(0.78), .black.opacity(0.94)],
@@ -66,38 +81,38 @@ struct CameraSessionControls: View {
 
     private var cameraToolsRow: some View {
         HStack {
-            SessionIconButton(
-                systemImage: torchEnabled ? "bolt.fill" : "bolt.slash",
-                isActive: torchEnabled,
-                label: torchEnabled ? "Turn flash off" : "Turn flash on",
-                action: onToggleTorch
-            )
+            gridToolSlot
 
             Spacer()
 
-            HStack(spacing: 8) {
-                SessionIconButton(systemImage: "minus.magnifyingglass", label: "Zoom out", action: onZoomOut)
-                Text(zoomLabel)
-                    .font(.subheadline.monospacedDigit().bold())
-                    .foregroundStyle(.white)
-                    .frame(minWidth: 58)
-                SessionIconButton(systemImage: "plus.magnifyingglass", label: "Zoom in", action: onZoomIn)
-            }
-            .padding(.horizontal, 10)
-            .frame(minHeight: 56)
-            .background(.black.opacity(0.54), in: Capsule())
-            .overlay {
-                Capsule().stroke(.white.opacity(0.14), lineWidth: 1)
-            }
+            zoomControls
 
             Spacer()
 
-            rightToolSlot
+            flashToolSlot
+        }
+        .frame(maxWidth: toolRowMaxWidth)
+    }
+
+    private var zoomControls: some View {
+        HStack(spacing: 8) {
+            SessionIconButton(systemImage: "minus.magnifyingglass", label: "Zoom out", action: onZoomOut)
+            Text(zoomLabel)
+                .font(.subheadline.monospacedDigit().bold())
+                .foregroundStyle(.white)
+                .frame(minWidth: 58)
+            SessionIconButton(systemImage: "plus.magnifyingglass", label: "Zoom in", action: onZoomIn)
+        }
+        .padding(.horizontal, 10)
+        .frame(minHeight: 56)
+        .background(.black.opacity(0.54), in: Capsule())
+        .overlay {
+            Capsule().stroke(.white.opacity(0.14), lineWidth: 1)
         }
     }
 
-    private var rightToolSlot: some View {
-        Group {
+    private var gridToolSlot: some View {
+        toolSlot {
             if activeMode == .photo {
                 SessionIconButton(
                     systemImage: gridVisible ? "grid" : "square",
@@ -105,11 +120,27 @@ struct CameraSessionControls: View {
                     label: gridVisible ? "Hide grid lines" : "Show grid lines",
                     action: onToggleGrid
                 )
-            } else {
-                Color.clear
-                    .frame(width: 52, height: 52)
             }
         }
+    }
+
+    private var flashToolSlot: some View {
+        toolSlot {
+            SessionIconButton(
+                systemImage: torchEnabled ? "bolt.fill" : "bolt.slash",
+                isActive: torchEnabled,
+                label: torchEnabled ? "Turn flash off" : "Turn flash on",
+                action: onToggleTorch
+            )
+        }
+    }
+
+    private func toolSlot<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        ZStack {
+            Color.clear
+            content()
+        }
+        .frame(width: sideToolSlotWidth, height: sideToolSlotWidth)
     }
 
     private var trailingSlot: some View {
@@ -178,37 +209,6 @@ struct CameraSessionControls: View {
         }
         .disabled(isRecognizingText)
         .accessibilityLabel(shutterAccessibilityLabel)
-    }
-}
-
-struct CameraSessionHeader: View {
-    let onFinish: () -> Void
-
-    var body: some View {
-        HStack {
-            Spacer()
-
-            Button("End session", systemImage: "xmark", action: onFinish)
-                .font(.subheadline.bold())
-                .foregroundStyle(.white)
-                .padding(.horizontal, 14)
-                .frame(minHeight: 44)
-                .background(.black.opacity(0.58), in: Capsule())
-                .overlay {
-                    Capsule().stroke(.white.opacity(0.14), lineWidth: 1)
-                }
-        }
-        .padding(.horizontal, 18)
-        .padding(.top, 8)
-        .padding(.bottom, 10)
-        .background {
-            LinearGradient(
-                colors: [.black.opacity(0.72), .black.opacity(0)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea(edges: .top)
-        }
     }
 }
 

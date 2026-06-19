@@ -26,14 +26,6 @@ struct CaptureSessionView: View {
 
         }
         .background(.black)
-        .safeAreaInset(edge: .top, spacing: 0) {
-            if store.ocrReviewImage == nil {
-                CameraSessionHeader(onFinish: {
-                    store.clearOcrReview()
-                    isPresented = false
-                })
-            }
-        }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if store.ocrReviewImage != nil {
                 OcrReviewControls(
@@ -69,6 +61,10 @@ struct CaptureSessionView: View {
                     },
                     onCapture: {
                         Task { await store.capture() }
+                    },
+                    onFinish: {
+                        store.clearOcrReview()
+                        isPresented = false
                     }
                 )
             }

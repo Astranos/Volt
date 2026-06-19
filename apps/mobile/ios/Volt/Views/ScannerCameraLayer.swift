@@ -5,8 +5,8 @@ struct ScannerCameraLayer: View {
     @State private var focusPoint: CGPoint?
     var gridVisible = false
     var guideVisible = true
-    private let photoHeaderClearance: CGFloat = 48
-    private let photoControlsReservedHeight: CGFloat = 318
+    private let photoTopClearance: CGFloat = 12
+    private let photoControlsReservedHeight: CGFloat = 360
 
     var body: some View {
         Group {
@@ -80,7 +80,7 @@ struct ScannerCameraLayer: View {
     }
 
     private func photoPreview(in proxy: GeometryProxy) -> some View {
-        let topInset = proxy.safeAreaInsets.top + photoHeaderClearance
+        let topInset = proxy.safeAreaInsets.top + photoTopClearance
         let bottomInset = proxy.safeAreaInsets.bottom
         let availableHeight = max(0, proxy.size.height - topInset - bottomInset - photoControlsReservedHeight)
         let side = min(proxy.size.width, availableHeight)
