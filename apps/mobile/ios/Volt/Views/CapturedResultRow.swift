@@ -15,7 +15,6 @@ struct CapturedResultRow: View {
                     Text(title)
                         .font(.subheadline.weight(.semibold))
                     Spacer(minLength: 0)
-                    DeliveryBadge(state: result.deliveryState)
                 }
 
                 resultContent

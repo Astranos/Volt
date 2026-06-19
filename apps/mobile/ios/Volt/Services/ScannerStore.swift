@@ -4,6 +4,19 @@ import CoreImage.CIFilterBuiltins
 import Security
 import UIKit
 
+struct CaptureDeliveryToast: Identifiable, Equatable {
+    enum Tone: Equatable {
+        case success
+        case failure
+    }
+
+    let id = UUID()
+    let title: String
+    let message: String
+    let systemImage: String
+    let tone: Tone
+}
+
 @MainActor
 @Observable
 final class ScannerStore {
@@ -28,6 +41,7 @@ final class ScannerStore {
     var ocrReviewText = ""
     var ocrTextRegions: [RecognizedTextRegion] = []
     var isRecognizingText = false
+    var captureDeliveryToast: CaptureDeliveryToast?
 
     let camera = CameraModel()
     let dictation = DictationModel()
@@ -356,12 +370,17 @@ final class ScannerStore {
 
         if receipt.insertedIntoCursor == false {
             results[index].deliveryState = .failed
+            showCaptureDeliveryToast(for: results[index], state: .failed)
             statusText = "Chrome received text"
             targetHint = "Chrome saved it, but no focused cursor target was available."
             return
         }
 
+        let previousDeliveryState = results[index].deliveryState
         results[index].deliveryState = receipt.savedToResults ? .sent : .failed
+        if results[index].deliveryState != previousDeliveryState {
+            showCaptureDeliveryToast(for: results[index], state: results[index].deliveryState)
+        }
         if receipt.insertedIntoCursor == true {
             statusText = results[index].kind == .barcode ? "Barcode inserted" : "Text inserted"
             if let cursorLabel = receipt.cursorTarget?.label, !cursorLabel.isEmpty {

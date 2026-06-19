@@ -241,8 +241,10 @@ extension ScannerStore {
                 contributorId: contributorId
             ))
             updateResultDeliveryState(id: result.id, state: .sent)
+            showCaptureDeliveryToast(for: result, state: .sent)
         } catch {
             updateResultDeliveryState(id: result.id, state: .failed)
+            showCaptureDeliveryToast(for: result, state: .failed)
             applyConnectionStatus(.error(error.localizedDescription))
         }
     }
@@ -288,6 +290,42 @@ extension ScannerStore {
     func updateResultDeliveryState(id: ScanResult.ID, state: ScanResult.DeliveryState) {
         guard let index = results.firstIndex(where: { $0.id == id }) else { return }
         results[index].deliveryState = state
+    }
+
+    func showCaptureDeliveryToast(for result: ScanResult, state: ScanResult.DeliveryState) {
+        guard result.source == .capture else { return }
+
+        switch state {
+        case .sent:
+            captureDeliveryToast = CaptureDeliveryToast(
+                title: "Sent to Chrome",
+                message: captureDeliveryMessage(for: result),
+                systemImage: "checkmark.circle.fill",
+                tone: .success
+            )
+        case .failed:
+            captureDeliveryToast = CaptureDeliveryToast(
+                title: "Send failed",
+                message: captureDeliveryMessage(for: result),
+                systemImage: "exclamationmark.triangle.fill",
+                tone: .failure
+            )
+        case .saved, .sending:
+            break
+        }
+    }
+
+    private func captureDeliveryMessage(for result: ScanResult) -> String {
+        switch result.kind {
+        case .barcode:
+            "Barcode capture"
+        case .text:
+            "Document text"
+        case .photo:
+            "Photo capture"
+        case .dictation:
+            "Dictation"
+        }
     }
 
     func currentPhotoBatch(now: Date) -> String {

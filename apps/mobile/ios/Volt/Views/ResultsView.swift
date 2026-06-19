@@ -61,6 +61,9 @@ struct UploadView: View {
                     selectedItems = []
                 }
             }
+            .onAppear {
+                store.selectedSection = .upload
+            }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 UploadStartAccessory(
                     selectedItems: $selectedItems,

@@ -60,6 +60,10 @@ struct DictationView: View {
                     holdEndAction: stopDictation
                 )
             }
+            .onAppear {
+                store.selectedSection = .dictation
+                store.activeMode = .dictation
+            }
             .task {
                 await store.prepareDictation()
             }

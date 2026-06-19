@@ -26,6 +26,15 @@ struct CaptureSessionView: View {
 
         }
         .background(.black)
+        .overlay(alignment: .top) {
+            if let toast = store.captureDeliveryToast {
+                CaptureDeliveryToastView(toast: toast)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 10)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.spring(response: 0.28, dampingFraction: 0.86), value: store.captureDeliveryToast?.id)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if store.ocrReviewImage != nil {
                 OcrReviewControls(
@@ -104,7 +113,15 @@ struct CaptureSessionView: View {
         .onChange(of: store.connectionStatus) { _, status in
             handleConnectionStatusChange(status)
         }
+        .task(id: store.captureDeliveryToast?.id) {
+            guard let toast = store.captureDeliveryToast else { return }
+            try? await Task.sleep(for: .seconds(toast.tone == .failure ? 3 : 2))
+            if store.captureDeliveryToast?.id == toast.id {
+                store.captureDeliveryToast = nil
+            }
+        }
         .onDisappear {
+            store.captureDeliveryToast = nil
             store.camera.stop()
         }
     }
@@ -133,6 +150,46 @@ struct CaptureSessionView: View {
             isConnectionRecoveryPresented = false
         case .connected:
             break
+        }
+    }
+}
+
+private struct CaptureDeliveryToastView: View {
+    let toast: CaptureDeliveryToast
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: toast.systemImage)
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(iconColor)
+                .frame(width: 24, height: 24)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(toast.title)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+                Text(toast.message)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .shadow(color: .black.opacity(0.2), radius: 18, y: 8)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(toast.title). \(toast.message)")
+    }
+
+    private var iconColor: Color {
+        switch toast.tone {
+        case .success:
+            .green
+        case .failure:
+            .red
         }
     }
 }

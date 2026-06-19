@@ -51,6 +51,7 @@ struct ScannerView: View {
                     .presentationDragIndicator(.visible)
             }
             .onAppear {
+                store.selectedSection = .scan
                 store.activeMode = .ocr
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {

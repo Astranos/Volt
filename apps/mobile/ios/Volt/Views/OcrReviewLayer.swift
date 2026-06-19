@@ -9,6 +9,7 @@ struct OcrReviewLayer: View {
     @State private var gestureScale: CGFloat = 1
     @State private var baseOffset: CGSize = .zero
     @State private var gestureOffset: CGSize = .zero
+    @State private var isMagnifying = false
 
     private var currentScale: CGFloat {
         min(max(baseScale * gestureScale, 1), 4)
@@ -35,22 +36,18 @@ struct OcrReviewLayer: View {
                 ForEach(regions) { region in
                     let rect = viewRect(for: region.boundingBox, in: imageRect)
 
-                    Button {
-                        onSelectRegion(region)
-                    } label: {
-                        RoundedRectangle(cornerRadius: max(4, min(rect.height * 0.22, 10)), style: .continuous)
-                            .fill(fillStyle(for: region))
-                            .overlay {
-                                RoundedRectangle(cornerRadius: max(4, min(rect.height * 0.22, 10)), style: .continuous)
-                                    .stroke(strokeStyle(for: region), lineWidth: 1.5)
-                            }
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .frame(width: max(rect.width, 28), height: max(rect.height, 28))
-                    .position(x: rect.midX, y: rect.midY)
-                    .accessibilityLabel(region.text)
-                    .accessibilityHint("Copy or send recognized text")
+                    RoundedRectangle(cornerRadius: max(4, min(rect.height * 0.22, 10)), style: .continuous)
+                        .fill(fillStyle(for: region))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: max(4, min(rect.height * 0.22, 10)), style: .continuous)
+                                .stroke(strokeStyle(for: region), lineWidth: 1.5)
+                        }
+                        .contentShape(Rectangle())
+                        .simultaneousGesture(selectionGesture(for: region))
+                        .frame(width: max(rect.width, 28), height: max(rect.height, 28))
+                        .position(x: rect.midX, y: rect.midY)
+                        .accessibilityLabel(region.text)
+                        .accessibilityHint("Copy or send recognized text")
                 }
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
@@ -64,11 +61,13 @@ struct OcrReviewLayer: View {
     private var magnificationGesture: some Gesture {
         MagnificationGesture()
             .onChanged { value in
+                isMagnifying = true
                 gestureScale = value
             }
             .onEnded { value in
                 baseScale = min(max(baseScale * value, 1), 4)
                 gestureScale = 1
+                isMagnifying = false
                 if baseScale == 1 {
                     baseOffset = .zero
                     gestureOffset = .zero
@@ -93,6 +92,15 @@ struct OcrReviewLayer: View {
                     height: baseOffset.height + value.translation.height
                 )
                 gestureOffset = .zero
+            }
+    }
+
+    private func selectionGesture(for region: RecognizedTextRegion) -> some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onEnded { value in
+                guard !isMagnifying else { return }
+                guard abs(value.translation.width) <= 6, abs(value.translation.height) <= 6 else { return }
+                onSelectRegion(region)
             }
     }
 
