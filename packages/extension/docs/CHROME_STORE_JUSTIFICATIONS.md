@@ -52,7 +52,7 @@
 
 ### sidePanel
 
-**Justification:** The sidePanel permission enables the extension to display a persistent side panel in the browser, providing easy access to extension features like controller testing, command palette, and other tools while browsing.
+**Justification:** The sidePanel permission enables the extension to display a persistent side panel in the browser, providing access to Mobile Scanner results, WebRTC pairing controls, and the Offer Calculator while browsing.
 
 ### storage
 
@@ -76,11 +76,11 @@
 
 ## Single Purpose Description
 
-Volt is a browser extension that provides a command palette, controller testing interface, and productivity tools to enhance the browsing experience.
+Volt is a browser extension that provides a command palette, mobile scanner pairing, resale search helpers, and productivity tools for resale workflows.
 
 ## Detailed Description
 
-Volt is a comprehensive browser extension designed to improve productivity and browsing efficiency. It features a powerful command palette for quick access to bookmarks, history, and various tools. The extension includes a unique controller testing interface that allows users to test and visualize gamepad inputs in real-time. With its intuitive side panel interface, users can easily access all features without disrupting their browsing workflow. The extension is built with performance in mind and respects user privacy by minimizing data collection and processing most functionality locally.
+Volt is a comprehensive browser extension designed to improve productivity and browsing efficiency for resale workflows. It features a command palette for quick access to tabs, bookmarks, history, quick links, search providers, and Mobile Scanner. The sidepanel hosts Mobile Scanner results and an Offer Calculator, while content scripts add resale-oriented helpers on eBay, Shopify, and pages with UPC codes. The extension is built with performance in mind and respects user privacy by minimizing data collection and processing most functionality locally.
 
 ## Data Usage Certification
 

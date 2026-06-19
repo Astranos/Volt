@@ -4,7 +4,9 @@ Obsolete for the active full-app scanner architecture. ADR 0002 makes the v1 sca
 
 This note is for agents working on the Volt App Clip control drawer, bottom mode navigation, or iOS 26 Liquid Glass behavior.
 
-## Current Stack
+## Historical Stack
+
+The paths in this section describe the retired App Clip implementation and may no longer exist in the live repo. The active mobile scanner is the full iOS app with WebRTC transport.
 
 - Mobile app: `apps/mobile`
 - Expo SDK: `expo ~56.0.4`

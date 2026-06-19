@@ -7,10 +7,10 @@ Arc-style command palette for quick navigation, tab switching, and site-specific
 ✅ **Extension Popup** - CMDK opens as the default extension popup (CMD+Shift+K)
 ✅ **Tab Switching** - Lists all open tabs with favicon, title, and URL
 ✅ **Volt Links from CSV** - Cached custom links from Google Sheets (30-min cache)
-✅ **Toolbar Tools** - Quick access to all extension tools (opens in sidebar)
+✅ **Sidepanel Tool Launch** - Quick access to Mobile Scanner from the command palette
 ✅ **Bookmarks** - Shows your 20 most recent bookmarks
 ✅ **Recent History** - Displays last 30 visited pages
-✅ **Search Providers** - PayMore, Google, Amazon, Best Buy, eBay, Price Charting, UPC Item DB, YouTube, GitHub, Twitter/X
+✅ **Search Providers** - Google, Volt Search, Amazon, Best Buy, eBay, PriceCharting, BarcodeLookup, UPCItemDB, YouTube, GitHub, Twitter/X, Home Depot, Lowe's, Menards, and Micro Center
 ✅ **Auto-complete** - Type "ama" + Tab → activates Amazon search
 ✅ **Provider Badges** - Visual indicator when provider is active
 ✅ **Keyboard Navigation** - Arrow keys, Enter, Escape, Tab
@@ -24,8 +24,8 @@ Arc-style command palette for quick navigation, tab switching, and site-specific
 | Shortcut                       | Action                           |
 | ------------------------------ | -------------------------------- |
 | `CMD+Shift+K` / `CTRL+Shift+K` | Open CMDK popup                  |
-| `CMD+Shift+T` / `CTRL+Shift+T` | Toggle toolbar visibility        |
 | `CMD+Shift+O` / `CTRL+Shift+O` | Open extension options           |
+| `CMD+Shift+Z` / `CTRL+Shift+Z` | Reopen last closed tab           |
 | `↑` / `↓`                      | Navigate results                 |
 | `Enter`                        | Select item / Execute search     |
 | `Tab`                          | Activate search provider         |
@@ -54,7 +54,7 @@ When you open the CMDK, items appear in this order:
 
 1. **Volt Links** - Grouped by category, sorted alphabetically (Warranty category first)
 2. **Open Tabs** - Currently open browser tabs
-3. **Tools** - Extension toolbar tools
+3. **Tools** - Selected sidepanel tools
 4. **Bookmarks** - Your 20 most recent bookmarks
 5. **Recent History** - Last 30 visited pages
 6. **Search Providers** - When typing search triggers
@@ -63,7 +63,7 @@ When you open the CMDK, items appear in this order:
 
 Volt Links are loaded from Google Sheets and **cached for 30 minutes** for instant loading.
 
-**CSV Configuration**: [src/utils/csv-links.ts](src/utils/csv-links.ts)
+**CSV Configuration**: [../src/utils/csv-links.ts](../src/utils/csv-links.ts)
 
 **CSV Format**:
 
@@ -98,27 +98,15 @@ Type a trigger word and press **Tab** to activate:
 | GitHub         | `github`, `gh`                 | https://github.com/search                     |
 | Twitter/X      | `twitter`, `x`                 | https://twitter.com/search                    |
 
-**Add more in**: [src/components/cmdk-palette/SearchProviders.tsx](src/components/cmdk-palette/SearchProviders.tsx)
+**Add more in**: [../src/components/cmdk-palette/SearchProviders.tsx](../src/components/cmdk-palette/SearchProviders.tsx)
 
-## Toolbar Tools Integration
+## Sidepanel Tool Integration
 
-All toolbar tools are searchable in CMDK. Press Enter to open in the sidebar:
+The command palette exposes selected sidepanel tools. Press Enter to open the tool in the Chrome sidepanel.
 
-- Controller Testing
-- Help Center
-- Offer Calculator
-- Checkout Prices
-- Minimum Requirements
-- Price Charting
-- Shopify Storefront
-- eBay Categories
-- PayMore Shop
-- QR Scanner
-- UPC Search
-- Volt Links
-- Chat
+- Mobile Scanner
 
-**Configured in**: [src/lib/tools.ts](src/lib/tools.ts)
+The sidepanel tool registry lives in [../src/lib/sidepanel-tools.ts](../src/lib/sidepanel-tools.ts). The command-palette allowlist is in [../src/components/cmdk-palette/CMDKPalette.tsx](../src/components/cmdk-palette/CMDKPalette.tsx).
 
 ## File Structure
 
@@ -129,7 +117,6 @@ src/
 │   │   ├── CMDKPalette.tsx       # Main CMDK component
 │   │   ├── TabItem.tsx           # Tab display component
 │   │   ├── CSVLinkItem.tsx       # Quick link display
-│   │   ├── ToolbarItem.tsx       # Tool display
 │   │   ├── BookmarkItem.tsx      # Bookmark display
 │   │   ├── HistoryItem.tsx       # History display
 │   │   ├── SearchProviders.tsx   # Provider configs
@@ -144,10 +131,11 @@ src/
 
 entrypoints/
 ├── popup/
-│   ├── CMDKPopup.tsx             # Popup wrapper
+│   ├── index.html                # Popup HTML
 │   └── main.tsx                  # Popup entry
-├── options/                      # Old popup moved here
-├── content.ts                    # Toolbar integration
+├── options/                      # Settings page
+├── newtab/                       # New-tab replacement
+├── sidepanel/                    # Unified sidepanel
 └── background.ts                 # Message handlers
 ```
 
@@ -217,11 +205,11 @@ The CMDK tracks user navigation to determine behavior:
 3. Type to filter or use arrow keys
 4. Press `Enter` to open
 
-### Open Toolbar Tool
+### Open Mobile Scanner
 
 1. Press `CMD+Shift+K`
-2. Type tool name (e.g., "price charting")
-3. Press `Enter` → Opens in sidebar
+2. Type `mobile scanner`
+3. Press `Enter` → Opens Mobile Scanner in the sidepanel
 
 ### Browse Bookmarks
 
@@ -252,7 +240,7 @@ The CMDK tracks user navigation to determine behavior:
 ### Styling looks broken
 
 - **Check**: Tailwind classes are loading
-- **Fix**: Rebuild extension (`pnpm run build`)
+- **Fix**: Rebuild extension (`pnpm build:extension` from the repo root or `pnpm build` from `packages/extension`)
 - **Fix**: Hard refresh the popup (close and reopen)
 
 ### Arrow keys don't work
@@ -273,7 +261,7 @@ The CMDK tracks user navigation to determine behavior:
 
 ### Adding a New Search Provider
 
-Edit [SearchProviders.tsx](src/components/cmdk-palette/SearchProviders.tsx):
+Edit [SearchProviders.tsx](../src/components/cmdk-palette/SearchProviders.tsx):
 
 ```typescript
 {
@@ -288,7 +276,7 @@ Edit [SearchProviders.tsx](src/components/cmdk-palette/SearchProviders.tsx):
 
 ### Changing Cache Duration
 
-Edit [csv-links.ts](src/utils/csv-links.ts):
+Edit [csv-links.ts](../src/utils/csv-links.ts):
 
 ```typescript
 const CACHE_DURATION = 1000 * 60 * 30; // 30 minutes
@@ -297,7 +285,7 @@ const CACHE_DURATION = 1000 * 60 * 30; // 30 minutes
 
 ### Modifying Display Order
 
-Reorder the `Command.Group` sections in [CMDKPalette.tsx](src/components/cmdk-palette/CMDKPalette.tsx):
+Reorder the `Command.Group` sections in [CMDKPalette.tsx](../src/components/cmdk-palette/CMDKPalette.tsx):
 
 ```tsx
 {

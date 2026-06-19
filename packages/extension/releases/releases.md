@@ -1,218 +1,92 @@
 # Volt Chrome Extension Releases
 
-Download the latest version of the Volt Chrome Extension.
+## Current Development Version
 
-## Latest Release
+### v1.0.39
 
-### v1.0.32 (Current)
+The current manifest/package version is `1.0.39`.
 
-**Release Date:** May 27, 2026
-**Download:** [voltextension-1.0.32-chrome.zip](./voltextension-1.0.32-chrome.zip)
+Current release build command:
 
-**What's New:**
+```sh
+pnpm zip:extension
+```
 
-This release improves mobile/App Clip photo capture reliability and stores received photos in Downloads by session folder.
+Build output is generated under:
 
-### Changes
+```text
+packages/extension/.output/volt/
+```
 
-- Saves mobile/App Clip photos to `Downloads/Volt Photos/<session-code>/`
-- Stores only lightweight photo metadata in extension storage to avoid quota failures
-- Keeps App Clip dictation out of the App Clip while preserving full mobile app dictation
-- Normalizes UPC-A scans that arrive as EAN-13 with a leading zero
-- Bumped the extension version to `1.0.32`
+The generated zip is moved into:
 
-## Previous Release
+```text
+packages/extension/releases/
+```
+
+## Recent Release History
+
+### v1.0.32
+
+Release date: May 27, 2026
+
+Changes:
+
+- Improved mobile photo capture reliability.
+- Stored received photos in Downloads by session folder.
+- Stored lightweight photo metadata in extension storage to avoid quota failures.
+- Normalized UPC-A scans that arrive as EAN-13 with a leading zero.
+
+Historical note: this release still referred to App Clip paths in release copy. The active architecture is now full-app WebRTC-only mobile scanner; App Clip/object-transfer work is historical.
 
 ### v1.0.29
 
-**Release Date:** May 23, 2026
-**Download:** [voltextension-1.0.29-chrome.zip](./voltextension-1.0.29-chrome.zip)
+Release date: May 23, 2026
 
-**What's New:**
+Changes:
 
-This release includes the latest mobile scanner viewfinder updates and extension build artifacts.
+- Included mobile scanner viewfinder updates.
+- Built Chrome extension release artifacts.
 
-### Changes
+### v1.0.23
 
-- Bumped the extension version to `1.0.29`
-- Built the Chrome extension release zip
+Release date: May 22, 2026
 
-## Previous Release
+Changes:
 
-### v1.0.23 (Current)
-
-**Release Date:** May 22, 2026
-**Download:** [voltextension-1.0.23-chrome.zip](./voltextension-1.0.23-chrome.zip)
-
-**What's New:**
-
-This release fixes Mobile Scanner barcode insertion so scans are typed into the active or last-focused page input while still appearing in scanner results.
-
-### Changes
-
-- Fixed barcode scans not auto-inserting at the cursor from the Mobile Scanner sidepanel
-- Improved text-field insertion reliability when replacing selected input text
-- Bumped the extension version to `1.0.23`
-
-## Previous Release
+- Fixed Mobile Scanner barcode insertion so scans are typed into the active or last-focused page input.
+- Preserved scanner results timeline behavior.
 
 ### v1.0.22
 
-**Release Date:** May 22, 2026
-**Download:** [voltextension-1.0.22-chrome.zip](./voltextension-1.0.22-chrome.zip)
+Release date: May 22, 2026
 
-**What's New:**
+Changes:
 
-This release fixes Mobile Scanner dictation targeting and duplicate scan handling, and deepens extension internals for search, sidepanel tools, background messages, and Top Offer settings.
-
-### Changes
-
-- Fixed repeated barcode scans flooding Mobile Scanner results
-- Improved dictation insertion into the active or last-focused page input
-- Refactored Search Intent, Sidepanel Tool, Background Message, Top Offer, and Mobile Scanner Session modules
-- Bumped the extension version to `1.0.22`
-
-## Previous Release
+- Fixed Mobile Scanner dictation targeting and duplicate scan handling.
+- Refactored search intent, sidepanel tool, background message, top-offer, and mobile scanner session modules.
 
 ### v1.0.21
 
-**Release Date:** May 18, 2026
-**Download:** [voltextension-1.0.21-chrome.zip](./voltextension-1.0.21-chrome.zip)
+Release date: May 18, 2026
 
-**What's New:**
+Changes:
 
-This release refreshes the new tab experience and improves search/tab workflows.
-
-### Changes
-
-- Redesigned the new tab layout with improved hero content, recent tab tiles, quick links, bookmarks, and closed tabs presentation
-- Added relative time formatting for recent and closed tab activity
-- Improved command palette tab results and search prefix previews
-- Refined popup focus behavior and Shopify button placement
-- Bumped the extension version to `1.0.21`
-
-## Previous Release
+- Redesigned the new-tab layout.
+- Added relative time formatting for recent and closed tab activity.
+- Improved command palette tab results and search prefix previews.
+- Refined popup focus behavior and Shopify button placement.
 
 ### v1.0.20
 
-**Release Date:** May 5, 2026
-**Download:** [voltextension-1.0.20-chrome.zip](./voltextension-1.0.20-chrome.zip)
+Release date: May 5, 2026
 
-**What's New:**
+Changes:
 
-This release removes deprecated tools and simplifies the extension surface.
+- Removed the injected floating toolbar.
+- Removed the PC cost breakdown sidepanel tool.
+- Removed the PriceCharting video game lot tool and related page enhancements.
 
-### Changes
+## Legacy Releases
 
-- Removed the injected floating toolbar from all pages
-- Removed the PC cost breakdown sidepanel tool
-- Removed the PriceCharting video game lot tool and related page enhancements
-- Bumped the extension version to `1.0.20`
-
-## Previous Release
-
-### v1.0.2
-
-**Release Date:** October 16, 2025
-**Download:** [volt-1.0.2-chrome.zip](./volt-1.0.2-chrome.zip)
-
-**What's New:**
-
-This update includes bug fixes and usability improvements based on user feedback, focusing on context menu behavior and settings stability.
-
-### Fixes
-
-- **Context Menu Shortcut**: Changed from `Alt+Right-click` to `Ctrl+Right-click` to show native browser menu instead of Volt menu
-- **Settings Stability**: Fixed potential undefined error in bookmark folder settings initialization
-- **Code Cleanup**: Removed unused radial menu code and improved overall code organization
-
-### Improvements
-
-- **Better User Experience**: More intuitive keyboard shortcut for accessing native context menu
-- **Enhanced Reliability**: Improved error handling in settings management
-- **Performance**: Streamlined code by removing deprecated features
-
-## Older Releases
-
-### v1.0.0
-
-**Release Date:** October 12, 2025
-**Download:** [volt-1.0.0-chrome.zip](./volt-1.0.0-chrome.zip)
-
-**What's New:**
-
-This was the first release of Volt, a versatile browser extension with command palette, controller testing, and multi-provider search capabilities.
-
-### Features
-
-- **CMDK Command Palette**: Arc-style command palette accessible via `CMD+Shift+K` / `CTRL+Shift+K`
-- **Controller Testing**: Real-time game controller input visualization via `CMD+J` / `CTRL+J`
-- **Volt Links**: Cached custom links from Google Sheets with 30-minute caching for instant access
-- **Tab Switching**: Fast switching between open tabs with search and filter
-- **Search Providers**: 10 integrated search engines including Google, Amazon, Best Buy, eBay, Price Charting, UPC Item DB, YouTube, GitHub, and Twitter/X
-- **Bookmarks & History**: Access your 20 most recent bookmarks and last 30 visited pages
-- **Settings Page**: Configure which command sources are enabled/disabled via `CMD+Shift+O` / `CTRL+Shift+O`
-- **Auto-Save Settings**: Changes to settings are automatically saved
-- **Smart Navigation**: Backspace to exit search providers, arrow keys for navigation
-- **Enhanced Context Menu Options**: Right-click search options for selected text including:
-  - Search on UPCItemDB
-  - Search for UPC on Google
-  - Search on PriceCharting
-  - Search for MPN on Google
-- **eBay Taxonomy Integration**: Query eBay's category taxonomy directly from the command palette
-
-### Keyboard Shortcuts
-
-- `CMD+Shift+K` / `CTRL+Shift+K` - Open CMDK popup
-- `CMD+Shift+O` / `CTRL+Shift+O` - Open settings page
-- `CMD+J` / `CTRL+J` - Open controller testing sidepanel
-
-### Installation
-
-1. Download [volt-1.0.0-chrome.zip](./volt-1.0.0-chrome.zip)
-2. Unzip the file
-3. Open Chrome and navigate to `chrome://extensions/`
-4. Enable "Developer mode" (toggle in top right)
-5. Click "Load unpacked"
-6. Select the unzipped `volt` folder
-
-## Installation Instructions
-
-1. Download `volt-1.0.0-chrome.zip`
-2. Extract the ZIP file to a folder on your computer
-3. Open Chrome and go to `chrome://extensions/`
-4. Enable "Developer mode" in the top right
-5. Click "Load unpacked"
-6. Navigate to the extracted folder and select the `volt` folder
-7. The extension will be installed and ready to use
-
-### For Chrome Web Store Submission
-
-The packed version is ready for Chrome Web Store upload via the [Chrome Web Store Developer Dashboard](https://chrome.google.com/webstore/devconsole)
-
-## Keyboard Shortcuts Setup
-
-After installation, you can customize keyboard shortcuts:
-
-1. Go to `chrome://extensions/shortcuts`
-2. Find "Volt" extension
-3. Customize shortcuts for:
-   - Open CMDK popup (default: `CMD+Shift+K`)
-   - Open settings page (default: `CMD+Shift+O`)
-
-## Notes
-
-- Always download from official releases to ensure security
-- For the latest features and bug fixes, use the current release (v1.0.0)
-- CMDK requires `bookmarks` and `history` permissions (granted on install)
-- Volt Links are cached for 30 minutes in Chrome storage
-- If you encounter issues, check the [CMDK_README.md](../CMDK_README.md) for troubleshooting
-- Settings changes are automatically saved
-
-## Changelog Summary
-
-**v1.0.2** - Bug fixes and usability improvements including context menu shortcut changes and settings stability
-**v1.0.1** - Enhanced user experience with install page, improved context menu, and better controller detection  
-**v1.0.0** - Initial Release with CMDK Command Palette, Controller Testing, Settings Page, and Multi-Platform Search
-
-For questions or support, open an issue on the GitHub repository.
+Older release notes before the current Volt/mobile-scanner architecture may describe removed features such as controller testing, old toolbar behavior, or old zip names. Treat them as historical context, not live documentation.

@@ -19,7 +19,9 @@ Sources:
 - Apple hardware permission controls: https://support.apple.com/guide/iphone/control-access-to-hardware-features-iph168c4bbd5/ios
 - Apple HIG privacy guidance: https://developer.apple.com/design/human-interface-guidelines/privacy/
 
-## Current Repo State
+## Historical Repo State
+
+The paths in this section describe the retired App Clip implementation and may no longer exist in the live repo. The active mobile scanner is the full iOS app with WebRTC transport.
 
 Relevant files:
 

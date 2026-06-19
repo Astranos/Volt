@@ -29,7 +29,8 @@ The page showcases all key features of Volt:
 #### Core Features
 
 - **Command Menu (CMD+Shift+K)** - Arc-style command palette for quick navigation, tab switching, and multi-provider search
-- **Controller Testing (CMD+J)** - Real-time controller input visualization with customizable color thresholds
+- **Mobile Scanner** - Pair the iPhone app and receive barcode, OCR, dictation, and photo captures through the sidepanel
+- **Offer Calculator** - Sidepanel calculator for resale cash-guide offers
 - **Volt Links** - Custom links from Google Sheets with 30-minute caching and custom URL support
 - **14 Search Providers** - Google, Amazon, Best Buy, eBay, Price Charting, UPC Item DB, YouTube, GitHub, Twitter/X, Home Depot, Lowe's, Menards, Micro Center, and Volt Search
 - **eBay Taxonomy API** - Direct integration for quick category lookups with copy-to-clipboard
@@ -111,10 +112,10 @@ To test the install page functionality:
 The install page is automatically included when building the extension:
 
 ```bash
-npm run build
+pnpm build:extension
 ```
 
-The install page will be available in the `.output/volt/` directory.
+The install page will be available at `packages/extension/.output/volt/install.html`.
 
 ### WXT Configuration
 
@@ -155,12 +156,6 @@ The thank you page uses Tailwind CSS for styling and follows the same design sys
 1. Ensure the extension is properly loaded in developer mode
 2. Check the browser console for any errors
 3. Verify that all files are correctly built
-
-### Download Link Not Working
-
-1. Check that the release file exists in the `releases/` directory
-2. Verify the file path in the download link
-3. Ensure the file is included in the build output
 
 ### Styling Issues
 

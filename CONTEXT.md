@@ -1,6 +1,8 @@
 # Volt Context
 
-Volt is a Chrome extension and companion web app for resale workflows.
+Volt is a Chrome extension and companion mobile app for electronic-device resale workflows. It exists to make buying quicker, reduce repetitive lookup work, and make the listing process easier by bringing market search, offer calculation, scanning, dictation, and photo capture into one browser-centered workflow.
+
+The product is built for resellers who buy electronics and similar inventory, then list those items for resale. The core loop is: evaluate an item quickly, decide what to pay, capture accurate product details, and prepare listing-friendly text and photos with as little manual re-entry as possible.
 
 ## Current Mobile Scanner Direction
 
@@ -13,7 +15,7 @@ ADR 0002 is the source of truth for the full mobile app scanner flow. The active
 - Search Provider: a configured destination that turns a query into a navigable URL.
 - Search Intent: the resolved action from user input, such as opening a URL, searching a provider, or searching Shopify inventory.
 - Shopify Inventory Search: a search that resolves the current Shopify store and opens the admin products page ordered by available inventory.
-- Sidepanel Tool: a tool hosted in the extension sidepanel, such as Controller Testing, Top Offers, eBay Categories, Buying Guide, Shopify Help, or Mobile Scanner.
+- Sidepanel Tool: a tool hosted in the extension sidepanel. The live sidepanel switcher currently exposes Offer Calculator and Mobile Scanner.
 - Top Offer: a resale offer value calculated from a projected selling price and configurable rate rules.
 - Mobile Scanner Session: a short-lived capture session that links a Chrome browser target to a phone capture surface so captured text, barcodes, dictation, or photos can return to the extension.
 - Session Capability: a capture type that a Mobile Scanner Session allows, such as OCR, barcode, dictation, or photo.

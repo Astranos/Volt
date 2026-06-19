@@ -1,5 +1,7 @@
 # Shopify Guardrails Technical Documentation
 
+Status: historical. There is no live `entrypoints/shopify-guardrails.ts` in the current extension. The Shopify-related live entrypoints are `entrypoints/shopify-buttons.ts` and `entrypoints/shopify-product-search.ts`.
+
 ## Overview
 
 The Shopify Guardrails content script monitors Shopify product admin pages to ensure data integrity and completeness. It provides real-time validation and visual feedback for:
@@ -12,7 +14,8 @@ The Shopify Guardrails content script monitors Shopify product admin pages to en
 ### File Structure
 
 ```
-entrypoints/shopify-guardrails.ts          # Main content script
+entrypoints/shopify-buttons.ts             # Live Shopify quick-action buttons
+entrypoints/shopify-product-search.ts      # Live Shopify product search helper
 src/utils/condition-mapping.ts             # Condition mapping logic
 examples/shopify.html                      # Example HTML for testing
 ```

@@ -2,6 +2,8 @@
 
 Volt is a monorepo for a Chrome extension, a companion mobile scanner app, a web pairing surface, and a small scanner signaling service.
 
+I built Volt to make buying and listing electronic devices for resale faster and easier. The app is shaped around the day-to-day resale workflow: quickly checking market prices while buying, calculating offers, capturing barcodes/text/photos from a phone, and moving clean listing information back into the browser with less manual typing.
+
 ## Packages
 
 | Workspace | Purpose |

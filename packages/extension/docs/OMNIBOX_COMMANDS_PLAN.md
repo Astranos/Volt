@@ -1,5 +1,7 @@
 # Omnibox Commands Plan (New Tab Search Modes)
 
+Status: not implemented in the live manifest. This remains a proposal. The current `wxt.config.ts` does not define `manifest.omnibox`.
+
 ## Goal
 
 Add **custom omnibox commands** that match the three search buttons at the top of the New Tab page:
@@ -31,9 +33,7 @@ Users should be able to type a keyword in Chrome’s address bar, then a short c
 
 Use a single omnibox keyword (Chrome limitation: 1 keyword per extension).
 
-Recommendation: **`volt`**
-
-Alternative: **`volt`** (matches extension name in `wxt.config.ts`)
+Recommendation: **`volt`** (matches extension name in `wxt.config.ts`)
 
 ### Command grammar (after the keyword)
 
@@ -63,8 +63,7 @@ Examples assume keyword `volt`:
 
 Update `wxt.config.ts`:
 
-- Add:
-  - `omnibox: { keyword: "volt" }` (or `"volt"`)
+- Add `omnibox: { keyword: "volt" }`.
 
 Notes:
 
@@ -133,6 +132,5 @@ If we want to avoid duplicating strings/logic across UI + background:
 
 - **Separate keywords per provider**: not possible with a single extension (Chrome omnibox supports one keyword).
 - **Use `chrome.commands` instead**: could map hotkeys to “Search eBay / Search PriceCharting / Search Inventory” and prompt for input via a small popup UI; still keep omnibox as the primary fast-path.
-
 
 
