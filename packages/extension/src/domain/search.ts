@@ -1,6 +1,6 @@
 export const SEARCH_URL_TEMPLATES = {
   google: "https://www.google.com/search?q={query}",
-  scout: "https://google.com/search/?q={query}",
+  volt: "https://google.com/search/?q={query}",
   amazon: "https://www.amazon.com/s?k={query}",
   bestbuy: "https://www.bestbuy.com/site/searchpage.jsp?st={query}",
   ebay:

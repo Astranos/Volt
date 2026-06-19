@@ -148,7 +148,10 @@ class MobileScannerOffscreenSession {
         scannedAt: data.scannedAt || new Date().toISOString(),
       },
     });
-    return response?.success !== false;
+    return {
+      saved: response?.success !== false,
+      insertedIntoCursor: response?.insertedIntoCursor === true,
+    };
   }
 
   private async sendPhoto(photo: PhotoMessage) {

@@ -349,3 +349,19 @@ extension ScannerSectionHeader where TrailingAccessory == EmptyView {
         }
     }
 }
+
+struct ScannerSessionsButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Label("Sessions", systemImage: "link")
+                .font(.headline)
+                .labelStyle(.iconOnly)
+                .foregroundStyle(.secondary)
+                .frame(width: 44, height: 44)
+                .background(.regularMaterial, in: Circle())
+        }
+        .accessibilityLabel("Previous sessions")
+    }
+}

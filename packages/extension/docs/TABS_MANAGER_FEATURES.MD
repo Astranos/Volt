@@ -6,7 +6,7 @@
    Domain Grouping: Automatically group tabs by domain (e.g., all github.com tabs under one collapsible header).
    Tab Groups Integration: Support Chrome's native Tab Groups, allowing users to see group colors and names, or even create new groups from the sidepanel.
    Vertical Tree View: Show parent-child relationships (e.g., if you opened a link in a new tab from GitHub, indent that new tab under the GitHub tab).
-3. Intelligence & Context (Scout Specific)
+3. Intelligence & Context (Volt Specific)
    AI Summarization: Add a "Summarize" button on hover that uses your backend/AI to give a 2-sentence TL;DR of the tab's content without switching to it.
    Auto-Categorization: Use AI to tag tabs as "Research," "Social," "Work," or "Shopping" and allow filtering by these categories.
    Search Content: Expand search to include the actual text content of open tabs, not just titles and URLs.

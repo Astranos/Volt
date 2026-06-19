@@ -178,6 +178,13 @@ export type ScannerControlMessage =
   | ScannerControlProtocolErrorMessage
   | ScannerControlSessionClosedMessage;
 
+export type EncodeBarcodeMessageInput = {
+  barcode: string;
+  format?: string;
+  insertIntoCursor?: boolean;
+  contributorId?: string;
+};
+
 const CONTROL_MESSAGE_TYPES = new Set([
   "hello",
   "session_ready",
@@ -517,6 +524,30 @@ export function encodeScannerControlMessage(message: ScannerControlMessage): str
   const decoded = decodeScannerControlMessage(JSON.stringify(message));
   if (!decoded) throw new Error("Invalid scanner-control message");
   return JSON.stringify(message);
+}
+
+function scannerMessageId(prefix: string) {
+  const randomId =
+    typeof globalThis.crypto?.randomUUID === "function"
+      ? globalThis.crypto.randomUUID()
+      : Math.random().toString(36).slice(2);
+  return `${prefix}_${Date.now()}_${randomId}`;
+}
+
+export function encodeBarcodeMessage(input: EncodeBarcodeMessageInput): string {
+  const sentAt = new Date().toISOString();
+  return encodeScannerControlMessage({
+    type: "capture_result",
+    messageId: scannerMessageId("message"),
+    sentAt,
+    resultId: scannerMessageId("result"),
+    resultKind: "barcode",
+    value: input.barcode.trim(),
+    format: optionalString(input.format),
+    capturedAt: sentAt,
+    insertIntoCursor: input.insertIntoCursor ?? true,
+    contributorId: input.contributorId,
+  });
 }
 
 export function scannerControlDuplicateKey(message: ScannerControlMessage) {

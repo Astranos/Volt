@@ -614,10 +614,14 @@ export class MobileScannerSession {
       const duplicateKey = scannerControlDuplicateKey(control);
       const accepted = scannerMessage.format === "dictation" || !this.seenControlMessages.has(duplicateKey);
       if (accepted) this.seenControlMessages.add(duplicateKey);
-      const stored = accepted ? await this.events.onScan(scannerMessage) : true;
-      const insertedIntoCursor = shouldInsertScannerMessage(scannerMessage);
-      if (insertedIntoCursor) {
-        this.events.onInsert?.(scannerMessage.barcode, scannerMessage);
+      const scanReceipt = accepted ? await this.events.onScan(scannerMessage) : true;
+      const stored = typeof scanReceipt === "object" ? scanReceipt.saved : scanReceipt;
+      let insertedIntoCursor =
+        typeof scanReceipt === "object" && typeof scanReceipt.insertedIntoCursor === "boolean"
+          ? scanReceipt.insertedIntoCursor
+          : false;
+      if (typeof scanReceipt !== "object" && shouldInsertScannerMessage(scannerMessage)) {
+        insertedIntoCursor = (await this.events.onInsert?.(scannerMessage.barcode, scannerMessage)) === true;
       }
       this.sendControl(peer, {
         type: "result_received",

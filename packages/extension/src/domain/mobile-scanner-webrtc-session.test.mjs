@@ -93,6 +93,9 @@ test("extension WebRTC session handles handshake, receipts, photo acks, and peer
   assert.match(peerConnectionSource, /pc\.connectionState === "connected" && peer\.ready/);
   assert.match(sessionSource, /type: "protocol_error"/);
   assert.match(sessionSource, /type: "result_received"/);
+  assert.match(sessionSource, /insertedIntoCursor =/);
+  assert.match(sessionSource, /scanReceipt\.insertedIntoCursor/);
+  assert.match(offscreenSource, /insertedIntoCursor: response\?\.insertedIntoCursor === true/);
   assert.match(photoReceiverSource, /type: "photo_chunk_ack"/);
   assert.match(photoReceiverSource, /type: "photo_received"/);
   assert.match(sessionSource, /session_closed/);

@@ -76,11 +76,11 @@
 
 ## Single Purpose Description
 
-Scout is a browser extension that provides a command palette, controller testing interface, and productivity tools to enhance the browsing experience.
+Volt is a browser extension that provides a command palette, controller testing interface, and productivity tools to enhance the browsing experience.
 
 ## Detailed Description
 
-Scout is a comprehensive browser extension designed to improve productivity and browsing efficiency. It features a powerful command palette for quick access to bookmarks, history, and various tools. The extension includes a unique controller testing interface that allows users to test and visualize gamepad inputs in real-time. With its intuitive side panel interface, users can easily access all features without disrupting their browsing workflow. The extension is built with performance in mind and respects user privacy by minimizing data collection and processing most functionality locally.
+Volt is a comprehensive browser extension designed to improve productivity and browsing efficiency. It features a powerful command palette for quick access to bookmarks, history, and various tools. The extension includes a unique controller testing interface that allows users to test and visualize gamepad inputs in real-time. With its intuitive side panel interface, users can easily access all features without disrupting their browsing workflow. The extension is built with performance in mind and respects user privacy by minimizing data collection and processing most functionality locally.
 
 ## Data Usage Certification
 

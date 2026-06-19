@@ -6,7 +6,7 @@ Arc-style command palette for quick navigation, tab switching, and site-specific
 
 ✅ **Extension Popup** - CMDK opens as the default extension popup (CMD+Shift+K)
 ✅ **Tab Switching** - Lists all open tabs with favicon, title, and URL
-✅ **Scout Links from CSV** - Cached custom links from Google Sheets (30-min cache)
+✅ **Volt Links from CSV** - Cached custom links from Google Sheets (30-min cache)
 ✅ **Toolbar Tools** - Quick access to all extension tools (opens in sidebar)
 ✅ **Bookmarks** - Shows your 20 most recent bookmarks
 ✅ **Recent History** - Displays last 30 visited pages
@@ -16,7 +16,7 @@ Arc-style command palette for quick navigation, tab switching, and site-specific
 ✅ **Keyboard Navigation** - Arrow keys, Enter, Escape, Tab
 ✅ **Return to Previous Tab** - Press Enter on empty input (when no items selected)
 ✅ **Green Accent Colors** - Consistent green theme throughout
-✅ **Loading Skeletons** - Smooth loading states for Scout Links
+✅ **Loading Skeletons** - Smooth loading states for Volt Links
 ✅ **Empty State** - Helpful icon and message when no results found
 
 ## Keyboard Shortcuts
@@ -52,16 +52,16 @@ The CMDK is implemented as the **default extension popup** (not a content script
 
 When you open the CMDK, items appear in this order:
 
-1. **Scout Links** - Grouped by category, sorted alphabetically (Warranty category first)
+1. **Volt Links** - Grouped by category, sorted alphabetically (Warranty category first)
 2. **Open Tabs** - Currently open browser tabs
 3. **Tools** - Extension toolbar tools
 4. **Bookmarks** - Your 20 most recent bookmarks
 5. **Recent History** - Last 30 visited pages
 6. **Search Providers** - When typing search triggers
 
-## Scout Links (CSV)
+## Volt Links (CSV)
 
-Scout Links are loaded from Google Sheets and **cached for 30 minutes** for instant loading.
+Volt Links are loaded from Google Sheets and **cached for 30 minutes** for instant loading.
 
 **CSV Configuration**: [src/utils/csv-links.ts](src/utils/csv-links.ts)
 
@@ -87,7 +87,7 @@ Type a trigger word and press **Tab** to activate:
 
 | Provider       | Triggers                       | URL                                           |
 | -------------- | ------------------------------ | --------------------------------------------- |
-| Scout Search   | `scout`, `search`              | https://google.com/search/                    |
+| Volt Search   | `volt`, `search`              | https://google.com/search/                    |
 | Google         | `google`, `g`                  | https://www.google.com/search                 |
 | Amazon         | `amazon`, `ama`, `amz`         | https://www.amazon.com/s                      |
 | Best Buy       | `bestbuy`, `bb`, `best`        | https://www.bestbuy.com/site/searchpage.jsp   |
@@ -115,7 +115,7 @@ All toolbar tools are searchable in CMDK. Press Enter to open in the sidebar:
 - PayMore Shop
 - QR Scanner
 - UPC Search
-- Scout Links
+- Volt Links
 - Chat
 
 **Configured in**: [src/lib/tools.ts](src/lib/tools.ts)
@@ -155,7 +155,7 @@ entrypoints/
 
 ### Caching Strategy
 
-Scout Links use a smart caching system:
+Volt Links use a smart caching system:
 
 ```typescript
 // First open: Show skeleton → Fetch CSV → Cache for 30 min
@@ -186,7 +186,7 @@ The CMDK tracks user navigation to determine behavior:
 ```json
 {
   "permissions": [
-    "storage", // Cache Scout Links
+    "storage", // Cache Volt Links
     "tabs", // Tab switching
     "bookmarks", // Show bookmarks
     "history" // Show recent history
@@ -210,10 +210,10 @@ The CMDK tracks user navigation to determine behavior:
 3. Type `iPhone 15`
 4. Press `Enter` → Opens Amazon search in new tab
 
-### Access Scout Links
+### Access Volt Links
 
 1. Press `CMD+Shift+K`
-2. Scout Links appear at top (cached instantly)
+2. Volt Links appear at top (cached instantly)
 3. Type to filter or use arrow keys
 4. Press `Enter` to open
 
@@ -238,7 +238,7 @@ The CMDK tracks user navigation to determine behavior:
 - **Check**: Keyboard shortcut isn't conflicting
 - **Fix**: Go to `chrome://extensions/shortcuts` to verify/change shortcuts
 
-### Scout Links not loading
+### Volt Links not loading
 
 - **Check**: DevTools Console for CSV fetch errors
 - **Fix**: Clear cache via `chrome.storage.local.clear()` in DevTools
@@ -263,7 +263,7 @@ The CMDK tracks user navigation to determine behavior:
 ## Performance
 
 - **Tab list**: Fetched on-demand from Chrome Tabs API (~5ms)
-- **Scout Links**: Cached, instant load after first fetch
+- **Volt Links**: Cached, instant load after first fetch
 - **Bookmarks**: Fetched on-demand, limited to 20 items
 - **History**: Fetched on-demand, limited to 30 items
 - **No virtualizing**: Works well up to ~500 total items
@@ -301,7 +301,7 @@ Reorder the `Command.Group` sections in [CMDKPalette.tsx](src/components/cmdk-pa
 
 ```tsx
 {
-  /* Scout Links - appears first */
+  /* Volt Links - appears first */
 }
 {
   /* Tabs - appears second */
@@ -331,5 +331,5 @@ Reorder the `Command.Group` sections in [CMDKPalette.tsx](src/components/cmdk-pa
 - [ ] History with timestamps
 - [ ] Recent searches persistence
 - [ ] Custom keyboard shortcuts per action
-- [ ] Export/import Scout Links
+- [ ] Export/import Volt Links
 - [ ] Quick Link categories customization

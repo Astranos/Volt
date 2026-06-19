@@ -43,7 +43,7 @@ const TOUR_STEPS: TourStep[] = [
     targetId: "tour-pc-instruction",
     title: "One-Click Lot Building",
     description:
-      "When browsing PriceCharting.com, look for the 'Add To Game Lot' buttons added by Scout. Click them to instantly add prices to your list.",
+      "When browsing PriceCharting.com, look for the 'Add To Game Lot' buttons added by Volt. Click them to instantly add prices to your list.",
     icon: <MousePointer2 className="h-5 w-5 text-green-600" />,
     position: "bottom",
   },

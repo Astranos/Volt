@@ -740,7 +740,7 @@ export default function SettingsPage() {
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = "scout-quicklinks-template.csv";
+      link.download = "volt-quicklinks-template.csv";
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -778,7 +778,7 @@ export default function SettingsPage() {
     },
     quickLinks: {
       key: "quickLinks" as const,
-      label: "Scout Links",
+      label: "Volt Links",
       description: "CSV-based custom links organized by category",
     },
     tools: {
@@ -1138,7 +1138,7 @@ export default function SettingsPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                     {[
                       { id: "google", name: "Google" },
-                      { id: "scout", name: "Scout Search" },
+                      { id: "volt", name: "Volt Search" },
                       { id: "amazon", name: "Amazon" },
                       { id: "bestbuy", name: "Best Buy" },
                       { id: "ebay", name: "eBay" },
@@ -1618,7 +1618,7 @@ export default function SettingsPage() {
             </div>
           </section>
 
-          {/* CSV Scout Links Section */}
+          {/* CSV Volt Links Section */}
           <section id="csvlinks" className="scroll-mt-20">
             <div className="mb-6">
               <h2 className="text-2xl font-bold mb-2">Quick Links</h2>
@@ -1653,7 +1653,7 @@ export default function SettingsPage() {
                     </div>
                     <p className="text-sm text-muted-foreground mb-4">
                       Enter a custom Google Sheets CSV URL to load your own
-                      Scout Links. Leave empty to use the default URL.
+                      Volt Links. Leave empty to use the default URL.
                     </p>
                     <input
                       type="text"
@@ -1690,7 +1690,7 @@ export default function SettingsPage() {
                         Cache Management
                       </h3>
                       <p className="text-sm text-muted-foreground mb-3">
-                        Scout Links are cached for 30 minutes to improve
+                        Volt Links are cached for 30 minutes to improve
                         performance. Use these options to manage your CSV cache.
                       </p>
                       <div className="text-xs text-muted-foreground space-y-1">

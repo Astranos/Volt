@@ -1,7 +1,7 @@
 // Test script to verify the install page functionality
 // This script can be run in the browser console to test the install page
 
-console.log("Testing Scout Install Page...");
+console.log("Testing Volt Install Page...");
 
 // Test 1: Check if the install page exists
 fetch(chrome.runtime.getURL("/install.html"))
@@ -14,7 +14,7 @@ fetch(chrome.runtime.getURL("/install.html"))
     }
   })
   .then((html) => {
-    if (html && html.includes("Install Scout")) {
+    if (html && html.includes("Install Volt")) {
       console.log("✅ Install page contains expected content");
     } else {
       console.error("❌ Install page content is incorrect");

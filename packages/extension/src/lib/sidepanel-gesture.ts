@@ -41,7 +41,7 @@ function primeContext(ctx: PanelContext) {
             if (typeof response?.tabId === "number") {
               ctx.tabId = response.tabId;
               // Log success for debugging
-              console.log(`[Scout] Sidepanel context initialized with tabId: ${ctx.tabId}`);
+              console.log(`[Volt] Sidepanel context initialized with tabId: ${ctx.tabId}`);
             }
             if (response?.state) {
               ctx.state = normalizeState(response.state);
@@ -100,7 +100,7 @@ function ensureSidePanelOptions(tabId?: number) {
     if (typeof tabId === "number") options.tabId = tabId;
     chrome.sidePanel.setOptions(options, () => {
         const err = chrome.runtime.lastError;
-        if (err) console.warn("[Scout] setOptions warning:", err.message);
+        if (err) console.warn("[Volt] setOptions warning:", err.message);
     });
   } catch (_) {
     // Non-fatal; fallback open attempt will surface any errors.
@@ -177,7 +177,7 @@ function notifyBackground(
 export function isSidePanelApiAvailable() {
   const available = Boolean(chrome?.sidePanel?.open);
   // Always log availability for now to debug
-  console.log(`[Scout] sidePanel API available: ${available}, tabId: ${getGlobalContext().tabId}`);
+  console.log(`[Volt] sidePanel API available: ${available}, tabId: ${getGlobalContext().tabId}`);
   return available;
 }
 
@@ -260,7 +260,7 @@ export function triggerSidepanelToolFromContentScript(
         resolve("opened");
       })
       .catch((error) => {
-        console.error("[Scout] execOpen failed:", error);
+        console.error("[Volt] execOpen failed:", error);
         ctx.state = { open: false, tool: null };
         notifyBackground(
           "error",

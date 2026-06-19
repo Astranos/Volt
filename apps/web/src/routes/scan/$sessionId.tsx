@@ -331,7 +331,7 @@ function ScannerPage() {
           >
             <p style={{ color: "#ddd", fontWeight: 600 }}>Finish pairing on desktop</p>
             <p style={{ color: "#888", fontSize: "0.875rem", lineHeight: 1.4 }}>
-              Copy this answer code, paste it into the Scout extension, then tap Connect Phone.
+              Copy this answer code, paste it into the Volt extension, then tap Connect Phone.
             </p>
             <textarea
               readOnly

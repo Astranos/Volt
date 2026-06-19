@@ -18,7 +18,7 @@ export default defineContentScript({
   main() {
     const log = (...args) => {
       try {
-        console.log("[Scout UPC Highlighter]", ...args);
+        console.log("[Volt UPC Highlighter]", ...args);
       } catch (_) {}
     };
 
@@ -27,7 +27,7 @@ export default defineContentScript({
 
     // CSS for highlighting UPC codes
     const HIGHLIGHT_CSS = `
-      .scout-upc-highlight {
+      .volt-upc-highlight {
         background-color: rgba(59, 130, 246, 0.15);
         border-bottom: 2px dotted #3b82f6;
         cursor: pointer;
@@ -37,17 +37,17 @@ export default defineContentScript({
         position: relative;
       }
 
-      .scout-upc-highlight:hover {
+      .volt-upc-highlight:hover {
         background-color: rgba(59, 130, 246, 0.25);
         border-bottom-style: solid;
       }
 
-      .scout-upc-copied {
+      .volt-upc-copied {
         background-color: rgba(16, 185, 129, 0.2) !important;
         border-bottom-color: #10b981 !important;
       }
 
-      .scout-upc-tooltip {
+      .volt-upc-tooltip {
         position: fixed;
         background-color: #1f2937;
         color: white;
@@ -62,17 +62,17 @@ export default defineContentScript({
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
       }
 
-      .scout-upc-tooltip.show {
+      .volt-upc-tooltip.show {
         opacity: 1;
       }
     `;
 
     // Function to inject CSS styles
     const injectStyles = () => {
-      if (!document.getElementById("scout-upc-highlighter-styles")) {
+      if (!document.getElementById("volt-upc-highlighter-styles")) {
         const styleElement = document.createElement("style");
         styleElement.textContent = HIGHLIGHT_CSS;
-        styleElement.id = "scout-upc-highlighter-styles";
+        styleElement.id = "volt-upc-highlighter-styles";
         (document.head || document.documentElement).appendChild(styleElement);
       }
     };
@@ -80,12 +80,12 @@ export default defineContentScript({
     // Function to show tooltip
     const showTooltip = (element, text) => {
       // Remove existing tooltips
-      document.querySelectorAll(".scout-upc-tooltip").forEach((tooltip) => {
+      document.querySelectorAll(".volt-upc-tooltip").forEach((tooltip) => {
         tooltip.remove();
       });
 
       const tooltip = document.createElement("div");
-      tooltip.className = "scout-upc-tooltip";
+      tooltip.className = "volt-upc-tooltip";
       tooltip.textContent = text;
 
       // Append to body to escape any overflow:hidden parents
@@ -213,7 +213,7 @@ export default defineContentScript({
         }
 
         if (success) {
-          element.classList.add("scout-upc-copied");
+          element.classList.add("volt-upc-copied");
           showTooltip(element, "UPC copied!");
           log("UPC code copied to clipboard:", upcCode);
         } else {
@@ -223,7 +223,7 @@ export default defineContentScript({
 
         // Remove the copied class after 2 seconds
         setTimeout(() => {
-          element.classList.remove("scout-upc-copied");
+          element.classList.remove("volt-upc-copied");
         }, 2000);
       } catch (err) {
         log("Failed to copy UPC code:", err);
@@ -254,7 +254,7 @@ export default defineContentScript({
         // Create highlighted element for the UPC
         const upcElement = document.createElement("span");
         const upcCode = match[0]; // Store UPC code in closure
-        upcElement.className = "scout-upc-highlight";
+        upcElement.className = "volt-upc-highlight";
         upcElement.textContent = upcCode;
         upcElement.setAttribute("data-upc", upcCode);
         upcElement.title = `Click to copy UPC: ${upcCode}`;
@@ -270,7 +270,7 @@ export default defineContentScript({
 
         // Add hover tooltip
         upcElement.addEventListener("mouseenter", () => {
-          if (!upcElement.classList.contains("scout-upc-copied")) {
+          if (!upcElement.classList.contains("volt-upc-copied")) {
             showTooltip(upcElement, "Click to copy UPC");
           }
         });
@@ -300,7 +300,7 @@ export default defineContentScript({
         (element.tagName === "SCRIPT" ||
           element.tagName === "STYLE" ||
           element.tagName === "NOSCRIPT" ||
-          element.classList.contains("scout-upc-highlight"))
+          element.classList.contains("volt-upc-highlight"))
       ) {
         return;
       }
@@ -415,7 +415,7 @@ export default defineContentScript({
                 if (!newEnabled) {
                   // Remove highlighting if disabled
                   document
-                    .querySelectorAll(".scout-upc-highlight")
+                    .querySelectorAll(".volt-upc-highlight")
                     .forEach((element) => {
                       const parent = element.parentNode;
                       if (parent) {
@@ -428,7 +428,7 @@ export default defineContentScript({
 
                   // Remove styles
                   const styleElement = document.getElementById(
-                    "scout-upc-highlighter-styles"
+                    "volt-upc-highlighter-styles"
                   );
                   if (styleElement) {
                     styleElement.remove();

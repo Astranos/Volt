@@ -32,7 +32,7 @@ export default defineContentScript({
 
     // Styles
     const STYLES = `
-      .scout-quick-actions-overlay {
+      .volt-quick-actions-overlay {
         position: fixed;
         z-index: 100; /* Lowered to allow modals to cover it */
         display: flex;
@@ -42,7 +42,7 @@ export default defineContentScript({
         transition: opacity 0.2s ease;
       }
 
-      .scout-action-tab {
+      .volt-action-tab {
         width: 48px;
         height: 120px;
         border-top-left-radius: 8px;
@@ -61,14 +61,14 @@ export default defineContentScript({
         flex-shrink: 0;
       }
 
-      .scout-action-tab img {
+      .volt-action-tab img {
         width: 32px;
         height: 32px;
         object-fit: contain;
         filter: drop-shadow(0 1px 2px rgba(0,0,0,0.1)) brightness(0) invert(1);
       }
 
-      .scout-volt-badge {
+      .volt-volt-badge {
         width: 48px;
         height: 32px;
         display: flex;
@@ -78,23 +78,23 @@ export default defineContentScript({
         pointer-events: auto;
       }
 
-      .scout-volt-badge img {
+      .volt-volt-badge img {
         width: 20px;
         height: 20px;
         object-fit: contain;
         filter: none;
       }
 
-      .scout-action-tab:hover {
+      .volt-action-tab:hover {
         filter: brightness(0.9);
         box-shadow: -4px 0 12px rgba(0, 0, 0, 0.2);
       }
 
-      .scout-action-tab:active {
+      .volt-action-tab:active {
         transform: translateX(-2px);
       }
 
-      .scout-action-tab.disabled {
+      .volt-action-tab.disabled {
         opacity: 0.5;
         cursor: not-allowed;
         filter: grayscale(1);
@@ -102,17 +102,17 @@ export default defineContentScript({
       }
 
       /* eBay Tab - Green */
-      .scout-tab-ebay {
+      .volt-tab-ebay {
         background: linear-gradient(135deg, #10b981 0%, #059669 100%); /* Green */
       }
 
       /* PriceCharting Tab - Blue */
-      .scout-tab-pricecharting {
+      .volt-tab-pricecharting {
         background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); /* Blue */
       }
 
       /* Tooltip */
-      .scout-action-tab::after {
+      .volt-action-tab::after {
         content: attr(data-tooltip);
         position: absolute;
         left: 100%;
@@ -134,7 +134,7 @@ export default defineContentScript({
         visibility: hidden;
       }
 
-      .scout-action-tab:hover::after {
+      .volt-action-tab:hover::after {
         opacity: 1;
         visibility: visible;
         margin-left: 16px;
@@ -143,10 +143,10 @@ export default defineContentScript({
 
     // Inject styles
     const injectStyles = () => {
-      if (!document.getElementById("scout-quick-actions-styles")) {
+      if (!document.getElementById("volt-quick-actions-styles")) {
         const styleElement = document.createElement("style");
         styleElement.textContent = STYLES;
-        styleElement.id = "scout-quick-actions-styles";
+        styleElement.id = "volt-quick-actions-styles";
         (document.head || document.documentElement).appendChild(styleElement);
       }
     };
@@ -333,7 +333,7 @@ export default defineContentScript({
             const top = y - height / 2;
             activePopup = window.open(
               url,
-              "scout_search_popup",
+              "volt_search_popup",
               `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
             );
             activePopupOpenedAt = Date.now();
@@ -348,7 +348,7 @@ export default defineContentScript({
         const top = y - height / 2;
         activePopup = window.open(
           url,
-          "scout_search_popup",
+          "volt_search_popup",
           `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
         );
         activePopupOpenedAt = Date.now();
@@ -357,16 +357,16 @@ export default defineContentScript({
 
     // Create Overlay
     const createOverlay = () => {
-      if (document.getElementById("scout-quick-actions-overlay")) return;
+      if (document.getElementById("volt-quick-actions-overlay")) return;
 
       overlay = document.createElement("div");
-      overlay.id = "scout-quick-actions-overlay";
-      overlay.className = "scout-quick-actions-overlay";
+      overlay.id = "volt-quick-actions-overlay";
+      overlay.className = "volt-quick-actions-overlay";
       overlay.style.opacity = "0"; // Start hidden until page is loaded
 
       // Volt Badge (Top)
       const voltBadge = document.createElement("div");
-      voltBadge.className = "scout-volt-badge";
+      voltBadge.className = "volt-volt-badge";
       const voltImg = document.createElement("img");
       voltImg.src = LOGO_URLS.volt;
       voltImg.alt = "Volt";
@@ -374,8 +374,8 @@ export default defineContentScript({
 
       // PriceCharting Tab (Blue)
       const pcTab = document.createElement("div");
-      pcTab.className = "scout-action-tab scout-tab-pricecharting";
-      pcTab.id = "scout-tab-pc";
+      pcTab.className = "volt-action-tab volt-tab-pricecharting";
+      pcTab.id = "volt-tab-pc";
       const pcImg = document.createElement("img");
       pcImg.src = LOGO_URLS.pricecharting;
       pcImg.alt = "PriceCharting";
@@ -393,8 +393,8 @@ export default defineContentScript({
 
       // eBay Tab (Green) - Now searches by product title
       const ebayTab = document.createElement("div");
-      ebayTab.className = "scout-action-tab scout-tab-ebay";
-      ebayTab.id = "scout-tab-ebay";
+      ebayTab.className = "volt-action-tab volt-tab-ebay";
+      ebayTab.id = "volt-tab-ebay";
       const ebayImg = document.createElement("img");
       ebayImg.src = LOGO_URLS.ebay;
       ebayImg.alt = "eBay";
@@ -477,8 +477,8 @@ export default defineContentScript({
       overlay.style.opacity = "1";
 
       // Update States
-      const pcTab = document.getElementById("scout-tab-pc");
-      const ebayTab = document.getElementById("scout-tab-ebay");
+      const pcTab = document.getElementById("volt-tab-pc");
+      const ebayTab = document.getElementById("volt-tab-ebay");
 
       if (pcTab) {
         if (upcValue) {
@@ -626,12 +626,12 @@ export default defineContentScript({
       if (message.action === "shopify-buttons-settings-changed") {
         if (message.enabled) {
           // Re-enable: check if already running or needs init
-          if (!document.getElementById("scout-quick-actions-overlay")) {
+          if (!document.getElementById("volt-quick-actions-overlay")) {
             init();
           } else {
             // If overlay exists but was hidden/removed, ensure it's visible
             const overlay = document.getElementById(
-              "scout-quick-actions-overlay"
+              "volt-quick-actions-overlay"
             );
             if (overlay) {
               overlay.style.display = "flex";
@@ -640,7 +640,7 @@ export default defineContentScript({
         } else {
           // Disable: remove or hide overlay
           const overlay = document.getElementById(
-            "scout-quick-actions-overlay"
+            "volt-quick-actions-overlay"
           );
           if (overlay) {
             overlay.style.display = "none";

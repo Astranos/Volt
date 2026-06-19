@@ -12,6 +12,7 @@ import {
   decodePhotoTransferMessage,
   decodePhotoTransferChunkFrame,
   decodeScannerControlMessage,
+  encodeBarcodeMessage,
   encodePhotoTransferMessage,
   encodePhotoTransferChunkFrame,
   encodeScannerControlMessage,
@@ -219,6 +220,15 @@ test("round-trips scanner-control messages", () => {
     scannerControlDuplicateKey(result),
     "capture_result:barcode:qr:abc-123:device_1234"
   );
+
+  const barcodeMessage = decodeScannerControlMessage(
+    encodeBarcodeMessage({ barcode: " 012345678905 ", format: "ean13" })
+  );
+  assert.equal(barcodeMessage?.type, "capture_result");
+  assert.equal(barcodeMessage?.resultKind, "barcode");
+  assert.equal(barcodeMessage?.value, "012345678905");
+  assert.equal(barcodeMessage?.format, "ean13");
+  assert.equal(barcodeMessage?.insertIntoCursor, true);
 });
 
 test("rejects unsupported and invalid scanner-control messages", () => {

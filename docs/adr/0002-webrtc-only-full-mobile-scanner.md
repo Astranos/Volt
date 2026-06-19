@@ -6,7 +6,7 @@ Planned.
 
 ## Context
 
-Scout needs a full iPhone mobile app flow that pairs with the Chrome extension and sends scanner results directly to the browser. The previous App Clip/photo-object-transfer direction relied on scanner-signal and object storage for App Clip-friendly delivery and recovery. That does not match the desired full-app product:
+Volt needs a full iPhone mobile app flow that pairs with the Chrome extension and sends scanner results directly to the browser. The previous App Clip/photo-object-transfer direction relied on scanner-signal and object storage for App Clip-friendly delivery and recovery. That does not match the desired full-app product:
 
 - direct transfer between iPhone and Chrome extension
 - no capture payloads or photo bytes through Vercel/object storage

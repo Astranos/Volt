@@ -69,14 +69,14 @@ setTimeout(() => {
   );
   console.log(`Found ${readFields.length} ReadFields in Google metafields`);
 
-  // Check if the scout script is detecting them
+  // Check if the volt script is detecting them
   const highlightedElements = document.querySelectorAll(
-    ".scout-google-input-warning"
+    ".volt-google-input-warning"
   );
   console.log(`Found ${highlightedElements.length} highlighted Google inputs`);
 
   // Check for notifications
-  const notifications = document.querySelectorAll(".scout-google-warning");
+  const notifications = document.querySelectorAll(".volt-google-warning");
   console.log(`Found ${notifications.length} Google warning notifications`);
 
   // Clean up

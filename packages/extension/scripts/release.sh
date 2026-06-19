@@ -128,7 +128,7 @@ echo "---"
 echo "## v$NEW_VERSION (Current)"
 echo ""
 echo "**Release Date:** $CURRENT_DATE"
-echo "**Download:** [scout-v${NEW_VERSION}.zip](./scout-v${NEW_VERSION}.zip)"
+echo "**Download:** [volt-v${NEW_VERSION}.zip](./volt-v${NEW_VERSION}.zip)"
 echo ""
 echo "**What's New:**"
 echo ""
@@ -146,14 +146,14 @@ echo "- [Add bug fixes here]"
 echo ""
 echo "### Installation"
 echo ""
-echo "1. Download [scout-v${NEW_VERSION}.zip](./scout-v${NEW_VERSION}.zip)"
+echo "1. Download [volt-v${NEW_VERSION}.zip](./volt-v${NEW_VERSION}.zip)"
 echo "2. Unzip the file"
 echo "3. Open Chrome and navigate to \`chrome://extensions/\`"
 echo "4. Enable \"Developer mode\" (toggle in top right)"
 echo "5. Click \"Load unpacked\""
-echo "6. Select the unzipped \`scout\` folder"
+echo "6. Select the unzipped \`volt\` folder"
 echo ""
-echo "Note: The packed version for Chrome Web Store submission is located at \`.output/scout-v${NEW_VERSION}-packed.zip\`"
+echo "Note: The packed version for Chrome Web Store submission is located at \`.output/volt-v${NEW_VERSION}-packed.zip\`"
 echo "---"
 echo ""
 
@@ -188,8 +188,8 @@ else
 fi
 
 # Check if manifest.json exists in build
-if [ -f ".output/scout/manifest.json" ]; then
-    MANIFEST_VERSION=$(grep -o '"version": "[^"]*"' .output/scout/manifest.json | cut -d'"' -f4)
+if [ -f ".output/volt/manifest.json" ]; then
+    MANIFEST_VERSION=$(grep -o '"version": "[^"]*"' .output/volt/manifest.json | cut -d'"' -f4)
     if [ "$MANIFEST_VERSION" == "$NEW_VERSION" ]; then
         print_success "Manifest version matches: v$MANIFEST_VERSION"
     else

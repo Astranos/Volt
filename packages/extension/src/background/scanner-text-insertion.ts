@@ -24,15 +24,23 @@ type ScannerTextInserterOptions = {
 };
 
 type DictationInsertionResult = {
+  inserted: boolean;
   dictationSessionId: string;
   final: boolean;
   sourceLength: number;
 };
 
+type ScannerTextInsertionResult = {
+  inserted: boolean;
+  dictationSessionId?: string;
+  final?: boolean;
+  sourceLength?: number;
+};
+
 export function insertTextAtTrackedEditableFromBackground(
   value: string,
   options: ScannerTextInsertOptions & { dictationSourceLength?: number } = {}
-): DictationInsertionResult | null | undefined {
+): ScannerTextInsertionResult | null | undefined {
   const root = window as typeof window & {
     __voltEditableTrackerInstalled?: boolean;
     __voltLastEditable?: HTMLElement | null;
@@ -65,8 +73,13 @@ export function insertTextAtTrackedEditableFromBackground(
       : 0;
   const dictationResult = () =>
     isLiveDictation
-      ? { dictationSessionId: liveSessionId, final: livePhase === "final", sourceLength: value.length }
+      ? { inserted: true, dictationSessionId: liveSessionId, final: livePhase === "final", sourceLength: value.length }
       : null;
+  const insertedResult = () => dictationResult() ?? { inserted: true };
+  const notInsertedResult = () =>
+    isLiveDictation
+      ? { inserted: false, dictationSessionId: liveSessionId, final: livePhase === "final", sourceLength: value.length }
+      : { inserted: false };
   const liveDictationDelta = (sourceLength: number) => {
     const delta = value.slice(sourceLength);
     return sourceLength > 0 ? delta : delta.trimStart();
@@ -163,9 +176,9 @@ export function insertTextAtTrackedEditableFromBackground(
     : null;
 
   if (!target) {
-    if (isLiveDictation && livePhase === "partial") return dictationResult();
+    if (isLiveDictation && livePhase === "partial") return notInsertedResult();
     navigator.clipboard.writeText(value).catch(() => {});
-    return dictationResult();
+    return notInsertedResult();
   }
 
   target.focus();
@@ -220,7 +233,7 @@ export function insertTextAtTrackedEditableFromBackground(
           livePhase === "final"
             ? null
             : { sessionId: liveSessionId, sourceStart: value.length, sourceLength: value.length };
-        return dictationResult();
+        return insertedResult();
       }
       const range =
         selection.rangeCount > 0
@@ -248,7 +261,7 @@ export function insertTextAtTrackedEditableFromBackground(
     }
     target.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
     root.__voltLastEditableRange = null;
-    return dictationResult();
+    return insertedResult();
   }
 
   const input = target as HTMLInputElement | HTMLTextAreaElement;
@@ -284,7 +297,7 @@ export function insertTextAtTrackedEditableFromBackground(
       livePhase === "final"
         ? null
         : { sessionId: liveSessionId, sourceStart: value.length, sourceLength: value.length };
-    return dictationResult();
+    return insertedResult();
   }
   const start = replaceLiveInput
     ? live.start ?? 0
@@ -315,7 +328,7 @@ export function insertTextAtTrackedEditableFromBackground(
   dispatchTextInputEvents(input, nextValue, replaceLiveInput ? "insertReplacementText" : "insertText");
   input.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
   root.__voltLastEditableSelection = null;
-  return dictationResult();
+  return insertedResult();
 }
 
 export function createScannerTextInserter({
@@ -335,7 +348,7 @@ export function createScannerTextInserter({
 
       if (!tab?.id) {
         await copyWithOffscreen(text);
-        return;
+        return false;
       }
 
       const trackedInsertionTarget = getTrackedTarget(tab.id);
@@ -384,6 +397,7 @@ export function createScannerTextInserter({
           liveDictationSourceLengths.set(injectionResult.dictationSessionId, injectionResult.sourceLength);
         }
       }
+      return injectionResult?.inserted === true;
     } catch (err) {
       log("scanner insert fallback", err instanceof Error ? err.message : err);
       try {
@@ -391,6 +405,7 @@ export function createScannerTextInserter({
       } catch (clipboardErr) {
         log("scanner clipboard fallback failed", clipboardErr instanceof Error ? clipboardErr.message : clipboardErr);
       }
+      return false;
     }
   }
 

@@ -98,7 +98,7 @@ export default function SettingsPopup() {
     },
     quickLinks: {
       key: "quickLinks" as const,
-      label: "Scout Links",
+      label: "Volt Links",
       description: "CSV-based custom links organized by category",
     },
     tools: {

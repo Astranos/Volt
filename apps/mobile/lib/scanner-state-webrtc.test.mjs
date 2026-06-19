@@ -46,6 +46,14 @@ const dictationViewSwiftSource = readFileSync(
   new URL("../ios/Volt/Views/DictationView.swift", import.meta.url),
   "utf8"
 );
+const uploadViewSwiftSource = readFileSync(
+  new URL("../ios/Volt/Views/ResultsView.swift", import.meta.url),
+  "utf8"
+);
+const scannerWebRTCConnectionSwiftSource = readFileSync(
+  new URL("../ios/Volt/Services/ScannerWebRTCConnection.swift", import.meta.url),
+  "utf8"
+);
 
 test("mobile waits for Chrome session_ready before showing connected", () => {
   const attachDataChannelStart = scannerStateSource.indexOf("const attachDataChannel = useCallback");
@@ -142,8 +150,10 @@ test("native capture owns the sessions accessory instead of leaking it into the 
   assert.match(rootViewSwiftSource, /struct ScannerSectionHeader<TrailingAccessory: View>: View/);
   assert.match(rootViewSwiftSource, /trailingAccessory\(\)/);
   assert.doesNotMatch(rootViewSwiftSource, /onSessions/);
-  assert.match(scannerViewSwiftSource, /SessionsButton/);
-  assert.match(scannerViewSwiftSource, /ScannerSectionHeader\(\s*title: "Capture",[\s\S]*\) \{\s*SessionsButton/);
+  assert.match(rootViewSwiftSource, /struct ScannerSessionsButton: View/);
+  assert.match(scannerViewSwiftSource, /ScannerSectionHeader\(\s*title: "Capture",[\s\S]*\) \{\s*ScannerSessionsButton/);
+  assert.match(dictationViewSwiftSource, /ScannerSectionHeader\(title: "Dictate"[\s\S]*trailingAccessory: \{\s*ScannerSessionsButton/);
+  assert.match(uploadViewSwiftSource, /ScannerSectionHeader\(title: "Upload"[\s\S]*trailingAccessory: \{\s*ScannerSessionsButton/);
 });
 
 test("native OCR review stops the live camera until retake", () => {
@@ -181,4 +191,14 @@ test("native Chrome input-change haptics are gated to the Dictate tab", () => {
   assert.match(scannerStoreDictationSwiftSource, /func allowsDictationFeedback\(_ requested: Bool = true\) -> Bool \{\s*requested && selectedSection == \.dictation\s*\}/);
   assert.match(scannerStoreDictationSwiftSource, /if allowsDictationFeedback\(allowsFeedback\) \{\s*dictationNotificationFeedback\.notificationOccurred\(\.success\)\s*\}/);
   assert.match(scannerStoreDictationSwiftSource, /if wasRecording, allowsDictationFeedback\(\) \{\s*dictationImpactFeedback\.impactOccurred\(intensity: 0\.7\)\s*\}/);
+});
+
+test("native scanner handles Chrome result receipts for cursor insertion feedback", () => {
+  assert.match(scannerProtocolSwiftSource, /struct ResultReceived: Decodable, Equatable/);
+  assert.match(scannerProtocolSwiftSource, /static func parseResultReceived\(_ rawValue: String\) -> ResultReceived\?/);
+  assert.match(scannerWebRTCConnectionSwiftSource, /var onResultReceived: \(\(ScannerProtocol\.ResultReceived\) -> Void\)\?/);
+  assert.match(scannerWebRTCConnectionSwiftSource, /ScannerProtocol\.parseResultReceived\(rawValue\)/);
+  assert.match(scannerStoreSwiftSource, /func applyResultReceived\(_ receipt: ScannerProtocol\.ResultReceived\)/);
+  assert.match(scannerStoreSwiftSource, /receipt\.insertedIntoCursor == false/);
+  assert.match(scannerStoreSwiftSource, /Chrome saved it, but no focused cursor target was available\./);
 });

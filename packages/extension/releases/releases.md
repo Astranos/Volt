@@ -114,7 +114,7 @@ This release removes deprecated tools and simplifies the extension surface.
 ### v1.0.2
 
 **Release Date:** October 16, 2025
-**Download:** [scout-1.0.2-chrome.zip](./scout-1.0.2-chrome.zip)
+**Download:** [volt-1.0.2-chrome.zip](./volt-1.0.2-chrome.zip)
 
 **What's New:**
 
@@ -122,7 +122,7 @@ This update includes bug fixes and usability improvements based on user feedback
 
 ### Fixes
 
-- **Context Menu Shortcut**: Changed from `Alt+Right-click` to `Ctrl+Right-click` to show native browser menu instead of Scout menu
+- **Context Menu Shortcut**: Changed from `Alt+Right-click` to `Ctrl+Right-click` to show native browser menu instead of Volt menu
 - **Settings Stability**: Fixed potential undefined error in bookmark folder settings initialization
 - **Code Cleanup**: Removed unused radial menu code and improved overall code organization
 
@@ -137,17 +137,17 @@ This update includes bug fixes and usability improvements based on user feedback
 ### v1.0.0
 
 **Release Date:** October 12, 2025
-**Download:** [scout-1.0.0-chrome.zip](./scout-1.0.0-chrome.zip)
+**Download:** [volt-1.0.0-chrome.zip](./volt-1.0.0-chrome.zip)
 
 **What's New:**
 
-This was the first release of Scout, a versatile browser extension with command palette, controller testing, and multi-provider search capabilities.
+This was the first release of Volt, a versatile browser extension with command palette, controller testing, and multi-provider search capabilities.
 
 ### Features
 
 - **CMDK Command Palette**: Arc-style command palette accessible via `CMD+Shift+K` / `CTRL+Shift+K`
 - **Controller Testing**: Real-time game controller input visualization via `CMD+J` / `CTRL+J`
-- **Scout Links**: Cached custom links from Google Sheets with 30-minute caching for instant access
+- **Volt Links**: Cached custom links from Google Sheets with 30-minute caching for instant access
 - **Tab Switching**: Fast switching between open tabs with search and filter
 - **Search Providers**: 10 integrated search engines including Google, Amazon, Best Buy, eBay, Price Charting, UPC Item DB, YouTube, GitHub, and Twitter/X
 - **Bookmarks & History**: Access your 20 most recent bookmarks and last 30 visited pages
@@ -169,21 +169,21 @@ This was the first release of Scout, a versatile browser extension with command 
 
 ### Installation
 
-1. Download [scout-1.0.0-chrome.zip](./scout-1.0.0-chrome.zip)
+1. Download [volt-1.0.0-chrome.zip](./volt-1.0.0-chrome.zip)
 2. Unzip the file
 3. Open Chrome and navigate to `chrome://extensions/`
 4. Enable "Developer mode" (toggle in top right)
 5. Click "Load unpacked"
-6. Select the unzipped `scout` folder
+6. Select the unzipped `volt` folder
 
 ## Installation Instructions
 
-1. Download `scout-1.0.0-chrome.zip`
+1. Download `volt-1.0.0-chrome.zip`
 2. Extract the ZIP file to a folder on your computer
 3. Open Chrome and go to `chrome://extensions/`
 4. Enable "Developer mode" in the top right
 5. Click "Load unpacked"
-6. Navigate to the extracted folder and select the `scout` folder
+6. Navigate to the extracted folder and select the `volt` folder
 7. The extension will be installed and ready to use
 
 ### For Chrome Web Store Submission
@@ -195,7 +195,7 @@ The packed version is ready for Chrome Web Store upload via the [Chrome Web Stor
 After installation, you can customize keyboard shortcuts:
 
 1. Go to `chrome://extensions/shortcuts`
-2. Find "Scout" extension
+2. Find "Volt" extension
 3. Customize shortcuts for:
    - Open CMDK popup (default: `CMD+Shift+K`)
    - Open settings page (default: `CMD+Shift+O`)
@@ -205,7 +205,7 @@ After installation, you can customize keyboard shortcuts:
 - Always download from official releases to ensure security
 - For the latest features and bug fixes, use the current release (v1.0.0)
 - CMDK requires `bookmarks` and `history` permissions (granted on install)
-- Scout Links are cached for 30 minutes in Chrome storage
+- Volt Links are cached for 30 minutes in Chrome storage
 - If you encounter issues, check the [CMDK_README.md](../CMDK_README.md) for troubleshooting
 - Settings changes are automatically saved
 

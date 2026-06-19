@@ -66,6 +66,13 @@ enum ScannerProtocol {
         let cursorTarget: CursorTarget?
     }
 
+    struct ResultReceived: Decodable, Equatable {
+        let resultId: String
+        let savedToResults: Bool
+        let insertedIntoCursor: Bool?
+        let cursorTarget: SessionReady.CursorTarget?
+    }
+
     struct PhotoPayload {
         let id: String
         let batchId: String
@@ -207,6 +214,16 @@ enum ScannerProtocol {
             return nil
         }
         return try? JSONDecoder().decode(SessionReady.self, from: data)
+    }
+
+    static func parseResultReceived(_ rawValue: String) -> ResultReceived? {
+        guard let data = rawValue.data(using: .utf8),
+              let envelope = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              envelope["type"] as? String == "result_received"
+        else {
+            return nil
+        }
+        return try? JSONDecoder().decode(ResultReceived.self, from: data)
     }
 
     private static func scannerDateString(from date: Date) -> String {

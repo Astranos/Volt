@@ -5,7 +5,7 @@
     "scheme": "volt",
     "version": "0.1.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/volt.icon",
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,

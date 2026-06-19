@@ -25,7 +25,7 @@ struct ScannerView: View {
                             isPairingScannerPresented = true
                         }
                     ) {
-                        SessionsButton {
+                        ScannerSessionsButton {
                             isSessionsPresented = true
                         }
                     }
@@ -120,22 +120,6 @@ struct ScannerView: View {
         }
     }
 
-}
-
-private struct SessionsButton: View {
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Label("Sessions", systemImage: "link")
-                .font(.headline)
-                .labelStyle(.iconOnly)
-                .foregroundStyle(.secondary)
-                .frame(width: 44, height: 44)
-                .background(.regularMaterial, in: Circle())
-        }
-        .accessibilityLabel("Previous sessions")
-    }
 }
 
 private struct CaptureStartAccessory: View {

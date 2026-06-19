@@ -47,8 +47,8 @@ export type MobileScannerSessionState = {
 
 export type MobileScannerSessionEvents = {
   onState: (state: MobileScannerSessionState) => void;
-  onScan: (message: BarcodeMessage) => Promise<boolean> | boolean;
+  onScan: (message: BarcodeMessage) => Promise<boolean | { saved: boolean; insertedIntoCursor?: boolean }> | boolean | { saved: boolean; insertedIntoCursor?: boolean };
   onPhoto: (message: PhotoMessage) => Promise<boolean> | boolean;
-  onInsert?: (text: string, message: BarcodeMessage) => void;
+  onInsert?: (text: string, message: BarcodeMessage) => Promise<boolean> | boolean;
   log?: (...args: unknown[]) => void;
 };

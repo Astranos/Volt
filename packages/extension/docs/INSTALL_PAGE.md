@@ -1,10 +1,10 @@
-# Scout Thank You Page
+# Volt Thank You Page
 
-This document describes the thank you page for the Scout Chrome extension.
+This document describes the thank you page for the Volt Chrome extension.
 
 ## Overview
 
-The thank you page provides a user-friendly interface that appears after installing the Scout extension. It thanks the user for installing, provides instructions for pinning the extension, and showcases all the features available in Scout.
+The thank you page provides a user-friendly interface that appears after installing the Volt extension. It thanks the user for installing, provides instructions for pinning the extension, and showcases all the features available in Volt.
 
 ## Files
 
@@ -16,22 +16,22 @@ The thank you page provides a user-friendly interface that appears after install
 
 ### Thank You Message
 
-The thank you page displays a welcoming message to users who have just installed Scout, encouraging them to pin the extension for easy access.
+The thank you page displays a welcoming message to users who have just installed Volt, encouraging them to pin the extension for easy access.
 
 ### Pinning Instructions
 
-The page includes detailed instructions on how to pin the Scout extension to the Chrome toolbar, with step-by-step guidance and visual cues.
+The page includes detailed instructions on how to pin the Volt extension to the Chrome toolbar, with step-by-step guidance and visual cues.
 
 ### Feature Highlights
 
-The page showcases all key features of Scout:
+The page showcases all key features of Volt:
 
 #### Core Features
 
 - **Command Menu (CMD+Shift+K)** - Arc-style command palette for quick navigation, tab switching, and multi-provider search
 - **Controller Testing (CMD+J)** - Real-time controller input visualization with customizable color thresholds
-- **Scout Links** - Custom links from Google Sheets with 30-minute caching and custom URL support
-- **14 Search Providers** - Google, Amazon, Best Buy, eBay, Price Charting, UPC Item DB, YouTube, GitHub, Twitter/X, Home Depot, Lowe's, Menards, Micro Center, and Scout Search
+- **Volt Links** - Custom links from Google Sheets with 30-minute caching and custom URL support
+- **14 Search Providers** - Google, Amazon, Best Buy, eBay, Price Charting, UPC Item DB, YouTube, GitHub, Twitter/X, Home Depot, Lowe's, Menards, Micro Center, and Volt Search
 - **eBay Taxonomy API** - Direct integration for quick category lookups with copy-to-clipboard
 
 #### Content Enhancement Features
@@ -55,28 +55,28 @@ Users can download the latest version directly from the install page with a sing
 
 ## Pinning the Extension
 
-After installing the Scout extension, users should pin it to their Chrome toolbar for quick access:
+After installing the Volt extension, users should pin it to their Chrome toolbar for quick access:
 
 ### Why Pin the Extension?
 
 - Quick access to the extension icon
-- Easy visual indicator that Scout is active
+- Easy visual indicator that Volt is active
 - One-click access to extension features
 - Faster access to the popup menu
 
 ### How to Pin
 
 1. Click the **Extensions icon** (puzzle piece) in the Chrome toolbar
-2. Find **Scout** in the list of extensions
-3. Click the **pin icon** next to Scout
-4. The Scout icon will now appear in your toolbar
+2. Find **Volt** in the list of extensions
+3. Click the **pin icon** next to Volt
+4. The Volt icon will now appear in your toolbar
 
 Alternatively:
 
 - Navigate to `chrome://extensions/`
-- Find Scout and ensure it's enabled
+- Find Volt and ensure it's enabled
 - Click the Extensions icon (puzzle piece) in the toolbar
-- Pin Scout from the dropdown
+- Pin Volt from the dropdown
 
 ## Accessing the Install Page
 
@@ -114,7 +114,7 @@ The install page is automatically included when building the extension:
 npm run build
 ```
 
-The install page will be available in the `.output/scout/` directory.
+The install page will be available in the `.output/volt/` directory.
 
 ### WXT Configuration
 

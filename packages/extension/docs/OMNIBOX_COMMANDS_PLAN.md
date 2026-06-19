@@ -20,7 +20,7 @@ Users should be able to type a keyword in Chrome’s address bar, then a short c
   - `ebay`: `https://www.ebay.com/sch/i.html?_nkw={query}&LH_Sold=1&LH_Complete=1&_dmd=2&rt=nc`
   - `pricecharting`: `https://www.pricecharting.com/search-products?q={query}&type=videogames`
 - **Shopify inventory search** is built dynamically in `entrypoints/newtab/NewTab.tsx`:
-  - Uses cached `chrome.storage.local` key: `scout_shopify_store`
+  - Uses cached `chrome.storage.local` key: `volt_shopify_store`
   - If missing, attempts to resolve store name by scanning open tabs (`admin.shopify.com/store/<name>` or `<name>.myshopify.com`)
   - Final URL format:
     - `https://admin.shopify.com/store/${storeName}/products?query=${query}&order=inventory_total%20desc`
@@ -64,7 +64,7 @@ Examples assume keyword `volt`:
 Update `wxt.config.ts`:
 
 - Add:
-  - `omnibox: { keyword: "scout" }` (or `"volt"`)
+  - `omnibox: { keyword: "volt" }` (or `"volt"`)
 
 Notes:
 
@@ -87,7 +87,7 @@ Implementation approach:
 - Build URLs:
   - eBay + PriceCharting: reuse templates from `SearchProviders.tsx` (copy the strings OR export a small shared helper in `src/lib/` to avoid duplication).
   - Shopify inventory:
-    - Try `chrome.storage.local.get("scout_shopify_store")`
+    - Try `chrome.storage.local.get("volt_shopify_store")`
     - If missing, `chrome.tabs.query({})` and extract store name from URLs (same regex approach as New Tab)
     - If still missing:
       - Suggest opening `https://admin.shopify.com/` (so the user signs in / lands on a store), and/or
@@ -120,11 +120,11 @@ If we want to avoid duplicating strings/logic across UI + background:
 ## Testing Checklist
 
 - **Manual smoke**:
-  - Type: `scout eb iphone 15` → navigates to eBay sold/completed results for “iphone 15”
-  - Type: `scout pc mario kart` → navigates to PriceCharting search
-  - Type: `scout inv airpods` with a known store cached → opens Shopify inventory products search
+  - Type: `volt eb iphone 15` → navigates to eBay sold/completed results for “iphone 15”
+  - Type: `volt pc mario kart` → navigates to PriceCharting search
+  - Type: `volt inv airpods` with a known store cached → opens Shopify inventory products search
 - **Shopify resolution**:
-  - With an existing tab on `admin.shopify.com/store/<store>`: `scout inv socks` resolves store and navigates
+  - With an existing tab on `admin.shopify.com/store/<store>`: `volt inv socks` resolves store and navigates
   - With no Shopify tabs and no cached store: suggestion/behavior is sensible (opens Shopify Admin or instructs user)
 - **Tab disposition**:
   - Enter vs Cmd+Enter behavior (foreground/background) works as expected.

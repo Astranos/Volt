@@ -329,12 +329,12 @@ Notification styles are defined in the `STYLES` constant (`shopify-guardrails.ts
 
 ```typescript
 const STYLES = `
-  .scout-notification-danger {
+  .volt-notification-danger {
     background-color: #fef2f2;  // Light red background
     border: 2px solid #ef4444;  // Red border
   }
 
-  .scout-notification-warning {
+  .volt-notification-warning {
     background-color: #fffbeb;  // Light orange background
     border: 2px solid #f59e0b;  // Orange border
   }
@@ -346,14 +346,14 @@ const STYLES = `
 Page border variants are defined in `updatePageOutline()`:
 
 ```typescript
-.scout-outline-danger {
+.volt-outline-danger {
   border-color: #ef4444;  // Red
-  animation: scout-outline-pulse-red 2s ease-in-out infinite;
+  animation: volt-outline-pulse-red 2s ease-in-out infinite;
 }
 
-.scout-outline-warning {
+.volt-outline-warning {
   border-color: #f59e0b;  // Orange
-  animation: scout-outline-pulse-orange 2s ease-in-out infinite;
+  animation: volt-outline-pulse-orange 2s ease-in-out infinite;
 }
 ```
 
@@ -397,7 +397,7 @@ Page border variants are defined in `updatePageOutline()`:
 1. Check if another extension is conflicting with styles
 2. Verify `document.body` exists when creating the outline
 3. Check browser console for CSS errors
-4. Increase `z-index` in `.scout-page-outline` style
+4. Increase `z-index` in `.volt-page-outline` style
 
 ## Testing
 
@@ -430,13 +430,13 @@ The `examples/shopify.html` file contains sample Shopify metafield HTML:
 Enable verbose logging by checking browser console for:
 
 ```
-[Scout Shopify Guardrails] Initializing Shopify Guardrails
-[Scout Shopify Guardrails] Found condition container
-[Scout Shopify Guardrails] ✓ Found Condition field: Used
-[Scout Shopify Guardrails] ✓ Found eBay Condition field: 3000 ID: 3000
-[Scout Shopify Guardrails] === Checking conditions ===
-[Scout Shopify Guardrails] ✓ Condition check result: {...}
-[Scout Shopify Guardrails] 🔄 Detected Condition field change: childList
+[Volt Shopify Guardrails] Initializing Shopify Guardrails
+[Volt Shopify Guardrails] Found condition container
+[Volt Shopify Guardrails] ✓ Found Condition field: Used
+[Volt Shopify Guardrails] ✓ Found eBay Condition field: 3000 ID: 3000
+[Volt Shopify Guardrails] === Checking conditions ===
+[Volt Shopify Guardrails] ✓ Condition check result: {...}
+[Volt Shopify Guardrails] 🔄 Detected Condition field change: childList
 ```
 
 ## Performance Considerations

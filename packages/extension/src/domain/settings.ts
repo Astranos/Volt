@@ -23,7 +23,7 @@ export const DEFAULT_SETTINGS: CmdkSettings = {
   ],
   enabledSearchProviders: {
     google: true,
-    scout: true,
+    volt: true,
     amazon: true,
     bestbuy: true,
     ebay: true,
@@ -80,6 +80,11 @@ export function mergeSettings(stored?: Partial<CmdkSettings>): CmdkSettings {
 
   const customRates = migrateDefaultTopOfferRates(stored.topOffers?.customRates);
 
+  const enabledSearchProviders = {
+    ...DEFAULT_SETTINGS.enabledSearchProviders,
+    ...(stored.enabledSearchProviders || {}),
+  };
+
   return {
     ...DEFAULT_SETTINGS,
     ...stored,
@@ -88,10 +93,7 @@ export function mergeSettings(stored?: Partial<CmdkSettings>): CmdkSettings {
       ...(stored.enabledSources || {}),
     },
     sourceOrder: mergedSourceOrder,
-    enabledSearchProviders: {
-      ...DEFAULT_SETTINGS.enabledSearchProviders,
-      ...(stored.enabledSearchProviders || {}),
-    },
+    enabledSearchProviders,
     customSearchProviders: stored.customSearchProviders
       ? [...stored.customSearchProviders]
       : [...DEFAULT_SETTINGS.customSearchProviders],

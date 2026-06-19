@@ -50,6 +50,9 @@ final class ScannerStore {
         connection.onSessionReady = { [weak self] message in
             self?.applySessionReady(message)
         }
+        connection.onResultReceived = { [weak self] receipt in
+            self?.applyResultReceived(receipt)
+        }
         return connection
     }()
     @ObservationIgnored let signaling = ScannerSignalingClient()
@@ -342,6 +345,29 @@ final class ScannerStore {
             guard let value else { return false }
             return !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         } ?? nil
+    }
+
+    func applyResultReceived(_ receipt: ScannerProtocol.ResultReceived) {
+        guard let id = UUID(uuidString: receipt.resultId),
+              let index = results.firstIndex(where: { $0.id == id })
+        else {
+            return
+        }
+
+        if receipt.insertedIntoCursor == false {
+            results[index].deliveryState = .failed
+            statusText = "Chrome received text"
+            targetHint = "Chrome saved it, but no focused cursor target was available."
+            return
+        }
+
+        results[index].deliveryState = receipt.savedToResults ? .sent : .failed
+        if receipt.insertedIntoCursor == true {
+            statusText = results[index].kind == .barcode ? "Barcode inserted" : "Text inserted"
+            if let cursorLabel = receipt.cursorTarget?.label, !cursorLabel.isEmpty {
+                targetHint = "Inserted into \(cursorLabel)."
+            }
+        }
     }
 
 }

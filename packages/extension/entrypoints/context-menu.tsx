@@ -44,7 +44,7 @@ export default defineContentScript({
 
     const log = (...args) => {
       try {
-        console.log("[Scout CtxMenu]", ...args);
+        console.log("[Volt CtxMenu]", ...args);
       } catch (_) {}
     };
 
@@ -107,7 +107,7 @@ export default defineContentScript({
 
         activePopup = window.open(
           url,
-          "scout_search_popup",
+          "volt_search_popup",
           `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
         );
         activePopupOpenedAt = Date.now();
@@ -709,7 +709,7 @@ export default defineContentScript({
 
     const styles = () => `
       :host{all:initial}
-      .scout-cm-root{position:fixed;inset:0;z-index:2147483647}
+      .volt-cm-root{position:fixed;inset:0;z-index:2147483647}
       .overlay{position:fixed;inset:0;background:transparent}
       .menu{position:absolute;min-width:240px;max-width:320px;background:#fff;color:#111827;border:1px solid #e5e7eb;border-radius:10px;box-shadow:0 20px 45px rgba(0,0,0,.18);overflow:hidden;font-family:ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif}
       .hdr{padding:8px 12px;border-bottom:1px solid #f3f4f6;font:600 12px/1 ui-sans-serif, system-ui, -apple-system;color:#6b7280;background:#fafafa;display:flex;justify-content:space-between;align-items:center}
@@ -755,7 +755,7 @@ export default defineContentScript({
       const style = document.createElement("style");
       style.textContent = styles();
       rootEl = document.createElement("div");
-      rootEl.className = "scout-cm-root";
+      rootEl.className = "volt-cm-root";
       shadow.appendChild(style);
       shadow.appendChild(rootEl);
       document.documentElement.appendChild(host);

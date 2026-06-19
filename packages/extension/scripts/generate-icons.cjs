@@ -2,19 +2,19 @@ const fs = require("fs");
 const path = require("path");
 const sharp = require("sharp");
 
-// Read the scout.svg file
-const scoutSVGPath = path.join(__dirname, "../public/assets/icons/scout.svg");
+// Read the volt.svg file
+const scoutSVGPath = path.join(__dirname, "../public/assets/icons/volt.svg");
 const scoutSVGContent = fs.readFileSync(scoutSVGPath, "utf8");
 
-// Extract path elements from scout.svg and format them properly
+// Extract path elements from volt.svg and format them properly
 const pathMatches = scoutSVGContent.match(/<path[^>]*>/g);
 const scoutPaths = pathMatches
   ? pathMatches.map((p) => "    " + p.replace(/\/>/g, "/>")).join("\n")
   : "";
 
-// Create SVG with outlined scout icon on transparent background
+// Create SVG with outlined volt icon on transparent background
 // The original viewBox is "0 0 400 400" so we'll scale appropriately
-function createScoutSVG(size) {
+function createVoltSVG(size) {
   const scale = size / 400; // Scale from 400x400 viewBox to icon size (no padding)
 
   return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">
@@ -38,11 +38,11 @@ async function generateIcons() {
     fs.mkdirSync(iconsDir, { recursive: true });
   }
 
-  console.log("Generating PNG icons with outlined green scout...");
+  console.log("Generating PNG icons with outlined green volt...");
 
   // Generate PNG files from SVG
   for (const size of sizes) {
-    const svgContent = createScoutSVG(size);
+    const svgContent = createVoltSVG(size);
     const pngPath = path.join(iconsDir, `icon${size}.png`);
 
     await sharp(Buffer.from(svgContent))
@@ -55,10 +55,10 @@ async function generateIcons() {
 
   // Create brand SVG for use in popup/sidepanel
   const brandSize = 128;
-  const brandSVG = createScoutSVG(brandSize);
+  const brandSVG = createVoltSVG(brandSize);
   const brandPath = path.join(
     __dirname,
-    "../public/assets/images/scout-brand.svg"
+    "../public/assets/images/volt-brand.svg"
   );
   fs.writeFileSync(brandPath, brandSVG);
   console.log(`✓ Created ${brandPath}`);

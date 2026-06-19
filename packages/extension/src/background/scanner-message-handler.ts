@@ -33,7 +33,7 @@ type ScannerMessageHandlerOptions = {
     target: unknown,
     sender: MessageSender | null
   ) => Promise<void>;
-  insertScannerText: (text: string, options?: ScannerTextInsertOptions) => Promise<void>;
+  insertScannerText: (text: string, options?: ScannerTextInsertOptions) => Promise<boolean>;
   openMobileScannerPairingPopup: (mode: string | null, state: unknown) => Promise<void>;
   resetMobileScannerActionPopup: () => Promise<void>;
 };
@@ -297,22 +297,25 @@ export function createScannerMessageHandler({
     }
   }
 
-  function handleScannerScan(message: Record<string, unknown>) {
+  async function handleScannerScan(message: Record<string, unknown>) {
     const scan = normalizeScannerMessage(message?.scan);
-    if (!scan) return;
+    if (!scan) return { success: false, insertedIntoCursor: false };
     if (shouldPersistScannerScan(scan)) {
       persistScannerScan(scan);
       broadcastScannerMessage({ action: "scannerScan", scan });
     }
 
     if (shouldInsertScannerMessage(scan)) {
-      void insertScannerText(scan.barcode, {
+      const insertedIntoCursor = await insertScannerText(scan.barcode, {
         dictationPhase: scan.dictationPhase,
         dictationSessionId: scan.dictationSessionId,
         format: scan.format,
         kind: scan.kind,
       });
+      return { success: true, insertedIntoCursor };
     }
+
+    return { success: true, insertedIntoCursor: false };
   }
 
   async function handleScannerPhoto(message: Record<string, unknown>) {
@@ -399,8 +402,7 @@ export function createScannerMessageHandler({
         sendResponse({ success: true });
         return true;
       case "scannerOffscreenScan":
-        handleScannerScan(message);
-        sendResponse({ success: true });
+        handleScannerScan(message).then(sendResponse);
         return true;
       case "scannerOffscreenPhoto":
         handleScannerPhoto(message).then(sendResponse);

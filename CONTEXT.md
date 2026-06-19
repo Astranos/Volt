@@ -1,6 +1,6 @@
-# Scout Context
+# Volt Context
 
-Scout is a Chrome extension and companion web app for resale workflows.
+Volt is a Chrome extension and companion web app for resale workflows.
 
 ## Current Mobile Scanner Direction
 

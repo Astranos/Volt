@@ -864,10 +864,10 @@ export function CMDKPalette({
                 case "quickLinks":
                   return (
                     <React.Fragment key="quickLinks">
-                      {/* Scout Links Loading Skeleton */}
+                      {/* Volt Links Loading Skeleton */}
                       {csvLinksLoading && (
                         <Command.Group
-                          heading="Scout Links"
+                          heading="Volt Links"
                           className="cmdk-group"
                         >
                           {[1, 2, 3].map((i) => (
@@ -884,7 +884,7 @@ export function CMDKPalette({
                         </Command.Group>
                       )}
 
-                      {/* Scout Links - sorted alphabetically by category */}
+                      {/* Volt Links - sorted alphabetically by category */}
                       {!csvLinksLoading &&
                         sortedCategories.map((category) => (
                           <Command.Group

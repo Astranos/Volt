@@ -679,7 +679,7 @@ export default defineBackground({
                 target: { tabId, allFrames: true },
                 func: () =>
                   window.postMessage(
-                    { source: "scout", action: "showControllerModal" },
+                    { source: "volt", action: "showControllerModal" },
                     "*"
                   ),
               });
@@ -742,10 +742,10 @@ export default defineBackground({
 
         // Save item to localStorage via storage.local (will be synced to sidepanel)
         chrome.storage.local.get(
-          { scout_pricecharting_pending_items: [] },
+          { volt_pricecharting_pending_items: [] },
           (result) => {
-            const pendingItems = Array.isArray(result.scout_pricecharting_pending_items)
-              ? result.scout_pricecharting_pending_items
+            const pendingItems = Array.isArray(result.volt_pricecharting_pending_items)
+              ? result.volt_pricecharting_pending_items
               : [];
             pendingItems.push(sanitizedItem);
             if (pendingItems.length > MAX_PENDING_PC_ITEMS) {
@@ -755,7 +755,7 @@ export default defineBackground({
               );
             }
             chrome.storage.local.set(
-              { scout_pricecharting_pending_items: pendingItems },
+              { volt_pricecharting_pending_items: pendingItems },
               () => {
                 log("Item saved to pending queue");
               }
@@ -1350,7 +1350,7 @@ export default defineBackground({
                     target: { tabId },
                     func: () => {
                       console.log(
-                        "%c[Scout] Debug Tools Activated",
+                        "%c[Volt] Debug Tools Activated",
                         "color: #00ff00; font-size: 16px; font-weight: bold;"
                       );
                       console.log(
@@ -1611,8 +1611,8 @@ export default defineBackground({
       switch (tool) {
         case "upc-search":
           return "/tools/upc-search";
-        case "scout":
-          return "/tools/scout";
+        case "volt":
+          return "/tools/volt";
         case "settings":
           return "/tools/settings";
         case "help":
@@ -1753,7 +1753,7 @@ export default defineBackground({
           toolsPassword: "",
         },
         (cfg) => {
-          const baseUrl = "https://scout-extension.vercel.app";
+          const baseUrl = "https://volt-extension.vercel.app";
           const path = toolToPath(tool);
           let url = `${baseUrl}${path}${
             path.includes("?") ? "&" : "?"
@@ -1825,7 +1825,7 @@ export default defineBackground({
           toolsPassword: "",
         },
         (cfg) => {
-          const baseUrl = "https://scout-extension.vercel.app";
+          const baseUrl = "https://volt-extension.vercel.app";
           const path = toolToPath(tool);
           let url = `${baseUrl}${path}${
             path.includes("?") ? "&" : "?"

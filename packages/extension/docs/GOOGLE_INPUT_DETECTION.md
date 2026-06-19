@@ -109,10 +109,10 @@ When Google inputs are detected, the system provides two visual indicators:
 Detected Google inputs are highlighted with an orange border:
 
 ```css
-.scout-google-input-warning {
+.volt-google-input-warning {
   border: 2px solid #f59e0b !important;
   box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.1) !important;
-  animation: scout-pulse-orange 2s ease-in-out infinite;
+  animation: volt-pulse-orange 2s ease-in-out infinite;
 }
 ```
 
@@ -256,7 +256,7 @@ Here's an example of the HTML structure that the detection system targets:
                           class="_ReadField_123bh_9 _ReadField--no-badge-padding_123bh_19"
                         >
                           <span
-                            class="scout-upc-highlight"
+                            class="volt-upc-highlight"
                             data-upc="196548430222"
                             title="Click to copy UPC: 196548430222"
                             >196548430222</span
@@ -296,7 +296,7 @@ The mutation observer uses debouncing (300ms delay) to avoid excessive calls and
 
 ## Testing
 
-A test script is available at `../scout/test-google-inputs.js` that can be used to verify the detection functionality:
+A test script is available at `../volt/test-google-inputs.js` that can be used to verify the detection functionality:
 
 1. Navigate to a Shopify product admin page
 2. Open the browser console

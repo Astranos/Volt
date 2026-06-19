@@ -5,6 +5,7 @@ import Foundation
 final class ScannerWebRTCConnection: NSObject {
     var onStatusChange: ((ScannerConnectionStatus) -> Void)?
     var onSessionReady: ((ScannerProtocol.SessionReady) -> Void)?
+    var onResultReceived: ((ScannerProtocol.ResultReceived) -> Void)?
 
     private let contributorId: String
     private let signaling = ScannerSignalingClient()
@@ -184,6 +185,10 @@ final class ScannerWebRTCConnection: NSObject {
         if let sessionReady = ScannerProtocol.parseSessionReady(rawValue) {
             onSessionReady?(sessionReady)
             onStatusChange?(.connected)
+            return
+        }
+        if let resultReceived = ScannerProtocol.parseResultReceived(rawValue) {
+            onResultReceived?(resultReceived)
         }
     }
 }
