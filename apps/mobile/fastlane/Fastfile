@@ -1,3 +1,5 @@
+require "shellwords"
+
 default_platform(:ios)
 opt_out_usage
 
@@ -42,7 +44,20 @@ def app_store_connect_api_key_from_env
   app_store_connect_api_key(options)
 end
 
+def xcode_auth_xcargs_from_env
+  return nil unless ENV["APP_STORE_CONNECT_API_KEY_PATH"] && ENV["APP_STORE_CONNECT_API_KEY_ID"] && ENV["APP_STORE_CONNECT_ISSUER_ID"]
+
+  [
+    "-allowProvisioningUpdates",
+    "-authenticationKeyPath #{Shellwords.escape(ENV.fetch('APP_STORE_CONNECT_API_KEY_PATH'))}",
+    "-authenticationKeyID #{Shellwords.escape(ENV.fetch('APP_STORE_CONNECT_API_KEY_ID'))}",
+    "-authenticationKeyIssuerID #{Shellwords.escape(ENV.fetch('APP_STORE_CONNECT_ISSUER_ID'))}"
+  ].join(" ")
+end
+
 def build_app_store_ipa
+  xcode_auth_xcargs = xcode_auth_xcargs_from_env
+
   build_app(
     workspace: WORKSPACE,
     scheme: APP_SCHEME,
@@ -51,6 +66,7 @@ def build_app_store_ipa
     export_method: "app-store",
     output_directory: BUILD_OUTPUT_DIRECTORY,
     output_name: "Volt.ipa",
+    export_xcargs: xcode_auth_xcargs,
     export_options: {
       signingStyle: "automatic",
       teamID: TEAM_ID

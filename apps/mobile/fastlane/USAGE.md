@@ -54,7 +54,7 @@ pnpm --filter @volt/mobile ios:fastlane:build
 
 ## TestFlight
 
-The beta lane builds a Release archive with `build_app` and uploads the generated `.ipa` with `upload_to_testflight`.
+The beta lane builds a Release archive with `build_app` and uploads the generated `.ipa` with `upload_to_testflight`. When `APP_STORE_CONNECT_API_KEY_PATH`, `APP_STORE_CONNECT_API_KEY_ID`, and `APP_STORE_CONNECT_ISSUER_ID` are present, the archive export also passes those credentials to Xcode with `-allowProvisioningUpdates` so automatic signing can create or update App Store distribution assets for the configured team.
 
 ```sh
 APP_STORE_CONNECT_API_KEY_ID=... \
@@ -76,7 +76,7 @@ Supported environment variables:
 
 - `APP_STORE_CONNECT_API_KEY_ID`: App Store Connect API key ID.
 - `APP_STORE_CONNECT_ISSUER_ID`: App Store Connect issuer ID.
-- `APP_STORE_CONNECT_API_KEY_PATH`: local path to the `.p8` key file.
+- `APP_STORE_CONNECT_API_KEY_PATH`: local path to the `.p8` key file. Required if Xcode should use the API key for automatic provisioning updates during export.
 - `APP_STORE_CONNECT_API_KEY_CONTENT`: raw `.p8` contents when a file path is not used.
 - `APP_STORE_CONNECT_API_KEY_CONTENT_BASE64`: set to `true` when `APP_STORE_CONNECT_API_KEY_CONTENT` is base64 encoded.
 - `APP_STORE_CONNECT_API_KEY_DURATION`: token duration in seconds. Defaults to `1200`.
@@ -105,7 +105,7 @@ apps/mobile/fastlane/screenshots/
 
 ## Signing Scope
 
-This setup intentionally does not add `match`. The Xcode project currently uses automatic signing for team `GB5SPLUARQ`, and the lanes preserve that first. `match` would require choosing encrypted certificate/profile storage, deciding who can access those signing assets, and rotating credentials through that storage. Add it later only after that team policy is explicit.
+This setup intentionally does not add `match`. The Xcode project currently uses automatic signing for team `GB5SPLUARQ`, and the lanes preserve that first. With a file-backed App Store Connect API key, fastlane lets Xcode perform automatic provisioning updates during export. `match` would require choosing encrypted certificate/profile storage, deciding who can access those signing assets, and rotating credentials through that storage. Add it later only after that team policy is explicit.
 
 For the beta lane to work, the local machine or CI runner still needs:
 
