@@ -53,19 +53,23 @@ struct ScannerCameraLayer: View {
     }
 
     private func updateBarcodeGuideRect(in proxy: GeometryProxy) {
-        guard guideVisible, store.activeMode == .barcode else {
+        guard store.activeMode == .barcode else {
             store.camera.updateBarcodeGuideRect(nil)
             store.camera.clearDetectedBarcode()
             return
         }
 
-        store.camera.updateBarcodeGuideRect(
-            CaptureGuideGeometry.guideRect(
-                for: .barcode,
-                in: proxy.size,
-                safeAreaInsets: proxy.safeAreaInsets
+        if guideVisible {
+            store.camera.updateBarcodeGuideRect(
+                CaptureGuideGeometry.guideRect(
+                    for: .barcode,
+                    in: proxy.size,
+                    safeAreaInsets: proxy.safeAreaInsets
+                )
             )
-        )
+        } else {
+            store.camera.updateBarcodeGuideRect(nil)
+        }
     }
 
     private var cameraPreview: some View {
@@ -95,7 +99,8 @@ struct ScannerCameraLayer: View {
             }
         }
         .overlay(alignment: .topLeading) {
-            if store.activeMode == .barcode,
+            if guideVisible,
+               store.activeMode == .barcode,
                let barcodeBounds = store.camera.detectedBarcodeBounds,
                barcodeBounds.width > 0,
                barcodeBounds.height > 0 {

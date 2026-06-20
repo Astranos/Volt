@@ -171,6 +171,7 @@ private struct ScanChromeQRAccessory: View {
 struct PairingScanSessionView: View {
     @Environment(ScannerStore.self) private var store
     @Binding var isPresented: Bool
+    @State private var previousBarcodeRecognitionMode: BarcodeRecognitionMode?
 
     var body: some View {
         ZStack {
@@ -189,11 +190,17 @@ struct PairingScanSessionView: View {
             )
         }
         .onAppear {
+            previousBarcodeRecognitionMode = store.camera.barcodeRecognitionMode
             store.activeMode = .barcode
+            store.camera.updateBarcodeRecognitionMode(.qr)
             store.camera.clearDetectedBarcode()
             store.camera.start()
         }
         .onDisappear {
+            if let previousBarcodeRecognitionMode {
+                store.camera.updateBarcodeRecognitionMode(previousBarcodeRecognitionMode)
+                self.previousBarcodeRecognitionMode = nil
+            }
             store.camera.stop()
             if store.activeMode == .barcode {
                 store.activeMode = .ocr

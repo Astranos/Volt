@@ -552,13 +552,7 @@ export function encodeBarcodeMessage(input: EncodeBarcodeMessageInput): string {
 
 export function scannerControlDuplicateKey(message: ScannerControlMessage) {
   if (message.type === "capture_result") {
-    return [
-      message.type,
-      message.resultKind,
-      message.format ?? "",
-      message.value.trim().toLowerCase(),
-      message.contributorId ?? "",
-    ].join(":");
+    return [message.type, message.resultId].join(":");
   }
   if (message.type === "dictation") {
     return [message.type, message.dictationSessionId, message.phase, message.text ?? ""].join(":");

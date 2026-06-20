@@ -74,9 +74,14 @@ test("scanner protocol validates scanner-control capture messages and dedupe key
     contributorId,
   };
   assert.deepEqual(stripUndefined(decodeScannerControlMessage(encodeScannerControlMessage(result))), result);
+  assert.equal(scannerControlDuplicateKey(result), "capture_result:result_1");
   assert.equal(
-    scannerControlDuplicateKey(result),
-    "capture_result:barcode:qr:abc-123:device_1234",
+    scannerControlDuplicateKey({
+      ...result,
+      messageId: "m3",
+      resultId: "result_2",
+    }),
+    "capture_result:result_2",
   );
 });
 

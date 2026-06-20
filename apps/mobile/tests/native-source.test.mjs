@@ -251,8 +251,18 @@ test("native barcode reticles expire when detections stop refreshing", () => {
 });
 
 test("native barcode reticle only renders in barcode capture mode", () => {
-  assert.match(scannerCameraLayerSwiftSource, /guard guideVisible, store\.activeMode == \.barcode else \{\s*store\.camera\.updateBarcodeGuideRect\(nil\)\s*store\.camera\.clearDetectedBarcode\(\)/);
-  assert.match(scannerCameraLayerSwiftSource, /if store\.activeMode == \.barcode,\s*let barcodeBounds = store\.camera\.detectedBarcodeBounds/);
+  assert.match(scannerCameraLayerSwiftSource, /guard store\.activeMode == \.barcode else \{\s*store\.camera\.updateBarcodeGuideRect\(nil\)\s*store\.camera\.clearDetectedBarcode\(\)/);
+  assert.match(scannerCameraLayerSwiftSource, /if guideVisible \{\s*store\.camera\.updateBarcodeGuideRect\(/);
+  assert.match(scannerCameraLayerSwiftSource, /else \{\s*store\.camera\.updateBarcodeGuideRect\(nil\)\s*\}/);
+  assert.match(scannerCameraLayerSwiftSource, /if guideVisible,\s*store\.activeMode == \.barcode,\s*let barcodeBounds = store\.camera\.detectedBarcodeBounds/);
+});
+
+test("native pairing QR scan temporarily enables QR recognition without clearing hidden-guide detections", () => {
+  assert.match(pairingSessionsViewSwiftSource, /@State private var previousBarcodeRecognitionMode: BarcodeRecognitionMode\?/);
+  assert.match(pairingSessionsViewSwiftSource, /previousBarcodeRecognitionMode = store\.camera\.barcodeRecognitionMode/);
+  assert.match(pairingSessionsViewSwiftSource, /store\.camera\.updateBarcodeRecognitionMode\(\.qr\)/);
+  assert.match(pairingSessionsViewSwiftSource, /if let previousBarcodeRecognitionMode \{\s*store\.camera\.updateBarcodeRecognitionMode\(previousBarcodeRecognitionMode\)/);
+  assert.match(pairingSessionsViewSwiftSource, /ScannerCameraLayer\(guideVisible: false\)/);
 });
 
 test("native camera resets capture sessions to display 1x zoom", () => {
