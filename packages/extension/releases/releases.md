@@ -89,4 +89,4 @@ Changes:
 
 ## Legacy Releases
 
-Older release notes before the current Volt/mobile-scanner architecture may describe removed features such as controller testing, old toolbar behavior, or old zip names. Treat them as historical context, not live documentation.
+Older release notes before the current Volt/mobile-scanner architecture may describe removed legacy behavior, old toolbar behavior, or old zip names. Treat them as historical context, not live documentation.

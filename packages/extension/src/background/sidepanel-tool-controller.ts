@@ -1,19 +1,31 @@
-// @ts-nocheck
-/* global chrome */
-
 type PanelState = {
   open: boolean;
   tool: string | null;
 };
 
+type SidePanelWithClose = typeof chrome.sidePanel & {
+  close?: (options: { windowId: number }, callback?: () => void) => void;
+};
+type SidePanelSetOptions = Parameters<typeof chrome.sidePanel.setOptions>[0] & {
+  windowId?: number;
+};
+
+type SidepanelChromeApi = Pick<typeof chrome, "runtime" | "storage" | "tabs"> & {
+  sidePanel: SidePanelWithClose;
+};
+
 type SidepanelToolControllerOptions = {
-  chromeApi: any;
-  log: (...args: any[]) => void;
+  chromeApi: SidepanelChromeApi;
+  log: (...args: unknown[]) => void;
   getFallbackTabIds: () => Array<number | null | undefined>;
   panelPath?: string;
 };
 
 const SIDE_PANEL_OPEN_COOLDOWN_MS = 900;
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
 
 export function createSidepanelToolController({
   chromeApi,
@@ -49,6 +61,7 @@ export function createSidepanelToolController({
     try {
       chromeApi.tabs.query({ windowId }, (tabs) => {
         tabs.forEach((tab) => {
+          if (typeof tab.id !== "number") return;
           try {
             chromeApi.tabs.sendMessage(
               tab.id,
@@ -61,18 +74,18 @@ export function createSidepanelToolController({
               }
             );
           } catch (e) {
-            log("sidePanelStateSync sendMessage error", e?.message || e, tab.id);
+            log("sidePanelStateSync sendMessage error", errorMessage(e), tab.id);
           }
         });
       });
     } catch (e) {
-      log("sidePanelStateSync broadcast error", e?.message || e, windowId);
+      log("sidePanelStateSync broadcast error", errorMessage(e), windowId);
     }
   }
 
   function configurePanelForWindow(windowId: number) {
     try {
-      const options: any = {
+      const options: SidePanelSetOptions = {
         enabled: true,
         path: panelPath,
       };
@@ -81,7 +94,7 @@ export function createSidepanelToolController({
       }
       chromeApi.sidePanel.setOptions(options);
     } catch (setErr) {
-      log("sidePanel setOptions error", setErr?.message || setErr);
+      log("sidePanel setOptions error", errorMessage(setErr));
     }
   }
 
@@ -92,7 +105,7 @@ export function createSidepanelToolController({
         sidePanelUrl: null,
       });
     } catch (storageErr) {
-      log("Failed to set chrome storage for tool:", storageErr?.message || storageErr);
+      log("Failed to set chrome storage for tool:", errorMessage(storageErr));
     }
   }
 
@@ -129,7 +142,8 @@ export function createSidepanelToolController({
   function toggleForWindow(windowId: unknown, tool?: string, mode = "toggle") {
     if (!tool) {
       chromeApi.storage.local.get({ sidePanelTool: "mobile-scanner" }, (res) => {
-        toggleForWindow(windowId, res.sidePanelTool || "mobile-scanner", mode);
+        const storedTool = typeof res.sidePanelTool === "string" ? res.sidePanelTool : "mobile-scanner";
+        toggleForWindow(windowId, storedTool, mode);
       });
       return;
     }
@@ -140,7 +154,7 @@ export function createSidepanelToolController({
 
       if (plan.mode === "close") {
         try {
-          chromeApi.sidePanel.close({ windowId: id }, () => {
+          chromeApi.sidePanel.close?.({ windowId: id }, () => {
             const err = chromeApi.runtime.lastError;
             if (err) {
               log("sidePanel close error", err.message);
@@ -150,7 +164,7 @@ export function createSidepanelToolController({
             }
           });
         } catch (closeErr) {
-          log("sidePanel close error", closeErr?.message || closeErr);
+          log("sidePanel close error", errorMessage(closeErr));
         }
         return;
       }
@@ -175,7 +189,7 @@ export function createSidepanelToolController({
 
       try {
         openInFlight.add(id);
-        chromeApi.sidePanel.open({ windowId: id }, () => {
+        chromeApi.sidePanel.open?.({ windowId: id }, () => {
           openInFlight.delete(id);
           lastOpenAt.set(id, Date.now());
           const err = chromeApi.runtime.lastError;
@@ -189,7 +203,7 @@ export function createSidepanelToolController({
         setTimeout(() => openInFlight.delete(id), 2000);
       } catch (openErr) {
         openInFlight.delete(id);
-        log("sidePanel open error", openErr?.message || openErr);
+        log("sidePanel open error", errorMessage(openErr));
       }
     };
 
@@ -214,9 +228,9 @@ export function createSidepanelToolController({
     const fallbackTabId = getFallbackTabIds().map(asValidId).find((id) => id !== null);
     const resolvedTabId = asValidId(tabId) ?? fallbackTabId;
 
-    if (resolvedTabId !== null) {
+    if (typeof resolvedTabId === "number") {
       chromeApi.tabs.get(resolvedTabId, (tab) => {
-        if (tab?.windowId) {
+        if (typeof tab?.windowId === "number") {
           toggleForWindow(tab.windowId, tool, mode);
         } else {
           log("toggleSidePanelForTab: could not get windowId for tab", resolvedTabId);

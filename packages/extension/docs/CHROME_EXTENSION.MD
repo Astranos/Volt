@@ -8,7 +8,7 @@ Key Features:
 - **Click To Copy UPC Codes** - Automatically detects and highlights UPC codes on any webpage, allowing for instant one-click copying to your clipboard.
 - **Price Charting Lot Tool** - Easily add, manage, and create video game lots via PriceCharting.
 - **Volt Tab (new tab override)** - Quickly get to any anything you need when opening a new tab.
-- **eBay Summary** - Get a quick summary when viewing search results on eBay.
+- **Sold Listing Warning** - Warns when eBay search results are not sold/completed listings and offers a one-click switch.
 - **Shopify Buttons** - Instantly check market pricing for items when viewing in Shopify.
 - **Offer Calculator** - Automated buyout offer calculations based on projected sell prices with support for custom rate profiles.
 - **Mobile Scanner** - Pairs with the Volt iPhone app for WebRTC barcode, OCR, dictation, and photo capture.

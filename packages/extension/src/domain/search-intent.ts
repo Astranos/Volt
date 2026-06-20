@@ -3,7 +3,7 @@ import {
   buildSearchUrl,
   buildShopifyInventoryUrl,
   getUrlFromInput,
-} from "./search";
+} from "./search.ts";
 
 export type NewTabSearchMode =
   | "google"
@@ -35,6 +35,15 @@ const SEARCH_PREFIXES: Record<string, NewTabSearchMode> = {
   e: "ebay",
   s: "shopify",
 };
+
+export function getSearchPrefixMode(input: string): NewTabSearchMode | null {
+  const normalized = input.trim().toLowerCase();
+  if (!/^[a-z]$/.test(normalized)) {
+    return null;
+  }
+
+  return SEARCH_PREFIXES[normalized] ?? null;
+}
 
 export function parseSearchPrefix(input: string): ParsedSearchInput {
   const match = input.match(/^([a-z])\s+(.+)$/i);

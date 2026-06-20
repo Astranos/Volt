@@ -10,7 +10,7 @@ import {
   Upload,
 } from "lucide-react";
 import QRCode from "qrcode";
-import type { ScannerConnectionStatus } from "../../../../scanner-protocol/src";
+import type { ScannerConnectionStatus } from "@volt/scanner-protocol";
 import { cn } from "../../lib/utils";
 import {
   IconChip,

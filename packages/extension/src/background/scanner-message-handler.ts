@@ -9,6 +9,11 @@ import {
   shouldPersistScannerScan,
 } from "../domain/mobile-scanner-results";
 import { shouldInsertScannerMessage } from "../domain/scanner-message";
+import type {
+  RuntimeMessage,
+  ScannerOffscreenRuntimeMessage,
+  ScannerRuntimeMessage,
+} from "./messages";
 import { normalizeMobileCaptureMode } from "./mobile-capture-targets";
 import type { ScannerTextInsertOptions } from "./scanner-text-insertion";
 
@@ -26,7 +31,7 @@ type MessageSender = Parameters<typeof chrome.runtime.onMessage.addListener>[0] 
 type ScannerMessageHandlerOptions = {
   chromeApi: typeof chrome;
   log: LogFn;
-  sendScannerOffscreenMessage: (message: unknown) => Promise<unknown>;
+  sendScannerOffscreenMessage: (message: ScannerOffscreenRuntimeMessage) => Promise<unknown>;
   getScannerPushSubscription: () => Promise<PushSubscriptionJSON | null>;
   getMobileCaptureTarget: () => Promise<unknown>;
   updateMobileCaptureTarget: (
@@ -43,6 +48,22 @@ const MOBILE_PHOTOS_STORAGE_KEY = "volt.mobilePhotos.photos";
 const MOBILE_SCANNER_MAX_SCANS = 100;
 const MOBILE_PHOTOS_MAX_PHOTOS = 80;
 const MOBILE_PHOTOS_MAX_PERSISTED_BYTES = 6_000_000;
+
+type ScannerIdentityUpdatedMessage = Extract<
+  ScannerRuntimeMessage,
+  { action: "scannerUpdateExtensionIdentity" }
+>;
+type ScannerStartMessage = Extract<
+  ScannerRuntimeMessage,
+  { action: "scannerStart" | "scannerStartForMode" }
+>;
+type OpenMobileCaptureMessage = {
+  mode?: unknown;
+  surface?: string;
+  target?: unknown;
+};
+type ScannerScanMessage = Extract<ScannerRuntimeMessage, { action: "scannerOffscreenScan" }>;
+type ScannerPhotoMessage = Extract<ScannerRuntimeMessage, { action: "scannerOffscreenPhoto" }>;
 
 type ScannerScan = {
   id: string;
@@ -190,7 +211,7 @@ export function createScannerMessageHandler({
     } catch (_) {}
   }
 
-  async function handleScannerIdentityUpdated(message: Record<string, unknown>, sendResponse: SendResponse) {
+  async function handleScannerIdentityUpdated(message: ScannerIdentityUpdatedMessage, sendResponse: SendResponse) {
     try {
       const state = await sendScannerOffscreenMessage({
         action: "scannerOffscreenUpdateExtensionIdentity",
@@ -202,7 +223,7 @@ export function createScannerMessageHandler({
     }
   }
 
-  async function handleScannerStart(message: Record<string, unknown>, sendResponse: SendResponse) {
+  async function handleScannerStart(message: ScannerStartMessage, sendResponse: SendResponse) {
     try {
       const state = await sendScannerOffscreenMessage({
         action: "scannerOffscreenStart",
@@ -217,7 +238,7 @@ export function createScannerMessageHandler({
   }
 
   async function handleOpenMobileCapture(
-    message: Record<string, unknown>,
+    message: OpenMobileCaptureMessage,
     sender: MessageSender,
     sendResponse: SendResponse
   ) {
@@ -297,7 +318,7 @@ export function createScannerMessageHandler({
     }
   }
 
-  async function handleScannerScan(message: Record<string, unknown>) {
+  async function handleScannerScan(message: ScannerScanMessage) {
     const scan = normalizeScannerMessage(message?.scan);
     if (!scan) return { success: false, insertedIntoCursor: false };
     if (shouldPersistScannerScan(scan)) {
@@ -318,7 +339,7 @@ export function createScannerMessageHandler({
     return { success: true, insertedIntoCursor: false };
   }
 
-  async function handleScannerPhoto(message: Record<string, unknown>) {
+  async function handleScannerPhoto(message: ScannerPhotoMessage) {
     const photo = normalizeMobilePhoto(message?.photo);
     if (!photo) return { success: false, error: "invalid_photo" };
 
@@ -347,11 +368,12 @@ export function createScannerMessageHandler({
   }
 
   function handleScannerMessage(
-    rawMessage: unknown,
+    message: RuntimeMessage,
     sender: MessageSender,
     sendResponse: SendResponse
   ) {
-    const message = rawMessage as Record<string, unknown>;
+    if (!("action" in message)) return false;
+
     switch (message?.action) {
       case "scannerStart":
       case "scannerStartForMode":
@@ -361,7 +383,7 @@ export function createScannerMessageHandler({
         void handleOpenMobileCapture(message, sender, sendResponse);
         return true;
       case "openMobileCapturePopup":
-        void handleOpenMobileCapture({ ...message, surface: "popup" }, sender, sendResponse);
+        void handleOpenMobileCapture({ mode: message.mode, target: message.target, surface: "popup" }, sender, sendResponse);
         return true;
       case "scannerDisconnect":
         void handleScannerDisconnect(sendResponse);

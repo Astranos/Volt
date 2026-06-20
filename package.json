@@ -8,6 +8,7 @@
     "dev:web": "pnpm --filter @volt/web dev",
     "test:convex": "vitest run convex",
     "test": "pnpm --filter @volt/scanner-protocol test && pnpm test:convex && pnpm --filter @volt/extension test:scanner && pnpm --filter @volt/mobile test",
+    "check:repo-health": "node scripts/check-repo-health.mjs",
     "build:extension": "pnpm --filter @volt/extension build",
     "build:mobile": "pnpm --filter @volt/mobile build:ios",
     "build:web": "pnpm --filter @volt/web build",
@@ -16,6 +17,7 @@
   },
   "packageManager": "pnpm@10.14.0+sha512.ad27a79641b49c3e481a16a805baa71817a04bbe06a38d17e60e2eaee83f6a146c6a688125f5792e48dd5ba30e7da52a5cda4c3992b9ccf333f9ce223af84748",
   "dependencies": {
+    "@volt/scanner-protocol": "workspace:*",
     "convex": "^1.41.0",
     "web-push": "^3.6.7"
   },

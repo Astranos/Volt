@@ -1,6 +1,11 @@
-// @ts-nocheck
-/* global chrome */
-declare const chrome: any;
+import {
+  parseTabRuntimeMessage,
+  type RuntimeMessage,
+  type RuntimeMessageSender,
+  type RuntimeSendResponse,
+  type TabInfo,
+  type ClosedTabInfo,
+} from "./messages";
 
 export const TAB_ACTIONS = {
   getTabs: "GET_TABS",
@@ -17,15 +22,18 @@ export interface TabMessageHandlerState {
 }
 
 export function handleTabMessage(
-  message: any,
-  sender: any,
-  sendResponse: (response?: any) => void,
+  message: RuntimeMessage,
+  sender: RuntimeMessageSender,
+  sendResponse: RuntimeSendResponse,
   state: TabMessageHandlerState
 ): boolean {
-  switch (message?.action) {
+  const tabMessage = parseTabRuntimeMessage(message);
+  if (!tabMessage) return false;
+
+  switch (tabMessage.action) {
     case TAB_ACTIONS.getTabs:
       chrome.tabs.query({}, (tabs) => {
-        const tabInfo = tabs.map((tab) => ({
+        const tabInfo: TabInfo[] = tabs.map((tab) => ({
           id: tab.id,
           title: tab.title,
           url: tab.url,
@@ -40,7 +48,7 @@ export function handleTabMessage(
     case TAB_ACTIONS.getClosedTabs:
       try {
         chrome.sessions.getRecentlyClosed({ maxResults: 25 }, (sessions) => {
-          const closedTabs = sessions
+          const closedTabs: ClosedTabInfo[] = sessions
             .filter((session) => session.tab)
             .map((session) => ({
               id: session.tab?.sessionId,
@@ -59,26 +67,26 @@ export function handleTabMessage(
       return true;
 
     case TAB_ACTIONS.restoreTab:
-      if (!message.sessionId) {
+      if (!tabMessage.sessionId) {
         sendResponse({ success: false, error: "No sessionId provided" });
         return true;
       }
 
-      chrome.sessions.restore(message.sessionId, () => {
-        if (message.closeTabId !== undefined) {
-          chrome.tabs.remove(message.closeTabId);
+      chrome.sessions.restore(tabMessage.sessionId, () => {
+        if (tabMessage.closeTabId !== undefined) {
+          chrome.tabs.remove(tabMessage.closeTabId);
         }
         sendResponse({ success: true });
       });
       return true;
 
     case TAB_ACTIONS.switchTab:
-      if (!message.tabId) {
+      if (!tabMessage.tabId) {
         sendResponse({ success: false, error: "No tabId provided" });
         return true;
       }
 
-      chrome.tabs.update(message.tabId, { active: true }, (tab) => {
+      chrome.tabs.update(tabMessage.tabId, { active: true }, (tab) => {
         if (tab) {
           chrome.windows.update(tab.windowId, { focused: true });
         }
@@ -91,18 +99,18 @@ export function handleTabMessage(
       return true;
 
     case TAB_ACTIONS.openTab:
-      if (!message.url) {
+      if (!tabMessage.url) {
         sendResponse({ success: false, error: "No URL provided" });
         return true;
       }
 
-      chrome.tabs.create({ url: message.url }, (tab) => {
+      chrome.tabs.create({ url: tabMessage.url }, (tab) => {
         sendResponse({ success: true, tabId: tab?.id });
       });
       return true;
 
     case TAB_ACTIONS.updateCurrentTab:
-      if (!message.url || !sender.tab?.id) {
+      if (!tabMessage.url || !sender.tab?.id) {
         sendResponse({
           success: false,
           error: "No URL or tab ID provided",
@@ -110,7 +118,7 @@ export function handleTabMessage(
         return true;
       }
 
-      chrome.tabs.update(sender.tab.id, { url: message.url }, (tab) => {
+      chrome.tabs.update(sender.tab.id, { url: tabMessage.url }, (tab) => {
         sendResponse({ success: true, tabId: tab?.id });
       });
       return true;

@@ -350,12 +350,57 @@ body {
   color: rgba(245, 245, 244, 0.84);
 }
 
+.mobile-scanner-card,
+.mobile-scanner-action,
+.mobile-scanner-icon,
+.mobile-scanner-inset {
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  background: rgba(255, 255, 255, 0.045);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.055);
+}
+
+.mobile-scanner-card {
+  border-radius: 18px;
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease,
+    transform 180ms ease;
+}
+
+.mobile-scanner-action,
+.mobile-scanner-icon,
+.mobile-scanner-inset {
+  border-radius: 14px;
+}
+
+.mobile-scanner-action:hover,
+.mobile-scanner-mini-action:hover {
+  background: rgba(255, 255, 255, 0.075);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.mobile-scanner-mini-action {
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  background: rgba(255, 255, 255, 0.055);
+  color: rgba(245, 245, 244, 0.82);
+}
+
+.mobile-scanner-toast {
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  background: rgba(28, 25, 23, 0.96);
+  color: rgba(255, 255, 255, 0.94);
+}
+
 @media (prefers-color-scheme: light) {
   .top-offers-input-card,
   .top-offers-card,
   .top-offers-value-button,
   .top-offers-input-shell,
-  .top-offers-secondary-action {
+  .top-offers-secondary-action,
+  .mobile-scanner-card,
+  .mobile-scanner-action,
+  .mobile-scanner-icon,
+  .mobile-scanner-inset {
     border-color: rgba(15, 23, 42, 0.1);
     background: rgba(255, 255, 255, 0.72);
     box-shadow:
@@ -365,13 +410,27 @@ body {
 
   .top-offers-card:hover,
   .top-offers-value-button:hover,
-  .top-offers-secondary-action:hover {
+  .top-offers-secondary-action:hover,
+  .mobile-scanner-action:hover,
+  .mobile-scanner-mini-action:hover {
     background: rgba(255, 255, 255, 0.88);
     border-color: rgba(15, 23, 42, 0.14);
   }
 
-  .top-offers-secondary-action {
+  .top-offers-secondary-action,
+  .mobile-scanner-mini-action {
     color: #44403c;
+  }
+
+  .mobile-scanner-mini-action {
+    border-color: rgba(15, 23, 42, 0.1);
+    background: rgba(255, 255, 255, 0.72);
+  }
+
+  .mobile-scanner-toast {
+    border-color: rgba(15, 23, 42, 0.1);
+    background: rgba(255, 255, 255, 0.94);
+    color: #1c1917;
   }
 }
 

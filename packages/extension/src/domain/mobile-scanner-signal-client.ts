@@ -2,7 +2,7 @@ import {
   PHOTO_TRANSFER_CHANNEL_LABEL,
   SCANNER_APP_PAIR_URL,
   SCANNER_CONTROL_CHANNEL_LABEL,
-} from "../../../scanner-protocol/src";
+} from "@volt/scanner-protocol";
 import type { DurablePairingCredential, WebPushSubscriptionRecord } from "./mobile-scanner-identity";
 import { EXTENSION_SCANNER_SIGNAL_URL } from "./mobile-scanner-signal-url";
 import type { SessionTarget } from "./mobile-scanner-session-types";

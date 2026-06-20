@@ -2,6 +2,8 @@
 
 This repo should bias toward small canonical modules and explicit boundaries. Avoid adding feature-specific branches to large entrypoints or sidepanel components when the behavior can live in a focused domain helper, controller, or component.
 
+Use the remediation workflow in [`docs/maintainability-remediation-workflow.md`](./maintainability-remediation-workflow.md) to fix the current repo-wide audit findings in dependency order.
+
 ## Current Decomposition Targets
 
 The following files are already over the 1,000-line review threshold. New feature work should not make them larger without first extracting a focused module or component:

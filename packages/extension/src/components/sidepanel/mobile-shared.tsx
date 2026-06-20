@@ -8,7 +8,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { cn } from "../../lib/utils";
-import type { ScannerConnectionStatus } from "../../../../scanner-protocol/src";
+import type { ScannerConnectionStatus } from "@volt/scanner-protocol";
 
 type StatusTone = "default" | "active" | "success" | "warning" | "error";
 

@@ -55,7 +55,7 @@ export interface CmdkSettings {
   newTabOverride?: {
     enabled?: boolean;
   };
-  ebaySummary?: {
+  soldListingWarning?: {
     enabled?: boolean;
   };
   upcHighlighter?: {

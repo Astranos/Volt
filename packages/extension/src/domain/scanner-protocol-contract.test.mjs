@@ -13,7 +13,7 @@ import {
   isScannerProtocolVersionSupported,
   isScannerSessionId,
   scannerControlDuplicateKey,
-} from "../../../scanner-protocol/src/index.ts";
+} from "@volt/scanner-protocol";
 
 const now = "2026-06-03T12:00:00.000Z";
 const sessionId = "session_1234";

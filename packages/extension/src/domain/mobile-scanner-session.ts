@@ -7,7 +7,7 @@ import {
   isScannerSessionId,
   scannerControlDuplicateKey,
   type ScannerControlMessage,
-} from "../../../scanner-protocol/src";
+} from "@volt/scanner-protocol";
 import {
   type DurablePairingCredential,
   type ExtensionIdentity,

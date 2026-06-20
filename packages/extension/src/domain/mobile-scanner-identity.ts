@@ -1,4 +1,4 @@
-import { isScannerSessionId } from "../../../scanner-protocol/src";
+import { isScannerSessionId } from "@volt/scanner-protocol";
 import { createId } from "./mobile-scanner-ids";
 
 export const MOBILE_SCANNER_IDENTITY_STORAGE_KEYS = {

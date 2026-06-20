@@ -22,6 +22,8 @@ type OfferResult = {
   maxValue: number;
 };
 
+const PROJECTION_AMOUNT_STORAGE_KEY = "volt.topOffers.projectionAmount";
+
 function OfferResultCard({
   offer,
   copied,
@@ -47,12 +49,9 @@ function OfferResultCard({
 
   return (
     <div className="top-offers-card top-offers-result-card min-w-0 select-none">
-      <div className="mb-3 flex items-center justify-between gap-3">
+      <div className="mb-3 flex items-center gap-3">
         <div className="min-w-0 truncate text-sm font-bold text-stone-900 dark:text-stone-50">
           {offer.label}
-        </div>
-        <div className="shrink-0 rounded-full bg-green-500/12 px-2 py-0.5 text-[11px] font-bold text-green-700 dark:text-green-300">
-          Cash guide
         </div>
       </div>
       <div className="grid min-w-0 grid-cols-2 gap-2">
@@ -114,6 +113,15 @@ function TopOfferCalculator() {
           setTopOffersSettings(result.cmdkSettings.topOffers);
         }
       });
+      chrome.storage.local.get(
+        [PROJECTION_AMOUNT_STORAGE_KEY],
+        (result: Record<string, unknown>) => {
+          const storedProjection = result[PROJECTION_AMOUNT_STORAGE_KEY];
+          if (typeof storedProjection === "string") {
+            handleProjectionChange(storedProjection, { persist: false });
+          }
+        }
+      );
 
       // Listen for changes
       const handleStorageChange = (
@@ -148,9 +156,17 @@ function TopOfferCalculator() {
     setTimeout(() => setCopied(null), 1500);
   };
 
-  const handleProjectionChange = (value: string) => {
+  const handleProjectionChange = (
+    value: string,
+    options: { persist?: boolean } = {}
+  ) => {
     const numericValue = value.replace(/[^0-9.-]/g, "");
     setProjectionAmount(numericValue);
+    if (options.persist !== false && typeof chrome !== "undefined" && chrome.storage) {
+      chrome.storage.local.set({
+        [PROJECTION_AMOUNT_STORAGE_KEY]: numericValue,
+      });
+    }
 
     // Auto-calculate when input changes
     const projection = parseFloat(numericValue) || 0;

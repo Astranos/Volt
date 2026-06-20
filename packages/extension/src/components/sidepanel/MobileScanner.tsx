@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { FolderOpen } from "lucide-react";
-import type { ScannerConnectionStatus } from "../../../../scanner-protocol/src";
+import type { ScannerConnectionStatus } from "@volt/scanner-protocol";
 import {
   saveMobileScannerPhoto,
   saveMobileScannerScan,
@@ -266,7 +266,7 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
           <button
             type="button"
             onClick={openVoltDownloadsFolder}
-            className="sidepanel-results-folder liquid-glass-soft inline-flex h-9 w-9 items-center justify-center rounded-full text-stone-600 transition hover:text-stone-900 active:scale-95 dark:text-stone-300 dark:hover:text-stone-50"
+            className="mobile-scanner-action sidepanel-results-folder inline-flex h-9 w-9 items-center justify-center rounded-full text-stone-600 transition hover:text-stone-900 active:scale-95 dark:text-stone-300 dark:hover:text-stone-50"
             aria-label="Open Volt Photos folder"
           >
             <FolderOpen className="h-4 w-4" />

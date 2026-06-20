@@ -18,7 +18,7 @@ The extension manifest version lives in [wxt.config.ts](wxt.config.ts), and the 
 - Custom new-tab page with closed tabs, quick links, bookmarks, and search modes.
 - Unified sidepanel with Mobile Scanner and Offer Calculator.
 - Mobile scanner pairing over WebRTC through Convex-backed signaling.
-- eBay sold-listing summary content script.
+- eBay sold/completed-listing warning content script.
 - Shopify admin quick-action buttons and product search helpers.
 - UPC highlighter with click-to-copy behavior.
 - Context-menu searches for selected text, UPCs, MPNs, eBay sold listings, and PriceCharting.
@@ -79,7 +79,7 @@ packages/extension/
 ├── entrypoints/
 │   ├── background.ts
 │   ├── context-menu.tsx
-│   ├── ebay-summary.tsx
+│   ├── ebay-sold-listing-warning.tsx
 │   ├── install/
 │   ├── mobile-scanner-popup/
 │   ├── newtab/

@@ -34,7 +34,7 @@ export default defineConfig({
       },
       {
         matches: ["https://www.ebay.com/sch/*"],
-        js: ["ebay-summary.js"],
+        js: ["ebay-sold-listing-warning.js"],
         run_at: "document_idle",
       },
       {
@@ -92,10 +92,6 @@ export default defineConfig({
     },
     options_page: "options.html",
     web_accessible_resources: [
-      {
-        resources: ["install.html"],
-        matches: ["<all_urls>"],
-      },
       {
         resources: ["assets/images/*"],
         matches: ["<all_urls>"],
