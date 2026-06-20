@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@volt/scanner-protocol':
+        specifier: workspace:*
+        version: link:packages/scanner-protocol
       convex:
         specifier: ^1.41.0
         version: 1.41.0(react@19.2.3)
@@ -126,6 +129,9 @@ importers:
       '@radix-ui/react-tooltip':
         specifier: ^1.2.8
         version: 1.2.8(@types/react-dom@19.2.3(@types/react@19.2.9))(@types/react@19.2.9)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+      '@volt/scanner-protocol':
+        specifier: workspace:*
+        version: link:../scanner-protocol
       autoprefixer:
         specifier: ^10.4.21
         version: 10.4.23(postcss@8.5.6)

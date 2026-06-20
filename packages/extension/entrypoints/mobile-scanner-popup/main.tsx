@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { CheckCircle2, Copy, Loader2, Pencil, RefreshCw, Smartphone, X } from "lucide-react";
 import QRCode from "qrcode";
-import type { ScannerConnectionStatus } from "../../../scanner-protocol/src";
+import type { ScannerConnectionStatus } from "@volt/scanner-protocol";
 import {
   PrimaryActionButton,
   SecondaryActionButton,

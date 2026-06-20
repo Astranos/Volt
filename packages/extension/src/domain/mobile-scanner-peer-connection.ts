@@ -3,7 +3,7 @@ import {
   SCANNER_CONTROL_CHANNEL_LABEL,
   SCANNER_ICE_GATHERING_TIMEOUT_MS,
   SCANNER_ICE_SERVERS,
-} from "../../../scanner-protocol/src";
+} from "@volt/scanner-protocol";
 import type { JoinWindow } from "./mobile-scanner-signal-client";
 import type { MobileScannerSignalClient } from "./mobile-scanner-signal-client";
 

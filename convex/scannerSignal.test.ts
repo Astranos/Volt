@@ -12,7 +12,7 @@ describe("scanner signal Convex lifecycle", () => {
     const t = convexTest(schema, modules);
     const origin = "https://adorable-hornet-19.convex.site";
 
-    const created = await t.mutation(internal.scannerSignal.createJoinToken, {
+    const created = await t.mutation(internal.scannerSignal.joinTokens.createJoinToken, {
       token: "abcdefghijklmnopqrstuvwxyzABCDEF123456",
       sessionId: "global-session-1",
       browserClaim: "browser-secret",
@@ -28,7 +28,7 @@ describe("scanner signal Convex lifecycle", () => {
       joinUrl: `${origin}/api/signal/join-token/abcdefghijklmnopqrstuvwxyzABCDEF123456`,
     });
 
-    const attempt = await t.mutation(internal.scannerSignal.createJoinAttempt, {
+    const attempt = await t.mutation(internal.scannerSignal.joinAttempts.createJoinAttempt, {
       token: created.token,
       attemptId: "join_attempt_12345",
       contributorId: "device_1234",
@@ -47,7 +47,7 @@ describe("scanner signal Convex lifecycle", () => {
     });
 
     const offer = JSON.stringify({ type: "offer", sdp: "offer-sdp" });
-    const postedOffer = await t.mutation(internal.scannerSignal.postJoinOffer, {
+    const postedOffer = await t.mutation(internal.scannerSignal.joinAttempts.postJoinOffer, {
       token: created.token,
       attemptId: "join_attempt_12345",
       browserClaim: "browser-secret",
@@ -55,21 +55,21 @@ describe("scanner signal Convex lifecycle", () => {
     });
     expect(postedOffer.body.attempt.status).toBe("offer_posted");
 
-    const fetchedOffer = await t.mutation(internal.scannerSignal.getJoinOffer, {
+    const fetchedOffer = await t.mutation(internal.scannerSignal.joinAttempts.getJoinOffer, {
       token: created.token,
       attemptId: "join_attempt_12345",
     });
     expect(fetchedOffer.body.offer).toBe(offer);
 
     const answer = JSON.stringify({ type: "answer", sdp: "answer-sdp" });
-    const postedAnswer = await t.mutation(internal.scannerSignal.postJoinAnswer, {
+    const postedAnswer = await t.mutation(internal.scannerSignal.joinAttempts.postJoinAnswer, {
       token: created.token,
       attemptId: "join_attempt_12345",
       answer,
     });
     expect(postedAnswer.body.attempt.status).toBe("answer_posted");
 
-    const fetchedAnswer = await t.mutation(internal.scannerSignal.getJoinAnswer, {
+    const fetchedAnswer = await t.mutation(internal.scannerSignal.joinAttempts.getJoinAnswer, {
       token: created.token,
       attemptId: "join_attempt_12345",
       browserClaim: "browser-secret",
@@ -80,7 +80,7 @@ describe("scanner signal Convex lifecycle", () => {
     const pairingSecret = "abcdefghijklmnopqrstuvwxyzABCDEFGH123456";
     const browserSessionId = "global-session-reconnect";
 
-    const pairing = await t.mutation(internal.scannerSignal.registerPairing, {
+    const pairing = await t.mutation(internal.scannerSignal.pairings.registerPairing, {
       pairingId,
       pairingSecret,
       browserSessionId,
@@ -90,7 +90,7 @@ describe("scanner signal Convex lifecycle", () => {
     });
     expect(pairing.body).toMatchObject({ pairingId, browserSessionId, displayName: "Chrome on Mac" });
 
-    const reconnect = await t.mutation(internal.scannerSignal.createReconnectRequest, {
+    const reconnect = await t.mutation(internal.scannerSignal.reconnectRequests.createReconnectRequest, {
       pairingId,
       pairingSecret,
       requestId: "reconnect_request_12345",
@@ -100,7 +100,7 @@ describe("scanner signal Convex lifecycle", () => {
       status: "waiting_for_browser",
     });
 
-    const pending = await t.mutation(internal.scannerSignal.getPendingReconnectRequests, {
+    const pending = await t.mutation(internal.scannerSignal.reconnectRequests.getPendingReconnectRequests, {
       browserSessionId,
     });
     expect(pending.body.requests).toEqual([
@@ -111,7 +111,7 @@ describe("scanner signal Convex lifecycle", () => {
       }),
     ]);
 
-    const joinWindow = await t.mutation(internal.scannerSignal.postReconnectJoinWindow, {
+    const joinWindow = await t.mutation(internal.scannerSignal.reconnectRequests.postReconnectJoinWindow, {
       pairingId,
       requestId: "reconnect_request_12345",
       pairingSecret,
@@ -126,7 +126,7 @@ describe("scanner signal Convex lifecycle", () => {
       sessionId: browserSessionId,
     });
 
-    const shortLived = await t.mutation(internal.scannerSignal.createJoinToken, {
+    const shortLived = await t.mutation(internal.scannerSignal.joinTokens.createJoinToken, {
       token: "shortlivedtokenabcdefghijklmnopqrstuvwxyz",
       sessionId: "global-session-expiring",
       ttlMs: 1,
@@ -136,10 +136,10 @@ describe("scanner signal Convex lifecycle", () => {
     expect(shortLived.token).toBe("shortlivedtokenabcdefghijklmnopqrstuvwxyz");
 
     await new Promise((resolve) => setTimeout(resolve, 5));
-    const cleanup = await t.mutation(internal.scannerSignal.cleanupExpired, {});
+    const cleanup = await t.mutation(internal.scannerSignal.cleanup.cleanupExpired, {});
     expect(cleanup.deleted).toBeGreaterThan(0);
 
-    const expiredLookup = await t.mutation(internal.scannerSignal.getJoinTokenStatus, {
+    const expiredLookup = await t.mutation(internal.scannerSignal.joinTokens.getJoinTokenStatus, {
       token: "shortlivedtokenabcdefghijklmnopqrstuvwxyz",
     });
     expect(expiredLookup).toEqual({ statusCode: 404, body: { error: "Join token not found" } });

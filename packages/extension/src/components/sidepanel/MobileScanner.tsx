@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { FolderOpen } from "lucide-react";
-import type { ScannerConnectionStatus } from "../../../../scanner-protocol/src";
+import type { ScannerConnectionStatus } from "@volt/scanner-protocol";
 import {
   saveMobileScannerPhoto,
   saveMobileScannerScan,

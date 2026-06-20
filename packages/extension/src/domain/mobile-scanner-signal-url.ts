@@ -1,4 +1,4 @@
-import { SCANNER_SIGNAL_URL_DEV, SCANNER_SIGNAL_URL_PROD } from "../../../scanner-protocol/src";
+import { SCANNER_SIGNAL_URL_DEV, SCANNER_SIGNAL_URL_PROD } from "@volt/scanner-protocol";
 
 const configuredSignalUrl = import.meta.env.WXT_SCANNER_SIGNAL_URL;
 

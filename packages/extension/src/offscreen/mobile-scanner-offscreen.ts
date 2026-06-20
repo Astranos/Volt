@@ -1,7 +1,7 @@
 import type {
   CaptureMode,
   ScannerConnectionStatus,
-} from "../../../scanner-protocol/src";
+} from "@volt/scanner-protocol";
 import {
   MobileScannerSession,
   type BarcodeMessage,

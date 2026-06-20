@@ -5,7 +5,7 @@ import {
   type PhotoTransferMessage,
   type PhotoTransferStartMessage,
   type ScannerControlMessage,
-} from "../../../scanner-protocol/src";
+} from "@volt/scanner-protocol";
 import { createMessageId } from "./mobile-scanner-ids";
 import type { PeerSession } from "./mobile-scanner-peer-connection";
 import type { PhotoMessage } from "./mobile-scanner-session-types";

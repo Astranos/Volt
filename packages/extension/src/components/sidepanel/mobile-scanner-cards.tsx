@@ -18,7 +18,7 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import type { ScannerConnectionStatus } from "../../../../scanner-protocol/src";
+import type { ScannerConnectionStatus } from "@volt/scanner-protocol";
 import type { HydratedMobileScannerPhotoResult } from "../../domain/mobile-scanner-results";
 import { cn } from "../../lib/utils";
 import { ConnectionPill } from "./mobile-shared";
