@@ -1,0 +1,115 @@
+require "shellwords"
+
+default_platform(:ios)
+opt_out_usage
+
+WORKSPACE = "ios/Volt.xcworkspace"
+APP_SCHEME = "Volt"
+SCREENSHOT_SCHEME = "VoltScreenshots"
+APP_IDENTIFIER = ENV.fetch("VOLT_IOS_BUNDLE_ID", "com.volt.mobile")
+TEAM_ID = ENV.fetch("VOLT_APPLE_TEAM_ID", "GB5SPLUARQ")
+BUILD_OUTPUT_DIRECTORY = "build/fastlane"
+
+def truthy_env?(name, default = false)
+  value = ENV[name]
+  return default if value.nil? || value.empty?
+
+  %w[1 true yes on].include?(value.downcase)
+end
+
+def app_store_connect_api_key_from_env
+  missing = []
+  missing << "APP_STORE_CONNECT_API_KEY_ID" unless ENV["APP_STORE_CONNECT_API_KEY_ID"]
+  missing << "APP_STORE_CONNECT_ISSUER_ID" unless ENV["APP_STORE_CONNECT_ISSUER_ID"]
+
+  key_path = ENV["APP_STORE_CONNECT_API_KEY_PATH"]
+  key_content = ENV["APP_STORE_CONNECT_API_KEY_CONTENT"]
+  missing << "APP_STORE_CONNECT_API_KEY_PATH or APP_STORE_CONNECT_API_KEY_CONTENT" unless key_path || key_content
+
+  UI.user_error!("Missing App Store Connect API key environment: #{missing.join(', ')}") unless missing.empty?
+
+  options = {
+    key_id: ENV.fetch("APP_STORE_CONNECT_API_KEY_ID"),
+    issuer_id: ENV.fetch("APP_STORE_CONNECT_ISSUER_ID"),
+    duration: ENV.fetch("APP_STORE_CONNECT_API_KEY_DURATION", "1200").to_i
+  }
+
+  if key_path
+    options[:key_filepath] = key_path
+  else
+    options[:key_content] = key_content
+    options[:is_key_content_base64] = truthy_env?("APP_STORE_CONNECT_API_KEY_CONTENT_BASE64")
+  end
+
+  app_store_connect_api_key(options)
+end
+
+def xcode_auth_xcargs_from_env
+  return nil unless ENV["APP_STORE_CONNECT_API_KEY_PATH"] && ENV["APP_STORE_CONNECT_API_KEY_ID"] && ENV["APP_STORE_CONNECT_ISSUER_ID"]
+
+  [
+    "-allowProvisioningUpdates",
+    "-authenticationKeyPath #{Shellwords.escape(ENV.fetch('APP_STORE_CONNECT_API_KEY_PATH'))}",
+    "-authenticationKeyID #{Shellwords.escape(ENV.fetch('APP_STORE_CONNECT_API_KEY_ID'))}",
+    "-authenticationKeyIssuerID #{Shellwords.escape(ENV.fetch('APP_STORE_CONNECT_ISSUER_ID'))}"
+  ].join(" ")
+end
+
+def build_app_store_ipa
+  xcode_auth_xcargs = xcode_auth_xcargs_from_env
+
+  build_app(
+    workspace: WORKSPACE,
+    scheme: APP_SCHEME,
+    configuration: "Release",
+    clean: true,
+    export_method: "app-store",
+    output_directory: BUILD_OUTPUT_DIRECTORY,
+    output_name: "Volt.ipa",
+    export_xcargs: xcode_auth_xcargs,
+    export_options: {
+      signingStyle: "automatic",
+      teamID: TEAM_ID
+    }
+  )
+end
+
+platform :ios do
+  desc "Validate the local iOS app with the repo-preferred simulator build command"
+  lane :build do
+    sh("pnpm --filter @volt/mobile build:ios")
+  end
+
+  desc "Create a signed App Store IPA with fastlane build_app/gym"
+  lane :archive do
+    build_app_store_ipa
+  end
+
+  desc "Build an App Store IPA and upload it to TestFlight"
+  lane :beta do |options|
+    api_key = app_store_connect_api_key_from_env
+    ipa_path = build_app_store_ipa
+
+    upload_to_testflight(
+      api_key: api_key,
+      app_identifier: APP_IDENTIFIER,
+      ipa: ipa_path,
+      changelog: options[:changelog] || ENV["TESTFLIGHT_CHANGELOG"],
+      skip_waiting_for_build_processing: truthy_env?("FASTLANE_SKIP_WAITING_FOR_BUILD_PROCESSING", true)
+    )
+  end
+
+  desc "Capture App Store screenshots with the VoltScreenshots UI-test scheme"
+  lane :screenshots do
+    snapshot(
+      workspace: WORKSPACE,
+      scheme: SCREENSHOT_SCHEME,
+      output_directory: "fastlane/screenshots",
+      clear_previous_screenshots: true,
+      stop_after_first_error: true,
+      devices: ["iPhone 17 Pro Max"],
+      languages: ["en-US"],
+      launch_arguments: ["--ui-testing", "--screenshots"]
+    )
+  end
+end

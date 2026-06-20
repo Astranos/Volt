@@ -44,7 +44,19 @@
 		B10000000000000000000009 /* CaptureDocks.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000009 /* CaptureDocks.swift */; };
 		B1000000000000000000000A /* OcrReviewLayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1000000000000000000000A /* OcrReviewLayer.swift */; };
 		B1000000000000000000000B /* CaptureGuideOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1000000000000000000000B /* CaptureGuideOverlay.swift */; };
+		B20000000000000000000001 /* SnapshotHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000001 /* SnapshotHelper.swift */; };
+		B20000000000000000000002 /* VoltScreenshots.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000002 /* VoltScreenshots.swift */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		D20000000000000000000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = I00000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = F00000000000000000000001;
+			remoteInfo = Volt;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		577C15430A95FB0B1F9D6C10 /* Pods-Volt.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Volt.debug.xcconfig"; path = "Target Support Files/Pods-Volt/Pods-Volt.debug.xcconfig"; sourceTree = "<group>"; };
@@ -88,6 +100,9 @@
 		C10000000000000000000009 /* CaptureDocks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureDocks.swift; sourceTree = "<group>"; };
 		C1000000000000000000000A /* OcrReviewLayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OcrReviewLayer.swift; sourceTree = "<group>"; };
 		C1000000000000000000000B /* CaptureGuideOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureGuideOverlay.swift; sourceTree = "<group>"; };
+		C20000000000000000000001 /* SnapshotHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapshotHelper.swift; sourceTree = "<group>"; };
+		C20000000000000000000002 /* VoltScreenshots.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoltScreenshots.swift; sourceTree = "<group>"; };
+		C20000000000000000000003 /* VoltScreenshots.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = VoltScreenshots.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C2FE1E81FC70D4D44558094E /* Pods-Volt.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Volt.release.xcconfig"; path = "Target Support Files/Pods-Volt/Pods-Volt.release.xcconfig"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -97,6 +112,13 @@
 			buildActionMask = 2147483647;
 			files = (
 				54EEE472295587B576FFFE34 /* libPods-Volt.a in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D20000000000000000000002 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -125,6 +147,7 @@
 			isa = PBXGroup;
 			children = (
 				E00000000000000000000003 /* Volt */,
+				E20000000000000000000001 /* VoltScreenshots */,
 				E00000000000000000000002 /* Products */,
 				9BA23944F6CEA1190A8C9A61 /* Pods */,
 				62DD079D976BDF3DEE28B67C /* Frameworks */,
@@ -135,6 +158,7 @@
 			isa = PBXGroup;
 			children = (
 				C00000000000000000000015 /* Volt.app */,
+				C20000000000000000000003 /* VoltScreenshots.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -216,6 +240,15 @@
 			path = Views;
 			sourceTree = "<group>";
 		};
+		E20000000000000000000001 /* VoltScreenshots */ = {
+			isa = PBXGroup;
+			children = (
+				C20000000000000000000001 /* SnapshotHelper.swift */,
+				C20000000000000000000002 /* VoltScreenshots.swift */,
+			);
+			path = VoltScreenshots;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -238,6 +271,24 @@
 			productReference = C00000000000000000000015 /* Volt.app */;
 			productType = "com.apple.product-type.application";
 		};
+		F20000000000000000000001 /* VoltScreenshots */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = J20000000000000000000003 /* Build configuration list for PBXNativeTarget "VoltScreenshots" */;
+			buildPhases = (
+				G20000000000000000000001 /* Sources */,
+				D20000000000000000000002 /* Frameworks */,
+				H20000000000000000000001 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				K20000000000000000000001 /* PBXTargetDependency */,
+			);
+			name = VoltScreenshots;
+			productName = VoltScreenshots;
+			productReference = C20000000000000000000003 /* VoltScreenshots.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -249,6 +300,10 @@
 				TargetAttributes = {
 					F00000000000000000000001 = {
 						CreatedOnToolsVersion = 26.5;
+					};
+					F20000000000000000000001 = {
+						CreatedOnToolsVersion = 26.5;
+						TestTargetID = F00000000000000000000001;
 					};
 				};
 			};
@@ -266,6 +321,7 @@
 			projectRoot = "";
 			targets = (
 				F00000000000000000000001 /* Volt */,
+				F20000000000000000000001 /* VoltScreenshots */,
 			);
 		};
 /* End PBXProject section */
@@ -279,6 +335,13 @@
 				B00000000000000000000010 /* SplashScreen.storyboard in Resources */,
 				B00000000000000000000011 /* PrivacyInfo.xcprivacy in Resources */,
 				B0000000000000000000001B /* volt.icon in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		H20000000000000000000001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -366,7 +429,24 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		G20000000000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B20000000000000000000001 /* SnapshotHelper.swift in Sources */,
+				B20000000000000000000002 /* VoltScreenshots.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		K20000000000000000000001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = F00000000000000000000001 /* Volt */;
+			targetProxy = D20000000000000000000001 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		J00000000000000000000002 /* Debug */ = {
@@ -378,7 +458,7 @@
 				CODE_SIGN_ENTITLEMENTS = Volt/Volt.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 36;
+				CURRENT_PROJECT_VERSION = 37;
 				DEVELOPMENT_TEAM = GB5SPLUARQ;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Volt/Info.plist;
@@ -407,7 +487,7 @@
 				CODE_SIGN_ENTITLEMENTS = Volt/Volt.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 36;
+				CURRENT_PROJECT_VERSION = 37;
 				DEVELOPMENT_TEAM = GB5SPLUARQ;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Volt/Info.plist;
@@ -424,6 +504,45 @@
 				TARGETED_DEVICE_FAMILY = "1,2";
 				VALIDATE_PRODUCT = YES;
 				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Release;
+		};
+		J20000000000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 37;
+				DEVELOPMENT_TEAM = GB5SPLUARQ;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = VoltScreenshots;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.volt.mobile.screenshots;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Volt;
+			};
+			name = Debug;
+		};
+		J20000000000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 37;
+				DEVELOPMENT_TEAM = GB5SPLUARQ;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = VoltScreenshots;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.volt.mobile.screenshots;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = Volt;
 			};
 			name = Release;
 		};
@@ -548,6 +667,15 @@
 			buildConfigurations = (
 				J00000000000000000000002 /* Debug */,
 				J00000000000000000000003 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		J20000000000000000000003 /* Build configuration list for PBXNativeTarget "VoltScreenshots" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				J20000000000000000000001 /* Debug */,
+				J20000000000000000000002 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

@@ -13,6 +13,13 @@
     "ios:sim:release": "node scripts/ios-build-install-launch.mjs --release",
     "ios:device": "node scripts/ios-build-install-launch.mjs --device",
     "ios:device:release": "node scripts/ios-build-install-launch.mjs --device --release",
+    "fastlane": "FASTLANE_SKIP_UPDATE_CHECK=1 BUNDLE_PATH=vendor/bundle bundle exec fastlane",
+    "fastlane:install": "BUNDLE_PATH=vendor/bundle bundle install",
+    "fastlane:lanes": "FASTLANE_SKIP_UPDATE_CHECK=1 BUNDLE_PATH=vendor/bundle bundle exec fastlane lanes",
+    "ios:fastlane:build": "FASTLANE_SKIP_UPDATE_CHECK=1 BUNDLE_PATH=vendor/bundle bundle exec fastlane ios build",
+    "ios:archive": "FASTLANE_SKIP_UPDATE_CHECK=1 BUNDLE_PATH=vendor/bundle bundle exec fastlane ios archive",
+    "ios:beta": "FASTLANE_SKIP_UPDATE_CHECK=1 BUNDLE_PATH=vendor/bundle bundle exec fastlane ios beta",
+    "ios:screenshots": "FASTLANE_SKIP_UPDATE_CHECK=1 BUNDLE_PATH=vendor/bundle bundle exec fastlane ios screenshots",
     "open:xcode": "open ios/Volt.xcodeproj",
     "test": "node --test tests/*.test.mjs"
   }

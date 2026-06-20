@@ -1,0 +1,5 @@
+app_identifier(ENV.fetch("VOLT_IOS_BUNDLE_ID", "com.volt.mobile"))
+team_id(ENV.fetch("VOLT_APPLE_TEAM_ID", "GB5SPLUARQ"))
+
+apple_id(ENV["FASTLANE_APPLE_ID"]) if ENV["FASTLANE_APPLE_ID"]
+itc_team_id(ENV["APP_STORE_CONNECT_TEAM_ID"]) if ENV["APP_STORE_CONNECT_TEAM_ID"]
