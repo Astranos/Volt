@@ -5,7 +5,11 @@
 # Xcode
 #
 build/
+build*/
 build-device-clean/
+DerivedData/
+*.xcresult
+*.xcarchive
 *.pbxuser
 !default.pbxuser
 *.mode1v3
@@ -17,7 +21,6 @@ build-device-clean/
 xcuserdata
 *.xccheckout
 *.moved-aside
-DerivedData
 *.hmap
 *.ipa
 *.xcuserstate
