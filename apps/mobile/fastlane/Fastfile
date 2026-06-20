@@ -74,6 +74,45 @@ def build_app_store_ipa
   )
 end
 
+def write_screenshot_report(output_directory)
+  output_path = File.expand_path(output_directory, File.expand_path("..", __dir__))
+  screenshots = Dir.glob(File.join(output_path, "**", "*.png")).sort
+  rows = screenshots.map do |path|
+    relative_path = path.delete_prefix("#{output_path}/")
+    escaped_path = relative_path.gsub(" ", "%20")
+    "<figure><a href=\"#{escaped_path}\"><img src=\"#{escaped_path}\" alt=\"#{File.basename(path)}\"></a><figcaption>#{relative_path}</figcaption></figure>"
+  end
+
+  FileUtils.mkdir_p(output_path)
+  File.write(
+    File.join(output_path, "screenshots.html"),
+    <<~HTML
+      <!doctype html>
+      <html lang="en">
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <title>Volt screenshots</title>
+          <style>
+            body { margin: 0; padding: 32px; background: #f6f7f8; color: #171717; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+            h1 { margin: 0 0 24px; font-size: 28px; font-weight: 700; }
+            .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 24px; align-items: start; }
+            figure { margin: 0; padding: 16px; background: white; border: 1px solid #ddd; border-radius: 8px; }
+            img { display: block; width: 100%; height: auto; border: 1px solid #eee; }
+            figcaption { margin-top: 12px; color: #555; font-size: 13px; overflow-wrap: anywhere; }
+          </style>
+        </head>
+        <body>
+          <h1>Volt screenshots</h1>
+          <main class="grid">
+            #{rows.join("\n        ")}
+          </main>
+        </body>
+      </html>
+    HTML
+  )
+end
+
 platform :ios do
   desc "Validate the local iOS app with the repo-preferred simulator build command"
   lane :build do
@@ -101,15 +140,19 @@ platform :ios do
 
   desc "Capture App Store screenshots with the VoltScreenshots UI-test scheme"
   lane :screenshots do
+    output_directory = "fastlane/screenshots"
+
     snapshot(
       workspace: WORKSPACE,
       scheme: SCREENSHOT_SCHEME,
-      output_directory: "fastlane/screenshots",
+      output_directory: output_directory,
       clear_previous_screenshots: true,
       stop_after_first_error: true,
       devices: ["iPhone 17 Pro Max"],
       languages: ["en-US"],
       launch_arguments: ["--ui-testing", "--screenshots"]
     )
+
+    write_screenshot_report(output_directory)
   end
 end
