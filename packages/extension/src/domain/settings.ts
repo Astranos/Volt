@@ -46,7 +46,7 @@ export const DEFAULT_SETTINGS: CmdkSettings = {
     enabled: true,
   },
   bookmarkFolderIds: [],
-  ebaySummary: {
+  soldListingWarning: {
     enabled: true,
   },
   upcHighlighter: {
@@ -108,9 +108,9 @@ export function mergeSettings(stored?: Partial<CmdkSettings>): CmdkSettings {
     bookmarkFolderIds: stored.bookmarkFolderIds
       ? [...stored.bookmarkFolderIds]
       : [...(DEFAULT_SETTINGS.bookmarkFolderIds || [])],
-    ebaySummary: {
-      ...(DEFAULT_SETTINGS.ebaySummary || {}),
-      ...(stored.ebaySummary || {}),
+    soldListingWarning: {
+      ...(DEFAULT_SETTINGS.soldListingWarning || {}),
+      ...(stored.soldListingWarning || {}),
     },
     upcHighlighter: {
       ...(DEFAULT_SETTINGS.upcHighlighter || {}),
@@ -167,7 +167,7 @@ export function structuredCloneSettings(settings: CmdkSettings): CmdkSettings {
     bookmarkFolderIds: [...(settings.bookmarkFolderIds || [])],
     shopifyButtons: { ...(settings.shopifyButtons || {}) },
     newTabOverride: { ...(settings.newTabOverride || {}) },
-    ebaySummary: { ...(settings.ebaySummary || {}) },
+    soldListingWarning: { ...(settings.soldListingWarning || {}) },
     upcHighlighter: { ...(settings.upcHighlighter || {}) },
     csvLinks: { ...(settings.csvLinks || {}) },
     contextMenu: { ...(settings.contextMenu || {}) },

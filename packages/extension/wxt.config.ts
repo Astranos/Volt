@@ -34,7 +34,7 @@ export default defineConfig({
       },
       {
         matches: ["https://www.ebay.com/sch/*"],
-        js: ["ebay-summary.js"],
+        js: ["ebay-sold-listing-warning.js"],
         run_at: "document_idle",
       },
       {

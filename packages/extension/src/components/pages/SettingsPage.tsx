@@ -2,16 +2,15 @@ import { useEffect, useState } from "react";
 import {
   Barcode,
   Bookmark,
+  Calculator,
   Check,
   Layers,
   Link2,
-  MapPin,
   Menu,
   MousePointerClick,
   ScanLine,
   Search as SearchIcon,
-  Shield,
-  TrendingUp,
+  BadgeAlert,
 } from "lucide-react";
 import { BookmarkFoldersSettings } from "@/src/components/settings/BookmarkFoldersSettings";
 import { CsvCacheSettings } from "@/src/components/settings/CsvCacheSettings";
@@ -25,12 +24,11 @@ const NAV_ITEMS = [
   { href: "#sources", icon: Layers, label: "Command Menu" },
   { href: "#bookmarks", icon: Bookmark, label: "Bookmarks" },
   { href: "#providers", icon: SearchIcon, label: "Search Providers" },
-  { href: "#guardrails", icon: Shield, label: "Shopify Guardrails" },
-  { href: "#ebay", icon: TrendingUp, label: "eBay Summary" },
+  { href: "#ebay", icon: BadgeAlert, label: "Sold Listing Warning" },
   { href: "#upc", icon: Barcode, label: "UPC Highlighter" },
   { href: "#contextmenu", icon: MousePointerClick, label: "Context Menu" },
   { href: "#csvlinks", icon: Link2, label: "Quick Links" },
-  { href: "#topoffers", icon: MapPin, label: "Offers" },
+  { href: "#topoffers", icon: Calculator, label: "Offer Calculator" },
 ];
 
 export default function SettingsPage() {

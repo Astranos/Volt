@@ -1,4 +1,4 @@
-#volt-ebay-summary {
+#volt-sold-listing-warning {
   position: fixed;
   top: 96px;
   right: 18px;
@@ -22,7 +22,7 @@
   -webkit-backdrop-filter: blur(18px);
 }
 
-#volt-ebay-summary::before {
+#volt-sold-listing-warning::before {
   content: "";
   position: absolute;
   inset: 0;
@@ -34,7 +34,7 @@
   );
 }
 
-#volt-ebay-summary::after {
+#volt-sold-listing-warning::after {
   content: "";
   position: absolute;
   left: 0;
@@ -43,15 +43,15 @@
   width: 5px;
 }
 
-#volt-ebay-summary.volt-state-active {
+#volt-sold-listing-warning.volt-state-active {
   border: 1px solid rgba(234, 88, 12, 0.38);
 }
 
-#volt-ebay-summary.volt-state-active::after {
+#volt-sold-listing-warning.volt-state-active::after {
   background: #ea580c;
 }
 
-#volt-ebay-summary .volt-ebay-summary__status-icon {
+#volt-sold-listing-warning .volt-sold-listing-warning__status-icon {
   width: 36px;
   height: 36px;
   border-radius: 12px;
@@ -61,16 +61,16 @@
   margin-top: 2px;
 }
 
-#volt-ebay-summary.volt-state-active .volt-ebay-summary__status-icon {
+#volt-sold-listing-warning.volt-state-active .volt-sold-listing-warning__status-icon {
   color: #c2410c;
   background: rgba(249, 115, 22, 0.14);
 }
 
-#volt-ebay-summary .volt-ebay-summary__body {
+#volt-sold-listing-warning .volt-sold-listing-warning__body {
   min-width: 0;
 }
 
-#volt-ebay-summary .volt-ebay-summary__title {
+#volt-sold-listing-warning .volt-sold-listing-warning__title {
   font-size: 14px;
   margin: 0;
   font-weight: 800;
@@ -82,20 +82,20 @@
   line-height: 1.2;
 }
 
-#volt-ebay-summary .volt-ebay-summary__title img {
+#volt-sold-listing-warning .volt-sold-listing-warning__title img {
   width: 18px;
   height: 18px;
   border-radius: 4px;
 }
 
-#volt-ebay-summary .volt-ebay-summary__content {
+#volt-sold-listing-warning .volt-sold-listing-warning__content {
   margin: 6px 0 0;
   font-size: 13px;
   color: #475569;
   line-height: 1.4;
 }
 
-#volt-ebay-summary .volt-ebay-summary__primary {
+#volt-sold-listing-warning .volt-sold-listing-warning__primary {
   margin-top: 12px;
   height: 34px;
   border: 0;
@@ -114,17 +114,17 @@
     box-shadow 0.16s ease;
 }
 
-#volt-ebay-summary .volt-ebay-summary__primary:hover {
+#volt-sold-listing-warning .volt-sold-listing-warning__primary:hover {
   background: #1e293b;
   box-shadow: 0 10px 22px rgba(15, 23, 42, 0.22);
 }
 
-#volt-ebay-summary .volt-ebay-summary__primary:active {
+#volt-sold-listing-warning .volt-sold-listing-warning__primary:active {
   transform: translateY(1px);
 }
 
-#volt-ebay-summary .volt-ebay-summary__dismiss,
-#volt-ebay-summary .volt-ebay-summary__settings {
+#volt-sold-listing-warning .volt-sold-listing-warning__dismiss,
+#volt-sold-listing-warning .volt-sold-listing-warning__settings {
   position: absolute;
   right: 10px;
   background: rgba(15, 23, 42, 0.06);
@@ -142,28 +142,28 @@
   z-index: 10;
 }
 
-#volt-ebay-summary .volt-ebay-summary__dismiss {
+#volt-sold-listing-warning .volt-sold-listing-warning__dismiss {
   top: 10px;
   font-size: 18px;
 }
 
-#volt-ebay-summary .volt-ebay-summary__settings {
+#volt-sold-listing-warning .volt-sold-listing-warning__settings {
   top: 44px;
   font-size: 16px;
 }
 
-#volt-ebay-summary .volt-ebay-summary__dismiss:hover {
+#volt-sold-listing-warning .volt-sold-listing-warning__dismiss:hover {
   background: rgba(239, 68, 68, 0.1);
   color: #dc2626;
 }
 
-#volt-ebay-summary .volt-ebay-summary__settings:hover {
+#volt-sold-listing-warning .volt-sold-listing-warning__settings:hover {
   background: rgba(59, 130, 246, 0.1);
   color: #2563eb;
 }
 
 @media (max-width: 640px) {
-  #volt-ebay-summary {
+  #volt-sold-listing-warning {
     top: auto;
     right: 12px;
     bottom: 14px;

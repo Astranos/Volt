@@ -4,11 +4,11 @@ import type { SyncStorageResult } from "../../types/settings";
 
 type ListingState = "sold" | "completed" | "active" | "unknown";
 
-interface EbaySummaryProps {
+interface SoldListingWarningProps {
   onDismiss: () => void;
 }
 
-const EbaySummary: React.FC<EbaySummaryProps> = ({ onDismiss }) => {
+const SoldListingWarning: React.FC<SoldListingWarningProps> = ({ onDismiss }) => {
   const [listingState, setListingState] = useState<ListingState>("active");
   const [isEnabled, setIsEnabled] = useState<boolean>(true);
   const [iconUrl, setIconUrl] = useState<string>("");
@@ -66,10 +66,10 @@ const EbaySummary: React.FC<EbaySummaryProps> = ({ onDismiss }) => {
         const result = (await chrome.storage.sync.get([
           "cmdkSettings",
         ])) as SyncStorageResult;
-        const enabled = result.cmdkSettings?.ebaySummary?.enabled ?? true;
+        const enabled = result.cmdkSettings?.soldListingWarning?.enabled ?? true;
         setIsEnabled(enabled);
       } catch (err) {
-        console.error("[Volt eBay Summary] Failed to check settings", err);
+        console.error("[Volt Sold Listing Warning] Failed to check settings", err);
         setIsEnabled(true);
       }
     };
@@ -78,7 +78,7 @@ const EbaySummary: React.FC<EbaySummaryProps> = ({ onDismiss }) => {
 
     // Listen for settings changes
     const handleMessage = (message: any) => {
-      if (message.action === "ebay-summary-settings-changed") {
+      if (message.action === "sold-listing-warning-settings-changed") {
         setIsEnabled(message.enabled ?? true);
       }
     };
@@ -94,7 +94,7 @@ const EbaySummary: React.FC<EbaySummaryProps> = ({ onDismiss }) => {
     try {
       setIconUrl(chrome.runtime.getURL("/assets/icons/logo-32.png"));
     } catch (err) {
-      console.error("[Volt eBay Summary] Failed to get icon URL", err);
+      console.error("[Volt Sold Listing Warning] Failed to get icon URL", err);
     }
   }, []);
 
@@ -122,21 +122,21 @@ const EbaySummary: React.FC<EbaySummaryProps> = ({ onDismiss }) => {
 
   return (
     <section
-      id="volt-ebay-summary"
-      className="volt-ebay-summary volt-state-active"
+      id="volt-sold-listing-warning"
+      className="volt-sold-listing-warning volt-state-active"
       aria-live="polite"
     >
-      <div className="volt-ebay-summary__status-icon" aria-hidden="true">
+      <div className="volt-sold-listing-warning__status-icon" aria-hidden="true">
         <AlertTriangle size={20} />
       </div>
-      <div className="volt-ebay-summary__body">
-        <h2 className="volt-ebay-summary__title">
+      <div className="volt-sold-listing-warning__body">
+        <h2 className="volt-sold-listing-warning__title">
           {iconUrl && <img src={iconUrl} alt="" />}
           Active listing warning
         </h2>
-        <p className="volt-ebay-summary__content">{message}</p>
+        <p className="volt-sold-listing-warning__content">{message}</p>
         <button
-          className="volt-ebay-summary__primary"
+          className="volt-sold-listing-warning__primary"
           type="button"
           onClick={handleSwitchToSold}
         >
@@ -144,7 +144,7 @@ const EbaySummary: React.FC<EbaySummaryProps> = ({ onDismiss }) => {
         </button>
       </div>
       <button
-        className="volt-ebay-summary__settings"
+        className="volt-sold-listing-warning__settings"
         onClick={handleSettings}
         type="button"
         title="Settings"
@@ -152,7 +152,7 @@ const EbaySummary: React.FC<EbaySummaryProps> = ({ onDismiss }) => {
         <Settings size={14} />
       </button>
       <button
-        className="volt-ebay-summary__dismiss"
+        className="volt-sold-listing-warning__dismiss"
         onClick={onDismiss}
         type="button"
         title="Dismiss"
@@ -163,4 +163,4 @@ const EbaySummary: React.FC<EbaySummaryProps> = ({ onDismiss }) => {
   );
 };
 
-export default EbaySummary;
+export default SoldListingWarning;

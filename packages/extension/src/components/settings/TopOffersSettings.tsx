@@ -73,7 +73,7 @@ export function TopOffersSettings({
     <section id="topoffers" className="scroll-mt-20">
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold mb-2">Offers</h2>
+          <h2 className="text-2xl font-bold mb-2">Offer Calculator</h2>
           <p className="text-muted-foreground">
             Configure settings for the Offer Calculator
           </p>

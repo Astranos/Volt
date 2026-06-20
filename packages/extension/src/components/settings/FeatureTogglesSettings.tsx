@@ -184,31 +184,31 @@ export function FeatureTogglesSettings({
 
       <ToggleSection
         id="ebay"
-        title="eBay Summary"
-        description="Display search context summary on eBay search pages"
-        itemTitle="Enable eBay Summary"
-        itemDescription="Displays a summary banner showing your current search context (Active vs Sold listings, item condition) at the top of eBay search results. Includes quick filter links."
-        enabled={settings.ebaySummary?.enabled ?? true}
+        title="Sold Listing Warning"
+        description="Warn when eBay search pages are showing active or completed results instead of sold listings."
+        itemTitle="Enable Sold Listing Warning"
+        itemDescription="Shows an alert on eBay search results when pricing would be based on active asking prices or completed unsold listings, with a one-click switch to sold/completed listings."
+        enabled={settings.soldListingWarning?.enabled ?? true}
         details={[
-          "Shows current listing type (Active/Sold/Completed) and condition filters",
-          "Quick filter links to switch between New, Used, and Broken conditions",
-          "One-click switch to Sold Listings for price analysis",
-          "Access to eBay Tool sidepanel and settings",
+          "Warns when the current eBay results are not sold listings",
+          "Explains why sold/completed listings are safer pricing comps",
+          "One-click switch to sold/completed listings for price analysis",
+          "Quick access to settings",
           "Dismissible per search session",
         ]}
         onToggle={() => {
-          const newEbaySummary = {
-            ...settings.ebaySummary,
-            enabled: !settings.ebaySummary?.enabled,
+          const newSoldListingWarning = {
+            ...settings.soldListingWarning,
+            enabled: !settings.soldListingWarning?.enabled,
           };
 
           void saveSettings({
             ...settings,
-            ebaySummary: newEbaySummary,
+            soldListingWarning: newSoldListingWarning,
           }).then(() =>
             notifyTabs(
-              "ebay-summary-settings-changed",
-              Boolean(newEbaySummary.enabled)
+              "sold-listing-warning-settings-changed",
+              Boolean(newSoldListingWarning.enabled)
             )
           );
         }}
