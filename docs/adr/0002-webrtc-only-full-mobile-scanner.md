@@ -18,7 +18,7 @@ App Clip is out of scope for this flow. The App Clip lifecycle is a poor fit for
 
 ## Decision
 
-The full mobile app will use WebRTC as the only capture transport after signaling. `scanner-signal` remains a short-lived signaling rendezvous service, but it must not carry OCR, barcode, dictation, or photo payloads.
+The full mobile app will use WebRTC as the only capture transport after signaling. Convex is the short-lived signaling rendezvous backend, but it must not carry OCR, barcode, dictation, or photo payloads.
 
 The v1 connectivity model is direct WebRTC with STUN only. TURN is not used. This means phone and computer must be on the same network, and some networks with client isolation, VPNs, or strict firewall rules may fail to connect.
 
@@ -33,10 +33,10 @@ The v1 connectivity model is direct WebRTC with STUN only. TURN is not used. Thi
 - QR tokens are high-entropy, valid only while visible, and rotate after a short TTL with a brief grace period.
 - Chrome creates one WebRTC offer per mobile join attempt.
 - Mobile scans the QR, creates a join attempt, polls for the offer, creates an answer, and posts it back.
-- Chrome learns join attempts by polling scanner-signal only while the QR is visible.
+- Chrome learns join attempts by polling Convex signaling only while the QR is visible.
 - Join attempts expire quickly, around 30 seconds.
 
-`scanner-signal` stores only short-lived signaling state:
+Convex stores only signaling state:
 
 - active join token
 - join attempts
@@ -310,13 +310,13 @@ Collect metadata only:
 - chunk counts and byte counts
 - storage rejection reasons
 
-Do not log capture payload contents or photo bytes. Do not send diagnostics automatically to scanner-signal.
+Do not log capture payload contents or photo bytes. Do not send diagnostics automatically to Convex signaling.
 
 ## Implementation Plan
 
 1. Update documentation and domain terms to reflect WebRTC-only full-app scanner and App Clip removal for this feature.
 2. Add shared protocol schemas/runtime validators to `@volt/scanner-protocol`.
-3. Rework scanner-signal into short-lived join-token and join-attempt signaling for full-app WebRTC.
+3. Rework signaling into Convex-backed join-token and join-attempt signaling for full-app WebRTC.
 4. Update extension offscreen code to manage a global session, join tokens, multi-peer WebRTC connections, and two data channels per peer.
 5. Update extension popup to auto-open QR on mount, revoke token on close, and show compact status.
 6. Update mobile deep-link pairing to join by token, poll for offer, answer Chrome's offer, and run capability handshake.

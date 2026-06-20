@@ -121,8 +121,8 @@ export function createScannerOffscreenController({
   function ensureScannerReconnectAlarm() {
     try {
       chromeApi.alarms?.create?.(reconnectAlarmName, {
-        delayInMinutes: 0.1,
-        periodInMinutes: 0.5,
+        delayInMinutes: 1,
+        periodInMinutes: 1,
       });
     } catch (error) {
       log("Failed to create scanner reconnect alarm", error instanceof Error ? error.message : error);

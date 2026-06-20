@@ -1,6 +1,6 @@
 # Volt
 
-Volt is a monorepo for a Chrome extension, a companion mobile scanner app, a web pairing surface, and a small scanner signaling service.
+Volt is a monorepo for a Chrome extension, a companion mobile scanner app, a Convex-backed scanner signaling backend, and a Vercel-hosted web/app-store support surface.
 
 I built Volt to make buying and listing electronic devices for resale faster and easier. The app is shaped around the day-to-day resale workflow: quickly checking market prices while buying, calculating offers, capturing barcodes/text/photos from a phone, and moving clean listing information back into the browser with less manual typing.
 
@@ -11,8 +11,8 @@ I built Volt to make buying and listing electronic devices for resale faster and
 | `packages/extension` | Chrome extension built with WXT, React, and TypeScript. |
 | `packages/scanner-protocol` | Shared scanner protocol constants, message types, and validation helpers. |
 | `apps/mobile` | Native SwiftUI iOS scanner app. |
-| `apps/web` | Vite web app used for scanner pairing and web flows. |
-| `apps/scanner-signal` | Vercel-hosted signaling API for scanner sessions, push, and dictation tokens. |
+| `apps/web` | TanStack Start, Base UI, and Tailwind CSS v4 app for the Vercel landing/app-store support deployment. |
+| `convex` | Convex schema, HTTP actions, Web Push action, and cleanup cron for scanner signaling state. |
 
 ## Requirements
 
@@ -20,7 +20,7 @@ I built Volt to make buying and listing electronic devices for resale faster and
 - pnpm 10.x via Corepack
 - Chrome for extension development
 - Xcode for iOS builds
-- Vercel CLI for the scanner signaling service
+- Convex CLI access for signaling backend development
 
 ## Getting Started
 
@@ -67,18 +67,15 @@ pnpm --filter @volt/mobile build:ios
 
 ## Environment
 
-Local secrets must stay out of git. The scanner signaling app documents its required environment variables in:
+Local secrets must stay out of git. Convex development is configured by `npx convex dev`, which writes `.env.local` with `CONVEX_DEPLOYMENT`, `CONVEX_URL`, and `CONVEX_SITE_URL`.
 
-```sh
-apps/scanner-signal/.env.example
-```
-
-Copy that file to `apps/scanner-signal/.env.local` for local Vercel development.
+Scanner signaling uses Convex environment variables for optional Web Push wakeups: `SCANNER_PUSH_VAPID_PUBLIC_KEY`, `SCANNER_PUSH_VAPID_PRIVATE_KEY`, and `SCANNER_PUSH_VAPID_SUBJECT`.
 
 ## Development Commands
 
 ```sh
 pnpm test
+pnpm test:convex
 pnpm build:web
 pnpm build:extension
 pnpm zip:extension

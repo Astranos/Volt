@@ -21,6 +21,6 @@ Preferred direction:
 ## Boundary Rules
 
 - `@volt/scanner-protocol` owns scanner message contracts, runtime validators, protocol constants, and QR/join URL shapes.
-- `apps/scanner-signal` owns signaling state only. It must not store OCR, barcode, dictation, or photo payloads for the active full-app scanner architecture.
+- `convex` owns signaling state only. It must not store OCR, barcode, dictation, or photo payloads for the active full-app scanner architecture.
 - The extension background layer owns privileged Chrome API work; React components should request actions through typed helpers instead of reaching into Chrome APIs directly when the behavior is shared.
 - Generated or build output such as `.wxt/`, `.output/`, and Vite `dist/` output must stay untracked.

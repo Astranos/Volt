@@ -15,13 +15,13 @@ corepack enable
 pnpm install
 ```
 
-If you need the scanner signaling API locally, copy the example environment file:
+If you need the scanner signaling backend locally, start Convex from the repository root:
 
 ```sh
-cp apps/scanner-signal/.env.example apps/scanner-signal/.env.local
+npx convex dev
 ```
 
-Then fill in local or development credentials.
+The command writes `.env.local` with the development deployment URLs. Optional Web Push wakeups require Convex environment variables for the VAPID public key, private key, and subject.
 
 ## Useful Commands
 
@@ -30,6 +30,7 @@ pnpm dev:extension
 pnpm dev:web
 pnpm dev:mobile
 pnpm test
+pnpm test:convex
 pnpm build:extension
 pnpm build:web
 pnpm --filter @volt/mobile build:ios

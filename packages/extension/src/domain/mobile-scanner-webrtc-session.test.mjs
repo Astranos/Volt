@@ -22,8 +22,16 @@ const signalClientSource = readFileSync(
   new URL("./mobile-scanner-signal-client.ts", import.meta.url),
   "utf8"
 );
+const signalUrlSource = readFileSync(
+  new URL("./mobile-scanner-signal-url.ts", import.meta.url),
+  "utf8"
+);
 const offscreenSource = readFileSync(
   new URL("../offscreen/mobile-scanner-offscreen.ts", import.meta.url),
+  "utf8"
+);
+const scannerOffscreenControllerSource = readFileSync(
+  new URL("../background/scanner-offscreen.ts", import.meta.url),
   "utf8"
 );
 const backgroundSource = readFileSync(
@@ -32,6 +40,10 @@ const backgroundSource = readFileSync(
 );
 const wxtConfigSource = readFileSync(
   new URL("../../wxt.config.ts", import.meta.url),
+  "utf8"
+);
+const extensionPackageSource = readFileSync(
+  new URL("../../package.json", import.meta.url),
   "utf8"
 );
 const pairingPopupSource = readFileSync(
@@ -114,7 +126,20 @@ test("extension hydrates persisted identity before polling reconnect requests", 
   assert.match(sessionSource, /private (readonly )?identityReady: Promise<void>/);
   assert.match(sessionSource, /this\.identityReady = this\.refreshExtensionIdentity\(\)\.then/);
   assert.match(sessionSource, /private async pollReconnectRequests\(\) \{\n\s+await this\.identityReady;/);
-  assert.match(signalClientSource, /const response = await fetch\(`\$\{SCANNER_SIGNAL_URL\}\/pairings\/reconnect-requests\?sessionId=\$\{encodeURIComponent\(sessionId\)\}`\)/);
+  assert.match(signalClientSource, /const response = await fetch\(`\$\{EXTENSION_SCANNER_SIGNAL_URL\}\/pairings\/reconnect-requests\?sessionId=\$\{encodeURIComponent\(sessionId\)\}`\)/);
+});
+
+test("extension reload build uses Convex dev and release zips use Convex production", () => {
+  assert.match(signalUrlSource, /SCANNER_SIGNAL_URL_DEV/);
+  assert.match(signalUrlSource, /SCANNER_SIGNAL_URL_PROD/);
+  assert.match(signalUrlSource, /WXT_SCANNER_SIGNAL_URL/);
+  assert.match(signalUrlSource, /import\.meta\.env\.MODE === "production"/);
+  assert.match(signalClientSource, /EXTENSION_SCANNER_SIGNAL_URL/);
+  assert.match(backgroundSource, /EXTENSION_SCANNER_SIGNAL_URL/);
+  assert.match(backgroundSource, /signalUrl: EXTENSION_SCANNER_SIGNAL_URL/);
+  assert.match(wxtConfigSource, /outDir: "\.output"/);
+  assert.match(extensionPackageSource, /"build": "wxt build --mode development"/);
+  assert.match(extensionPackageSource, /"zip": "wxt zip --mode production/);
 });
 
 test("offscreen localStorage fallback persists durable pairing arrays", () => {
@@ -152,6 +177,13 @@ test("extension boots offscreen reconnect polling without opening scanner UI", (
   assert.match(signalClientSource, /pushSubscription: pushSubscription \?\? undefined/);
   assert.match(sessionSource, /reconnect requests fetched/);
   assert.match(sessionSource, /join window posted/);
+  assert.match(sessionSource, /RECONNECT_FALLBACK_POLL_INTERVAL_MS = 60 \* 1000/);
+  assert.match(sessionSource, /RECONNECT_ACTIVE_WINDOW_POLL_INTERVAL_MS = 5000/);
+  assert.match(sessionSource, /RECONNECT_ACTIVE_WINDOW_MS = 95 \* 1000/);
+  assert.match(sessionSource, /this\.reconnectFastPollUntil = Date\.now\(\) \+ RECONNECT_ACTIVE_WINDOW_MS/);
+  assert.match(scannerOffscreenControllerSource, /periodInMinutes: 1/);
+  assert.doesNotMatch(sessionSource, /const RECONNECT_POLL_INTERVAL_MS = 5000/);
+  assert.doesNotMatch(scannerOffscreenControllerSource, /periodInMinutes: 0\.5/);
 });
 
 test("extension retries reconnect requests until join-window posting succeeds", () => {

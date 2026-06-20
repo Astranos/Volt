@@ -7,11 +7,6 @@
     "ios": {
       "bundleIdentifier": "com.volt.mobile",
       "buildNumber": "35",
-      "entitlements": {
-        "com.apple.developer.associated-domains": [
-          "applinks:scanner-signal.vercel.app"
-        ]
-      },
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }

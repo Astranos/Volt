@@ -32,7 +32,7 @@ test("offscreen scanner is WebRTC-only and has no HTTPS relay session path", () 
   assert.doesNotMatch(offscreenSource, /appClipRelay/);
 });
 
-test("offscreen scanner does not poll scanner-signal for relay results or photo manifests", () => {
+test("offscreen scanner does not poll signaling for relay results or photo manifests", () => {
   assert.doesNotMatch(offscreenSource, /pollForResult/);
   assert.doesNotMatch(offscreenSource, /ScannerRelayResult/);
   assert.doesNotMatch(offscreenSource, /\/result/);

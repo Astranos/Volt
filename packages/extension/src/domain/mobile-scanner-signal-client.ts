@@ -2,9 +2,9 @@ import {
   PHOTO_TRANSFER_CHANNEL_LABEL,
   SCANNER_APP_PAIR_URL,
   SCANNER_CONTROL_CHANNEL_LABEL,
-  SCANNER_SIGNAL_URL,
 } from "../../../scanner-protocol/src";
 import type { DurablePairingCredential, WebPushSubscriptionRecord } from "./mobile-scanner-identity";
+import { EXTENSION_SCANNER_SIGNAL_URL } from "./mobile-scanner-signal-url";
 import type { SessionTarget } from "./mobile-scanner-session-types";
 
 type JoinAttempt = {
@@ -92,7 +92,7 @@ export class MobileScannerSignalClient {
       deviceLabel,
       capabilities: ["text", "barcode", "dictation", "photo", "photo-chunk-ack"],
     };
-    const response = await fetch(`${SCANNER_SIGNAL_URL}/join-token`, {
+    const response = await fetch(`${EXTENSION_SCANNER_SIGNAL_URL}/join-token`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -125,7 +125,7 @@ export class MobileScannerSignalClient {
   }
 
   async revokeJoinWindow(joinWindow: JoinWindow) {
-    await fetch(`${SCANNER_SIGNAL_URL}/join-token/${encodeURIComponent(joinWindow.joinToken)}/revoke`, {
+    await fetch(`${EXTENSION_SCANNER_SIGNAL_URL}/join-token/${encodeURIComponent(joinWindow.joinToken)}/revoke`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ sessionId: joinWindow.sessionId }),
@@ -134,7 +134,7 @@ export class MobileScannerSignalClient {
 
   async fetchJoinAttempts(joinWindow: JoinWindow) {
     const response = await fetch(
-      `${SCANNER_SIGNAL_URL}/join-token/${encodeURIComponent(joinWindow.joinToken)}/attempts`
+      `${EXTENSION_SCANNER_SIGNAL_URL}/join-token/${encodeURIComponent(joinWindow.joinToken)}/attempts`
     );
     if (!response.ok) return [];
     const payload = (await response.json()) as { joinAttempts?: unknown[]; attempts?: unknown[] };
@@ -148,7 +148,7 @@ export class MobileScannerSignalClient {
 
   async fetchPeerAnswer(joinWindow: JoinWindow, joinAttemptId: string) {
     const response = await fetch(
-      `${SCANNER_SIGNAL_URL}/join-token/${encodeURIComponent(joinWindow.joinToken)}/attempt/${encodeURIComponent(joinAttemptId)}/answer`
+      `${EXTENSION_SCANNER_SIGNAL_URL}/join-token/${encodeURIComponent(joinWindow.joinToken)}/attempt/${encodeURIComponent(joinAttemptId)}/answer`
     );
     if (!response.ok) return null;
     const payload = (await response.json()) as { answer?: unknown };
@@ -157,7 +157,7 @@ export class MobileScannerSignalClient {
 
   async postPeerOffer(joinWindow: JoinWindow, joinAttemptId: string, offer: RTCSessionDescriptionInit) {
     await fetch(
-      `${SCANNER_SIGNAL_URL}/join-token/${encodeURIComponent(joinWindow.joinToken)}/attempt/${encodeURIComponent(joinAttemptId)}/offer`,
+      `${EXTENSION_SCANNER_SIGNAL_URL}/join-token/${encodeURIComponent(joinWindow.joinToken)}/attempt/${encodeURIComponent(joinAttemptId)}/offer`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -170,7 +170,7 @@ export class MobileScannerSignalClient {
   }
 
   async registerPairing(pairing: DurablePairingCredential, pushSubscription?: WebPushSubscriptionRecord | null) {
-    await fetch(`${SCANNER_SIGNAL_URL}/pairings`, {
+    await fetch(`${EXTENSION_SCANNER_SIGNAL_URL}/pairings`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -184,7 +184,7 @@ export class MobileScannerSignalClient {
   }
 
   async fetchReconnectRequests(sessionId: string) {
-    const response = await fetch(`${SCANNER_SIGNAL_URL}/pairings/reconnect-requests?sessionId=${encodeURIComponent(sessionId)}`);
+    const response = await fetch(`${EXTENSION_SCANNER_SIGNAL_URL}/pairings/reconnect-requests?sessionId=${encodeURIComponent(sessionId)}`);
     const requests: ReconnectRequest[] = [];
     if (!response.ok) return { response, requests };
     const payload = (await response.json()) as { requests?: unknown[] };
@@ -200,7 +200,7 @@ export class MobileScannerSignalClient {
 
   async postReconnectJoinWindow(pairing: DurablePairingCredential, requestId: string, joinWindow: JoinWindow) {
     const response = await fetch(
-      `${SCANNER_SIGNAL_URL}/pairings/${encodeURIComponent(pairing.pairingId)}/reconnect/${encodeURIComponent(requestId)}/join-window`,
+      `${EXTENSION_SCANNER_SIGNAL_URL}/pairings/${encodeURIComponent(pairing.pairingId)}/reconnect/${encodeURIComponent(requestId)}/join-window`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Volt-Pairing-Secret": pairing.pairingSecret },

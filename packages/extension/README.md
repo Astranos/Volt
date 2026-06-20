@@ -17,7 +17,7 @@ The extension manifest version lives in [wxt.config.ts](wxt.config.ts), and the 
 - Command palette popup with tabs, quick links, bookmarks, history, search providers, and Mobile Scanner launch.
 - Custom new-tab page with closed tabs, quick links, bookmarks, and search modes.
 - Unified sidepanel with Mobile Scanner and Offer Calculator.
-- Mobile scanner pairing over WebRTC through the `scanner-signal` service.
+- Mobile scanner pairing over WebRTC through Convex-backed signaling.
 - eBay sold-listing summary content script.
 - Shopify admin quick-action buttons and product search helpers.
 - UPC highlighter with click-to-copy behavior.
@@ -70,7 +70,7 @@ The production extension build is written to `.output/volt/`.
 pnpm --filter @volt/extension test:scanner
 ```
 
-The root `pnpm test` command also runs extension domain tests along with scanner protocol, scanner signal, and mobile library tests.
+The root `pnpm test` command also runs extension domain tests along with scanner protocol, Convex signaling, and mobile library tests.
 
 ## Project Structure
 
@@ -109,7 +109,7 @@ Current built-in providers include Google, Volt Search, Amazon, Best Buy, eBay s
 
 ## Mobile Scanner
 
-The extension pairs with the full mobile app through short-lived scanner-signal join tokens. After signaling, capture payloads move over WebRTC data channels only. `scanner-signal` does not relay OCR, barcode, dictation, or photo payloads.
+The extension pairs with the full mobile app through short-lived Convex-backed join tokens. After signaling, capture payloads move over WebRTC data channels only. Convex does not relay OCR, barcode, dictation, or photo payloads.
 
 Relevant implementation:
 

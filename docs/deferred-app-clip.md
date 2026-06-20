@@ -2,7 +2,7 @@
 
 This is not part of the active mobile scanner architecture.
 
-ADR 0002 is the source of truth for the current full-app scanner flow: the iPhone app pairs through short-lived `scanner-signal` join tokens and sends OCR, barcode, dictation, and photo payloads over direct WebRTC data channels. App Clip relay, HTTPS result relay, and Photo Object Transfer are obsolete for that full-app transport.
+ADR 0002 is the source of truth for the current full-app scanner flow: the iPhone app pairs through short-lived Convex-backed join tokens and sends OCR, barcode, dictation, and photo payloads over direct WebRTC data channels. App Clip relay, HTTPS result relay, and Photo Object Transfer are obsolete for that full-app transport.
 
 Keep this note only as a future product option: a photo-only App Clip might still be useful for no-install capture, but it must be designed as a separate feature with its own constraints rather than mixed into the full mobile app scanner.
 

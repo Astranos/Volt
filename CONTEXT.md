@@ -6,7 +6,7 @@ The product is built for resellers who buy electronics and similar inventory, th
 
 ## Current Mobile Scanner Direction
 
-ADR 0002 is the source of truth for the full mobile app scanner flow. The active scanner architecture is mobile-app-only WebRTC. The full app pairs through short-lived `scanner-signal` join tokens and then sends OCR, barcode, dictation, and photo payloads over direct WebRTC data channels only. App Clip relay, HTTPS result relay, and Photo Object Transfer are obsolete for the full-app scanner transport.
+ADR 0002 is the source of truth for the full mobile app scanner flow. The active scanner architecture is mobile-app-only WebRTC. The full app pairs through short-lived Convex-backed join tokens and then sends OCR, barcode, dictation, and photo payloads over direct WebRTC data channels only. App Clip relay, HTTPS result relay, and Photo Object Transfer are obsolete for the full-app scanner transport.
 
 ## Domain Terms
 
@@ -38,9 +38,9 @@ ADR 0002 is the source of truth for the full mobile app scanner flow. The active
 
 - A Photo Capture has one or more photos.
 - A Cursor-Targeted Capture uses the latest Browser Capture Target; a Photo Capture does not.
-- OCR, barcode, dictation, and photo payloads are sent over WebRTC after pairing. `scanner-signal` is only a signaling rendezvous for join tokens, offers, and answers.
+- OCR, barcode, dictation, and photo payloads are sent over WebRTC after pairing. Convex is only a signaling rendezvous for join tokens, offers, answers, durable pairings, and reconnect requests.
 - Mobile Scanner Sessions are capability-bound rather than mode-bound; a session can allow multiple Session Capabilities while the UI starts in a selected mode.
-- The QR opens a join-token WebRTC Pairing Session; scanner-signal owns only signaling state, not capture modes or payload delivery.
+- The QR opens a join-token WebRTC Pairing Session; Convex owns only signaling state, not capture modes or payload delivery.
 - The full mobile app supports Paired Mode Switch among OCR, barcode, dictation, and photo in one WebRTC session.
 - Dictation remains a full mobile app capture mode.
 - Each Photo Capture photo moves through queued, sending, sent, failed, received, or cancelled on mobile.

@@ -21,6 +21,7 @@ struct CaptureDeliveryToast: Identifiable, Equatable {
 @Observable
 final class ScannerStore {
     static let pairedSessionsStorageKey = "volt.pairedScannerSessions.v2"
+    static let barcodeRecognitionModeStorageKey = "volt.barcodeRecognitionMode.v1"
 
     let ocrCaptureMaxDimension: CGFloat = 1800
     let photoLongEdge: CGFloat = 2200
@@ -42,6 +43,12 @@ final class ScannerStore {
     var ocrTextRegions: [RecognizedTextRegion] = []
     var isRecognizingText = false
     var captureDeliveryToast: CaptureDeliveryToast?
+    var barcodeRecognitionMode: BarcodeRecognitionMode = .upc {
+        didSet {
+            UserDefaults.standard.set(barcodeRecognitionMode.rawValue, forKey: Self.barcodeRecognitionModeStorageKey)
+            camera.updateBarcodeRecognitionMode(barcodeRecognitionMode)
+        }
+    }
 
     let camera = CameraModel()
     let dictation = DictationModel()
@@ -51,9 +58,18 @@ final class ScannerStore {
 
     init() {
         loadPairedSessions()
+        barcodeRecognitionMode = Self.savedBarcodeRecognitionMode()
+        camera.updateBarcodeRecognitionMode(barcodeRecognitionMode)
         dictation.onTranscriptChange = { [weak self] text in
             self?.handleDictationTranscriptChange(text)
         }
+    }
+
+    private static func savedBarcodeRecognitionMode() -> BarcodeRecognitionMode {
+        guard let rawValue = UserDefaults.standard.string(forKey: barcodeRecognitionModeStorageKey),
+              let mode = BarcodeRecognitionMode(rawValue: rawValue)
+        else { return .upc }
+        return mode
     }
 
     @ObservationIgnored lazy var connection: ScannerWebRTCConnection = {

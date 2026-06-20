@@ -5,6 +5,8 @@ struct CaptureSessionView: View {
     @Binding var isPresented: Bool
     @State private var gridVisible = true
     @State private var selectedTextRegion: RecognizedTextRegion?
+    @State private var selectedCleanedText: String?
+    @State private var isCleaningSelectedText = false
     @State private var isConnectionRecoveryPresented = false
 
     var body: some View {
@@ -16,7 +18,7 @@ struct CaptureSessionView: View {
                     image: reviewImage,
                     regions: store.ocrTextRegions,
                     selectedRegion: selectedTextRegion,
-                    onSelectRegion: { selectedTextRegion = $0 }
+                    onSelectRegion: { selectTextRegion($0) }
                 )
                     .ignoresSafeArea()
             } else {
@@ -41,10 +43,12 @@ struct CaptureSessionView: View {
                     regionCount: store.ocrTextRegions.count,
                     onRetake: {
                         selectedTextRegion = nil
+                        selectedCleanedText = nil
                         store.clearOcrReview()
                     },
                     onFinish: {
                         selectedTextRegion = nil
+                        selectedCleanedText = nil
                         store.clearOcrReview()
                         isPresented = false
                     }
@@ -92,11 +96,15 @@ struct CaptureSessionView: View {
         ) {
             Button("Send", systemImage: "paperplane.fill") {
                 guard let selectedTextRegion else { return }
-                store.sendRecognizedText(selectedTextRegion.text)
+                store.sendRecognizedText(selectedCleanedText ?? selectedTextRegion.text)
+            }
+            Button(isCleaningSelectedText ? "Cleaning..." : "Cleanup", systemImage: "wand.and.sparkles") {
+                guard let selectedTextRegion else { return }
+                cleanupSelectedText(selectedTextRegion)
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text(selectedTextRegion?.text ?? "")
+            Text(selectedTextPreview)
         }
         .sheet(isPresented: $isConnectionRecoveryPresented) {
             PairingSessionsView()
@@ -134,6 +142,23 @@ struct CaptureSessionView: View {
         }
     }
 
+    private func selectTextRegion(_ region: RecognizedTextRegion) {
+        selectedCleanedText = nil
+        selectedTextRegion = region
+    }
+
+    private func cleanupSelectedText(_ region: RecognizedTextRegion) {
+        isCleaningSelectedText = true
+        store.statusText = "Cleaning text"
+        Task {
+            let result = await OcrTextCleaner.clean(text: region.text)
+            selectedCleanedText = result.text
+            selectedTextRegion = region
+            isCleaningSelectedText = false
+            store.statusText = result.usedFoundationModel ? "Text cleaned on device" : "Text cleaned"
+        }
+    }
+
     private func handleConnectionStatusChange(_ status: ScannerConnectionStatus) {
         if status.isConnected {
             isConnectionRecoveryPresented = false
@@ -141,6 +166,7 @@ struct CaptureSessionView: View {
         }
 
         selectedTextRegion = nil
+        selectedCleanedText = nil
         store.clearOcrReview()
 
         switch status {
@@ -151,6 +177,20 @@ struct CaptureSessionView: View {
         case .connected:
             break
         }
+    }
+
+    private var selectedTextPreview: String {
+        guard let selectedTextRegion else { return "" }
+        guard let selectedCleanedText, selectedCleanedText != selectedTextRegion.text else {
+            return selectedTextRegion.text
+        }
+        return """
+        Cleaned
+        \(selectedCleanedText)
+
+        Original
+        \(selectedTextRegion.text)
+        """
     }
 }
 

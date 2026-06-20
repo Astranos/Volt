@@ -39,7 +39,7 @@ enum PairingURLParser {
     }
 
     private static func joinToken(from url: URL) -> String? {
-        guard url.host == "scanner-signal.vercel.app" else { return nil }
+        guard url.host == ScannerProtocol.signalURL.host else { return nil }
         let parts = url.pathComponents.filter { $0 != "/" }
         guard parts.count >= 4, parts[0] == "api", parts[1] == "signal", parts[2] == "join-token" else { return nil }
         return parts[3]

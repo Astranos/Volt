@@ -6,12 +6,23 @@
     "dev:extension": "pnpm --filter @volt/extension dev",
     "dev:mobile": "pnpm --filter @volt/mobile ios:sim",
     "dev:web": "pnpm --filter @volt/web dev",
-    "test": "pnpm --filter @volt/scanner-protocol test && pnpm --filter @volt/scanner-signal test:signal && pnpm --filter @volt/extension test:scanner && pnpm --filter @volt/mobile test",
+    "test:convex": "vitest run convex",
+    "test": "pnpm --filter @volt/scanner-protocol test && pnpm test:convex && pnpm --filter @volt/extension test:scanner && pnpm --filter @volt/mobile test",
     "build:extension": "pnpm --filter @volt/extension build",
     "build:mobile": "pnpm --filter @volt/mobile build:ios",
     "build:web": "pnpm --filter @volt/web build",
     "build": "pnpm -r build",
     "zip:extension": "pnpm --filter @volt/extension zip"
   },
-  "packageManager": "pnpm@10.14.0+sha512.ad27a79641b49c3e481a16a805baa71817a04bbe06a38d17e60e2eaee83f6a146c6a688125f5792e48dd5ba30e7da52a5cda4c3992b9ccf333f9ce223af84748"
+  "packageManager": "pnpm@10.14.0+sha512.ad27a79641b49c3e481a16a805baa71817a04bbe06a38d17e60e2eaee83f6a146c6a688125f5792e48dd5ba30e7da52a5cda4c3992b9ccf333f9ce223af84748",
+  "dependencies": {
+    "convex": "^1.41.0",
+    "web-push": "^3.6.7"
+  },
+  "devDependencies": {
+    "@edge-runtime/vm": "^5.0.0",
+    "@types/web-push": "^3.6.4",
+    "convex-test": "^0.0.53",
+    "vitest": "^4.1.9"
+  }
 }

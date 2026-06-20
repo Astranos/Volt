@@ -53,7 +53,9 @@ const JOIN_WINDOW_TTL_MS = 2 * 60 * 1000;
 const HIDDEN_JOIN_ATTEMPT_POLL_GRACE_MS = 60 * 1000;
 const JOIN_ATTEMPT_INITIAL_POLL_INTERVAL_MS = 1000;
 const JOIN_ATTEMPT_MAX_POLL_INTERVAL_MS = 10 * 1000;
-const RECONNECT_POLL_INTERVAL_MS = 5000;
+const RECONNECT_FALLBACK_POLL_INTERVAL_MS = 60 * 1000;
+const RECONNECT_ACTIVE_WINDOW_POLL_INTERVAL_MS = 5000;
+const RECONNECT_ACTIVE_WINDOW_MS = 95 * 1000;
 
 const EXTENSION_PROTOCOL_VERSION = {
   major: SCANNER_PROTOCOL_MAJOR_VERSION,
@@ -116,6 +118,7 @@ export class MobileScannerSession {
   private readonly peerConnections: MobileScannerPeerConnections;
   private readonly photoReceiver: MobileScannerPhotoReceiver;
   private readonly signalClient = new MobileScannerSignalClient(JOIN_WINDOW_TTL_MS);
+  private reconnectFastPollUntil = 0;
   private seenReconnectRequests = new Set<string>();
   private seenJoinAttempts = new Set<string>();
   private seenControlMessages = new Set<string>();
@@ -154,7 +157,7 @@ export class MobileScannerSession {
     void this.refreshDurablePairingRegistrations().catch((error) => {
       this.events.log?.("Failed to refresh scanner pairing registrations", error);
     });
-    this.scheduleReconnectPoll(RECONNECT_POLL_INTERVAL_MS);
+    this.scheduleReconnectPoll(RECONNECT_FALLBACK_POLL_INTERVAL_MS);
   }
 
   getState() {
@@ -379,9 +382,15 @@ export class MobileScannerSession {
           this.events.log?.("Failed to poll scanner reconnect requests", error);
         })
         .finally(() => {
-          this.scheduleReconnectPoll(RECONNECT_POLL_INTERVAL_MS);
+          this.scheduleReconnectPoll(this.nextReconnectPollDelay());
         });
     }, delayMs);
+  }
+
+  private nextReconnectPollDelay() {
+    return Date.now() < this.reconnectFastPollUntil
+      ? RECONNECT_ACTIVE_WINDOW_POLL_INTERVAL_MS
+      : RECONNECT_FALLBACK_POLL_INTERVAL_MS;
   }
 
   private async pollReconnectRequests() {
@@ -409,6 +418,9 @@ export class MobileScannerSession {
       sessionId,
       requestCount: requests.length,
     });
+    if (requests.length > 0) {
+      this.reconnectFastPollUntil = Date.now() + RECONNECT_ACTIVE_WINDOW_MS;
+    }
     for (const request of requests) {
       const pairing = pairingById.get(request.pairingId);
       if (!pairing) continue;

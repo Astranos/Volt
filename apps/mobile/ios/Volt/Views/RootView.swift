@@ -25,6 +25,10 @@ struct RootView: View {
             DictationView()
                 .tabItem { Label("Dictate", systemImage: "mic") }
                 .tag(AppSection.dictation)
+
+            SettingsView()
+                .tabItem { Label("Settings", systemImage: "gearshape") }
+                .tag(AppSection.settings)
         }
         .sheet(isPresented: $isConnectionSheetPresented, onDismiss: handleConnectionSheetDismiss) {
             if connectionSheetDetent == Self.connectionStatusDetent, let connectionSheetStatus {
@@ -74,6 +78,8 @@ struct RootView: View {
         case .dictation:
             store.activeMode = .dictation
         case .upload:
+            break
+        case .settings:
             break
         }
     }
@@ -169,6 +175,33 @@ enum AppSection: Hashable {
     case scan
     case dictation
     case upload
+    case settings
+}
+
+struct SettingsView: View {
+    @Environment(ScannerStore.self) private var store
+
+    var body: some View {
+        @Bindable var store = store
+
+        NavigationStack {
+            Form {
+                Section("Barcodes") {
+                    Picker("Recognized Codes", selection: $store.barcodeRecognitionMode) {
+                        ForEach(BarcodeRecognitionMode.allCases) { mode in
+                            Text(mode.title)
+                                .tag(mode)
+                        }
+                    }
+                    .pickerStyle(.navigationLink)
+                }
+            }
+            .navigationTitle("Settings")
+            .onAppear {
+                store.selectedSection = .settings
+            }
+        }
+    }
 }
 
 private struct PairingStatusSheetModel: Identifiable, Equatable {

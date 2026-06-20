@@ -11,7 +11,7 @@ import { createMobileCaptureTargetController } from "../src/background/mobile-ca
 import { createScannerMessageHandler } from "../src/background/scanner-message-handler";
 import { createScannerOffscreenController } from "../src/background/scanner-offscreen";
 import { createScannerTextInserter } from "../src/background/scanner-text-insertion";
-import { SCANNER_SIGNAL_URL } from "../../scanner-protocol/src";
+import { EXTENSION_SCANNER_SIGNAL_URL } from "../src/domain/mobile-scanner-signal-url";
 
 type MessageRecord = Record<string, any>;
 type SendResponse = (response?: any) => void;
@@ -197,7 +197,7 @@ export default defineBackground({
       log,
       createOffscreenDocument,
       getOffscreenContexts,
-      signalUrl: SCANNER_SIGNAL_URL,
+      signalUrl: EXTENSION_SCANNER_SIGNAL_URL,
       reconnectAlarmName: SCANNER_RECONNECT_ALARM_NAME,
     });
     const scannerTargets = createMobileCaptureTargetController({

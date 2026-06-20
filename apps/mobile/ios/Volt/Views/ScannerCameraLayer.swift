@@ -55,6 +55,7 @@ struct ScannerCameraLayer: View {
     private func updateBarcodeGuideRect(in proxy: GeometryProxy) {
         guard guideVisible, store.activeMode == .barcode else {
             store.camera.updateBarcodeGuideRect(nil)
+            store.camera.clearDetectedBarcode()
             return
         }
 
@@ -94,7 +95,8 @@ struct ScannerCameraLayer: View {
             }
         }
         .overlay(alignment: .topLeading) {
-            if let barcodeBounds = store.camera.detectedBarcodeBounds,
+            if store.activeMode == .barcode,
+               let barcodeBounds = store.camera.detectedBarcodeBounds,
                barcodeBounds.width > 0,
                barcodeBounds.height > 0 {
                 BarcodeDetectionReticle(

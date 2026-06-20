@@ -2,7 +2,11 @@ import Foundation
 import UIKit
 
 enum ScannerProtocol {
-    static let signalURL = URL(string: "https://scanner-signal.vercel.app/api/signal")!
+    #if DEBUG
+    static let signalURL = URL(string: "https://adorable-hornet-19.convex.site/api/signal")!
+    #else
+    static let signalURL = URL(string: "https://sincere-trout-414.convex.site/api/signal")!
+    #endif
     static let controlChannelLabel = "scanner-control"
     static let photoTransferChannelLabel = "photo-transfer"
     static let protocolVersion = ProtocolVersion(major: 1, minor: 0, patch: 0)

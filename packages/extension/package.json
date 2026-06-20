@@ -8,10 +8,10 @@
   "scripts": {
     "dev": "wxt",
     "dev:firefox": "wxt -b firefox",
-    "build": "wxt build",
-    "build:firefox": "wxt build -b firefox",
-    "zip": "wxt zip && mkdir -p releases && mv .output/*.zip releases/",
-    "zip:firefox": "wxt zip -b firefox && mkdir -p releases && mv .output/*.zip releases/",
+    "build": "wxt build --mode development",
+    "build:firefox": "wxt build -b firefox --mode development",
+    "zip": "wxt zip --mode production && mkdir -p releases && mv .output/*.zip releases/",
+    "zip:firefox": "wxt zip -b firefox --mode production && mkdir -p releases && mv .output/*.zip releases/",
     "compile": "tsc --noEmit",
     "test:scanner": "node --experimental-strip-types --test src/domain/*.test.mjs",
     "postinstall": "wxt prepare"

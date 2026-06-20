@@ -10,6 +10,10 @@ const scannerStoreCaptureActionsSwiftSource = readFileSync(
   new URL("../ios/Volt/Services/ScannerStoreCaptureActions.swift", import.meta.url),
   "utf8"
 );
+const cameraModelSwiftSource = readFileSync(
+  new URL("../ios/Volt/Services/CameraModel.swift", import.meta.url),
+  "utf8"
+);
 const scannerStoreDictationSwiftSource = readFileSync(
   new URL("../ios/Volt/Services/ScannerStoreDictation.swift", import.meta.url),
   "utf8"
@@ -36,6 +40,10 @@ const pairingSessionsViewSwiftSource = readFileSync(
 );
 const scannerViewSwiftSource = readFileSync(
   new URL("../ios/Volt/Views/ScannerView.swift", import.meta.url),
+  "utf8"
+);
+const scannerCameraLayerSwiftSource = readFileSync(
+  new URL("../ios/Volt/Views/ScannerCameraLayer.swift", import.meta.url),
   "utf8"
 );
 const captureSessionViewSwiftSource = readFileSync(
@@ -82,6 +90,14 @@ test("native saved-session reconnect waits longer than QR pairing for sleeping C
   assert.match(scannerProtocolSwiftSource, /static let reconnectRequestTTL: Duration = \.seconds\(95\)/);
   assert.match(scannerProtocolSwiftSource, /static let iceGatheringTimeout: Duration = \.seconds\(2\)/);
   assert.match(scannerSignalingSwiftSource, /let deadline = ContinuousClock\.now \+ ScannerProtocol\.reconnectRequestTTL/);
+});
+
+test("native Debug builds use Convex dev and Release builds use Convex production", () => {
+  assert.match(scannerProtocolSwiftSource, /#if DEBUG/);
+  assert.match(scannerProtocolSwiftSource, /https:\/\/adorable-hornet-19\.convex\.site\/api\/signal/);
+  assert.match(scannerProtocolSwiftSource, /#else/);
+  assert.match(scannerProtocolSwiftSource, /https:\/\/sincere-trout-414\.convex\.site\/api\/signal/);
+  assert.match(scannerProtocolSwiftSource, /#endif/);
 });
 
 test("native saved-session reconnect toast can cancel manual previous-session taps", () => {
@@ -170,6 +186,25 @@ test("native OCR review renders Vision quadrilaterals for angled text", () => {
   assert.match(ocrReviewLayerSwiftSource, /viewPoints\(for: region\.quadrilateral/);
 });
 
+test("native OCR review keeps raw Vision text until selected cleanup is requested", () => {
+  assert.match(textRecognizerSwiftSource, /import FoundationModels/);
+  assert.match(textRecognizerSwiftSource, /enum OcrTextCleaner/);
+  assert.match(textRecognizerSwiftSource, /static func clean\(text: String\) async -> OcrTextCleanupResult/);
+  assert.match(textRecognizerSwiftSource, /SystemLanguageModel\(/);
+  assert.match(textRecognizerSwiftSource, /LanguageModelSession\(/);
+  assert.match(scannerStoreCaptureActionsSwiftSource, /ocrTextRegions = try await TextRecognizer\.recognizeTextRegions\(in: preparedImage\)/);
+  assert.match(scannerStoreCaptureActionsSwiftSource, /ocrReviewText = ocrTextRegions\.map\(\\\.text\)\.joined\(separator: "\\n"\)/);
+  assert.doesNotMatch(scannerStoreCaptureActionsSwiftSource, /OcrTextCleaner\.clean/);
+});
+
+test("native OCR target dialog can clean selected text before sending", () => {
+  assert.match(captureSessionViewSwiftSource, /Button\("Send", systemImage: "paperplane\.fill"\)/);
+  assert.match(captureSessionViewSwiftSource, /Button\(isCleaningSelectedText \? "Cleaning\.\.\." : "Cleanup", systemImage: "wand\.and\.sparkles"\)/);
+  assert.match(captureSessionViewSwiftSource, /store\.sendRecognizedText\(selectedCleanedText \?\? selectedTextRegion\.text\)/);
+  assert.match(captureSessionViewSwiftSource, /let result = await OcrTextCleaner\.clean\(text: region\.text\)/);
+  assert.match(captureSessionViewSwiftSource, /private var selectedTextPreview: String/);
+});
+
 test("native scanner normalizes UPC-A barcodes and upload filenames preserve selection order", () => {
   assert.match(scannerStoreCaptureActionsSwiftSource, /normalizedBarcodeScan\(value: value, format: camera\.lastBarcodeFormat \?\? "barcode"\)/);
   assert.match(scannerStoreCaptureActionsSwiftSource, /trimmedValue\.count == 13/);
@@ -177,6 +212,60 @@ test("native scanner normalizes UPC-A barcodes and upload filenames preserve sel
   assert.match(scannerStoreCaptureActionsSwiftSource, /return \(String\(trimmedValue\.dropFirst\(\)\), "upc_a"\)/);
   assert.match(scannerStoreCaptureActionsSwiftSource, /String\(format: "%03d", index \+ 1\)/);
   assert.match(scannerStoreCaptureActionsSwiftSource, /filename: uploadFilename\(index: index, capturedAt: capturedAt\)/);
+});
+
+test("native barcode scanning favors guided UPC codes over adjacent supplemental barcodes", () => {
+  assert.match(cameraModelSwiftSource, /private struct BarcodeCandidate/);
+  assert.match(cameraModelSwiftSource, /barcodeGuideOverlapRatio\(candidate\.bounds, guideRect\) >= 0\.35/);
+  assert.match(cameraModelSwiftSource, /let retailCandidates = guidedCandidates\.filter\(isRetailUPCorEAN\)/);
+  assert.match(cameraModelSwiftSource, /let selectableCandidates = retailCandidates\.isEmpty \? guidedCandidates : retailCandidates/);
+  assert.match(cameraModelSwiftSource, /private func barcodeGuideScore/);
+  assert.match(cameraModelSwiftSource, /if isSupplementalRetailCode\(candidate\.value\) \{\s*score \+= 4_000\s*\}/);
+  assert.match(cameraModelSwiftSource, /score -= widthRatio \* 480/);
+});
+
+test("native barcode recognition defaults to UPC with settings override", () => {
+  assert.match(cameraModelSwiftSource, /enum BarcodeRecognitionMode: String, CaseIterable, Identifiable/);
+  assert.match(cameraModelSwiftSource, /case upc = "upc"/);
+  assert.match(cameraModelSwiftSource, /var barcodeRecognitionMode: BarcodeRecognitionMode = \.upc/);
+  assert.match(cameraModelSwiftSource, /case \.upc:\s*\[\.ean13, \.ean8, \.upce\]/);
+  assert.match(cameraModelSwiftSource, /case \.all:\s*Self\.allSupportedMetadataObjectTypes/);
+  assert.match(cameraModelSwiftSource, /func updateBarcodeRecognitionMode\(_ mode: BarcodeRecognitionMode\)/);
+  assert.match(scannerStoreSwiftSource, /static let barcodeRecognitionModeStorageKey = "volt\.barcodeRecognitionMode\.v1"/);
+  assert.match(scannerStoreSwiftSource, /var barcodeRecognitionMode: BarcodeRecognitionMode = \.upc/);
+  assert.match(scannerStoreSwiftSource, /UserDefaults\.standard\.set\(barcodeRecognitionMode\.rawValue, forKey: Self\.barcodeRecognitionModeStorageKey\)/);
+  assert.match(scannerStoreSwiftSource, /camera\.updateBarcodeRecognitionMode\(barcodeRecognitionMode\)/);
+  assert.match(rootViewSwiftSource, /SettingsView\(\)\s*\.tabItem \{ Label\("Settings", systemImage: "gearshape"\) \}/);
+  assert.match(rootViewSwiftSource, /Picker\("Recognized Codes", selection: \$store\.barcodeRecognitionMode\)/);
+  assert.match(rootViewSwiftSource, /ForEach\(BarcodeRecognitionMode\.allCases\)/);
+});
+
+test("native barcode reticles expire when detections stop refreshing", () => {
+  assert.match(cameraModelSwiftSource, /private var barcodeDetectionRevision = 0/);
+  assert.match(cameraModelSwiftSource, /private var barcodeClearTask: Task<Void, Never>\?/);
+  assert.match(cameraModelSwiftSource, /func clearDetectedBarcode\(\) \{\s*barcodeDetectionRevision \+= 1\s*barcodeClearTask\?\.cancel\(\)\s*barcodeClearTask = nil/);
+  assert.match(cameraModelSwiftSource, /scheduleStaleBarcodeClear\(\)/);
+  assert.match(cameraModelSwiftSource, /try\? await Task\.sleep\(for: \.milliseconds\(450\)\)/);
+  assert.match(cameraModelSwiftSource, /self\.barcodeDetectionRevision == revision/);
+  assert.match(cameraModelSwiftSource, /self\.clearDetectedBarcode\(\)/);
+});
+
+test("native barcode reticle only renders in barcode capture mode", () => {
+  assert.match(scannerCameraLayerSwiftSource, /guard guideVisible, store\.activeMode == \.barcode else \{\s*store\.camera\.updateBarcodeGuideRect\(nil\)\s*store\.camera\.clearDetectedBarcode\(\)/);
+  assert.match(scannerCameraLayerSwiftSource, /if store\.activeMode == \.barcode,\s*let barcodeBounds = store\.camera\.detectedBarcodeBounds/);
+});
+
+test("native camera resets capture sessions to display 1x zoom", () => {
+  const startSource = cameraModelSwiftSource.slice(
+    cameraModelSwiftSource.indexOf("func start()"),
+    cameraModelSwiftSource.indexOf("func stop()")
+  );
+
+  assert.match(startSource, /resetZoomToDisplayOne\(for: videoDevice\)/);
+  assert.match(cameraModelSwiftSource, /nonisolated private func resetZoomToDisplayOne\(for device: AVCaptureDevice\)/);
+  assert.match(cameraModelSwiftSource, /clampedRawZoomFactor\(1 \/ displayZoomFactorMultiplier\(for: device\), for: device\)/);
+  assert.match(cameraModelSwiftSource, /device\.videoZoomFactor = rawZoomFactor/);
+  assert.match(cameraModelSwiftSource, /updateZoomState\(for: device, rawZoomFactor: rawZoomFactor\)/);
 });
 
 test("native dictation keeps listening briefly after user stop actions", () => {

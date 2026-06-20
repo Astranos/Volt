@@ -55,9 +55,9 @@ test("exports ADR 0002 channel labels and version support", () => {
   assert.equal(SCANNER_CONTROL_CHANNEL_LABEL, "scanner-control");
   assert.equal(PHOTO_TRANSFER_CHANNEL_LABEL, "photo-transfer");
   assert.equal(SCANNER_PROTOCOL_VERSION, "1.0.0");
-  assert.equal(SCANNER_JOIN_TOKEN_TTL_MS, 5 * 60 * 1000);
-  assert.equal(SCANNER_PAIRING_TTL_MS, 180 * 24 * 60 * 60 * 1000);
-  assert.equal(SCANNER_RECONNECT_REQUEST_TTL_MS, 2 * 60 * 1000);
+  assert.equal(SCANNER_JOIN_TOKEN_TTL_MS, 2 * 60 * 1000);
+  assert.equal(SCANNER_PAIRING_TTL_MS, 90 * 24 * 60 * 60 * 1000);
+  assert.equal(SCANNER_RECONNECT_REQUEST_TTL_MS, 95 * 1000);
   assert.equal(isScannerProtocolVersionSupported({ major: 1, minor: 0 }), true);
   assert.equal(isScannerProtocolVersionSupported({ major: 2, minor: 0 }), false);
 });
