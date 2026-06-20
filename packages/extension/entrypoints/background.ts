@@ -37,12 +37,12 @@ import {
 import { EXTENSION_SCANNER_SIGNAL_URL } from "../src/domain/mobile-scanner-signal-url";
 
 type RuntimePath =
-  | `/install.html${string}`
   | `/mobile-scanner-popup.html${string}`
   | `/offscreen.html${string}`
   | `/options.html${string}`;
 
 const SCANNER_RECONNECT_ALARM_NAME = "volt.mobileScanner.reconnectPoll";
+const VOLT_INSTALL_URL = "https://volt-resale.vercel.app/thankyou";
 
 function asMessageRecord(message: unknown) {
   return parseMessageRecord(message) ?? {};
@@ -268,9 +268,9 @@ export default defineBackground({
         }
 
         if (details.reason === "install") {
-          log("First installation detected, opening install page");
+          log("First installation detected, opening hosted setup page");
           chrome.tabs.create({
-            url: runtimeUrl("/install.html"),
+            url: VOLT_INSTALL_URL,
             active: true,
           });
         }

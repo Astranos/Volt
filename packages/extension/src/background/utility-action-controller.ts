@@ -2,7 +2,6 @@ import type { RuntimeActionRegistry } from "./runtime-action-registry";
 import type { LogFn } from "./runtime-action-registry";
 
 type RuntimePath =
-  | `/install.html${string}`
   | `/mobile-scanner-popup.html${string}`
   | `/offscreen.html${string}`
   | `/options.html${string}`;

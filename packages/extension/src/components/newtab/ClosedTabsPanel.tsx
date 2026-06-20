@@ -8,6 +8,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/src/components/ui/toggle-group";
 import { Search as SearchIcon, Clock } from "lucide-react";
 import { searchProviders } from "../cmdk-palette/SearchProviders";
 import { type SearchMode } from "./NewTabHelp";
+import { getSearchPrefixMode, parseSearchPrefix } from "@/src/domain/search-intent";
 import "./closed-tabs-panel.css";
 
 interface ClosedTabsPanelProps {
@@ -32,31 +33,6 @@ const SEARCH_MODE_OPTIONS: Array<{
   { mode: "ebay", label: "eBay", id: "tour-search-ebay" },
   { mode: "shopify", label: "Shopify", id: "tour-search-shopify" },
 ];
-
-const SEARCH_PREFIXES: Record<string, SearchMode> = {
-  g: "google",
-  p: "pricecharting",
-  u: "barcodelookup",
-  e: "ebay",
-  s: "shopify",
-};
-
-function parseSearchPrefix(input: string): {
-  mode: SearchMode | null;
-  query: string;
-} {
-  const match = input.match(/^([a-z])\s+(.+)$/i);
-  if (!match) {
-    return { mode: null, query: input };
-  }
-
-  const mode = SEARCH_PREFIXES[match[1].toLowerCase()];
-  if (!mode) {
-    return { mode: null, query: input };
-  }
-
-  return { mode, query: match[2].trim() };
-}
 
 export function ClosedTabsPanel({
   onSearchSubmit,
@@ -155,6 +131,21 @@ export function ClosedTabsPanel({
   };
 
   const handleSearchInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === " " || e.key === "Spacebar") {
+      const prefixMode = getSearchPrefixMode(search);
+      if (prefixMode) {
+        e.preventDefault();
+        setSearch("");
+        if (listRef.current) {
+          listRef.current.scrollTop = 0;
+        }
+        if (prefixMode !== activeMode) {
+          onToggleSearchMode?.(prefixMode);
+        }
+        return;
+      }
+    }
+
     if (e.key === "Enter" && onSearchSubmit) {
       e.preventDefault();
       onSearchSubmit(search);
@@ -275,8 +266,8 @@ export function ClosedTabsPanel({
                     className="closed-tabs-item"
                   >
                     <div className="flex items-center gap-3 px-4 py-3 w-full">
-                      <div className="p-2 rounded bg-gray-100">
-                        <SearchIcon className="w-4 h-4 text-gray-500" />
+                      <div className="closed-tabs-search-action-icon rounded p-2">
+                        <SearchIcon className="w-4 h-4" />
                       </div>
                       <div className="flex-1">
                         <p className="text-sm font-medium text-gray-900">

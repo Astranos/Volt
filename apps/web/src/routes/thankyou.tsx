@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { createFileRoute } from "@tanstack/react-router";
 import type { ComponentType } from "react";
 import {
   AlertTriangle,
   BadgeCheck,
   Barcode,
+  Chrome,
   ExternalLink,
   LayoutDashboard,
   MousePointer2,
@@ -13,6 +14,10 @@ import {
   Settings,
   Smartphone,
 } from "lucide-react";
+
+export const Route = createFileRoute("/thankyou")({
+  component: Install,
+});
 
 type Workflow = {
   title: string;
@@ -26,22 +31,19 @@ const workflows: Workflow[] = [
   {
     title: "Volt new tab",
     description:
-      "Start new browser work from the Volt dashboard, including provider search, saved links, and recently closed tabs.",
-    image: "/assets/images/new-tab.png",
+      "Start browser work from the Volt dashboard with provider search, saved links, and recently closed tabs.",
     icon: LayoutDashboard,
   },
   {
     title: "Right-click research",
     description:
       "Highlight text and send it straight to eBay solds, PriceCharting, UPC lookup, or configured search providers.",
-    image: "/assets/screenshots/quick-actions.png",
     icon: MousePointer2,
   },
   {
     title: "UPC capture",
     description:
-      "Detect UPCs on product pages, copy them quickly, and reduce the small manual steps that slow down listing.",
-    image: "/assets/screenshots/upc-highlighter.png",
+      "Detect UPCs on product pages, copy them quickly, and reduce the manual steps that slow down listing.",
     icon: Barcode,
   },
   {
@@ -53,40 +55,20 @@ const workflows: Workflow[] = [
   },
 ];
 
-export default function ThankYouPage() {
-  const [version, setVersion] = useState("");
-
-  useEffect(() => {
-    try {
-      setVersion(chrome.runtime.getManifest().version);
-    } catch {
-      setVersion("");
-    }
-  }, []);
-
-  const openChromeUrl = (href: string) => {
-    const url =
-      href === "chrome://extensions/?id=__EXTENSION_ID__"
-        ? `chrome://extensions/?id=${chrome.runtime.id}`
-        : href;
-    chrome.tabs.create({ url });
-  };
-
+function Install() {
   return (
     <main className="min-h-screen bg-[#f7f8fa] text-slate-950">
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-4">
           <div className="flex items-center gap-3">
             <img
-              src="/assets/icons/logo-128.png"
+              src="/assets/volt.webp"
               alt="Volt"
               className="h-10 w-10 rounded-lg border border-slate-200 bg-white"
             />
             <div>
               <p className="text-sm font-semibold leading-5">Volt</p>
-              <p className="text-xs text-slate-500">
-                Chrome extension{version ? ` · v${version}` : ""}
-              </p>
+              <p className="text-xs text-slate-500">Chrome extension</p>
             </div>
           </div>
 
@@ -109,7 +91,7 @@ export default function ThankYouPage() {
               </h1>
             </div>
             <img
-              src="/assets/icons/logo-128.png"
+              src="/assets/volt.webp"
               alt=""
               className="hidden h-16 w-16 rounded-lg border border-slate-200 bg-white md:block"
             />
@@ -134,26 +116,22 @@ export default function ThankYouPage() {
           </div>
 
           <div className="mt-6 flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() =>
-                openChromeUrl("chrome://extensions/?id=__EXTENSION_ID__")
-              }
+            <a
+              href="chrome://extensions"
               className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800 hover:border-slate-300 hover:bg-slate-50"
             >
               <Settings className="h-4 w-4 text-slate-500" />
-              Manage extension
+              Manage extensions
               <ExternalLink className="h-3.5 w-3.5 text-slate-400" />
-            </button>
-            <button
-              type="button"
-              onClick={() => openChromeUrl("chrome://newtab")}
+            </a>
+            <a
+              href="chrome://newtab"
               className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800 hover:border-slate-300 hover:bg-slate-50"
             >
               <LayoutDashboard className="h-4 w-4 text-slate-500" />
               Open new tab
               <ExternalLink className="h-3.5 w-3.5 text-slate-400" />
-            </button>
+            </a>
           </div>
         </div>
 
@@ -167,15 +145,36 @@ export default function ThankYouPage() {
                 Search and session tools moved into the dashboard.
               </h2>
             </div>
-            <LayoutDashboard className="h-7 w-7 text-emerald-300" />
+            <Chrome className="h-7 w-7 text-emerald-300" />
           </div>
 
-          <div className="overflow-hidden rounded-lg border border-white/10 bg-white/[0.04]">
-            <img
-              src="/assets/images/new-tab.png"
-              alt=""
-              className="h-64 w-full object-cover object-top"
-            />
+          <div className="overflow-hidden rounded-lg border border-white/10 bg-white/[0.04] p-4">
+            <div className="rounded-md bg-white p-3 text-slate-950">
+              <div className="mb-3 flex items-center justify-between border-b border-slate-200 pb-2">
+                <div className="flex items-center gap-2 text-xs font-semibold">
+                  <img src="/assets/volt.webp" alt="" className="h-5 w-5 rounded" />
+                  Volt Resale
+                </div>
+                <LayoutDashboard className="h-4 w-4 text-slate-500" />
+              </div>
+              <div className="grid gap-3 md:grid-cols-[1.2fr_0.8fr]">
+                <div className="space-y-2">
+                  {["Google", "PriceCharting", "UPC", "eBay", "Shopify"].map((item) => (
+                    <div key={item} className="h-8 rounded bg-slate-100 px-3 py-2 text-xs font-medium text-slate-600">
+                      {item}
+                    </div>
+                  ))}
+                </div>
+                <div className="space-y-2">
+                  <div className="h-8 rounded bg-emerald-100 px-3 py-2 text-xs font-semibold text-emerald-700">
+                    Quick links
+                  </div>
+                  <div className="h-8 rounded bg-slate-100" />
+                  <div className="h-8 rounded bg-slate-100" />
+                  <div className="h-8 rounded bg-slate-100" />
+                </div>
+              </div>
+            </div>
           </div>
 
           <div className="mt-5 rounded-lg border border-emerald-400/20 bg-emerald-400/10 p-4 text-sm leading-6 text-emerald-50">
@@ -186,15 +185,13 @@ export default function ThankYouPage() {
       </section>
 
       <section className="mx-auto max-w-6xl px-5 pb-8">
-        <div className="mb-4 flex items-end justify-between gap-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-              Core workflows
-            </p>
-            <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">
-              What Volt adds to Chrome
-            </h2>
-          </div>
+        <div className="mb-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+            Core workflows
+          </p>
+          <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">
+            What Volt adds to Chrome
+          </h2>
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">
@@ -248,48 +245,32 @@ function SetupStep({
 }
 
 function WorkflowCard({ workflow }: { workflow: Workflow }) {
-  const isWarning = workflow.accent === "warning";
-
+  const Icon = workflow.icon;
   return (
     <article className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-      {workflow.image ? (
-        <div className="border-b border-slate-200 bg-slate-100">
-          <img
-            src={workflow.image}
-            alt=""
-            className="h-56 w-full object-cover object-top"
-          />
-        </div>
-      ) : (
-        <div className="border-b border-amber-200 bg-amber-50 p-5">
-          <div className="rounded-lg border border-amber-200 bg-white p-4 shadow-sm">
-            <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-amber-800">
-              <AlertTriangle className="h-4 w-4" />
-              Active listing warning
-            </div>
-            <p className="text-sm leading-6 text-amber-900">
-              Active listings are asking prices, not market comps. Switch to
-              sold listings before pricing.
-            </p>
-          </div>
-        </div>
-      )}
-      <div className="p-5">
+      <div
+        className={
+          workflow.accent === "warning"
+            ? "flex h-44 items-center justify-center border-b border-slate-200 bg-amber-50 text-amber-700"
+            : "flex h-44 items-center justify-center border-b border-slate-200 bg-emerald-50 text-emerald-700"
+        }
+      >
+        <Icon className="h-10 w-10" />
+      </div>
+      <div className="p-4">
         <div className="mb-3 flex items-center gap-2">
           <div
-            className={`flex h-8 w-8 items-center justify-center rounded-lg ${
-              isWarning
-                ? "bg-amber-50 text-amber-700"
-                : "bg-emerald-50 text-emerald-700"
-            }`}
+            className={
+              workflow.accent === "warning"
+                ? "rounded-md bg-amber-100 p-2 text-amber-700"
+                : "rounded-md bg-emerald-100 p-2 text-emerald-700"
+            }
           >
-            <workflow.icon className="h-4 w-4" />
+            <Icon className="h-4 w-4" />
           </div>
-          <h3 className="font-semibold text-slate-950">{workflow.title}</h3>
+          <h3 className="text-sm font-semibold text-slate-950">{workflow.title}</h3>
         </div>
-        <p className="text-sm leading-6 text-slate-600">
-          {workflow.description}
-        </p>
+        <p className="text-sm leading-6 text-slate-600">{workflow.description}</p>
       </div>
     </article>
   );
@@ -306,10 +287,10 @@ function UtilityCard({
 }) {
   return (
     <article className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="mb-4 flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100 text-slate-700">
-        <Icon className="h-4 w-4" />
+      <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100 text-slate-700">
+        <Icon className="h-5 w-5" />
       </div>
-      <h3 className="font-semibold text-slate-950">{title}</h3>
+      <h3 className="text-sm font-semibold text-slate-950">{title}</h3>
       <p className="mt-2 text-sm leading-6 text-slate-600">{body}</p>
     </article>
   );

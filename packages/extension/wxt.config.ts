@@ -93,10 +93,6 @@ export default defineConfig({
     options_page: "options.html",
     web_accessible_resources: [
       {
-        resources: ["install.html"],
-        matches: ["<all_urls>"],
-      },
-      {
         resources: ["assets/images/*"],
         matches: ["<all_urls>"],
       },

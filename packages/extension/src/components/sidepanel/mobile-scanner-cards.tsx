@@ -59,9 +59,9 @@ export function CompactScannerStatus({
           : "Open the pairing popup to add an iPhone.";
 
   return (
-    <div className="sidepanel-scanner-card liquid-glass concentric-xl flex min-w-0 flex-col gap-3 px-3.5 py-3">
+    <div className="mobile-scanner-card sidepanel-scanner-card flex min-w-0 flex-col gap-3 px-3.5 py-3">
       <div className="flex min-w-0 items-start gap-3">
-        <span className="sidepanel-scanner-icon liquid-glass-soft flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-green-700 dark:text-green-300">
+        <span className="mobile-scanner-icon sidepanel-scanner-icon flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-green-700 dark:text-green-300">
           <Smartphone className="h-4 w-4" />
         </span>
         <div className="min-w-0 flex-1">
@@ -80,7 +80,7 @@ export function CompactScannerStatus({
         <button
           type="button"
           onClick={onAddPhone}
-          className="sidepanel-scanner-action liquid-glass-soft inline-flex h-10 min-w-0 items-center justify-center gap-2 rounded-full px-3 text-xs font-bold text-stone-700 transition hover:text-stone-950 active:scale-[0.99] dark:text-stone-200 dark:hover:text-stone-50"
+          className="mobile-scanner-action sidepanel-scanner-action inline-flex h-10 min-w-0 items-center justify-center gap-2 rounded-full px-3 text-xs font-bold text-stone-700 transition hover:text-stone-950 active:scale-[0.99] dark:text-stone-200 dark:hover:text-stone-50"
         >
           <Plus className="h-3.5 w-3.5 shrink-0" />
           <span className="truncate">Add iPhone</span>
@@ -89,7 +89,7 @@ export function CompactScannerStatus({
           type="button"
           onClick={connected ? onDisconnect : onForceRestart}
           disabled={creating}
-          className="sidepanel-scanner-action liquid-glass-soft inline-flex h-10 min-w-0 items-center justify-center gap-2 rounded-full px-3 text-xs font-bold text-stone-700 transition hover:text-stone-950 active:scale-[0.99] disabled:opacity-40 dark:text-stone-200 dark:hover:text-stone-50"
+          className="mobile-scanner-action sidepanel-scanner-action inline-flex h-10 min-w-0 items-center justify-center gap-2 rounded-full px-3 text-xs font-bold text-stone-700 transition hover:text-stone-950 active:scale-[0.99] disabled:opacity-40 dark:text-stone-200 dark:hover:text-stone-50"
         >
           {connected ? (
             <X className="h-3.5 w-3.5 shrink-0" />
@@ -105,7 +105,7 @@ export function CompactScannerStatus({
 
 export function LoadingHistory() {
   return (
-    <div className="liquid-glass-soft concentric-lg flex items-center justify-center gap-2 px-4 py-8 text-xs font-semibold text-stone-500 dark:text-stone-400">
+    <div className="mobile-scanner-card flex items-center justify-center gap-2 px-4 py-8 text-xs font-semibold text-stone-500 dark:text-stone-400">
       <Loader2 className="h-4 w-4 animate-spin" />
       Loading results
     </div>
@@ -114,8 +114,8 @@ export function LoadingHistory() {
 
 export function EmptyHistory() {
   return (
-    <div className="sidepanel-empty-history liquid-glass-soft concentric-lg flex flex-col items-center border border-dashed border-stone-300/70 px-4 py-9 text-center dark:border-stone-700/70">
-      <div className="liquid-glass-soft mb-3 flex h-12 w-12 items-center justify-center rounded-full text-stone-400 dark:text-stone-500">
+    <div className="mobile-scanner-card sidepanel-empty-history flex flex-col items-center border-dashed px-4 py-9 text-center">
+      <div className="mobile-scanner-icon mb-3 flex h-12 w-12 items-center justify-center rounded-full text-stone-400 dark:text-stone-500">
         <Scan className="h-5 w-5" />
       </div>
       <p className="text-sm font-semibold text-stone-700 dark:text-stone-200">
@@ -145,7 +145,7 @@ export function ScanCard({
   const isText = group.kind === "text";
   const Icon = isText ? Type : ScanLine;
   return (
-    <div className={cn("liquid-glass-soft concentric-lg min-w-0 overflow-hidden px-3 py-3", removing && "volt-item-exit")}>
+    <div className={cn("mobile-scanner-card min-w-0 overflow-hidden px-3 py-3", removing && "volt-item-exit")}>
       <div className="mb-2 flex min-w-0 items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
           <span className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-full", isText ? "bg-amber-100/80 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300" : "bg-green-100/80 text-green-700 dark:bg-green-500/15 dark:text-green-300")}>
@@ -164,11 +164,11 @@ export function ScanCard({
           <Trash2 className="h-3.5 w-3.5" />
         </button>
       </div>
-      <div className="rounded-lg bg-white/80 px-3 py-2 ring-1 ring-stone-200/70 dark:bg-stone-800/70 dark:ring-stone-700/70">
+      <div className="mobile-scanner-inset rounded-lg px-3 py-2">
         <div className={cn("text-[13px] font-semibold leading-snug text-stone-950 dark:text-stone-50", isText ? "line-clamp-4 break-words" : "break-all font-mono")}>
           {scan.value}
         </div>
-        <button type="button" onClick={onCopy} className="mt-2 inline-flex h-7 items-center gap-1 rounded-full bg-stone-100 px-2.5 text-[11px] font-bold text-stone-700 transition hover:bg-stone-200 dark:bg-stone-700 dark:text-stone-100 dark:hover:bg-stone-600">
+        <button type="button" onClick={onCopy} className="mobile-scanner-mini-action mt-2 inline-flex h-7 items-center gap-1 rounded-full px-2.5 text-[11px] font-bold transition">
           <Copy className="h-3 w-3" />
           Copy
         </button>
@@ -218,7 +218,7 @@ export function PhotoBatchCard({
   const visibleEntries = collapsed ? collapsedPreviewEntries : group.entries;
   const count = group.entries.length;
   return (
-    <div className="liquid-glass-soft concentric-lg min-w-0 overflow-hidden">
+    <div className="mobile-scanner-card min-w-0 overflow-hidden">
       <div className="flex min-w-0 items-center justify-between gap-2 px-3 pt-3">
         <div className="flex min-w-0 items-center gap-2">
           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-orange-100/80 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300">
@@ -234,7 +234,7 @@ export function PhotoBatchCard({
           </div>
         </div>
         <div className="flex items-center gap-1">
-          <button type="button" onClick={onToggleCollapse} className="inline-flex h-8 items-center gap-1.5 rounded-full bg-stone-100 px-2.5 text-[11px] font-bold text-stone-700 transition hover:bg-stone-200 dark:bg-stone-700 dark:text-stone-100 dark:hover:bg-stone-600" aria-label={collapsed ? "Expand photo batch" : "Collapse photo batch"}>
+          <button type="button" onClick={onToggleCollapse} className="mobile-scanner-mini-action inline-flex h-8 items-center gap-1.5 rounded-full px-2.5 text-[11px] font-bold transition" aria-label={collapsed ? "Expand photo batch" : "Collapse photo batch"}>
             <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", collapsed && "-rotate-90")} />
             {collapsed ? (count > 1 ? `+${count - 1}` : "Show") : "Hide"}
           </button>
@@ -307,7 +307,7 @@ function CollapsedPhotoBatchPreview({
       onDragStart={onDragStart}
       onMouseEnter={onHover}
       onPointerDown={onHover}
-      className="group mx-3 mb-3 mt-2 cursor-grab rounded-lg bg-stone-50/70 p-1 ring-1 ring-stone-200/70 active:cursor-grabbing dark:bg-stone-800/55 dark:ring-stone-700/70"
+      className="mobile-scanner-inset group mx-3 mb-3 mt-2 cursor-grab rounded-lg p-1 active:cursor-grabbing"
       aria-label={`Drag ${totalCount} photo batch`}
     >
       <div className="grid grid-cols-4 gap-1">
@@ -324,7 +324,7 @@ function CollapsedPhotoBatchPreview({
                 onToggleCollapse();
               }}
               className={cn(
-                "relative aspect-square min-w-0 overflow-hidden rounded-md bg-stone-100 ring-1 ring-inset transition dark:bg-stone-900",
+                "relative aspect-square min-w-0 overflow-hidden rounded-md bg-stone-100 ring-1 ring-inset transition dark:bg-stone-900/80",
                 selectedPhotoIds.has(entry.id) ? "ring-green-500 dark:ring-green-300" : "ring-stone-200/80 dark:ring-stone-700",
                 removingIds.has(entry.id) && "volt-item-exit",
               )}
@@ -468,7 +468,7 @@ export function UndoDeleteToast({
   onUndo: () => void;
 }) {
   return (
-    <div className="absolute inset-x-3 bottom-3 z-20 flex items-center justify-between gap-3 rounded-lg bg-stone-950 px-3 py-2 text-xs font-semibold text-white shadow-lg">
+    <div className="mobile-scanner-toast absolute inset-x-3 bottom-3 z-20 flex items-center justify-between gap-3 rounded-lg px-3 py-2 text-xs font-semibold shadow-lg">
       <span className="truncate">{label}</span>
       <button
         type="button"
