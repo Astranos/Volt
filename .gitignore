@@ -22,6 +22,14 @@ stats-*.json
 web-ext.config.ts
 apps/scanner-signal/.tmp/
 apps/mobile/.tmp/
+apps/mobile/build/fastlane/
+apps/mobile/vendor/bundle/
+apps/mobile/fastlane/Preview.html
+apps/mobile/fastlane/README.md
+apps/mobile/fastlane/report.xml
+apps/mobile/fastlane/screenshots/
+apps/mobile/fastlane/test_output/
+apps/mobile/fastlane/*.p8
 apps/web/dist/
 graphify-out/
 packages/extension/docs/examples/
