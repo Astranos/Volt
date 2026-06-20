@@ -15,6 +15,21 @@ enum ScannerProtocol {
     static let reconnectRequestTTL: Duration = .seconds(95)
     static let joinAttemptPollInterval: Duration = .milliseconds(650)
     static let iceGatheringTimeout: Duration = .seconds(2)
+    static let photoReceiptTimeout: Duration = .seconds(20)
+
+    enum MessageType: String {
+        case hello
+        case captureResult = "capture_result"
+        case dictation
+        case sessionReady = "session_ready"
+        case resultReceived = "result_received"
+        case photoStart = "photo_start"
+        case photoChunk = "photo_chunk"
+        case photoComplete = "photo_complete"
+        case photoChunkAck = "photo_chunk_ack"
+        case photoReceived = "photo_received"
+        case photoRejected = "photo_rejected"
+    }
 
     struct ProtocolVersion: Codable, Equatable {
         let major: Int
@@ -77,6 +92,31 @@ enum ScannerProtocol {
         let cursorTarget: SessionReady.CursorTarget?
     }
 
+    struct PhotoChunkAck: Decodable, Equatable {
+        let photoId: String
+        let chunkIndex: Int
+        let totalChunks: Int
+    }
+
+    struct PhotoReceived: Decodable, Equatable {
+        let photoId: String
+        let photoBatchId: String
+        let storedAt: String
+        let size: Int
+    }
+
+    struct PhotoRejected: Decodable, Equatable {
+        let photoId: String
+        let reason: String
+        let retryable: Bool
+        let detail: String?
+    }
+
+    enum PhotoDeliveryReceipt: Equatable {
+        case received(PhotoReceived)
+        case rejected(PhotoRejected)
+    }
+
     struct PhotoPayload {
         let id: String
         let batchId: String
@@ -123,9 +163,9 @@ enum ScannerProtocol {
         return value
     }
 
-    static func baseMessage(type: String, prefix: String) -> [String: Any] {
+    static func baseMessage(type: MessageType, prefix: String) -> [String: Any] {
         [
-            "type": type,
+            "type": type.rawValue,
             "messageId": makeMessageId(prefix),
             "sentAt": scannerDateString(from: .now),
         ]
@@ -133,7 +173,7 @@ enum ScannerProtocol {
 
     @MainActor
     static func helloMessage(contributorId: String, chromeSessionId: String = "local") -> [String: Any] {
-        var message = baseMessage(type: "hello", prefix: "hello")
+        var message = baseMessage(type: .hello, prefix: "hello")
         message["peer"] = [
             "protocolVersion": ["major": protocolVersion.major, "minor": protocolVersion.minor, "patch": protocolVersion.patch ?? 0],
             "appVersion": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.0",
@@ -155,7 +195,7 @@ enum ScannerProtocol {
         insertIntoCursor: Bool,
         contributorId: String
     ) -> [String: Any] {
-        var message = baseMessage(type: "capture_result", prefix: "capture")
+        var message = baseMessage(type: .captureResult, prefix: "capture")
         message["resultId"] = id
         message["resultKind"] = kind
         message["value"] = value
@@ -167,7 +207,7 @@ enum ScannerProtocol {
     }
 
     static func dictationMessage(sessionId: String, phase: String, text: String?, insertIntoCursor: Bool) -> [String: Any] {
-        var message = baseMessage(type: "dictation", prefix: "dictation")
+        var message = baseMessage(type: .dictation, prefix: "dictation")
         message["dictationSessionId"] = sessionId
         message["phase"] = phase
         message["capturedAt"] = scannerDateString(from: .now)
@@ -179,7 +219,7 @@ enum ScannerProtocol {
     }
 
     static func photoStart(_ payload: PhotoPayload, contributorId: String, totalChunks: Int) -> [String: Any] {
-        var message = baseMessage(type: "photo_start", prefix: "photo")
+        var message = baseMessage(type: .photoStart, prefix: "photo")
         message["photoId"] = payload.id
         message["photoBatchId"] = payload.batchId
         message["contributorId"] = contributorId
@@ -195,7 +235,7 @@ enum ScannerProtocol {
     }
 
     static func photoChunk(photoId: String, index: Int, totalChunks: Int, data: String) -> [String: Any] {
-        var message = baseMessage(type: "photo_chunk", prefix: "photo")
+        var message = baseMessage(type: .photoChunk, prefix: "photo")
         message["photoId"] = photoId
         message["chunkIndex"] = index
         message["totalChunks"] = totalChunks
@@ -204,30 +244,45 @@ enum ScannerProtocol {
     }
 
     static func photoComplete(photoId: String, totalChunks: Int) -> [String: Any] {
-        var message = baseMessage(type: "photo_complete", prefix: "photo")
+        var message = baseMessage(type: .photoComplete, prefix: "photo")
         message["photoId"] = photoId
         message["totalChunks"] = totalChunks
         return message
     }
 
     static func parseSessionReady(_ rawValue: String) -> SessionReady? {
-        guard let data = rawValue.data(using: .utf8),
-              let envelope = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              envelope["type"] as? String == "session_ready"
-        else {
-            return nil
-        }
+        guard let data = data(for: rawValue, matching: .sessionReady) else { return nil }
         return try? JSONDecoder().decode(SessionReady.self, from: data)
     }
 
     static func parseResultReceived(_ rawValue: String) -> ResultReceived? {
+        guard let data = data(for: rawValue, matching: .resultReceived) else { return nil }
+        return try? JSONDecoder().decode(ResultReceived.self, from: data)
+    }
+
+    static func parsePhotoChunkAck(_ rawValue: String) -> PhotoChunkAck? {
+        guard let data = data(for: rawValue, matching: .photoChunkAck) else { return nil }
+        return try? JSONDecoder().decode(PhotoChunkAck.self, from: data)
+    }
+
+    static func parsePhotoReceived(_ rawValue: String) -> PhotoReceived? {
+        guard let data = data(for: rawValue, matching: .photoReceived) else { return nil }
+        return try? JSONDecoder().decode(PhotoReceived.self, from: data)
+    }
+
+    static func parsePhotoRejected(_ rawValue: String) -> PhotoRejected? {
+        guard let data = data(for: rawValue, matching: .photoRejected) else { return nil }
+        return try? JSONDecoder().decode(PhotoRejected.self, from: data)
+    }
+
+    private static func data(for rawValue: String, matching type: MessageType) -> Data? {
         guard let data = rawValue.data(using: .utf8),
               let envelope = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              envelope["type"] as? String == "result_received"
+              envelope["type"] as? String == type.rawValue
         else {
             return nil
         }
-        return try? JSONDecoder().decode(ResultReceived.self, from: data)
+        return data
     }
 
     private static func scannerDateString(from date: Date) -> String {
@@ -248,6 +303,9 @@ enum ScannerPairingError: LocalizedError {
     case chromeTimedOut
     case joinTokenExpired
     case requestFailed
+    case photoRejected(String)
+    case photoDeliveryInterrupted
+    case photoDeliveryTimedOut
 
     var errorDescription: String? {
         switch self {
@@ -261,6 +319,9 @@ enum ScannerPairingError: LocalizedError {
         case .chromeTimedOut: "Chrome did not respond in time. Reopen the QR and scan again."
         case .joinTokenExpired: "This Chrome pairing session expired. Scan the QR again."
         case .requestFailed: "The scanner signaling service did not accept the request."
+        case .photoRejected(let reason): "Chrome rejected the photo: \(reason)"
+        case .photoDeliveryInterrupted: "Photo delivery was interrupted."
+        case .photoDeliveryTimedOut: "Chrome did not confirm photo delivery in time."
         }
     }
 }

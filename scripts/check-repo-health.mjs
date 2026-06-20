@@ -27,10 +27,6 @@ const sourceExtensions = new Set([
 
 const sourceRootsPattern = /^(apps|convex|packages)\//;
 const maxSourceLines = 1000;
-const oversizedSourceBaseline = new Map([
-  ["packages/extension/entrypoints/context-menu.tsx", 1070],
-  ["packages/extension/src/components/cmdk-palette/CMDKPalette.tsx", 1092],
-]);
 
 const workingTreeFiles = execFileSync(
   "git",
@@ -92,18 +88,12 @@ const sourceFiles = workingTreeFiles.filter((file) => {
 const oversizedFiles = [];
 for (const file of sourceFiles) {
   const lineCount = countLines(readFileSync(file, "utf8"));
-  const baseline = oversizedSourceBaseline.get(file);
-
-  if (baseline !== undefined) {
-    if (lineCount > baseline) {
-      oversizedFiles.push(`${file} (${lineCount} lines, baseline ${baseline})`);
-    }
-  } else if (lineCount > maxSourceLines) {
+  if (lineCount > maxSourceLines) {
     oversizedFiles.push(`${file} (${lineCount} lines)`);
   }
 }
 reportFailures(
-  `source files over ${maxSourceLines} lines outside the accepted baseline`,
+  `source files over ${maxSourceLines} lines`,
   oversizedFiles,
 );
 

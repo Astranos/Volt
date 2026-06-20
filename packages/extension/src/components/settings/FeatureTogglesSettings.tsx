@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction } from "react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Menu } from "lucide-react";
 import type { SaveExtensionSettings } from "@/src/hooks/useExtensionSettings";
 import type { CmdkSettings } from "@/src/types/settings";
@@ -49,6 +49,7 @@ export function FeatureTogglesSettings({
   saveSettings,
 }: FeatureTogglesSettingsProps) {
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const pendingSourceOrderSettingsRef = useRef<CmdkSettings | null>(null);
   const sources = settings.sourceOrder
     .map((key) => SOURCES_CONFIG[key as keyof typeof SOURCES_CONFIG])
     .filter(Boolean);
@@ -67,21 +68,26 @@ export function FeatureTogglesSettings({
     event.preventDefault();
     if (draggedIndex === null || draggedIndex === index) return;
 
-    const newOrder = [...settings.sourceOrder];
+    const currentSettings = pendingSourceOrderSettingsRef.current ?? settings;
+    const newOrder = [...currentSettings.sourceOrder];
     const draggedItem = newOrder[draggedIndex];
     newOrder.splice(draggedIndex, 1);
     newOrder.splice(index, 0, draggedItem);
 
-    setSettings({
-      ...settings,
+    const nextSettings = {
+      ...currentSettings,
       sourceOrder: newOrder,
-    });
+    };
+    pendingSourceOrderSettingsRef.current = nextSettings;
+    setSettings(nextSettings);
     setDraggedIndex(index);
   };
 
   const handleDragEnd = () => {
     setDraggedIndex(null);
-    void saveSettings(settings);
+    const nextSettings = pendingSourceOrderSettingsRef.current ?? settings;
+    pendingSourceOrderSettingsRef.current = null;
+    void saveSettings(nextSettings);
   };
 
   return (

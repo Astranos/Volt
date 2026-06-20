@@ -14,6 +14,10 @@ final class ScannerWebRTCConnection: NSObject {
     private var controlChannel: RTCDataChannel?
     private var photoChannel: RTCDataChannel?
     private var iceGatheringContinuation: CheckedContinuation<Void, Never>?
+    private var pendingPhotoReceipts: [String: CheckedContinuation<ScannerProtocol.PhotoDeliveryReceipt, Error>] = [:]
+    private var pendingPhotoReceiptTimeouts: [String: Task<Void, Never>] = [:]
+    private var completedPhotoReceipts: [String: ScannerProtocol.PhotoDeliveryReceipt] = [:]
+    private var latestPhotoChunkAcks: [String: ScannerProtocol.PhotoChunkAck] = [:]
 
     init(contributorId: String) {
         self.contributorId = contributorId
@@ -38,6 +42,7 @@ final class ScannerWebRTCConnection: NSObject {
     }
 
     func close() {
+        failPendingPhotoReceipts(with: ScannerPairingError.channelNotOpen)
         controlChannel?.close()
         photoChannel?.close()
         peerConnection?.close()
@@ -71,7 +76,19 @@ final class ScannerWebRTCConnection: NSObject {
             )
             await Task.yield()
         }
-        try sendPhotoMessage(ScannerProtocol.photoComplete(photoId: payload.id, totalChunks: chunks.count), through: photoChannel)
+        let receiptTask = Task { @MainActor in
+            try await waitForPhotoReceipt(photoId: payload.id)
+        }
+        do {
+            try sendPhotoMessage(ScannerProtocol.photoComplete(photoId: payload.id, totalChunks: chunks.count), through: photoChannel)
+        } catch {
+            receiptTask.cancel()
+            throw error
+        }
+        let receipt = try await receiptTask.value
+        if case .rejected(let rejection) = receipt {
+            throw ScannerPairingError.photoRejected(rejection.detail ?? rejection.reason)
+        }
     }
 
     private func resolvePairing(_ session: PairingSession) async throws -> (offer: String, answerURL: URL, sessionId: String?) {
@@ -188,6 +205,79 @@ final class ScannerWebRTCConnection: NSObject {
         }
         if let resultReceived = ScannerProtocol.parseResultReceived(rawValue) {
             onResultReceived?(resultReceived)
+            return
+        }
+        if let chunkAck = ScannerProtocol.parsePhotoChunkAck(rawValue) {
+            latestPhotoChunkAcks[chunkAck.photoId] = chunkAck
+            return
+        }
+        if let photoReceived = ScannerProtocol.parsePhotoReceived(rawValue) {
+            resumePhotoReceipt(.received(photoReceived), photoId: photoReceived.photoId)
+            return
+        }
+        if let photoRejected = ScannerProtocol.parsePhotoRejected(rawValue) {
+            resumePhotoReceipt(.rejected(photoRejected), photoId: photoRejected.photoId)
+        }
+    }
+
+    private func waitForPhotoReceipt(photoId: String) async throws -> ScannerProtocol.PhotoDeliveryReceipt {
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                if let receipt = completedPhotoReceipts.removeValue(forKey: photoId) {
+                    continuation.resume(returning: receipt)
+                    return
+                }
+                if let existingContinuation = pendingPhotoReceipts.removeValue(forKey: photoId) {
+                    existingContinuation.resume(throwing: ScannerPairingError.photoDeliveryInterrupted)
+                }
+                pendingPhotoReceiptTimeouts[photoId]?.cancel()
+                pendingPhotoReceipts[photoId] = continuation
+                pendingPhotoReceiptTimeouts[photoId] = Task { @MainActor in
+                    try? await Task.sleep(for: ScannerProtocol.photoReceiptTimeout)
+                    guard !Task.isCancelled else { return }
+                    timeoutPendingPhotoReceipt(photoId: photoId)
+                }
+            }
+        } onCancel: {
+            Task { @MainActor in
+                cancelPendingPhotoReceipt(photoId: photoId)
+            }
+        }
+    }
+
+    private func resumePhotoReceipt(_ receipt: ScannerProtocol.PhotoDeliveryReceipt, photoId: String) {
+        latestPhotoChunkAcks[photoId] = nil
+        pendingPhotoReceiptTimeouts.removeValue(forKey: photoId)?.cancel()
+        if let continuation = pendingPhotoReceipts.removeValue(forKey: photoId) {
+            continuation.resume(returning: receipt)
+        } else {
+            completedPhotoReceipts[photoId] = receipt
+        }
+    }
+
+    private func cancelPendingPhotoReceipt(photoId: String) {
+        latestPhotoChunkAcks[photoId] = nil
+        completedPhotoReceipts[photoId] = nil
+        pendingPhotoReceiptTimeouts.removeValue(forKey: photoId)?.cancel()
+        pendingPhotoReceipts.removeValue(forKey: photoId)?.resume(throwing: ScannerPairingError.photoDeliveryInterrupted)
+    }
+
+    private func timeoutPendingPhotoReceipt(photoId: String) {
+        latestPhotoChunkAcks[photoId] = nil
+        completedPhotoReceipts[photoId] = nil
+        pendingPhotoReceiptTimeouts[photoId] = nil
+        pendingPhotoReceipts.removeValue(forKey: photoId)?.resume(throwing: ScannerPairingError.photoDeliveryTimedOut)
+    }
+
+    private func failPendingPhotoReceipts(with error: Error) {
+        let continuations = pendingPhotoReceipts.values
+        pendingPhotoReceipts.removeAll()
+        completedPhotoReceipts.removeAll()
+        latestPhotoChunkAcks.removeAll()
+        pendingPhotoReceiptTimeouts.values.forEach { $0.cancel() }
+        pendingPhotoReceiptTimeouts.removeAll()
+        for continuation in continuations {
+            continuation.resume(throwing: error)
         }
     }
 }
@@ -209,6 +299,7 @@ extension ScannerWebRTCConnection: RTCPeerConnectionDelegate {
             case .connected:
                 break
             case .disconnected, .failed, .closed:
+                failPendingPhotoReceipts(with: ScannerPairingError.channelNotOpen)
                 onStatusChange?(.disconnected)
             default:
                 break

@@ -3,17 +3,13 @@ import {
   normalizeMobilePhoto,
   type MobilePhoto,
 } from "../domain/mobile-photo";
-import {
-  saveMobileScannerPhoto,
-  saveMobileScannerScan,
-  shouldPersistScannerScan,
-} from "../domain/mobile-scanner-results";
-import { shouldInsertScannerMessage } from "../domain/scanner-message";
+import { saveMobileScannerPhoto } from "../domain/mobile-scanner-results";
 import type {
   RuntimeMessage,
   ScannerOffscreenRuntimeMessage,
   ScannerRuntimeMessage,
 } from "./messages";
+import { createCursorTargetedCaptureDelivery } from "./mobile-capture-delivery";
 import { normalizeMobileCaptureMode } from "./mobile-capture-targets";
 import type { ScannerTextInsertOptions } from "./scanner-text-insertion";
 
@@ -43,9 +39,7 @@ type ScannerMessageHandlerOptions = {
   resetMobileScannerActionPopup: () => Promise<void>;
 };
 
-const MOBILE_SCANNER_STORAGE_KEY = "volt.mobileScanner.scans";
 const MOBILE_PHOTOS_STORAGE_KEY = "volt.mobilePhotos.photos";
-const MOBILE_SCANNER_MAX_SCANS = 100;
 const MOBILE_PHOTOS_MAX_PHOTOS = 80;
 const MOBILE_PHOTOS_MAX_PERSISTED_BYTES = 6_000_000;
 
@@ -71,6 +65,7 @@ type ScannerScan = {
   dictationPhase?: "partial" | "final";
   dictationSessionId?: string;
   format?: string;
+  insertIntoCursor?: boolean;
   kind: "text" | "barcode";
   scannedAt: string;
 };
@@ -120,6 +115,13 @@ export function createScannerMessageHandler({
   openMobileScannerPairingPopup,
   resetMobileScannerActionPopup,
 }: ScannerMessageHandlerOptions) {
+  const captureDelivery = createCursorTargetedCaptureDelivery({
+    chromeApi,
+    log,
+    insertScannerText,
+    broadcastScannerMessage,
+  });
+
   function downloadMobilePhoto(photo: MobilePhoto) {
     return new Promise<{ success: true; downloadId: number; filename: string } | { success: false; error: string }>(
       (resolve) => {
@@ -149,22 +151,6 @@ export function createScannerMessageHandler({
         );
       }
     );
-  }
-
-  function persistScannerScan(scan: ScannerScan) {
-    void saveMobileScannerScan(scan).catch((error) => {
-      log("scanner IndexedDB scan persist failed", error instanceof Error ? error.message : error);
-      chromeApi.storage.local.get(
-        { [MOBILE_SCANNER_STORAGE_KEY]: [] },
-        (stored) => {
-          const current = Array.isArray(stored[MOBILE_SCANNER_STORAGE_KEY])
-            ? stored[MOBILE_SCANNER_STORAGE_KEY]
-            : [];
-          const next = [scan, ...current].slice(0, MOBILE_SCANNER_MAX_SCANS);
-          chromeApi.storage.local.set({ [MOBILE_SCANNER_STORAGE_KEY]: next });
-        }
-      );
-    });
   }
 
   function trimMobilePhotosForStorage<TPhoto extends { dataUrl?: string }>(photos: TPhoto[]) {
@@ -321,22 +307,7 @@ export function createScannerMessageHandler({
   async function handleScannerScan(message: ScannerScanMessage) {
     const scan = normalizeScannerMessage(message?.scan);
     if (!scan) return { success: false, insertedIntoCursor: false };
-    if (shouldPersistScannerScan(scan)) {
-      persistScannerScan(scan);
-      broadcastScannerMessage({ action: "scannerScan", scan });
-    }
-
-    if (shouldInsertScannerMessage(scan)) {
-      const insertedIntoCursor = await insertScannerText(scan.barcode, {
-        dictationPhase: scan.dictationPhase,
-        dictationSessionId: scan.dictationSessionId,
-        format: scan.format,
-        kind: scan.kind,
-      });
-      return { success: true, insertedIntoCursor };
-    }
-
-    return { success: true, insertedIntoCursor: false };
+    return captureDelivery.deliverScannerScan(scan);
   }
 
   async function handleScannerPhoto(message: ScannerPhotoMessage) {

@@ -19,6 +19,7 @@ import {
   saveMobileScannerSessionLabel,
 } from "./mobile-scanner-identity";
 import { createId, createMessageId, createSecret } from "./mobile-scanner-ids";
+import { MobileScannerJoinAttemptPoller } from "./mobile-scanner-join-attempt-poller";
 import { type PeerSession, MobileScannerPeerConnections } from "./mobile-scanner-peer-connection";
 import { MobileScannerPhotoReceiver } from "./mobile-scanner-photo-receiver";
 import {
@@ -50,9 +51,6 @@ export {
 type SessionTimer = ReturnType<typeof setTimeout>;
 
 const JOIN_WINDOW_TTL_MS = 2 * 60 * 1000;
-const HIDDEN_JOIN_ATTEMPT_POLL_GRACE_MS = 60 * 1000;
-const JOIN_ATTEMPT_INITIAL_POLL_INTERVAL_MS = 1000;
-const JOIN_ATTEMPT_MAX_POLL_INTERVAL_MS = 10 * 1000;
 const RECONNECT_FALLBACK_POLL_INTERVAL_MS = 60 * 1000;
 const RECONNECT_ACTIVE_WINDOW_POLL_INTERVAL_MS = 5000;
 const RECONNECT_ACTIVE_WINDOW_MS = 95 * 1000;
@@ -107,20 +105,16 @@ function scanFromControlMessage(message: ScannerControlMessage): (BarcodeMessage
 }
 
 export class MobileScannerSession {
-  private answerPoll: SessionTimer | null = null;
-  private answerPollJoinWindow: JoinWindow | null = null;
-  private answerPollDelayMs = JOIN_ATTEMPT_INITIAL_POLL_INTERVAL_MS;
-  private hiddenPollingExpiresAt: number | null = null;
   private joinWindow: JoinWindow | null = null;
   private peerPairings = new Map<string, DurablePairingCredential>();
   private reconnectPoll: SessionTimer | null = null;
+  private readonly joinAttemptPoller: MobileScannerJoinAttemptPoller;
   private readonly identityReady: Promise<void>;
   private readonly peerConnections: MobileScannerPeerConnections;
   private readonly photoReceiver: MobileScannerPhotoReceiver;
   private readonly signalClient = new MobileScannerSignalClient(JOIN_WINDOW_TTL_MS);
   private reconnectFastPollUntil = 0;
   private seenReconnectRequests = new Set<string>();
-  private seenJoinAttempts = new Set<string>();
   private seenControlMessages = new Set<string>();
   private target: SessionTarget | null = null;
   private state: MobileScannerSessionState;
@@ -142,6 +136,12 @@ export class MobileScannerSession {
       configurePhotoChannel: (peer, channel) => this.configurePhotoChannel(peer, channel),
       onPeerConnected: () => this.handlePeerConnected(),
       onPeerDisconnected: (peer) => this.closePeer(peer.id),
+      log: (...args) => this.events.log?.(...args),
+    });
+    this.joinAttemptPoller = new MobileScannerJoinAttemptPoller({
+      getActiveJoinWindow: () => this.joinWindow,
+      peerConnections: this.peerConnections,
+      signalClient: this.signalClient,
       log: (...args) => this.events.log?.(...args),
     });
     this.photoReceiver = new MobileScannerPhotoReceiver({
@@ -171,8 +171,6 @@ export class MobileScannerSession {
       const extensionIdentity = await this.refreshExtensionIdentity();
       const joinWindow = await this.createJoinWindow(target);
       this.joinWindow = joinWindow;
-      this.answerPollJoinWindow = joinWindow;
-      this.hiddenPollingExpiresAt = null;
       this.events.log?.("[Volt Scanner Pairing] join window opened", {
         sessionId: joinWindow.sessionId,
         tokenTail: joinWindow.joinToken.slice(-6),
@@ -184,7 +182,7 @@ export class MobileScannerSession {
         joinWindowExpiresAt: joinWindow.expiresAt ?? null,
         extensionIdentity,
       });
-      this.pollForJoinAttempts();
+      this.joinAttemptPoller.start(joinWindow);
     } catch (err) {
       this.setState({
         status: this.peerConnections.peers.size > 0 ? "connected" : "error",
@@ -200,7 +198,7 @@ export class MobileScannerSession {
     const previous = this.joinWindow;
     this.joinWindow = null;
     if (previous) {
-      this.hiddenPollingExpiresAt = Date.now() + HIDDEN_JOIN_ATTEMPT_POLL_GRACE_MS;
+      this.joinAttemptPoller.continueHiddenPollingFor(previous);
       await this.signalClient.revokeJoinWindow(previous).catch((error) => {
         this.events.log?.("Failed to revoke scanner join window", error);
       });
@@ -209,7 +207,7 @@ export class MobileScannerSession {
         tokenTail: previous.joinToken.slice(-6),
       });
     }
-    this.stopHiddenJoinAttemptPollingIfIdle();
+    this.joinAttemptPoller.stopIfIdle();
     this.setState({
       status: this.peerConnections.peers.size > 0 ? "connected" : "disconnected",
       qrCodeUrl: null,
@@ -226,10 +224,7 @@ export class MobileScannerSession {
     }
     this.peerConnections.peers.clear();
     this.photoReceiver.clear();
-    this.answerPollJoinWindow = null;
-    this.hiddenPollingExpiresAt = null;
-    this.stopJoinAttemptPolling();
-    this.seenJoinAttempts.clear();
+    this.joinAttemptPoller.clear();
     this.setState({
       status: "disconnected",
       qrCodeUrl: null,
@@ -439,15 +434,13 @@ export class MobileScannerSession {
   private async answerReconnectRequest(pairing: DurablePairingCredential, requestId: string) {
     const joinWindow = await this.createJoinWindow(this.target);
     this.joinWindow = joinWindow;
-    this.answerPollJoinWindow = joinWindow;
-    this.hiddenPollingExpiresAt = null;
     this.setState({
       status: this.peerConnections.peers.size > 0 ? "connected" : "waiting",
       qrCodeUrl: joinWindow.qrCodeUrl,
       error: null,
       joinWindowExpiresAt: joinWindow.expiresAt ?? null,
     });
-    this.pollForJoinAttempts();
+    this.joinAttemptPoller.start(joinWindow);
 
     await this.signalClient.postReconnectJoinWindow(pairing, requestId, joinWindow);
     this.events.log?.("[Volt Scanner Reconnect] join window posted", {
@@ -455,82 +448,6 @@ export class MobileScannerSession {
       requestId,
       sessionId: joinWindow.sessionId,
     });
-  }
-
-  private pollForJoinAttempts() {
-    this.stopJoinAttemptPolling();
-    this.answerPollDelayMs = JOIN_ATTEMPT_INITIAL_POLL_INTERVAL_MS;
-    this.scheduleJoinAttemptPoll(0);
-  }
-
-  private stopJoinAttemptPolling() {
-    if (!this.answerPoll) return;
-    clearTimeout(this.answerPoll);
-    this.answerPoll = null;
-  }
-
-  private shouldContinueJoinAttemptPolling() {
-    if (this.joinWindow) return true;
-    if (!this.answerPollJoinWindow) return false;
-    return this.hiddenPollingExpiresAt === null || this.hiddenPollingExpiresAt > Date.now();
-  }
-
-  private scheduleJoinAttemptPoll(delayMs: number) {
-    if (!this.shouldContinueJoinAttemptPolling()) {
-      this.answerPollJoinWindow = null;
-      this.hiddenPollingExpiresAt = null;
-      return;
-    }
-    this.answerPoll = setTimeout(() => {
-      this.answerPoll = null;
-      void this.fetchJoinAttempts()
-        .then((hadActivity) => {
-          if (!this.shouldContinueJoinAttemptPolling()) {
-            this.answerPollJoinWindow = null;
-            this.hiddenPollingExpiresAt = null;
-            return;
-          }
-          this.answerPollDelayMs = hadActivity
-            ? JOIN_ATTEMPT_INITIAL_POLL_INTERVAL_MS
-            : Math.min(
-                Math.ceil(this.answerPollDelayMs * 1.5),
-                JOIN_ATTEMPT_MAX_POLL_INTERVAL_MS,
-              );
-          this.scheduleJoinAttemptPoll(this.answerPollDelayMs);
-        })
-        .catch((error) => {
-          this.events.log?.("Failed to poll scanner join attempts", error);
-          this.answerPollDelayMs = JOIN_ATTEMPT_MAX_POLL_INTERVAL_MS;
-          this.scheduleJoinAttemptPoll(this.answerPollDelayMs);
-        });
-    }, delayMs);
-  }
-
-  private async fetchJoinAttempts() {
-    const joinWindow = this.joinWindow ?? this.answerPollJoinWindow;
-    if (!joinWindow) return false;
-    let hadActivity = false;
-    const acceptingNewAttempts = this.joinWindow?.joinToken === joinWindow.joinToken;
-    const attempts = await this.signalClient.fetchJoinAttempts(joinWindow);
-    for (const attempt of attempts) {
-      if (!this.seenJoinAttempts.has(attempt.joinAttemptId)) {
-        if (!acceptingNewAttempts) continue;
-        this.seenJoinAttempts.add(attempt.joinAttemptId);
-        this.events.log?.("[Volt Scanner Pairing] join attempt seen", {
-          joinAttemptId: attempt.joinAttemptId,
-        });
-        await this.peerConnections.createPeerOffer(joinWindow, attempt.joinAttemptId);
-        hadActivity = true;
-      }
-      if (this.peerConnections.peers.get(attempt.joinAttemptId)?.answerApplied) continue;
-      const answer = attempt.answer ?? (attempt.hasAnswer ? await this.signalClient.fetchPeerAnswer(joinWindow, attempt.joinAttemptId) : null);
-      if (answer) {
-        await this.peerConnections.applyPeerAnswer(attempt.joinAttemptId, answer);
-        hadActivity = true;
-      }
-    }
-    this.stopHiddenJoinAttemptPollingIfIdle();
-    return hadActivity;
   }
 
   private configureControlChannel(peer: PeerSession, channel: RTCDataChannel) {
@@ -674,22 +591,6 @@ export class MobileScannerSession {
       status: this.peerConnections.peers.size > 0 ? "connected" : this.joinWindow ? "waiting" : "disconnected",
       connectedAt: this.peerConnections.peers.size > 0 ? this.state.connectedAt : null,
     });
-    this.stopHiddenJoinAttemptPollingIfIdle();
-  }
-
-  private stopHiddenJoinAttemptPollingIfIdle() {
-    if (this.joinWindow || !this.answerPollJoinWindow) return;
-    if (this.hiddenPollingExpiresAt !== null && this.hiddenPollingExpiresAt <= Date.now()) {
-      this.answerPollJoinWindow = null;
-      this.hiddenPollingExpiresAt = null;
-      this.stopJoinAttemptPolling();
-      return;
-    }
-    for (const peer of this.peerConnections.peers.values()) {
-      if (!peer.answerApplied) return;
-    }
-    this.answerPollJoinWindow = null;
-    this.hiddenPollingExpiresAt = null;
-    this.stopJoinAttemptPolling();
+    this.joinAttemptPoller.stopIfIdle();
   }
 }

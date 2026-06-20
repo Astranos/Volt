@@ -5,6 +5,7 @@
 import { defineContentScript } from "wxt/utils/define-content-script";
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { createMobileCaptureController } from "./context-menu-mobile-capture";
 import { initializeSidePanelContext } from "../src/lib/sidepanel-gesture";
 import { buildSearchUrl, SEARCH_URL_TEMPLATES } from "../src/domain/search";
 import {
@@ -75,8 +76,6 @@ export default defineContentScript({
       onInvoke: (ctx: { x: number; y: number; selection: string }) => void;
       getUrl?: (selection: string) => string;
     };
-
-    type MobileCaptureMode = "ocr" | "barcode" | "dictation";
 
     const openUrl = (url: string) => {
       try {
@@ -298,173 +297,12 @@ export default defineContentScript({
       } catch (_) {}
     };
 
-    const isEditable = (element: Element | null): element is HTMLElement => {
-      if (!(element instanceof HTMLElement)) return false;
-      if (element.getAttribute("contenteditable") === "false") return false;
-      const isDesignModeEditable =
-        document.designMode?.toLowerCase() === "on" &&
-        (element === document.body || element === document.documentElement);
-      return (
-        element.tagName === "INPUT" ||
-        element.tagName === "TEXTAREA" ||
-        element.isContentEditable ||
-        isDesignModeEditable
-      );
-    };
-
-    const describeEditable = (element: HTMLElement) => {
-      const label =
-        element.getAttribute("aria-label") ||
-        element.getAttribute("placeholder") ||
-        element.getAttribute("name") ||
-        element.getAttribute("id") ||
-        (document.designMode?.toLowerCase() === "on" &&
-        (element === document.body || element === document.documentElement)
-          ? "Rich text editor"
-          : "") ||
-        (element.tagName === "TEXTAREA"
-          ? "Textarea"
-          : element.isContentEditable
-            ? "Editable text"
-            : "Text input");
-      return String(label).slice(0, 120);
-    };
-
-    const primeEditableTarget = () => {
-      const root = window as typeof window & {
-        __voltLastEditable?: HTMLElement | null;
-        __voltLastEditableSelection?: {
-          start?: number | null;
-          end?: number | null;
-          isContentEditable?: boolean;
-        } | null;
-        __voltLastEditableRange?: Range | null;
-      };
-
-      const target = isEditable(focusedElementBeforeMenu)
-        ? focusedElementBeforeMenu
-        : isEditable(clickedElement)
-        ? clickedElement
-        : isEditable(document.activeElement)
-        ? (document.activeElement as HTMLElement)
-        : null;
-
-      if (!target) return;
-
-      root.__voltLastEditable = target;
-      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
-        root.__voltLastEditableSelection = {
-          start: target.selectionStart,
-          end: target.selectionEnd,
-          isContentEditable: false,
-        };
-      } else {
-        root.__voltLastEditableSelection = { isContentEditable: true };
-        const selection = window.getSelection();
-        root.__voltLastEditableRange =
-          selection && selection.rangeCount > 0 ? selection.getRangeAt(0).cloneRange() : null;
-      }
-
-      return {
-        browser: "Chrome",
-        tabTitle: document.title || "Current tab",
-        url: location.href,
-        cursor: describeEditable(target),
-        updatedAt: Date.now(),
-      };
-    };
-
-    const installMobileCursorTargetTracker = () => {
-      const root = window as typeof window & {
-        __voltLastEditable?: HTMLElement | null;
-        __voltLastEditableSelection?: {
-          start?: number | null;
-          end?: number | null;
-          isContentEditable?: boolean;
-        } | null;
-        __voltLastEditableRange?: Range | null;
-        __voltLiveDictation?: {
-          sessionId?: string;
-          sourceLength?: number;
-        } | null;
-        __voltEditableTrackerInstalled?: boolean;
-      };
-
-      if (root.__voltEditableTrackerInstalled) return;
-
-      const rememberEditable = (editable: HTMLElement) => {
-        if (root.__voltLiveDictation && root.__voltLastEditable !== editable) {
-          root.__voltLiveDictation = {
-            sessionId: root.__voltLiveDictation.sessionId,
-            sourceLength: root.__voltLiveDictation.sourceLength ?? 0,
-          };
-        }
-
-        root.__voltLastEditable = editable;
-        if (editable instanceof HTMLInputElement || editable instanceof HTMLTextAreaElement) {
-          root.__voltLastEditableSelection = {
-            start: editable.selectionStart,
-            end: editable.selectionEnd,
-            isContentEditable: false,
-          };
-          root.__voltLastEditableRange = null;
-        } else {
-          root.__voltLastEditableSelection = { isContentEditable: true };
-          const selection = window.getSelection();
-          root.__voltLastEditableRange =
-            selection && selection.rangeCount > 0 ? selection.getRangeAt(0).cloneRange() : null;
-        }
-
-        try {
-          chrome.runtime.sendMessage({
-            action: "mobileCursorTargetChanged",
-            target: {
-              browser: "Chrome",
-              tabTitle: document.title || "Current tab",
-              url: location.href,
-              cursor: describeEditable(editable),
-              updatedAt: Date.now(),
-            },
-          });
-        } catch (_) {}
-      };
-
-      const track = (target: EventTarget | null) => {
-        const element = target instanceof Element ? target : document.activeElement;
-        const editable =
-          isEditable(element) ? element : isEditable(document.activeElement) ? document.activeElement : null;
-        if (editable) rememberEditable(editable);
-      };
-
-      track(document.activeElement);
-      document.addEventListener("focusin", (event) => track(event.target), true);
-      document.addEventListener("selectionchange", () => track(document.activeElement), true);
-      document.addEventListener("keyup", (event) => track(event.target), true);
-      document.addEventListener("pointerup", (event) => track(event.target), true);
-      root.__voltEditableTrackerInstalled = true;
-    };
-
-    installMobileCursorTargetTracker();
-
-    const openMobileCapture = (mode: MobileCaptureMode) => {
-      const target = primeEditableTarget();
-      try {
-        chrome.runtime.sendMessage(
-          {
-            action: "openMobileCapture",
-            mode,
-            surface: "popup",
-            target,
-          },
-          (response) => {
-            const lastError = chrome.runtime.lastError;
-            if (lastError || response?.success === false) {
-              log("Mobile capture start failed", lastError || response?.error);
-            }
-          }
-        );
-      } catch (_) {}
-    };
+    const mobileCapture = createMobileCaptureController({
+      getFocusedElement: () => focusedElementBeforeMenu,
+      getClickedElement: () => clickedElement,
+      log,
+    });
+    mobileCapture.installMobileCursorTargetTracker();
 
     const openSidepanelTool = (tool: string) => {
       try {
@@ -677,7 +515,7 @@ export default defineContentScript({
         shortcut: "V",
         description: "Open mobile scanner",
         icon: Smartphone,
-        onInvoke: () => openMobileCapture("barcode"),
+        onInvoke: () => mobileCapture.openMobileCapture("barcode"),
       },
       {
         id: "offer-calculator",
