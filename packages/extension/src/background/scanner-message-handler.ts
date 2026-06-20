@@ -3,7 +3,7 @@ import {
   normalizeMobilePhoto,
   type MobilePhoto,
 } from "../domain/mobile-photo";
-import { saveMobileScannerPhoto } from "../domain/mobile-scanner-results";
+import { persistAndBroadcastMobileScannerPhoto } from "../domain/mobile-scanner-results";
 import type {
   RuntimeMessage,
   ScannerOffscreenRuntimeMessage,
@@ -322,20 +322,13 @@ export function createScannerMessageHandler({
       downloadId: downloadResult.downloadId,
       downloadFilename: downloadResult.filename,
     };
-    const savedPhoto = await saveMobileScannerPhoto(downloadedPhoto).catch((error) => {
-      log("scanner IndexedDB photo persist failed", error instanceof Error ? error.message : error);
-      return null;
+    return persistAndBroadcastMobileScannerPhoto(downloadedPhoto, {
+      broadcastScannerMessage,
+      persistFallbackPhoto: persistMobilePhoto,
+      onPersistError: (error) => {
+        log("scanner IndexedDB photo persist failed", error instanceof Error ? error.message : error);
+      },
     });
-    const persisted = savedPhoto ? true : await persistMobilePhoto(downloadedPhoto);
-    if (!persisted) return { success: false, error: "storage_failed" };
-    const { blob: _blob, ...savedPhotoMetadata } = savedPhoto?.photo ?? {};
-    broadcastScannerMessage({
-      action: "scannerPhoto",
-      photo: savedPhoto
-        ? { ...savedPhotoMetadata, dataUrl: downloadedPhoto.dataUrl }
-        : downloadedPhoto,
-    });
-    return { success: true };
   }
 
   function handleScannerMessage(

@@ -3,8 +3,8 @@ import {
   SCANNER_PROTOCOL_MINOR_VERSION,
   decodeScannerControlMessage,
   encodeScannerControlMessage,
-  isScannerProtocolVersionSupported,
   isScannerSessionId,
+  isScannerProtocolVersionSupported,
   scannerControlDuplicateKey,
   type ScannerControlMessage,
 } from "@volt/scanner-protocol";
@@ -19,7 +19,7 @@ import {
   saveMobileScannerSessionLabel,
 } from "./mobile-scanner-identity";
 import { createId, createMessageId, createSecret } from "./mobile-scanner-ids";
-import { MobileScannerJoinAttemptPoller } from "./mobile-scanner-join-attempt-poller";
+import { MobileScannerJoinAttemptPoller, MobileScannerReconnectPoller } from "./mobile-scanner-join-attempt-poller";
 import { type PeerSession, MobileScannerPeerConnections } from "./mobile-scanner-peer-connection";
 import { MobileScannerPhotoReceiver } from "./mobile-scanner-photo-receiver";
 import {
@@ -48,12 +48,7 @@ export {
   type SessionTarget,
 };
 
-type SessionTimer = ReturnType<typeof setTimeout>;
-
 const JOIN_WINDOW_TTL_MS = 2 * 60 * 1000;
-const RECONNECT_FALLBACK_POLL_INTERVAL_MS = 60 * 1000;
-const RECONNECT_ACTIVE_WINDOW_POLL_INTERVAL_MS = 5000;
-const RECONNECT_ACTIVE_WINDOW_MS = 95 * 1000;
 
 const EXTENSION_PROTOCOL_VERSION = {
   major: SCANNER_PROTOCOL_MAJOR_VERSION,
@@ -107,14 +102,12 @@ function scanFromControlMessage(message: ScannerControlMessage): (BarcodeMessage
 export class MobileScannerSession {
   private joinWindow: JoinWindow | null = null;
   private peerPairings = new Map<string, DurablePairingCredential>();
-  private reconnectPoll: SessionTimer | null = null;
   private readonly joinAttemptPoller: MobileScannerJoinAttemptPoller;
   private readonly identityReady: Promise<void>;
   private readonly peerConnections: MobileScannerPeerConnections;
   private readonly photoReceiver: MobileScannerPhotoReceiver;
+  private readonly reconnectPoller: MobileScannerReconnectPoller;
   private readonly signalClient = new MobileScannerSignalClient(JOIN_WINDOW_TTL_MS);
-  private reconnectFastPollUntil = 0;
-  private seenReconnectRequests = new Set<string>();
   private seenControlMessages = new Set<string>();
   private target: SessionTarget | null = null;
   private state: MobileScannerSessionState;
@@ -154,10 +147,18 @@ export class MobileScannerSession {
         this.events.log?.("Failed to load scanner extension identity", error);
       },
     );
+    this.reconnectPoller = new MobileScannerReconnectPoller({
+      createReconnectJoinWindow: (pairing, requestId) => this.openReconnectJoinWindow(pairing, requestId),
+      getDurablePairings: () => loadDurablePairings(),
+      getSessionId: () => this.state.sessionId,
+      identityReady: this.identityReady,
+      signalClient: this.signalClient,
+      log: (...args) => this.events.log?.(...args),
+    });
     void this.refreshDurablePairingRegistrations().catch((error) => {
       this.events.log?.("Failed to refresh scanner pairing registrations", error);
     });
-    this.scheduleReconnectPoll(RECONNECT_FALLBACK_POLL_INTERVAL_MS);
+    this.reconnectPoller.start();
   }
 
   getState() {
@@ -259,7 +260,7 @@ export class MobileScannerSession {
   }
 
   async pollReconnectRequestsNow() {
-    await this.pollReconnectRequests();
+    await this.reconnectPoller.pollNow();
     return this.getState();
   }
 
@@ -368,70 +369,7 @@ export class MobileScannerSession {
     await this.signalClient.registerPairing(pairing, subscription);
   }
 
-  private scheduleReconnectPoll(delayMs: number) {
-    if (this.reconnectPoll) return;
-    this.reconnectPoll = setTimeout(() => {
-      this.reconnectPoll = null;
-      void this.pollReconnectRequests()
-        .catch((error) => {
-          this.events.log?.("Failed to poll scanner reconnect requests", error);
-        })
-        .finally(() => {
-          this.scheduleReconnectPoll(this.nextReconnectPollDelay());
-        });
-    }, delayMs);
-  }
-
-  private nextReconnectPollDelay() {
-    return Date.now() < this.reconnectFastPollUntil
-      ? RECONNECT_ACTIVE_WINDOW_POLL_INTERVAL_MS
-      : RECONNECT_FALLBACK_POLL_INTERVAL_MS;
-  }
-
-  private async pollReconnectRequests() {
-    await this.identityReady;
-    const sessionId = this.state.sessionId;
-    if (!isScannerSessionId(sessionId)) {
-      this.events.log?.("[Volt Scanner Reconnect] poll skipped: invalid session id", { sessionId });
-      return;
-    }
-    const pairings = await loadDurablePairings();
-    const pairingById = new Map(pairings.map((pairing) => [pairing.pairingId, pairing]));
-    if (pairingById.size === 0) {
-      this.events.log?.("[Volt Scanner Reconnect] poll skipped: no durable pairings", { sessionId });
-      return;
-    }
-
-    const { response, requests } = await this.signalClient.fetchReconnectRequests(sessionId);
-    this.events.log?.("[Volt Scanner Reconnect] reconnect requests fetched", {
-      sessionId,
-      status: response.status,
-      pairingCount: pairingById.size,
-    });
-    if (!response.ok) return;
-    this.events.log?.("[Volt Scanner Reconnect] reconnect requests decoded", {
-      sessionId,
-      requestCount: requests.length,
-    });
-    if (requests.length > 0) {
-      this.reconnectFastPollUntil = Date.now() + RECONNECT_ACTIVE_WINDOW_MS;
-    }
-    for (const request of requests) {
-      const pairing = pairingById.get(request.pairingId);
-      if (!pairing) continue;
-      const key = `${request.pairingId}:${request.requestId}`;
-      if (this.seenReconnectRequests.has(key)) continue;
-      this.events.log?.("[Volt Scanner Reconnect] answering reconnect request", {
-        sessionId,
-        pairingId: request.pairingId,
-        requestId: request.requestId,
-      });
-      await this.answerReconnectRequest(pairing, request.requestId);
-      this.seenReconnectRequests.add(key);
-    }
-  }
-
-  private async answerReconnectRequest(pairing: DurablePairingCredential, requestId: string) {
+  private async openReconnectJoinWindow(_pairing: DurablePairingCredential, _requestId: string) {
     const joinWindow = await this.createJoinWindow(this.target);
     this.joinWindow = joinWindow;
     this.setState({
@@ -441,13 +379,7 @@ export class MobileScannerSession {
       joinWindowExpiresAt: joinWindow.expiresAt ?? null,
     });
     this.joinAttemptPoller.start(joinWindow);
-
-    await this.signalClient.postReconnectJoinWindow(pairing, requestId, joinWindow);
-    this.events.log?.("[Volt Scanner Reconnect] join window posted", {
-      pairingId: pairing.pairingId,
-      requestId,
-      sessionId: joinWindow.sessionId,
-    });
+    return joinWindow;
   }
 
   private configureControlChannel(peer: PeerSession, channel: RTCDataChannel) {

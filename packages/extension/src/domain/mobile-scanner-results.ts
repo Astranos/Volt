@@ -40,6 +40,37 @@ export type HydratedMobileScannerResult =
   | MobileScannerScanResult
   | HydratedMobileScannerPhotoResult;
 
+export type MobileScannerResultBroadcastMessage =
+  | {
+      action: "scannerScan";
+      scan: BarcodeMessage & { id?: string };
+      result?: MobileScannerScanResult;
+    }
+  | {
+      action: "scannerPhoto";
+      photo: MobilePhoto;
+      result?: HydratedMobileScannerPhotoResult;
+    };
+
+export type MobileScannerResultDeliveryReceipt =
+  | { success: true; result: HydratedMobileScannerPhotoResult | null }
+  | { success: false; error: string };
+
+type MobileScannerDeliveryOptions = {
+  broadcastScannerMessage: (message: MobileScannerResultBroadcastMessage) => void;
+  onPersistError?: (error: unknown) => void;
+};
+
+type MobileScannerScanDeliveryOptions = MobileScannerDeliveryOptions & {
+  persistFallbackScan?: (scan: BarcodeMessage & { id?: string }) => Promise<boolean> | boolean;
+  saveScan?: typeof saveMobileScannerScan;
+};
+
+type MobileScannerPhotoDeliveryOptions = MobileScannerDeliveryOptions & {
+  persistFallbackPhoto?: (photo: MobilePhoto) => Promise<boolean> | boolean;
+  savePhoto?: typeof saveMobileScannerPhoto;
+};
+
 type StoredPhotoBlob = {
   photoId: string;
   blob: Blob;
@@ -297,6 +328,33 @@ export async function saveMobileScannerScan(scan: BarcodeMessage & { id?: string
   return result;
 }
 
+export async function persistAndBroadcastMobileScannerScan(
+  scan: BarcodeMessage & { id?: string },
+  {
+    broadcastScannerMessage,
+    onPersistError,
+    persistFallbackScan,
+    saveScan = saveMobileScannerScan,
+  }: MobileScannerScanDeliveryOptions,
+) {
+  if (!shouldPersistScannerScan(scan)) return null;
+
+  let result: MobileScannerScanResult | null = null;
+  try {
+    result = await saveScan(scan);
+  } catch (error) {
+    onPersistError?.(error);
+    await persistFallbackScan?.(scan);
+  }
+
+  broadcastScannerMessage({
+    action: "scannerScan",
+    scan,
+    result: result ?? undefined,
+  });
+  return result;
+}
+
 async function dataUrlToBlob(dataUrl: string) {
   const response = await fetch(dataUrl);
   return response.blob();
@@ -375,6 +433,43 @@ export async function saveMobileScannerPhoto(photoInput: unknown) {
       blob,
     },
   } satisfies HydratedMobileScannerPhotoResult;
+}
+
+export async function persistAndBroadcastMobileScannerPhoto(
+  photoInput: unknown,
+  {
+    broadcastScannerMessage,
+    onPersistError,
+    persistFallbackPhoto,
+    savePhoto = saveMobileScannerPhoto,
+  }: MobileScannerPhotoDeliveryOptions,
+): Promise<MobileScannerResultDeliveryReceipt> {
+  const normalized = normalizeMobilePhoto(photoInput);
+  if (!normalized) return { success: false, error: "invalid_photo" };
+
+  let result: HydratedMobileScannerPhotoResult | null = null;
+  try {
+    result = await savePhoto(normalized);
+  } catch (error) {
+    onPersistError?.(error);
+  }
+
+  const persisted = result ? true : Boolean(await persistFallbackPhoto?.(normalized));
+  if (!persisted) return { success: false, error: "storage_failed" };
+
+  const broadcastPhoto = result
+    ? (() => {
+        const { blob: _blob, ...savedPhotoMetadata } = result.photo;
+        return { ...savedPhotoMetadata, dataUrl: normalized.dataUrl };
+      })()
+    : normalized;
+  broadcastScannerMessage({
+    action: "scannerPhoto",
+    photo: broadcastPhoto,
+    result: result ?? undefined,
+  });
+
+  return { success: true, result };
 }
 
 export async function listMobileScannerResults() {

@@ -3,6 +3,199 @@ import CoreImage.CIFilterBuiltins
 import UIKit
 
 @MainActor
+final class MobilePhotoRetryQueue {
+    static let recoveryWindow: TimeInterval = 24 * 60 * 60
+
+    enum Status: String, Codable, Equatable {
+        case queued
+        case sending
+        case sent
+        case failed
+        case received
+        case cancelled
+    }
+
+    struct Entry: Codable, Equatable, Identifiable {
+        let id: String
+        let resultId: UUID
+        let batchId: String
+        let filename: String
+        let width: Int
+        let height: Int
+        let capturedAt: Date
+        let queuedAt: Date
+        let expiresAt: Date
+        let dataFilename: String
+        var status: Status
+
+        var isExpired: Bool {
+            expiresAt <= Date.now
+        }
+    }
+
+    private struct Manifest: Codable {
+        var entries: [Entry]
+    }
+
+    private let fileManager: FileManager
+    private let directoryURL: URL
+    private let manifestURL: URL
+    private(set) var entries: [Entry] = []
+
+    init(fileManager: FileManager = .default, directoryURL: URL? = nil) {
+        self.fileManager = fileManager
+        let baseURL = directoryURL ?? fileManager
+            .urls(for: .applicationSupportDirectory, in: .userDomainMask)
+            .first!
+            .appendingPathComponent("VoltPhotoRetryQueue", isDirectory: true)
+        self.directoryURL = baseURL
+        self.manifestURL = baseURL.appendingPathComponent("manifest.json")
+        load()
+        expireEntries()
+    }
+
+    var retryableEntries: [Entry] {
+        entries.filter { entry in
+            !entry.isExpired && [.queued, .sent, .failed].contains(entry.status)
+        }
+    }
+
+    @discardableResult
+    func enqueue(payload: ScannerProtocol.PhotoPayload, resultId: UUID, now: Date = .now) -> Entry? {
+        do {
+            try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+            let dataFilename = "\(payload.id).jpg"
+            try payload.data.write(to: directoryURL.appendingPathComponent(dataFilename), options: .atomic)
+            let entry = Entry(
+                id: payload.id,
+                resultId: resultId,
+                batchId: payload.batchId,
+                filename: payload.filename,
+                width: payload.width,
+                height: payload.height,
+                capturedAt: payload.capturedAt,
+                queuedAt: now,
+                expiresAt: now.addingTimeInterval(Self.recoveryWindow),
+                dataFilename: dataFilename,
+                status: .queued
+            )
+            entries.removeAll { $0.id == entry.id }
+            entries.append(entry)
+            save()
+            return entry
+        } catch {
+            return nil
+        }
+    }
+
+    func payload(for photoId: String) -> ScannerProtocol.PhotoPayload? {
+        guard let entry = entries.first(where: { $0.id == photoId }),
+              !entry.isExpired,
+              let data = try? Data(contentsOf: directoryURL.appendingPathComponent(entry.dataFilename))
+        else {
+            markStatus(.cancelled, photoId: photoId)
+            return nil
+        }
+        return ScannerProtocol.PhotoPayload(
+            id: entry.id,
+            batchId: entry.batchId,
+            filename: entry.filename,
+            data: data,
+            width: entry.width,
+            height: entry.height,
+            capturedAt: entry.capturedAt
+        )
+    }
+
+    func resultId(for photoId: String) -> UUID? {
+        entries.first { $0.id == photoId }?.resultId
+    }
+
+    func markSending(photoId: String) {
+        markStatus(.sending, photoId: photoId)
+    }
+
+    func markSent(photoId: String) {
+        markStatus(.sent, photoId: photoId)
+    }
+
+    func markReceived(photoId: String) {
+        markStatus(.received, photoId: photoId)
+        removeData(photoId: photoId)
+    }
+
+    func markFailed(photoId: String) {
+        markStatus(.failed, photoId: photoId)
+    }
+
+    func cancel(photoId: String) {
+        markStatus(.cancelled, photoId: photoId)
+        removeData(photoId: photoId)
+    }
+
+    @discardableResult
+    func expireEntries(now: Date = .now) -> [Entry] {
+        let expired = entries.filter { $0.expiresAt <= now && $0.status != .received && $0.status != .cancelled }
+        for entry in expired {
+            cancel(photoId: entry.id)
+        }
+        return expired
+    }
+
+    private func markStatus(_ status: Status, photoId: String) {
+        guard let index = entries.firstIndex(where: { $0.id == photoId }) else { return }
+        entries[index].status = status
+        save()
+    }
+
+    private func removeData(photoId: String) {
+        guard let entry = entries.first(where: { $0.id == photoId }) else { return }
+        try? fileManager.removeItem(at: directoryURL.appendingPathComponent(entry.dataFilename))
+    }
+
+    private func load() {
+        guard let data = try? Data(contentsOf: manifestURL),
+              let manifest = try? Self.decoder.decode(Manifest.self, from: data)
+        else { return }
+        entries = manifest.entries.map { entry in
+            guard entry.status == .sending else { return entry }
+            var retryableEntry = entry
+            retryableEntry.status = .failed
+            return retryableEntry
+        }
+    }
+
+    private func save() {
+        do {
+            try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+            let data = try JSONEncoder.scanner.encode(Manifest(entries: entries))
+            try data.write(to: manifestURL, options: .atomic)
+        } catch {
+            return
+        }
+    }
+
+    private static var decoder: JSONDecoder {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return decoder
+    }
+}
+
+extension ScanResult.DeliveryState {
+    init(photoRetryStatus status: MobilePhotoRetryQueue.Status) {
+        switch status {
+        case .queued: self = .saved
+        case .sending: self = .sending
+        case .sent: self = .sent
+        case .failed: self = .failed
+        case .received: self = .sent
+        case .cancelled: self = .failed
+        }
+    }
+}
+
+@MainActor
 extension ScannerStore {
     func saveBarcodeIfNeeded() {
         guard let value = camera.lastBarcode, !value.isEmpty else { return }
@@ -119,7 +312,7 @@ extension ScannerStore {
             kind: .photo,
             value: "Photo",
             format: preparedImage.sizeDescription,
-            deliveryState: initialDeliveryState,
+            deliveryState: .saved,
             imageData: preparedImage.previewJPEGData()
         )
         results.insert(photoResult, at: 0)
@@ -149,7 +342,7 @@ extension ScannerStore {
                 value: "Upload \(index + 1)",
                 format: preparedImage.sizeDescription,
                 capturedAt: capturedAt,
-                deliveryState: .sending,
+                deliveryState: .saved,
                 imageData: preparedImage.previewJPEGData(),
                 batchId: batch
             )
@@ -256,7 +449,6 @@ extension ScannerStore {
         filename: String? = nil,
         capturedAt: Date? = nil
     ) async {
-        guard connectionStatus.isConnected else { return }
         guard let data = image.jpegData(compressionQuality: 0.76) else {
             statusText = "Could not prepare photo"
             updateResultDeliveryState(id: resultId, state: .failed)
@@ -273,14 +465,49 @@ extension ScannerStore {
             height: Int(image.size.height),
             capturedAt: now
         )
+        guard let entry = photoRetryQueue.enqueue(payload: payload, resultId: resultId, now: now) else {
+            updateResultDeliveryState(id: resultId, state: .failed)
+            statusText = "Could not queue photo"
+            return
+        }
+        updateResultDeliveryState(id: resultId, state: ScanResult.DeliveryState(photoRetryStatus: entry.status))
+        guard connectionStatus.isConnected else { return }
+        await sendQueuedPhoto(photoId: payload.id)
+    }
+
+    func sendRetryablePhotos() async {
+        photoRetryQueue.expireEntries()
+        for entry in photoRetryQueue.retryableEntries {
+            await sendQueuedPhoto(photoId: entry.id)
+        }
+    }
+
+    func sendQueuedPhoto(photoId: String) async {
+        guard connectionStatus.isConnected else { return }
+        guard let resultId = photoRetryQueue.resultId(for: photoId),
+              let payload = photoRetryQueue.payload(for: photoId)
+        else { return }
+        photoRetryQueue.markSending(photoId: photoId)
+        updateResultDeliveryState(id: resultId, state: .sending)
         do {
-            try await connection.sendPhoto(payload)
-            updateResultDeliveryState(id: resultId, state: .sent)
-            statusText = "Photo sent"
+            let receipt = try await connection.sendPhoto(payload)
+            if case .received = receipt {
+                photoRetryQueue.markReceived(photoId: photoId)
+                updateResultDeliveryState(id: resultId, state: .sent)
+                statusText = "Photo delivered"
+            }
         } catch {
+            photoRetryQueue.markFailed(photoId: photoId)
             updateResultDeliveryState(id: resultId, state: .failed)
             applyConnectionStatus(.error(error.localizedDescription))
         }
+    }
+
+    func applyPhotoTransferCompleted(photoId: String) {
+        guard let resultId = photoRetryQueue.resultId(for: photoId) else { return }
+        photoRetryQueue.markSent(photoId: photoId)
+        updateResultDeliveryState(id: resultId, state: .sent)
+        statusText = "Photo sent"
     }
 
     var initialDeliveryState: ScanResult.DeliveryState {

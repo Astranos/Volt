@@ -1,5 +1,5 @@
 import {
-  saveMobileScannerScan,
+  persistAndBroadcastMobileScannerScan,
   shouldPersistScannerScan,
 } from "../domain/mobile-scanner-results.ts";
 import { shouldInsertScannerMessage } from "../domain/scanner-message.ts";
@@ -39,23 +39,30 @@ export function createCursorTargetedCaptureDelivery({
   insertScannerText,
   broadcastScannerMessage,
 }: CursorTargetedCaptureDeliveryOptions) {
-  function persistScannerScan(scan: CursorTargetedCaptureScan) {
-    void saveMobileScannerScan(scan).catch((error) => {
-      log("scanner IndexedDB scan persist failed", error instanceof Error ? error.message : error);
+  function persistFallbackScan(scan: CursorTargetedCaptureScan) {
+    return new Promise<boolean>((resolve) => {
       chromeApi.storage.local.get({ [MOBILE_SCANNER_STORAGE_KEY]: [] }, (stored) => {
         const current = Array.isArray(stored[MOBILE_SCANNER_STORAGE_KEY])
           ? stored[MOBILE_SCANNER_STORAGE_KEY]
           : [];
         const next = [scan, ...current].slice(0, MOBILE_SCANNER_MAX_SCANS);
-        chromeApi.storage.local.set({ [MOBILE_SCANNER_STORAGE_KEY]: next });
+        chromeApi.storage.local.set({ [MOBILE_SCANNER_STORAGE_KEY]: next }, () => {
+          resolve(!chromeApi.runtime?.lastError);
+        });
       });
     });
   }
 
   async function deliverScannerScan(scan: CursorTargetedCaptureScan): Promise<CaptureDeliveryReceipt> {
     if (shouldPersistScannerScan(scan)) {
-      persistScannerScan(scan);
-      broadcastScannerMessage({ action: "scannerScan", scan });
+      void persistAndBroadcastMobileScannerScan(scan, {
+        broadcastScannerMessage,
+        persistFallbackScan: (scanForFallback) =>
+          persistFallbackScan(scanForFallback as CursorTargetedCaptureScan),
+        onPersistError: (error) => {
+          log("scanner IndexedDB scan persist failed", error instanceof Error ? error.message : error);
+        },
+      });
     }
 
     if (!shouldInsertScannerMessage(scan)) {

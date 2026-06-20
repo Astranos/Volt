@@ -4,6 +4,7 @@ import type { ScannerConnectionStatus } from "@volt/scanner-protocol";
 import {
   saveMobileScannerPhoto,
   saveMobileScannerScan,
+  type HydratedMobileScannerPhotoResult,
   type MobileScannerScanResult,
 } from "../../domain/mobile-scanner-results";
 import type { BarcodeMessage } from "../../domain/mobile-scanner-session";
@@ -212,6 +213,11 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
         return;
       }
       if (message?.action === "scannerScan") {
+        if (message.result) {
+          const saved = message.result as MobileScannerScanResult;
+          setResults((current) => [saved, ...current.filter((item) => item.id !== saved.id)]);
+          return;
+        }
         void saveMobileScannerScan(message.scan as BarcodeMessage & { id?: string }).then((saved) => {
           if (!saved) return;
           setResults((current) => [saved, ...current.filter((item) => item.id !== saved.id)]);
@@ -219,6 +225,12 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
         return;
       }
       if (message?.action === "scannerPhoto") {
+        if (message.result) {
+          const saved = message.result as HydratedMobileScannerPhotoResult;
+          setResults((current) => [saved, ...current.filter((item) => item.id !== saved.id)] as TimelineEntry[]);
+          void prepareActiveTabForPhotoDrop();
+          return;
+        }
         void saveMobileScannerPhoto(message.photo).then((saved) => {
           if (!saved) return;
           setResults((current) => [saved, ...current.filter((item) => item.id !== saved.id)] as TimelineEntry[]);

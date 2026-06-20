@@ -83,9 +83,13 @@ final class ScannerStore {
         connection.onResultReceived = { [weak self] receipt in
             self?.applyResultReceived(receipt)
         }
+        connection.onPhotoTransferCompleted = { [weak self] photoId in
+            self?.applyPhotoTransferCompleted(photoId: photoId)
+        }
         return connection
     }()
     @ObservationIgnored let signaling = ScannerSignalingClient()
+    @ObservationIgnored var photoRetryQueue = MobilePhotoRetryQueue()
     var lastBarcodeValue: String?
     var lastBarcodeSentAt: Date?
     var photoBatch: (id: String, expiresAt: Date)?
@@ -375,6 +379,7 @@ final class ScannerStore {
             allowsConnectedFeedback: !wasConnected || (didChangeChromeInputTarget && selectedSection == .dictation)
         )
         resetDictationForTargetChangeIfNeeded(from: previousPeerTarget, to: nextPeerTarget)
+        Task { await sendRetryablePhotos() }
     }
 
     private func firstNonEmpty(_ values: String?...) -> String? {

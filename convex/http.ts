@@ -13,6 +13,7 @@ import {
   stringArrayFrom,
   stringFrom,
 } from "./scannerSignal/httpAdapter";
+import { signalRouteCommand } from "./scannerSignal/routeCommands";
 
 const http = httpRouter();
 
@@ -46,7 +47,9 @@ const signalHandler = httpAction(async (ctx, request) => {
   const parts = signalPartsFromRequest(request);
   const body = await signalBodyFromRequest(request);
 
-  if (request.method === "POST" && parts.length === 1 && parts[0] === "join-token") {
+  const command = signalRouteCommand(request.method, parts);
+
+  if (command === "createJoinToken") {
     const sessionId = stringFrom(body.sessionId, 120) ?? makeSecretId(12);
     const token = makeSecretId();
     const response = await ctx.runMutation(internal.scannerSignal.joinTokens.createJoinToken, {
@@ -62,10 +65,10 @@ const signalHandler = httpAction(async (ctx, request) => {
 
   if (parts[0] === "join-token" && parts.length >= 2) {
     const token = parts[1];
-    if (request.method === "GET" && parts.length === 2) {
+    if (command === "getJoinTokenStatus") {
       return runAndRespond(ctx.runMutation(internal.scannerSignal.joinTokens.getJoinTokenStatus, { token }));
     }
-    if (request.method === "POST" && parts[2] === "revoke" && parts.length === 3) {
+    if (command === "revokeJoinToken") {
       return runAndRespond(
         ctx.runMutation(internal.scannerSignal.joinTokens.revokeJoinToken, {
           token,
@@ -73,7 +76,7 @@ const signalHandler = httpAction(async (ctx, request) => {
         }),
       );
     }
-    if (request.method === "POST" && parts[2] === "rotate" && parts.length === 3) {
+    if (command === "rotateJoinToken") {
       return runAndRespond(
         ctx.runMutation(internal.scannerSignal.joinTokens.rotateJoinToken, {
           token,
@@ -85,7 +88,7 @@ const signalHandler = httpAction(async (ctx, request) => {
         }),
       );
     }
-    if (request.method === "GET" && parts[2] === "attempts" && parts.length === 3) {
+    if (command === "listJoinAttempts") {
       return runAndRespond(
         ctx.runMutation(internal.scannerSignal.joinAttempts.listJoinAttempts, {
           token,
@@ -93,7 +96,7 @@ const signalHandler = httpAction(async (ctx, request) => {
         }),
       );
     }
-    if (request.method === "POST" && parts[2] === "attempt" && parts.length === 3) {
+    if (command === "createJoinAttempt") {
       return runAndRespond(
         ctx.runMutation(internal.scannerSignal.joinAttempts.createJoinAttempt, {
           token,
@@ -108,8 +111,7 @@ const signalHandler = httpAction(async (ctx, request) => {
     }
     if (parts[2] === "attempt" && parts.length === 5) {
       const attemptId = parts[3];
-      const route = parts[4];
-      if (route === "offer" && request.method === "POST") {
+      if (command === "postJoinOffer") {
         const offer = stringFrom(body.offer, 200_000);
         if (!offer) return jsonResponse({ error: "Missing offer" }, 400);
         return runAndRespond(
@@ -121,15 +123,15 @@ const signalHandler = httpAction(async (ctx, request) => {
           }),
         );
       }
-      if (route === "offer" && request.method === "GET") {
+      if (command === "getJoinOffer") {
         return runAndRespond(ctx.runMutation(internal.scannerSignal.joinAttempts.getJoinOffer, { token, attemptId }));
       }
-      if (route === "answer" && request.method === "POST") {
+      if (command === "postJoinAnswer") {
         const answer = stringFrom(body.answer, 200_000);
         if (!answer) return jsonResponse({ error: "Missing answer" }, 400);
         return runAndRespond(ctx.runMutation(internal.scannerSignal.joinAttempts.postJoinAnswer, { token, attemptId, answer }));
       }
-      if (route === "answer" && request.method === "GET") {
+      if (command === "getJoinAnswer") {
         return runAndRespond(
           ctx.runMutation(internal.scannerSignal.joinAttempts.getJoinAnswer, {
             token,
@@ -142,7 +144,7 @@ const signalHandler = httpAction(async (ctx, request) => {
   }
 
   if (parts[0] === "pairings") {
-    if (request.method === "POST" && parts.length === 1) {
+    if (command === "registerPairing") {
       return runAndRespond(
         ctx.runMutation(internal.scannerSignal.pairings.registerPairing, {
           pairingId: stringFrom(body.pairingId, 120) ?? makeSecretId(18),
@@ -155,7 +157,7 @@ const signalHandler = httpAction(async (ctx, request) => {
         }),
       );
     }
-    if (request.method === "GET" && parts[1] === "reconnect-requests" && parts.length === 2) {
+    if (command === "getPendingReconnectRequests") {
       return runAndRespond(
         ctx.runMutation(internal.scannerSignal.reconnectRequests.getPendingReconnectRequests, {
           browserSessionId: stringFrom(url.searchParams.get("sessionId"), 120) ?? "",
@@ -163,7 +165,7 @@ const signalHandler = httpAction(async (ctx, request) => {
       );
     }
     const pairingId = parts[1];
-    if (request.method === "POST" && parts[2] === "reconnect" && parts.length === 3) {
+    if (command === "createReconnectRequest") {
       const result = await ctx.runMutation(internal.scannerSignal.reconnectRequests.createReconnectRequest, {
         pairingId,
         pairingSecret: pairingSecretFrom(request, body),
@@ -185,7 +187,7 @@ const signalHandler = httpAction(async (ctx, request) => {
       }
       return jsonResponse(result.body, result.statusCode);
     }
-    if (parts[2] === "reconnect" && parts.length === 4 && request.method === "GET") {
+    if (command === "getReconnectRequestStatus") {
       return runAndRespond(
         ctx.runMutation(internal.scannerSignal.reconnectRequests.getReconnectRequestStatus, {
           pairingId,
@@ -194,7 +196,7 @@ const signalHandler = httpAction(async (ctx, request) => {
         }),
       );
     }
-    if (parts[2] === "reconnect" && parts[4] === "join-window" && parts.length === 5 && request.method === "POST") {
+    if (command === "postReconnectJoinWindow") {
       const joinUrl = stringFrom(body.joinUrl, 1000);
       const joinToken = stringFrom(body.joinToken, 240);
       const sessionId = stringFrom(body.sessionId, 120);
@@ -212,7 +214,7 @@ const signalHandler = httpAction(async (ctx, request) => {
     }
   }
 
-  if (parts[0] === "push" && parts[1] === "public-key" && request.method === "GET" && parts.length === 2) {
+  if (command === "getPushPublicKey") {
     const publicKey = process.env.SCANNER_PUSH_VAPID_PUBLIC_KEY;
     if (!publicKey) return jsonResponse({ error: "Web Push is not configured" }, 404);
     return jsonResponse({ publicKey });

@@ -1,3 +1,5 @@
+import { isScannerSessionId } from "@volt/scanner-protocol";
+import type { DurablePairingCredential } from "./mobile-scanner-identity";
 import type { MobileScannerPeerConnections } from "./mobile-scanner-peer-connection";
 import type { JoinWindow, MobileScannerSignalClient } from "./mobile-scanner-signal-client";
 
@@ -6,6 +8,9 @@ type SessionTimer = ReturnType<typeof setTimeout>;
 const HIDDEN_JOIN_ATTEMPT_POLL_GRACE_MS = 60 * 1000;
 const JOIN_ATTEMPT_INITIAL_POLL_INTERVAL_MS = 1000;
 const JOIN_ATTEMPT_MAX_POLL_INTERVAL_MS = 10 * 1000;
+const RECONNECT_FALLBACK_POLL_INTERVAL_MS = 60 * 1000;
+const RECONNECT_ACTIVE_WINDOW_POLL_INTERVAL_MS = 5000;
+const RECONNECT_ACTIVE_WINDOW_MS = 95 * 1000;
 
 type MobileScannerJoinAttemptPollerOptions = {
   getActiveJoinWindow: () => JoinWindow | null;
@@ -152,5 +157,129 @@ export class MobileScannerJoinAttemptPoller {
 
   private get maxPollIntervalMs() {
     return this.options.maxPollIntervalMs ?? JOIN_ATTEMPT_MAX_POLL_INTERVAL_MS;
+  }
+}
+
+type MobileScannerReconnectPollerOptions = {
+  activeWindowMs?: number;
+  activeWindowPollIntervalMs?: number;
+  createReconnectJoinWindow: (pairing: DurablePairingCredential, requestId: string) => Promise<JoinWindow>;
+  fallbackPollIntervalMs?: number;
+  getDurablePairings: () => Promise<DurablePairingCredential[]>;
+  getSessionId: () => string;
+  identityReady?: Promise<void>;
+  log?: (...args: unknown[]) => void;
+  signalClient: MobileScannerSignalClient;
+};
+
+export class MobileScannerReconnectPoller {
+  private readonly options: MobileScannerReconnectPollerOptions;
+  private poll: SessionTimer | null = null;
+  private reconnectFastPollUntil = 0;
+  private seenReconnectRequests = new Set<string>();
+
+  constructor(options: MobileScannerReconnectPollerOptions) {
+    this.options = options;
+  }
+
+  start(delayMs = this.fallbackPollIntervalMs) {
+    this.schedule(delayMs);
+  }
+
+  stop() {
+    if (!this.poll) return;
+    clearTimeout(this.poll);
+    this.poll = null;
+  }
+
+  clear() {
+    this.stop();
+    this.reconnectFastPollUntil = 0;
+    this.seenReconnectRequests.clear();
+  }
+
+  async pollNow() {
+    await this.pollReconnectRequests();
+  }
+
+  private schedule(delayMs: number) {
+    if (this.poll) return;
+    this.poll = setTimeout(() => {
+      this.poll = null;
+      void this.pollReconnectRequests()
+        .catch((error) => {
+          this.options.log?.("Failed to poll scanner reconnect requests", error);
+        })
+        .finally(() => {
+          this.schedule(this.nextPollDelay());
+        });
+    }, delayMs);
+  }
+
+  private nextPollDelay() {
+    return Date.now() < this.reconnectFastPollUntil
+      ? this.activeWindowPollIntervalMs
+      : this.fallbackPollIntervalMs;
+  }
+
+  private async pollReconnectRequests() {
+    await this.options.identityReady;
+    const sessionId = this.options.getSessionId();
+    if (!isScannerSessionId(sessionId)) {
+      this.options.log?.("[Volt Scanner Reconnect] poll skipped: invalid session id", { sessionId });
+      return;
+    }
+    const pairings = await this.options.getDurablePairings();
+    const pairingById = new Map(pairings.map((pairing) => [pairing.pairingId, pairing]));
+    if (pairingById.size === 0) {
+      this.options.log?.("[Volt Scanner Reconnect] poll skipped: no durable pairings", { sessionId });
+      return;
+    }
+
+    const { response, requests } = await this.options.signalClient.fetchReconnectRequests(sessionId);
+    this.options.log?.("[Volt Scanner Reconnect] reconnect requests fetched", {
+      sessionId,
+      status: response.status,
+      pairingCount: pairingById.size,
+    });
+    if (!response.ok) return;
+    this.options.log?.("[Volt Scanner Reconnect] reconnect requests decoded", {
+      sessionId,
+      requestCount: requests.length,
+    });
+    if (requests.length > 0) {
+      this.reconnectFastPollUntil = Date.now() + this.activeWindowMs;
+    }
+    for (const request of requests) {
+      const pairing = pairingById.get(request.pairingId);
+      if (!pairing) continue;
+      const key = `${request.pairingId}:${request.requestId}`;
+      if (this.seenReconnectRequests.has(key)) continue;
+      this.options.log?.("[Volt Scanner Reconnect] answering reconnect request", {
+        sessionId,
+        pairingId: request.pairingId,
+        requestId: request.requestId,
+      });
+      const joinWindow = await this.options.createReconnectJoinWindow(pairing, request.requestId);
+      await this.options.signalClient.postReconnectJoinWindow(pairing, request.requestId, joinWindow);
+      this.options.log?.("[Volt Scanner Reconnect] join window posted", {
+        pairingId: pairing.pairingId,
+        requestId: request.requestId,
+        sessionId: joinWindow.sessionId,
+      });
+      this.seenReconnectRequests.add(key);
+    }
+  }
+
+  private get activeWindowMs() {
+    return this.options.activeWindowMs ?? RECONNECT_ACTIVE_WINDOW_MS;
+  }
+
+  private get activeWindowPollIntervalMs() {
+    return this.options.activeWindowPollIntervalMs ?? RECONNECT_ACTIVE_WINDOW_POLL_INTERVAL_MS;
+  }
+
+  private get fallbackPollIntervalMs() {
+    return this.options.fallbackPollIntervalMs ?? RECONNECT_FALLBACK_POLL_INTERVAL_MS;
   }
 }

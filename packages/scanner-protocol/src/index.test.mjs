@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { scannerProtocolGolden } from "./protocol-fixtures.mjs";
 import {
   PHOTO_TRANSFER_CHANNEL_LABEL,
   SCANNER_JOIN_TOKEN_TTL_MS,
@@ -31,34 +32,33 @@ import {
   scannerControlDuplicateKey,
 } from "./index.ts";
 
-const now = "2026-06-03T12:00:00.000Z";
-const token = "abcdefghijklmnopqrstuvwxyzABCDEF";
-const sessionId = "session_1234";
-const joinAttemptId = "join_attempt_123";
-const contributorId = "device_1234";
-
-const peer = {
-  protocolVersion: { major: 1, minor: 0 },
-  appVersion: "1.2.3",
-  platform: "ios",
-  capabilities: ["ocr", "barcode", "dictation", "photo", "photo_retry_queue"],
+const {
+  now,
+  token,
+  sessionId,
+  joinAttemptId,
   contributorId,
-  deviceLabel: "Juan's iPhone",
-  chromeSessionId: sessionId,
-};
+  peer,
+  pairingId,
+  pairingSecret,
+  displayName,
+  phoneDeviceId,
+  photo,
+  messages,
+} = scannerProtocolGolden;
 
 function stripUndefined(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
 test("exports ADR 0002 channel labels and version support", () => {
-  assert.equal(SCANNER_CONTROL_CHANNEL_LABEL, "scanner-control");
-  assert.equal(PHOTO_TRANSFER_CHANNEL_LABEL, "photo-transfer");
-  assert.equal(SCANNER_PROTOCOL_VERSION, "1.0.0");
-  assert.equal(SCANNER_JOIN_TOKEN_TTL_MS, 2 * 60 * 1000);
-  assert.equal(SCANNER_PAIRING_TTL_MS, 90 * 24 * 60 * 60 * 1000);
-  assert.equal(SCANNER_RECONNECT_REQUEST_TTL_MS, 95 * 1000);
-  assert.equal(isScannerProtocolVersionSupported({ major: 1, minor: 0 }), true);
+  assert.equal(SCANNER_CONTROL_CHANNEL_LABEL, scannerProtocolGolden.labels.controlChannel);
+  assert.equal(PHOTO_TRANSFER_CHANNEL_LABEL, scannerProtocolGolden.labels.photoTransferChannel);
+  assert.equal(SCANNER_PROTOCOL_VERSION, scannerProtocolGolden.protocolVersion.string);
+  assert.equal(SCANNER_JOIN_TOKEN_TTL_MS, scannerProtocolGolden.timing.joinTokenTtlMs);
+  assert.equal(SCANNER_PAIRING_TTL_MS, scannerProtocolGolden.timing.pairingTtlMs);
+  assert.equal(SCANNER_RECONNECT_REQUEST_TTL_MS, scannerProtocolGolden.timing.reconnectRequestTtlMs);
+  assert.equal(isScannerProtocolVersionSupported({ major: scannerProtocolGolden.protocolVersion.major, minor: 0 }), true);
   assert.equal(isScannerProtocolVersionSupported({ major: 2, minor: 0 }), false);
 });
 
@@ -130,10 +130,10 @@ test("validates durable pairing ids and exposes signal response DTO helpers", ()
   const pairing = normalizeScannerPairing(
     {
       id: "pairing_test_12345",
-      secret: "abcdefghijklmnopqrstuvwxyzABCDEFGH123456",
+      secret: pairingSecret,
       browserSessionId: sessionId,
-      displayName: "Chrome on Mac",
-      phoneDeviceId: "phone_1234",
+      displayName,
+      phoneDeviceId,
       createdAt: Date.parse(now),
       lastSeenAt: Date.parse(now),
       expiresAt: Date.parse(now) + 100_000,
@@ -160,11 +160,11 @@ test("validates durable pairing ids and exposes signal response DTO helpers", ()
     answeredAt: undefined,
   });
   assert.deepEqual(publicPendingScannerReconnectRequest(pairing, pairing.reconnectRequests[0]), {
-    pairingId: "pairing_test_12345",
+    pairingId,
     requestId: "request_12345",
     browserSessionId: sessionId,
-    displayName: "Chrome on Mac",
-    phoneDeviceId: "phone_1234",
+    displayName,
+    phoneDeviceId,
     phoneLabel: undefined,
     createdAt: now,
     expiresAt: "2026-06-03T12:00:30.000Z",
@@ -172,48 +172,15 @@ test("validates durable pairing ids and exposes signal response DTO helpers", ()
 });
 
 test("round-trips scanner-control messages", () => {
-  const hello = {
-    type: "hello",
-    messageId: "m1",
-    sentAt: now,
-    peer,
-  };
+  const hello = messages.hello;
 
   assert.deepEqual(stripUndefined(decodeScannerControlMessage(encodeScannerControlMessage(hello))), hello);
 
-  const sessionReady = {
-    type: "session_ready",
-    messageId: "m-ready",
-    sentAt: now,
-    peer,
-    pairing: {
-      pairingId: "pairing_test_12345",
-      pairingSecret: "abcdefghijklmnopqrstuvwxyzABCDEFGH123456",
-      browserSessionId: "session_1234",
-      displayName: "Chrome on Mac",
-    },
-    cursorTarget: {
-      tabTitle: "Product Admin",
-      url: "https://example.com/products/1",
-      label: "SKU",
-      hasCursorTarget: true,
-    },
-  };
+  const sessionReady = messages.sessionReady;
 
   assert.deepEqual(stripUndefined(decodeScannerControlMessage(encodeScannerControlMessage(sessionReady))), sessionReady);
 
-  const result = {
-    type: "capture_result",
-    messageId: "m2",
-    sentAt: now,
-    resultId: "result_1",
-    resultKind: "barcode",
-    value: "  ABC-123  ",
-    format: "qr",
-    capturedAt: now,
-    insertIntoCursor: true,
-    contributorId,
-  };
+  const result = messages.captureResult;
 
   assert.deepEqual(stripUndefined(decodeScannerControlMessage(encodeScannerControlMessage(result))), result);
   assert.equal(scannerControlDuplicateKey(result), "capture_result:result_1");
@@ -267,34 +234,11 @@ test("rejects unsupported and invalid scanner-control messages", () => {
 });
 
 test("round-trips photo-transfer messages and dedupe keys", () => {
-  const start = {
-    type: "photo_start",
-    messageId: "p1",
-    sentAt: now,
-    photoId: "photo_1",
-    photoBatchId: "batch_1",
-    contributorId,
-    filename: "listing-001.jpg",
-    mimeType: "image/jpeg",
-    size: 2048,
-    width: 1800,
-    height: 1200,
-    capturedAt: now,
-    chunkSize: 1024,
-    totalChunks: 2,
-  };
+  const start = photo.start;
   assert.deepEqual(stripUndefined(decodePhotoTransferMessage(encodePhotoTransferMessage(start))), start);
   assert.equal(photoTransferDuplicateKey(start), "photo_start:photo_1");
 
-  const chunk = {
-    type: "photo_chunk",
-    messageId: "p2",
-    sentAt: now,
-    photoId: "photo_1",
-    chunkIndex: 1,
-    totalChunks: 2,
-    data: "ZmFrZS1qcGVnLWJ5dGVz",
-  };
+  const chunk = photo.chunk;
   assert.deepEqual(stripUndefined(decodePhotoTransferMessage(encodePhotoTransferMessage(chunk))), chunk);
   assert.equal(photoTransferDuplicateKey(chunk), "photo_chunk:photo_1:1:2");
 

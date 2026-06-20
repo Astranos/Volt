@@ -6,6 +6,7 @@ import {
   MOBILE_SCANNER_DELETE_UNDO_WINDOW_MS,
   groupPhotoResultsByBatch,
   normalizeScannerScanResult,
+  persistAndBroadcastMobileScannerPhoto,
   resolvePhotoBatchId,
   shouldPersistScannerScan,
 } from "./mobile-scanner-results.ts";
@@ -92,3 +93,50 @@ test("photo batch grouping preserves upload order inside each batch", () => {
 test("results model owns the delete undo window used by the sidepanel", () => {
   assert.equal(MOBILE_SCANNER_DELETE_UNDO_WINDOW_MS, 7000);
 });
+
+test("browser photo receipt is false when storage fails", async () => {
+  const broadcasts = [];
+  const receipt = await persistAndBroadcastMobileScannerPhoto(createPhoto(), {
+    broadcastScannerMessage: (message) => broadcasts.push(message),
+    savePhoto: async () => null,
+    persistFallbackPhoto: async () => false,
+  });
+
+  assert.deepEqual(receipt, { success: false, error: "storage_failed" });
+  assert.deepEqual(broadcasts, []);
+});
+
+test("browser photo receipt is true only after storage succeeds and then broadcasts", async () => {
+  const broadcasts = [];
+  const photo = createPhoto();
+  const savedResult = {
+    type: "photo",
+    id: photo.id,
+    photoBatchId: "batch-1",
+    capturedAt: photo.capturedAt,
+    photo: { ...photo, photoBatchId: "batch-1" },
+  };
+
+  const receipt = await persistAndBroadcastMobileScannerPhoto(photo, {
+    broadcastScannerMessage: (message) => broadcasts.push(message),
+    savePhoto: async () => savedResult,
+  });
+
+  assert.deepEqual(receipt, { success: true, result: savedResult });
+  assert.equal(broadcasts.length, 1);
+  assert.equal(broadcasts[0].action, "scannerPhoto");
+  assert.equal(broadcasts[0].result, savedResult);
+  assert.equal(broadcasts[0].photo.id, photo.id);
+});
+
+function createPhoto() {
+  return {
+    id: "photo-1",
+    kind: "photo",
+    name: "photo.png",
+    mimeType: "image/png",
+    dataUrl: "data:image/png;base64,ZmFrZQ==",
+    size: 4,
+    capturedAt: "2026-06-03T15:00:00.000Z",
+  };
+}

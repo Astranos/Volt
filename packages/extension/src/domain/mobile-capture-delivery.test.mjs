@@ -67,7 +67,7 @@ test("cursor targeted capture delivery persists and broadcasts barcodes without 
   await new Promise((resolve) => setTimeout(resolve, 0));
 
   assert.deepEqual(receipt, { success: true, insertedIntoCursor: false });
-  assert.deepEqual(broadcasts, [{ action: "scannerScan", scan }]);
+  assert.deepEqual(broadcasts, [{ action: "scannerScan", scan, result: undefined }]);
   assert.equal(logs[0][0], "scanner IndexedDB scan persist failed");
   assert.deepEqual(storageWrites, [{ [MOBILE_SCANNER_STORAGE_KEY]: [scan] }]);
 });

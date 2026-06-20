@@ -4,8 +4,42 @@ import { describe, expect, test } from "vitest";
 
 import { internal } from "./_generated/api";
 import schema from "./schema";
+import { signalRouteCommand } from "./scannerSignal/routeCommands";
 
 const modules = import.meta.glob("./**/*.ts");
+
+describe("scanner signal route command extraction", () => {
+  test.each([
+    ["POST", ["join-token"], "createJoinToken"],
+    ["GET", ["join-token", "token"], "getJoinTokenStatus"],
+    ["POST", ["join-token", "token", "revoke"], "revokeJoinToken"],
+    ["POST", ["join-token", "token", "rotate"], "rotateJoinToken"],
+    ["GET", ["join-token", "token", "attempts"], "listJoinAttempts"],
+    ["POST", ["join-token", "token", "attempt"], "createJoinAttempt"],
+    ["POST", ["join-token", "token", "attempt", "attempt-id", "offer"], "postJoinOffer"],
+    ["GET", ["join-token", "token", "attempt", "attempt-id", "offer"], "getJoinOffer"],
+    ["POST", ["join-token", "token", "attempt", "attempt-id", "answer"], "postJoinAnswer"],
+    ["GET", ["join-token", "token", "attempt", "attempt-id", "answer"], "getJoinAnswer"],
+    ["POST", ["pairings"], "registerPairing"],
+    ["GET", ["pairings", "reconnect-requests"], "getPendingReconnectRequests"],
+    ["POST", ["pairings", "pairing-id", "reconnect"], "createReconnectRequest"],
+    ["GET", ["pairings", "pairing-id", "reconnect", "request-id"], "getReconnectRequestStatus"],
+    ["POST", ["pairings", "pairing-id", "reconnect", "request-id", "join-window"], "postReconnectJoinWindow"],
+    ["GET", ["push", "public-key"], "getPushPublicKey"],
+  ] as const)("maps %s /%s to %s", (method, parts, command) => {
+    expect(signalRouteCommand(method, [...parts])).toBe(command);
+  });
+
+  test.each([
+    ["GET", ["join-token"]],
+    ["POST", ["join-token", "token", "attempt", "attempt-id", "candidate"]],
+    ["POST", ["pairings", "reconnect-requests"]],
+    ["POST", ["pairings", "pairing-id", "reconnect", "request-id"]],
+    ["GET", ["push", "public-key", "extra"]],
+  ] as const)("maps unsupported %s /%s to notFound", (method, parts) => {
+    expect(signalRouteCommand(method, [...parts])).toBe("notFound");
+  });
+});
 
 describe("scanner signal Convex lifecycle", () => {
   test("creates a token, exchanges offer and answer, registers pairing, reconnects, and cleans up expiry", async () => {

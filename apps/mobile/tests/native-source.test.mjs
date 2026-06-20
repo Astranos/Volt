@@ -2,6 +2,12 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
+import { scannerProtocolGolden } from "@volt/scanner-protocol/protocol-fixtures";
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 const scannerStoreSwiftSource = readFileSync(
   new URL("../ios/Volt/Services/ScannerStore.swift", import.meta.url),
   "utf8"
@@ -86,18 +92,31 @@ test("native saved-session reconnect re-registers durable pairing before request
 });
 
 test("native saved-session reconnect waits longer than QR pairing for sleeping Chrome extensions", () => {
-  assert.match(scannerProtocolSwiftSource, /static let joinAttemptTTL: Duration = \.seconds\(32\)/);
-  assert.match(scannerProtocolSwiftSource, /static let reconnectRequestTTL: Duration = \.seconds\(95\)/);
-  assert.match(scannerProtocolSwiftSource, /static let iceGatheringTimeout: Duration = \.seconds\(2\)/);
+  assert.match(scannerProtocolSwiftSource, new RegExp(`static let joinAttemptTTL: Duration = \\.seconds\\(${scannerProtocolGolden.timing.joinAttemptTtlMs / 1000}\\)`));
+  assert.match(scannerProtocolSwiftSource, new RegExp(`static let reconnectRequestTTL: Duration = \\.seconds\\(${scannerProtocolGolden.timing.reconnectRequestTtlMs / 1000}\\)`));
+  assert.match(scannerProtocolSwiftSource, new RegExp(`static let iceGatheringTimeout: Duration = \\.seconds\\(${scannerProtocolGolden.timing.iceGatheringTimeoutMs / 1000}\\)`));
   assert.match(scannerSignalingSwiftSource, /let deadline = ContinuousClock\.now \+ ScannerProtocol\.reconnectRequestTTL/);
 });
 
 test("native Debug builds use Convex dev and Release builds use Convex production", () => {
   assert.match(scannerProtocolSwiftSource, /#if DEBUG/);
-  assert.match(scannerProtocolSwiftSource, /https:\/\/adorable-hornet-19\.convex\.site\/api\/signal/);
+  assert.match(scannerProtocolSwiftSource, new RegExp(escapeRegExp(scannerProtocolGolden.urls.signalDev)));
   assert.match(scannerProtocolSwiftSource, /#else/);
-  assert.match(scannerProtocolSwiftSource, /https:\/\/sincere-trout-414\.convex\.site\/api\/signal/);
+  assert.match(scannerProtocolSwiftSource, new RegExp(escapeRegExp(scannerProtocolGolden.urls.signalProd)));
   assert.match(scannerProtocolSwiftSource, /#endif/);
+});
+
+test("native scanner protocol constants match shared scanner protocol fixtures", () => {
+  assert.match(scannerProtocolSwiftSource, new RegExp(`static let controlChannelLabel = "${scannerProtocolGolden.labels.controlChannel}"`));
+  assert.match(scannerProtocolSwiftSource, new RegExp(`static let photoTransferChannelLabel = "${scannerProtocolGolden.labels.photoTransferChannel}"`));
+  assert.match(
+    scannerProtocolSwiftSource,
+    new RegExp(
+      `static let protocolVersion = ProtocolVersion\\(major: ${scannerProtocolGolden.protocolVersion.major}, minor: ${scannerProtocolGolden.protocolVersion.minor}, patch: ${scannerProtocolGolden.protocolVersion.patch}\\)`
+    )
+  );
+  assert.match(scannerProtocolSwiftSource, new RegExp(`static let chunkSize = ${scannerProtocolGolden.photo.chunkSizeBytes / 1024} \\* 1024`));
+  assert.match(scannerProtocolSwiftSource, new RegExp(`static let photoReceiptTimeout: Duration = \\.seconds\\(${scannerProtocolGolden.timing.photoReceiptTimeoutMs / 1000}\\)`));
 });
 
 test("native saved-session reconnect toast can cancel manual previous-session taps", () => {
@@ -332,4 +351,21 @@ test("native scanner handles Chrome result receipts for cursor insertion feedbac
   assert.match(scannerStoreCaptureActionsSwiftSource, /title: "Failed to type"/);
   assert.match(scannerStoreCaptureActionsSwiftSource, /was saved to Chrome sidepanel results/);
   assert.match(scannerStoreSwiftSource, /Chrome saved it, but no focused cursor target was available\./);
+});
+
+test("native photo delivery uses a durable retry queue until browser receipt", () => {
+  assert.match(scannerStoreCaptureActionsSwiftSource, /final class MobilePhotoRetryQueue/);
+  assert.match(scannerStoreCaptureActionsSwiftSource, /static let recoveryWindow: TimeInterval = 24 \* 60 \* 60/);
+  assert.match(scannerStoreCaptureActionsSwiftSource, /enum Status: String, Codable, Equatable \{[\s\S]*case queued[\s\S]*case sending[\s\S]*case sent[\s\S]*case failed[\s\S]*case received[\s\S]*case cancelled/);
+  assert.match(scannerStoreCaptureActionsSwiftSource, /appendingPathComponent\("VoltPhotoRetryQueue", isDirectory: true\)/);
+  assert.match(scannerStoreCaptureActionsSwiftSource, /func enqueue\(payload: ScannerProtocol\.PhotoPayload, resultId: UUID, now: Date = \.now\) -> Entry\?/);
+  assert.match(scannerStoreCaptureActionsSwiftSource, /func expireEntries\(now: Date = \.now\) -> \[Entry\]/);
+  assert.match(scannerStoreSwiftSource, /@ObservationIgnored var photoRetryQueue = MobilePhotoRetryQueue\(\)/);
+  assert.match(scannerStoreSwiftSource, /Task \{ await sendRetryablePhotos\(\) \}/);
+  assert.match(scannerWebRTCConnectionSwiftSource, /var onPhotoTransferCompleted: \(\(String\) -> Void\)\?/);
+  assert.match(scannerWebRTCConnectionSwiftSource, /func sendPhoto\(_ payload: ScannerProtocol\.PhotoPayload\) async throws -> ScannerProtocol\.PhotoDeliveryReceipt/);
+  assert.match(scannerWebRTCConnectionSwiftSource, /onPhotoTransferCompleted\?\(payload\.id\)/);
+  assert.match(scannerStoreCaptureActionsSwiftSource, /photoRetryQueue\.markSent\(photoId: photoId\)/);
+  assert.match(scannerStoreCaptureActionsSwiftSource, /photoRetryQueue\.markReceived\(photoId: photoId\)/);
+  assert.match(scannerStoreCaptureActionsSwiftSource, /removeData\(photoId: photoId\)/);
 });

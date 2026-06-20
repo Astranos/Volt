@@ -6,6 +6,7 @@ final class ScannerWebRTCConnection: NSObject {
     var onStatusChange: ((ScannerConnectionStatus) -> Void)?
     var onSessionReady: ((ScannerProtocol.SessionReady) -> Void)?
     var onResultReceived: ((ScannerProtocol.ResultReceived) -> Void)?
+    var onPhotoTransferCompleted: ((String) -> Void)?
 
     private let contributorId: String
     private let signaling = ScannerSignalingClient()
@@ -61,7 +62,7 @@ final class ScannerWebRTCConnection: NSObject {
         controlChannel.sendData(RTCDataBuffer(data: data, isBinary: false))
     }
 
-    func sendPhoto(_ payload: ScannerProtocol.PhotoPayload) async throws {
+    func sendPhoto(_ payload: ScannerProtocol.PhotoPayload) async throws -> ScannerProtocol.PhotoDeliveryReceipt {
         guard let photoChannel, photoChannel.readyState == .open else {
             throw ScannerPairingError.channelNotOpen
         }
@@ -81,6 +82,7 @@ final class ScannerWebRTCConnection: NSObject {
         }
         do {
             try sendPhotoMessage(ScannerProtocol.photoComplete(photoId: payload.id, totalChunks: chunks.count), through: photoChannel)
+            onPhotoTransferCompleted?(payload.id)
         } catch {
             receiptTask.cancel()
             throw error
@@ -89,6 +91,7 @@ final class ScannerWebRTCConnection: NSObject {
         if case .rejected(let rejection) = receipt {
             throw ScannerPairingError.photoRejected(rejection.detail ?? rejection.reason)
         }
+        return receipt
     }
 
     private func resolvePairing(_ session: PairingSession) async throws -> (offer: String, answerURL: URL, sessionId: String?) {
