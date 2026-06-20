@@ -2,7 +2,9 @@ import {
   PHOTO_TRANSFER_CHANNEL_LABEL,
   SCANNER_APP_PAIR_URL,
   SCANNER_CONTROL_CHANNEL_LABEL,
+  normalizeScannerIceServers,
 } from "@volt/scanner-protocol";
+import type { ScannerIceServer } from "@volt/scanner-protocol";
 import type { DurablePairingCredential, WebPushSubscriptionRecord } from "./mobile-scanner-identity";
 import { EXTENSION_SCANNER_SIGNAL_URL } from "./mobile-scanner-signal-url";
 import type { SessionTarget } from "./mobile-scanner-session-types";
@@ -56,6 +58,13 @@ export function normalizeSessionDescription(value: unknown): RTCSessionDescripti
   return { type: description.type, sdp: description.sdp };
 }
 
+export function normalizeScannerIceServersResponse(value: unknown): ScannerIceServer[] | null {
+  if (!value || typeof value !== "object") return null;
+  const payload = value as { iceServers?: unknown };
+  const iceServers = normalizeScannerIceServers(payload.iceServers);
+  return iceServers && iceServers.length > 0 ? iceServers : null;
+}
+
 function normalizeJoinAttempt(value: unknown): NormalizedJoinAttempt | null {
   if (!value || typeof value !== "object") return null;
   const attempt = value as JoinAttempt;
@@ -71,7 +80,11 @@ function normalizeJoinAttempt(value: unknown): NormalizedJoinAttempt | null {
 }
 
 export class MobileScannerSignalClient {
-  constructor(private readonly ttlMs: number) {}
+  private readonly ttlMs: number;
+
+  constructor(ttlMs: number) {
+    this.ttlMs = ttlMs;
+  }
 
   async createJoinWindow({
     sessionId,
@@ -153,6 +166,18 @@ export class MobileScannerSignalClient {
     if (!response.ok) return null;
     const payload = (await response.json()) as { answer?: unknown };
     return normalizeSessionDescription(payload.answer);
+  }
+
+  async fetchIceServers() {
+    const response = await fetch(`${EXTENSION_SCANNER_SIGNAL_URL}/ice-servers`, {
+      headers: { Accept: "application/json" },
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to fetch scanner ICE servers (${response.status})`);
+    }
+    const iceServers = normalizeScannerIceServersResponse(await response.json());
+    if (!iceServers) throw new Error("Scanner signal returned invalid ICE servers");
+    return iceServers;
   }
 
   async postPeerOffer(joinWindow: JoinWindow, joinAttemptId: string, offer: RTCSessionDescriptionInit) {

@@ -113,10 +113,10 @@ final class ScannerWebRTCConnection: NSObject {
         }
 
         let configuration = RTCConfiguration()
-        configuration.iceServers = [
-            RTCIceServer(urlStrings: ["stun:stun.l.google.com:19302"]),
-            RTCIceServer(urlStrings: ["stun:stun1.l.google.com:19302"]),
-        ]
+        let iceServerConfiguration = await fetchIceServerConfiguration()
+        configuration.iceServers = iceServerConfiguration.iceServers.map { server in
+            RTCIceServer(urlStrings: server.urls, username: server.username, credential: server.credential)
+        }
         configuration.iceTransportPolicy = .all
         configuration.sdpSemantics = .unifiedPlan
 
@@ -135,6 +135,14 @@ final class ScannerWebRTCConnection: NSObject {
             throw ScannerPairingError.missingAnswer
         }
         return ScannerProtocol.SessionDescription(type: RTCSessionDescription.string(for: localDescription.type), sdp: localDescription.sdp)
+    }
+
+    private func fetchIceServerConfiguration() async -> ScannerProtocol.IceServerConfiguration {
+        do {
+            return try await signaling.fetchIceServerConfiguration()
+        } catch {
+            return ScannerProtocol.fallbackIceServerConfiguration
+        }
     }
 
     private func answer(on peerConnection: RTCPeerConnection, constraints: RTCMediaConstraints) async throws -> RTCSessionDescription {

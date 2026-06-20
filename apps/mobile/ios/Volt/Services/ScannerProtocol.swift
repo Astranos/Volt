@@ -52,6 +52,64 @@ enum ScannerProtocol {
         let sdp: String
     }
 
+    struct IceServerConfiguration: Codable, Equatable {
+        let iceServers: [IceServer]
+        let ttlSeconds: Int?
+        let expiresAt: String?
+
+        init(iceServers: [IceServer], ttlSeconds: Int? = nil, expiresAt: String? = nil) {
+            self.iceServers = iceServers
+            self.ttlSeconds = ttlSeconds
+            self.expiresAt = expiresAt
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            iceServers = try container.decode([IceServer].self, forKey: .iceServers)
+            ttlSeconds = try container.decodeIfPresent(Int.self, forKey: .ttlSeconds)
+            expiresAt = try container.decodeIfPresent(String.self, forKey: .expiresAt)
+
+            if iceServers.isEmpty {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .iceServers,
+                    in: container,
+                    debugDescription: "ICE server configuration must include at least one server."
+                )
+            }
+        }
+    }
+
+    struct IceServer: Codable, Equatable {
+        let urls: [String]
+        let username: String?
+        let credential: String?
+
+        init(urls: [String], username: String? = nil, credential: String? = nil) {
+            self.urls = urls
+            self.username = username
+            self.credential = credential
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            if let urlList = try? container.decode([String].self, forKey: .urls) {
+                urls = urlList
+            } else {
+                urls = [try container.decode(String.self, forKey: .urls)]
+            }
+            username = try container.decodeIfPresent(String.self, forKey: .username)
+            credential = try container.decodeIfPresent(String.self, forKey: .credential)
+
+            if urls.isEmpty || urls.contains(where: { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .urls,
+                    in: container,
+                    debugDescription: "ICE server URLs must be non-empty."
+                )
+            }
+        }
+    }
+
     struct JoinAttempt: Codable, Equatable {
         let attemptId: String
         let pollURL: URL
@@ -133,6 +191,13 @@ enum ScannerProtocol {
 
     static func makeMessageId(_ prefix: String) -> String {
         "\(prefix)-\(Int(Date.now.timeIntervalSince1970 * 1000))-\(UUID().uuidString.prefix(8).lowercased())"
+    }
+
+    static var fallbackIceServerConfiguration: IceServerConfiguration {
+        IceServerConfiguration(iceServers: [
+            IceServer(urls: ["stun:stun.l.google.com:19302"]),
+            IceServer(urls: ["stun:stun1.l.google.com:19302"]),
+        ])
     }
 
     static func encodePairingPayload(_ payload: SessionDescription) throws -> String {

@@ -6,9 +6,11 @@ import {
   PHOTO_TRANSFER_CHANNEL_LABEL,
   SCANNER_JOIN_TOKEN_TTL_MS,
   SCANNER_PAIRING_TTL_MS,
+  SCANNER_STUN_ONLY_ICE_SERVERS,
   SCANNER_CONTROL_CHANNEL_LABEL,
   SCANNER_PROTOCOL_VERSION,
   SCANNER_RECONNECT_REQUEST_TTL_MS,
+  buildScannerIceServersResponse,
   buildScannerJoinUrl,
   decodePhotoTransferMessage,
   decodePhotoTransferChunkFrame,
@@ -22,6 +24,8 @@ import {
   isScannerPairingId,
   isScannerProtocolVersionSupported,
   normalizeScannerJoinAttempt,
+  normalizeScannerIceServer,
+  normalizeScannerIceServers,
   normalizeScannerPairing,
   parseScannerJoinUrl,
   publicPendingScannerReconnectRequest,
@@ -30,6 +34,7 @@ import {
   publicScannerReconnectRequest,
   photoTransferDuplicateKey,
   scannerControlDuplicateKey,
+  scannerStunOnlyIceServersResponse,
 } from "./index.ts";
 
 const {
@@ -77,6 +82,59 @@ test("validates join tokens, join attempt ids, and join URLs", () => {
     joinAttemptId,
   });
   assert.equal(parseScannerJoinUrl("volt://pair?token=bad"), null);
+});
+
+test("normalizes scanner ICE server responses", () => {
+  const iceServers = normalizeScannerIceServers([
+    { urls: ["stun:stun.cloudflare.com:3478", "stun:stun.cloudflare.com:53"] },
+    {
+      urls: ["turn:turn.cloudflare.com:3478?transport=udp", "turns:turn.cloudflare.com:443?transport=tcp"],
+      username: "temporary-user",
+      credential: "temporary-credential",
+    },
+  ]);
+
+  assert.deepEqual(iceServers, [
+    { urls: ["stun:stun.cloudflare.com:3478", "stun:stun.cloudflare.com:53"] },
+    {
+      urls: ["turn:turn.cloudflare.com:3478?transport=udp", "turns:turn.cloudflare.com:443?transport=tcp"],
+      username: "temporary-user",
+      credential: "temporary-credential",
+    },
+  ]);
+  assert.equal(normalizeScannerIceServer({ urls: "turn:turn.cloudflare.com:3478?transport=udp" }), null);
+  assert.equal(normalizeScannerIceServers([{ urls: "https://example.com/not-ice" }]), null);
+
+  assert.deepEqual(
+    buildScannerIceServersResponse({
+      iceServers,
+      nowMs: Date.parse(now),
+      source: "cloudflare",
+      ttlSeconds: 60,
+    }),
+    {
+      iceServers,
+      expiresAt: "2026-06-03T12:01:00.000Z",
+      ttlSeconds: 60,
+      source: "cloudflare",
+    }
+  );
+});
+
+test("builds STUN-only ICE fallback responses", () => {
+  assert.deepEqual(
+    scannerStunOnlyIceServersResponse({
+      iceServers: SCANNER_STUN_ONLY_ICE_SERVERS,
+      nowMs: Date.parse(now),
+      ttlSeconds: 300,
+    }),
+    {
+      iceServers: SCANNER_STUN_ONLY_ICE_SERVERS,
+      expiresAt: "2026-06-03T12:05:00.000Z",
+      ttlSeconds: 300,
+      source: "stun-fallback",
+    }
+  );
 });
 
 test("validates durable pairing ids and exposes signal response DTO helpers", () => {

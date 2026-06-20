@@ -25,6 +25,7 @@ describe("scanner signal route command extraction", () => {
     ["POST", ["pairings", "pairing-id", "reconnect"], "createReconnectRequest"],
     ["GET", ["pairings", "pairing-id", "reconnect", "request-id"], "getReconnectRequestStatus"],
     ["POST", ["pairings", "pairing-id", "reconnect", "request-id", "join-window"], "postReconnectJoinWindow"],
+    ["GET", ["ice-servers"], "getIceServers"],
     ["GET", ["push", "public-key"], "getPushPublicKey"],
   ] as const)("maps %s /%s to %s", (method, parts, command) => {
     expect(signalRouteCommand(method, [...parts])).toBe(command);
@@ -35,6 +36,7 @@ describe("scanner signal route command extraction", () => {
     ["POST", ["join-token", "token", "attempt", "attempt-id", "candidate"]],
     ["POST", ["pairings", "reconnect-requests"]],
     ["POST", ["pairings", "pairing-id", "reconnect", "request-id"]],
+    ["POST", ["ice-servers"]],
     ["GET", ["push", "public-key", "extra"]],
   ] as const)("maps unsupported %s /%s to notFound", (method, parts) => {
     expect(signalRouteCommand(method, [...parts])).toBe("notFound");

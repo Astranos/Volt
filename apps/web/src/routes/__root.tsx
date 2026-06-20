@@ -25,9 +25,11 @@ export const Route = createRootRoute({
 });
 
 function RootComponent() {
+  const content = <Outlet />;
+  if (typeof document !== "undefined") return content;
   return (
     <RootDocument>
-      <Outlet />
+      {content}
     </RootDocument>
   );
 }

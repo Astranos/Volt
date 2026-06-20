@@ -2,8 +2,9 @@ import {
   PHOTO_TRANSFER_CHANNEL_LABEL,
   SCANNER_CONTROL_CHANNEL_LABEL,
   SCANNER_ICE_GATHERING_TIMEOUT_MS,
-  SCANNER_ICE_SERVERS,
+  SCANNER_STUN_ONLY_ICE_SERVERS,
 } from "@volt/scanner-protocol";
+import type { ScannerIceServer } from "@volt/scanner-protocol";
 import type { JoinWindow } from "./mobile-scanner-signal-client";
 import type { MobileScannerSignalClient } from "./mobile-scanner-signal-client";
 
@@ -27,14 +28,18 @@ export type PeerConnectionEvents = {
 export class MobileScannerPeerConnections {
   readonly peers = new Map<string, PeerSession>();
 
-  constructor(
-    private readonly signalClient: MobileScannerSignalClient,
-    private readonly events: PeerConnectionEvents,
-  ) {}
+  private readonly signalClient: MobileScannerSignalClient;
+  private readonly events: PeerConnectionEvents;
+
+  constructor(signalClient: MobileScannerSignalClient, events: PeerConnectionEvents) {
+    this.signalClient = signalClient;
+    this.events = events;
+  }
 
   async createPeerOffer(joinWindow: JoinWindow, joinAttemptId: string) {
     this.events.log?.("[Volt Scanner Pairing] creating WebRTC offer", { joinAttemptId });
-    const pc = new RTCPeerConnection({ iceServers: SCANNER_ICE_SERVERS });
+    const iceServers = await this.resolveIceServers(joinAttemptId);
+    const pc = new RTCPeerConnection({ iceServers });
     const peer: PeerSession = {
       answerApplied: false,
       control: null,
@@ -70,6 +75,23 @@ export class MobileScannerPeerConnections {
 
     await this.signalClient.postPeerOffer(joinWindow, joinAttemptId, pc.localDescription);
     this.events.log?.("[Volt Scanner Pairing] WebRTC offer posted", { joinAttemptId });
+  }
+
+  private async resolveIceServers(joinAttemptId: string): Promise<ScannerIceServer[]> {
+    try {
+      const iceServers = await this.signalClient.fetchIceServers();
+      this.events.log?.("[Volt Scanner Pairing] fetched ICE servers", {
+        joinAttemptId,
+        count: iceServers.length,
+      });
+      return iceServers;
+    } catch (error) {
+      this.events.log?.("[Volt Scanner Pairing] falling back to STUN-only ICE servers", {
+        joinAttemptId,
+        error,
+      });
+      return SCANNER_STUN_ONLY_ICE_SERVERS;
+    }
   }
 
   async applyPeerAnswer(joinAttemptId: string, answer: RTCSessionDescriptionInit) {

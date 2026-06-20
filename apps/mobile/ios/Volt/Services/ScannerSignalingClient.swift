@@ -8,6 +8,18 @@ struct ScannerSignalingClient {
         let sourceURL: URL
     }
 
+    func fetchIceServerConfiguration() async throws -> ScannerProtocol.IceServerConfiguration {
+        var request = URLRequest(url: ScannerProtocol.signalURL.appending(path: "ice-servers"))
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else {
+            throw ScannerPairingError.requestFailed
+        }
+
+        return try JSONDecoder().decode(ScannerProtocol.IceServerConfiguration.self, from: data)
+    }
+
     func registerPairing(_ pairing: ScannerProtocol.SessionReady.Pairing, phoneDeviceId: String) async throws {
         try await registerPairing(
             pairingId: pairing.pairingId,

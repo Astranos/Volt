@@ -14,6 +14,7 @@ export type SignalRouteCommand =
   | "createReconnectRequest"
   | "getReconnectRequestStatus"
   | "postReconnectJoinWindow"
+  | "getIceServers"
   | "getPushPublicKey"
   | "notFound";
 
@@ -48,6 +49,10 @@ export function signalRouteCommand(method: string, parts: string[]): SignalRoute
 
   if (parts[0] === "push" && parts[1] === "public-key" && method === "GET" && parts.length === 2) {
     return "getPushPublicKey";
+  }
+
+  if (parts[0] === "ice-servers" && method === "GET" && parts.length === 1) {
+    return "getIceServers";
   }
 
   return "notFound";

@@ -10,11 +10,17 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as ThankyouRouteImport } from './routes/thankyou'
+import { Route as ScannerDemoRouteImport } from './routes/scanner-demo'
 import { Route as IndexRouteImport } from './routes/index'
 
 const ThankyouRoute = ThankyouRouteImport.update({
   id: '/thankyou',
   path: '/thankyou',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ScannerDemoRoute = ScannerDemoRouteImport.update({
+  id: '/scanner-demo',
+  path: '/scanner-demo',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -25,27 +31,31 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/scanner-demo': typeof ScannerDemoRoute
   '/thankyou': typeof ThankyouRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/scanner-demo': typeof ScannerDemoRoute
   '/thankyou': typeof ThankyouRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/scanner-demo': typeof ScannerDemoRoute
   '/thankyou': typeof ThankyouRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/thankyou'
+  fullPaths: '/' | '/scanner-demo' | '/thankyou'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/thankyou'
-  id: '__root__' | '/' | '/thankyou'
+  to: '/' | '/scanner-demo' | '/thankyou'
+  id: '__root__' | '/' | '/scanner-demo' | '/thankyou'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ScannerDemoRoute: typeof ScannerDemoRoute
   ThankyouRoute: typeof ThankyouRoute
 }
 
@@ -56,6 +66,13 @@ declare module '@tanstack/react-router' {
       path: '/thankyou'
       fullPath: '/thankyou'
       preLoaderRoute: typeof ThankyouRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/scanner-demo': {
+      id: '/scanner-demo'
+      path: '/scanner-demo'
+      fullPath: '/scanner-demo'
+      preLoaderRoute: typeof ScannerDemoRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -70,6 +87,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ScannerDemoRoute: ScannerDemoRoute,
   ThankyouRoute: ThankyouRoute,
 }
 export const routeTree = rootRouteImport

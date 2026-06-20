@@ -1,7 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "pnpm --filter @volt/web build",
+  "buildCommand": "pnpm --filter @volt/web build:static",
   "devCommand": "pnpm --filter @volt/web dev",
-  "installCommand": "pnpm install",
-  "outputDirectory": "apps/web/dist"
+  "installCommand": "pnpm install --ignore-scripts",
+  "outputDirectory": "apps/web/dist",
+  "rewrites": [
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ]
 }
