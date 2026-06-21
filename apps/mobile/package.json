@@ -20,6 +20,8 @@
     "ios:archive": "FASTLANE_SKIP_UPDATE_CHECK=1 BUNDLE_PATH=vendor/bundle bundle exec fastlane ios archive",
     "ios:beta": "FASTLANE_SKIP_UPDATE_CHECK=1 BUNDLE_PATH=vendor/bundle bundle exec fastlane ios beta",
     "ios:screenshots": "FASTLANE_SKIP_UPDATE_CHECK=1 BUNDLE_PATH=vendor/bundle bundle exec fastlane ios screenshots",
+    "ios:screenshots:upload": "FASTLANE_SKIP_UPDATE_CHECK=1 BUNDLE_PATH=vendor/bundle bundle exec fastlane ios upload_screenshots",
+    "ios:screenshots:frame": "FASTLANE_SKIP_UPDATE_CHECK=1 BUNDLE_PATH=vendor/bundle bundle exec fastlane ios frameit_screenshots",
     "open:xcode": "open ios/Volt.xcodeproj",
     "test": "node --test tests/*.test.mjs"
   }

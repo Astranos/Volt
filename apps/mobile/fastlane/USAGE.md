@@ -9,7 +9,7 @@ This package owns the iOS fastlane setup for repeatable local builds, TestFlight
 - `upload_to_testflight`/`pilot` uploads an existing `.ipa` to App Store Connect. fastlane documents App Store Connect API keys as the preferred authentication path because they use Apple's API, avoid 2FA prompts, and work better in CI.
 - `snapshot` captures localized App Store screenshots by running an iOS UI-test scheme.
 - Apple associates uploaded builds by bundle ID, marketing version, and build string. The uploaded build must finish Apple's processing before it appears in App Store Connect.
-- Apple currently accepts one to ten screenshots per locale in `.jpeg`, `.jpg`, or `.png`. For iPhone, provide 6.9-inch screenshots where possible; 6.5-inch screenshots are required only if 6.9-inch screenshots are not provided. Smaller iPhone sizes can be scaled from the larger assets.
+- Apple currently accepts one to ten screenshots per locale in `.jpeg`, `.jpg`, or `.png`. For iPhone, provide 6.9-inch screenshots where possible; 6.5-inch screenshots are required only if 6.9-inch screenshots are not provided. Smaller iPhone sizes can be scaled from the larger assets. The iPhone 17 Pro Max simulator produces `1320 x 2868` portrait screenshots, which App Store Connect accepts for 6.9-inch iPhone uploads.
 
 Primary references:
 
@@ -103,6 +103,29 @@ Generated screenshots are written to:
 apps/mobile/fastlane/screenshots/
 ```
 
+Only raw App Store Connect-sized screenshots should live in this directory. Framed screenshots are useful for review, but App Store Connect rejects their resized dimensions. Generate them separately with:
+
+```sh
+pnpm --filter @volt/mobile ios:screenshots:frame
+```
+
+Framed previews are written to:
+
+```text
+apps/mobile/build/framed-screenshots/
+```
+
+Upload the raw iPhone screenshots with:
+
+```sh
+APP_STORE_CONNECT_API_KEY_ID=... \
+APP_STORE_CONNECT_ISSUER_ID=... \
+APP_STORE_CONNECT_API_KEY_PATH=/secure/path/AuthKey_XXXXXXXXXX.p8 \
+pnpm --filter @volt/mobile ios:screenshots:upload
+```
+
+The upload lane validates screenshot dimensions before contacting App Store Connect, so framed or resized files fail locally with the offending filenames.
+
 ## Signing Scope
 
 This setup intentionally does not add `match`. The Xcode project currently uses automatic signing for team `GB5SPLUARQ`, and the lanes preserve that first. With a file-backed App Store Connect API key, fastlane lets Xcode perform automatic provisioning updates during export. `match` would require choosing encrypted certificate/profile storage, deciding who can access those signing assets, and rotating credentials through that storage. Add it later only after that team policy is explicit.
@@ -124,4 +147,6 @@ pnpm --filter @volt/mobile ios:fastlane:build
 pnpm --filter @volt/mobile ios:archive
 pnpm --filter @volt/mobile ios:beta
 pnpm --filter @volt/mobile ios:screenshots
+pnpm --filter @volt/mobile ios:screenshots:upload
+pnpm --filter @volt/mobile ios:screenshots:frame
 ```

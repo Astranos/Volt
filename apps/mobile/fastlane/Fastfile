@@ -9,6 +9,42 @@ SCREENSHOT_SCHEME = "VoltScreenshots"
 APP_IDENTIFIER = ENV.fetch("VOLT_IOS_BUNDLE_ID", "com.volt.mobile")
 TEAM_ID = ENV.fetch("VOLT_APPLE_TEAM_ID", "GB5SPLUARQ")
 BUILD_OUTPUT_DIRECTORY = "build/fastlane"
+SCREENSHOT_OUTPUT_DIRECTORY = "fastlane/screenshots"
+FRAMED_SCREENSHOT_OUTPUT_DIRECTORY = "build/framed-screenshots"
+ACCEPTED_IPHONE_SCREENSHOT_SIZES = [
+  [1260, 2736],
+  [2736, 1260],
+  [1290, 2796],
+  [2796, 1290],
+  [1320, 2868],
+  [2868, 1320],
+  [1284, 2778],
+  [2778, 1284],
+  [1242, 2688],
+  [2688, 1242],
+  [1179, 2556],
+  [2556, 1179],
+  [1206, 2622],
+  [2622, 1206],
+  [1170, 2532],
+  [2532, 1170],
+  [1125, 2436],
+  [2436, 1125],
+  [1080, 2340],
+  [2340, 1080],
+  [1242, 2208],
+  [2208, 1242],
+  [750, 1334],
+  [1334, 750],
+  [640, 1096],
+  [640, 1136],
+  [1136, 600],
+  [1136, 640],
+  [640, 920],
+  [640, 960],
+  [960, 600],
+  [960, 640]
+].freeze
 
 def truthy_env?(name, default = false)
   value = ENV[name]
@@ -110,6 +146,33 @@ def write_screenshot_report(output_directory)
         </body>
       </html>
     HTML
+  )
+end
+
+def validate_iphone_screenshots_for_upload(output_directory)
+  require "fastimage"
+
+  output_path = File.expand_path(output_directory, File.expand_path("..", __dir__))
+  screenshots = Dir.glob(File.join(output_path, "**", "*.png")).sort
+  UI.user_error!("No screenshots found in #{output_path}") if screenshots.empty?
+
+  invalid_screenshots = []
+  screenshots.each do |path|
+    size = FastImage.size(path)
+    unless size && ACCEPTED_IPHONE_SCREENSHOT_SIZES.include?(size)
+      relative_path = path.delete_prefix("#{output_path}/")
+      invalid_screenshots << "#{relative_path} (#{size ? size.join(' x ') : 'unknown size'})"
+    end
+  end
+
+  return if invalid_screenshots.empty?
+
+  UI.user_error!(
+    [
+      "Only App Store Connect iPhone screenshot dimensions are allowed in #{output_path}.",
+      "Remove framed or resized screenshots before upload.",
+      invalid_screenshots.join("\n")
+    ].join("\n")
   )
 end
 
@@ -234,12 +297,10 @@ platform :ios do
 
   desc "Capture App Store screenshots with the VoltScreenshots UI-test scheme"
   lane :screenshots do
-    output_directory = "fastlane/screenshots"
-
     snapshot(
       workspace: WORKSPACE,
       scheme: SCREENSHOT_SCHEME,
-      output_directory: output_directory,
+      output_directory: SCREENSHOT_OUTPUT_DIRECTORY,
       clear_previous_screenshots: true,
       stop_after_first_error: true,
       clean: true,
@@ -248,18 +309,38 @@ platform :ios do
       launch_arguments: ["--ui-testing", "--screenshots"]
     )
 
-    write_screenshot_report(output_directory)
+    validate_iphone_screenshots_for_upload(SCREENSHOT_OUTPUT_DIRECTORY)
+    write_screenshot_report(SCREENSHOT_OUTPUT_DIRECTORY)
+  end
+
+  desc "Upload iPhone screenshots to App Store Connect"
+  lane :upload_screenshots do
+    validate_iphone_screenshots_for_upload(SCREENSHOT_OUTPUT_DIRECTORY)
+    api_key = app_store_connect_api_key_from_env
+
+    deliver(
+      api_key: api_key,
+      app_identifier: APP_IDENTIFIER,
+      screenshots_path: SCREENSHOT_OUTPUT_DIRECTORY,
+      skip_binary_upload: true,
+      skip_metadata: true,
+      skip_app_version_update: true,
+      overwrite_screenshots: true,
+      force: true
+    )
   end
 
   desc "Frame generated screenshots with the iPhone 17 Pro Max device frame"
   lane :frameit_screenshots do
     app_root = File.expand_path("..", __dir__)
-    output_directory = File.join(app_root, "fastlane/screenshots")
+    source_directory = File.join(app_root, SCREENSHOT_OUTPUT_DIRECTORY)
+    output_directory = File.join(app_root, FRAMED_SCREENSHOT_OUTPUT_DIRECTORY)
     frameit_work_directory = File.join(app_root, "build/frameit-screenshots")
 
     register_frameit_iphone_17_pro_max
-    FileUtils.rm_f(Dir.glob(File.join(output_directory, "**", "*_framed*.png")))
-    prepare_rounded_frameit_sources(output_directory, frameit_work_directory)
+    validate_iphone_screenshots_for_upload(SCREENSHOT_OUTPUT_DIRECTORY)
+    FileUtils.rm_rf(output_directory)
+    prepare_rounded_frameit_sources(source_directory, frameit_work_directory)
 
     frame_screenshots(
       path: frameit_work_directory,
@@ -276,6 +357,6 @@ platform :ios do
       flatten_framed_screenshot(destination_path)
     end
 
-    write_screenshot_report(output_directory)
+    write_screenshot_report(FRAMED_SCREENSHOT_OUTPUT_DIRECTORY)
   end
 end
