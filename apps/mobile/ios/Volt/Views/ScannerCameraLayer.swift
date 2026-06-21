@@ -82,6 +82,8 @@ struct ScannerCameraLayer: View {
                     .ignoresSafeArea()
 
                 switch scenario {
+                case .captureTextPre:
+                    screenshotTextPreview(image: image, in: proxy)
                 case .captureBarcode:
                     screenshotBarcodePreview(image: image, in: proxy)
                 case .capturePhoto:
@@ -92,6 +94,14 @@ struct ScannerCameraLayer: View {
                 }
             }
         }
+    }
+
+    private func screenshotTextPreview(image: UIImage, in proxy: GeometryProxy) -> some View {
+        Image(uiImage: image)
+            .resizable()
+            .scaledToFill()
+            .frame(width: proxy.size.width, height: proxy.size.height)
+            .clipped()
     }
 
     private func screenshotBarcodePreview(image: UIImage, in proxy: GeometryProxy) -> some View {

@@ -11,6 +11,7 @@ TEAM_ID = ENV.fetch("VOLT_APPLE_TEAM_ID", "GB5SPLUARQ")
 BUILD_OUTPUT_DIRECTORY = "build/fastlane"
 SCREENSHOT_OUTPUT_DIRECTORY = "fastlane/screenshots"
 FRAMED_SCREENSHOT_OUTPUT_DIRECTORY = "build/framed-screenshots"
+APP_STORE_ARTWORK_OUTPUT_DIRECTORY = "build/app-store-artwork"
 ACCEPTED_IPHONE_SCREENSHOT_SIZES = [
   [1260, 2736],
   [2736, 1260],
@@ -358,5 +359,14 @@ platform :ios do
     end
 
     write_screenshot_report(FRAMED_SCREENSHOT_OUTPUT_DIRECTORY)
+  end
+
+  desc "Create designed App Store screenshots from iPhone 17 Pro Max framed assets"
+  lane :app_store_artwork do
+    app_root = File.expand_path("..", __dir__)
+    frameit_screenshots
+    sh("ruby #{Shellwords.escape(File.join(app_root, 'scripts/render_app_store_artwork.rb'))}")
+    validate_iphone_screenshots_for_upload(APP_STORE_ARTWORK_OUTPUT_DIRECTORY)
+    write_screenshot_report(APP_STORE_ARTWORK_OUTPUT_DIRECTORY)
   end
 end

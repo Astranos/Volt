@@ -11,38 +11,43 @@ final class VoltScreenshots: XCTestCase {
             waitFor: "Left Buyer"
         )
         capture(
+            scenario: "captureTextPre",
+            name: "02-capture-text-chip",
+            waitForButton: "Serial FH7XC36BKDT0"
+        )
+        capture(
             scenario: "captureReview",
-            name: "02-capture-text-extracted",
+            name: "03-capture-text-extracted",
             waitFor: "Tap highlighted text"
         )
         capture(
             scenario: "captureReviewSend",
-            name: "03-capture-send-popup",
+            name: "04-capture-send-popup",
             waitForButton: "Send"
         )
         capture(
             scenario: "captureBarcode",
-            name: "04-capture-barcode-detected",
+            name: "05-capture-barcode-detected",
             waitForButton: "Capture barcode"
         )
         capture(
             scenario: "capturePhoto",
-            name: "05-capture-photo-viewfinder",
+            name: "06-capture-photo-viewfinder",
             waitForButton: "Capture photo"
         )
         capture(
             scenario: "captureResults",
-            name: "06-capture-results",
+            name: "07-capture-results",
             waitFor: "711719573364"
         )
         capture(
             scenario: "dictation",
-            name: "07-dictation",
+            name: "08-dictation",
             waitFor: "Description field"
         )
         capture(
             scenario: "upload",
-            name: "08-upload-batches",
+            name: "09-upload-batches",
             waitFor: "Uploaded 5 photos"
         )
     }

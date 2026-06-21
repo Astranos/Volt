@@ -2,6 +2,7 @@ import UIKit
 
 enum ScreenshotScenario: String {
     case sessions
+    case captureTextPre
     case captureReview
     case captureReviewSend
     case captureBarcode
@@ -23,7 +24,7 @@ enum ScreenshotScenario: String {
 
     var initialSection: AppSection {
         switch self {
-        case .sessions, .captureReview, .captureReviewSend, .captureBarcode, .capturePhoto, .captureResults:
+        case .sessions, .captureTextPre, .captureReview, .captureReviewSend, .captureBarcode, .capturePhoto, .captureResults:
             .scan
         case .dictation:
             .dictation
@@ -58,6 +59,9 @@ extension ScannerStore {
         switch scenario {
         case .sessions:
             results = []
+        case .captureTextPre:
+            results = Self.captureResults
+            camera.liveTextCandidates = Self.liveIdentifierCandidates
         case .captureReview, .captureReviewSend:
             results = Self.captureResults
             ocrReviewImage = Self.ocrReviewImage()
@@ -97,7 +101,7 @@ extension ScannerStore {
     static func screenshotPeerTarget(for scenario: ScreenshotScenario) -> ScannerPeerTarget {
         let session: PairedScannerSession
         switch scenario {
-        case .sessions, .captureReview, .captureReviewSend, .captureBarcode, .capturePhoto, .captureResults:
+        case .sessions, .captureTextPre, .captureReview, .captureReviewSend, .captureBarcode, .capturePhoto, .captureResults:
             session = screenshotPairedSessions[2]
         case .dictation:
             session = screenshotPairedSessions[0]
@@ -120,7 +124,24 @@ extension ScannerStore {
     """
 
     static let ocrRegions: [RecognizedTextRegion] = [
-        region("FH7XC36BKDT0", x: 0.532, y: 0.674, width: 0.151, height: 0.021, confidence: 0.91),
+        region(
+            "FH7XC36BKDT0",
+            x: 0.532,
+            y: 0.674,
+            width: 0.151,
+            height: 0.021,
+            confidence: 0.91,
+            isDeviceIdentifier: true
+        ),
+    ]
+
+    static let liveIdentifierCandidates: [LiveTextCandidate] = [
+        LiveTextCandidate(
+            kind: .serial,
+            value: "FH7XC36BKDT0",
+            bounds: .zero,
+            confidence: 0.93
+        ),
     ]
 
     static let dictationTranscript = "Sony PlayStation 5 Slim Disc, model CFI-2015, one terabyte. Includes controller, HDMI cable, and power cable. Good pre-owned cosmetic condition with light scuffs on the white side panels. Tested and fully functional."
@@ -192,14 +213,16 @@ extension ScannerStore {
         y: CGFloat,
         width: CGFloat,
         height: CGFloat,
-        confidence: Float
+        confidence: Float,
+        isDeviceIdentifier: Bool = false
     ) -> RecognizedTextRegion {
         let rect = CGRect(x: x, y: y, width: width, height: height)
         return RecognizedTextRegion(
             text: text,
             boundingBox: rect,
             quadrilateral: TextQuadrilateral(rect: rect),
-            confidence: confidence
+            confidence: confidence,
+            isDeviceIdentifier: isDeviceIdentifier
         )
     }
 
@@ -213,6 +236,8 @@ extension ScannerStore {
             UIImage(named: "screenshot-barcode-game")
         case .capturePhoto:
             UIImage(named: "screenshot-product-1")
+        case .captureTextPre:
+            UIImage(named: "screenshot-watch-ocr")
         case .sessions, .captureReview, .captureReviewSend, .captureResults, .dictation, .upload:
             nil
         }
@@ -268,7 +293,7 @@ extension ScreenshotScenario {
         switch self {
         case .sessions:
             "Volt Command Center"
-        case .captureReview, .captureReviewSend, .captureBarcode, .capturePhoto, .captureResults:
+        case .captureTextPre, .captureReview, .captureReviewSend, .captureBarcode, .capturePhoto, .captureResults:
             "Inventory Draft - Console"
         case .dictation:
             "eBay Listing Description"
@@ -281,7 +306,7 @@ extension ScreenshotScenario {
         switch self {
         case .sessions:
             "chrome://extensions"
-        case .captureReview, .captureReviewSend, .captureBarcode, .capturePhoto, .captureResults:
+        case .captureTextPre, .captureReview, .captureReviewSend, .captureBarcode, .capturePhoto, .captureResults:
             "https://seller.example.local/inventory/ps5"
         case .dictation:
             "https://www.ebay.com/sl/list"
@@ -294,7 +319,7 @@ extension ScreenshotScenario {
         switch self {
         case .sessions:
             "Scanner command menu"
-        case .captureReview, .captureReviewSend, .captureBarcode, .capturePhoto, .captureResults:
+        case .captureTextPre, .captureReview, .captureReviewSend, .captureBarcode, .capturePhoto, .captureResults:
             "SKU and serial number field"
         case .dictation:
             "Description field"
@@ -311,14 +336,14 @@ extension ScreenshotScenario {
             .photo
         case .dictation:
             .dictation
-        case .sessions, .captureReview, .captureReviewSend, .captureResults, .upload:
+        case .sessions, .captureTextPre, .captureReview, .captureReviewSend, .captureResults, .upload:
             .ocr
         }
     }
 
     var opensCaptureSession: Bool {
         switch self {
-        case .captureReview, .captureReviewSend, .captureBarcode, .capturePhoto:
+        case .captureTextPre, .captureReview, .captureReviewSend, .captureBarcode, .capturePhoto:
             true
         case .sessions, .captureResults, .dictation, .upload:
             false
