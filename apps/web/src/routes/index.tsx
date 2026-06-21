@@ -2,16 +2,20 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Popover } from "@base-ui/react/popover";
 import {
   ArrowRight,
-  BellRing,
+  BadgeCheck,
+  Boxes,
   Chrome,
+  ClipboardCheck,
   DatabaseZap,
-  FileCheck2,
+  Keyboard,
   LockKeyhole,
+  PackageCheck,
   RadioTower,
   ScanBarcode,
+  SearchCheck,
   ShieldCheck,
   Smartphone,
-  Store,
+  TimerReset,
   Zap,
 } from "lucide-react";
 
@@ -22,31 +26,92 @@ export const Route = createFileRoute("/")({
 const supportLinks = [
   ["Support", "https://github.com/JuanQuenga/Volt/issues"],
   ["Privacy", "#privacy"],
-  ["Scanner status", "#scanner"],
+  ["Workflow", "#workflow"],
 ];
 
-const appStoreItems = [
-  "Camera access is used for barcode, text, and product photo capture.",
-  "Microphone and speech recognition are used only for hold-to-speak dictation.",
-  "Captured text, barcode, dictation, and photo payloads move over WebRTC after pairing.",
-  "Convex stores short-lived signaling records only: tokens, offers, answers, pairings, and reconnect requests.",
+const proofPoints = [
+  { value: "Phone camera", label: "captures barcodes, labels, and product photos" },
+  { value: "Chrome extension", label: "delivers scans into desktop listing workflows" },
+  { value: "WebRTC path", label: "moves scanner payloads after pairing" },
+];
+
+const captureExamples = [
+  {
+    title: "Barcode capture",
+    body: "Detect package barcodes in the camera view and send the value straight to the paired browser session.",
+    image: "/assets/app-screenshots/barcode-detected.webp",
+    alt: "Volt mobile scanner detecting a barcode on product packaging",
+  },
+  {
+    title: "Text extraction",
+    body: "Review tiny model numbers, serials, and label text before sending extracted content to the desktop.",
+    image: "/assets/app-screenshots/text-extracted.webp",
+    alt: "Volt mobile scanner extracting text from a close-up product label",
+  },
+  {
+    title: "Capture history",
+    body: "Keep recent barcodes, OCR text, photos, and delivery states visible during a scanning session.",
+    image: "/assets/app-screenshots/capture-results.webp",
+    alt: "Volt mobile scanner showing recent capture results",
+  },
+];
+
+const problemItems = [
+  {
+    icon: TimerReset,
+    title: "Manual entry slows every listing",
+    body: "Typing identifiers, copying label text, and moving photos from phone to computer turns simple intake into repetitive admin work.",
+  },
+  {
+    icon: Boxes,
+    title: "Desktop tools still need mobile capture",
+    body: "Sellers work in browser tabs, but the best scanner and camera are already in their pocket.",
+  },
+  {
+    icon: ClipboardCheck,
+    title: "Context switching creates mistakes",
+    body: "Barcodes, titles, notes, and photos lose accuracy when they bounce through messages, cloud drives, and clipboards.",
+  },
+];
+
+const capabilityItems = [
+  {
+    icon: ScanBarcode,
+    title: "Scan product identifiers",
+    body: "Use the phone camera for UPCs, model numbers, serials, and other inventory labels while staying focused on the desktop page.",
+  },
+  {
+    icon: SearchCheck,
+    title: "Capture useful text",
+    body: "Turn label text and spoken notes into structured input for research, cataloging, and listing prep.",
+  },
+  {
+    icon: PackageCheck,
+    title: "Send product photos",
+    body: "Move reference photos from the mobile scanner to the browser workflow without a separate file-transfer step.",
+  },
+  {
+    icon: Keyboard,
+    title: "Insert where work happens",
+    body: "The extension receives captures beside marketplace, inventory, and research tabs so the next action can happen immediately.",
+  },
 ];
 
 const platformItems = [
   {
     icon: DatabaseZap,
-    title: "Convex signaling",
-    body: "Join tokens, attempts, durable pairings, and reconnect windows are stored in Convex with scheduled expiry cleanup.",
+    title: "Short-lived signaling",
+    body: "Convex coordinates join tokens, attempts, pairings, and reconnect windows so devices can find each other reliably.",
   },
   {
     icon: RadioTower,
-    title: "WebRTC after pairing",
-    body: "The phone and Chrome extension exchange scanner payloads directly after the short signaling handshake finishes.",
+    title: "Direct scanner payloads",
+    body: "After pairing, scan results and photos move through WebRTC instead of being written into the signaling backend.",
   },
   {
-    icon: BellRing,
-    title: "Push-first reconnect",
-    body: "Web Push can wake the browser extension, while background fallback polling stays low-frequency outside active reconnect windows.",
+    icon: ShieldCheck,
+    title: "Clear data boundary",
+    body: "Pairing metadata is separate from barcode values, OCR text, dictation, and photo bytes in the production scanner flow.",
   },
 ];
 
@@ -60,8 +125,10 @@ function Home() {
             <span className="text-sm font-semibold">Volt</span>
           </a>
           <nav className="hidden items-center gap-7 text-sm text-zinc-600 md:flex" aria-label="Primary">
-            <a className="hover:text-zinc-950" href="#scanner">Scanner</a>
-            <a className="hover:text-zinc-950" href="#app-store">App Store</a>
+            <a className="hover:text-zinc-950" href="#problems">Problems</a>
+            <a className="hover:text-zinc-950" href="#workflow">Workflow</a>
+            <a className="hover:text-zinc-950" href="#examples">Examples</a>
+            <a className="hover:text-zinc-950" href="#capabilities">Capabilities</a>
             <a className="hover:text-zinc-950" href="#privacy">Privacy</a>
           </nav>
           <Popover.Root>
@@ -93,41 +160,52 @@ function Home() {
         <div className="mx-auto grid max-w-7xl gap-10 px-4 py-12 sm:px-6 lg:grid-cols-[1fr_0.9fr] lg:px-8 lg:py-20">
           <div className="flex min-h-[66vh] flex-col justify-center">
             <div className="mb-6 inline-flex w-fit items-center gap-2 rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs font-medium text-zinc-600">
-              <Store size={14} />
-              App Store support surface for Volt Scanner
+              <BadgeCheck size={14} />
+              Built for product intake, resale, and desktop inventory work
             </div>
             <h1 className="max-w-4xl text-5xl font-semibold leading-[1.02] text-zinc-950 sm:text-6xl lg:text-7xl">
-              Volt
+              Volt turns your phone into the scanner your browser is missing.
             </h1>
             <p className="mt-6 max-w-2xl text-lg leading-8 text-zinc-600 sm:text-xl">
-              A mobile scanner app and Chrome extension for fast product capture in desktop inventory workflows.
+              Pair the mobile app with the Chrome extension to capture barcodes, label text, spoken notes, and product photos without breaking your desktop workflow.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              <a href="#app-store" className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-zinc-950 px-5 text-sm font-semibold text-white hover:bg-zinc-800">
-                App information
-                <FileCheck2 size={16} />
+              <a href="#workflow" className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-zinc-950 px-5 text-sm font-semibold text-white hover:bg-zinc-800">
+                See the workflow
+                <ArrowRight size={16} />
               </a>
-              <a href="#scanner" className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-zinc-300 bg-white px-5 text-sm font-semibold text-zinc-800 hover:border-zinc-950">
-                Scanner architecture
+              <a href="#capabilities" className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-zinc-300 bg-white px-5 text-sm font-semibold text-zinc-800 hover:border-zinc-950">
+                What Volt captures
                 <ScanBarcode size={16} />
               </a>
+            </div>
+            <div className="mt-12 grid gap-px overflow-hidden border border-zinc-200 bg-zinc-200 sm:grid-cols-3">
+              {proofPoints.map((item) => (
+                <div key={item.value} className="bg-white p-4">
+                  <p className="text-sm font-semibold text-zinc-950">{item.value}</p>
+                  <p className="mt-2 text-xs leading-5 text-zinc-600">{item.label}</p>
+                </div>
+              ))}
             </div>
           </div>
           <HeroPanel />
         </div>
       </section>
 
-      <section id="scanner" className="border-b border-zinc-200 bg-zinc-50">
+      <section id="problems" className="border-b border-zinc-200 bg-zinc-50">
         <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
           <div className="grid gap-10 lg:grid-cols-[0.75fr_1.25fr]">
             <div>
-              <p className="text-sm font-semibold text-zinc-500">Scanner</p>
+              <p className="text-sm font-semibold text-zinc-500">Problems Volt Solves</p>
               <h2 className="mt-3 text-3xl font-semibold leading-tight text-zinc-950 sm:text-4xl">
-                Pair once, then keep scanner payloads off the server.
+                Product intake should not feel like paperwork.
               </h2>
+              <p className="mt-5 text-base leading-7 text-zinc-600">
+                Volt is aimed at the gap between physical inventory and browser-based tools: the moment where sellers, operators, and collectors have the item in hand but the work lives on a desktop screen.
+              </p>
             </div>
             <div className="grid gap-px overflow-hidden border border-zinc-200 bg-zinc-200 md:grid-cols-3">
-              {platformItems.map((item) => (
+              {problemItems.map((item) => (
                 <article key={item.title} className="min-h-72 bg-white p-6">
                   <item.icon size={24} className="text-zinc-950" />
                   <h3 className="mt-8 text-lg font-semibold text-zinc-950">{item.title}</h3>
@@ -139,23 +217,69 @@ function Home() {
         </div>
       </section>
 
-      <section id="app-store" className="border-b border-zinc-200 bg-white">
+      <section id="workflow" className="border-b border-zinc-200 bg-white">
         <div className="mx-auto grid max-w-7xl gap-10 px-4 py-16 sm:px-6 lg:grid-cols-[0.9fr_1.1fr] lg:px-8 lg:py-24">
           <div>
-            <p className="text-sm font-semibold text-zinc-500">App Store</p>
+            <p className="text-sm font-semibold text-zinc-500">Workflow</p>
             <h2 className="mt-3 text-3xl font-semibold leading-tight text-zinc-950 sm:text-4xl">
-              Required review details in one durable web destination.
+              Mobile capture, desktop action.
             </h2>
             <p className="mt-5 max-w-xl text-base leading-7 text-zinc-600">
-              This Vercel deployment is now reserved for product, support, privacy, and app-review information. Scanner signaling runs on Convex.
+              Volt keeps capture on the device that is best at it and sends the result to the browser surface where pricing, research, listing, and cataloging already happen.
             </p>
           </div>
-          <div className="grid gap-px overflow-hidden border border-zinc-200 bg-zinc-200">
-            {appStoreItems.map((item) => (
-              <div key={item} className="flex gap-4 bg-white p-5">
-                <ShieldCheck className="mt-0.5 shrink-0 text-emerald-600" size={19} />
-                <p className="text-sm leading-6 text-zinc-700">{item}</p>
-              </div>
+          <div className="grid gap-px overflow-hidden border border-zinc-200 bg-zinc-200 md:grid-cols-3">
+            <WorkflowStep number="01" title="Pair" body="Connect the mobile app and Chrome extension for a desktop session." />
+            <WorkflowStep number="02" title="Capture" body="Scan a code, read a label, dictate a note, or send a product photo." />
+            <WorkflowStep number="03" title="Act" body="Use the capture in the browser without detouring through manual transfer." />
+          </div>
+        </div>
+      </section>
+
+      <section id="capabilities" className="border-b border-zinc-200 bg-zinc-50">
+        <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
+          <div className="mb-10 max-w-2xl">
+            <p className="text-sm font-semibold text-zinc-500">Capabilities</p>
+            <h2 className="mt-3 text-3xl font-semibold leading-tight text-zinc-950 sm:text-4xl">
+              Capture the product details that usually slow down listing.
+            </h2>
+          </div>
+          <div className="grid gap-px overflow-hidden border border-zinc-200 bg-zinc-200 sm:grid-cols-2 lg:grid-cols-4">
+            {capabilityItems.map((item) => (
+              <article key={item.title} className="min-h-64 bg-white p-6">
+                <item.icon size={24} className="text-zinc-950" />
+                <h3 className="mt-8 text-lg font-semibold text-zinc-950">{item.title}</h3>
+                <p className="mt-3 text-sm leading-6 text-zinc-600">{item.body}</p>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section id="examples" className="border-b border-zinc-200 bg-white">
+        <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
+          <div className="mb-10 grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
+            <div>
+              <p className="text-sm font-semibold text-zinc-500">Capture Examples</p>
+              <h2 className="mt-3 text-3xl font-semibold leading-tight text-zinc-950 sm:text-4xl">
+                Real product details, ready for the next browser step.
+              </h2>
+            </div>
+            <p className="max-w-2xl text-base leading-7 text-zinc-600 lg:pt-8">
+              The generated iPhone screenshots show Volt in the moments that matter: detecting product identifiers, reviewing extracted text, and keeping capture results ready for the next desktop action.
+            </p>
+          </div>
+          <div className="grid gap-px overflow-hidden border border-zinc-200 bg-zinc-200 lg:grid-cols-3">
+            {captureExamples.map((item) => (
+              <article key={item.title} className="grid bg-white">
+                <div className="flex min-h-[34rem] items-end justify-center overflow-hidden bg-zinc-100 px-8 pt-8">
+                  <img src={item.image} alt={item.alt} className="max-h-[32rem] w-auto max-w-full object-contain" loading="lazy" />
+                </div>
+                <div className="p-6">
+                  <h3 className="text-lg font-semibold text-zinc-950">{item.title}</h3>
+                  <p className="mt-3 text-sm leading-6 text-zinc-600">{item.body}</p>
+                </div>
+              </article>
             ))}
           </div>
         </div>
@@ -166,16 +290,17 @@ function Home() {
           <div>
             <p className="text-sm font-semibold text-zinc-400">Privacy</p>
             <h2 className="mt-3 text-3xl font-semibold leading-tight sm:text-4xl">
-              Signaling state is separate from scanner content.
+              Fast capture with a tight data boundary.
             </h2>
           </div>
-          <div className="space-y-5 text-sm leading-7 text-zinc-300">
-            <p>
-              Convex stores pairing and reconnect metadata needed to establish WebRTC. OCR text, barcode values, dictation text, and photo bytes are not written to Convex by the production scanner flow.
-            </p>
-            <p>
-              Durable pairings use a rolling 90-day expiry. Join tokens last about two minutes, join attempts about 32 seconds, and reconnect requests about 95 seconds.
-            </p>
+          <div className="grid gap-px overflow-hidden border border-white/15 bg-white/15 md:grid-cols-3">
+            {platformItems.map((item) => (
+              <article key={item.title} className="bg-zinc-950 p-6">
+                <item.icon size={23} className="text-emerald-400" />
+                <h3 className="mt-8 text-lg font-semibold text-white">{item.title}</h3>
+                <p className="mt-3 text-sm leading-6 text-zinc-300">{item.body}</p>
+              </article>
+            ))}
           </div>
         </div>
       </section>
@@ -196,50 +321,57 @@ function HeroPanel() {
         </div>
         <div className="grid gap-px bg-white/15 sm:grid-cols-[0.9fr_1.1fr]">
           <div className="bg-zinc-950 p-6">
-            <div className="mx-auto max-w-52 rounded-[2rem] border border-white/15 bg-zinc-900 p-3">
-              <div className="relative aspect-[9/16] overflow-hidden rounded-[1.4rem] border border-white/15 bg-zinc-950">
-                <img src="/assets/volt.webp" alt="Volt app icon" className="absolute left-1/2 top-7 size-16 -translate-x-1/2 rounded-2xl object-cover" />
-                <div className="absolute inset-x-7 bottom-16 space-y-3">
-                  <div className="flex items-center gap-2 text-xs text-zinc-400">
-                    <Smartphone size={14} />
-                    iPhone camera
-                  </div>
-                  <div className="h-2 bg-white" />
-                  <div className="grid grid-cols-8 gap-1">
-                    {Array.from({ length: 32 }).map((_, index) => (
-                      <span key={index} className={`h-10 bg-white ${index % 3 === 0 ? "opacity-90" : "opacity-40"}`} />
-                    ))}
-                  </div>
-                  <div className="scan-beam h-0.5 bg-emerald-400 shadow-[0_0_18px_rgba(52,211,153,0.95)]" />
+            <div className="mx-auto max-w-64">
+              <div className="mb-4 flex items-center justify-between rounded-full border border-white/15 bg-white/10 px-3 py-2 text-xs backdrop-blur">
+                <div className="flex items-center gap-2 text-zinc-200">
+                  <Smartphone size={14} />
+                  iPhone camera
                 </div>
+                <span className="text-emerald-300">live</span>
               </div>
+              <img src="/assets/app-screenshots/barcode-detected.webp" alt="Volt barcode scanner on iPhone" className="mx-auto w-full object-contain drop-shadow-2xl" />
             </div>
           </div>
           <div className="grid content-between gap-4 bg-white p-6 text-zinc-950">
             <div>
               <div className="flex items-center gap-2 text-sm font-semibold">
                 <Zap size={17} />
-                Scanner event
+                Product capture
               </div>
               <div className="mt-6 grid gap-3 font-mono text-xs">
-                <Metric label="transport" value="WebRTC" />
-                <Metric label="signal" value="Convex" />
-                <Metric label="payload store" value="none" />
+                <Metric label="barcode" value="ready" />
+                <Metric label="label text" value="captured" />
+                <Metric label="photo" value="sent" />
               </div>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <img src="/assets/app-screenshots/text-extracted.webp" alt="Volt text extraction screen" className="h-28 w-full object-contain" />
+              <img src="/assets/app-screenshots/photo-viewfinder.webp" alt="Volt photo capture screen" className="h-28 w-full object-contain" />
+              <img src="/assets/app-screenshots/upload-batches.webp" alt="Volt upload batches screen" className="h-28 w-full object-contain" />
             </div>
             <div className="border border-zinc-200 bg-zinc-50 p-4">
               <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
                 <LockKeyhole size={16} />
-                Data boundary
+                Desktop handoff
               </div>
               <p className="text-sm leading-6 text-zinc-600">
-                Server state is limited to the rendezvous records needed to connect the devices.
+                Capture physical product details on mobile and keep the next task in the browser.
               </p>
             </div>
           </div>
         </div>
       </div>
     </div>
+  );
+}
+
+function WorkflowStep({ number, title, body }: { number: string; title: string; body: string }) {
+  return (
+    <article className="bg-white p-6">
+      <div className="font-mono text-xs text-zinc-500">{number}</div>
+      <h3 className="mt-10 text-lg font-semibold text-zinc-950">{title}</h3>
+      <p className="mt-3 text-sm leading-6 text-zinc-600">{body}</p>
+    </article>
   );
 }
 

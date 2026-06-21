@@ -10,9 +10,9 @@ export const Route = createRootRoute({
       {
         name: "description",
         content:
-          "Volt turns a browser extension and your phone camera into a fast, paired scanner for desktop workflows.",
+          "Volt pairs a mobile scanner app with a Chrome extension so product sellers can capture barcodes, label text, notes, and photos for desktop inventory workflows.",
       },
-      { title: "Volt - Mobile scanning for desktop work" },
+      { title: "Volt - Mobile product scanning for desktop workflows" },
     ],
     links: [
       {
