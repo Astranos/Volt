@@ -113,6 +113,96 @@ def write_screenshot_report(output_directory)
   )
 end
 
+def register_frameit_iphone_17_pro_max
+  require "frameit"
+
+  return if Frameit::Devices.const_defined?(:IPHONE_17_PRO_MAX)
+
+  Frameit::Devices.const_set(
+    :IPHONE_17_PRO_MAX,
+    Frameit::Device.new(
+      "iphone17-pro-max",
+      "Apple iPhone 17 Pro Max",
+      14,
+      [[1320, 2868], [2868, 1320]],
+      460,
+      Frameit::Color::SILVER,
+      Frameit::Platform::IOS
+    )
+  )
+end
+
+def prepare_rounded_frameit_sources(source_directory, work_directory)
+  require "fastimage"
+
+  FileUtils.rm_rf(work_directory)
+  FileUtils.mkdir_p(work_directory)
+
+  masks = {}
+  screenshot_paths = Dir.glob(File.join(source_directory, "**", "*.png"))
+    .reject { |path| path.include?("_framed.png") }
+    .sort
+
+  screenshot_paths.each do |source_path|
+    relative_path = source_path.delete_prefix("#{source_directory}/")
+    destination_path = File.join(work_directory, relative_path)
+    FileUtils.mkdir_p(File.dirname(destination_path))
+    FileUtils.cp(source_path, destination_path)
+
+    size = FastImage.size(destination_path)
+    UI.user_error!("Could not read screenshot dimensions for #{destination_path}") unless size
+
+    width, height = size
+    radius = 116
+    mask_key = "#{width}x#{height}"
+    masks[mask_key] ||= begin
+      mask_path = File.join(work_directory, "device_frames", "mask-#{mask_key}.png")
+      FileUtils.mkdir_p(File.dirname(mask_path))
+      round_rectangle = "roundrectangle 0,0 #{width - 1},#{height - 1} #{radius},#{radius}"
+      sh(
+        [
+          "magick",
+          "-size", mask_key,
+          "xc:none",
+          "-fill", "white",
+          "-draw", Shellwords.escape(round_rectangle),
+          Shellwords.escape(mask_path)
+        ].join(" ")
+      )
+      mask_path
+    end
+
+    masked_path = "#{destination_path}.masked.png"
+    sh(
+      [
+        "magick",
+        Shellwords.escape(destination_path),
+        "-alpha", "set",
+        Shellwords.escape(masks.fetch(mask_key)),
+        "-compose", "CopyOpacity",
+        "-composite",
+        Shellwords.escape(masked_path)
+      ].join(" ")
+    )
+    FileUtils.mv(masked_path, destination_path)
+  end
+end
+
+def flatten_framed_screenshot(path)
+  flattened_path = "#{path}.flattened.png"
+  sh(
+    [
+      "magick",
+      Shellwords.escape(path),
+      "-background", "white",
+      "-alpha", "remove",
+      "-alpha", "off",
+      Shellwords.escape(flattened_path)
+    ].join(" ")
+  )
+  FileUtils.mv(flattened_path, path)
+end
+
 platform :ios do
   desc "Validate the local iOS app with the repo-preferred simulator build command"
   lane :build do
@@ -153,6 +243,33 @@ platform :ios do
       languages: ["en-US"],
       launch_arguments: ["--ui-testing", "--screenshots"]
     )
+
+    write_screenshot_report(output_directory)
+  end
+
+  desc "Frame generated screenshots with the iPhone 17 Pro Max device frame"
+  lane :frameit_screenshots do
+    app_root = File.expand_path("..", __dir__)
+    output_directory = File.join(app_root, "fastlane/screenshots")
+    frameit_work_directory = File.join(app_root, "build/frameit-screenshots")
+
+    register_frameit_iphone_17_pro_max
+    FileUtils.rm_f(Dir.glob(File.join(output_directory, "**", "*_framed.png")))
+    prepare_rounded_frameit_sources(output_directory, frameit_work_directory)
+
+    frame_screenshots(
+      path: frameit_work_directory,
+      silver: true,
+      use_platform: "IOS"
+    )
+
+    Dir.glob(File.join(frameit_work_directory, "**", "*_framed.png")).each do |framed_path|
+      relative_path = framed_path.delete_prefix("#{frameit_work_directory}/")
+      destination_path = File.join(output_directory, relative_path)
+      FileUtils.mkdir_p(File.dirname(destination_path))
+      FileUtils.cp(framed_path, destination_path)
+      flatten_framed_screenshot(destination_path)
+    end
 
     write_screenshot_report(output_directory)
   end
