@@ -46,6 +46,33 @@ struct RecognizedTextRegion: Identifiable, Equatable {
     let confidence: Float
 }
 
+enum DeviceIdentifierRegionExtractor {
+    static func extractedIdentifierRegions(from regions: [RecognizedTextRegion]) -> [RecognizedTextRegion] {
+        let identifierRegions = regions.compactMap(identifierRegion(from:))
+        return identifierRegions.isEmpty ? regions : deduplicated(identifierRegions)
+    }
+
+    private static func identifierRegion(from region: RecognizedTextRegion) -> RecognizedTextRegion? {
+        guard let match = LiveTextIdentifierMatcher.match(region.text) else { return nil }
+        return RecognizedTextRegion(
+            text: match.value,
+            boundingBox: region.boundingBox,
+            quadrilateral: region.quadrilateral,
+            confidence: region.confidence
+        )
+    }
+
+    private static func deduplicated(_ regions: [RecognizedTextRegion]) -> [RecognizedTextRegion] {
+        var seen = Set<String>()
+        return regions.filter { region in
+            let key = region.text.uppercased()
+            guard !seen.contains(key) else { return false }
+            seen.insert(key)
+            return true
+        }
+    }
+}
+
 struct OcrTextCleanupResult: Equatable {
     let text: String
     let usedFoundationModel: Bool

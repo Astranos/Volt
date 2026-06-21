@@ -56,7 +56,6 @@ end
 def app_store_connect_api_key_from_env
   missing = []
   missing << "APP_STORE_CONNECT_API_KEY_ID" unless ENV["APP_STORE_CONNECT_API_KEY_ID"]
-  missing << "APP_STORE_CONNECT_ISSUER_ID" unless ENV["APP_STORE_CONNECT_ISSUER_ID"]
 
   key_path = ENV["APP_STORE_CONNECT_API_KEY_PATH"]
   key_content = ENV["APP_STORE_CONNECT_API_KEY_CONTENT"]
@@ -66,9 +65,9 @@ def app_store_connect_api_key_from_env
 
   options = {
     key_id: ENV.fetch("APP_STORE_CONNECT_API_KEY_ID"),
-    issuer_id: ENV.fetch("APP_STORE_CONNECT_ISSUER_ID"),
     duration: ENV.fetch("APP_STORE_CONNECT_API_KEY_DURATION", "1200").to_i
   }
+  options[:issuer_id] = ENV["APP_STORE_CONNECT_ISSUER_ID"] if ENV["APP_STORE_CONNECT_ISSUER_ID"]
 
   if key_path
     options[:key_filepath] = key_path
@@ -326,6 +325,7 @@ platform :ios do
       skip_metadata: true,
       skip_app_version_update: true,
       overwrite_screenshots: true,
+      run_precheck_before_submit: false,
       force: true
     )
   end

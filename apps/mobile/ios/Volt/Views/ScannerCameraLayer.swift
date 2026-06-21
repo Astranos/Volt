@@ -26,15 +26,20 @@ struct ScannerCameraLayer: View {
                                 .ignoresSafeArea()
                                 .onAppear {
                                     updateBarcodeGuideRect(in: proxy)
+                                    updateLiveTextScanning()
                                 }
                                 .onChange(of: proxy.size) { _, _ in
                                     updateBarcodeGuideRect(in: proxy)
                                 }
                                 .onChange(of: store.activeMode) { _, _ in
                                     updateBarcodeGuideRect(in: proxy)
+                                    updateLiveTextScanning()
                                 }
                                 .onChange(of: guideVisible) { _, _ in
                                     updateBarcodeGuideRect(in: proxy)
+                                }
+                                .onDisappear {
+                                    store.camera.setLiveTextScanningEnabled(false)
                                 }
                                 .overlay(alignment: .center) {
                                     if guideVisible {
@@ -63,6 +68,10 @@ struct ScannerCameraLayer: View {
         }
 
         store.camera.updateBarcodeGuideRect(nil)
+    }
+
+    private func updateLiveTextScanning() {
+        store.camera.setLiveTextScanningEnabled(store.activeMode == .ocr)
     }
 
     @ViewBuilder

@@ -72,32 +72,44 @@ struct CaptureSessionView: View {
                     }
                 )
             } else {
-                CameraSessionControls(
-                    activeMode: $store.activeMode,
-                    torchEnabled: store.camera.torchEnabled,
-                    zoomLabel: store.camera.zoomDisplayLabel,
-                    gridVisible: gridVisible,
-                    isRecognizingText: store.isRecognizingText,
-                    onToggleTorch: {
-                        store.camera.setTorchEnabled(!store.camera.torchEnabled)
-                    },
-                    onZoomOut: {
-                        store.camera.adjustZoom(by: -0.25)
-                    },
-                    onZoomIn: {
-                        store.camera.adjustZoom(by: 0.25)
-                    },
-                    onToggleGrid: {
-                        gridVisible.toggle()
-                    },
-                    onCapture: {
-                        Task { await store.capture() }
-                    },
-                    onFinish: {
-                        store.clearOcrReview()
-                        isPresented = false
+                VStack(spacing: 6) {
+                    if store.activeMode == .ocr {
+                        LiveIdentifierStrip(
+                            candidates: store.camera.liveTextCandidates,
+                            onSend: { candidate in
+                                store.sendRecognizedText(candidate.value)
+                            }
+                        )
                     }
-                )
+
+                    CameraSessionControls(
+                        activeMode: $store.activeMode,
+                        torchEnabled: store.camera.torchEnabled,
+                        zoomLabel: store.camera.zoomDisplayLabel,
+                        gridVisible: gridVisible,
+                        hasLiveTextCandidates: !store.camera.liveTextCandidates.isEmpty,
+                        isRecognizingText: store.isRecognizingText,
+                        onToggleTorch: {
+                            store.camera.setTorchEnabled(!store.camera.torchEnabled)
+                        },
+                        onZoomOut: {
+                            store.camera.adjustZoom(by: -0.25)
+                        },
+                        onZoomIn: {
+                            store.camera.adjustZoom(by: 0.25)
+                        },
+                        onToggleGrid: {
+                            gridVisible.toggle()
+                        },
+                        onCapture: {
+                            Task { await store.capture() }
+                        },
+                        onFinish: {
+                            store.clearOcrReview()
+                            isPresented = false
+                        }
+                    )
+                }
             }
         }
         .sheet(isPresented: $isConnectionRecoveryPresented) {

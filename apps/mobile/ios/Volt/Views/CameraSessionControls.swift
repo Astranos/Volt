@@ -8,6 +8,7 @@ struct CameraSessionControls: View {
     let torchEnabled: Bool
     let zoomLabel: String
     let gridVisible: Bool
+    let hasLiveTextCandidates: Bool
     let isRecognizingText: Bool
     let onToggleTorch: () -> Void
     let onZoomOut: () -> Void
@@ -151,7 +152,7 @@ struct CameraSessionControls: View {
     private var captureHint: String {
         switch activeMode {
         case .ocr:
-            "Hold document in frame"
+            hasLiveTextCandidates ? "Tap a recognized chip to send" : "Frame device identifiers"
         case .barcode:
             ScreenshotScenario.current == .captureBarcode ? "Send '883929739929'" : "Point camera at barcode"
         case .photo:
@@ -230,5 +231,69 @@ struct SessionIconButton: View {
                 }
         }
         .accessibilityLabel(label)
+    }
+}
+
+struct LiveIdentifierStrip: View {
+    let candidates: [LiveTextCandidate]
+    let onSend: (LiveTextCandidate) -> Void
+
+    var body: some View {
+        let visibleCandidates = deduplicatedCandidates
+        if !visibleCandidates.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(visibleCandidates) { candidate in
+                        LiveIdentifierChip(candidate: candidate) {
+                            onSend(candidate)
+                        }
+                    }
+                }
+                .padding(.horizontal, 18)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 2)
+            .transition(.opacity)
+        }
+    }
+
+    private var deduplicatedCandidates: [LiveTextCandidate] {
+        var seen = Set<String>()
+        return candidates.filter { candidate in
+            let key = "\(candidate.kind.rawValue):\(candidate.value.uppercased())"
+            guard !seen.contains(key) else { return false }
+            seen.insert(key)
+            return true
+        }
+        .prefix(4)
+        .map { $0 }
+    }
+}
+
+struct LiveIdentifierChip: View {
+    let candidate: LiveTextCandidate
+    let onSend: () -> Void
+
+    var body: some View {
+        Button(action: onSend) {
+            HStack(spacing: 6) {
+                Text(candidate.kind.rawValue)
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.black.opacity(0.72))
+                Text(candidate.value)
+                    .font(.caption.monospaced().weight(.semibold))
+                    .foregroundStyle(.black)
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 10)
+            .frame(height: 30)
+            .background(.cyan.opacity(0.92), in: Capsule())
+            .overlay {
+                Capsule().stroke(.white.opacity(0.28), lineWidth: 1)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(candidate.kind.rawValue) \(candidate.value)")
+        .accessibilityHint("Sends this detected identifier")
     }
 }

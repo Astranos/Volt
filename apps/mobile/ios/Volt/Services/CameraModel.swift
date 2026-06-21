@@ -1,6 +1,8 @@
 @preconcurrency import AVFoundation
+import CoreMedia
 import Observation
 import UIKit
+@preconcurrency import Vision
 
 enum BarcodeRecognitionMode: String, CaseIterable, Identifiable {
     case upc = "upc"
@@ -80,9 +82,12 @@ final class CameraModel: NSObject {
     let previewLayer = AVCaptureVideoPreviewLayer()
     private let metadataOutput = AVCaptureMetadataOutput()
     private let photoOutput = AVCapturePhotoOutput()
+    private let videoOutput = AVCaptureVideoDataOutput()
+    private let liveTextFrameProcessor = LiveTextFrameProcessor()
     private var photoContinuation: CheckedContinuation<UIImage?, Never>?
     private let sessionQueue = DispatchQueue(label: "com.volt.mobile.camera-session")
     private let metadataQueue = DispatchQueue(label: "com.volt.mobile.camera-metadata")
+    private let videoQueue = DispatchQueue(label: "com.volt.mobile.camera-video")
     private var videoDevice: AVCaptureDevice?
 
     var authorizationStatus = AVCaptureDevice.authorizationStatus(for: .video)
@@ -90,6 +95,7 @@ final class CameraModel: NSObject {
     var lastBarcodeFormat: String?
     var detectedBarcodeBounds: CGRect?
     var detectedBarcodeFormat: String?
+    var liveTextCandidates: [LiveTextCandidate] = []
     var lastPhoto: UIImage?
     var errorMessage: String?
     var torchEnabled = false
@@ -104,11 +110,17 @@ final class CameraModel: NSObject {
     private var barcodeGuideRect: CGRect?
     private var barcodeDetectionRevision = 0
     private var barcodeClearTask: Task<Void, Never>?
+    private var liveTextReplacementObservationCounts: [String: Int] = [:]
 
     override init() {
         super.init()
         previewLayer.session = session
         previewLayer.videoGravity = .resizeAspectFill
+        liveTextFrameProcessor.onCandidates = { [weak self] candidates in
+            Task { @MainActor in
+                self?.applyLiveTextCandidates(candidates)
+            }
+        }
     }
 
     func requestAccess() async {
@@ -135,6 +147,7 @@ final class CameraModel: NSObject {
 
     func stop() {
         clearDetectedBarcode()
+        clearLiveTextCandidates()
         let session = session
         sessionQueue.async {
             if session.isRunning {
@@ -151,6 +164,19 @@ final class CameraModel: NSObject {
         lastBarcodeFormat = nil
         detectedBarcodeBounds = nil
         detectedBarcodeFormat = nil
+    }
+
+    func setLiveTextScanningEnabled(_ enabled: Bool) {
+        liveTextFrameProcessor.isEnabled = enabled
+        if !enabled {
+            clearLiveTextCandidates()
+        }
+    }
+
+    func clearLiveTextCandidates() {
+        liveTextFrameProcessor.reset()
+        liveTextCandidates = []
+        liveTextReplacementObservationCounts = [:]
     }
 
     func updateBarcodeGuideRect(_ rect: CGRect?) {
@@ -189,6 +215,14 @@ final class CameraModel: NSObject {
         }
         if session.canAddOutput(photoOutput) {
             session.addOutput(photoOutput)
+        }
+        if session.canAddOutput(videoOutput) {
+            session.addOutput(videoOutput)
+            videoOutput.alwaysDiscardsLateVideoFrames = true
+            videoOutput.videoSettings = [
+                kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
+            ]
+            videoOutput.setSampleBufferDelegate(liveTextFrameProcessor, queue: videoQueue)
         }
 
         session.commitConfiguration()
@@ -364,6 +398,265 @@ final class CameraModel: NSObject {
         }
     }
 
+    private func applyLiveTextCandidates(_ candidates: [LiveTextCandidateObservation]) {
+        guard !candidates.isEmpty else { return }
+        var acceptedCandidates = liveTextCandidates
+        for candidate in candidates {
+            guard !hasLiveTextCandidate(candidate, in: acceptedCandidates) else { continue }
+            let liveCandidate = liveTextCandidate(from: candidate)
+            if let replacementIndex = replacementIndex(for: candidate, in: acceptedCandidates) {
+                if shouldReplaceLiveTextCandidate(candidate, replacing: acceptedCandidates[replacementIndex]) {
+                    acceptedCandidates[replacementIndex] = liveCandidate
+                }
+            } else if canAppendLiveTextCandidate(candidate, to: acceptedCandidates) {
+                acceptedCandidates.append(liveCandidate)
+            }
+        }
+        liveTextCandidates = acceptedCandidates
+    }
+
+    private func liveTextCandidate(from candidate: LiveTextCandidateObservation) -> LiveTextCandidate {
+        let previewBounds = previewRect(forVisionBoundingBox: candidate.boundingBox)
+        return LiveTextCandidate(
+            kind: candidate.kind,
+            value: candidate.value,
+            bounds: previewBounds,
+            confidence: candidate.confidence
+        )
+    }
+
+    private func hasLiveTextCandidate(_ candidate: LiveTextCandidateObservation, in existing: [LiveTextCandidate]) -> Bool {
+        let normalizedValue = candidate.value.uppercased()
+        return existing.contains { $0.kind == candidate.kind && $0.value.uppercased() == normalizedValue }
+    }
+
+    private func replacementIndex(for candidate: LiveTextCandidateObservation, in existing: [LiveTextCandidate]) -> Int? {
+        switch candidate.kind {
+        case .imei:
+            return nil
+        case .model, .serial:
+            return existing.firstIndex { $0.kind == candidate.kind }
+        }
+    }
+
+    private func canAppendLiveTextCandidate(_ candidate: LiveTextCandidateObservation, to existing: [LiveTextCandidate]) -> Bool {
+        let existingKindCount = existing.filter { $0.kind == candidate.kind }.count
+        switch candidate.kind {
+        case .imei:
+            return existingKindCount < 2
+        case .model, .serial:
+            return existingKindCount < 1
+        }
+    }
+
+    private func shouldReplaceLiveTextCandidate(
+        _ candidate: LiveTextCandidateObservation,
+        replacing existing: LiveTextCandidate
+    ) -> Bool {
+        let key = "\(candidate.kind.rawValue):\(candidate.value.uppercased())"
+        let observationCount = (liveTextReplacementObservationCounts[key] ?? 0) + 1
+        liveTextReplacementObservationCounts[key] = observationCount
+        guard observationCount >= 2 else { return false }
+
+        return observationCount >= 3
+            || candidate.value.count >= existing.value.count
+            || candidate.confidence > existing.confidence + 0.08
+    }
+
+    private func previewRect(forVisionBoundingBox boundingBox: CGRect) -> CGRect {
+        let bounds = previewLayer.bounds
+        return CGRect(
+            x: boundingBox.minX * bounds.width,
+            y: (1 - boundingBox.maxY) * bounds.height,
+            width: boundingBox.width * bounds.width,
+            height: boundingBox.height * bounds.height
+        )
+    }
+
+}
+
+enum LiveTextCandidateKind: String, Equatable {
+    case imei = "IMEI"
+    case model = "Model"
+    case serial = "Serial"
+}
+
+struct LiveTextCandidate: Identifiable, Equatable {
+    let id = UUID()
+    let kind: LiveTextCandidateKind
+    let value: String
+    let bounds: CGRect
+    let confidence: Float
+}
+
+private struct LiveTextCandidateObservation: Equatable {
+    let kind: LiveTextCandidateKind
+    let value: String
+    let boundingBox: CGRect
+    let confidence: Float
+}
+
+private final class LiveTextFrameProcessor: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, @unchecked Sendable {
+    var onCandidates: (@Sendable ([LiveTextCandidateObservation]) -> Void)?
+    var isEnabled = false
+    private var isRecognizing = false
+    private var lastRecognitionAt = ContinuousClock.now
+    private let recognitionInterval: Duration = .milliseconds(500)
+    private var lastCandidates: [LiveTextCandidateObservation] = []
+
+    func reset() {
+        lastCandidates = []
+        onCandidates?([])
+    }
+
+    func captureOutput(
+        _ output: AVCaptureOutput,
+        didOutput sampleBuffer: CMSampleBuffer,
+        from connection: AVCaptureConnection
+    ) {
+        guard isEnabled, !isRecognizing else { return }
+        let now = ContinuousClock.now
+        guard lastRecognitionAt.duration(to: now) >= recognitionInterval else { return }
+
+        lastRecognitionAt = now
+        isRecognizing = true
+        recognize(sampleBuffer)
+    }
+
+    private func recognize(_ sampleBuffer: CMSampleBuffer) {
+        let request = VNRecognizeTextRequest { [weak self] request, _ in
+            guard let self else { return }
+            let observations = request.results as? [VNRecognizedTextObservation] ?? []
+            let candidates = Self.candidates(from: observations)
+            if candidates != lastCandidates {
+                lastCandidates = candidates
+                onCandidates?(candidates)
+            }
+            isRecognizing = false
+        }
+        request.recognitionLevel = .fast
+        request.usesLanguageCorrection = false
+        request.recognitionLanguages = ["en-US"]
+        request.customWords = ["IMEI", "MEID", "Serial", "S/N", "SN", "Model", "Model No", "SKU"]
+        request.minimumTextHeight = 0.012
+
+        do {
+            try VNImageRequestHandler(cmSampleBuffer: sampleBuffer, orientation: .right).perform([request])
+        } catch {
+            isRecognizing = false
+        }
+    }
+
+    private static func candidates(from observations: [VNRecognizedTextObservation]) -> [LiveTextCandidateObservation] {
+        observations
+            .compactMap { observation -> LiveTextCandidateObservation? in
+                guard let text = observation.topCandidates(1).first else { return nil }
+                guard let match = LiveTextIdentifierMatcher.match(text.string) else { return nil }
+                let matchedBox = (try? text.boundingBox(for: match.range))?.boundingBox ?? observation.boundingBox
+                return LiveTextCandidateObservation(
+                    kind: match.kind,
+                    value: match.value,
+                    boundingBox: matchedBox,
+                    confidence: text.confidence
+                )
+            }
+            .sorted { lhs, rhs in
+                if lhs.kind.rawValue != rhs.kind.rawValue {
+                    return lhs.kind.rawValue < rhs.kind.rawValue
+                }
+                return lhs.boundingBox.minY > rhs.boundingBox.minY
+            }
+            .prefix(4)
+            .map { $0 }
+    }
+}
+
+enum LiveTextIdentifierMatcher {
+    struct Match {
+        let kind: LiveTextCandidateKind
+        let value: String
+        let range: Range<String.Index>
+    }
+
+    static func match(_ rawText: String) -> Match? {
+        let text = rawText
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+
+        if let imei = imei(in: text) {
+            return imei
+        }
+        if let serial = labeledValue(in: text, labels: ["serial number", "serial no", "serial", "s/n", "sn"]) {
+            return Match(kind: .serial, value: serial.value, range: serial.range)
+        }
+        if let model = labeledValue(in: text, labels: ["model number", "model no", "model", "mdl"]) {
+            return Match(kind: .model, value: model.value, range: model.range)
+        }
+        return nil
+    }
+
+    private static func imei(in text: String) -> Match? {
+        guard text.localizedCaseInsensitiveContains("imei") else { return nil }
+        let digits = String(text.filter(\.isNumber))
+        guard digits.count >= 15 else { return nil }
+
+        for offset in 0...(digits.count - 15) {
+            let start = digits.index(digits.startIndex, offsetBy: offset)
+            let end = digits.index(start, offsetBy: 15)
+            let candidate = String(digits[start..<end])
+            guard isValidLuhn(candidate) else { continue }
+
+            var digitIndex = 0
+            var rangeStart: String.Index?
+            var rangeEnd: String.Index?
+            for index in text.indices where text[index].isNumber {
+                if digitIndex == offset {
+                    rangeStart = index
+                }
+                if digitIndex == offset + 14 {
+                    rangeEnd = text.index(after: index)
+                    break
+                }
+                digitIndex += 1
+            }
+            guard let rangeStart, let rangeEnd else { return nil }
+            return Match(kind: .imei, value: candidate, range: rangeStart..<rangeEnd)
+        }
+        return nil
+    }
+
+    private static func labeledValue(in text: String, labels: [String]) -> (value: String, range: Range<String.Index>)? {
+        let lowercased = text.lowercased()
+        guard let labelRange = labels
+            .compactMap({ lowercased.range(of: $0) })
+            .min(by: { $0.lowerBound < $1.lowerBound })
+        else { return nil }
+
+        let valueStart = text.index(text.startIndex, offsetBy: lowercased.distance(from: lowercased.startIndex, to: labelRange.upperBound))
+        let suffix = String(text[valueStart...])
+        let trimmed = suffix
+            .trimmingCharacters(in: CharacterSet(charactersIn: " #:=-\t\n\r"))
+            .split(whereSeparator: \.isWhitespace)
+            .first
+            .map(String.init)
+            ?? ""
+        let cleaned = trimmed.trimmingCharacters(in: CharacterSet(charactersIn: ".,;:|"))
+        guard cleaned.count >= 4, cleaned.rangeOfCharacter(from: .alphanumerics) != nil else { return nil }
+        guard let valueRange = text[valueStart...].range(of: cleaned) else { return nil }
+        return (cleaned, valueRange)
+    }
+
+    private static func isValidLuhn(_ value: String) -> Bool {
+        let digits = value.compactMap(\.wholeNumberValue)
+        guard digits.count == value.count else { return false }
+
+        let checksum = digits.reversed().enumerated().reduce(0) { total, item in
+            let (index, digit) = item
+            guard index.isMultiple(of: 2) == false else { return total + digit }
+            let doubled = digit * 2
+            return total + (doubled > 9 ? doubled - 9 : doubled)
+        }
+        return checksum.isMultiple(of: 10)
+    }
 }
 
 private final class BarcodeMetadataObjects: @unchecked Sendable {

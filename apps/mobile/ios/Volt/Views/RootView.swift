@@ -119,14 +119,25 @@ struct RootView: View {
             )
             connectionSheetDetent = Self.connectionStatusDetent
             isConnectionSheetPresented = true
-        case .connected:
-            keepsConnectionSheetOpenForSessions = false
-            connectionSheetStatus = nil
-            isConnectionSheetPresented = false
-        case .idle, .disconnected, .error:
-            if keepsConnectionSheetOpenForSessions {
-                connectionSheetStatus = nil
-                connectionSheetDetent = .medium
+	        case .connected:
+	            keepsConnectionSheetOpenForSessions = false
+	            connectionSheetStatus = nil
+	            isConnectionSheetPresented = false
+	        case .error:
+	            keepsConnectionSheetOpenForSessions = false
+	            connectionSheetStatus = PairingStatusSheetModel(
+	                title: "Pairing failed",
+	                message: store.targetHint,
+	                systemImage: "exclamationmark.triangle",
+	                isProgressing: false,
+	                canCancel: false
+	            )
+	            connectionSheetDetent = Self.connectionStatusDetent
+	            isConnectionSheetPresented = true
+	        case .idle, .disconnected:
+	            if keepsConnectionSheetOpenForSessions {
+	                connectionSheetStatus = nil
+	                connectionSheetDetent = .medium
                 isConnectionSheetPresented = true
             } else {
                 connectionSheetStatus = nil

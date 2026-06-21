@@ -56,6 +56,10 @@ const captureSessionViewSwiftSource = readFileSync(
   new URL("../ios/Volt/Views/CaptureSessionView.swift", import.meta.url),
   "utf8"
 );
+const cameraSessionControlsSwiftSource = readFileSync(
+  new URL("../ios/Volt/Views/CameraSessionControls.swift", import.meta.url),
+  "utf8"
+);
 const ocrReviewLayerSwiftSource = readFileSync(
   new URL("../ios/Volt/Views/OcrReviewLayer.swift", import.meta.url),
   "utf8"
@@ -144,6 +148,16 @@ test("native connection sheet is always visible while connecting and user dismis
   assert.match(rootViewSwiftSource, /private var isConnectionAttemptVisible: Bool \{[\s\S]*case \.pairing, \.waitingForChrome:/);
 });
 
+test("native connection sheet shows pairing failures instead of silently dismissing", () => {
+  assert.match(rootViewSwiftSource, /case \.error:/);
+  assert.match(rootViewSwiftSource, /title: "Pairing failed"/);
+  assert.match(rootViewSwiftSource, /message: store\.targetHint/);
+  assert.match(rootViewSwiftSource, /systemImage: "exclamationmark\.triangle"/);
+  assert.match(rootViewSwiftSource, /isProgressing: false/);
+  assert.match(rootViewSwiftSource, /canCancel: false/);
+  assert.match(rootViewSwiftSource, /case \.idle, \.disconnected:/);
+});
+
 test("native saved-session taps intentionally dismiss sessions before reconnect sheet returns", () => {
   assert.match(rootViewSwiftSource, /PairingSessionsView \{\s*beginReconnectFromConnectionSheetSessions\(\)\s*\}/);
   assert.match(rootViewSwiftSource, /@State private var allowsNextConnectionSheetDismissal = false/);
@@ -211,14 +225,79 @@ test("native OCR review keeps raw Vision text until selected cleanup is requeste
   assert.match(textRecognizerSwiftSource, /static func clean\(text: String\) async -> OcrTextCleanupResult/);
   assert.match(textRecognizerSwiftSource, /SystemLanguageModel\(/);
   assert.match(textRecognizerSwiftSource, /LanguageModelSession\(/);
-  assert.match(scannerStoreCaptureActionsSwiftSource, /ocrTextRegions = try await TextRecognizer\.recognizeTextRegions\(in: preparedImage\)/);
+  assert.match(scannerStoreCaptureActionsSwiftSource, /let recognizedRegions = try await TextRecognizer\.recognizeTextRegions\(in: preparedImage\)/);
+  assert.match(scannerStoreCaptureActionsSwiftSource, /ocrTextRegions = DeviceIdentifierRegionExtractor\.extractedIdentifierRegions\(from: recognizedRegions\)/);
   assert.match(scannerStoreCaptureActionsSwiftSource, /ocrReviewText = ocrTextRegions\.map\(\\\.text\)\.joined\(separator: "\\n"\)/);
   assert.doesNotMatch(scannerStoreCaptureActionsSwiftSource, /OcrTextCleaner\.clean/);
 });
 
+test("native camera can detect identifier candidates before OCR capture", () => {
+  assert.match(cameraModelSwiftSource, /private let videoOutput = AVCaptureVideoDataOutput\(\)/);
+  assert.match(cameraModelSwiftSource, /private let liveTextFrameProcessor = LiveTextFrameProcessor\(\)/);
+  assert.match(cameraModelSwiftSource, /videoOutput\.alwaysDiscardsLateVideoFrames = true/);
+  assert.match(cameraModelSwiftSource, /videoOutput\.setSampleBufferDelegate\(liveTextFrameProcessor, queue: videoQueue\)/);
+  assert.match(cameraModelSwiftSource, /VNRecognizeTextRequest/);
+  assert.match(cameraModelSwiftSource, /request\.recognitionLevel = \.fast/);
+  assert.match(cameraModelSwiftSource, /request\.customWords = \["IMEI", "MEID", "Serial", "S\/N", "SN", "Model", "Model No", "SKU"\]/);
+  assert.match(cameraModelSwiftSource, /private let recognitionInterval: Duration = \.milliseconds\(500\)/);
+  assert.match(cameraModelSwiftSource, /let candidates = Self\.candidates\(from: observations\)/);
+  assert.match(cameraModelSwiftSource, /try\? text\.boundingBox\(for: match\.range\)/);
+  assert.doesNotMatch(cameraModelSwiftSource, /layerRectConverted\(fromMetadataOutputRect:/);
+});
+
+test("native pre-capture identifier matching is deterministic", () => {
+  assert.match(cameraModelSwiftSource, /enum LiveTextCandidateKind: String, Equatable/);
+  assert.match(cameraModelSwiftSource, /case imei = "IMEI"/);
+  assert.match(cameraModelSwiftSource, /case model = "Model"/);
+  assert.match(cameraModelSwiftSource, /case serial = "Serial"/);
+  assert.match(cameraModelSwiftSource, /enum LiveTextIdentifierMatcher/);
+  assert.match(cameraModelSwiftSource, /struct Match \{[\s\S]*let range: Range<String\.Index>/);
+  assert.match(cameraModelSwiftSource, /guard text\.localizedCaseInsensitiveContains\("imei"\)/);
+  assert.match(cameraModelSwiftSource, /guard isValidLuhn\(candidate\) else \{ continue \}/);
+  assert.match(cameraModelSwiftSource, /labels: \["serial number", "serial no", "serial", "s\/n", "sn"\]/);
+  assert.match(cameraModelSwiftSource, /labels: \["model number", "model no", "model", "mdl"\]/);
+  assert.match(cameraModelSwiftSource, /text\[valueStart\.\.\.\]\.range\(of: cleaned\)/);
+});
+
+test("native pre-capture identifiers render as a stable controls readout", () => {
+  assert.match(scannerCameraLayerSwiftSource, /store\.camera\.setLiveTextScanningEnabled\(store\.activeMode == \.ocr\)/);
+  assert.match(scannerCameraLayerSwiftSource, /\.onDisappear \{\s*store\.camera\.setLiveTextScanningEnabled\(false\)\s*\}/);
+  assert.doesNotMatch(scannerCameraLayerSwiftSource, /LiveTextCandidateReticle/);
+  assert.match(captureSessionViewSwiftSource, /LiveIdentifierStrip\([\s\S]*candidates: store\.camera\.liveTextCandidates,[\s\S]*store\.sendRecognizedText\(candidate\.value\)/);
+  assert.match(captureSessionViewSwiftSource, /hasLiveTextCandidates: !store\.camera\.liveTextCandidates\.isEmpty/);
+  assert.doesNotMatch(cameraSessionControlsSwiftSource, /let liveTextCandidates: \[LiveTextCandidate\]/);
+  assert.match(cameraSessionControlsSwiftSource, /let hasLiveTextCandidates: Bool/);
+  assert.match(cameraSessionControlsSwiftSource, /struct LiveIdentifierStrip: View/);
+  assert.match(cameraSessionControlsSwiftSource, /let onSend: \(LiveTextCandidate\) -> Void/);
+  assert.match(cameraSessionControlsSwiftSource, /struct LiveIdentifierChip: View/);
+  assert.match(cameraSessionControlsSwiftSource, /"Frame device identifiers"/);
+  assert.match(cameraSessionControlsSwiftSource, /"Tap a recognized chip to send"/);
+  assert.match(cameraSessionControlsSwiftSource, /Button\(action: onSend\)/);
+});
+
+test("native pre-capture identifier chips show quickly and correct repeated replacements", () => {
+  assert.match(cameraModelSwiftSource, /private var liveTextReplacementObservationCounts: \[String: Int\] = \[:\]/);
+  assert.match(cameraModelSwiftSource, /var acceptedCandidates = liveTextCandidates/);
+  assert.match(cameraModelSwiftSource, /hasLiveTextCandidate\(candidate, in: acceptedCandidates\)/);
+  assert.match(cameraModelSwiftSource, /replacementIndex\(for: candidate, in: acceptedCandidates\)/);
+  assert.match(cameraModelSwiftSource, /shouldReplaceLiveTextCandidate\(candidate, replacing: acceptedCandidates\[replacementIndex\]\)/);
+  assert.match(cameraModelSwiftSource, /case \.imei:\s*return existingKindCount < 2/);
+  assert.match(cameraModelSwiftSource, /case \.model, \.serial:\s*return existingKindCount < 1/);
+  assert.match(cameraModelSwiftSource, /guard observationCount >= 2 else \{ return false \}/);
+  assert.match(cameraModelSwiftSource, /observationCount >= 3/);
+});
+
+test("native post-capture OCR extracts device identifiers from recognized rows", () => {
+  assert.match(textRecognizerSwiftSource, /enum DeviceIdentifierRegionExtractor/);
+  assert.match(textRecognizerSwiftSource, /LiveTextIdentifierMatcher\.match\(region\.text\)/);
+  assert.match(textRecognizerSwiftSource, /text: match\.value/);
+  assert.match(textRecognizerSwiftSource, /return identifierRegions\.isEmpty \? regions : deduplicated\(identifierRegions\)/);
+  assert.match(scannerStoreCaptureActionsSwiftSource, /DeviceIdentifierRegionExtractor\.extractedIdentifierRegions\(from: recognizedRegions\)/);
+});
+
 test("native OCR target dialog can clean selected text before sending", () => {
-  assert.match(captureSessionViewSwiftSource, /Button\("Send", systemImage: "paperplane\.fill"\)/);
-  assert.match(captureSessionViewSwiftSource, /Button\(isCleaningSelectedText \? "Cleaning\.\.\." : "Cleanup", systemImage: "wand\.and\.sparkles"\)/);
+  assert.match(captureSessionViewSwiftSource, /Button\(action: onSend\) \{[\s\S]*Label\("Send", systemImage: "paperplane\.fill"\)/);
+  assert.match(captureSessionViewSwiftSource, /Button\(action: onCleanup\) \{[\s\S]*Label\(isCleaning \? "Cleaning\.\.\." : "Cleanup", systemImage: "wand\.and\.sparkles"\)/);
   assert.match(captureSessionViewSwiftSource, /store\.sendRecognizedText\(selectedCleanedText \?\? selectedTextRegion\.text\)/);
   assert.match(captureSessionViewSwiftSource, /let result = await OcrTextCleaner\.clean\(text: region\.text\)/);
   assert.match(captureSessionViewSwiftSource, /private var selectedTextPreview: String/);
@@ -271,8 +350,7 @@ test("native barcode reticles expire when detections stop refreshing", () => {
 
 test("native barcode reticle only renders in barcode capture mode", () => {
   assert.match(scannerCameraLayerSwiftSource, /guard store\.activeMode == \.barcode else \{\s*store\.camera\.updateBarcodeGuideRect\(nil\)\s*store\.camera\.clearDetectedBarcode\(\)/);
-  assert.match(scannerCameraLayerSwiftSource, /if guideVisible \{\s*store\.camera\.updateBarcodeGuideRect\(/);
-  assert.match(scannerCameraLayerSwiftSource, /else \{\s*store\.camera\.updateBarcodeGuideRect\(nil\)\s*\}/);
+  assert.match(scannerCameraLayerSwiftSource, /store\.camera\.updateBarcodeGuideRect\(nil\)/);
   assert.match(scannerCameraLayerSwiftSource, /if guideVisible,\s*store\.activeMode == \.barcode,\s*let barcodeBounds = store\.camera\.detectedBarcodeBounds/);
 });
 
@@ -331,7 +409,7 @@ test("native Chrome input-change haptics are gated to the Dictate tab", () => {
   assert.match(scannerStoreSwiftSource, /wasConnected && dictationTargetKey\(for: previousPeerTarget\) != dictationTargetKey\(for: nextPeerTarget\)/);
   assert.match(scannerStoreSwiftSource, /allowsConnectedFeedback: !wasConnected \|\| \(didChangeChromeInputTarget && selectedSection == \.dictation\)/);
   assert.doesNotMatch(scannerStoreSwiftSource, /allowsConnectedFeedback: !didChangeChromeInputTarget \|\| selectedSection == \.dictation/);
-  assert.match(scannerViewSwiftSource, /\.onAppear \{\s*store\.selectedSection = \.scan\s*store\.activeMode = \.ocr\s*\}/);
+  assert.match(scannerViewSwiftSource, /\.onAppear \{\s*store\.selectedSection = \.scan\s*store\.activeMode = ScreenshotScenario\.current\?\.initialCaptureMode \?\? \.ocr/);
   assert.match(dictationViewSwiftSource, /\.onAppear \{\s*store\.selectedSection = \.dictation\s*store\.activeMode = \.dictation\s*\}/);
   assert.match(uploadViewSwiftSource, /\.onAppear \{\s*store\.selectedSection = \.upload\s*\}/);
   assert.match(scannerStoreDictationSwiftSource, /func allowsDictationFeedback\(_ requested: Bool = true\) -> Bool \{\s*requested && selectedSection == \.dictation\s*\}/);
