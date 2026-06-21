@@ -327,20 +327,71 @@ enum TextRecognizer {
         to regions: inout [RecognizedTextRegion]
     ) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, let firstGlyph = glyphs.first else { return }
+        guard !trimmed.isEmpty, !glyphs.isEmpty else { return }
 
+        if let match = LiveTextIdentifierMatcher.match(trimmed) {
+            let matchedGlyphs = Self.glyphs(in: match.range, text: trimmed, glyphs: glyphs)
+            if !matchedGlyphs.isEmpty {
+                appendGlyphRegion(
+                    text: match.value,
+                    glyphs: matchedGlyphs,
+                    confidence: confidence,
+                    to: &regions
+                )
+                return
+            }
+        }
+
+        appendGlyphRegion(
+            text: trimmed,
+            glyphs: glyphs,
+            confidence: confidence,
+            to: &regions
+        )
+    }
+
+    private static func appendGlyphRegion(
+        text: String,
+        glyphs: [RecognizedGlyph],
+        confidence: Float,
+        to regions: inout [RecognizedTextRegion]
+    ) {
+        guard let firstGlyph = glyphs.first else { return }
         let boundingBox = glyphs.dropFirst().reduce(firstGlyph.boundingBox) { partialResult, glyph in
             partialResult.union(glyph.boundingBox)
         }
         let quadrilateral = orientedQuadrilateral(enclosing: glyphs) ?? TextQuadrilateral(rect: boundingBox)
         regions.append(
             RecognizedTextRegion(
-                text: trimmed,
+                text: text,
                 boundingBox: boundingBox,
                 quadrilateral: quadrilateral,
                 confidence: confidence
             )
         )
+    }
+
+    private static func glyphs(
+        in range: Range<String.Index>,
+        text: String,
+        glyphs: [RecognizedGlyph]
+    ) -> [RecognizedGlyph] {
+        var matchedGlyphs: [RecognizedGlyph] = []
+        var glyphIndex = 0
+        var index = text.startIndex
+
+        while index < text.endIndex, glyphIndex < glyphs.count {
+            let character = text[index]
+            if !character.isWhitespace {
+                if range.contains(index) {
+                    matchedGlyphs.append(glyphs[glyphIndex])
+                }
+                glyphIndex += 1
+            }
+            index = text.index(after: index)
+        }
+
+        return matchedGlyphs
     }
 
     private static func orientedQuadrilateral(enclosing glyphs: [RecognizedGlyph]) -> TextQuadrilateral? {

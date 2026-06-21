@@ -291,6 +291,9 @@ test("native post-capture OCR extracts device identifiers from recognized rows",
   assert.match(textRecognizerSwiftSource, /enum DeviceIdentifierRegionExtractor/);
   assert.match(textRecognizerSwiftSource, /LiveTextIdentifierMatcher\.match\(region\.text\)/);
   assert.match(textRecognizerSwiftSource, /text: match\.value/);
+  assert.match(textRecognizerSwiftSource, /if let match = LiveTextIdentifierMatcher\.match\(trimmed\)/);
+  assert.match(textRecognizerSwiftSource, /let matchedGlyphs = Self\.glyphs\(in: match\.range, text: trimmed, glyphs: glyphs\)/);
+  assert.match(textRecognizerSwiftSource, /appendGlyphRegion\([\s\S]*text: match\.value/);
   assert.match(textRecognizerSwiftSource, /return identifierRegions\.isEmpty \? regions : deduplicated\(identifierRegions\)/);
   assert.match(scannerStoreCaptureActionsSwiftSource, /DeviceIdentifierRegionExtractor\.extractedIdentifierRegions\(from: recognizedRegions\)/);
 });
