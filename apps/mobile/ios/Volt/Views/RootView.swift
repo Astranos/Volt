@@ -3,7 +3,10 @@ import SwiftUI
 struct RootView: View {
     @Environment(ScannerStore.self) private var store
     @Environment(\.scenePhase) private var scenePhase
+    @AppStorage("volt.hasSeenWelcome.v1") private var hasSeenWelcome = false
     @State private var selectedTab = AppSection.scan
+    @State private var isWelcomePresented = false
+    @State private var opensSessionsAfterWelcome = false
     @State private var isConnectionSheetPresented = false
     @State private var connectionSheetStatus: PairingStatusSheetModel?
     @State private var connectionSheetDetent = RootView.connectionStatusDetent
@@ -54,8 +57,23 @@ struct RootView: View {
                     .presentationDragIndicator(.visible)
             }
         }
+        .fullScreenCover(isPresented: $isWelcomePresented) {
+            WelcomeView(
+                onSetUpWebSession: {
+                    completeWelcome(opensSessions: true)
+                },
+                onContinue: {
+                    completeWelcome(opensSessions: false)
+                }
+            )
+        }
         .onChange(of: selectedTab) { _, newValue in
             applySelectedTab(newValue)
+        }
+        .onChange(of: isWelcomePresented) { _, newValue in
+            guard !newValue, opensSessionsAfterWelcome else { return }
+            opensSessionsAfterWelcome = false
+            showSessionsFromWelcome()
         }
         .onChange(of: store.connectionStatus) { _, newValue in
             showPairingSheet(for: newValue)
@@ -69,14 +87,36 @@ struct RootView: View {
                 return
             }
             guard !ScreenshotScenario.isEnabled else { return }
-            await store.camera.requestAccess()
-            store.reconnectToMostRecentPairedSessionIfNeeded()
+            guard hasSeenWelcome else {
+                isWelcomePresented = true
+                return
+            }
+            startAppServices()
         }
         .onChange(of: scenePhase) { _, newValue in
-            if newValue == .active && !ScreenshotScenario.isEnabled {
+            if newValue == .active && !ScreenshotScenario.isEnabled && hasSeenWelcome {
                 store.reconnectToMostRecentPairedSessionIfNeeded()
             }
         }
+    }
+
+    private func completeWelcome(opensSessions: Bool) {
+        hasSeenWelcome = true
+        opensSessionsAfterWelcome = opensSessions
+        isWelcomePresented = false
+
+        startAppServices()
+    }
+
+    private func startAppServices() {
+        store.reconnectToMostRecentPairedSessionIfNeeded()
+    }
+
+    private func showSessionsFromWelcome() {
+        keepsConnectionSheetOpenForSessions = true
+        connectionSheetStatus = nil
+        connectionSheetDetent = .medium
+        isConnectionSheetPresented = true
     }
 
     private func applySelectedTab(_ newTab: AppSection) {
@@ -420,5 +460,133 @@ extension ScannerSectionHeader where TrailingAccessory == EmptyView {
         self.init(title: title, onConnectionControlTapped: onConnectionControlTapped) {
             EmptyView()
         }
+    }
+}
+
+private struct WelcomeView: View {
+    let onSetUpWebSession: () -> Void
+    let onContinue: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            GeometryReader { geometry in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+                        VStack(alignment: .leading, spacing: 16) {
+                            Image("VoltLogo")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 78, height: 78)
+                                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                                .accessibilityHidden(true)
+
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Welcome to Volt")
+                                    .font(.largeTitle.bold())
+                                    .lineLimit(2)
+                                    .minimumScaleFactor(0.82)
+                                Text("Thanks for installing. Volt turns your iPhone into a scanner for your computer.")
+                                    .font(.body)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+
+                        VStack(spacing: 12) {
+                            WelcomeStep(
+                                systemImage: "safari",
+                                title: "Open Volt on your computer",
+                                message: "Use the Volt website or the Chrome extension."
+                            )
+                            WelcomeStep(
+                                systemImage: "qrcode.viewfinder",
+                                title: "Scan the pairing QR",
+                                message: "Scan the QR from Chrome or the create session page."
+                            )
+                            WelcomeStep(
+                                systemImage: "camera.viewfinder",
+                                title: "Send scans from your phone",
+                                message: "Capture barcodes, text, voice notes, and photos."
+                            )
+                        }
+                    }
+                    .padding(24)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(minHeight: max(0, geometry.size.height - WelcomeActions.estimatedHeight), alignment: .center)
+                }
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    WelcomeActions(onSetUpWebSession: onSetUpWebSession, onContinue: onContinue)
+                }
+                .background(ScannerTabLayout.background)
+            }
+            .navigationTitle("Welcome")
+            .toolbar(.hidden, for: .navigationBar)
+        }
+        .interactiveDismissDisabled()
+    }
+}
+
+private struct WelcomeActions: View {
+    static let estimatedHeight: CGFloat = 154
+
+    let onSetUpWebSession: () -> Void
+    let onContinue: () -> Void
+
+    var body: some View {
+        VStack(spacing: 10) {
+            Button(action: onContinue) {
+                Text("Continue to Volt")
+                    .font(.headline)
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity, minHeight: 54)
+                    .background(
+                        ScannerTabLayout.primaryActionBackground(isEnabled: true),
+                        in: RoundedRectangle(cornerRadius: ScannerTabLayout.primaryActionCornerRadius, style: .continuous)
+                    )
+            }
+            .buttonStyle(.plain)
+
+            Button(action: onSetUpWebSession) {
+                Label("Set Up Web Session", systemImage: "desktopcomputer")
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                    .frame(maxWidth: .infinity, minHeight: 50)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 24)
+        .padding(.top, 12)
+        .padding(.bottom, 16)
+        .background(.bar)
+    }
+}
+
+private struct WelcomeStep: View {
+    let systemImage: String
+    let title: String
+    let message: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 14) {
+            Image(systemName: systemImage)
+                .font(.headline.weight(.semibold))
+                .foregroundStyle(.green)
+                .frame(width: 30, height: 30)
+                .background(.green.opacity(0.12), in: Circle())
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.headline)
+                Text(message)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.background, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 }

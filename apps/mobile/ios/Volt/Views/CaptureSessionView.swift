@@ -123,11 +123,14 @@ struct CaptureSessionView: View {
         }
         .onAppear {
             store.activeMode = ScreenshotScenario.current?.initialCaptureMode ?? .ocr
-            syncCameraForOcrReview(isReviewingOcr: store.ocrReviewImage != nil)
             if ScreenshotScenario.current == .captureReviewSend,
                let region = store.ocrTextRegions.first {
                 selectedTextRegion = region
             }
+        }
+        .task {
+            await store.camera.requestAccess()
+            syncCameraForOcrReview(isReviewingOcr: store.ocrReviewImage != nil)
         }
         .onChange(of: store.ocrReviewImage != nil) { _, isReviewingOcr in
             syncCameraForOcrReview(isReviewingOcr: isReviewingOcr)

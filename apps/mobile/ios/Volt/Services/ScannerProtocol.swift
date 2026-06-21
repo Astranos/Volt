@@ -121,6 +121,7 @@ enum ScannerProtocol {
         struct Peer: Decodable, Equatable {
             let chromeSessionId: String?
             let deviceLabel: String?
+            let platform: String?
         }
 
         struct Pairing: Decodable, Equatable {

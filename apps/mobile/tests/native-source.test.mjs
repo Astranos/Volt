@@ -196,6 +196,30 @@ test("native screens use the shared header connection control without extra sess
   assert.doesNotMatch(uploadViewSwiftSource, /trailingAccessory: \{\s*ScannerSessionsButton/);
 });
 
+test("native first launch welcomes users without requesting camera access and can open session setup", () => {
+  assert.match(rootViewSwiftSource, /@AppStorage\("volt\.hasSeenWelcome\.v1"\) private var hasSeenWelcome = false/);
+  assert.match(rootViewSwiftSource, /guard hasSeenWelcome else \{\s*isWelcomePresented = true\s*return\s*\}/);
+  assert.match(rootViewSwiftSource, /private struct WelcomeView: View/);
+  assert.match(rootViewSwiftSource, /Text\("Welcome to Volt"\)/);
+  assert.match(rootViewSwiftSource, /Image\("VoltLogo"\)/);
+  assert.match(rootViewSwiftSource, /\.safeAreaInset\(edge: \.bottom, spacing: 0\) \{\s*WelcomeActions/);
+  assert.match(rootViewSwiftSource, /Label\("Set Up Web Session", systemImage: "desktopcomputer"\)/);
+  assert.match(rootViewSwiftSource, /private func completeWelcome\(opensSessions: Bool\)/);
+  assert.match(rootViewSwiftSource, /private func startAppServices\(\) \{\s*store\.reconnectToMostRecentPairedSessionIfNeeded\(\)\s*\}/);
+  assert.doesNotMatch(rootViewSwiftSource, /store\.camera\.requestAccess\(\)/);
+  assert.match(captureSessionViewSwiftSource, /\.task \{\s*await store\.camera\.requestAccess\(\)\s*syncCameraForOcrReview/);
+  assert.match(pairingSessionsViewSwiftSource, /\.task \{\s*await store\.camera\.requestAccess\(\)\s*store\.camera\.start\(\)\s*\}/);
+  assert.match(rootViewSwiftSource, /private func showSessionsFromWelcome\(\) \{[\s\S]*connectionSheetDetent = \.medium[\s\S]*isConnectionSheetPresented = true/);
+  assert.match(pairingSessionsViewSwiftSource, /private let webScannerURL = URL\(string: "https:\/\/volt-scanner\.vercel\.app\/create-session"\)!/);
+  assert.match(pairingSessionsViewSwiftSource, /Text\("Scan the QR code from the Chrome extension, or open the create session page on your computer\. This iPhone will connect to that browser session\."\)/);
+  assert.match(pairingSessionsViewSwiftSource, /title: "Open Volt on your computer"/);
+  assert.match(pairingSessionsViewSwiftSource, /detail: "Use the Chrome extension side panel, or go to volt-scanner\.vercel\.app\/create-session\."/);
+  assert.match(pairingSessionsViewSwiftSource, /detail: "Start pairing in Chrome or on the create session page\."/);
+  assert.match(pairingSessionsViewSwiftSource, /Label\("Open Create Session Page", systemImage: "safari"\)/);
+  assert.match(pairingSessionsViewSwiftSource, /Label\("Scan Computer QR", systemImage: "qrcode\.viewfinder"\)/);
+  assert.match(rootViewSwiftSource, /\.frame\(maxWidth: \.infinity, alignment: \.leading\)\s*\.background\(\.background, in: RoundedRectangle\(cornerRadius: 16/);
+});
+
 test("native OCR review stops the live camera until retake", () => {
   assert.match(captureSessionViewSwiftSource, /struct CaptureSessionView/);
   assert.match(captureSessionViewSwiftSource, /\.onChange\(of: store\.ocrReviewImage != nil\)/);
@@ -433,11 +457,16 @@ test("native scanner handles Chrome result receipts for cursor insertion feedbac
   assert.match(scannerWebRTCConnectionSwiftSource, /ScannerProtocol\.parseResultReceived\(rawValue\)/);
   assert.match(scannerStoreSwiftSource, /func applyResultReceived\(_ receipt: ScannerProtocol\.ResultReceived\)/);
   assert.match(scannerStoreSwiftSource, /receipt\.insertedIntoCursor == false/);
+  assert.match(scannerProtocolSwiftSource, /let platform: String\?/);
+  assert.match(scannerStoreSwiftSource, /message\.peer\?\.platform == "web" \? "Browser" : "Chrome"/);
+  assert.match(scannerStoreSwiftSource, /peerTarget\?\.isWebPageSession == true && receipt\.savedToResults/);
+  assert.match(scannerStoreSwiftSource, /statusText = "Successfully sent to browser"/);
+  assert.match(scannerStoreCaptureActionsSwiftSource, /peerTarget\?\.isWebPageSession == true \? "Sent to browser" : "Sent to Chrome"/);
   assert.match(scannerStoreSwiftSource, /if receipt\.savedToResults \{\s*showCaptureTypingFallbackToast\(for: results\[index\]\)\s*\} else \{\s*showCaptureDeliveryToast\(for: results\[index\], state: \.failed\)\s*\}/);
   assert.match(scannerStoreCaptureActionsSwiftSource, /func showCaptureTypingFallbackToast\(for result: ScanResult\)/);
   assert.match(scannerStoreCaptureActionsSwiftSource, /title: "Failed to type"/);
   assert.match(scannerStoreCaptureActionsSwiftSource, /was saved to Chrome sidepanel results/);
-  assert.match(scannerStoreSwiftSource, /Chrome saved it, but no focused cursor target was available\./);
+  assert.match(scannerStoreSwiftSource, /\(browserName\) saved it, but no focused cursor target was available\./);
 });
 
 test("native photo delivery uses a durable retry queue until browser receipt", () => {
