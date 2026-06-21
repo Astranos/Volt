@@ -12,13 +12,12 @@ TMP = File.join(ROOT, "build/app-store-artwork-tmp")
 WIDTH = 1320
 HEIGHT = 2868
 FONT = "/System/Library/Fonts/SFNS.ttf"
+TITLE_FONT = File.exist?("/Library/Fonts/SF-Pro-Display-Heavy.otf") ? "/Library/Fonts/SF-Pro-Display-Heavy.otf" : FONT
 
 Scene = Struct.new(
   :source,
   :output,
-  :eyebrow,
   :title,
-  :subtitle,
   :theme,
   :phone_width,
   :phone_y,
@@ -31,109 +30,91 @@ SCENES = [
   Scene.new(
     source: "iPhone 17 Pro Max-01-connected-sessions_framed_transparent.png",
     output: "01-connected-sessions.png",
-    eyebrow: "Volt for Chrome",
-    title: "Pair once. Capture into any browser tab.",
-    subtitle: "Reconnect to saved Chrome sessions and send scans straight to the focused field.",
+    title: "Pair and swap between multiple sessions",
     theme: :light,
-    phone_width: 900,
-    phone_y: 870,
-    phone_x: 210,
+    phone_width: 1100,
+    phone_y: 590,
+    phone_x: 80,
     tilt: -3
   ),
   Scene.new(
     source: "iPhone 17 Pro Max-02-capture-text-chip_framed_transparent.png",
     output: "02-capture-text-chip.png",
-    eyebrow: "Live device text",
-    title: "Spot serials before you capture.",
-    subtitle: "Volt surfaces model, serial, and IMEI chips while the camera is still open.",
+    title: "Detect details instantly",
     theme: :product,
-    phone_width: 920,
-    phone_y: 840,
-    phone_x: 200,
+    phone_width: 1100,
+    phone_y: 590,
+    phone_x: 80,
     tilt: 2
   ),
   Scene.new(
     source: "iPhone 17 Pro Max-03-capture-text-extracted_framed_transparent.png",
     output: "03-capture-text-extracted.png",
-    eyebrow: "Precise OCR",
-    title: "Tap only the identifier you need.",
-    subtitle: "Post-capture highlights focus on model, serial, and IMEI values instead of whole lines.",
+    title: "Extract serial numbers, model numbers, and IMEIs",
     theme: :dark,
-    phone_width: 930,
-    phone_y: 830,
-    phone_x: 195,
+    phone_width: 1100,
+    phone_y: 590,
+    phone_x: 80,
     tilt: -2
   ),
   Scene.new(
     source: "iPhone 17 Pro Max-04-capture-send-popup_framed_transparent.png",
     output: "04-capture-send-popup.png",
-    eyebrow: "Review before send",
-    title: "Clean up OCR text on device.",
-    subtitle: "Send the raw capture, polish it first, or close the action sheet and keep reviewing.",
+    title: "Send directly to your desktop.",
     theme: :light,
-    phone_width: 900,
-    phone_y: 850,
-    phone_x: 210,
+    phone_width: 1100,
+    phone_y: 590,
+    phone_x: 80,
     tilt: 3
   ),
   Scene.new(
     source: "iPhone 17 Pro Max-05-capture-barcode-detected_framed_transparent.png",
     output: "05-capture-barcode-detected.png",
-    eyebrow: "Barcode capture",
-    title: "Scan UPCs without leaving inventory.",
-    subtitle: "Guide the camera, confirm the code, and send it back to Chrome instantly.",
+    title: "Scan and send any barcode",
     theme: :product,
-    phone_width: 890,
-    phone_y: 855,
-    phone_x: 215,
+    phone_width: 1100,
+    phone_y: 590,
+    phone_x: 80,
     tilt: -3
   ),
   Scene.new(
     source: "iPhone 17 Pro Max-06-capture-photo-viewfinder_framed_transparent.png",
     output: "06-capture-photo-viewfinder.png",
-    eyebrow: "Photo capture",
-    title: "Take listing photos in the same flow.",
-    subtitle: "Move from identifiers to product photos without changing tools.",
+    title: "Take listing photos in the same flow",
     theme: :dark,
-    phone_width: 900,
-    phone_y: 865,
-    phone_x: 210,
+    phone_width: 1100,
+    phone_y: 590,
+    phone_x: 80,
     tilt: 2
   ),
   Scene.new(
     source: "iPhone 17 Pro Max-07-capture-results_framed_transparent.png",
     output: "07-capture-results.png",
-    eyebrow: "Capture history",
-    title: "Keep every scan visible.",
-    subtitle: "Text, barcodes, and photos stay organized after the session ends.",
+    title: "All captures are sent to your desktop",
     theme: :light,
-    phone_width: 900,
-    phone_y: 850,
-    phone_x: 210,
+    phone_width: 1100,
+    phone_y: 590,
+    phone_x: 80,
     tilt: -2
   ),
   Scene.new(
     source: "iPhone 17 Pro Max-08-dictation_framed_transparent.png",
     output: "08-dictation.png",
-    eyebrow: "Hands-free entry",
-    title: "Dictate descriptions directly to Chrome.",
-    subtitle: "Capture condition notes and listing copy while your hands stay on the item.",
+    title: "Dictate anything directly to your desktop",
     theme: :product,
-    phone_width: 900,
-    phone_y: 850,
-    phone_x: 210,
+    phone_width: 1100,
+    phone_y: 590,
+    phone_x: 80,
     tilt: 3
   ),
   Scene.new(
     source: "iPhone 17 Pro Max-09-upload-batches_framed_transparent.png",
     output: "09-upload-batches.png",
-    eyebrow: "Batch uploads",
-    title: "Send photo batches with delivery status.",
-    subtitle: "Track upload progress and recover failed sends without losing work.",
+    title: "Easily upload photos to your desktop",
     theme: :dark,
-    phone_width: 900,
-    phone_y: 850,
-    phone_x: 210,
+    phone_width: 1100,
+    phone_y: 590,
+    phone_x: 80,
     tilt: -3
   )
 ].freeze
@@ -154,30 +135,21 @@ def theme_colors(theme)
       gradient_a: "#03170d",
       gradient_b: "#0a3a21",
       card: "#f5fff8",
-      title: "#f7fff9",
-      subtitle: "#cdebd7",
-      eyebrow_bg: "#35c765",
-      eyebrow_text: "#062112"
+      title: "#f7fff9"
     }
   when :product
     {
       gradient_a: "#eafff1",
       gradient_b: "#35c765",
       card: "#062112",
-      title: "#062112",
-      subtitle: "#1f4f32",
-      eyebrow_bg: "#062112",
-      eyebrow_text: "#f7fff9"
+      title: "#062112"
     }
   else
     {
       gradient_a: "#f7fff9",
       gradient_b: "#d8f8e3",
       card: "#0f2f1d",
-      title: "#062112",
-      subtitle: "#315c40",
-      eyebrow_bg: "#35c765",
-      eyebrow_text: "#062112"
+      title: "#062112"
     }
   end
 end
@@ -192,48 +164,25 @@ def draw_background(path, colors)
     "-fill", "#06211218",
     "-draw", "circle 120,2520 520,2520",
     "-fill", "#ffffff24",
-    "-draw", "roundrectangle 86,690 1234,2600 88,88",
+    "-draw", "roundrectangle 86,760 1234,2600 88,88",
     "-fill", "#06211212",
-    "-draw", "roundrectangle 160,790 1160,2520 76,76",
+    "-draw", "roundrectangle 160,870 1160,2520 76,76",
     path
   )
 end
 
-def text_image(text, path, width:, height:, point_size:, fill:, gravity: "center", font: FONT)
+def text_image(text, path, width:, height:, point_size:, fill:, gravity: "center", font: FONT, weight: 400)
   run!(
     "magick",
     "-background", "none",
     "-fill", fill,
     "-font", font,
+    "-weight", weight.to_s,
     "-pointsize", point_size.to_s,
-    "-interline-spacing", "-8",
+    "-interline-spacing", "-4",
     "-size", "#{width}x#{height}",
     "-gravity", gravity,
     "caption:#{text}",
-    path
-  )
-end
-
-def pill_image(text, path, colors)
-  label = File.join(TMP, "pill-label.png")
-  text_image(
-    text.upcase,
-    label,
-    width: 720,
-    height: 70,
-    point_size: 34,
-    fill: colors.fetch(:eyebrow_text)
-  )
-  run!(
-    "magick",
-    "-size", "780x92",
-    "xc:none",
-    "-fill", colors.fetch(:eyebrow_bg),
-    "-draw", "roundrectangle 0,0 779,91 46,46",
-    label,
-    "-gravity", "center",
-    "-compose", "over",
-    "-composite",
     path
   )
 end
@@ -244,7 +193,15 @@ def phone_image(source, path, width, tilt)
   input = resized
   if tilt && tilt != 0
     rotated = File.join(TMP, "phone-rotated.png")
-    run!("magick", resized, "-background", "none", "-distort", "SRT", tilt.to_s, rotated)
+    run!(
+      "magick",
+      resized,
+      "-background", "none",
+      "-virtual-pixel", "transparent",
+      "+distort", "SRT", tilt.to_s,
+      "+repage",
+      rotated
+    )
     input = rotated
   end
 
@@ -271,28 +228,31 @@ def render_scene(scene)
 
   FileUtils.mkdir_p(TMP)
   background = File.join(TMP, "background.png")
-  eyebrow = File.join(TMP, "eyebrow.png")
   title = File.join(TMP, "title.png")
-  subtitle = File.join(TMP, "subtitle.png")
   phone = File.join(TMP, "phone.png")
   output = File.join(OUTPUT, scene.output)
 
   draw_background(background, colors)
-  pill_image(scene.eyebrow, eyebrow, colors)
-  text_image(scene.title, title, width: 1120, height: 320, point_size: 84, fill: colors.fetch(:title))
-  text_image(scene.subtitle, subtitle, width: 1040, height: 180, point_size: 38, fill: colors.fetch(:subtitle))
+  text_image(
+    scene.title,
+    title,
+    width: 1160,
+    height: 430,
+    point_size: 118,
+    fill: colors.fetch(:title),
+    font: TITLE_FONT,
+    weight: 800
+  )
   phone_image(source, phone, scene.phone_width, scene.tilt)
 
   FileUtils.mkdir_p(File.dirname(output))
-  run!(
+  args = [
     "magick",
     background,
-    eyebrow, "-geometry", "+270+128", "-compose", "over", "-composite",
-    title, "-geometry", "+100+245", "-compose", "over", "-composite",
-    subtitle, "-geometry", "+140+560", "-compose", "over", "-composite",
-    phone, "-geometry", "+#{scene.phone_x}+#{scene.phone_y}", "-compose", "over", "-composite",
-    output
-  )
+    title, "-geometry", "+80+105", "-compose", "over", "-composite"
+  ]
+  args.concat([phone, "-geometry", "+#{scene.phone_x}+#{scene.phone_y}", "-compose", "over", "-composite", output])
+  run!(*args)
 end
 
 FileUtils.rm_rf(OUTPUT)

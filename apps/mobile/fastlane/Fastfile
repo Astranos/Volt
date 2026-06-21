@@ -8,6 +8,7 @@ APP_SCHEME = "Volt"
 SCREENSHOT_SCHEME = "VoltScreenshots"
 APP_IDENTIFIER = ENV.fetch("VOLT_IOS_BUNDLE_ID", "com.volt.mobile")
 TEAM_ID = ENV.fetch("VOLT_APPLE_TEAM_ID", "GB5SPLUARQ")
+APP_STORE_CONNECT_ISSUER_ID = ENV.fetch("APP_STORE_CONNECT_ISSUER_ID", "69a6de87-2df2-47e3-e053-5b8c7c11a4d1")
 BUILD_OUTPUT_DIRECTORY = "build/fastlane"
 SCREENSHOT_OUTPUT_DIRECTORY = "fastlane/screenshots"
 FRAMED_SCREENSHOT_OUTPUT_DIRECTORY = "build/framed-screenshots"
@@ -66,9 +67,9 @@ def app_store_connect_api_key_from_env
 
   options = {
     key_id: ENV.fetch("APP_STORE_CONNECT_API_KEY_ID"),
-    duration: ENV.fetch("APP_STORE_CONNECT_API_KEY_DURATION", "1200").to_i
+    duration: ENV.fetch("APP_STORE_CONNECT_API_KEY_DURATION", "1200").to_i,
+    issuer_id: APP_STORE_CONNECT_ISSUER_ID
   }
-  options[:issuer_id] = ENV["APP_STORE_CONNECT_ISSUER_ID"] if ENV["APP_STORE_CONNECT_ISSUER_ID"]
 
   if key_path
     options[:key_filepath] = key_path
@@ -322,6 +323,24 @@ platform :ios do
       api_key: api_key,
       app_identifier: APP_IDENTIFIER,
       screenshots_path: SCREENSHOT_OUTPUT_DIRECTORY,
+      skip_binary_upload: true,
+      skip_metadata: true,
+      skip_app_version_update: true,
+      overwrite_screenshots: true,
+      run_precheck_before_submit: false,
+      force: true
+    )
+  end
+
+  desc "Upload designed App Store artwork screenshots to App Store Connect"
+  lane :upload_app_store_artwork do
+    validate_iphone_screenshots_for_upload(APP_STORE_ARTWORK_OUTPUT_DIRECTORY)
+    api_key = app_store_connect_api_key_from_env
+
+    deliver(
+      api_key: api_key,
+      app_identifier: APP_IDENTIFIER,
+      screenshots_path: APP_STORE_ARTWORK_OUTPUT_DIRECTORY,
       skip_binary_upload: true,
       skip_metadata: true,
       skip_app_version_update: true,
