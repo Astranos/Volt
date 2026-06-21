@@ -203,6 +203,10 @@ def flatten_framed_screenshot(path)
   FileUtils.mv(flattened_path, path)
 end
 
+def transparent_framed_path(path)
+  path.sub(/_framed\.png\z/, "_framed_transparent.png")
+end
+
 platform :ios do
   desc "Validate the local iOS app with the repo-preferred simulator build command"
   lane :build do
@@ -254,7 +258,7 @@ platform :ios do
     frameit_work_directory = File.join(app_root, "build/frameit-screenshots")
 
     register_frameit_iphone_17_pro_max
-    FileUtils.rm_f(Dir.glob(File.join(output_directory, "**", "*_framed.png")))
+    FileUtils.rm_f(Dir.glob(File.join(output_directory, "**", "*_framed*.png")))
     prepare_rounded_frameit_sources(output_directory, frameit_work_directory)
 
     frame_screenshots(
@@ -268,6 +272,7 @@ platform :ios do
       destination_path = File.join(output_directory, relative_path)
       FileUtils.mkdir_p(File.dirname(destination_path))
       FileUtils.cp(framed_path, destination_path)
+      FileUtils.cp(framed_path, transparent_framed_path(destination_path))
       flatten_framed_screenshot(destination_path)
     end
 
