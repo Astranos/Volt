@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import QRCode from "qrcode";
 import {
@@ -9,7 +9,6 @@ import {
   Link as LinkIcon,
   Loader2,
   Radio,
-  RefreshCw,
   ScanBarcode,
   ShieldCheck,
   Smartphone,
@@ -46,6 +45,7 @@ export const Route = createFileRoute("/scanner-demo")({
 
 const SIGNAL_URL = scannerSignalUrl();
 const DEVICE_LABEL = "Volt website demo";
+const REVIEW_INPUT_LABEL = "Review test input";
 const WEB_PROTOCOL_VERSION = {
   major: SCANNER_PROTOCOL_MAJOR_VERSION,
   minor: SCANNER_PROTOCOL_MINOR_VERSION,
@@ -214,6 +214,15 @@ function statusLabel(status: DemoStatus) {
   return "Ready";
 }
 
+function reviewCursorTarget() {
+  return {
+    hasCursorTarget: true,
+    label: REVIEW_INPUT_LABEL,
+    tabTitle: "Volt Scanner Demo",
+    url: window.location.href,
+  };
+}
+
 function ScannerDemo() {
   const [captures, setCaptures] = useState<CaptureItem[]>([]);
   const [connectedPeerCount, setConnectedPeerCount] = useState(0);
@@ -222,6 +231,7 @@ function ScannerDemo() {
   const [joinWindow, setJoinWindow] = useState<JoinWindow | null>(null);
   const [photos, setPhotos] = useState<PhotoItem[]>([]);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [reviewInputValue, setReviewInputValue] = useState("");
   const [status, setStatus] = useState<DemoStatus>("idle");
 
   const capturesRef = useRef(new Set<string>());
@@ -230,6 +240,7 @@ function ScannerDemo() {
   const peersRef = useRef(new Map<string, PeerSession>());
   const pendingPhotosRef = useRef(new Map<string, PendingPhoto>());
   const pollTimerRef = useRef<number | null>(null);
+  const reviewInputRef = useRef<HTMLTextAreaElement | null>(null);
 
   const receivedCount = captures.length + photos.length;
   const signalHost = useMemo(() => new URL(SIGNAL_URL).host, []);
@@ -290,7 +301,7 @@ function ScannerDemo() {
         messageId: createMessageId("ready"),
         sentAt: new Date().toISOString(),
         peer: webPeerInfo(),
-        cursorTarget: { hasCursorTarget: false },
+        cursorTarget: reviewCursorTarget(),
       });
     },
     [sendControl, webPeerInfo],
@@ -302,6 +313,29 @@ function ScannerDemo() {
       if (peer.ready) ready += 1;
     }
     setConnectedPeerCount(ready);
+  }, []);
+
+  const insertIntoReviewInput = useCallback((value: string) => {
+    if (!value) return false;
+
+    const input = reviewInputRef.current;
+    setReviewInputValue((current) => {
+      if (!input) return current ? `${current}\n${value}` : value;
+
+      const start = input.selectionStart ?? current.length;
+      const end = input.selectionEnd ?? current.length;
+      return `${current.slice(0, start)}${value}${current.slice(end)}`;
+    });
+
+    window.requestAnimationFrame(() => {
+      const inputAfterRender = reviewInputRef.current;
+      if (!inputAfterRender) return;
+      inputAfterRender.focus();
+      const insertionPoint = inputAfterRender.value.length;
+      inputAfterRender.setSelectionRange(insertionPoint, insertionPoint);
+    });
+
+    return true;
   }, []);
 
   const closePeer = useCallback(
@@ -355,16 +389,18 @@ function ScannerDemo() {
               value: message.text ?? "",
             };
       if (item.value) setCaptures((current) => [item, ...current].slice(0, MAX_CAPTURE_ITEMS));
+      const insertedIntoCursor = insertIntoReviewInput(item.value);
       sendControl(peer, {
         type: "result_received",
         messageId: createMessageId("receipt"),
         sentAt: new Date().toISOString(),
         resultId: item.id,
         savedToResults: true,
-        insertedIntoCursor: false,
+        insertedIntoCursor,
+        cursorTarget: reviewCursorTarget(),
       });
     },
-    [sendControl],
+    [insertIntoReviewInput, sendControl],
   );
 
   const handleControlMessage = useCallback(
@@ -648,6 +684,7 @@ function ScannerDemo() {
     setJoinWindow(null);
     setPhotos([]);
     setQrDataUrl(null);
+    setReviewInputValue("");
     setStatus("idle");
   }, [disposeRuntime]);
 
@@ -834,7 +871,12 @@ function ScannerDemo() {
       </section>
 
       <section className="mx-auto grid max-w-7xl gap-6 px-4 py-8 sm:px-6 lg:grid-cols-2 lg:px-8">
-        <ResultsPanel captures={captures} />
+        <ResultsPanel
+          captures={captures}
+          reviewInputRef={reviewInputRef}
+          reviewInputValue={reviewInputValue}
+          onReviewInputChange={setReviewInputValue}
+        />
         <PhotosPanel photos={photos} />
       </section>
     </main>
@@ -870,7 +912,17 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function ResultsPanel({ captures }: { captures: CaptureItem[] }) {
+function ResultsPanel({
+  captures,
+  onReviewInputChange,
+  reviewInputRef,
+  reviewInputValue,
+}: {
+  captures: CaptureItem[];
+  onReviewInputChange: (value: string) => void;
+  reviewInputRef: RefObject<HTMLTextAreaElement | null>;
+  reviewInputValue: string;
+}) {
   return (
     <section className="rounded-lg border border-zinc-200 bg-white">
       <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
@@ -879,6 +931,19 @@ function ResultsPanel({ captures }: { captures: CaptureItem[] }) {
           Text and barcode
         </h2>
         <span className="text-xs text-zinc-500">{captures.length}</span>
+      </div>
+      <div className="border-b border-zinc-200 p-3">
+        <label htmlFor="review-test-input" className="text-xs font-semibold uppercase text-zinc-500">
+          {REVIEW_INPUT_LABEL}
+        </label>
+        <textarea
+          ref={reviewInputRef}
+          id="review-test-input"
+          value={reviewInputValue}
+          onChange={(event) => onReviewInputChange(event.target.value)}
+          placeholder="Scanned text, barcodes, and dictation appear here."
+          className="mt-2 min-h-24 w-full resize-y rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm leading-6 text-zinc-950 outline-none focus:border-zinc-950"
+        />
       </div>
       <div className="max-h-[34rem] overflow-auto p-3">
         {captures.length === 0 ? (
