@@ -60,7 +60,9 @@ struct DictationView: View {
                 store.activeMode = .dictation
             }
             .task {
-                await store.prepareDictation()
+                if !ScreenshotScenario.isEnabled {
+                    await store.prepareDictation()
+                }
             }
         }
     }

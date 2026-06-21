@@ -153,7 +153,7 @@ struct CameraSessionControls: View {
         case .ocr:
             "Hold document in frame"
         case .barcode:
-            "Center barcode in frame"
+            ScreenshotScenario.current == .captureBarcode ? "Send '883929739929'" : "Point camera at barcode"
         case .photo:
             "Frame photo"
         case .dictation:

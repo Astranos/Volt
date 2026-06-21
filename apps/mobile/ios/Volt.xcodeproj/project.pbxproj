@@ -44,6 +44,7 @@
 		B10000000000000000000009 /* CaptureDocks.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000009 /* CaptureDocks.swift */; };
 		B1000000000000000000000A /* OcrReviewLayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1000000000000000000000A /* OcrReviewLayer.swift */; };
 		B1000000000000000000000B /* CaptureGuideOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1000000000000000000000B /* CaptureGuideOverlay.swift */; };
+		B1000000000000000000000C /* ScreenshotFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1000000000000000000000C /* ScreenshotFixtures.swift */; };
 		B20000000000000000000001 /* SnapshotHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000001 /* SnapshotHelper.swift */; };
 		B20000000000000000000002 /* VoltScreenshots.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000002 /* VoltScreenshots.swift */; };
 /* End PBXBuildFile section */
@@ -100,6 +101,7 @@
 		C10000000000000000000009 /* CaptureDocks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureDocks.swift; sourceTree = "<group>"; };
 		C1000000000000000000000A /* OcrReviewLayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OcrReviewLayer.swift; sourceTree = "<group>"; };
 		C1000000000000000000000B /* CaptureGuideOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureGuideOverlay.swift; sourceTree = "<group>"; };
+		C1000000000000000000000C /* ScreenshotFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotFixtures.swift; sourceTree = "<group>"; };
 		C20000000000000000000001 /* SnapshotHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapshotHelper.swift; sourceTree = "<group>"; };
 		C20000000000000000000002 /* VoltScreenshots.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoltScreenshots.swift; sourceTree = "<group>"; };
 		C20000000000000000000003 /* VoltScreenshots.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = VoltScreenshots.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -213,6 +215,7 @@
 				C10000000000000000000002 /* ScannerStoreDictation.swift */,
 				C10000000000000000000003 /* ScannerStorePairedSessions.swift */,
 				C10000000000000000000004 /* PairingSecretStore.swift */,
+				C1000000000000000000000C /* ScreenshotFixtures.swift */,
 				C00000000000000000000018 /* ScannerProtocol.swift */,
 				C00000000000000000000019 /* ScannerSignalingClient.swift */,
 				C0000000000000000000001A /* ScannerWebRTCConnection.swift */,
@@ -426,6 +429,7 @@
 				B10000000000000000000009 /* CaptureDocks.swift in Sources */,
 				B1000000000000000000000A /* OcrReviewLayer.swift in Sources */,
 				B1000000000000000000000B /* CaptureGuideOverlay.swift in Sources */,
+				B1000000000000000000000C /* ScreenshotFixtures.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -15,16 +15,7 @@ struct CaptureGuideOverlay: View {
             ZStack {
                 switch mode {
                 case .barcode:
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(.green, lineWidth: 3)
-                        .frame(width: guideSize.width, height: guideSize.height)
-                        .overlay {
-                            Rectangle()
-                                .fill(.green.opacity(0.75))
-                                .frame(height: 2)
-                                .padding(.horizontal, 16)
-                        }
-                        .position(x: targetZone.midX, y: targetZone.midY)
+                    EmptyView()
                 case .photo:
                     RoundedRectangle(cornerRadius: 24)
                         .stroke(.white.opacity(0.72), lineWidth: 1.2)

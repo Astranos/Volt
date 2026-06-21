@@ -4,6 +4,8 @@ struct OcrReviewLayer: View {
     let image: UIImage
     let regions: [RecognizedTextRegion]
     let selectedRegion: RecognizedTextRegion?
+    let imageContentMode: ContentMode
+    let fillFocusX: CGFloat
     let onSelectRegion: (RecognizedTextRegion) -> Void
     @State private var baseScale: CGFloat = 1
     @State private var gestureScale: CGFloat = 1
@@ -28,15 +30,15 @@ struct OcrReviewLayer: View {
 
     var body: some View {
         GeometryReader { proxy in
-            let imageRect = aspectFitRect(for: image.size, in: proxy.size)
+            let imageRect = imageRect(for: image.size, in: proxy.size)
 
             ZStack {
                 Color.black
 
                 Image(uiImage: image)
                     .resizable()
-                    .scaledToFit()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .frame(width: imageRect.width, height: imageRect.height)
+                    .position(x: imageRect.midX, y: imageRect.midY)
 
                 ForEach(regions) { region in
                     let points = viewPoints(for: region.quadrilateral, in: imageRect)
@@ -63,6 +65,7 @@ struct OcrReviewLayer: View {
                 }
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
+            .clipped()
             .scaleEffect(currentScale)
             .offset(currentOffset)
             .simultaneousGesture(magnificationGesture)
@@ -134,11 +137,45 @@ struct OcrReviewLayer: View {
     }
 
     private func aspectFitRect(for imageSize: CGSize, in containerSize: CGSize) -> CGRect {
+        aspectRect(for: imageSize, in: containerSize, scale: min)
+    }
+
+    private func aspectFillRect(for imageSize: CGSize, in containerSize: CGSize) -> CGRect {
+        let centeredRect = aspectRect(for: imageSize, in: containerSize, scale: max)
+        guard centeredRect.width > containerSize.width else {
+            return centeredRect
+        }
+
+        let focusedX = (containerSize.width / 2) - (centeredRect.width * fillFocusX)
+        return CGRect(
+            x: min(max(focusedX, containerSize.width - centeredRect.width), 0),
+            y: centeredRect.minY,
+            width: centeredRect.width,
+            height: centeredRect.height
+        )
+    }
+
+    private func imageRect(for imageSize: CGSize, in containerSize: CGSize) -> CGRect {
+        switch imageContentMode {
+        case .fill:
+            aspectFillRect(for: imageSize, in: containerSize)
+        case .fit:
+            aspectFitRect(for: imageSize, in: containerSize)
+        @unknown default:
+            aspectFitRect(for: imageSize, in: containerSize)
+        }
+    }
+
+    private func aspectRect(
+        for imageSize: CGSize,
+        in containerSize: CGSize,
+        scale scaleFunction: (CGFloat, CGFloat) -> CGFloat
+    ) -> CGRect {
         guard imageSize.width > 0, imageSize.height > 0, containerSize.width > 0, containerSize.height > 0 else {
             return .zero
         }
 
-        let scale = min(containerSize.width / imageSize.width, containerSize.height / imageSize.height)
+        let scale = scaleFunction(containerSize.width / imageSize.width, containerSize.height / imageSize.height)
         let size = CGSize(width: imageSize.width * scale, height: imageSize.height * scale)
         return CGRect(
             x: (containerSize.width - size.width) / 2,

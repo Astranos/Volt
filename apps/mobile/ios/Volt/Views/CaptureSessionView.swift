@@ -18,6 +18,8 @@ struct CaptureSessionView: View {
                     image: reviewImage,
                     regions: store.ocrTextRegions,
                     selectedRegion: selectedTextRegion,
+                    imageContentMode: ScreenshotScenario.isEnabled ? .fill : .fit,
+                    fillFocusX: ScreenshotScenario.isEnabled ? 0.565 : 0.5,
                     onSelectRegion: { selectTextRegion($0) }
                 )
                     .ignoresSafeArea()
@@ -26,6 +28,22 @@ struct CaptureSessionView: View {
                     .ignoresSafeArea()
             }
 
+            if selectedTextRegion != nil {
+                ExtractedTextActionCard(
+                    text: selectedTextPreview,
+                    isCleaning: isCleaningSelectedText,
+                    onCleanup: {
+                        guard let selectedTextRegion else { return }
+                        cleanupSelectedText(selectedTextRegion)
+                    },
+                    onSend: {
+                        guard let selectedTextRegion else { return }
+                        store.sendRecognizedText(selectedCleanedText ?? selectedTextRegion.text)
+                        self.selectedTextRegion = nil
+                    }
+                )
+                .transition(.scale(scale: 0.96).combined(with: .opacity))
+            }
         }
         .background(.black)
         .overlay(alignment: .top) {
@@ -82,38 +100,18 @@ struct CaptureSessionView: View {
                 )
             }
         }
-        .confirmationDialog(
-            "Extracted Text",
-            isPresented: Binding(
-                get: { selectedTextRegion != nil },
-                set: { isPresented in
-                    if !isPresented {
-                        selectedTextRegion = nil
-                    }
-                }
-            ),
-            titleVisibility: .visible
-        ) {
-            Button("Send", systemImage: "paperplane.fill") {
-                guard let selectedTextRegion else { return }
-                store.sendRecognizedText(selectedCleanedText ?? selectedTextRegion.text)
-            }
-            Button(isCleaningSelectedText ? "Cleaning..." : "Cleanup", systemImage: "wand.and.sparkles") {
-                guard let selectedTextRegion else { return }
-                cleanupSelectedText(selectedTextRegion)
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text(selectedTextPreview)
-        }
         .sheet(isPresented: $isConnectionRecoveryPresented) {
             PairingSessionsView()
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
         .onAppear {
-            store.activeMode = .ocr
+            store.activeMode = ScreenshotScenario.current?.initialCaptureMode ?? .ocr
             syncCameraForOcrReview(isReviewingOcr: store.ocrReviewImage != nil)
+            if ScreenshotScenario.current == .captureReviewSend,
+               let region = store.ocrTextRegions.first {
+                selectedTextRegion = region
+            }
         }
         .onChange(of: store.ocrReviewImage != nil) { _, isReviewingOcr in
             syncCameraForOcrReview(isReviewingOcr: isReviewingOcr)
@@ -191,6 +189,63 @@ struct CaptureSessionView: View {
         Original
         \(selectedTextRegion.text)
         """
+    }
+}
+
+private struct ExtractedTextActionCard: View {
+    let text: String
+    let isCleaning: Bool
+    let onCleanup: () -> Void
+    let onSend: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Extracted Text")
+                    .font(.title3.weight(.bold))
+                    .foregroundStyle(.black)
+
+                Text(text)
+                    .font(.title3)
+                    .foregroundStyle(.black.opacity(0.62))
+                    .lineLimit(3)
+                    .minimumScaleFactor(0.78)
+            }
+
+            VStack(spacing: 12) {
+                Button(action: onCleanup) {
+                    Label(isCleaning ? "Cleaning..." : "Cleanup", systemImage: "wand.and.sparkles")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(.black)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 64)
+                        .background(.black.opacity(0.12), in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .disabled(isCleaning)
+
+                Button(action: onSend) {
+                    Label("Send", systemImage: "paperplane.fill")
+                        .font(.title3.weight(.bold))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 64)
+                        .background(Color.green, in: Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 24)
+        .padding(.top, 24)
+        .padding(.bottom, 28)
+        .frame(width: 340)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 36, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 36, style: .continuous)
+                .stroke(.white.opacity(0.42), lineWidth: 1)
+        }
+        .shadow(color: .black.opacity(0.22), radius: 28, y: 16)
+        .accessibilityElement(children: .contain)
     }
 }
 

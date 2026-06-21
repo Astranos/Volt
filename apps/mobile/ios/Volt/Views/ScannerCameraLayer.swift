@@ -10,7 +10,10 @@ struct ScannerCameraLayer: View {
 
     var body: some View {
         Group {
-            if store.camera.authorizationStatus == .authorized {
+            if let screenshotScenario = ScreenshotScenario.current,
+               let screenshotImage = ScannerStore.screenshotCaptureImage(for: screenshotScenario) {
+                screenshotPreview(image: screenshotImage, scenario: screenshotScenario)
+            } else if store.camera.authorizationStatus == .authorized {
                 GeometryReader { proxy in
                     ZStack(alignment: .top) {
                         Color.black
@@ -59,17 +62,76 @@ struct ScannerCameraLayer: View {
             return
         }
 
-        if guideVisible {
-            store.camera.updateBarcodeGuideRect(
-                CaptureGuideGeometry.guideRect(
-                    for: .barcode,
-                    in: proxy.size,
-                    safeAreaInsets: proxy.safeAreaInsets
-                )
-            )
-        } else {
-            store.camera.updateBarcodeGuideRect(nil)
+        store.camera.updateBarcodeGuideRect(nil)
+    }
+
+    @ViewBuilder
+    private func screenshotPreview(image: UIImage, scenario: ScreenshotScenario) -> some View {
+        GeometryReader { proxy in
+            ZStack(alignment: .top) {
+                Color.white
+                    .ignoresSafeArea()
+
+                switch scenario {
+                case .captureBarcode:
+                    screenshotBarcodePreview(image: image, in: proxy)
+                case .capturePhoto:
+                    screenshotPhotoPreview(image: image, in: proxy)
+                case .sessions, .captureReview, .captureReviewSend, .captureResults, .dictation, .upload:
+                    Color.black
+                        .ignoresSafeArea()
+                }
+            }
         }
+    }
+
+    private func screenshotBarcodePreview(image: UIImage, in proxy: GeometryProxy) -> some View {
+        let imageWidth = proxy.size.width
+        let imageHeight = proxy.size.height
+        let barcodeBounds = CGRect(
+            x: proxy.size.width * 0.705,
+            y: proxy.size.height * 0.425,
+            width: proxy.size.width * 0.205,
+            height: proxy.size.height * 0.066
+        )
+
+        return ZStack(alignment: .topLeading) {
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFill()
+                .frame(width: imageWidth, height: imageHeight)
+                .clipped()
+
+            BarcodeDetectionReticle(bounds: barcodeBounds, format: "UPC-A")
+        }
+        .frame(width: proxy.size.width, height: proxy.size.height)
+    }
+
+    private func screenshotPhotoPreview(image: UIImage, in proxy: GeometryProxy) -> some View {
+        let topInset = proxy.safeAreaInsets.top + photoTopClearance
+        let bottomInset = proxy.safeAreaInsets.bottom
+        let availableHeight = max(0, proxy.size.height - topInset - bottomInset - photoControlsReservedHeight)
+        let side = min(proxy.size.width, availableHeight)
+        let topOffset = topInset + max(0, (availableHeight - side) / 2)
+
+        return Image(uiImage: image)
+            .resizable()
+            .scaledToFill()
+            .frame(width: side, height: side)
+            .clipped()
+            .overlay {
+                if gridVisible {
+                    SquareGrid()
+                        .allowsHitTesting(false)
+                }
+            }
+            .overlay {
+                Rectangle()
+                    .stroke(.white.opacity(0.46), lineWidth: 1)
+                    .allowsHitTesting(false)
+            }
+            .frame(maxWidth: .infinity, alignment: .center)
+            .padding(.top, topOffset)
     }
 
     private var cameraPreview: some View {

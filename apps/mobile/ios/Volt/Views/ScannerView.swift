@@ -44,7 +44,10 @@ struct ScannerView: View {
             }
             .onAppear {
                 store.selectedSection = .scan
-                store.activeMode = .ocr
+                store.activeMode = ScreenshotScenario.current?.initialCaptureMode ?? .ocr
+                if ScreenshotScenario.current?.opensCaptureSession == true {
+                    isCaptureSessionPresented = true
+                }
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 CaptureStartAccessory(
@@ -68,7 +71,7 @@ struct ScannerView: View {
     private func startCapture() {
         guard store.connectionStatus.isConnected else { return }
         store.clearOcrReview()
-        store.activeMode = .ocr
+        store.activeMode = ScreenshotScenario.current?.initialCaptureMode ?? .ocr
         isCaptureSessionPresented = true
     }
 

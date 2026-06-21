@@ -12,6 +12,10 @@ struct RootView: View {
 
     private static let connectionStatusDetent = PresentationDetent.height(112)
 
+    init() {
+        _selectedTab = State(initialValue: ScreenshotScenario.current?.initialSection ?? .scan)
+    }
+
     var body: some View {
         TabView(selection: $selectedTab) {
             ScannerView()
@@ -57,12 +61,19 @@ struct RootView: View {
             showPairingSheet(for: newValue)
         }
         .task {
+            applySelectedTab(selectedTab)
+            if ScreenshotScenario.current == .sessions {
+                connectionSheetStatus = nil
+                connectionSheetDetent = .large
+                isConnectionSheetPresented = true
+                return
+            }
+            guard !ScreenshotScenario.isEnabled else { return }
             await store.camera.requestAccess()
             store.reconnectToMostRecentPairedSessionIfNeeded()
-            applySelectedTab(selectedTab)
         }
         .onChange(of: scenePhase) { _, newValue in
-            if newValue == .active {
+            if newValue == .active && !ScreenshotScenario.isEnabled {
                 store.reconnectToMostRecentPairedSessionIfNeeded()
             }
         }

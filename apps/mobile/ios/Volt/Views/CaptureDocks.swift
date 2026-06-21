@@ -154,7 +154,10 @@ struct OcrReviewControls: View {
                         .font(.subheadline.bold())
                         .foregroundStyle(.white)
                         .frame(minWidth: 104, minHeight: 48)
-                        .background(.black.opacity(0.54), in: Capsule())
+                        .background(.black.opacity(0.86), in: Capsule())
+                        .overlay {
+                            Capsule().stroke(.white.opacity(0.22), lineWidth: 1)
+                        }
                 }
 
                 Spacer()
@@ -164,9 +167,9 @@ struct OcrReviewControls: View {
                     .foregroundStyle(.white)
                     .padding(.horizontal, 14)
                     .frame(minHeight: 48)
-                    .background(.black.opacity(0.54), in: Capsule())
+                    .background(.black.opacity(0.86), in: Capsule())
                     .overlay {
-                        Capsule().stroke(.white.opacity(0.14), lineWidth: 1)
+                        Capsule().stroke(.white.opacity(0.22), lineWidth: 1)
                     }
                     .accessibilityLabel("\(regionCount) recognized text regions")
 
@@ -177,7 +180,10 @@ struct OcrReviewControls: View {
                         .font(.subheadline.bold())
                         .foregroundStyle(.white)
                         .frame(minWidth: 104, minHeight: 48)
-                        .background(.black.opacity(0.54), in: Capsule())
+                        .background(.black.opacity(0.86), in: Capsule())
+                        .overlay {
+                            Capsule().stroke(.white.opacity(0.22), lineWidth: 1)
+                        }
                 }
             }
         }
@@ -186,7 +192,7 @@ struct OcrReviewControls: View {
         .padding(.bottom, 22)
         .background {
             LinearGradient(
-                colors: [.black.opacity(0), .black.opacity(0.78), .black.opacity(0.94)],
+                colors: [.black.opacity(0), .black.opacity(0.88), .black.opacity(0.98)],
                 startPoint: .top,
                 endPoint: .bottom
             )

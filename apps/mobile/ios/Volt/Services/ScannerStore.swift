@@ -63,6 +63,7 @@ final class ScannerStore {
         dictation.onTranscriptChange = { [weak self] text in
             self?.handleDictationTranscriptChange(text)
         }
+        applyScreenshotFixturesIfNeeded()
     }
 
     private static func savedBarcodeRecognitionMode() -> BarcodeRecognitionMode {

@@ -148,6 +148,7 @@ platform :ios do
       output_directory: output_directory,
       clear_previous_screenshots: true,
       stop_after_first_error: true,
+      clean: true,
       devices: ["iPhone 17 Pro Max"],
       languages: ["en-US"],
       launch_arguments: ["--ui-testing", "--screenshots"]
