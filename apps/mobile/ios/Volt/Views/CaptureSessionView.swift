@@ -40,6 +40,10 @@ struct CaptureSessionView: View {
                         guard let selectedTextRegion else { return }
                         store.sendRecognizedText(selectedCleanedText ?? selectedTextRegion.text)
                         self.selectedTextRegion = nil
+                    },
+                    onDismiss: {
+                        selectedTextRegion = nil
+                        selectedCleanedText = nil
                     }
                 )
                 .transition(.scale(scale: 0.96).combined(with: .opacity))
@@ -209,19 +213,34 @@ private struct ExtractedTextActionCard: View {
     let isCleaning: Bool
     let onCleanup: () -> Void
     let onSend: () -> Void
+    let onDismiss: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Extracted Text")
-                    .font(.title3.weight(.bold))
-                    .foregroundStyle(.black)
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Extracted Text")
+                        .font(.title3.weight(.bold))
+                        .foregroundStyle(.black)
 
-                Text(text)
-                    .font(.title3)
-                    .foregroundStyle(.black.opacity(0.62))
-                    .lineLimit(3)
-                    .minimumScaleFactor(0.78)
+                    Text(text)
+                        .font(.title3)
+                        .foregroundStyle(.black.opacity(0.62))
+                        .lineLimit(3)
+                        .minimumScaleFactor(0.78)
+                }
+
+                Spacer(minLength: 0)
+
+                Button(action: onDismiss) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(.black.opacity(0.68))
+                        .frame(width: 34, height: 34)
+                        .background(.black.opacity(0.1), in: Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Close")
             }
 
             VStack(spacing: 12) {

@@ -44,6 +44,21 @@ struct RecognizedTextRegion: Identifiable, Equatable {
     let boundingBox: CGRect
     let quadrilateral: TextQuadrilateral
     let confidence: Float
+    let isDeviceIdentifier: Bool
+
+    init(
+        text: String,
+        boundingBox: CGRect,
+        quadrilateral: TextQuadrilateral,
+        confidence: Float,
+        isDeviceIdentifier: Bool = false
+    ) {
+        self.text = text
+        self.boundingBox = boundingBox
+        self.quadrilateral = quadrilateral
+        self.confidence = confidence
+        self.isDeviceIdentifier = isDeviceIdentifier
+    }
 }
 
 enum DeviceIdentifierRegionExtractor {
@@ -58,7 +73,8 @@ enum DeviceIdentifierRegionExtractor {
             text: match.value,
             boundingBox: region.boundingBox,
             quadrilateral: region.quadrilateral,
-            confidence: region.confidence
+            confidence: region.confidence,
+            isDeviceIdentifier: true
         )
     }
 
@@ -336,6 +352,7 @@ enum TextRecognizer {
                     text: match.value,
                     glyphs: matchedGlyphs,
                     confidence: confidence,
+                    isDeviceIdentifier: true,
                     to: &regions
                 )
                 return
@@ -354,6 +371,7 @@ enum TextRecognizer {
         text: String,
         glyphs: [RecognizedGlyph],
         confidence: Float,
+        isDeviceIdentifier: Bool = false,
         to regions: inout [RecognizedTextRegion]
     ) {
         guard let firstGlyph = glyphs.first else { return }
@@ -366,7 +384,8 @@ enum TextRecognizer {
                 text: text,
                 boundingBox: boundingBox,
                 quadrilateral: quadrilateral,
-                confidence: confidence
+                confidence: confidence,
+                isDeviceIdentifier: isDeviceIdentifier
             )
         )
     }

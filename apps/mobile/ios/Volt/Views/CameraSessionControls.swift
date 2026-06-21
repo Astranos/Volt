@@ -279,17 +279,17 @@ struct LiveIdentifierChip: View {
             HStack(spacing: 6) {
                 Text(candidate.kind.rawValue)
                     .font(.caption.weight(.bold))
-                    .foregroundStyle(.black.opacity(0.72))
+                    .foregroundStyle(.white.opacity(0.78))
                 Text(candidate.value)
                     .font(.caption.monospaced().weight(.semibold))
-                    .foregroundStyle(.black)
+                    .foregroundStyle(.white)
                     .lineLimit(1)
             }
             .padding(.horizontal, 10)
             .frame(height: 30)
-            .background(.cyan.opacity(0.92), in: Capsule())
+            .background(Color.green, in: Capsule())
             .overlay {
-                Capsule().stroke(.white.opacity(0.28), lineWidth: 1)
+                Capsule().stroke(.white.opacity(0.32), lineWidth: 1)
             }
         }
         .buttonStyle(.plain)

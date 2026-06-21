@@ -273,6 +273,7 @@ test("native pre-capture identifiers render as a stable controls readout", () =>
   assert.match(cameraSessionControlsSwiftSource, /"Frame device identifiers"/);
   assert.match(cameraSessionControlsSwiftSource, /"Tap a recognized chip to send"/);
   assert.match(cameraSessionControlsSwiftSource, /Button\(action: onSend\)/);
+  assert.match(cameraSessionControlsSwiftSource, /\.background\(Color\.green, in: Capsule\(\)\)/);
 });
 
 test("native pre-capture identifier chips show quickly and correct repeated replacements", () => {
@@ -293,7 +294,10 @@ test("native post-capture OCR extracts device identifiers from recognized rows",
   assert.match(textRecognizerSwiftSource, /text: match\.value/);
   assert.match(textRecognizerSwiftSource, /if let match = LiveTextIdentifierMatcher\.match\(trimmed\)/);
   assert.match(textRecognizerSwiftSource, /let matchedGlyphs = Self\.glyphs\(in: match\.range, text: trimmed, glyphs: glyphs\)/);
-  assert.match(textRecognizerSwiftSource, /appendGlyphRegion\([\s\S]*text: match\.value/);
+  assert.match(textRecognizerSwiftSource, /appendGlyphRegion\([\s\S]*text: match\.value[\s\S]*isDeviceIdentifier: true/);
+  assert.match(textRecognizerSwiftSource, /let isDeviceIdentifier: Bool/);
+  assert.match(ocrReviewLayerSwiftSource, /region\.isDeviceIdentifier \? \.green\.opacity\(0\.24\) : \.yellow\.opacity\(0\.24\)/);
+  assert.match(ocrReviewLayerSwiftSource, /region\.isDeviceIdentifier \? \.green\.opacity\(0\.9\) : \.yellow\.opacity\(0\.9\)/);
   assert.match(textRecognizerSwiftSource, /return identifierRegions\.isEmpty \? regions : deduplicated\(identifierRegions\)/);
   assert.match(scannerStoreCaptureActionsSwiftSource, /DeviceIdentifierRegionExtractor\.extractedIdentifierRegions\(from: recognizedRegions\)/);
 });
@@ -302,6 +306,8 @@ test("native OCR target dialog can clean selected text before sending", () => {
   assert.match(captureSessionViewSwiftSource, /Button\(action: onSend\) \{[\s\S]*Label\("Send", systemImage: "paperplane\.fill"\)/);
   assert.match(captureSessionViewSwiftSource, /Button\(action: onCleanup\) \{[\s\S]*Label\(isCleaning \? "Cleaning\.\.\." : "Cleanup", systemImage: "wand\.and\.sparkles"\)/);
   assert.match(captureSessionViewSwiftSource, /store\.sendRecognizedText\(selectedCleanedText \?\? selectedTextRegion\.text\)/);
+  assert.match(captureSessionViewSwiftSource, /onDismiss: \{\s*selectedTextRegion = nil\s*selectedCleanedText = nil\s*\}/);
+  assert.match(captureSessionViewSwiftSource, /Button\(action: onDismiss\) \{[\s\S]*Image\(systemName: "xmark"\)/);
   assert.match(captureSessionViewSwiftSource, /let result = await OcrTextCleaner\.clean\(text: region\.text\)/);
   assert.match(captureSessionViewSwiftSource, /private var selectedTextPreview: String/);
 });

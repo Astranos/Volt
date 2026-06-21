@@ -129,11 +129,17 @@ struct OcrReviewLayer: View {
     }
 
     private func fillStyle(for region: RecognizedTextRegion) -> Color {
-        selectedRegion?.id == region.id ? .green.opacity(0.34) : .yellow.opacity(0.24)
+        if selectedRegion?.id == region.id {
+            return .green.opacity(0.34)
+        }
+        return region.isDeviceIdentifier ? .green.opacity(0.24) : .yellow.opacity(0.24)
     }
 
     private func strokeStyle(for region: RecognizedTextRegion) -> Color {
-        selectedRegion?.id == region.id ? .green.opacity(0.92) : .yellow.opacity(0.9)
+        if selectedRegion?.id == region.id {
+            return .green.opacity(0.92)
+        }
+        return region.isDeviceIdentifier ? .green.opacity(0.9) : .yellow.opacity(0.9)
     }
 
     private func aspectFitRect(for imageSize: CGSize, in containerSize: CGSize) -> CGRect {
