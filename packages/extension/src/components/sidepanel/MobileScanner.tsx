@@ -198,10 +198,11 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
           <button
             type="button"
             onClick={openVoltDownloadsFolder}
-            className="mobile-scanner-action sidepanel-results-folder inline-flex h-9 w-9 items-center justify-center rounded-full text-stone-600 transition hover:text-stone-900 active:scale-95 dark:text-stone-300 dark:hover:text-stone-50"
+            className="sidepanel-results-files"
             aria-label="Open Volt Photos folder"
           >
             <FolderOpen className="h-4 w-4" />
+            <span>Files</span>
           </button>
         </div>
       </div>

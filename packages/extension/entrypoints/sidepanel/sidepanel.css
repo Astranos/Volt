@@ -456,6 +456,33 @@ body {
   width: 100%;
 }
 
+.sidepanel-results-files {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: rgba(214, 211, 209, 0.78);
+  cursor: pointer;
+  display: inline-flex;
+  flex: none;
+  font-size: 12px;
+  font-weight: 750;
+  gap: 6px;
+  padding: 0;
+  transition:
+    color 160ms ease,
+    transform 160ms ease;
+}
+
+.sidepanel-results-files:hover {
+  color: #f5f5f4;
+  transform: translateY(-1px);
+}
+
+.sidepanel-results-files svg {
+  height: 15px;
+  width: 15px;
+}
+
 .mobile-scanner-card,
 .mobile-scanner-action,
 .mobile-scanner-icon,
@@ -530,6 +557,14 @@ body {
 
   .sidepanel-results-title {
     color: #57534e;
+  }
+
+  .sidepanel-results-files {
+    color: #57534e;
+  }
+
+  .sidepanel-results-files:hover {
+    color: #1c1917;
   }
 
   .mobile-scanner-mini-action {
@@ -705,11 +740,6 @@ body {
   .sidepanel-results-header {
     min-height: 40px;
     padding: 3px 12px 5px;
-  }
-
-  .sidepanel-results-folder {
-    height: 34px;
-    width: 34px;
   }
 
   .sidepanel-empty-history {
