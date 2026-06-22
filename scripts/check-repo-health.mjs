@@ -127,25 +127,35 @@ reportFailures(
   sourceTextTestViolations,
 );
 
-const easConfigPath = "eas.json";
-const easConfig = existsSync(easConfigPath)
-  ? JSON.parse(readFileSync(easConfigPath, "utf8"))
-  : {};
+const expoConfigFiles = [
+  "app.json",
+  "app.config.js",
+  "app.config.mjs",
+  "app.config.ts",
+  "eas.json",
+].filter((file) => existsSync(file));
 reportFailures(
-  "Expo-hosted EAS Build profiles",
-  easConfig.build ? [easConfigPath] : [],
+  "Expo or EAS configuration files",
+  expoConfigFiles,
 );
 
-const packageScriptBuildViolations = [];
+const packageExpoViolations = [];
 for (const file of trackedFiles.filter((file) => file.endsWith("package.json"))) {
   const packageJson = JSON.parse(readFileSync(file, "utf8"));
   for (const [scriptName, scriptCommand] of Object.entries(packageJson.scripts ?? {})) {
-    if (/\beas\s+build\b/.test(scriptCommand)) {
-      packageScriptBuildViolations.push(`${file} scripts.${scriptName}`);
+    if (/\b(eas|expo)\b/.test(scriptCommand)) {
+      packageExpoViolations.push(`${file} scripts.${scriptName}`);
+    }
+  }
+  for (const dependencyField of ["dependencies", "devDependencies", "optionalDependencies"]) {
+    for (const dependencyName of Object.keys(packageJson[dependencyField] ?? {})) {
+      if (/^(expo|@expo\/|eas-cli$)/.test(dependencyName)) {
+        packageExpoViolations.push(`${file} ${dependencyField}.${dependencyName}`);
+      }
     }
   }
 }
-reportFailures("package scripts that invoke eas build", packageScriptBuildViolations);
+reportFailures("package scripts or dependencies that use Expo/EAS", packageExpoViolations);
 
 if (failed) {
   process.exitCode = 1;

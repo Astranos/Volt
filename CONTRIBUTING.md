@@ -38,7 +38,7 @@ pnpm --filter @volt/mobile build:ios
 
 The iOS compile check should use the repository script above. It targets the generic iOS Simulator destination and does not require forcing a concrete simulator ID.
 
-Mobile build artifacts should be produced locally with Xcode or fastlane. Do not add `eas build` scripts or EAS build profiles; EAS is only used to submit an already-exported IPA to App Store Connect.
+Mobile build artifacts should be produced locally with Xcode or fastlane. Do not add third-party hosted mobile builder configuration, dependencies, or scripts.
 
 ## Pull Requests
 
@@ -47,6 +47,8 @@ Mobile build artifacts should be produced locally with Xcode or fastlane. Do not
 - Include manual verification steps for extension, mobile, or browser flows that are not covered by automated tests.
 - Update documentation when setup, commands, permissions, or architecture decisions change.
 
+CodeRabbit reviews are configured in `.coderabbit.yaml` and run automatically on non-draft pull requests once the CodeRabbit GitHub App is installed for this repository. Maintainers can request another pass with `@coderabbitai review`, request a fresh full review with `@coderabbitai full review`, or skip a pull request with the `do-not-review` label or `[skip review]` in the title.
+
 ## Code Style
 
-Follow the existing TypeScript, React, Swift, and Expo patterns in the touched package. Prefer small, reviewable changes over broad rewrites.
+Follow the existing TypeScript, React, and Swift patterns in the touched package. Prefer small, reviewable changes over broad rewrites.

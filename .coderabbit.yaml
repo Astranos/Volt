@@ -1,0 +1,66 @@
+language: en-US
+tone_instructions: "Be direct and practical. Prioritize correctness, security, maintainability, and missing tests over style-only feedback."
+
+reviews:
+  profile: assertive
+  request_changes_workflow: false
+  high_level_summary: true
+  review_status: true
+  review_details: true
+  commit_status: true
+  fail_commit_status: true
+  collapse_walkthrough: true
+  changed_files_summary: true
+  sequence_diagrams: false
+  poem: false
+  path_filters:
+    - "!**/node_modules/**"
+    - "!**/dist/**"
+    - "!**/build/**"
+    - "!**/.next/**"
+    - "!**/coverage/**"
+    - "!**/ios/Pods/**"
+    - "!**/*.xcworkspace/**"
+    - "!**/*.xcodeproj/**"
+  path_instructions:
+    - path: "convex/**"
+      instructions: "Apply the Convex rules from convex/_generated/ai/guidelines.md and flag API, schema, or authorization issues."
+    - path: "apps/mobile/**"
+      instructions: "Review Expo, React Native, Swift, and iOS build changes against the repository guidance in AGENTS.md. Prefer the existing pnpm mobile build script for compile verification."
+    - path: "packages/scanner-protocol/**"
+      instructions: "Treat protocol changes as cross-package contracts. Look for compatibility breaks and require focused tests for scanner session behavior."
+  auto_review:
+    enabled: true
+    auto_incremental_review: true
+    auto_pause_after_reviewed_commits: 5
+    drafts: false
+    base_branches:
+      - "main"
+    ignore_title_keywords:
+      - "WIP"
+      - "[skip review]"
+    ignore_usernames:
+      - "dependabot[bot]"
+      - "github-actions[bot]"
+    labels:
+      - "!do-not-review"
+  tools:
+    github-checks:
+      enabled: true
+      timeout_ms: 900000
+    shellcheck:
+      enabled: true
+    markdownlint:
+      enabled: true
+
+chat:
+  art: false
+  auto_reply: false
+
+knowledge_base:
+  code_guidelines:
+    enabled: true
+  learnings:
+    scope: local
+  pull_requests:
+    scope: local

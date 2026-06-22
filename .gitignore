@@ -13,8 +13,6 @@ lerna-debug.log*
 !**/.env.example
 
 node_modules
-.expo/
-apps/mobile/.expo/
 .output
 stats.html
 stats-*.json

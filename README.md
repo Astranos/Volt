@@ -81,12 +81,12 @@ pnpm build:extension
 pnpm zip:extension
 ```
 
-The root `pnpm build` command includes the native mobile build and requires Xcode. Mobile build and release archives are produced locally with Xcode or fastlane; this repo does not use Expo-hosted EAS Build workers.
+The root `pnpm build` command includes the native mobile build and requires Xcode. Mobile build and release archives are produced locally with Xcode or fastlane.
 
-For App Store Connect releases, export a signed native IPA with Xcode or fastlane, then use EAS only as the submission transport:
+For App Store Connect releases, use fastlane to build a signed IPA and upload it to TestFlight:
 
 ```sh
-pnpm exec eas submit -p ios --profile production --path <path-to-ipa>
+pnpm --filter @volt/mobile ios:beta
 ```
 
 ## Documentation
