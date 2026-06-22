@@ -57,6 +57,22 @@ a {
   animation: scan-beam 2.8s ease-in-out infinite;
 }
 
+.mobile-feature-carousel {
+  contain: layout paint;
+  mask-image: linear-gradient(to right, transparent, black 7%, black 93%, transparent);
+  max-width: 100%;
+  width: 100%;
+}
+
+.mobile-feature-track {
+  animation: mobile-feature-scroll 48s linear infinite;
+}
+
+.mobile-feature-carousel:hover .mobile-feature-track,
+.mobile-feature-carousel:focus-within .mobile-feature-track {
+  animation-play-state: paused;
+}
+
 @keyframes scan-beam {
   0%,
   100% {
@@ -67,5 +83,26 @@ a {
   50% {
     transform: translateY(132px);
     opacity: 1;
+  }
+}
+
+@keyframes mobile-feature-scroll {
+  from {
+    transform: translateX(0);
+  }
+
+  to {
+    transform: translateX(calc(-50%));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mobile-feature-track {
+    animation: none;
+  }
+
+  .mobile-feature-carousel {
+    overflow-x: auto;
+    mask-image: none;
   }
 }

@@ -140,79 +140,47 @@ export default function UnifiedSidepanel() {
 
   const ActiveComponent =
     tools.find((t) => t.id === activeTool)?.component || MobileScanner;
-  const activeToolIndex = Math.max(
-    0,
-    tools.findIndex((tool) => tool.id === activeTool),
-  );
+  const activeToolMeta = tools.find((tool) => tool.id === activeTool) ?? tools[0];
+  const ActiveToolIcon = activeToolMeta.icon;
 
   const toneStyles = toast ? TOAST_TONE_STYLES[toast.tone] : null;
   const ToastIcon = toneStyles?.icon;
 
   return (
     <div className="sidepanel-shell sidepanel-frame h-full w-full flex flex-col">
-      {/* Fixed Header */}
-      <div className="sidepanel-tool-switch-wrap sidepanel-tool-header">
-        <div className="sidepanel-tool-switch">
+      {/* Main content - Flex 1 to take remaining space, overflow hidden to prevent double scrollbars */}
+      <div className="sidepanel-content-frame flex flex-1 flex-col overflow-hidden">
+        <div className="sidepanel-inline-tool-title-wrap">
           <div
-            role="radiogroup"
-            aria-label="Sidepanel tool"
+            aria-label={`Current tool: ${activeToolMeta.label}`}
             className={cn(
-              "sidepanel-tool-options",
+              "sidepanel-inline-tool-title",
               toast ? "-translate-y-1 opacity-0" : "translate-y-0 opacity-100",
             )}
             aria-hidden={toast ? "true" : undefined}
           >
-            <span
-              className={cn(
-                "sidepanel-tool-indicator",
-                activeToolIndex === 0 ? "is-left" : "is-right",
-              )}
-            />
-            {tools.map((tool) => (
-              <button
-                key={tool.id}
-                type="button"
-                role="radio"
-                aria-checked={activeTool === tool.id}
-                aria-label={tool.label}
-                onClick={() => handleToolChange(tool.id)}
-                className={cn(
-                  "sidepanel-tool-option",
-                  activeTool === tool.id && "is-active",
-                )}
-              >
-                <tool.icon
-                  className="sidepanel-tool-option-icon"
-                />
-                <span className="sidepanel-tool-option-label">
-                  {tool.label}
-                </span>
-              </button>
-            ))}
+            <ActiveToolIcon className="sidepanel-inline-tool-icon" />
+            <span>{activeToolMeta.label}</span>
           </div>
-          <span className="pointer-events-none absolute inset-1.5 flex min-w-0 items-center px-3">
-            {toast && ToastIcon ? (
-              <span
-                key={toast.id}
-                aria-live="polite"
-                className={cn(
-                  "volt-toast-enter flex min-w-0 items-center gap-3 text-base font-bold",
-                  toneStyles?.text,
-                )}
-              >
-                <ToastIcon className="h-5 w-5 shrink-0" />
-                <span className="whitespace-normal break-words leading-tight">{toast.message}</span>
-              </span>
-            ) : null}
-          </span>
+          {toast && ToastIcon ? (
+            <span
+              key={toast.id}
+              aria-live="polite"
+              className={cn(
+                "volt-toast-enter sidepanel-inline-toast",
+                toneStyles?.text,
+              )}
+            >
+              <ToastIcon className="h-4 w-4 shrink-0" />
+              <span className="min-w-0 truncate">{toast.message}</span>
+            </span>
+          ) : null}
         </div>
-      </div>
-
-      {/* Main content - Flex 1 to take remaining space, overflow hidden to prevent double scrollbars */}
-      <div className="sidepanel-content-frame flex-1 overflow-hidden">
-        <ActiveComponent
-          onClose={() => handleToolChange("mobile-scanner")}
-        />
+        <div className="min-h-0 flex-1 overflow-hidden">
+          <ActiveComponent
+            onClose={() => handleToolChange("mobile-scanner")}
+          />
+        </div>
       </div>
     </div>
   );

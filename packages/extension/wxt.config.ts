@@ -4,6 +4,9 @@ import tailwindcss from "@tailwindcss/vite";
 // See https://wxt.dev/api/config.html
 export default defineConfig({
   modules: ["@wxt-dev/module-react"],
+  webExt: {
+    disabled: process.env.VOLT_MANUAL_CHROME === "1",
+  },
   // Use the official Tailwind v4 Vite plugin for class scanning + HMR.
   vite: () => ({ plugins: [tailwindcss()] }) as WxtViteConfig,
   outDir: ".output", // Base output directory
@@ -80,6 +83,7 @@ export default defineConfig({
       128: "assets/icons/logo-128.png",
     },
     action: {
+      default_popup: "mobile-scanner-popup.html",
       default_icon: {
         16: "assets/icons/logo-16.png",
         32: "assets/icons/logo-32.png",
@@ -106,13 +110,6 @@ export default defineConfig({
       },
     ],
     commands: {
-      _execute_action: {
-        suggested_key: {
-          default: "Ctrl+Shift+K",
-          mac: "Command+Shift+K",
-        },
-        description: "Open Volt Command Palette",
-      },
       "open-options": {
         suggested_key: {
           default: "Ctrl+Shift+O",

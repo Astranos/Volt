@@ -222,6 +222,94 @@
   gap: 8px;
 }
 
+.newtab-mobile-status {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--nt-border);
+  border-radius: 999px;
+  color: var(--nt-text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 650;
+  gap: 7px;
+  height: 34px;
+  padding: 0 12px;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    transform 160ms ease;
+}
+
+.newtab-mobile-status svg {
+  height: 16px;
+  width: 16px;
+}
+
+.newtab-mobile-status:hover {
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(22, 163, 74, 0.28);
+  color: var(--nt-text);
+  transform: translateY(-1px);
+}
+
+.newtab-mobile-status.is-paired {
+  color: #047857;
+}
+
+.newtab-mobile-status.is-ready {
+  background: rgba(20, 83, 45, 0.1);
+  border-color: rgba(20, 83, 45, 0.24);
+  color: #14532d;
+}
+
+.newtab-mobile-status.is-creating {
+  color: #047857;
+}
+
+.newtab-mobile-status.is-inactive {
+  color: var(--nt-text-muted);
+}
+
+@media (prefers-color-scheme: dark) {
+  .newtab-mobile-status {
+    background: rgba(23, 23, 23, 0.74);
+    border-color: rgba(212, 212, 212, 0.16);
+    color: #d4d4d4;
+  }
+
+  .newtab-mobile-status:hover {
+    background: rgba(38, 38, 38, 0.9);
+    border-color: rgba(34, 197, 94, 0.34);
+    color: #fafafa;
+  }
+
+  .newtab-mobile-status.is-paired {
+    background: rgba(20, 83, 45, 0.44);
+    border-color: rgba(74, 222, 128, 0.32);
+    color: #86efac;
+  }
+
+  .newtab-mobile-status.is-ready {
+    background: rgba(5, 46, 22, 0.62);
+    border-color: rgba(34, 197, 94, 0.34);
+    color: #bbf7d0;
+  }
+
+  .newtab-mobile-status.is-creating {
+    background: rgba(20, 83, 45, 0.44);
+    border-color: rgba(74, 222, 128, 0.32);
+    color: #86efac;
+  }
+
+  .newtab-mobile-status.is-inactive {
+    background: rgba(38, 38, 38, 0.72);
+    border-color: rgba(212, 212, 212, 0.14);
+    color: #d4d4d4;
+  }
+}
+
 /* ============================================================
    Hero (greeting, clock, date)
    ============================================================ */
