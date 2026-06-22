@@ -61,11 +61,17 @@ a {
   contain: layout paint;
   mask-image: linear-gradient(to right, transparent, black 7%, black 93%, transparent);
   max-width: 100%;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
   width: 100%;
 }
 
+.mobile-feature-carousel::-webkit-scrollbar {
+  display: none;
+}
+
 .mobile-feature-track {
-  animation: mobile-feature-scroll 48s linear infinite;
+  animation: mobile-feature-scroll 108s linear infinite;
 }
 
 .mobile-feature-carousel:hover .mobile-feature-track,
@@ -97,12 +103,7 @@ a {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .mobile-feature-track {
-    animation: none;
-  }
-
   .mobile-feature-carousel {
-    overflow-x: auto;
     mask-image: none;
   }
 }

@@ -80,11 +80,6 @@ const browserFeatures = [
 
 const mobileScreenshots = [
   {
-    src: "/assets/product/mobile-01-connected-sessions.png",
-    title: "Saved sessions",
-    body: "Reconnect the iPhone scanner to a trusted browser session.",
-  },
-  {
     src: "/assets/product/mobile-02-capture-text-chip.png",
     title: "Text mode",
     body: "Aim at labels, model numbers, and serials while keeping capture controls close.",
@@ -124,9 +119,12 @@ const mobileScreenshots = [
     title: "Upload batches",
     body: "Track photo transfer batches during desktop handoff.",
   },
+  {
+    src: "/assets/product/mobile-01-connected-sessions.png",
+    title: "Saved sessions",
+    body: "Reconnect the iPhone scanner to a trusted browser session.",
+  },
 ];
-
-const mobileCarouselScreenshots = [...mobileScreenshots, ...mobileScreenshots];
 
 const platformItems = [
   {
@@ -312,7 +310,7 @@ function ResaleFlowSection() {
 function CaptureSection() {
   return (
     <section id="scanner" className="border-b border-zinc-200 bg-zinc-50">
-      <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
+      <div className="mx-auto max-w-7xl px-4 pt-16 sm:px-6 lg:px-8 lg:pt-24">
         <div className="grid gap-10 lg:grid-cols-[0.78fr_1.22fr]">
           <div>
             <p className="text-sm font-semibold text-zinc-500">Mobile capture</p>
@@ -335,14 +333,18 @@ function CaptureSection() {
             ))}
           </div>
         </div>
+      </div>
 
-        <div className="mt-10">
-          <div className="mobile-feature-carousel min-w-0 max-w-full overflow-hidden rounded-[1.35rem] border border-zinc-200 bg-white py-4">
-            <div className="mobile-feature-track flex w-max gap-4 px-4">
-              {mobileCarouselScreenshots.map((item, index) => (
-                <MobileFeatureShot key={`${item.title}-${index}`} {...item} />
-              ))}
-            </div>
+      <div className="py-12 lg:py-16">
+        <div className="mobile-feature-carousel min-w-0 overflow-x-auto overflow-y-hidden py-1" aria-label="Volt mobile capture screenshots">
+          <div className="mobile-feature-track flex w-max">
+            {[0, 1].map((groupIndex) => (
+              <div key={groupIndex} className="mobile-feature-group flex shrink-0 gap-4 px-2" aria-hidden={groupIndex === 1}>
+                {mobileScreenshots.map((item) => (
+                  <MobileFeatureShot key={`${groupIndex}-${item.title}`} {...item} />
+                ))}
+              </div>
+            ))}
           </div>
         </div>
       </div>
@@ -621,21 +623,15 @@ function MockColumn({
 }
 
 function MobileFeatureShot({
-  body,
   src,
   title,
 }: {
-  body: string;
   src: string;
   title: string;
 }) {
   return (
     <article className="w-[18rem] shrink-0 overflow-hidden rounded-[1.35rem] border border-zinc-200 bg-white shadow-sm">
       <img src={src} alt={`${title} screenshot`} className="w-full bg-zinc-100 object-contain" />
-      <div className="p-4">
-        <h3 className="text-sm font-semibold text-zinc-950">{title}</h3>
-        <p className="mt-2 text-sm leading-6 text-zinc-600">{body}</p>
-      </div>
     </article>
   );
 }
