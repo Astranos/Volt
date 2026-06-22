@@ -31,7 +31,7 @@ const workflows: Workflow[] = [
   {
     title: "Volt new tab",
     description:
-      "Start browser work from the Volt dashboard with provider search, saved links, and recently closed tabs.",
+      "Start resale work from the Volt dashboard with provider search, saved links, and recently closed tabs.",
     icon: LayoutDashboard,
   },
   {
@@ -43,7 +43,7 @@ const workflows: Workflow[] = [
   {
     title: "UPC capture",
     description:
-      "Detect UPCs on product pages, copy them quickly, and reduce the manual steps that slow down listing.",
+      "Detect UPCs on product pages, copy them quickly, or bring fresh barcode scans in from the paired iPhone app.",
     icon: Barcode,
   },
   {
@@ -64,11 +64,11 @@ function Install() {
             <img
               src="/assets/volt.webp"
               alt="Volt"
-              className="h-10 w-10 rounded-lg border border-slate-200 bg-white"
+              className="h-10 w-10 rounded-[0.75rem] border border-slate-200 bg-white"
             />
             <div>
               <p className="text-sm font-semibold leading-5">Volt</p>
-              <p className="text-xs text-slate-500">Chrome extension</p>
+              <p className="text-xs text-slate-500">Chrome workflow + iPhone scanner</p>
             </div>
           </div>
 
@@ -80,20 +80,23 @@ function Install() {
       </header>
 
       <section className="mx-auto grid max-w-6xl gap-6 px-5 py-8 lg:grid-cols-[1.05fr_0.95fr]">
-        <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="rounded-[1.35rem] border border-slate-200 bg-white p-6 shadow-sm">
           <div className="mb-6 flex items-start justify-between gap-6">
             <div>
               <p className="mb-3 text-xs font-semibold uppercase tracking-[0.14em] text-emerald-700">
                 Ready to use
               </p>
               <h1 className="max-w-2xl text-3xl font-semibold tracking-tight text-slate-950 md:text-4xl">
-                Set up Volt in under a minute.
+                Set up the browser side of Volt.
               </h1>
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600">
+                Pin the extension, keep the dashboard, and open the side panel when you want to pair the iPhone scanner for barcode, OCR, dictation, and photo capture.
+              </p>
             </div>
             <img
               src="/assets/volt.webp"
               alt=""
-              className="hidden h-16 w-16 rounded-lg border border-slate-200 bg-white md:block"
+              className="hidden h-16 w-16 rounded-[0.95rem] border border-slate-200 bg-white md:block"
             />
           </div>
 
@@ -111,14 +114,14 @@ function Install() {
             <SetupStep
               icon={PanelRight}
               title="Open the side panel"
-              body="Use the toolbar action for scanner pairing, photos, tab tools, settings, and workflow helpers."
+              body="Use the toolbar action for iPhone scanner pairing, received photos, tab tools, settings, and workflow helpers."
             />
           </div>
 
           <div className="mt-6 flex flex-wrap gap-2">
             <a
               href="chrome://extensions"
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800 hover:border-slate-300 hover:bg-slate-50"
+              className="inline-flex items-center gap-2 rounded-[0.85rem] border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800 hover:border-slate-300 hover:bg-slate-50"
             >
               <Settings className="h-4 w-4 text-slate-500" />
               Manage extensions
@@ -126,7 +129,7 @@ function Install() {
             </a>
             <a
               href="chrome://newtab"
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800 hover:border-slate-300 hover:bg-slate-50"
+              className="inline-flex items-center gap-2 rounded-[0.85rem] border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800 hover:border-slate-300 hover:bg-slate-50"
             >
               <LayoutDashboard className="h-4 w-4 text-slate-500" />
               Open new tab
@@ -135,51 +138,51 @@ function Install() {
           </div>
         </div>
 
-        <div className="rounded-lg border border-slate-200 bg-slate-950 p-6 text-white shadow-sm">
+        <div className="rounded-[1.35rem] border border-slate-200 bg-slate-950 p-6 text-white shadow-sm">
           <div className="mb-5 flex items-center justify-between gap-3">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-emerald-300">
                 New tab
               </p>
               <h2 className="mt-2 text-2xl font-semibold tracking-tight">
-                Search and session tools moved into the dashboard.
+                Search, scanner, and session tools work as one flow.
               </h2>
             </div>
             <Chrome className="h-7 w-7 text-emerald-300" />
           </div>
 
-          <div className="overflow-hidden rounded-lg border border-white/10 bg-white/[0.04] p-4">
-            <div className="rounded-md bg-white p-3 text-slate-950">
+          <div className="overflow-hidden rounded-[0.95rem] border border-white/10 bg-white/[0.04] p-4">
+            <div className="rounded-[0.75rem] bg-white p-3 text-slate-950">
               <div className="mb-3 flex items-center justify-between border-b border-slate-200 pb-2">
                 <div className="flex items-center gap-2 text-xs font-semibold">
-                  <img src="/assets/volt.webp" alt="" className="h-5 w-5 rounded" />
-                  Volt Resale
+                  <img src="/assets/volt.webp" alt="" className="h-5 w-5 rounded-[0.35rem]" />
+                  Volt
                 </div>
                 <LayoutDashboard className="h-4 w-4 text-slate-500" />
               </div>
               <div className="grid gap-3 md:grid-cols-[1.2fr_0.8fr]">
                 <div className="space-y-2">
                   {["Google", "PriceCharting", "UPC", "eBay", "Shopify"].map((item) => (
-                    <div key={item} className="h-8 rounded bg-slate-100 px-3 py-2 text-xs font-medium text-slate-600">
+                    <div key={item} className="h-8 rounded-[0.65rem] bg-slate-100 px-3 py-2 text-xs font-medium text-slate-600">
                       {item}
                     </div>
                   ))}
                 </div>
                 <div className="space-y-2">
-                  <div className="h-8 rounded bg-emerald-100 px-3 py-2 text-xs font-semibold text-emerald-700">
+                  <div className="h-8 rounded-[0.65rem] bg-emerald-100 px-3 py-2 text-xs font-semibold text-emerald-700">
                     Quick links
                   </div>
-                  <div className="h-8 rounded bg-slate-100" />
-                  <div className="h-8 rounded bg-slate-100" />
-                  <div className="h-8 rounded bg-slate-100" />
+                  <div className="h-8 rounded-[0.65rem] bg-slate-100" />
+                  <div className="h-8 rounded-[0.65rem] bg-slate-100" />
+                  <div className="h-8 rounded-[0.65rem] bg-slate-100" />
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="mt-5 rounded-lg border border-emerald-400/20 bg-emerald-400/10 p-4 text-sm leading-6 text-emerald-50">
-            The new tab is now the home for provider search, saved links, and
-            fast tab recovery.
+          <div className="mt-5 rounded-[0.95rem] border border-emerald-400/20 bg-emerald-400/10 p-4 text-sm leading-6 text-emerald-50">
+            The browser surfaces handle research, pricing, and tab recovery while
+            the iPhone scanner sends capture results back into the same workflow.
           </div>
         </div>
       </section>
@@ -190,7 +193,7 @@ function Install() {
             Core workflows
           </p>
           <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">
-            What Volt adds to Chrome
+            How the extension and scanner complement each other
           </h2>
         </div>
 
@@ -204,8 +207,8 @@ function Install() {
       <section className="mx-auto grid max-w-6xl gap-4 px-5 pb-10 md:grid-cols-3">
         <UtilityCard
           icon={Smartphone}
-          title="Mobile scanner"
-          body="Pair the iPhone app with the side panel to send scans, dictation, and photos into the browser workflow."
+          title="iPhone scanner"
+          body="Pair the iPhone app with the side panel to send barcodes, OCR text, dictation, and photos into the browser workflow."
         />
         <UtilityCard
           icon={RotateCcw}
@@ -232,8 +235,8 @@ function SetupStep({
   body: string;
 }) {
   return (
-    <div className="flex gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-emerald-700 shadow-sm">
+    <div className="flex gap-3 rounded-[0.95rem] border border-slate-200 bg-slate-50 p-4">
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[0.65rem] bg-white text-emerald-700 shadow-sm">
         <Icon className="h-4 w-4" />
       </div>
       <div>
@@ -247,7 +250,7 @@ function SetupStep({
 function WorkflowCard({ workflow }: { workflow: Workflow }) {
   const Icon = workflow.icon;
   return (
-    <article className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+    <article className="overflow-hidden rounded-[1.35rem] border border-slate-200 bg-white shadow-sm">
       <div
         className={
           workflow.accent === "warning"
@@ -262,8 +265,8 @@ function WorkflowCard({ workflow }: { workflow: Workflow }) {
           <div
             className={
               workflow.accent === "warning"
-                ? "rounded-md bg-amber-100 p-2 text-amber-700"
-                : "rounded-md bg-emerald-100 p-2 text-emerald-700"
+                ? "rounded-[0.65rem] bg-amber-100 p-2 text-amber-700"
+                : "rounded-[0.65rem] bg-emerald-100 p-2 text-emerald-700"
             }
           >
             <Icon className="h-4 w-4" />
@@ -286,8 +289,8 @@ function UtilityCard({
   body: string;
 }) {
   return (
-    <article className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100 text-slate-700">
+    <article className="rounded-[1.35rem] border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-[0.75rem] bg-slate-100 text-slate-700">
         <Icon className="h-5 w-5" />
       </div>
       <h3 className="text-sm font-semibold text-slate-950">{title}</h3>

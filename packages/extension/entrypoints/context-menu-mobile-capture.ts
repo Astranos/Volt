@@ -1,5 +1,7 @@
 /* global chrome */
 
+import { defineUnlistedScript } from "wxt/utils/define-unlisted-script";
+
 type MobileCaptureMode = "ocr" | "barcode" | "dictation";
 
 type ChromeRuntimeApi = {
@@ -196,3 +198,5 @@ export function createMobileCaptureController({
     openMobileCapture,
   };
 }
+
+export default defineUnlistedScript(() => {});

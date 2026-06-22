@@ -8,6 +8,10 @@ struct ScannerPeerTarget: Equatable {
     var cursorLabel: String?
     var browser: String?
 
+    var isWebPageSession: Bool {
+        browser == "Browser"
+    }
+
     var displayText: String {
         if let sessionLabel, !sessionLabel.isEmpty {
             sessionLabel
@@ -16,7 +20,7 @@ struct ScannerPeerTarget: Equatable {
         } else if let tabTitle, !tabTitle.isEmpty {
             tabTitle
         } else {
-            "Chrome"
+            browser ?? "Chrome"
         }
     }
 }

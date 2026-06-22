@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { CheckCircle2, Copy, Loader2, Pencil, RefreshCw, Smartphone, X } from "lucide-react";
+import { Calculator, CheckCircle2, Loader2, Pencil, Settings, Smartphone, X } from "lucide-react";
 import QRCode from "qrcode";
 import type { ScannerConnectionStatus } from "@volt/scanner-protocol";
 import {
   PrimaryActionButton,
   SecondaryActionButton,
 } from "../../src/components/sidepanel/mobile-shared";
+import type { SidepanelToolId } from "../../src/lib/sidepanel-tools";
 import {
   getMobileScannerExtensionIdentity,
   saveMobileScannerSessionLabel,
@@ -51,7 +52,6 @@ function MobileScannerPopup() {
     mode: requestedMode,
   });
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
   const [sessionLabel, setSessionLabel] = useState("");
   const [identityLoaded, setIdentityLoaded] = useState(false);
   const [labelSaved, setLabelSaved] = useState(false);
@@ -218,103 +218,110 @@ function MobileScannerPopup() {
     };
   }, []);
 
-  const copyLink = useCallback(async () => {
-    if (!state.qrCodeUrl) return;
-    await navigator.clipboard.writeText(state.qrCodeUrl);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1200);
-  }, [state.qrCodeUrl]);
+  const openSidepanelTool = useCallback(async (tool: SidepanelToolId) => {
+    await chrome.runtime.sendMessage({ action: "openInSidebar", tool });
+    window.close();
+  }, []);
 
-  const title = state.status === "connected" ? "iPhone connected" : "Pair iPhone";
-  const activeMode = state.mode ?? requestedMode;
-  const subtitle = activeMode ? modeLabels[activeMode] : "Mobile scanner";
-  const isCreating = state.status === "creating";
+  const openSettings = useCallback(async () => {
+    await chrome.runtime.sendMessage({ action: "open-settings" });
+    window.close();
+  }, []);
+
+  const title = "Mobile Scanner";
+  const subtitle = state.status === "connected" ? "Connected to this browser" : "Scan QR code with app";
   const showQr = Boolean(qrDataUrl) && (state.status === "waiting" || state.status === "connected");
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-stone-50 text-stone-950">
-      <header className="flex flex-none items-center justify-between gap-3 border-b border-stone-200 bg-white px-4 py-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-green-100 text-green-700">
+    <div className="popup-shell">
+      <section className="popup-hero">
+        <div className="popup-title-row">
+          <span className="popup-icon">
             {state.status === "connected" ? <CheckCircle2 className="h-5 w-5" /> : <Smartphone className="h-5 w-5" />}
           </span>
-          <div className="min-w-0">
-            <div className="truncate text-sm font-bold">{title}</div>
-            <div className="truncate text-xs font-medium text-stone-500">{subtitle}</div>
+          <div className="popup-title-copy">
+            <h1>{title}</h1>
+            <p>{subtitle}</p>
           </div>
+          <button
+            type="button"
+            className="popup-settings-button"
+            onClick={() => void openSettings()}
+            aria-label="Open settings"
+            title="Open settings"
+          >
+            <Settings className="h-4 w-4" />
+          </button>
         </div>
-        <PopupStatus status={state.status} />
-      </header>
 
-      <section className="flex flex-none flex-col gap-1 border-b border-stone-200 bg-white px-5 py-2">
-        <label className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-stone-500">
-          <Pencil className="h-3 w-3" />
-          Chrome session name
-        </label>
-        <input
-          value={sessionLabel}
-          onChange={(event) => setSessionLabel(event.target.value)}
-          onBlur={() => void saveSessionLabel().catch(() => {})}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              event.currentTarget.blur();
-            }
-          }}
-          disabled={!identityLoaded}
-          maxLength={80}
-          className="h-9 w-full rounded-lg border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-900 outline-none transition focus:border-green-500 focus:ring-2 focus:ring-green-500/20 disabled:opacity-60"
-          placeholder="Chrome session"
-          aria-label="Chrome session name"
-        />
-        <div className="min-h-3 text-[11px] font-medium leading-3 text-stone-500">
-          {labelSaved ? "Saved for future QR sessions" : "Reused by this browser profile"}
+        <div className="popup-session-card">
+          <label className="popup-session-label">
+            <span className="popup-session-label-main">
+              <Pencil className="h-3 w-3" />
+              Session name
+            </span>
+            {labelSaved ? <span className="popup-session-saved">Saved</span> : null}
+          </label>
+          <input
+            value={sessionLabel}
+            onChange={(event) => setSessionLabel(event.target.value)}
+            onBlur={() => void saveSessionLabel().catch(() => {})}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.currentTarget.blur();
+              }
+            }}
+            disabled={!identityLoaded}
+            maxLength={80}
+            className="popup-session-input"
+            placeholder="Chrome session"
+            aria-label="Chrome session name"
+          />
         </div>
       </section>
 
-      <main className="flex min-h-0 flex-1 flex-col items-center justify-center px-5 py-4">
+      <main className="popup-main">
         {showQr && qrDataUrl ? (
           <PopupQrCode qrDataUrl={qrDataUrl} />
         ) : state.status === "connected" ? (
-          <div className="flex flex-col items-center text-center">
-            <span className="flex h-16 w-16 items-center justify-center rounded-full bg-green-500 text-white">
+          <div className="popup-message">
+            <span className="popup-message-icon popup-message-icon-success">
               <CheckCircle2 className="h-8 w-8" />
             </span>
-            <div className="mt-4 text-base font-bold">Connected</div>
-            <p className="mt-1 max-w-[260px] text-sm text-stone-500">
+            <div className="popup-message-title">Connected</div>
+            <p>
               Continue scanning on your phone. Results land in the sidepanel.
             </p>
           </div>
         ) : (
-          <div className="flex flex-col items-center text-center">
-            <span className="flex h-16 w-16 items-center justify-center rounded-full bg-stone-100 text-stone-500">
+          <div className="popup-message">
+            <span className="popup-message-icon">
               {state.status === "error" ? <X className="h-7 w-7" /> : <Loader2 className="h-7 w-7 animate-spin" />}
             </span>
-            <div className="mt-4 text-base font-bold">
+            <div className="popup-message-title">
               {state.status === "error" ? "Could not create QR" : "Preparing QR"}
             </div>
-            <p className="mt-1 max-w-[260px] text-sm text-stone-500">
+            <p>
               {state.error ?? "Creating a secure mobile scanner session."}
             </p>
           </div>
         )}
       </main>
 
-      <footer className="flex flex-none gap-2 border-t border-stone-200 bg-white px-4 py-3">
+      <footer className="popup-actions">
         <SecondaryActionButton
-          onClick={copyLink}
-          disabled={!state.qrCodeUrl}
-          className="flex-1"
+          onClick={() => void openSidepanelTool("top-offers")}
+          className="popup-action-button"
         >
-          <Copy className="h-4 w-4" />
-          {copied ? "Copied" : "Copy"}
+          <Calculator className="h-4 w-4" />
+          Offer Calculator
         </SecondaryActionButton>
         <PrimaryActionButton
-          onClick={() => startSession(true)}
-          disabled={isCreating}
-          className="flex-1"
+          onClick={() => void openSidepanelTool("mobile-scanner")}
+          className="popup-action-button"
         >
-          {isCreating ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-          New QR
+          <Smartphone className="h-4 w-4" />
+          Mobile Scanner
         </PrimaryActionButton>
       </footer>
     </div>
@@ -330,32 +337,6 @@ function PopupQrCode({ qrDataUrl }: { qrDataUrl: string }) {
         className="popup-qr-image"
       />
     </div>
-  );
-}
-
-function PopupStatus({ status }: { status: ScannerConnectionStatus }) {
-  const label =
-    status === "connected"
-      ? "Connected"
-      : status === "waiting"
-        ? "Ready"
-        : status === "creating"
-          ? "Creating"
-          : status === "error"
-            ? "Error"
-            : "Idle";
-  const tone =
-    status === "connected"
-      ? "bg-green-100 text-green-700"
-      : status === "error"
-        ? "bg-red-100 text-red-700"
-        : status === "waiting"
-          ? "bg-amber-100 text-amber-700"
-          : "bg-stone-100 text-stone-600";
-  return (
-    <span className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold ${tone}`}>
-      {label}
-    </span>
   );
 }
 

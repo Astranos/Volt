@@ -3,10 +3,10 @@
     "name": "Volt",
     "slug": "volt",
     "owner": "juanquenga",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "ios": {
       "bundleIdentifier": "com.volt.mobile",
-      "buildNumber": "36",
+      "buildNumber": "39",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }

@@ -38,11 +38,12 @@ import { EXTENSION_SCANNER_SIGNAL_URL } from "../src/domain/mobile-scanner-signa
 
 type RuntimePath =
   | `/mobile-scanner-popup.html${string}`
+  | `/newtab.html${string}`
   | `/offscreen.html${string}`
   | `/options.html${string}`;
 
 const SCANNER_RECONNECT_ALARM_NAME = "volt.mobileScanner.reconnectPoll";
-const VOLT_INSTALL_URL = "https://volt-resale.vercel.app/thankyou";
+const MOBILE_SCANNER_POPUP_PATH = "mobile-scanner-popup.html";
 
 function asMessageRecord(message: unknown) {
   return parseMessageRecord(message) ?? {};
@@ -129,7 +130,7 @@ export default defineBackground({
 
     async function resetMobileScannerActionPopup() {
       try {
-        await chrome.action.setPopup({ popup: "" });
+        await chrome.action.setPopup({ popup: MOBILE_SCANNER_POPUP_PATH });
       } catch (_) {}
     }
 
@@ -166,8 +167,18 @@ export default defineBackground({
     }
 
     activeTabs.initialize();
+    disableActionClickSidepanel();
+    void resetMobileScannerActionPopup();
     registerActions();
     registerListeners();
+
+    function disableActionClickSidepanel() {
+      try {
+        chrome.sidePanel?.setPanelBehavior?.({ openPanelOnActionClick: false });
+      } catch (error) {
+        log("Failed to disable side panel action click behavior:", error);
+      }
+    }
 
     function registerActions() {
       registerSidepanelMessageActions({
@@ -214,7 +225,7 @@ export default defineBackground({
 
       chrome.action.onClicked.addListener((tab) => {
         scannerMessages.handleScannerMessage(
-          { action: "openMobileCapture", mode: "barcode", surface: "popup" },
+          { action: "openMobileCapture", surface: "popup" },
           { tab },
           () => {}
         );
@@ -261,16 +272,12 @@ export default defineBackground({
           debugLogs: true,
         });
 
-        try {
-          chrome.sidePanel?.setPanelBehavior?.({ openPanelOnActionClick: true });
-        } catch (error) {
-          log("Failed to set side panel behavior:", error);
-        }
+        disableActionClickSidepanel();
 
         if (details.reason === "install") {
-          log("First installation detected, opening hosted setup page");
+          log("First installation detected, opening Volt new tab");
           chrome.tabs.create({
-            url: VOLT_INSTALL_URL,
+            url: runtimeUrl("/newtab.html"),
             active: true,
           });
         }

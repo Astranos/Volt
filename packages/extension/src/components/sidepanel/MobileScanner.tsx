@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
 import { FolderOpen } from "lucide-react";
-import type { ScannerConnectionStatus } from "@volt/scanner-protocol";
 import {
   saveMobileScannerPhoto,
   saveMobileScannerScan,
@@ -14,7 +13,6 @@ import { useMobileScannerPhotoActions } from "../../hooks/useMobileScannerPhotoA
 import { ScrollArea } from "../ui/scroll-area";
 import type { MobilePhoto } from "./mobile-photo-helpers";
 import {
-  CompactScannerStatus,
   EmptyHistory,
   LoadingHistory,
   PhotoBatchCard,
@@ -27,7 +25,6 @@ import type { TimelineEntry } from "./mobile-scanner-timeline";
 
 /*
  * Source-contract breadcrumbs for scanner domain tests. Implementations live in:
- * - mobile-scanner-cards.tsx: function CompactScannerStatus
  * - mobile-scanner-page-bridge.ts: document.designMode?.toLowerCase() === "on", __voltLastEditableRange
  * - useMobileScannerPhotoActions.ts: async function photoToClipboardPngBlob(photo: MobilePhoto),
  *   if (photo.blob) return dataUrlToPngBlob(await blobToDataUrl(photo.blob)),
@@ -40,25 +37,11 @@ import type { TimelineEntry } from "./mobile-scanner-timeline";
  * - mobile-scanner-cards.tsx: onToggleSelection={(shiftKey) => onToggleSelection(entry.id, shiftKey)}
  */
 
-type MobileScannerState = {
-  status: ScannerConnectionStatus;
-  qrCodeUrl: string | null;
-  error: string | null;
-  connectedAt?: string | null;
-  connectedPeerCount?: number;
-  transferSummary?: string | null;
-};
-
 interface MobileScannerProps {
   onClose?: () => void;
 }
 
 export default function MobileScanner({ onClose: _onClose }: MobileScannerProps) {
-  const [state, setState] = useState<MobileScannerState>({
-    status: "disconnected",
-    qrCodeUrl: null,
-    error: null,
-  });
   const [previewPhoto, setPreviewPhoto] = useState<MobilePhoto | null>(null);
   const [now, setNow] = useState(Date.now());
 
@@ -105,15 +88,6 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
     flashFeedback,
   });
 
-  const applyScannerState = useCallback((nextState?: Partial<MobileScannerState> | null) => {
-    if (!nextState) return;
-    setState((current) => ({
-      ...current,
-      ...nextState,
-      error: nextState.error ?? null,
-    }));
-  }, []);
-
   const primeCursorTarget = useCallback(async () => {
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -126,35 +100,6 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
       // Restricted Chrome pages fall back to sidepanel-only capture.
     }
   }, []);
-
-  const openPairingPopup = useCallback(async () => {
-    try {
-      const response = await chrome.runtime.sendMessage({
-        action: "openMobileCapturePopup",
-        mode: "photo",
-      });
-      if (response?.state) applyScannerState(response.state);
-      if (response?.error) flashFeedback(response.error, "error");
-    } catch (error) {
-      flashFeedback(error instanceof Error ? error.message : "Could not open pairing popup", "error");
-    }
-  }, [applyScannerState, flashFeedback]);
-
-  const restartPairing = useCallback(async () => {
-    setState((current) => ({ ...current, status: "creating", error: null }));
-    try {
-      const response = await chrome.runtime.sendMessage({ action: "scannerStart", force: true });
-      if (response?.state) applyScannerState(response.state);
-      if (response?.error) flashFeedback(response.error, "error");
-    } catch (_err) {
-      flashFeedback("Could not restart scanner session", "error");
-    }
-  }, [applyScannerState, flashFeedback]);
-
-  const disconnect = useCallback(async () => {
-    const response = await chrome.runtime.sendMessage({ action: "scannerDisconnect" });
-    if (response?.state) applyScannerState(response.state);
-  }, [applyScannerState]);
 
   const copyScan = useCallback(
     async (scan: MobileScannerScanResult) => {
@@ -176,11 +121,7 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
   useEffect(() => {
     void refreshResults();
     void primeCursorTarget();
-    void chrome.runtime
-      .sendMessage({ action: "scannerGetState" })
-      .then((response) => applyScannerState(response?.state))
-      .catch(() => applyScannerState({ status: "disconnected", qrCodeUrl: null, error: null }));
-  }, [applyScannerState, primeCursorTarget, refreshResults]);
+  }, [primeCursorTarget, refreshResults]);
 
   useEffect(() => {
     const prepareActiveTab = () => {
@@ -209,7 +150,6 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
   useEffect(() => {
     const handleMessage = (message: any) => {
       if (message?.action === "scannerStateChanged") {
-        applyScannerState(message.state);
         return;
       }
       if (message?.action === "scannerScan") {
@@ -240,54 +180,35 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
     };
     chrome.runtime.onMessage.addListener(handleMessage);
     return () => chrome.runtime.onMessage.removeListener(handleMessage);
-  }, [applyScannerState, prepareActiveTabForPhotoDrop, setResults]);
+  }, [prepareActiveTabForPhotoDrop, setResults]);
 
   useEffect(() => {
     if (photos.length > 0) void prepareActiveTabForPhotoDrop();
   }, [photos.length, prepareActiveTabForPhotoDrop]);
 
-  const totalCount = results.length;
-  const phoneCount = state.connectedPeerCount ?? (state.status === "connected" ? 1 : 0);
-
   return (
     <div className="sidepanel-shell relative flex h-full min-w-0 flex-col overflow-hidden">
-      <div className="sidepanel-scanner-status-wrap flex-none px-3 pt-3">
-        <CompactScannerStatus
-          status={state.status}
-          error={state.error}
-          phoneCount={phoneCount}
-          transferSummary={state.transferSummary}
-          onAddPhone={openPairingPopup}
-          onForceRestart={restartPairing}
-          onDisconnect={disconnect}
-        />
-      </div>
-
-      <div className="sidepanel-results-header flex-none min-w-0 px-4 pb-2 pt-5">
+      <div className="sidepanel-results-header flex-none min-w-0">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <div className="sidepanel-results-title text-sm font-bold text-stone-900 dark:text-stone-50">
+            <div className="sidepanel-results-title text-xs font-bold uppercase tracking-normal">
               Results
-            </div>
-            <div className="sidepanel-results-copy truncate text-xs text-stone-500 dark:text-stone-400">
-              {totalCount === 0
-                ? "Text, barcodes, and received photos land here"
-                : `${totalCount} saved item${totalCount === 1 ? "" : "s"}`}
             </div>
           </div>
           <button
             type="button"
             onClick={openVoltDownloadsFolder}
-            className="mobile-scanner-action sidepanel-results-folder inline-flex h-9 w-9 items-center justify-center rounded-full text-stone-600 transition hover:text-stone-900 active:scale-95 dark:text-stone-300 dark:hover:text-stone-50"
+            className="sidepanel-results-files"
             aria-label="Open Volt Photos folder"
           >
             <FolderOpen className="h-4 w-4" />
+            <span>Files</span>
           </button>
         </div>
       </div>
 
       <ScrollArea className="min-h-0 min-w-0 flex-1 px-3 pb-3 [&>div]:!overflow-x-hidden">
-        <div className="min-w-0 space-y-3 pt-1">
+        <div className="min-w-0 space-y-3">
           {loadingResults ? (
             <LoadingHistory />
           ) : groups.length === 0 ? (

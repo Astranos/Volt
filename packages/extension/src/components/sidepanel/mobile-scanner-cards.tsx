@@ -8,100 +8,21 @@ import {
   FolderOpen,
   ImagePlus,
   Loader2,
-  Plus,
-  RefreshCw,
   Scan,
   ScanLine,
-  Smartphone,
   Trash2,
   Type,
   Upload,
   X,
 } from "lucide-react";
-import type { ScannerConnectionStatus } from "@volt/scanner-protocol";
 import type { HydratedMobileScannerPhotoResult } from "../../domain/mobile-scanner-results";
 import { cn } from "../../lib/utils";
-import { ConnectionPill } from "./mobile-shared";
 import { formatPhotoSize, type MobilePhoto } from "./mobile-photo-helpers";
 import {
   formatRelativeTime,
   photoFromResult,
   type TimelineGroup,
 } from "./mobile-scanner-timeline";
-
-export function CompactScannerStatus({
-  status,
-  error,
-  phoneCount,
-  transferSummary,
-  onAddPhone,
-  onForceRestart,
-  onDisconnect,
-}: {
-  status: ScannerConnectionStatus;
-  error: string | null;
-  phoneCount: number;
-  transferSummary?: string | null;
-  onAddPhone: () => void;
-  onForceRestart: () => void;
-  onDisconnect: () => void;
-}) {
-  const connected = status === "connected";
-  const creating = status === "creating";
-  const copy = connected
-    ? `${phoneCount} phone${phoneCount === 1 ? "" : "s"} connected${transferSummary ? ` · ${transferSummary}` : ""}`
-    : status === "waiting"
-      ? "Pairing popup is ready for iPhone."
-      : creating
-        ? "Preparing mobile scanner session."
-        : status === "error"
-          ? (error ?? "Scanner session needs attention.")
-          : "Open the pairing popup to add an iPhone.";
-
-  return (
-    <div className="mobile-scanner-card sidepanel-scanner-card flex min-w-0 flex-col gap-3 px-3.5 py-3">
-      <div className="flex min-w-0 items-start gap-3">
-        <span className="mobile-scanner-icon sidepanel-scanner-icon flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-green-700 dark:text-green-300">
-          <Smartphone className="h-4 w-4" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="sidepanel-scanner-title text-[15px] font-bold leading-tight text-stone-900 dark:text-stone-50">
-            Mobile Scanner
-          </div>
-          <div className="sidepanel-scanner-copy mt-1 text-xs font-medium leading-snug text-stone-500 dark:text-stone-400">
-            {copy}
-          </div>
-        </div>
-        <div className="shrink-0">
-          <ConnectionPill status={status} error={error} />
-        </div>
-      </div>
-      <div className="sidepanel-scanner-actions grid grid-cols-2 gap-2">
-        <button
-          type="button"
-          onClick={onAddPhone}
-          className="mobile-scanner-action sidepanel-scanner-action inline-flex h-10 min-w-0 items-center justify-center gap-2 rounded-full px-3 text-xs font-bold text-stone-700 transition hover:text-stone-950 active:scale-[0.99] dark:text-stone-200 dark:hover:text-stone-50"
-        >
-          <Plus className="h-3.5 w-3.5 shrink-0" />
-          <span className="truncate">Add iPhone</span>
-        </button>
-        <button
-          type="button"
-          onClick={connected ? onDisconnect : onForceRestart}
-          disabled={creating}
-          className="mobile-scanner-action sidepanel-scanner-action inline-flex h-10 min-w-0 items-center justify-center gap-2 rounded-full px-3 text-xs font-bold text-stone-700 transition hover:text-stone-950 active:scale-[0.99] disabled:opacity-40 dark:text-stone-200 dark:hover:text-stone-50"
-        >
-          {connected ? (
-            <X className="h-3.5 w-3.5 shrink-0" />
-          ) : (
-            <RefreshCw className={cn("h-3.5 w-3.5 shrink-0", creating && "animate-spin")} />
-          )}
-          <span className="truncate">{connected ? "Disconnect" : "Restart"}</span>
-        </button>
-      </div>
-    </div>
-  );
-}
 
 export function LoadingHistory() {
   return (

@@ -39,12 +39,17 @@ import {
   type ScannerIceServer,
 } from "@volt/scanner-protocol";
 
+import {
+  nextReviewInputAfterLiveDictation,
+  type LiveDictationInsertion,
+} from "./-scanner-demo-dictation";
+
 export const Route = createFileRoute("/scanner-demo")({
   component: ScannerDemo,
 });
 
 const SIGNAL_URL = scannerSignalUrl();
-const DEVICE_LABEL = "Volt website demo";
+const DEFAULT_SESSION_LABEL = "Private browser session";
 const REVIEW_INPUT_LABEL = "Review test input";
 const WEB_PROTOCOL_VERSION = {
   major: SCANNER_PROTOCOL_MAJOR_VERSION,
@@ -57,6 +62,7 @@ type JoinWindow = {
   browserClaim: string;
   expiresAt: string | null;
   joinToken: string;
+  label: string;
   qrCodeUrl: string;
   sessionId: string;
 };
@@ -125,6 +131,11 @@ function createSecret(byteLength = 24) {
 
 function createMessageId(prefix = "control") {
   return createId(prefix);
+}
+
+function normalizedSessionLabel(value: string) {
+  const trimmed = value.trim().replace(/\s+/g, " ");
+  return trimmed || DEFAULT_SESSION_LABEL;
 }
 
 function parseJson(value: string) {
@@ -218,12 +229,12 @@ function reviewCursorTarget() {
   return {
     hasCursorTarget: true,
     label: REVIEW_INPUT_LABEL,
-    tabTitle: "Volt Scanner Demo",
+    tabTitle: "Volt Scanner",
     url: window.location.href,
   };
 }
 
-function ScannerDemo() {
+export function ScannerDemo() {
   const [captures, setCaptures] = useState<CaptureItem[]>([]);
   const [connectedPeerCount, setConnectedPeerCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -232,10 +243,12 @@ function ScannerDemo() {
   const [photos, setPhotos] = useState<PhotoItem[]>([]);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [reviewInputValue, setReviewInputValue] = useState("");
+  const [sessionLabel, setSessionLabel] = useState(DEFAULT_SESSION_LABEL);
   const [status, setStatus] = useState<DemoStatus>("idle");
 
   const capturesRef = useRef(new Set<string>());
   const joinWindowRef = useRef<JoinWindow | null>(null);
+  const liveDictationInsertionsRef = useRef(new Map<string, LiveDictationInsertion>());
   const objectUrlsRef = useRef(new Set<string>());
   const peersRef = useRef(new Map<string, PeerSession>());
   const pendingPhotosRef = useRef(new Map<string, PendingPhoto>());
@@ -261,6 +274,7 @@ function ScannerDemo() {
     peersRef.current.clear();
     pendingPhotosRef.current.clear();
     capturesRef.current.clear();
+    liveDictationInsertionsRef.current.clear();
     for (const url of objectUrlsRef.current) URL.revokeObjectURL(url);
     objectUrlsRef.current.clear();
     joinWindowRef.current = null;
@@ -277,9 +291,9 @@ function ScannerDemo() {
       platform: "web" as const,
       capabilities: ["ocr" as const, "barcode" as const, "dictation" as const, "photo" as const],
       chromeSessionId: joinWindowRef.current?.sessionId ?? createId("web-session"),
-      deviceLabel: DEVICE_LABEL,
+      deviceLabel: joinWindowRef.current?.label ?? normalizedSessionLabel(sessionLabel),
     }),
-    [],
+    [sessionLabel],
   );
 
   const sendHello = useCallback(
@@ -338,6 +352,47 @@ function ScannerDemo() {
     return true;
   }, []);
 
+  const replaceLiveDictationInReviewInput = useCallback((message: Extract<ScannerControlMessage, { type: "dictation" }>) => {
+    const liveSessionId = message.dictationSessionId;
+    if (message.phase === "started" || message.phase === "stopped") {
+      liveDictationInsertionsRef.current.delete(liveSessionId);
+      return false;
+    }
+
+    const value = message.text?.trim();
+    if (!value) return false;
+
+    setReviewInputValue((current) => {
+      const existing = liveDictationInsertionsRef.current.get(liveSessionId);
+      const input = reviewInputRef.current;
+      const result = nextReviewInputAfterLiveDictation({
+        current,
+        existing,
+        phase: message.phase,
+        selectionEnd: input?.selectionEnd ?? current.length,
+        selectionStart: input?.selectionStart ?? current.length,
+        text: value,
+      });
+      if (result.insertion) {
+        liveDictationInsertionsRef.current.set(liveSessionId, result.insertion);
+      } else {
+        liveDictationInsertionsRef.current.delete(liveSessionId);
+      }
+      return result.value;
+    });
+
+    window.requestAnimationFrame(() => {
+      const inputAfterRender = reviewInputRef.current;
+      if (!inputAfterRender) return;
+      const liveInsertion = liveDictationInsertionsRef.current.get(liveSessionId);
+      if (!liveInsertion) return;
+      inputAfterRender.focus();
+      inputAfterRender.setSelectionRange(liveInsertion.end, liveInsertion.end);
+    });
+
+    return true;
+  }, []);
+
   const closePeer = useCallback(
     (peerId: string) => {
       const peer = peersRef.current.get(peerId);
@@ -372,6 +427,19 @@ function ScannerDemo() {
         return;
       }
       capturesRef.current.add(duplicateKey);
+      if (message.type === "dictation" && (message.phase === "started" || message.phase === "stopped")) {
+        const insertedIntoCursor = replaceLiveDictationInReviewInput(message);
+        sendControl(peer, {
+          type: "result_received",
+          messageId: createMessageId("receipt"),
+          sentAt: new Date().toISOString(),
+          resultId: message.messageId,
+          savedToResults: true,
+          insertedIntoCursor,
+          cursorTarget: reviewCursorTarget(),
+        });
+        return;
+      }
       const item =
         message.type === "capture_result"
           ? {
@@ -384,12 +452,19 @@ function ScannerDemo() {
           : {
               capturedAt: message.capturedAt,
               format: "dictation",
-              id: message.messageId,
+              id: message.dictationSessionId,
               kind: "dictation" as const,
               value: message.text ?? "",
             };
-      if (item.value) setCaptures((current) => [item, ...current].slice(0, MAX_CAPTURE_ITEMS));
-      const insertedIntoCursor = insertIntoReviewInput(item.value);
+      if (item.value) {
+        setCaptures((current) => {
+          if (message.type !== "dictation") return [item, ...current].slice(0, MAX_CAPTURE_ITEMS);
+          const withoutSession = current.filter((capture) => capture.id !== item.id);
+          return [item, ...withoutSession].slice(0, MAX_CAPTURE_ITEMS);
+        });
+      }
+      const insertedIntoCursor =
+        message.type === "dictation" ? replaceLiveDictationInReviewInput(message) : insertIntoReviewInput(item.value);
       sendControl(peer, {
         type: "result_received",
         messageId: createMessageId("receipt"),
@@ -400,7 +475,7 @@ function ScannerDemo() {
         cursorTarget: reviewCursorTarget(),
       });
     },
-    [insertIntoReviewInput, sendControl],
+    [insertIntoReviewInput, replaceLiveDictationInReviewInput, sendControl],
   );
 
   const handleControlMessage = useCallback(
@@ -695,13 +770,14 @@ function ScannerDemo() {
       await fetchIceServers();
       const sessionId = createId("web-session");
       const browserClaim = createSecret(32);
+      const label = normalizedSessionLabel(sessionLabel);
       const response = await fetch(`${SIGNAL_URL}/join-token`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           browserClaim,
           capabilities: ["text", "barcode", "dictation", "photo", "photo-chunk-ack"],
-          deviceLabel: DEVICE_LABEL,
+          deviceLabel: label,
           role: "browser",
           sessionId,
           transport: "webrtc",
@@ -724,11 +800,12 @@ function ScannerDemo() {
           ? payload.qrCodeUrl
           : typeof payload.joinUrl === "string" && payload.joinUrl
             ? payload.joinUrl
-            : `${SCANNER_APP_PAIR_URL}?sessionId=${encodeURIComponent(returnedSessionId)}&session=${encodeURIComponent(returnedSessionId)}&token=${encodeURIComponent(joinToken)}&joinToken=${encodeURIComponent(joinToken)}&transport=webrtc&label=${encodeURIComponent(DEVICE_LABEL)}`;
+            : `${SCANNER_APP_PAIR_URL}?sessionId=${encodeURIComponent(returnedSessionId)}&session=${encodeURIComponent(returnedSessionId)}&token=${encodeURIComponent(joinToken)}&joinToken=${encodeURIComponent(joinToken)}&transport=webrtc&label=${encodeURIComponent(label)}`;
       const nextWindow: JoinWindow = {
         browserClaim,
         expiresAt: typeof payload.expiresAt === "string" ? payload.expiresAt : null,
         joinToken,
+        label,
         qrCodeUrl,
         sessionId: returnedSessionId,
       };
@@ -747,7 +824,7 @@ function ScannerDemo() {
       setStatus("error");
       setError(startError instanceof Error ? startError.message : "Failed to start scanner demo");
     }
-  }, [fetchIceServers, pollJoinAttempts, reset]);
+  }, [fetchIceServers, pollJoinAttempts, reset, sessionLabel]);
 
   const copyPairingUrl = useCallback(async () => {
     if (!joinWindow?.qrCodeUrl) return;
@@ -761,8 +838,8 @@ function ScannerDemo() {
       <header className="border-b border-zinc-200 bg-white">
         <div className="mx-auto flex min-h-16 max-w-7xl flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
           <a href="/" className="flex items-center gap-2 text-sm font-semibold">
-            <img src="/assets/volt.webp" alt="" className="size-8 rounded-md object-cover" />
-            Volt Scanner Demo
+            <img src="/assets/volt.webp" alt="" className="size-8 rounded-[0.65rem] object-cover" />
+            Volt scanner pairing
           </a>
           <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-600">
             <span className="inline-flex items-center gap-1.5 rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1.5">
@@ -781,39 +858,54 @@ function ScannerDemo() {
         <div className="mx-auto grid max-w-7xl gap-8 px-4 py-8 sm:px-6 lg:grid-cols-[0.82fr_1.18fr] lg:px-8 lg:py-10">
           <div className="flex flex-col gap-6">
             <div>
-              <p className="text-sm font-semibold text-emerald-700">Apple App Review</p>
+              <p className="text-sm font-semibold text-emerald-700">Private web receiver</p>
               <h1 className="mt-3 max-w-2xl text-4xl font-semibold leading-tight text-zinc-950 sm:text-5xl">
-                Live iPhone scanner pairing
+                Pair the iPhone scanner with a browser session
               </h1>
               <p className="mt-4 max-w-2xl text-base leading-7 text-zinc-600">
-                This page receives WebRTC scanner results and photo bytes in memory for the current browser tab.
+                This page mirrors the Chrome extension receiver for testing and app review. Name the session, scan the QR in the Volt iPhone app, and receive barcode, OCR, dictation, and photo captures in this browser only.
               </p>
             </div>
 
-            <div className="grid gap-px overflow-hidden rounded-lg border border-zinc-200 bg-zinc-200 sm:grid-cols-3">
+            <div className="grid gap-px overflow-hidden rounded-[1.35rem] border border-zinc-200 bg-zinc-200 sm:grid-cols-3">
               <StatusTile icon={Smartphone} label="Pairing" value={statusLabel(status)} />
               <StatusTile icon={Radio} label="ICE" value={iceLabel} />
               <StatusTile icon={CheckCircle2} label="Received" value={String(receivedCount)} />
             </div>
 
             {error ? (
-              <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</div>
+              <div className="rounded-[0.95rem] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</div>
             ) : null}
+
+            <div className="max-w-md">
+              <label htmlFor="private-session-label" className="text-sm font-semibold text-zinc-800">
+                Session name
+              </label>
+              <input
+                id="private-session-label"
+                type="text"
+                value={sessionLabel}
+                maxLength={64}
+                onChange={(event) => setSessionLabel(event.target.value)}
+                placeholder={DEFAULT_SESSION_LABEL}
+                className="mt-2 h-11 w-full rounded-[0.85rem] border border-zinc-300 bg-white px-3 text-sm text-zinc-950 outline-none focus:border-zinc-950"
+              />
+            </div>
 
             <div className="flex flex-wrap gap-3">
               <button
                 type="button"
                 onClick={() => void startPairing()}
                 disabled={status === "creating" || status === "connecting"}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-zinc-950 px-5 text-sm font-semibold text-white hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-[0.85rem] bg-zinc-950 px-5 text-sm font-semibold text-white hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {status === "creating" || status === "connecting" ? <Loader2 size={17} className="animate-spin" /> : <ScanBarcode size={17} />}
-                {joinWindow ? "New pairing" : "Start pairing"}
+                {joinWindow ? "Generate new session" : "Generate pairing session"}
               </button>
               <button
                 type="button"
                 onClick={reset}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-zinc-300 bg-white px-5 text-sm font-semibold text-zinc-800 hover:border-zinc-950"
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-[0.85rem] border border-zinc-300 bg-white px-5 text-sm font-semibold text-zinc-800 hover:border-zinc-950"
               >
                 <Trash2 size={17} />
                 Reset
@@ -822,12 +914,12 @@ function ScannerDemo() {
           </div>
 
           <div className="grid gap-4 lg:grid-cols-[minmax(260px,0.75fr)_1fr]">
-            <section className="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+            <section className="rounded-[1.35rem] border border-zinc-200 bg-zinc-50 p-4">
               <div className="flex items-center justify-between gap-3">
                 <h2 className="text-sm font-semibold text-zinc-950">Pairing QR</h2>
                 {status === "waiting" ? <span className="text-xs font-medium text-emerald-700">active</span> : null}
               </div>
-              <div className="mt-4 grid aspect-square place-items-center rounded-md border border-zinc-200 bg-white p-3">
+              <div className="mt-4 grid aspect-square place-items-center rounded-[0.95rem] border border-zinc-200 bg-white p-3">
                 {qrDataUrl ? (
                   <img src={qrDataUrl} alt="Volt scanner pairing QR code" className="h-full w-full object-contain" />
                 ) : (
@@ -838,29 +930,30 @@ function ScannerDemo() {
                 type="button"
                 onClick={() => void copyPairingUrl()}
                 disabled={!joinWindow?.qrCodeUrl}
-                className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-md border border-zinc-300 bg-white px-3 text-sm font-semibold text-zinc-800 hover:border-zinc-950 disabled:cursor-not-allowed disabled:opacity-50"
+                className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-[0.85rem] border border-zinc-300 bg-white px-3 text-sm font-semibold text-zinc-800 hover:border-zinc-950 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Copy size={16} />
                 Copy pairing URL
               </button>
             </section>
 
-            <section className="rounded-lg border border-zinc-200 bg-white p-4">
+            <section className="rounded-[1.35rem] border border-zinc-200 bg-white p-4">
               <div className="flex items-center justify-between gap-3">
                 <h2 className="text-sm font-semibold text-zinc-950">Session</h2>
                 <span className="text-xs text-zinc-500">{connectedPeerCount} peer{connectedPeerCount === 1 ? "" : "s"}</span>
               </div>
               <dl className="mt-4 grid gap-3 text-sm">
                 <InfoRow label="Status" value={statusLabel(status)} />
+                <InfoRow label="Name" value={joinWindow?.label ?? normalizedSessionLabel(sessionLabel)} />
                 <InfoRow label="Join token" value={joinWindow ? `...${joinWindow.joinToken.slice(-8)}` : "Not created"} />
                 <InfoRow label="Expires" value={joinWindow?.expiresAt ? new Date(joinWindow.expiresAt).toLocaleTimeString() : "Not active"} />
                 <InfoRow label="Storage" value="Browser memory only" />
               </dl>
-              <div className="mt-4 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs leading-5 text-emerald-900">
+              <div className="mt-4 rounded-[0.95rem] border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs leading-5 text-emerald-900">
                 Photo bytes are assembled into Blob URLs in this tab and are never written to Convex, Vercel, localStorage, or IndexedDB.
               </div>
               {joinWindow?.qrCodeUrl ? (
-                <div className="mt-4 flex items-start gap-2 rounded-md border border-zinc-200 bg-zinc-50 p-3 text-xs text-zinc-600">
+                <div className="mt-4 flex items-start gap-2 rounded-[0.95rem] border border-zinc-200 bg-zinc-50 p-3 text-xs text-zinc-600">
                   <LinkIcon size={14} className="mt-0.5 shrink-0" />
                   <span className="break-all">{joinWindow.qrCodeUrl}</span>
                 </div>
@@ -924,7 +1017,7 @@ function ResultsPanel({
   reviewInputValue: string;
 }) {
   return (
-    <section className="rounded-lg border border-zinc-200 bg-white">
+    <section className="rounded-[1.35rem] border border-zinc-200 bg-white">
       <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold">
           <Type size={16} />
@@ -942,7 +1035,7 @@ function ResultsPanel({
           value={reviewInputValue}
           onChange={(event) => onReviewInputChange(event.target.value)}
           placeholder="Scanned text, barcodes, and dictation appear here."
-          className="mt-2 min-h-24 w-full resize-y rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm leading-6 text-zinc-950 outline-none focus:border-zinc-950"
+          className="mt-2 min-h-24 w-full resize-y rounded-[0.85rem] border border-zinc-300 bg-white px-3 py-2 text-sm leading-6 text-zinc-950 outline-none focus:border-zinc-950"
         />
       </div>
       <div className="max-h-[34rem] overflow-auto p-3">
@@ -951,7 +1044,7 @@ function ResultsPanel({
         ) : (
           <div className="space-y-3">
             {captures.map((capture) => (
-              <article key={`${capture.id}:${capture.capturedAt}`} className="rounded-md border border-zinc-200 bg-zinc-50 p-3">
+              <article key={`${capture.id}:${capture.capturedAt}`} className="rounded-[0.95rem] border border-zinc-200 bg-zinc-50 p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-500">
                   <span className="font-medium capitalize text-zinc-700">{capture.kind}</span>
                   <time dateTime={capture.capturedAt}>{new Date(capture.capturedAt).toLocaleTimeString()}</time>
@@ -969,7 +1062,7 @@ function ResultsPanel({
 
 function PhotosPanel({ photos }: { photos: PhotoItem[] }) {
   return (
-    <section className="rounded-lg border border-zinc-200 bg-white">
+    <section className="rounded-[1.35rem] border border-zinc-200 bg-white">
       <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold">
           <ImageIcon size={16} />
@@ -983,7 +1076,7 @@ function PhotosPanel({ photos }: { photos: PhotoItem[] }) {
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
             {photos.map((photo) => (
-              <article key={photo.id} className="overflow-hidden rounded-md border border-zinc-200 bg-zinc-50">
+              <article key={photo.id} className="overflow-hidden rounded-[0.95rem] border border-zinc-200 bg-zinc-50">
                 <img src={photo.objectUrl} alt={photo.filename} className="aspect-[4/3] w-full bg-zinc-100 object-contain" />
                 <div className="space-y-1 p-3 text-xs text-zinc-500">
                   <div className="truncate text-sm font-semibold text-zinc-950">{photo.filename}</div>
@@ -1002,7 +1095,7 @@ function PhotosPanel({ photos }: { photos: PhotoItem[] }) {
 
 function EmptyState({ label }: { label: string }) {
   return (
-    <div className="grid min-h-40 place-items-center rounded-md border border-dashed border-zinc-300 bg-zinc-50 px-4 text-center text-sm text-zinc-500">
+    <div className="grid min-h-40 place-items-center rounded-[0.95rem] border border-dashed border-zinc-300 bg-zinc-50 px-4 text-center text-sm text-zinc-500">
       {label}
     </div>
   );

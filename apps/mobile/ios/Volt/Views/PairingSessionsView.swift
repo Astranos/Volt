@@ -3,8 +3,10 @@ import SwiftUI
 struct PairingSessionsView: View {
     @Environment(ScannerStore.self) private var store
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
     @State private var isPairingScannerPresented = false
     let onReconnectStarted: () -> Void
+    private let webScannerURL = URL(string: "https://volt-scanner.vercel.app/create-session")!
 
     init(onReconnectStarted: @escaping () -> Void = {}) {
         self.onReconnectStarted = onReconnectStarted
@@ -12,32 +14,32 @@ struct PairingSessionsView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(alignment: .leading, spacing: 0) {
-                VStack(alignment: .leading, spacing: ScannerTabLayout.stackSpacing) {
-                    sessionsHeader
-
-                    if store.pairedSessions.isEmpty {
-                        ContentUnavailableView(
-                            "No Paired Sessions",
-                            systemImage: "link",
-                            description: Text("Pair once from the Chrome QR code, then reconnect to that computer from here.")
-                        )
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 34)
-                        .background(.background, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                    } else {
-                        Text("Previously Paired")
-                            .font(.headline)
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 2)
+            Group {
+                if store.pairedSessions.isEmpty {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 18) {
+                            sessionsHeader
+                            webSessionSetup
+                        }
+                        .padding(ScannerTabLayout.contentPadding)
+                        .padding(.top, ScannerTabLayout.topPadding)
+                        .padding(.bottom, ScannerTabLayout.bottomAccessoryContentPadding)
                     }
-                }
-                .padding(ScannerTabLayout.contentPadding)
-                .padding(.top, ScannerTabLayout.topPadding)
-                .padding(.bottom, store.pairedSessions.isEmpty ? ScannerTabLayout.bottomAccessoryContentPadding : 0)
+                } else {
+                    VStack(alignment: .leading, spacing: 0) {
+                        VStack(alignment: .leading, spacing: ScannerTabLayout.stackSpacing) {
+                            sessionsHeader
 
-                if !store.pairedSessions.isEmpty {
-                    pairedSessionsList
+                            Text("Previously Paired")
+                                .font(.headline)
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 2)
+                        }
+                        .padding(ScannerTabLayout.contentPadding)
+                        .padding(.top, ScannerTabLayout.topPadding)
+
+                        pairedSessionsList
+                    }
                 }
             }
             .background(ScannerTabLayout.background)
@@ -63,24 +65,67 @@ struct PairingSessionsView: View {
                 .minimumScaleFactor(0.82)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-            Button {
-                if store.connectionStatus.isConnected {
-                    store.unpair()
-                } else {
-                    startPairingScan()
+            if !store.pairedSessions.isEmpty {
+                Button {
+                    if store.connectionStatus.isConnected {
+                        store.unpair()
+                    } else {
+                        startPairingScan()
+                    }
+                } label: {
+                    Label(pairingButtonTitle, systemImage: pairingButtonSystemImage)
+                        .font(.headline)
+                        .foregroundStyle(pairingButtonColor)
+                        .lineLimit(1)
+                        .padding(.horizontal, 18)
+                        .frame(minHeight: 44)
+                        .background(.regularMaterial, in: Capsule())
                 }
-            } label: {
-                Label(pairingButtonTitle, systemImage: pairingButtonSystemImage)
-                    .font(.headline)
-                    .foregroundStyle(pairingButtonColor)
-                    .lineLimit(1)
-                    .padding(.horizontal, 18)
-                    .frame(minHeight: 44)
-                    .background(.regularMaterial, in: Capsule())
+                .accessibilityLabel(pairingButtonAccessibilityLabel)
             }
-            .accessibilityLabel(pairingButtonAccessibilityLabel)
         }
         .accessibilityElement(children: .contain)
+    }
+
+    private var webSessionSetup: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Scan the QR code from the Chrome extension, or open the create session page on your computer. This iPhone will connect to that browser session.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            VStack(spacing: 10) {
+                SessionSetupStep(
+                    systemImage: "desktopcomputer",
+                    title: "Open Volt on your computer",
+                    detail: "Use the Chrome extension side panel, or go to volt-scanner.vercel.app/create-session."
+                )
+                SessionSetupStep(
+                    systemImage: "qrcode",
+                    title: "Show the pairing QR",
+                    detail: "Start pairing in Chrome or on the create session page."
+                )
+                SessionSetupStep(
+                    systemImage: "iphone",
+                    title: "Scan the QR with this iPhone",
+                    detail: "Tap the green button below."
+                )
+            }
+
+            Button {
+                openURL(webScannerURL)
+            } label: {
+                Label("Open Create Session Page", systemImage: "safari")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.green)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .background(.green.opacity(0.10), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }
+            .buttonStyle(.plain)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func startPairingScan() {
@@ -101,7 +146,7 @@ struct PairingSessionsView: View {
     }
 
     private var pairingButtonAccessibilityLabel: String {
-        store.connectionStatus.isConnected ? "Unpair from Chrome" : "Pair with Chrome"
+        store.connectionStatus.isConnected ? "Unpair from browser" : "Pair with browser"
     }
 
     private var pairedSessionsList: some View {
@@ -146,7 +191,7 @@ private struct ScanChromeQRAccessory: View {
     var body: some View {
         VStack(spacing: 0) {
             Button(action: onScan) {
-                Label("Scan Chrome QR", systemImage: "qrcode.viewfinder")
+                Label("Scan Computer QR", systemImage: "qrcode.viewfinder")
                     .font(.headline)
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity, minHeight: 52)
@@ -165,6 +210,34 @@ private struct ScanChromeQRAccessory: View {
                 .fill(.bar)
                 .ignoresSafeArea(edges: .bottom)
         }
+    }
+}
+
+private struct SessionSetupStep: View {
+    let systemImage: String
+    let title: String
+    let detail: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: systemImage)
+                .font(.headline.weight(.semibold))
+                .foregroundStyle(.green)
+                .frame(width: 32, height: 32)
+                .background(.green.opacity(0.10), in: Circle())
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(detail)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -194,6 +267,9 @@ struct PairingScanSessionView: View {
             store.activeMode = .barcode
             store.camera.updateBarcodeRecognitionMode(.qr)
             store.camera.clearDetectedBarcode()
+        }
+        .task {
+            await store.camera.requestAccess()
             store.camera.start()
         }
         .onDisappear {
@@ -227,7 +303,7 @@ private struct PairingScanControls: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            Label("Scan Chrome QR", systemImage: "qrcode.viewfinder")
+            Label("Scan Pairing QR", systemImage: "qrcode.viewfinder")
                 .font(.headline)
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
@@ -280,7 +356,7 @@ private enum PairingScanStatusMessage {
     static func detail(connectionStatus: ScannerConnectionStatus, isCodeDetected: Bool) -> String {
         switch connectionStatus {
         case .idle, .disconnected:
-            isCodeDetected ? "Hold steady while the QR is read." : "Center the Chrome pairing QR in the frame."
+            isCodeDetected ? "Hold steady while the QR is read." : "Center the browser pairing QR in the frame."
         case .pairing:
             "QR accepted. Starting the pairing request."
         case .waitingForChrome:
@@ -288,7 +364,7 @@ private enum PairingScanStatusMessage {
         case .connected:
             "Ready to send captures back to the browser."
         case .error:
-            "Try refreshing the Chrome QR and scan it again."
+            "Try refreshing the pairing QR and scan it again."
         }
     }
 }

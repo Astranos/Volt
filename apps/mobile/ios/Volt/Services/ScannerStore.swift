@@ -358,6 +358,7 @@ final class ScannerStore {
             peerTarget?.sessionLabel,
             savedSessionLabel(sessionId: chromeSessionId)
         )
+        let browserName = message.peer?.platform == "web" ? "Browser" : "Chrome"
         let previousPeerTarget = peerTarget
         let nextPeerTarget = ScannerPeerTarget(
             chromeSessionId: chromeSessionId,
@@ -365,7 +366,7 @@ final class ScannerStore {
             tabTitle: message.cursorTarget?.tabTitle,
             tabURL: message.cursorTarget?.url,
             cursorLabel: message.cursorTarget?.label,
-            browser: "Chrome"
+            browser: browserName
         )
         let didChangeChromeInputTarget: Bool
         if let previousPeerTarget {
@@ -398,6 +399,18 @@ final class ScannerStore {
         }
 
         if receipt.insertedIntoCursor == false {
+            if peerTarget?.isWebPageSession == true && receipt.savedToResults {
+                let previousDeliveryState = results[index].deliveryState
+                results[index].deliveryState = .sent
+                if results[index].deliveryState != previousDeliveryState {
+                    showCaptureDeliveryToast(for: results[index], state: .sent)
+                }
+                captureSuccessFeedback.notificationOccurred(.success)
+                statusText = "Successfully sent to browser"
+                targetHint = peerTarget?.displayText ?? "The web session received it."
+                return
+            }
+
             results[index].deliveryState = .failed
             playCaptureFailureFeedback()
             if receipt.savedToResults {
@@ -405,8 +418,9 @@ final class ScannerStore {
             } else {
                 showCaptureDeliveryToast(for: results[index], state: .failed)
             }
-            statusText = "Chrome received text"
-            targetHint = "Chrome saved it, but no focused cursor target was available."
+            let browserName = peerTarget?.browser ?? "Chrome"
+            statusText = "\(browserName) received text"
+            targetHint = "\(browserName) saved it, but no focused cursor target was available."
             return
         }
 

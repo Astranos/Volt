@@ -121,6 +121,7 @@ enum ScannerProtocol {
         struct Peer: Decodable, Equatable {
             let chromeSessionId: String?
             let deviceLabel: String?
+            let platform: String?
         }
 
         struct Pairing: Decodable, Equatable {
@@ -241,7 +242,7 @@ enum ScannerProtocol {
         var message = baseMessage(type: .hello, prefix: "hello")
         message["peer"] = [
             "protocolVersion": ["major": protocolVersion.major, "minor": protocolVersion.minor, "patch": protocolVersion.patch ?? 0],
-            "appVersion": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.0",
+            "appVersion": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.1",
             "platform": "ios",
             "capabilities": ["ocr", "barcode", "dictation", "photo", "photo_retry_queue"],
             "contributorId": contributorId,

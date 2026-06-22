@@ -5,8 +5,12 @@ import {
   AlertTriangle,
   CheckCircle2,
   Info,
+  Loader2,
+  QrCode,
+  Smartphone,
   XCircle,
 } from "lucide-react";
+import type { ScannerConnectionStatus } from "@volt/scanner-protocol";
 import { cn } from "../../lib/utils";
 import {
   SIDEPANEL_TOOLS,
@@ -52,6 +56,8 @@ const TOAST_TONE_STYLES: Record<
 export default function UnifiedSidepanel() {
   const [activeTool, setActiveTool] =
     useState<SidepanelToolId>("mobile-scanner");
+  const [scannerStatus, setScannerStatus] =
+    useState<ScannerConnectionStatus>("disconnected");
   const [toast, setToast] = useState<ActiveToast | null>(null);
   const toastTimer = useRef<number | null>(null);
   const toastCounter = useRef(0);
@@ -80,6 +86,27 @@ export default function UnifiedSidepanel() {
       );
       if (toastTimer.current) window.clearTimeout(toastTimer.current);
     };
+  }, []);
+
+  useEffect(() => {
+    if (typeof chrome === "undefined" || !chrome.runtime) return;
+
+    chrome.runtime.sendMessage({ action: "scannerGetState" }, (response) => {
+      if (chrome.runtime.lastError) return;
+      if (response?.state?.status) {
+        setScannerStatus(response.state.status as ScannerConnectionStatus);
+      }
+    });
+
+    const listener = (message: any) => {
+      if (message?.action !== "scannerStateChanged") return;
+      if (message?.state?.status) {
+        setScannerStatus(message.state.status as ScannerConnectionStatus);
+      }
+    };
+
+    chrome.runtime.onMessage.addListener(listener);
+    return () => chrome.runtime.onMessage.removeListener(listener);
   }, []);
 
   // Load the initial tool from storage
@@ -124,6 +151,13 @@ export default function UnifiedSidepanel() {
     }
   };
 
+  const openMobilePairingPopup = () => {
+    if (typeof chrome === "undefined" || !chrome.runtime) return;
+    chrome.runtime.sendMessage({
+      action: "openMobileCapturePopup",
+    });
+  };
+
   const componentMap: Record<
     SidepanelToolId,
     React.ComponentType<{ onClose?: () => void }>
@@ -140,80 +174,88 @@ export default function UnifiedSidepanel() {
 
   const ActiveComponent =
     tools.find((t) => t.id === activeTool)?.component || MobileScanner;
-  const activeToolIndex = Math.max(
-    0,
-    tools.findIndex((tool) => tool.id === activeTool),
-  );
+  const activeToolMeta = tools.find((tool) => tool.id === activeTool) ?? tools[0];
+  const ActiveToolIcon = activeToolMeta.icon;
 
   const toneStyles = toast ? TOAST_TONE_STYLES[toast.tone] : null;
   const ToastIcon = toneStyles?.icon;
 
   return (
     <div className="sidepanel-shell sidepanel-frame h-full w-full flex flex-col">
-      {/* Fixed Header */}
-      <div className="sidepanel-tool-switch-wrap sidepanel-tool-header">
-        <div className="sidepanel-tool-switch">
+      {/* Main content - Flex 1 to take remaining space, overflow hidden to prevent double scrollbars */}
+      <div className="sidepanel-content-frame flex flex-1 flex-col overflow-hidden">
+        <div className="sidepanel-inline-tool-title-wrap">
           <div
-            role="radiogroup"
-            aria-label="Sidepanel tool"
+            aria-label={`Current tool: ${activeToolMeta.label}`}
             className={cn(
-              "sidepanel-tool-options",
+              "sidepanel-inline-tool-title",
               toast ? "-translate-y-1 opacity-0" : "translate-y-0 opacity-100",
             )}
             aria-hidden={toast ? "true" : undefined}
           >
-            <span
-              className={cn(
-                "sidepanel-tool-indicator",
-                activeToolIndex === 0 ? "is-left" : "is-right",
-              )}
-            />
-            {tools.map((tool) => (
-              <button
-                key={tool.id}
-                type="button"
-                role="radio"
-                aria-checked={activeTool === tool.id}
-                aria-label={tool.label}
-                onClick={() => handleToolChange(tool.id)}
-                className={cn(
-                  "sidepanel-tool-option",
-                  activeTool === tool.id && "is-active",
-                )}
-              >
-                <tool.icon
-                  className="sidepanel-tool-option-icon"
-                />
-                <span className="sidepanel-tool-option-label">
-                  {tool.label}
-                </span>
-              </button>
-            ))}
+            <ActiveToolIcon className="sidepanel-inline-tool-icon" />
+            <span>{activeToolMeta.label}</span>
           </div>
-          <span className="pointer-events-none absolute inset-1.5 flex min-w-0 items-center px-3">
-            {toast && ToastIcon ? (
-              <span
-                key={toast.id}
-                aria-live="polite"
-                className={cn(
-                  "volt-toast-enter flex min-w-0 items-center gap-3 text-base font-bold",
-                  toneStyles?.text,
-                )}
-              >
-                <ToastIcon className="h-5 w-5 shrink-0" />
-                <span className="whitespace-normal break-words leading-tight">{toast.message}</span>
-              </span>
-            ) : null}
-          </span>
+          {!toast && activeTool === "mobile-scanner" ? (
+            <SidepanelMobilePairingStatus
+              status={scannerStatus}
+              onClick={openMobilePairingPopup}
+            />
+          ) : null}
+          {toast && ToastIcon ? (
+            <span
+              key={toast.id}
+              aria-live="polite"
+              className={cn(
+                "volt-toast-enter sidepanel-inline-toast",
+                toneStyles?.text,
+              )}
+            >
+              <ToastIcon className="h-4 w-4 shrink-0" />
+              <span className="min-w-0 truncate">{toast.message}</span>
+            </span>
+          ) : null}
+        </div>
+        <div className="min-h-0 flex-1 overflow-hidden">
+          <ActiveComponent
+            onClose={() => handleToolChange("mobile-scanner")}
+          />
         </div>
       </div>
-
-      {/* Main content - Flex 1 to take remaining space, overflow hidden to prevent double scrollbars */}
-      <div className="sidepanel-content-frame flex-1 overflow-hidden">
-        <ActiveComponent
-          onClose={() => handleToolChange("mobile-scanner")}
-        />
-      </div>
     </div>
+  );
+}
+
+function SidepanelMobilePairingStatus({
+  onClick,
+  status,
+}: {
+  onClick: () => void;
+  status: ScannerConnectionStatus;
+}) {
+  const isPaired = status === "connected";
+  const isCreating = status === "creating";
+  const isReady = status === "waiting";
+  const label = isPaired ? "Connected" : isCreating ? "Connecting" : isReady ? "Pair Phone" : "Connect Phone";
+  const Icon = isPaired ? Smartphone : isCreating ? Loader2 : isReady ? QrCode : Smartphone;
+  const tone = isPaired
+    ? "is-paired"
+    : isReady
+      ? "is-ready"
+      : isCreating
+        ? "is-creating"
+        : "is-inactive";
+
+  return (
+    <button
+      type="button"
+      className={`sidepanel-mobile-status ${tone}`}
+      onClick={onClick}
+      aria-label="Open mobile pairing"
+      title="Open mobile pairing"
+    >
+      <Icon className={isCreating ? "animate-spin" : undefined} />
+      <span>{label}</span>
+    </button>
   );
 }
