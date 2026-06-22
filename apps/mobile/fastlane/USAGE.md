@@ -1,6 +1,6 @@
 # Volt iOS fastlane
 
-This package owns the iOS fastlane setup for repeatable local builds, TestFlight uploads, and App Store screenshot capture.
+This package owns the iOS fastlane setup for repeatable local builds, TestFlight uploads, and App Store screenshot capture. Volt does not use Expo-hosted EAS Build workers; archives are produced locally with Xcode/fastlane.
 
 ## Research notes
 

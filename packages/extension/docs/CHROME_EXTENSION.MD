@@ -1,16 +1,24 @@
-Volt Chrome Extension
+# Volt Chrome Extension
 
-Volt is an all-in-one productivity suite designed for people buying electronic devices and related inventory to resell. I made it to make buying quicker and easier, and to make the listing process less repetitive. By integrating market data, offer calculation, mobile scanning, photo capture, and listing utilities directly into the browser, Volt streamlines the resale workflow from item evaluation to marketplace listing.
+## Short Description
 
-Key Features:
+Volt helps resellers research prices, calculate offers, capture product details, and move mobile scans into Chrome for faster buying and listing workflows.
 
-- **Quick Actions** - Highlight any text to instantly search eBay Sold Listings, PriceCharting, or UPC/MPN databases via the right-click context menu.
-- **Click To Copy UPC Codes** - Automatically detects and highlights UPC codes on any webpage, allowing for instant one-click copying to your clipboard.
-- **Price Charting Lot Tool** - Easily add, manage, and create video game lots via PriceCharting.
-- **Volt Tab (new tab override)** - Quickly get to any anything you need when opening a new tab.
-- **Sold Listing Warning** - Warns when eBay search results are not sold/completed listings and offers a one-click switch.
-- **Shopify Buttons** - Instantly check market pricing for items when viewing in Shopify.
-- **Offer Calculator** - Automated buyout offer calculations based on projected sell prices with support for custom rate profiles.
-- **Mobile Scanner** - Pairs with the Volt iPhone app for WebRTC barcode, OCR, dictation, and photo capture.
-- **Custom Search Providers** - Configurable search provider list for the command palette.
-- **Tab Management** - Recently closed tabs, open tabs, bookmarks, history, and quick links are available from the popup and new-tab surfaces.
+## Full Description
+
+Volt is a Chrome extension and companion iPhone scanner workflow built for electronics and product resale.
+
+Use Volt to speed up the repetitive parts of buying, pricing, and listing inventory. The extension keeps market research, offer calculation, search shortcuts, mobile scanner results, and listing helpers close to the browser tabs where the work already happens.
+
+Key features:
+
+- Search Google, eBay sold listings, PriceCharting, UPC sources, and Shopify inventory from one command surface.
+- Calculate buy offers from resale prices using configurable margin rules.
+- Pair with the Volt iPhone app to receive barcodes, OCR text, dictation, and product photos directly in Chrome.
+- Review scanner results in the side panel and use them while preparing listings.
+- Highlight and copy UPCs from product pages.
+- Add quick-action tools to supported Shopify admin pages.
+- Reopen recent tabs, manage quick links, and use a resale-focused new tab workspace.
+- Enable or disable extension tools so Volt matches your workflow.
+
+Volt is designed for sellers who handle physical products but do most of their research, pricing, inventory, and listing work in Chrome. It reduces tab switching, manual typing, and phone-to-computer transfer steps so product intake moves faster.

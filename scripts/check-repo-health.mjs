@@ -127,6 +127,26 @@ reportFailures(
   sourceTextTestViolations,
 );
 
+const easConfigPath = "eas.json";
+const easConfig = existsSync(easConfigPath)
+  ? JSON.parse(readFileSync(easConfigPath, "utf8"))
+  : {};
+reportFailures(
+  "Expo-hosted EAS Build profiles",
+  easConfig.build ? [easConfigPath] : [],
+);
+
+const packageScriptBuildViolations = [];
+for (const file of trackedFiles.filter((file) => file.endsWith("package.json"))) {
+  const packageJson = JSON.parse(readFileSync(file, "utf8"));
+  for (const [scriptName, scriptCommand] of Object.entries(packageJson.scripts ?? {})) {
+    if (/\beas\s+build\b/.test(scriptCommand)) {
+      packageScriptBuildViolations.push(`${file} scripts.${scriptName}`);
+    }
+  }
+}
+reportFailures("package scripts that invoke eas build", packageScriptBuildViolations);
+
 if (failed) {
   process.exitCode = 1;
 }

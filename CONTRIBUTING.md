@@ -38,6 +38,8 @@ pnpm --filter @volt/mobile build:ios
 
 The iOS compile check should use the repository script above. It targets the generic iOS Simulator destination and does not require forcing a concrete simulator ID.
 
+Mobile build artifacts should be produced locally with Xcode or fastlane. Do not add `eas build` scripts or EAS build profiles; EAS is only used to submit an already-exported IPA to App Store Connect.
+
 ## Pull Requests
 
 - Explain the user-facing change and the reason for it.
