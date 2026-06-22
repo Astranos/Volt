@@ -5,8 +5,12 @@ import {
   AlertTriangle,
   CheckCircle2,
   Info,
+  Loader2,
+  QrCode,
+  Smartphone,
   XCircle,
 } from "lucide-react";
+import type { ScannerConnectionStatus } from "@volt/scanner-protocol";
 import { cn } from "../../lib/utils";
 import {
   SIDEPANEL_TOOLS,
@@ -52,6 +56,8 @@ const TOAST_TONE_STYLES: Record<
 export default function UnifiedSidepanel() {
   const [activeTool, setActiveTool] =
     useState<SidepanelToolId>("mobile-scanner");
+  const [scannerStatus, setScannerStatus] =
+    useState<ScannerConnectionStatus>("disconnected");
   const [toast, setToast] = useState<ActiveToast | null>(null);
   const toastTimer = useRef<number | null>(null);
   const toastCounter = useRef(0);
@@ -80,6 +86,27 @@ export default function UnifiedSidepanel() {
       );
       if (toastTimer.current) window.clearTimeout(toastTimer.current);
     };
+  }, []);
+
+  useEffect(() => {
+    if (typeof chrome === "undefined" || !chrome.runtime) return;
+
+    chrome.runtime.sendMessage({ action: "scannerGetState" }, (response) => {
+      if (chrome.runtime.lastError) return;
+      if (response?.state?.status) {
+        setScannerStatus(response.state.status as ScannerConnectionStatus);
+      }
+    });
+
+    const listener = (message: any) => {
+      if (message?.action !== "scannerStateChanged") return;
+      if (message?.state?.status) {
+        setScannerStatus(message.state.status as ScannerConnectionStatus);
+      }
+    };
+
+    chrome.runtime.onMessage.addListener(listener);
+    return () => chrome.runtime.onMessage.removeListener(listener);
   }, []);
 
   // Load the initial tool from storage
@@ -124,6 +151,13 @@ export default function UnifiedSidepanel() {
     }
   };
 
+  const openMobilePairingPopup = () => {
+    if (typeof chrome === "undefined" || !chrome.runtime) return;
+    chrome.runtime.sendMessage({
+      action: "openMobileCapturePopup",
+    });
+  };
+
   const componentMap: Record<
     SidepanelToolId,
     React.ComponentType<{ onClose?: () => void }>
@@ -162,6 +196,12 @@ export default function UnifiedSidepanel() {
             <ActiveToolIcon className="sidepanel-inline-tool-icon" />
             <span>{activeToolMeta.label}</span>
           </div>
+          {!toast && activeTool === "mobile-scanner" ? (
+            <SidepanelMobilePairingStatus
+              status={scannerStatus}
+              onClick={openMobilePairingPopup}
+            />
+          ) : null}
           {toast && ToastIcon ? (
             <span
               key={toast.id}
@@ -183,5 +223,39 @@ export default function UnifiedSidepanel() {
         </div>
       </div>
     </div>
+  );
+}
+
+function SidepanelMobilePairingStatus({
+  onClick,
+  status,
+}: {
+  onClick: () => void;
+  status: ScannerConnectionStatus;
+}) {
+  const isPaired = status === "connected";
+  const isCreating = status === "creating";
+  const isReady = status === "waiting";
+  const label = isPaired ? "Connected" : isCreating ? "Connecting" : isReady ? "Pair Phone" : "Connect Phone";
+  const Icon = isPaired ? Smartphone : isCreating ? Loader2 : isReady ? QrCode : Smartphone;
+  const tone = isPaired
+    ? "is-paired"
+    : isReady
+      ? "is-ready"
+      : isCreating
+        ? "is-creating"
+        : "is-inactive";
+
+  return (
+    <button
+      type="button"
+      className={`sidepanel-mobile-status ${tone}`}
+      onClick={onClick}
+      aria-label="Open mobile pairing"
+      title="Open mobile pairing"
+    >
+      <Icon className={isCreating ? "animate-spin" : undefined} />
+      <span>{label}</span>
+    </button>
   );
 }

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Calculator, CheckCircle2, Loader2, Pencil, Smartphone, X } from "lucide-react";
+import { Calculator, CheckCircle2, Loader2, Pencil, Settings, Smartphone, X } from "lucide-react";
 import QRCode from "qrcode";
 import type { ScannerConnectionStatus } from "@volt/scanner-protocol";
 import {
@@ -223,6 +223,11 @@ function MobileScannerPopup() {
     window.close();
   }, []);
 
+  const openSettings = useCallback(async () => {
+    await chrome.runtime.sendMessage({ action: "open-settings" });
+    window.close();
+  }, []);
+
   const title = "Mobile Scanner";
   const subtitle = state.status === "connected" ? "Connected to this browser" : "Scan QR code with app";
   const showQr = Boolean(qrDataUrl) && (state.status === "waiting" || state.status === "connected");
@@ -238,13 +243,24 @@ function MobileScannerPopup() {
             <h1>{title}</h1>
             <p>{subtitle}</p>
           </div>
-          <PopupStatus status={state.status} />
+          <button
+            type="button"
+            className="popup-settings-button"
+            onClick={() => void openSettings()}
+            aria-label="Open settings"
+            title="Open settings"
+          >
+            <Settings className="h-4 w-4" />
+          </button>
         </div>
 
         <div className="popup-session-card">
           <label className="popup-session-label">
-          <Pencil className="h-3 w-3" />
-          Chrome session name
+            <span className="popup-session-label-main">
+              <Pencil className="h-3 w-3" />
+              Session name
+            </span>
+            {labelSaved ? <span className="popup-session-saved">Saved</span> : null}
           </label>
           <input
             value={sessionLabel}
@@ -261,9 +277,6 @@ function MobileScannerPopup() {
             placeholder="Chrome session"
             aria-label="Chrome session name"
           />
-          <div className="popup-session-help">
-            {labelSaved ? "Saved for future QR sessions" : "Reused by this browser profile"}
-          </div>
         </div>
       </section>
 
@@ -324,32 +337,6 @@ function PopupQrCode({ qrDataUrl }: { qrDataUrl: string }) {
         className="popup-qr-image"
       />
     </div>
-  );
-}
-
-function PopupStatus({ status }: { status: ScannerConnectionStatus }) {
-  const label =
-    status === "connected"
-      ? "Connected"
-      : status === "waiting"
-        ? "Ready"
-        : status === "creating"
-          ? "Creating"
-          : status === "error"
-            ? "Error"
-            : "Idle";
-  const tone =
-    status === "connected"
-      ? "popup-status-connected"
-      : status === "error"
-        ? "popup-status-error"
-        : status === "waiting"
-          ? "popup-status-ready"
-          : "popup-status-idle";
-  return (
-    <span className={`popup-status ${tone}`}>
-      {label}
-    </span>
   );
 }
 

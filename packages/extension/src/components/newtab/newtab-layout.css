@@ -259,9 +259,9 @@
 }
 
 .newtab-mobile-status.is-ready {
-  background: rgba(20, 83, 45, 0.1);
-  border-color: rgba(20, 83, 45, 0.24);
-  color: #14532d;
+  background: rgba(255, 255, 255, 0.72);
+  border-color: var(--nt-border);
+  color: var(--nt-text-muted);
 }
 
 .newtab-mobile-status.is-creating {
@@ -292,9 +292,9 @@
   }
 
   .newtab-mobile-status.is-ready {
-    background: rgba(5, 46, 22, 0.62);
-    border-color: rgba(34, 197, 94, 0.34);
-    color: #bbf7d0;
+    background: rgba(38, 38, 38, 0.72);
+    border-color: rgba(212, 212, 212, 0.14);
+    color: #d4d4d4;
   }
 
   .newtab-mobile-status.is-creating {

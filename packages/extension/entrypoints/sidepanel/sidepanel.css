@@ -234,15 +234,18 @@ body {
   min-height: 0;
   position: relative;
   z-index: 1;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .sidepanel-inline-tool-title-wrap {
   align-items: center;
   display: flex;
   flex: none;
-  min-height: 50px;
-  padding: 10px 12px 4px;
+  gap: 10px;
+  justify-content: space-between;
+  min-height: 54px;
+  overflow: visible;
+  padding: 12px 18px 6px 12px;
   position: relative;
 }
 
@@ -273,6 +276,63 @@ body {
   white-space: nowrap;
 }
 
+.sidepanel-mobile-status {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 999px;
+  color: rgba(214, 211, 209, 0.82);
+  cursor: pointer;
+  display: inline-flex;
+  flex: none;
+  font-size: 12px;
+  font-weight: 750;
+  gap: 7px;
+  height: 34px;
+  max-width: 46%;
+  min-width: 0;
+  position: relative;
+  padding: 0 11px;
+  z-index: 2;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    transform 160ms ease;
+}
+
+.sidepanel-mobile-status svg {
+  color: currentColor;
+  flex: none;
+  height: 15px;
+  width: 15px;
+}
+
+.sidepanel-mobile-status span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidepanel-mobile-status:hover {
+  background: rgba(255, 255, 255, 0.075);
+  border-color: rgba(74, 222, 128, 0.34);
+  color: #f5f5f4;
+  transform: translateY(-1px);
+}
+
+.sidepanel-mobile-status.is-paired,
+.sidepanel-mobile-status.is-creating {
+  color: #86efac;
+}
+
+.sidepanel-mobile-status.is-ready {
+  background: rgba(38, 38, 38, 0.72);
+  border-color: rgba(212, 212, 212, 0.14);
+  color: #d4d4d4;
+}
+
 .sidepanel-inline-toast {
   align-items: center;
   display: flex;
@@ -293,7 +353,7 @@ body {
 }
 
 .top-offers-content {
-  padding: 6px 12px 16px;
+  padding: 6px 16px 16px;
 }
 
 .top-offers-content,
@@ -380,6 +440,22 @@ body {
   color: rgba(245, 245, 244, 0.84);
 }
 
+.sidepanel-results-title {
+  color: rgba(214, 211, 209, 0.78);
+}
+
+.sidepanel-results-header {
+  align-items: center;
+  display: flex;
+  min-height: 44px;
+  padding: 4px 16px 6px;
+}
+
+.sidepanel-results-header > div {
+  align-items: center;
+  width: 100%;
+}
+
 .mobile-scanner-card,
 .mobile-scanner-action,
 .mobile-scanner-icon,
@@ -452,6 +528,10 @@ body {
     color: #44403c;
   }
 
+  .sidepanel-results-title {
+    color: #57534e;
+  }
+
   .mobile-scanner-mini-action {
     border-color: rgba(15, 23, 42, 0.1);
     background: rgba(255, 255, 255, 0.72);
@@ -471,6 +551,30 @@ body {
 
   .sidepanel-inline-tool-icon {
     color: #16a34a;
+  }
+
+  .sidepanel-mobile-status {
+    background: rgba(255, 255, 255, 0.72);
+    border-color: rgba(15, 23, 42, 0.1);
+    color: #78716c;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+  }
+
+  .sidepanel-mobile-status:hover {
+    background: rgba(255, 255, 255, 0.92);
+    border-color: rgba(22, 163, 74, 0.28);
+    color: #1c1917;
+  }
+
+  .sidepanel-mobile-status.is-paired,
+  .sidepanel-mobile-status.is-creating {
+    color: #047857;
+  }
+
+  .sidepanel-mobile-status.is-ready {
+    background: rgba(255, 255, 255, 0.72);
+    border-color: rgba(15, 23, 42, 0.1);
+    color: #78716c;
   }
 }
 
@@ -545,8 +649,8 @@ body {
 
 @container (max-width: 430px) {
   .sidepanel-inline-tool-title-wrap {
-    min-height: 46px;
-    padding: 9px 10px 3px;
+    min-height: 50px;
+    padding: 10px 18px 5px 10px;
   }
 
   .sidepanel-inline-tool-icon {
@@ -599,15 +703,8 @@ body {
   }
 
   .sidepanel-results-header {
-    padding: 14px 12px 6px;
-  }
-
-  .sidepanel-results-title {
-    font-size: 13px;
-  }
-
-  .sidepanel-results-copy {
-    font-size: 11px;
+    min-height: 40px;
+    padding: 3px 12px 5px;
   }
 
   .sidepanel-results-folder {
@@ -622,7 +719,7 @@ body {
 
   .top-offers-content {
     gap: 10px;
-    padding: 5px 10px 14px;
+    padding: 5px 14px 14px;
   }
 
   .top-offers-results-list {
@@ -674,7 +771,7 @@ body {
 
   .sidepanel-inline-tool-title-wrap {
     padding-left: 10px;
-    padding-right: 10px;
+    padding-right: 16px;
   }
 
   .sidepanel-inline-tool-title span {
@@ -682,8 +779,8 @@ body {
   }
 
   .top-offers-content {
-    padding-left: 8px;
-    padding-right: 8px;
+    padding-left: 12px;
+    padding-right: 12px;
   }
 
   .top-offers-value-button {

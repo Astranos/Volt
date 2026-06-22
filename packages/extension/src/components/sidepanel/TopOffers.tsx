@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Calculator, Check, Settings } from "lucide-react";
+import { Check, Settings } from "lucide-react";
 import SidepanelLayout from "./SidepanelLayout";
 import { cn } from "../../lib/utils";
 import type {
@@ -200,7 +200,6 @@ function TopOfferCalculator() {
       <div className="top-offers-content">
         <div className="top-offers-input-card">
           <label className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-normal text-stone-500 dark:text-stone-400">
-            <Calculator className="h-3.5 w-3.5" />
             Projected sale price
           </label>
           <div className="top-offers-input-shell flex items-center gap-2 transition focus-within:ring-2 focus-within:ring-green-500/40">
