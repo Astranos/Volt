@@ -168,6 +168,13 @@ const platformItems = [
   },
 ];
 
+const extensionScreenshots = {
+  activeWarning: "/assets/extension/ebay-sold-listing-warning.png",
+  contextMenu: "/assets/extension/quick-actions.png",
+  shopify: "/assets/extension/shopify-buttons.png",
+  upc: "/assets/extension/upc-highlighter.png",
+};
+
 function Home() {
   return (
     <main className="min-h-screen bg-zinc-50 text-zinc-950">
@@ -244,7 +251,12 @@ function Home() {
 function HeroPanel() {
   return (
     <div className="mx-auto mt-8 max-w-6xl lg:mt-10">
-      <BrowserWorkspaceMock />
+      <div className="lg:hidden">
+        <MobileNewTabDemo />
+      </div>
+      <div className="hidden lg:block">
+        <BrowserWorkspaceMock />
+      </div>
     </div>
   );
 }
@@ -333,46 +345,91 @@ function CaptureSection() {
   return (
     <section className="border-b border-zinc-200 bg-zinc-50">
       <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
-        <div className="grid gap-12 lg:grid-cols-[0.86fr_1.14fr] lg:items-center">
-          <div>
-            <p className="text-sm font-semibold text-zinc-500">Two connected surfaces</p>
-            <h2 className="mt-3 max-w-xl text-3xl font-semibold leading-tight text-zinc-950 sm:text-4xl">
-              Use the phone for capture and Chrome for the resale work.
+        <div className="flex flex-col justify-between gap-8 lg:flex-row lg:items-end">
+          <div className="max-w-3xl">
+            <p className="text-sm font-semibold text-zinc-500">Chrome extension</p>
+            <h2 className="mt-3 text-3xl font-semibold leading-tight text-zinc-950 sm:text-4xl">
+              Page-aware tools that stay out of the way.
             </h2>
-            <p className="mt-5 max-w-xl text-base leading-7 text-zinc-600">
-              Volt keeps the mobile app and browser extension focused on different jobs. The iPhone captures product information quickly, then the Chrome extension receives it where buying, pricing, and listing already happen.
-            </p>
-            <div className="mt-8 grid gap-3 sm:grid-cols-2">
-              <SurfaceBadge icon={Smartphone} label="iPhone capture app" />
-              <SurfaceBadge icon={Chrome} label="Chrome resale tools" />
-            </div>
           </div>
+          <p className="max-w-xl text-base leading-7 text-zinc-600">
+            Volt adds focused controls to the browser surfaces resellers already use: UPC pages, product pages, Shopify Admin, and eBay sold-listing checks.
+          </p>
+        </div>
 
-          <div className="grid gap-4 md:grid-cols-[0.85fr_1.15fr]">
-            <figure className="overflow-hidden rounded-[1.25rem] border border-zinc-200 bg-white">
-              <img
-                src="/assets/product/mobile-06-capture-photo-viewfinder.png"
-                alt="Volt mobile photo capture"
-                className="h-full min-h-[24rem] w-full object-cover object-top"
-              />
-            </figure>
-            <div className="grid content-center gap-4">
-              {browserFeatures.slice(0, 3).map((item) => (
-                <article key={item.title} className="rounded-[1.1rem] border border-zinc-200 bg-white p-5 shadow-sm">
-                  <div className="flex items-center gap-3">
-                    <div className="grid size-10 shrink-0 place-items-center rounded-[0.8rem] bg-zinc-950 text-white">
-                      <item.icon size={19} />
-                    </div>
-                    <h3 className="text-sm font-semibold text-zinc-950">{item.title}</h3>
-                  </div>
-                  <p className="mt-3 text-sm leading-6 text-zinc-600">{item.body}</p>
-                </article>
-              ))}
-            </div>
-          </div>
+        <div className="mt-10">
+          <ChromeExtensionShowcase />
         </div>
       </div>
     </section>
+  );
+}
+
+function ChromeExtensionShowcase() {
+  return (
+    <div className="grid gap-5">
+      <div className="grid gap-5 lg:grid-cols-[1fr_1fr]">
+        <ExtensionFeatureCard
+          body="Highlight product text, then open eBay solds, Google UPC, PriceCharting, mobile scanner, offer calculator, or settings."
+          image={extensionScreenshots.contextMenu}
+          imageClassName="h-[21rem] object-contain"
+          mediaClassName="bg-zinc-100 p-4"
+          title="Context menu searches"
+        />
+        <ExtensionFeatureCard
+          body="When eBay is showing asking prices, Volt prompts you to switch to sold listings before pricing."
+          image={extensionScreenshots.activeWarning}
+          imageClassName="h-[21rem] object-contain"
+          mediaClassName="bg-zinc-100 p-4"
+          title="Active-listing warning"
+        />
+      </div>
+
+      <div className="grid gap-5 lg:grid-cols-[0.88fr_1.12fr]">
+        <ExtensionFeatureCard
+          body="12-digit UPCs are highlighted inline and copied with one click."
+          image={extensionScreenshots.upc}
+          imageClassName="h-[14rem] object-contain"
+          mediaClassName="bg-zinc-100 p-3"
+          title="Click-to-copy UPCs"
+        />
+        <ExtensionFeatureCard
+          body="Open eBay solds or PriceCharting from product title and UPC fields."
+          image={extensionScreenshots.shopify}
+          imageClassName="h-[14rem] object-contain"
+          mediaClassName="bg-zinc-100 p-3"
+          title="Shopify search tabs"
+        />
+      </div>
+    </div>
+  );
+}
+
+function ExtensionFeatureCard({
+  body,
+  image,
+  imageClassName,
+  mediaClassName,
+  title,
+}: {
+  body: string;
+  image: string;
+  imageClassName: string;
+  mediaClassName: string;
+  title: string;
+}) {
+  return (
+    <article className="overflow-hidden rounded-[1.2rem] border border-zinc-200 bg-white shadow-sm">
+      <div className={`overflow-hidden border-b border-zinc-200 ${mediaClassName}`}>
+        <div className="overflow-hidden rounded-[0.85rem] bg-white">
+          <img src={image} alt={`${title} demo`} className={`w-full ${imageClassName}`} />
+        </div>
+      </div>
+      <div className="p-5">
+        <h3 className="text-sm font-semibold text-zinc-950">{title}</h3>
+        <p className="mt-2 text-sm leading-6 text-zinc-600">{body}</p>
+      </div>
+    </article>
   );
 }
 
@@ -444,15 +501,6 @@ function PrivacySection() {
         </div>
       </div>
     </footer>
-  );
-}
-
-function SurfaceBadge({ icon: Icon, label }: { icon: typeof Search; label: string }) {
-  return (
-    <div className="inline-flex items-center gap-3 rounded-[1rem] border border-zinc-200 bg-white px-4 py-3 text-sm font-semibold text-zinc-800 shadow-sm">
-      <Icon size={18} className="text-emerald-600" />
-      {label}
-    </div>
   );
 }
 
@@ -584,6 +632,76 @@ function BrowserWorkspaceMock() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function MobileNewTabDemo() {
+  return (
+    <div className="overflow-hidden rounded-[1.2rem] border border-zinc-200 bg-white shadow-xl shadow-zinc-950/10">
+      <div className="relative overflow-hidden bg-gradient-to-b from-emerald-50 via-white to-zinc-50 p-4">
+        <div className="absolute left-1/2 top-0 size-64 -translate-x-1/2 rounded-full bg-emerald-200/55 blur-3xl" />
+        <div className="relative">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <img src="/assets/volt.webp" alt="" className="size-7 rounded-[0.6rem]" />
+              <span className="text-sm font-semibold text-zinc-950">Volt</span>
+            </div>
+            <PairingStatus status="paired" />
+          </div>
+
+          <div className="mt-6 text-center">
+            <p className="text-xs font-semibold text-zinc-600">Good evening</p>
+            <div className="mt-1 flex items-baseline justify-center gap-1.5 text-zinc-950">
+              <span className="text-5xl font-bold leading-none">7:21</span>
+              <span className="text-base font-semibold">PM</span>
+            </div>
+            <p className="mt-1.5 text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-zinc-400">
+              Sunday, June 21
+            </p>
+          </div>
+
+          <section className="mt-6 overflow-hidden rounded-[1rem] border border-zinc-200 bg-white/90 shadow-lg shadow-zinc-950/10 backdrop-blur">
+            <div className="border-b border-zinc-200 p-3">
+              <div className="flex items-center gap-2 rounded-[0.85rem] bg-zinc-100 px-3 py-2 text-sm text-zinc-500">
+                <Search size={16} />
+                <span className="min-w-0 truncate">Search resale prices</span>
+              </div>
+              <div className="mt-2 grid grid-cols-3 gap-1 rounded-[0.8rem] bg-zinc-100 p-1 text-[0.68rem] font-semibold text-zinc-600">
+                <span className="flex h-7 items-center justify-center rounded-[0.65rem]">Google</span>
+                <span className="flex h-7 items-center justify-center rounded-[0.65rem] bg-emerald-600 text-white shadow-sm">eBay sold</span>
+                <span className="flex h-7 items-center justify-center rounded-[0.65rem]">Shopify</span>
+              </div>
+            </div>
+
+            <div className="p-3">
+              <div className="mb-2 flex items-center gap-1.5 text-[0.65rem] font-semibold uppercase tracking-wide text-zinc-400">
+                <RotateCcw size={12} />
+                Pick up where you left off
+              </div>
+              <div className="space-y-2">
+                <MockTab title="eBay solds - PS5 Slim Disc" url="ebay.com" time="58s" />
+                <MockTab title="Shopify product draft" url="admin.shopify.com" time="2m" />
+                <MockTab title="PriceCharting: PlayStation 5" url="pricecharting.com" time="3h" />
+              </div>
+            </div>
+          </section>
+
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <MobileToolButton icon={Calculator} label="Offer calculator" />
+            <MobileToolButton icon={Smartphone} label="Mobile scanner" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MobileToolButton({ icon: Icon, label }: { icon: typeof Search; label: string }) {
+  return (
+    <div className="flex min-w-0 items-center justify-center gap-1.5 rounded-[0.8rem] border border-zinc-200 bg-white px-2.5 py-2 text-xs font-semibold text-zinc-700 shadow-sm">
+      <Icon size={14} className="shrink-0 text-emerald-600" />
+      <span className="min-w-0 truncate">{label}</span>
     </div>
   );
 }
