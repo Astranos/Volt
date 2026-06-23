@@ -22,6 +22,7 @@ export type PeerConnectionEvents = {
   configurePhotoChannel: (peer: PeerSession, channel: RTCDataChannel) => void;
   onPeerConnected: (peer: PeerSession) => void;
   onPeerDisconnected: (peer: PeerSession) => void;
+  onRemoteAudioTrack?: (peer: PeerSession, track: MediaStreamTrack, streams: readonly MediaStream[]) => void;
   log?: (...args: unknown[]) => void;
 };
 
@@ -49,6 +50,13 @@ export class MobileScannerPeerConnections {
       ready: false,
     };
     this.peers.set(joinAttemptId, peer);
+
+    pc.addTransceiver("audio", { direction: "recvonly" });
+    pc.ontrack = (event) => {
+      if (event.track.kind !== "audio") return;
+      this.events.log?.("[Volt Scanner Pairing] remote audio track received", { joinAttemptId });
+      this.events.onRemoteAudioTrack?.(peer, event.track, event.streams);
+    };
 
     peer.control = pc.createDataChannel(SCANNER_CONTROL_CHANNEL_LABEL, { ordered: true });
     peer.photoTransfer = pc.createDataChannel(PHOTO_TRANSFER_CHANNEL_LABEL, { ordered: true });

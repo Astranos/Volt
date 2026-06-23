@@ -93,6 +93,7 @@ struct CaptureSessionView: View {
                         gridVisible: gridVisible,
                         hasLiveTextCandidates: !store.camera.liveTextCandidates.isEmpty,
                         isRecognizingText: store.isRecognizingText,
+                        barcodeHint: ScreenshotScenario.current == .captureBarcode ? "Send '883929739929'" : "Point camera at barcode",
                         onToggleTorch: {
                             store.camera.setTorchEnabled(!store.camera.torchEnabled)
                         },

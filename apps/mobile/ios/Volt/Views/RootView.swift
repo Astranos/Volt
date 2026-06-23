@@ -341,23 +341,6 @@ private struct PairingStatusSheet: View {
     }
 }
 
-enum ScannerTabLayout {
-    static let stackSpacing: CGFloat = 18
-    static let contentPadding: CGFloat = 20
-    static let topPadding: CGFloat = 8
-    static let bottomAccessoryContentPadding: CGFloat = 84
-    static let primaryActionCornerRadius: CGFloat = 22
-    static let disabledPrimaryActionOpacity = 0.68
-
-    static var background: Color {
-        Color(.systemGroupedBackground)
-    }
-
-    static func primaryActionBackground(isEnabled: Bool) -> Color {
-        isEnabled ? .green : .gray
-    }
-}
-
 struct ScannerSectionHeader<TrailingAccessory: View>: View {
     @Environment(ScannerStore.self) private var store
     let title: String
@@ -375,49 +358,12 @@ struct ScannerSectionHeader<TrailingAccessory: View>: View {
     }
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
-            Text(title)
-                .font(.largeTitle.bold())
-                .lineLimit(1)
-                .minimumScaleFactor(0.82)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
+        ScannerChromeSectionHeader(
+            title: title,
+            connection: connectionSummary,
+            onConnectionControlTapped: onConnectionControlTapped
+        ) {
             trailingAccessory()
-
-            connectionControl
-        }
-        .accessibilityElement(children: .contain)
-    }
-
-    @ViewBuilder
-    private var connectionControl: some View {
-        if store.connectionStatus.isConnected {
-            Button {
-                onConnectionControlTapped()
-            } label: {
-                Text(connectedSessionName)
-                    .font(.headline)
-                    .foregroundStyle(.green)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.76)
-                    .padding(.horizontal, 18)
-                    .frame(minHeight: 44)
-                    .background(.regularMaterial, in: Capsule())
-            }
-            .accessibilityLabel("Connected to \(connectedSessionName). Open sessions.")
-        } else {
-            Button {
-                onConnectionControlTapped()
-            } label: {
-                Label("Connect", systemImage: "desktopcomputer")
-                    .font(.headline)
-                    .foregroundStyle(statusColor)
-                    .lineLimit(1)
-                    .padding(.horizontal, 18)
-                    .frame(minHeight: 44)
-                    .background(.regularMaterial, in: Capsule())
-            }
-            .accessibilityLabel("Connect. Open sessions.")
         }
     }
 
@@ -441,17 +387,13 @@ struct ScannerSectionHeader<TrailingAccessory: View>: View {
         }?.displayName
     }
 
-    private var statusColor: Color {
-        switch store.connectionStatus {
-        case .connected:
-            .green
-        case .pairing, .waitingForChrome:
-            .orange
-        case .error:
-            .red
-        case .idle, .disconnected:
-            .secondary
-        }
+    private var connectionSummary: ScannerConnectionSummary {
+        ScannerConnectionSummary(
+            isConnected: store.connectionStatus.isConnected,
+            isBusy: store.connectionStatus == .pairing || store.connectionStatus == .waitingForChrome,
+            title: store.connectionStatus.isConnected ? connectedSessionName : "Connect",
+            statusText: store.targetHint
+        )
     }
 }
 

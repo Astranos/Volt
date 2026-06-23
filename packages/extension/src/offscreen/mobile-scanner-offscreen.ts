@@ -144,7 +144,7 @@ class MobileScannerOffscreenSession {
       action: "scannerOffscreenScan",
       scan: {
         ...data,
-        id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        id: data.id || `${Date.now()}-${Math.random().toString(36).slice(2)}`,
         scannedAt: data.scannedAt || new Date().toISOString(),
       },
     });

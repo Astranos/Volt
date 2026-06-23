@@ -14,9 +14,12 @@ Modes:
   start, run, web       Start the Volt web dev server
   extension             Start the Chrome extension dev server
   ios, mobile           Build, install, and launch the iOS app on a simulator
+  ios-appclip           Build, install, and launch the App Clip on a simulator
+  ios-appclip-device    Build, install, and launch the App Clip on Juan's iPhone
   build-web             Build the web app
   build-extension       Build the Chrome extension
   build-ios             Compile the iOS app for a generic simulator
+  build-ios-appclip     Compile the App Clip for a generic simulator
   test                  Run the repo test suite
   repo-health           Run repository health checks
   help, --help          Show this help
@@ -41,6 +44,12 @@ case "$MODE" in
   ios|mobile)
     run_pnpm dev:mobile
     ;;
+  ios-appclip)
+    run_pnpm dev:mobile:appclip
+    ;;
+  ios-appclip-device)
+    run_pnpm dev:mobile:appclip:device
+    ;;
   build-web)
     run_pnpm build:web
     ;;
@@ -49,6 +58,9 @@ case "$MODE" in
     ;;
   build-ios)
     run_pnpm build:mobile
+    ;;
+  build-ios-appclip)
+    run_pnpm build:mobile:appclip
     ;;
   test)
     run_pnpm test

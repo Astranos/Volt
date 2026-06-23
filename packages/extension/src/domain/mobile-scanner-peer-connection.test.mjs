@@ -36,6 +36,8 @@ test("peer offer creation fetches ICE servers before creating RTCPeerConnection"
   await peerConnections.createPeerOffer(joinWindow, "attempt-turn");
 
   assert.deepEqual(rtc.configs, [{ iceServers: turnIceServers }]);
+  assert.deepEqual(rtc.instances[0].transceivers, [{ kind: "audio", init: { direction: "recvonly" } }]);
+  assert.deepEqual(rtc.instances[0].operations.slice(0, 2), ["addTransceiver:audio", "createDataChannel:scanner-control"]);
   assert.equal(offers.length, 1);
   assert.equal(offers[0].joinAttemptId, "attempt-turn");
   assert.equal(offers[0].offer.type, "offer");
@@ -64,18 +66,45 @@ test("peer offer creation falls back to static STUN servers when ICE fetch fails
   assert.equal(logs.some(([message]) => message === "[Volt Scanner Pairing] falling back to STUN-only ICE servers"), true);
 });
 
-function createEvents({ log = () => {} } = {}) {
+test("peer connection forwards remote audio tracks", async () => {
+  const rtc = installFakeRTCPeerConnection();
+  const remoteTracks = [];
+  const peerConnections = new MobileScannerPeerConnections(
+    {
+      fetchIceServers: async () => turnIceServers,
+      postPeerOffer: async () => {},
+    },
+    createEvents({
+      onRemoteAudioTrack: (peer, track, streams) => remoteTracks.push({ peer, track, streams }),
+    }),
+  );
+
+  await peerConnections.createPeerOffer(joinWindow, "attempt-audio");
+
+  const track = { kind: "audio" };
+  const stream = { id: "remote-stream" };
+  rtc.instances[0].ontrack({ track, streams: [stream] });
+
+  assert.equal(remoteTracks.length, 1);
+  assert.equal(remoteTracks[0].peer.id, "attempt-audio");
+  assert.equal(remoteTracks[0].track, track);
+  assert.deepEqual(remoteTracks[0].streams, [stream]);
+});
+
+function createEvents({ log = () => {}, onRemoteAudioTrack = () => {} } = {}) {
   return {
     configureControlChannel: () => {},
     configurePhotoChannel: () => {},
     onPeerConnected: () => {},
     onPeerDisconnected: () => {},
+    onRemoteAudioTrack,
     log,
   };
 }
 
 function installFakeRTCPeerConnection() {
   const configs = [];
+  const instances = [];
 
   globalThis.RTCPeerConnection = class FakeRTCPeerConnection {
     connectionState = "new";
@@ -83,12 +112,22 @@ function installFakeRTCPeerConnection() {
     localDescription = null;
     onconnectionstatechange = null;
     onicegatheringstatechange = null;
+    ontrack = null;
+    operations = [];
+    transceivers = [];
 
     constructor(config) {
       configs.push(config);
+      instances.push(this);
+    }
+
+    addTransceiver(kind, init) {
+      this.operations.push(`addTransceiver:${kind}`);
+      this.transceivers.push({ kind, init });
     }
 
     createDataChannel(label) {
+      this.operations.push(`createDataChannel:${label}`);
       return {
         label,
         close() {},
@@ -110,5 +149,5 @@ function installFakeRTCPeerConnection() {
     }
   };
 
-  return { configs };
+  return { configs, instances };
 }

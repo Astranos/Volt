@@ -40,7 +40,10 @@ export function createMobileCaptureTargetController({
   const mobileCursorTargetsByTabId = new Map<number, MobileCursorTarget>();
 
   function getTrackedTarget(tabId: number) {
-    return mobileCursorTargetsByTabId.get(tabId) ?? null;
+    const exactTarget = mobileCursorTargetsByTabId.get(tabId);
+    if (exactTarget) return exactTarget;
+    return Array.from(mobileCursorTargetsByTabId.values())
+      .sort((lhs, rhs) => (rhs.updatedAt ?? 0) - (lhs.updatedAt ?? 0))[0] ?? null;
   }
 
   function deleteTrackedTarget(tabId: number) {
@@ -51,6 +54,8 @@ export function createMobileCaptureTargetController({
     try {
       const [tab] = await chromeApi.tabs.query({ active: true, currentWindow: true });
       if (!tab) {
+        const latestTrackedTarget = getTrackedTarget(-1);
+        if (latestTrackedTarget) return latestTrackedTarget;
         return {
           browser: "Chrome",
           cursor: "Last focused editable field",
@@ -85,6 +90,8 @@ export function createMobileCaptureTargetController({
       target && typeof target === "object"
         ? {
             browser: clampString((target as MobileCursorTarget).browser || "Chrome", 80),
+            tabId: senderTabId ?? undefined,
+            windowId: typeof sender?.tab?.windowId === "number" ? sender.tab.windowId : undefined,
             tabTitle: clampString((target as MobileCursorTarget).tabTitle || "Current tab", 160),
             url: clampString((target as MobileCursorTarget).url || "", 600),
             cursor: clampString((target as MobileCursorTarget).cursor || "Last focused editable field", 120),

@@ -78,9 +78,9 @@ export function createOffscreenDocumentController({
     try {
       const createOptions: OffscreenCreateParameters = {
         url: documentPath,
-        reasons: ["DOM_SCRAPING", "CLIPBOARD", "WEB_RTC"],
+        reasons: ["DOM_SCRAPING", "CLIPBOARD", "WEB_RTC", "USER_MEDIA", "AUDIO_PLAYBACK"],
         justification:
-          "Gamepad detection, clipboard fallback, and the mobile scanner connection run without visible extension UI",
+          "Gamepad detection, clipboard fallback, mobile scanner WebRTC, and remote audio dictation run without visible extension UI",
       };
       try {
         await chromeApi.offscreen.createDocument(createOptions);

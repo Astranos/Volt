@@ -46,17 +46,19 @@ export function installEditableTracker() {
     return String(label).slice(0, 120);
   };
 
+  const targetMetadata = (element: HTMLElement) => ({
+    browser: "Chrome",
+    tabTitle: document.title || "Current tab",
+    url: location.href,
+    cursor: describeEditable(element),
+    updatedAt: Date.now(),
+  });
+
   const notifyTarget = (element: HTMLElement) => {
     try {
       chrome.runtime.sendMessage({
         action: "mobileCursorTargetChanged",
-        target: {
-          browser: "Chrome",
-          tabTitle: document.title || "Current tab",
-          url: location.href,
-          cursor: describeEditable(element),
-          updatedAt: Date.now(),
-        },
+        target: targetMetadata(element),
       });
     } catch (_error) {}
   };
@@ -87,14 +89,18 @@ export function installEditableTracker() {
         selection && selection.rangeCount > 0 ? selection.getRangeAt(0).cloneRange() : null;
     }
     notifyTarget(editable);
+    return targetMetadata(editable);
   };
 
-  track(document.activeElement);
+  const currentTarget = track(document.activeElement);
 
-  if (root.__voltEditableTrackerInstalled) return;
-  document.addEventListener("focusin", (event) => track(event.target), true);
-  document.addEventListener("selectionchange", () => track(document.activeElement), true);
-  document.addEventListener("keyup", (event) => track(event.target), true);
-  document.addEventListener("pointerup", (event) => track(event.target), true);
-  root.__voltEditableTrackerInstalled = true;
+  if (!root.__voltEditableTrackerInstalled) {
+    document.addEventListener("focusin", (event) => track(event.target), true);
+    document.addEventListener("selectionchange", () => track(document.activeElement), true);
+    document.addEventListener("keyup", (event) => track(event.target), true);
+    document.addEventListener("pointerup", (event) => track(event.target), true);
+    root.__voltEditableTrackerInstalled = true;
+  }
+
+  return currentTarget ?? null;
 }

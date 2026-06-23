@@ -14,9 +14,20 @@ const getArg = (name, fallback) => {
 
 const configuration = args.has("--release") ? "Release" : "Debug";
 const workspace = "ios/Volt.xcworkspace";
-const scheme = "Volt";
-const bundleId = "com.volt.mobile";
-const derivedData = path.resolve("ios/build");
+const target = args.has("--appclip")
+  ? {
+      scheme: "VoltClip",
+      bundleId: "com.volt.mobile.Clip",
+      productName: "VoltClip",
+      derivedDataDirectory: "build-appclip",
+    }
+  : {
+      scheme: "Volt",
+      bundleId: "com.volt.mobile",
+      productName: "Volt",
+      derivedDataDirectory: "build",
+    };
+const derivedData = path.resolve("ios", target.derivedDataDirectory);
 const mode = args.has("--device") ? "device" : "simulator";
 const destinationName = getArg("--name", mode === "device" ? undefined : "iPhone 17 Pro Max");
 const destinationId = getArg("--id", undefined);
@@ -41,6 +52,29 @@ function simulatorId() {
   throw new Error(`No available simulator named "${destinationName}". Pass --name="..." or --id=...`);
 }
 
+function physicalDeviceId() {
+  if (destinationId) return destinationId;
+  const destinations = output("xcodebuild", [
+    "-workspace", workspace,
+    "-scheme", target.scheme,
+    "-showdestinations",
+  ]);
+  const lines = destinations
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith("{") && line.includes("platform:iOS,"));
+
+  for (const line of lines) {
+    if (line.includes("dvtdevice-DVTiPhonePlaceholder")) continue;
+    if (destinationName && !line.includes(`name:${destinationName}`)) continue;
+    const idMatch = line.match(/\bid:([^,}]+)/);
+    if (idMatch) return idMatch[1].trim();
+  }
+
+  const nameHint = destinationName ? ` named "${destinationName}"` : "";
+  throw new Error(`No connected iOS device${nameHint}. Pass --id=... or connect and unlock the device.`);
+}
+
 function bootSimulator(udid) {
   spawnSync("xcrun", ["simctl", "boot", udid], { stdio: "ignore" });
   run("xcrun", ["simctl", "bootstatus", udid, "-b"]);
@@ -49,7 +83,7 @@ function bootSimulator(udid) {
 function build(destination) {
   const commandArgs = [
     "-workspace", workspace,
-    "-scheme", scheme,
+    "-scheme", target.scheme,
     "-configuration", configuration,
     "-derivedDataPath", derivedData,
     "-destination", destination,
@@ -62,23 +96,17 @@ if (mode === "simulator") {
   const udid = simulatorId();
   bootSimulator(udid);
   build(`platform=iOS Simulator,id=${udid}`);
-  const appPath = path.join(derivedData, "Build/Products", `${configuration}-iphonesimulator`, "Volt.app");
+  const appPath = path.join(derivedData, "Build/Products", `${configuration}-iphonesimulator`, `${target.productName}.app`);
   if (!existsSync(appPath)) throw new Error(`Built app not found at ${appPath}`);
   run("xcrun", ["simctl", "install", udid, appPath]);
-  run("xcrun", ["simctl", "launch", udid, bundleId]);
+  run("xcrun", ["simctl", "launch", udid, target.bundleId]);
   process.exit(0);
 }
 
-const deviceSelector = destinationId ? `id=${destinationId}` : `name=${destinationName ?? "Any iOS Device"}`;
-build(`platform=iOS,${deviceSelector}`);
-const appPath = path.join(derivedData, "Build/Products", `${configuration}-iphoneos`, "Volt.app");
+const deviceId = physicalDeviceId();
+build(`platform=iOS,id=${deviceId}`);
+const appPath = path.join(derivedData, "Build/Products", `${configuration}-iphoneos`, `${target.productName}.app`);
 if (!existsSync(appPath)) throw new Error(`Built app not found at ${appPath}`);
 
-if (!destinationId) {
-  console.log("Built for iPhone. For install+launch, rerun with --device --id=<device-udid>.");
-  console.log("Find your phone UDID with: xcrun devicectl list devices");
-  process.exit(0);
-}
-
-run("xcrun", ["devicectl", "device", "install", "app", "--device", destinationId, appPath]);
-run("xcrun", ["devicectl", "device", "process", "launch", "--device", destinationId, bundleId]);
+run("xcrun", ["devicectl", "device", "install", "app", "--device", deviceId, appPath]);
+run("xcrun", ["devicectl", "device", "process", "launch", "--device", deviceId, target.bundleId]);

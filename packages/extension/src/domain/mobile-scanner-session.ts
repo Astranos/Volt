@@ -7,6 +7,7 @@ import {
   isScannerProtocolVersionSupported,
   scannerControlDuplicateKey,
   type ScannerControlMessage,
+  type ScannerProtocolErrorCode,
 } from "@volt/scanner-protocol";
 import {
   type DurablePairingCredential,
@@ -29,10 +30,14 @@ import {
 } from "./mobile-scanner-signal-client";
 import {
   type BarcodeMessage,
+  MobileScannerRemoteSpeechRecognizer,
   type MobileScannerSessionEvents,
   type MobileScannerSessionState,
   type PhotoMessage,
   type SessionTarget,
+  createDictationMessageFromSpeechTranscript,
+  isRestartableRemoteSpeechError,
+  type SpeechRecognitionTranscript,
 } from "./mobile-scanner-session-types";
 import { shouldInsertScannerMessage } from "./scanner-message";
 
@@ -49,10 +54,21 @@ export {
 };
 
 const JOIN_WINDOW_TTL_MS = 2 * 60 * 1000;
+const REMOTE_SPEECH_START_RETRY_DELAY_MS = 250;
+const REMOTE_SPEECH_START_MAX_ATTEMPTS = 20;
 
 const EXTENSION_PROTOCOL_VERSION = {
   major: SCANNER_PROTOCOL_MAJOR_VERSION,
   minor: SCANNER_PROTOCOL_MINOR_VERSION,
+};
+
+type RemoteSpeechAudioBridge = {
+  context?: AudioContext;
+  destination?: MediaStreamAudioDestinationNode;
+  monitorGain?: GainNode;
+  source?: MediaStreamAudioSourceNode;
+  stream: MediaStream;
+  track: MediaStreamTrack;
 };
 
 function controlMessageType(rawData: string) {
@@ -70,6 +86,68 @@ function protocolVersionFromRawControl(rawData: string) {
     return (record.peer as { protocolVersion?: unknown }).protocolVersion ?? null;
   }
   return record.protocolVersion ?? record.version ?? null;
+}
+
+function remoteSpeechErrorDetail(error: unknown) {
+  const message = remoteSpeechErrorMessage(error);
+  const name = remoteSpeechErrorName(error);
+
+  if (error instanceof Error) {
+    if (error.message === "speech_recognition_unavailable") {
+      return "Chrome speech recognition is not available in this browser context.";
+    }
+    if (error.message === "speech_recognition_audio_track_start_unavailable") {
+      return "Chrome cannot start speech recognition from the App Clip audio stream on this browser version.";
+    }
+    if (error.message === "speech_recognition_requires_audio_track") {
+      return "Chrome did not receive an audio track from the App Clip.";
+    }
+    if (error.message === "speech_recognition_requires_live_audio_track") {
+      return "Chrome received the App Clip microphone track before it was live. Tap Dictate again.";
+    }
+    if (name === "InvalidStateError" && message.includes("MediaStreamTrack")) {
+      return "Chrome received the App Clip microphone track before it was live. Tap Dictate again.";
+    }
+    return error.message;
+  }
+
+  if (name === "InvalidStateError" && message.includes("MediaStreamTrack")) {
+    return "Chrome received the App Clip microphone track before it was live. Tap Dictate again.";
+  }
+  if (message) return message;
+
+  if (error && typeof error === "object" && "error" in error) {
+    const value = (error as { error?: unknown }).error;
+    if (typeof value === "string" && value.trim()) {
+      return `Chrome speech recognition failed: ${value}`;
+    }
+  }
+
+  return "Chrome speech recognition failed to start.";
+}
+
+function remoteSpeechErrorMessage(error: unknown) {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === "object" && "message" in error) {
+    const value = (error as { message?: unknown }).message;
+    if (typeof value === "string") return value;
+  }
+  return "";
+}
+
+function remoteSpeechErrorName(error: unknown) {
+  if (error instanceof Error) return error.name;
+  if (error && typeof error === "object" && "name" in error) {
+    const value = (error as { name?: unknown }).name;
+    if (typeof value === "string") return value;
+  }
+  return "";
+}
+
+function isTransientRemoteSpeechTrackStartError(error: unknown) {
+  const message = remoteSpeechErrorMessage(error);
+  const name = remoteSpeechErrorName(error);
+  return name === "InvalidStateError" && message.includes("MediaStreamTrack");
 }
 
 function scanFromControlMessage(message: ScannerControlMessage): (BarcodeMessage & { id?: string }) | null {
@@ -100,6 +178,7 @@ function scanFromControlMessage(message: ScannerControlMessage): (BarcodeMessage
 }
 
 export class MobileScannerSession {
+  private readonly events: MobileScannerSessionEvents;
   private joinWindow: JoinWindow | null = null;
   private peerPairings = new Map<string, DurablePairingCredential>();
   private readonly joinAttemptPoller: MobileScannerJoinAttemptPoller;
@@ -108,11 +187,20 @@ export class MobileScannerSession {
   private readonly photoReceiver: MobileScannerPhotoReceiver;
   private readonly reconnectPoller: MobileScannerReconnectPoller;
   private readonly signalClient = new MobileScannerSignalClient(JOIN_WINDOW_TTL_MS);
+  private readonly remoteSpeechRecognizers = new Map<string, MobileScannerRemoteSpeechRecognizer>();
+  private readonly remoteSpeechAudioBridges = new Map<string, RemoteSpeechAudioBridge>();
+  private readonly remoteSpeechSessionIds = new Map<string, string>();
+  private readonly remoteSpeechTracks = new Map<string, MediaStreamTrack>();
+  private readonly remoteSpeechSinks = new Map<string, HTMLAudioElement>();
+  private readonly pendingRemoteSpeechStarts = new Set<string>();
+  private readonly remoteSpeechStartAttempts = new Map<string, number>();
+  private readonly remoteSpeechStartRetryTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private seenControlMessages = new Set<string>();
   private target: SessionTarget | null = null;
   private state: MobileScannerSessionState;
 
-  constructor(private readonly events: MobileScannerSessionEvents) {
+  constructor(events: MobileScannerSessionEvents) {
+    this.events = events;
     this.state = {
       status: "disconnected",
       qrCodeUrl: null,
@@ -129,6 +217,7 @@ export class MobileScannerSession {
       configurePhotoChannel: (peer, channel) => this.configurePhotoChannel(peer, channel),
       onPeerConnected: () => this.handlePeerConnected(),
       onPeerDisconnected: (peer) => this.closePeer(peer.id),
+      onRemoteAudioTrack: (peer, track) => this.handleRemoteAudioTrack(peer, track),
       log: (...args) => this.events.log?.(...args),
     });
     this.joinAttemptPoller = new MobileScannerJoinAttemptPoller({
@@ -458,6 +547,20 @@ export class MobileScannerSession {
       return;
     }
 
+    if (control.type === "dictation" && control.phase === "started") {
+      this.pendingRemoteSpeechStarts.add(peer.id);
+      this.remoteSpeechStartAttempts.set(peer.id, 0);
+      this.remoteSpeechSessionIds.set(peer.id, control.dictationSessionId);
+      this.startRemoteSpeechRecognition(peer);
+      return;
+    }
+
+    if (control.type === "dictation" && control.phase === "stopped") {
+      this.pendingRemoteSpeechStarts.delete(peer.id);
+      this.stopRemoteSpeechRecognition(peer.id);
+      return;
+    }
+
     if (
       control.type === "result_received" ||
       control.type === "photo_chunk_ack" ||
@@ -475,33 +578,304 @@ export class MobileScannerSession {
       const duplicateKey = scannerControlDuplicateKey(control);
       const accepted = scannerMessage.format === "dictation" || !this.seenControlMessages.has(duplicateKey);
       if (accepted) this.seenControlMessages.add(duplicateKey);
-      const scanReceipt = accepted ? await this.events.onScan(scannerMessage) : true;
-      const stored = typeof scanReceipt === "object" ? scanReceipt.saved : scanReceipt;
-      let insertedIntoCursor =
-        typeof scanReceipt === "object" && typeof scanReceipt.insertedIntoCursor === "boolean"
-          ? scanReceipt.insertedIntoCursor
-          : false;
-      if (typeof scanReceipt !== "object" && shouldInsertScannerMessage(scannerMessage)) {
-        insertedIntoCursor = (await this.events.onInsert?.(scannerMessage.barcode, scannerMessage)) === true;
-      }
+      const receipt = accepted
+        ? await this.deliverScannerMessage(scannerMessage)
+        : { stored: true, insertedIntoCursor: false };
       this.sendControl(peer, {
         type: "result_received",
         messageId: createMessageId("control"),
         sentAt: new Date().toISOString(),
         resultId: control.type === "capture_result" ? control.resultId : control.messageId,
-        savedToResults: stored,
-        insertedIntoCursor,
+        savedToResults: receipt.stored,
+        insertedIntoCursor: receipt.insertedIntoCursor,
       });
     }
   }
 
-  private sendProtocolError(peer: PeerSession, code: "unsupported_protocol" | "invalid_message", receivedType?: string) {
+  private handleRemoteAudioTrack(peer: PeerSession, track: MediaStreamTrack) {
+    if (track.kind !== "audio") {
+      this.events.log?.("[Volt Scanner Pairing] ignoring non-audio remote track", {
+        joinAttemptId: peer.id,
+        kind: track.kind,
+      });
+      return;
+    }
+    this.remoteSpeechTracks.set(peer.id, track);
+    this.attachRemoteSpeechSink(peer.id, track);
+    track.addEventListener("ended", () => this.stopRemoteSpeechRecognition(peer.id), { once: true });
+    track.addEventListener("unmute", () => {
+      if (this.pendingRemoteSpeechStarts.has(peer.id)) {
+        this.startRemoteSpeechRecognition(peer);
+      }
+    });
+    if (this.pendingRemoteSpeechStarts.has(peer.id)) {
+      this.startRemoteSpeechRecognition(peer);
+    }
+  }
+
+  private attachRemoteSpeechSink(joinAttemptId: string, track: MediaStreamTrack) {
+    if (typeof document === "undefined" || typeof MediaStream === "undefined") return;
+    const previousSink = this.remoteSpeechSinks.get(joinAttemptId);
+    if (previousSink) {
+      previousSink.remove();
+    }
+
+    const sink = document.createElement("audio");
+    sink.autoplay = true;
+    sink.muted = true;
+    sink.setAttribute("playsinline", "true");
+    sink.srcObject = new MediaStream([track]);
+    sink.style.display = "none";
+    document.body?.appendChild(sink);
+    void sink.play().catch((error) => {
+      this.events.log?.("[Volt Scanner Pairing] remote speech sink play failed", {
+        joinAttemptId,
+        error: error instanceof Error ? error.message : error,
+      });
+    });
+    this.remoteSpeechSinks.set(joinAttemptId, sink);
+  }
+
+  private remoteSpeechTrackForRecognition(joinAttemptId: string, track: MediaStreamTrack) {
+    const existingBridge = this.remoteSpeechAudioBridges.get(joinAttemptId);
+    if (existingBridge?.track.readyState === "live") return existingBridge.track;
+    this.closeRemoteSpeechAudioBridge(joinAttemptId);
+
+    if (typeof MediaStream === "undefined") return track;
+    const AudioContextCtor =
+      globalThis.AudioContext ??
+      (globalThis as typeof globalThis & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextCtor) return track;
+
+    try {
+      const stream = new MediaStream([track]);
+      const context = new AudioContextCtor();
+      const source = context.createMediaStreamSource(stream);
+      const destination = context.createMediaStreamDestination();
+      const monitorGain = context.createGain();
+      monitorGain.gain.value = 0.001;
+      source.connect(destination);
+      source.connect(monitorGain);
+      monitorGain.connect(context.destination);
+      void context.resume?.().catch(() => {});
+      const speechTrack = destination.stream.getAudioTracks()[0];
+      if (!speechTrack) {
+        void context.close().catch(() => {});
+        return track;
+      }
+      this.remoteSpeechAudioBridges.set(joinAttemptId, {
+        context,
+        destination,
+        monitorGain,
+        source,
+        stream,
+        track: speechTrack,
+      });
+      this.events.log?.("[Volt Scanner Pairing] bridged remote audio track for Chrome speech", {
+        joinAttemptId,
+        contextState: context.state,
+        readyState: speechTrack.readyState,
+      });
+      return speechTrack;
+    } catch (error) {
+      this.events.log?.("[Volt Scanner Pairing] remote speech audio bridge failed", {
+        joinAttemptId,
+        error: error instanceof Error ? error.message : error,
+      });
+      return track;
+    }
+  }
+
+  private closeRemoteSpeechAudioBridge(joinAttemptId: string) {
+    const bridge = this.remoteSpeechAudioBridges.get(joinAttemptId);
+    this.remoteSpeechAudioBridges.delete(joinAttemptId);
+    if (!bridge) return;
+    try {
+      bridge.source?.disconnect();
+    } catch {}
+    try {
+      bridge.monitorGain?.disconnect();
+    } catch {}
+    try {
+      bridge.destination?.disconnect();
+    } catch {}
+    for (const track of bridge.stream.getTracks()) {
+      if (track !== this.remoteSpeechTracks.get(joinAttemptId)) track.stop();
+    }
+    if (bridge.track !== this.remoteSpeechTracks.get(joinAttemptId)) {
+      bridge.track.stop();
+    }
+    void bridge.context?.close().catch(() => {});
+  }
+
+  private startRemoteSpeechRecognition(peer: PeerSession) {
+    if (this.remoteSpeechRecognizers.has(peer.id)) return;
+    const retryTimer = this.remoteSpeechStartRetryTimers.get(peer.id);
+    if (retryTimer) {
+      clearTimeout(retryTimer);
+      this.remoteSpeechStartRetryTimers.delete(peer.id);
+    }
+    const track = this.remoteSpeechTracks.get(peer.id);
+    if (!track) {
+      this.events.log?.("[Volt Scanner Pairing] remote speech track unavailable", { joinAttemptId: peer.id });
+      return;
+    }
+    if (track.kind !== "audio") {
+      this.events.log?.("[Volt Scanner Pairing] remote speech track is not audio", {
+        joinAttemptId: peer.id,
+        kind: track.kind,
+      });
+      this.sendProtocolError(peer, "invalid_state", undefined, "Chrome did not receive an audio track from the App Clip.");
+      return;
+    }
+    if (track.readyState !== "live") {
+      this.events.log?.("[Volt Scanner Pairing] remote speech track is not live", {
+        joinAttemptId: peer.id,
+        readyState: track.readyState,
+      });
+      this.sendProtocolError(
+        peer,
+        "invalid_state",
+        undefined,
+        "Chrome received the App Clip microphone track before it was live. Tap Dictate again.",
+      );
+      return;
+    }
+    const recognitionTrack = this.remoteSpeechTrackForRecognition(peer.id, track);
+    if (recognitionTrack.kind !== "audio" || recognitionTrack.readyState !== "live") {
+      this.events.log?.("[Volt Scanner Pairing] remote speech bridge track is not usable", {
+        joinAttemptId: peer.id,
+        kind: recognitionTrack.kind,
+        readyState: recognitionTrack.readyState,
+      });
+      this.sendProtocolError(
+        peer,
+        "invalid_state",
+        undefined,
+        "Chrome could not prepare the App Clip microphone stream for speech recognition.",
+      );
+      return;
+    }
+
+    const recognizer = new MobileScannerRemoteSpeechRecognizer({
+      onTranscript: (transcript) => {
+        void this.handleRemoteSpeechTranscript(peer, transcript).catch((error) => {
+          this.events.log?.("Failed to handle scanner remote speech transcript", error);
+        });
+      },
+      onError: (error) => {
+        this.events.log?.("[Volt Scanner Pairing] remote speech recognition unavailable", {
+          joinAttemptId: peer.id,
+          error,
+        });
+        if (isRestartableRemoteSpeechError(error) && this.pendingRemoteSpeechStarts.has(peer.id)) {
+          this.events.log?.("[Volt Scanner Pairing] keeping remote speech active after empty input", {
+            joinAttemptId: peer.id,
+            error: remoteSpeechErrorDetail(error),
+          });
+          return;
+        }
+        if (isTransientRemoteSpeechTrackStartError(error) && this.scheduleRemoteSpeechStartRetry(peer, error)) {
+          return;
+        }
+        this.sendProtocolError(peer, "invalid_state", undefined, remoteSpeechErrorDetail(error));
+      },
+      onEnd: () => {
+        this.remoteSpeechRecognizers.delete(peer.id);
+        if (this.pendingRemoteSpeechStarts.has(peer.id)) {
+          setTimeout(() => this.startRemoteSpeechRecognition(peer), 250);
+        }
+      },
+    });
+    const started = recognizer.start(recognitionTrack);
+    if (!started) return;
+    this.remoteSpeechStartAttempts.delete(peer.id);
+    this.remoteSpeechRecognizers.set(peer.id, recognizer);
+  }
+
+  private scheduleRemoteSpeechStartRetry(peer: PeerSession, error: unknown) {
+    if (!this.pendingRemoteSpeechStarts.has(peer.id)) return false;
+    const attempts = (this.remoteSpeechStartAttempts.get(peer.id) ?? 0) + 1;
+    this.remoteSpeechStartAttempts.set(peer.id, attempts);
+    if (attempts > REMOTE_SPEECH_START_MAX_ATTEMPTS) {
+      this.remoteSpeechStartAttempts.delete(peer.id);
+      return false;
+    }
+    if (this.remoteSpeechStartRetryTimers.has(peer.id)) return true;
+
+    this.events.log?.("[Volt Scanner Pairing] retrying remote speech start after transient track state", {
+      joinAttemptId: peer.id,
+      attempts,
+      error: remoteSpeechErrorDetail(error),
+    });
+    const retryTimer = setTimeout(() => {
+      this.remoteSpeechStartRetryTimers.delete(peer.id);
+      if (this.pendingRemoteSpeechStarts.has(peer.id)) {
+        this.startRemoteSpeechRecognition(peer);
+      }
+    }, REMOTE_SPEECH_START_RETRY_DELAY_MS);
+    this.remoteSpeechStartRetryTimers.set(peer.id, retryTimer);
+    return true;
+  }
+
+  private async handleRemoteSpeechTranscript(peer: PeerSession, transcript: SpeechRecognitionTranscript) {
+    const existingSessionId = this.remoteSpeechSessionIds.get(peer.id);
+    const dictationSessionId = existingSessionId ?? createId("dictation-session");
+    this.remoteSpeechSessionIds.set(peer.id, dictationSessionId);
+
+    const message = createDictationMessageFromSpeechTranscript({
+      dictationSessionId,
+      messageId: createMessageId("dictation"),
+      phase: transcript.phase,
+      text: transcript.text,
+    });
+    const receipt = await this.deliverScannerMessage(message);
+    this.sendControl(peer, {
+      type: "result_received",
+      messageId: createMessageId("control"),
+      sentAt: new Date().toISOString(),
+      resultId: message.id ?? createMessageId("dictation"),
+      savedToResults: receipt.stored,
+      insertedIntoCursor: receipt.insertedIntoCursor,
+    });
+    this.sendControl(peer, {
+      type: "dictation",
+      messageId: createMessageId("control"),
+      sentAt: new Date().toISOString(),
+      dictationSessionId,
+      phase: transcript.phase,
+      capturedAt: message.scannedAt ?? new Date().toISOString(),
+      text: transcript.text,
+      insertIntoCursor: true,
+    });
+  }
+
+  private async deliverScannerMessage(scannerMessage: BarcodeMessage) {
+    const scanReceipt = await this.events.onScan(scannerMessage);
+    const stored = typeof scanReceipt === "object" ? scanReceipt.saved : scanReceipt;
+    let insertedIntoCursor =
+      typeof scanReceipt === "object" && typeof scanReceipt.insertedIntoCursor === "boolean"
+        ? scanReceipt.insertedIntoCursor
+        : false;
+    if (typeof scanReceipt !== "object" && shouldInsertScannerMessage(scannerMessage)) {
+      insertedIntoCursor = (await this.events.onInsert?.(scannerMessage.barcode, scannerMessage)) === true;
+    }
+    return { stored, insertedIntoCursor };
+  }
+
+  private sendProtocolError(
+    peer: PeerSession,
+    code: ScannerProtocolErrorCode,
+    receivedType?: string,
+    detail?: string,
+  ) {
     this.sendControl(peer, {
       type: "protocol_error",
       messageId: createMessageId("control"),
       sentAt: new Date().toISOString(),
       code,
       receivedType,
+      detail,
     });
   }
 
@@ -516,6 +890,15 @@ export class MobileScannerSession {
   }
 
   private closePeer(joinAttemptId: string) {
+    this.stopRemoteSpeechRecognition(joinAttemptId);
+    this.remoteSpeechTracks.delete(joinAttemptId);
+    this.closeRemoteSpeechAudioBridge(joinAttemptId);
+    const sink = this.remoteSpeechSinks.get(joinAttemptId);
+    this.remoteSpeechSinks.delete(joinAttemptId);
+    if (sink) {
+      sink.srcObject = null;
+      sink.remove();
+    }
     const peer = this.peerConnections.closePeer(joinAttemptId);
     if (!peer) return;
     this.peerPairings.delete(joinAttemptId);
@@ -524,5 +907,20 @@ export class MobileScannerSession {
       connectedAt: this.peerConnections.peers.size > 0 ? this.state.connectedAt : null,
     });
     this.joinAttemptPoller.stopIfIdle();
+  }
+
+  private stopRemoteSpeechRecognition(joinAttemptId: string) {
+    const recognizer = this.remoteSpeechRecognizers.get(joinAttemptId);
+    this.remoteSpeechRecognizers.delete(joinAttemptId);
+    this.remoteSpeechSessionIds.delete(joinAttemptId);
+    this.pendingRemoteSpeechStarts.delete(joinAttemptId);
+    this.remoteSpeechStartAttempts.delete(joinAttemptId);
+    const retryTimer = this.remoteSpeechStartRetryTimers.get(joinAttemptId);
+    if (retryTimer) {
+      clearTimeout(retryTimer);
+      this.remoteSpeechStartRetryTimers.delete(joinAttemptId);
+    }
+    this.closeRemoteSpeechAudioBridge(joinAttemptId);
+    recognizer?.stop();
   }
 }
