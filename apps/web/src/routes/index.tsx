@@ -29,6 +29,30 @@ const supportLinks = [
 const chromeExtensionDownloadUrl =
   "https://chromewebstore.google.com/search/Volt%20Chrome%20extension";
 const mobileAppDownloadUrl = "https://apps.apple.com/us/search?term=Volt%20mobile%20scanner";
+const repositoryUrl = "https://github.com/JuanQuenga/Volt";
+
+const footerLinkGroups = [
+  {
+    title: "Project",
+    links: [
+      ["GitHub repo", repositoryUrl],
+      ["Issues", `${repositoryUrl}/issues`],
+      ["Chrome extension", chromeExtensionDownloadUrl],
+      ["Mobile app", mobileAppDownloadUrl],
+    ],
+  },
+  {
+    title: "Web",
+    links: [
+      ["Home", "#top"],
+      ["Workflow", "#workflow"],
+      ["Mobile capture", "#scanner"],
+      ["Privacy", "#privacy"],
+      ["Scanner demo", "/create-session"],
+      ["App review demo", "/scanner-demo"],
+    ],
+  },
+];
 
 const productHighlights = [
   "Capture product information with the iPhone camera instead of typing from labels, boxes, and device screens.",
@@ -40,18 +64,18 @@ const productHighlights = [
 const workflowItems = [
   {
     icon: Search,
-    title: "Buy with context",
-    body: "Jump into market searches, sold listings, UPC lookups, PriceCharting, and inventory pages without rebuilding the same search over and over.",
+    title: "Search from the browser",
+    body: "Open sold listings, UPC lookups, PriceCharting, Shopify, and other resale pages from the same Chrome workflow.",
   },
   {
     icon: Calculator,
-    title: "Price with confidence",
-    body: "Use offer calculations and resale shortcuts while you are evaluating an item, so your buy price stays tied to the margin you want.",
+    title: "Calculate offers in context",
+    body: "Keep offer math close to the tabs you already use, so buy prices stay tied to fees, expected resale value, and margin.",
   },
   {
     icon: ClipboardList,
-    title: "List with less rework",
-    body: "Bring product details, notes, barcode values, and photos back into Chrome so listing prep starts with the information already collected.",
+    title: "Receive captured details",
+    body: "Use the text, barcode values, dictated notes, and photos from the phone inside Chrome where listing prep happens.",
   },
 ];
 
@@ -209,8 +233,8 @@ function Home() {
       </section>
 
       <ProductSurfaceSection />
-      <ResaleFlowSection />
       <CaptureSection />
+      <ResaleFlowSection />
       <ExtensionToolkitSection />
       <PrivacySection />
     </main>
@@ -227,44 +251,42 @@ function HeroPanel() {
 
 function ProductSurfaceSection() {
   return (
-    <section className="border-b border-zinc-200 bg-zinc-950 text-white">
-      <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
-        <div className="grid gap-12 lg:grid-cols-[0.86fr_1.14fr] lg:items-center">
+    <section id="scanner" className="border-b border-zinc-200 bg-zinc-950 text-white">
+      <div className="mx-auto max-w-7xl px-4 pt-16 sm:px-6 lg:px-8 lg:pt-24">
+        <div className="grid gap-10 lg:grid-cols-[0.78fr_1.22fr]">
           <div>
-            <p className="text-sm font-semibold text-emerald-300">Two connected surfaces</p>
-            <h2 className="mt-3 max-w-xl text-3xl font-semibold leading-tight sm:text-4xl">
-              Use the phone for capture and Chrome for the resale work.
+            <p className="text-sm font-semibold text-emerald-300">Mobile capture</p>
+            <h2 className="mt-3 text-3xl font-semibold leading-tight sm:text-4xl">
+              Capture product details with the device already in your hand.
             </h2>
             <p className="mt-5 max-w-xl text-base leading-7 text-zinc-300">
-              Volt keeps the mobile app and browser extension focused on different jobs. The iPhone captures product information quickly, then the Chrome extension receives it where buying, pricing, and listing already happen.
+              The mobile app turns the iPhone camera and microphone into a faster input device for resale work: scan labels, read barcodes, take photos, and dictate notes without returning to the keyboard for every item.
             </p>
-            <div className="mt-8 grid gap-3 sm:grid-cols-2">
-              <SurfaceBadge icon={Smartphone} label="iPhone capture app" />
-              <SurfaceBadge icon={Chrome} label="Chrome resale tools" />
-            </div>
           </div>
+          <div className="grid gap-4 md:grid-cols-3">
+            {platformItems.map((item) => (
+              <article key={item.title} className="rounded-[1.2rem] border border-white/10 bg-white/[0.06] p-5">
+                <div className="grid size-10 place-items-center rounded-[0.8rem] bg-white text-zinc-950">
+                  <item.icon size={20} />
+                </div>
+                <h3 className="mt-8 text-base font-semibold">{item.title}</h3>
+                <p className="mt-3 text-sm leading-6 text-zinc-300">{item.body}</p>
+              </article>
+            ))}
+          </div>
+        </div>
+      </div>
 
-          <div className="grid gap-4 md:grid-cols-[0.85fr_1.15fr]">
-            <figure className="overflow-hidden rounded-[1.25rem] border border-white/10 bg-zinc-900">
-              <img
-                src="/assets/product/mobile-06-capture-photo-viewfinder.png"
-                alt="Volt mobile photo capture"
-                className="h-full min-h-[24rem] w-full object-cover object-top"
-              />
-            </figure>
-            <div className="grid content-center gap-4">
-              {browserFeatures.slice(0, 3).map((item) => (
-                <article key={item.title} className="rounded-[1.1rem] border border-white/10 bg-white/[0.06] p-5">
-                  <div className="flex items-center gap-3">
-                    <div className="grid size-10 shrink-0 place-items-center rounded-[0.8rem] bg-white text-zinc-950">
-                      <item.icon size={19} />
-                    </div>
-                    <h3 className="text-sm font-semibold">{item.title}</h3>
-                  </div>
-                  <p className="mt-3 text-sm leading-6 text-zinc-300">{item.body}</p>
-                </article>
-              ))}
-            </div>
+      <div className="py-12 lg:py-16">
+        <div className="mobile-feature-carousel min-w-0 overflow-x-auto overflow-y-hidden py-1" aria-label="Volt mobile capture screenshots">
+          <div className="mobile-feature-track flex w-max">
+            {[0, 1].map((groupIndex) => (
+              <div key={groupIndex} className="mobile-feature-group flex shrink-0 gap-4 px-2" aria-hidden={groupIndex === 1}>
+                {mobileScreenshots.map((item) => (
+                  <MobileFeatureShot key={`${groupIndex}-${item.title}`} {...item} />
+                ))}
+              </div>
+            ))}
           </div>
         </div>
       </div>
@@ -278,13 +300,13 @@ function ResaleFlowSection() {
       <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
         <div className="flex flex-col justify-between gap-8 lg:flex-row lg:items-end">
           <div>
-            <p className="text-sm font-semibold text-zinc-500">Resale workflow</p>
+            <p className="text-sm font-semibold text-zinc-500">Chrome resale workflow</p>
             <h2 className="mt-3 max-w-2xl text-3xl font-semibold leading-tight text-zinc-950 sm:text-4xl">
-              Built around the repeated work of buying, pricing, and listing.
+              Turn mobile captures into browser-side resale work.
             </h2>
           </div>
           <p className="max-w-xl text-base leading-7 text-zinc-600">
-            Volt reduces the switching and retyping that slows down inventory work. Capture the item once, then use the same information across market checks, offer decisions, and listing prep.
+            Once the phone sends product details into Chrome, Volt keeps the next steps close: market checks, offer decisions, tab recovery, and listing prep.
           </p>
         </div>
 
@@ -309,42 +331,44 @@ function ResaleFlowSection() {
 
 function CaptureSection() {
   return (
-    <section id="scanner" className="border-b border-zinc-200 bg-zinc-50">
-      <div className="mx-auto max-w-7xl px-4 pt-16 sm:px-6 lg:px-8 lg:pt-24">
-        <div className="grid gap-10 lg:grid-cols-[0.78fr_1.22fr]">
+    <section className="border-b border-zinc-200 bg-zinc-50">
+      <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
+        <div className="grid gap-12 lg:grid-cols-[0.86fr_1.14fr] lg:items-center">
           <div>
-            <p className="text-sm font-semibold text-zinc-500">Mobile capture</p>
-            <h2 className="mt-3 text-3xl font-semibold leading-tight text-zinc-950 sm:text-4xl">
-              Capture product details with the device already in your hand.
+            <p className="text-sm font-semibold text-zinc-500">Two connected surfaces</p>
+            <h2 className="mt-3 max-w-xl text-3xl font-semibold leading-tight text-zinc-950 sm:text-4xl">
+              Use the phone for capture and Chrome for the resale work.
             </h2>
             <p className="mt-5 max-w-xl text-base leading-7 text-zinc-600">
-              The mobile app turns the iPhone camera and microphone into a faster input device for resale work: scan labels, read barcodes, take photos, and dictate notes without returning to the keyboard for every item.
+              Volt keeps the mobile app and browser extension focused on different jobs. The iPhone captures product information quickly, then the Chrome extension receives it where buying, pricing, and listing already happen.
             </p>
+            <div className="mt-8 grid gap-3 sm:grid-cols-2">
+              <SurfaceBadge icon={Smartphone} label="iPhone capture app" />
+              <SurfaceBadge icon={Chrome} label="Chrome resale tools" />
+            </div>
           </div>
-          <div className="grid gap-4 md:grid-cols-3">
-            {platformItems.map((item) => (
-              <article key={item.title} className="rounded-[1.2rem] border border-zinc-200 bg-white p-5 shadow-sm">
-                <div className="grid size-10 place-items-center rounded-[0.8rem] bg-emerald-50 text-emerald-700">
-                  <item.icon size={20} />
-                </div>
-                <h3 className="mt-8 text-base font-semibold text-zinc-950">{item.title}</h3>
-                <p className="mt-3 text-sm leading-6 text-zinc-600">{item.body}</p>
-              </article>
-            ))}
-          </div>
-        </div>
-      </div>
 
-      <div className="py-12 lg:py-16">
-        <div className="mobile-feature-carousel min-w-0 overflow-x-auto overflow-y-hidden py-1" aria-label="Volt mobile capture screenshots">
-          <div className="mobile-feature-track flex w-max">
-            {[0, 1].map((groupIndex) => (
-              <div key={groupIndex} className="mobile-feature-group flex shrink-0 gap-4 px-2" aria-hidden={groupIndex === 1}>
-                {mobileScreenshots.map((item) => (
-                  <MobileFeatureShot key={`${groupIndex}-${item.title}`} {...item} />
-                ))}
-              </div>
-            ))}
+          <div className="grid gap-4 md:grid-cols-[0.85fr_1.15fr]">
+            <figure className="overflow-hidden rounded-[1.25rem] border border-zinc-200 bg-white">
+              <img
+                src="/assets/product/mobile-06-capture-photo-viewfinder.png"
+                alt="Volt mobile photo capture"
+                className="h-full min-h-[24rem] w-full object-cover object-top"
+              />
+            </figure>
+            <div className="grid content-center gap-4">
+              {browserFeatures.slice(0, 3).map((item) => (
+                <article key={item.title} className="rounded-[1.1rem] border border-zinc-200 bg-white p-5 shadow-sm">
+                  <div className="flex items-center gap-3">
+                    <div className="grid size-10 shrink-0 place-items-center rounded-[0.8rem] bg-zinc-950 text-white">
+                      <item.icon size={19} />
+                    </div>
+                    <h3 className="text-sm font-semibold text-zinc-950">{item.title}</h3>
+                  </div>
+                  <p className="mt-3 text-sm leading-6 text-zinc-600">{item.body}</p>
+                </article>
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -382,39 +406,51 @@ function ExtensionToolkitSection() {
 
 function PrivacySection() {
   return (
-    <section id="privacy" className="bg-zinc-950 text-white">
-      <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
-        <div className="grid gap-8 lg:grid-cols-[0.8fr_1.2fr] lg:items-center">
-          <div>
-            <p className="text-sm font-semibold text-zinc-400">Control</p>
-            <h2 className="mt-3 text-3xl font-semibold leading-tight sm:text-4xl">
-              Keep the workflow focused on the tools you actually use.
-            </h2>
+    <footer id="privacy" className="bg-zinc-950 text-white">
+      <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8 lg:py-16">
+        <div className="grid gap-10 lg:grid-cols-[1fr_1.1fr]">
+          <div className="max-w-2xl">
+            <a href="#top" className="inline-flex items-center gap-2" aria-label="Volt home">
+              <img src="/assets/volt.webp" alt="" className="size-9 rounded-[0.75rem]" />
+              <span className="text-base font-semibold">Volt</span>
+            </a>
+            <p className="mt-5 text-sm leading-6 text-zinc-300">
+              Volt is an independent resale workflow project for pairing a Chrome extension with a companion mobile capture app.
+            </p>
+            <p className="mt-4 text-sm leading-6 text-zinc-400">
+              Volt is not affiliated with, endorsed by, or sponsored by Volt Resale or Paymore Electronics.
+            </p>
           </div>
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="rounded-[1.15rem] border border-white/10 bg-white/[0.06] p-5">
-              <h3 className="text-sm font-semibold">Captures go back to Chrome</h3>
-              <p className="mt-3 text-sm leading-6 text-zinc-300">
-                Text, barcodes, dictated notes, and photos are sent into the extension for your active resale workflow.
-              </p>
-            </div>
-            <div className="rounded-[1.15rem] border border-white/10 bg-white/[0.06] p-5">
-              <h3 className="text-sm font-semibold">Features are optional</h3>
-              <p className="mt-3 text-sm leading-6 text-zinc-300">
-                Keep the extension lean by turning off features that do not match how you buy, price, or list inventory.
-              </p>
-            </div>
+
+          <div className="grid gap-8 sm:grid-cols-2">
+            {footerLinkGroups.map((group) => (
+              <nav key={group.title} aria-label={group.title}>
+                <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{group.title}</h2>
+                <div className="mt-4 grid gap-3">
+                  {group.links.map(([label, href]) => (
+                    <a key={label} href={href} className="text-sm font-medium text-zinc-300 hover:text-white">
+                      {label}
+                    </a>
+                  ))}
+                </div>
+              </nav>
+            ))}
           </div>
         </div>
+
+        <div className="mt-10 flex flex-col gap-3 border-t border-white/10 pt-6 text-xs text-zinc-500 sm:flex-row sm:items-center sm:justify-between">
+          <p>Copyright {new Date().getFullYear()} Volt.</p>
+          <p>Chrome extension, mobile scanner, and web support surface for resale workflows.</p>
+        </div>
       </div>
-    </section>
+    </footer>
   );
 }
 
 function SurfaceBadge({ icon: Icon, label }: { icon: typeof Search; label: string }) {
   return (
-    <div className="inline-flex items-center gap-3 rounded-[1rem] border border-white/10 bg-white/[0.06] px-4 py-3 text-sm font-semibold">
-      <Icon size={18} className="text-emerald-300" />
+    <div className="inline-flex items-center gap-3 rounded-[1rem] border border-zinc-200 bg-white px-4 py-3 text-sm font-semibold text-zinc-800 shadow-sm">
+      <Icon size={18} className="text-emerald-600" />
       {label}
     </div>
   );
@@ -630,8 +666,8 @@ function MobileFeatureShot({
   title: string;
 }) {
   return (
-    <article className="w-[18rem] shrink-0 overflow-hidden rounded-[1.35rem] border border-zinc-200 bg-white shadow-sm">
-      <img src={src} alt={`${title} screenshot`} className="w-full bg-zinc-100 object-contain" />
+    <article className="w-[18rem] shrink-0 overflow-hidden rounded-[1.35rem] border border-white/10 bg-white/[0.04] shadow-lg shadow-black/20">
+      <img src={src} alt={`${title} screenshot`} className="w-full object-contain" />
     </article>
   );
 }
