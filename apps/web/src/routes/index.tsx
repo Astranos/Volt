@@ -219,10 +219,10 @@ function Home() {
           <div className="mx-auto max-w-5xl text-center">
 
             <h1 className="text-4xl font-semibold leading-[1.02] text-zinc-950 sm:text-6xl">
-             The lightning fast resale workflow.
+             The fastest way to resell electronics.
             </h1>
             <p className="mx-auto mt-5 max-w-3xl text-lg leading-8 text-zinc-600 sm:text-xl">
-              Volt makes buying and reselling quicker by using the power of the iPhone. Use the phone to extract product details, scan barcodes, take photos, upload images, and dictate notes directly into Chrome.
+              Volt is a set of tools that makes buying and reselling quicker. The Chrome extension and iPhone app work together to streamline the process of evaluating items, capturing details, and preparing listings.
             </p>
             <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
               <a href={chromeExtensionDownloadUrl} className="inline-flex h-11 items-center justify-center gap-2 rounded-[0.85rem] bg-zinc-950 px-5 text-sm font-semibold text-white hover:bg-zinc-800">
