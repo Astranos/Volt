@@ -289,6 +289,10 @@ test("native screens use the shared header connection control without extra sess
   assert.match(scannerViewSwiftSource, /ScannerSectionHeader\(\s*title: "Capture",\s*onConnectionControlTapped:/);
   assert.match(dictationViewSwiftSource, /ScannerSectionHeader\(\s*title: "Dictate",\s*onConnectionControlTapped:/);
   assert.match(uploadViewSwiftSource, /ScannerSectionHeader\(\s*title: "Upload",\s*onConnectionControlTapped:/);
+  assert.match(rootViewSwiftSource, /private var connectionTitle: String/);
+  assert.match(rootViewSwiftSource, /store\.connectionStatus == \.pairing \|\| store\.connectionStatus == \.waitingForChrome[\s\S]*return "Connecting"/);
+  assert.match(clipRootViewSwiftSource, /private func clipConnectionTitle\(isConnected: Bool, isPairing: Bool\) -> String/);
+  assert.match(clipRootViewSwiftSource, /if isPairing \{\s*return "Connecting"\s*\}/);
   assert.doesNotMatch(scannerViewSwiftSource, /trailingAccessory: \{\s*ScannerSessionsButton/);
   assert.doesNotMatch(dictationViewSwiftSource, /trailingAccessory: \{\s*ScannerSessionsButton/);
   assert.doesNotMatch(uploadViewSwiftSource, /trailingAccessory: \{\s*ScannerSessionsButton/);
@@ -464,6 +468,23 @@ test("native scanner normalizes UPC-A barcodes and upload filenames preserve sel
   assert.match(scannerStoreCaptureActionsSwiftSource, /return \(String\(trimmedValue\.dropFirst\(\)\), "upc_a"\)/);
   assert.match(scannerStoreCaptureActionsSwiftSource, /String\(format: "%03d", index \+ 1\)/);
   assert.match(scannerStoreCaptureActionsSwiftSource, /filename: uploadFilename\(index: index, capturedAt: capturedAt\)/);
+});
+
+test("native upload batches expose clear progress while photos are preparing and uploading", () => {
+  assert.match(scannerStoreSwiftSource, /struct PhotoUploadProgress: Identifiable, Equatable/);
+  assert.match(scannerStoreSwiftSource, /var photoUploadProgress: PhotoUploadProgress\?/);
+  assert.match(scannerStoreSwiftSource, /var remainingCount: Int/);
+  assert.match(scannerStoreSwiftSource, /"Uploading \\\(min\(finishedCount \+ 1, total\)\) of \\\(total\)"/);
+  assert.match(scannerStoreCaptureActionsSwiftSource, /photoUploadProgress = PhotoUploadProgress\(/);
+  assert.match(scannerStoreCaptureActionsSwiftSource, /updatePhotoUploadProgress\(batchId: batch, prepared: index \+ 1, phase: \.uploading\)/);
+  assert.match(scannerStoreCaptureActionsSwiftSource, /finishPhotoUploadItem\(batchId: batch, resultId: photoResult\.id\)/);
+  assert.match(scannerStoreCaptureActionsSwiftSource, /finishPhotoUploadBatch\(batchId: batch\)/);
+  assert.match(uploadViewSwiftSource, /PhotoUploadProgressSummary\(progress: progress\)/);
+  assert.match(uploadViewSwiftSource, /ProgressView\(value: progress\.fractionCompleted\)/);
+  assert.match(uploadViewSwiftSource, /"Reading \\\(min\(selectedUploadPrepared \+ 1, selectedUploadTotal\)\) of \\\(selectedUploadTotal\) selected photos"/);
+  assert.match(uploadViewSwiftSource, /"\\\(progress\.title\)\. \\\(progress\.detail\)\."/);
+  assert.match(uploadViewSwiftSource, /"Uploading \\\(results\.count\) of \\\(expectedTotal\) photo/);
+  assert.match(readFileSync(new URL("../ios/Volt/Views/SharedScannerTabComponents.swift", import.meta.url), "utf8"), /var isUploading = false/);
 });
 
 test("native barcode scanning favors guided UPC codes over adjacent supplemental barcodes", () => {

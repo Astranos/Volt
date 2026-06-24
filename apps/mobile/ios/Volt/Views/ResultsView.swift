@@ -5,6 +5,8 @@ struct UploadView: View {
     @Environment(ScannerStore.self) private var store
     @State private var selectedItems: [PhotosPickerItem] = []
     @State private var isPreparingUploads = false
+    @State private var selectedUploadTotal = 0
+    @State private var selectedUploadPrepared = 0
     @State private var uploadError: String?
     @State private var expandedBatchIds: Set<String> = []
     @State private var isSessionsPresented = false
@@ -19,9 +21,20 @@ struct UploadView: View {
         }
 
         return grouped.map { key, results in
-            PhotoUploadBatch(id: key, results: results.sorted { $0.capturedAt < $1.capturedAt })
+            let progress = store.photoUploadProgress?.id == key ? store.photoUploadProgress : nil
+            return PhotoUploadBatch(
+                id: key,
+                results: results.sorted { $0.capturedAt < $1.capturedAt },
+                expectedTotal: progress?.total ?? results.count,
+                isActive: progress?.isActive == true
+            )
         }
         .sorted { $0.latestCapturedAt > $1.latestCapturedAt }
+    }
+
+    private var activeUploadProgress: PhotoUploadProgress? {
+        guard let progress = store.photoUploadProgress, progress.isActive else { return nil }
+        return progress
     }
 
     var body: some View {
@@ -34,6 +47,10 @@ struct UploadView: View {
                             isSessionsPresented = true
                         }
                     )
+
+                    if let progress = store.photoUploadProgress {
+                        PhotoUploadProgressSummary(progress: progress)
+                    }
 
                     recentUploads
                 }
@@ -64,6 +81,7 @@ struct UploadView: View {
                     selectedItems: $selectedItems,
                     isConnected: store.connectionStatus.isConnected,
                     isPreparing: isPreparingUploads,
+                    isUploading: activeUploadProgress != nil,
                     statusText: uploadStatusText,
                     showsError: uploadError != nil,
                     disabledHint: uploadError ?? store.targetHint
@@ -76,7 +94,13 @@ struct UploadView: View {
         if let uploadError {
             uploadError
         } else if isPreparingUploads {
-            "Preparing uploads..."
+            if selectedUploadTotal > 0 {
+                "Reading \(min(selectedUploadPrepared + 1, selectedUploadTotal)) of \(selectedUploadTotal) selected photos"
+            } else {
+                "Preparing uploads..."
+            }
+        } else if let progress = store.photoUploadProgress {
+            "\(progress.title). \(progress.detail)."
         } else if store.connectionStatus.isConnected {
             "Ready to upload to Chrome"
         } else {
@@ -135,17 +159,22 @@ struct UploadView: View {
 
     private func uploadSelectedItems(_ items: [PhotosPickerItem]) async {
         isPreparingUploads = true
+        selectedUploadTotal = items.count
+        selectedUploadPrepared = 0
         uploadError = nil
-        defer { isPreparingUploads = false }
+        defer {
+            isPreparingUploads = false
+            selectedUploadTotal = 0
+            selectedUploadPrepared = 0
+        }
 
         var images: [UIImage] = []
-        for item in items {
-            guard let data = try? await item.loadTransferable(type: Data.self),
-                  let image = UIImage(data: data)
-            else {
-                continue
+        for (index, item) in items.enumerated() {
+            if let data = try? await item.loadTransferable(type: Data.self),
+               let image = UIImage(data: data) {
+                images.append(image)
             }
-            images.append(image)
+            selectedUploadPrepared = index + 1
         }
 
         guard !images.isEmpty else {
@@ -160,6 +189,8 @@ struct UploadView: View {
 private struct PhotoUploadBatch: Identifiable {
     let id: String
     let results: [ScanResult]
+    let expectedTotal: Int
+    let isActive: Bool
 
     var latestCapturedAt: Date {
         results.map(\.capturedAt).max() ?? .distantPast
@@ -176,6 +207,43 @@ private struct PhotoUploadBatch: Identifiable {
             return .sent
         }
         return .saved
+    }
+
+    var title: String {
+        if isActive {
+            return "Uploading \(results.count) of \(expectedTotal) photo\(expectedTotal == 1 ? "" : "s")"
+        }
+        return "Uploaded \(results.count) photo\(results.count == 1 ? "" : "s")"
+    }
+}
+
+private struct PhotoUploadProgressSummary: View {
+    let progress: PhotoUploadProgress
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Label(progress.title, systemImage: progress.isActive ? "arrow.up.circle" : "checkmark.circle.fill")
+                    .font(.headline)
+                    .foregroundStyle(progress.failed > 0 ? .orange : .primary)
+
+                Spacer(minLength: 10)
+
+                Text("\(progress.finishedCount)/\(progress.total)")
+                    .font(.subheadline.monospacedDigit().weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+
+            ProgressView(value: progress.fractionCompleted)
+                .tint(progress.failed > 0 ? .orange : .green)
+
+            Text(progress.detail)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .padding(14)
+        .background(.background, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -194,7 +262,7 @@ private struct PhotoUploadBatchCard: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("Uploaded \(batch.results.count) photo\(batch.results.count == 1 ? "" : "s")")
+                    Text(batch.title)
                         .font(.headline)
                     Text(batch.latestCapturedAt, format: .dateTime.hour().minute())
                         .font(.caption)

@@ -146,11 +146,20 @@ struct ScannerPhotoPickerAccessory: View {
     @Binding var selectedItems: [PhotosPickerItem]
     let isConnected: Bool
     let isPreparing: Bool
+    var isUploading = false
     let statusText: String
     var showsError = false
     let disabledHint: String
 
+    private var isBusy: Bool {
+        isPreparing || isUploading
+    }
+
     var body: some View {
+        let isPickerEnabled = isConnected && !isBusy
+        let pickerTitle = actionTitle
+        let pickerSystemImage = actionSystemImage
+
         VStack(spacing: 10) {
             Text(statusText)
                 .font(.footnote)
@@ -163,23 +172,43 @@ struct ScannerPhotoPickerAccessory: View {
                 maxSelectionCount: 30,
                 matching: .images
             ) {
-                Label(isPreparing ? "Preparing Uploads" : "Choose Photos", systemImage: isPreparing ? "hourglass" : "photo.on.rectangle.angled")
+                Label(pickerTitle, systemImage: pickerSystemImage)
                     .font(.headline)
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity, minHeight: 52)
                     .background(
-                        ScannerTabLayout.primaryActionBackground(isEnabled: isConnected && !isPreparing),
+                        ScannerTabLayout.primaryActionBackground(isEnabled: isPickerEnabled),
                         in: RoundedRectangle(cornerRadius: ScannerTabLayout.primaryActionCornerRadius, style: .continuous)
                     )
-                    .opacity((isConnected && !isPreparing) ? 1 : ScannerTabLayout.disabledPrimaryActionOpacity)
+                    .opacity(isPickerEnabled ? 1 : ScannerTabLayout.disabledPrimaryActionOpacity)
             }
             .buttonStyle(.plain)
-            .disabled(!isConnected || isPreparing)
-            .accessibilityHint(isConnected && !isPreparing ? "Opens the photo picker." : disabledHint)
+            .disabled(!isPickerEnabled)
+            .accessibilityHint(isPickerEnabled ? "Opens the photo picker." : disabledHint)
         }
         .padding(.horizontal)
         .padding(.top, 12)
         .padding(.bottom, 10)
         .background(.bar)
+    }
+
+    private var actionTitle: String {
+        if isPreparing {
+            return "Preparing Uploads"
+        }
+        if isUploading {
+            return "Uploading Photos"
+        }
+        return "Choose Photos"
+    }
+
+    private var actionSystemImage: String {
+        if isPreparing {
+            return "hourglass"
+        }
+        if isUploading {
+            return "arrow.up.circle"
+        }
+        return "photo.on.rectangle.angled"
     }
 }

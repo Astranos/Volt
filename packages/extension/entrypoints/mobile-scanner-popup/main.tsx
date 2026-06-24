@@ -324,7 +324,7 @@ function MobileScannerPopup() {
           className="popup-action-button"
         >
           <Smartphone className="h-4 w-4" />
-          Mobile Scanner
+          Scanner Results
         </PrimaryActionButton>
       </footer>
     </div>

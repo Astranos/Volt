@@ -391,9 +391,19 @@ struct ScannerSectionHeader<TrailingAccessory: View>: View {
         ScannerConnectionSummary(
             isConnected: store.connectionStatus.isConnected,
             isBusy: store.connectionStatus == .pairing || store.connectionStatus == .waitingForChrome,
-            title: store.connectionStatus.isConnected ? connectedSessionName : "Connect",
+            title: connectionTitle,
             statusText: store.targetHint
         )
+    }
+
+    private var connectionTitle: String {
+        if store.connectionStatus.isConnected {
+            return connectedSessionName
+        }
+        if store.connectionStatus == .pairing || store.connectionStatus == .waitingForChrome {
+            return "Connecting"
+        }
+        return "Connect"
     }
 }
 

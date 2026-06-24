@@ -124,7 +124,7 @@ private struct ClipCaptureView: View {
         ScannerConnectionSummary(
             isConnected: store.isConnected,
             isBusy: store.isPairing,
-            title: store.isConnected ? "Chrome" : "Connect",
+            title: clipConnectionTitle(isConnected: store.isConnected, isPairing: store.isPairing),
             statusText: store.statusText
         )
     }
@@ -199,7 +199,7 @@ private struct ClipDictationView: View {
         ScannerConnectionSummary(
             isConnected: store.isConnected,
             isBusy: store.isPairing,
-            title: store.isConnected ? "Chrome" : "Connect",
+            title: clipConnectionTitle(isConnected: store.isConnected, isPairing: store.isPairing),
             statusText: store.statusText
         )
     }
@@ -286,7 +286,7 @@ private struct ClipUploadView: View {
         ScannerConnectionSummary(
             isConnected: store.isConnected,
             isBusy: store.isPairing,
-            title: store.isConnected ? "Chrome" : "Connect",
+            title: clipConnectionTitle(isConnected: store.isConnected, isPairing: store.isPairing),
             statusText: store.statusText
         )
     }
@@ -342,6 +342,16 @@ private struct ClipRecentPhotosSection: View {
             }
         }
     }
+}
+
+private func clipConnectionTitle(isConnected: Bool, isPairing: Bool) -> String {
+    if isConnected {
+        return "Chrome"
+    }
+    if isPairing {
+        return "Connecting"
+    }
+    return "Connect"
 }
 
 private struct ClipDictationConnectionCard: View {

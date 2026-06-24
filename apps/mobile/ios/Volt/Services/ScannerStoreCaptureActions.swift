@@ -330,12 +330,21 @@ extension ScannerStore {
         let now = Date.now
         let batch = ScannerProtocol.makeMessageId("upload-batch")
         photoBatch = (batch, now.addingTimeInterval(5 * 60))
+        photoUploadProgress = PhotoUploadProgress(
+            id: batch,
+            total: images.count,
+            prepared: 0,
+            completed: 0,
+            failed: 0,
+            phase: .preparing
+        )
         statusText = "Preparing \(images.count) upload\(images.count == 1 ? "" : "s")"
 
         for (index, image) in images.enumerated() {
             let preparedImage = image
                 .normalizedForProcessing()
                 .resized(maxLongEdge: photoLongEdge)
+            updatePhotoUploadProgress(batchId: batch, prepared: index + 1, phase: .uploading)
             let capturedAt = now.addingTimeInterval(Double(index) / 1000)
             let photoResult = ScanResult(
                 kind: .photo,
@@ -356,8 +365,10 @@ extension ScannerStore {
                 filename: uploadFilename(index: index, capturedAt: capturedAt),
                 capturedAt: capturedAt
             )
+            finishPhotoUploadItem(batchId: batch, resultId: photoResult.id)
         }
 
+        finishPhotoUploadBatch(batchId: batch)
         statusText = "Uploaded \(images.count) photo\(images.count == 1 ? "" : "s")"
     }
 
@@ -518,6 +529,32 @@ extension ScannerStore {
     func updateResultDeliveryState(id: ScanResult.ID, state: ScanResult.DeliveryState) {
         guard let index = results.firstIndex(where: { $0.id == id }) else { return }
         results[index].deliveryState = state
+    }
+
+    func updatePhotoUploadProgress(batchId: String, prepared: Int, phase: PhotoUploadProgress.Phase) {
+        guard var progress = photoUploadProgress, progress.id == batchId else { return }
+        progress.prepared = min(progress.total, max(progress.prepared, prepared))
+        progress.phase = phase
+        photoUploadProgress = progress
+    }
+
+    func finishPhotoUploadItem(batchId: String, resultId: ScanResult.ID) {
+        guard var progress = photoUploadProgress, progress.id == batchId else { return }
+        let resultState = results.first(where: { $0.id == resultId })?.deliveryState
+        if resultState == .failed {
+            progress.failed += 1
+        } else {
+            progress.completed += 1
+        }
+        progress.completed = min(progress.completed, progress.total)
+        progress.failed = min(progress.failed, progress.total - progress.completed)
+        photoUploadProgress = progress
+    }
+
+    func finishPhotoUploadBatch(batchId: String) {
+        guard var progress = photoUploadProgress, progress.id == batchId else { return }
+        progress.phase = .finished
+        photoUploadProgress = progress
     }
 
     func showCaptureDeliveryToast(for result: ScanResult, state: ScanResult.DeliveryState) {

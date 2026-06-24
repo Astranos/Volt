@@ -17,6 +17,63 @@ struct CaptureDeliveryToast: Identifiable, Equatable {
     let tone: Tone
 }
 
+struct PhotoUploadProgress: Identifiable, Equatable {
+    enum Phase: Equatable {
+        case preparing
+        case uploading
+        case finished
+    }
+
+    let id: String
+    let total: Int
+    var prepared: Int
+    var completed: Int
+    var failed: Int
+    var phase: Phase
+
+    var finishedCount: Int {
+        completed + failed
+    }
+
+    var remainingCount: Int {
+        max(0, total - finishedCount)
+    }
+
+    var fractionCompleted: Double {
+        guard total > 0 else { return 0 }
+        return min(1, Double(finishedCount) / Double(total))
+    }
+
+    var isActive: Bool {
+        phase != .finished
+    }
+
+    var title: String {
+        switch phase {
+        case .preparing:
+            "Preparing \(min(prepared + 1, total)) of \(total)"
+        case .uploading:
+            "Uploading \(min(finishedCount + 1, total)) of \(total)"
+        case .finished:
+            failed > 0 ? "Uploaded \(completed) of \(total)" : "Uploaded \(total) photo\(total == 1 ? "" : "s")"
+        }
+    }
+
+    var detail: String {
+        if failed > 0 {
+            return "\(completed) sent, \(failed) failed, \(remainingCount) left"
+        }
+        switch phase {
+        case .preparing:
+            return "\(prepared) ready, \(max(0, total - prepared)) left to prepare"
+        case .uploading:
+            return "\(completed) sent, \(remainingCount) left"
+        case .finished:
+            return "All uploads finished"
+        }
+    }
+}
+
 @MainActor
 @Observable
 final class ScannerStore {
@@ -43,6 +100,7 @@ final class ScannerStore {
     var ocrTextRegions: [RecognizedTextRegion] = []
     var isRecognizingText = false
     var captureDeliveryToast: CaptureDeliveryToast?
+    var photoUploadProgress: PhotoUploadProgress?
     var barcodeRecognitionMode: BarcodeRecognitionMode = .upc {
         didSet {
             UserDefaults.standard.set(barcodeRecognitionMode.rawValue, forKey: Self.barcodeRecognitionModeStorageKey)
