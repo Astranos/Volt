@@ -12,7 +12,6 @@ import {
   RotateCcw,
   ScanBarcode,
   Search,
-  ShieldCheck,
   Smartphone,
 } from "lucide-react";
 
@@ -45,37 +44,11 @@ const footerLinkGroups = [
     title: "Web",
     links: [
       ["Home", "#top"],
-      ["Workflow", "#workflow"],
       ["Mobile capture", "#scanner"],
       ["Privacy", "#privacy"],
       ["Scanner demo", "/create-session"],
       ["App review demo", "/scanner-demo"],
     ],
-  },
-];
-
-const productHighlights = [
-  "Capture product information with the iPhone camera instead of typing from labels, boxes, and device screens.",
-  "Send barcodes, OCR text, dictated notes, and product photos into the Chrome workflow where pricing and listings already live.",
-  "Use Chrome tools for market searches, sold-price checks, offer math, quick links, and resale-focused page helpers.",
-  "Turn off extension features you do not need, so Volt stays focused on the parts of your workflow you actually use.",
-];
-
-const workflowItems = [
-  {
-    icon: Search,
-    title: "Search from the browser",
-    body: "Open sold listings, UPC lookups, PriceCharting, Shopify, and other resale pages from the same Chrome workflow.",
-  },
-  {
-    icon: Calculator,
-    title: "Calculate offers in context",
-    body: "Keep offer math close to the tabs you already use, so buy prices stay tied to fees, expected resale value, and margin.",
-  },
-  {
-    icon: ClipboardList,
-    title: "Receive captured details",
-    body: "Use the text, barcode values, dictated notes, and photos from the phone inside Chrome where listing prep happens.",
   },
 ];
 
@@ -185,7 +158,6 @@ function Home() {
             <span className="text-sm font-semibold">Volt</span>
           </a>
           <nav className="hidden items-center gap-7 text-sm text-zinc-600 md:flex" aria-label="Primary">
-            <a className="hover:text-zinc-950" href="#workflow">Workflow</a>
             <a className="hover:text-zinc-950" href="#scanner">Capture</a>
             <a className="hover:text-zinc-950" href="#privacy">Privacy</a>
           </nav>
@@ -241,8 +213,6 @@ function Home() {
 
       <ProductSurfaceSection />
       <CaptureSection />
-      <ResaleFlowSection />
-      <ExtensionToolkitSection />
       <PrivacySection />
     </main>
   );
@@ -290,7 +260,7 @@ function ProductSurfaceSection() {
       </div>
 
       <div className="py-12 lg:py-16">
-        <div className="mobile-feature-carousel min-w-0 overflow-x-auto overflow-y-hidden py-1" aria-label="Volt mobile capture screenshots">
+        <div className="mobile-feature-carousel min-w-0 overflow-hidden py-1" aria-label="Volt mobile capture screenshots">
           <div className="mobile-feature-track flex w-max">
             {[0, 1].map((groupIndex) => (
               <div key={groupIndex} className="mobile-feature-group flex shrink-0 gap-4 px-2" aria-hidden={groupIndex === 1}>
@@ -300,41 +270,6 @@ function ProductSurfaceSection() {
               </div>
             ))}
           </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function ResaleFlowSection() {
-  return (
-    <section id="workflow" className="border-b border-zinc-200 bg-white">
-      <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
-        <div className="flex flex-col justify-between gap-8 lg:flex-row lg:items-end">
-          <div>
-            <p className="text-sm font-semibold text-zinc-500">Chrome resale workflow</p>
-            <h2 className="mt-3 max-w-2xl text-3xl font-semibold leading-tight text-zinc-950 sm:text-4xl">
-              Turn mobile captures into browser-side resale work.
-            </h2>
-          </div>
-          <p className="max-w-xl text-base leading-7 text-zinc-600">
-            Once the phone sends product details into Chrome, Volt keeps the next steps close: market checks, offer decisions, tab recovery, and listing prep.
-          </p>
-        </div>
-
-        <div className="mt-10 grid gap-4 lg:grid-cols-3">
-          {workflowItems.map((item, index) => (
-            <article key={item.title} className="relative min-h-80 overflow-hidden rounded-[1.25rem] border border-zinc-200 bg-zinc-50 p-6">
-              <div className="flex items-center justify-between">
-                <div className="grid size-11 place-items-center rounded-[0.85rem] bg-zinc-950 text-white">
-                  <item.icon size={21} />
-                </div>
-                <span className="text-5xl font-semibold leading-none text-zinc-200">{index + 1}</span>
-              </div>
-              <h3 className="mt-16 text-xl font-semibold text-zinc-950">{item.title}</h3>
-              <p className="mt-3 text-sm leading-6 text-zinc-600">{item.body}</p>
-            </article>
-          ))}
         </div>
       </div>
     </section>
@@ -430,34 +365,6 @@ function ExtensionFeatureCard({
         <p className="mt-2 text-sm leading-6 text-zinc-600">{body}</p>
       </div>
     </article>
-  );
-}
-
-function ExtensionToolkitSection() {
-  return (
-    <section id="app-store" className="border-b border-zinc-200 bg-white">
-      <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
-        <div className="grid gap-10 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
-          <div>
-            <p className="text-sm font-semibold text-zinc-500">Chrome extension</p>
-            <h2 className="mt-3 text-3xl font-semibold leading-tight text-zinc-950 sm:text-4xl">
-              A configurable browser toolkit, not another rigid dashboard.
-            </h2>
-            <p className="mt-5 max-w-xl text-base leading-7 text-zinc-600">
-              Use Volt to receive captures from the phone and keep resale shortcuts close to the tabs you already use. Enable the helpers that fit your process and turn off anything that does not.
-            </p>
-          </div>
-          <div className="grid gap-3">
-            {productHighlights.map((item) => (
-              <div key={item} className="flex gap-4 rounded-[1rem] border border-zinc-200 bg-zinc-50 p-5">
-                <ShieldCheck className="mt-0.5 shrink-0 text-emerald-600" size={19} />
-                <p className="text-sm leading-6 text-zinc-700">{item}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </section>
   );
 }
 
