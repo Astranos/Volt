@@ -219,8 +219,11 @@ function MobileScannerPopup() {
   }, []);
 
   const openSidepanelTool = useCallback(async (tool: SidepanelToolId) => {
-    await chrome.runtime.sendMessage({ action: "openInSidebar", tool });
-    window.close();
+    try {
+      await chrome.runtime.sendMessage({ action: "openInSidebar", tool, mode: "open" });
+    } finally {
+      window.close();
+    }
   }, []);
 
   const openSettings = useCallback(async () => {
