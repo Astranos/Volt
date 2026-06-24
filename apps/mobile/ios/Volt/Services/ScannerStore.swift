@@ -325,6 +325,7 @@ final class ScannerStore {
                 attemptId: nil,
                 offer: nil,
                 answerURL: nil,
+                label: pairedSession.displayName,
                 sourceURL: joinWindow.sourceURL
             )
             pairingSession = session

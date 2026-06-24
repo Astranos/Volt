@@ -6,6 +6,8 @@ import WebKit
 
 struct ClipRootView: View {
     @Bindable var store: ClipScannerStore
+    @State private var isPairingFailurePresented = false
+    @State private var isPairingScannerPresented = false
 
     var body: some View {
         ZStack {
@@ -28,24 +30,39 @@ struct ClipRootView: View {
                 .opacity(0.01)
                 .allowsHitTesting(false)
         }
+        .sheet(isPresented: $isPairingFailurePresented) {
+            ClipPairingFailureView(
+                store: store,
+                onScanQRCode: {
+                    isPairingFailurePresented = false
+                    isPairingScannerPresented = true
+                }
+            )
+            .presentationDetents([.medium])
+            .presentationDragIndicator(.visible)
+        }
+        .fullScreenCover(isPresented: $isPairingScannerPresented) {
+            ClipPairingScannerView(store: store) {
+                isPairingScannerPresented = false
+            }
+        }
+        .onChange(of: store.pairingFailureMessage) { _, message in
+            isPairingFailurePresented = message != nil && !store.isConnected
+        }
     }
 }
 
 private struct ClipCaptureView: View {
     @Bindable var store: ClipScannerStore
     @State private var isCaptureSessionPresented = false
-    @State private var isPairingPresented = false
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: ScannerTabLayout.stackSpacing) {
-                    ScannerChromeSectionHeader(
+                    ClipChromeSectionHeader(
                         title: "Capture",
-                        connection: connectionSummary,
-                        onConnectionControlTapped: {
-                            isPairingPresented = true
-                        }
+                        connection: connectionSummary
                     )
 
                     ClipRecentPhotosSection(
@@ -100,11 +117,6 @@ private struct ClipCaptureView: View {
                     }
                 )
             }
-            .sheet(isPresented: $isPairingPresented) {
-                ClipPairingSessionsView(store: store)
-                    .presentationDetents([.medium, .large])
-                    .presentationDragIndicator(.visible)
-            }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 ScannerBottomActionAccessory(
                     title: "Start Capture",
@@ -124,7 +136,12 @@ private struct ClipCaptureView: View {
         ScannerConnectionSummary(
             isConnected: store.isConnected,
             isBusy: store.isPairing,
-            title: clipConnectionTitle(isConnected: store.isConnected, isPairing: store.isPairing),
+            title: clipConnectionTitle(
+                isConnected: store.isConnected,
+                isPairing: store.isPairing,
+                pairingLabel: store.pairingLabel,
+                pairingFailureMessage: store.pairingFailureMessage
+            ),
             statusText: store.statusText
         )
     }
@@ -140,18 +157,14 @@ private struct ClipCaptureView: View {
 
 private struct ClipDictationView: View {
     @Bindable var store: ClipScannerStore
-    @State private var isPairingPresented = false
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: ScannerTabLayout.stackSpacing) {
-                    ScannerChromeSectionHeader(
+                    ClipChromeSectionHeader(
                         title: "Dictate",
-                        connection: connectionSummary,
-                        onConnectionControlTapped: {
-                            isPairingPresented = true
-                        }
+                        connection: connectionSummary
                     )
 
                     ClipDictationConnectionCard(
@@ -177,11 +190,6 @@ private struct ClipDictationView: View {
             .background(ScannerTabLayout.background)
             .navigationTitle("Dictate")
             .toolbar(.hidden, for: .navigationBar)
-            .sheet(isPresented: $isPairingPresented) {
-                ClipPairingSessionsView(store: store)
-                    .presentationDetents([.medium, .large])
-                    .presentationDragIndicator(.visible)
-            }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 ClipDictationStartAccessory(
                     isRecording: store.isDictating,
@@ -199,7 +207,12 @@ private struct ClipDictationView: View {
         ScannerConnectionSummary(
             isConnected: store.isConnected,
             isBusy: store.isPairing,
-            title: clipConnectionTitle(isConnected: store.isConnected, isPairing: store.isPairing),
+            title: clipConnectionTitle(
+                isConnected: store.isConnected,
+                isPairing: store.isPairing,
+                pairingLabel: store.pairingLabel,
+                pairingFailureMessage: store.pairingFailureMessage
+            ),
             statusText: store.statusText
         )
     }
@@ -218,19 +231,15 @@ private struct ClipDictationView: View {
 private struct ClipUploadView: View {
     @Bindable var store: ClipScannerStore
     @State private var pickerItems: [PhotosPickerItem] = []
-    @State private var isPairingPresented = false
     @State private var isPreparingUploads = false
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: ScannerTabLayout.stackSpacing) {
-                    ScannerChromeSectionHeader(
+                    ClipChromeSectionHeader(
                         title: "Upload",
-                        connection: connectionSummary,
-                        onConnectionControlTapped: {
-                            isPairingPresented = true
-                        }
+                        connection: connectionSummary
                     )
 
                     ClipRecentPhotosSection(
@@ -251,11 +260,6 @@ private struct ClipUploadView: View {
             .background(ScannerTabLayout.background)
             .navigationTitle("Upload")
             .toolbar(.hidden, for: .navigationBar)
-            .sheet(isPresented: $isPairingPresented) {
-                ClipPairingSessionsView(store: store)
-                    .presentationDetents([.medium, .large])
-                    .presentationDragIndicator(.visible)
-            }
             .onChange(of: pickerItems) { _, items in
                 Task {
                     isPreparingUploads = true
@@ -286,7 +290,12 @@ private struct ClipUploadView: View {
         ScannerConnectionSummary(
             isConnected: store.isConnected,
             isBusy: store.isPairing,
-            title: clipConnectionTitle(isConnected: store.isConnected, isPairing: store.isPairing),
+            title: clipConnectionTitle(
+                isConnected: store.isConnected,
+                isPairing: store.isPairing,
+                pairingLabel: store.pairingLabel,
+                pairingFailureMessage: store.pairingFailureMessage
+            ),
             statusText: store.statusText
         )
     }
@@ -344,14 +353,138 @@ private struct ClipRecentPhotosSection: View {
     }
 }
 
-private func clipConnectionTitle(isConnected: Bool, isPairing: Bool) -> String {
+private func clipConnectionTitle(
+    isConnected: Bool,
+    isPairing: Bool,
+    pairingLabel: String?,
+    pairingFailureMessage: String?
+) -> String {
     if isConnected {
-        return "Chrome"
+        return pairingLabel ?? "Chrome"
     }
     if isPairing {
         return "Connecting"
     }
+    if pairingFailureMessage != nil {
+        return "Failed"
+    }
     return "Connect"
+}
+
+private struct ClipChromeSectionHeader: View {
+    let title: String
+    let connection: ScannerConnectionSummary
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text(title)
+                .font(.largeTitle.bold())
+                .lineLimit(1)
+                .minimumScaleFactor(0.82)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            HStack(spacing: 8) {
+                if connection.isBusy {
+                    ProgressView()
+                        .controlSize(.small)
+                        .tint(.primary)
+                } else {
+                    Image(systemName: connectionIcon)
+                        .font(.subheadline.weight(.semibold))
+                }
+
+                Text(connection.title)
+                    .font(.headline)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.76)
+            }
+            .foregroundStyle(connectionColor)
+            .padding(.horizontal, 18)
+            .frame(minHeight: 44)
+            .background(.regularMaterial, in: Capsule())
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(connection.statusText)
+        }
+    }
+
+    private var connectionIcon: String {
+        if connection.isConnected {
+            return "checkmark.circle.fill"
+        }
+        if connection.title == "Failed" {
+            return "exclamationmark.triangle.fill"
+        }
+        return "desktopcomputer"
+    }
+
+    private var connectionColor: Color {
+        if connection.isConnected {
+            return .green
+        }
+        if connection.title == "Failed" {
+            return .red
+        }
+        return connection.isBusy ? .orange : .secondary
+    }
+}
+
+private struct ClipPairingFailureView: View {
+    @Bindable var store: ClipScannerStore
+    @Environment(\.dismiss) private var dismiss
+    let onScanQRCode: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 18) {
+                Label("Connection Failed", systemImage: "exclamationmark.triangle.fill")
+                    .font(.title2.bold())
+                    .foregroundStyle(.red)
+
+                Text(store.pairingFailureMessage ?? "The App Clip could not connect to the Chrome session.")
+                    .font(.body)
+                    .foregroundStyle(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text("Retry can help if Chrome or the network was slow. If the QR expired or opened the wrong session, scan a fresh Volt QR code.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Spacer(minLength: 0)
+
+                VStack(spacing: 10) {
+                    Button {
+                        store.retryPairing()
+                    } label: {
+                        Label("Retry", systemImage: "arrow.clockwise")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity, minHeight: 52)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.green)
+                    .disabled(!store.canRetryPairing)
+
+                    Button {
+                        onScanQRCode()
+                    } label: {
+                        Label("Scan QR Code", systemImage: "qrcode.viewfinder")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity, minHeight: 52)
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+            .padding(ScannerTabLayout.contentPadding)
+            .navigationTitle("Chrome Session")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
 }
 
 private struct ClipDictationConnectionCard: View {
@@ -766,12 +899,12 @@ private struct ClipCaptureSessionBackdrop: View {
     let focusPoint: CGPoint?
     let onTap: (CGPoint, CGPoint) -> Void
     let onPinch: (CGFloat) -> Void
-    private let photoTopClearance: CGFloat = 12
+    private let photoTopClearance: CGFloat = 78
     private let photoControlsReservedHeight: CGFloat = 430
 
     var body: some View {
         GeometryReader { geometry in
-            ZStack {
+            ZStack(alignment: .top) {
                 Color.black
                     .ignoresSafeArea()
 
@@ -813,7 +946,7 @@ private struct ClipCaptureSessionBackdrop: View {
         let bottomInset = geometry.safeAreaInsets.bottom
         let availableHeight = max(0, geometry.size.height - topInset - bottomInset - photoControlsReservedHeight)
         let side = min(geometry.size.width - 24, availableHeight)
-        let topOffset = topInset + 10
+        let topOffset = topInset
 
         return ClipCameraPreview(service: cameraService, onTap: onTap, onPinch: onPinch)
             .frame(width: side, height: side)
@@ -1038,143 +1171,6 @@ private struct ClipOcrReviewControls: View {
                 endPoint: .bottom
             )
             .ignoresSafeArea(edges: .bottom)
-        }
-    }
-}
-
-private struct ClipPairingSessionsView: View {
-    @Bindable var store: ClipScannerStore
-    @Environment(\.openURL) private var openURL
-    @State private var isPairingScannerPresented = false
-    private let webScannerURL = URL(string: "https://volt-scanner.vercel.app/create-session")!
-
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: ScannerTabLayout.stackSpacing) {
-                    sessionsHeader
-
-                    PairingSessionSetupContent {
-                        openURL(webScannerURL)
-                    }
-
-                    ClipPairingStatusSummary(
-                        statusText: store.statusText,
-                        isConnected: store.isConnected,
-                        isPairing: store.isPairing,
-                        errorMessage: store.errorMessage
-                    )
-                }
-                .padding(ScannerTabLayout.contentPadding)
-                .padding(.top, ScannerTabLayout.topPadding)
-                .padding(.bottom, ScannerTabLayout.bottomAccessoryContentPadding)
-            }
-            .background(ScannerTabLayout.background)
-            .navigationTitle("Sessions")
-            .toolbar(.hidden, for: .navigationBar)
-            .fullScreenCover(isPresented: $isPairingScannerPresented) {
-                ClipPairingScannerView(store: store) {
-                    isPairingScannerPresented = false
-                }
-            }
-            .overlay(alignment: .bottom) {
-                ScanChromeQRAccessory {
-                    isPairingScannerPresented = true
-                }
-            }
-        }
-    }
-
-    private var sessionsHeader: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
-            Text("Sessions")
-                .font(.largeTitle.bold())
-                .lineLimit(1)
-                .minimumScaleFactor(0.82)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            if store.isConnected {
-                Button {
-                    store.disconnect()
-                } label: {
-                    Label("Disconnect", systemImage: "xmark.circle.fill")
-                        .font(.headline)
-                        .foregroundStyle(.red)
-                        .lineLimit(1)
-                        .padding(.horizontal, 18)
-                        .frame(minHeight: 44)
-                        .background(.regularMaterial, in: Capsule())
-                }
-                .accessibilityLabel("Disconnect from browser")
-            } else if store.isPairing {
-                ProgressView()
-                    .controlSize(.regular)
-            }
-        }
-        .accessibilityElement(children: .contain)
-    }
-}
-
-private struct ClipPairingStatusSummary: View {
-    let statusText: String
-    let isConnected: Bool
-    let isPairing: Bool
-    let errorMessage: String?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Label(title, systemImage: systemImage)
-                .font(.headline)
-                .foregroundStyle(tint)
-
-            Text(statusText)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            if let errorMessage {
-                Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
-                    .font(.footnote)
-                    .foregroundStyle(.red)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .padding()
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.background, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-    }
-
-    private var title: String {
-        if isConnected {
-            "Connected"
-        } else if isPairing {
-            "Pairing with Chrome"
-        } else if errorMessage != nil {
-            "Pairing failed"
-        } else {
-            "Chrome Pairing"
-        }
-    }
-
-    private var systemImage: String {
-        if isConnected {
-            "checkmark.circle.fill"
-        } else if errorMessage != nil {
-            "exclamationmark.triangle.fill"
-        } else {
-            "desktopcomputer"
-        }
-    }
-
-    private var tint: Color {
-        if isConnected {
-            .green
-        } else if isPairing {
-            .orange
-        } else if errorMessage != nil {
-            .red
-        } else {
-            .primary
         }
     }
 }

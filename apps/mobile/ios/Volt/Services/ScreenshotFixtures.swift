@@ -48,6 +48,7 @@ extension ScannerStore {
             attemptId: nil,
             offer: nil,
             answerURL: nil,
+            label: nil,
             sourceURL: URL(string: "volt://screenshots/mock-session")!
         )
         connectionStatus = .connected

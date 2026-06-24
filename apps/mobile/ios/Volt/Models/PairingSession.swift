@@ -6,6 +6,7 @@ struct PairingSession: Equatable {
     var attemptId: String?
     var offer: String?
     var answerURL: URL?
+    var label: String?
     var sourceURL: URL
 
     var isPresent: Bool {

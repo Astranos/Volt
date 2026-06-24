@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Popover } from "@base-ui/react/popover";
+import { useEffect, useRef } from "react";
 import {
   ArrowRight,
   Bookmark,
@@ -260,19 +261,89 @@ function ProductSurfaceSection() {
       </div>
 
       <div className="py-12 lg:py-16">
-        <div className="mobile-feature-carousel min-w-0 overflow-hidden py-1" aria-label="Volt mobile capture screenshots">
-          <div className="mobile-feature-track flex w-max">
-            {[0, 1].map((groupIndex) => (
-              <div key={groupIndex} className="mobile-feature-group flex shrink-0 gap-4 px-2" aria-hidden={groupIndex === 1}>
-                {mobileScreenshots.map((item) => (
-                  <MobileFeatureShot key={`${groupIndex}-${item.title}`} {...item} />
-                ))}
-              </div>
-            ))}
-          </div>
-        </div>
+        <MobileFeatureCarousel />
       </div>
     </section>
+  );
+}
+
+function MobileFeatureCarousel() {
+  const carouselRef = useRef<HTMLDivElement>(null);
+  const groupRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const carousel = carouselRef.current;
+    const group = groupRef.current;
+    if (!carousel || !group) return;
+
+    let animationFrame = 0;
+    let lastTimestamp = performance.now();
+    let groupWidth = 0;
+    let isWrapping = false;
+
+    const measure = () => {
+      groupWidth = group.scrollWidth;
+      if (groupWidth > 0 && carousel.scrollLeft < groupWidth * 0.5) {
+        carousel.scrollLeft = groupWidth;
+      }
+    };
+
+    const wrapScrollPosition = () => {
+      if (!groupWidth || isWrapping) return;
+
+      if (carousel.scrollLeft <= groupWidth * 0.5) {
+        isWrapping = true;
+        carousel.scrollLeft += groupWidth;
+        isWrapping = false;
+      } else if (carousel.scrollLeft >= groupWidth * 1.5) {
+        isWrapping = true;
+        carousel.scrollLeft -= groupWidth;
+        isWrapping = false;
+      }
+    };
+
+    const animate = (timestamp: number) => {
+      const elapsed = timestamp - lastTimestamp;
+      lastTimestamp = timestamp;
+
+      if (groupWidth > 0) {
+        carousel.scrollLeft += elapsed * 0.035;
+        wrapScrollPosition();
+      }
+
+      animationFrame = requestAnimationFrame(animate);
+    };
+
+    measure();
+    const resizeObserver = new ResizeObserver(measure);
+    resizeObserver.observe(group);
+    carousel.addEventListener("scroll", wrapScrollPosition, { passive: true });
+    animationFrame = requestAnimationFrame(animate);
+
+    return () => {
+      cancelAnimationFrame(animationFrame);
+      resizeObserver.disconnect();
+      carousel.removeEventListener("scroll", wrapScrollPosition);
+    };
+  }, []);
+
+  return (
+    <div ref={carouselRef} className="mobile-feature-carousel min-w-0 overflow-x-auto overflow-y-hidden py-1" aria-label="Volt mobile capture screenshots">
+      <div className="mobile-feature-track flex w-max">
+        {[0, 1, 2].map((groupIndex) => (
+          <div
+            key={groupIndex}
+            ref={groupIndex === 0 ? groupRef : undefined}
+            className="mobile-feature-group flex shrink-0 gap-4 px-2"
+            aria-hidden={groupIndex !== 1}
+          >
+            {mobileScreenshots.map((item) => (
+              <MobileFeatureShot key={`${groupIndex}-${item.title}`} {...item} />
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 

@@ -71,13 +71,7 @@ a {
 }
 
 .mobile-feature-track {
-  animation: mobile-feature-scroll 108s linear infinite;
-  will-change: transform;
-}
-
-.mobile-feature-carousel:hover .mobile-feature-track,
-.mobile-feature-carousel:focus-within .mobile-feature-track {
-  animation-play-state: paused;
+  will-change: scroll-position;
 }
 
 @keyframes scan-beam {
@@ -90,16 +84,6 @@ a {
   50% {
     transform: translateY(132px);
     opacity: 1;
-  }
-}
-
-@keyframes mobile-feature-scroll {
-  from {
-    transform: translate3d(0, 0, 0);
-  }
-
-  to {
-    transform: translate3d(-50%, 0, 0);
   }
 }
 

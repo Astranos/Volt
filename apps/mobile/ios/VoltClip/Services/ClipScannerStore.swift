@@ -59,6 +59,8 @@ final class ClipScannerStore {
     var pairingURLText = ""
     var statusText = "Open Volt in Chrome and scan the pairing code."
     var targetHint = "Not connected"
+    var pairingLabel: String?
+    var pairingFailureMessage: String?
     var transcript = ""
     var isPairing = false
     var isConnected = false
@@ -80,6 +82,10 @@ final class ClipScannerStore {
         transport.embeddedWebView
     }
 
+    var canRetryPairing: Bool {
+        pairingSession != nil && !isPairing && !isConnected
+    }
+
     init() {
         transport.onStatus = { [weak self] status in
             self?.statusText = status
@@ -87,8 +93,9 @@ final class ClipScannerStore {
         transport.onConnected = { [weak self] sessionReady in
             self?.isConnected = true
             self?.isPairing = false
+            self?.pairingFailureMessage = nil
             self?.targetHint = sessionReady.cursorTarget?.label ?? "Ready for Chrome"
-            self?.statusText = "Connected to Chrome"
+            self?.statusText = "Connected to \(self?.pairingLabel ?? "Chrome")"
             self?.sendSavedItemsAfterConnect()
         }
         transport.onTranscript = { [weak self] text, final in
@@ -107,6 +114,9 @@ final class ClipScannerStore {
             self?.isPairing = false
             self?.isDictating = false
             self?.errorMessage = message
+            if self?.isConnected != true {
+                self?.pairingFailureMessage = message
+            }
             self?.statusText = self?.isConnected == true ? "Dictation failed" : "Connection failed"
         }
     }
@@ -119,6 +129,8 @@ final class ClipScannerStore {
         guard let session else { return }
         pairingSession = session
         pairingURLText = url.absoluteString
+        pairingLabel = session.label ?? pairingLabel
+        pairingFailureMessage = nil
         Task { await pair(session) }
     }
 
@@ -139,19 +151,27 @@ final class ClipScannerStore {
         let nextSession = session ?? pairingSession
         guard let nextSession else {
             errorMessage = "Open a pairing link first."
+            pairingFailureMessage = "Open a Volt App Clip link or scan the Chrome pairing QR."
             return
         }
 
         isPairing = true
         errorMessage = nil
+        pairingFailureMessage = nil
         statusText = "Pairing with Chrome"
         do {
             try await transport.pair(with: nextSession, contributorId: contributorId)
         } catch {
             isPairing = false
             errorMessage = error.localizedDescription
+            pairingFailureMessage = error.localizedDescription
             statusText = "Pairing failed"
         }
+    }
+
+    func retryPairing() {
+        guard pairingSession != nil, !isPairing, !isConnected else { return }
+        Task { await pair() }
     }
 
     func startDictation() {
@@ -419,6 +439,8 @@ final class ClipScannerStore {
         }
         pairingSession = session
         pairingURLText = url.absoluteString
+        pairingLabel = session.label ?? pairingLabel
+        pairingFailureMessage = nil
         Task { await pair(session) }
         return true
     }

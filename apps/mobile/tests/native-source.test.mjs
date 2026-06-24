@@ -291,8 +291,14 @@ test("native screens use the shared header connection control without extra sess
   assert.match(uploadViewSwiftSource, /ScannerSectionHeader\(\s*title: "Upload",\s*onConnectionControlTapped:/);
   assert.match(rootViewSwiftSource, /private var connectionTitle: String/);
   assert.match(rootViewSwiftSource, /store\.connectionStatus == \.pairing \|\| store\.connectionStatus == \.waitingForChrome[\s\S]*return "Connecting"/);
-  assert.match(clipRootViewSwiftSource, /private func clipConnectionTitle\(isConnected: Bool, isPairing: Bool\) -> String/);
+  assert.match(clipRootViewSwiftSource, /private func clipConnectionTitle\(\s*isConnected: Bool,\s*isPairing: Bool,\s*pairingLabel: String\?,\s*pairingFailureMessage: String\?\s*\) -> String/);
   assert.match(clipRootViewSwiftSource, /if isPairing \{\s*return "Connecting"\s*\}/);
+  assert.match(clipRootViewSwiftSource, /return pairingLabel \?\? "Chrome"/);
+  assert.match(clipRootViewSwiftSource, /if pairingFailureMessage != nil \{\s*return "Failed"\s*\}/);
+  assert.match(clipRootViewSwiftSource, /private struct ClipPairingFailureView: View/);
+  assert.match(clipRootViewSwiftSource, /Label\("Retry", systemImage: "arrow\.clockwise"\)/);
+  assert.match(clipRootViewSwiftSource, /Label\("Scan QR Code", systemImage: "qrcode\.viewfinder"\)/);
+  assert.doesNotMatch(clipRootViewSwiftSource, /private struct ClipPairingSessionsView: View/);
   assert.doesNotMatch(scannerViewSwiftSource, /trailingAccessory: \{\s*ScannerSessionsButton/);
   assert.doesNotMatch(dictationViewSwiftSource, /trailingAccessory: \{\s*ScannerSessionsButton/);
   assert.doesNotMatch(uploadViewSwiftSource, /trailingAccessory: \{\s*ScannerSessionsButton/);

@@ -14,6 +14,7 @@ enum PairingURLParser {
             attemptId: query["joinAttemptId"],
             offer: query["offer"],
             answerURL: query["answerUrl"].flatMap(URL.init(string:)),
+            label: query["label"],
             sourceURL: url
         )
 
