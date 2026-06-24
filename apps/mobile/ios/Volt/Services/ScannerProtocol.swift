@@ -16,6 +16,7 @@ enum ScannerProtocol {
     static let joinAttemptPollInterval: Duration = .milliseconds(650)
     static let iceGatheringTimeout: Duration = .seconds(2)
     static let photoReceiptTimeout: Duration = .seconds(20)
+    static let signalRequestTimeout: TimeInterval = 8
 
     enum MessageType: String {
         case hello
@@ -396,6 +397,7 @@ enum ScannerPairingError: LocalizedError {
     case chromeTimedOut
     case joinTokenExpired
     case requestFailed
+    case signalRejected(statusCode: Int, detail: String?)
     case photoRejected(String)
     case photoDeliveryInterrupted
     case photoDeliveryTimedOut
@@ -412,6 +414,12 @@ enum ScannerPairingError: LocalizedError {
         case .chromeTimedOut: "Chrome did not respond in time. Reopen the QR and scan again."
         case .joinTokenExpired: "This Chrome pairing session expired. Scan the QR again."
         case .requestFailed: "The scanner signaling service did not accept the request."
+        case .signalRejected(let statusCode, let detail):
+            if let detail, !detail.isEmpty {
+                "The scanner signaling service rejected the request (\(statusCode)): \(detail)"
+            } else {
+                "The scanner signaling service rejected the request (\(statusCode))."
+            }
         case .photoRejected(let reason): "Chrome rejected the photo: \(reason)"
         case .photoDeliveryInterrupted: "Photo delivery was interrupted."
         case .photoDeliveryTimedOut: "Chrome did not confirm photo delivery in time."

@@ -20,17 +20,21 @@ export type PeerSession = {
 export type PeerConnectionEvents = {
   configureControlChannel: (peer: PeerSession, channel: RTCDataChannel) => void;
   configurePhotoChannel: (peer: PeerSession, channel: RTCDataChannel) => void;
+  disconnectGraceMs?: number;
   onPeerConnected: (peer: PeerSession) => void;
   onPeerDisconnected: (peer: PeerSession) => void;
   onRemoteAudioTrack?: (peer: PeerSession, track: MediaStreamTrack, streams: readonly MediaStream[]) => void;
   log?: (...args: unknown[]) => void;
 };
 
+const PEER_DISCONNECT_GRACE_MS = 5_000;
+
 export class MobileScannerPeerConnections {
   readonly peers = new Map<string, PeerSession>();
 
   private readonly signalClient: MobileScannerSignalClient;
   private readonly events: PeerConnectionEvents;
+  private readonly disconnectTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
   constructor(signalClient: MobileScannerSignalClient, events: PeerConnectionEvents) {
     this.signalClient = signalClient;
@@ -38,51 +42,62 @@ export class MobileScannerPeerConnections {
   }
 
   async createPeerOffer(joinWindow: JoinWindow, joinAttemptId: string) {
+    if (this.peers.has(joinAttemptId)) return;
     this.events.log?.("[Volt Scanner Pairing] creating WebRTC offer", { joinAttemptId });
-    const iceServers = await this.resolveIceServers(joinAttemptId);
-    const pc = new RTCPeerConnection({ iceServers });
-    const peer: PeerSession = {
-      answerApplied: false,
-      control: null,
-      id: joinAttemptId,
-      pc,
-      photoTransfer: null,
-      ready: false,
-    };
-    this.peers.set(joinAttemptId, peer);
+    let peer: PeerSession | null = null;
+    try {
+      const iceServers = await this.resolveIceServers(joinAttemptId);
+      const pc = new RTCPeerConnection({ iceServers });
+      const nextPeer: PeerSession = {
+        answerApplied: false,
+        control: null,
+        id: joinAttemptId,
+        pc,
+        photoTransfer: null,
+        ready: false,
+      };
+      peer = nextPeer;
+      this.peers.set(joinAttemptId, peer);
 
-    pc.addTransceiver("audio", { direction: "recvonly" });
-    pc.ontrack = (event) => {
-      if (event.track.kind !== "audio") return;
-      this.events.log?.("[Volt Scanner Pairing] remote audio track received", { joinAttemptId });
-      this.events.onRemoteAudioTrack?.(peer, event.track, event.streams);
-    };
+      pc.addTransceiver("audio", { direction: "recvonly" });
+      pc.ontrack = (event) => {
+        if (event.track.kind !== "audio") return;
+        this.events.log?.("[Volt Scanner Pairing] remote audio track received", { joinAttemptId });
+        this.events.onRemoteAudioTrack?.(nextPeer, event.track, event.streams);
+      };
 
-    peer.control = pc.createDataChannel(SCANNER_CONTROL_CHANNEL_LABEL, { ordered: true });
-    peer.photoTransfer = pc.createDataChannel(PHOTO_TRANSFER_CHANNEL_LABEL, { ordered: true });
-    this.events.configureControlChannel(peer, peer.control);
-    this.events.configurePhotoChannel(peer, peer.photoTransfer);
+      nextPeer.control = pc.createDataChannel(SCANNER_CONTROL_CHANNEL_LABEL, { ordered: true });
+      nextPeer.photoTransfer = pc.createDataChannel(PHOTO_TRANSFER_CHANNEL_LABEL, { ordered: true });
+      this.events.configureControlChannel(nextPeer, nextPeer.control);
+      this.events.configurePhotoChannel(nextPeer, nextPeer.photoTransfer);
 
-    pc.onconnectionstatechange = () => {
-      this.events.log?.("[Volt Scanner Pairing] peer connection state", {
-        joinAttemptId,
-        state: pc.connectionState,
-        ready: peer.ready,
-      });
-      if (pc.connectionState === "failed" || pc.connectionState === "disconnected" || pc.connectionState === "closed") {
-        this.events.onPeerDisconnected(peer);
-      } else if (pc.connectionState === "connected" && peer.ready) {
-        this.events.onPeerConnected(peer);
-      }
-    };
+      pc.onconnectionstatechange = () => {
+        this.events.log?.("[Volt Scanner Pairing] peer connection state", {
+          joinAttemptId,
+          state: pc.connectionState,
+          ready: nextPeer.ready,
+        });
+        if (pc.connectionState === "failed" || pc.connectionState === "closed") {
+          this.events.onPeerDisconnected(nextPeer);
+        } else if (pc.connectionState === "disconnected") {
+          this.scheduleTransientDisconnect(nextPeer);
+        } else if (pc.connectionState === "connected") {
+          this.clearDisconnectTimer(nextPeer.id);
+          if (nextPeer.ready) this.events.onPeerConnected(nextPeer);
+        }
+      };
 
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-    await this.waitForIceGathering(pc);
-    if (!pc.localDescription) throw new Error("Failed to create scanner offer");
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      await this.waitForIceGathering(pc);
+      if (!pc.localDescription) throw new Error("Failed to create scanner offer");
 
-    await this.signalClient.postPeerOffer(joinWindow, joinAttemptId, pc.localDescription);
-    this.events.log?.("[Volt Scanner Pairing] WebRTC offer posted", { joinAttemptId });
+      await this.signalClient.postPeerOffer(joinWindow, joinAttemptId, pc.localDescription);
+      this.events.log?.("[Volt Scanner Pairing] WebRTC offer posted", { joinAttemptId });
+    } catch (error) {
+      if (peer) this.closePeer(peer.id);
+      throw error;
+    }
   }
 
   private async resolveIceServers(joinAttemptId: string): Promise<ScannerIceServer[]> {
@@ -114,6 +129,7 @@ export class MobileScannerPeerConnections {
     const peer = this.peers.get(joinAttemptId);
     if (!peer) return null;
     this.peers.delete(joinAttemptId);
+    this.clearDisconnectTimer(joinAttemptId);
     peer.control?.close();
     peer.photoTransfer?.close();
     peer.pc.close();
@@ -122,6 +138,7 @@ export class MobileScannerPeerConnections {
 
   clear() {
     for (const peer of this.peers.values()) {
+      this.clearDisconnectTimer(peer.id);
       peer.control?.close();
       peer.photoTransfer?.close();
       peer.pc.close();
@@ -135,6 +152,24 @@ export class MobileScannerPeerConnections {
       if (peer.ready) count += 1;
     }
     return count;
+  }
+
+  private scheduleTransientDisconnect(peer: PeerSession) {
+    if (this.disconnectTimers.has(peer.id)) return;
+    const timer = setTimeout(() => {
+      this.disconnectTimers.delete(peer.id);
+      if (peer.pc.connectionState === "disconnected") {
+        this.events.onPeerDisconnected(peer);
+      }
+    }, this.events.disconnectGraceMs ?? PEER_DISCONNECT_GRACE_MS);
+    this.disconnectTimers.set(peer.id, timer);
+  }
+
+  private clearDisconnectTimer(joinAttemptId: string) {
+    const timer = this.disconnectTimers.get(joinAttemptId);
+    if (!timer) return;
+    clearTimeout(timer);
+    this.disconnectTimers.delete(joinAttemptId);
   }
 
   private waitForIceGathering(pc: RTCPeerConnection) {

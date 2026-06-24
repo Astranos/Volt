@@ -56,6 +56,10 @@ export type MobileScannerResultDeliveryReceipt =
   | { success: true; result: HydratedMobileScannerPhotoResult | null }
   | { success: false; error: string };
 
+export type MobileScannerScanDeliveryReceipt =
+  | { success: true; result: MobileScannerScanResult | null }
+  | { success: false; error: string };
+
 type MobileScannerDeliveryOptions = {
   broadcastScannerMessage: (message: MobileScannerResultBroadcastMessage) => void;
   onPersistError?: (error: unknown) => void;
@@ -336,23 +340,25 @@ export async function persistAndBroadcastMobileScannerScan(
     persistFallbackScan,
     saveScan = saveMobileScannerScan,
   }: MobileScannerScanDeliveryOptions,
-) {
-  if (!shouldPersistScannerScan(scan)) return null;
+): Promise<MobileScannerScanDeliveryReceipt> {
+  if (!shouldPersistScannerScan(scan)) return { success: true, result: null };
 
   let result: MobileScannerScanResult | null = null;
   try {
     result = await saveScan(scan);
   } catch (error) {
     onPersistError?.(error);
-    await persistFallbackScan?.(scan);
   }
+
+  const persisted = result ? true : Boolean(await persistFallbackScan?.(scan));
+  if (!persisted) return { success: false, error: "storage_failed" };
 
   broadcastScannerMessage({
     action: "scannerScan",
     scan,
     result: result ?? undefined,
   });
-  return result;
+  return { success: true, result };
 }
 
 async function dataUrlToBlob(dataUrl: string) {

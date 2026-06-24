@@ -6,9 +6,9 @@ import {
   type PhotoTransferStartMessage,
   type ScannerControlMessage,
 } from "@volt/scanner-protocol";
-import { createMessageId } from "./mobile-scanner-ids";
-import type { PeerSession } from "./mobile-scanner-peer-connection";
-import type { PhotoMessage } from "./mobile-scanner-session-types";
+import { createMessageId } from "./mobile-scanner-ids.ts";
+import type { PeerSession } from "./mobile-scanner-peer-connection.ts";
+import type { PhotoMessage } from "./mobile-scanner-session-types.ts";
 
 type PendingPhoto = PhotoTransferStartMessage & {
   chunks: string[];
@@ -22,9 +22,12 @@ export type PhotoReceiverEvents = {
 };
 
 export class MobileScannerPhotoReceiver {
+  private readonly events: PhotoReceiverEvents;
   private pendingPhotos = new Map<string, PendingPhoto>();
 
-  constructor(private readonly events: PhotoReceiverEvents) {}
+  constructor(events: PhotoReceiverEvents) {
+    this.events = events;
+  }
 
   clear() {
     this.pendingPhotos.clear();
@@ -81,20 +84,29 @@ export class MobileScannerPhotoReceiver {
       const pending = this.pendingPhotos.get(data.photoId);
       if (!pending || pending.receivedChunks !== pending.totalChunks) return;
       this.pendingPhotos.delete(data.photoId);
-      const stored = await this.events.onPhoto({
-        kind: "photo",
-        id: pending.photoId,
-        name: pending.filename,
-        mimeType: pending.mimeType,
-        size: pending.size,
-        width: pending.width,
-        height: pending.height,
-        capturedAt: pending.capturedAt,
-        contributorId: pending.contributorId,
-        dataUrl: `data:${pending.mimeType};base64,${pending.chunks.join("")}`,
-        photoBatchId: pending.photoBatchId,
-      } as PhotoMessage & { photoBatchId: string });
-      if (stored) this.sendPhotoReceived(peer, pending.photoId, pending.photoBatchId, pending.size);
+      let stored = false;
+      try {
+        stored = await this.events.onPhoto({
+          kind: "photo",
+          id: pending.photoId,
+          name: pending.filename,
+          mimeType: pending.mimeType,
+          size: pending.size,
+          width: pending.width,
+          height: pending.height,
+          capturedAt: pending.capturedAt,
+          contributorId: pending.contributorId,
+          dataUrl: `data:${pending.mimeType};base64,${pending.chunks.join("")}`,
+          photoBatchId: pending.photoBatchId,
+        } as PhotoMessage & { photoBatchId: string });
+      } catch (_error) {
+        stored = false;
+      }
+      if (stored) {
+        this.sendPhotoReceived(peer, pending.photoId, pending.photoBatchId, pending.size);
+      } else {
+        this.sendPhotoRejected(peer, pending.photoId, "Chrome could not store the photo.");
+      }
       return;
     }
 
@@ -112,6 +124,18 @@ export class MobileScannerPhotoReceiver {
       photoBatchId,
       storedAt: new Date().toISOString(),
       size: Math.max(1, size),
+    });
+  }
+
+  private sendPhotoRejected(peer: PeerSession, photoId: string, detail: string) {
+    this.events.sendControl(peer, {
+      type: "photo_rejected",
+      messageId: createMessageId("control"),
+      sentAt: new Date().toISOString(),
+      photoId,
+      reason: "storage_full",
+      retryable: true,
+      detail,
     });
   }
 

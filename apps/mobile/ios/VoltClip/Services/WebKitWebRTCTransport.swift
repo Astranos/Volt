@@ -16,6 +16,8 @@ final class WebKitWebRTCTransport: NSObject {
     private var answerContinuation: CheckedContinuation<ScannerProtocol.SessionDescription, Error>?
     private var resultContinuations: [String: CheckedContinuation<ScannerProtocol.ResultReceived, Error>] = [:]
     private var resultTimeoutTasks: [String: Task<Void, Never>] = [:]
+    private var photoContinuations: [String: CheckedContinuation<ScannerProtocol.PhotoReceived, Error>] = [:]
+    private var photoTimeoutTasks: [String: Task<Void, Never>] = [:]
     private var isLoaded = false
 
     var embeddedWebView: WKWebView {
@@ -81,18 +83,25 @@ final class WebKitWebRTCTransport: NSObject {
         }
     }
 
-    func sendPhoto(_ image: UIImage, contributorId: String) async throws {
+    func sendPhoto(
+        _ image: UIImage,
+        contributorId: String,
+        batchId: String? = nil,
+        filename: String? = nil,
+        capturedAt: Date = .now
+    ) async throws -> ScannerProtocol.PhotoReceived {
         guard let data = image.jpegData(compressionQuality: 0.82) else {
             throw ScannerPairingError.invalidMessage
         }
+        let photoId = ScannerProtocol.makeMessageId("photo")
         let payload = ScannerProtocol.PhotoPayload(
-            id: ScannerProtocol.makeMessageId("photo"),
-            batchId: ScannerProtocol.makeMessageId("batch"),
-            filename: "volt-clip-\(Int(Date.now.timeIntervalSince1970)).jpg",
+            id: photoId,
+            batchId: batchId ?? ScannerProtocol.makeMessageId("batch"),
+            filename: filename ?? "volt-clip-\(Int(capturedAt.timeIntervalSince1970 * 1000)).jpg",
             data: data,
             width: Int(image.size.width * image.scale),
             height: Int(image.size.height * image.scale),
-            capturedAt: .now
+            capturedAt: capturedAt
         )
         let base64 = data.base64EncodedString()
         let chunks = base64.chunked(maxLength: ScannerProtocol.chunkSize)
@@ -104,11 +113,24 @@ final class WebKitWebRTCTransport: NSObject {
         }
         messages.append(ScannerProtocol.photoComplete(photoId: payload.id, totalChunks: chunks.count))
         let json = try encodedJavaScriptArgument(messages)
-        evaluate("window.voltBridge && window.voltBridge.sendPhotoMessages(\(json))")
+        return try await withCheckedThrowingContinuation { continuation in
+            photoContinuations[payload.id] = continuation
+            photoTimeoutTasks[payload.id] = Task { [weak self] in
+                try? await Task.sleep(for: ScannerProtocol.photoReceiptTimeout)
+                await MainActor.run {
+                    self?.resumePhotoContinuation(
+                        photoId: payload.id,
+                        with: .failure(ScannerPairingError.photoDeliveryTimedOut)
+                    )
+                }
+            }
+            evaluate("window.voltBridge && window.voltBridge.sendPhotoMessages(\(json))")
+        }
     }
 
     func close() {
         evaluate("window.voltBridge && window.voltBridge.close()")
+        failPendingReceipts(with: ScannerPairingError.channelNotOpen)
         onClosed?()
     }
 
@@ -214,11 +236,13 @@ final class WebKitWebRTCTransport: NSObject {
         case "transcript":
             onTranscript?(message["text"] as? String ?? "", message["final"] as? Bool ?? false)
         case "closed":
+            failPendingReceipts(with: ScannerPairingError.channelNotOpen)
             onClosed?()
         case "error":
             onError?(message["message"] as? String ?? "WebRTC failed")
             answerContinuation?.resume(throwing: ScannerPairingError.requestFailed)
             answerContinuation = nil
+            failPendingReceipts(with: ScannerPairingError.channelNotOpen)
         default:
             break
         }
@@ -236,6 +260,18 @@ final class WebKitWebRTCTransport: NSObject {
         if let receipt = ScannerProtocol.parseResultReceived(rawValue) {
             resumeResultContinuation(resultId: receipt.resultId, with: .success(receipt))
             onStatus?(receipt.insertedIntoCursor == true ? "Inserted into Chrome" : "Chrome received it, but no cursor target was available.")
+            return
+        }
+        if let receipt = ScannerProtocol.parsePhotoReceived(rawValue) {
+            resumePhotoContinuation(photoId: receipt.photoId, with: .success(receipt))
+            onStatus?("Photo delivered")
+            return
+        }
+        if let rejected = ScannerProtocol.parsePhotoRejected(rawValue) {
+            resumePhotoContinuation(
+                photoId: rejected.photoId,
+                with: .failure(ScannerPairingError.photoRejected(rejected.reason))
+            )
             return
         }
         if let protocolError = ScannerProtocol.parseProtocolError(rawValue) {
@@ -259,6 +295,33 @@ final class WebKitWebRTCTransport: NSObject {
         guard let continuation = resultContinuations.removeValue(forKey: resultId) else { return }
         resultTimeoutTasks.removeValue(forKey: resultId)?.cancel()
         continuation.resume(with: result)
+    }
+
+    private func resumePhotoContinuation(
+        photoId: String,
+        with result: Result<ScannerProtocol.PhotoReceived, Error>
+    ) {
+        guard let continuation = photoContinuations.removeValue(forKey: photoId) else { return }
+        photoTimeoutTasks.removeValue(forKey: photoId)?.cancel()
+        continuation.resume(with: result)
+    }
+
+    private func failPendingReceipts(with error: Error) {
+        let pendingResultContinuations = resultContinuations
+        self.resultContinuations.removeAll()
+        resultTimeoutTasks.values.forEach { $0.cancel() }
+        resultTimeoutTasks.removeAll()
+        for continuation in pendingResultContinuations.values {
+            continuation.resume(throwing: error)
+        }
+
+        let pendingPhotoContinuations = photoContinuations
+        self.photoContinuations.removeAll()
+        photoTimeoutTasks.values.forEach { $0.cancel() }
+        photoTimeoutTasks.removeAll()
+        for continuation in pendingPhotoContinuations.values {
+            continuation.resume(throwing: error)
+        }
     }
 
     private func encodedJavaScriptArgument(_ value: Any) throws -> String {

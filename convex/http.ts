@@ -14,12 +14,21 @@ import {
   normalizePushSubscription,
   numberFrom,
   pairingSecretFrom,
+  type SignalRequestBody,
   signalBodyFromRequest,
   signalPartsFromRequest,
   stringArrayFrom,
   stringFrom,
 } from "./scannerSignal/httpAdapter";
+import {
+  logScannerSignalEvent,
+  scannerSignalEventForCommand,
+  scannerSignalIdTail,
+  scannerSignalRouteTemplate,
+  type ScannerSignalLogFields,
+} from "./scannerSignal/logging";
 import { signalRouteCommand } from "./scannerSignal/routeCommands";
+import type { SignalRouteCommand } from "./scannerSignal/routeCommands";
 
 const http = httpRouter();
 const CLOUDFLARE_TURN_GENERATE_ICE_SERVERS_BASE_URL = "https://rtc.live.cloudflare.com/v1/turn/keys";
@@ -44,8 +53,98 @@ function emptyResponse(status = 204) {
   return new Response(null, { status, headers: corsHeaders });
 }
 
-async function runAndRespond<T extends { statusCode: number; body: unknown }>(result: Promise<T>) {
+function objectFrom(value: unknown) {
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+}
+
+function stringField(value: unknown, key: string) {
+  const field = objectFrom(value)[key];
+  return typeof field === "string" ? field : undefined;
+}
+
+function scannerSignalLogFields(
+  command: SignalRouteCommand,
+  parts: string[],
+  body: SignalRequestBody,
+  responseBody: unknown,
+  statusCode: number,
+  startedAt: number,
+): ScannerSignalLogFields {
+  const response = objectFrom(responseBody);
+  const attempt = objectFrom(response.attempt);
+  const request = objectFrom(response.request);
+  const requests = Array.isArray(response.requests) ? response.requests : undefined;
+  const isPairingIdRoute = parts[0] === "pairings" && parts[1] !== "reconnect-requests";
+
+  return {
+    route: scannerSignalRouteTemplate(command),
+    command,
+    statusCode,
+    elapsedMs: Date.now() - startedAt,
+    tokenTail: scannerSignalIdTail(parts[0] === "join-token" ? parts[1] : response.token ?? response.joinToken),
+    attemptIdTail: scannerSignalIdTail(parts[3] ?? attempt.id),
+    pairingIdTail: scannerSignalIdTail((isPairingIdRoute ? parts[1] : undefined) ?? response.pairingId ?? body.pairingId),
+    requestIdTail: scannerSignalIdTail(parts[3] ?? request.id ?? response.requestId),
+    browserSessionIdTail: scannerSignalIdTail(response.browserSessionId ?? body.browserSessionId ?? body.sessionId),
+    requestCount: requests?.length,
+  };
+}
+
+function rejectionReason(responseBody: unknown) {
+  const reason = stringField(responseBody, "error");
+  return reason ? reason.slice(0, 120) : undefined;
+}
+
+function logScannerSignalResponse(
+  command: SignalRouteCommand,
+  parts: string[],
+  body: SignalRequestBody,
+  responseBody: unknown,
+  statusCode: number,
+  startedAt: number,
+) {
+  const fields = scannerSignalLogFields(command, parts, body, responseBody, statusCode, startedAt);
+  if (statusCode >= 400) {
+    logScannerSignalEvent("signal_rejected", { ...fields, reason: rejectionReason(responseBody) }, "warn");
+    return;
+  }
+
+  const event = scannerSignalEventForCommand(command);
+  if (event) logScannerSignalEvent(event, fields);
+}
+
+function signalJsonResponse(
+  command: SignalRouteCommand,
+  parts: string[],
+  requestBody: SignalRequestBody,
+  responseBody: unknown,
+  statusCode: number,
+  startedAt: number,
+) {
+  logScannerSignalResponse(command, parts, requestBody, responseBody, statusCode, startedAt);
+  return jsonResponse(responseBody, statusCode);
+}
+
+async function runAndRespond<T extends { statusCode: number; body: unknown }>(
+  result: Promise<T>,
+  logContext?: {
+    command: SignalRouteCommand;
+    parts: string[];
+    requestBody: SignalRequestBody;
+    startedAt: number;
+  },
+) {
   const response = await result;
+  if (logContext) {
+    logScannerSignalResponse(
+      logContext.command,
+      logContext.parts,
+      logContext.requestBody,
+      response.body,
+      response.statusCode,
+      logContext.startedAt,
+    );
+  }
   return jsonResponse(response.body, response.statusCode);
 }
 
@@ -107,6 +206,8 @@ const signalHandler = httpAction(async (ctx, request) => {
   const body = await signalBodyFromRequest(request);
 
   const command = signalRouteCommand(request.method, parts);
+  const startedAt = Date.now();
+  const logContext = { command, parts, requestBody: body, startedAt };
 
   if (command === "getIceServers") {
     return jsonResponse(await scannerIceServersResponse());
@@ -123,13 +224,13 @@ const signalHandler = httpAction(async (ctx, request) => {
       graceMs: numberFrom(body.graceMs),
       origin: url.origin,
     });
-    return jsonResponse(response);
+    return signalJsonResponse(command, parts, body, response, 200, startedAt);
   }
 
   if (parts[0] === "join-token" && parts.length >= 2) {
     const token = parts[1];
     if (command === "getJoinTokenStatus") {
-      return runAndRespond(ctx.runMutation(internal.scannerSignal.joinTokens.getJoinTokenStatus, { token }));
+      return runAndRespond(ctx.runMutation(internal.scannerSignal.joinTokens.getJoinTokenStatus, { token }), logContext);
     }
     if (command === "revokeJoinToken") {
       return runAndRespond(
@@ -137,6 +238,7 @@ const signalHandler = httpAction(async (ctx, request) => {
           token,
           browserClaim: browserClaimFrom(request, body),
         }),
+        logContext,
       );
     }
     if (command === "rotateJoinToken") {
@@ -149,6 +251,7 @@ const signalHandler = httpAction(async (ctx, request) => {
           graceMs: numberFrom(body.graceMs),
           origin: url.origin,
         }),
+        logContext,
       );
     }
     if (command === "listJoinAttempts") {
@@ -157,6 +260,7 @@ const signalHandler = httpAction(async (ctx, request) => {
           token,
           browserClaim: browserClaimFrom(request, body),
         }),
+        logContext,
       );
     }
     if (command === "createJoinAttempt") {
@@ -170,13 +274,14 @@ const signalHandler = httpAction(async (ctx, request) => {
           capabilities: stringArrayFrom(body.capabilities),
           attemptTtlMs: numberFrom(body.attemptTtlMs),
         }),
+        logContext,
       );
     }
     if (parts[2] === "attempt" && parts.length === 5) {
       const attemptId = parts[3];
       if (command === "postJoinOffer") {
         const offer = stringFrom(body.offer, 200_000);
-        if (!offer) return jsonResponse({ error: "Missing offer" }, 400);
+        if (!offer) return signalJsonResponse(command, parts, body, { error: "Missing offer" }, 400, startedAt);
         return runAndRespond(
           ctx.runMutation(internal.scannerSignal.joinAttempts.postJoinOffer, {
             token,
@@ -184,15 +289,19 @@ const signalHandler = httpAction(async (ctx, request) => {
             browserClaim: browserClaimFrom(request, body),
             offer,
           }),
+          logContext,
         );
       }
       if (command === "getJoinOffer") {
-        return runAndRespond(ctx.runMutation(internal.scannerSignal.joinAttempts.getJoinOffer, { token, attemptId }));
+        return runAndRespond(ctx.runMutation(internal.scannerSignal.joinAttempts.getJoinOffer, { token, attemptId }), logContext);
       }
       if (command === "postJoinAnswer") {
         const answer = stringFrom(body.answer, 200_000);
-        if (!answer) return jsonResponse({ error: "Missing answer" }, 400);
-        return runAndRespond(ctx.runMutation(internal.scannerSignal.joinAttempts.postJoinAnswer, { token, attemptId, answer }));
+        if (!answer) return signalJsonResponse(command, parts, body, { error: "Missing answer" }, 400, startedAt);
+        return runAndRespond(
+          ctx.runMutation(internal.scannerSignal.joinAttempts.postJoinAnswer, { token, attemptId, answer }),
+          logContext,
+        );
       }
       if (command === "getJoinAnswer") {
         return runAndRespond(
@@ -201,6 +310,7 @@ const signalHandler = httpAction(async (ctx, request) => {
             attemptId,
             browserClaim: browserClaimFrom(request, body),
           }),
+          logContext,
         );
       }
     }
@@ -218,13 +328,16 @@ const signalHandler = httpAction(async (ctx, request) => {
           phoneLabel: stringFrom(body.phoneLabel, 120),
           pushSubscription: normalizePushSubscription(body.pushSubscription),
         }),
+        logContext,
       );
     }
     if (command === "getPendingReconnectRequests") {
+      const browserSessionId = stringFrom(url.searchParams.get("sessionId"), 120) ?? "";
       return runAndRespond(
         ctx.runMutation(internal.scannerSignal.reconnectRequests.getPendingReconnectRequests, {
-          browserSessionId: stringFrom(url.searchParams.get("sessionId"), 120) ?? "",
+          browserSessionId,
         }),
+        { ...logContext, requestBody: { browserSessionId } },
       );
     }
     const pairingId = parts[1];
@@ -244,11 +357,26 @@ const signalHandler = httpAction(async (ctx, request) => {
           subscription: responseBody.pushSubscription ?? null,
           pairingId,
           requestId,
+        }).catch(() => {
+          logScannerSignalEvent(
+            "push_wake_failed",
+            {
+              route: scannerSignalRouteTemplate(command),
+              command,
+              statusCode: result.statusCode,
+              elapsedMs: Date.now() - startedAt,
+              pairingIdTail: scannerSignalIdTail(pairingId),
+              requestIdTail: scannerSignalIdTail(requestId),
+              reason: "action_rejected",
+            },
+            "warn",
+          );
+          return { sent: false };
         });
         const { pushSubscription: _pushSubscription, ...bodyWithoutSubscription } = responseBody;
-        return jsonResponse(bodyWithoutSubscription, result.statusCode);
+        return signalJsonResponse(command, parts, body, bodyWithoutSubscription, result.statusCode, startedAt);
       }
-      return jsonResponse(result.body, result.statusCode);
+      return signalJsonResponse(command, parts, body, result.body, result.statusCode, startedAt);
     }
     if (command === "getReconnectRequestStatus") {
       return runAndRespond(
@@ -257,13 +385,16 @@ const signalHandler = httpAction(async (ctx, request) => {
           requestId: parts[3],
           pairingSecret: pairingSecretFrom(request, body),
         }),
+        logContext,
       );
     }
     if (command === "postReconnectJoinWindow") {
       const joinUrl = stringFrom(body.joinUrl, 1000);
       const joinToken = stringFrom(body.joinToken, 240);
       const sessionId = stringFrom(body.sessionId, 120);
-      if (!joinUrl || !joinToken || !sessionId) return jsonResponse({ error: "Invalid join window" }, 400);
+      if (!joinUrl || !joinToken || !sessionId) {
+        return signalJsonResponse(command, parts, body, { error: "Invalid join window" }, 400, startedAt);
+      }
       return runAndRespond(
         ctx.runMutation(internal.scannerSignal.reconnectRequests.postReconnectJoinWindow, {
           pairingId,
@@ -273,6 +404,7 @@ const signalHandler = httpAction(async (ctx, request) => {
           joinToken,
           sessionId,
         }),
+        logContext,
       );
     }
   }
@@ -283,7 +415,7 @@ const signalHandler = httpAction(async (ctx, request) => {
     return jsonResponse({ publicKey });
   }
 
-  return jsonResponse({ error: "Not found" }, 404);
+  return signalJsonResponse(command, parts, body, { error: "Not found" }, 404, startedAt);
 });
 
 http.route({ path: "/api/signal", method: "GET", handler: signalHandler });

@@ -34,7 +34,15 @@ final class ClipScannerStore {
     struct ClipPhoto: Identifiable, Equatable {
         let id = UUID()
         let image: UIImage
+        let source: Source
+        let batchId: String?
+        let capturedAt: Date
         var status: String
+
+        enum Source: String, Equatable {
+            case capture
+            case upload
+        }
     }
 
     struct ClipCapture: Identifiable, Equatable {
@@ -47,7 +55,7 @@ final class ClipScannerStore {
     }
 
     var selectedTab: ClipTab = .capture
-    var activeCaptureMode: CaptureMode = .photo
+    var activeCaptureMode: CaptureMode = .ocr
     var pairingURLText = ""
     var statusText = "Open Volt in Chrome and scan the pairing code."
     var targetHint = "Not connected"
@@ -81,6 +89,7 @@ final class ClipScannerStore {
             self?.isPairing = false
             self?.targetHint = sessionReady.cursorTarget?.label ?? "Ready for Chrome"
             self?.statusText = "Connected to Chrome"
+            self?.sendSavedItemsAfterConnect()
         }
         transport.onTranscript = { [weak self] text, final in
             self?.transcript = text
@@ -163,27 +172,81 @@ final class ClipScannerStore {
         transport.stopDictation()
     }
 
-    func addCapturedImage(_ image: UIImage) {
-        photos.insert(ClipPhoto(image: image, status: "Ready to send"), at: 0)
-        selectedTab = .upload
+    @discardableResult
+    func addCapturedImage(_ image: UIImage, source: ClipPhoto.Source, batchId: String? = nil, capturedAt: Date = .now) -> ClipPhoto {
+        let photo = ClipPhoto(
+            image: image,
+            source: source,
+            batchId: batchId,
+            capturedAt: capturedAt,
+            status: isConnected ? "Sending" : "Saved until connected"
+        )
+        photos.insert(photo, at: 0)
+        return photo
     }
 
     func addImportedImage(_ image: UIImage) {
-        photos.insert(ClipPhoto(image: image, status: "Ready to send"), at: 0)
+        _ = addCapturedImage(image, source: .upload)
     }
 
-    func sendPhoto(_ photo: ClipPhoto) async {
+    func capturePhoto(_ image: UIImage) async {
+        let preparedImage = image
+            .normalizedForProcessing()
+            .centerSquareCropped()
+            .resized(maxLongEdge: 2200)
+        let photo = addCapturedImage(preparedImage, source: .capture)
+        await sendPhoto(photo)
+    }
+
+    func uploadPhotos(_ images: [UIImage]) async {
+        guard !images.isEmpty else { return }
+        guard isConnected else {
+            statusText = "Pair with Chrome before uploading."
+            targetHint = "Connect to Chrome first"
+            return
+        }
+
+        let now = Date.now
+        let batchId = ScannerProtocol.makeMessageId("upload-batch")
+        statusText = "Preparing \(images.count) upload\(images.count == 1 ? "" : "s")"
+
+        for (index, image) in images.enumerated() {
+            let capturedAt = now.addingTimeInterval(Double(index) / 1000)
+            let preparedImage = image
+                .normalizedForProcessing()
+                .resized(maxLongEdge: 2200)
+            let photo = addCapturedImage(preparedImage, source: .upload, batchId: batchId, capturedAt: capturedAt)
+            statusText = "Uploading \(index + 1) of \(images.count)"
+            await sendPhoto(
+                photo,
+                filename: uploadFilename(index: index, capturedAt: capturedAt)
+            )
+        }
+
+        statusText = "Uploaded \(images.count) photo\(images.count == 1 ? "" : "s")"
+    }
+
+    func sendPhoto(_ photo: ClipPhoto, filename: String? = nil) async {
         guard isConnected else {
             errorMessage = "Connect to Chrome first."
+            updatePhoto(photo.id, status: "Saved until connected")
             return
         }
         updatePhoto(photo.id, status: "Sending")
         do {
-            try await transport.sendPhoto(photo.image, contributorId: contributorId)
-            updatePhoto(photo.id, status: "Sent")
+            _ = try await transport.sendPhoto(
+                photo.image,
+                contributorId: contributorId,
+                batchId: photo.batchId,
+                filename: filename ?? photoFilename(for: photo),
+                capturedAt: photo.capturedAt
+            )
+            updatePhoto(photo.id, status: "Delivered")
+            statusText = "Photo delivered"
         } catch {
             updatePhoto(photo.id, status: "Failed")
             errorMessage = error.localizedDescription
+            statusText = "Photo send failed"
         }
     }
 
@@ -286,18 +349,39 @@ final class ClipScannerStore {
             return
         }
 
+        sendCaptureToChrome(capture)
+    }
+
+    private func sendSavedItemsAfterConnect() {
+        let savedCaptures = captures.filter { $0.status == "Saved until connected" }
+        let savedPhotos = photos.filter { $0.status == "Saved until connected" }
+        guard !savedCaptures.isEmpty || !savedPhotos.isEmpty else { return }
+
+        for capture in savedCaptures {
+            sendCaptureToChrome(capture)
+        }
+
+        Task {
+            for photo in savedPhotos {
+                await sendPhoto(photo)
+            }
+        }
+    }
+
+    private func sendCaptureToChrome(_ capture: ClipCapture) {
+        updateCapture(capture.id, status: "Sending")
         Task {
             do {
                 let receipt = try await transport.sendCaptureResult(
-                    kind: mode == .barcode ? "barcode" : "text",
-                    value: trimmed,
-                    format: format,
-                    capturedAt: capturedAt,
+                    kind: capture.mode == .barcode ? "barcode" : "text",
+                    value: capture.value,
+                    format: capture.format,
+                    capturedAt: capture.capturedAt,
                     contributorId: contributorId
                 )
                 if receipt.insertedIntoCursor == true {
                     updateCapture(capture.id, status: "Inserted")
-                    statusText = mode == .barcode ? "Barcode inserted" : "Text inserted"
+                    statusText = capture.mode == .barcode ? "Barcode inserted" : "Text inserted"
                 } else {
                     updateCapture(capture.id, status: "Received")
                     statusText = "Chrome received it, but no cursor target was available."
@@ -355,11 +439,64 @@ final class ClipScannerStore {
         return (trimmedValue, format)
     }
 
+    private func photoFilename(for photo: ClipPhoto) -> String {
+        switch photo.source {
+        case .capture:
+            "volt-clip-photo-\(Int(photo.capturedAt.timeIntervalSince1970 * 1000)).jpg"
+        case .upload:
+            "volt-upload-\(Int(photo.capturedAt.timeIntervalSince1970 * 1000)).jpg"
+        }
+    }
+
+    private func uploadFilename(index: Int, capturedAt: Date) -> String {
+        let uploadNumber = String(format: "%03d", index + 1)
+        let timestampMs = Int(capturedAt.timeIntervalSince1970 * 1000)
+        return "volt-upload-\(uploadNumber)-\(timestampMs).jpg"
+    }
+
     private func tab(for mode: CaptureMode) -> ClipTab {
         switch mode {
         case .dictation: .dictate
         case .photo: .upload
         case .ocr, .barcode: .capture
+        }
+    }
+}
+
+private extension UIImage {
+    func normalizedForProcessing() -> UIImage {
+        guard imageOrientation != .up else { return self }
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = scale
+        let renderer = UIGraphicsImageRenderer(size: size, format: format)
+        return renderer.image { _ in
+            draw(in: CGRect(origin: .zero, size: size))
+        }
+    }
+
+    func centerSquareCropped() -> UIImage {
+        guard let cgImage else { return self }
+        let side = min(cgImage.width, cgImage.height)
+        let rect = CGRect(
+            x: (cgImage.width - side) / 2,
+            y: (cgImage.height - side) / 2,
+            width: side,
+            height: side
+        )
+        guard let cropped = cgImage.cropping(to: rect) else { return self }
+        return UIImage(cgImage: cropped, scale: scale, orientation: .up)
+    }
+
+    func resized(maxLongEdge: CGFloat) -> UIImage {
+        let longEdge = max(size.width, size.height)
+        guard longEdge > maxLongEdge, longEdge > 0 else { return self }
+        let ratio = maxLongEdge / longEdge
+        let targetSize = CGSize(width: size.width * ratio, height: size.height * ratio)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let renderer = UIGraphicsImageRenderer(size: targetSize, format: format)
+        return renderer.image { _ in
+            draw(in: CGRect(origin: .zero, size: targetSize))
         }
     }
 }

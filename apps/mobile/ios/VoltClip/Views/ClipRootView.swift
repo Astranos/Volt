@@ -53,7 +53,7 @@ private struct ClipCaptureView: View {
                         emptyTitle: "No Captures Yet",
                         emptySystemImage: "doc.text.magnifyingglass",
                         emptyDescription: "Finished captures will show here after you leave the camera session.",
-                        photos: store.photos,
+                        photos: store.photos.filter { $0.source == .capture },
                         actionTitle: "Send"
                     ) { photo in
                         Task { await store.sendPhoto(photo) }
@@ -71,7 +71,7 @@ private struct ClipCaptureView: View {
                     activeMode: $store.activeCaptureMode,
                     isConnected: store.isConnected,
                     isRecognizingText: store.isRecognizingText,
-                    latestPhoto: store.photos.first,
+                    latestPhoto: store.photos.first(where: { $0.source == .capture }),
                     ocrReviewImage: store.ocrReviewImage,
                     ocrTextRegions: store.ocrTextRegions,
                     statusText: captureStatusText,
@@ -83,15 +83,13 @@ private struct ClipCaptureView: View {
                         case .ocr:
                             Task { await store.recognizeText(in: image) }
                         case .barcode:
-                            store.addCapturedImage(image)
-                            store.selectedTab = .capture
+                            break
                         case .photo, .dictation:
-                            store.addCapturedImage(image)
-                            store.selectedTab = .capture
+                            Task { await store.capturePhoto(image) }
                         }
                     },
                     onSendLatest: {
-                        guard let latest = store.photos.first else { return }
+                        guard let latest = store.photos.first(where: { $0.source == .capture }) else { return }
                         Task { await store.sendPhoto(latest) }
                     },
                     onSendRecognizedText: { text in
@@ -240,7 +238,7 @@ private struct ClipUploadView: View {
                         emptyTitle: "No Uploads Yet",
                         emptySystemImage: "photo.badge.plus",
                         emptyDescription: "Camera roll uploads will appear here after they are sent.",
-                        photos: store.photos,
+                        photos: store.photos.filter { $0.source == .upload },
                         actionTitle: "Send"
                     ) { photo in
                         Task { await store.sendPhoto(photo) }
@@ -262,11 +260,13 @@ private struct ClipUploadView: View {
                 Task {
                     isPreparingUploads = true
                     defer { isPreparingUploads = false }
+                    var images: [UIImage] = []
                     for item in items {
                         guard let data = try? await item.loadTransferable(type: Data.self),
                               let image = UIImage(data: data) else { continue }
-                        store.addImportedImage(image)
+                        images.append(image)
                     }
+                    await store.uploadPhotos(images)
                     pickerItems = []
                 }
             }
@@ -645,8 +645,9 @@ private struct ClipCaptureSessionView: View {
         }
         .animation(.spring(response: 0.28, dampingFraction: 0.86), value: selectedTextRegion?.id)
         .onAppear {
+            activeMode = .ocr
             cameraService.onScan = { scan in
-                if scan.isQRCode {
+                if activeMode == .barcode || scan.isQRCode {
                     onBarcodeScan(scan)
                 }
             }
@@ -756,7 +757,7 @@ private struct ClipCaptureSessionBackdrop: View {
     let onTap: (CGPoint, CGPoint) -> Void
     let onPinch: (CGFloat) -> Void
     private let photoTopClearance: CGFloat = 12
-    private let photoControlsReservedHeight: CGFloat = 360
+    private let photoControlsReservedHeight: CGFloat = 430
 
     var body: some View {
         GeometryReader { geometry in
@@ -801,8 +802,8 @@ private struct ClipCaptureSessionBackdrop: View {
         let topInset = geometry.safeAreaInsets.top + photoTopClearance
         let bottomInset = geometry.safeAreaInsets.bottom
         let availableHeight = max(0, geometry.size.height - topInset - bottomInset - photoControlsReservedHeight)
-        let side = min(geometry.size.width, availableHeight)
-        let topOffset = topInset + max(0, (availableHeight - side) / 2)
+        let side = min(geometry.size.width - 24, availableHeight)
+        let topOffset = topInset + 10
 
         return ClipCameraPreview(service: cameraService, onTap: onTap, onPinch: onPinch)
             .frame(width: side, height: side)

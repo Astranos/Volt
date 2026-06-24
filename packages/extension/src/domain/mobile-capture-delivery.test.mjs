@@ -72,8 +72,30 @@ test("cursor targeted capture delivery persists and broadcasts barcodes without 
   assert.deepEqual(storageWrites, [{ [MOBILE_SCANNER_STORAGE_KEY]: [scan] }]);
 });
 
-function createChromeApi({ storageWrites = [] } = {}) {
+test("cursor targeted capture delivery reports unsaved when primary and fallback storage fail", async () => {
+  const broadcasts = [];
+  const delivery = createCursorTargetedCaptureDelivery({
+    chromeApi: createChromeApi({ storageFails: true }),
+    log: () => {},
+    broadcastScannerMessage: (message) => broadcasts.push(message),
+    insertScannerText: async () => false,
+  });
+
+  const receipt = await delivery.deliverScannerScan({
+    id: "scan-unsaved",
+    barcode: "012345678905",
+    kind: "barcode",
+    scannedAt: "2026-06-03T15:00:00.000Z",
+  });
+
+  assert.deepEqual(receipt, { success: false, insertedIntoCursor: false });
+  assert.deepEqual(broadcasts, []);
+});
+
+function createChromeApi({ storageWrites = [], storageFails = false } = {}) {
+  const runtime = {};
   return {
+    runtime,
     storage: {
       local: {
         get(defaults, callback) {
@@ -81,7 +103,9 @@ function createChromeApi({ storageWrites = [] } = {}) {
         },
         set(value, callback) {
           storageWrites.push(value);
+          runtime.lastError = storageFails ? { message: "storage failed" } : undefined;
           callback?.();
+          runtime.lastError = undefined;
         },
       },
     },

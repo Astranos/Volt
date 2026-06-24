@@ -1,10 +1,11 @@
 import { SCANNER_SIGNAL_URL_DEV, SCANNER_SIGNAL_URL_PROD } from "@volt/scanner-protocol";
 
-const configuredSignalUrl = import.meta.env.WXT_SCANNER_SIGNAL_URL;
+const extensionEnv = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env;
+const configuredSignalUrl = extensionEnv?.WXT_SCANNER_SIGNAL_URL;
 
 export const EXTENSION_SCANNER_SIGNAL_URL =
   typeof configuredSignalUrl === "string" && configuredSignalUrl.length > 0
     ? configuredSignalUrl
-    : import.meta.env.MODE === "production"
+    : extensionEnv?.MODE === "production"
       ? SCANNER_SIGNAL_URL_PROD
       : SCANNER_SIGNAL_URL_DEV;

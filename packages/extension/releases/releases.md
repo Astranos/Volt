@@ -2,9 +2,9 @@
 
 ## Current Development Version
 
-### v1.0.41
+### v1.0.43
 
-The current manifest/package version is `1.0.41`.
+The current manifest/package version is `1.0.43`.
 
 Current release build command:
 
@@ -25,6 +25,27 @@ packages/extension/releases/
 ```
 
 ## Recent Release History
+
+### v1.0.43
+
+Release date: June 23, 2026
+
+Changes:
+
+- Made saved-session reconnect polling immediate on extension startup.
+- Reduced reconnect fallback polling so missed push wakeups recover quickly.
+- Kept reconnect requests retryable when posting a join window fails.
+
+### v1.0.42
+
+Release date: June 23, 2026
+
+Changes:
+
+- Improved mobile scanner signaling retries and connection cleanup.
+- Fixed scan receipts so Chrome only reports saved results after storage succeeds.
+- Added explicit photo rejection receipts when Chrome cannot store a received photo.
+- Improved transient WebRTC disconnect handling for mobile scanner sessions.
 
 ### v1.0.32
 

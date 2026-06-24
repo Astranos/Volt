@@ -96,6 +96,18 @@ const clipBarcodeScannerServiceSwiftSource = readFileSync(
   new URL("../ios/VoltClip/Services/ClipBarcodeScannerService.swift", import.meta.url),
   "utf8"
 );
+const clipScannerStoreSwiftSource = readFileSync(
+  new URL("../ios/VoltClip/Services/ClipScannerStore.swift", import.meta.url),
+  "utf8"
+);
+const clipOCRServiceSwiftSource = readFileSync(
+  new URL("../ios/VoltClip/Services/ClipOCRService.swift", import.meta.url),
+  "utf8"
+);
+const clipTransportSwiftSource = readFileSync(
+  new URL("../ios/VoltClip/Services/WebKitWebRTCTransport.swift", import.meta.url),
+  "utf8"
+);
 const scannerWebRTCConnectionSwiftSource = readFileSync(
   new URL("../ios/Volt/Services/ScannerWebRTCConnection.swift", import.meta.url),
   "utf8"
@@ -112,7 +124,7 @@ test("native saved-session reconnect re-registers durable pairing before request
   assert.match(scannerStoreSwiftSource, /browserSessionId: pairedSession\.browserSessionId/);
   assert.match(scannerStoreSwiftSource, /pairingSecret: secret/);
   assert.match(scannerSignalingSwiftSource, /func registerPairing\(\n\s+pairingId: String,/);
-  assert.match(scannerSignalingSwiftSource, /guard \(response as\? HTTPURLResponse\)\?\.statusCode == 200 else/);
+  assert.match(scannerSignalingSwiftSource, /try validateSignalResponse\(data: data, response: response\)/);
 });
 
 test("native saved-session reconnect waits longer than QR pairing for sleeping Chrome extensions", () => {
@@ -120,6 +132,13 @@ test("native saved-session reconnect waits longer than QR pairing for sleeping C
   assert.match(scannerProtocolSwiftSource, new RegExp(`static let reconnectRequestTTL: Duration = \\.seconds\\(${scannerProtocolGolden.timing.reconnectRequestTtlMs / 1000}\\)`));
   assert.match(scannerProtocolSwiftSource, new RegExp(`static let iceGatheringTimeout: Duration = \\.seconds\\(${scannerProtocolGolden.timing.iceGatheringTimeoutMs / 1000}\\)`));
   assert.match(scannerSignalingSwiftSource, /let deadline = ContinuousClock\.now \+ ScannerProtocol\.reconnectRequestTTL/);
+});
+
+test("native signaling errors preserve rejected status and server detail", () => {
+  assert.match(scannerProtocolSwiftSource, /case signalRejected\(statusCode: Int, detail: String\?\)/);
+  assert.match(scannerProtocolSwiftSource, /The scanner signaling service rejected the request/);
+  assert.match(scannerSignalingSwiftSource, /private func signalRejectedError\(data: Data, statusCode: Int\?\) -> ScannerPairingError/);
+  assert.match(scannerSignalingSwiftSource, /payload\["error"\] as\? String/);
 });
 
 test("native Debug builds use Convex dev and Release builds use Convex production", () => {
@@ -201,6 +220,14 @@ test("native capture session recovers pairing instead of dismissing when the sca
   const recoverySource = captureSessionViewSwiftSource.slice(recoveryStart);
   assert.ok(recoveryStart > -1);
   assert.doesNotMatch(recoverySource, /isPresented = false/);
+});
+
+test("native and app clip close stale peers after sustained WebRTC disconnect", () => {
+  assert.match(scannerWebRTCConnectionSwiftSource, /private var disconnectGraceTask: Task<Void, Never>\?/);
+  assert.match(scannerWebRTCConnectionSwiftSource, /case \.disconnected:\s*scheduleDisconnectGrace\(\)/);
+  assert.match(scannerWebRTCConnectionSwiftSource, /guard peerConnection\?\.connectionState == \.disconnected else \{ return \}\s*close\(\)/);
+  assert.match(clipRootViewSwiftSource, /ClipWebRTCBridgeView\(webView: store\.bridgeWebView\)/);
+  assert.match(readFileSync(new URL("../ios/VoltClip/Resources/webrtc-bridge.html", import.meta.url), "utf8"), /pc && pc\.connectionState === "disconnected"[\s\S]*window\.voltBridge\.close\(\)/);
 });
 
 test("native screens use the shared header connection control without extra session accessories", () => {
@@ -459,6 +486,60 @@ test("app clip camera service supports zoom, torch, focus, and UPC-A priority", 
   assert.match(clipBarcodeScannerServiceSwiftSource, /resetZoomToDisplayOne\(for: videoDevice\)/);
   assert.match(clipBarcodeScannerServiceSwiftSource, /private func upcADigitCount\(_ type: AVMetadataObject\.ObjectType, value: String\) -> Bool/);
   assert.match(clipBarcodeScannerServiceSwiftSource, /if upcADigitCount\(type, value: value\) \{ return 0 \}/);
+});
+
+test("app clip capture opens in OCR and keeps capture and upload photo lists separate", () => {
+  assert.match(clipScannerStoreSwiftSource, /var activeCaptureMode: CaptureMode = \.ocr/);
+  assert.match(clipRootViewSwiftSource, /\.onAppear \{\s*activeMode = \.ocr/);
+  assert.match(clipRootViewSwiftSource, /photos: store\.photos\.filter \{ \$0\.source == \.capture \}/);
+  assert.match(clipRootViewSwiftSource, /photos: store\.photos\.filter \{ \$0\.source == \.upload \}/);
+  assert.match(clipRootViewSwiftSource, /latestPhoto: store\.photos\.first\(where: \{ \$0\.source == \.capture \}\)/);
+});
+
+test("app clip photo capture and library upload wait for Chrome photo receipts", () => {
+  assert.match(clipScannerStoreSwiftSource, /func capturePhoto\(_ image: UIImage\) async/);
+  assert.match(clipScannerStoreSwiftSource, /\.centerSquareCropped\(\)/);
+  assert.match(clipScannerStoreSwiftSource, /await sendPhoto\(photo\)/);
+  assert.match(clipScannerStoreSwiftSource, /func uploadPhotos\(_ images: \[UIImage\]\) async/);
+  assert.match(clipScannerStoreSwiftSource, /let batchId = ScannerProtocol\.makeMessageId\("upload-batch"\)/);
+  assert.match(clipScannerStoreSwiftSource, /await sendPhoto\(\s*photo,\s*filename: uploadFilename\(index: index, capturedAt: capturedAt\)\s*\)/);
+  assert.match(clipTransportSwiftSource, /private var photoContinuations: \[String: CheckedContinuation<ScannerProtocol\.PhotoReceived, Error>\] = \[:\]/);
+  assert.match(clipTransportSwiftSource, /ScannerProtocol\.parsePhotoReceived\(rawValue\)/);
+  assert.match(clipTransportSwiftSource, /ScannerProtocol\.parsePhotoRejected\(rawValue\)/);
+  assert.match(clipTransportSwiftSource, /ScannerProtocol\.photoReceiptTimeout/);
+});
+
+test("app clip replays saved captures and photos after connecting", () => {
+  assert.match(clipScannerStoreSwiftSource, /self\?\.sendSavedItemsAfterConnect\(\)/);
+  assert.match(clipScannerStoreSwiftSource, /private func sendSavedItemsAfterConnect\(\)/);
+  assert.match(clipScannerStoreSwiftSource, /let savedCaptures = captures\.filter \{ \$0\.status == "Saved until connected" \}/);
+  assert.match(clipScannerStoreSwiftSource, /let savedPhotos = photos\.filter \{ \$0\.status == "Saved until connected" \}/);
+  assert.match(clipScannerStoreSwiftSource, /for capture in savedCaptures \{\s*sendCaptureToChrome\(capture\)\s*\}/);
+  assert.match(clipScannerStoreSwiftSource, /for photo in savedPhotos \{\s*await sendPhoto\(photo\)\s*\}/);
+  assert.match(clipScannerStoreSwiftSource, /private func sendCaptureToChrome\(_ capture: ClipCapture\)/);
+});
+
+test("app clip pending sends fail promptly when WebRTC closes or errors", () => {
+  assert.match(clipTransportSwiftSource, /private func failPendingReceipts\(with error: Error\)/);
+  assert.match(clipTransportSwiftSource, /func close\(\) \{[\s\S]*failPendingReceipts\(with: ScannerPairingError\.channelNotOpen\)/);
+  assert.match(clipTransportSwiftSource, /case "closed":[\s\S]*failPendingReceipts\(with: ScannerPairingError\.channelNotOpen\)[\s\S]*onClosed\?\(\)/);
+  assert.match(clipTransportSwiftSource, /case "error":[\s\S]*answerContinuation\?\.resume\(throwing: ScannerPairingError\.requestFailed\)[\s\S]*failPendingReceipts\(with: ScannerPairingError\.channelNotOpen\)/);
+  assert.match(clipTransportSwiftSource, /resultTimeoutTasks\.values\.forEach \{ \$0\.cancel\(\) \}/);
+  assert.match(clipTransportSwiftSource, /photoTimeoutTasks\.values\.forEach \{ \$0\.cancel\(\) \}/);
+});
+
+test("app clip scanner restricts capture barcodes to UPC/EAN and clears stale scans", () => {
+  assert.match(clipBarcodeScannerServiceSwiftSource, /static let captureMetadataObjectTypes: \[AVMetadataObject\.ObjectType\] = \[\s*\.ean13,\s*\.ean8,\s*\.upce,\s*\]/);
+  assert.match(clipBarcodeScannerServiceSwiftSource, /metadataOutput\.metadataObjectTypes = Self\.captureMetadataObjectTypes\.filter/);
+  assert.match(clipBarcodeScannerServiceSwiftSource, /func clearDetectedBarcode\(\) \{\s*barcodeDetectionRevision \+= 1\s*barcodeClearTask\?\.cancel\(\)\s*barcodeClearTask = nil\s*latestScan = nil/);
+});
+
+test("app clip OCR reuses the main async recognizer and identifier extractor", () => {
+  assert.match(clipOCRServiceSwiftSource, /withCheckedThrowingContinuation/);
+  assert.match(clipOCRServiceSwiftSource, /DispatchQueue\.global\(qos: \.userInitiated\)\.async/);
+  assert.match(clipOCRServiceSwiftSource, /LiveTextIdentifierMatcher\.match\(text\)/);
+  assert.match(clipOCRServiceSwiftSource, /candidate\.boundingBox\(for: match\.range\)/);
+  assert.match(clipOCRServiceSwiftSource, /DeviceIdentifierRegionExtractor\.extractedIdentifierRegions\(from: recognizedRegions\)/);
 });
 
 test("native dictation keeps listening briefly after user stop actions", () => {

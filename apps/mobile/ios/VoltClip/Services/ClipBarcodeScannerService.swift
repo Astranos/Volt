@@ -33,6 +33,11 @@ final class ClipBarcodeScannerService: NSObject {
         .qr,
         .upce,
     ]
+    static let captureMetadataObjectTypes: [AVMetadataObject.ObjectType] = [
+        .ean13,
+        .ean8,
+        .upce,
+    ]
 
     let session = AVCaptureSession()
     let previewLayer = AVCaptureVideoPreviewLayer()
@@ -129,6 +134,7 @@ final class ClipBarcodeScannerService: NSObject {
         barcodeDetectionRevision += 1
         barcodeClearTask?.cancel()
         barcodeClearTask = nil
+        latestScan = nil
         detectedBarcodeBounds = nil
         detectedBarcodeFormat = nil
         onDetectedBarcode?(nil, nil)
@@ -289,7 +295,7 @@ final class ClipBarcodeScannerService: NSObject {
             session.addOutput(metadataOutput)
             metadataOutput.setMetadataObjectsDelegate(self, queue: metadataQueue)
             let availableTypes = metadataOutput.availableMetadataObjectTypes
-            metadataOutput.metadataObjectTypes = Self.supportedMetadataObjectTypes.filter {
+            metadataOutput.metadataObjectTypes = Self.captureMetadataObjectTypes.filter {
                 availableTypes.contains($0)
             }
         }

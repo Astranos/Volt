@@ -19,6 +19,7 @@ final class ScannerWebRTCConnection: NSObject {
     private var pendingPhotoReceiptTimeouts: [String: Task<Void, Never>] = [:]
     private var completedPhotoReceipts: [String: ScannerProtocol.PhotoDeliveryReceipt] = [:]
     private var latestPhotoChunkAcks: [String: ScannerProtocol.PhotoChunkAck] = [:]
+    private var disconnectGraceTask: Task<Void, Never>?
 
     init(contributorId: String) {
         self.contributorId = contributorId
@@ -43,6 +44,7 @@ final class ScannerWebRTCConnection: NSObject {
     }
 
     func close() {
+        cancelDisconnectGrace()
         failPendingPhotoReceipts(with: ScannerPairingError.channelNotOpen)
         controlChannel?.close()
         photoChannel?.close()
@@ -291,6 +293,22 @@ final class ScannerWebRTCConnection: NSObject {
             continuation.resume(throwing: error)
         }
     }
+
+    private func scheduleDisconnectGrace() {
+        guard disconnectGraceTask == nil else { return }
+        disconnectGraceTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(5))
+            guard !Task.isCancelled else { return }
+            disconnectGraceTask = nil
+            guard peerConnection?.connectionState == .disconnected else { return }
+            close()
+        }
+    }
+
+    private func cancelDisconnectGrace() {
+        disconnectGraceTask?.cancel()
+        disconnectGraceTask = nil
+    }
 }
 
 extension ScannerWebRTCConnection: RTCPeerConnectionDelegate {
@@ -308,8 +326,11 @@ extension ScannerWebRTCConnection: RTCPeerConnectionDelegate {
         Task { @MainActor in
             switch newState {
             case .connected:
-                break
-            case .disconnected, .failed, .closed:
+                cancelDisconnectGrace()
+            case .disconnected:
+                scheduleDisconnectGrace()
+            case .failed, .closed:
+                cancelDisconnectGrace()
                 failPendingPhotoReceipts(with: ScannerPairingError.channelNotOpen)
                 onStatusChange?(.disconnected)
             default:

@@ -8,8 +8,8 @@ type SessionTimer = ReturnType<typeof setTimeout>;
 const HIDDEN_JOIN_ATTEMPT_POLL_GRACE_MS = 60 * 1000;
 const JOIN_ATTEMPT_INITIAL_POLL_INTERVAL_MS = 1000;
 const JOIN_ATTEMPT_MAX_POLL_INTERVAL_MS = 10 * 1000;
-const RECONNECT_FALLBACK_POLL_INTERVAL_MS = 60 * 1000;
-const RECONNECT_ACTIVE_WINDOW_POLL_INTERVAL_MS = 5000;
+const RECONNECT_FALLBACK_POLL_INTERVAL_MS = 5000;
+const RECONNECT_ACTIVE_WINDOW_POLL_INTERVAL_MS = 1000;
 const RECONNECT_ACTIVE_WINDOW_MS = 95 * 1000;
 
 type MobileScannerJoinAttemptPollerOptions = {
@@ -120,11 +120,11 @@ export class MobileScannerJoinAttemptPoller {
     for (const attempt of attempts) {
       if (!this.seenJoinAttempts.has(attempt.joinAttemptId)) {
         if (!acceptingNewAttempts) continue;
-        this.seenJoinAttempts.add(attempt.joinAttemptId);
         this.options.log?.("[Volt Scanner Pairing] join attempt seen", {
           joinAttemptId: attempt.joinAttemptId,
         });
         await this.options.peerConnections.createPeerOffer(joinWindow, attempt.joinAttemptId);
+        this.seenJoinAttempts.add(attempt.joinAttemptId);
         hadActivity = true;
       }
       if (this.options.peerConnections.peers.get(attempt.joinAttemptId)?.answerApplied) continue;
@@ -182,7 +182,7 @@ export class MobileScannerReconnectPoller {
     this.options = options;
   }
 
-  start(delayMs = this.fallbackPollIntervalMs) {
+  start(delayMs = 0) {
     this.schedule(delayMs);
   }
 

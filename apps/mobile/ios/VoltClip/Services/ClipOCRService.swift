@@ -1,4 +1,5 @@
 import CoreGraphics
+import CoreImage
 import Foundation
 import UIKit
 @preconcurrency import Vision
@@ -16,10 +17,26 @@ struct ClipOCRResult: Equatable {
 
 struct ClipOCRService {
     func recognizeText(in image: UIImage) async throws -> ClipOCRResult {
-        guard let cgImage = image.normalizedForClipOCR().cgImage else {
+        let preparedImage = image
+            .normalizedForClipOCR()
+            .cleanedForClipOCR()
+            .resizedForClipOCR(maxLongEdge: 1800)
+        guard let cgImage = preparedImage.cgImage else {
             throw ClipOCRError.imageUnavailable
         }
 
+        return try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                do {
+                    continuation.resume(returning: try recognizePreparedText(in: cgImage))
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+    }
+
+    private func recognizePreparedText(in cgImage: CGImage) throws -> ClipOCRResult {
         let request = VNRecognizeTextRequest()
         request.recognitionLevel = .accurate
         request.usesLanguageCorrection = false
@@ -47,6 +64,16 @@ struct ClipOCRService {
         guard let candidate = observation.topCandidates(1).first else { return nil }
         let text = candidate.string.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return nil }
+        if let match = LiveTextIdentifierMatcher.match(text),
+           let matchedBox = try? candidate.boundingBox(for: match.range) {
+            return RecognizedTextRegion(
+                text: match.value,
+                boundingBox: matchedBox.boundingBox,
+                quadrilateral: TextQuadrilateral(observation: matchedBox),
+                confidence: candidate.confidence,
+                isDeviceIdentifier: true
+            )
+        }
         return RecognizedTextRegion(
             text: text,
             boundingBox: observation.boundingBox,
@@ -102,6 +129,44 @@ private extension UIImage {
         let renderer = UIGraphicsImageRenderer(size: targetSize, format: format)
         return renderer.image { _ in
             normalized.draw(in: CGRect(origin: .zero, size: targetSize))
+        }
+    }
+
+    func cleanedForClipOCR() -> UIImage {
+        guard let ciImage = CIImage(image: self) else { return self }
+        let filters: [(String, [String: Any])] = [
+            ("CIColorControls", [
+                kCIInputContrastKey: 1.18,
+                kCIInputBrightnessKey: 0.02,
+                kCIInputSaturationKey: 0.92,
+            ]),
+            ("CISharpenLuminance", [
+                kCIInputSharpnessKey: 0.42,
+            ]),
+        ]
+        let output = filters.reduce(ciImage) { image, filter in
+            guard let ciFilter = CIFilter(name: filter.0) else { return image }
+            ciFilter.setValue(image, forKey: kCIInputImageKey)
+            for (key, value) in filter.1 {
+                ciFilter.setValue(value, forKey: key)
+            }
+            return ciFilter.outputImage ?? image
+        }
+        let context = CIContext(options: [.useSoftwareRenderer: false])
+        guard let cgImage = context.createCGImage(output, from: output.extent) else { return self }
+        return UIImage(cgImage: cgImage, scale: scale, orientation: .up)
+    }
+
+    func resizedForClipOCR(maxLongEdge: CGFloat) -> UIImage {
+        let longEdge = max(size.width, size.height)
+        guard longEdge > maxLongEdge, longEdge > 0 else { return self }
+        let ratio = maxLongEdge / longEdge
+        let targetSize = CGSize(width: size.width * ratio, height: size.height * ratio)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let renderer = UIGraphicsImageRenderer(size: targetSize, format: format)
+        return renderer.image { _ in
+            draw(in: CGRect(origin: .zero, size: targetSize))
         }
     }
 }

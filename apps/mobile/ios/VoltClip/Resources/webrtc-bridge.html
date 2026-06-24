@@ -18,6 +18,7 @@
         let audioSender = null;
         let dictationSessionId = null;
         let dictationRequested = false;
+        let disconnectTimer = null;
         let options = {};
 
         function post(message) {
@@ -108,7 +109,19 @@
             };
             pc.onconnectionstatechange = () => {
               status(`WebRTC ${pc.connectionState}`);
-              if (pc.connectionState === "failed" || pc.connectionState === "closed" || pc.connectionState === "disconnected") {
+              if (pc.connectionState === "connected" && disconnectTimer) {
+                clearTimeout(disconnectTimer);
+                disconnectTimer = null;
+              }
+              if (pc.connectionState === "disconnected" && !disconnectTimer) {
+                disconnectTimer = setTimeout(() => {
+                  disconnectTimer = null;
+                  if (pc && pc.connectionState === "disconnected") {
+                    window.voltBridge.close();
+                  }
+                }, 5000);
+              }
+              if (pc.connectionState === "failed" || pc.connectionState === "closed") {
                 post({ type: "closed" });
               }
             };
@@ -212,6 +225,10 @@
           },
 
           close() {
+            if (disconnectTimer) {
+              clearTimeout(disconnectTimer);
+              disconnectTimer = null;
+            }
             if (localStream) {
               for (const track of localStream.getTracks()) track.stop();
             }

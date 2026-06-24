@@ -1,12 +1,83 @@
 /// <reference types="vite/client" />
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 
 import { internal } from "./_generated/api";
 import schema from "./schema";
+import { logReconnectWakePushResult } from "./scannerPush";
+import {
+  logScannerSignalEvent,
+  scannerSignalIdTail,
+  scannerSignalRouteTemplate,
+} from "./scannerSignal/logging";
 import { signalRouteCommand } from "./scannerSignal/routeCommands";
 
 const modules = import.meta.glob("./**/*.ts");
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+describe("scanner signal logging", () => {
+  test("redacts ids to tails and logs route templates", () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+
+    expect(scannerSignalIdTail("abcdefghijklmnopqrstuvwxyzABCDEF123456")).toBe("EF123456");
+    expect(scannerSignalRouteTemplate("postJoinOffer")).toBe("/api/signal/join-token/:token/attempt/:attemptId/offer");
+
+    logScannerSignalEvent("offer_posted", {
+      route: scannerSignalRouteTemplate("postJoinOffer"),
+      command: "postJoinOffer",
+      statusCode: 200,
+      elapsedMs: 12,
+      tokenTail: scannerSignalIdTail("abcdefghijklmnopqrstuvwxyzABCDEF123456"),
+      attemptIdTail: scannerSignalIdTail("join_attempt_12345"),
+    });
+
+    expect(info).toHaveBeenCalledWith(
+      "[Volt Scanner Signal]",
+      expect.objectContaining({
+        event: "offer_posted",
+        route: "/api/signal/join-token/:token/attempt/:attemptId/offer",
+        command: "postJoinOffer",
+        statusCode: 200,
+        elapsedMs: 12,
+        tokenTail: "EF123456",
+        attemptIdTail: "pt_12345",
+      }),
+    );
+    expect(JSON.stringify(info.mock.calls)).not.toContain("abcdefghijklmnopqrstuvwxyzABCDEF123456");
+  });
+
+  test("logs reconnect push failures without full ids", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    logReconnectWakePushResult({
+      sent: false,
+      pairingId: "pairing_test_12345",
+      requestId: "reconnect_request_12345",
+      reason: "send_failed",
+      pushStatusCode: 410,
+      elapsedMs: 34,
+    });
+
+    expect(warn).toHaveBeenCalledWith(
+      "[Volt Scanner Signal]",
+      expect.objectContaining({
+        event: "push_wake_failed",
+        route: "/api/signal/pairings/:pairingId/reconnect",
+        command: "createReconnectRequest",
+        pairingIdTail: "st_12345",
+        requestIdTail: "st_12345",
+        reason: "send_failed",
+        pushStatusCode: 410,
+        elapsedMs: 34,
+      }),
+    );
+    expect(JSON.stringify(warn.mock.calls)).not.toContain("pairing_test_12345");
+    expect(JSON.stringify(warn.mock.calls)).not.toContain("reconnect_request_12345");
+  });
+});
 
 describe("scanner signal route command extraction", () => {
   test.each([

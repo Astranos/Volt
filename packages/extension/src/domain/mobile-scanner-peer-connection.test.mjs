@@ -66,6 +66,23 @@ test("peer offer creation falls back to static STUN servers when ICE fetch fails
   assert.equal(logs.some(([message]) => message === "[Volt Scanner Pairing] falling back to STUN-only ICE servers"), true);
 });
 
+test("peer offer creation removes partial peer when posting the offer fails", async () => {
+  installFakeRTCPeerConnection();
+  const peerConnections = new MobileScannerPeerConnections(
+    {
+      fetchIceServers: async () => turnIceServers,
+      postPeerOffer: async () => {
+        throw new Error("signal unavailable");
+      },
+    },
+    createEvents(),
+  );
+
+  await assert.rejects(peerConnections.createPeerOffer(joinWindow, "attempt-failed"), /signal unavailable/);
+
+  assert.equal(peerConnections.peers.has("attempt-failed"), false);
+});
+
 test("peer connection forwards remote audio tracks", async () => {
   const rtc = installFakeRTCPeerConnection();
   const remoteTracks = [];
@@ -91,12 +108,64 @@ test("peer connection forwards remote audio tracks", async () => {
   assert.deepEqual(remoteTracks[0].streams, [stream]);
 });
 
-function createEvents({ log = () => {}, onRemoteAudioTrack = () => {} } = {}) {
+test("peer connection waits through transient disconnected state", async () => {
+  const rtc = installFakeRTCPeerConnection();
+  const disconnected = [];
+  const peerConnections = new MobileScannerPeerConnections(
+    {
+      fetchIceServers: async () => turnIceServers,
+      postPeerOffer: async () => {},
+    },
+    createEvents({
+      disconnectGraceMs: 10,
+      onPeerDisconnected: (peer) => disconnected.push(peer.id),
+    }),
+  );
+
+  await peerConnections.createPeerOffer(joinWindow, "attempt-transient");
+
+  const pc = rtc.instances[0];
+  pc.connectionState = "disconnected";
+  pc.onconnectionstatechange();
+  pc.connectionState = "connected";
+  pc.onconnectionstatechange();
+  await new Promise((resolve) => setTimeout(resolve, 15));
+
+  assert.deepEqual(disconnected, []);
+  assert.equal(peerConnections.peers.has("attempt-transient"), true);
+});
+
+test("peer connection closes after sustained disconnected state", async () => {
+  const rtc = installFakeRTCPeerConnection();
+  const disconnected = [];
+  const peerConnections = new MobileScannerPeerConnections(
+    {
+      fetchIceServers: async () => turnIceServers,
+      postPeerOffer: async () => {},
+    },
+    createEvents({
+      disconnectGraceMs: 5,
+      onPeerDisconnected: (peer) => disconnected.push(peer.id),
+    }),
+  );
+
+  await peerConnections.createPeerOffer(joinWindow, "attempt-sustained");
+
+  const pc = rtc.instances[0];
+  pc.connectionState = "disconnected";
+  pc.onconnectionstatechange();
+  await new Promise((resolve) => setTimeout(resolve, 10));
+
+  assert.deepEqual(disconnected, ["attempt-sustained"]);
+});
+
+function createEvents({ log = () => {}, onRemoteAudioTrack = () => {}, onPeerDisconnected = () => {}, disconnectGraceMs } = {}) {
   return {
     configureControlChannel: () => {},
     configurePhotoChannel: () => {},
+    disconnectGraceMs,
     onPeerConnected: () => {},
-    onPeerDisconnected: () => {},
+    onPeerDisconnected,
     onRemoteAudioTrack,
     log,
   };
