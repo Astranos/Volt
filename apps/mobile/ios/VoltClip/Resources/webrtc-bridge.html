@@ -1,0 +1,250 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Volt Clip WebRTC Bridge</title>
+  </head>
+  <body>
+    <script>
+      (() => {
+        const CONTROL_CHANNEL_LABEL = "scanner-control";
+        const PHOTO_CHANNEL_LABEL = "photo-transfer";
+
+        let pc = null;
+        let controlChannel = null;
+        let photoChannel = null;
+        let localStream = null;
+        let audioSender = null;
+        let dictationSessionId = null;
+        let dictationRequested = false;
+        let disconnectTimer = null;
+        let options = {};
+
+        function post(message) {
+          window.webkit.messageHandlers.voltClip.postMessage(message);
+        }
+
+        function status(value) {
+          post({ type: "status", value });
+        }
+
+        function messageId(prefix) {
+          return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+        }
+
+        function baseMessage(type, prefix) {
+          return {
+            type,
+            messageId: messageId(prefix),
+            sentAt: new Date().toISOString(),
+          };
+        }
+
+        function helloMessage() {
+          const message = baseMessage("hello", "hello");
+          message.peer = {
+            protocolVersion: options.protocolVersion || { major: 1, minor: 0, patch: 0 },
+            appVersion: options.appVersion || "0.1.1",
+            platform: "ios",
+            capabilities: ["ocr", "barcode", "dictation", "photo", "photo_retry_queue"],
+            contributorId: options.contributorId,
+            deviceLabel: options.deviceLabel || "iPhone",
+            chromeSessionId: "app-clip",
+          };
+          return message;
+        }
+
+        function sendControl(message) {
+          if (!controlChannel || controlChannel.readyState !== "open") return false;
+          controlChannel.send(JSON.stringify(message));
+          return true;
+        }
+
+        function configureControlChannel(channel) {
+          controlChannel = channel;
+          controlChannel.onopen = () => {
+            status("Control channel open");
+            sendControl(helloMessage());
+          };
+          controlChannel.onmessage = (event) => {
+            if (typeof event.data === "string") {
+              post({ type: "controlMessage", value: event.data });
+            }
+          };
+          controlChannel.onclose = () => post({ type: "closed" });
+          controlChannel.onerror = () => post({ type: "error", message: "Control channel failed" });
+          if (controlChannel.readyState === "open") {
+            sendControl(helloMessage());
+          }
+        }
+
+        function configurePhotoChannel(channel) {
+          photoChannel = channel;
+          photoChannel.onopen = () => status("Photo channel open");
+          photoChannel.onerror = () => post({ type: "error", message: "Photo channel failed" });
+        }
+
+        function configureAudioSender() {
+          if (!pc) return;
+          const offeredAudio = pc.getTransceivers().find((transceiver) => {
+            return transceiver.receiver && transceiver.receiver.track && transceiver.receiver.track.kind === "audio";
+          });
+          const transceiver = offeredAudio || pc.addTransceiver("audio", { direction: "sendonly" });
+          transceiver.direction = "sendonly";
+          audioSender = transceiver.sender;
+        }
+
+        window.voltBridge = {
+          async start(nextOptions) {
+            options = nextOptions || {};
+            status("Creating WebRTC answer");
+            pc = new RTCPeerConnection({ iceServers: options.iceServers || [] });
+            pc.ondatachannel = (event) => {
+              if (event.channel.label === CONTROL_CHANNEL_LABEL) {
+                configureControlChannel(event.channel);
+              } else if (event.channel.label === PHOTO_CHANNEL_LABEL) {
+                configurePhotoChannel(event.channel);
+              }
+            };
+            pc.onconnectionstatechange = () => {
+              status(`WebRTC ${pc.connectionState}`);
+              if (pc.connectionState === "connected" && disconnectTimer) {
+                clearTimeout(disconnectTimer);
+                disconnectTimer = null;
+              }
+              if (pc.connectionState === "disconnected" && !disconnectTimer) {
+                disconnectTimer = setTimeout(() => {
+                  disconnectTimer = null;
+                  if (pc && pc.connectionState === "disconnected") {
+                    window.voltBridge.close();
+                  }
+                }, 5000);
+              }
+              if (pc.connectionState === "failed" || pc.connectionState === "closed") {
+                post({ type: "closed" });
+              }
+            };
+
+            await pc.setRemoteDescription(options.offer);
+            configureAudioSender();
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            if (pc.iceGatheringState !== "complete") {
+              await new Promise((resolve) => {
+                const timeout = setTimeout(resolve, 2000);
+                pc.onicegatheringstatechange = () => {
+                  if (pc.iceGatheringState === "complete") {
+                    clearTimeout(timeout);
+                    resolve();
+                  }
+                };
+              });
+            }
+            post({ type: "answer", answer: { type: pc.localDescription.type, sdp: pc.localDescription.sdp } });
+          },
+
+          async startDictation() {
+            if (!pc) {
+              post({ type: "error", message: "Connect to Chrome before starting dictation." });
+              return;
+            }
+            dictationRequested = true;
+            if (!localStream) {
+              status("Requesting microphone");
+              try {
+                localStream = await navigator.mediaDevices.getUserMedia({
+                  audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true,
+                  },
+                  video: false,
+                });
+              } catch (error) {
+                post({ type: "error", message: `Microphone unavailable: ${error && (error.message || String(error)) || "permission denied"}` });
+                return;
+              }
+              if (!dictationRequested) {
+                for (const track of localStream.getTracks()) track.stop();
+                localStream = null;
+                status("Microphone stream paused");
+                return;
+              }
+              const nextTrack = localStream.getAudioTracks()[0];
+              if (audioSender && nextTrack) {
+                await audioSender.replaceTrack(nextTrack);
+              } else if (nextTrack) {
+                pc.addTrack(nextTrack, localStream);
+              }
+            }
+            const track = localStream && localStream.getAudioTracks()[0];
+            if (!track) {
+              post({ type: "error", message: "Microphone track is not available." });
+              return;
+            }
+            track.enabled = true;
+            dictationSessionId = dictationSessionId || messageId("clip-dictation-session");
+            sendControl({
+              ...baseMessage("dictation", "dictation"),
+              dictationSessionId,
+              phase: "started",
+              capturedAt: new Date().toISOString(),
+              insertIntoCursor: true,
+            });
+            status("Streaming microphone to Chrome");
+          },
+
+          stopDictation() {
+            dictationRequested = false;
+            if (localStream) {
+              for (const track of localStream.getAudioTracks()) track.enabled = false;
+            }
+            if (dictationSessionId) {
+              sendControl({
+                ...baseMessage("dictation", "dictation"),
+                dictationSessionId,
+                phase: "stopped",
+                capturedAt: new Date().toISOString(),
+                insertIntoCursor: true,
+              });
+            }
+            dictationSessionId = null;
+            status("Microphone stream paused");
+          },
+
+          sendPhotoMessages(messages) {
+            if (!photoChannel || photoChannel.readyState !== "open") {
+              post({ type: "error", message: "Photo channel is not open." });
+              return;
+            }
+            for (const message of messages || []) {
+              photoChannel.send(JSON.stringify(message));
+            }
+            status("Photo sent");
+          },
+
+          close() {
+            if (disconnectTimer) {
+              clearTimeout(disconnectTimer);
+              disconnectTimer = null;
+            }
+            if (localStream) {
+              for (const track of localStream.getTracks()) track.stop();
+            }
+            if (controlChannel) controlChannel.close();
+            if (photoChannel) photoChannel.close();
+            if (pc) pc.close();
+            controlChannel = null;
+            photoChannel = null;
+            localStream = null;
+            pc = null;
+            post({ type: "closed" });
+          },
+        };
+
+        post({ type: "status", value: "WebRTC bridge ready" });
+      })();
+    </script>
+  </body>
+</html>

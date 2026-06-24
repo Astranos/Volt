@@ -63,6 +63,18 @@ APP_STORE_CONNECT_API_KEY_PATH=/secure/path/AuthKey_XXXXXXXXXX.p8 \
 pnpm --filter @volt/mobile ios:beta
 ```
 
+Current local setup on Juan's machine:
+
+```sh
+APP_STORE_CONNECT_API_KEY_ID=2LA645SSNN \
+APP_STORE_CONNECT_ISSUER_ID=69a6de87-2df2-47e3-e053-5b8c7c11a4d1 \
+APP_STORE_CONNECT_API_KEY_PATH="$PWD/apps/mobile/fastlane/AuthKey_2LA645SSNN.p8" \
+FASTLANE_SKIP_WAITING_FOR_BUILD_PROCESSING=1 \
+pnpm --filter @volt/mobile ios:beta
+```
+
+Run this from the repository root. The `.p8` file is local signing/upload material; keep the file out of release notes and never paste its contents into docs or chat. The key ID is the suffix in the filename: `AuthKey_2LA645SSNN.p8`.
+
 You can provide key content instead of a file path:
 
 ```sh
@@ -137,6 +149,8 @@ For the beta lane to work, the local machine or CI runner still needs:
 - An App Store Connect app record matching `com.volt.mobile`.
 - An App Store Connect API key with upload access.
 - A unique `CFBundleVersion`/build number for each TestFlight upload.
+
+Before publishing a new TestFlight build, bump `CURRENT_PROJECT_VERSION` in `apps/mobile/ios/Volt.xcodeproj/project.pbxproj`. App Store Connect rejects reused build numbers for the same marketing version.
 
 ## Commands
 

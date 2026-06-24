@@ -50,11 +50,13 @@ struct ScannerView: View {
                 }
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                CaptureStartAccessory(
-                    isConnected: store.connectionStatus.isConnected,
+                ScannerBottomActionAccessory(
+                    title: "Start Capture",
+                    systemImage: "doc.viewfinder",
+                    isEnabled: store.connectionStatus.isConnected,
                     statusText: captureStatusText,
-                    targetHint: store.targetHint,
-                    onStart: startCapture
+                    disabledHint: store.targetHint,
+                    action: startCapture
                 )
             }
         }
@@ -116,40 +118,4 @@ struct ScannerView: View {
         }
     }
 
-}
-
-private struct CaptureStartAccessory: View {
-    let isConnected: Bool
-    let statusText: String
-    let targetHint: String
-    let onStart: () -> Void
-
-    var body: some View {
-        VStack(spacing: 10) {
-            Text(statusText)
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: .infinity)
-
-            Button(action: onStart) {
-                Label("Start Capture", systemImage: "doc.viewfinder")
-                    .font(.headline)
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity, minHeight: 52)
-                    .background(
-                        ScannerTabLayout.primaryActionBackground(isEnabled: isConnected),
-                        in: RoundedRectangle(cornerRadius: ScannerTabLayout.primaryActionCornerRadius, style: .continuous)
-                    )
-                    .opacity(isConnected ? 1 : ScannerTabLayout.disabledPrimaryActionOpacity)
-            }
-            .buttonStyle(.plain)
-            .disabled(!isConnected)
-            .accessibilityHint(isConnected ? "Opens the camera capture session." : targetHint)
-        }
-        .padding(.horizontal)
-        .padding(.top, 12)
-        .padding(.bottom, 10)
-        .background(.bar)
-    }
 }

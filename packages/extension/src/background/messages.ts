@@ -175,7 +175,17 @@ export function parseMessageRecord(value: unknown): MessageRecord | null {
 export function isScannerOffscreenRuntimeMessage(
   message: RuntimeMessage
 ): message is ScannerOffscreenRuntimeMessage {
-  return "action" in message && message.action.startsWith("scannerOffscreen");
+  if (!("action" in message)) return false;
+  return (
+    message.action === "scannerOffscreenPing" ||
+    message.action === "scannerOffscreenStart" ||
+    message.action === "scannerOffscreenDisconnect" ||
+    message.action === "scannerOffscreenCloseJoinWindow" ||
+    message.action === "scannerOffscreenGetState" ||
+    message.action === "scannerOffscreenUpdateExtensionIdentity" ||
+    message.action === "scannerOffscreenUpdateTarget" ||
+    message.action === "scannerOffscreenPollReconnectRequests"
+  );
 }
 
 export function parseRuntimeMessage(rawMessage: unknown): RuntimeMessage | null {

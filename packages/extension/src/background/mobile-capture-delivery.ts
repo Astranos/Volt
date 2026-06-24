@@ -54,8 +54,9 @@ export function createCursorTargetedCaptureDelivery({
   }
 
   async function deliverScannerScan(scan: CursorTargetedCaptureScan): Promise<CaptureDeliveryReceipt> {
+    let savedToResults = true;
     if (shouldPersistScannerScan(scan)) {
-      void persistAndBroadcastMobileScannerScan(scan, {
+      const receipt = await persistAndBroadcastMobileScannerScan(scan, {
         broadcastScannerMessage,
         persistFallbackScan: (scanForFallback) =>
           persistFallbackScan(scanForFallback as CursorTargetedCaptureScan),
@@ -63,10 +64,11 @@ export function createCursorTargetedCaptureDelivery({
           log("scanner IndexedDB scan persist failed", error instanceof Error ? error.message : error);
         },
       });
+      savedToResults = receipt.success;
     }
 
     if (!shouldInsertScannerMessage(scan)) {
-      return { success: true, insertedIntoCursor: false };
+      return { success: savedToResults, insertedIntoCursor: false };
     }
 
     const insertedIntoCursor = await insertScannerText(scan.barcode, {
@@ -76,7 +78,7 @@ export function createCursorTargetedCaptureDelivery({
       kind: scan.kind,
     });
 
-    return { success: true, insertedIntoCursor };
+    return { success: savedToResults, insertedIntoCursor };
   }
 
   return { deliverScannerScan };

@@ -12,10 +12,8 @@ struct ScannerSignalingClient {
         var request = URLRequest(url: ScannerProtocol.signalURL.appending(path: "ice-servers"))
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard (response as? HTTPURLResponse)?.statusCode == 200 else {
-            throw ScannerPairingError.requestFailed
-        }
+        let (data, response) = try await signalData(for: request)
+        try validateSignalResponse(data: data, response: response)
 
         return try JSONDecoder().decode(ScannerProtocol.IceServerConfiguration.self, from: data)
     }
@@ -49,10 +47,8 @@ struct ScannerSignalingClient {
             "phoneDeviceId": phoneDeviceId,
             "phoneLabel": phoneLabel,
         ])
-        let (_, response) = try await URLSession.shared.data(for: request)
-        guard (response as? HTTPURLResponse)?.statusCode == 200 else {
-            throw ScannerPairingError.requestFailed
-        }
+        let (data, response) = try await signalData(for: request)
+        try validateSignalResponse(data: data, response: response)
     }
 
     func requestReconnect(pairingId: String, pairingSecret: String) async throws -> ReconnectJoinWindow {
@@ -67,16 +63,13 @@ struct ScannerSignalingClient {
         while ContinuousClock.now < deadline {
             var request = URLRequest(url: statusURL)
             request.setValue(pairingSecret, forHTTPHeaderField: "X-Volt-Pairing-Secret")
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await signalData(for: request)
             let statusCode = (response as? HTTPURLResponse)?.statusCode
             guard statusCode == 200 else {
-                if statusCode == 403 {
-                    throw ScannerPairingError.requestFailed
-                }
                 if statusCode == 410 {
                     throw ScannerPairingError.joinTokenExpired
                 }
-                throw ScannerPairingError.requestFailed
+                throw signalRejectedError(data: data, statusCode: statusCode)
             }
             let payload = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
             let reconnectRequest = payload["request"] as? [String: Any] ?? payload
@@ -113,13 +106,13 @@ struct ScannerSignalingClient {
             "capabilities": ["ocr", "barcode", "dictation", "photo", "photo_retry_queue"],
         ])
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await signalData(for: request)
         let statusCode = (response as? HTTPURLResponse)?.statusCode
         guard statusCode == 200 else {
             if statusCode == 410 {
                 throw ScannerPairingError.joinTokenExpired
             }
-            throw ScannerPairingError.requestFailed
+            throw signalRejectedError(data: data, statusCode: statusCode)
         }
         let payload = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
         let attempt = payload["attempt"] as? [String: Any] ?? payload
@@ -148,10 +141,13 @@ struct ScannerSignalingClient {
     func pollOffer(token: String, attempt: ScannerProtocol.JoinAttempt) async throws -> (offer: String, answerURL: URL, sessionId: String?) {
         let deadline = ContinuousClock.now + ScannerProtocol.joinAttemptTTL
         while ContinuousClock.now < deadline {
-            let (data, response) = try await URLSession.shared.data(from: attempt.pollURL)
+            let (data, response) = try await signalData(from: attempt.pollURL)
             let statusCode = (response as? HTTPURLResponse)?.statusCode
             if statusCode == 410 {
                 throw ScannerPairingError.joinTokenExpired
+            }
+            if statusCode != 200 {
+                throw signalRejectedError(data: data, statusCode: statusCode)
             }
             if statusCode == 200,
                let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -171,13 +167,13 @@ struct ScannerSignalingClient {
             "answer": String(data: try JSONEncoder.scanner.encode(answer), encoding: .utf8) ?? "",
         ])
 
-        let (_, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await signalData(for: request)
         let statusCode = (response as? HTTPURLResponse)?.statusCode
         guard statusCode == 200 else {
             if statusCode == 410 {
                 throw ScannerPairingError.joinTokenExpired
             }
-            throw ScannerPairingError.requestFailed
+            throw signalRejectedError(data: data, statusCode: statusCode)
         }
     }
 
@@ -193,13 +189,13 @@ struct ScannerSignalingClient {
         request.setValue(pairingSecret, forHTTPHeaderField: "X-Volt-Pairing-Secret")
         request.httpBody = try JSONSerialization.data(withJSONObject: ["pairingSecret": pairingSecret])
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await signalData(for: request)
         let statusCode = (response as? HTTPURLResponse)?.statusCode
         guard statusCode == 200 else {
             if statusCode == 410 {
                 throw ScannerPairingError.joinTokenExpired
             }
-            throw ScannerPairingError.requestFailed
+            throw signalRejectedError(data: data, statusCode: statusCode)
         }
         let payload = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
         let reconnectRequest = payload["request"] as? [String: Any] ?? payload
@@ -207,6 +203,62 @@ struct ScannerSignalingClient {
             throw ScannerPairingError.requestFailed
         }
         return requestId
+    }
+
+    private func signalData(from url: URL, retries: Int = 2) async throws -> (Data, URLResponse) {
+        try await signalData(for: URLRequest(url: url), retries: retries)
+    }
+
+    private func signalData(for request: URLRequest, retries: Int = 2) async throws -> (Data, URLResponse) {
+        var request = request
+        request.timeoutInterval = ScannerProtocol.signalRequestTimeout
+
+        for attempt in 0...retries {
+            do {
+                let result = try await URLSession.shared.data(for: request)
+                if attempt < retries,
+                   let statusCode = (result.1 as? HTTPURLResponse)?.statusCode,
+                   isRetryableSignalStatus(statusCode) {
+                    try await Task.sleep(for: signalRetryDelay(attempt: attempt))
+                    continue
+                }
+                return result
+            } catch {
+                guard attempt < retries else { throw error }
+                try await Task.sleep(for: signalRetryDelay(attempt: attempt))
+            }
+        }
+
+        throw ScannerPairingError.requestFailed
+    }
+
+    private func isRetryableSignalStatus(_ statusCode: Int) -> Bool {
+        statusCode == 408 || statusCode == 429 || statusCode >= 500
+    }
+
+    private func signalRetryDelay(attempt: Int) -> Duration {
+        .milliseconds(250 * (1 << attempt))
+    }
+
+    private func validateSignalResponse(data: Data, response: URLResponse) throws {
+        let statusCode = (response as? HTTPURLResponse)?.statusCode
+        guard statusCode == 200 else {
+            throw signalRejectedError(data: data, statusCode: statusCode)
+        }
+    }
+
+    private func signalRejectedError(data: Data, statusCode: Int?) -> ScannerPairingError {
+        ScannerPairingError.signalRejected(
+            statusCode: statusCode ?? -1,
+            detail: signalErrorDetail(data)
+        )
+    }
+
+    private func signalErrorDetail(_ data: Data) -> String? {
+        guard !data.isEmpty,
+              let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return nil }
+        return payload["error"] as? String
     }
 }
 

@@ -16,6 +16,7 @@ enum ScannerProtocol {
     static let joinAttemptPollInterval: Duration = .milliseconds(650)
     static let iceGatheringTimeout: Duration = .seconds(2)
     static let photoReceiptTimeout: Duration = .seconds(20)
+    static let signalRequestTimeout: TimeInterval = 8
 
     enum MessageType: String {
         case hello
@@ -23,6 +24,7 @@ enum ScannerProtocol {
         case dictation
         case sessionReady = "session_ready"
         case resultReceived = "result_received"
+        case protocolError = "protocol_error"
         case photoStart = "photo_start"
         case photoChunk = "photo_chunk"
         case photoComplete = "photo_complete"
@@ -169,6 +171,19 @@ enum ScannerProtocol {
         let reason: String
         let retryable: Bool
         let detail: String?
+    }
+
+    struct ProtocolError: Decodable, Equatable {
+        let code: String
+        let detail: String?
+        let receivedType: String?
+    }
+
+    struct DictationTranscript: Decodable, Equatable {
+        let dictationSessionId: String
+        let phase: String
+        let text: String?
+        let insertIntoCursor: Bool?
     }
 
     enum PhotoDeliveryReceipt: Equatable {
@@ -326,6 +341,19 @@ enum ScannerProtocol {
         return try? JSONDecoder().decode(ResultReceived.self, from: data)
     }
 
+    static func parseProtocolError(_ rawValue: String) -> ProtocolError? {
+        guard let data = data(for: rawValue, matching: .protocolError) else { return nil }
+        return try? JSONDecoder().decode(ProtocolError.self, from: data)
+    }
+
+    static func parseDictationTranscript(_ rawValue: String) -> DictationTranscript? {
+        guard let data = data(for: rawValue, matching: .dictation),
+              let transcript = try? JSONDecoder().decode(DictationTranscript.self, from: data),
+              (transcript.phase == "partial" || transcript.phase == "final")
+        else { return nil }
+        return transcript
+    }
+
     static func parsePhotoChunkAck(_ rawValue: String) -> PhotoChunkAck? {
         guard let data = data(for: rawValue, matching: .photoChunkAck) else { return nil }
         return try? JSONDecoder().decode(PhotoChunkAck.self, from: data)
@@ -369,6 +397,7 @@ enum ScannerPairingError: LocalizedError {
     case chromeTimedOut
     case joinTokenExpired
     case requestFailed
+    case signalRejected(statusCode: Int, detail: String?)
     case photoRejected(String)
     case photoDeliveryInterrupted
     case photoDeliveryTimedOut
@@ -385,6 +414,12 @@ enum ScannerPairingError: LocalizedError {
         case .chromeTimedOut: "Chrome did not respond in time. Reopen the QR and scan again."
         case .joinTokenExpired: "This Chrome pairing session expired. Scan the QR again."
         case .requestFailed: "The scanner signaling service did not accept the request."
+        case .signalRejected(let statusCode, let detail):
+            if let detail, !detail.isEmpty {
+                "The scanner signaling service rejected the request (\(statusCode)): \(detail)"
+            } else {
+                "The scanner signaling service rejected the request (\(statusCode))."
+            }
         case .photoRejected(let reason): "Chrome rejected the photo: \(reason)"
         case .photoDeliveryInterrupted: "Photo delivery was interrupted."
         case .photoDeliveryTimedOut: "Chrome did not confirm photo delivery in time."

@@ -87,6 +87,11 @@ function normalizeScannerMessage(message: unknown): ScannerScan | null {
       typeof candidate.dictationSessionId === "string"
         ? candidate.dictationSessionId
         : undefined,
+    format: typeof candidate.format === "string" ? candidate.format : undefined,
+    insertIntoCursor:
+      typeof candidate.insertIntoCursor === "boolean"
+        ? candidate.insertIntoCursor
+        : undefined,
     id:
       typeof candidate.id === "string" && candidate.id
         ? candidate.id

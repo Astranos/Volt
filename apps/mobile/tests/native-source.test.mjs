@@ -36,6 +36,10 @@ const scannerProtocolSwiftSource = readFileSync(
   new URL("../ios/Volt/Services/ScannerProtocol.swift", import.meta.url),
   "utf8"
 );
+const scannerRecognitionModelsSwiftSource = readFileSync(
+  new URL("../ios/Volt/Models/ScannerRecognitionModels.swift", import.meta.url),
+  "utf8"
+);
 const rootViewSwiftSource = readFileSync(
   new URL("../ios/Volt/Views/RootView.swift", import.meta.url),
   "utf8"
@@ -60,6 +64,14 @@ const cameraSessionControlsSwiftSource = readFileSync(
   new URL("../ios/Volt/Views/CameraSessionControls.swift", import.meta.url),
   "utf8"
 );
+const sharedCameraSessionControlsSwiftSource = readFileSync(
+  new URL("../ios/Volt/Views/SharedCameraSessionControls.swift", import.meta.url),
+  "utf8"
+);
+const sharedPairingSessionComponentsSwiftSource = readFileSync(
+  new URL("../ios/Volt/Views/SharedPairingSessionComponents.swift", import.meta.url),
+  "utf8"
+);
 const ocrReviewLayerSwiftSource = readFileSync(
   new URL("../ios/Volt/Views/OcrReviewLayer.swift", import.meta.url),
   "utf8"
@@ -74,6 +86,26 @@ const dictationViewSwiftSource = readFileSync(
 );
 const uploadViewSwiftSource = readFileSync(
   new URL("../ios/Volt/Views/ResultsView.swift", import.meta.url),
+  "utf8"
+);
+const clipRootViewSwiftSource = readFileSync(
+  new URL("../ios/VoltClip/Views/ClipRootView.swift", import.meta.url),
+  "utf8"
+);
+const clipBarcodeScannerServiceSwiftSource = readFileSync(
+  new URL("../ios/VoltClip/Services/ClipBarcodeScannerService.swift", import.meta.url),
+  "utf8"
+);
+const clipScannerStoreSwiftSource = readFileSync(
+  new URL("../ios/VoltClip/Services/ClipScannerStore.swift", import.meta.url),
+  "utf8"
+);
+const clipOCRServiceSwiftSource = readFileSync(
+  new URL("../ios/VoltClip/Services/ClipOCRService.swift", import.meta.url),
+  "utf8"
+);
+const clipTransportSwiftSource = readFileSync(
+  new URL("../ios/VoltClip/Services/WebKitWebRTCTransport.swift", import.meta.url),
   "utf8"
 );
 const scannerWebRTCConnectionSwiftSource = readFileSync(
@@ -92,7 +124,7 @@ test("native saved-session reconnect re-registers durable pairing before request
   assert.match(scannerStoreSwiftSource, /browserSessionId: pairedSession\.browserSessionId/);
   assert.match(scannerStoreSwiftSource, /pairingSecret: secret/);
   assert.match(scannerSignalingSwiftSource, /func registerPairing\(\n\s+pairingId: String,/);
-  assert.match(scannerSignalingSwiftSource, /guard \(response as\? HTTPURLResponse\)\?\.statusCode == 200 else/);
+  assert.match(scannerSignalingSwiftSource, /try validateSignalResponse\(data: data, response: response\)/);
 });
 
 test("native saved-session reconnect waits longer than QR pairing for sleeping Chrome extensions", () => {
@@ -100,6 +132,13 @@ test("native saved-session reconnect waits longer than QR pairing for sleeping C
   assert.match(scannerProtocolSwiftSource, new RegExp(`static let reconnectRequestTTL: Duration = \\.seconds\\(${scannerProtocolGolden.timing.reconnectRequestTtlMs / 1000}\\)`));
   assert.match(scannerProtocolSwiftSource, new RegExp(`static let iceGatheringTimeout: Duration = \\.seconds\\(${scannerProtocolGolden.timing.iceGatheringTimeoutMs / 1000}\\)`));
   assert.match(scannerSignalingSwiftSource, /let deadline = ContinuousClock\.now \+ ScannerProtocol\.reconnectRequestTTL/);
+});
+
+test("native signaling errors preserve rejected status and server detail", () => {
+  assert.match(scannerProtocolSwiftSource, /case signalRejected\(statusCode: Int, detail: String\?\)/);
+  assert.match(scannerProtocolSwiftSource, /The scanner signaling service rejected the request/);
+  assert.match(scannerSignalingSwiftSource, /private func signalRejectedError\(data: Data, statusCode: Int\?\) -> ScannerPairingError/);
+  assert.match(scannerSignalingSwiftSource, /payload\["error"\] as\? String/);
 });
 
 test("native Debug builds use Convex dev and Release builds use Convex production", () => {
@@ -183,6 +222,14 @@ test("native capture session recovers pairing instead of dismissing when the sca
   assert.doesNotMatch(recoverySource, /isPresented = false/);
 });
 
+test("native and app clip close stale peers after sustained WebRTC disconnect", () => {
+  assert.match(scannerWebRTCConnectionSwiftSource, /private var disconnectGraceTask: Task<Void, Never>\?/);
+  assert.match(scannerWebRTCConnectionSwiftSource, /case \.disconnected:\s*scheduleDisconnectGrace\(\)/);
+  assert.match(scannerWebRTCConnectionSwiftSource, /guard peerConnection\?\.connectionState == \.disconnected else \{ return \}\s*close\(\)/);
+  assert.match(clipRootViewSwiftSource, /ClipWebRTCBridgeView\(webView: store\.bridgeWebView\)/);
+  assert.match(readFileSync(new URL("../ios/VoltClip/Resources/webrtc-bridge.html", import.meta.url), "utf8"), /pc && pc\.connectionState === "disconnected"[\s\S]*window\.voltBridge\.close\(\)/);
+});
+
 test("native screens use the shared header connection control without extra session accessories", () => {
   assert.match(rootViewSwiftSource, /struct ScannerSectionHeader<TrailingAccessory: View>: View/);
   assert.match(rootViewSwiftSource, /trailingAccessory\(\)/);
@@ -211,12 +258,13 @@ test("native first launch welcomes users without requesting camera access and ca
   assert.match(pairingSessionsViewSwiftSource, /\.task \{\s*await store\.camera\.requestAccess\(\)\s*store\.camera\.start\(\)\s*\}/);
   assert.match(rootViewSwiftSource, /private func showSessionsFromWelcome\(\) \{[\s\S]*connectionSheetDetent = \.medium[\s\S]*isConnectionSheetPresented = true/);
   assert.match(pairingSessionsViewSwiftSource, /private let webScannerURL = URL\(string: "https:\/\/volt-scanner\.vercel\.app\/create-session"\)!/);
-  assert.match(pairingSessionsViewSwiftSource, /Text\("Scan the QR code from the Chrome extension, or open the create session page on your computer\. This iPhone will connect to that browser session\."\)/);
-  assert.match(pairingSessionsViewSwiftSource, /title: "Open Volt on your computer"/);
-  assert.match(pairingSessionsViewSwiftSource, /detail: "Use the Chrome extension side panel, or go to volt-scanner\.vercel\.app\/create-session\."/);
-  assert.match(pairingSessionsViewSwiftSource, /detail: "Start pairing in Chrome or on the create session page\."/);
-  assert.match(pairingSessionsViewSwiftSource, /Label\("Open Create Session Page", systemImage: "safari"\)/);
-  assert.match(pairingSessionsViewSwiftSource, /Label\("Scan Computer QR", systemImage: "qrcode\.viewfinder"\)/);
+  assert.match(pairingSessionsViewSwiftSource, /PairingSessionSetupContent \{[\s\S]*openURL\(webScannerURL\)/);
+  assert.match(sharedPairingSessionComponentsSwiftSource, /Text\("Scan the QR code from the Chrome extension, or open the create session page on your computer\. This iPhone will connect to that browser session\."\)/);
+  assert.match(sharedPairingSessionComponentsSwiftSource, /title: "Open Volt on your computer"/);
+  assert.match(sharedPairingSessionComponentsSwiftSource, /detail: "Use the Chrome extension side panel, or go to volt-scanner\.vercel\.app\/create-session\."/);
+  assert.match(sharedPairingSessionComponentsSwiftSource, /detail: "Start pairing in Chrome or on the create session page\."/);
+  assert.match(sharedPairingSessionComponentsSwiftSource, /Label\("Open Create Session Page", systemImage: "safari"\)/);
+  assert.match(sharedPairingSessionComponentsSwiftSource, /Label\("Scan Computer QR", systemImage: "qrcode\.viewfinder"\)/);
   assert.match(rootViewSwiftSource, /\.frame\(maxWidth: \.infinity, alignment: \.leading\)\s*\.background\(\.background, in: RoundedRectangle\(cornerRadius: 16/);
 });
 
@@ -236,8 +284,8 @@ test("native OCR review separates pan gestures from selectable text targets", ()
 });
 
 test("native OCR review renders Vision quadrilaterals for angled text", () => {
-  assert.match(textRecognizerSwiftSource, /struct TextQuadrilateral: Equatable/);
-  assert.match(textRecognizerSwiftSource, /init\(observation: VNRectangleObservation\)/);
+  assert.match(scannerRecognitionModelsSwiftSource, /struct TextQuadrilateral: Equatable/);
+  assert.match(scannerRecognitionModelsSwiftSource, /init\(observation: VNRectangleObservation\)/);
   assert.match(textRecognizerSwiftSource, /quadrilateral: TextQuadrilateral\(observation: observation\)/);
   assert.match(ocrReviewLayerSwiftSource, /OcrRegionShape\(points: points\)/);
   assert.match(ocrReviewLayerSwiftSource, /viewPoints\(for: region\.quadrilateral/);
@@ -270,17 +318,17 @@ test("native camera can detect identifier candidates before OCR capture", () => 
 });
 
 test("native pre-capture identifier matching is deterministic", () => {
-  assert.match(cameraModelSwiftSource, /enum LiveTextCandidateKind: String, Equatable/);
-  assert.match(cameraModelSwiftSource, /case imei = "IMEI"/);
-  assert.match(cameraModelSwiftSource, /case model = "Model"/);
-  assert.match(cameraModelSwiftSource, /case serial = "Serial"/);
-  assert.match(cameraModelSwiftSource, /enum LiveTextIdentifierMatcher/);
-  assert.match(cameraModelSwiftSource, /struct Match \{[\s\S]*let range: Range<String\.Index>/);
-  assert.match(cameraModelSwiftSource, /guard text\.localizedCaseInsensitiveContains\("imei"\)/);
-  assert.match(cameraModelSwiftSource, /guard isValidLuhn\(candidate\) else \{ continue \}/);
-  assert.match(cameraModelSwiftSource, /labels: \["serial number", "serial no", "serial", "s\/n", "sn"\]/);
-  assert.match(cameraModelSwiftSource, /labels: \["model number", "model no", "model", "mdl"\]/);
-  assert.match(cameraModelSwiftSource, /text\[valueStart\.\.\.\]\.range\(of: cleaned\)/);
+  assert.match(scannerRecognitionModelsSwiftSource, /enum LiveTextCandidateKind: String, Equatable/);
+  assert.match(scannerRecognitionModelsSwiftSource, /case imei = "IMEI"/);
+  assert.match(scannerRecognitionModelsSwiftSource, /case model = "Model"/);
+  assert.match(scannerRecognitionModelsSwiftSource, /case serial = "Serial"/);
+  assert.match(scannerRecognitionModelsSwiftSource, /enum LiveTextIdentifierMatcher/);
+  assert.match(scannerRecognitionModelsSwiftSource, /struct Match \{[\s\S]*let range: Range<String\.Index>/);
+  assert.match(scannerRecognitionModelsSwiftSource, /guard text\.localizedCaseInsensitiveContains\("imei"\)/);
+  assert.match(scannerRecognitionModelsSwiftSource, /guard isValidLuhn\(candidate\) else \{ continue \}/);
+  assert.match(scannerRecognitionModelsSwiftSource, /labels: \["serial number", "serial no", "serial", "s\/n", "sn"\]/);
+  assert.match(scannerRecognitionModelsSwiftSource, /labels: \["model number", "model no", "model", "mdl"\]/);
+  assert.match(scannerRecognitionModelsSwiftSource, /text\[valueStart\.\.\.\]\.range\(of: cleaned\)/);
 });
 
 test("native pre-capture identifiers render as a stable controls readout", () => {
@@ -289,13 +337,13 @@ test("native pre-capture identifiers render as a stable controls readout", () =>
   assert.doesNotMatch(scannerCameraLayerSwiftSource, /LiveTextCandidateReticle/);
   assert.match(captureSessionViewSwiftSource, /LiveIdentifierStrip\([\s\S]*candidates: store\.camera\.liveTextCandidates,[\s\S]*store\.sendRecognizedText\(candidate\.value\)/);
   assert.match(captureSessionViewSwiftSource, /hasLiveTextCandidates: !store\.camera\.liveTextCandidates\.isEmpty/);
-  assert.doesNotMatch(cameraSessionControlsSwiftSource, /let liveTextCandidates: \[LiveTextCandidate\]/);
-  assert.match(cameraSessionControlsSwiftSource, /let hasLiveTextCandidates: Bool/);
+  assert.doesNotMatch(sharedCameraSessionControlsSwiftSource, /let liveTextCandidates: \[LiveTextCandidate\]/);
+  assert.match(sharedCameraSessionControlsSwiftSource, /let hasLiveTextCandidates: Bool/);
   assert.match(cameraSessionControlsSwiftSource, /struct LiveIdentifierStrip: View/);
   assert.match(cameraSessionControlsSwiftSource, /let onSend: \(LiveTextCandidate\) -> Void/);
   assert.match(cameraSessionControlsSwiftSource, /struct LiveIdentifierChip: View/);
-  assert.match(cameraSessionControlsSwiftSource, /"Frame device identifiers"/);
-  assert.match(cameraSessionControlsSwiftSource, /"Tap a recognized chip to send"/);
+  assert.match(sharedCameraSessionControlsSwiftSource, /"Frame device identifiers"/);
+  assert.match(sharedCameraSessionControlsSwiftSource, /"Tap a recognized chip to send"/);
   assert.match(cameraSessionControlsSwiftSource, /Button\(action: onSend\)/);
   assert.match(cameraSessionControlsSwiftSource, /\.background\(Color\.green, in: Capsule\(\)\)/);
 });
@@ -313,16 +361,16 @@ test("native pre-capture identifier chips show quickly and correct repeated repl
 });
 
 test("native post-capture OCR extracts device identifiers from recognized rows", () => {
-  assert.match(textRecognizerSwiftSource, /enum DeviceIdentifierRegionExtractor/);
-  assert.match(textRecognizerSwiftSource, /LiveTextIdentifierMatcher\.match\(region\.text\)/);
-  assert.match(textRecognizerSwiftSource, /text: match\.value/);
+  assert.match(scannerRecognitionModelsSwiftSource, /enum DeviceIdentifierRegionExtractor/);
+  assert.match(scannerRecognitionModelsSwiftSource, /LiveTextIdentifierMatcher\.match\(region\.text\)/);
+  assert.match(scannerRecognitionModelsSwiftSource, /text: match\.value/);
   assert.match(textRecognizerSwiftSource, /if let match = LiveTextIdentifierMatcher\.match\(trimmed\)/);
   assert.match(textRecognizerSwiftSource, /let matchedGlyphs = Self\.glyphs\(in: match\.range, text: trimmed, glyphs: glyphs\)/);
   assert.match(textRecognizerSwiftSource, /appendGlyphRegion\([\s\S]*text: match\.value[\s\S]*isDeviceIdentifier: true/);
-  assert.match(textRecognizerSwiftSource, /let isDeviceIdentifier: Bool/);
+  assert.match(scannerRecognitionModelsSwiftSource, /let isDeviceIdentifier: Bool/);
   assert.match(ocrReviewLayerSwiftSource, /region\.isDeviceIdentifier \? \.green\.opacity\(0\.24\) : \.yellow\.opacity\(0\.24\)/);
   assert.match(ocrReviewLayerSwiftSource, /region\.isDeviceIdentifier \? \.green\.opacity\(0\.9\) : \.yellow\.opacity\(0\.9\)/);
-  assert.match(textRecognizerSwiftSource, /return identifierRegions\.isEmpty \? regions : deduplicated\(identifierRegions\)/);
+  assert.match(scannerRecognitionModelsSwiftSource, /return identifierRegions\.isEmpty \? regions : deduplicated\(identifierRegions\)/);
   assert.match(scannerStoreCaptureActionsSwiftSource, /DeviceIdentifierRegionExtractor\.extractedIdentifierRegions\(from: recognizedRegions\)/);
 });
 
@@ -406,6 +454,92 @@ test("native camera resets capture sessions to display 1x zoom", () => {
   assert.match(cameraModelSwiftSource, /clampedRawZoomFactor\(1 \/ displayZoomFactorMultiplier\(for: device\), for: device\)/);
   assert.match(cameraModelSwiftSource, /device\.videoZoomFactor = rawZoomFactor/);
   assert.match(cameraModelSwiftSource, /updateZoomState\(for: device, rawZoomFactor: rawZoomFactor\)/);
+});
+
+test("app clip capture controls are wired to camera hardware actions", () => {
+  assert.match(clipRootViewSwiftSource, /torchEnabled: cameraService\.torchEnabled/);
+  assert.match(clipRootViewSwiftSource, /zoomLabel: cameraService\.zoomDisplayLabel/);
+  assert.match(clipRootViewSwiftSource, /cameraService\.setTorchEnabled\(!cameraService\.torchEnabled\)/);
+  assert.match(clipRootViewSwiftSource, /cameraService\.adjustZoom\(by: -0\.25\)/);
+  assert.match(clipRootViewSwiftSource, /cameraService\.adjustZoom\(by: 0\.25\)/);
+  assert.doesNotMatch(clipRootViewSwiftSource, /onToggleTorch: \{\}/);
+  assert.doesNotMatch(clipRootViewSwiftSource, /onZoomOut: \{\}/);
+  assert.doesNotMatch(clipRootViewSwiftSource, /onZoomIn: \{\}/);
+});
+
+test("app clip camera preview supports tap focus and pinch zoom", () => {
+  assert.match(clipRootViewSwiftSource, /UITapGestureRecognizer\(target: self, action: #selector\(handleTap\(_:\)\)\)/);
+  assert.match(clipRootViewSwiftSource, /UIPinchGestureRecognizer\(target: self, action: #selector\(handlePinch\(_:\)\)\)/);
+  assert.match(clipRootViewSwiftSource, /captureDevicePointConverted\(fromLayerPoint: layerPoint\)/);
+  assert.match(clipRootViewSwiftSource, /cameraService\.focus\(at: devicePoint\)/);
+  assert.match(clipRootViewSwiftSource, /cameraService\.scaleZoom\(by: scale\)/);
+  assert.match(clipRootViewSwiftSource, /ClipFocusReticle\(\)/);
+});
+
+test("app clip camera service supports zoom, torch, focus, and UPC-A priority", () => {
+  assert.match(clipBarcodeScannerServiceSwiftSource, /private\(set\) var torchEnabled = false/);
+  assert.match(clipBarcodeScannerServiceSwiftSource, /private\(set\) var zoomDisplayLabel = "1x"/);
+  assert.match(clipBarcodeScannerServiceSwiftSource, /func setTorchEnabled\(_ enabled: Bool\)/);
+  assert.match(clipBarcodeScannerServiceSwiftSource, /func adjustZoom\(by delta: CGFloat\)/);
+  assert.match(clipBarcodeScannerServiceSwiftSource, /func scaleZoom\(by scale: CGFloat\)/);
+  assert.match(clipBarcodeScannerServiceSwiftSource, /func focus\(at point: CGPoint\)/);
+  assert.match(clipBarcodeScannerServiceSwiftSource, /resetZoomToDisplayOne\(for: videoDevice\)/);
+  assert.match(clipBarcodeScannerServiceSwiftSource, /private func upcADigitCount\(_ type: AVMetadataObject\.ObjectType, value: String\) -> Bool/);
+  assert.match(clipBarcodeScannerServiceSwiftSource, /if upcADigitCount\(type, value: value\) \{ return 0 \}/);
+});
+
+test("app clip capture opens in OCR and keeps capture and upload photo lists separate", () => {
+  assert.match(clipScannerStoreSwiftSource, /var activeCaptureMode: CaptureMode = \.ocr/);
+  assert.match(clipRootViewSwiftSource, /\.onAppear \{\s*activeMode = \.ocr/);
+  assert.match(clipRootViewSwiftSource, /photos: store\.photos\.filter \{ \$0\.source == \.capture \}/);
+  assert.match(clipRootViewSwiftSource, /photos: store\.photos\.filter \{ \$0\.source == \.upload \}/);
+  assert.match(clipRootViewSwiftSource, /latestPhoto: store\.photos\.first\(where: \{ \$0\.source == \.capture \}\)/);
+});
+
+test("app clip photo capture and library upload wait for Chrome photo receipts", () => {
+  assert.match(clipScannerStoreSwiftSource, /func capturePhoto\(_ image: UIImage\) async/);
+  assert.match(clipScannerStoreSwiftSource, /\.centerSquareCropped\(\)/);
+  assert.match(clipScannerStoreSwiftSource, /await sendPhoto\(photo\)/);
+  assert.match(clipScannerStoreSwiftSource, /func uploadPhotos\(_ images: \[UIImage\]\) async/);
+  assert.match(clipScannerStoreSwiftSource, /let batchId = ScannerProtocol\.makeMessageId\("upload-batch"\)/);
+  assert.match(clipScannerStoreSwiftSource, /await sendPhoto\(\s*photo,\s*filename: uploadFilename\(index: index, capturedAt: capturedAt\)\s*\)/);
+  assert.match(clipTransportSwiftSource, /private var photoContinuations: \[String: CheckedContinuation<ScannerProtocol\.PhotoReceived, Error>\] = \[:\]/);
+  assert.match(clipTransportSwiftSource, /ScannerProtocol\.parsePhotoReceived\(rawValue\)/);
+  assert.match(clipTransportSwiftSource, /ScannerProtocol\.parsePhotoRejected\(rawValue\)/);
+  assert.match(clipTransportSwiftSource, /ScannerProtocol\.photoReceiptTimeout/);
+});
+
+test("app clip replays saved captures and photos after connecting", () => {
+  assert.match(clipScannerStoreSwiftSource, /self\?\.sendSavedItemsAfterConnect\(\)/);
+  assert.match(clipScannerStoreSwiftSource, /private func sendSavedItemsAfterConnect\(\)/);
+  assert.match(clipScannerStoreSwiftSource, /let savedCaptures = captures\.filter \{ \$0\.status == "Saved until connected" \}/);
+  assert.match(clipScannerStoreSwiftSource, /let savedPhotos = photos\.filter \{ \$0\.status == "Saved until connected" \}/);
+  assert.match(clipScannerStoreSwiftSource, /for capture in savedCaptures \{\s*sendCaptureToChrome\(capture\)\s*\}/);
+  assert.match(clipScannerStoreSwiftSource, /for photo in savedPhotos \{\s*await sendPhoto\(photo\)\s*\}/);
+  assert.match(clipScannerStoreSwiftSource, /private func sendCaptureToChrome\(_ capture: ClipCapture\)/);
+});
+
+test("app clip pending sends fail promptly when WebRTC closes or errors", () => {
+  assert.match(clipTransportSwiftSource, /private func failPendingReceipts\(with error: Error\)/);
+  assert.match(clipTransportSwiftSource, /func close\(\) \{[\s\S]*failPendingReceipts\(with: ScannerPairingError\.channelNotOpen\)/);
+  assert.match(clipTransportSwiftSource, /case "closed":[\s\S]*failPendingReceipts\(with: ScannerPairingError\.channelNotOpen\)[\s\S]*onClosed\?\(\)/);
+  assert.match(clipTransportSwiftSource, /case "error":[\s\S]*answerContinuation\?\.resume\(throwing: ScannerPairingError\.requestFailed\)[\s\S]*failPendingReceipts\(with: ScannerPairingError\.channelNotOpen\)/);
+  assert.match(clipTransportSwiftSource, /resultTimeoutTasks\.values\.forEach \{ \$0\.cancel\(\) \}/);
+  assert.match(clipTransportSwiftSource, /photoTimeoutTasks\.values\.forEach \{ \$0\.cancel\(\) \}/);
+});
+
+test("app clip scanner restricts capture barcodes to UPC/EAN and clears stale scans", () => {
+  assert.match(clipBarcodeScannerServiceSwiftSource, /static let captureMetadataObjectTypes: \[AVMetadataObject\.ObjectType\] = \[\s*\.ean13,\s*\.ean8,\s*\.upce,\s*\]/);
+  assert.match(clipBarcodeScannerServiceSwiftSource, /metadataOutput\.metadataObjectTypes = Self\.captureMetadataObjectTypes\.filter/);
+  assert.match(clipBarcodeScannerServiceSwiftSource, /func clearDetectedBarcode\(\) \{\s*barcodeDetectionRevision \+= 1\s*barcodeClearTask\?\.cancel\(\)\s*barcodeClearTask = nil\s*latestScan = nil/);
+});
+
+test("app clip OCR reuses the main async recognizer and identifier extractor", () => {
+  assert.match(clipOCRServiceSwiftSource, /withCheckedThrowingContinuation/);
+  assert.match(clipOCRServiceSwiftSource, /DispatchQueue\.global\(qos: \.userInitiated\)\.async/);
+  assert.match(clipOCRServiceSwiftSource, /LiveTextIdentifierMatcher\.match\(text\)/);
+  assert.match(clipOCRServiceSwiftSource, /candidate\.boundingBox\(for: match\.range\)/);
+  assert.match(clipOCRServiceSwiftSource, /DeviceIdentifierRegionExtractor\.extractedIdentifierRegions\(from: recognizedRegions\)/);
 });
 
 test("native dictation keeps listening briefly after user stop actions", () => {

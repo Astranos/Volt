@@ -33,6 +33,56 @@ test("scanner text insertion targets the tracked iframe when the cursor is insid
   assert.deepEqual(executeCalls[0].target, { tabId: 42, frameIds: [7] });
 });
 
+test("scanner text insertion prefers the stored cursor tab when the active tab changed", async () => {
+  const executeCalls = [];
+  const inserter = createScannerTextInserter({
+    chromeApi: {
+      tabs: { query: async () => [{ id: 99 }] },
+      scripting: {
+        executeScript: async (call) => {
+          executeCalls.push(call);
+          return [{ result: { inserted: true } }];
+        },
+      },
+    },
+    log: () => {},
+    getTrackedTarget: () => ({ tabId: 42, frameId: 7, cursor: "Description" }),
+    copyWithOffscreen: async () => {
+      throw new Error("clipboard fallback should not run");
+    },
+  });
+
+  const inserted = await inserter.insertScannerText("hello");
+
+  assert.equal(inserted, true);
+  assert.deepEqual(executeCalls[0].target, { tabId: 42, frameIds: [7] });
+});
+
+test("scanner text insertion can use a stored cursor target when no active tab is available", async () => {
+  const executeCalls = [];
+  const inserter = createScannerTextInserter({
+    chromeApi: {
+      tabs: { query: async () => [] },
+      scripting: {
+        executeScript: async (call) => {
+          executeCalls.push(call);
+          return [{ result: { inserted: true } }];
+        },
+      },
+    },
+    log: () => {},
+    getTrackedTarget: () => ({ tabId: 42, frameId: 7, cursor: "Description" }),
+    copyWithOffscreen: async () => {
+      throw new Error("clipboard fallback should not run");
+    },
+  });
+
+  const inserted = await inserter.insertScannerText("hello");
+
+  assert.equal(inserted, true);
+  assert.deepEqual(executeCalls[0].target, { tabId: 42, frameIds: [7] });
+});
+
 test("scanner text insertion falls back to the main frame if tracked iframe injection fails", async () => {
   const executeCalls = [];
   const logs = [];
@@ -82,11 +132,13 @@ test("mobile capture target tracking preserves sender frame id for later inserti
 
   await controller.updateMobileCaptureTarget(
     { cursor: "Description", tabTitle: "Old title", url: "https://old.test" },
-    { tab: { id: 42 }, frameId: 5 }
+    { tab: { id: 42, windowId: 9 }, frameId: 5 }
   );
 
   assert.deepEqual(controller.getTrackedTarget(42), {
     browser: "Chrome",
+    tabId: 42,
+    windowId: 9,
     tabTitle: "Old title",
     url: "https://old.test",
     cursor: "Description",

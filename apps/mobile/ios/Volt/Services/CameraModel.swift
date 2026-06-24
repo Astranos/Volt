@@ -475,20 +475,6 @@ final class CameraModel: NSObject {
 
 }
 
-enum LiveTextCandidateKind: String, Equatable {
-    case imei = "IMEI"
-    case model = "Model"
-    case serial = "Serial"
-}
-
-struct LiveTextCandidate: Identifiable, Equatable {
-    let id = UUID()
-    let kind: LiveTextCandidateKind
-    let value: String
-    let bounds: CGRect
-    let confidence: Float
-}
-
 private struct LiveTextCandidateObservation: Equatable {
     let kind: LiveTextCandidateKind
     let value: String
@@ -568,94 +554,6 @@ private final class LiveTextFrameProcessor: NSObject, AVCaptureVideoDataOutputSa
             }
             .prefix(4)
             .map { $0 }
-    }
-}
-
-enum LiveTextIdentifierMatcher {
-    struct Match {
-        let kind: LiveTextCandidateKind
-        let value: String
-        let range: Range<String.Index>
-    }
-
-    static func match(_ rawText: String) -> Match? {
-        let text = rawText
-        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
-
-        if let imei = imei(in: text) {
-            return imei
-        }
-        if let serial = labeledValue(in: text, labels: ["serial number", "serial no", "serial", "s/n", "sn"]) {
-            return Match(kind: .serial, value: serial.value, range: serial.range)
-        }
-        if let model = labeledValue(in: text, labels: ["model number", "model no", "model", "mdl"]) {
-            return Match(kind: .model, value: model.value, range: model.range)
-        }
-        return nil
-    }
-
-    private static func imei(in text: String) -> Match? {
-        guard text.localizedCaseInsensitiveContains("imei") else { return nil }
-        let digits = String(text.filter(\.isNumber))
-        guard digits.count >= 15 else { return nil }
-
-        for offset in 0...(digits.count - 15) {
-            let start = digits.index(digits.startIndex, offsetBy: offset)
-            let end = digits.index(start, offsetBy: 15)
-            let candidate = String(digits[start..<end])
-            guard isValidLuhn(candidate) else { continue }
-
-            var digitIndex = 0
-            var rangeStart: String.Index?
-            var rangeEnd: String.Index?
-            for index in text.indices where text[index].isNumber {
-                if digitIndex == offset {
-                    rangeStart = index
-                }
-                if digitIndex == offset + 14 {
-                    rangeEnd = text.index(after: index)
-                    break
-                }
-                digitIndex += 1
-            }
-            guard let rangeStart, let rangeEnd else { return nil }
-            return Match(kind: .imei, value: candidate, range: rangeStart..<rangeEnd)
-        }
-        return nil
-    }
-
-    private static func labeledValue(in text: String, labels: [String]) -> (value: String, range: Range<String.Index>)? {
-        let lowercased = text.lowercased()
-        guard let labelRange = labels
-            .compactMap({ lowercased.range(of: $0) })
-            .min(by: { $0.lowerBound < $1.lowerBound })
-        else { return nil }
-
-        let valueStart = text.index(text.startIndex, offsetBy: lowercased.distance(from: lowercased.startIndex, to: labelRange.upperBound))
-        let suffix = String(text[valueStart...])
-        let trimmed = suffix
-            .trimmingCharacters(in: CharacterSet(charactersIn: " #:=-\t\n\r"))
-            .split(whereSeparator: \.isWhitespace)
-            .first
-            .map(String.init)
-            ?? ""
-        let cleaned = trimmed.trimmingCharacters(in: CharacterSet(charactersIn: ".,;:|"))
-        guard cleaned.count >= 4, cleaned.rangeOfCharacter(from: .alphanumerics) != nil else { return nil }
-        guard let valueRange = text[valueStart...].range(of: cleaned) else { return nil }
-        return (cleaned, valueRange)
-    }
-
-    private static func isValidLuhn(_ value: String) -> Bool {
-        let digits = value.compactMap(\.wholeNumberValue)
-        guard digits.count == value.count else { return false }
-
-        let checksum = digits.reversed().enumerated().reduce(0) { total, item in
-            let (index, digit) = item
-            guard index.isMultiple(of: 2) == false else { return total + digit }
-            let doubled = digit * 2
-            return total + (doubled > 9 ? doubled - 9 : doubled)
-        }
-        return checksum.isMultiple(of: 10)
     }
 }
 

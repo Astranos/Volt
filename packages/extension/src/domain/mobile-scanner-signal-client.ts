@@ -6,7 +6,7 @@ import {
 } from "@volt/scanner-protocol";
 import type { ScannerIceServer } from "@volt/scanner-protocol";
 import type { DurablePairingCredential, WebPushSubscriptionRecord } from "./mobile-scanner-identity";
-import { EXTENSION_SCANNER_SIGNAL_URL } from "./mobile-scanner-signal-url";
+import { EXTENSION_SCANNER_SIGNAL_URL } from "./mobile-scanner-signal-url.ts";
 import type { SessionTarget } from "./mobile-scanner-session-types";
 
 type JoinAttempt = {
@@ -14,6 +14,12 @@ type JoinAttempt = {
   id?: unknown;
   joinAttemptId?: unknown;
   answer?: unknown;
+};
+
+type SignalFetchOptions = RequestInit & {
+  retries?: number;
+  retryDelayMs?: number;
+  timeoutMs?: number;
 };
 
 export type JoinWindow = {
@@ -65,6 +71,58 @@ export function normalizeScannerIceServersResponse(value: unknown): ScannerIceSe
   return iceServers && iceServers.length > 0 ? iceServers : null;
 }
 
+const DEFAULT_SIGNAL_FETCH_TIMEOUT_MS = 8_000;
+const DEFAULT_SIGNAL_FETCH_RETRIES = 2;
+const DEFAULT_SIGNAL_FETCH_RETRY_DELAY_MS = 250;
+
+function retryDelay(attempt: number, baseDelayMs: number) {
+  return baseDelayMs * 2 ** attempt;
+}
+
+function sleep(delayMs: number) {
+  return new Promise((resolve) => setTimeout(resolve, delayMs));
+}
+
+function isRetryableSignalStatus(status: number) {
+  return status === 408 || status === 429 || status >= 500;
+}
+
+function signalFetchTimeoutMessage(input: string | URL | Request, timeoutMs: number) {
+  const url = typeof input === "string" || input instanceof URL ? input.toString() : input.url;
+  return `Scanner signal request timed out after ${timeoutMs}ms (${url})`;
+}
+
+export async function signalFetch(input: string | URL | Request, options: SignalFetchOptions = {}) {
+  const {
+    retries = DEFAULT_SIGNAL_FETCH_RETRIES,
+    retryDelayMs = DEFAULT_SIGNAL_FETCH_RETRY_DELAY_MS,
+    timeoutMs = DEFAULT_SIGNAL_FETCH_TIMEOUT_MS,
+    ...init
+  } = options;
+  let lastError: unknown = null;
+
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(input, { ...init, signal: controller.signal });
+      clearTimeout(timeout);
+      if (attempt < retries && isRetryableSignalStatus(response.status)) {
+        await sleep(retryDelay(attempt, retryDelayMs));
+        continue;
+      }
+      return response;
+    } catch (error) {
+      clearTimeout(timeout);
+      lastError = controller.signal.aborted ? new Error(signalFetchTimeoutMessage(input, timeoutMs)) : error;
+      if (attempt >= retries) break;
+      await sleep(retryDelay(attempt, retryDelayMs));
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error("Scanner signal request failed");
+}
+
 function normalizeJoinAttempt(value: unknown): NormalizedJoinAttempt | null {
   if (!value || typeof value !== "object") return null;
   const attempt = value as JoinAttempt;
@@ -105,7 +163,7 @@ export class MobileScannerSignalClient {
       deviceLabel,
       capabilities: ["text", "barcode", "dictation", "photo", "photo-chunk-ack"],
     };
-    const response = await fetch(`${EXTENSION_SCANNER_SIGNAL_URL}/join-token`, {
+    const response = await signalFetch(`${EXTENSION_SCANNER_SIGNAL_URL}/join-token`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -138,15 +196,16 @@ export class MobileScannerSignalClient {
   }
 
   async revokeJoinWindow(joinWindow: JoinWindow) {
-    await fetch(`${EXTENSION_SCANNER_SIGNAL_URL}/join-token/${encodeURIComponent(joinWindow.joinToken)}/revoke`, {
+    await signalFetch(`${EXTENSION_SCANNER_SIGNAL_URL}/join-token/${encodeURIComponent(joinWindow.joinToken)}/revoke`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ sessionId: joinWindow.sessionId }),
+      retries: 0,
     });
   }
 
   async fetchJoinAttempts(joinWindow: JoinWindow) {
-    const response = await fetch(
+    const response = await signalFetch(
       `${EXTENSION_SCANNER_SIGNAL_URL}/join-token/${encodeURIComponent(joinWindow.joinToken)}/attempts`
     );
     if (!response.ok) return [];
@@ -160,7 +219,7 @@ export class MobileScannerSignalClient {
   }
 
   async fetchPeerAnswer(joinWindow: JoinWindow, joinAttemptId: string) {
-    const response = await fetch(
+    const response = await signalFetch(
       `${EXTENSION_SCANNER_SIGNAL_URL}/join-token/${encodeURIComponent(joinWindow.joinToken)}/attempt/${encodeURIComponent(joinAttemptId)}/answer`
     );
     if (!response.ok) return null;
@@ -169,7 +228,7 @@ export class MobileScannerSignalClient {
   }
 
   async fetchIceServers() {
-    const response = await fetch(`${EXTENSION_SCANNER_SIGNAL_URL}/ice-servers`, {
+    const response = await signalFetch(`${EXTENSION_SCANNER_SIGNAL_URL}/ice-servers`, {
       headers: { Accept: "application/json" },
     });
     if (!response.ok) {
@@ -181,7 +240,7 @@ export class MobileScannerSignalClient {
   }
 
   async postPeerOffer(joinWindow: JoinWindow, joinAttemptId: string, offer: RTCSessionDescriptionInit) {
-    await fetch(
+    const response = await signalFetch(
       `${EXTENSION_SCANNER_SIGNAL_URL}/join-token/${encodeURIComponent(joinWindow.joinToken)}/attempt/${encodeURIComponent(joinAttemptId)}/offer`,
       {
         method: "POST",
@@ -192,10 +251,13 @@ export class MobileScannerSignalClient {
         }),
       }
     );
+    if (!response.ok) {
+      throw new Error(`Failed to post scanner WebRTC offer (${response.status})`);
+    }
   }
 
   async registerPairing(pairing: DurablePairingCredential, pushSubscription?: WebPushSubscriptionRecord | null) {
-    await fetch(`${EXTENSION_SCANNER_SIGNAL_URL}/pairings`, {
+    const response = await signalFetch(`${EXTENSION_SCANNER_SIGNAL_URL}/pairings`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -206,10 +268,13 @@ export class MobileScannerSignalClient {
         pushSubscription: pushSubscription ?? undefined,
       }),
     });
+    if (!response.ok) {
+      throw new Error(`Failed to register scanner pairing (${response.status})`);
+    }
   }
 
   async fetchReconnectRequests(sessionId: string) {
-    const response = await fetch(`${EXTENSION_SCANNER_SIGNAL_URL}/pairings/reconnect-requests?sessionId=${encodeURIComponent(sessionId)}`);
+    const response = await signalFetch(`${EXTENSION_SCANNER_SIGNAL_URL}/pairings/reconnect-requests?sessionId=${encodeURIComponent(sessionId)}`);
     const requests: ReconnectRequest[] = [];
     if (!response.ok) return { response, requests };
     const payload = (await response.json()) as { requests?: unknown[] };
@@ -224,7 +289,7 @@ export class MobileScannerSignalClient {
   }
 
   async postReconnectJoinWindow(pairing: DurablePairingCredential, requestId: string, joinWindow: JoinWindow) {
-    const response = await fetch(
+    const response = await signalFetch(
       `${EXTENSION_SCANNER_SIGNAL_URL}/pairings/${encodeURIComponent(pairing.pairingId)}/reconnect/${encodeURIComponent(requestId)}/join-window`,
       {
         method: "POST",

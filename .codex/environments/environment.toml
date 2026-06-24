@@ -31,6 +31,16 @@ icon = "run"
 command = "./script/build_and_run.sh ios"
 
 [[actions]]
+name = "Run App Clip Simulator"
+icon = "run"
+command = "./script/build_and_run.sh ios-appclip"
+
+[[actions]]
+name = "Run App Clip"
+icon = "run"
+command = "./script/build_and_run.sh ios-appclip-device"
+
+[[actions]]
 name = "Build Web"
 icon = "tool"
 command = "./script/build_and_run.sh build-web"
@@ -44,6 +54,11 @@ command = "./script/build_and_run.sh build-extension"
 name = "Build iOS"
 icon = "tool"
 command = "./script/build_and_run.sh build-ios"
+
+[[actions]]
+name = "Build App Clip"
+icon = "tool"
+command = "./script/build_and_run.sh build-ios-appclip"
 
 [[actions]]
 name = "Test"

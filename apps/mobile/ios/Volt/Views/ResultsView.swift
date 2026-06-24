@@ -60,13 +60,13 @@ struct UploadView: View {
                 store.selectedSection = .upload
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                UploadStartAccessory(
+                ScannerPhotoPickerAccessory(
                     selectedItems: $selectedItems,
                     isConnected: store.connectionStatus.isConnected,
                     isPreparing: isPreparingUploads,
                     statusText: uploadStatusText,
                     showsError: uploadError != nil,
-                    targetHint: uploadError ?? store.targetHint
+                    disabledHint: uploadError ?? store.targetHint
                 )
             }
         }
@@ -154,48 +154,6 @@ struct UploadView: View {
         }
 
         await store.uploadPhotos(images)
-    }
-}
-
-private struct UploadStartAccessory: View {
-    @Binding var selectedItems: [PhotosPickerItem]
-    let isConnected: Bool
-    let isPreparing: Bool
-    let statusText: String
-    let showsError: Bool
-    let targetHint: String
-
-    var body: some View {
-        VStack(spacing: 10) {
-            Text(statusText)
-                .font(.footnote)
-                .foregroundStyle(showsError ? .red : .secondary)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: .infinity)
-
-            PhotosPicker(
-                selection: $selectedItems,
-                maxSelectionCount: 30,
-                matching: .images
-            ) {
-                Label(isPreparing ? "Preparing Uploads" : "Choose Photos", systemImage: isPreparing ? "hourglass" : "photo.on.rectangle.angled")
-                    .font(.headline)
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity, minHeight: 52)
-                    .background(
-                        ScannerTabLayout.primaryActionBackground(isEnabled: isConnected && !isPreparing),
-                        in: RoundedRectangle(cornerRadius: ScannerTabLayout.primaryActionCornerRadius, style: .continuous)
-                    )
-                    .opacity((isConnected && !isPreparing) ? 1 : ScannerTabLayout.disabledPrimaryActionOpacity)
-            }
-            .buttonStyle(.plain)
-            .disabled(!isConnected || isPreparing)
-            .accessibilityHint(isConnected && !isPreparing ? "Opens the photo picker." : targetHint)
-        }
-        .padding(.horizontal)
-        .padding(.top, 12)
-        .padding(.bottom, 10)
-        .background(.bar)
     }
 }
 

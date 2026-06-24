@@ -2,6 +2,8 @@ type LogFn = (...args: unknown[]) => void;
 
 export type MobileCursorTarget = {
   browser?: string;
+  tabId?: number;
+  windowId?: number;
   tabTitle?: string;
   url?: string;
   cursor?: string;
@@ -346,20 +348,26 @@ export function createScannerTextInserter({
         currentWindow: true,
       });
 
-      if (!tab?.id) {
+      const activeTabId = typeof tab?.id === "number" ? tab.id : null;
+      const trackedInsertionTarget = getTrackedTarget(activeTabId ?? -1);
+      const targetTabId =
+        typeof trackedInsertionTarget?.tabId === "number"
+          ? trackedInsertionTarget.tabId
+          : activeTabId;
+
+      if (targetTabId === null) {
         await copyWithOffscreen(text);
         return false;
       }
 
-      const trackedInsertionTarget = getTrackedTarget(tab.id);
       const targetFrameId =
         typeof trackedInsertionTarget?.frameId === "number"
           ? trackedInsertionTarget.frameId
           : null;
       const injectionTarget =
         targetFrameId === null
-          ? { tabId: tab.id }
-          : { tabId: tab.id, frameIds: [targetFrameId] };
+          ? { tabId: targetTabId }
+          : { tabId: targetTabId, frameIds: [targetFrameId] };
       const injectionArgs: [
         string,
         ScannerTextInsertOptions & { dictationSourceLength: number },
@@ -384,7 +392,7 @@ export function createScannerTextInserter({
         if (targetFrameId === null) throw frameErr;
         log("scanner frame insert fallback", frameErr instanceof Error ? frameErr.message : frameErr);
         injectionResults = await chromeApi.scripting.executeScript({
-          target: { tabId: tab.id },
+          target: { tabId: targetTabId },
           func: insertTextAtTrackedEditableFromBackground,
           args: injectionArgs,
         });
