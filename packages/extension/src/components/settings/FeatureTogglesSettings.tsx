@@ -37,6 +37,13 @@ const SOURCES_CONFIG = {
   },
 };
 
+const MOBILE_PHOTO_RETENTION_OPTIONS = [
+  { value: 12, label: "12 hours" },
+  { value: 24, label: "24 hours" },
+  { value: 48, label: "48 hours" },
+  { value: 72, label: "72 hours" },
+];
+
 interface FeatureTogglesSettingsProps {
   settings: CmdkSettings;
   setSettings: Dispatch<SetStateAction<CmdkSettings>>;
@@ -284,6 +291,78 @@ export function FeatureTogglesSettings({
         }}
         activeTone="blue"
       />
+
+      <section id="mobilephotos" className="scroll-mt-20">
+        <div className="mb-6">
+          <h2 className="text-2xl font-bold mb-2">Mobile Photos</h2>
+          <p className="text-muted-foreground">
+            Control automatic cleanup for photos downloaded from the mobile scanner.
+          </p>
+        </div>
+
+        <div className="bg-card rounded-xl border border-border shadow-lg overflow-hidden">
+          <div className="divide-y divide-border">
+            <div className="p-6 flex items-start gap-4">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-2">
+                  <h3 className="font-semibold text-base">
+                    Auto-delete downloaded photos
+                  </h3>
+                  {(settings.mobilePhotoDownloads?.autoDeleteEnabled ?? true) && (
+                    <StatusBadge tone="blue">Active</StatusBadge>
+                  )}
+                </div>
+                <p className="text-sm text-muted-foreground leading-relaxed mb-3">
+                  Deletes Volt-created files in the Volt Photos download folder after the retention window. Cleanup runs at local midnight and noon.
+                </p>
+              </div>
+              <ToggleSwitch
+                enabled={settings.mobilePhotoDownloads?.autoDeleteEnabled ?? true}
+                onClick={() =>
+                  void saveSettings({
+                    ...settings,
+                    mobilePhotoDownloads: {
+                      ...settings.mobilePhotoDownloads,
+                      autoDeleteEnabled: !(
+                        settings.mobilePhotoDownloads?.autoDeleteEnabled ?? true
+                      ),
+                    },
+                  })
+                }
+              />
+            </div>
+
+            <div className="p-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 className="font-semibold text-base mb-1">Delete after</h3>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  Applies to future mobile photo downloads.
+                </p>
+              </div>
+              <select
+                className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm sm:w-44"
+                value={settings.mobilePhotoDownloads?.retentionHours ?? 24}
+                disabled={settings.mobilePhotoDownloads?.autoDeleteEnabled === false}
+                onChange={(event) =>
+                  void saveSettings({
+                    ...settings,
+                    mobilePhotoDownloads: {
+                      ...settings.mobilePhotoDownloads,
+                      retentionHours: Number(event.target.value),
+                    },
+                  })
+                }
+              >
+                {MOBILE_PHOTO_RETENTION_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+      </section>
     </>
   );
 }

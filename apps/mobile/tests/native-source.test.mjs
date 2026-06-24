@@ -322,12 +322,19 @@ test("native pre-capture identifier matching is deterministic", () => {
   assert.match(scannerRecognitionModelsSwiftSource, /case imei = "IMEI"/);
   assert.match(scannerRecognitionModelsSwiftSource, /case model = "Model"/);
   assert.match(scannerRecognitionModelsSwiftSource, /case serial = "Serial"/);
+  assert.match(scannerRecognitionModelsSwiftSource, /case sku = "SKU"/);
   assert.match(scannerRecognitionModelsSwiftSource, /enum LiveTextIdentifierMatcher/);
   assert.match(scannerRecognitionModelsSwiftSource, /struct Match \{[\s\S]*let range: Range<String\.Index>/);
   assert.match(scannerRecognitionModelsSwiftSource, /guard text\.localizedCaseInsensitiveContains\("imei"\)/);
   assert.match(scannerRecognitionModelsSwiftSource, /guard isValidLuhn\(candidate\) else \{ continue \}/);
-  assert.match(scannerRecognitionModelsSwiftSource, /labels: \["serial number", "serial no", "serial", "s\/n", "sn"\]/);
-  assert.match(scannerRecognitionModelsSwiftSource, /labels: \["model number", "model no", "model", "mdl"\]/);
+  assert.match(scannerRecognitionModelsSwiftSource, /serialLabels = \["serial number", "serial no", "serial", "s\/n", "s\/ n", "s n", "s\. n\.", "sn"\]/);
+  assert.match(scannerRecognitionModelsSwiftSource, /modelLabels = \["model number", "model no", "model", "mdl"\]/);
+  assert.match(scannerRecognitionModelsSwiftSource, /skuLabels = \["sku", "stock keeping unit"\]/);
+  assert.match(scannerRecognitionModelsSwiftSource, /static func labelKind\(in rawText: String\) -> LiveTextCandidateKind\?/);
+  assert.match(scannerRecognitionModelsSwiftSource, /static func standaloneValue\(in rawText: String, kind: LiveTextCandidateKind\) -> String\?/);
+  assert.match(scannerRecognitionModelsSwiftSource, /private static func labelRange\(in text: String, label: String\) -> Range<String\.Index>\?/);
+  assert.match(scannerRecognitionModelsSwiftSource, /isLabelBoundary\(in: text, before: range\.lowerBound\)/);
+  assert.match(scannerRecognitionModelsSwiftSource, /isLabelBoundary\(in: text, after: range\.upperBound\)/);
   assert.match(scannerRecognitionModelsSwiftSource, /text\[valueStart\.\.\.\]\.range\(of: cleaned\)/);
 });
 
@@ -355,7 +362,11 @@ test("native pre-capture identifier chips show quickly and correct repeated repl
   assert.match(cameraModelSwiftSource, /replacementIndex\(for: candidate, in: acceptedCandidates\)/);
   assert.match(cameraModelSwiftSource, /shouldReplaceLiveTextCandidate\(candidate, replacing: acceptedCandidates\[replacementIndex\]\)/);
   assert.match(cameraModelSwiftSource, /case \.imei:\s*return existingKindCount < 2/);
-  assert.match(cameraModelSwiftSource, /case \.model, \.serial:\s*return existingKindCount < 1/);
+  assert.match(cameraModelSwiftSource, /case \.model, \.serial, \.sku:\s*return existingKindCount < 1/);
+  assert.match(cameraModelSwiftSource, /guard !candidates\.isEmpty else \{\s*liveTextCandidates = \[\]\s*liveTextReplacementObservationCounts = \[:\]\s*return\s*\}/);
+  assert.match(cameraModelSwiftSource, /adjacentLabelValueCandidates\(in: snapshots\)/);
+  assert.match(cameraModelSwiftSource, /LiveTextIdentifierMatcher\.labelKind\(in: label\.text\)/);
+  assert.match(cameraModelSwiftSource, /LiveTextIdentifierMatcher\.standaloneValue\(in: value\.text, kind: kind\)/);
   assert.match(cameraModelSwiftSource, /guard observationCount >= 2 else \{ return false \}/);
   assert.match(cameraModelSwiftSource, /observationCount >= 3/);
 });

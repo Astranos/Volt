@@ -93,6 +93,7 @@ enum LiveTextCandidateKind: String, Equatable {
     case imei = "IMEI"
     case model = "Model"
     case serial = "Serial"
+    case sku = "SKU"
 }
 
 struct LiveTextCandidate: Identifiable, Equatable {
@@ -117,13 +118,47 @@ enum LiveTextIdentifierMatcher {
         if let imei = imei(in: text) {
             return imei
         }
-        if let serial = labeledValue(in: text, labels: ["serial number", "serial no", "serial", "s/n", "sn"]) {
+        if let serial = labeledValue(in: text, labels: serialLabels) {
             return Match(kind: .serial, value: serial.value, range: serial.range)
         }
-        if let model = labeledValue(in: text, labels: ["model number", "model no", "model", "mdl"]) {
+        if let model = labeledValue(in: text, labels: modelLabels) {
             return Match(kind: .model, value: model.value, range: model.range)
         }
+        if let sku = labeledValue(in: text, labels: skuLabels) {
+            return Match(kind: .sku, value: sku.value, range: sku.range)
+        }
         return nil
+    }
+
+    static func labelKind(in rawText: String) -> LiveTextCandidateKind? {
+        let text = rawText.lowercased()
+        if text.contains("imei") || text.contains("meid") {
+            return .imei
+        }
+        if containsLabel(in: text, labels: serialLabels) {
+            return .serial
+        }
+        if containsLabel(in: text, labels: modelLabels) {
+            return .model
+        }
+        if containsLabel(in: text, labels: skuLabels) {
+            return .sku
+        }
+        return nil
+    }
+
+    static func standaloneValue(in rawText: String, kind: LiveTextCandidateKind) -> String? {
+        switch kind {
+        case .imei:
+            return validLuhnCandidate(in: rawText)
+        case .model, .serial, .sku:
+            let cleaned = firstIdentifierToken(in: rawText)
+            guard cleaned.count >= 4,
+                  cleaned.rangeOfCharacter(from: .decimalDigits) != nil,
+                  cleaned.rangeOfCharacter(from: .letters) != nil
+            else { return nil }
+            return cleaned
+        }
     }
 
     private static func imei(in text: String) -> Match? {
@@ -156,25 +191,76 @@ enum LiveTextIdentifierMatcher {
         return nil
     }
 
+    private static func validLuhnCandidate(in text: String) -> String? {
+        let digits = String(text.filter(\.isNumber))
+        guard digits.count >= 15 else { return nil }
+
+        for offset in 0...(digits.count - 15) {
+            let start = digits.index(digits.startIndex, offsetBy: offset)
+            let end = digits.index(start, offsetBy: 15)
+            let candidate = String(digits[start..<end])
+            if isValidLuhn(candidate) {
+                return candidate
+            }
+        }
+        return nil
+    }
+
+    private static let serialLabels = ["serial number", "serial no", "serial", "s/n", "s/ n", "s n", "s. n.", "sn"]
+    private static let modelLabels = ["model number", "model no", "model", "mdl"]
+    private static let skuLabels = ["sku", "stock keeping unit"]
+
     private static func labeledValue(in text: String, labels: [String]) -> (value: String, range: Range<String.Index>)? {
         let lowercased = text.lowercased()
         guard let labelRange = labels
-            .compactMap({ lowercased.range(of: $0) })
+            .compactMap({ labelRange(in: lowercased, label: $0) })
             .min(by: { $0.lowerBound < $1.lowerBound })
         else { return nil }
 
         let valueStart = text.index(text.startIndex, offsetBy: lowercased.distance(from: lowercased.startIndex, to: labelRange.upperBound))
         let suffix = String(text[valueStart...])
-        let trimmed = suffix
+        let cleaned = firstIdentifierToken(in: suffix)
+        guard cleaned.count >= 4, cleaned.rangeOfCharacter(from: .alphanumerics) != nil else { return nil }
+        guard let valueRange = text[valueStart...].range(of: cleaned) else { return nil }
+        return (cleaned, valueRange)
+    }
+
+    private static func containsLabel(in text: String, labels: [String]) -> Bool {
+        labels.contains { labelRange(in: text, label: $0) != nil }
+    }
+
+    private static func labelRange(in text: String, label: String) -> Range<String.Index>? {
+        var searchStart = text.startIndex
+        while searchStart < text.endIndex,
+              let range = text.range(of: label, range: searchStart..<text.endIndex) {
+            if isLabelBoundary(in: text, before: range.lowerBound) && isLabelBoundary(in: text, after: range.upperBound) {
+                return range
+            }
+            searchStart = range.upperBound
+        }
+        return nil
+    }
+
+    private static func isLabelBoundary(in text: String, before index: String.Index) -> Bool {
+        guard index > text.startIndex else { return true }
+        let previous = text[text.index(before: index)]
+        return !previous.isLetter && !previous.isNumber
+    }
+
+    private static func isLabelBoundary(in text: String, after index: String.Index) -> Bool {
+        guard index < text.endIndex else { return true }
+        let next = text[index]
+        return !next.isLetter && !next.isNumber
+    }
+
+    private static func firstIdentifierToken(in text: String) -> String {
+        let trimmed = text
             .trimmingCharacters(in: CharacterSet(charactersIn: " #:=-\t\n\r"))
             .split(whereSeparator: \.isWhitespace)
             .first
             .map(String.init)
             ?? ""
-        let cleaned = trimmed.trimmingCharacters(in: CharacterSet(charactersIn: ".,;:|"))
-        guard cleaned.count >= 4, cleaned.rangeOfCharacter(from: .alphanumerics) != nil else { return nil }
-        guard let valueRange = text[valueStart...].range(of: cleaned) else { return nil }
-        return (cleaned, valueRange)
+        return trimmed.trimmingCharacters(in: CharacterSet(charactersIn: ".,;:|"))
     }
 
     private static func isValidLuhn(_ value: String) -> Bool {

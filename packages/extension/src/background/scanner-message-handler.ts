@@ -4,6 +4,7 @@ import {
   type MobilePhoto,
 } from "../domain/mobile-photo";
 import { persistAndBroadcastMobileScannerPhoto } from "../domain/mobile-scanner-results";
+import type { createMobilePhotoDownloadCleanup } from "./mobile-photo-download-cleanup";
 import type {
   RuntimeMessage,
   ScannerOffscreenRuntimeMessage,
@@ -35,6 +36,9 @@ type ScannerMessageHandlerOptions = {
     sender: MessageSender | null
   ) => Promise<void>;
   insertScannerText: (text: string, options?: ScannerTextInsertOptions) => Promise<boolean>;
+  recordMobilePhotoDownload?: ReturnType<
+    typeof createMobilePhotoDownloadCleanup
+  >["recordMobilePhotoDownload"];
   openMobileScannerPairingPopup: (mode: string | null, state: unknown) => Promise<void>;
   resetMobileScannerActionPopup: () => Promise<void>;
 };
@@ -117,6 +121,7 @@ export function createScannerMessageHandler({
   getMobileCaptureTarget,
   updateMobileCaptureTarget,
   insertScannerText,
+  recordMobilePhotoDownload,
   openMobileScannerPairingPopup,
   resetMobileScannerActionPopup,
 }: ScannerMessageHandlerOptions) {
@@ -320,7 +325,13 @@ export function createScannerMessageHandler({
     if (!photo) return { success: false, error: "invalid_photo" };
 
     const downloadResult = await downloadMobilePhoto(photo);
-    if (!downloadResult.success) return { success: false, error: downloadResult.error || "download_failed" };
+    if (!downloadResult.success) {
+      return { success: false, error: downloadResult.error || "download_failed" };
+    }
+    void recordMobilePhotoDownload?.({
+      downloadId: downloadResult.downloadId,
+      filename: downloadResult.filename,
+    });
 
     const downloadedPhoto = {
       ...photo,

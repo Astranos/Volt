@@ -13,7 +13,7 @@
     "zip": "wxt zip --mode production && mkdir -p releases && mv .output/*.zip releases/",
     "zip:firefox": "wxt zip -b firefox --mode production && mkdir -p releases && mv .output/*.zip releases/",
     "compile": "tsc --noEmit",
-    "test:scanner": "node --experimental-strip-types --test src/domain/*.test.mjs",
+    "test:scanner": "node --experimental-strip-types --test src/domain/*.test.mjs src/background/*.test.mjs",
     "postinstall": "wxt prepare"
   },
   "dependencies": {
