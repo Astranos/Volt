@@ -9,6 +9,7 @@ import { createClipboardController } from "../src/background/clipboard-controlle
 import { createContextMenuController } from "../src/background/context-menu-controller";
 import { registerDisabledSiteActions } from "../src/background/disabled-site-controller";
 import { createMobileCaptureTargetController } from "../src/background/mobile-capture-targets";
+import { createMobilePhotoDownloadCleanup } from "../src/background/mobile-photo-download-cleanup";
 import { registerNavigationActions } from "../src/background/navigation-controller";
 import { createOffscreenDocumentController } from "../src/background/offscreen-document-controller";
 import { createPreviewPopupController } from "../src/background/preview-popup-controller";
@@ -92,6 +93,10 @@ export default defineBackground({
       signalUrl: EXTENSION_SCANNER_SIGNAL_URL,
       reconnectAlarmName: SCANNER_RECONNECT_ALARM_NAME,
     });
+    const photoDownloadCleanup = createMobilePhotoDownloadCleanup({
+      chromeApi: chrome,
+      log,
+    });
     const scannerTargets = createMobileCaptureTargetController({
       chromeApi: chrome,
       log,
@@ -124,6 +129,7 @@ export default defineBackground({
       getMobileCaptureTarget: scannerTargets.getMobileCaptureTarget,
       updateMobileCaptureTarget: scannerTargets.updateMobileCaptureTarget,
       insertScannerText: scannerTextInserter.insertScannerText,
+      recordMobilePhotoDownload: photoDownloadCleanup.recordMobilePhotoDownload,
       openMobileScannerPairingPopup,
       resetMobileScannerActionPopup,
     });
@@ -313,6 +319,7 @@ export default defineBackground({
 
         scannerOffscreen.bootstrapScannerReconnectListener("installed");
         scannerOffscreen.ensureScannerReconnectAlarm();
+        photoDownloadCleanup.ensureCleanupAlarm();
       });
 
       chrome.runtime.onStartup?.addListener(() => {
@@ -323,14 +330,21 @@ export default defineBackground({
         });
         void scannerOffscreen.pollScannerReconnectRequests("startup");
         scannerOffscreen.ensureScannerReconnectAlarm();
+        photoDownloadCleanup.ensureCleanupAlarm();
       });
 
       void scannerOffscreen.pollScannerReconnectRequests("background-main");
       scannerOffscreen.ensureScannerReconnectAlarm();
+      photoDownloadCleanup.ensureCleanupAlarm();
 
       chrome.alarms?.onAlarm?.addListener((alarm) => {
-        if (alarm?.name !== scannerOffscreen.alarmName) return;
-        void scannerOffscreen.pollScannerReconnectRequests("alarm");
+        if (alarm?.name === scannerOffscreen.alarmName) {
+          void scannerOffscreen.pollScannerReconnectRequests("alarm");
+          return;
+        }
+        if (alarm?.name === photoDownloadCleanup.alarmName) {
+          void photoDownloadCleanup.cleanupExpiredDownloads();
+        }
       });
 
       self.addEventListener("push", (event: Event) => {

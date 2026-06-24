@@ -8,6 +8,7 @@ import {
   Link2,
   Menu,
   MousePointerClick,
+  Images,
   ScanLine,
   Search as SearchIcon,
   BadgeAlert,
@@ -27,6 +28,7 @@ const NAV_ITEMS = [
   { href: "#ebay", icon: BadgeAlert, label: "Sold Listing Warning" },
   { href: "#upc", icon: Barcode, label: "UPC Highlighter" },
   { href: "#contextmenu", icon: MousePointerClick, label: "Context Menu" },
+  { href: "#mobilephotos", icon: Images, label: "Mobile Photos" },
   { href: "#csvlinks", icon: Link2, label: "Quick Links" },
   { href: "#topoffers", icon: Calculator, label: "Offer Calculator" },
 ];

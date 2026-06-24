@@ -6,6 +6,11 @@ import {
   type PhotoTransferStartMessage,
   type ScannerControlMessage,
 } from "@volt/scanner-protocol";
+import {
+  normalizeBrowserPhotoDeliveryReceipt,
+  type BrowserPhotoDeliveryError,
+  type BrowserPhotoDeliveryReceipt,
+} from "./mobile-photo-delivery-ledger.ts";
 import { createMessageId } from "./mobile-scanner-ids.ts";
 import type { PeerSession } from "./mobile-scanner-peer-connection.ts";
 import type { PhotoMessage } from "./mobile-scanner-session-types.ts";
@@ -17,7 +22,7 @@ type PendingPhoto = PhotoTransferStartMessage & {
 };
 
 export type PhotoReceiverEvents = {
-  onPhoto: (message: PhotoMessage) => Promise<boolean> | boolean;
+  onPhoto: (message: PhotoMessage) => Promise<boolean | BrowserPhotoDeliveryReceipt> | boolean | BrowserPhotoDeliveryReceipt;
   sendControl: (peer: PeerSession, message: ScannerControlMessage) => void;
 };
 
@@ -84,9 +89,9 @@ export class MobileScannerPhotoReceiver {
       const pending = this.pendingPhotos.get(data.photoId);
       if (!pending || pending.receivedChunks !== pending.totalChunks) return;
       this.pendingPhotos.delete(data.photoId);
-      let stored = false;
+      let receipt: BrowserPhotoDeliveryReceipt;
       try {
-        stored = await this.events.onPhoto({
+        receipt = normalizeBrowserPhotoDeliveryReceipt(await this.events.onPhoto({
           kind: "photo",
           id: pending.photoId,
           name: pending.filename,
@@ -98,14 +103,28 @@ export class MobileScannerPhotoReceiver {
           contributorId: pending.contributorId,
           dataUrl: `data:${pending.mimeType};base64,${pending.chunks.join("")}`,
           photoBatchId: pending.photoBatchId,
-        } as PhotoMessage & { photoBatchId: string });
+        } as PhotoMessage & { photoBatchId: string }), {
+          photoId: pending.photoId,
+          photoBatchId: pending.photoBatchId,
+          size: pending.size,
+        });
       } catch (_error) {
-        stored = false;
+        receipt = {
+          success: false,
+          error: "storage_failed",
+          detail: "Chrome could not store the photo.",
+          retryable: true,
+        };
       }
-      if (stored) {
-        this.sendPhotoReceived(peer, pending.photoId, pending.photoBatchId, pending.size);
+      if (receipt.success) {
+        this.sendPhotoReceived(peer, receipt.photoId, receipt.photoBatchId, receipt.size);
       } else {
-        this.sendPhotoRejected(peer, pending.photoId, "Chrome could not store the photo.");
+        this.sendPhotoRejected(
+          peer,
+          pending.photoId,
+          photoRejectionReason(receipt.error),
+          receipt.detail || photoDeliveryErrorMessage(receipt.error),
+        );
       }
       return;
     }
@@ -127,13 +146,18 @@ export class MobileScannerPhotoReceiver {
     });
   }
 
-  private sendPhotoRejected(peer: PeerSession, photoId: string, detail: string) {
+  private sendPhotoRejected(
+    peer: PeerSession,
+    photoId: string,
+    reason: "storage_full" | "invalid_photo" | "cancelled" | "unsupported",
+    detail: string,
+  ) {
     this.events.sendControl(peer, {
       type: "photo_rejected",
       messageId: createMessageId("control"),
       sentAt: new Date().toISOString(),
       photoId,
-      reason: "storage_full",
+      reason,
       retryable: true,
       detail,
     });
@@ -144,5 +168,31 @@ export class MobileScannerPhotoReceiver {
     for (const [id, pending] of this.pendingPhotos) {
       if (pending.updatedAt < staleBefore) this.pendingPhotos.delete(id);
     }
+  }
+}
+
+function photoDeliveryErrorMessage(error: BrowserPhotoDeliveryError) {
+  switch (error) {
+    case "download_failed":
+      return "Chrome could not download the photo.";
+    case "invalid_photo":
+      return "Chrome received an invalid photo payload.";
+    case "storage_failed":
+    default:
+      return "Chrome could not store the photo.";
+  }
+}
+
+function photoRejectionReason(
+  error: BrowserPhotoDeliveryError,
+): "storage_full" | "invalid_photo" | "cancelled" | "unsupported" {
+  switch (error) {
+    case "invalid_photo":
+      return "invalid_photo";
+    case "download_failed":
+      return "unsupported";
+    case "storage_failed":
+    default:
+      return "storage_full";
   }
 }

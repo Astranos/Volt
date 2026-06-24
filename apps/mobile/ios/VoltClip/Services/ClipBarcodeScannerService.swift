@@ -359,7 +359,9 @@ final class ClipBarcodeScannerService: NSObject {
 
     private func applyLiveTextCandidates(_ candidates: [ClipLiveTextCandidateObservation]) {
         guard !candidates.isEmpty else {
-            clearLiveTextCandidates()
+            liveTextCandidates = []
+            liveTextReplacementObservationCounts = [:]
+            onLiveTextCandidates?([])
             return
         }
         var acceptedCandidates = liveTextCandidates
@@ -396,7 +398,7 @@ final class ClipBarcodeScannerService: NSObject {
         switch candidate.kind {
         case .imei:
             return nil
-        case .model, .serial:
+        case .model, .serial, .sku:
             return existing.firstIndex { $0.kind == candidate.kind }
         }
     }
@@ -406,7 +408,7 @@ final class ClipBarcodeScannerService: NSObject {
         switch candidate.kind {
         case .imei:
             return existingKindCount < 2
-        case .model, .serial:
+        case .model, .serial, .sku:
             return existingKindCount < 1
         }
     }

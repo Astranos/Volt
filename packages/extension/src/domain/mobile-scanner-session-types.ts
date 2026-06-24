@@ -1,4 +1,5 @@
 import type { ScannerConnectionStatus } from "@volt/scanner-protocol";
+import type { BrowserPhotoDeliveryReceipt } from "./mobile-photo-delivery-ledger";
 import type { ExtensionIdentity } from "./mobile-scanner-identity";
 
 export type BarcodeMessage = {
@@ -48,7 +49,7 @@ export type MobileScannerSessionState = {
 export type MobileScannerSessionEvents = {
   onState: (state: MobileScannerSessionState) => void;
   onScan: (message: BarcodeMessage) => Promise<boolean | { saved: boolean; insertedIntoCursor?: boolean }> | boolean | { saved: boolean; insertedIntoCursor?: boolean };
-  onPhoto: (message: PhotoMessage) => Promise<boolean> | boolean;
+  onPhoto: (message: PhotoMessage) => Promise<boolean | BrowserPhotoDeliveryReceipt> | boolean | BrowserPhotoDeliveryReceipt;
   onInsert?: (text: string, message: BarcodeMessage) => Promise<boolean> | boolean;
   log?: (...args: unknown[]) => void;
 };

@@ -67,6 +67,10 @@ export interface CmdkSettings {
   contextMenu?: {
     enabled?: boolean;
   };
+  mobilePhotoDownloads?: {
+    autoDeleteEnabled?: boolean;
+    retentionHours?: number;
+  };
   bookmarkFolderIds?: string[];
   topOffers?: TopOffersSettings;
 }

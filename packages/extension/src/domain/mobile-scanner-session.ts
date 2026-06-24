@@ -23,6 +23,7 @@ import { createId, createMessageId, createSecret } from "./mobile-scanner-ids";
 import { MobileScannerJoinAttemptPoller, MobileScannerReconnectPoller } from "./mobile-scanner-join-attempt-poller";
 import { type PeerSession, MobileScannerPeerConnections } from "./mobile-scanner-peer-connection";
 import { MobileScannerPhotoReceiver } from "./mobile-scanner-photo-receiver";
+import { MobileScannerSessionLifecycle } from "./mobile-scanner-session-lifecycle";
 import {
   type JoinWindow,
   MobileScannerSignalClient,
@@ -179,7 +180,7 @@ function scanFromControlMessage(message: ScannerControlMessage): (BarcodeMessage
 
 export class MobileScannerSession {
   private readonly events: MobileScannerSessionEvents;
-  private joinWindow: JoinWindow | null = null;
+  private readonly lifecycle: MobileScannerSessionLifecycle;
   private peerPairings = new Map<string, DurablePairingCredential>();
   private readonly joinAttemptPoller: MobileScannerJoinAttemptPoller;
   private readonly identityReady: Promise<void>;
@@ -196,22 +197,9 @@ export class MobileScannerSession {
   private readonly remoteSpeechStartAttempts = new Map<string, number>();
   private readonly remoteSpeechStartRetryTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private seenControlMessages = new Set<string>();
-  private target: SessionTarget | null = null;
-  private state: MobileScannerSessionState;
 
   constructor(events: MobileScannerSessionEvents) {
     this.events = events;
-    this.state = {
-      status: "disconnected",
-      qrCodeUrl: null,
-      error: null,
-      connectedAt: null,
-      connectedPeerCount: 0,
-      joinWindowExpiresAt: null,
-      sessionId: createId("global-session"),
-      target: null,
-      extensionIdentity: null,
-    };
     this.peerConnections = new MobileScannerPeerConnections(this.signalClient, {
       configureControlChannel: (peer, channel) => this.configureControlChannel(peer, channel),
       configurePhotoChannel: (peer, channel) => this.configurePhotoChannel(peer, channel),
@@ -220,8 +208,13 @@ export class MobileScannerSession {
       onRemoteAudioTrack: (peer, track) => this.handleRemoteAudioTrack(peer, track),
       log: (...args) => this.events.log?.(...args),
     });
+    this.lifecycle = new MobileScannerSessionLifecycle({
+      countConnectedPeers: () => this.peerConnections.countConnectedPeers(),
+      initialSessionId: createId("global-session"),
+      onState: (state) => this.events.onState(state),
+    });
     this.joinAttemptPoller = new MobileScannerJoinAttemptPoller({
-      getActiveJoinWindow: () => this.joinWindow,
+      getActiveJoinWindow: () => this.lifecycle.getJoinWindow(),
       peerConnections: this.peerConnections,
       signalClient: this.signalClient,
       log: (...args) => this.events.log?.(...args),
@@ -239,7 +232,7 @@ export class MobileScannerSession {
     this.reconnectPoller = new MobileScannerReconnectPoller({
       createReconnectJoinWindow: (pairing, requestId) => this.openReconnectJoinWindow(pairing, requestId),
       getDurablePairings: () => loadDurablePairings(),
-      getSessionId: () => this.state.sessionId,
+      getSessionId: () => this.lifecycle.getSessionId(),
       identityReady: this.identityReady,
       signalClient: this.signalClient,
       log: (...args) => this.events.log?.(...args),
@@ -251,42 +244,28 @@ export class MobileScannerSession {
   }
 
   getState() {
-    return { ...this.state };
+    return this.lifecycle.getState();
   }
 
   async openJoinWindow(target?: SessionTarget | null) {
-    this.target = target ?? this.target;
-    this.setState({ status: this.peerConnections.peers.size > 0 ? "connected" : "creating", error: null, target: this.target });
+    this.lifecycle.beginOpenJoinWindow(target);
     try {
       const extensionIdentity = await this.refreshExtensionIdentity();
       const joinWindow = await this.createJoinWindow(target);
-      this.joinWindow = joinWindow;
+      this.lifecycle.joinWindowOpened(joinWindow, extensionIdentity);
       this.events.log?.("[Volt Scanner Pairing] join window opened", {
         sessionId: joinWindow.sessionId,
         tokenTail: joinWindow.joinToken.slice(-6),
       });
-      this.setState({
-        status: this.peerConnections.peers.size > 0 ? "connected" : "waiting",
-        qrCodeUrl: joinWindow.qrCodeUrl,
-        error: null,
-        joinWindowExpiresAt: joinWindow.expiresAt ?? null,
-        extensionIdentity,
-      });
       this.joinAttemptPoller.start(joinWindow);
     } catch (err) {
-      this.setState({
-        status: this.peerConnections.peers.size > 0 ? "connected" : "error",
-        error: err instanceof Error ? err.message : "Failed to open scanner join window",
-        qrCodeUrl: null,
-        joinWindowExpiresAt: null,
-      });
+      this.lifecycle.joinWindowOpenFailed(err instanceof Error ? err.message : "Failed to open scanner join window");
     }
     return this.getState();
   }
 
   async closeJoinWindow() {
-    const previous = this.joinWindow;
-    this.joinWindow = null;
+    const previous = this.lifecycle.takeJoinWindowForClose();
     if (previous) {
       this.joinAttemptPoller.continueHiddenPollingFor(previous);
       await this.signalClient.revokeJoinWindow(previous).catch((error) => {
@@ -298,12 +277,7 @@ export class MobileScannerSession {
       });
     }
     this.joinAttemptPoller.stopIfIdle();
-    this.setState({
-      status: this.peerConnections.peers.size > 0 ? "connected" : "disconnected",
-      qrCodeUrl: null,
-      joinWindowExpiresAt: null,
-      error: null,
-    });
+    this.lifecycle.joinWindowClosed();
     return this.getState();
   }
 
@@ -315,19 +289,12 @@ export class MobileScannerSession {
     this.peerConnections.peers.clear();
     this.photoReceiver.clear();
     this.joinAttemptPoller.clear();
-    this.setState({
-      status: "disconnected",
-      qrCodeUrl: null,
-      error: null,
-      connectedAt: null,
-      connectedPeerCount: 0,
-    });
+    this.lifecycle.disconnected();
     return this.getState();
   }
 
   async updateTarget(target?: SessionTarget | null) {
-    this.target = target ?? null;
-    this.setState({ target: this.target });
+    this.lifecycle.updateTarget(target);
     for (const peer of this.peerConnections.peers.values()) {
       if (peer.ready) {
         this.sendSessionReady(peer);
@@ -338,8 +305,7 @@ export class MobileScannerSession {
 
   async updateExtensionIdentity(identity?: ExtensionIdentity | null) {
     const nextIdentity = identity ?? await getMobileScannerExtensionIdentity();
-    this.state.sessionId = nextIdentity.installId;
-    this.setState({ extensionIdentity: nextIdentity });
+    this.lifecycle.updateExtensionIdentity(nextIdentity);
     for (const peer of this.peerConnections.peers.values()) {
       if (peer.ready) {
         this.sendSessionReady(peer);
@@ -353,45 +319,38 @@ export class MobileScannerSession {
     return this.getState();
   }
 
-  private setState(patch: Partial<MobileScannerSessionState>) {
-    this.state = {
-      ...this.state,
-      ...patch,
-      connectedPeerCount: this.peerConnections.countConnectedPeers(),
-    };
-    this.events.onState(this.getState());
-  }
-
   private async refreshExtensionIdentity() {
     const extensionIdentity = await getMobileScannerExtensionIdentity();
-    this.state.sessionId = extensionIdentity.installId;
-    this.setState({ extensionIdentity });
+    this.lifecycle.updateExtensionIdentity(extensionIdentity);
     return extensionIdentity;
   }
 
   private async createJoinWindow(target?: SessionTarget | null): Promise<JoinWindow> {
-    const sessionId = isScannerSessionId(this.state.sessionId) ? this.state.sessionId : createId("global-session");
+    const activeSessionId = this.lifecycle.getSessionId();
+    const sessionId = isScannerSessionId(activeSessionId) ? activeSessionId : createId("global-session");
     const joinWindow = await this.signalClient.createJoinWindow({
       sessionId,
       target,
-      deviceLabel: this.state.extensionIdentity?.sessionLabel,
+      deviceLabel: this.lifecycle.getExtensionIdentity()?.sessionLabel,
     });
-    this.state.sessionId = joinWindow.sessionId;
+    this.lifecycle.setSessionId(joinWindow.sessionId);
     return joinWindow;
   }
 
   private cursorTargetSummary() {
-    if (!this.target) return undefined;
+    const target = this.lifecycle.getTarget();
+    if (!target) return undefined;
     return {
-      tabTitle: this.target.tabTitle,
-      url: this.target.url,
-      label: this.target.cursor,
-      hasCursorTarget: Boolean(this.target.cursor),
+      tabTitle: target.tabTitle,
+      url: target.url,
+      label: target.cursor,
+      hasCursorTarget: Boolean(target.cursor),
     };
   }
 
   private sendSessionReady(peer: PeerSession) {
-    const identity = this.state.extensionIdentity;
+    const state = this.lifecycle.getState();
+    const identity = state.extensionIdentity;
     const pairing = this.ensurePairingForPeer(peer);
     this.sendControl(peer, {
       type: "session_ready",
@@ -402,7 +361,7 @@ export class MobileScannerSession {
         extensionVersion: "1.0.35",
         platform: "chrome_extension",
         capabilities: ["ocr", "barcode", "dictation", "photo", "cursor_insert", "sidepanel_results"],
-        chromeSessionId: this.state.sessionId,
+        chromeSessionId: state.sessionId,
         deviceLabel: identity?.sessionLabel,
       },
       pairing: {
@@ -420,11 +379,12 @@ export class MobileScannerSession {
     if (existing) return existing;
 
     const now = new Date().toISOString();
-    const displayName = this.state.extensionIdentity?.sessionLabel ?? "Chrome session";
+    const state = this.lifecycle.getState();
+    const displayName = state.extensionIdentity?.sessionLabel ?? "Chrome session";
     const pairing: DurablePairingCredential = {
       pairingId: createId("pairing").replace(/[^a-zA-Z0-9_-]/g, "_"),
       pairingSecret: createSecret(32),
-      browserSessionId: this.state.sessionId,
+      browserSessionId: state.sessionId,
       displayName,
       createdAt: now,
       lastConnectedAt: now,
@@ -459,14 +419,8 @@ export class MobileScannerSession {
   }
 
   private async openReconnectJoinWindow(_pairing: DurablePairingCredential, _requestId: string) {
-    const joinWindow = await this.createJoinWindow(this.target);
-    this.joinWindow = joinWindow;
-    this.setState({
-      status: this.peerConnections.peers.size > 0 ? "connected" : "waiting",
-      qrCodeUrl: joinWindow.qrCodeUrl,
-      error: null,
-      joinWindowExpiresAt: joinWindow.expiresAt ?? null,
-    });
+    const joinWindow = await this.createJoinWindow(this.lifecycle.getTarget());
+    this.lifecycle.joinWindowOpened(joinWindow);
     this.joinAttemptPoller.start(joinWindow);
     return joinWindow;
   }
@@ -483,8 +437,8 @@ export class MobileScannerSession {
           extensionVersion: "1.0.35",
           platform: "chrome_extension",
           capabilities: ["ocr", "barcode", "dictation", "photo", "cursor_insert", "sidepanel_results"],
-          chromeSessionId: this.state.sessionId,
-          deviceLabel: this.state.extensionIdentity?.sessionLabel,
+          chromeSessionId: this.lifecycle.getSessionId(),
+          deviceLabel: this.lifecycle.getExtensionIdentity()?.sessionLabel,
         },
       });
     };
@@ -885,7 +839,7 @@ export class MobileScannerSession {
   }
 
   private handlePeerConnected() {
-    this.setState({ status: "connected", error: null, connectedAt: this.state.connectedAt ?? new Date().toISOString() });
+    this.lifecycle.peerConnected();
     void this.closeJoinWindow();
   }
 
@@ -902,10 +856,7 @@ export class MobileScannerSession {
     const peer = this.peerConnections.closePeer(joinAttemptId);
     if (!peer) return;
     this.peerPairings.delete(joinAttemptId);
-    this.setState({
-      status: this.peerConnections.peers.size > 0 ? "connected" : this.joinWindow ? "waiting" : "disconnected",
-      connectedAt: this.peerConnections.peers.size > 0 ? this.state.connectedAt : null,
-    });
+    this.lifecycle.peerClosed();
     this.joinAttemptPoller.stopIfIdle();
   }
 

@@ -4,14 +4,21 @@ import test from "node:test";
 import { scannerProtocolGolden } from "./protocol-fixtures.mjs";
 import {
   PHOTO_TRANSFER_CHANNEL_LABEL,
+  PHOTO_TRANSFER_MESSAGE_TYPES,
+  SCANNER_BROWSER_CAPABILITIES,
+  SCANNER_CAPABILITIES,
+  SCANNER_CONTROL_MESSAGE_TYPES,
   SCANNER_JOIN_TOKEN_TTL_MS,
+  SCANNER_MOBILE_CAPABILITIES,
   SCANNER_PAIRING_TTL_MS,
+  SCANNER_PEER_PLATFORMS,
   SCANNER_STUN_ONLY_ICE_SERVERS,
   SCANNER_CONTROL_CHANNEL_LABEL,
   SCANNER_PROTOCOL_VERSION,
   SCANNER_RECONNECT_REQUEST_TTL_MS,
   buildScannerIceServersResponse,
   buildScannerJoinUrl,
+  CAPTURE_MODES,
   decodePhotoTransferMessage,
   decodePhotoTransferChunkFrame,
   decodeScannerControlMessage,
@@ -65,6 +72,16 @@ test("exports ADR 0002 channel labels and version support", () => {
   assert.equal(SCANNER_RECONNECT_REQUEST_TTL_MS, scannerProtocolGolden.timing.reconnectRequestTtlMs);
   assert.equal(isScannerProtocolVersionSupported({ major: scannerProtocolGolden.protocolVersion.major, minor: 0 }), true);
   assert.equal(isScannerProtocolVersionSupported({ major: 2, minor: 0 }), false);
+});
+
+test("exports the scanner protocol surface used by native drift tests", () => {
+  assert.deepEqual(CAPTURE_MODES, scannerProtocolGolden.surface.captureModes);
+  assert.deepEqual(SCANNER_PEER_PLATFORMS, scannerProtocolGolden.surface.peerPlatforms);
+  assert.deepEqual(SCANNER_CAPABILITIES, scannerProtocolGolden.surface.capabilities);
+  assert.deepEqual(SCANNER_MOBILE_CAPABILITIES, scannerProtocolGolden.surface.mobileCapabilities);
+  assert.deepEqual(SCANNER_BROWSER_CAPABILITIES, scannerProtocolGolden.surface.browserCapabilities);
+  assert.deepEqual(SCANNER_CONTROL_MESSAGE_TYPES, scannerProtocolGolden.surface.controlMessageTypes);
+  assert.deepEqual(PHOTO_TRANSFER_MESSAGE_TYPES, scannerProtocolGolden.surface.photoTransferMessageTypes);
 });
 
 test("validates join tokens, join attempt ids, and join URLs", () => {

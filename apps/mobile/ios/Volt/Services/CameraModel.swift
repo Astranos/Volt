@@ -399,7 +399,11 @@ final class CameraModel: NSObject {
     }
 
     private func applyLiveTextCandidates(_ candidates: [LiveTextCandidateObservation]) {
-        guard !candidates.isEmpty else { return }
+        guard !candidates.isEmpty else {
+            liveTextCandidates = []
+            liveTextReplacementObservationCounts = [:]
+            return
+        }
         var acceptedCandidates = liveTextCandidates
         for candidate in candidates {
             guard !hasLiveTextCandidate(candidate, in: acceptedCandidates) else { continue }
@@ -434,7 +438,7 @@ final class CameraModel: NSObject {
         switch candidate.kind {
         case .imei:
             return nil
-        case .model, .serial:
+        case .model, .serial, .sku:
             return existing.firstIndex { $0.kind == candidate.kind }
         }
     }
@@ -444,7 +448,7 @@ final class CameraModel: NSObject {
         switch candidate.kind {
         case .imei:
             return existingKindCount < 2
-        case .model, .serial:
+        case .model, .serial, .sku:
             return existingKindCount < 1
         }
     }
@@ -478,6 +482,12 @@ final class CameraModel: NSObject {
 private struct LiveTextCandidateObservation: Equatable {
     let kind: LiveTextCandidateKind
     let value: String
+    let boundingBox: CGRect
+    let confidence: Float
+}
+
+private struct LiveTextObservationSnapshot {
+    let text: String
     let boundingBox: CGRect
     let confidence: Float
 }
@@ -534,8 +544,16 @@ private final class LiveTextFrameProcessor: NSObject, AVCaptureVideoDataOutputSa
     }
 
     private static func candidates(from observations: [VNRecognizedTextObservation]) -> [LiveTextCandidateObservation] {
-        observations
-            .compactMap { observation -> LiveTextCandidateObservation? in
+        let snapshots = observations.compactMap { observation -> LiveTextObservationSnapshot? in
+            guard let text = observation.topCandidates(1).first else { return nil }
+            return LiveTextObservationSnapshot(
+                text: text.string,
+                boundingBox: observation.boundingBox,
+                confidence: text.confidence
+            )
+        }
+
+        let directCandidates = observations.compactMap { observation -> LiveTextCandidateObservation? in
                 guard let text = observation.topCandidates(1).first else { return nil }
                 guard let match = LiveTextIdentifierMatcher.match(text.string) else { return nil }
                 let matchedBox = (try? text.boundingBox(for: match.range))?.boundingBox ?? observation.boundingBox
@@ -546,6 +564,8 @@ private final class LiveTextFrameProcessor: NSObject, AVCaptureVideoDataOutputSa
                     confidence: text.confidence
                 )
             }
+
+        return deduplicated(directCandidates + adjacentLabelValueCandidates(in: snapshots))
             .sorted { lhs, rhs in
                 if lhs.kind.rawValue != rhs.kind.rawValue {
                     return lhs.kind.rawValue < rhs.kind.rawValue
@@ -554,6 +574,56 @@ private final class LiveTextFrameProcessor: NSObject, AVCaptureVideoDataOutputSa
             }
             .prefix(4)
             .map { $0 }
+    }
+
+    private static func adjacentLabelValueCandidates(in snapshots: [LiveTextObservationSnapshot]) -> [LiveTextCandidateObservation] {
+        let ordered = snapshots.sorted { lhs, rhs in
+            if abs(lhs.boundingBox.midY - rhs.boundingBox.midY) > 0.025 {
+                return lhs.boundingBox.midY > rhs.boundingBox.midY
+            }
+            return lhs.boundingBox.minX < rhs.boundingBox.minX
+        }
+        var candidates: [LiveTextCandidateObservation] = []
+
+        for (index, label) in ordered.enumerated() {
+            guard let kind = LiveTextIdentifierMatcher.labelKind(in: label.text) else { continue }
+            for value in ordered[(index + 1)...].prefix(4) {
+                guard isPlausibleValueObservation(value, near: label) else { continue }
+                guard let candidateValue = LiveTextIdentifierMatcher.standaloneValue(in: value.text, kind: kind) else { continue }
+                candidates.append(
+                    LiveTextCandidateObservation(
+                        kind: kind,
+                        value: candidateValue,
+                        boundingBox: value.boundingBox,
+                        confidence: min(label.confidence, value.confidence)
+                    )
+                )
+                break
+            }
+        }
+
+        return candidates
+    }
+
+    private static func isPlausibleValueObservation(
+        _ value: LiveTextObservationSnapshot,
+        near label: LiveTextObservationSnapshot
+    ) -> Bool {
+        let verticalDistance = abs(label.boundingBox.midY - value.boundingBox.midY)
+        let horizontalOverlap = min(label.boundingBox.maxX, value.boundingBox.maxX) - max(label.boundingBox.minX, value.boundingBox.minX)
+        let sameRow = verticalDistance <= 0.035 && value.boundingBox.minX >= label.boundingBox.minX
+        let nextRow = label.boundingBox.minY >= value.boundingBox.midY && label.boundingBox.minY - value.boundingBox.maxY <= 0.08
+        return sameRow || nextRow || horizontalOverlap > -0.08
+    }
+
+    private static func deduplicated(_ candidates: [LiveTextCandidateObservation]) -> [LiveTextCandidateObservation] {
+        var seen = Set<String>()
+        return candidates.filter { candidate in
+            let key = "\(candidate.kind.rawValue):\(candidate.value.uppercased())"
+            guard !seen.contains(key) else { return false }
+            seen.insert(key)
+            return true
+        }
     }
 }
 

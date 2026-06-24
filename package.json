@@ -6,6 +6,7 @@
     "dev:extension": "pnpm --filter @volt/extension dev",
     "dev:mobile:appclip": "pnpm --filter @volt/mobile ios:sim:appclip",
     "dev:mobile:appclip:device": "pnpm --filter @volt/mobile ios:device:appclip -- --id=00008150-0014684A023B401C",
+    "dev:mobile:device": "pnpm --filter @volt/mobile ios:device -- --id=00008150-0014684A023B401C",
     "dev:mobile": "pnpm --filter @volt/mobile ios:sim",
     "dev:web": "pnpm --filter @volt/web dev",
     "test:convex": "vitest run convex",

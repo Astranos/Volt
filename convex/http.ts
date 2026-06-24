@@ -6,18 +6,13 @@ import {
   scannerStunOnlyIceServersResponse,
 } from "@volt/scanner-protocol";
 
-import { internal } from "./_generated/api";
 import { httpAction } from "./_generated/server";
 import {
   browserClaimFrom,
-  makeSecretId,
-  normalizePushSubscription,
-  numberFrom,
   pairingSecretFrom,
   type SignalRequestBody,
   signalBodyFromRequest,
   signalPartsFromRequest,
-  stringArrayFrom,
   stringFrom,
 } from "./scannerSignal/httpAdapter";
 import {
@@ -27,6 +22,7 @@ import {
   scannerSignalRouteTemplate,
   type ScannerSignalLogFields,
 } from "./scannerSignal/logging";
+import { executeScannerSignalRendezvous } from "./scannerSignal/rendezvous";
 import { signalRouteCommand } from "./scannerSignal/routeCommands";
 import type { SignalRouteCommand } from "./scannerSignal/routeCommands";
 
@@ -111,18 +107,6 @@ function logScannerSignalResponse(
 
   const event = scannerSignalEventForCommand(command);
   if (event) logScannerSignalEvent(event, fields);
-}
-
-function signalJsonResponse(
-  command: SignalRouteCommand,
-  parts: string[],
-  requestBody: SignalRequestBody,
-  responseBody: unknown,
-  statusCode: number,
-  startedAt: number,
-) {
-  logScannerSignalResponse(command, parts, requestBody, responseBody, statusCode, startedAt);
-  return jsonResponse(responseBody, statusCode);
 }
 
 async function runAndRespond<T extends { statusCode: number; body: unknown }>(
@@ -213,209 +197,30 @@ const signalHandler = httpAction(async (ctx, request) => {
     return jsonResponse(await scannerIceServersResponse());
   }
 
-  if (command === "createJoinToken") {
-    const sessionId = stringFrom(body.sessionId, 120) ?? makeSecretId(12);
-    const token = makeSecretId();
-    const response = await ctx.runMutation(internal.scannerSignal.joinTokens.createJoinToken, {
-      token,
-      sessionId,
-      browserClaim: stringFrom(body.browserClaim, 240),
-      ttlMs: numberFrom(body.ttlMs),
-      graceMs: numberFrom(body.graceMs),
-      origin: url.origin,
-    });
-    return signalJsonResponse(command, parts, body, response, 200, startedAt);
-  }
-
-  if (parts[0] === "join-token" && parts.length >= 2) {
-    const token = parts[1];
-    if (command === "getJoinTokenStatus") {
-      return runAndRespond(ctx.runMutation(internal.scannerSignal.joinTokens.getJoinTokenStatus, { token }), logContext);
-    }
-    if (command === "revokeJoinToken") {
-      return runAndRespond(
-        ctx.runMutation(internal.scannerSignal.joinTokens.revokeJoinToken, {
-          token,
-          browserClaim: browserClaimFrom(request, body),
-        }),
-        logContext,
-      );
-    }
-    if (command === "rotateJoinToken") {
-      return runAndRespond(
-        ctx.runMutation(internal.scannerSignal.joinTokens.rotateJoinToken, {
-          token,
-          nextToken: makeSecretId(),
-          browserClaim: browserClaimFrom(request, body),
-          ttlMs: numberFrom(body.ttlMs),
-          graceMs: numberFrom(body.graceMs),
-          origin: url.origin,
-        }),
-        logContext,
-      );
-    }
-    if (command === "listJoinAttempts") {
-      return runAndRespond(
-        ctx.runMutation(internal.scannerSignal.joinAttempts.listJoinAttempts, {
-          token,
-          browserClaim: browserClaimFrom(request, body),
-        }),
-        logContext,
-      );
-    }
-    if (command === "createJoinAttempt") {
-      return runAndRespond(
-        ctx.runMutation(internal.scannerSignal.joinAttempts.createJoinAttempt, {
-          token,
-          attemptId: makeSecretId(18),
-          contributorId: stringFrom(body.contributorId, 120),
-          deviceLabel: stringFrom(body.deviceLabel, 120),
-          protocolVersion: stringFrom(body.protocolVersion, 80),
-          capabilities: stringArrayFrom(body.capabilities),
-          attemptTtlMs: numberFrom(body.attemptTtlMs),
-        }),
-        logContext,
-      );
-    }
-    if (parts[2] === "attempt" && parts.length === 5) {
-      const attemptId = parts[3];
-      if (command === "postJoinOffer") {
-        const offer = stringFrom(body.offer, 200_000);
-        if (!offer) return signalJsonResponse(command, parts, body, { error: "Missing offer" }, 400, startedAt);
-        return runAndRespond(
-          ctx.runMutation(internal.scannerSignal.joinAttempts.postJoinOffer, {
-            token,
-            attemptId,
-            browserClaim: browserClaimFrom(request, body),
-            offer,
-          }),
-          logContext,
-        );
-      }
-      if (command === "getJoinOffer") {
-        return runAndRespond(ctx.runMutation(internal.scannerSignal.joinAttempts.getJoinOffer, { token, attemptId }), logContext);
-      }
-      if (command === "postJoinAnswer") {
-        const answer = stringFrom(body.answer, 200_000);
-        if (!answer) return signalJsonResponse(command, parts, body, { error: "Missing answer" }, 400, startedAt);
-        return runAndRespond(
-          ctx.runMutation(internal.scannerSignal.joinAttempts.postJoinAnswer, { token, attemptId, answer }),
-          logContext,
-        );
-      }
-      if (command === "getJoinAnswer") {
-        return runAndRespond(
-          ctx.runMutation(internal.scannerSignal.joinAttempts.getJoinAnswer, {
-            token,
-            attemptId,
-            browserClaim: browserClaimFrom(request, body),
-          }),
-          logContext,
-        );
-      }
-    }
-  }
-
-  if (parts[0] === "pairings") {
-    if (command === "registerPairing") {
-      return runAndRespond(
-        ctx.runMutation(internal.scannerSignal.pairings.registerPairing, {
-          pairingId: stringFrom(body.pairingId, 120) ?? makeSecretId(18),
-          pairingSecret: stringFrom(body.pairingSecret, 240) ?? makeSecretId(32),
-          browserSessionId: stringFrom(body.browserSessionId ?? body.sessionId, 120) ?? "",
-          displayName: stringFrom(body.displayName, 120),
-          phoneDeviceId: stringFrom(body.phoneDeviceId, 120),
-          phoneLabel: stringFrom(body.phoneLabel, 120),
-          pushSubscription: normalizePushSubscription(body.pushSubscription),
-        }),
-        logContext,
-      );
-    }
-    if (command === "getPendingReconnectRequests") {
-      const browserSessionId = stringFrom(url.searchParams.get("sessionId"), 120) ?? "";
-      return runAndRespond(
-        ctx.runMutation(internal.scannerSignal.reconnectRequests.getPendingReconnectRequests, {
-          browserSessionId,
-        }),
-        { ...logContext, requestBody: { browserSessionId } },
-      );
-    }
-    const pairingId = parts[1];
-    if (command === "createReconnectRequest") {
-      const result = await ctx.runMutation(internal.scannerSignal.reconnectRequests.createReconnectRequest, {
-        pairingId,
-        pairingSecret: pairingSecretFrom(request, body),
-        requestId: makeSecretId(18),
-      });
-      if (result.statusCode === 200) {
-        const responseBody = result.body as {
-          request?: { id?: string };
-          pushSubscription?: Parameters<typeof normalizePushSubscription>[0] | null;
-        };
-        const requestId = typeof responseBody.request?.id === "string" ? responseBody.request.id : "";
-        await ctx.runAction(internal.scannerPush.sendReconnectWakePush, {
-          subscription: responseBody.pushSubscription ?? null,
-          pairingId,
-          requestId,
-        }).catch(() => {
-          logScannerSignalEvent(
-            "push_wake_failed",
-            {
-              route: scannerSignalRouteTemplate(command),
-              command,
-              statusCode: result.statusCode,
-              elapsedMs: Date.now() - startedAt,
-              pairingIdTail: scannerSignalIdTail(pairingId),
-              requestIdTail: scannerSignalIdTail(requestId),
-              reason: "action_rejected",
-            },
-            "warn",
-          );
-          return { sent: false };
-        });
-        const { pushSubscription: _pushSubscription, ...bodyWithoutSubscription } = responseBody;
-        return signalJsonResponse(command, parts, body, bodyWithoutSubscription, result.statusCode, startedAt);
-      }
-      return signalJsonResponse(command, parts, body, result.body, result.statusCode, startedAt);
-    }
-    if (command === "getReconnectRequestStatus") {
-      return runAndRespond(
-        ctx.runMutation(internal.scannerSignal.reconnectRequests.getReconnectRequestStatus, {
-          pairingId,
-          requestId: parts[3],
-          pairingSecret: pairingSecretFrom(request, body),
-        }),
-        logContext,
-      );
-    }
-    if (command === "postReconnectJoinWindow") {
-      const joinUrl = stringFrom(body.joinUrl, 1000);
-      const joinToken = stringFrom(body.joinToken, 240);
-      const sessionId = stringFrom(body.sessionId, 120);
-      if (!joinUrl || !joinToken || !sessionId) {
-        return signalJsonResponse(command, parts, body, { error: "Invalid join window" }, 400, startedAt);
-      }
-      return runAndRespond(
-        ctx.runMutation(internal.scannerSignal.reconnectRequests.postReconnectJoinWindow, {
-          pairingId,
-          requestId: parts[3],
-          pairingSecret: pairingSecretFrom(request, body),
-          joinUrl,
-          joinToken,
-          sessionId,
-        }),
-        logContext,
-      );
-    }
-  }
-
   if (command === "getPushPublicKey") {
     const publicKey = process.env.SCANNER_PUSH_VAPID_PUBLIC_KEY;
     if (!publicKey) return jsonResponse({ error: "Web Push is not configured" }, 404);
     return jsonResponse({ publicKey });
   }
 
-  return signalJsonResponse(command, parts, body, { error: "Not found" }, 404, startedAt);
+  const reconnectBrowserSessionId = stringFrom(url.searchParams.get("sessionId"), 120);
+  const rendezvousBody =
+    command === "getPendingReconnectRequests"
+      ? { browserSessionId: reconnectBrowserSessionId ?? "" }
+      : body;
+  return runAndRespond(
+    executeScannerSignalRendezvous(ctx, {
+      command,
+      parts,
+      body,
+      origin: url.origin,
+      startedAt,
+      browserClaim: browserClaimFrom(request, body),
+      pairingSecret: pairingSecretFrom(request, body),
+      pendingReconnectBrowserSessionId: reconnectBrowserSessionId,
+    }),
+    { ...logContext, requestBody: rendezvousBody },
+  );
 });
 
 http.route({ path: "/api/signal", method: "GET", handler: signalHandler });

@@ -22,7 +22,7 @@ import {
   formatRelativeTime,
   photoFromResult,
   type TimelineGroup,
-} from "./mobile-scanner-timeline";
+} from "../../domain/mobile-scanner-timeline";
 
 export function LoadingHistory() {
   return (

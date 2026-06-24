@@ -58,6 +58,10 @@ export const DEFAULT_SETTINGS: CmdkSettings = {
   contextMenu: {
     enabled: true,
   },
+  mobilePhotoDownloads: {
+    autoDeleteEnabled: true,
+    retentionHours: 24,
+  },
   topOffers: DEFAULT_TOP_OFFERS_SETTINGS,
 };
 
@@ -124,6 +128,16 @@ export function mergeSettings(stored?: Partial<CmdkSettings>): CmdkSettings {
       ...(DEFAULT_SETTINGS.contextMenu || {}),
       ...(stored.contextMenu || {}),
     },
+    mobilePhotoDownloads: {
+      ...(DEFAULT_SETTINGS.mobilePhotoDownloads || {}),
+      ...(stored.mobilePhotoDownloads || {}),
+      retentionHours:
+        typeof stored.mobilePhotoDownloads?.retentionHours === "number" &&
+        Number.isFinite(stored.mobilePhotoDownloads.retentionHours) &&
+        stored.mobilePhotoDownloads.retentionHours > 0
+          ? stored.mobilePhotoDownloads.retentionHours
+          : DEFAULT_SETTINGS.mobilePhotoDownloads!.retentionHours,
+    },
     topOffers: {
       ...(DEFAULT_SETTINGS.topOffers || {}),
       ...(stored.topOffers || {}),
@@ -171,6 +185,7 @@ export function structuredCloneSettings(settings: CmdkSettings): CmdkSettings {
     upcHighlighter: { ...(settings.upcHighlighter || {}) },
     csvLinks: { ...(settings.csvLinks || {}) },
     contextMenu: { ...(settings.contextMenu || {}) },
+    mobilePhotoDownloads: { ...(settings.mobilePhotoDownloads || {}) },
     topOffers: {
       ...(settings.topOffers || {}),
       customRates: settings.topOffers?.customRates

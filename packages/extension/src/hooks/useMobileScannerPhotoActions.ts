@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import type React from "react";
+import type { Dispatch, SetStateAction } from "react";
 import type { HydratedMobileScannerPhotoResult } from "../domain/mobile-scanner-results";
 import type { SidepanelToastTone } from "../lib/sidepanel-toast";
 import {
@@ -16,7 +17,10 @@ import {
 import {
   firstDownloadedPhoto,
   photoFromResult,
-} from "../components/sidepanel/mobile-scanner-timeline";
+  photoIdsFromBatchEntries,
+  photosFromBatchEntries,
+  resolvePhotoDragSelection,
+} from "../domain/mobile-scanner-timeline";
 
 async function photoToClipboardPngBlob(photo: MobilePhoto) {
   if (photo.dataUrl) return dataUrlToPngBlob(photo.dataUrl);
@@ -45,7 +49,7 @@ export function useMobileScannerPhotoActions({
   photos: MobilePhoto[];
   selectedPhotoIds: Set<string>;
   selectedPhotos: MobilePhoto[];
-  setSelectedPhotoIds: (ids: Set<string>) => void;
+  setSelectedPhotoIds: Dispatch<SetStateAction<Set<string>>>;
   flashFeedback: (message: string, tone?: SidepanelToastTone) => void;
 }) {
   const prepareActiveTabForPhotoDrop = useCallback(async () => {
@@ -225,9 +229,15 @@ export function useMobileScannerPhotoActions({
   const dragPhotos = useCallback(
     (event: React.DragEvent, photo: MobilePhoto) => {
       void prepareActiveTabForPhotoDrop();
-      const sourcePhotos = selectedPhotoIds.has(photo.id) ? selectedPhotos : [photo];
-      if (!selectedPhotoIds.has(photo.id)) setSelectedPhotoIds(new Set([photo.id]));
-      writePhotoDragData(event, sourcePhotos);
+      const selection = resolvePhotoDragSelection({
+        photo,
+        selectedPhotoIds,
+        selectedPhotos,
+      });
+      if (selection.selectedPhotoIds !== selectedPhotoIds) {
+        setSelectedPhotoIds(selection.selectedPhotoIds);
+      }
+      writePhotoDragData(event, selection.sourcePhotos);
     },
     [prepareActiveTabForPhotoDrop, selectedPhotoIds, selectedPhotos, setSelectedPhotoIds, writePhotoDragData],
   );
@@ -235,8 +245,8 @@ export function useMobileScannerPhotoActions({
   const dragPhotoBatch = useCallback(
     (event: React.DragEvent, entries: HydratedMobileScannerPhotoResult[]) => {
       void prepareActiveTabForPhotoDrop();
-      setSelectedPhotoIds(new Set(entries.map((entry) => entry.id)));
-      writePhotoDragData(event, entries.map(photoFromResult));
+      setSelectedPhotoIds(new Set(photoIdsFromBatchEntries(entries)));
+      writePhotoDragData(event, photosFromBatchEntries(entries));
     },
     [prepareActiveTabForPhotoDrop, setSelectedPhotoIds, writePhotoDragData],
   );

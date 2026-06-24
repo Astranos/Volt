@@ -56,12 +56,14 @@ export type PhotoTransferMessage =
   | PhotoTransferCompleteMessage
   | PhotoTransferCancelMessage;
 
-const PHOTO_TRANSFER_MESSAGE_TYPES = new Set([
+export const PHOTO_TRANSFER_MESSAGE_TYPES = [
   "photo_start",
   "photo_chunk",
   "photo_complete",
   "photo_cancel",
-]);
+] as const satisfies readonly PhotoTransferMessage["type"][];
+
+const PHOTO_TRANSFER_MESSAGE_TYPE_SET = new Set<string>(PHOTO_TRANSFER_MESSAGE_TYPES);
 
 function hasMessageBase(
   value: Record<string, unknown>
@@ -77,7 +79,7 @@ export function decodePhotoTransferMessage(data: string): PhotoTransferMessage |
     return null;
   }
 
-  if (!isRecord(parsed) || typeof parsed.type !== "string" || !PHOTO_TRANSFER_MESSAGE_TYPES.has(parsed.type)) {
+  if (!isRecord(parsed) || typeof parsed.type !== "string" || !PHOTO_TRANSFER_MESSAGE_TYPE_SET.has(parsed.type)) {
     return null;
   }
   if (!hasMessageBase(parsed)) return null;

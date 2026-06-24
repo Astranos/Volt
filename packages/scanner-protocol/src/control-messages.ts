@@ -14,6 +14,8 @@ export type ScannerProtocolVersion = {
 
 export type ScannerPeerPlatform = "ios" | "chrome_extension" | "web" | "unknown";
 
+export const SCANNER_PEER_PLATFORMS = ["ios", "chrome_extension", "web", "unknown"] as const satisfies readonly ScannerPeerPlatform[];
+
 export type ScannerCapability =
   | "ocr"
   | "barcode"
@@ -22,6 +24,33 @@ export type ScannerCapability =
   | "cursor_insert"
   | "sidepanel_results"
   | "photo_retry_queue";
+
+export const SCANNER_CAPABILITIES = [
+  "ocr",
+  "barcode",
+  "dictation",
+  "photo",
+  "cursor_insert",
+  "sidepanel_results",
+  "photo_retry_queue",
+] as const satisfies readonly ScannerCapability[];
+
+export const SCANNER_MOBILE_CAPABILITIES = [
+  "ocr",
+  "barcode",
+  "dictation",
+  "photo",
+  "photo_retry_queue",
+] as const satisfies readonly ScannerCapability[];
+
+export const SCANNER_BROWSER_CAPABILITIES = [
+  "ocr",
+  "barcode",
+  "dictation",
+  "photo",
+  "cursor_insert",
+  "sidepanel_results",
+] as const satisfies readonly ScannerCapability[];
 
 export type ScannerMode = "ocr" | "barcode" | "dictation" | "photo";
 
@@ -185,7 +214,7 @@ export type EncodeBarcodeMessageInput = {
   contributorId?: string;
 };
 
-const CONTROL_MESSAGE_TYPES = new Set([
+export const SCANNER_CONTROL_MESSAGE_TYPES = [
   "hello",
   "session_ready",
   "mode_changed",
@@ -197,7 +226,9 @@ const CONTROL_MESSAGE_TYPES = new Set([
   "photo_rejected",
   "protocol_error",
   "session_closed",
-]);
+] as const satisfies readonly ScannerControlMessage["type"][];
+
+const CONTROL_MESSAGE_TYPES = new Set<string>(SCANNER_CONTROL_MESSAGE_TYPES);
 
 function parseProtocolVersion(value: unknown): ScannerProtocolVersion | null {
   if (isRecord(value)) {
@@ -273,27 +304,15 @@ function isScannerMode(value: unknown): value is ScannerMode {
 }
 
 function isScannerCapability(value: unknown): value is ScannerCapability {
-  return (
-    value === "ocr" ||
-    value === "barcode" ||
-    value === "dictation" ||
-    value === "photo" ||
-    value === "cursor_insert" ||
-    value === "sidepanel_results" ||
-    value === "photo_retry_queue"
-  );
+  return SCANNER_CAPABILITIES.includes(value as ScannerCapability);
 }
 
 function parsePeerInfo(value: unknown): ScannerPeerInfo | null {
   if (!isRecord(value) || !isSupportedProtocolVersion(value.protocolVersion)) return null;
-  if (
-    value.platform !== "ios" &&
-    value.platform !== "chrome_extension" &&
-    value.platform !== "web" &&
-    value.platform !== "unknown"
-  ) {
+  if (!SCANNER_PEER_PLATFORMS.includes(value.platform as ScannerPeerPlatform)) {
     return null;
   }
+  const platform = value.platform as ScannerPeerPlatform;
   if (!Array.isArray(value.capabilities) || !value.capabilities.every(isScannerCapability)) {
     return null;
   }
@@ -304,7 +323,7 @@ function parsePeerInfo(value: unknown): ScannerPeerInfo | null {
     protocolVersion: parseProtocolVersion(value.protocolVersion)!,
     appVersion: optionalString(value.appVersion),
     extensionVersion: optionalString(value.extensionVersion),
-    platform: value.platform,
+    platform,
     capabilities: [...new Set(value.capabilities)],
     contributorId: typeof value.contributorId === "string" ? value.contributorId : undefined,
     deviceLabel: optionalString(value.deviceLabel),
