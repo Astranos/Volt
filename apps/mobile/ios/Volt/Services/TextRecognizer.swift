@@ -61,10 +61,14 @@ enum OcrTextCleaner {
     }
 
     private static func deterministicCleanup(_ text: String) -> String {
-        text
+        let normalized = text
             .split(whereSeparator: \.isWhitespace)
             .joined(separator: " ")
             .trimmingCharacters(in: .whitespacesAndNewlines)
+        if let match = LiveTextIdentifierMatcher.match(normalized) {
+            return match.value
+        }
+        return normalized
     }
 
     private static func sanitizeModelOutput(_ output: String, fallback: String) -> String {

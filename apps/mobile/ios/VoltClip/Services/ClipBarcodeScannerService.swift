@@ -109,6 +109,7 @@ final class ClipBarcodeScannerService: NSObject {
     func stop() {
         clearDetectedBarcode()
         setLiveTextScanningEnabled(false)
+        setTorchEnabled(false)
         let session = session
         sessionQueue.async {
             guard session.isRunning else { return }
@@ -141,7 +142,11 @@ final class ClipBarcodeScannerService: NSObject {
     }
 
     func setTorchEnabled(_ enabled: Bool) {
-        guard let videoDevice, videoDevice.hasTorch else { return }
+        guard let videoDevice, videoDevice.hasTorch else {
+            torchEnabled = false
+            onCameraStateChanged?()
+            return
+        }
         sessionQueue.async { [weak self] in
             do {
                 try videoDevice.lockForConfiguration()
@@ -684,7 +689,7 @@ private final class ClipLiveTextFrameProcessor: NSObject, AVCaptureVideoDataOutp
         request.usesLanguageCorrection = false
         request.recognitionLanguages = ["en-US"]
         request.customWords = ["IMEI", "MEID", "Serial", "S/N", "SN", "Model", "Model No", "SKU"]
-        request.minimumTextHeight = 0.012
+        request.minimumTextHeight = 0.006
 
         do {
             try VNImageRequestHandler(cmSampleBuffer: sampleBuffer, orientation: .right).perform([request])

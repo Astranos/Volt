@@ -63,12 +63,23 @@ struct RecognizedTextRegion: Identifiable, Equatable {
 
 enum DeviceIdentifierRegionExtractor {
     static func extractedIdentifierRegions(from regions: [RecognizedTextRegion]) -> [RecognizedTextRegion] {
-        let identifierRegions = regions.compactMap(identifierRegion(from:))
+        let labeledIdentifierRegions = deduplicated(
+            regions.filter(\.isDeviceIdentifier)
+                + regions.compactMap { identifierRegion(from: $0, allowingStandalone: false) }
+        )
+        if !labeledIdentifierRegions.isEmpty {
+            return labeledIdentifierRegions
+        }
+
+        let identifierRegions = regions.compactMap { identifierRegion(from: $0, allowingStandalone: true) }
         return identifierRegions.isEmpty ? regions : deduplicated(identifierRegions)
     }
 
-    private static func identifierRegion(from region: RecognizedTextRegion) -> RecognizedTextRegion? {
-        guard let match = LiveTextIdentifierMatcher.match(region.text) else { return nil }
+    private static func identifierRegion(
+        from region: RecognizedTextRegion,
+        allowingStandalone: Bool
+    ) -> RecognizedTextRegion? {
+        guard let match = LiveTextIdentifierMatcher.match(region.text, allowingStandalone: allowingStandalone) else { return nil }
         return RecognizedTextRegion(
             text: match.value,
             boundingBox: region.boundingBox,
@@ -112,6 +123,10 @@ enum LiveTextIdentifierMatcher {
     }
 
     static func match(_ rawText: String) -> Match? {
+        match(rawText, allowingStandalone: true)
+    }
+
+    static func match(_ rawText: String, allowingStandalone: Bool) -> Match? {
         let text = rawText
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
 
@@ -126,6 +141,10 @@ enum LiveTextIdentifierMatcher {
         }
         if let sku = labeledValue(in: text, labels: skuLabels) {
             return Match(kind: .sku, value: sku.value, range: sku.range)
+        }
+        guard allowingStandalone else { return nil }
+        if let standalone = standaloneIdentifier(in: text) {
+            return standalone
         }
         return nil
     }
@@ -209,6 +228,7 @@ enum LiveTextIdentifierMatcher {
     private static let serialLabels = ["serial number", "serial no", "serial", "s/n", "s/ n", "s n", "s. n.", "sn"]
     private static let modelLabels = ["model number", "model no", "model", "mdl"]
     private static let skuLabels = ["sku", "stock keeping unit"]
+    private static let regulatoryLabels = ["fcc id", "ic", "emc", "r-cmm", "can ices", "ices"]
 
     private static func labeledValue(in text: String, labels: [String]) -> (value: String, range: Range<String.Index>)? {
         let lowercased = text.lowercased()
@@ -223,6 +243,22 @@ enum LiveTextIdentifierMatcher {
         guard cleaned.count >= 4, cleaned.rangeOfCharacter(from: .alphanumerics) != nil else { return nil }
         guard let valueRange = text[valueStart...].range(of: cleaned) else { return nil }
         return (cleaned, valueRange)
+    }
+
+    private static func standaloneIdentifier(in text: String) -> Match? {
+        guard !isRegulatoryIdentifierContext(text) else { return nil }
+        let candidates = identifierTokenCandidates(in: text)
+        if let candidate = candidates.first(where: { isKnownModelToken($0.value) }) {
+            return Match(kind: .model, value: candidate.value, range: candidate.range)
+        }
+        if let candidate = candidates.first(where: { isLikelySerialToken($0.value) }) {
+            return Match(kind: .serial, value: candidate.value, range: candidate.range)
+        }
+        return nil
+    }
+
+    private static func isRegulatoryIdentifierContext(_ text: String) -> Bool {
+        containsLabel(in: text.lowercased(), labels: regulatoryLabels)
     }
 
     private static func containsLabel(in text: String, labels: [String]) -> Bool {
@@ -254,13 +290,42 @@ enum LiveTextIdentifierMatcher {
     }
 
     private static func firstIdentifierToken(in text: String) -> String {
-        let trimmed = text
-            .trimmingCharacters(in: CharacterSet(charactersIn: " #:=-\t\n\r"))
+        identifierTokenCandidates(in: text).first?.value ?? ""
+    }
+
+    private static func identifierTokenCandidates(in text: String) -> [(value: String, range: Range<String.Index>)] {
+        text
             .split(whereSeparator: \.isWhitespace)
-            .first
-            .map(String.init)
-            ?? ""
-        return trimmed.trimmingCharacters(in: CharacterSet(charactersIn: ".,;:|"))
+            .compactMap { rawToken -> (value: String, range: Range<String.Index>)? in
+                let value = String(rawToken).trimmingCharacters(in: identifierTokenTrimCharacters)
+                guard !value.isEmpty,
+                      let range = text[rawToken.startIndex..<rawToken.endIndex].range(of: value)
+                else { return nil }
+                return (value, range)
+            }
+    }
+
+    private static let identifierTokenTrimCharacters = CharacterSet(charactersIn: " #:=-{}[](),.;|")
+
+    private static func isKnownModelToken(_ value: String) -> Bool {
+        let uppercased = value.uppercased()
+        guard uppercased.hasPrefix("CFI-"),
+              uppercased.count >= 7,
+              uppercased.count <= 20
+        else { return false }
+        return uppercased.allSatisfy { character in
+            character.isLetter || character.isNumber || character == "-"
+        }
+    }
+
+    private static func isLikelySerialToken(_ value: String) -> Bool {
+        guard value.count >= 10, value.count <= 24 else { return false }
+        let digitCount = value.filter(\.isNumber).count
+        let letterCount = value.filter(\.isLetter).count
+        guard digitCount >= 6, letterCount >= 1 else { return false }
+        return value.allSatisfy { character in
+            character.isLetter || character.isNumber || character == "-"
+        }
     }
 
     private static func isValidLuhn(_ value: String) -> Bool {

@@ -348,6 +348,7 @@ test("native OCR review keeps raw Vision text until selected cleanup is requeste
   assert.match(textRecognizerSwiftSource, /static func clean\(text: String\) async -> OcrTextCleanupResult/);
   assert.match(textRecognizerSwiftSource, /SystemLanguageModel\(/);
   assert.match(textRecognizerSwiftSource, /LanguageModelSession\(/);
+  assert.match(textRecognizerSwiftSource, /if let match = LiveTextIdentifierMatcher\.match\(normalized\) \{\s*return match\.value\s*\}/);
   assert.match(scannerStoreCaptureActionsSwiftSource, /let recognizedRegions = try await TextRecognizer\.recognizeTextRegions\(in: preparedImage\)/);
   assert.match(scannerStoreCaptureActionsSwiftSource, /ocrTextRegions = DeviceIdentifierRegionExtractor\.extractedIdentifierRegions\(from: recognizedRegions\)/);
   assert.match(scannerStoreCaptureActionsSwiftSource, /ocrReviewText = ocrTextRegions\.map\(\\\.text\)\.joined\(separator: "\\n"\)/);
@@ -381,6 +382,9 @@ test("native pre-capture identifier matching is deterministic", () => {
   assert.match(scannerRecognitionModelsSwiftSource, /serialLabels = \["serial number", "serial no", "serial", "s\/n", "s\/ n", "s n", "s\. n\.", "sn"\]/);
   assert.match(scannerRecognitionModelsSwiftSource, /modelLabels = \["model number", "model no", "model", "mdl"\]/);
   assert.match(scannerRecognitionModelsSwiftSource, /skuLabels = \["sku", "stock keeping unit"\]/);
+  assert.match(scannerRecognitionModelsSwiftSource, /private static func standaloneIdentifier\(in text: String\) -> Match\?/);
+  assert.match(scannerRecognitionModelsSwiftSource, /isKnownModelToken\(\$0\.value\)/);
+  assert.match(scannerRecognitionModelsSwiftSource, /isLikelySerialToken\(\$0\.value\)/);
   assert.match(scannerRecognitionModelsSwiftSource, /static func labelKind\(in rawText: String\) -> LiveTextCandidateKind\?/);
   assert.match(scannerRecognitionModelsSwiftSource, /static func standaloneValue\(in rawText: String, kind: LiveTextCandidateKind\) -> String\?/);
   assert.match(scannerRecognitionModelsSwiftSource, /private static func labelRange\(in text: String, label: String\) -> Range<String\.Index>\?/);
@@ -415,6 +419,8 @@ test("native pre-capture identifier chips show quickly and correct repeated repl
   assert.match(cameraModelSwiftSource, /case \.imei:\s*return existingKindCount < 2/);
   assert.match(cameraModelSwiftSource, /case \.model, \.serial, \.sku:\s*return existingKindCount < 1/);
   assert.match(cameraModelSwiftSource, /guard !candidates\.isEmpty else \{\s*liveTextCandidates = \[\]\s*liveTextReplacementObservationCounts = \[:\]\s*return\s*\}/);
+  assert.match(cameraModelSwiftSource, /request\.minimumTextHeight = 0\.006/);
+  assert.match(clipBarcodeScannerServiceSwiftSource, /request\.minimumTextHeight = 0\.006/);
   assert.match(cameraModelSwiftSource, /adjacentLabelValueCandidates\(in: snapshots\)/);
   assert.match(cameraModelSwiftSource, /LiveTextIdentifierMatcher\.labelKind\(in: label\.text\)/);
   assert.match(cameraModelSwiftSource, /LiveTextIdentifierMatcher\.standaloneValue\(in: value\.text, kind: kind\)/);
@@ -424,7 +430,10 @@ test("native pre-capture identifier chips show quickly and correct repeated repl
 
 test("native post-capture OCR extracts device identifiers from recognized rows", () => {
   assert.match(scannerRecognitionModelsSwiftSource, /enum DeviceIdentifierRegionExtractor/);
-  assert.match(scannerRecognitionModelsSwiftSource, /LiveTextIdentifierMatcher\.match\(region\.text\)/);
+  assert.match(scannerRecognitionModelsSwiftSource, /regions\.filter\(\\\.isDeviceIdentifier\)/);
+  assert.match(scannerRecognitionModelsSwiftSource, /identifierRegion\(from: \$0, allowingStandalone: false\)/);
+  assert.match(scannerRecognitionModelsSwiftSource, /identifierRegion\(from: \$0, allowingStandalone: true\)/);
+  assert.match(scannerRecognitionModelsSwiftSource, /LiveTextIdentifierMatcher\.match\(region\.text, allowingStandalone: allowingStandalone\)/);
   assert.match(scannerRecognitionModelsSwiftSource, /text: match\.value/);
   assert.match(textRecognizerSwiftSource, /if let match = LiveTextIdentifierMatcher\.match\(trimmed\)/);
   assert.match(textRecognizerSwiftSource, /let matchedGlyphs = Self\.glyphs\(in: match\.range, text: trimmed, glyphs: glyphs\)/);
@@ -433,6 +442,8 @@ test("native post-capture OCR extracts device identifiers from recognized rows",
   assert.match(ocrReviewLayerSwiftSource, /region\.isDeviceIdentifier \? \.green\.opacity\(0\.24\) : \.yellow\.opacity\(0\.24\)/);
   assert.match(ocrReviewLayerSwiftSource, /region\.isDeviceIdentifier \? \.green\.opacity\(0\.9\) : \.yellow\.opacity\(0\.9\)/);
   assert.match(scannerRecognitionModelsSwiftSource, /return identifierRegions\.isEmpty \? regions : deduplicated\(identifierRegions\)/);
+  assert.match(scannerRecognitionModelsSwiftSource, /private static let regulatoryLabels = \["fcc id", "ic", "emc", "r-cmm", "can ices", "ices"\]/);
+  assert.match(scannerRecognitionModelsSwiftSource, /guard !isRegulatoryIdentifierContext\(text\) else \{ return nil \}/);
   assert.match(scannerStoreCaptureActionsSwiftSource, /DeviceIdentifierRegionExtractor\.extractedIdentifierRegions\(from: recognizedRegions\)/);
 });
 
@@ -516,6 +527,22 @@ test("native camera resets capture sessions to display 1x zoom", () => {
   assert.match(cameraModelSwiftSource, /clampedRawZoomFactor\(1 \/ displayZoomFactorMultiplier\(for: device\), for: device\)/);
   assert.match(cameraModelSwiftSource, /device\.videoZoomFactor = rawZoomFactor/);
   assert.match(cameraModelSwiftSource, /updateZoomState\(for: device, rawZoomFactor: rawZoomFactor\)/);
+});
+
+test("native camera clears stale torch state when capture sessions stop", () => {
+  const stopSource = cameraModelSwiftSource.slice(
+    cameraModelSwiftSource.indexOf("func stop()"),
+    cameraModelSwiftSource.indexOf("func clearDetectedBarcode()")
+  );
+  const clipStopSource = clipBarcodeScannerServiceSwiftSource.slice(
+    clipBarcodeScannerServiceSwiftSource.indexOf("func stop()"),
+    clipBarcodeScannerServiceSwiftSource.indexOf("func setLiveTextScanningEnabled")
+  );
+
+  assert.match(stopSource, /setTorchEnabled\(false\)/);
+  assert.match(cameraModelSwiftSource, /guard let videoDevice, videoDevice\.hasTorch else \{\s*torchEnabled = false\s*return\s*\}/);
+  assert.match(clipStopSource, /setTorchEnabled\(false\)/);
+  assert.match(clipBarcodeScannerServiceSwiftSource, /guard let videoDevice, videoDevice\.hasTorch else \{\s*torchEnabled = false\s*onCameraStateChanged\?\(\)\s*return\s*\}/);
 });
 
 test("app clip capture controls are wired to camera hardware actions", () => {

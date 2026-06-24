@@ -148,6 +148,7 @@ final class CameraModel: NSObject {
     func stop() {
         clearDetectedBarcode()
         clearLiveTextCandidates()
+        setTorchEnabled(false)
         let session = session
         sessionQueue.async {
             if session.isRunning {
@@ -256,7 +257,10 @@ final class CameraModel: NSObject {
     }
 
     func setTorchEnabled(_ enabled: Bool) {
-        guard let videoDevice, videoDevice.hasTorch else { return }
+        guard let videoDevice, videoDevice.hasTorch else {
+            torchEnabled = false
+            return
+        }
         sessionQueue.async { [weak self] in
             do {
                 try videoDevice.lockForConfiguration()
@@ -534,7 +538,7 @@ private final class LiveTextFrameProcessor: NSObject, AVCaptureVideoDataOutputSa
         request.usesLanguageCorrection = false
         request.recognitionLanguages = ["en-US"]
         request.customWords = ["IMEI", "MEID", "Serial", "S/N", "SN", "Model", "Model No", "SKU"]
-        request.minimumTextHeight = 0.012
+        request.minimumTextHeight = 0.006
 
         do {
             try VNImageRequestHandler(cmSampleBuffer: sampleBuffer, orientation: .right).perform([request])
