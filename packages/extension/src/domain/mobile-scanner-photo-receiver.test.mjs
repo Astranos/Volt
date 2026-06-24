@@ -45,6 +45,29 @@ test("photo receiver sends photo_rejected when Chrome cannot store a completed p
   assert.equal(rejection.retryable, true);
 });
 
+test("photo receiver sends rejection detail from browser photo delivery ledger", async () => {
+  const controls = [];
+  const receiver = new MobileScannerPhotoReceiver({
+    onPhoto: async () => ({
+      success: false,
+      error: "invalid_photo",
+      detail: "Chrome received an invalid photo payload.",
+      retryable: true,
+    }),
+    sendControl: (_peer, message) => controls.push(message),
+  });
+
+  await sendOneChunkPhoto(receiver);
+
+  const rejection = controls.find((message) => message.type === "photo_rejected");
+  assert.equal(rejection.photoId, "photo_123");
+  assert.equal(rejection.reason, "invalid_photo");
+  assert.equal(
+    rejection.detail,
+    "Chrome received an invalid photo payload.",
+  );
+});
+
 async function sendOneChunkPhoto(receiver) {
   const base = {
     sentAt,

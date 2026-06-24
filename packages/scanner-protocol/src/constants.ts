@@ -43,7 +43,7 @@ export const SCANNER_LOCAL_SESSION_ID = "local";
 
 export type CaptureMode = "ocr" | "barcode" | "dictation" | "photo";
 
-export const CAPTURE_MODES: CaptureMode[] = ["ocr", "barcode", "dictation", "photo"];
+export const CAPTURE_MODES = ["ocr", "barcode", "dictation", "photo"] as const satisfies readonly CaptureMode[];
 
 export type ScannerConnectionStatus =
   | "disconnected"

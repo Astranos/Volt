@@ -17,11 +17,14 @@ enum ScannerProtocol {
     static let iceGatheringTimeout: Duration = .seconds(2)
     static let photoReceiptTimeout: Duration = .seconds(20)
     static let signalRequestTimeout: TimeInterval = 8
+    static let supportedCapabilities = ["ocr", "barcode", "dictation", "photo", "photo_retry_queue"]
+    static let supportedPeerPlatforms = ["ios", "chrome_extension", "web", "unknown"]
 
-    enum MessageType: String {
+    enum MessageType: String, CaseIterable {
         case hello
         case captureResult = "capture_result"
         case dictation
+        case modeChanged = "mode_changed"
         case sessionReady = "session_ready"
         case resultReceived = "result_received"
         case protocolError = "protocol_error"
@@ -31,6 +34,33 @@ enum ScannerProtocol {
         case photoChunkAck = "photo_chunk_ack"
         case photoReceived = "photo_received"
         case photoRejected = "photo_rejected"
+        case photoCancel = "photo_cancel"
+        case sessionClosed = "session_closed"
+    }
+
+    static let controlMessageTypes: [String] = [
+        MessageType.hello.rawValue,
+        MessageType.sessionReady.rawValue,
+        MessageType.modeChanged.rawValue,
+        MessageType.captureResult.rawValue,
+        MessageType.dictation.rawValue,
+        MessageType.resultReceived.rawValue,
+        MessageType.photoChunkAck.rawValue,
+        MessageType.photoReceived.rawValue,
+        MessageType.photoRejected.rawValue,
+        MessageType.protocolError.rawValue,
+        MessageType.sessionClosed.rawValue,
+    ]
+
+    static let photoTransferMessageTypes: [String] = [
+        MessageType.photoStart.rawValue,
+        MessageType.photoChunk.rawValue,
+        MessageType.photoComplete.rawValue,
+        MessageType.photoCancel.rawValue,
+    ]
+
+    static var captureModeValues: [String] {
+        CaptureMode.allCases.map(\.rawValue)
     }
 
     struct ProtocolVersion: Codable, Equatable {
@@ -259,7 +289,7 @@ enum ScannerProtocol {
             "protocolVersion": ["major": protocolVersion.major, "minor": protocolVersion.minor, "patch": protocolVersion.patch ?? 0],
             "appVersion": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.1",
             "platform": "ios",
-            "capabilities": ["ocr", "barcode", "dictation", "photo", "photo_retry_queue"],
+            "capabilities": supportedCapabilities,
             "contributorId": contributorId,
             "deviceLabel": UIDevice.current.name,
             "chromeSessionId": chromeSessionId,

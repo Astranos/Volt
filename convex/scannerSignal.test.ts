@@ -10,6 +10,7 @@ import {
   scannerSignalIdTail,
   scannerSignalRouteTemplate,
 } from "./scannerSignal/logging";
+import { executeScannerSignalRendezvous } from "./scannerSignal/rendezvous";
 import { signalRouteCommand } from "./scannerSignal/routeCommands";
 
 const modules = import.meta.glob("./**/*.ts");
@@ -111,6 +112,65 @@ describe("scanner signal route command extraction", () => {
     ["GET", ["push", "public-key", "extra"]],
   ] as const)("maps unsupported %s /%s to notFound", (method, parts) => {
     expect(signalRouteCommand(method, [...parts])).toBe("notFound");
+  });
+});
+
+describe("scanner signal rendezvous module", () => {
+  test("maps create join attempt requests to the internal mutation contract", async () => {
+    const calls: Array<{ fn: unknown; args: unknown }> = [];
+    const ctx = {
+      runMutation: vi.fn(async (fn, args) => {
+        calls.push({ fn, args });
+        return { statusCode: 200, body: { attempt: { id: args.attemptId } } };
+      }),
+    };
+
+    const result = await executeScannerSignalRendezvous(ctx as never, {
+      command: "createJoinAttempt",
+      parts: ["join-token", "join-token-123", "attempt"],
+      body: {
+        contributorId: "phone-device",
+        deviceLabel: "Juan's iPhone",
+        protocolVersion: "1.0.0",
+        capabilities: ["ocr", "barcode", "dictation", "photo"],
+        attemptTtlMs: 30_000,
+      },
+      origin: "https://example.test",
+      startedAt: Date.now(),
+    });
+
+    expect(result).toMatchObject({ statusCode: 200 });
+    expect(ctx.runMutation).toHaveBeenCalledTimes(1);
+    expect(calls[0].args).toMatchObject({
+      token: "join-token-123",
+      contributorId: "phone-device",
+      deviceLabel: "Juan's iPhone",
+      protocolVersion: "1.0.0",
+      capabilities: ["ocr", "barcode", "dictation", "photo"],
+      attemptTtlMs: 30_000,
+    });
+    expect((calls[0].args as { attemptId?: string }).attemptId).toEqual(expect.any(String));
+  });
+
+  test("validates reconnect join window body before calling mutations", async () => {
+    const ctx = {
+      runMutation: vi.fn(),
+    };
+
+    const result = await executeScannerSignalRendezvous(ctx as never, {
+      command: "postReconnectJoinWindow",
+      parts: ["pairings", "pairing-1", "reconnect", "request-1", "join-window"],
+      body: {
+        joinUrl: "https://example.test/api/signal/join-token/token",
+        joinToken: "token",
+      },
+      origin: "https://example.test",
+      startedAt: Date.now(),
+      pairingSecret: "secret",
+    });
+
+    expect(result).toEqual({ statusCode: 400, body: { error: "Invalid join window" } });
+    expect(ctx.runMutation).not.toHaveBeenCalled();
   });
 });
 

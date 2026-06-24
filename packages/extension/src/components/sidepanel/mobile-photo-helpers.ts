@@ -3,12 +3,12 @@ export {
   normalizeImageFilename,
   normalizeImageMimeType,
   type MobilePhoto,
-} from "../../domain/mobile-photo";
+} from "../../domain/mobile-photo.ts";
 
 import {
   normalizeImageFilename,
   normalizeImageMimeType,
-} from "../../domain/mobile-photo";
+} from "../../domain/mobile-photo.ts";
 
 export function dataUrlToFile(
   dataUrl: string,

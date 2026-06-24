@@ -3,10 +3,9 @@ import { FolderOpen } from "lucide-react";
 import {
   saveMobileScannerPhoto,
   saveMobileScannerScan,
-  type HydratedMobileScannerPhotoResult,
+  type MobileScannerResultBroadcastMessage,
   type MobileScannerScanResult,
 } from "../../domain/mobile-scanner-results";
-import type { BarcodeMessage } from "../../domain/mobile-scanner-session";
 import { showSidepanelToast, type SidepanelToastTone } from "../../lib/sidepanel-toast";
 import { useMobileScannerHistory } from "../../hooks/useMobileScannerHistory";
 import { useMobileScannerPhotoActions } from "../../hooks/useMobileScannerPhotoActions";
@@ -21,7 +20,10 @@ import {
   UndoDeleteToast,
 } from "./mobile-scanner-cards";
 import { installEditableTracker } from "./mobile-scanner-page-bridge";
-import type { TimelineEntry } from "./mobile-scanner-timeline";
+import {
+  resolveTimelineMessage,
+  upsertTimelineEntry,
+} from "../../domain/mobile-scanner-timeline";
 
 /*
  * Source-contract breadcrumbs for scanner domain tests. Implementations live in:
@@ -152,29 +154,16 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
       if (message?.action === "scannerStateChanged") {
         return;
       }
-      if (message?.action === "scannerScan") {
-        if (message.result) {
-          const saved = message.result as MobileScannerScanResult;
-          setResults((current) => [saved, ...current.filter((item) => item.id !== saved.id)]);
-          return;
-        }
-        void saveMobileScannerScan(message.scan as BarcodeMessage & { id?: string }).then((saved) => {
+      if (message?.action === "scannerScan" || message?.action === "scannerPhoto") {
+        void resolveTimelineMessage(message as MobileScannerResultBroadcastMessage, {
+          saveScan: saveMobileScannerScan,
+          savePhoto: saveMobileScannerPhoto,
+        }).then((saved) => {
           if (!saved) return;
-          setResults((current) => [saved, ...current.filter((item) => item.id !== saved.id)]);
-        });
-        return;
-      }
-      if (message?.action === "scannerPhoto") {
-        if (message.result) {
-          const saved = message.result as HydratedMobileScannerPhotoResult;
-          setResults((current) => [saved, ...current.filter((item) => item.id !== saved.id)] as TimelineEntry[]);
-          void prepareActiveTabForPhotoDrop();
-          return;
-        }
-        void saveMobileScannerPhoto(message.photo).then((saved) => {
-          if (!saved) return;
-          setResults((current) => [saved, ...current.filter((item) => item.id !== saved.id)] as TimelineEntry[]);
-          void prepareActiveTabForPhotoDrop();
+          setResults((current) => upsertTimelineEntry(current, saved));
+          if (saved.type === "photo") {
+            void prepareActiveTabForPhotoDrop();
+          }
         });
       }
     };

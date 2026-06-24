@@ -117,12 +117,13 @@ test("recording a Volt photo download stores a 24 hour delete time", async () =>
   });
   const downloadedAt = Date.parse("2026-06-23T10:00:00.000Z");
 
-  await cleanup.recordMobilePhotoDownload({
+  const receipt = await cleanup.recordMobilePhotoDownload({
     downloadId: 42,
     filename: "Volt Photos/session/batch/photo.jpg",
     downloadedAt,
   });
 
+  assert.deepEqual(receipt, { status: "tracked" });
   assert.deepEqual(storage[MOBILE_PHOTO_DOWNLOADS_STORAGE_KEY], [
     {
       downloadId: 42,
@@ -146,12 +147,13 @@ test("recording uses the configured retention window", async () => {
   });
   const downloadedAt = Date.parse("2026-06-23T10:00:00.000Z");
 
-  await cleanup.recordMobilePhotoDownload({
+  const receipt = await cleanup.recordMobilePhotoDownload({
     downloadId: 43,
     filename: "Volt Photos/session/batch/photo.jpg",
     downloadedAt,
   });
 
+  assert.deepEqual(receipt, { status: "tracked" });
   assert.equal(
     storage[MOBILE_PHOTO_DOWNLOADS_STORAGE_KEY][0].deleteAfter,
     downloadedAt + 12 * 60 * 60 * 1000,
@@ -176,7 +178,10 @@ test("recording is skipped when auto-delete is disabled", async () => {
     downloadedAt: Date.parse("2026-06-23T10:00:00.000Z"),
   });
 
-  assert.equal(recorded, false);
+  assert.deepEqual(recorded, {
+    status: "not_applicable",
+    reason: "auto_delete_disabled",
+  });
   assert.deepEqual(storage[MOBILE_PHOTO_DOWNLOADS_STORAGE_KEY], []);
 });
 

@@ -155,7 +155,7 @@ class MobileScannerOffscreenSession {
   }
 
   private async sendPhoto(photo: PhotoMessage) {
-    const response = await chrome.runtime.sendMessage({
+    return chrome.runtime.sendMessage({
       action: "scannerOffscreenPhoto",
       photo: {
         ...photo,
@@ -163,7 +163,6 @@ class MobileScannerOffscreenSession {
         sessionId: this.state.sessionId,
       },
     });
-    return response?.success === true;
   }
 }
 

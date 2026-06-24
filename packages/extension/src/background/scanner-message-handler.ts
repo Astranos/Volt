@@ -1,8 +1,8 @@
 import {
   buildMobilePhotoDownloadFilename,
-  normalizeMobilePhoto,
   type MobilePhoto,
 } from "../domain/mobile-photo";
+import { deliverBrowserPhoto } from "../domain/mobile-photo-delivery-ledger";
 import { persistAndBroadcastMobileScannerPhoto } from "../domain/mobile-scanner-results";
 import type { createMobilePhotoDownloadCleanup } from "./mobile-photo-download-cleanup";
 import type {
@@ -321,29 +321,23 @@ export function createScannerMessageHandler({
   }
 
   async function handleScannerPhoto(message: ScannerPhotoMessage) {
-    const photo = normalizeMobilePhoto(message?.photo);
-    if (!photo) return { success: false, error: "invalid_photo" };
-
-    const downloadResult = await downloadMobilePhoto(photo);
-    if (!downloadResult.success) {
-      return { success: false, error: downloadResult.error || "download_failed" };
-    }
-    void recordMobilePhotoDownload?.({
-      downloadId: downloadResult.downloadId,
-      filename: downloadResult.filename,
-    });
-
-    const downloadedPhoto = {
-      ...photo,
-      downloadId: downloadResult.downloadId,
-      downloadFilename: downloadResult.filename,
-    };
-    return persistAndBroadcastMobileScannerPhoto(downloadedPhoto, {
-      broadcastScannerMessage,
-      persistFallbackPhoto: persistMobilePhoto,
-      onPersistError: (error) => {
-        log("scanner IndexedDB photo persist failed", error instanceof Error ? error.message : error);
+    return deliverBrowserPhoto({
+      photoInput: message?.photo,
+      downloadMobilePhoto,
+      recordMobilePhotoDownload,
+      onCleanupTrackingFailed: (error) => {
+        log("scanner photo cleanup tracking failed", error || "unknown_error");
       },
+      persistBrowserPhoto: (photo) => persistAndBroadcastMobileScannerPhoto(photo, {
+        broadcastScannerMessage,
+        persistFallbackPhoto: persistMobilePhoto,
+        onPersistError: (error) => {
+          log("scanner IndexedDB photo persist failed", error instanceof Error ? error.message : error);
+        },
+      }).then((receipt) => ({
+        success: receipt.success,
+        error: receipt.success ? undefined : receipt.error,
+      })),
     });
   }
 

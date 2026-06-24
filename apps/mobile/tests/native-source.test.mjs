@@ -8,6 +8,14 @@ function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+function swiftStringArrayLiteral(values) {
+  return `\\[${values.map((value) => `"${escapeRegExp(value)}"`).join(", ")}\\]`;
+}
+
+function swiftRawValueList(values) {
+  return values.map((value) => `MessageType\\.${value}.rawValue`).join(",\\s*");
+}
+
 const scannerStoreSwiftSource = readFileSync(
   new URL("../ios/Volt/Services/ScannerStore.swift", import.meta.url),
   "utf8"
@@ -160,6 +168,49 @@ test("native scanner protocol constants match shared scanner protocol fixtures",
   );
   assert.match(scannerProtocolSwiftSource, new RegExp(`static let chunkSize = ${scannerProtocolGolden.photo.chunkSizeBytes / 1024} \\* 1024`));
   assert.match(scannerProtocolSwiftSource, new RegExp(`static let photoReceiptTimeout: Duration = \\.seconds\\(${scannerProtocolGolden.timing.photoReceiptTimeoutMs / 1000}\\)`));
+  assert.match(
+    scannerProtocolSwiftSource,
+    new RegExp(`static let supportedCapabilities = ${swiftStringArrayLiteral(scannerProtocolGolden.surface.mobileCapabilities)}`)
+  );
+  assert.match(
+    scannerProtocolSwiftSource,
+    new RegExp(`static let supportedPeerPlatforms = ${swiftStringArrayLiteral(scannerProtocolGolden.surface.peerPlatforms)}`)
+  );
+  assert.match(scannerProtocolSwiftSource, /"capabilities": supportedCapabilities/);
+});
+
+test("native scanner protocol message surfaces match shared scanner protocol fixtures", () => {
+  const swiftControlCases = {
+    hello: "hello",
+    session_ready: "sessionReady",
+    mode_changed: "modeChanged",
+    capture_result: "captureResult",
+    dictation: "dictation",
+    result_received: "resultReceived",
+    photo_chunk_ack: "photoChunkAck",
+    photo_received: "photoReceived",
+    photo_rejected: "photoRejected",
+    protocol_error: "protocolError",
+    session_closed: "sessionClosed",
+  };
+  const swiftPhotoCases = {
+    photo_start: "photoStart",
+    photo_chunk: "photoChunk",
+    photo_complete: "photoComplete",
+    photo_cancel: "photoCancel",
+  };
+
+  for (const type of scannerProtocolGolden.surface.controlMessageTypes) {
+    assert.match(scannerProtocolSwiftSource, new RegExp(`case ${swiftControlCases[type]}(?: = "${type}")?`));
+  }
+  for (const type of scannerProtocolGolden.surface.photoTransferMessageTypes) {
+    assert.match(scannerProtocolSwiftSource, new RegExp(`case ${swiftPhotoCases[type]} = "${type}"`));
+  }
+
+  const expectedControlRawValues = scannerProtocolGolden.surface.controlMessageTypes.map((type) => swiftControlCases[type]);
+  const expectedPhotoRawValues = scannerProtocolGolden.surface.photoTransferMessageTypes.map((type) => swiftPhotoCases[type]);
+  assert.match(scannerProtocolSwiftSource, new RegExp(`static let controlMessageTypes: \\[String\\] = \\[\\s*${swiftRawValueList(expectedControlRawValues)},?\\s*\\]`));
+  assert.match(scannerProtocolSwiftSource, new RegExp(`static let photoTransferMessageTypes: \\[String\\] = \\[\\s*${swiftRawValueList(expectedPhotoRawValues)},?\\s*\\]`));
 });
 
 test("native saved-session reconnect toast can cancel manual previous-session taps", () => {

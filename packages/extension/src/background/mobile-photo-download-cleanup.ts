@@ -1,4 +1,5 @@
 import type { CmdkSettings, SyncStorageResult } from "../types/settings.ts";
+import type { MobilePhotoDownloadCleanupReceipt } from "../domain/mobile-photo-delivery-ledger.ts";
 
 type LogFn = (...args: unknown[]) => void;
 
@@ -140,12 +141,14 @@ export function createMobilePhotoDownloadCleanup({
     downloadId: number;
     filename: string;
     downloadedAt?: number;
-  }) {
+  }): Promise<MobilePhotoDownloadCleanupReceipt> {
     const settings = normalizeCleanupSettings(await getExtensionSettings(chromeApi));
     if (!settings.autoDeleteEnabled) {
-      return false;
+      return { status: "not_applicable", reason: "auto_delete_disabled" };
     }
-    if (!isVoltPhotoDownloadFilename(filename)) return false;
+    if (!isVoltPhotoDownloadFilename(filename)) {
+      return { status: "not_applicable", reason: "non_volt_filename" };
+    }
 
     const current = await getStoredDownloads(chromeApi);
     const retentionMs = retentionHoursToMs(settings.retentionHours);
@@ -159,7 +162,10 @@ export function createMobilePhotoDownloadCleanup({
       nextRecord,
       ...current.filter((record) => record.downloadId !== downloadId),
     ];
-    return setStoredDownloads(chromeApi, next);
+    const stored = await setStoredDownloads(chromeApi, next);
+    return stored
+      ? { status: "tracked" }
+      : { status: "failed", error: "storage_failed" };
   }
 
   function ensureCleanupAlarm() {
