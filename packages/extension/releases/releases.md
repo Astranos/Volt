@@ -2,9 +2,9 @@
 
 ## Current Development Version
 
-### v1.0.43
+### v1.0.44
 
-The current manifest/package version is `1.0.43`.
+The current manifest/package version is `1.0.44`.
 
 Current release build command:
 
