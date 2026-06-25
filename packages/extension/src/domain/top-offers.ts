@@ -1,4 +1,12 @@
-import type { CustomOffer, CustomRates, RateRule, TopOffersSettings } from "../types/settings";
+import type {
+  CustomOffer,
+  CustomRates,
+  EnabledOfferTypes,
+  OfferRateTable,
+  RateRule,
+  StartingRates,
+  TopOffersSettings,
+} from "../types/settings";
 
 export const TOP_OFFER_FLOOR_MULTIPLE = 5;
 
@@ -86,11 +94,42 @@ export const DEFAULT_CUSTOM_RATES: CustomRates = {
   checkout: {
     percentage: DEFAULT_CHECKOUT_PERCENTAGE,
   },
+  newCustomer: {
+    rules: DEFAULT_NEW_CUSTOMER_RULES,
+    defaultPercentage: DEFAULT_NEW_CUSTOMER_DEFAULT_PERCENTAGE,
+  },
+};
+
+export const DEFAULT_STARTING_RATES: Required<StartingRates> = {
+  standard: {
+    rules: DEFAULT_STANDARD_STARTING_RULES,
+    defaultPercentage: DEFAULT_STANDARD_STARTING_DEFAULT_PERCENTAGE,
+  },
+  premium: {
+    rules: DEFAULT_PREMIUM_STARTING_RULES,
+    defaultPercentage: DEFAULT_PREMIUM_STARTING_DEFAULT_PERCENTAGE,
+  },
+  checkout: {
+    rules: DEFAULT_STANDARD_RULES,
+    defaultPercentage: DEFAULT_STANDARD_DEFAULT_PERCENTAGE,
+  },
+  newCustomer: {
+    rules: DEFAULT_STANDARD_RULES,
+    defaultPercentage: DEFAULT_STANDARD_DEFAULT_PERCENTAGE,
+  },
+};
+
+export const DEFAULT_ENABLED_OFFER_TYPES: EnabledOfferTypes = {
+  standard: true,
+  premium: true,
+  checkout: true,
+  newCustomer: true,
 };
 
 export const DEFAULT_TOP_OFFERS_SETTINGS: TopOffersSettings = {
   customRates: DEFAULT_CUSTOM_RATES,
   customOffers: [],
+  enabledOfferTypes: DEFAULT_ENABLED_OFFER_TYPES,
 };
 
 export function floorToMultiple(value: number, multiple = TOP_OFFER_FLOOR_MULTIPLE): number {
@@ -121,6 +160,14 @@ export function createCustomOffer(id: string, name = "Custom Offer"): CustomOffe
     name,
     rules: DEFAULT_STANDARD_RULES,
     defaultPercentage: DEFAULT_STANDARD_DEFAULT_PERCENTAGE,
+    enabled: true,
+  };
+}
+
+function cloneRateTable(table: OfferRateTable): OfferRateTable {
+  return {
+    ...table,
+    rules: [...table.rules],
   };
 }
 
@@ -159,6 +206,7 @@ export function migrateDefaultTopOfferRates(customRates?: CustomRates): CustomRa
     checkout: isLegacyCheckoutDefault
       ? DEFAULT_CUSTOM_RATES.checkout
       : customRates.checkout ?? DEFAULT_CUSTOM_RATES.checkout,
+    newCustomer: customRates.newCustomer ?? DEFAULT_CUSTOM_RATES.newCustomer,
   };
 }
 
@@ -190,20 +238,20 @@ export function calculateTopOfferPremium(projection: number, customRates?: Custo
   );
 }
 
-export function calculateStartingOffer(projection: number): number {
-  return calculateFromRules(
-    projection,
-    DEFAULT_STANDARD_STARTING_RULES,
-    DEFAULT_STANDARD_STARTING_DEFAULT_PERCENTAGE
-  );
+export function calculateStartingOffer(
+  projection: number,
+  startingRates?: StartingRates
+): number {
+  const rates = startingRates?.standard ?? DEFAULT_STARTING_RATES.standard;
+  return calculateFromRules(projection, rates.rules, rates.defaultPercentage);
 }
 
-export function calculateStartingOfferPremium(projection: number): number {
-  return calculateFromRules(
-    projection,
-    DEFAULT_PREMIUM_STARTING_RULES,
-    DEFAULT_PREMIUM_STARTING_DEFAULT_PERCENTAGE
-  );
+export function calculateStartingOfferPremium(
+  projection: number,
+  startingRates?: StartingRates
+): number {
+  const rates = startingRates?.premium ?? DEFAULT_STARTING_RATES.premium;
+  return calculateFromRules(projection, rates.rules, rates.defaultPercentage);
 }
 
 export function calculateTopOfferCheckout(projection: number, customRates?: CustomRates): number {
@@ -213,23 +261,41 @@ export function calculateTopOfferCheckout(projection: number, customRates?: Cust
 
 export function calculateStartingOfferCheckout(
   projection: number,
-  customRates?: CustomRates
+  customRates?: CustomRates,
+  startingRates?: StartingRates
 ): number {
+  if (startingRates?.checkout) {
+    return calculateFromRules(
+      projection,
+      startingRates.checkout.rules,
+      startingRates.checkout.defaultPercentage
+    );
+  }
   return calculateTopOffer(projection, customRates);
 }
 
-export function calculateTopOfferNewCustomer(projection: number): number {
+export function calculateTopOfferNewCustomer(projection: number, customRates?: CustomRates): number {
+  const rates = customRates ?? DEFAULT_CUSTOM_RATES;
+  const newCustomerRates = rates.newCustomer ?? DEFAULT_CUSTOM_RATES.newCustomer!;
   return calculateFromRules(
     projection,
-    DEFAULT_NEW_CUSTOMER_RULES,
-    DEFAULT_NEW_CUSTOMER_DEFAULT_PERCENTAGE
+    newCustomerRates.rules,
+    newCustomerRates.defaultPercentage
   );
 }
 
 export function calculateStartingOfferNewCustomer(
   projection: number,
-  customRates?: CustomRates
+  customRates?: CustomRates,
+  startingRates?: StartingRates
 ): number {
+  if (startingRates?.newCustomer) {
+    return calculateFromRules(
+      projection,
+      startingRates.newCustomer.rules,
+      startingRates.newCustomer.defaultPercentage
+    );
+  }
   return calculateTopOffer(projection, customRates);
 }
 
@@ -237,24 +303,64 @@ export function calculateCustomOffer(projection: number, offer: CustomOffer): nu
   return calculateFromRules(projection, offer.rules, offer.defaultPercentage);
 }
 
+export function calculateCustomStartingOffer(
+  projection: number,
+  offer: CustomOffer,
+  startingRates?: StartingRates
+): number {
+  if (offer.startingRules) {
+    return calculateFromRules(
+      projection,
+      offer.startingRules,
+      offer.startingDefaultPercentage ??
+        DEFAULT_STARTING_RATES.standard.defaultPercentage
+    );
+  }
+  return calculateStartingOffer(projection, startingRates);
+}
+
 export function calculateTopOfferResults(projection: number, settings: TopOffersSettings = {}) {
   const customRates = migrateDefaultTopOfferRates(settings.customRates);
   const customOffers = settings.customOffers ?? [];
+  const startingRates = settings.startingRates ?? {};
+  const enabledOfferTypes = {
+    ...DEFAULT_ENABLED_OFFER_TYPES,
+    ...(settings.enabledOfferTypes || {}),
+  };
 
   return {
-    startingOffer: calculateStartingOffer(projection),
+    enabledOfferTypes,
+    startingOffer: calculateStartingOffer(projection, startingRates),
     topOffer: calculateTopOffer(projection, customRates),
-    startingOfferPremium: calculateStartingOfferPremium(projection),
+    startingOfferPremium: calculateStartingOfferPremium(projection, startingRates),
     topOfferPremium: calculateTopOfferPremium(projection, customRates),
-    startingOfferCheckout: calculateStartingOfferCheckout(projection, customRates),
+    startingOfferCheckout: calculateStartingOfferCheckout(
+      projection,
+      customRates,
+      startingRates
+    ),
     topOfferCheckout: calculateTopOfferCheckout(projection, customRates),
-    startingOfferNewCustomer: calculateStartingOfferNewCustomer(projection, customRates),
-    topOfferNewCustomer: calculateTopOfferNewCustomer(projection),
-    customOffers: customOffers.map((offer) => ({
-      id: offer.id,
-      name: offer.name,
-      value: calculateCustomOffer(projection, offer),
-    })),
+    startingOfferNewCustomer: calculateStartingOfferNewCustomer(
+      projection,
+      customRates,
+      startingRates
+    ),
+    topOfferNewCustomer: calculateTopOfferNewCustomer(projection, customRates),
+    customOffers: customOffers.map((offer) => {
+      const maxValue = calculateCustomOffer(projection, offer);
+      return {
+        id: offer.id,
+        name: offer.name,
+        enabled: offer.enabled ?? true,
+        startingValue: calculateCustomStartingOffer(
+          projection,
+          offer,
+          startingRates
+        ),
+        maxValue,
+        value: maxValue,
+      };
+    }),
   };
 }
 
@@ -310,11 +416,25 @@ export function isCheckoutRateCustom(customRates?: CustomRates): boolean {
   );
 }
 
-export type BuiltInTopOfferRateType = "standard" | "premium";
+export type BuiltInTopOfferRateType = "standard" | "premium" | "newCustomer";
+export type BuiltInTopOfferType = BuiltInTopOfferRateType | "checkout";
+export type BuiltInStartingRateType = keyof StartingRates;
+
+type NormalizedCustomRates = {
+  standard: OfferRateTable;
+  premium: OfferRateTable;
+  checkout: {
+    percentage: number;
+  };
+  newCustomer: OfferRateTable;
+};
 
 function normalizeTopOffersSettings(
   settings: TopOffersSettings = {}
-): Required<TopOffersSettings> & { customRates: CustomRates } {
+): Required<Omit<TopOffersSettings, "startingRates">> & {
+  customRates: NormalizedCustomRates;
+  startingRates: StartingRates;
+} {
   const customRates = settings.customRates ?? DEFAULT_CUSTOM_RATES;
 
   return {
@@ -336,12 +456,75 @@ function normalizeTopOffersSettings(
           customRates.checkout?.percentage ??
           DEFAULT_CUSTOM_RATES.checkout!.percentage,
       },
+      newCustomer: {
+        ...DEFAULT_CUSTOM_RATES.newCustomer!,
+        ...(customRates.newCustomer || {}),
+        rules: [
+          ...(customRates.newCustomer?.rules || DEFAULT_NEW_CUSTOMER_RULES),
+        ],
+        defaultPercentage:
+          customRates.newCustomer?.defaultPercentage ??
+          DEFAULT_NEW_CUSTOMER_DEFAULT_PERCENTAGE,
+      },
+    },
+    startingRates: {
+      ...(settings.startingRates || {}),
+      standard: settings.startingRates?.standard
+        ? cloneRateTable(settings.startingRates.standard)
+        : undefined,
+      premium: settings.startingRates?.premium
+        ? cloneRateTable(settings.startingRates.premium)
+        : undefined,
+      checkout: settings.startingRates?.checkout
+        ? cloneRateTable(settings.startingRates.checkout)
+        : undefined,
+      newCustomer: settings.startingRates?.newCustomer
+        ? cloneRateTable(settings.startingRates.newCustomer)
+        : undefined,
     },
     customOffers: (settings.customOffers || []).map((offer) => ({
       ...offer,
+      enabled: offer.enabled ?? true,
       rules: [...offer.rules],
+      startingRules: offer.startingRules ? [...offer.startingRules] : undefined,
     })),
+    enabledOfferTypes: {
+      ...DEFAULT_ENABLED_OFFER_TYPES,
+      ...(settings.enabledOfferTypes || {}),
+    },
   };
+}
+
+function getDefaultStartingRateTable(
+  type: BuiltInStartingRateType,
+  customRates: NormalizedCustomRates
+): OfferRateTable {
+  if (type === "checkout" || type === "newCustomer") {
+    return cloneRateTable(customRates.standard);
+  }
+  return cloneRateTable(DEFAULT_STARTING_RATES[type]);
+}
+
+function getStartingRateTable(
+  settings: ReturnType<typeof normalizeTopOffersSettings>,
+  type: BuiltInStartingRateType
+): OfferRateTable {
+  return settings.startingRates[type]
+    ? cloneRateTable(settings.startingRates[type]!)
+    : getDefaultStartingRateTable(type, settings.customRates);
+}
+
+export function setBuiltInTopOfferEnabled(
+  settings: TopOffersSettings | undefined,
+  type: BuiltInTopOfferType,
+  enabled: boolean
+): TopOffersSettings {
+  const next = normalizeTopOffersSettings(settings);
+  next.enabledOfferTypes = {
+    ...next.enabledOfferTypes,
+    [type]: enabled,
+  };
+  return next;
 }
 
 export function updateTopOfferRateRule(
@@ -358,6 +541,105 @@ export function updateTopOfferRateRule(
 
   rules[index] = { ...rules[index], [field]: value };
   next.customRates[type] = { ...currentRates, rules };
+  return next;
+}
+
+export function setBuiltInTopOfferStartingRatesEnabled(
+  settings: TopOffersSettings | undefined,
+  type: BuiltInStartingRateType,
+  enabled: boolean
+): TopOffersSettings {
+  const next = normalizeTopOffersSettings(settings);
+  const startingRates = { ...next.startingRates };
+  if (enabled) {
+    startingRates[type] = getStartingRateTable(next, type);
+  } else {
+    delete startingRates[type];
+  }
+  next.startingRates = startingRates;
+  return next;
+}
+
+export function updateTopOfferStartingRateRule(
+  settings: TopOffersSettings | undefined,
+  type: BuiltInStartingRateType,
+  index: number,
+  field: keyof RateRule,
+  value: number
+): TopOffersSettings {
+  const next = normalizeTopOffersSettings(settings);
+  const currentRates = getStartingRateTable(next, type);
+  const rules = [...currentRates.rules];
+  if (!rules[index]) return next;
+
+  rules[index] = { ...rules[index], [field]: value };
+  next.startingRates = {
+    ...next.startingRates,
+    [type]: { ...currentRates, rules },
+  };
+  return next;
+}
+
+export function sortTopOfferStartingRateRules(
+  settings: TopOffersSettings | undefined,
+  type: BuiltInStartingRateType
+): TopOffersSettings {
+  const next = normalizeTopOffersSettings(settings);
+  const currentRates = getStartingRateTable(next, type);
+  next.startingRates = {
+    ...next.startingRates,
+    [type]: { ...currentRates, rules: sortRateRules(currentRates.rules) },
+  };
+  return next;
+}
+
+export function addTopOfferStartingRateRule(
+  settings: TopOffersSettings | undefined,
+  type: BuiltInStartingRateType
+): TopOffersSettings {
+  const next = normalizeTopOffersSettings(settings);
+  const currentRates = getStartingRateTable(next, type);
+  next.startingRates = {
+    ...next.startingRates,
+    [type]: {
+      ...currentRates,
+      rules: sortRateRules([
+        ...currentRates.rules,
+        createNextRateRule(currentRates.rules),
+      ]),
+    },
+  };
+  return next;
+}
+
+export function removeTopOfferStartingRateRule(
+  settings: TopOffersSettings | undefined,
+  type: BuiltInStartingRateType,
+  index: number
+): TopOffersSettings {
+  const next = normalizeTopOffersSettings(settings);
+  const currentRates = getStartingRateTable(next, type);
+  next.startingRates = {
+    ...next.startingRates,
+    [type]: {
+      ...currentRates,
+      rules: currentRates.rules.filter((_, ruleIndex) => ruleIndex !== index),
+    },
+  };
+  return next;
+}
+
+export function updateTopOfferStartingDefaultPercentage(
+  settings: TopOffersSettings | undefined,
+  type: BuiltInStartingRateType,
+  value: number
+): TopOffersSettings {
+  const next = normalizeTopOffersSettings(settings);
+  const currentRates = getStartingRateTable(next, type);
+  next.startingRates = {
+    ...next.startingRates,
+    [type]: { ...currentRates, defaultPercentage: value },
+  };
   return next;
 }
 
@@ -456,6 +738,44 @@ export function deleteCustomTopOffer(
   return next;
 }
 
+export function setCustomTopOfferEnabled(
+  settings: TopOffersSettings | undefined,
+  offerId: string,
+  enabled: boolean
+): TopOffersSettings {
+  const next = normalizeTopOffersSettings(settings);
+  next.customOffers = next.customOffers.map((offer) =>
+    offer.id === offerId ? { ...offer, enabled } : offer
+  );
+  return next;
+}
+
+export function setCustomTopOfferStartingRatesEnabled(
+  settings: TopOffersSettings | undefined,
+  offerId: string,
+  enabled: boolean
+): TopOffersSettings {
+  const next = normalizeTopOffersSettings(settings);
+  const standardStartRates = getStartingRateTable(next, "standard");
+  next.customOffers = next.customOffers.map((offer) => {
+    if (offer.id !== offerId) return offer;
+    if (!enabled) {
+      const { startingRules: _rules, startingDefaultPercentage: _default, ...rest } = offer;
+      return rest;
+    }
+    return {
+      ...offer,
+      startingRules: offer.startingRules
+        ? [...offer.startingRules]
+        : [...standardStartRates.rules],
+      startingDefaultPercentage:
+        offer.startingDefaultPercentage ??
+        standardStartRates.defaultPercentage,
+    };
+  });
+  return next;
+}
+
 export function updateCustomTopOfferRule(
   settings: TopOffersSettings | undefined,
   offerId: string,
@@ -473,6 +793,33 @@ export function updateCustomTopOfferRule(
   return next;
 }
 
+export function updateCustomTopOfferStartingRule(
+  settings: TopOffersSettings | undefined,
+  offerId: string,
+  ruleIndex: number,
+  field: keyof RateRule,
+  value: number
+): TopOffersSettings {
+  const next = normalizeTopOffersSettings(settings);
+  const standardStartRates = getStartingRateTable(next, "standard");
+  next.customOffers = next.customOffers.map((offer) => {
+    if (offer.id !== offerId) return offer;
+    const rules = offer.startingRules
+      ? [...offer.startingRules]
+      : [...standardStartRates.rules];
+    if (!rules[ruleIndex]) return offer;
+    rules[ruleIndex] = { ...rules[ruleIndex], [field]: value };
+    return {
+      ...offer,
+      startingRules: rules,
+      startingDefaultPercentage:
+        offer.startingDefaultPercentage ??
+        standardStartRates.defaultPercentage,
+    };
+  });
+  return next;
+}
+
 export function sortCustomTopOfferRules(
   settings: TopOffersSettings | undefined,
   offerId: string
@@ -481,6 +828,28 @@ export function sortCustomTopOfferRules(
   next.customOffers = next.customOffers.map((offer) =>
     offer.id === offerId ? { ...offer, rules: sortRateRules(offer.rules) } : offer
   );
+  return next;
+}
+
+export function sortCustomTopOfferStartingRules(
+  settings: TopOffersSettings | undefined,
+  offerId: string
+): TopOffersSettings {
+  const next = normalizeTopOffersSettings(settings);
+  const standardStartRates = getStartingRateTable(next, "standard");
+  next.customOffers = next.customOffers.map((offer) => {
+    if (offer.id !== offerId) return offer;
+    const rules = offer.startingRules
+      ? [...offer.startingRules]
+      : [...standardStartRates.rules];
+    return {
+      ...offer,
+      startingRules: sortRateRules(rules),
+      startingDefaultPercentage:
+        offer.startingDefaultPercentage ??
+        standardStartRates.defaultPercentage,
+    };
+  });
   return next;
 }
 
@@ -497,6 +866,28 @@ export function addCustomTopOfferRule(
         }
       : offer
   );
+  return next;
+}
+
+export function addCustomTopOfferStartingRule(
+  settings: TopOffersSettings | undefined,
+  offerId: string
+): TopOffersSettings {
+  const next = normalizeTopOffersSettings(settings);
+  const standardStartRates = getStartingRateTable(next, "standard");
+  next.customOffers = next.customOffers.map((offer) => {
+    if (offer.id !== offerId) return offer;
+    const rules = offer.startingRules
+      ? [...offer.startingRules]
+      : [...standardStartRates.rules];
+    return {
+      ...offer,
+      startingRules: sortRateRules([...rules, createNextRateRule(rules)]),
+      startingDefaultPercentage:
+        offer.startingDefaultPercentage ??
+        standardStartRates.defaultPercentage,
+    };
+  });
   return next;
 }
 
@@ -517,6 +908,29 @@ export function removeCustomTopOfferRule(
   return next;
 }
 
+export function removeCustomTopOfferStartingRule(
+  settings: TopOffersSettings | undefined,
+  offerId: string,
+  ruleIndex: number
+): TopOffersSettings {
+  const next = normalizeTopOffersSettings(settings);
+  const standardStartRates = getStartingRateTable(next, "standard");
+  next.customOffers = next.customOffers.map((offer) => {
+    if (offer.id !== offerId) return offer;
+    const rules = offer.startingRules
+      ? [...offer.startingRules]
+      : [...standardStartRates.rules];
+    return {
+      ...offer,
+      startingRules: rules.filter((_, index) => index !== ruleIndex),
+      startingDefaultPercentage:
+        offer.startingDefaultPercentage ??
+        standardStartRates.defaultPercentage,
+    };
+  });
+  return next;
+}
+
 export function updateCustomTopOfferDefaultPercentage(
   settings: TopOffersSettings | undefined,
   offerId: string,
@@ -525,6 +939,27 @@ export function updateCustomTopOfferDefaultPercentage(
   const next = normalizeTopOffersSettings(settings);
   next.customOffers = next.customOffers.map((offer) =>
     offer.id === offerId ? { ...offer, defaultPercentage: value } : offer
+  );
+  return next;
+}
+
+export function updateCustomTopOfferStartingDefaultPercentage(
+  settings: TopOffersSettings | undefined,
+  offerId: string,
+  value: number
+): TopOffersSettings {
+  const next = normalizeTopOffersSettings(settings);
+  const standardStartRates = getStartingRateTable(next, "standard");
+  next.customOffers = next.customOffers.map((offer) =>
+    offer.id === offerId
+      ? {
+          ...offer,
+          startingRules: offer.startingRules
+            ? [...offer.startingRules]
+            : [...standardStartRates.rules],
+          startingDefaultPercentage: value,
+        }
+      : offer
   );
   return next;
 }

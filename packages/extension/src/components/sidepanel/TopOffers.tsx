@@ -12,6 +12,7 @@ import type {
 } from "../../types/settings";
 import {
   calculateTopOfferResults,
+  DEFAULT_ENABLED_OFFER_TYPES,
   formatCurrency,
 } from "../../domain/top-offers";
 
@@ -100,7 +101,14 @@ function TopOfferCalculator() {
     topOfferNewCustomer: 0,
   });
   const [customOfferResults, setCustomOfferResults] = useState<
-    { id: string; name: string; value: number }[]
+    {
+      id: string;
+      name: string;
+      enabled: boolean;
+      startingValue: number;
+      maxValue: number;
+      value: number;
+    }[]
   >([]);
   const [copied, setCopied] = useState<string | null>(null);
 
@@ -195,6 +203,11 @@ function TopOfferCalculator() {
     }
   };
 
+  const enabledOfferTypes = {
+    ...DEFAULT_ENABLED_OFFER_TYPES,
+    ...(topOffersSettings.enabledOfferTypes || {}),
+  };
+
   return (
     <SidepanelLayout className="top-offers-root bg-transparent">
       <div className="top-offers-content">
@@ -216,6 +229,7 @@ function TopOfferCalculator() {
         </div>
 
         <div className="top-offers-results-list">
+          {enabledOfferTypes.standard && (
             <OfferResultCard
               offer={{
                 id: "standard",
@@ -226,7 +240,9 @@ function TopOfferCalculator() {
               copied={copied}
               onCopy={handleCopy}
             />
+          )}
 
+          {enabledOfferTypes.premium && (
             <OfferResultCard
               offer={{
                 id: "premium",
@@ -237,7 +253,9 @@ function TopOfferCalculator() {
               copied={copied}
               onCopy={handleCopy}
             />
+          )}
 
+          {enabledOfferTypes.checkout && (
             <OfferResultCard
               offer={{
                 id: "checkout",
@@ -248,7 +266,9 @@ function TopOfferCalculator() {
               copied={copied}
               onCopy={handleCopy}
             />
+          )}
 
+          {enabledOfferTypes.newCustomer && (
             <OfferResultCard
               offer={{
                 id: "new-customer",
@@ -259,34 +279,24 @@ function TopOfferCalculator() {
               copied={copied}
               onCopy={handleCopy}
             />
+          )}
 
             {/* Custom Offers */}
             {(topOffersSettings.customOffers || []).map((offer) => {
+              if (offer.enabled === false) return null;
               const result = customOfferResults.find((r) => r.id === offer.id);
-              const value = result?.value ?? 0;
               return (
-                <button
-                  type="button"
+                <OfferResultCard
                   key={offer.id}
-                  onClick={() => handleCopy(value, offer.id)}
-                  className="top-offers-card top-offers-custom-card flex w-full min-w-0 cursor-pointer flex-col items-center justify-center text-center transition active:scale-[0.99]"
-                >
-                  <div className="flex h-9 max-w-full items-center justify-center">
-                    {copied === offer.id ? (
-                      <span className="inline-flex items-center justify-center gap-1.5 text-sm font-bold text-green-700 dark:text-green-300">
-                        <Check className="h-4 w-4 shrink-0" />
-                        Copied
-                      </span>
-                    ) : (
-                      <span className="top-offers-amount max-w-full font-bold leading-tight tabular-nums text-green-700 [overflow-wrap:anywhere] dark:text-green-300">
-                        ${formatCurrency(value)}
-                      </span>
-                    )}
-                  </div>
-                  <div className="mt-1 max-w-full truncate text-xs font-bold text-stone-500 dark:text-stone-400">
-                    {offer.name}
-                  </div>
-                </button>
+                  offer={{
+                    id: offer.id,
+                    label: offer.name,
+                    startingValue: result?.startingValue ?? 0,
+                    maxValue: result?.maxValue ?? result?.value ?? 0,
+                  }}
+                  copied={copied}
+                  onCopy={handleCopy}
+                />
               );
             })}
           <button

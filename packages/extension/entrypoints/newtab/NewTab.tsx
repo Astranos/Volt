@@ -17,7 +17,6 @@ import {
   type SidepanelToolId,
 } from "../../src/lib/sidepanel-tools";
 import { Loader2, QrCode, Smartphone } from "lucide-react";
-import { triggerSidepanelToolFromContentScript } from "../../src/lib/sidepanel-gesture";
 import { searchProviders } from "../../src/components/cmdk-palette/SearchProviders";
 import { TabManager } from "../../src/utils/tab-manager";
 import type { SyncStorageResult } from "../../src/types/settings";
@@ -160,28 +159,21 @@ export default function NewTab() {
   };
 
   const handleSidepanelToolClick = (toolId: SidepanelToolId) => {
-    try {
-      triggerSidepanelToolFromContentScript(toolId, {
-        source: "newtab",
-      }).catch((err) => {
-        console.error("[NewTab] Failed to open sidepanel tool:", err);
-        // Fallback to message-based approach
-        if (typeof chrome !== "undefined" && chrome.runtime) {
-          chrome.runtime.sendMessage({
-            action: "openInSidebar",
-            tool: toolId,
-          });
+    if (typeof chrome === "undefined" || !chrome.runtime) return;
+
+    chrome.runtime.sendMessage(
+      {
+        action: "openInSidebar",
+        mode: "open",
+        tool: toolId,
+      },
+      () => {
+        const error = chrome.runtime.lastError;
+        if (error) {
+          console.error("[NewTab] Failed to open sidepanel tool:", error);
         }
-      });
-    } catch (e) {
-      console.error("[NewTab] Failed to open sidepanel tool:", e);
-      if (typeof chrome !== "undefined" && chrome.runtime) {
-        chrome.runtime.sendMessage({
-          action: "openInSidebar",
-          tool: toolId,
-        });
       }
-    }
+    );
   };
 
   const openMobilePairingPopup = () => {

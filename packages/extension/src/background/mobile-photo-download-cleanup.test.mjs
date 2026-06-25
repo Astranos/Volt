@@ -8,7 +8,7 @@ import {
   MOBILE_PHOTO_DOWNLOADS_STORAGE_KEY,
   createMobilePhotoDownloadCleanup,
   isVoltPhotoDownloadFilename,
-  nextMidnightOrNoonTimestamp,
+  nextMidnightTimestamp,
 } from "./mobile-photo-download-cleanup.ts";
 
 const DEFAULT_RETENTION_MS =
@@ -67,18 +67,18 @@ function createChromeStub(initialRecords = [], cmdkSettings = undefined) {
   };
 }
 
-test("next cleanup is scheduled for local noon before noon", () => {
+test("next cleanup is scheduled for the next local midnight before noon", () => {
   const now = new Date(2026, 5, 23, 8, 15, 30).getTime();
   assert.equal(
-    nextMidnightOrNoonTimestamp(now),
-    new Date(2026, 5, 23, 12, 0, 0).getTime(),
+    nextMidnightTimestamp(now),
+    new Date(2026, 5, 24, 0, 0, 0).getTime(),
   );
 });
 
-test("next cleanup is scheduled for local midnight after noon", () => {
+test("next cleanup is scheduled for the next local midnight after noon", () => {
   const now = new Date(2026, 5, 23, 18, 15, 30).getTime();
   assert.equal(
-    nextMidnightOrNoonTimestamp(now),
+    nextMidnightTimestamp(now),
     new Date(2026, 5, 24, 0, 0, 0).getTime(),
   );
 });
@@ -92,7 +92,7 @@ test("only Volt photo download paths are accepted", () => {
   assert.equal(isVoltPhotoDownloadFilename("Volt/photo.jpg"), false);
 });
 
-test("cleanup alarm runs every 12 hours", () => {
+test("cleanup alarm runs daily", () => {
   const { chromeApi, alarms } = createChromeStub();
   const cleanup = createMobilePhotoDownloadCleanup({
     chromeApi,

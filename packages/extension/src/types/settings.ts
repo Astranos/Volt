@@ -3,30 +3,49 @@ export interface RateRule {
   percentage: number;
 }
 
+export interface OfferRateTable {
+  rules: RateRule[];
+  defaultPercentage: number;
+}
+
 export interface CustomOffer {
   id: string;
   name: string;
   rules: RateRule[];
   defaultPercentage: number;
+  enabled?: boolean;
+  startingRules?: RateRule[];
+  startingDefaultPercentage?: number;
 }
 
 export interface CustomRates {
-  standard: {
-    rules: RateRule[];
-    defaultPercentage: number;
-  };
-  premium: {
-    rules: RateRule[];
-    defaultPercentage: number;
-  };
+  standard: OfferRateTable;
+  premium: OfferRateTable;
   checkout?: {
     percentage: number;
   };
+  newCustomer?: OfferRateTable;
+}
+
+export interface StartingRates {
+  standard?: OfferRateTable;
+  premium?: OfferRateTable;
+  checkout?: OfferRateTable;
+  newCustomer?: OfferRateTable;
+}
+
+export interface EnabledOfferTypes {
+  standard: boolean;
+  premium: boolean;
+  checkout: boolean;
+  newCustomer: boolean;
 }
 
 export interface TopOffersSettings {
   customRates?: CustomRates;
+  startingRates?: StartingRates;
   customOffers?: CustomOffer[];
+  enabledOfferTypes?: EnabledOfferTypes;
 }
 
 export interface CustomSearchProviderSettings {

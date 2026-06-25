@@ -41,3 +41,10 @@ test("background-to-offscreen commands are still ignored by the background liste
     true
   );
 });
+
+test("sidepanel close notification preserves its window id", () => {
+  assert.deepEqual(parseRuntimeMessage({ action: "sidePanelDidClose", windowId: 42 }), {
+    action: "sidePanelDidClose",
+    windowId: 42,
+  });
+});

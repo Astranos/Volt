@@ -1,8 +1,10 @@
 import { Plus, Trash2 } from "lucide-react";
+import type { ReactNode } from "react";
 import type { RateRule } from "@/src/types/settings";
 
 interface RateRuleEditorProps {
   title?: string;
+  headerAction?: ReactNode;
   rules: RateRule[];
   defaultPercentage: number;
   onRuleChange: (
@@ -18,6 +20,7 @@ interface RateRuleEditorProps {
 
 export function RateRuleEditor({
   title,
+  headerAction,
   rules,
   defaultPercentage,
   onRuleChange,
@@ -28,7 +31,12 @@ export function RateRuleEditor({
 }: RateRuleEditorProps) {
   return (
     <div>
-      {title && <h3 className="font-semibold text-lg mb-4">{title}</h3>}
+      {(title || headerAction) && (
+        <div className="mb-4 flex items-center justify-between gap-4">
+          {title ? <h3 className="font-semibold text-lg">{title}</h3> : <div />}
+          {headerAction}
+        </div>
+      )}
       <div className="space-y-3">
         <RateRuleHeader />
         {rules.map((rule, index) => (

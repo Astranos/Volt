@@ -393,7 +393,11 @@ export function CMDKPalette({
           const response = await new Promise<any>((resolve) => {
             try {
               chrome.runtime.sendMessage(
-                { action: "openInSidebar", tool: "mobile-scanner" },
+                {
+                  action: "openInSidebar",
+                  mode: "open",
+                  tool: "mobile-scanner",
+                },
                 (resp: any) => resolve(resp)
               );
             } catch (err) {
@@ -535,12 +539,15 @@ export function CMDKPalette({
   };
 
   const toggleSidepanel = async () => {
-    // Send message to toggle sidepanel
     try {
       await new Promise<any>((resolve) => {
         try {
           chrome.runtime.sendMessage(
-            { action: "toggleSidepanelTool" },
+            {
+              action: "openInSidebar",
+              mode: "open",
+              tool: "mobile-scanner",
+            },
             (resp: any) => resolve(resp)
           );
         } catch (err) {

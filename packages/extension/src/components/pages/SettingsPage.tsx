@@ -4,27 +4,21 @@ import {
   Bookmark,
   Calculator,
   Check,
-  Layers,
   Link2,
-  Menu,
   MousePointerClick,
   Images,
   ScanLine,
-  Search as SearchIcon,
   BadgeAlert,
 } from "lucide-react";
 import { BookmarkFoldersSettings } from "@/src/components/settings/BookmarkFoldersSettings";
 import { CsvCacheSettings } from "@/src/components/settings/CsvCacheSettings";
 import { FeatureTogglesSettings } from "@/src/components/settings/FeatureTogglesSettings";
-import { SearchProvidersSettings } from "@/src/components/settings/SearchProvidersSettings";
 import { TopOffersSettings } from "@/src/components/settings/TopOffersSettings";
 import { useExtensionSettings } from "@/src/hooks/useExtensionSettings";
 
 const NAV_ITEMS = [
   { href: "#newtab", icon: ScanLine, label: "New Tab Override" },
-  { href: "#sources", icon: Layers, label: "Command Menu" },
   { href: "#bookmarks", icon: Bookmark, label: "Bookmarks" },
-  { href: "#providers", icon: SearchIcon, label: "Search Providers" },
   { href: "#ebay", icon: BadgeAlert, label: "Sold Listing Warning" },
   { href: "#upc", icon: Barcode, label: "UPC Highlighter" },
   { href: "#contextmenu", icon: MousePointerClick, label: "Context Menu" },
@@ -34,7 +28,7 @@ const NAV_ITEMS = [
 ];
 
 export default function SettingsPage() {
-  const { settings, setSettings, isSaved, saveSettings, resetSettings } =
+  const { settings, isSaved, saveSettings, resetSettings } =
     useExtensionSettings();
   const [version, setVersion] = useState<string>("");
 
@@ -111,27 +105,14 @@ export default function SettingsPage() {
               </a>
             ))}
           </nav>
-
-          <div className="mt-8 p-4 bg-muted/30 rounded-lg border border-border/40">
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              <strong className="text-foreground block mb-2">Quick Tip</strong>
-              Drag the <Menu className="w-3 h-3 inline" /> icon to reorder
-              sources. Changes are saved automatically.
-            </p>
-          </div>
         </aside>
 
         <main className="flex-1 p-8 space-y-12 max-w-5xl">
           <FeatureTogglesSettings
             settings={settings}
-            setSettings={setSettings}
             saveSettings={saveSettings}
           />
           <BookmarkFoldersSettings
-            settings={settings}
-            saveSettings={saveSettings}
-          />
-          <SearchProvidersSettings
             settings={settings}
             saveSettings={saveSettings}
           />

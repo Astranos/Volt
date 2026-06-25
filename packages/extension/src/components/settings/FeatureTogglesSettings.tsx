@@ -1,41 +1,5 @@
-import type { Dispatch, SetStateAction } from "react";
-import { useRef, useState } from "react";
-import { Menu } from "lucide-react";
 import type { SaveExtensionSettings } from "@/src/hooks/useExtensionSettings";
 import type { CmdkSettings } from "@/src/types/settings";
-
-const SOURCES_CONFIG = {
-  tabs: {
-    key: "tabs" as const,
-    label: "Tabs",
-    description: "Search and switch between open browser tabs",
-  },
-  bookmarks: {
-    key: "bookmarks" as const,
-    label: "Bookmarks",
-    description: "Access your saved bookmarks",
-  },
-  history: {
-    key: "history" as const,
-    label: "Recent History",
-    description: "View recently visited pages",
-  },
-  quickLinks: {
-    key: "quickLinks" as const,
-    label: "Volt Links",
-    description: "CSV-based custom links organized by category",
-  },
-  tools: {
-    key: "tools" as const,
-    label: "Tools",
-    description: "PayMore extension tools and features",
-  },
-  searchProviders: {
-    key: "searchProviders" as const,
-    label: "Search Providers",
-    description: "Google, YouTube, Amazon, and other search engines",
-  },
-};
 
 const MOBILE_PHOTO_RETENTION_OPTIONS = [
   { value: 12, label: "12 hours" },
@@ -46,57 +10,13 @@ const MOBILE_PHOTO_RETENTION_OPTIONS = [
 
 interface FeatureTogglesSettingsProps {
   settings: CmdkSettings;
-  setSettings: Dispatch<SetStateAction<CmdkSettings>>;
   saveSettings: SaveExtensionSettings;
 }
 
 export function FeatureTogglesSettings({
   settings,
-  setSettings,
   saveSettings,
 }: FeatureTogglesSettingsProps) {
-  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
-  const pendingSourceOrderSettingsRef = useRef<CmdkSettings | null>(null);
-  const sources = settings.sourceOrder
-    .map((key) => SOURCES_CONFIG[key as keyof typeof SOURCES_CONFIG])
-    .filter(Boolean);
-
-  const handleToggle = (source: keyof CmdkSettings["enabledSources"]) => {
-    void saveSettings({
-      ...settings,
-      enabledSources: {
-        ...settings.enabledSources,
-        [source]: !settings.enabledSources[source],
-      },
-    });
-  };
-
-  const handleDragOver = (event: React.DragEvent, index: number) => {
-    event.preventDefault();
-    if (draggedIndex === null || draggedIndex === index) return;
-
-    const currentSettings = pendingSourceOrderSettingsRef.current ?? settings;
-    const newOrder = [...currentSettings.sourceOrder];
-    const draggedItem = newOrder[draggedIndex];
-    newOrder.splice(draggedIndex, 1);
-    newOrder.splice(index, 0, draggedItem);
-
-    const nextSettings = {
-      ...currentSettings,
-      sourceOrder: newOrder,
-    };
-    pendingSourceOrderSettingsRef.current = nextSettings;
-    setSettings(nextSettings);
-    setDraggedIndex(index);
-  };
-
-  const handleDragEnd = () => {
-    setDraggedIndex(null);
-    const nextSettings = pendingSourceOrderSettingsRef.current ?? settings;
-    pendingSourceOrderSettingsRef.current = null;
-    void saveSettings(nextSettings);
-  };
-
   return (
     <>
       <ToggleSection
@@ -115,59 +35,7 @@ export function FeatureTogglesSettings({
             },
           })
         }
-        activeTone="green"
       />
-
-      <section id="sources" className="scroll-mt-20">
-        <div className="mb-6">
-          <h2 className="text-2xl font-bold mb-2">Command Menu Sources</h2>
-          <p className="text-muted-foreground">
-            Control which sources appear in your command menu and customize
-            their order
-          </p>
-        </div>
-
-        <div className="bg-card rounded-xl border border-border shadow-lg overflow-hidden">
-          <div className="divide-y divide-border">
-            {sources.map((source, index) => (
-              <div
-                key={source.key}
-                draggable
-                onDragStart={() => setDraggedIndex(index)}
-                onDragOver={(event) => handleDragOver(event, index)}
-                onDragEnd={handleDragEnd}
-                className={`p-6 flex items-start gap-4 hover:bg-muted/30 transition-all cursor-move group ${
-                  draggedIndex === index ? "opacity-50 scale-[0.98]" : ""
-                }`}
-              >
-                <button
-                  className="p-2 text-muted-foreground group-hover:text-foreground cursor-grab active:cursor-grabbing transition-colors"
-                  onMouseDown={(event) => event.stopPropagation()}
-                >
-                  <Menu className="w-5 h-5" />
-                </button>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <h3 className="font-semibold text-base">
-                      {source.label}
-                    </h3>
-                    {settings.enabledSources[source.key] && (
-                      <StatusBadge tone="green">Enabled</StatusBadge>
-                    )}
-                  </div>
-                  <p className="text-sm text-muted-foreground leading-relaxed">
-                    {source.description}
-                  </p>
-                </div>
-                <ToggleSwitch
-                  enabled={settings.enabledSources[source.key]}
-                  onClick={() => handleToggle(source.key)}
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
 
       <ToggleSection
         id="shopify-buttons"
@@ -192,7 +60,6 @@ export function FeatureTogglesSettings({
             )
           );
         }}
-        activeTone="green"
       />
 
       <ToggleSection
@@ -225,7 +92,6 @@ export function FeatureTogglesSettings({
             )
           );
         }}
-        activeTone="blue"
       />
 
       <ToggleSection
@@ -257,7 +123,6 @@ export function FeatureTogglesSettings({
             )
           );
         }}
-        activeTone="blue"
       />
 
       <ToggleSection
@@ -289,7 +154,6 @@ export function FeatureTogglesSettings({
             )
           );
         }}
-        activeTone="blue"
       />
 
       <section id="mobilephotos" className="scroll-mt-20">
@@ -309,11 +173,11 @@ export function FeatureTogglesSettings({
                     Auto-delete downloaded photos
                   </h3>
                   {(settings.mobilePhotoDownloads?.autoDeleteEnabled ?? true) && (
-                    <StatusBadge tone="blue">Active</StatusBadge>
+                    <StatusBadge>Active</StatusBadge>
                   )}
                 </div>
                 <p className="text-sm text-muted-foreground leading-relaxed mb-3">
-                  Deletes Volt-created files in the Volt Photos download folder after the retention window. Cleanup runs at local midnight and noon.
+                  Deletes Volt-created files in the Volt Photos download folder after the retention window. Cleanup runs at local midnight.
                 </p>
               </div>
               <ToggleSwitch
@@ -376,7 +240,6 @@ function ToggleSection({
   details = [],
   enabled,
   onToggle,
-  activeTone,
 }: {
   id: string;
   title: string;
@@ -386,7 +249,6 @@ function ToggleSection({
   details?: string[];
   enabled: boolean;
   onToggle: () => void;
-  activeTone: "green" | "blue";
 }) {
   return (
     <section id={id} className="scroll-mt-20">
@@ -401,7 +263,7 @@ function ToggleSection({
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-2">
                 <h3 className="font-semibold text-base">{itemTitle}</h3>
-                {enabled && <StatusBadge tone={activeTone}>Active</StatusBadge>}
+                {enabled && <StatusBadge>Active</StatusBadge>}
               </div>
               <p className="text-sm text-muted-foreground leading-relaxed mb-3">
                 {itemDescription}
@@ -446,19 +308,12 @@ function ToggleSwitch({
 }
 
 function StatusBadge({
-  tone,
   children,
 }: {
-  tone: "green" | "blue";
   children: string;
 }) {
-  const toneClasses =
-    tone === "green"
-      ? "bg-green-100 text-green-700"
-      : "bg-blue-100 text-blue-700";
-
   return (
-    <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${toneClasses}`}>
+    <span className="text-xs px-2.5 py-1 rounded-full font-medium bg-green-100 text-green-700">
       {children}
     </span>
   );

@@ -119,6 +119,30 @@ export function registerSidepanelMessageActions({
       return true;
     });
 
+    registry.register("sidePanelDidClose", (message, _sender, sendResponse) => {
+      const markClosed = (windowId: number) => {
+        setSidePanelState(windowId, { open: false, tool: null });
+        log(`Sidepanel closed for window: ${windowId}`);
+      };
+
+      if (typeof message.windowId === "number") {
+        markClosed(message.windowId);
+        sendResponse({ success: true, windowId: message.windowId });
+        return true;
+      }
+
+      chromeApi.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        const active = tabs && tabs[0];
+        if (typeof active?.windowId === "number") {
+          markClosed(active.windowId);
+          sendResponse({ success: true, windowId: active.windowId });
+        } else {
+          sendResponse({ success: false, error: "missing_window" });
+        }
+      });
+      return true;
+    });
+
     registry.register("closeSidebar", (message, sender, sendResponse) => {
       const tabId = sender?.tab?.id ?? message.tabId;
       if (typeof tabId === "number") {

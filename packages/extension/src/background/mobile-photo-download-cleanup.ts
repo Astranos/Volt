@@ -5,7 +5,7 @@ type LogFn = (...args: unknown[]) => void;
 
 export const MOBILE_PHOTO_DOWNLOAD_CLEANUP_ALARM_NAME =
   "volt.mobilePhotoDownloads.cleanup";
-export const MOBILE_PHOTO_DOWNLOAD_CLEANUP_PERIOD_MINUTES = 12 * 60;
+export const MOBILE_PHOTO_DOWNLOAD_CLEANUP_PERIOD_MINUTES = 24 * 60;
 export const DEFAULT_MOBILE_PHOTO_DOWNLOAD_RETENTION_HOURS = 24;
 export const MOBILE_PHOTO_DOWNLOADS_STORAGE_KEY =
   "volt.mobilePhotoDownloads.v1";
@@ -37,17 +37,11 @@ export function isVoltPhotoDownloadFilename(filename: string) {
   return filename === "Volt Photos" || filename.startsWith("Volt Photos/");
 }
 
-export function nextMidnightOrNoonTimestamp(now = Date.now()) {
+export function nextMidnightTimestamp(now = Date.now()) {
   const current = new Date(now);
   const next = new Date(current);
-  next.setMinutes(0, 0, 0);
-
-  if (current.getHours() < 12) {
-    next.setHours(12);
-  } else {
-    next.setDate(next.getDate() + 1);
-    next.setHours(0);
-  }
+  next.setDate(next.getDate() + 1);
+  next.setHours(0, 0, 0, 0);
 
   return next.getTime();
 }
@@ -171,7 +165,7 @@ export function createMobilePhotoDownloadCleanup({
   function ensureCleanupAlarm() {
     try {
       chromeApi.alarms?.create?.(MOBILE_PHOTO_DOWNLOAD_CLEANUP_ALARM_NAME, {
-        when: nextMidnightOrNoonTimestamp(),
+        when: nextMidnightTimestamp(),
         periodInMinutes: MOBILE_PHOTO_DOWNLOAD_CLEANUP_PERIOD_MINUTES,
       });
     } catch (error) {

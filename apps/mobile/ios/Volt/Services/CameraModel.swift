@@ -197,7 +197,7 @@ final class CameraModel: NSObject {
         session.sessionPreset = .photo
 
         guard
-            let camera = Self.bestBackCamera(),
+            let camera = CameraDeviceSelector.bestBackCamera(),
             let input = try? AVCaptureDeviceInput(device: camera),
             session.canAddInput(input)
         else {
@@ -227,19 +227,6 @@ final class CameraModel: NSObject {
         }
 
         session.commitConfiguration()
-    }
-
-    private static func bestBackCamera() -> AVCaptureDevice? {
-        let preferredDeviceTypes: [AVCaptureDevice.DeviceType] = [
-            .builtInTripleCamera,
-            .builtInDualWideCamera,
-            .builtInDualCamera,
-            .builtInWideAngleCamera
-        ]
-
-        return preferredDeviceTypes.lazy.compactMap {
-            AVCaptureDevice.default($0, for: .video, position: .back)
-        }.first
     }
 
     func updateBarcodeRecognitionMode(_ mode: BarcodeRecognitionMode) {
@@ -286,11 +273,9 @@ final class CameraModel: NSObject {
         let clampedFactor = clampedRawZoomFactor(factor, for: videoDevice)
         sessionQueue.async { [weak self] in
             do {
-                try videoDevice.lockForConfiguration()
-                videoDevice.videoZoomFactor = clampedFactor
-                videoDevice.unlockForConfiguration()
+                let zoomState = try CameraZoomController.setRawZoomFactor(clampedFactor, on: videoDevice)
                 Task { @MainActor in
-                    self?.updateZoomState(for: videoDevice, rawZoomFactor: clampedFactor)
+                    self?.applyZoomState(zoomState)
                 }
             } catch {
                 Task { @MainActor in
@@ -306,20 +291,18 @@ final class CameraModel: NSObject {
 
     private func setDisplayZoomFactor(_ factor: CGFloat) {
         guard let videoDevice else { return }
-        setZoomFactor(factor / displayZoomFactorMultiplier(for: videoDevice))
+        setZoomFactor(CameraZoomController.rawZoomFactor(forDisplayZoomFactor: factor, on: videoDevice))
     }
 
     func scaleZoom(by scale: CGFloat) {
         guard let videoDevice else { return }
         sessionQueue.async { [weak self] in
             do {
-                try videoDevice.lockForConfiguration()
                 let clampedFactor = self?.clampedRawZoomFactor(videoDevice.videoZoomFactor * scale, for: videoDevice)
                     ?? videoDevice.videoZoomFactor
-                videoDevice.videoZoomFactor = clampedFactor
-                videoDevice.unlockForConfiguration()
+                let zoomState = try CameraZoomController.setRawZoomFactor(clampedFactor, on: videoDevice)
                 Task { @MainActor in
-                    self?.updateZoomState(for: videoDevice, rawZoomFactor: clampedFactor)
+                    self?.applyZoomState(zoomState)
                 }
             } catch {
                 Task { @MainActor in
@@ -330,40 +313,32 @@ final class CameraModel: NSObject {
     }
 
     nonisolated private func clampedRawZoomFactor(_ factor: CGFloat, for device: AVCaptureDevice) -> CGFloat {
-        let maxDisplayZoomFactor: CGFloat = 6
-        let displayMultiplier = displayZoomFactorMultiplier(for: device)
-        let displayLimitedMaxZoomFactor = maxDisplayZoomFactor / displayMultiplier
-        let maxZoomFactor = min(device.maxAvailableVideoZoomFactor, displayLimitedMaxZoomFactor)
-        return max(device.minAvailableVideoZoomFactor, min(maxZoomFactor, factor))
+        CameraZoomController.clampedRawZoomFactor(factor, for: device)
     }
 
     nonisolated private func displayZoomFactorMultiplier(for device: AVCaptureDevice) -> CGFloat {
-        max(device.displayVideoZoomFactorMultiplier, .leastNonzeroMagnitude)
+        CameraZoomController.displayZoomFactorMultiplier(for: device)
     }
 
     private func updateZoomState(for device: AVCaptureDevice, rawZoomFactor: CGFloat) {
-        let clampedFactor = clampedRawZoomFactor(rawZoomFactor, for: device)
-        let displayMultiplier = displayZoomFactorMultiplier(for: device)
-        let displayFactor = clampedFactor * displayMultiplier
+        applyZoomState(CameraZoomController.state(for: device, rawZoomFactor: rawZoomFactor))
+    }
 
-        minZoomFactor = device.minAvailableVideoZoomFactor
-        maxZoomFactor = clampedRawZoomFactor(device.maxAvailableVideoZoomFactor, for: device)
-        zoomFactor = clampedFactor
-        minDisplayZoomFactor = minZoomFactor * displayMultiplier
-        maxDisplayZoomFactor = maxZoomFactor * displayMultiplier
-        displayZoomFactor = displayFactor
-        let roundedDisplayFactor = (Double(displayFactor) * 10).rounded() / 10
-        zoomDisplayLabel = "\(roundedDisplayFactor.formatted(.number.precision(.fractionLength(0...1))))x"
+    private func applyZoomState(_ state: CameraZoomState) {
+        minZoomFactor = state.rawMinFactor
+        maxZoomFactor = state.rawMaxFactor
+        zoomFactor = state.rawFactor
+        minDisplayZoomFactor = state.displayMinFactor
+        maxDisplayZoomFactor = state.displayMaxFactor
+        displayZoomFactor = state.displayFactor
+        zoomDisplayLabel = state.displayLabel
     }
 
     nonisolated private func resetZoomToDisplayOne(for device: AVCaptureDevice) {
         do {
-            try device.lockForConfiguration()
-            let rawZoomFactor = clampedRawZoomFactor(1 / displayZoomFactorMultiplier(for: device), for: device)
-            device.videoZoomFactor = rawZoomFactor
-            device.unlockForConfiguration()
+            let state = try CameraZoomController.resetToDisplayOne(on: device)
             Task { @MainActor in
-                self.updateZoomState(for: device, rawZoomFactor: rawZoomFactor)
+                self.applyZoomState(state)
             }
         } catch {
             Task { @MainActor in

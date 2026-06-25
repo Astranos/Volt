@@ -61,6 +61,8 @@ export default function UnifiedSidepanel() {
   const [toast, setToast] = useState<ActiveToast | null>(null);
   const toastTimer = useRef<number | null>(null);
   const toastCounter = useRef(0);
+  const windowIdRef = useRef<number | null>(null);
+  const closeReportedRef = useRef(false);
 
   useEffect(() => {
     const handler = (event: Event) => {
@@ -107,6 +109,38 @@ export default function UnifiedSidepanel() {
 
     chrome.runtime.onMessage.addListener(listener);
     return () => chrome.runtime.onMessage.removeListener(listener);
+  }, []);
+
+  useEffect(() => {
+    if (typeof chrome === "undefined") return;
+
+    chrome.windows?.getCurrent?.((currentWindow) => {
+      if (typeof currentWindow?.id === "number") {
+        windowIdRef.current = currentWindow.id;
+      }
+    });
+
+    const reportClosed = () => {
+      if (closeReportedRef.current || !chrome.runtime) return;
+      closeReportedRef.current = true;
+      chrome.runtime.sendMessage(
+        {
+          action: "sidePanelDidClose",
+          windowId: windowIdRef.current ?? undefined,
+        },
+        () => {
+          void chrome.runtime.lastError;
+        }
+      );
+    };
+
+    window.addEventListener("pagehide", reportClosed);
+    window.addEventListener("beforeunload", reportClosed);
+
+    return () => {
+      window.removeEventListener("pagehide", reportClosed);
+      window.removeEventListener("beforeunload", reportClosed);
+    };
   }, []);
 
   // Load the initial tool from storage

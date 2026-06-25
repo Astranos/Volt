@@ -12,15 +12,21 @@ struct ClipRootView: View {
     var body: some View {
         ZStack {
             TabView(selection: $store.selectedTab) {
-                ClipCaptureView(store: store)
+                ClipCaptureView(store: store) {
+                    isPairingScannerPresented = true
+                }
                     .tabItem { Label("Capture", systemImage: "camera.viewfinder") }
                     .tag(ClipScannerStore.ClipTab.capture)
 
-                ClipDictationView(store: store)
+                ClipDictationView(store: store) {
+                    isPairingScannerPresented = true
+                }
                     .tabItem { Label("Dictate", systemImage: "mic") }
                     .tag(ClipScannerStore.ClipTab.dictate)
 
-                ClipUploadView(store: store)
+                ClipUploadView(store: store) {
+                    isPairingScannerPresented = true
+                }
                     .tabItem { Label("Upload", systemImage: "square.and.arrow.up") }
                     .tag(ClipScannerStore.ClipTab.upload)
             }
@@ -54,6 +60,7 @@ struct ClipRootView: View {
 
 private struct ClipCaptureView: View {
     @Bindable var store: ClipScannerStore
+    let onScanQRCode: () -> Void
     @State private var isCaptureSessionPresented = false
 
     var body: some View {
@@ -62,7 +69,8 @@ private struct ClipCaptureView: View {
                 VStack(alignment: .leading, spacing: ScannerTabLayout.stackSpacing) {
                     ClipChromeSectionHeader(
                         title: "Capture",
-                        connection: connectionSummary
+                        connection: connectionSummary,
+                        onConnectionTapped: onScanQRCode
                     )
 
                     ClipRecentPhotosSection(
@@ -157,6 +165,7 @@ private struct ClipCaptureView: View {
 
 private struct ClipDictationView: View {
     @Bindable var store: ClipScannerStore
+    let onScanQRCode: () -> Void
 
     var body: some View {
         NavigationStack {
@@ -164,7 +173,8 @@ private struct ClipDictationView: View {
                 VStack(alignment: .leading, spacing: ScannerTabLayout.stackSpacing) {
                     ClipChromeSectionHeader(
                         title: "Dictate",
-                        connection: connectionSummary
+                        connection: connectionSummary,
+                        onConnectionTapped: onScanQRCode
                     )
 
                     ClipDictationConnectionCard(
@@ -230,6 +240,7 @@ private struct ClipDictationView: View {
 
 private struct ClipUploadView: View {
     @Bindable var store: ClipScannerStore
+    let onScanQRCode: () -> Void
     @State private var pickerItems: [PhotosPickerItem] = []
     @State private var isPreparingUploads = false
 
@@ -239,7 +250,8 @@ private struct ClipUploadView: View {
                 VStack(alignment: .leading, spacing: ScannerTabLayout.stackSpacing) {
                     ClipChromeSectionHeader(
                         title: "Upload",
-                        connection: connectionSummary
+                        connection: connectionSummary,
+                        onConnectionTapped: onScanQRCode
                     )
 
                     ClipRecentPhotosSection(
@@ -374,6 +386,7 @@ private func clipConnectionTitle(
 private struct ClipChromeSectionHeader: View {
     let title: String
     let connection: ScannerConnectionSummary
+    let onConnectionTapped: () -> Void
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
@@ -383,27 +396,32 @@ private struct ClipChromeSectionHeader: View {
                 .minimumScaleFactor(0.82)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-            HStack(spacing: 8) {
-                if connection.isBusy {
-                    ProgressView()
-                        .controlSize(.small)
-                        .tint(.primary)
-                } else {
-                    Image(systemName: connectionIcon)
-                        .font(.subheadline.weight(.semibold))
-                }
+            Button(action: onConnectionTapped) {
+                HStack(spacing: 8) {
+                    if connection.isBusy {
+                        ProgressView()
+                            .controlSize(.small)
+                            .tint(.primary)
+                    } else {
+                        Image(systemName: connectionIcon)
+                            .font(.subheadline.weight(.semibold))
+                    }
 
-                Text(connection.title)
-                    .font(.headline)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.76)
+                    Text(connection.title)
+                        .font(.headline)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.76)
+                }
+                .foregroundStyle(connectionColor)
+                .padding(.horizontal, 18)
+                .frame(minHeight: 44)
+                .background(.regularMaterial, in: Capsule())
             }
-            .foregroundStyle(connectionColor)
-            .padding(.horizontal, 18)
-            .frame(minHeight: 44)
-            .background(.regularMaterial, in: Capsule())
+            .buttonStyle(.plain)
+            .disabled(connection.isBusy || connection.isConnected)
             .accessibilityElement(children: .combine)
-            .accessibilityLabel(connection.statusText)
+            .accessibilityLabel(connection.isConnected ? connection.statusText : "Scan QR code")
+            .accessibilityHint(connection.isConnected ? "" : "Opens the camera to scan a Volt pairing QR code.")
         }
     }
 
@@ -620,8 +638,13 @@ private struct ClipCaptureSessionView: View {
     @State private var detectedBarcodeBounds: CGRect?
     @State private var detectedBarcodeFormat: String?
     @State private var selectedTextRegion: RecognizedTextRegion?
+    @State private var selectedCleanedText: String?
+    @State private var isCleaningSelectedText = false
     @State private var focusPoint: CGPoint?
     @State private var cameraStateRevision = 0
+    private let topToolbarTopPadding: CGFloat = 12
+    private let topToolbarHeight: CGFloat = 42
+    private let photoPreviewToolbarGap: CGFloat = 32
 
     var body: some View {
         ZStack {
@@ -632,7 +655,7 @@ private struct ClipCaptureSessionView: View {
                     selectedRegion: selectedTextRegion,
                     imageContentMode: .fit,
                     fillFocusX: 0.5,
-                    onSelectRegion: { selectedTextRegion = $0 }
+                    onSelectRegion: { selectTextRegion($0) }
                 )
                 .ignoresSafeArea()
             } else {
@@ -668,7 +691,7 @@ private struct ClipCaptureSessionView: View {
                         .font(.headline)
                         .foregroundStyle(.white)
                         .padding(.horizontal, 14)
-                        .frame(minHeight: 42)
+                        .frame(minHeight: topToolbarHeight)
                         .background(.black.opacity(0.48), in: Capsule())
 
                     Spacer()
@@ -680,13 +703,13 @@ private struct ClipCaptureSessionView: View {
                         Image(systemName: "xmark")
                             .font(.system(size: 15, weight: .bold))
                             .foregroundStyle(.white)
-                            .frame(width: 42, height: 42)
+                            .frame(width: topToolbarHeight, height: topToolbarHeight)
                             .background(.black.opacity(0.48), in: Circle())
                     }
                     .accessibilityLabel("End session")
                 }
                 .padding(.horizontal, 18)
-                .padding(.top, 12)
+                .padding(.top, topToolbarTopPadding)
 
                 if let captureError {
                     Label(captureError, systemImage: "exclamationmark.triangle.fill")
@@ -710,18 +733,54 @@ private struct ClipCaptureSessionView: View {
                         .padding(.top, 8)
                 }
 
-                Spacer()
+                if activeMode == .photo, ocrReviewImage == nil {
+                    GeometryReader { previewGeometry in
+                        let side = min(previewGeometry.size.width - 24, previewGeometry.size.height)
+
+                        ClipPhotoPreview(
+                            cameraService: cameraService,
+                            gridVisible: gridVisible,
+                            focusPoint: focusPoint,
+                            onTap: { devicePoint, layerPoint in
+                                focusPoint = layerPoint
+                                cameraService.focus(at: devicePoint)
+                                Task {
+                                    try? await Task.sleep(for: .milliseconds(750))
+                                    await MainActor.run {
+                                        if focusPoint == layerPoint {
+                                            focusPoint = nil
+                                        }
+                                    }
+                                }
+                            },
+                            onPinch: { scale in
+                                cameraService.scaleZoom(by: scale)
+                            }
+                        )
+                        .frame(width: side, height: side)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                    }
+                    .padding(.top, photoPreviewToolbarGap)
+                } else {
+                    Spacer()
+                }
             }
 
             if let selectedTextRegion {
-                ClipExtractedTextActionCard(
-                    text: selectedTextRegion.text,
+                ExtractedTextActionCard(
+                    text: selectedTextPreview,
+                    isCleaning: isCleaningSelectedText,
+                    onCleanup: {
+                        cleanupSelectedText(selectedTextRegion)
+                    },
                     onSend: {
-                        onSendRecognizedText(selectedTextRegion.text)
+                        onSendRecognizedText(selectedCleanedText ?? selectedTextRegion.text)
                         self.selectedTextRegion = nil
+                        selectedCleanedText = nil
                     },
                     onDismiss: {
                         self.selectedTextRegion = nil
+                        selectedCleanedText = nil
                     }
                 )
                 .transition(.scale(scale: 0.96).combined(with: .opacity))
@@ -734,10 +793,12 @@ private struct ClipCaptureSessionView: View {
                     regionCount: ocrTextRegions.count,
                     onRetake: {
                         selectedTextRegion = nil
+                        selectedCleanedText = nil
                         onClearOcrReview()
                     },
                     onFinish: {
                         selectedTextRegion = nil
+                        selectedCleanedText = nil
                         onClearOcrReview()
                         dismiss()
                     }
@@ -830,7 +891,26 @@ private struct ClipCaptureSessionView: View {
             cameraService.setLiveTextScanningEnabled(activeMode == .ocr && !isReviewing)
             if isReviewing {
                 selectedTextRegion = nil
+                selectedCleanedText = nil
             }
+        }
+    }
+
+    private func selectTextRegion(_ region: RecognizedTextRegion) {
+        selectedCleanedText = nil
+        selectedTextRegion = region
+    }
+
+    private func cleanupSelectedText(_ region: RecognizedTextRegion) {
+        isCleaningSelectedText = true
+        captureError = nil
+        captureNotice = "Cleaning text"
+        Task {
+            let result = await OcrTextCleaner.clean(text: region.text)
+            selectedCleanedText = result.text
+            selectedTextRegion = region
+            isCleaningSelectedText = false
+            captureNotice = result.usedFoundationModel ? "Text cleaned on device" : "Text cleaned"
         }
     }
 
@@ -888,6 +968,20 @@ private struct ClipCaptureSessionView: View {
             "Capture"
         }
     }
+
+    private var selectedTextPreview: String {
+        guard let selectedTextRegion else { return "" }
+        guard let selectedCleanedText, selectedCleanedText != selectedTextRegion.text else {
+            return selectedTextRegion.text
+        }
+        return """
+        Cleaned
+        \(selectedCleanedText)
+
+        Original
+        \(selectedTextRegion.text)
+        """
+    }
 }
 
 private struct ClipCaptureSessionBackdrop: View {
@@ -899,57 +993,52 @@ private struct ClipCaptureSessionBackdrop: View {
     let focusPoint: CGPoint?
     let onTap: (CGPoint, CGPoint) -> Void
     let onPinch: (CGFloat) -> Void
-    private let photoTopClearance: CGFloat = 78
-    private let photoControlsReservedHeight: CGFloat = 430
 
     var body: some View {
-        GeometryReader { geometry in
-            ZStack(alignment: .top) {
-                Color.black
-                    .ignoresSafeArea()
+        ZStack(alignment: .top) {
+            Color.black
+                .ignoresSafeArea()
 
-                if activeMode == .photo {
-                    photoPreview(in: geometry)
-                } else {
-                    ClipCameraPreview(service: cameraService, onTap: onTap, onPinch: onPinch)
-                        .ignoresSafeArea()
-                        .overlay {
-                            CaptureGuideOverlay(mode: activeMode, gridVisible: gridVisible)
+            if activeMode != .photo {
+                ClipCameraPreview(service: cameraService, onTap: onTap, onPinch: onPinch)
+                    .ignoresSafeArea()
+                    .overlay {
+                        CaptureGuideOverlay(mode: activeMode, gridVisible: gridVisible)
+                            .allowsHitTesting(false)
+                    }
+                    .overlay(alignment: .topLeading) {
+                        if activeMode == .barcode,
+                           let detectedBarcodeBounds,
+                           detectedBarcodeBounds.width > 0,
+                           detectedBarcodeBounds.height > 0 {
+                            BarcodeDetectionReticle(
+                                bounds: detectedBarcodeBounds,
+                                format: detectedBarcodeFormat
+                            )
+                            .allowsHitTesting(false)
+                        }
+                    }
+                    .overlay(alignment: .topLeading) {
+                        if let focusPoint {
+                            FocusReticle()
+                                .position(focusPoint)
                                 .allowsHitTesting(false)
                         }
-                        .overlay(alignment: .topLeading) {
-                            if activeMode == .barcode,
-                               let detectedBarcodeBounds,
-                               detectedBarcodeBounds.width > 0,
-                               detectedBarcodeBounds.height > 0 {
-                                BarcodeDetectionReticle(
-                                    bounds: detectedBarcodeBounds,
-                                    format: detectedBarcodeFormat
-                                )
-                                .allowsHitTesting(false)
-                            }
-                        }
-                        .overlay(alignment: .topLeading) {
-                            if let focusPoint {
-                                ClipFocusReticle()
-                                    .position(focusPoint)
-                                    .allowsHitTesting(false)
-                            }
-                        }
-                }
+                    }
             }
         }
     }
+}
 
-    private func photoPreview(in geometry: GeometryProxy) -> some View {
-        let topInset = geometry.safeAreaInsets.top + photoTopClearance
-        let bottomInset = geometry.safeAreaInsets.bottom
-        let availableHeight = max(0, geometry.size.height - topInset - bottomInset - photoControlsReservedHeight)
-        let side = min(geometry.size.width - 24, availableHeight)
-        let topOffset = topInset
+private struct ClipPhotoPreview: View {
+    let cameraService: ClipBarcodeScannerService
+    let gridVisible: Bool
+    let focusPoint: CGPoint?
+    let onTap: (CGPoint, CGPoint) -> Void
+    let onPinch: (CGFloat) -> Void
 
-        return ClipCameraPreview(service: cameraService, onTap: onTap, onPinch: onPinch)
-            .frame(width: side, height: side)
+    var body: some View {
+        ClipCameraPreview(service: cameraService, onTap: onTap, onPinch: onPinch)
             .clipped()
             .overlay {
                 if gridVisible {
@@ -964,13 +1053,11 @@ private struct ClipCaptureSessionBackdrop: View {
             }
             .overlay(alignment: .topLeading) {
                 if let focusPoint {
-                    ClipFocusReticle()
+                    FocusReticle()
                         .position(focusPoint)
                         .allowsHitTesting(false)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .center)
-            .padding(.top, topOffset)
     }
 }
 
@@ -1036,77 +1123,6 @@ private struct ClipCameraPreview: UIViewRepresentable {
             onPinch?(recognizer.scale)
             recognizer.scale = 1
         }
-    }
-}
-
-private struct ClipFocusReticle: View {
-    var body: some View {
-        RoundedRectangle(cornerRadius: 6, style: .continuous)
-            .stroke(.yellow, lineWidth: 2)
-            .frame(width: 74, height: 74)
-            .overlay {
-                Circle()
-                    .fill(.yellow)
-                    .frame(width: 8, height: 8)
-            }
-            .transition(.scale.combined(with: .opacity))
-    }
-}
-
-private struct ClipExtractedTextActionCard: View {
-    let text: String
-    let onSend: () -> Void
-    let onDismiss: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Extracted Text")
-                        .font(.title3.weight(.bold))
-                        .foregroundStyle(.black)
-
-                    Text(text)
-                        .font(.title3)
-                        .foregroundStyle(.black.opacity(0.62))
-                        .lineLimit(3)
-                        .minimumScaleFactor(0.78)
-                }
-
-                Spacer(minLength: 0)
-
-                Button(action: onDismiss) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(.black.opacity(0.68))
-                        .frame(width: 34, height: 34)
-                        .background(.black.opacity(0.1), in: Circle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Close")
-            }
-
-            Button(action: onSend) {
-                Label("Send", systemImage: "paperplane.fill")
-                    .font(.title3.weight(.bold))
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 64)
-                    .background(Color.green, in: Capsule())
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(.horizontal, 24)
-        .padding(.top, 24)
-        .padding(.bottom, 28)
-        .frame(width: 340)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 36, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 36, style: .continuous)
-                .stroke(.white.opacity(0.42), lineWidth: 1)
-        }
-        .shadow(color: .black.opacity(0.22), radius: 28, y: 16)
-        .accessibilityElement(children: .contain)
     }
 }
 

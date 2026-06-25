@@ -84,6 +84,7 @@ export type BackgroundActionMessage =
   | { action: "openInActionPopup"; tool?: string }
   | { action: "openInSidebar"; tool?: string; mode?: string; tabId?: number }
   | { action: "getSidePanelStateForTab"; tabId?: number }
+  | { action: "sidePanelDidClose"; windowId?: number }
   | {
       action: "sidePanelToggleResult";
       tabId?: number;
@@ -245,6 +246,8 @@ function parseActionMessage(action: string, message: MessageRecord): RuntimeMess
     case "getSidePanelStateForTab":
     case "closeSidebar":
       return { action, tabId: optionalNumber(message.tabId) } as RuntimeMessage;
+    case "sidePanelDidClose":
+      return { action, windowId: optionalNumber(message.windowId) } as RuntimeMessage;
     case "OPEN_TAB":
     case "UPDATE_CURRENT_TAB":
     case "fetchResource":

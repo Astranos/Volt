@@ -28,6 +28,10 @@ const cameraModelSwiftSource = readFileSync(
   new URL("../ios/Volt/Services/CameraModel.swift", import.meta.url),
   "utf8"
 );
+const cameraZoomControllerSwiftSource = readFileSync(
+  new URL("../ios/Volt/Services/CameraZoomController.swift", import.meta.url),
+  "utf8"
+);
 const scannerStoreDictationSwiftSource = readFileSync(
   new URL("../ios/Volt/Services/ScannerStoreDictation.swift", import.meta.url),
   "utf8"
@@ -80,12 +84,20 @@ const sharedPairingSessionComponentsSwiftSource = readFileSync(
   new URL("../ios/Volt/Views/SharedPairingSessionComponents.swift", import.meta.url),
   "utf8"
 );
+const sharedCaptureSessionOverlaysSwiftSource = readFileSync(
+  new URL("../ios/Volt/Views/SharedCaptureSessionOverlays.swift", import.meta.url),
+  "utf8"
+);
 const ocrReviewLayerSwiftSource = readFileSync(
   new URL("../ios/Volt/Views/OcrReviewLayer.swift", import.meta.url),
   "utf8"
 );
 const textRecognizerSwiftSource = readFileSync(
   new URL("../ios/Volt/Services/TextRecognizer.swift", import.meta.url),
+  "utf8"
+);
+const ocrTextCleanerSwiftSource = readFileSync(
+  new URL("../ios/Volt/Services/OcrTextCleaner.swift", import.meta.url),
   "utf8"
 );
 const dictationViewSwiftSource = readFileSync(
@@ -353,12 +365,12 @@ test("native OCR review renders Vision quadrilaterals for angled text", () => {
 });
 
 test("native OCR review keeps raw Vision text until selected cleanup is requested", () => {
-  assert.match(textRecognizerSwiftSource, /import FoundationModels/);
-  assert.match(textRecognizerSwiftSource, /enum OcrTextCleaner/);
-  assert.match(textRecognizerSwiftSource, /static func clean\(text: String\) async -> OcrTextCleanupResult/);
-  assert.match(textRecognizerSwiftSource, /SystemLanguageModel\(/);
-  assert.match(textRecognizerSwiftSource, /LanguageModelSession\(/);
-  assert.match(textRecognizerSwiftSource, /if let match = LiveTextIdentifierMatcher\.match\(normalized\) \{\s*return match\.value\s*\}/);
+  assert.match(ocrTextCleanerSwiftSource, /import FoundationModels/);
+  assert.match(ocrTextCleanerSwiftSource, /enum OcrTextCleaner/);
+  assert.match(ocrTextCleanerSwiftSource, /static func clean\(text: String\) async -> OcrTextCleanupResult/);
+  assert.match(ocrTextCleanerSwiftSource, /SystemLanguageModel\(/);
+  assert.match(ocrTextCleanerSwiftSource, /LanguageModelSession\(/);
+  assert.match(ocrTextCleanerSwiftSource, /if let match = LiveTextIdentifierMatcher\.match\(normalized\) \{\s*return match\.value\s*\}/);
   assert.match(scannerStoreCaptureActionsSwiftSource, /let recognizedRegions = try await TextRecognizer\.recognizeTextRegions\(in: preparedImage\)/);
   assert.match(scannerStoreCaptureActionsSwiftSource, /ocrTextRegions = DeviceIdentifierRegionExtractor\.extractedIdentifierRegions\(from: recognizedRegions\)/);
   assert.match(scannerStoreCaptureActionsSwiftSource, /ocrReviewText = ocrTextRegions\.map\(\\\.text\)\.joined\(separator: "\\n"\)/);
@@ -458,11 +470,11 @@ test("native post-capture OCR extracts device identifiers from recognized rows",
 });
 
 test("native OCR target dialog can clean selected text before sending", () => {
-  assert.match(captureSessionViewSwiftSource, /Button\(action: onSend\) \{[\s\S]*Label\("Send", systemImage: "paperplane\.fill"\)/);
-  assert.match(captureSessionViewSwiftSource, /Button\(action: onCleanup\) \{[\s\S]*Label\(isCleaning \? "Cleaning\.\.\." : "Cleanup", systemImage: "wand\.and\.sparkles"\)/);
+  assert.match(sharedCaptureSessionOverlaysSwiftSource, /Button\(action: onSend\) \{[\s\S]*Label\("Send", systemImage: "paperplane\.fill"\)/);
+  assert.match(sharedCaptureSessionOverlaysSwiftSource, /Button\(action: onCleanup\) \{[\s\S]*Label\(isCleaning \? "Cleaning\.\.\." : "Cleanup", systemImage: "wand\.and\.sparkles"\)/);
   assert.match(captureSessionViewSwiftSource, /store\.sendRecognizedText\(selectedCleanedText \?\? selectedTextRegion\.text\)/);
   assert.match(captureSessionViewSwiftSource, /onDismiss: \{\s*selectedTextRegion = nil\s*selectedCleanedText = nil\s*\}/);
-  assert.match(captureSessionViewSwiftSource, /Button\(action: onDismiss\) \{[\s\S]*Image\(systemName: "xmark"\)/);
+  assert.match(sharedCaptureSessionOverlaysSwiftSource, /Button\(action: onDismiss\) \{[\s\S]*Image\(systemName: "xmark"\)/);
   assert.match(captureSessionViewSwiftSource, /let result = await OcrTextCleaner\.clean\(text: region\.text\)/);
   assert.match(captureSessionViewSwiftSource, /private var selectedTextPreview: String/);
 });
@@ -550,10 +562,13 @@ test("native camera resets capture sessions to display 1x zoom", () => {
   );
 
   assert.match(startSource, /resetZoomToDisplayOne\(for: videoDevice\)/);
+  assert.match(cameraZoomControllerSwiftSource, /enum CameraZoomController/);
+  assert.match(cameraZoomControllerSwiftSource, /static func rawZoomFactorForDisplayOne\(on device: AVCaptureDevice\) -> CGFloat/);
+  assert.match(cameraZoomControllerSwiftSource, /static func resetToDisplayOne\(on device: AVCaptureDevice\) throws -> CameraZoomState/);
   assert.match(cameraModelSwiftSource, /nonisolated private func resetZoomToDisplayOne\(for device: AVCaptureDevice\)/);
-  assert.match(cameraModelSwiftSource, /clampedRawZoomFactor\(1 \/ displayZoomFactorMultiplier\(for: device\), for: device\)/);
-  assert.match(cameraModelSwiftSource, /device\.videoZoomFactor = rawZoomFactor/);
-  assert.match(cameraModelSwiftSource, /updateZoomState\(for: device, rawZoomFactor: rawZoomFactor\)/);
+  assert.match(cameraModelSwiftSource, /CameraZoomController\.resetToDisplayOne\(on: device\)/);
+  assert.match(cameraZoomControllerSwiftSource, /device\.videoZoomFactor = clampedFactor/);
+  assert.match(cameraModelSwiftSource, /applyZoomState\(state\)/);
 });
 
 test("native camera clears stale torch state when capture sessions stop", () => {
@@ -589,7 +604,8 @@ test("app clip camera preview supports tap focus and pinch zoom", () => {
   assert.match(clipRootViewSwiftSource, /captureDevicePointConverted\(fromLayerPoint: layerPoint\)/);
   assert.match(clipRootViewSwiftSource, /cameraService\.focus\(at: devicePoint\)/);
   assert.match(clipRootViewSwiftSource, /cameraService\.scaleZoom\(by: scale\)/);
-  assert.match(clipRootViewSwiftSource, /ClipFocusReticle\(\)/);
+  assert.match(sharedCaptureSessionOverlaysSwiftSource, /struct FocusReticle: View/);
+  assert.match(clipRootViewSwiftSource, /FocusReticle\(\)/);
 });
 
 test("app clip camera service supports zoom, torch, focus, and UPC-A priority", () => {
@@ -599,9 +615,23 @@ test("app clip camera service supports zoom, torch, focus, and UPC-A priority", 
   assert.match(clipBarcodeScannerServiceSwiftSource, /func adjustZoom\(by delta: CGFloat\)/);
   assert.match(clipBarcodeScannerServiceSwiftSource, /func scaleZoom\(by scale: CGFloat\)/);
   assert.match(clipBarcodeScannerServiceSwiftSource, /func focus\(at point: CGPoint\)/);
-  assert.match(clipBarcodeScannerServiceSwiftSource, /resetZoomToDisplayOne\(for: videoDevice\)/);
+  assert.match(clipBarcodeScannerServiceSwiftSource, /startRunningIfNeeded\(resetZoom: true\)/);
+  assert.match(clipBarcodeScannerServiceSwiftSource, /capturePhoto\(\) async throws -> UIImage \{[\s\S]*await startRunningIfNeeded\(\)/);
+  assert.doesNotMatch(clipBarcodeScannerServiceSwiftSource, /capturePhoto\(\) async throws -> UIImage \{[\s\S]*startRunningIfNeeded\(resetZoom: true\)/);
+  assert.match(clipBarcodeScannerServiceSwiftSource, /CameraZoomController\.setRawZoomFactor/);
+  assert.match(clipBarcodeScannerServiceSwiftSource, /CameraZoomController\.resetToDisplayOne\(on: device\)/);
   assert.match(clipBarcodeScannerServiceSwiftSource, /private func upcADigitCount\(_ type: AVMetadataObject\.ObjectType, value: String\) -> Bool/);
   assert.match(clipBarcodeScannerServiceSwiftSource, /if upcADigitCount\(type, value: value\) \{ return 0 \}/);
+});
+
+test("app clip OCR target dialog shares cleanup and styling with the main app", () => {
+  assert.match(clipRootViewSwiftSource, /ExtractedTextActionCard\(/);
+  assert.match(clipRootViewSwiftSource, /text: selectedTextPreview/);
+  assert.match(clipRootViewSwiftSource, /isCleaning: isCleaningSelectedText/);
+  assert.match(clipRootViewSwiftSource, /let result = await OcrTextCleaner\.clean\(text: region\.text\)/);
+  assert.match(clipRootViewSwiftSource, /onSendRecognizedText\(selectedCleanedText \?\? selectedTextRegion\.text\)/);
+  assert.match(clipRootViewSwiftSource, /private var selectedTextPreview: String/);
+  assert.match(sharedCaptureSessionOverlaysSwiftSource, /\.foregroundStyle\(\.black\)/);
 });
 
 test("app clip capture opens in OCR and keeps capture and upload photo lists separate", () => {

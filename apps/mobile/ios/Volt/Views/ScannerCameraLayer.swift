@@ -219,17 +219,3 @@ struct ScannerCameraLayer: View {
             .padding(.top, topOffset)
     }
 }
-
-struct FocusReticle: View {
-    var body: some View {
-        RoundedRectangle(cornerRadius: 6, style: .continuous)
-            .stroke(.yellow, lineWidth: 2)
-            .frame(width: 74, height: 74)
-            .overlay {
-                Circle()
-                    .fill(.yellow)
-                    .frame(width: 8, height: 8)
-            }
-            .transition(.scale.combined(with: .opacity))
-    }
-}

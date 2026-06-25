@@ -4,28 +4,65 @@ import { DEFAULT_SETTINGS } from "@/src/domain/settings";
 import {
   addCustomTopOffer,
   addCustomTopOfferRule,
+  addCustomTopOfferStartingRule,
   addTopOfferRateRule,
+  addTopOfferStartingRateRule,
   deleteCustomTopOffer,
   DEFAULT_CUSTOM_RATES,
+  DEFAULT_ENABLED_OFFER_TYPES,
+  DEFAULT_STARTING_RATES,
   removeCustomTopOfferRule,
+  removeCustomTopOfferStartingRule,
   removeTopOfferRateRule,
+  removeTopOfferStartingRateRule,
+  setBuiltInTopOfferEnabled,
+  setBuiltInTopOfferStartingRatesEnabled,
+  setCustomTopOfferEnabled,
+  setCustomTopOfferStartingRatesEnabled,
+  sortCustomTopOfferStartingRules,
   sortCustomTopOfferRules,
+  sortTopOfferStartingRateRules,
   sortTopOfferRateRules,
   updateCustomTopOfferDefaultPercentage,
   updateCustomTopOfferName,
   updateCustomTopOfferRule,
+  updateCustomTopOfferStartingDefaultPercentage,
+  updateCustomTopOfferStartingRule,
   updateTopOfferCheckoutRate,
   updateTopOfferDefaultPercentage,
   updateTopOfferRateRule,
+  updateTopOfferStartingDefaultPercentage,
+  updateTopOfferStartingRateRule,
+  type BuiltInTopOfferType,
   type BuiltInTopOfferRateType,
+  type BuiltInStartingRateType,
 } from "@/src/domain/top-offers";
 import type { SaveExtensionSettings } from "@/src/hooks/useExtensionSettings";
 import type { CmdkSettings, RateRule } from "@/src/types/settings";
+import { Switch } from "@/src/components/ui/switch";
 import { RateRuleEditor } from "./TopOfferRuleEditor";
 
 interface TopOffersSettingsProps {
   settings: CmdkSettings;
   saveSettings: SaveExtensionSettings;
+}
+
+function OfferEnabledSwitch({
+  ariaLabel,
+  checked,
+  onChange,
+}: {
+  ariaLabel: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <Switch
+      checked={checked}
+      aria-label={ariaLabel}
+      onCheckedChange={onChange}
+    />
+  );
 }
 
 export function TopOffersSettings({
@@ -67,7 +104,92 @@ export function TopOffersSettings({
 
   const customRates =
     settings.topOffers?.customRates || DEFAULT_SETTINGS.topOffers!.customRates!;
+  const startingRates = settings.topOffers?.startingRates || {};
   const customOffers = settings.topOffers?.customOffers || [];
+  const enabledOfferTypes = {
+    ...DEFAULT_ENABLED_OFFER_TYPES,
+    ...(settings.topOffers?.enabledOfferTypes || {}),
+  };
+
+  const handleToggleBuiltInOffer = (
+    type: BuiltInTopOfferType,
+    enabled: boolean
+  ) => {
+    saveTopOffers(setBuiltInTopOfferEnabled(settings.topOffers, type, enabled));
+  };
+
+  const handleToggleBuiltInStartRates = (
+    type: BuiltInStartingRateType,
+    enabled: boolean
+  ) => {
+    saveTopOffers(
+      setBuiltInTopOfferStartingRatesEnabled(settings.topOffers, type, enabled)
+    );
+  };
+
+  const getBuiltInStartRates = (type: BuiltInStartingRateType) => {
+    if (startingRates[type]) return startingRates[type]!;
+    if (type === "checkout" || type === "newCustomer") {
+      return customRates.standard;
+    }
+    return DEFAULT_STARTING_RATES[type];
+  };
+
+  const renderBuiltInStartEditor = (type: BuiltInStartingRateType) => {
+    if (!startingRates[type]) return null;
+    const rates = getBuiltInStartRates(type);
+    return (
+      <RateRuleEditor
+        title="Start Rates"
+        rules={rates.rules}
+        defaultPercentage={rates.defaultPercentage}
+        onRuleChange={(index, field, value) =>
+          saveTopOffers(
+            updateTopOfferStartingRateRule(
+              settings.topOffers,
+              type,
+              index,
+              field,
+              value
+            )
+          )
+        }
+        onSortRules={() =>
+          saveTopOffers(sortTopOfferStartingRateRules(settings.topOffers, type))
+        }
+        onAddRule={() =>
+          saveTopOffers(addTopOfferStartingRateRule(settings.topOffers, type))
+        }
+        onRemoveRule={(index) =>
+          saveTopOffers(
+            removeTopOfferStartingRateRule(settings.topOffers, type, index)
+          )
+        }
+        onDefaultPercentageChange={(value) =>
+          saveTopOffers(
+            updateTopOfferStartingDefaultPercentage(
+              settings.topOffers,
+              type,
+              value
+            )
+          )
+        }
+      />
+    );
+  };
+
+  const renderStartToggle = (type: BuiltInStartingRateType) => (
+    <div className="mb-4 flex items-center justify-between rounded-lg border border-border bg-muted/20 px-4 py-3">
+      <span className="text-sm font-medium">Customize Start</span>
+      <Switch
+        checked={Boolean(startingRates[type])}
+        aria-label={`Customize ${type} start rates`}
+        onCheckedChange={(enabled) =>
+          handleToggleBuiltInStartRates(type, enabled)
+        }
+      />
+    </div>
+  );
 
   return (
     <section id="topoffers" className="scroll-mt-20">
@@ -83,6 +205,7 @@ export function TopOffersSettings({
             saveTopOffers({
               ...settings.topOffers,
               customRates: DEFAULT_CUSTOM_RATES,
+              startingRates: undefined,
             })
           }
           className="flex items-center gap-2 px-4 py-2 bg-muted text-foreground hover:bg-muted/80 rounded-lg transition-colors text-sm font-medium"
@@ -94,72 +217,193 @@ export function TopOffersSettings({
 
       <div className="bg-card rounded-xl border border-border shadow-lg overflow-hidden">
         <div className="p-8 space-y-8">
-          <RateRuleEditor
-            title="Standard Rates"
-            rules={
-              customRates.standard.rules ||
-              DEFAULT_SETTINGS.topOffers!.customRates!.standard.rules
-            }
-            defaultPercentage={customRates.standard.defaultPercentage ?? 0.65}
-            onRuleChange={(index, field, value) =>
-              handleUpdateRateRule("standard", index, field, value)
-            }
-            onSortRules={() =>
-              saveTopOffers(sortTopOfferRateRules(settings.topOffers, "standard"))
-            }
-            onAddRule={() =>
-              saveTopOffers(addTopOfferRateRule(settings.topOffers, "standard"))
-            }
-            onRemoveRule={(index) =>
-              saveTopOffers(
-                removeTopOfferRateRule(settings.topOffers, "standard", index)
-              )
-            }
-            onDefaultPercentageChange={(value) =>
-              saveTopOffers(
-                updateTopOfferDefaultPercentage(settings.topOffers, "standard", value)
-              )
-            }
-          />
-
-          <div className="border-t border-border" />
-
-          <RateRuleEditor
-            title="Premium Rates"
-            rules={
-              customRates.premium.rules ||
-              DEFAULT_SETTINGS.topOffers!.customRates!.premium.rules
-            }
-            defaultPercentage={customRates.premium.defaultPercentage ?? 0.75}
-            onRuleChange={(index, field, value) =>
-              handleUpdateRateRule("premium", index, field, value)
-            }
-            onSortRules={() =>
-              saveTopOffers(sortTopOfferRateRules(settings.topOffers, "premium"))
-            }
-            onAddRule={() =>
-              saveTopOffers(addTopOfferRateRule(settings.topOffers, "premium"))
-            }
-            onRemoveRule={(index) =>
-              saveTopOffers(
-                removeTopOfferRateRule(settings.topOffers, "premium", index)
-              )
-            }
-            onDefaultPercentageChange={(value) =>
-              saveTopOffers(
-                updateTopOfferDefaultPercentage(settings.topOffers, "premium", value)
-              )
-            }
-          />
+          <div>
+            <div className="mb-4 flex items-center justify-between gap-4">
+              <h3 className="font-semibold text-lg">Standard Rates</h3>
+              <OfferEnabledSwitch
+                ariaLabel="Standard rates enabled"
+                checked={enabledOfferTypes.standard}
+                onChange={(enabled) =>
+                  handleToggleBuiltInOffer("standard", enabled)
+                }
+              />
+            </div>
+            {renderStartToggle("standard")}
+            {renderBuiltInStartEditor("standard")}
+            {startingRates.standard ? (
+              <div className="my-6 border-t border-border" />
+            ) : null}
+            <RateRuleEditor
+              title="Max Rates"
+              rules={
+                customRates.standard.rules ||
+                DEFAULT_SETTINGS.topOffers!.customRates!.standard.rules
+              }
+              defaultPercentage={customRates.standard.defaultPercentage ?? 0.65}
+              onRuleChange={(index, field, value) =>
+                handleUpdateRateRule("standard", index, field, value)
+              }
+              onSortRules={() =>
+                saveTopOffers(
+                  sortTopOfferRateRules(settings.topOffers, "standard")
+                )
+              }
+              onAddRule={() =>
+                saveTopOffers(addTopOfferRateRule(settings.topOffers, "standard"))
+              }
+              onRemoveRule={(index) =>
+                saveTopOffers(
+                  removeTopOfferRateRule(settings.topOffers, "standard", index)
+                )
+              }
+              onDefaultPercentageChange={(value) =>
+                saveTopOffers(
+                  updateTopOfferDefaultPercentage(
+                    settings.topOffers,
+                    "standard",
+                    value
+                  )
+                )
+              }
+            />
+          </div>
 
           <div className="border-t border-border" />
 
           <div>
-            <h3 className="font-semibold text-lg mb-4">Checkout Rate</h3>
+            <div className="mb-4 flex items-center justify-between gap-4">
+              <h3 className="font-semibold text-lg">Premium Rates</h3>
+              <OfferEnabledSwitch
+                ariaLabel="Premium rates enabled"
+                checked={enabledOfferTypes.premium}
+                onChange={(enabled) =>
+                  handleToggleBuiltInOffer("premium", enabled)
+                }
+              />
+            </div>
+            {renderStartToggle("premium")}
+            {renderBuiltInStartEditor("premium")}
+            {startingRates.premium ? (
+              <div className="my-6 border-t border-border" />
+            ) : null}
+            <RateRuleEditor
+              title="Max Rates"
+              rules={
+                customRates.premium.rules ||
+                DEFAULT_SETTINGS.topOffers!.customRates!.premium.rules
+              }
+              defaultPercentage={customRates.premium.defaultPercentage ?? 0.75}
+              onRuleChange={(index, field, value) =>
+                handleUpdateRateRule("premium", index, field, value)
+              }
+              onSortRules={() =>
+                saveTopOffers(
+                  sortTopOfferRateRules(settings.topOffers, "premium")
+                )
+              }
+              onAddRule={() =>
+                saveTopOffers(addTopOfferRateRule(settings.topOffers, "premium"))
+              }
+              onRemoveRule={(index) =>
+                saveTopOffers(
+                  removeTopOfferRateRule(settings.topOffers, "premium", index)
+                )
+              }
+              onDefaultPercentageChange={(value) =>
+                saveTopOffers(
+                  updateTopOfferDefaultPercentage(
+                    settings.topOffers,
+                    "premium",
+                    value
+                  )
+                )
+              }
+            />
+          </div>
+
+          <div className="border-t border-border" />
+
+          <div>
+            <div className="mb-4 flex items-center justify-between gap-4">
+              <h3 className="font-semibold text-lg">New Customer Rates</h3>
+              <OfferEnabledSwitch
+                ariaLabel="New customer rates enabled"
+                checked={enabledOfferTypes.newCustomer}
+                onChange={(enabled) =>
+                  handleToggleBuiltInOffer("newCustomer", enabled)
+                }
+              />
+            </div>
+            {renderStartToggle("newCustomer")}
+            {renderBuiltInStartEditor("newCustomer")}
+            {startingRates.newCustomer ? (
+              <div className="my-6 border-t border-border" />
+            ) : null}
+            <RateRuleEditor
+              title="Max Rates"
+              rules={
+                customRates.newCustomer?.rules ||
+                DEFAULT_SETTINGS.topOffers!.customRates!.newCustomer!.rules
+              }
+              defaultPercentage={
+                customRates.newCustomer?.defaultPercentage ??
+                DEFAULT_SETTINGS.topOffers!.customRates!.newCustomer!
+                  .defaultPercentage
+              }
+              onRuleChange={(index, field, value) =>
+                handleUpdateRateRule("newCustomer", index, field, value)
+              }
+              onSortRules={() =>
+                saveTopOffers(
+                  sortTopOfferRateRules(settings.topOffers, "newCustomer")
+                )
+              }
+              onAddRule={() =>
+                saveTopOffers(
+                  addTopOfferRateRule(settings.topOffers, "newCustomer")
+                )
+              }
+              onRemoveRule={(index) =>
+                saveTopOffers(
+                  removeTopOfferRateRule(
+                    settings.topOffers,
+                    "newCustomer",
+                    index
+                  )
+                )
+              }
+              onDefaultPercentageChange={(value) =>
+                saveTopOffers(
+                  updateTopOfferDefaultPercentage(
+                    settings.topOffers,
+                    "newCustomer",
+                    value
+                  )
+                )
+              }
+            />
+          </div>
+
+          <div className="border-t border-border" />
+
+          <div>
+            <div className="mb-4 flex items-center justify-between gap-4">
+              <h3 className="font-semibold text-lg">Checkout Rate</h3>
+              <OfferEnabledSwitch
+                ariaLabel="Checkout rate enabled"
+                checked={enabledOfferTypes.checkout}
+                onChange={(enabled) =>
+                  handleToggleBuiltInOffer("checkout", enabled)
+                }
+              />
+            </div>
             <p className="text-sm text-muted-foreground mb-4">
-              Set the percentage used for the "Checkout Offer" top calculation.
-              The starting value uses the standard top-offer guide.
+              Set the percentage used for the "Checkout Offer" max calculation.
+              By default, the starting value uses the standard top-offer guide.
             </p>
+            {renderStartToggle("checkout")}
+            {renderBuiltInStartEditor("checkout")}
+            {startingRates.checkout ? <div className="my-6 border-t border-border" /> : null}
             <div className="grid grid-cols-12 gap-4 items-center">
               <div className="col-span-5 text-sm font-medium pl-2">
                 All amounts
@@ -272,19 +516,113 @@ export function TopOffersSettings({
                           </>
                         )}
                       </div>
-                      <button
-                        onClick={() =>
-                          saveTopOffers(
-                            deleteCustomTopOffer(settings.topOffers, offer.id)
-                          )
-                        }
-                        className="p-2 text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center gap-3">
+                        <Switch
+                          checked={offer.enabled ?? true}
+                          aria-label={`${offer.name} enabled`}
+                          onCheckedChange={(enabled) =>
+                            saveTopOffers(
+                              setCustomTopOfferEnabled(
+                                settings.topOffers,
+                                offer.id,
+                                enabled
+                              )
+                            )
+                          }
+                        />
+                        <button
+                          onClick={() =>
+                            saveTopOffers(
+                              deleteCustomTopOffer(settings.topOffers, offer.id)
+                            )
+                          }
+                          className="p-2 text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
 
+                    <div className="mb-4 flex items-center justify-between rounded-lg border border-border bg-background px-4 py-3">
+                      <span className="text-sm font-medium">
+                        Customize Start
+                      </span>
+                      <Switch
+                        checked={Boolean(offer.startingRules)}
+                        aria-label={`${offer.name} start rates enabled`}
+                        onCheckedChange={(enabled) =>
+                          saveTopOffers(
+                            setCustomTopOfferStartingRatesEnabled(
+                              settings.topOffers,
+                              offer.id,
+                              enabled
+                            )
+                          )
+                        }
+                      />
+                    </div>
+
+                    {offer.startingRules ? (
+                      <>
+                        <RateRuleEditor
+                          title="Start Rates"
+                          rules={offer.startingRules}
+                          defaultPercentage={
+                            offer.startingDefaultPercentage ??
+                            customRates.standard.defaultPercentage
+                          }
+                          onRuleChange={(ruleIndex, field, value) =>
+                            saveTopOffers(
+                              updateCustomTopOfferStartingRule(
+                                settings.topOffers,
+                                offer.id,
+                                ruleIndex,
+                                field,
+                                value
+                              )
+                            )
+                          }
+                          onSortRules={() =>
+                            saveTopOffers(
+                              sortCustomTopOfferStartingRules(
+                                settings.topOffers,
+                                offer.id
+                              )
+                            )
+                          }
+                          onAddRule={() =>
+                            saveTopOffers(
+                              addCustomTopOfferStartingRule(
+                                settings.topOffers,
+                                offer.id
+                              )
+                            )
+                          }
+                          onRemoveRule={(ruleIndex) =>
+                            saveTopOffers(
+                              removeCustomTopOfferStartingRule(
+                                settings.topOffers,
+                                offer.id,
+                                ruleIndex
+                              )
+                            )
+                          }
+                          onDefaultPercentageChange={(value) =>
+                            saveTopOffers(
+                              updateCustomTopOfferStartingDefaultPercentage(
+                                settings.topOffers,
+                                offer.id,
+                                value
+                              )
+                            )
+                          }
+                        />
+                        <div className="my-6 border-t border-border" />
+                      </>
+                    ) : null}
+
                     <RateRuleEditor
+                      title="Max Rates"
                       rules={offer.rules}
                       defaultPercentage={offer.defaultPercentage}
                       onRuleChange={(ruleIndex, field, value) =>
