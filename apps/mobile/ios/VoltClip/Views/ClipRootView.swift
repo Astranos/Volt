@@ -129,10 +129,11 @@ private struct ClipCaptureView: View {
                 ScannerBottomActionAccessory(
                     title: "Start Capture",
                     systemImage: store.activeCaptureMode.symbolName,
-                    isEnabled: true,
+                    isEnabled: store.isConnected,
                     statusText: captureStatusText,
                     disabledHint: store.targetHint,
                     action: {
+                        guard store.isConnected else { return }
                         isCaptureSessionPresented = true
                     }
                 )
@@ -158,7 +159,7 @@ private struct ClipCaptureView: View {
         if store.isConnected {
             "Ready to capture into Chrome"
         } else {
-            "Capture locally. Connect to Chrome to send."
+            store.targetHint
         }
     }
 }
@@ -418,10 +419,10 @@ private struct ClipChromeSectionHeader: View {
                 .background(.regularMaterial, in: Capsule())
             }
             .buttonStyle(.plain)
-            .disabled(connection.isBusy || connection.isConnected)
+            .disabled(connection.isBusy)
             .accessibilityElement(children: .combine)
             .accessibilityLabel(connection.isConnected ? connection.statusText : "Scan QR code")
-            .accessibilityHint(connection.isConnected ? "" : "Opens the camera to scan a Volt pairing QR code.")
+            .accessibilityHint("Opens the camera to scan a Volt pairing QR code.")
         }
     }
 
@@ -442,7 +443,7 @@ private struct ClipChromeSectionHeader: View {
         if connection.title == "Failed" {
             return .red
         }
-        return connection.isBusy ? .orange : .secondary
+        return .secondary
     }
 }
 
@@ -595,6 +596,7 @@ private struct ClipDictationStartAccessory: View {
                     .opacity(isConnected || isRecording ? 1 : ScannerTabLayout.disabledPrimaryActionOpacity)
             }
             .buttonStyle(.plain)
+            .disabled(!isConnected && !isRecording)
             .accessibilityHint(isConnected || isRecording ? "" : "Connect to Chrome before dictating")
         }
         .padding(.horizontal)
@@ -821,7 +823,7 @@ private struct ClipCaptureSessionView: View {
                         gridVisible: gridVisible,
                         hasLiveTextCandidates: !liveTextCandidates.isEmpty,
                         isRecognizingText: isRecognizingText || isCapturingPhoto,
-                        isCaptureEnabled: !isCapturingPhoto && !isRecognizingText,
+                        isCaptureEnabled: isConnected && !isCapturingPhoto && !isRecognizingText,
                         barcodeHint: detectedBarcodeBounds == nil ? "Point camera at barcode" : "Barcode found",
                         hasLatestCapture: latestPhoto != nil,
                         onToggleTorch: {

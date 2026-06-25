@@ -8,8 +8,8 @@ struct ScannerSignalingClient {
         let sourceURL: URL
     }
 
-    func fetchIceServerConfiguration() async throws -> ScannerProtocol.IceServerConfiguration {
-        var request = URLRequest(url: ScannerProtocol.signalURL.appending(path: "ice-servers"))
+    func fetchIceServerConfiguration(signalURL: URL = ScannerProtocol.signalURL) async throws -> ScannerProtocol.IceServerConfiguration {
+        var request = URLRequest(url: signalURL.appending(path: "ice-servers"))
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
         let (data, response) = try await signalData(for: request)
@@ -89,9 +89,13 @@ struct ScannerSignalingClient {
         throw ScannerPairingError.chromeTimedOut
     }
 
-    func createJoinAttempt(token: String, contributorId: String) async throws -> ScannerProtocol.JoinAttempt {
+    func createJoinAttempt(
+        token: String,
+        contributorId: String,
+        signalURL: URL = ScannerProtocol.signalURL
+    ) async throws -> ScannerProtocol.JoinAttempt {
         let tokenPath = token.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? token
-        let url = ScannerProtocol.signalURL
+        let url = signalURL
             .appending(path: "join-token")
             .appending(path: tokenPath)
             .appending(path: "attempt")
@@ -122,13 +126,13 @@ struct ScannerSignalingClient {
         }
         return ScannerProtocol.JoinAttempt(
             attemptId: id,
-            pollURL: ScannerProtocol.signalURL
+            pollURL: signalURL
                 .appending(path: "join-token")
                 .appending(path: tokenPath)
                 .appending(path: "attempt")
                 .appending(path: id)
                 .appending(path: "offer"),
-            answerURL: ScannerProtocol.signalURL
+            answerURL: signalURL
                 .appending(path: "join-token")
                 .appending(path: tokenPath)
                 .appending(path: "attempt")
@@ -136,6 +140,40 @@ struct ScannerSignalingClient {
                 .appending(path: "answer"),
             sessionId: nil
         )
+    }
+
+    func createJoinAttemptResolvingSignalURL(
+        token: String,
+        contributorId: String,
+        preferredSignalURL: URL,
+        allowFallback: Bool
+    ) async throws -> (attempt: ScannerProtocol.JoinAttempt, signalURL: URL) {
+        var signalURLs = [preferredSignalURL]
+        if allowFallback {
+            for fallbackURL in ScannerProtocol.fallbackSignalURLs where !signalURLs.contains(fallbackURL) {
+                signalURLs.append(fallbackURL)
+            }
+        }
+
+        var lastError: Error?
+        for signalURL in signalURLs {
+            do {
+                let attempt = try await createJoinAttempt(
+                    token: token,
+                    contributorId: contributorId,
+                    signalURL: signalURL
+                )
+                return (attempt, signalURL)
+            } catch ScannerPairingError.signalRejected(let statusCode, let detail)
+                where statusCode == 404 && detail == "Join token not found" && allowFallback {
+                lastError = ScannerPairingError.signalRejected(statusCode: statusCode, detail: detail)
+                continue
+            } catch {
+                throw error
+            }
+        }
+
+        throw lastError ?? ScannerPairingError.requestFailed
     }
 
     func pollOffer(token: String, attempt: ScannerProtocol.JoinAttempt) async throws -> (offer: String, answerURL: URL, sessionId: String?) {

@@ -48,23 +48,23 @@ body {
 .popup-title-row {
   align-items: center;
   display: grid;
-  gap: 12px;
+  gap: 10px;
   grid-template-columns: auto minmax(0, 1fr) auto;
-  min-height: 48px;
+  min-height: 38px;
 }
 
 .popup-icon {
   align-items: center;
   color: #047857;
   display: inline-flex;
-  height: 40px;
+  height: 32px;
   justify-content: center;
-  width: 40px;
+  width: 32px;
 }
 
 .popup-icon svg {
-  height: 32px;
-  width: 32px;
+  height: 22px;
+  width: 22px;
 }
 
 .popup-title-copy {
@@ -72,19 +72,19 @@ body {
 }
 
 .popup-title-copy h1 {
-  font-size: 22px;
+  font-size: 18px;
   font-weight: 800;
   letter-spacing: 0;
-  line-height: 1.05;
+  line-height: 1.12;
   margin: 0;
 }
 
 .popup-title-copy p {
   color: var(--popup-muted);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   line-height: 1.25;
-  margin: 5px 0 0;
+  margin: 3px 0 0;
 }
 
 .popup-settings-button {
@@ -95,14 +95,14 @@ body {
   color: var(--popup-muted);
   cursor: pointer;
   display: inline-flex;
-  height: 34px;
+  height: 30px;
   justify-content: center;
   padding: 0;
   transition:
     background-color 160ms ease,
     color 160ms ease,
     transform 160ms ease;
-  width: 34px;
+  width: 30px;
 }
 
 .popup-settings-button:hover {
@@ -193,6 +193,14 @@ body {
   padding: 12px 0 14px;
 }
 
+.popup-qr-stack {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  width: 100%;
+}
+
 .popup-qr-frame {
   background: #ffffff;
   border: 1px solid var(--popup-border);
@@ -201,6 +209,16 @@ body {
   height: min(282px, 100%);
   padding: 12px;
   width: min(282px, 100%);
+}
+
+.popup-qr-stack p {
+  color: var(--popup-muted);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.35;
+  margin: 0;
+  max-width: 270px;
+  text-align: center;
 }
 
 .popup-qr-image {
@@ -245,6 +263,37 @@ body {
   line-height: 1.45;
   margin: 5px 0 0;
   max-width: 260px;
+}
+
+.popup-pair-another-button {
+  align-items: center;
+  background: var(--popup-panel);
+  border: 1px solid var(--popup-border);
+  border-radius: 999px;
+  color: var(--popup-text);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 800;
+  gap: 7px;
+  height: 36px;
+  justify-content: center;
+  margin-top: 16px;
+  padding: 0 14px;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    transform 160ms ease;
+}
+
+.popup-pair-another-button:hover {
+  background: var(--popup-panel-strong);
+  border-color: rgba(34, 197, 94, 0.32);
+  transform: translateY(-1px);
+}
+
+.popup-pair-another-button svg {
+  color: #16a34a;
 }
 
 .popup-actions {

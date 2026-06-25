@@ -15,6 +15,7 @@ enum PairingURLParser {
             offer: query["offer"],
             answerURL: query["answerUrl"].flatMap(URL.init(string:)),
             label: query["label"],
+            signalURL: query["signalUrl"].flatMap(URL.init(string:))?.signalBaseURL ?? url.signalBaseURL,
             sourceURL: url
         )
 
@@ -40,13 +41,28 @@ enum PairingURLParser {
     }
 
     private static func joinToken(from url: URL) -> String? {
-        guard url.host == ScannerProtocol.signalURL.host else { return nil }
         let parts = url.pathComponents.filter { $0 != "/" }
         guard parts.count >= 4, parts[0] == "api", parts[1] == "signal", parts[2] == "join-token" else { return nil }
         return parts[3]
     }
 
-    private static func normalizedURL(from rawValue: String) -> URL? {
+}
+
+extension URL {
+    var signalBaseURL: URL? {
+        let parts = pathComponents.filter { $0 != "/" }
+        guard parts.count >= 2, parts[0] == "api", parts[1] == "signal" else { return nil }
+        var components = URLComponents()
+        components.scheme = scheme
+        components.host = host
+        components.port = port
+        components.path = "/api/signal"
+        return components.url
+    }
+}
+
+private extension PairingURLParser {
+    static func normalizedURL(from rawValue: String) -> URL? {
         let urlBoundaryCharacters = CharacterSet(charactersIn: "\"'<>[](){}")
         let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines.union(urlBoundaryCharacters))
         return URL(string: trimmed)

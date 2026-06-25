@@ -62,6 +62,16 @@ struct RecognizedTextRegion: Identifiable, Equatable {
 }
 
 enum DeviceIdentifierRegionExtractor {
+    static func reviewRegions(from regions: [RecognizedTextRegion]) -> [RecognizedTextRegion] {
+        let identifierRegions = extractedIdentifierRegions(from: regions)
+        var reviewRegions = deduplicated(identifierRegions)
+        for region in regions {
+            guard !containsEquivalentText(region, in: reviewRegions) else { continue }
+            reviewRegions.append(region)
+        }
+        return reviewRegions.sorted(by: readingOrder)
+    }
+
     static func extractedIdentifierRegions(from regions: [RecognizedTextRegion]) -> [RecognizedTextRegion] {
         let labeledIdentifierRegions = deduplicated(
             regions.filter(\.isDeviceIdentifier)
@@ -98,6 +108,22 @@ enum DeviceIdentifierRegionExtractor {
             return true
         }
     }
+
+    private static func containsEquivalentText(_ region: RecognizedTextRegion, in regions: [RecognizedTextRegion]) -> Bool {
+        regions.contains { existing in
+            existing.text.trimmingCharacters(in: .whitespacesAndNewlines).caseInsensitiveCompare(
+                region.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            ) == .orderedSame
+        }
+    }
+
+    private static func readingOrder(_ lhs: RecognizedTextRegion, _ rhs: RecognizedTextRegion) -> Bool {
+        let sameRowThreshold = max(lhs.boundingBox.height, rhs.boundingBox.height) * 0.6
+        if abs(lhs.boundingBox.midY - rhs.boundingBox.midY) <= sameRowThreshold {
+            return lhs.boundingBox.minX < rhs.boundingBox.minX
+        }
+        return lhs.boundingBox.midY > rhs.boundingBox.midY
+    }
 }
 
 enum LiveTextCandidateKind: String, Equatable {
@@ -113,6 +139,86 @@ struct LiveTextCandidate: Identifiable, Equatable {
     let value: String
     let bounds: CGRect
     let confidence: Float
+}
+
+struct LiveTextCandidateObservation: Equatable {
+    let kind: LiveTextCandidateKind
+    let value: String
+    let boundingBox: CGRect
+    let confidence: Float
+}
+
+struct LiveTextObservationSnapshot {
+    let text: String
+    let boundingBox: CGRect
+    let confidence: Float
+}
+
+enum LiveTextCandidateObservationExtractor {
+    static func prioritizedCandidates(
+        directCandidates: [LiveTextCandidateObservation],
+        snapshots: [LiveTextObservationSnapshot]
+    ) -> [LiveTextCandidateObservation] {
+        deduplicated(directCandidates + adjacentLabelValueCandidates(in: snapshots))
+            .sorted { lhs, rhs in
+                if lhs.kind.rawValue != rhs.kind.rawValue {
+                    return lhs.kind.rawValue < rhs.kind.rawValue
+                }
+                return lhs.boundingBox.minY > rhs.boundingBox.minY
+            }
+            .prefix(4)
+            .map { $0 }
+    }
+
+    private static func adjacentLabelValueCandidates(in snapshots: [LiveTextObservationSnapshot]) -> [LiveTextCandidateObservation] {
+        let ordered = snapshots.sorted { lhs, rhs in
+            if abs(lhs.boundingBox.midY - rhs.boundingBox.midY) > 0.025 {
+                return lhs.boundingBox.midY > rhs.boundingBox.midY
+            }
+            return lhs.boundingBox.minX < rhs.boundingBox.minX
+        }
+        var candidates: [LiveTextCandidateObservation] = []
+
+        for (index, label) in ordered.enumerated() {
+            guard let kind = LiveTextIdentifierMatcher.labelKind(in: label.text) else { continue }
+            for value in ordered[(index + 1)...].prefix(4) {
+                guard isPlausibleValueObservation(value, near: label) else { continue }
+                guard let candidateValue = LiveTextIdentifierMatcher.standaloneValue(in: value.text, kind: kind) else { continue }
+                candidates.append(
+                    LiveTextCandidateObservation(
+                        kind: kind,
+                        value: candidateValue,
+                        boundingBox: value.boundingBox,
+                        confidence: min(label.confidence, value.confidence)
+                    )
+                )
+                break
+            }
+        }
+
+        return candidates
+    }
+
+    private static func isPlausibleValueObservation(
+        _ value: LiveTextObservationSnapshot,
+        near label: LiveTextObservationSnapshot
+    ) -> Bool {
+        let verticalDistance = abs(label.boundingBox.midY - value.boundingBox.midY)
+        let horizontalOverlap = min(label.boundingBox.maxX, value.boundingBox.maxX) - max(label.boundingBox.minX, value.boundingBox.minX)
+        let sameRow = verticalDistance <= 0.035 && value.boundingBox.minX >= label.boundingBox.minX
+        let nextRow = label.boundingBox.minY >= value.boundingBox.midY && label.boundingBox.minY - value.boundingBox.maxY <= 0.08
+        return sameRow || nextRow || horizontalOverlap > -0.08
+    }
+
+    private static func deduplicated(_ candidates: [LiveTextCandidateObservation]) -> [LiveTextCandidateObservation] {
+        var seen = Set<String>()
+        return candidates.filter { candidate in
+            let key = "\(candidate.kind.rawValue):\(candidate.value.uppercased())"
+            guard !seen.contains(key) else { return false }
+            seen.insert(key)
+            return true
+        }
+    }
 }
 
 enum LiveTextIdentifierMatcher {
@@ -136,7 +242,7 @@ enum LiveTextIdentifierMatcher {
         if let serial = labeledValue(in: text, labels: serialLabels) {
             return Match(kind: .serial, value: serial.value, range: serial.range)
         }
-        if let model = labeledValue(in: text, labels: modelLabels) {
+        if let model = labeledModelValue(in: text) {
             return Match(kind: .model, value: model.value, range: model.range)
         }
         if let sku = labeledValue(in: text, labels: skuLabels) {
@@ -170,7 +276,17 @@ enum LiveTextIdentifierMatcher {
         switch kind {
         case .imei:
             return validLuhnCandidate(in: rawText)
-        case .model, .serial, .sku:
+        case .model:
+            if let model = modelTokenCandidate(in: rawText) {
+                return model.value
+            }
+            let cleaned = firstIdentifierToken(in: rawText)
+            guard cleaned.count >= 4,
+                  cleaned.rangeOfCharacter(from: .decimalDigits) != nil,
+                  cleaned.rangeOfCharacter(from: .letters) != nil
+            else { return nil }
+            return isKnownModelToken(cleaned) ? normalizedModelToken(cleaned) : cleaned
+        case .serial, .sku:
             let cleaned = firstIdentifierToken(in: rawText)
             guard cleaned.count >= 4,
                   cleaned.rangeOfCharacter(from: .decimalDigits) != nil,
@@ -245,11 +361,34 @@ enum LiveTextIdentifierMatcher {
         return (cleaned, valueRange)
     }
 
+    private static func labeledModelValue(in text: String) -> (value: String, range: Range<String.Index>)? {
+        let lowercased = text.lowercased()
+        guard let labelRange = modelLabels
+            .compactMap({ labelRange(in: lowercased, label: $0) })
+            .min(by: { $0.lowerBound < $1.lowerBound })
+        else { return nil }
+
+        let valueStart = text.index(text.startIndex, offsetBy: lowercased.distance(from: lowercased.startIndex, to: labelRange.upperBound))
+        let suffix = String(text[valueStart...])
+        if let model = modelTokenCandidate(in: suffix) {
+            let lowerOffset = suffix.distance(from: suffix.startIndex, to: model.range.lowerBound)
+            let upperOffset = suffix.distance(from: suffix.startIndex, to: model.range.upperBound)
+            let lower = text.index(valueStart, offsetBy: lowerOffset)
+            let upper = text.index(valueStart, offsetBy: upperOffset)
+            return (model.value, lower..<upper)
+        }
+
+        return labeledValue(in: text, labels: modelLabels)
+    }
+
     private static func standaloneIdentifier(in text: String) -> Match? {
         guard !isRegulatoryIdentifierContext(text) else { return nil }
+        if let model = modelTokenCandidate(in: text) {
+            return Match(kind: .model, value: model.value, range: model.range)
+        }
         let candidates = identifierTokenCandidates(in: text)
         if let candidate = candidates.first(where: { isKnownModelToken($0.value) }) {
-            return Match(kind: .model, value: candidate.value, range: candidate.range)
+            return Match(kind: .model, value: normalizedModelToken(candidate.value), range: candidate.range)
         }
         if let candidate = candidates.first(where: { isLikelySerialToken($0.value) }) {
             return Match(kind: .serial, value: candidate.value, range: candidate.range)
@@ -307,8 +446,37 @@ enum LiveTextIdentifierMatcher {
 
     private static let identifierTokenTrimCharacters = CharacterSet(charactersIn: " #:=-{}[](),.;|")
 
+    private static func modelTokenCandidate(in text: String) -> (value: String, range: Range<String.Index>)? {
+        let candidates = identifierTokenCandidates(in: text)
+        for (index, candidate) in candidates.enumerated() {
+            let normalized = normalizedModelToken(candidate.value)
+            if isKnownModelToken(normalized) {
+                return (normalized, candidate.range)
+            }
+
+            guard index + 1 < candidates.count else { continue }
+            let next = candidates[index + 1]
+            if let combined = combinedModelToken(prefix: candidate.value, suffix: next.value) {
+                return (combined, candidate.range.lowerBound..<next.range.upperBound)
+            }
+        }
+        return nil
+    }
+
+    private static func combinedModelToken(prefix: String, suffix: String) -> String? {
+        let normalizedPrefix = normalizedModelPrefix(prefix)
+        let cleanedSuffix = suffix.trimmingCharacters(in: identifierTokenTrimCharacters).uppercased()
+        guard let normalizedPrefix,
+              cleanedSuffix.count >= 2,
+              cleanedSuffix.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "-" })
+        else { return nil }
+
+        let combined = normalizedPrefix + cleanedSuffix
+        return isKnownModelToken(combined) ? combined : nil
+    }
+
     private static func isKnownModelToken(_ value: String) -> Bool {
-        let uppercased = value.uppercased()
+        let uppercased = normalizedModelToken(value)
         guard uppercased.hasPrefix("CFI-"),
               uppercased.count >= 7,
               uppercased.count <= 20
@@ -316,6 +484,31 @@ enum LiveTextIdentifierMatcher {
         return uppercased.allSatisfy { character in
             character.isLetter || character.isNumber || character == "-"
         }
+    }
+
+    private static func normalizedModelToken(_ value: String) -> String {
+        let uppercased = value.uppercased()
+        if uppercased.hasPrefix("CF1-") || uppercased.hasPrefix("CFL-") {
+            return "CFI-" + String(uppercased.dropFirst(4))
+        }
+        if uppercased.hasPrefix("CF1") || uppercased.hasPrefix("CFL") {
+            return "CFI-" + String(uppercased.dropFirst(3)).trimmingCharacters(in: identifierTokenTrimCharacters)
+        }
+        if uppercased.hasPrefix("CFI") && !uppercased.hasPrefix("CFI-") {
+            let suffix = String(uppercased.dropFirst(3)).trimmingCharacters(in: identifierTokenTrimCharacters)
+            if !suffix.isEmpty {
+                return "CFI-" + suffix
+            }
+        }
+        return uppercased
+    }
+
+    private static func normalizedModelPrefix(_ value: String) -> String? {
+        let uppercased = value.uppercased().trimmingCharacters(in: identifierTokenTrimCharacters)
+        if uppercased == "CFI" || uppercased == "CF1" || uppercased == "CFL" {
+            return "CFI-"
+        }
+        return nil
     }
 
     private static func isLikelySerialToken(_ value: String) -> Bool {

@@ -50,6 +50,10 @@ test("scanner protocol builds join-token URLs for full app pairing", () => {
     buildScannerJoinUrl({ token, sessionId, joinAttemptId }),
     `volt://pair?token=${token}&sessionId=${sessionId}&joinAttemptId=${joinAttemptId}`,
   );
+  assert.equal(
+    buildScannerJoinUrl({ token, sessionId, signalUrl: "https://signal.example.test/api/signal" }),
+    `volt://pair?token=${token}&sessionId=${sessionId}&signalUrl=https%3A%2F%2Fsignal.example.test%2Fapi%2Fsignal`,
+  );
 });
 
 test("scanner protocol validates scanner-control capture messages and dedupe keys", () => {

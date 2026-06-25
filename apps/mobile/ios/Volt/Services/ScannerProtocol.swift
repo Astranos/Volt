@@ -2,10 +2,14 @@ import Foundation
 import UIKit
 
 enum ScannerProtocol {
+    static let developmentSignalURL = URL(string: "https://adorable-hornet-19.convex.site/api/signal")!
+    static let productionSignalURL = URL(string: "https://sincere-trout-414.convex.site/api/signal")!
     #if DEBUG
-    static let signalURL = URL(string: "https://adorable-hornet-19.convex.site/api/signal")!
+    static let signalURL = developmentSignalURL
+    static let fallbackSignalURLs = [productionSignalURL]
     #else
-    static let signalURL = URL(string: "https://sincere-trout-414.convex.site/api/signal")!
+    static let signalURL = productionSignalURL
+    static let fallbackSignalURLs: [URL] = []
     #endif
     static let controlChannelLabel = "scanner-control"
     static let photoTransferChannelLabel = "photo-transfer"

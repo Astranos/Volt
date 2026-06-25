@@ -49,7 +49,7 @@ struct ClipOCRService {
         let recognizedRegions = (request.results ?? [])
             .compactMap(region)
             .sorted(by: readingOrder)
-        let regions = DeviceIdentifierRegionExtractor.extractedIdentifierRegions(from: recognizedRegions)
+        let regions = DeviceIdentifierRegionExtractor.reviewRegions(from: recognizedRegions)
         let lines = regions.map(\.text)
 
         return ClipOCRResult(

@@ -359,7 +359,7 @@ final class ClipBarcodeScannerService: NSObject {
         }
     }
 
-    private func applyLiveTextCandidates(_ candidates: [ClipLiveTextCandidateObservation]) {
+    private func applyLiveTextCandidates(_ candidates: [LiveTextCandidateObservation]) {
         guard !candidates.isEmpty else {
             liveTextCandidates = []
             liveTextReplacementObservationCounts = [:]
@@ -382,7 +382,7 @@ final class ClipBarcodeScannerService: NSObject {
         onLiveTextCandidates?(acceptedCandidates)
     }
 
-    private func liveTextCandidate(from candidate: ClipLiveTextCandidateObservation) -> LiveTextCandidate {
+    private func liveTextCandidate(from candidate: LiveTextCandidateObservation) -> LiveTextCandidate {
         LiveTextCandidate(
             kind: candidate.kind,
             value: candidate.value,
@@ -391,12 +391,12 @@ final class ClipBarcodeScannerService: NSObject {
         )
     }
 
-    private func hasLiveTextCandidate(_ candidate: ClipLiveTextCandidateObservation, in existing: [LiveTextCandidate]) -> Bool {
+    private func hasLiveTextCandidate(_ candidate: LiveTextCandidateObservation, in existing: [LiveTextCandidate]) -> Bool {
         let normalizedValue = candidate.value.uppercased()
         return existing.contains { $0.kind == candidate.kind && $0.value.uppercased() == normalizedValue }
     }
 
-    private func replacementIndex(for candidate: ClipLiveTextCandidateObservation, in existing: [LiveTextCandidate]) -> Int? {
+    private func replacementIndex(for candidate: LiveTextCandidateObservation, in existing: [LiveTextCandidate]) -> Int? {
         switch candidate.kind {
         case .imei:
             return nil
@@ -405,7 +405,7 @@ final class ClipBarcodeScannerService: NSObject {
         }
     }
 
-    private func canAppendLiveTextCandidate(_ candidate: ClipLiveTextCandidateObservation, to existing: [LiveTextCandidate]) -> Bool {
+    private func canAppendLiveTextCandidate(_ candidate: LiveTextCandidateObservation, to existing: [LiveTextCandidate]) -> Bool {
         let existingKindCount = existing.filter { $0.kind == candidate.kind }.count
         switch candidate.kind {
         case .imei:
@@ -416,7 +416,7 @@ final class ClipBarcodeScannerService: NSObject {
     }
 
     private func shouldReplaceLiveTextCandidate(
-        _ candidate: ClipLiveTextCandidateObservation,
+        _ candidate: LiveTextCandidateObservation,
         replacing existing: LiveTextCandidate
     ) -> Bool {
         let key = "\(candidate.kind.rawValue):\(candidate.value.uppercased())"
@@ -629,20 +629,13 @@ private struct ClipBarcodeCandidate {
     let value: String
 }
 
-private struct ClipLiveTextCandidateObservation: Equatable {
-    let kind: LiveTextCandidateKind
-    let value: String
-    let boundingBox: CGRect
-    let confidence: Float
-}
-
 private final class ClipLiveTextFrameProcessor: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, @unchecked Sendable {
-    var onCandidates: (@Sendable ([ClipLiveTextCandidateObservation]) -> Void)?
+    var onCandidates: (@Sendable ([LiveTextCandidateObservation]) -> Void)?
     var isEnabled = false
     private var isRecognizing = false
     private var lastRecognitionAt = ContinuousClock.now
     private let recognitionInterval: Duration = .milliseconds(500)
-    private var lastCandidates: [ClipLiveTextCandidateObservation] = []
+    private var lastCandidates: [LiveTextCandidateObservation] = []
 
     func reset() {
         lastCandidates = []
@@ -677,7 +670,7 @@ private final class ClipLiveTextFrameProcessor: NSObject, AVCaptureVideoDataOutp
         request.recognitionLevel = .fast
         request.usesLanguageCorrection = false
         request.recognitionLanguages = ["en-US"]
-        request.customWords = ["IMEI", "MEID", "Serial", "S/N", "SN", "Model", "Model No", "SKU"]
+        request.customWords = ["IMEI", "MEID", "Serial", "S/N", "SN", "Model", "Model No", "SKU", "CFI", "CF1", "CFL", "CFI-ZCT1W"]
         request.minimumTextHeight = 0.006
 
         do {
@@ -687,26 +680,32 @@ private final class ClipLiveTextFrameProcessor: NSObject, AVCaptureVideoDataOutp
         }
     }
 
-    private static func candidates(from observations: [VNRecognizedTextObservation]) -> [ClipLiveTextCandidateObservation] {
-        observations
-            .compactMap { observation -> ClipLiveTextCandidateObservation? in
+    private static func candidates(from observations: [VNRecognizedTextObservation]) -> [LiveTextCandidateObservation] {
+        let snapshots = observations.compactMap { observation -> LiveTextObservationSnapshot? in
+            guard let text = observation.topCandidates(1).first else { return nil }
+            return LiveTextObservationSnapshot(
+                text: text.string,
+                boundingBox: observation.boundingBox,
+                confidence: text.confidence
+            )
+        }
+
+        let directCandidates = observations
+            .compactMap { observation -> LiveTextCandidateObservation? in
                 guard let text = observation.topCandidates(1).first else { return nil }
                 guard let match = LiveTextIdentifierMatcher.match(text.string) else { return nil }
                 let matchedBox = (try? text.boundingBox(for: match.range))?.boundingBox ?? observation.boundingBox
-                return ClipLiveTextCandidateObservation(
+                return LiveTextCandidateObservation(
                     kind: match.kind,
                     value: match.value,
                     boundingBox: matchedBox,
                     confidence: text.confidence
                 )
             }
-            .sorted { lhs, rhs in
-                if lhs.kind.rawValue != rhs.kind.rawValue {
-                    return lhs.kind.rawValue < rhs.kind.rawValue
-                }
-                return lhs.boundingBox.minY > rhs.boundingBox.minY
-            }
-            .prefix(4)
-            .map { $0 }
+
+        return LiveTextCandidateObservationExtractor.prioritizedCandidates(
+            directCandidates: directCandidates,
+            snapshots: snapshots
+        )
     }
 }

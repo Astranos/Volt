@@ -38,7 +38,7 @@ final class ScannerWebRTCConnection: NSObject {
     func pair(with session: PairingSession) async throws {
         onStatusChange?(.pairing)
         let resolved = try await resolvePairing(session)
-        let answer = try await createAnswer(for: resolved.offer)
+        let answer = try await createAnswer(for: resolved.offer, signalURL: resolved.signalURL)
         try await signaling.postAnswer(answer, to: resolved.answerURL)
         onStatusChange?(.waitingForChrome)
     }
@@ -96,26 +96,33 @@ final class ScannerWebRTCConnection: NSObject {
         return receipt
     }
 
-    private func resolvePairing(_ session: PairingSession) async throws -> (offer: String, answerURL: URL, sessionId: String?) {
+    private func resolvePairing(_ session: PairingSession) async throws -> (offer: String, answerURL: URL, sessionId: String?, signalURL: URL) {
+        let signalURL = session.signalURL ?? ScannerProtocol.signalURL
         if let offer = session.offer, let answerURL = session.answerURL {
-            return (offer, answerURL, session.sessionId)
+            return (offer, answerURL, session.sessionId, signalURL)
         }
 
         guard let token = session.token else {
             throw ScannerPairingError.missingPairingURL
         }
-        let attempt = try await signaling.createJoinAttempt(token: token, contributorId: contributorId)
-        return try await signaling.pollOffer(token: token, attempt: attempt)
+        let resolvedAttempt = try await signaling.createJoinAttemptResolvingSignalURL(
+            token: token,
+            contributorId: contributorId,
+            preferredSignalURL: signalURL,
+            allowFallback: session.signalURL == nil
+        )
+        let resolved = try await signaling.pollOffer(token: token, attempt: resolvedAttempt.attempt)
+        return (resolved.offer, resolved.answerURL, resolved.sessionId, resolvedAttempt.signalURL)
     }
 
-    private func createAnswer(for encodedOffer: String) async throws -> ScannerProtocol.SessionDescription {
+    private func createAnswer(for encodedOffer: String, signalURL: URL) async throws -> ScannerProtocol.SessionDescription {
         let offer = try ScannerProtocol.decodePairingPayload(encodedOffer)
         guard offer.type == "offer" else {
             throw ScannerPairingError.invalidPairingPayload
         }
 
         let configuration = RTCConfiguration()
-        let iceServerConfiguration = await fetchIceServerConfiguration()
+        let iceServerConfiguration = await fetchIceServerConfiguration(signalURL: signalURL)
         configuration.iceServers = iceServerConfiguration.iceServers.map { server in
             RTCIceServer(urlStrings: server.urls, username: server.username, credential: server.credential)
         }
@@ -139,9 +146,9 @@ final class ScannerWebRTCConnection: NSObject {
         return ScannerProtocol.SessionDescription(type: RTCSessionDescription.string(for: localDescription.type), sdp: localDescription.sdp)
     }
 
-    private func fetchIceServerConfiguration() async -> ScannerProtocol.IceServerConfiguration {
+    private func fetchIceServerConfiguration(signalURL: URL) async -> ScannerProtocol.IceServerConfiguration {
         do {
-            return try await signaling.fetchIceServerConfiguration()
+            return try await signaling.fetchIceServerConfiguration(signalURL: signalURL)
         } catch {
             return ScannerProtocol.fallbackIceServerConfiguration
         }

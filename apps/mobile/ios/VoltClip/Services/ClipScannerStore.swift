@@ -54,6 +54,13 @@ final class ClipScannerStore {
         var status: String
     }
 
+    private struct ClipPairingCredential {
+        let pairingId: String
+        let pairingSecret: String
+        let browserSessionId: String
+        let displayName: String
+    }
+
     var selectedTab: ClipTab = .capture
     var activeCaptureMode: CaptureMode = .ocr
     var pairingURLText = ""
@@ -75,8 +82,20 @@ final class ClipScannerStore {
 
     private let contributorId = ScannerProtocol.makeContributorId()
     @ObservationIgnored private let ocrService = ClipOCRService()
+    @ObservationIgnored private let signaling = ScannerSignalingClient()
     @ObservationIgnored private let transport = WebKitWebRTCTransport()
+    @ObservationIgnored private let pairingImpactFeedback = UIImpactFeedbackGenerator(style: .medium)
+    @ObservationIgnored private let pairingNotificationFeedback = UINotificationFeedbackGenerator()
+    @ObservationIgnored private let dictationImpactFeedback = UIImpactFeedbackGenerator(style: .light)
+    @ObservationIgnored private let dictationNotificationFeedback = UINotificationFeedbackGenerator()
+    @ObservationIgnored private let captureSuccessFeedback = UINotificationFeedbackGenerator()
+    @ObservationIgnored private let captureFailureFeedback = UINotificationFeedbackGenerator()
+    @ObservationIgnored private let captureFailureImpactFeedback = UIImpactFeedbackGenerator(style: .heavy)
     private var pairingSession: PairingSession?
+    private var reconnectTask: Task<Void, Never>?
+    private var suppressNextReconnect = false
+    private var lastPairingCredential: ClipPairingCredential?
+    private var dictationTargetKey: String?
 
     var bridgeWebView: WKWebView {
         transport.embeddedWebView
@@ -91,12 +110,23 @@ final class ClipScannerStore {
             self?.statusText = status
         }
         transport.onConnected = { [weak self] sessionReady in
-            self?.isConnected = true
-            self?.isPairing = false
-            self?.pairingFailureMessage = nil
-            self?.targetHint = sessionReady.cursorTarget?.label ?? "Ready for Chrome"
-            self?.statusText = "Connected to \(self?.pairingLabel ?? "Chrome")"
-            self?.sendSavedItemsAfterConnect()
+            guard let self else { return }
+            let wasConnected = self.isConnected
+            let nextTargetKey = self.dictationTargetKey(for: sessionReady)
+            let didChangeChromeInputTarget = wasConnected
+                && self.dictationTargetKey != nil
+                && self.dictationTargetKey != nextTargetKey
+            self.savePairingCredential(from: sessionReady)
+            self.dictationTargetKey = nextTargetKey
+            self.isConnected = true
+            self.isPairing = false
+            self.pairingFailureMessage = nil
+            self.targetHint = sessionReady.cursorTarget?.label ?? "Ready for Chrome"
+            self.statusText = "Connected to \(self.pairingLabel ?? "Chrome")"
+            if !wasConnected || (didChangeChromeInputTarget && self.selectedTab == .dictate) {
+                self.pairingNotificationFeedback.notificationOccurred(.success)
+            }
+            self.sendSavedItemsAfterConnect()
         }
         transport.onTranscript = { [weak self] text, final in
             self?.transcript = text
@@ -105,19 +135,21 @@ final class ClipScannerStore {
             }
         }
         transport.onClosed = { [weak self] in
-            self?.isConnected = false
-            self?.isDictating = false
-            self?.targetHint = "Disconnected"
-            self?.statusText = "Connection closed"
+            self?.handleTransportClosed()
         }
         transport.onError = { [weak self] message in
-            self?.isPairing = false
-            self?.isDictating = false
-            self?.errorMessage = message
-            if self?.isConnected != true {
-                self?.pairingFailureMessage = message
+            guard let self else { return }
+            let wasConnected = self.isConnected
+            self.isPairing = false
+            self.isDictating = false
+            self.errorMessage = message
+            if wasConnected {
+                self.scheduleReconnectIfPossible(reason: "Connection interrupted")
+            } else {
+                self.pairingFailureMessage = message
+                self.pairingNotificationFeedback.notificationOccurred(.error)
+                self.statusText = "Connection failed"
             }
-            self?.statusText = self?.isConnected == true ? "Dictation failed" : "Connection failed"
         }
     }
 
@@ -155,10 +187,14 @@ final class ClipScannerStore {
             return
         }
 
+        reconnectTask?.cancel()
+        reconnectTask = nil
+        suppressNextReconnect = false
         isPairing = true
         errorMessage = nil
         pairingFailureMessage = nil
         statusText = "Pairing with Chrome"
+        pairingImpactFeedback.impactOccurred(intensity: 0.85)
         do {
             try await transport.pair(with: nextSession, contributorId: contributorId)
         } catch {
@@ -166,6 +202,7 @@ final class ClipScannerStore {
             errorMessage = error.localizedDescription
             pairingFailureMessage = error.localizedDescription
             statusText = "Pairing failed"
+            pairingNotificationFeedback.notificationOccurred(.error)
         }
     }
 
@@ -185,11 +222,16 @@ final class ClipScannerStore {
         isDictating = true
         transcript = ""
         transport.startDictation()
+        dictationNotificationFeedback.notificationOccurred(.success)
     }
 
     func stopDictation() {
+        let wasDictating = isDictating
         isDictating = false
         transport.stopDictation()
+        if wasDictating {
+            dictationImpactFeedback.impactOccurred(intensity: 0.7)
+        }
     }
 
     @discardableResult
@@ -263,10 +305,12 @@ final class ClipScannerStore {
             )
             updatePhoto(photo.id, status: "Delivered")
             statusText = "Photo delivered"
+            captureSuccessFeedback.notificationOccurred(.success)
         } catch {
             updatePhoto(photo.id, status: "Failed")
             errorMessage = error.localizedDescription
             statusText = "Photo send failed"
+            playCaptureFailureFeedback()
         }
     }
 
@@ -335,9 +379,116 @@ final class ClipScannerStore {
     }
 
     func disconnect() {
+        suppressNextReconnect = true
+        reconnectTask?.cancel()
+        reconnectTask = nil
         transport.close()
         isConnected = false
         isDictating = false
+        isPairing = false
+        statusText = "Disconnected"
+        targetHint = "Disconnected"
+    }
+
+    private func savePairingCredential(from sessionReady: ScannerProtocol.SessionReady) {
+        guard let pairing = sessionReady.pairing else { return }
+        let displayName = pairing.displayName ?? pairing.browserSessionId
+        lastPairingCredential = ClipPairingCredential(
+            pairingId: pairing.pairingId,
+            pairingSecret: pairing.pairingSecret,
+            browserSessionId: pairing.browserSessionId,
+            displayName: displayName
+        )
+        pairingLabel = displayName
+        Task {
+            try? await signaling.registerPairing(pairing, phoneDeviceId: contributorId)
+        }
+    }
+
+    private func dictationTargetKey(for sessionReady: ScannerProtocol.SessionReady) -> String {
+        [
+            sessionReady.peer?.chromeSessionId,
+            sessionReady.cursorTarget?.url,
+            sessionReady.cursorTarget?.tabTitle,
+            sessionReady.cursorTarget?.label,
+        ]
+            .map { value in
+                value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            }
+            .joined(separator: "\u{1F}")
+    }
+
+    private func handleTransportClosed() {
+        let shouldReconnect = isConnected && !suppressNextReconnect
+        isConnected = false
+        isDictating = false
+
+        if shouldReconnect {
+            scheduleReconnectIfPossible(reason: "Connection closed")
+        } else {
+            suppressNextReconnect = false
+            targetHint = "Disconnected"
+            statusText = "Connection closed"
+        }
+    }
+
+    private func scheduleReconnectIfPossible(reason: String) {
+        suppressNextReconnect = false
+        guard reconnectTask == nil else { return }
+        guard let credential = lastPairingCredential else {
+            isConnected = false
+            targetHint = "Scan a fresh Volt QR code."
+            statusText = reason
+            return
+        }
+
+        isConnected = false
+        isPairing = true
+        targetHint = "Reopening \(credential.displayName)"
+        statusText = "Reconnecting to Chrome"
+        reconnectTask = Task { [weak self] in
+            await self?.reconnect(using: credential)
+        }
+    }
+
+    private func reconnect(using credential: ClipPairingCredential) async {
+        defer {
+            reconnectTask = nil
+        }
+
+        do {
+            try await signaling.registerPairing(
+                pairingId: credential.pairingId,
+                pairingSecret: credential.pairingSecret,
+                browserSessionId: credential.browserSessionId,
+                displayName: credential.displayName,
+                phoneDeviceId: contributorId
+            )
+            let joinWindow = try await signaling.requestReconnect(
+                pairingId: credential.pairingId,
+                pairingSecret: credential.pairingSecret
+            )
+            let session = PairingSession(
+                token: joinWindow.token,
+                sessionId: joinWindow.sessionId ?? credential.browserSessionId,
+                attemptId: nil,
+                offer: nil,
+                answerURL: nil,
+                label: credential.displayName,
+                signalURL: joinWindow.sourceURL.signalBaseURL ?? ScannerProtocol.signalURL,
+                sourceURL: joinWindow.sourceURL
+            )
+            pairingSession = session
+            try await transport.pair(with: session, contributorId: contributorId)
+        } catch {
+            isPairing = false
+            isConnected = false
+            pairingFailureMessage = error.localizedDescription
+            errorMessage = error.localizedDescription
+            targetHint = "Scan a fresh Volt QR code."
+            statusText = "Reconnect failed"
+            pairingNotificationFeedback.notificationOccurred(.error)
+        }
     }
 
     private func updatePhoto(_ id: UUID, status: String) {
@@ -402,6 +553,7 @@ final class ClipScannerStore {
                 if receipt.insertedIntoCursor == true {
                     updateCapture(capture.id, status: "Inserted")
                     statusText = capture.mode == .barcode ? "Barcode inserted" : "Text inserted"
+                    captureSuccessFeedback.notificationOccurred(.success)
                 } else {
                     updateCapture(capture.id, status: "Received")
                     statusText = "Chrome received it, but no cursor target was available."
@@ -413,8 +565,14 @@ final class ClipScannerStore {
                 updateCapture(capture.id, status: "Failed")
                 errorMessage = error.localizedDescription
                 statusText = "Send failed"
+                playCaptureFailureFeedback()
             }
         }
+    }
+
+    private func playCaptureFailureFeedback() {
+        captureFailureImpactFeedback.impactOccurred(intensity: 1)
+        captureFailureFeedback.notificationOccurred(.error)
     }
 
     @discardableResult

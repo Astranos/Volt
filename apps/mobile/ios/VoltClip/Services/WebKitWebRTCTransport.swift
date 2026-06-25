@@ -32,7 +32,9 @@ final class WebKitWebRTCTransport: NSObject {
     func pair(with session: PairingSession, contributorId: String) async throws {
         let resolved = try await resolvePairing(session, contributorId: contributorId)
         let offer = try ScannerProtocol.decodePairingPayload(resolved.offer)
-        let iceConfiguration = (try? await signaling.fetchIceServerConfiguration()) ?? ScannerProtocol.fallbackIceServerConfiguration
+        let iceConfiguration = (try? await signaling.fetchIceServerConfiguration(
+            signalURL: resolved.signalURL
+        )) ?? ScannerProtocol.fallbackIceServerConfiguration
         let answer = try await createAnswer(
             offer: offer,
             iceServers: iceConfiguration.iceServers,
@@ -137,15 +139,22 @@ final class WebKitWebRTCTransport: NSObject {
     private func resolvePairing(
         _ session: PairingSession,
         contributorId: String
-    ) async throws -> (offer: String, answerURL: URL, sessionId: String?) {
+    ) async throws -> (offer: String, answerURL: URL, sessionId: String?, signalURL: URL) {
+        let signalURL = session.signalURL ?? ScannerProtocol.signalURL
         if let offer = session.offer, let answerURL = session.answerURL {
-            return (offer, answerURL, session.sessionId)
+            return (offer, answerURL, session.sessionId, signalURL)
         }
         guard let token = session.token else {
             throw ScannerPairingError.missingPairingURL
         }
-        let attempt = try await signaling.createJoinAttempt(token: token, contributorId: contributorId)
-        return try await signaling.pollOffer(token: token, attempt: attempt)
+        let resolvedAttempt = try await signaling.createJoinAttemptResolvingSignalURL(
+            token: token,
+            contributorId: contributorId,
+            preferredSignalURL: signalURL,
+            allowFallback: session.signalURL == nil
+        )
+        let resolved = try await signaling.pollOffer(token: token, attempt: resolvedAttempt.attempt)
+        return (resolved.offer, resolved.answerURL, resolved.sessionId, resolvedAttempt.signalURL)
     }
 
     private func createAnswer(

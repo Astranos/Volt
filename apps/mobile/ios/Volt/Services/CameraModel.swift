@@ -458,19 +458,6 @@ final class CameraModel: NSObject {
 
 }
 
-private struct LiveTextCandidateObservation: Equatable {
-    let kind: LiveTextCandidateKind
-    let value: String
-    let boundingBox: CGRect
-    let confidence: Float
-}
-
-private struct LiveTextObservationSnapshot {
-    let text: String
-    let boundingBox: CGRect
-    let confidence: Float
-}
-
 private final class LiveTextFrameProcessor: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, @unchecked Sendable {
     var onCandidates: (@Sendable ([LiveTextCandidateObservation]) -> Void)?
     var isEnabled = false
@@ -512,7 +499,7 @@ private final class LiveTextFrameProcessor: NSObject, AVCaptureVideoDataOutputSa
         request.recognitionLevel = .fast
         request.usesLanguageCorrection = false
         request.recognitionLanguages = ["en-US"]
-        request.customWords = ["IMEI", "MEID", "Serial", "S/N", "SN", "Model", "Model No", "SKU"]
+        request.customWords = ["IMEI", "MEID", "Serial", "S/N", "SN", "Model", "Model No", "SKU", "CFI", "CF1", "CFL", "CFI-ZCT1W"]
         request.minimumTextHeight = 0.006
 
         do {
@@ -544,65 +531,10 @@ private final class LiveTextFrameProcessor: NSObject, AVCaptureVideoDataOutputSa
                 )
             }
 
-        return deduplicated(directCandidates + adjacentLabelValueCandidates(in: snapshots))
-            .sorted { lhs, rhs in
-                if lhs.kind.rawValue != rhs.kind.rawValue {
-                    return lhs.kind.rawValue < rhs.kind.rawValue
-                }
-                return lhs.boundingBox.minY > rhs.boundingBox.minY
-            }
-            .prefix(4)
-            .map { $0 }
-    }
-
-    private static func adjacentLabelValueCandidates(in snapshots: [LiveTextObservationSnapshot]) -> [LiveTextCandidateObservation] {
-        let ordered = snapshots.sorted { lhs, rhs in
-            if abs(lhs.boundingBox.midY - rhs.boundingBox.midY) > 0.025 {
-                return lhs.boundingBox.midY > rhs.boundingBox.midY
-            }
-            return lhs.boundingBox.minX < rhs.boundingBox.minX
-        }
-        var candidates: [LiveTextCandidateObservation] = []
-
-        for (index, label) in ordered.enumerated() {
-            guard let kind = LiveTextIdentifierMatcher.labelKind(in: label.text) else { continue }
-            for value in ordered[(index + 1)...].prefix(4) {
-                guard isPlausibleValueObservation(value, near: label) else { continue }
-                guard let candidateValue = LiveTextIdentifierMatcher.standaloneValue(in: value.text, kind: kind) else { continue }
-                candidates.append(
-                    LiveTextCandidateObservation(
-                        kind: kind,
-                        value: candidateValue,
-                        boundingBox: value.boundingBox,
-                        confidence: min(label.confidence, value.confidence)
-                    )
-                )
-                break
-            }
-        }
-
-        return candidates
-    }
-
-    private static func isPlausibleValueObservation(
-        _ value: LiveTextObservationSnapshot,
-        near label: LiveTextObservationSnapshot
-    ) -> Bool {
-        let verticalDistance = abs(label.boundingBox.midY - value.boundingBox.midY)
-        let horizontalOverlap = min(label.boundingBox.maxX, value.boundingBox.maxX) - max(label.boundingBox.minX, value.boundingBox.minX)
-        let sameRow = verticalDistance <= 0.035 && value.boundingBox.minX >= label.boundingBox.minX
-        let nextRow = label.boundingBox.minY >= value.boundingBox.midY && label.boundingBox.minY - value.boundingBox.maxY <= 0.08
-        return sameRow || nextRow || horizontalOverlap > -0.08
-    }
-
-    private static func deduplicated(_ candidates: [LiveTextCandidateObservation]) -> [LiveTextCandidateObservation] {
-        var seen = Set<String>()
-        return candidates.filter { candidate in
-            let key = "\(candidate.kind.rawValue):\(candidate.value.uppercased())"
-            guard !seen.contains(key) else { return false }
-            seen.insert(key)
-            return true
-        }
+        return LiveTextCandidateObservationExtractor.prioritizedCandidates(
+            directCandidates: directCandidates,
+            snapshots: snapshots
+        )
     }
 }
 

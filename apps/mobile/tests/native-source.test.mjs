@@ -48,6 +48,10 @@ const scannerProtocolSwiftSource = readFileSync(
   new URL("../ios/Volt/Services/ScannerProtocol.swift", import.meta.url),
   "utf8"
 );
+const pairingURLParserSwiftSource = readFileSync(
+  new URL("../ios/Volt/Services/PairingURLParser.swift", import.meta.url),
+  "utf8"
+);
 const scannerRecognitionModelsSwiftSource = readFileSync(
   new URL("../ios/Volt/Models/ScannerRecognitionModels.swift", import.meta.url),
   "utf8"
@@ -225,6 +229,23 @@ test("native scanner protocol message surfaces match shared scanner protocol fix
   assert.match(scannerProtocolSwiftSource, new RegExp(`static let photoTransferMessageTypes: \\[String\\] = \\[\\s*${swiftRawValueList(expectedPhotoRawValues)},?\\s*\\]`));
 });
 
+test("native pairing URLs can carry the signal deployment that minted the token", () => {
+  assert.match(pairingURLParserSwiftSource, /signalURL: query\["signalUrl"\]\.flatMap\(URL\.init\(string:\)\)\?\.signalBaseURL \?\? url\.signalBaseURL/);
+  assert.match(pairingURLParserSwiftSource, /guard parts\.count >= 4, parts\[0\] == "api", parts\[1\] == "signal", parts\[2\] == "join-token"/);
+  assert.doesNotMatch(pairingURLParserSwiftSource, /url\.host == ScannerProtocol\.signalURL\.host/);
+  assert.match(scannerProtocolSwiftSource, /static let developmentSignalURL = URL\(string: "https:\/\/adorable-hornet-19\.convex\.site\/api\/signal"\)!/);
+  assert.match(scannerProtocolSwiftSource, /static let productionSignalURL = URL\(string: "https:\/\/sincere-trout-414\.convex\.site\/api\/signal"\)!/);
+  assert.match(scannerProtocolSwiftSource, /#if DEBUG[\s\S]*static let fallbackSignalURLs = \[productionSignalURL\]/);
+  assert.match(scannerSignalingSwiftSource, /func createJoinAttempt\([\s\S]*signalURL: URL = ScannerProtocol\.signalURL/);
+  assert.match(scannerSignalingSwiftSource, /let url = signalURL[\s\S]*\.appending\(path: "join-token"\)/);
+  assert.match(scannerSignalingSwiftSource, /func createJoinAttemptResolvingSignalURL\([\s\S]*allowFallback: Bool/);
+  assert.match(scannerSignalingSwiftSource, /ScannerProtocol\.fallbackSignalURLs/);
+  assert.match(scannerSignalingSwiftSource, /where statusCode == 404 && detail == "Join token not found" && allowFallback/);
+  assert.match(scannerWebRTCConnectionSwiftSource, /createJoinAttemptResolvingSignalURL\([\s\S]*allowFallback: session\.signalURL == nil/);
+  assert.match(clipTransportSwiftSource, /createJoinAttemptResolvingSignalURL\([\s\S]*allowFallback: session\.signalURL == nil/);
+  assert.match(clipTransportSwiftSource, /fetchIceServerConfiguration\([\s\S]*signalURL: resolved\.signalURL/);
+});
+
 test("native saved-session reconnect toast can cancel manual previous-session taps", () => {
   const reconnectStart = scannerStoreSwiftSource.indexOf("func reconnect(to pairedSession:");
   const reconnectEnd = scannerStoreSwiftSource.indexOf("func reconnectToMostRecentPairedSessionIfNeeded", reconnectStart);
@@ -372,7 +393,7 @@ test("native OCR review keeps raw Vision text until selected cleanup is requeste
   assert.match(ocrTextCleanerSwiftSource, /LanguageModelSession\(/);
   assert.match(ocrTextCleanerSwiftSource, /if let match = LiveTextIdentifierMatcher\.match\(normalized\) \{\s*return match\.value\s*\}/);
   assert.match(scannerStoreCaptureActionsSwiftSource, /let recognizedRegions = try await TextRecognizer\.recognizeTextRegions\(in: preparedImage\)/);
-  assert.match(scannerStoreCaptureActionsSwiftSource, /ocrTextRegions = DeviceIdentifierRegionExtractor\.extractedIdentifierRegions\(from: recognizedRegions\)/);
+  assert.match(scannerStoreCaptureActionsSwiftSource, /ocrTextRegions = DeviceIdentifierRegionExtractor\.reviewRegions\(from: recognizedRegions\)/);
   assert.match(scannerStoreCaptureActionsSwiftSource, /ocrReviewText = ocrTextRegions\.map\(\\\.text\)\.joined\(separator: "\\n"\)/);
   assert.doesNotMatch(scannerStoreCaptureActionsSwiftSource, /OcrTextCleaner\.clean/);
 });
@@ -384,7 +405,7 @@ test("native camera can detect identifier candidates before OCR capture", () => 
   assert.match(cameraModelSwiftSource, /videoOutput\.setSampleBufferDelegate\(liveTextFrameProcessor, queue: videoQueue\)/);
   assert.match(cameraModelSwiftSource, /VNRecognizeTextRequest/);
   assert.match(cameraModelSwiftSource, /request\.recognitionLevel = \.fast/);
-  assert.match(cameraModelSwiftSource, /request\.customWords = \["IMEI", "MEID", "Serial", "S\/N", "SN", "Model", "Model No", "SKU"\]/);
+  assert.match(cameraModelSwiftSource, /request\.customWords = \["IMEI", "MEID", "Serial", "S\/N", "SN", "Model", "Model No", "SKU", "CFI", "CF1", "CFL", "CFI-ZCT1W"\]/);
   assert.match(cameraModelSwiftSource, /private let recognitionInterval: Duration = \.milliseconds\(500\)/);
   assert.match(cameraModelSwiftSource, /let candidates = Self\.candidates\(from: observations\)/);
   assert.match(cameraModelSwiftSource, /try\? text\.boundingBox\(for: match\.range\)/);
@@ -405,6 +426,10 @@ test("native pre-capture identifier matching is deterministic", () => {
   assert.match(scannerRecognitionModelsSwiftSource, /modelLabels = \["model number", "model no", "model", "mdl"\]/);
   assert.match(scannerRecognitionModelsSwiftSource, /skuLabels = \["sku", "stock keeping unit"\]/);
   assert.match(scannerRecognitionModelsSwiftSource, /private static func standaloneIdentifier\(in text: String\) -> Match\?/);
+  assert.match(scannerRecognitionModelsSwiftSource, /private static func modelTokenCandidate\(in text: String\) -> \(value: String, range: Range<String\.Index>\)\?/);
+  assert.match(scannerRecognitionModelsSwiftSource, /combinedModelToken\(prefix: candidate\.value, suffix: next\.value\)/);
+  assert.match(scannerRecognitionModelsSwiftSource, /uppercased\.hasPrefix\("CF1"\) \|\| uppercased\.hasPrefix\("CFL"\)/);
+  assert.match(scannerRecognitionModelsSwiftSource, /uppercased\.hasPrefix\("CFI"\) && !uppercased\.hasPrefix\("CFI-"\)/);
   assert.match(scannerRecognitionModelsSwiftSource, /isKnownModelToken\(\$0\.value\)/);
   assert.match(scannerRecognitionModelsSwiftSource, /isLikelySerialToken\(\$0\.value\)/);
   assert.match(scannerRecognitionModelsSwiftSource, /static func labelKind\(in rawText: String\) -> LiveTextCandidateKind\?/);
@@ -443,9 +468,14 @@ test("native pre-capture identifier chips show quickly and correct repeated repl
   assert.match(cameraModelSwiftSource, /guard !candidates\.isEmpty else \{\s*liveTextCandidates = \[\]\s*liveTextReplacementObservationCounts = \[:\]\s*return\s*\}/);
   assert.match(cameraModelSwiftSource, /request\.minimumTextHeight = 0\.006/);
   assert.match(clipBarcodeScannerServiceSwiftSource, /request\.minimumTextHeight = 0\.006/);
-  assert.match(cameraModelSwiftSource, /adjacentLabelValueCandidates\(in: snapshots\)/);
-  assert.match(cameraModelSwiftSource, /LiveTextIdentifierMatcher\.labelKind\(in: label\.text\)/);
-  assert.match(cameraModelSwiftSource, /LiveTextIdentifierMatcher\.standaloneValue\(in: value\.text, kind: kind\)/);
+  assert.match(cameraModelSwiftSource, /"CFI-ZCT1W"/);
+  assert.match(clipBarcodeScannerServiceSwiftSource, /"CFI-ZCT1W"/);
+  assert.match(scannerRecognitionModelsSwiftSource, /enum LiveTextCandidateObservationExtractor/);
+  assert.match(scannerRecognitionModelsSwiftSource, /adjacentLabelValueCandidates\(in: snapshots\)/);
+  assert.match(scannerRecognitionModelsSwiftSource, /LiveTextIdentifierMatcher\.labelKind\(in: label\.text\)/);
+  assert.match(scannerRecognitionModelsSwiftSource, /LiveTextIdentifierMatcher\.standaloneValue\(in: value\.text, kind: kind\)/);
+  assert.match(cameraModelSwiftSource, /LiveTextCandidateObservationExtractor\.prioritizedCandidates/);
+  assert.match(clipBarcodeScannerServiceSwiftSource, /LiveTextCandidateObservationExtractor\.prioritizedCandidates/);
   assert.match(cameraModelSwiftSource, /guard observationCount >= 2 else \{ return false \}/);
   assert.match(cameraModelSwiftSource, /observationCount >= 3/);
 });
@@ -464,9 +494,12 @@ test("native post-capture OCR extracts device identifiers from recognized rows",
   assert.match(ocrReviewLayerSwiftSource, /region\.isDeviceIdentifier \? \.green\.opacity\(0\.24\) : \.yellow\.opacity\(0\.24\)/);
   assert.match(ocrReviewLayerSwiftSource, /region\.isDeviceIdentifier \? \.green\.opacity\(0\.9\) : \.yellow\.opacity\(0\.9\)/);
   assert.match(scannerRecognitionModelsSwiftSource, /return identifierRegions\.isEmpty \? regions : deduplicated\(identifierRegions\)/);
+  assert.match(scannerRecognitionModelsSwiftSource, /static func reviewRegions\(from regions: \[RecognizedTextRegion\]\) -> \[RecognizedTextRegion\]/);
+  assert.match(scannerRecognitionModelsSwiftSource, /guard !containsEquivalentText\(region, in: reviewRegions\) else \{ continue \}/);
+  assert.match(ocrReviewLayerSwiftSource, /Button\("Copy", systemImage: "doc\.on\.doc"\)/);
   assert.match(scannerRecognitionModelsSwiftSource, /private static let regulatoryLabels = \["fcc id", "ic", "emc", "r-cmm", "can ices", "ices"\]/);
   assert.match(scannerRecognitionModelsSwiftSource, /guard !isRegulatoryIdentifierContext\(text\) else \{ return nil \}/);
-  assert.match(scannerStoreCaptureActionsSwiftSource, /DeviceIdentifierRegionExtractor\.extractedIdentifierRegions\(from: recognizedRegions\)/);
+  assert.match(scannerStoreCaptureActionsSwiftSource, /DeviceIdentifierRegionExtractor\.reviewRegions\(from: recognizedRegions\)/);
 });
 
 test("native OCR target dialog can clean selected text before sending", () => {
@@ -632,6 +665,7 @@ test("app clip OCR target dialog shares cleanup and styling with the main app", 
   assert.match(clipRootViewSwiftSource, /onSendRecognizedText\(selectedCleanedText \?\? selectedTextRegion\.text\)/);
   assert.match(clipRootViewSwiftSource, /private var selectedTextPreview: String/);
   assert.match(sharedCaptureSessionOverlaysSwiftSource, /\.foregroundStyle\(\.black\)/);
+  assert.match(sharedCaptureSessionOverlaysSwiftSource, /Color\.white\.opacity\(0\.9\)/);
 });
 
 test("app clip capture opens in OCR and keeps capture and upload photo lists separate", () => {
@@ -656,13 +690,29 @@ test("app clip photo capture and library upload wait for Chrome photo receipts",
 });
 
 test("app clip replays saved captures and photos after connecting", () => {
-  assert.match(clipScannerStoreSwiftSource, /self\?\.sendSavedItemsAfterConnect\(\)/);
+  assert.match(clipScannerStoreSwiftSource, /self\.sendSavedItemsAfterConnect\(\)/);
   assert.match(clipScannerStoreSwiftSource, /private func sendSavedItemsAfterConnect\(\)/);
   assert.match(clipScannerStoreSwiftSource, /let savedCaptures = captures\.filter \{ \$0\.status == "Saved until connected" \}/);
   assert.match(clipScannerStoreSwiftSource, /let savedPhotos = photos\.filter \{ \$0\.status == "Saved until connected" \}/);
   assert.match(clipScannerStoreSwiftSource, /for capture in savedCaptures \{\s*sendCaptureToChrome\(capture\)\s*\}/);
   assert.match(clipScannerStoreSwiftSource, /for photo in savedPhotos \{\s*await sendPhoto\(photo\)\s*\}/);
   assert.match(clipScannerStoreSwiftSource, /private func sendCaptureToChrome\(_ capture: ClipCapture\)/);
+});
+
+test("app clip reconnects unexpected WebRTC disconnects without undoing manual end session", () => {
+  assert.match(clipScannerStoreSwiftSource, /private struct ClipPairingCredential/);
+  assert.match(clipScannerStoreSwiftSource, /@ObservationIgnored private let signaling = ScannerSignalingClient\(\)/);
+  assert.match(clipScannerStoreSwiftSource, /private var reconnectTask: Task<Void, Never>\?/);
+  assert.match(clipScannerStoreSwiftSource, /private var suppressNextReconnect = false/);
+  assert.match(clipScannerStoreSwiftSource, /private var lastPairingCredential: ClipPairingCredential\?/);
+  assert.match(clipScannerStoreSwiftSource, /self\.savePairingCredential\(from: sessionReady\)/);
+  assert.match(clipScannerStoreSwiftSource, /try\? await signaling\.registerPairing\(pairing, phoneDeviceId: contributorId\)/);
+  assert.match(clipScannerStoreSwiftSource, /transport\.onClosed = \{ \[weak self\] in\s*self\?\.handleTransportClosed\(\)/);
+  assert.match(clipScannerStoreSwiftSource, /if wasConnected \{\s*self\.scheduleReconnectIfPossible\(reason: "Connection interrupted"\)/);
+  assert.match(clipScannerStoreSwiftSource, /func disconnect\(\) \{\s*suppressNextReconnect = true\s*reconnectTask\?\.cancel\(\)/);
+  assert.match(clipScannerStoreSwiftSource, /private func reconnect\(using credential: ClipPairingCredential\) async/);
+  assert.match(clipScannerStoreSwiftSource, /try await signaling\.requestReconnect\(/);
+  assert.match(clipScannerStoreSwiftSource, /try await transport\.pair\(with: session, contributorId: contributorId\)/);
 });
 
 test("app clip pending sends fail promptly when WebRTC closes or errors", () => {
@@ -685,7 +735,7 @@ test("app clip OCR reuses the main async recognizer and identifier extractor", (
   assert.match(clipOCRServiceSwiftSource, /DispatchQueue\.global\(qos: \.userInitiated\)\.async/);
   assert.match(clipOCRServiceSwiftSource, /LiveTextIdentifierMatcher\.match\(text\)/);
   assert.match(clipOCRServiceSwiftSource, /candidate\.boundingBox\(for: match\.range\)/);
-  assert.match(clipOCRServiceSwiftSource, /DeviceIdentifierRegionExtractor\.extractedIdentifierRegions\(from: recognizedRegions\)/);
+  assert.match(clipOCRServiceSwiftSource, /DeviceIdentifierRegionExtractor\.reviewRegions\(from: recognizedRegions\)/);
 });
 
 test("native dictation keeps listening briefly after user stop actions", () => {
@@ -728,6 +778,11 @@ test("native Chrome input-change haptics are gated to the Dictate tab", () => {
   assert.match(scannerStoreDictationSwiftSource, /func allowsDictationFeedback\(_ requested: Bool = true\) -> Bool \{\s*requested && selectedSection == \.dictation\s*\}/);
   assert.match(scannerStoreDictationSwiftSource, /if allowsDictationFeedback\(allowsFeedback\) \{\s*dictationNotificationFeedback\.notificationOccurred\(\.success\)\s*\}/);
   assert.match(scannerStoreDictationSwiftSource, /if wasRecording, allowsDictationFeedback\(\) \{\s*dictationImpactFeedback\.impactOccurred\(intensity: 0\.7\)\s*\}/);
+  assert.match(clipScannerStoreSwiftSource, /private var dictationTargetKey: String\?/);
+  assert.match(clipScannerStoreSwiftSource, /let didChangeChromeInputTarget = wasConnected[\s\S]*self\.dictationTargetKey != nextTargetKey/);
+  assert.match(clipScannerStoreSwiftSource, /if !wasConnected \|\| \(didChangeChromeInputTarget && self\.selectedTab == \.dictate\) \{\s*self\.pairingNotificationFeedback\.notificationOccurred\(\.success\)\s*\}/);
+  assert.match(clipScannerStoreSwiftSource, /private func dictationTargetKey\(for sessionReady: ScannerProtocol\.SessionReady\) -> String/);
+  assert.match(clipScannerStoreSwiftSource, /sessionReady\.cursorTarget\?\.url/);
 });
 
 test("native scanner handles Chrome result receipts for cursor insertion feedback", () => {

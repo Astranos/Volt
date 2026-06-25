@@ -94,10 +94,21 @@ test("validates join tokens, join attempt ids, and join URLs", () => {
   assert.equal(url, `volt://pair?token=${token}&sessionId=${sessionId}&joinAttemptId=${joinAttemptId}`);
   assert.deepEqual(parseScannerJoinUrl(url), {
     baseUrl: "volt://pair",
+    signalUrl: undefined,
     token,
     sessionId,
     joinAttemptId,
   });
+  const urlWithSignal = buildScannerJoinUrl({
+    token,
+    sessionId,
+    signalUrl: scannerProtocolGolden.urls.signalDev,
+  });
+  assert.equal(
+    urlWithSignal,
+    `volt://pair?token=${token}&sessionId=${sessionId}&signalUrl=${encodeURIComponent(scannerProtocolGolden.urls.signalDev)}`,
+  );
+  assert.equal(parseScannerJoinUrl(urlWithSignal)?.signalUrl, scannerProtocolGolden.urls.signalDev);
   assert.equal(parseScannerJoinUrl("volt://pair?token=bad"), null);
 });
 

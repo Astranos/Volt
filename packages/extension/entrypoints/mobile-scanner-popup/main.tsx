@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Calculator, CheckCircle2, Loader2, Pencil, Settings, Smartphone, X } from "lucide-react";
+import { Calculator, CheckCircle2, Loader2, Pencil, PlusCircle, Settings, Smartphone, X } from "lucide-react";
 import QRCode from "qrcode";
 import type { ScannerConnectionStatus } from "@volt/scanner-protocol";
 import {
@@ -23,6 +23,7 @@ type MobileScannerState = {
   qrCodeUrl: string | null;
   error: string | null;
   connectedAt?: string | null;
+  connectedPeerCount?: number;
   joinWindowExpiresAt?: string | null;
   mode?: MobileCaptureMode | null;
   extensionIdentity?: ExtensionIdentity | null;
@@ -232,8 +233,16 @@ function MobileScannerPopup() {
   }, []);
 
   const title = "Mobile Scanner";
-  const subtitle = state.status === "connected" ? "Connected to this browser" : "Scan QR code with app";
+  const connectedCount = state.connectedPeerCount ?? 0;
+  const subtitle = state.status === "connected"
+    ? connectedCount > 1
+      ? `${connectedCount} phones connected`
+      : "Connected to this browser"
+    : "Scan QR code with app";
   const showQr = Boolean(qrDataUrl) && (state.status === "waiting" || state.status === "connected");
+  const pairingHint = state.status === "connected"
+    ? "Scan this QR with another phone to add it to this browser session."
+    : "Scan this QR with Volt on your phone.";
 
   return (
     <div className="popup-shell">
@@ -285,7 +294,7 @@ function MobileScannerPopup() {
 
       <main className="popup-main">
         {showQr && qrDataUrl ? (
-          <PopupQrCode qrDataUrl={qrDataUrl} />
+          <PopupQrCode qrDataUrl={qrDataUrl} hint={pairingHint} />
         ) : state.status === "connected" ? (
           <div className="popup-message">
             <span className="popup-message-icon popup-message-icon-success">
@@ -295,6 +304,14 @@ function MobileScannerPopup() {
             <p>
               Continue scanning on your phone. Results land in the sidepanel.
             </p>
+            <button
+              type="button"
+              className="popup-pair-another-button"
+              onClick={() => void startSession(true)}
+            >
+              <PlusCircle className="h-4 w-4" />
+              Pair another phone
+            </button>
           </div>
         ) : (
           <div className="popup-message">
@@ -331,14 +348,17 @@ function MobileScannerPopup() {
   );
 }
 
-function PopupQrCode({ qrDataUrl }: { qrDataUrl: string }) {
+function PopupQrCode({ qrDataUrl, hint }: { qrDataUrl: string; hint: string }) {
   return (
-    <div className="popup-qr-frame">
-      <img
-        src={qrDataUrl}
-        alt="Scan this QR code with the Volt mobile app"
-        className="popup-qr-image"
-      />
+    <div className="popup-qr-stack">
+      <div className="popup-qr-frame">
+        <img
+          src={qrDataUrl}
+          alt="Scan this QR code with the Volt mobile app"
+          className="popup-qr-image"
+        />
+      </div>
+      <p>{hint}</p>
     </div>
   );
 }

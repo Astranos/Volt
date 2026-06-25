@@ -24,10 +24,11 @@ struct CameraSessionControls: View {
     var body: some View {
         VStack(spacing: 10) {
             cameraToolsRow
+                .opacity(isCaptureEnabled ? 1 : 0.45)
 
             Text(captureHint)
                 .font(.subheadline.bold())
-                .foregroundStyle(.white)
+                .foregroundStyle(isCaptureEnabled ? .white : .white.opacity(0.55))
                 .frame(maxWidth: .infinity)
 
             ZStack {
@@ -59,6 +60,8 @@ struct CameraSessionControls: View {
             .overlay {
                 Capsule().stroke(.white.opacity(0.35), lineWidth: 1)
             }
+            .disabled(!isCaptureEnabled)
+            .opacity(isCaptureEnabled ? 1 : 0.55)
 
             Button("End session", systemImage: "xmark", action: onFinish)
                 .font(.subheadline.bold())
@@ -101,12 +104,22 @@ struct CameraSessionControls: View {
 
     private var zoomControls: some View {
         HStack(spacing: 8) {
-            SessionIconButton(systemImage: "minus.magnifyingglass", label: "Zoom out", action: onZoomOut)
+            SessionIconButton(
+                systemImage: "minus.magnifyingglass",
+                isEnabled: isCaptureEnabled,
+                label: "Zoom out",
+                action: onZoomOut
+            )
             Text(zoomLabel)
                 .font(.subheadline.monospacedDigit().bold())
                 .foregroundStyle(.white)
                 .frame(minWidth: 58)
-            SessionIconButton(systemImage: "plus.magnifyingglass", label: "Zoom in", action: onZoomIn)
+            SessionIconButton(
+                systemImage: "plus.magnifyingglass",
+                isEnabled: isCaptureEnabled,
+                label: "Zoom in",
+                action: onZoomIn
+            )
         }
         .padding(.horizontal, 10)
         .frame(minHeight: 56)
@@ -122,6 +135,7 @@ struct CameraSessionControls: View {
                 SessionIconButton(
                     systemImage: gridVisible ? "grid" : "square",
                     isActive: gridVisible,
+                    isEnabled: isCaptureEnabled,
                     label: gridVisible ? "Hide grid lines" : "Show grid lines",
                     action: onToggleGrid
                 )
@@ -134,6 +148,7 @@ struct CameraSessionControls: View {
             SessionIconButton(
                 systemImage: torchEnabled ? "bolt.fill" : "bolt.slash",
                 isActive: torchEnabled,
+                isEnabled: isCaptureEnabled,
                 label: torchEnabled ? "Turn flash off" : "Turn flash on",
                 action: onToggleTorch
             )
@@ -230,6 +245,7 @@ struct CameraSessionControls: View {
 struct SessionIconButton: View {
     let systemImage: String
     var isActive = false
+    var isEnabled = true
     let label: String
     let action: () -> Void
 
@@ -244,6 +260,8 @@ struct SessionIconButton: View {
                     Circle().stroke(.white.opacity(0.12), lineWidth: 1)
                 }
         }
+        .disabled(!isEnabled)
+        .opacity(isEnabled ? 1 : 0.55)
         .accessibilityLabel(label)
     }
 }

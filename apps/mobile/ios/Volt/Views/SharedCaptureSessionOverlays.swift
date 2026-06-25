@@ -62,7 +62,10 @@ struct ExtractedTextActionCard: View {
         .padding(.top, 24)
         .padding(.bottom, 28)
         .frame(width: 340)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 36, style: .continuous))
+        .background(
+            Color.white.opacity(0.9),
+            in: RoundedRectangle(cornerRadius: 36, style: .continuous)
+        )
         .overlay {
             RoundedRectangle(cornerRadius: 36, style: .continuous)
                 .stroke(.white.opacity(0.42), lineWidth: 1)

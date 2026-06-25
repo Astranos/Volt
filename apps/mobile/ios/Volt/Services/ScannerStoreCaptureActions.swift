@@ -266,7 +266,7 @@ extension ScannerStore {
         ocrReviewImage = preparedImage
         do {
             let recognizedRegions = try await TextRecognizer.recognizeTextRegions(in: preparedImage)
-            ocrTextRegions = DeviceIdentifierRegionExtractor.extractedIdentifierRegions(from: recognizedRegions)
+            ocrTextRegions = DeviceIdentifierRegionExtractor.reviewRegions(from: recognizedRegions)
             ocrReviewText = ocrTextRegions.map(\.text).joined(separator: "\n")
             if handlePairingValue(ocrReviewText) {
                 clearOcrReview()

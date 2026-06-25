@@ -8,6 +8,7 @@ export type ScannerSessionDescription = {
 
 export type ScannerJoinUrlParts = {
   baseUrl?: string;
+  signalUrl?: string;
   token: string;
   sessionId?: string;
   joinAttemptId?: string;
@@ -41,6 +42,7 @@ export function buildScannerJoinUrl(parts: ScannerJoinUrlParts): string {
   url.searchParams.set("token", parts.token);
   if (parts.sessionId) url.searchParams.set("sessionId", parts.sessionId);
   if (parts.joinAttemptId) url.searchParams.set("joinAttemptId", parts.joinAttemptId);
+  if (parts.signalUrl) url.searchParams.set("signalUrl", parts.signalUrl);
   return url.toString();
 }
 
@@ -48,6 +50,7 @@ export function parseScannerJoinUrl(value: string): ScannerJoinUrlParts | null {
   try {
     const url = new URL(value);
     const token = url.searchParams.get("token");
+    const signalUrl = url.searchParams.get("signalUrl") ?? undefined;
     const sessionId = url.searchParams.get("sessionId") ?? undefined;
     const joinAttemptId = url.searchParams.get("joinAttemptId") ?? undefined;
     if (!isScannerJoinToken(token)) return null;
@@ -55,6 +58,7 @@ export function parseScannerJoinUrl(value: string): ScannerJoinUrlParts | null {
     if (joinAttemptId !== undefined && !isScannerJoinAttemptId(joinAttemptId)) return null;
     return {
       baseUrl: `${url.protocol}//${url.host}${url.pathname}`,
+      signalUrl,
       token,
       sessionId,
       joinAttemptId,

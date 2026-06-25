@@ -7,6 +7,7 @@ struct PairingSession: Equatable {
     var offer: String?
     var answerURL: URL?
     var label: String?
+    var signalURL: URL?
     var sourceURL: URL
 
     var isPresent: Bool {

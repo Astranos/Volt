@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct OcrReviewLayer: View {
     let image: UIImage
@@ -58,6 +59,14 @@ struct OcrReviewLayer: View {
                         .fill(.clear)
                         .contentShape(Rectangle())
                         .simultaneousGesture(selectionGesture(for: region))
+                        .contextMenu {
+                            Button("Copy", systemImage: "doc.on.doc") {
+                                UIPasteboard.general.string = region.text
+                            }
+                            Button("Select", systemImage: "text.viewfinder") {
+                                onSelectRegion(region)
+                            }
+                        }
                         .frame(width: tapTargetSize.width, height: tapTargetSize.height)
                         .position(x: bounds.midX, y: bounds.midY)
                         .accessibilityLabel(region.text)

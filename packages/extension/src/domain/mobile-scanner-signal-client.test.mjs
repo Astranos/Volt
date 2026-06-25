@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { signalFetch } from "./mobile-scanner-signal-client.ts";
+import { SCANNER_SIGNAL_URL_DEV } from "@volt/scanner-protocol";
+import { MobileScannerSignalClient, signalFetch } from "./mobile-scanner-signal-client.ts";
 
 test("signalFetch retries transient server failures", async () => {
   const originalFetch = globalThis.fetch;
@@ -67,6 +68,30 @@ test("signalFetch aborts and retries hung requests", async () => {
       /timed out/,
     );
     assert.equal(fetchCount, 2);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("createJoinWindow fallback QR includes the signal URL that minted the token", async () => {
+  const originalFetch = globalThis.fetch;
+  const token = "abcdefghijklmnopqrstuvwxyzABCDEF";
+  const sessionId = "session_1234";
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify({ token, sessionId }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+
+  try {
+    const client = new MobileScannerSignalClient(120_000);
+    const window = await client.createJoinWindow({ sessionId, deviceLabel: "Chrome Dev" });
+    const url = new URL(window.qrCodeUrl);
+
+    assert.equal(url.protocol, "volt:");
+    assert.equal(url.searchParams.get("token"), token);
+    assert.equal(url.searchParams.get("sessionId"), sessionId);
+    assert.equal(url.searchParams.get("signalUrl"), SCANNER_SIGNAL_URL_DEV);
   } finally {
     globalThis.fetch = originalFetch;
   }
