@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 @preconcurrency import WebRTC
 
 @MainActor
@@ -20,6 +21,8 @@ final class ScannerWebRTCConnection: NSObject {
     private var completedPhotoReceipts: [String: ScannerProtocol.PhotoDeliveryReceipt] = [:]
     private var latestPhotoChunkAcks: [String: ScannerProtocol.PhotoChunkAck] = [:]
     private var disconnectGraceTask: Task<Void, Never>?
+    private var isAppInBackground = false
+    private var backgroundTaskIdentifier: UIBackgroundTaskIdentifier = .invalid
 
     init(contributorId: String) {
         self.contributorId = contributorId
@@ -45,6 +48,7 @@ final class ScannerWebRTCConnection: NSObject {
 
     func close() {
         cancelDisconnectGrace()
+        endBackgroundTask()
         failPendingPhotoReceipts(with: ScannerPairingError.channelNotOpen)
         controlChannel?.close()
         photoChannel?.close()
@@ -53,6 +57,15 @@ final class ScannerWebRTCConnection: NSObject {
         photoChannel = nil
         peerConnection = nil
         onStatusChange?(.disconnected)
+    }
+
+    func setAppIsInBackground(_ isInBackground: Bool) {
+        isAppInBackground = isInBackground
+        if isInBackground, isConnected {
+            beginBackgroundTaskIfNeeded()
+        } else if !isInBackground {
+            endBackgroundTask()
+        }
     }
 
     func sendControl(_ message: [String: Any]) throws {
@@ -303,8 +316,12 @@ final class ScannerWebRTCConnection: NSObject {
 
     private func scheduleDisconnectGrace() {
         guard disconnectGraceTask == nil else { return }
+        if isAppInBackground {
+            beginBackgroundTaskIfNeeded()
+        }
+        let graceDuration: Duration = isAppInBackground ? .seconds(45) : .seconds(12)
         disconnectGraceTask = Task { @MainActor in
-            try? await Task.sleep(for: .seconds(5))
+            try? await Task.sleep(for: graceDuration)
             guard !Task.isCancelled else { return }
             disconnectGraceTask = nil
             guard peerConnection?.connectionState == .disconnected else { return }
@@ -315,6 +332,21 @@ final class ScannerWebRTCConnection: NSObject {
     private func cancelDisconnectGrace() {
         disconnectGraceTask?.cancel()
         disconnectGraceTask = nil
+    }
+
+    private func beginBackgroundTaskIfNeeded() {
+        guard backgroundTaskIdentifier == .invalid else { return }
+        backgroundTaskIdentifier = UIApplication.shared.beginBackgroundTask(withName: "Volt WebRTC grace") { [weak self] in
+            Task { @MainActor in
+                self?.endBackgroundTask()
+            }
+        }
+    }
+
+    private func endBackgroundTask() {
+        guard backgroundTaskIdentifier != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(backgroundTaskIdentifier)
+        backgroundTaskIdentifier = .invalid
     }
 }
 

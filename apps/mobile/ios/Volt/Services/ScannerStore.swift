@@ -183,6 +183,10 @@ final class ScannerStore {
         }
     }
 
+    func updateAppIsInBackground(_ isInBackground: Bool) {
+        connection.setAppIsInBackground(isInBackground)
+    }
+
     func reconnect(to pairedSession: PairedScannerSession, reportsErrors: Bool = true, isAutomatic: Bool = false) {
         reconnectTask?.cancel()
         let automaticToken = isAutomatic ? UUID() : nil

@@ -19,6 +19,7 @@
         let dictationSessionId = null;
         let dictationRequested = false;
         let disconnectTimer = null;
+        let disconnectGraceMs = 12000;
         let options = {};
 
         function post(message) {
@@ -119,7 +120,7 @@
                   if (pc && pc.connectionState === "disconnected") {
                     window.voltBridge.close();
                   }
-                }, 5000);
+                }, disconnectGraceMs);
               }
               if (pc.connectionState === "failed" || pc.connectionState === "closed") {
                 post({ type: "closed" });
@@ -211,6 +212,13 @@
             }
             dictationSessionId = null;
             status("Microphone stream paused");
+          },
+
+          setDisconnectGraceMs(nextGraceMs) {
+            const parsed = Number(nextGraceMs);
+            if (Number.isFinite(parsed) && parsed >= 5000) {
+              disconnectGraceMs = parsed;
+            }
           },
 
           sendPhotoMessages(messages) {

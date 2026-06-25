@@ -100,6 +100,10 @@ const sharedCaptureSessionOverlaysSwiftSource = readFileSync(
   new URL("../ios/Volt/Views/SharedCaptureSessionOverlays.swift", import.meta.url),
   "utf8"
 );
+const cameraPreviewSwiftSource = readFileSync(
+  new URL("../ios/Volt/Views/CameraPreview.swift", import.meta.url),
+  "utf8"
+);
 const ocrReviewLayerSwiftSource = readFileSync(
   new URL("../ios/Volt/Views/OcrReviewLayer.swift", import.meta.url),
   "utf8"
@@ -328,12 +332,22 @@ test("native capture session recovers pairing instead of dismissing when the sca
   assert.doesNotMatch(recoverySource, /isPresented = false/);
 });
 
-test("native and app clip close stale peers after sustained WebRTC disconnect", () => {
+test("native and app clip keep transient WebRTC disconnects alive through background grace", () => {
   assert.match(scannerWebRTCConnectionSwiftSource, /private var disconnectGraceTask: Task<Void, Never>\?/);
+  assert.match(scannerWebRTCConnectionSwiftSource, /private var backgroundTaskIdentifier: UIBackgroundTaskIdentifier = \.invalid/);
+  assert.match(scannerWebRTCConnectionSwiftSource, /func setAppIsInBackground\(_ isInBackground: Bool\)/);
+  assert.match(scannerWebRTCConnectionSwiftSource, /let graceDuration: Duration = isAppInBackground \? \.seconds\(45\) : \.seconds\(12\)/);
+  assert.match(scannerWebRTCConnectionSwiftSource, /UIApplication\.shared\.beginBackgroundTask\(withName: "Volt WebRTC grace"/);
+  assert.match(rootViewSwiftSource, /store\.updateAppIsInBackground\(newValue != \.active\)/);
   assert.match(scannerWebRTCConnectionSwiftSource, /case \.disconnected:\s*scheduleDisconnectGrace\(\)/);
   assert.match(scannerWebRTCConnectionSwiftSource, /guard peerConnection\?\.connectionState == \.disconnected else \{ return \}\s*close\(\)/);
   assert.match(clipRootViewSwiftSource, /ClipWebRTCBridgeView\(webView: store\.bridgeWebView\)/);
-  assert.match(readFileSync(new URL("../ios/VoltClip/Resources/webrtc-bridge.html", import.meta.url), "utf8"), /pc && pc\.connectionState === "disconnected"[\s\S]*window\.voltBridge\.close\(\)/);
+  assert.match(clipRootViewSwiftSource, /store\.updateAppIsInBackground\(newValue != \.active\)/);
+  assert.match(clipTransportSwiftSource, /setDisconnectGraceMs\(\\\(graceMs\)\)/);
+  const bridgeSource = readFileSync(new URL("../ios/VoltClip/Resources/webrtc-bridge.html", import.meta.url), "utf8");
+  assert.match(bridgeSource, /let disconnectGraceMs = 12000/);
+  assert.match(bridgeSource, /setDisconnectGraceMs\(nextGraceMs\)/);
+  assert.match(bridgeSource, /pc && pc\.connectionState === "disconnected"[\s\S]*window\.voltBridge\.close\(\)/);
 });
 
 test("native screens use the shared header connection control without extra session accessories", () => {
@@ -658,37 +672,44 @@ test("native camera resets capture sessions to display 1x zoom", () => {
   assert.match(cameraModelSwiftSource, /applyZoomState\(state\)/);
 });
 
-test("native camera restricts focus-driven virtual lens switching", () => {
-  assert.match(cameraDeviceSelectorSwiftSource, /restrictFocusDrivenVirtualDeviceSwitching\(on device: AVCaptureDevice\)/);
+test("native camera uses system virtual lens switching with single tap focus", () => {
+  assert.match(cameraDeviceSelectorSwiftSource, /configureNativeVirtualDeviceSwitching\(on device: AVCaptureDevice\)/);
   assert.match(cameraDeviceSelectorSwiftSource, /applySmoothTapFocus\(on device: AVCaptureDevice, point: CGPoint\)/);
   assert.match(cameraDeviceSelectorSwiftSource, /isSmoothAutoFocusEnabled = true/);
-  assert.match(cameraDeviceSelectorSwiftSource, /focusMode = \.continuousAutoFocus/);
-  assert.match(cameraDeviceSelectorSwiftSource, /exposureMode = \.continuousAutoExposure/);
+  assert.match(cameraDeviceSelectorSwiftSource, /focusMode = \.autoFocus/);
+  assert.match(cameraDeviceSelectorSwiftSource, /exposureMode = \.autoExpose/);
   assert.match(cameraDeviceSelectorSwiftSource, /isSubjectAreaChangeMonitoringEnabled = true/);
   assert.match(cameraDeviceSelectorSwiftSource, /primaryConstituentDeviceSwitchingBehavior != \.unsupported/);
-  assert.match(cameraDeviceSelectorSwiftSource, /supportedFallbackPrimaryConstituentDevices/);
-  assert.match(cameraDeviceSelectorSwiftSource, /fallbackPrimaryConstituentDevices = \[\]/);
+  assert.doesNotMatch(cameraDeviceSelectorSwiftSource, /fallbackPrimaryConstituentDevices = \[\]/);
   assert.match(
     cameraDeviceSelectorSwiftSource,
-    /setPrimaryConstituentDeviceSwitchingBehavior\(\s*\.restricted,\s*restrictedSwitchingBehaviorConditions: \[\.videoZoomChanged\]\s*\)/
+    /setPrimaryConstituentDeviceSwitchingBehavior\(\s*\.auto,\s*restrictedSwitchingBehaviorConditions: \[\]\s*\)/
   );
-  assert.match(cameraModelSwiftSource, /CameraDeviceSelector\.restrictFocusDrivenVirtualDeviceSwitching\(on: camera\)/);
-  assert.match(clipBarcodeScannerServiceSwiftSource, /CameraDeviceSelector\.restrictFocusDrivenVirtualDeviceSwitching\(on: camera\)/);
+  assert.match(cameraModelSwiftSource, /CameraDeviceSelector\.configureNativeVirtualDeviceSwitching\(on: camera\)/);
+  assert.match(clipBarcodeScannerServiceSwiftSource, /CameraDeviceSelector\.configureNativeVirtualDeviceSwitching\(on: camera\)/);
   assert.match(cameraModelSwiftSource, /CameraDeviceSelector\.applySmoothTapFocus\(on: videoDevice, point: point\)/);
   assert.match(clipBarcodeScannerServiceSwiftSource, /CameraDeviceSelector\.applySmoothTapFocus\(on: videoDevice, point: point\)/);
 });
 
 test("native camera shares smooth display zoom for pinch and controls", () => {
-  assert.match(cameraZoomControllerSwiftSource, /private static let zoomRampRate: Float = 12/);
+  assert.match(cameraZoomControllerSwiftSource, /enum CameraZoomGesturePhase/);
+  assert.match(cameraZoomControllerSwiftSource, /private static let zoomRampRate: Float = 4/);
+  assert.match(cameraZoomControllerSwiftSource, /private static let gestureZoomSensitivity: CGFloat = 0\.72/);
   assert.match(cameraZoomControllerSwiftSource, /forDisplayZoomDelta delta: CGFloat/);
   assert.match(cameraZoomControllerSwiftSource, /forDisplayZoomScale scale: CGFloat/);
+  assert.match(cameraZoomControllerSwiftSource, /adjustedGestureScale\(scale\)/);
   assert.match(cameraZoomControllerSwiftSource, /device\.ramp\(toVideoZoomFactor: clampedFactor, withRate: zoomRampRate\)/);
   assert.match(cameraModelSwiftSource, /setDisplayZoomFactor\(displayZoomFactor \+ delta, ramping: true\)/);
-  assert.match(cameraModelSwiftSource, /forDisplayZoomScale: scale,[\s\S]*currentDisplayZoomFactor: displayZoomFactor/);
+  assert.match(cameraModelSwiftSource, /private var zoomGestureStartDisplayFactor: CGFloat\?/);
+  assert.match(cameraModelSwiftSource, /func handleZoomGesture\(scale: CGFloat, phase: CameraZoomGesturePhase\)/);
+  assert.match(cameraModelSwiftSource, /currentDisplayZoomFactor: startDisplayZoomFactor/);
   assert.match(clipBarcodeScannerServiceSwiftSource, /forDisplayZoomDelta: delta,[\s\S]*currentDisplayZoomFactor: displayZoomFactor/);
-  assert.match(clipBarcodeScannerServiceSwiftSource, /forDisplayZoomScale: scale,[\s\S]*currentDisplayZoomFactor: displayZoomFactor/);
+  assert.match(clipBarcodeScannerServiceSwiftSource, /private var zoomGestureStartDisplayFactor: CGFloat\?/);
+  assert.match(clipBarcodeScannerServiceSwiftSource, /func handleZoomGesture\(scale: CGFloat, phase: CameraZoomGesturePhase\)/);
+  assert.match(clipBarcodeScannerServiceSwiftSource, /currentDisplayZoomFactor: startDisplayZoomFactor/);
   assert.match(cameraModelSwiftSource, /CameraZoomController\.setRawZoomFactor\([\s\S]*ramping: ramping/);
   assert.match(clipBarcodeScannerServiceSwiftSource, /CameraZoomController\.setRawZoomFactor\([\s\S]*ramping: ramping/);
+  assert.doesNotMatch(cameraPreviewSwiftSource, /recognizer\.scale = 1/);
 });
 
 test("native camera clears stale torch state when capture sessions stop", () => {
@@ -725,7 +746,8 @@ test("app clip camera preview supports tap focus and pinch zoom", () => {
   assert.match(clipRootViewSwiftSource, /UIPinchGestureRecognizer\(target: self, action: #selector\(handlePinch\(_:\)\)\)/);
   assert.match(clipRootViewSwiftSource, /captureDevicePointConverted\(fromLayerPoint: layerPoint\)/);
   assert.match(clipRootViewSwiftSource, /cameraService\.focus\(at: devicePoint\)/);
-  assert.match(clipRootViewSwiftSource, /cameraService\.scaleZoom\(by: scale\)/);
+  assert.match(clipRootViewSwiftSource, /cameraService\.handleZoomGesture\(scale: scale, phase: phase\)/);
+  assert.doesNotMatch(clipRootViewSwiftSource, /recognizer\.scale = 1/);
   assert.match(sharedCaptureSessionOverlaysSwiftSource, /struct FocusReticle: View/);
   assert.match(clipRootViewSwiftSource, /FocusReticle\(\)/);
 });

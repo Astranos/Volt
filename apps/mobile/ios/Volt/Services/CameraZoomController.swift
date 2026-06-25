@@ -12,9 +12,16 @@ struct CameraZoomState: Sendable {
     let displayLabel: String
 }
 
+enum CameraZoomGesturePhase {
+    case began
+    case changed
+    case ended
+}
+
 enum CameraZoomController {
     private static let maxDisplayZoomFactor: CGFloat = 6
-    private static let zoomRampRate: Float = 12
+    private static let zoomRampRate: Float = 4
+    private static let gestureZoomSensitivity: CGFloat = 0.72
 
     static func clampedRawZoomFactor(_ factor: CGFloat, for device: AVCaptureDevice) -> CGFloat {
         let displayMultiplier = displayZoomFactorMultiplier(for: device)
@@ -40,7 +47,10 @@ enum CameraZoomController {
         currentDisplayZoomFactor: CGFloat,
         on device: AVCaptureDevice
     ) -> CGFloat {
-        rawZoomFactor(forDisplayZoomFactor: currentDisplayZoomFactor * scale, on: device)
+        rawZoomFactor(
+            forDisplayZoomFactor: currentDisplayZoomFactor * adjustedGestureScale(scale),
+            on: device
+        )
     }
 
     static func rawZoomFactorForDisplayOne(on device: AVCaptureDevice) -> CGFloat {
@@ -49,6 +59,10 @@ enum CameraZoomController {
 
     static func displayZoomFactorMultiplier(for device: AVCaptureDevice) -> CGFloat {
         max(device.displayVideoZoomFactorMultiplier, .leastNonzeroMagnitude)
+    }
+
+    static func adjustedGestureScale(_ scale: CGFloat) -> CGFloat {
+        pow(max(scale, .leastNonzeroMagnitude), gestureZoomSensitivity)
     }
 
     static func state(for device: AVCaptureDevice, rawZoomFactor: CGFloat) -> CameraZoomState {

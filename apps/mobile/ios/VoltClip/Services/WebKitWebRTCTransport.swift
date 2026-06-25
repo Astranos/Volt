@@ -19,6 +19,8 @@ final class WebKitWebRTCTransport: NSObject {
     private var photoContinuations: [String: CheckedContinuation<ScannerProtocol.PhotoReceived, Error>] = [:]
     private var photoTimeoutTasks: [String: Task<Void, Never>] = [:]
     private var isLoaded = false
+    private var isAppInBackground = false
+    private var backgroundTaskIdentifier: UIBackgroundTaskIdentifier = .invalid
 
     var embeddedWebView: WKWebView {
         if let webView {
@@ -131,9 +133,21 @@ final class WebKitWebRTCTransport: NSObject {
     }
 
     func close() {
+        endBackgroundTask()
         evaluate("window.voltBridge && window.voltBridge.close()")
         failPendingReceipts(with: ScannerPairingError.channelNotOpen)
         onClosed?()
+    }
+
+    func setAppIsInBackground(_ isInBackground: Bool) {
+        isAppInBackground = isInBackground
+        let graceMs = isInBackground ? 45_000 : 12_000
+        evaluate("window.voltBridge && window.voltBridge.setDisconnectGraceMs(\(graceMs))")
+        if isInBackground {
+            beginBackgroundTaskIfNeeded()
+        } else {
+            endBackgroundTask()
+        }
     }
 
     private func resolvePairing(
@@ -226,6 +240,21 @@ final class WebKitWebRTCTransport: NSObject {
         view.navigationDelegate = self
         view.uiDelegate = self
         return view
+    }
+
+    private func beginBackgroundTaskIfNeeded() {
+        guard backgroundTaskIdentifier == .invalid else { return }
+        backgroundTaskIdentifier = UIApplication.shared.beginBackgroundTask(withName: "Volt Clip WebRTC grace") { [weak self] in
+            Task { @MainActor in
+                self?.endBackgroundTask()
+            }
+        }
+    }
+
+    private func endBackgroundTask() {
+        guard backgroundTaskIdentifier != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(backgroundTaskIdentifier)
+        backgroundTaskIdentifier = .invalid
     }
 
     private func handleMessage(_ body: Any) {

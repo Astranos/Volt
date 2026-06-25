@@ -4,7 +4,7 @@ import SwiftUI
 struct CameraPreview: UIViewRepresentable {
     let previewLayer: AVCaptureVideoPreviewLayer
     var onTap: ((CGPoint, CGPoint) -> Void)?
-    var onPinch: ((CGFloat) -> Void)?
+    var onPinch: ((CGFloat, CameraZoomGesturePhase) -> Void)?
 
     func makeUIView(context: Context) -> PreviewLayerHostView {
         let view = PreviewLayerHostView()
@@ -24,7 +24,7 @@ struct CameraPreview: UIViewRepresentable {
 final class PreviewLayerHostView: UIView {
     private weak var previewLayer: AVCaptureVideoPreviewLayer?
     var onTap: ((CGPoint, CGPoint) -> Void)?
-    var onPinch: ((CGFloat) -> Void)?
+    var onPinch: ((CGFloat, CameraZoomGesturePhase) -> Void)?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -59,8 +59,15 @@ final class PreviewLayerHostView: UIView {
     }
 
     @objc private func handlePinch(_ recognizer: UIPinchGestureRecognizer) {
-        guard recognizer.state == .began || recognizer.state == .changed else { return }
-        onPinch?(recognizer.scale)
-        recognizer.scale = 1
+        switch recognizer.state {
+        case .began:
+            onPinch?(recognizer.scale, .began)
+        case .changed:
+            onPinch?(recognizer.scale, .changed)
+        case .ended, .cancelled, .failed:
+            onPinch?(recognizer.scale, .ended)
+        default:
+            break
+        }
     }
 }

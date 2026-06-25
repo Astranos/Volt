@@ -112,6 +112,7 @@ final class CameraModel: NSObject {
     private var barcodeClearTask: Task<Void, Never>?
     private var liveTextReplacementObservationCounts: [String: Int] = [:]
     private var liveTextEmptyObservationCount = 0
+    private var zoomGestureStartDisplayFactor: CGFloat?
 
     override init() {
         super.init()
@@ -210,7 +211,7 @@ final class CameraModel: NSObject {
 
         session.addInput(input)
         videoDevice = camera
-        CameraDeviceSelector.restrictFocusDrivenVirtualDeviceSwitching(on: camera)
+        CameraDeviceSelector.configureNativeVirtualDeviceSwitching(on: camera)
         updateZoomState(for: camera, rawZoomFactor: camera.videoZoomFactor)
         if session.canAddOutput(metadataOutput) {
             session.addOutput(metadataOutput)
@@ -307,12 +308,25 @@ final class CameraModel: NSObject {
 
     func scaleZoom(by scale: CGFloat) {
         guard let videoDevice else { return }
+        let startDisplayZoomFactor = zoomGestureStartDisplayFactor ?? displayZoomFactor
         let rawZoomFactor = CameraZoomController.rawZoomFactor(
             forDisplayZoomScale: scale,
-            currentDisplayZoomFactor: displayZoomFactor,
+            currentDisplayZoomFactor: startDisplayZoomFactor,
             on: videoDevice
         )
         setZoomFactor(rawZoomFactor, ramping: true)
+    }
+
+    func handleZoomGesture(scale: CGFloat, phase: CameraZoomGesturePhase) {
+        switch phase {
+        case .began:
+            zoomGestureStartDisplayFactor = displayZoomFactor
+            scaleZoom(by: scale)
+        case .changed:
+            scaleZoom(by: scale)
+        case .ended:
+            zoomGestureStartDisplayFactor = nil
+        }
     }
 
     nonisolated private func clampedRawZoomFactor(_ factor: CGFloat, for device: AVCaptureDevice) -> CGFloat {

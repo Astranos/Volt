@@ -101,6 +101,10 @@ final class ClipScannerStore {
         transport.embeddedWebView
     }
 
+    func updateAppIsInBackground(_ isInBackground: Bool) {
+        transport.setAppIsInBackground(isInBackground)
+    }
+
     var canRetryPairing: Bool {
         pairingSession != nil && !isPairing && !isConnected
     }

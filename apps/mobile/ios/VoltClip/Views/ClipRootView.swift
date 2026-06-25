@@ -5,6 +5,7 @@ import UIKit
 import WebKit
 
 struct ClipRootView: View {
+    @Environment(\.scenePhase) private var scenePhase
     @Bindable var store: ClipScannerStore
     @State private var isPairingFailurePresented = false
     @State private var isPairingScannerPresented = false
@@ -54,6 +55,9 @@ struct ClipRootView: View {
         }
         .onChange(of: store.pairingFailureMessage) { _, message in
             isPairingFailurePresented = message != nil && !store.isConnected
+        }
+        .onChange(of: scenePhase) { _, newValue in
+            store.updateAppIsInBackground(newValue != .active)
         }
     }
 }
@@ -680,8 +684,8 @@ private struct ClipCaptureSessionView: View {
                             }
                         }
                     },
-                    onPinch: { scale in
-                        cameraService.scaleZoom(by: scale)
+                    onPinch: { scale, phase in
+                        cameraService.handleZoomGesture(scale: scale, phase: phase)
                     }
                 )
                 .ignoresSafeArea()
@@ -755,8 +759,8 @@ private struct ClipCaptureSessionView: View {
                                     }
                                 }
                             },
-                            onPinch: { scale in
-                                cameraService.scaleZoom(by: scale)
+                            onPinch: { scale, phase in
+                                cameraService.handleZoomGesture(scale: scale, phase: phase)
                             }
                         )
                         .frame(width: side, height: side)
@@ -996,7 +1000,7 @@ private struct ClipCaptureSessionBackdrop: View {
     let detectedBarcodeFormat: String?
     let focusPoint: CGPoint?
     let onTap: (CGPoint, CGPoint) -> Void
-    let onPinch: (CGFloat) -> Void
+    let onPinch: (CGFloat, CameraZoomGesturePhase) -> Void
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -1039,7 +1043,7 @@ private struct ClipPhotoPreview: View {
     let gridVisible: Bool
     let focusPoint: CGPoint?
     let onTap: (CGPoint, CGPoint) -> Void
-    let onPinch: (CGFloat) -> Void
+    let onPinch: (CGFloat, CameraZoomGesturePhase) -> Void
 
     var body: some View {
         ClipCameraPreview(service: cameraService, onTap: onTap, onPinch: onPinch)
@@ -1068,7 +1072,7 @@ private struct ClipPhotoPreview: View {
 private struct ClipCameraPreview: UIViewRepresentable {
     let service: ClipBarcodeScannerService
     let onTap: (CGPoint, CGPoint) -> Void
-    let onPinch: (CGFloat) -> Void
+    let onPinch: (CGFloat, CameraZoomGesturePhase) -> Void
 
     func makeUIView(context: Context) -> ClipCameraPreviewHostView {
         let view = ClipCameraPreviewHostView(previewLayer: service.previewLayer)
@@ -1086,7 +1090,7 @@ private struct ClipCameraPreview: UIViewRepresentable {
     final class ClipCameraPreviewHostView: UIView {
         private var previewLayer: AVCaptureVideoPreviewLayer
         var onTap: ((CGPoint, CGPoint) -> Void)?
-        var onPinch: ((CGFloat) -> Void)?
+        var onPinch: ((CGFloat, CameraZoomGesturePhase) -> Void)?
 
         init(previewLayer: AVCaptureVideoPreviewLayer) {
             self.previewLayer = previewLayer
@@ -1123,9 +1127,16 @@ private struct ClipCameraPreview: UIViewRepresentable {
         }
 
         @objc private func handlePinch(_ recognizer: UIPinchGestureRecognizer) {
-            guard recognizer.state == .began || recognizer.state == .changed else { return }
-            onPinch?(recognizer.scale)
-            recognizer.scale = 1
+            switch recognizer.state {
+            case .began:
+                onPinch?(recognizer.scale, .began)
+            case .changed:
+                onPinch?(recognizer.scale, .changed)
+            case .ended, .cancelled, .failed:
+                onPinch?(recognizer.scale, .ended)
+            default:
+                break
+            }
         }
     }
 }

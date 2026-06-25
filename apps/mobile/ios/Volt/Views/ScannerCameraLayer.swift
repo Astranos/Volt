@@ -168,8 +168,8 @@ struct ScannerCameraLayer: View {
                     }
                 }
             },
-            onPinch: { scale in
-                store.camera.scaleZoom(by: scale)
+            onPinch: { scale, phase in
+                store.camera.handleZoomGesture(scale: scale, phase: phase)
             }
         )
         .overlay(alignment: .topLeading) {

@@ -15,7 +15,7 @@ enum CameraDeviceSelector {
         }.first
     }
 
-    static func restrictFocusDrivenVirtualDeviceSwitching(on device: AVCaptureDevice) {
+    static func configureNativeVirtualDeviceSwitching(on device: AVCaptureDevice) {
         guard #available(iOS 15.0, *),
               device.isVirtualDevice,
               device.primaryConstituentDeviceSwitchingBehavior != .unsupported
@@ -24,12 +24,9 @@ enum CameraDeviceSelector {
         do {
             try device.lockForConfiguration()
             defer { device.unlockForConfiguration() }
-            if !device.supportedFallbackPrimaryConstituentDevices.isEmpty {
-                device.fallbackPrimaryConstituentDevices = []
-            }
             device.setPrimaryConstituentDeviceSwitchingBehavior(
-                .restricted,
-                restrictedSwitchingBehaviorConditions: [.videoZoomChanged]
+                .auto,
+                restrictedSwitchingBehaviorConditions: []
             )
         } catch {
             return
@@ -42,18 +39,18 @@ enum CameraDeviceSelector {
         }
         if device.isFocusPointOfInterestSupported {
             device.focusPointOfInterest = point
-            if device.isFocusModeSupported(.continuousAutoFocus) {
-                device.focusMode = .continuousAutoFocus
-            } else if device.isFocusModeSupported(.autoFocus) {
+            if device.isFocusModeSupported(.autoFocus) {
                 device.focusMode = .autoFocus
+            } else if device.isFocusModeSupported(.continuousAutoFocus) {
+                device.focusMode = .continuousAutoFocus
             }
         }
         if device.isExposurePointOfInterestSupported {
             device.exposurePointOfInterest = point
-            if device.isExposureModeSupported(.continuousAutoExposure) {
-                device.exposureMode = .continuousAutoExposure
-            } else if device.isExposureModeSupported(.autoExpose) {
+            if device.isExposureModeSupported(.autoExpose) {
                 device.exposureMode = .autoExpose
+            } else if device.isExposureModeSupported(.continuousAutoExposure) {
+                device.exposureMode = .continuousAutoExposure
             }
         }
         device.isSubjectAreaChangeMonitoringEnabled = true

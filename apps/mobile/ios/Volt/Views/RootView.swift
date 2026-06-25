@@ -101,6 +101,7 @@ struct RootView: View {
             startAppServices()
         }
         .onChange(of: scenePhase) { _, newValue in
+            store.updateAppIsInBackground(newValue != .active)
             if newValue == .active && !ScreenshotScenario.isEnabled && hasSeenWelcome {
                 store.reconnectToMostRecentPairedSessionIfNeeded()
             }
