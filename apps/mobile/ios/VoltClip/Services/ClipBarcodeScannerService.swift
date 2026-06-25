@@ -67,6 +67,7 @@ final class ClipBarcodeScannerService: NSObject {
     private var barcodeClearTask: Task<Void, Never>?
     private var barcodeDetectionRevision = 0
     private var liveTextReplacementObservationCounts: [String: Int] = [:]
+    private var liveTextEmptyObservationCount = 0
     private var videoDevice: AVCaptureDevice?
     private var displayZoomFactor: CGFloat = 1
 
@@ -128,6 +129,7 @@ final class ClipBarcodeScannerService: NSObject {
         liveTextFrameProcessor.reset()
         liveTextCandidates = []
         liveTextReplacementObservationCounts = [:]
+        liveTextEmptyObservationCount = 0
         onLiveTextCandidates?([])
     }
 
@@ -277,7 +279,7 @@ final class ClipBarcodeScannerService: NSObject {
         isConfigured = true
 
         session.beginConfiguration()
-        session.sessionPreset = .high
+        session.sessionPreset = .photo
 
         guard
             let camera = CameraDeviceSelector.bestBackCamera() ?? AVCaptureDevice.default(for: .video),
@@ -362,11 +364,15 @@ final class ClipBarcodeScannerService: NSObject {
 
     private func applyLiveTextCandidates(_ candidates: [LiveTextCandidateObservation]) {
         guard !candidates.isEmpty else {
-            liveTextCandidates = []
-            liveTextReplacementObservationCounts = [:]
-            onLiveTextCandidates?([])
+            liveTextEmptyObservationCount += 1
+            if liveTextEmptyObservationCount >= 3 {
+                liveTextCandidates = []
+                liveTextReplacementObservationCounts = [:]
+                onLiveTextCandidates?([])
+            }
             return
         }
+        liveTextEmptyObservationCount = 0
         var acceptedCandidates = liveTextCandidates
         for candidate in candidates {
             guard !hasLiveTextCandidate(candidate, in: acceptedCandidates) else { continue }

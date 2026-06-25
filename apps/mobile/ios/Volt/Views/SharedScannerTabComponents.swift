@@ -88,7 +88,7 @@ struct ScannerChromeSectionHeader<TrailingAccessory: View>: View {
         if connection.isConnected {
             return .green
         }
-        return connection.isBusy ? .orange : .secondary
+        return .secondary
     }
 }
 

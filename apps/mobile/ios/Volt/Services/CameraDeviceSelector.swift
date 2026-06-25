@@ -23,6 +23,9 @@ enum CameraDeviceSelector {
         do {
             try device.lockForConfiguration()
             defer { device.unlockForConfiguration() }
+            if !device.supportedFallbackPrimaryConstituentDevices.isEmpty {
+                device.fallbackPrimaryConstituentDevices = []
+            }
             device.setPrimaryConstituentDeviceSwitchingBehavior(
                 .restricted,
                 restrictedSwitchingBehaviorConditions: [.videoZoomChanged]

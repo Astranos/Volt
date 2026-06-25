@@ -159,7 +159,7 @@ enum LiveTextCandidateObservationExtractor {
         directCandidates: [LiveTextCandidateObservation],
         snapshots: [LiveTextObservationSnapshot]
     ) -> [LiveTextCandidateObservation] {
-        deduplicated(directCandidates + adjacentLabelValueCandidates(in: snapshots))
+        deduplicated(directCandidates + denseRowCandidates(in: snapshots) + adjacentLabelValueCandidates(in: snapshots))
             .sorted { lhs, rhs in
                 if lhs.kind.rawValue != rhs.kind.rawValue {
                     return lhs.kind.rawValue < rhs.kind.rawValue
@@ -168,6 +168,42 @@ enum LiveTextCandidateObservationExtractor {
             }
             .prefix(4)
             .map { $0 }
+    }
+
+    private static func denseRowCandidates(in snapshots: [LiveTextObservationSnapshot]) -> [LiveTextCandidateObservation] {
+        let ordered = snapshots.sorted { lhs, rhs in
+            if abs(lhs.boundingBox.midY - rhs.boundingBox.midY) > 0.025 {
+                return lhs.boundingBox.midY > rhs.boundingBox.midY
+            }
+            return lhs.boundingBox.minX < rhs.boundingBox.minX
+        }
+        var candidates: [LiveTextCandidateObservation] = []
+
+        for startIndex in ordered.indices {
+            var rowWindow: [LiveTextObservationSnapshot] = []
+            for snapshot in ordered[startIndex...].prefix(8) {
+                if let first = rowWindow.first,
+                   abs(first.boundingBox.midY - snapshot.boundingBox.midY) > max(first.boundingBox.height, snapshot.boundingBox.height) * 1.2 {
+                    break
+                }
+                rowWindow.append(snapshot)
+                guard rowWindow.count >= 2 else { continue }
+
+                let combinedText = rowWindow.map(\.text).joined(separator: " ")
+                guard let match = LiveTextIdentifierMatcher.match(combinedText, allowingStandalone: false) else { continue }
+                candidates.append(
+                    LiveTextCandidateObservation(
+                        kind: match.kind,
+                        value: match.value,
+                        boundingBox: unionBoundingBox(for: rowWindow),
+                        confidence: rowWindow.map(\.confidence).min() ?? snapshot.confidence
+                    )
+                )
+                break
+            }
+        }
+
+        return candidates
     }
 
     private static func adjacentLabelValueCandidates(in snapshots: [LiveTextObservationSnapshot]) -> [LiveTextCandidateObservation] {
@@ -208,6 +244,12 @@ enum LiveTextCandidateObservationExtractor {
         let sameRow = verticalDistance <= 0.035 && value.boundingBox.minX >= label.boundingBox.minX
         let nextRow = label.boundingBox.minY >= value.boundingBox.midY && label.boundingBox.minY - value.boundingBox.maxY <= 0.08
         return sameRow || nextRow || horizontalOverlap > -0.08
+    }
+
+    private static func unionBoundingBox(for snapshots: [LiveTextObservationSnapshot]) -> CGRect {
+        snapshots.dropFirst().reduce(snapshots.first?.boundingBox ?? .zero) { partial, snapshot in
+            partial.union(snapshot.boundingBox)
+        }
     }
 
     private static func deduplicated(_ candidates: [LiveTextCandidateObservation]) -> [LiveTextCandidateObservation] {

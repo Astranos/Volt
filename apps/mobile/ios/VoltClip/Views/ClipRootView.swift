@@ -796,6 +796,7 @@ private struct ClipCaptureSessionView: View {
                     onRetake: {
                         selectedTextRegion = nil
                         selectedCleanedText = nil
+                        cameraService.setTorchEnabled(false)
                         onClearOcrReview()
                     },
                     onFinish: {
@@ -894,6 +895,7 @@ private struct ClipCaptureSessionView: View {
             if isReviewing {
                 selectedTextRegion = nil
                 selectedCleanedText = nil
+                cameraService.setTorchEnabled(false)
             }
         }
     }

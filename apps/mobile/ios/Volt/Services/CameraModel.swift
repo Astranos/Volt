@@ -111,6 +111,7 @@ final class CameraModel: NSObject {
     private var barcodeDetectionRevision = 0
     private var barcodeClearTask: Task<Void, Never>?
     private var liveTextReplacementObservationCounts: [String: Int] = [:]
+    private var liveTextEmptyObservationCount = 0
 
     override init() {
         super.init()
@@ -178,6 +179,7 @@ final class CameraModel: NSObject {
         liveTextFrameProcessor.reset()
         liveTextCandidates = []
         liveTextReplacementObservationCounts = [:]
+        liveTextEmptyObservationCount = 0
     }
 
     func updateBarcodeGuideRect(_ rect: CGRect?) {
@@ -380,10 +382,14 @@ final class CameraModel: NSObject {
 
     private func applyLiveTextCandidates(_ candidates: [LiveTextCandidateObservation]) {
         guard !candidates.isEmpty else {
-            liveTextCandidates = []
-            liveTextReplacementObservationCounts = [:]
+            liveTextEmptyObservationCount += 1
+            if liveTextEmptyObservationCount >= 3 {
+                liveTextCandidates = []
+                liveTextReplacementObservationCounts = [:]
+            }
             return
         }
+        liveTextEmptyObservationCount = 0
         var acceptedCandidates = liveTextCandidates
         for candidate in candidates {
             guard !hasLiveTextCandidate(candidate, in: acceptedCandidates) else { continue }

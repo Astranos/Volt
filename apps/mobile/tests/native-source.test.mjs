@@ -88,6 +88,10 @@ const sharedCameraSessionControlsSwiftSource = readFileSync(
   new URL("../ios/Volt/Views/SharedCameraSessionControls.swift", import.meta.url),
   "utf8"
 );
+const sharedScannerTabComponentsSwiftSource = readFileSync(
+  new URL("../ios/Volt/Views/SharedScannerTabComponents.swift", import.meta.url),
+  "utf8"
+);
 const sharedPairingSessionComponentsSwiftSource = readFileSync(
   new URL("../ios/Volt/Views/SharedPairingSessionComponents.swift", import.meta.url),
   "utf8"
@@ -332,6 +336,8 @@ test("native screens use the shared header connection control without extra sess
   assert.match(uploadViewSwiftSource, /ScannerSectionHeader\(\s*title: "Upload",\s*onConnectionControlTapped:/);
   assert.match(rootViewSwiftSource, /private var connectionTitle: String/);
   assert.match(rootViewSwiftSource, /store\.connectionStatus == \.pairing \|\| store\.connectionStatus == \.waitingForChrome[\s\S]*return "Connecting"/);
+  assert.match(sharedScannerTabComponentsSwiftSource, /private var connectionColor: Color \{[\s\S]*if connection\.isConnected \{\s*return \.green\s*\}[\s\S]*return \.secondary/);
+  assert.doesNotMatch(sharedScannerTabComponentsSwiftSource, /connection\.isBusy \? \.orange : \.secondary/);
   assert.match(clipRootViewSwiftSource, /private func clipConnectionTitle\(\s*isConnected: Bool,\s*isPairing: Bool,\s*pairingLabel: String\?,\s*pairingFailureMessage: String\?\s*\) -> String/);
   assert.match(clipRootViewSwiftSource, /if isPairing \{\s*return "Connecting"\s*\}/);
   assert.match(clipRootViewSwiftSource, /return pairingLabel \?\? "Chrome"/);
@@ -482,18 +488,25 @@ test("native pre-capture identifiers render as a stable controls readout", () =>
 
 test("native pre-capture identifier chips show quickly and correct repeated replacements", () => {
   assert.match(cameraModelSwiftSource, /private var liveTextReplacementObservationCounts: \[String: Int\] = \[:\]/);
+  assert.match(cameraModelSwiftSource, /private var liveTextEmptyObservationCount = 0/);
+  assert.match(clipBarcodeScannerServiceSwiftSource, /private var liveTextEmptyObservationCount = 0/);
   assert.match(cameraModelSwiftSource, /var acceptedCandidates = liveTextCandidates/);
   assert.match(cameraModelSwiftSource, /hasLiveTextCandidate\(candidate, in: acceptedCandidates\)/);
   assert.match(cameraModelSwiftSource, /replacementIndex\(for: candidate, in: acceptedCandidates\)/);
   assert.match(cameraModelSwiftSource, /shouldReplaceLiveTextCandidate\(candidate, replacing: acceptedCandidates\[replacementIndex\]\)/);
   assert.match(cameraModelSwiftSource, /case \.imei:\s*return existingKindCount < 2/);
   assert.match(cameraModelSwiftSource, /case \.model, \.serial, \.sku:\s*return existingKindCount < 1/);
-  assert.match(cameraModelSwiftSource, /guard !candidates\.isEmpty else \{\s*liveTextCandidates = \[\]\s*liveTextReplacementObservationCounts = \[:\]\s*return\s*\}/);
+  assert.match(cameraModelSwiftSource, /guard !candidates\.isEmpty else \{\s*liveTextEmptyObservationCount \+= 1\s*if liveTextEmptyObservationCount >= 3/);
+  assert.match(cameraModelSwiftSource, /liveTextEmptyObservationCount = 0\s*var acceptedCandidates = liveTextCandidates/);
   assert.match(cameraModelSwiftSource, /request\.minimumTextHeight = 0\.006/);
   assert.match(clipBarcodeScannerServiceSwiftSource, /request\.minimumTextHeight = 0\.006/);
   assert.match(cameraModelSwiftSource, /"CFI-ZCT1W"/);
   assert.match(clipBarcodeScannerServiceSwiftSource, /"CFI-ZCT1W"/);
   assert.match(scannerRecognitionModelsSwiftSource, /enum LiveTextCandidateObservationExtractor/);
+  assert.match(scannerRecognitionModelsSwiftSource, /denseRowCandidates\(in: snapshots\)/);
+  assert.match(scannerRecognitionModelsSwiftSource, /let combinedText = rowWindow\.map\(\\\.text\)\.joined\(separator: " "\)/);
+  assert.match(scannerRecognitionModelsSwiftSource, /LiveTextIdentifierMatcher\.match\(combinedText, allowingStandalone: false\)/);
+  assert.match(scannerRecognitionModelsSwiftSource, /unionBoundingBox\(for: rowWindow\)/);
   assert.match(scannerRecognitionModelsSwiftSource, /adjacentLabelValueCandidates\(in: snapshots\)/);
   assert.match(scannerRecognitionModelsSwiftSource, /LiveTextIdentifierMatcher\.labelKind\(in: label\.text\)/);
   assert.match(scannerRecognitionModelsSwiftSource, /LiveTextIdentifierMatcher\.standaloneValue\(in: value\.text, kind: kind\)/);
@@ -630,6 +643,8 @@ test("native camera resets capture sessions to display 1x zoom", () => {
 test("native camera restricts focus-driven virtual lens switching", () => {
   assert.match(cameraDeviceSelectorSwiftSource, /restrictFocusDrivenVirtualDeviceSwitching\(on device: AVCaptureDevice\)/);
   assert.match(cameraDeviceSelectorSwiftSource, /primaryConstituentDeviceSwitchingBehavior != \.unsupported/);
+  assert.match(cameraDeviceSelectorSwiftSource, /supportedFallbackPrimaryConstituentDevices/);
+  assert.match(cameraDeviceSelectorSwiftSource, /fallbackPrimaryConstituentDevices = \[\]/);
   assert.match(
     cameraDeviceSelectorSwiftSource,
     /setPrimaryConstituentDeviceSwitchingBehavior\(\s*\.restricted,\s*restrictedSwitchingBehaviorConditions: \[\.videoZoomChanged\]\s*\)/
@@ -658,6 +673,8 @@ test("app clip capture controls are wired to camera hardware actions", () => {
   assert.match(clipRootViewSwiftSource, /torchEnabled: cameraService\.torchEnabled/);
   assert.match(clipRootViewSwiftSource, /zoomLabel: cameraService\.zoomDisplayLabel/);
   assert.match(clipRootViewSwiftSource, /cameraService\.setTorchEnabled\(!cameraService\.torchEnabled\)/);
+  assert.match(clipRootViewSwiftSource, /onRetake: \{\s*selectedTextRegion = nil\s*selectedCleanedText = nil\s*cameraService\.setTorchEnabled\(false\)\s*onClearOcrReview\(\)/);
+  assert.match(clipRootViewSwiftSource, /if isReviewing \{\s*selectedTextRegion = nil\s*selectedCleanedText = nil\s*cameraService\.setTorchEnabled\(false\)/);
   assert.match(clipRootViewSwiftSource, /cameraService\.adjustZoom\(by: -0\.25\)/);
   assert.match(clipRootViewSwiftSource, /cameraService\.adjustZoom\(by: 0\.25\)/);
   assert.doesNotMatch(clipRootViewSwiftSource, /onToggleTorch: \{\}/);
@@ -678,6 +695,7 @@ test("app clip camera preview supports tap focus and pinch zoom", () => {
 test("app clip camera service supports zoom, torch, focus, and UPC-A priority", () => {
   assert.match(clipBarcodeScannerServiceSwiftSource, /private\(set\) var torchEnabled = false/);
   assert.match(clipBarcodeScannerServiceSwiftSource, /private\(set\) var zoomDisplayLabel = "1x"/);
+  assert.match(clipBarcodeScannerServiceSwiftSource, /session\.sessionPreset = \.photo/);
   assert.match(clipBarcodeScannerServiceSwiftSource, /func setTorchEnabled\(_ enabled: Bool\)/);
   assert.match(clipBarcodeScannerServiceSwiftSource, /func adjustZoom\(by delta: CGFloat\)/);
   assert.match(clipBarcodeScannerServiceSwiftSource, /func scaleZoom\(by scale: CGFloat\)/);
