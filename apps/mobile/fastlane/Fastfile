@@ -94,21 +94,67 @@ end
 
 def build_app_store_ipa
   xcode_auth_xcargs = xcode_auth_xcargs_from_env
+  app_root = File.expand_path("..", __dir__)
+  workspace_path = File.join(app_root, WORKSPACE)
+  output_directory = File.join(app_root, BUILD_OUTPUT_DIRECTORY)
+  archive_path = File.join(output_directory, "Volt.xcarchive")
+  export_path = File.join(output_directory, "export")
+  export_options_path = File.join(output_directory, "ExportOptions.plist")
+  ipa_path = File.join(export_path, "Volt.ipa")
 
-  build_app(
-    workspace: WORKSPACE,
-    scheme: APP_SCHEME,
-    configuration: "Release",
-    clean: true,
-    export_method: "app-store",
-    output_directory: BUILD_OUTPUT_DIRECTORY,
-    output_name: "Volt.ipa",
-    export_xcargs: xcode_auth_xcargs,
-    export_options: {
-      signingStyle: "automatic",
-      teamID: TEAM_ID
-    }
+  FileUtils.rm_rf(archive_path)
+  FileUtils.rm_rf(export_path)
+  FileUtils.mkdir_p(output_directory)
+
+  File.write(
+    export_options_path,
+    <<~PLIST
+      <?xml version="1.0" encoding="UTF-8"?>
+      <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+      <plist version="1.0">
+      <dict>
+        <key>destination</key>
+        <string>export</string>
+        <key>manageAppVersionAndBuildNumber</key>
+        <false/>
+        <key>method</key>
+        <string>app-store-connect</string>
+        <key>signingStyle</key>
+        <string>automatic</string>
+        <key>teamID</key>
+        <string>#{TEAM_ID}</string>
+        <key>uploadSymbols</key>
+        <true/>
+      </dict>
+      </plist>
+    PLIST
   )
+
+  archive_command = [
+    "xcodebuild",
+    "-workspace", Shellwords.escape(workspace_path),
+    "-scheme", Shellwords.escape(APP_SCHEME),
+    "-configuration", "Release",
+    "-destination", Shellwords.escape("generic/platform=iOS"),
+    "-archivePath", Shellwords.escape(archive_path),
+    "clean", "archive",
+    xcode_auth_xcargs
+  ].compact.join(" ")
+  sh(archive_command)
+
+  export_command = [
+    "xcodebuild",
+    "-exportArchive",
+    "-archivePath", Shellwords.escape(archive_path),
+    "-exportPath", Shellwords.escape(export_path),
+    "-exportOptionsPlist", Shellwords.escape(export_options_path),
+    xcode_auth_xcargs
+  ].compact.join(" ")
+  sh(export_command)
+
+  UI.user_error!("Expected IPA at #{ipa_path}") unless File.exist?(ipa_path)
+
+  ipa_path
 end
 
 def write_screenshot_report(output_directory)

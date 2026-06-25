@@ -1,0 +1,23 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appIDs": [
+          "GB5SPLUARQ.com.volt.mobile",
+          "GB5SPLUARQ.com.volt.mobile.Clip"
+        ],
+        "components": [
+          {
+            "/": "/*"
+          }
+        ]
+      }
+    ]
+  },
+  "appclips": {
+    "apps": [
+      "GB5SPLUARQ.com.volt.mobile.Clip"
+    ]
+  }
+}
