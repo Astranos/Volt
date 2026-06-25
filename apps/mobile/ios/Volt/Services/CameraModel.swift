@@ -208,6 +208,7 @@ final class CameraModel: NSObject {
 
         session.addInput(input)
         videoDevice = camera
+        CameraDeviceSelector.restrictFocusDrivenVirtualDeviceSwitching(on: camera)
         updateZoomState(for: camera, rawZoomFactor: camera.videoZoomFactor)
         if session.canAddOutput(metadataOutput) {
             session.addOutput(metadataOutput)

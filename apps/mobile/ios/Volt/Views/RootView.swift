@@ -6,7 +6,8 @@ struct RootView: View {
     @AppStorage("volt.hasSeenWelcome.v1") private var hasSeenWelcome = false
     @State private var selectedTab = AppSection.scan
     @State private var isWelcomePresented = false
-    @State private var opensSessionsAfterWelcome = false
+    @State private var opensPairingScannerAfterWelcome = false
+    @State private var isWelcomePairingScannerPresented = false
     @State private var isConnectionSheetPresented = false
     @State private var connectionSheetStatus: PairingStatusSheetModel?
     @State private var connectionSheetDetent = RootView.connectionStatusDetent
@@ -59,21 +60,24 @@ struct RootView: View {
         }
         .fullScreenCover(isPresented: $isWelcomePresented) {
             WelcomeView(
-                onSetUpWebSession: {
-                    completeWelcome(opensSessions: true)
+                onScanPairingQR: {
+                    completeWelcome(opensPairingScanner: true)
                 },
                 onContinue: {
-                    completeWelcome(opensSessions: false)
+                    completeWelcome(opensPairingScanner: false)
                 }
             )
+        }
+        .fullScreenCover(isPresented: $isWelcomePairingScannerPresented) {
+            PairingScanSessionView(isPresented: $isWelcomePairingScannerPresented)
         }
         .onChange(of: selectedTab) { _, newValue in
             applySelectedTab(newValue)
         }
         .onChange(of: isWelcomePresented) { _, newValue in
-            guard !newValue, opensSessionsAfterWelcome else { return }
-            opensSessionsAfterWelcome = false
-            showSessionsFromWelcome()
+            guard !newValue, opensPairingScannerAfterWelcome else { return }
+            opensPairingScannerAfterWelcome = false
+            showPairingScannerFromWelcome()
         }
         .onChange(of: store.connectionStatus) { _, newValue in
             showPairingSheet(for: newValue)
@@ -100,9 +104,9 @@ struct RootView: View {
         }
     }
 
-    private func completeWelcome(opensSessions: Bool) {
+    private func completeWelcome(opensPairingScanner: Bool) {
         hasSeenWelcome = true
-        opensSessionsAfterWelcome = opensSessions
+        opensPairingScannerAfterWelcome = opensPairingScanner
         isWelcomePresented = false
 
         startAppServices()
@@ -112,11 +116,9 @@ struct RootView: View {
         store.reconnectToMostRecentPairedSessionIfNeeded()
     }
 
-    private func showSessionsFromWelcome() {
-        keepsConnectionSheetOpenForSessions = true
-        connectionSheetStatus = nil
-        connectionSheetDetent = .medium
-        isConnectionSheetPresented = true
+    private func showPairingScannerFromWelcome() {
+        store.activeMode = .barcode
+        isWelcomePairingScannerPresented = true
     }
 
     private func applySelectedTab(_ newTab: AppSection) {
@@ -416,7 +418,7 @@ extension ScannerSectionHeader where TrailingAccessory == EmptyView {
 }
 
 private struct WelcomeView: View {
-    let onSetUpWebSession: () -> Void
+    let onScanPairingQR: () -> Void
     let onContinue: () -> Void
 
     var body: some View {
@@ -467,7 +469,7 @@ private struct WelcomeView: View {
                     .frame(minHeight: max(0, geometry.size.height - WelcomeActions.estimatedHeight), alignment: .center)
                 }
                 .safeAreaInset(edge: .bottom, spacing: 0) {
-                    WelcomeActions(onSetUpWebSession: onSetUpWebSession, onContinue: onContinue)
+                    WelcomeActions(onScanPairingQR: onScanPairingQR, onContinue: onContinue)
                 }
                 .background(ScannerTabLayout.background)
             }
@@ -481,13 +483,13 @@ private struct WelcomeView: View {
 private struct WelcomeActions: View {
     static let estimatedHeight: CGFloat = 154
 
-    let onSetUpWebSession: () -> Void
+    let onScanPairingQR: () -> Void
     let onContinue: () -> Void
 
     var body: some View {
         VStack(spacing: 10) {
-            Button(action: onContinue) {
-                Text("Continue to Volt")
+            Button(action: onScanPairingQR) {
+                Label("Scan QR Code to Pair", systemImage: "qrcode.viewfinder")
                     .font(.headline)
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity, minHeight: 54)
@@ -498,8 +500,8 @@ private struct WelcomeActions: View {
             }
             .buttonStyle(.plain)
 
-            Button(action: onSetUpWebSession) {
-                Label("Set Up Web Session", systemImage: "desktopcomputer")
+            Button(action: onContinue) {
+                Text("Continue Without Pairing")
                     .font(.headline)
                     .foregroundStyle(.primary)
                     .frame(maxWidth: .infinity, minHeight: 50)

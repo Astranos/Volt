@@ -82,6 +82,7 @@
 		B3000000000000000000001B /* CameraZoomController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000020 /* CameraZoomController.swift */; };
 		B3000000000000000000001C /* OcrTextCleaner.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000021 /* OcrTextCleaner.swift */; };
 		B3000000000000000000001D /* SharedCaptureSessionOverlays.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000011 /* SharedCaptureSessionOverlays.swift */; };
+		B3000000000000000000001E /* volt.icon in Resources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000001B /* volt.icon */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -500,6 +501,7 @@
 			files = (
 				B30000000000000000000014 /* ClipAssets.xcassets in Resources */,
 				B30000000000000000000009 /* webrtc-bridge.html in Resources */,
+				B3000000000000000000001E /* volt.icon in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -747,7 +749,7 @@
 		J30000000000000000000001 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = volt;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = VoltClip/VoltClip.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
@@ -776,7 +778,7 @@
 		J30000000000000000000002 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = volt;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = VoltClip/VoltClip.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";

@@ -290,6 +290,7 @@ final class ClipBarcodeScannerService: NSObject {
         }
 
         videoDevice = camera
+        CameraDeviceSelector.restrictFocusDrivenVirtualDeviceSwitching(on: camera)
         updateZoomState(for: camera, rawZoomFactor: camera.videoZoomFactor)
 
         session.addInput(input)

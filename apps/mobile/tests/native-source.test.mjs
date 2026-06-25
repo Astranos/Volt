@@ -32,6 +32,10 @@ const cameraZoomControllerSwiftSource = readFileSync(
   new URL("../ios/Volt/Services/CameraZoomController.swift", import.meta.url),
   "utf8"
 );
+const cameraDeviceSelectorSwiftSource = readFileSync(
+  new URL("../ios/Volt/Services/CameraDeviceSelector.swift", import.meta.url),
+  "utf8"
+);
 const scannerStoreDictationSwiftSource = readFileSync(
   new URL("../ios/Volt/Services/ScannerStoreDictation.swift", import.meta.url),
   "utf8"
@@ -134,6 +138,10 @@ const clipTransportSwiftSource = readFileSync(
 );
 const scannerWebRTCConnectionSwiftSource = readFileSync(
   new URL("../ios/Volt/Services/ScannerWebRTCConnection.swift", import.meta.url),
+  "utf8"
+);
+const xcodeProjectSource = readFileSync(
+  new URL("../ios/Volt.xcodeproj/project.pbxproj", import.meta.url),
   "utf8"
 );
 
@@ -344,13 +352,17 @@ test("native first launch welcomes users without requesting camera access and ca
   assert.match(rootViewSwiftSource, /Text\("Welcome to Volt"\)/);
   assert.match(rootViewSwiftSource, /Image\("VoltLogo"\)/);
   assert.match(rootViewSwiftSource, /\.safeAreaInset\(edge: \.bottom, spacing: 0\) \{\s*WelcomeActions/);
-  assert.match(rootViewSwiftSource, /Label\("Set Up Web Session", systemImage: "desktopcomputer"\)/);
-  assert.match(rootViewSwiftSource, /private func completeWelcome\(opensSessions: Bool\)/);
+  assert.match(rootViewSwiftSource, /Label\("Scan QR Code to Pair", systemImage: "qrcode\.viewfinder"\)/);
+  assert.match(rootViewSwiftSource, /Text\("Continue Without Pairing"\)/);
+  assert.doesNotMatch(rootViewSwiftSource, /Text\("Continue to Volt"\)/);
+  assert.match(rootViewSwiftSource, /private func completeWelcome\(opensPairingScanner: Bool\)/);
   assert.match(rootViewSwiftSource, /private func startAppServices\(\) \{\s*store\.reconnectToMostRecentPairedSessionIfNeeded\(\)\s*\}/);
   assert.doesNotMatch(rootViewSwiftSource, /store\.camera\.requestAccess\(\)/);
   assert.match(captureSessionViewSwiftSource, /\.task \{\s*await store\.camera\.requestAccess\(\)\s*syncCameraForOcrReview/);
   assert.match(pairingSessionsViewSwiftSource, /\.task \{\s*await store\.camera\.requestAccess\(\)\s*store\.camera\.start\(\)\s*\}/);
-  assert.match(rootViewSwiftSource, /private func showSessionsFromWelcome\(\) \{[\s\S]*connectionSheetDetent = \.medium[\s\S]*isConnectionSheetPresented = true/);
+  assert.match(rootViewSwiftSource, /\.fullScreenCover\(isPresented: \$isWelcomePairingScannerPresented\) \{\s*PairingScanSessionView\(isPresented: \$isWelcomePairingScannerPresented\)/);
+  assert.match(rootViewSwiftSource, /private func showPairingScannerFromWelcome\(\) \{\s*store\.activeMode = \.barcode\s*isWelcomePairingScannerPresented = true\s*\}/);
+  assert.doesNotMatch(rootViewSwiftSource, /private func showSessionsFromWelcome/);
   assert.match(pairingSessionsViewSwiftSource, /private let webScannerURL = URL\(string: "https:\/\/volt-scanner\.vercel\.app\/create-session"\)!/);
   assert.match(pairingSessionsViewSwiftSource, /PairingSessionSetupContent \{[\s\S]*openURL\(webScannerURL\)/);
   assert.match(sharedPairingSessionComponentsSwiftSource, /Text\("Scan the QR code from the Chrome extension, or open the create session page on your computer\. This iPhone will connect to that browser session\."\)/);
@@ -360,6 +372,17 @@ test("native first launch welcomes users without requesting camera access and ca
   assert.match(sharedPairingSessionComponentsSwiftSource, /Label\("Open Create Session Page", systemImage: "safari"\)/);
   assert.match(sharedPairingSessionComponentsSwiftSource, /Label\("Scan Computer QR", systemImage: "qrcode\.viewfinder"\)/);
   assert.match(rootViewSwiftSource, /\.frame\(maxWidth: \.infinity, alignment: \.leading\)\s*\.background\(\.background, in: RoundedRectangle\(cornerRadius: 16/);
+});
+
+test("app clip uses the same app icon resource as the main app", () => {
+  assert.match(xcodeProjectSource, /B0000000000000000000001B \/\* volt\.icon in Resources \*\//);
+  assert.match(xcodeProjectSource, /B3000000000000000000001E \/\* volt\.icon in Resources \*\//);
+  assert.match(xcodeProjectSource, /H30000000000000000000001 \/\* Resources \*\/ = \{[\s\S]*B3000000000000000000001E \/\* volt\.icon in Resources \*\//);
+  const clipConfigStart = xcodeProjectSource.indexOf("J30000000000000000000001 /* Debug */");
+  const clipConfigSource = xcodeProjectSource.slice(clipConfigStart, xcodeProjectSource.indexOf("J400", clipConfigStart) === -1 ? undefined : xcodeProjectSource.indexOf("J400", clipConfigStart));
+  assert.ok(clipConfigStart > -1);
+  assert.match(clipConfigSource, /ASSETCATALOG_COMPILER_APPICON_NAME = volt/g);
+  assert.doesNotMatch(clipConfigSource, /ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon/);
 });
 
 test("native OCR review stops the live camera until retake", () => {
@@ -602,6 +625,17 @@ test("native camera resets capture sessions to display 1x zoom", () => {
   assert.match(cameraModelSwiftSource, /CameraZoomController\.resetToDisplayOne\(on: device\)/);
   assert.match(cameraZoomControllerSwiftSource, /device\.videoZoomFactor = clampedFactor/);
   assert.match(cameraModelSwiftSource, /applyZoomState\(state\)/);
+});
+
+test("native camera restricts focus-driven virtual lens switching", () => {
+  assert.match(cameraDeviceSelectorSwiftSource, /restrictFocusDrivenVirtualDeviceSwitching\(on device: AVCaptureDevice\)/);
+  assert.match(cameraDeviceSelectorSwiftSource, /primaryConstituentDeviceSwitchingBehavior != \.unsupported/);
+  assert.match(
+    cameraDeviceSelectorSwiftSource,
+    /setPrimaryConstituentDeviceSwitchingBehavior\(\s*\.restricted,\s*restrictedSwitchingBehaviorConditions: \[\.videoZoomChanged\]\s*\)/
+  );
+  assert.match(cameraModelSwiftSource, /CameraDeviceSelector\.restrictFocusDrivenVirtualDeviceSwitching\(on: camera\)/);
+  assert.match(clipBarcodeScannerServiceSwiftSource, /CameraDeviceSelector\.restrictFocusDrivenVirtualDeviceSwitching\(on: camera\)/);
 });
 
 test("native camera clears stale torch state when capture sessions stop", () => {
