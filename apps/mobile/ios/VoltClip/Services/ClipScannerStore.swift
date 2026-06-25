@@ -96,6 +96,7 @@ final class ClipScannerStore {
     private var suppressNextReconnect = false
     private var lastPairingCredential: ClipPairingCredential?
     private var dictationTargetKey: String?
+    private var activeCaptureBatchId: String?
 
     var bridgeWebView: WKWebView {
         transport.embeddedWebView
@@ -255,12 +256,20 @@ final class ClipScannerStore {
         _ = addCapturedImage(image, source: .upload)
     }
 
+    func beginCaptureSession() {
+        activeCaptureBatchId = ScannerProtocol.makeMessageId("batch")
+    }
+
+    func endCaptureSession() {
+        activeCaptureBatchId = nil
+    }
+
     func capturePhoto(_ image: UIImage) async {
         let preparedImage = image
             .normalizedForProcessing()
             .centerSquareCropped()
             .resized(maxLongEdge: 2200)
-        let photo = addCapturedImage(preparedImage, source: .capture)
+        let photo = addCapturedImage(preparedImage, source: .capture, batchId: currentCaptureBatchId())
         await sendPhoto(photo)
     }
 
@@ -636,6 +645,15 @@ final class ClipScannerStore {
         let uploadNumber = String(format: "%03d", index + 1)
         let timestampMs = Int(capturedAt.timeIntervalSince1970 * 1000)
         return "volt-upload-\(uploadNumber)-\(timestampMs).jpg"
+    }
+
+    private func currentCaptureBatchId() -> String {
+        if let activeCaptureBatchId {
+            return activeCaptureBatchId
+        }
+        let batchId = ScannerProtocol.makeMessageId("batch")
+        activeCaptureBatchId = batchId
+        return batchId
     }
 
     private func tab(for mode: CaptureMode) -> ClipTab {

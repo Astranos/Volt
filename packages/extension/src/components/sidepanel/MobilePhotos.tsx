@@ -37,7 +37,15 @@ type MobileScannerState = {
   status: ScannerConnectionStatus;
   qrCodeUrl: string | null;
   error: string | null;
+  joinWindowExpiresAt?: string | null;
 };
+
+function isJoinWindowActive(state?: Pick<MobileScannerState, "qrCodeUrl" | "joinWindowExpiresAt"> | null) {
+  if (!state?.qrCodeUrl) return false;
+  if (!state.joinWindowExpiresAt) return true;
+  const expiresAt = Date.parse(state.joinWindowExpiresAt);
+  return Number.isFinite(expiresAt) && expiresAt > Date.now();
+}
 
 function trimPhotosForStorage(photos: MobilePhoto[]) {
   return trimPhotosForState(photos).map(({ dataUrl, ...metadata }) => metadata);
@@ -82,6 +90,7 @@ export default function MobilePhotos({
   const [photos, setPhotos] = useState<MobilePhoto[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
+  const [joinWindowExpiresAt, setJoinWindowExpiresAt] = useState<string | null>(null);
 
   const selectedPhotos = useMemo(
     () => photos.filter((photo) => selectedIds.has(photo.id)),
@@ -106,6 +115,7 @@ export default function MobilePhotos({
       if (!state) return;
       if (state.status) setStatus(state.status);
       setError(state.error ?? null);
+      setJoinWindowExpiresAt(state.joinWindowExpiresAt ?? null);
 
       if (!state.qrCodeUrl) {
         setQrDataUrl(null);
@@ -342,7 +352,7 @@ export default function MobilePhotos({
         .then((response) => {
           const state = response?.state as MobileScannerState | undefined;
           applyScannerState(state);
-          if (!state || state.status === "disconnected" || state.status === "error") {
+          if (!isJoinWindowActive(state) && (!state || state.status !== "connected")) {
             void startSession();
           }
         })
@@ -369,6 +379,17 @@ export default function MobilePhotos({
     if (photos.length === 0) return;
     void prepareActiveTabForPhotoDrop();
   }, [photos.length, prepareActiveTabForPhotoDrop]);
+
+  useEffect(() => {
+    if (!qrDataUrl || !joinWindowExpiresAt || !showConnectionControls) return;
+    const expiresAt = Date.parse(joinWindowExpiresAt);
+    if (!Number.isFinite(expiresAt)) return;
+    const refreshInMs = Math.max(0, expiresAt - Date.now() - 5_000);
+    const timer = window.setTimeout(() => {
+      void startSession(true);
+    }, refreshInMs);
+    return () => window.clearTimeout(timer);
+  }, [joinWindowExpiresAt, qrDataUrl, showConnectionControls, startSession]);
 
   const showQr = status === "waiting" && qrDataUrl;
   const isCreating = status === "creating";

@@ -42,6 +42,13 @@ function normalizeMode(value: string | null): MobileCaptureMode | null {
     : null;
 }
 
+function isJoinWindowActive(state?: Pick<MobileScannerState, "qrCodeUrl" | "joinWindowExpiresAt"> | null) {
+  if (!state?.qrCodeUrl) return false;
+  if (!state.joinWindowExpiresAt) return true;
+  const expiresAt = Date.parse(state.joinWindowExpiresAt);
+  return Number.isFinite(expiresAt) && expiresAt > Date.now();
+}
+
 function MobileScannerPopup() {
   const searchParams = useMemo(() => new URLSearchParams(window.location.search), []);
   const requestedMode = useMemo(() => normalizeMode(searchParams.get("mode")), [searchParams]);
@@ -94,7 +101,7 @@ function MobileScannerPopup() {
   }, [applyScannerState, requestedMode, saveSessionLabel]);
 
   const ensureJoinWindow = useCallback(async (currentState?: MobileScannerState) => {
-    if (currentState?.qrCodeUrl) return;
+    if (isJoinWindowActive(currentState)) return;
     await startSession(false);
   }, [startSession]);
 
@@ -133,9 +140,7 @@ function MobileScannerPopup() {
     refreshState()
       .then((nextState) => {
         if (cancelled) return;
-        if (nextState?.status !== "connected") {
-          void ensureJoinWindow(nextState);
-        }
+        void ensureJoinWindow(nextState);
       })
       .catch((error) => {
         if (!cancelled) {
@@ -190,7 +195,7 @@ function MobileScannerPopup() {
   }, [openedAt, state.connectedAt, state.status]);
 
   useEffect(() => {
-    if (state.status !== "waiting" || !state.joinWindowExpiresAt) return;
+    if (!state.qrCodeUrl || !state.joinWindowExpiresAt) return;
     const expiresAt = Date.parse(state.joinWindowExpiresAt);
     if (!Number.isFinite(expiresAt)) return;
     const refreshInMs = Math.max(0, expiresAt - Date.now() - 5_000);
@@ -198,7 +203,7 @@ function MobileScannerPopup() {
       void startSession(true);
     }, refreshInMs);
     return () => window.clearTimeout(timer);
-  }, [startSession, state.joinWindowExpiresAt, state.status]);
+  }, [startSession, state.joinWindowExpiresAt, state.qrCodeUrl]);
 
   useEffect(() => {
     let sent = false;

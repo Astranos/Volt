@@ -95,7 +95,12 @@ private struct ClipCaptureView: View {
             .background(ScannerTabLayout.background)
             .navigationTitle("Capture")
             .toolbar(.hidden, for: .navigationBar)
-            .fullScreenCover(isPresented: $isCaptureSessionPresented) {
+            .fullScreenCover(
+                isPresented: $isCaptureSessionPresented,
+                onDismiss: {
+                    store.endCaptureSession()
+                }
+            ) {
                 ClipCaptureSessionView(
                     activeMode: $store.activeCaptureMode,
                     isConnected: store.isConnected,
@@ -138,6 +143,7 @@ private struct ClipCaptureView: View {
                     disabledHint: store.targetHint,
                     action: {
                         guard store.isConnected else { return }
+                        store.beginCaptureSession()
                         isCaptureSessionPresented = true
                     }
                 )
@@ -741,7 +747,7 @@ private struct ClipCaptureSessionView: View {
 
                 if activeMode == .photo, ocrReviewImage == nil {
                     GeometryReader { previewGeometry in
-                        let side = min(previewGeometry.size.width - 24, previewGeometry.size.height)
+                        let side = min(previewGeometry.size.width, previewGeometry.size.height)
 
                         ClipPhotoPreview(
                             cameraService: cameraService,

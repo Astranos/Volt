@@ -5,8 +5,9 @@ import {
   Camera,
   CheckCircle2,
   Copy,
+  Download,
   Image as ImageIcon,
-  Link as LinkIcon,
+  Images,
   Loader2,
   Radio,
   ScanBarcode,
@@ -256,7 +257,6 @@ export function ScannerDemo() {
   const reviewInputRef = useRef<HTMLTextAreaElement | null>(null);
 
   const receivedCount = captures.length + photos.length;
-  const signalHost = useMemo(() => new URL(SIGNAL_URL).host, []);
 
   const clearPollTimer = useCallback(() => {
     if (pollTimerRef.current === null) return;
@@ -834,51 +834,51 @@ export function ScannerDemo() {
   useEffect(() => disposeRuntime, [disposeRuntime]);
 
   return (
-    <main className="min-h-screen bg-zinc-50 text-zinc-950">
-      <header className="border-b border-zinc-200 bg-white">
-        <div className="mx-auto flex min-h-16 max-w-7xl flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
-          <a href="/" className="flex items-center gap-2 text-sm font-semibold">
-            <img src="/assets/volt.webp" alt="" className="size-8 rounded-[0.65rem] object-cover" />
-            Volt scanner pairing
+    <main className="min-h-screen bg-[#f4f7f5] text-zinc-950">
+      <header className="border-b border-zinc-950 bg-white">
+        <div className="mx-auto flex min-h-14 max-w-7xl items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
+          <a href="/" className="flex min-w-0 items-center gap-2 text-sm font-semibold">
+            <img src="/assets/volt.webp" alt="" className="size-8 rounded-[0.5rem] object-cover" />
+            <span className="truncate">Volt web scanner</span>
           </a>
-          <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-600">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1.5">
-              <Radio size={13} />
-              {signalHost}
-            </span>
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1.5">
+          <div className="hidden items-center gap-2 text-xs font-semibold text-zinc-700 sm:flex">
+            <span className="inline-flex items-center gap-1.5 border border-zinc-300 bg-[#f6ff7f] px-2.5 py-1">
               <ShieldCheck size={13} />
-              Local photo display only
+              Browser-only workspace
+            </span>
+            <span className="inline-flex items-center gap-1.5 border border-zinc-300 bg-cyan-50 px-2.5 py-1">
+              <ImageIcon size={13} />
+              Downloadable batches
             </span>
           </div>
         </div>
       </header>
 
-      <section className="border-b border-zinc-200 bg-white">
-        <div className="mx-auto grid max-w-7xl gap-8 px-4 py-8 sm:px-6 lg:grid-cols-[0.82fr_1.18fr] lg:px-8 lg:py-10">
-          <div className="flex flex-col gap-6">
-            <div>
-              <p className="text-sm font-semibold text-emerald-700">Private web receiver</p>
-              <h1 className="mt-3 max-w-2xl text-4xl font-semibold leading-tight text-zinc-950 sm:text-5xl">
-                Pair the iPhone scanner with a browser session
-              </h1>
-              <p className="mt-4 max-w-2xl text-base leading-7 text-zinc-600">
-                This page mirrors the Chrome extension receiver for testing and app review. Name the session, scan the QR in the Volt iPhone app, and receive barcode, OCR, dictation, and photo captures in this browser only.
-              </p>
-            </div>
+      <section className="mx-auto grid max-w-7xl gap-4 px-4 py-4 sm:px-6 lg:grid-cols-[minmax(18rem,0.72fr)_minmax(0,1.28fr)] lg:px-8">
+        <aside className="min-w-0 border border-zinc-950 bg-[#15130f] text-white">
+          <div className="border-b border-white/15 p-4">
+            <p className="text-xs font-semibold uppercase text-[#f6ff7f]">Private receiver</p>
+            <h1 className="mt-3 text-3xl font-semibold leading-tight sm:text-4xl lg:text-3xl xl:text-4xl">
+              Scan into this browser.
+            </h1>
+            <p className="mt-3 text-sm leading-6 text-zinc-300">
+              Use Volt on iPhone to send text, barcodes, dictation, and photo sets to this tab.
+            </p>
+          </div>
 
-            <div className="grid gap-px overflow-hidden rounded-[1.35rem] border border-zinc-200 bg-zinc-200 sm:grid-cols-3">
-              <StatusTile icon={Smartphone} label="Pairing" value={statusLabel(status)} />
-              <StatusTile icon={Radio} label="ICE" value={iceLabel} />
-              <StatusTile icon={CheckCircle2} label="Received" value={String(receivedCount)} />
-            </div>
+          <div className="grid gap-px border-b border-white/15 bg-white/15 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
+            <StatusTile icon={Smartphone} label="Session" value={statusLabel(status)} dark />
+            <StatusTile icon={Radio} label="Link" value={iceLabel} dark />
+            <StatusTile icon={CheckCircle2} label="Items" value={String(receivedCount)} dark />
+          </div>
 
+          <div className="space-y-4 p-4">
             {error ? (
-              <div className="rounded-[0.95rem] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</div>
+              <div className="border border-red-300 bg-red-950/60 px-3 py-2 text-sm text-red-100">{error}</div>
             ) : null}
 
-            <div className="max-w-md">
-              <label htmlFor="private-session-label" className="text-sm font-semibold text-zinc-800">
+            <div>
+              <label htmlFor="private-session-label" className="text-xs font-semibold uppercase text-zinc-400">
                 Session name
               </label>
               <input
@@ -888,38 +888,40 @@ export function ScannerDemo() {
                 maxLength={64}
                 onChange={(event) => setSessionLabel(event.target.value)}
                 placeholder={DEFAULT_SESSION_LABEL}
-                className="mt-2 h-11 w-full rounded-[0.85rem] border border-zinc-300 bg-white px-3 text-sm text-zinc-950 outline-none focus:border-zinc-950"
+                className="mt-2 h-11 w-full border border-white/20 bg-white px-3 text-sm text-zinc-950 outline-none focus:border-[#f6ff7f]"
               />
             </div>
 
-            <div className="flex flex-wrap gap-3">
+            <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
                 onClick={() => void startPairing()}
                 disabled={status === "creating" || status === "connecting"}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-[0.85rem] bg-zinc-950 px-5 text-sm font-semibold text-white hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex h-11 min-w-0 items-center justify-center gap-2 bg-[#f6ff7f] px-3 text-sm font-semibold text-zinc-950 hover:bg-[#ecf75f] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {status === "creating" || status === "connecting" ? <Loader2 size={17} className="animate-spin" /> : <ScanBarcode size={17} />}
-                {joinWindow ? "Generate new session" : "Generate pairing session"}
+                <span className="truncate">{joinWindow ? "New" : "Create"}</span>
               </button>
               <button
                 type="button"
                 onClick={reset}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-[0.85rem] border border-zinc-300 bg-white px-5 text-sm font-semibold text-zinc-800 hover:border-zinc-950"
+                className="inline-flex h-11 items-center justify-center gap-2 border border-white/25 bg-transparent px-3 text-sm font-semibold text-white hover:bg-white/10"
               >
                 <Trash2 size={17} />
                 Reset
               </button>
             </div>
           </div>
+        </aside>
 
-          <div className="grid gap-4 lg:grid-cols-[minmax(260px,0.75fr)_1fr]">
-            <section className="rounded-[1.35rem] border border-zinc-200 bg-zinc-50 p-4">
+        <div className="grid min-w-0 gap-4">
+          <section className="grid min-w-0 gap-4 lg:grid-cols-[minmax(15rem,0.48fr)_minmax(0,1fr)]">
+            <div className="border border-zinc-950 bg-white p-3">
               <div className="flex items-center justify-between gap-3">
-                <h2 className="text-sm font-semibold text-zinc-950">Pairing QR</h2>
-                {status === "waiting" ? <span className="text-xs font-medium text-emerald-700">active</span> : null}
+                <h2 className="text-sm font-semibold text-zinc-950">Pairing dock</h2>
+                {status === "waiting" ? <span className="bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-800">active</span> : null}
               </div>
-              <div className="mt-4 grid aspect-square place-items-center rounded-[0.95rem] border border-zinc-200 bg-white p-3">
+              <div className="mt-3 grid aspect-square max-h-[20rem] place-items-center border border-zinc-300 bg-[#f9faf8] p-3">
                 {qrDataUrl ? (
                   <img src={qrDataUrl} alt="Volt scanner pairing QR code" className="h-full w-full object-contain" />
                 ) : (
@@ -930,77 +932,110 @@ export function ScannerDemo() {
                 type="button"
                 onClick={() => void copyPairingUrl()}
                 disabled={!joinWindow?.qrCodeUrl}
-                className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 rounded-[0.85rem] border border-zinc-300 bg-white px-3 text-sm font-semibold text-zinc-800 hover:border-zinc-950 disabled:cursor-not-allowed disabled:opacity-50"
+                className="mt-3 inline-flex h-10 w-full items-center justify-center gap-2 border border-zinc-950 bg-white px-3 text-sm font-semibold text-zinc-950 hover:bg-zinc-950 hover:text-white disabled:cursor-not-allowed disabled:border-zinc-300 disabled:text-zinc-400 disabled:hover:bg-white"
               >
                 <Copy size={16} />
-                Copy pairing URL
+                Copy pairing link
               </button>
-            </section>
+            </div>
 
-            <section className="rounded-[1.35rem] border border-zinc-200 bg-white p-4">
-              <div className="flex items-center justify-between gap-3">
-                <h2 className="text-sm font-semibold text-zinc-950">Session</h2>
-                <span className="text-xs text-zinc-500">{connectedPeerCount} peer{connectedPeerCount === 1 ? "" : "s"}</span>
-              </div>
-              <dl className="mt-4 grid gap-3 text-sm">
-                <InfoRow label="Status" value={statusLabel(status)} />
-                <InfoRow label="Name" value={joinWindow?.label ?? normalizedSessionLabel(sessionLabel)} />
-                <InfoRow label="Join token" value={joinWindow ? `...${joinWindow.joinToken.slice(-8)}` : "Not created"} />
-                <InfoRow label="Expires" value={joinWindow?.expiresAt ? new Date(joinWindow.expiresAt).toLocaleTimeString() : "Not active"} />
-                <InfoRow label="Storage" value="Browser memory only" />
-              </dl>
-              <div className="mt-4 rounded-[0.95rem] border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs leading-5 text-emerald-900">
-                Photo bytes are assembled into Blob URLs in this tab and are never written to Convex, Vercel, localStorage, or IndexedDB.
-              </div>
-              {joinWindow?.qrCodeUrl ? (
-                <div className="mt-4 flex items-start gap-2 rounded-[0.95rem] border border-zinc-200 bg-zinc-50 p-3 text-xs text-zinc-600">
-                  <LinkIcon size={14} className="mt-0.5 shrink-0" />
-                  <span className="break-all">{joinWindow.qrCodeUrl}</span>
+            <div className="grid min-w-0 content-between border border-zinc-950 bg-white">
+              <div className="grid gap-4 p-4 sm:grid-cols-[minmax(0,1fr)_13rem]">
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold uppercase text-zinc-500">No extension required</p>
+                  <h2 className="mt-2 text-2xl font-semibold leading-tight text-zinc-950">
+                    A temporary scan desk for product photos and copied results.
+                  </h2>
+                  <p className="mt-3 text-sm leading-6 text-zinc-600">
+                    Keep this tab open while you scan. Copy results as they arrive, or download photo batches before closing the session.
+                  </p>
                 </div>
-              ) : null}
-            </section>
-          </div>
-        </div>
-      </section>
+                <dl className="grid content-start gap-3 border-l-0 border-zinc-200 text-sm sm:border-l sm:pl-4">
+                  <InfoRow label="Status" value={statusLabel(status)} />
+                  <InfoRow label="Name" value={joinWindow?.label ?? normalizedSessionLabel(sessionLabel)} />
+                  <InfoRow label="Expires" value={joinWindow?.expiresAt ? new Date(joinWindow.expiresAt).toLocaleTimeString() : "Not active"} />
+                  <InfoRow label="Peers" value={String(connectedPeerCount)} />
+                </dl>
+              </div>
+              <div className="grid border-t border-zinc-950 sm:grid-cols-3">
+                <InstructionStep value="1" text="Create session" />
+                <InstructionStep value="2" text="Scan the QR" />
+                <InstructionStep value="3" text="Copy or download" />
+              </div>
+            </div>
+          </section>
 
-      <section className="mx-auto grid max-w-7xl gap-6 px-4 py-8 sm:px-6 lg:grid-cols-2 lg:px-8">
-        <ResultsPanel
-          captures={captures}
-          reviewInputRef={reviewInputRef}
-          reviewInputValue={reviewInputValue}
-          onReviewInputChange={setReviewInputValue}
-        />
-        <PhotosPanel photos={photos} />
+          <section className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,0.94fr)_minmax(0,1.06fr)]">
+            <ResultsPanel
+              captures={captures}
+              reviewInputRef={reviewInputRef}
+              reviewInputValue={reviewInputValue}
+              onReviewInputChange={setReviewInputValue}
+            />
+            <PhotosPanel photos={photos} />
+          </section>
+        </div>
       </section>
     </main>
   );
 }
 
 function StatusTile({
+  dark = false,
   icon: Icon,
   label,
   value,
 }: {
+  dark?: boolean;
   icon: typeof Smartphone;
   label: string;
   value: string;
 }) {
   return (
-    <div className="bg-white p-4">
-      <div className="flex items-center gap-2 text-xs font-medium uppercase text-zinc-500">
+    <div className={dark ? "bg-[#15130f] p-4 text-white" : "bg-white p-4"}>
+      <div className={dark ? "flex items-center gap-2 text-xs font-medium uppercase text-zinc-400" : "flex items-center gap-2 text-xs font-medium uppercase text-zinc-500"}>
         <Icon size={14} />
         {label}
       </div>
-      <div className="mt-2 truncate text-sm font-semibold text-zinc-950">{value}</div>
+      <div className={dark ? "mt-2 truncate text-sm font-semibold text-white" : "mt-2 truncate text-sm font-semibold text-zinc-950"}>{value}</div>
     </div>
   );
 }
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="grid grid-cols-[7rem_1fr] gap-3">
+    <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-3">
       <dt className="text-zinc-500">{label}</dt>
       <dd className="truncate font-medium text-zinc-950">{value}</dd>
+    </div>
+  );
+}
+
+function copyText(value: string) {
+  if (!value) return Promise.resolve();
+  return navigator.clipboard.writeText(value);
+}
+
+function downloadUrl(url: string, filename: string) {
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename || "volt-photo.jpg";
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+}
+
+function downloadPhotos(photos: PhotoItem[]) {
+  for (const [index, photo] of photos.entries()) {
+    window.setTimeout(() => downloadUrl(photo.objectUrl, photo.filename), index * 120);
+  }
+}
+
+function InstructionStep({ text, value }: { text: string; value: string }) {
+  return (
+    <div className="grid grid-cols-[1.75rem_minmax(0,1fr)] gap-3 p-3 text-sm">
+      <span className="grid size-7 place-items-center bg-zinc-950 text-xs font-semibold text-white">{value}</span>
+      <span className="min-w-0 self-center font-medium leading-5 text-zinc-800">{text}</span>
     </div>
   );
 }
@@ -1016,26 +1051,50 @@ function ResultsPanel({
   reviewInputRef: RefObject<HTMLTextAreaElement | null>;
   reviewInputValue: string;
 }) {
+  const allCaptureText = useMemo(() => captures.map((capture) => capture.value).join("\n"), [captures]);
+
   return (
-    <section className="rounded-[1.35rem] border border-zinc-200 bg-white">
-      <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
+    <section className="min-w-0 border border-zinc-950 bg-white">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-950 bg-[#e8fff3] px-4 py-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold">
           <Type size={16} />
-          Text and barcode
+          Text lane
         </h2>
-        <span className="text-xs text-zinc-500">{captures.length}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-zinc-500">{captures.length}</span>
+          <button
+            type="button"
+            onClick={() => void copyText(allCaptureText || reviewInputValue)}
+            disabled={!allCaptureText && !reviewInputValue}
+            className="inline-flex h-8 items-center justify-center gap-1.5 border border-zinc-950 bg-white px-2.5 text-xs font-semibold text-zinc-950 hover:bg-zinc-950 hover:text-white disabled:cursor-not-allowed disabled:border-zinc-300 disabled:text-zinc-400 disabled:hover:bg-white"
+          >
+            <Copy size={13} />
+            Copy all
+          </button>
+        </div>
       </div>
-      <div className="border-b border-zinc-200 p-3">
-        <label htmlFor="review-test-input" className="text-xs font-semibold uppercase text-zinc-500">
-          {REVIEW_INPUT_LABEL}
-        </label>
+      <div className="border-b border-zinc-950 p-3">
+        <div className="flex items-center justify-between gap-2">
+          <label htmlFor="review-test-input" className="text-xs font-semibold uppercase text-zinc-500">
+            Live clipboard
+          </label>
+          <button
+            type="button"
+            onClick={() => void copyText(reviewInputValue)}
+            disabled={!reviewInputValue}
+            className="inline-flex h-8 items-center justify-center gap-1.5 border border-zinc-300 bg-white px-2.5 text-xs font-semibold text-zinc-800 hover:border-zinc-950 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Copy size={13} />
+            Copy
+          </button>
+        </div>
         <textarea
           ref={reviewInputRef}
           id="review-test-input"
           value={reviewInputValue}
           onChange={(event) => onReviewInputChange(event.target.value)}
           placeholder="Scanned text, barcodes, and dictation appear here."
-          className="mt-2 min-h-24 w-full resize-y rounded-[0.85rem] border border-zinc-300 bg-white px-3 py-2 text-sm leading-6 text-zinc-950 outline-none focus:border-zinc-950"
+          className="mt-2 min-h-24 w-full resize-y border border-zinc-300 bg-[#fbfcfa] px-3 py-2 text-sm leading-6 text-zinc-950 outline-none focus:border-zinc-950"
         />
       </div>
       <div className="max-h-[34rem] overflow-auto p-3">
@@ -1044,10 +1103,20 @@ function ResultsPanel({
         ) : (
           <div className="space-y-3">
             {captures.map((capture) => (
-              <article key={`${capture.id}:${capture.capturedAt}`} className="rounded-[0.95rem] border border-zinc-200 bg-zinc-50 p-3">
+              <article key={`${capture.id}:${capture.capturedAt}`} className="border border-zinc-300 bg-[#fbfcfa] p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-500">
-                  <span className="font-medium capitalize text-zinc-700">{capture.kind}</span>
-                  <time dateTime={capture.capturedAt}>{new Date(capture.capturedAt).toLocaleTimeString()}</time>
+                  <div className="flex min-w-0 flex-wrap items-center gap-2">
+                    <span className="bg-white px-2 py-1 font-medium capitalize text-zinc-700">{capture.kind}</span>
+                    <time dateTime={capture.capturedAt}>{new Date(capture.capturedAt).toLocaleTimeString()}</time>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void copyText(capture.value)}
+                    className="inline-flex h-7 items-center justify-center gap-1.5 border border-zinc-300 bg-white px-2 text-xs font-semibold text-zinc-800 hover:border-zinc-950"
+                  >
+                    <Copy size={12} />
+                    Copy
+                  </button>
                 </div>
                 <p className="mt-2 break-words text-sm font-medium leading-6 text-zinc-950">{capture.value}</p>
                 {capture.format ? <p className="mt-2 text-xs text-zinc-500">{capture.format}</p> : null}
@@ -1061,30 +1130,84 @@ function ResultsPanel({
 }
 
 function PhotosPanel({ photos }: { photos: PhotoItem[] }) {
+  const photoBatches = useMemo(() => {
+    const batches = new Map<string, PhotoItem[]>();
+    for (const photo of photos) {
+      const batch = batches.get(photo.photoBatchId) ?? [];
+      batch.push(photo);
+      batches.set(photo.photoBatchId, batch);
+    }
+    return Array.from(batches, ([id, items]) => ({ id, items }));
+  }, [photos]);
+
   return (
-    <section className="rounded-[1.35rem] border border-zinc-200 bg-white">
-      <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-3">
+    <section className="min-w-0 border border-zinc-950 bg-white">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-950 bg-[#fff4d8] px-4 py-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold">
           <ImageIcon size={16} />
-          Photos
+          Photo batches
         </h2>
-        <span className="text-xs text-zinc-500">{photos.length}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-zinc-500">{photos.length}</span>
+          <button
+            type="button"
+            onClick={() => downloadPhotos(photos)}
+            disabled={photos.length === 0}
+            className="inline-flex h-8 items-center justify-center gap-1.5 border border-zinc-950 bg-white px-2.5 text-xs font-semibold text-zinc-950 hover:bg-zinc-950 hover:text-white disabled:cursor-not-allowed disabled:border-zinc-300 disabled:text-zinc-400 disabled:hover:bg-white"
+          >
+            <Download size={13} />
+            Download all
+          </button>
+        </div>
       </div>
       <div className="max-h-[34rem] overflow-auto p-3">
         {photos.length === 0 ? (
           <EmptyState label="No photos received yet" />
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2">
-            {photos.map((photo) => (
-              <article key={photo.id} className="overflow-hidden rounded-[0.95rem] border border-zinc-200 bg-zinc-50">
-                <img src={photo.objectUrl} alt={photo.filename} className="aspect-[4/3] w-full bg-zinc-100 object-contain" />
-                <div className="space-y-1 p-3 text-xs text-zinc-500">
-                  <div className="truncate text-sm font-semibold text-zinc-950">{photo.filename}</div>
-                  <div>{formatBytes(photo.size)}</div>
-                  {photo.width && photo.height ? <div>{photo.width} x {photo.height}</div> : null}
-                  <time dateTime={photo.capturedAt}>{new Date(photo.capturedAt).toLocaleString()}</time>
+          <div className="space-y-4">
+            {photoBatches.map((batch) => (
+              <section key={batch.id} className="border border-zinc-300 bg-[#fbfcfa] p-3">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="flex min-w-0 items-center gap-2 text-sm font-semibold text-zinc-950">
+                    <Images size={15} />
+                    <span className="truncate">Batch {batch.id.slice(-6)}</span>
+                  </h3>
+                  <div className="flex items-center gap-2 text-xs text-zinc-500">
+                    <span>{batch.items.length} photo{batch.items.length === 1 ? "" : "s"}</span>
+                    <button
+                      type="button"
+                      onClick={() => downloadPhotos(batch.items)}
+                      className="inline-flex h-8 items-center justify-center gap-1.5 border border-zinc-300 bg-white px-2.5 text-xs font-semibold text-zinc-800 hover:border-zinc-950"
+                    >
+                      <Download size={13} />
+                      Download batch
+                    </button>
+                  </div>
                 </div>
-              </article>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {batch.items.map((photo) => (
+                    <article key={photo.id} className="min-w-0 overflow-hidden border border-zinc-200 bg-white">
+                      <img src={photo.objectUrl} alt={photo.filename} className="aspect-[4/3] w-full bg-zinc-100 object-contain" />
+                      <div className="space-y-2 p-3 text-xs text-zinc-500">
+                        <div className="truncate text-sm font-semibold text-zinc-950">{photo.filename}</div>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                          <span>{formatBytes(photo.size)}</span>
+                          {photo.width && photo.height ? <span>{photo.width} x {photo.height}</span> : null}
+                          <time dateTime={photo.capturedAt}>{new Date(photo.capturedAt).toLocaleString()}</time>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => downloadUrl(photo.objectUrl, photo.filename)}
+                          className="inline-flex h-8 w-full items-center justify-center gap-1.5 border border-zinc-300 bg-white px-2.5 text-xs font-semibold text-zinc-800 hover:border-zinc-950"
+                        >
+                          <Download size={13} />
+                          Download
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </section>
             ))}
           </div>
         )}
@@ -1095,7 +1218,7 @@ function PhotosPanel({ photos }: { photos: PhotoItem[] }) {
 
 function EmptyState({ label }: { label: string }) {
   return (
-    <div className="grid min-h-40 place-items-center rounded-[0.95rem] border border-dashed border-zinc-300 bg-zinc-50 px-4 text-center text-sm text-zinc-500">
+    <div className="grid min-h-40 place-items-center border border-dashed border-zinc-300 bg-[#fbfcfa] px-4 text-center text-sm text-zinc-500">
       {label}
     </div>
   );

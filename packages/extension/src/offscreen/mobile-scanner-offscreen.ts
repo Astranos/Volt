@@ -41,6 +41,13 @@ function normalizeTarget(value: unknown): SessionTarget | null {
   return value && typeof value === "object" ? (value as SessionTarget) : null;
 }
 
+function isJoinWindowActive(state: MobileScannerSessionState) {
+  if (!state.qrCodeUrl) return false;
+  if (!state.joinWindowExpiresAt) return true;
+  const expiresAt = Date.parse(state.joinWindowExpiresAt);
+  return Number.isFinite(expiresAt) && expiresAt > Date.now();
+}
+
 class MobileScannerOffscreenSession {
   private webRtcSession: MobileScannerSession;
   private state: ScannerState = {
@@ -97,7 +104,7 @@ class MobileScannerOffscreenSession {
   async start(force = false, mode: CaptureMode | null = null, target?: SessionTarget | null) {
     if (!force) {
       const webRtcState = this.webRtcSession.getState();
-      if (webRtcState.qrCodeUrl) {
+      if (isJoinWindowActive(webRtcState)) {
         this.handleWebRtcState(webRtcState);
         this.setState({ mode });
         return { ...this.state };
