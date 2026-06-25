@@ -1,5 +1,6 @@
 import type { RuntimeActionRegistry } from "./runtime-action-registry";
 import type { LogFn } from "./runtime-action-registry";
+import type { SidePanelOperationCallback } from "./sidepanel-tool-controller";
 
 type PanelState = { open: boolean; tool: string | null };
 type SidePanelWithClose = typeof chrome.sidePanel & {
@@ -16,7 +17,8 @@ type SidepanelMessageControllerOptions = {
   toggleSidePanelForTab: (
     tabId: number | null | undefined,
     tool: string,
-    mode?: string
+    mode?: string,
+    callback?: SidePanelOperationCallback
   ) => void;
 };
 
@@ -47,16 +49,18 @@ export function registerSidepanelMessageActions({
       const candidateId =
         message.tabId ?? sender?.tab?.id ?? getCurrentTabId() ?? getLastTabId();
       if (candidateId) {
-        toggleSidePanelForTab(candidateId, tool, mode);
-        sendResponse({ success: true, tabId: candidateId });
+        toggleSidePanelForTab(candidateId, tool, mode, (result) => {
+          sendResponse({ ...result, tabId: candidateId });
+        });
         return true;
       }
 
       chromeApi.tabs.query({ active: true, currentWindow: true }, (tabs) => {
         const active = tabs && tabs[0];
         if (active?.id) {
-          toggleSidePanelForTab(active.id, tool, mode);
-          sendResponse({ success: true, tabId: active.id });
+          toggleSidePanelForTab(active.id, tool, mode, (result) => {
+            sendResponse({ ...result, tabId: active.id });
+          });
         } else {
           sendResponse({ success: false, error: "no_active_tab" });
         }
