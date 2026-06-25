@@ -14,6 +14,7 @@ struct CameraZoomState: Sendable {
 
 enum CameraZoomController {
     private static let maxDisplayZoomFactor: CGFloat = 6
+    private static let zoomRampRate: Float = 12
 
     static func clampedRawZoomFactor(_ factor: CGFloat, for device: AVCaptureDevice) -> CGFloat {
         let displayMultiplier = displayZoomFactorMultiplier(for: device)
@@ -24,6 +25,22 @@ enum CameraZoomController {
 
     static func rawZoomFactor(forDisplayZoomFactor factor: CGFloat, on device: AVCaptureDevice) -> CGFloat {
         clampedRawZoomFactor(factor / displayZoomFactorMultiplier(for: device), for: device)
+    }
+
+    static func rawZoomFactor(
+        forDisplayZoomDelta delta: CGFloat,
+        currentDisplayZoomFactor: CGFloat,
+        on device: AVCaptureDevice
+    ) -> CGFloat {
+        rawZoomFactor(forDisplayZoomFactor: currentDisplayZoomFactor + delta, on: device)
+    }
+
+    static func rawZoomFactor(
+        forDisplayZoomScale scale: CGFloat,
+        currentDisplayZoomFactor: CGFloat,
+        on device: AVCaptureDevice
+    ) -> CGFloat {
+        rawZoomFactor(forDisplayZoomFactor: currentDisplayZoomFactor * scale, on: device)
     }
 
     static func rawZoomFactorForDisplayOne(on device: AVCaptureDevice) -> CGFloat {
@@ -54,10 +71,19 @@ enum CameraZoomController {
         )
     }
 
-    static func setRawZoomFactor(_ rawZoomFactor: CGFloat, on device: AVCaptureDevice) throws -> CameraZoomState {
+    static func setRawZoomFactor(
+        _ rawZoomFactor: CGFloat,
+        on device: AVCaptureDevice,
+        ramping: Bool = false
+    ) throws -> CameraZoomState {
         let clampedFactor = clampedRawZoomFactor(rawZoomFactor, for: device)
         try device.lockForConfiguration()
-        device.videoZoomFactor = clampedFactor
+        if ramping {
+            device.cancelVideoZoomRamp()
+            device.ramp(toVideoZoomFactor: clampedFactor, withRate: zoomRampRate)
+        } else {
+            device.videoZoomFactor = clampedFactor
+        }
         device.unlockForConfiguration()
         return state(for: device, rawZoomFactor: clampedFactor)
     }

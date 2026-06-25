@@ -8,6 +8,7 @@ struct RootView: View {
     @State private var isWelcomePresented = false
     @State private var opensPairingScannerAfterWelcome = false
     @State private var isWelcomePairingScannerPresented = false
+    @State private var showsConnectionSheetAfterWelcomePairingScan = false
     @State private var isConnectionSheetPresented = false
     @State private var connectionSheetStatus: PairingStatusSheetModel?
     @State private var connectionSheetDetent = RootView.connectionStatusDetent
@@ -68,8 +69,10 @@ struct RootView: View {
                 }
             )
         }
-        .fullScreenCover(isPresented: $isWelcomePairingScannerPresented) {
-            PairingScanSessionView(isPresented: $isWelcomePairingScannerPresented)
+        .fullScreenCover(isPresented: $isWelcomePairingScannerPresented, onDismiss: handleWelcomePairingScannerDismiss) {
+            PairingScanSessionView(isPresented: $isWelcomePairingScannerPresented) {
+                showsConnectionSheetAfterWelcomePairingScan = true
+            }
         }
         .onChange(of: selectedTab) { _, newValue in
             applySelectedTab(newValue)
@@ -118,7 +121,15 @@ struct RootView: View {
 
     private func showPairingScannerFromWelcome() {
         store.activeMode = .barcode
+        showsConnectionSheetAfterWelcomePairingScan = false
         isWelcomePairingScannerPresented = true
+    }
+
+    private func handleWelcomePairingScannerDismiss() {
+        guard showsConnectionSheetAfterWelcomePairingScan else { return }
+        showsConnectionSheetAfterWelcomePairingScan = false
+        resetConnectionSheetPresentation()
+        showPairingSheet(for: store.connectionStatus)
     }
 
     private func applySelectedTab(_ newTab: AppSection) {

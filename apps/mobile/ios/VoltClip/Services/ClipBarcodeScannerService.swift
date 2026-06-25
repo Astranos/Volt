@@ -172,27 +172,22 @@ final class ClipBarcodeScannerService: NSObject {
 
     func adjustZoom(by delta: CGFloat) {
         guard let videoDevice else { return }
-        setZoomFactor((displayZoomFactor + delta) / displayZoomFactorMultiplier(for: videoDevice))
+        let rawZoomFactor = CameraZoomController.rawZoomFactor(
+            forDisplayZoomDelta: delta,
+            currentDisplayZoomFactor: displayZoomFactor,
+            on: videoDevice
+        )
+        setZoomFactor(rawZoomFactor, ramping: true)
     }
 
     func scaleZoom(by scale: CGFloat) {
         guard let videoDevice else { return }
-        sessionQueue.async { [weak self] in
-            do {
-                let clampedFactor = self?.clampedRawZoomFactor(
-                    videoDevice.videoZoomFactor * scale,
-                    for: videoDevice
-                ) ?? videoDevice.videoZoomFactor
-                let zoomState = try CameraZoomController.setRawZoomFactor(clampedFactor, on: videoDevice)
-                Task { @MainActor in
-                    self?.applyZoomState(zoomState)
-                }
-            } catch {
-                Task { @MainActor in
-                    self?.onError?(error.localizedDescription)
-                }
-            }
-        }
+        let rawZoomFactor = CameraZoomController.rawZoomFactor(
+            forDisplayZoomScale: scale,
+            currentDisplayZoomFactor: displayZoomFactor,
+            on: videoDevice
+        )
+        setZoomFactor(rawZoomFactor, ramping: true)
     }
 
     func focus(at point: CGPoint) {
@@ -201,22 +196,7 @@ final class ClipBarcodeScannerService: NSObject {
             do {
                 try videoDevice.lockForConfiguration()
                 defer { videoDevice.unlockForConfiguration() }
-                if videoDevice.isFocusPointOfInterestSupported {
-                    videoDevice.focusPointOfInterest = point
-                    if videoDevice.isFocusModeSupported(.autoFocus) {
-                        videoDevice.focusMode = .autoFocus
-                    } else if videoDevice.isFocusModeSupported(.continuousAutoFocus) {
-                        videoDevice.focusMode = .continuousAutoFocus
-                    }
-                }
-                if videoDevice.isExposurePointOfInterestSupported {
-                    videoDevice.exposurePointOfInterest = point
-                    if videoDevice.isExposureModeSupported(.autoExpose) {
-                        videoDevice.exposureMode = .autoExpose
-                    } else if videoDevice.isExposureModeSupported(.continuousAutoExposure) {
-                        videoDevice.exposureMode = .continuousAutoExposure
-                    }
-                }
+                CameraDeviceSelector.applySmoothTapFocus(on: videoDevice, point: point)
             } catch {
                 Task { @MainActor in
                     self?.onError?(error.localizedDescription)
@@ -486,12 +466,16 @@ final class ClipBarcodeScannerService: NSObject {
         }
     }
 
-    private func setZoomFactor(_ factor: CGFloat) {
+    private func setZoomFactor(_ factor: CGFloat, ramping: Bool = false) {
         guard let videoDevice else { return }
         let clampedFactor = CameraZoomController.clampedRawZoomFactor(factor, for: videoDevice)
         sessionQueue.async { [weak self] in
             do {
-                let zoomState = try CameraZoomController.setRawZoomFactor(clampedFactor, on: videoDevice)
+                let zoomState = try CameraZoomController.setRawZoomFactor(
+                    clampedFactor,
+                    on: videoDevice,
+                    ramping: ramping
+                )
                 Task { @MainActor in
                     self?.applyZoomState(zoomState)
                 }
@@ -505,10 +489,6 @@ final class ClipBarcodeScannerService: NSObject {
 
     nonisolated private func clampedRawZoomFactor(_ factor: CGFloat, for device: AVCaptureDevice) -> CGFloat {
         CameraZoomController.clampedRawZoomFactor(factor, for: device)
-    }
-
-    nonisolated private func displayZoomFactorMultiplier(for device: AVCaptureDevice) -> CGFloat {
-        CameraZoomController.displayZoomFactorMultiplier(for: device)
     }
 
     private func updateZoomState(for device: AVCaptureDevice, rawZoomFactor: CGFloat) {
@@ -674,10 +654,24 @@ private final class ClipLiveTextFrameProcessor: NSObject, AVCaptureVideoDataOutp
             }
             isRecognizing = false
         }
-        request.recognitionLevel = .fast
+        request.recognitionLevel = .accurate
         request.usesLanguageCorrection = false
         request.recognitionLanguages = ["en-US"]
-        request.customWords = ["IMEI", "MEID", "Serial", "S/N", "SN", "Model", "Model No", "SKU", "CFI", "CF1", "CFL", "CFI-ZCT1W"]
+        request.customWords = [
+            "IMEI",
+            "MEID",
+            "Serial",
+            "S/N",
+            "SN",
+            "Model",
+            "Model No",
+            "Wireless Controller",
+            "SKU",
+            "CFI",
+            "CF1",
+            "CFL",
+            "CFI-ZCT1W"
+        ]
         request.minimumTextHeight = 0.006
 
         do {

@@ -159,7 +159,12 @@ enum LiveTextCandidateObservationExtractor {
         directCandidates: [LiveTextCandidateObservation],
         snapshots: [LiveTextObservationSnapshot]
     ) -> [LiveTextCandidateObservation] {
-        deduplicated(directCandidates + denseRowCandidates(in: snapshots) + adjacentLabelValueCandidates(in: snapshots))
+        deduplicated(
+            directCandidates
+                + labelAnchoredRowCandidates(in: snapshots)
+                + denseRowCandidates(in: snapshots)
+                + adjacentLabelValueCandidates(in: snapshots)
+        )
             .sorted { lhs, rhs in
                 if lhs.kind.rawValue != rhs.kind.rawValue {
                     return lhs.kind.rawValue < rhs.kind.rawValue
@@ -183,7 +188,7 @@ enum LiveTextCandidateObservationExtractor {
             var rowWindow: [LiveTextObservationSnapshot] = []
             for snapshot in ordered[startIndex...].prefix(8) {
                 if let first = rowWindow.first,
-                   abs(first.boundingBox.midY - snapshot.boundingBox.midY) > max(first.boundingBox.height, snapshot.boundingBox.height) * 1.2 {
+                   !isSameTextRow(first, snapshot) {
                     break
                 }
                 rowWindow.append(snapshot)
@@ -197,6 +202,39 @@ enum LiveTextCandidateObservationExtractor {
                         value: match.value,
                         boundingBox: unionBoundingBox(for: rowWindow),
                         confidence: rowWindow.map(\.confidence).min() ?? snapshot.confidence
+                    )
+                )
+                break
+            }
+        }
+
+        return candidates
+    }
+
+    private static func labelAnchoredRowCandidates(in snapshots: [LiveTextObservationSnapshot]) -> [LiveTextCandidateObservation] {
+        let ordered = snapshots.sorted { lhs, rhs in
+            if abs(lhs.boundingBox.midY - rhs.boundingBox.midY) > 0.025 {
+                return lhs.boundingBox.midY > rhs.boundingBox.midY
+            }
+            return lhs.boundingBox.minX < rhs.boundingBox.minX
+        }
+        var candidates: [LiveTextCandidateObservation] = []
+
+        for (index, label) in ordered.enumerated() {
+            guard LiveTextIdentifierMatcher.labelKind(in: label.text) != nil else { continue }
+
+            var rowWindow = [label]
+            for value in ordered[(index + 1)...].prefix(8) {
+                guard isSameTextRow(label, value) else { continue }
+                rowWindow.append(value)
+                let combinedText = rowWindow.map(\.text).joined(separator: " ")
+                guard let match = LiveTextIdentifierMatcher.match(combinedText, allowingStandalone: false) else { continue }
+                candidates.append(
+                    LiveTextCandidateObservation(
+                        kind: match.kind,
+                        value: match.value,
+                        boundingBox: unionBoundingBox(for: rowWindow),
+                        confidence: rowWindow.map(\.confidence).min() ?? label.confidence
                     )
                 )
                 break
@@ -250,6 +288,15 @@ enum LiveTextCandidateObservationExtractor {
         snapshots.dropFirst().reduce(snapshots.first?.boundingBox ?? .zero) { partial, snapshot in
             partial.union(snapshot.boundingBox)
         }
+    }
+
+    private static func isSameTextRow(
+        _ lhs: LiveTextObservationSnapshot,
+        _ rhs: LiveTextObservationSnapshot
+    ) -> Bool {
+        let verticalDistance = abs(lhs.boundingBox.midY - rhs.boundingBox.midY)
+        let heightTolerance = max(lhs.boundingBox.height, rhs.boundingBox.height) * 2.2
+        return verticalDistance <= max(0.035, heightTolerance)
     }
 
     private static func deduplicated(_ candidates: [LiveTextCandidateObservation]) -> [LiveTextCandidateObservation] {
@@ -386,7 +433,18 @@ enum LiveTextIdentifierMatcher {
     private static let serialLabels = ["serial number", "serial no", "serial", "s/n", "s/ n", "s n", "s. n.", "sn"]
     private static let modelLabels = ["model number", "model no", "model", "mdl"]
     private static let skuLabels = ["sku", "stock keeping unit"]
-    private static let regulatoryLabels = ["fcc id", "ic", "emc", "r-cmm", "can ices", "ices"]
+    private static let regulatoryLabels = [
+        "fcc id",
+        "ic",
+        "emc",
+        "r-cmm",
+        "can ices",
+        "ices",
+        "cnc id",
+        "conatel",
+        "anatel",
+        "ict"
+    ]
 
     private static func labeledValue(in text: String, labels: [String]) -> (value: String, range: Range<String.Index>)? {
         let lowercased = text.lowercased()

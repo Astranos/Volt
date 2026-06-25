@@ -283,6 +283,16 @@ test("native connection sheet is always visible while connecting and user dismis
   assert.match(rootViewSwiftSource, /private var isConnectionAttemptVisible: Bool \{[\s\S]*case \.pairing, \.waitingForChrome:/);
 });
 
+test("native first-install welcome scanner defers pairing progress sheet until scan cover dismisses", () => {
+  assert.match(rootViewSwiftSource, /@State private var showsConnectionSheetAfterWelcomePairingScan = false/);
+  assert.match(rootViewSwiftSource, /\.fullScreenCover\(isPresented: \$isWelcomePairingScannerPresented, onDismiss: handleWelcomePairingScannerDismiss\)/);
+  assert.match(rootViewSwiftSource, /PairingScanSessionView\(isPresented: \$isWelcomePairingScannerPresented\) \{\s*showsConnectionSheetAfterWelcomePairingScan = true\s*\}/);
+  assert.match(rootViewSwiftSource, /private func handleWelcomePairingScannerDismiss\(\) \{\s*guard showsConnectionSheetAfterWelcomePairingScan else \{ return \}\s*showsConnectionSheetAfterWelcomePairingScan = false\s*resetConnectionSheetPresentation\(\)\s*showPairingSheet\(for: store\.connectionStatus\)/);
+  assert.match(pairingSessionsViewSwiftSource, /let onPairingCodeAccepted: \(\) -> Void/);
+  assert.match(pairingSessionsViewSwiftSource, /init\(isPresented: Binding<Bool>, onPairingCodeAccepted: @escaping \(\) -> Void = \{\}\)/);
+  assert.match(pairingSessionsViewSwiftSource, /if store\.pairScannedBarcodeIfNeeded\(\) \{\s*onPairingCodeAccepted\(\)\s*isPresented = false\s*\}/);
+});
+
 test("native connection sheet shows pairing failures instead of silently dismissing", () => {
   assert.match(rootViewSwiftSource, /case \.error:/);
   assert.match(rootViewSwiftSource, /title: "Pairing failed"/);
@@ -366,8 +376,8 @@ test("native first launch welcomes users without requesting camera access and ca
   assert.doesNotMatch(rootViewSwiftSource, /store\.camera\.requestAccess\(\)/);
   assert.match(captureSessionViewSwiftSource, /\.task \{\s*await store\.camera\.requestAccess\(\)\s*syncCameraForOcrReview/);
   assert.match(pairingSessionsViewSwiftSource, /\.task \{\s*await store\.camera\.requestAccess\(\)\s*store\.camera\.start\(\)\s*\}/);
-  assert.match(rootViewSwiftSource, /\.fullScreenCover\(isPresented: \$isWelcomePairingScannerPresented\) \{\s*PairingScanSessionView\(isPresented: \$isWelcomePairingScannerPresented\)/);
-  assert.match(rootViewSwiftSource, /private func showPairingScannerFromWelcome\(\) \{\s*store\.activeMode = \.barcode\s*isWelcomePairingScannerPresented = true\s*\}/);
+  assert.match(rootViewSwiftSource, /\.fullScreenCover\(isPresented: \$isWelcomePairingScannerPresented, onDismiss: handleWelcomePairingScannerDismiss\) \{\s*PairingScanSessionView\(isPresented: \$isWelcomePairingScannerPresented\)/);
+  assert.match(rootViewSwiftSource, /private func showPairingScannerFromWelcome\(\) \{\s*store\.activeMode = \.barcode\s*showsConnectionSheetAfterWelcomePairingScan = false\s*isWelcomePairingScannerPresented = true\s*\}/);
   assert.doesNotMatch(rootViewSwiftSource, /private func showSessionsFromWelcome/);
   assert.match(pairingSessionsViewSwiftSource, /private let webScannerURL = URL\(string: "https:\/\/volt-scanner\.vercel\.app\/create-session"\)!/);
   assert.match(pairingSessionsViewSwiftSource, /PairingSessionSetupContent \{[\s\S]*openURL\(webScannerURL\)/);
@@ -433,8 +443,10 @@ test("native camera can detect identifier candidates before OCR capture", () => 
   assert.match(cameraModelSwiftSource, /videoOutput\.alwaysDiscardsLateVideoFrames = true/);
   assert.match(cameraModelSwiftSource, /videoOutput\.setSampleBufferDelegate\(liveTextFrameProcessor, queue: videoQueue\)/);
   assert.match(cameraModelSwiftSource, /VNRecognizeTextRequest/);
-  assert.match(cameraModelSwiftSource, /request\.recognitionLevel = \.fast/);
-  assert.match(cameraModelSwiftSource, /request\.customWords = \["IMEI", "MEID", "Serial", "S\/N", "SN", "Model", "Model No", "SKU", "CFI", "CF1", "CFL", "CFI-ZCT1W"\]/);
+  assert.match(cameraModelSwiftSource, /request\.recognitionLevel = \.accurate/);
+  assert.match(clipBarcodeScannerServiceSwiftSource, /request\.recognitionLevel = \.accurate/);
+  assert.match(cameraModelSwiftSource, /"Wireless Controller"/);
+  assert.match(clipBarcodeScannerServiceSwiftSource, /"Wireless Controller"/);
   assert.match(cameraModelSwiftSource, /private let recognitionInterval: Duration = \.milliseconds\(500\)/);
   assert.match(cameraModelSwiftSource, /let candidates = Self\.candidates\(from: observations\)/);
   assert.match(cameraModelSwiftSource, /try\? text\.boundingBox\(for: match\.range\)/);
@@ -503,7 +515,10 @@ test("native pre-capture identifier chips show quickly and correct repeated repl
   assert.match(cameraModelSwiftSource, /"CFI-ZCT1W"/);
   assert.match(clipBarcodeScannerServiceSwiftSource, /"CFI-ZCT1W"/);
   assert.match(scannerRecognitionModelsSwiftSource, /enum LiveTextCandidateObservationExtractor/);
+  assert.match(scannerRecognitionModelsSwiftSource, /labelAnchoredRowCandidates\(in: snapshots\)/);
   assert.match(scannerRecognitionModelsSwiftSource, /denseRowCandidates\(in: snapshots\)/);
+  assert.match(scannerRecognitionModelsSwiftSource, /isSameTextRow\(/);
+  assert.match(scannerRecognitionModelsSwiftSource, /max\(0\.035, heightTolerance\)/);
   assert.match(scannerRecognitionModelsSwiftSource, /let combinedText = rowWindow\.map\(\\\.text\)\.joined\(separator: " "\)/);
   assert.match(scannerRecognitionModelsSwiftSource, /LiveTextIdentifierMatcher\.match\(combinedText, allowingStandalone: false\)/);
   assert.match(scannerRecognitionModelsSwiftSource, /unionBoundingBox\(for: rowWindow\)/);
@@ -533,7 +548,10 @@ test("native post-capture OCR extracts device identifiers from recognized rows",
   assert.match(scannerRecognitionModelsSwiftSource, /static func reviewRegions\(from regions: \[RecognizedTextRegion\]\) -> \[RecognizedTextRegion\]/);
   assert.match(scannerRecognitionModelsSwiftSource, /guard !containsEquivalentText\(region, in: reviewRegions\) else \{ continue \}/);
   assert.match(ocrReviewLayerSwiftSource, /Button\("Copy", systemImage: "doc\.on\.doc"\)/);
-  assert.match(scannerRecognitionModelsSwiftSource, /private static let regulatoryLabels = \["fcc id", "ic", "emc", "r-cmm", "can ices", "ices"\]/);
+  assert.match(scannerRecognitionModelsSwiftSource, /private static let regulatoryLabels = \[/);
+  assert.match(scannerRecognitionModelsSwiftSource, /"cnc id"/);
+  assert.match(scannerRecognitionModelsSwiftSource, /"conatel"/);
+  assert.match(scannerRecognitionModelsSwiftSource, /"anatel"/);
   assert.match(scannerRecognitionModelsSwiftSource, /guard !isRegulatoryIdentifierContext\(text\) else \{ return nil \}/);
   assert.match(scannerStoreCaptureActionsSwiftSource, /DeviceIdentifierRegionExtractor\.reviewRegions\(from: recognizedRegions\)/);
 });
@@ -642,6 +660,11 @@ test("native camera resets capture sessions to display 1x zoom", () => {
 
 test("native camera restricts focus-driven virtual lens switching", () => {
   assert.match(cameraDeviceSelectorSwiftSource, /restrictFocusDrivenVirtualDeviceSwitching\(on device: AVCaptureDevice\)/);
+  assert.match(cameraDeviceSelectorSwiftSource, /applySmoothTapFocus\(on device: AVCaptureDevice, point: CGPoint\)/);
+  assert.match(cameraDeviceSelectorSwiftSource, /isSmoothAutoFocusEnabled = true/);
+  assert.match(cameraDeviceSelectorSwiftSource, /focusMode = \.continuousAutoFocus/);
+  assert.match(cameraDeviceSelectorSwiftSource, /exposureMode = \.continuousAutoExposure/);
+  assert.match(cameraDeviceSelectorSwiftSource, /isSubjectAreaChangeMonitoringEnabled = true/);
   assert.match(cameraDeviceSelectorSwiftSource, /primaryConstituentDeviceSwitchingBehavior != \.unsupported/);
   assert.match(cameraDeviceSelectorSwiftSource, /supportedFallbackPrimaryConstituentDevices/);
   assert.match(cameraDeviceSelectorSwiftSource, /fallbackPrimaryConstituentDevices = \[\]/);
@@ -651,6 +674,21 @@ test("native camera restricts focus-driven virtual lens switching", () => {
   );
   assert.match(cameraModelSwiftSource, /CameraDeviceSelector\.restrictFocusDrivenVirtualDeviceSwitching\(on: camera\)/);
   assert.match(clipBarcodeScannerServiceSwiftSource, /CameraDeviceSelector\.restrictFocusDrivenVirtualDeviceSwitching\(on: camera\)/);
+  assert.match(cameraModelSwiftSource, /CameraDeviceSelector\.applySmoothTapFocus\(on: videoDevice, point: point\)/);
+  assert.match(clipBarcodeScannerServiceSwiftSource, /CameraDeviceSelector\.applySmoothTapFocus\(on: videoDevice, point: point\)/);
+});
+
+test("native camera shares smooth display zoom for pinch and controls", () => {
+  assert.match(cameraZoomControllerSwiftSource, /private static let zoomRampRate: Float = 12/);
+  assert.match(cameraZoomControllerSwiftSource, /forDisplayZoomDelta delta: CGFloat/);
+  assert.match(cameraZoomControllerSwiftSource, /forDisplayZoomScale scale: CGFloat/);
+  assert.match(cameraZoomControllerSwiftSource, /device\.ramp\(toVideoZoomFactor: clampedFactor, withRate: zoomRampRate\)/);
+  assert.match(cameraModelSwiftSource, /setDisplayZoomFactor\(displayZoomFactor \+ delta, ramping: true\)/);
+  assert.match(cameraModelSwiftSource, /forDisplayZoomScale: scale,[\s\S]*currentDisplayZoomFactor: displayZoomFactor/);
+  assert.match(clipBarcodeScannerServiceSwiftSource, /forDisplayZoomDelta: delta,[\s\S]*currentDisplayZoomFactor: displayZoomFactor/);
+  assert.match(clipBarcodeScannerServiceSwiftSource, /forDisplayZoomScale: scale,[\s\S]*currentDisplayZoomFactor: displayZoomFactor/);
+  assert.match(cameraModelSwiftSource, /CameraZoomController\.setRawZoomFactor\([\s\S]*ramping: ramping/);
+  assert.match(clipBarcodeScannerServiceSwiftSource, /CameraZoomController\.setRawZoomFactor\([\s\S]*ramping: ramping/);
 });
 
 test("native camera clears stale torch state when capture sessions stop", () => {

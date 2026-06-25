@@ -1,4 +1,5 @@
 @preconcurrency import AVFoundation
+import CoreGraphics
 
 enum CameraDeviceSelector {
     static func bestBackCamera() -> AVCaptureDevice? {
@@ -33,5 +34,28 @@ enum CameraDeviceSelector {
         } catch {
             return
         }
+    }
+
+    static func applySmoothTapFocus(on device: AVCaptureDevice, point: CGPoint) {
+        if device.isSmoothAutoFocusSupported {
+            device.isSmoothAutoFocusEnabled = true
+        }
+        if device.isFocusPointOfInterestSupported {
+            device.focusPointOfInterest = point
+            if device.isFocusModeSupported(.continuousAutoFocus) {
+                device.focusMode = .continuousAutoFocus
+            } else if device.isFocusModeSupported(.autoFocus) {
+                device.focusMode = .autoFocus
+            }
+        }
+        if device.isExposurePointOfInterestSupported {
+            device.exposurePointOfInterest = point
+            if device.isExposureModeSupported(.continuousAutoExposure) {
+                device.exposureMode = .continuousAutoExposure
+            } else if device.isExposureModeSupported(.autoExpose) {
+                device.exposureMode = .autoExpose
+            }
+        }
+        device.isSubjectAreaChangeMonitoringEnabled = true
     }
 }

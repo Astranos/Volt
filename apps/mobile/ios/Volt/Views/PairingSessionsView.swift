@@ -153,7 +153,13 @@ struct PairingSessionsView: View {
 struct PairingScanSessionView: View {
     @Environment(ScannerStore.self) private var store
     @Binding var isPresented: Bool
+    let onPairingCodeAccepted: () -> Void
     @State private var previousBarcodeRecognitionMode: BarcodeRecognitionMode?
+
+    init(isPresented: Binding<Bool>, onPairingCodeAccepted: @escaping () -> Void = {}) {
+        self._isPresented = isPresented
+        self.onPairingCodeAccepted = onPairingCodeAccepted
+    }
 
     var body: some View {
         ZStack {
@@ -195,6 +201,7 @@ struct PairingScanSessionView: View {
         }
         .onChange(of: store.camera.lastBarcode) { _, _ in
             if store.pairScannedBarcodeIfNeeded() {
+                onPairingCodeAccepted()
                 isPresented = false
             }
         }
