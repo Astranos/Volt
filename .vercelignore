@@ -1,0 +1,12 @@
+.git
+.pnpm-store
+node_modules
+
+apps/mobile/build
+apps/mobile/vendor
+apps/web/dist
+
+packages/extension/.output
+packages/extension/releases/*.zip
+
+graphify-out
