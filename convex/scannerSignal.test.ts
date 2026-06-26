@@ -293,6 +293,47 @@ describe("scanner signal Convex lifecycle", () => {
       sessionId: browserSessionId,
     });
 
+    const oldPairingId = "pairing_old_phone_12345";
+    const oldPairingSecret = "oldabcdefghijklmnopqrstuvwxyzABCDEFGH";
+    const currentPairingId = "pairing_current_12345";
+    const currentPairingSecret = "currentabcdefghijklmnopqrstuvwxyzABC";
+    await t.mutation(internal.scannerSignal.pairings.registerPairing, {
+      pairingId: oldPairingId,
+      pairingSecret: oldPairingSecret,
+      browserSessionId,
+      displayName: "Chrome on Mac",
+      phoneDeviceId: "phone_old",
+      phoneLabel: "Juan's iPhone",
+    });
+    await t.mutation(internal.scannerSignal.pairings.registerPairing, {
+      pairingId: currentPairingId,
+      pairingSecret: currentPairingSecret,
+      browserSessionId,
+      displayName: "Chrome on Mac",
+      phoneDeviceId: "phone_current",
+      phoneLabel: "Juan's iPhone",
+    });
+    await t.mutation(internal.scannerSignal.reconnectRequests.createReconnectRequest, {
+      pairingId: oldPairingId,
+      pairingSecret: oldPairingSecret,
+      requestId: "reconnect_request_old_pairing",
+    });
+    const fallbackJoinWindow = await t.mutation(internal.scannerSignal.reconnectRequests.postReconnectJoinWindow, {
+      pairingId: oldPairingId,
+      requestId: "reconnect_request_old_pairing",
+      answeringPairingId: currentPairingId,
+      pairingSecret: currentPairingSecret,
+      joinUrl: `${origin}/api/signal/join-token/${created.token}`,
+      joinToken: created.token,
+      sessionId: browserSessionId,
+    });
+    expect(fallbackJoinWindow.body.request).toMatchObject({
+      id: "reconnect_request_old_pairing",
+      status: "join_window_ready",
+      joinToken: created.token,
+      sessionId: browserSessionId,
+    });
+
     const shortLived = await t.mutation(internal.scannerSignal.joinTokens.createJoinToken, {
       token: "shortlivedtokenabcdefghijklmnopqrstuvwxyz",
       sessionId: "global-session-expiring",

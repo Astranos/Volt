@@ -94,6 +94,7 @@ extension ScannerStore {
                 id: id,
                 browserSessionId: browserSessionId,
                 displayName: displayName,
+                platform: "chrome_extension",
                 pairedAt: Date(timeIntervalSince1970: 1_780_000_000 + TimeInterval(offset)),
                 lastConnectedAt: Date.now.addingTimeInterval(TimeInterval(offset))
             )

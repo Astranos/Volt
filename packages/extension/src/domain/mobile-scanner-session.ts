@@ -182,6 +182,7 @@ export class MobileScannerSession {
   private readonly events: MobileScannerSessionEvents;
   private readonly lifecycle: MobileScannerSessionLifecycle;
   private peerPairings = new Map<string, DurablePairingCredential>();
+  private browserSessionPairings = new Map<string, DurablePairingCredential>();
   private readonly joinAttemptPoller: MobileScannerJoinAttemptPoller;
   private readonly identityReady: Promise<void>;
   private readonly peerConnections: MobileScannerPeerConnections;
@@ -381,15 +382,23 @@ export class MobileScannerSession {
     const now = new Date().toISOString();
     const state = this.lifecycle.getState();
     const displayName = state.extensionIdentity?.sessionLabel ?? "Chrome session";
-    const pairing: DurablePairingCredential = {
-      pairingId: createId("pairing").replace(/[^a-zA-Z0-9_-]/g, "_"),
-      pairingSecret: createSecret(32),
-      browserSessionId: state.sessionId,
-      displayName,
-      createdAt: now,
-      lastConnectedAt: now,
-    };
+    const savedPairing = this.browserSessionPairings.get(state.sessionId);
+    const pairing: DurablePairingCredential = savedPairing
+      ? {
+          ...savedPairing,
+          displayName,
+          lastConnectedAt: now,
+        }
+      : {
+          pairingId: createId("pairing").replace(/[^a-zA-Z0-9_-]/g, "_"),
+          pairingSecret: createSecret(32),
+          browserSessionId: state.sessionId,
+          displayName,
+          createdAt: now,
+          lastConnectedAt: now,
+        };
     this.peerPairings.set(peer.id, pairing);
+    this.browserSessionPairings.set(pairing.browserSessionId, pairing);
     void saveDurablePairing(pairing).catch((error) => {
       this.events.log?.("Failed to save scanner pairing", error);
     });
@@ -403,6 +412,9 @@ export class MobileScannerSession {
     await this.identityReady;
     const pairings = await loadDurablePairings();
     if (pairings.length === 0) return;
+    for (const pairing of pairings) {
+      this.browserSessionPairings.set(pairing.browserSessionId, pairing);
+    }
     const pushSubscription = await getMobileScannerPushSubscription();
     await Promise.all(
       pairings.map((pairing) =>

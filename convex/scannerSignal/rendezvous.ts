@@ -214,6 +214,7 @@ export async function executeScannerSignalRendezvous(
       return ctx.runMutation(internal.scannerSignal.reconnectRequests.postReconnectJoinWindow, {
         pairingId,
         requestId: parts[3],
+        answeringPairingId: stringFrom(body.answeringPairingId, 120),
         pairingSecret: request.pairingSecret,
         joinUrl,
         joinToken,

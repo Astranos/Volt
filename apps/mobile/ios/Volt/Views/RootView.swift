@@ -13,7 +13,6 @@ struct RootView: View {
     @State private var connectionSheetStatus: PairingStatusSheetModel?
     @State private var connectionSheetDetent = RootView.connectionStatusDetent
     @State private var keepsConnectionSheetOpenForSessions = false
-    @State private var allowsNextConnectionSheetDismissal = false
 
     private static let connectionStatusDetent = PresentationDetent.height(164)
 
@@ -123,6 +122,7 @@ struct RootView: View {
 
     private func startAppServices() {
         store.reconnectToMostRecentPairedSessionIfNeeded()
+        showPairingSheet(for: store.connectionStatus)
     }
 
     private func showPairingScannerFromWelcome() {
@@ -216,13 +216,6 @@ struct RootView: View {
     }
 
     private func handleConnectionSheetDismiss() {
-        if allowsNextConnectionSheetDismissal {
-            allowsNextConnectionSheetDismissal = false
-            resetConnectionSheetPresentation()
-            showPairingSheet(for: store.connectionStatus)
-            return
-        }
-
         if isConnectionAttemptVisible {
             store.cancelConnectionAttempt()
         }
@@ -245,16 +238,29 @@ struct RootView: View {
     }
 
     private func beginReconnectFromConnectionSheetSessions() {
-        allowsNextConnectionSheetDismissal = true
         keepsConnectionSheetOpenForSessions = false
-        connectionSheetStatus = nil
+        connectionSheetStatus = PairingStatusSheetModel(
+            title: "Reconnecting to Chrome",
+            message: "Opening the saved browser session.",
+            systemImage: "desktopcomputer",
+            isProgressing: true,
+            canCancel: true
+        )
         connectionSheetDetent = Self.connectionStatusDetent
+        isConnectionSheetPresented = true
     }
 
     private func beginPairingFromConnectionSheetSessions() {
-        allowsNextConnectionSheetDismissal = true
         keepsConnectionSheetOpenForSessions = false
+        connectionSheetStatus = PairingStatusSheetModel(
+            title: "Pairing with Chrome",
+            message: "Trying to open the scanner channel.",
+            systemImage: "link",
+            isProgressing: true,
+            canCancel: true
+        )
         connectionSheetDetent = Self.connectionStatusDetent
+        isConnectionSheetPresented = true
     }
 }
 

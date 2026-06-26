@@ -89,7 +89,7 @@ final class ScannerStore {
     var selectedSection: AppSection = .scan
     var pairingSession: PairingSession?
     var pairedSessions: [PairedScannerSession] = []
-    var recentBrowserSession: PairedScannerSession?
+    var recentBrowserSessions: [PairedScannerSession] = []
     var connectionStatus: ScannerConnectionStatus = .idle
     var peerTarget: ScannerPeerTarget?
     var canCancelReconnect = false
@@ -201,6 +201,7 @@ final class ScannerStore {
             cursorLabel: nil,
             browser: "Chrome"
         )
+        applyConnectionStatus(.pairing)
         reconnectTask = Task { [weak self] in
             await self?.reconnectWithSavedPairing(
                 pairedSession,
@@ -283,7 +284,8 @@ final class ScannerStore {
         if let peerTarget {
             rememberRecentBrowserSession(
                 browserSessionId: peerTarget.chromeSessionId,
-                displayName: peerTarget.displayText
+                displayName: peerTarget.displayText,
+                platform: peerTarget.isWebPageSession ? "web" : "chrome_extension"
             )
         }
         peerTarget = nil
@@ -323,7 +325,6 @@ final class ScannerStore {
 
         do {
             guard isReconnectCurrent(automaticToken) else { return }
-            applyConnectionStatus(.pairing)
             try await signaling.registerPairing(
                 pairingId: pairedSession.id,
                 pairingSecret: secret,
@@ -452,7 +453,8 @@ final class ScannerStore {
         peerTarget = nextPeerTarget
         rememberRecentBrowserSession(
             browserSessionId: chromeSessionId,
-            displayName: sessionLabel ?? nextPeerTarget.displayText
+            displayName: sessionLabel ?? nextPeerTarget.displayText,
+            platform: message.peer?.platform
         )
         saveCurrentPairingSession(message: message)
         applyConnectionStatus(

@@ -30,22 +30,18 @@ struct PairingSessionsView: View {
                         .padding(.bottom, 24)
                     }
                 } else {
-                    ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
                         VStack(alignment: .leading, spacing: ScannerTabLayout.stackSpacing) {
                             sessionsHeader
-
                             Text("Previously Paired")
                                 .font(.headline)
                                 .foregroundStyle(.secondary)
                                 .padding(.horizontal, 2)
-
-                            pairedSessionsList
-
-                            scanPairingCTA
                         }
                         .padding(ScannerTabLayout.contentPadding)
                         .padding(.top, ScannerTabLayout.topPadding)
-                        .padding(.bottom, 24)
+
+                        pairedSessionsList
                     }
                 }
             }
@@ -55,7 +51,6 @@ struct PairingSessionsView: View {
             .fullScreenCover(isPresented: $isPairingScannerPresented) {
                 PairingScanSessionView(isPresented: $isPairingScannerPresented) {
                     onPairingCodeAccepted()
-                    dismiss()
                 }
             }
             .onAppear {
@@ -72,9 +67,9 @@ struct PairingSessionsView: View {
                 .minimumScaleFactor(0.82)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-            if store.connectionStatus.isConnected {
+            if !store.visiblePairingSessions.isEmpty {
                 Button {
-                    store.disconnectFromCurrentSession()
+                    handleHeaderPairingAction()
                 } label: {
                     Label(pairingButtonTitle, systemImage: pairingButtonSystemImage)
                         .font(.headline)
@@ -113,49 +108,68 @@ struct PairingSessionsView: View {
         isPairingScannerPresented = true
     }
 
+    private func handleHeaderPairingAction() {
+        if store.connectionStatus.isConnected {
+            store.disconnectFromCurrentSession()
+            return
+        }
+
+        startPairingScan()
+    }
+
     private var pairingButtonTitle: String {
-        "Disconnect"
+        store.connectionStatus.isConnected ? "Disconnect" : "Pair"
     }
 
     private var pairingButtonSystemImage: String {
-        "link.badge.minus"
+        store.connectionStatus.isConnected ? "link.badge.minus" : "qrcode.viewfinder"
     }
 
     private var pairingButtonColor: Color {
-        .secondary
+        store.connectionStatus.isConnected ? .red : .green
     }
 
     private var pairingButtonAccessibilityLabel: String {
-        "Disconnect from browser"
+        store.connectionStatus.isConnected ? "Disconnect from browser" : "Pair with QR code"
     }
 
     private var pairedSessionsList: some View {
-        LazyVStack(spacing: 10) {
+        List {
             ForEach(store.visiblePairingSessions) { session in
                 Button {
                     handleSessionTap(session)
                 } label: {
                     PairedSessionRow(session: session, canReconnect: store.canReconnect(to: session))
                         .padding(14)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                         .background(.background, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 }
                 .buttonStyle(.plain)
+                .listRowInsets(EdgeInsets(top: 5, leading: ScannerTabLayout.contentPadding, bottom: 5, trailing: ScannerTabLayout.contentPadding))
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
                 .contextMenu {
-                    if store.canReconnect(to: session) {
-                        Button("Forget", systemImage: "trash", role: .destructive) {
-                            store.removePairedSession(session)
-                        }
+                    Button("Forget", systemImage: "trash", role: .destructive) {
+                        store.forgetVisibleSession(session)
+                    }
+                }
+                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                    Button("Forget", systemImage: "trash", role: .destructive) {
+                        store.forgetVisibleSession(session)
                     }
                 }
             }
         }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(ScannerTabLayout.background)
     }
 
     private func handleSessionTap(_ session: PairedScannerSession) {
         if store.canReconnect(to: session) {
             onReconnectStarted()
             store.reconnect(to: session)
-            dismiss()
             return
         }
 
@@ -165,7 +179,7 @@ struct PairingSessionsView: View {
             return
         }
 
-        startPairingScan()
+        // Recent web-only sessions are informational; use the Pair button to scan a fresh QR.
     }
 
 }
@@ -273,7 +287,7 @@ private struct PairedSessionRow: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                 if !canReconnect {
-                    Text("Scan QR again to reconnect")
+                    Text("Use Pair to reconnect")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -282,7 +296,7 @@ private struct PairedSessionRow: View {
 
             Spacer()
 
-            Image(systemName: canReconnect ? "chevron.right" : "qrcode.viewfinder")
+            Image(systemName: canReconnect ? "chevron.right" : "info.circle")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.tertiary)
         }

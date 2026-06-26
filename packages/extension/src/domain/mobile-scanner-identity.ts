@@ -124,7 +124,7 @@ export async function saveDurablePairing(pairing: DurablePairingCredential) {
   const pairings = await loadDurablePairings();
   const nextPairings = [
     pairing,
-    ...pairings.filter((item) => item.pairingId !== pairing.pairingId && item.browserSessionId !== pairing.browserSessionId),
+    ...pairings.filter((item) => item.pairingId !== pairing.pairingId),
   ].slice(0, 12);
   await storageLocalSet({ [key]: nextPairings });
 }
