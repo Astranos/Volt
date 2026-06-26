@@ -89,7 +89,7 @@ test("createJoinWindow fallback QR includes the signal URL that minted the token
     const url = new URL(window.qrCodeUrl);
 
     assert.equal(url.origin, "https://volt-scanner.vercel.app");
-    assert.equal(url.pathname, "/create-session");
+    assert.equal(url.pathname, "/session");
     assert.equal(url.searchParams.get("token"), token);
     assert.equal(url.searchParams.get("sessionId"), sessionId);
     assert.equal(url.searchParams.get("signalUrl"), SCANNER_SIGNAL_URL_DEV);

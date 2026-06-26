@@ -393,11 +393,11 @@ test("native first launch welcomes users without requesting camera access and ca
   assert.match(rootViewSwiftSource, /\.fullScreenCover\(isPresented: \$isWelcomePairingScannerPresented, onDismiss: handleWelcomePairingScannerDismiss\) \{\s*PairingScanSessionView\(isPresented: \$isWelcomePairingScannerPresented\)/);
   assert.match(rootViewSwiftSource, /private func showPairingScannerFromWelcome\(\) \{\s*store\.activeMode = \.barcode\s*showsConnectionSheetAfterWelcomePairingScan = false\s*isWelcomePairingScannerPresented = true\s*\}/);
   assert.doesNotMatch(rootViewSwiftSource, /private func showSessionsFromWelcome/);
-  assert.match(pairingSessionsViewSwiftSource, /private let webScannerURL = URL\(string: "https:\/\/volt-scanner\.vercel\.app\/create-session"\)!/);
+  assert.match(pairingSessionsViewSwiftSource, /private let webScannerURL = URL\(string: "https:\/\/volt-scanner\.vercel\.app\/session"\)!/);
   assert.match(pairingSessionsViewSwiftSource, /PairingSessionSetupContent \{[\s\S]*openURL\(webScannerURL\)/);
   assert.match(sharedPairingSessionComponentsSwiftSource, /Text\("Scan the QR code from the Chrome extension, or open the create session page on your computer\. This iPhone will connect to that browser session\."\)/);
   assert.match(sharedPairingSessionComponentsSwiftSource, /title: "Open Volt on your computer"/);
-  assert.match(sharedPairingSessionComponentsSwiftSource, /detail: "Use the Chrome extension side panel, or go to volt-scanner\.vercel\.app\/create-session\."/);
+  assert.match(sharedPairingSessionComponentsSwiftSource, /detail: "Use the Chrome extension side panel, or go to volt-scanner\.vercel\.app\/session\."/);
   assert.match(sharedPairingSessionComponentsSwiftSource, /detail: "Start pairing in Chrome or on the create session page\."/);
   assert.match(sharedPairingSessionComponentsSwiftSource, /Label\("Open Create Session Page", systemImage: "safari"\)/);
   assert.match(sharedPairingSessionComponentsSwiftSource, /Label\("Scan Computer QR", systemImage: "qrcode\.viewfinder"\)/);

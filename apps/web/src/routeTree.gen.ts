@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as ThankyouRouteImport } from './routes/thankyou'
+import { Route as SessionRouteImport } from './routes/session'
 import { Route as ScannerDemoRouteImport } from './routes/scanner-demo'
 import { Route as CreateSessionRouteImport } from './routes/create-session'
 import { Route as IndexRouteImport } from './routes/index'
@@ -17,6 +18,11 @@ import { Route as IndexRouteImport } from './routes/index'
 const ThankyouRoute = ThankyouRouteImport.update({
   id: '/thankyou',
   path: '/thankyou',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SessionRoute = SessionRouteImport.update({
+  id: '/session',
+  path: '/session',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ScannerDemoRoute = ScannerDemoRouteImport.update({
@@ -39,12 +45,14 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/create-session': typeof CreateSessionRoute
   '/scanner-demo': typeof ScannerDemoRoute
+  '/session': typeof SessionRoute
   '/thankyou': typeof ThankyouRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/create-session': typeof CreateSessionRoute
   '/scanner-demo': typeof ScannerDemoRoute
+  '/session': typeof SessionRoute
   '/thankyou': typeof ThankyouRoute
 }
 export interface FileRoutesById {
@@ -52,20 +60,33 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/create-session': typeof CreateSessionRoute
   '/scanner-demo': typeof ScannerDemoRoute
+  '/session': typeof SessionRoute
   '/thankyou': typeof ThankyouRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/create-session' | '/scanner-demo' | '/thankyou'
+  fullPaths:
+    | '/'
+    | '/create-session'
+    | '/scanner-demo'
+    | '/session'
+    | '/thankyou'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/create-session' | '/scanner-demo' | '/thankyou'
-  id: '__root__' | '/' | '/create-session' | '/scanner-demo' | '/thankyou'
+  to: '/' | '/create-session' | '/scanner-demo' | '/session' | '/thankyou'
+  id:
+    | '__root__'
+    | '/'
+    | '/create-session'
+    | '/scanner-demo'
+    | '/session'
+    | '/thankyou'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   CreateSessionRoute: typeof CreateSessionRoute
   ScannerDemoRoute: typeof ScannerDemoRoute
+  SessionRoute: typeof SessionRoute
   ThankyouRoute: typeof ThankyouRoute
 }
 
@@ -76,6 +97,13 @@ declare module '@tanstack/react-router' {
       path: '/thankyou'
       fullPath: '/thankyou'
       preLoaderRoute: typeof ThankyouRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/session': {
+      id: '/session'
+      path: '/session'
+      fullPath: '/session'
+      preLoaderRoute: typeof SessionRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/scanner-demo': {
@@ -106,6 +134,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   CreateSessionRoute: CreateSessionRoute,
   ScannerDemoRoute: ScannerDemoRoute,
+  SessionRoute: SessionRoute,
   ThankyouRoute: ThankyouRoute,
 }
 export const routeTree = rootRouteImport

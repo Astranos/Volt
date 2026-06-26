@@ -6,7 +6,7 @@ struct PairingSessionsView: View {
     @Environment(\.openURL) private var openURL
     @State private var isPairingScannerPresented = false
     let onReconnectStarted: () -> Void
-    private let webScannerURL = URL(string: "https://volt-scanner.vercel.app/create-session")!
+    private let webScannerURL = URL(string: "https://volt-scanner.vercel.app/session")!
 
     init(onReconnectStarted: @escaping () -> Void = {}) {
         self.onReconnectStarted = onReconnectStarted

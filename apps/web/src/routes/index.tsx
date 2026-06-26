@@ -23,7 +23,7 @@ export const Route = createFileRoute("/")({
 const supportLinks = [
   ["Support", "https://github.com/JuanQuenga/Volt/issues"],
   ["Privacy", "#privacy"],
-  ["Scanner demo", "/create-session"],
+  ["Scanner demo", "/session"],
 ];
 
 const chromeExtensionDownloadUrl =
@@ -47,7 +47,7 @@ const footerLinkGroups = [
       ["Home", "#top"],
       ["Mobile capture", "#scanner"],
       ["Privacy", "#privacy"],
-      ["Scanner demo", "/create-session"],
+      ["Scanner demo", "/session"],
       ["App review demo", "/scanner-demo"],
     ],
   },
@@ -575,7 +575,7 @@ function BrowserWorkspaceMock() {
               <div className="mt-5">
                 <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">Earlier today</div>
                 <div className="space-y-1">
-                  <RecentRow title="Volt - Chrome scanner session" url="volt-scanner.vercel.app/create-session" active />
+                  <RecentRow title="Volt - Chrome scanner session" url="volt-scanner.vercel.app/session" active />
                   <RecentRow title="Browse PlayStation sold listings" url="ebay.com/sch/i.html?_sop=13" />
                   <RecentRow title="Shopify inventory search" url="admin.shopify.com/store/products" />
                 </div>

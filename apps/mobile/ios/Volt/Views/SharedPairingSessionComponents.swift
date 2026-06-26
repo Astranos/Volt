@@ -14,7 +14,7 @@ struct PairingSessionSetupContent: View {
                 PairingSessionSetupStep(
                     systemImage: "desktopcomputer",
                     title: "Open Volt on your computer",
-                    detail: "Use the Chrome extension side panel, or go to volt-scanner.vercel.app/create-session."
+                    detail: "Use the Chrome extension side panel, or go to volt-scanner.vercel.app/session."
                 )
                 PairingSessionSetupStep(
                     systemImage: "qrcode",
