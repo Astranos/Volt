@@ -2,11 +2,10 @@
 .pnpm-store
 node_modules
 
-apps/mobile/build
-apps/mobile/vendor
+apps/mobile
+apps/scanner-signal
 apps/web/dist
 
-packages/extension/.output
-packages/extension/releases/*.zip
+packages/extension
 
 graphify-out
