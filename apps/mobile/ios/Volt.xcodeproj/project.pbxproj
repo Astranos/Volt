@@ -696,7 +696,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1.1;
+				MARKETING_VERSION = 0.1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.volt.mobile;
 				PRODUCT_NAME = Volt;
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -725,7 +725,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1.1;
+				MARKETING_VERSION = 0.1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.volt.mobile;
 				PRODUCT_NAME = Volt;
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -792,7 +792,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1.1;
+				MARKETING_VERSION = 0.1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.volt.mobile.Clip;
 				PRODUCT_NAME = VoltClip;
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -821,7 +821,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1.1;
+				MARKETING_VERSION = 0.1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.volt.mobile.Clip;
 				PRODUCT_NAME = VoltClip;
 				PROVISIONING_PROFILE_SPECIFIER = "";
