@@ -11,6 +11,7 @@ enum ScannerProtocol {
     static let signalURL = productionSignalURL
     static let fallbackSignalURLs: [URL] = []
     #endif
+    static let reconnectSignalURLs = [signalURL] + fallbackSignalURLs
     static let controlChannelLabel = "scanner-control"
     static let photoTransferChannelLabel = "photo-transfer"
     static let protocolVersion = ProtocolVersion(major: 1, minor: 0, patch: 0)

@@ -86,6 +86,7 @@ extension ScannerStore {
             browserSessionId: pairing.browserSessionId,
             displayName: displayName,
             platform: message.peer?.platform,
+            signalURL: pairingSession?.signalURL ?? pairingSession?.sourceURL.signalBaseURL,
             pairedAt: pairedSessions.first { $0.id == pairing.pairingId }?.pairedAt ?? .now,
             lastConnectedAt: .now
         )

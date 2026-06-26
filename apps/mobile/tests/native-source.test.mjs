@@ -174,8 +174,22 @@ test("native saved-session reconnect re-registers durable pairing before request
   assert.ok(requestReconnectStart > registerStart);
   assert.match(scannerStoreSwiftSource, /browserSessionId: pairedSession\.browserSessionId/);
   assert.match(scannerStoreSwiftSource, /pairingSecret: secret/);
+  assert.match(pairedScannerSessionSwiftSource, /var signalURL: URL\? = nil/);
+  assert.match(scannerStorePairedSessionsSwiftSource, /signalURL: pairingSession\?\.signalURL \?\? pairingSession\?\.sourceURL\.signalBaseURL/);
+  assert.match(reconnectSource, /let signalURLs = pairedSession\.signalURL\.map \{ \[\$0\] \} \?\? ScannerProtocol\.reconnectSignalURLs/);
+  assert.match(reconnectSource, /var didRegisterPairing = false/);
+  assert.match(reconnectSource, /for signalURL in signalURLs \{[\s\S]*phoneDeviceId: contributorId,\s*signalURL: signalURL/);
+  assert.match(reconnectSource, /guard didRegisterPairing else \{[\s\S]*throw registrationError \?\? ScannerPairingError\.requestFailed/);
+  assert.match(reconnectSource, /signaling\.requestReconnect\(\s*pairingId: pairedSession\.id,\s*pairingSecret: secret,\s*signalURLs: signalURLs\s*\)/);
   assert.doesNotMatch(reconnectSource, /removePairedSession\(pairedSession\)/);
+  assert.match(scannerProtocolSwiftSource, /static let reconnectSignalURLs = \[signalURL\] \+ fallbackSignalURLs/);
   assert.match(scannerSignalingSwiftSource, /func registerPairing\(\n\s+pairingId: String,/);
+  assert.match(scannerSignalingSwiftSource, /phoneDeviceId: String,\s*signalURL: URL = ScannerProtocol\.signalURL/);
+  assert.match(scannerSignalingSwiftSource, /var request = URLRequest\(url: signalURL\.appending\(path: "pairings"\)\)/);
+  assert.match(scannerSignalingSwiftSource, /func requestReconnect\([\s\S]*signalURL: URL = ScannerProtocol\.signalURL/);
+  assert.match(scannerSignalingSwiftSource, /func requestReconnect\([\s\S]*signalURLs: \[URL\]/);
+  assert.match(scannerSignalingSwiftSource, /let requestId = try await createReconnectRequest\([\s\S]*signalURL: signalURL/);
+  assert.match(scannerSignalingSwiftSource, /signalURL\s*\.appending\(path: "pairings"\)[\s\S]*\.appending\(path: requestId\)/);
   assert.match(scannerSignalingSwiftSource, /try validateSignalResponse\(data: data, response: response\)/);
 });
 

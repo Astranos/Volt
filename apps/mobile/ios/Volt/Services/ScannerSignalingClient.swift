@@ -18,13 +18,18 @@ struct ScannerSignalingClient {
         return try JSONDecoder().decode(ScannerProtocol.IceServerConfiguration.self, from: data)
     }
 
-    func registerPairing(_ pairing: ScannerProtocol.SessionReady.Pairing, phoneDeviceId: String) async throws {
+    func registerPairing(
+        _ pairing: ScannerProtocol.SessionReady.Pairing,
+        phoneDeviceId: String,
+        signalURL: URL = ScannerProtocol.signalURL
+    ) async throws {
         try await registerPairing(
             pairingId: pairing.pairingId,
             pairingSecret: pairing.pairingSecret,
             browserSessionId: pairing.browserSessionId,
             displayName: pairing.displayName ?? "Chrome session",
-            phoneDeviceId: phoneDeviceId
+            phoneDeviceId: phoneDeviceId,
+            signalURL: signalURL
         )
     }
 
@@ -33,10 +38,11 @@ struct ScannerSignalingClient {
         pairingSecret: String,
         browserSessionId: String,
         displayName: String,
-        phoneDeviceId: String
+        phoneDeviceId: String,
+        signalURL: URL = ScannerProtocol.signalURL
     ) async throws {
         let phoneLabel = await MainActor.run { UIDevice.current.name }
-        var request = URLRequest(url: ScannerProtocol.signalURL.appending(path: "pairings"))
+        var request = URLRequest(url: signalURL.appending(path: "pairings"))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try? JSONSerialization.data(withJSONObject: [
@@ -51,42 +57,88 @@ struct ScannerSignalingClient {
         try validateSignalResponse(data: data, response: response)
     }
 
-    func requestReconnect(pairingId: String, pairingSecret: String) async throws -> ReconnectJoinWindow {
-        let requestId = try await createReconnectRequest(pairingId: pairingId, pairingSecret: pairingSecret)
+    func requestReconnect(
+        pairingId: String,
+        pairingSecret: String,
+        signalURL: URL = ScannerProtocol.signalURL
+    ) async throws -> ReconnectJoinWindow {
+        try await requestReconnect(
+            pairingId: pairingId,
+            pairingSecret: pairingSecret,
+            signalURLs: [signalURL]
+        )
+    }
+
+    func requestReconnect(
+        pairingId: String,
+        pairingSecret: String,
+        signalURLs: [URL]
+    ) async throws -> ReconnectJoinWindow {
+        var requests: [(requestId: String, statusURL: URL)] = []
+        var lastError: Error?
+        for signalURL in signalURLs {
+            do {
+                let requestId = try await createReconnectRequest(
+                    pairingId: pairingId,
+                    pairingSecret: pairingSecret,
+                    signalURL: signalURL
+                )
+                requests.append((
+                    requestId,
+                    signalURL
+                        .appending(path: "pairings")
+                        .appending(path: pairingId)
+                        .appending(path: "reconnect")
+                        .appending(path: requestId)
+                ))
+            } catch {
+                lastError = error
+            }
+        }
+        guard !requests.isEmpty else {
+            throw lastError ?? ScannerPairingError.requestFailed
+        }
+
         let deadline = ContinuousClock.now + ScannerProtocol.reconnectRequestTTL
-        let statusURL = ScannerProtocol.signalURL
-            .appending(path: "pairings")
-            .appending(path: pairingId)
-            .appending(path: "reconnect")
-            .appending(path: requestId)
 
         while ContinuousClock.now < deadline {
-            var request = URLRequest(url: statusURL)
-            request.setValue(pairingSecret, forHTTPHeaderField: "X-Volt-Pairing-Secret")
-            let (data, response) = try await signalData(for: request)
-            let statusCode = (response as? HTTPURLResponse)?.statusCode
-            guard statusCode == 200 else {
-                if statusCode == 410 {
-                    throw ScannerPairingError.joinTokenExpired
+            for reconnectRequest in requests {
+                var request = URLRequest(url: reconnectRequest.statusURL)
+                request.setValue(pairingSecret, forHTTPHeaderField: "X-Volt-Pairing-Secret")
+                let data: Data
+                let response: URLResponse
+                do {
+                    (data, response) = try await signalData(for: request)
+                } catch {
+                    lastError = error
+                    continue
                 }
-                throw signalRejectedError(data: data, statusCode: statusCode)
-            }
-            let payload = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
-            let reconnectRequest = payload["request"] as? [String: Any] ?? payload
-            if reconnectRequest["status"] as? String == "join_window_ready",
-               let joinToken = reconnectRequest["joinToken"] as? String {
-                return ReconnectJoinWindow(
-                    token: joinToken,
-                    sessionId: reconnectRequest["sessionId"] as? String,
-                    sourceURL: (reconnectRequest["joinUrl"] as? String).flatMap(URL.init(string:)) ?? statusURL
-                )
-            }
-            if reconnectRequest["status"] as? String == "expired" {
-                throw ScannerPairingError.joinTokenExpired
+                let statusCode = (response as? HTTPURLResponse)?.statusCode
+                guard statusCode == 200 else {
+                    if statusCode == 410 {
+                        lastError = ScannerPairingError.joinTokenExpired
+                        continue
+                    }
+                    lastError = signalRejectedError(data: data, statusCode: statusCode)
+                    continue
+                }
+                let payload = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
+                let reconnectStatus = payload["request"] as? [String: Any] ?? payload
+                if reconnectStatus["status"] as? String == "join_window_ready",
+                   let joinToken = reconnectStatus["joinToken"] as? String {
+                    return ReconnectJoinWindow(
+                        token: joinToken,
+                        sessionId: reconnectStatus["sessionId"] as? String,
+                        sourceURL: (reconnectStatus["joinUrl"] as? String).flatMap(URL.init(string:)) ?? reconnectRequest.statusURL
+                    )
+                }
+                if reconnectStatus["status"] as? String == "expired" {
+                    lastError = ScannerPairingError.joinTokenExpired
+                }
             }
             try await Task.sleep(for: ScannerProtocol.joinAttemptPollInterval)
         }
-        throw ScannerPairingError.chromeTimedOut
+        throw lastError ?? ScannerPairingError.chromeTimedOut
     }
 
     func createJoinAttempt(
@@ -215,9 +267,13 @@ struct ScannerSignalingClient {
         }
     }
 
-    private func createReconnectRequest(pairingId: String, pairingSecret: String) async throws -> String {
+    private func createReconnectRequest(
+        pairingId: String,
+        pairingSecret: String,
+        signalURL: URL = ScannerProtocol.signalURL
+    ) async throws -> String {
         var request = URLRequest(
-            url: ScannerProtocol.signalURL
+            url: signalURL
                 .appending(path: "pairings")
                 .appending(path: pairingId)
                 .appending(path: "reconnect")
