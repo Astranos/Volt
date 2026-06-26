@@ -186,6 +186,54 @@ test("reconnect poller answers durable pairing requests once", async () => {
   ]);
 });
 
+test("reconnect poller answers old pairing requests with a current same-browser credential", async () => {
+  const calls = [];
+  const currentPairing = {
+    pairingId: "pairing_current",
+    pairingSecret: "current-secret",
+    browserSessionId: "global-session-test",
+    displayName: "Chrome",
+    createdAt: "2026-06-20T12:00:00.000Z",
+    lastConnectedAt: "2026-06-20T12:00:00.000Z",
+  };
+  const poller = new MobileScannerReconnectPoller({
+    getSessionId: () => "global-session-test",
+    getDurablePairings: async () => [currentPairing],
+    createReconnectJoinWindow: async (requestPairing, requestId) => {
+      calls.push(["create", requestPairing.pairingId, requestId]);
+      return joinWindow;
+    },
+    signalClient: {
+      fetchReconnectRequests: async () => ({
+        response: { ok: true, status: 200 },
+        requests: [
+          {
+            browserSessionId: currentPairing.browserSessionId,
+            pairingId: "pairing_old_phone_row",
+            requestId: "request-old",
+          },
+        ],
+      }),
+      postReconnectJoinWindow: async (requestPairing, requestId, requestJoinWindow, requestPairingId) => {
+        calls.push([
+          "post",
+          requestPairing.pairingId,
+          requestPairingId,
+          requestId,
+          requestJoinWindow.joinToken,
+        ]);
+      },
+    },
+  });
+
+  await poller.pollNow();
+
+  assert.deepEqual(calls, [
+    ["create", currentPairing.pairingId, "request-old"],
+    ["post", currentPairing.pairingId, "pairing_old_phone_row", "request-old", joinWindow.joinToken],
+  ]);
+});
+
 test("reconnect poller starts with an immediate poll", async () => {
   const pairing = {
     pairingId: "pairing_123456",

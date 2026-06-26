@@ -89,6 +89,7 @@ final class ScannerStore {
     var selectedSection: AppSection = .scan
     var pairingSession: PairingSession?
     var pairedSessions: [PairedScannerSession] = []
+    var recentBrowserSessions: [PairedScannerSession] = []
     var connectionStatus: ScannerConnectionStatus = .idle
     var peerTarget: ScannerPeerTarget?
     var canCancelReconnect = false
@@ -112,7 +113,7 @@ final class ScannerStore {
     let dictation = DictationModel()
     let contributorId = ScannerProtocol.makeContributorId()
 
-    static let disconnectedPairingHint = "Use the Pair button next to the section title to connect to Chrome."
+    static let disconnectedPairingHint = "Use the connect button in the top right to pair to Chrome."
 
     init() {
         loadPairedSessions()
@@ -200,6 +201,7 @@ final class ScannerStore {
             cursorLabel: nil,
             browser: "Chrome"
         )
+        applyConnectionStatus(.pairing)
         reconnectTask = Task { [weak self] in
             await self?.reconnectWithSavedPairing(
                 pairedSession,
@@ -271,9 +273,21 @@ final class ScannerStore {
         targetHint = Self.disconnectedPairingHint
     }
 
-    func unpair() {
+    func disconnectFromCurrentSession() {
+        reconnectTask?.cancel()
+        reconnectTask = nil
+        canCancelReconnect = false
+        activeAutomaticReconnectToken = nil
+        preservesReconnectCancelOnNextDisconnect = false
         connection.close()
         pairingSession = nil
+        if let peerTarget {
+            rememberRecentBrowserSession(
+                browserSessionId: peerTarget.chromeSessionId,
+                displayName: peerTarget.displayText,
+                platform: peerTarget.isWebPageSession ? "web" : "chrome_extension"
+            )
+        }
         peerTarget = nil
         dictationSessionId = nil
         applyConnectionStatus(.disconnected)
@@ -301,7 +315,6 @@ final class ScannerStore {
     ) async {
         guard isReconnectCurrent(automaticToken) else { return }
         guard let secret = PairingSecretStore.secret(pairingId: pairedSession.id) else {
-            removePairedSession(pairedSession)
             if reportsErrors {
                 applyConnectionStatus(.error("Pairing secret missing. Scan the Chrome QR again."))
             } else {
@@ -311,17 +324,22 @@ final class ScannerStore {
         }
 
         do {
+            let signalURLs = pairedSession.signalURL.map { [$0] } ?? ScannerProtocol.reconnectSignalURLs
             guard isReconnectCurrent(automaticToken) else { return }
-            applyConnectionStatus(.pairing)
-            try await signaling.registerPairing(
+            await signaling.registerPairingCandidates(
                 pairingId: pairedSession.id,
                 pairingSecret: secret,
                 browserSessionId: pairedSession.browserSessionId,
                 displayName: pairedSession.displayName,
-                phoneDeviceId: contributorId
+                phoneDeviceId: contributorId,
+                signalURLs: signalURLs
             )
             guard isReconnectCurrent(automaticToken) else { return }
-            let joinWindow = try await signaling.requestReconnect(pairingId: pairedSession.id, pairingSecret: secret)
+            let joinWindow = try await signaling.requestReconnect(
+                pairingId: pairedSession.id,
+                pairingSecret: secret,
+                signalURLs: signalURLs
+            )
             guard isReconnectCurrent(automaticToken) else { return }
             let session = PairingSession(
                 token: joinWindow.token,
@@ -439,6 +457,11 @@ final class ScannerStore {
             didChangeChromeInputTarget = false
         }
         peerTarget = nextPeerTarget
+        rememberRecentBrowserSession(
+            browserSessionId: chromeSessionId,
+            displayName: sessionLabel ?? nextPeerTarget.displayText,
+            platform: message.peer?.platform
+        )
         saveCurrentPairingSession(message: message)
         applyConnectionStatus(
             .connected,

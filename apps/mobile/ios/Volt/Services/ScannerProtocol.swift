@@ -11,6 +11,7 @@ enum ScannerProtocol {
     static let signalURL = productionSignalURL
     static let fallbackSignalURLs: [URL] = []
     #endif
+    static let reconnectSignalURLs = [signalURL] + fallbackSignalURLs
     static let controlChannelLabel = "scanner-control"
     static let photoTransferChannelLabel = "photo-transfer"
     static let protocolVersion = ProtocolVersion(major: 1, minor: 0, patch: 0)
@@ -21,6 +22,7 @@ enum ScannerProtocol {
     static let iceGatheringTimeout: Duration = .seconds(2)
     static let photoReceiptTimeout: Duration = .seconds(20)
     static let signalRequestTimeout: TimeInterval = 8
+    static let reconnectCandidateRequestTimeout: TimeInterval = 3
     static let supportedCapabilities = ["ocr", "barcode", "dictation", "photo", "photo_retry_queue"]
     static let supportedPeerPlatforms = ["ios", "chrome_extension", "web", "unknown"]
 

@@ -93,6 +93,7 @@ export const postReconnectJoinWindow = internalMutation({
   args: {
     pairingId: v.string(),
     requestId: v.string(),
+    answeringPairingId: optionalString,
     pairingSecret: optionalString,
     joinUrl: v.string(),
     joinToken: v.string(),
@@ -101,15 +102,29 @@ export const postReconnectJoinWindow = internalMutation({
   handler: async (ctx, args) => {
     const pairing = await getPairingByPairingId(ctx, args.pairingId);
     if (!pairing) return { statusCode: 404, body: { error: "Pairing not found" } };
-    if (!requirePairingSecret(pairing, args.pairingSecret)) return { statusCode: 403, body: { error: "Pairing secret required" } };
+    const now = Date.now();
+    let answeringPairing = pairing;
+    if (!requirePairingSecret(pairing, args.pairingSecret)) {
+      const fallbackPairing = args.answeringPairingId
+        ? await getPairingByPairingId(ctx, args.answeringPairingId)
+        : null;
+      if (
+        !fallbackPairing ||
+        !requireActivePairing(fallbackPairing, now) ||
+        fallbackPairing.browserSessionId !== pairing.browserSessionId ||
+        !requirePairingSecret(fallbackPairing, args.pairingSecret)
+      ) {
+        return { statusCode: 403, body: { error: "Pairing secret required" } };
+      }
+      answeringPairing = fallbackPairing;
+    }
     if (!isScannerJoinToken(args.joinToken) || !isScannerSessionId(args.sessionId)) {
       return { statusCode: 400, body: { error: "Invalid join window" } };
     }
     const request = await getReconnectRequestByPairingAndRequestId(ctx, args.pairingId, args.requestId);
     if (!request) return { statusCode: 404, body: { error: "Reconnect request not found" } };
-    const normalized = await expireReconnectIfNeeded(ctx, request, Date.now());
+    const normalized = await expireReconnectIfNeeded(ctx, request, now);
     if (normalized.status === "expired") return { statusCode: 410, body: { error: "Reconnect request expired" } };
-    const now = Date.now();
     await ctx.db.patch(request._id, {
       status: "join_window_ready",
       joinUrl: args.joinUrl,
@@ -118,6 +133,9 @@ export const postReconnectJoinWindow = internalMutation({
       answeredAt: now,
     });
     await ctx.db.patch(pairing._id, { lastSeenAt: now, expiresAt: now + SCANNER_PAIRING_TTL_MS });
+    if (answeringPairing._id !== pairing._id) {
+      await ctx.db.patch(answeringPairing._id, { lastSeenAt: now, expiresAt: now + SCANNER_PAIRING_TTL_MS });
+    }
     const next = await ctx.db.get(request._id);
     if (!next) throw new Error("Reconnect join window post failed");
     return { statusCode: 200, body: { success: true, request: publicReconnectRequest(next) } };

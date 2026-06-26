@@ -231,6 +231,9 @@ export class MobileScannerReconnectPoller {
     }
     const pairings = await this.options.getDurablePairings();
     const pairingById = new Map(pairings.map((pairing) => [pairing.pairingId, pairing]));
+    const pairingByBrowserSessionId = new Map(
+      pairings.map((pairing) => [pairing.browserSessionId, pairing]),
+    );
     if (pairingById.size === 0) {
       this.options.log?.("[Volt Scanner Reconnect] poll skipped: no durable pairings", { sessionId });
       return;
@@ -251,7 +254,9 @@ export class MobileScannerReconnectPoller {
       this.reconnectFastPollUntil = Date.now() + this.activeWindowMs;
     }
     for (const request of requests) {
-      const pairing = pairingById.get(request.pairingId);
+      const pairing =
+        pairingById.get(request.pairingId) ??
+        (request.browserSessionId ? pairingByBrowserSessionId.get(request.browserSessionId) : undefined);
       if (!pairing) continue;
       const key = `${request.pairingId}:${request.requestId}`;
       if (this.seenReconnectRequests.has(key)) continue;
@@ -261,9 +266,10 @@ export class MobileScannerReconnectPoller {
         requestId: request.requestId,
       });
       const joinWindow = await this.options.createReconnectJoinWindow(pairing, request.requestId);
-      await this.options.signalClient.postReconnectJoinWindow(pairing, request.requestId, joinWindow);
+      await this.options.signalClient.postReconnectJoinWindow(pairing, request.requestId, joinWindow, request.pairingId);
       this.options.log?.("[Volt Scanner Reconnect] join window posted", {
         pairingId: pairing.pairingId,
+        requestPairingId: request.pairingId,
         requestId: request.requestId,
         sessionId: joinWindow.sessionId,
       });

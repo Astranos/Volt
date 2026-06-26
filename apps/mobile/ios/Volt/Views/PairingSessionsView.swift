@@ -3,33 +3,36 @@ import SwiftUI
 struct PairingSessionsView: View {
     @Environment(ScannerStore.self) private var store
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.openURL) private var openURL
     @State private var isPairingScannerPresented = false
     let onReconnectStarted: () -> Void
-    private let webScannerURL = URL(string: "https://volt-scanner.vercel.app/session")!
+    let onPairingCodeAccepted: () -> Void
 
-    init(onReconnectStarted: @escaping () -> Void = {}) {
+    init(
+        onReconnectStarted: @escaping () -> Void = {},
+        onPairingCodeAccepted: @escaping () -> Void = {}
+    ) {
         self.onReconnectStarted = onReconnectStarted
+        self.onPairingCodeAccepted = onPairingCodeAccepted
     }
 
     var body: some View {
         NavigationStack {
             Group {
-                if store.pairedSessions.isEmpty {
+                if store.visiblePairingSessions.isEmpty {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 18) {
                             sessionsHeader
                             webSessionSetup
+                            scanPairingCTA
                         }
                         .padding(ScannerTabLayout.contentPadding)
                         .padding(.top, ScannerTabLayout.topPadding)
-                        .padding(.bottom, ScannerTabLayout.bottomAccessoryContentPadding)
+                        .padding(.bottom, 24)
                     }
                 } else {
                     VStack(alignment: .leading, spacing: 0) {
                         VStack(alignment: .leading, spacing: ScannerTabLayout.stackSpacing) {
                             sessionsHeader
-
                             Text("Previously Paired")
                                 .font(.headline)
                                 .foregroundStyle(.secondary)
@@ -46,13 +49,12 @@ struct PairingSessionsView: View {
             .navigationTitle("Sessions")
             .toolbar(.hidden, for: .navigationBar)
             .fullScreenCover(isPresented: $isPairingScannerPresented) {
-                PairingScanSessionView(isPresented: $isPairingScannerPresented)
+                PairingScanSessionView(isPresented: $isPairingScannerPresented) {
+                    onPairingCodeAccepted()
+                }
             }
             .onAppear {
                 store.pruneExpiredPairedSessions()
-            }
-            .overlay(alignment: .bottom) {
-                ScanChromeQRAccessory(onScan: startPairingScan)
             }
         }
     }
@@ -65,13 +67,9 @@ struct PairingSessionsView: View {
                 .minimumScaleFactor(0.82)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-            if !store.pairedSessions.isEmpty {
+            if !store.visiblePairingSessions.isEmpty {
                 Button {
-                    if store.connectionStatus.isConnected {
-                        store.unpair()
-                    } else {
-                        startPairingScan()
-                    }
+                    handleHeaderPairingAction()
                 } label: {
                     Label(pairingButtonTitle, systemImage: pairingButtonSystemImage)
                         .font(.headline)
@@ -88,9 +86,21 @@ struct PairingSessionsView: View {
     }
 
     private var webSessionSetup: some View {
-        PairingSessionSetupContent {
-            openURL(webScannerURL)
+        PairingSessionSetupContent()
+    }
+
+    private var scanPairingCTA: some View {
+        Button(action: startPairingScan) {
+            Label("Scan Computer QR", systemImage: "qrcode.viewfinder")
+                .font(.headline)
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity, minHeight: 52)
+                .background(
+                    ScannerTabLayout.primaryActionBackground(isEnabled: true),
+                    in: RoundedRectangle(cornerRadius: ScannerTabLayout.primaryActionCornerRadius, style: .continuous)
+                )
         }
+        .buttonStyle(.plain)
     }
 
     private func startPairingScan() {
@@ -98,32 +108,41 @@ struct PairingSessionsView: View {
         isPairingScannerPresented = true
     }
 
+    private func handleHeaderPairingAction() {
+        if store.connectionStatus.isConnected {
+            store.disconnectFromCurrentSession()
+            return
+        }
+
+        startPairingScan()
+    }
+
     private var pairingButtonTitle: String {
-        store.connectionStatus.isConnected ? "Unpair" : "Pair"
+        store.connectionStatus.isConnected ? "Disconnect" : "Pair"
     }
 
     private var pairingButtonSystemImage: String {
-        store.connectionStatus.isConnected ? "xmark.circle.fill" : "qrcode.viewfinder"
+        store.connectionStatus.isConnected ? "link.badge.minus" : "qrcode.viewfinder"
     }
 
     private var pairingButtonColor: Color {
-        store.connectionStatus.isConnected ? .red : .secondary
+        store.connectionStatus.isConnected ? .red : .green
     }
 
     private var pairingButtonAccessibilityLabel: String {
-        store.connectionStatus.isConnected ? "Unpair from browser" : "Pair with browser"
+        store.connectionStatus.isConnected ? "Disconnect from browser" : "Pair with QR code"
     }
 
     private var pairedSessionsList: some View {
         List {
-            ForEach(store.pairedSessions) { session in
+            ForEach(store.visiblePairingSessions) { session in
                 Button {
-                    onReconnectStarted()
-                    store.reconnect(to: session)
-                    dismiss()
+                    handleSessionTap(session)
                 } label: {
-                    PairedSessionRow(session: session)
+                    PairedSessionRow(session: session, canReconnect: store.canReconnect(to: session))
                         .padding(14)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                         .background(.background, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 }
                 .buttonStyle(.plain)
@@ -132,12 +151,12 @@ struct PairingSessionsView: View {
                 .listRowSeparator(.hidden)
                 .contextMenu {
                     Button("Forget", systemImage: "trash", role: .destructive) {
-                        store.removePairedSession(session)
+                        store.forgetVisibleSession(session)
                     }
                 }
                 .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                     Button("Forget", systemImage: "trash", role: .destructive) {
-                        store.removePairedSession(session)
+                        store.forgetVisibleSession(session)
                     }
                 }
             }
@@ -145,7 +164,22 @@ struct PairingSessionsView: View {
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .background(ScannerTabLayout.background)
-        .safeAreaPadding(.bottom, ScannerTabLayout.bottomAccessoryContentPadding)
+    }
+
+    private func handleSessionTap(_ session: PairedScannerSession) {
+        if store.canReconnect(to: session) {
+            onReconnectStarted()
+            store.reconnect(to: session)
+            return
+        }
+
+        if store.connectionStatus.isConnected,
+           session.browserSessionId == store.peerTarget?.chromeSessionId {
+            dismiss()
+            return
+        }
+
+        // Recent web-only sessions are informational; use the Pair button to scan a fresh QR.
     }
 
 }
@@ -232,6 +266,7 @@ private enum PairingScanStatusMessage {
 
 private struct PairedSessionRow: View {
     let session: PairedScannerSession
+    let canReconnect: Bool
 
     var body: some View {
         HStack(spacing: 12) {
@@ -251,11 +286,17 @@ private struct PairedSessionRow: View {
                     .font(.caption2.monospaced())
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+                if !canReconnect {
+                    Text("Use Pair to reconnect")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
             }
 
             Spacer()
 
-            Image(systemName: "chevron.right")
+            Image(systemName: canReconnect ? "chevron.right" : "info.circle")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.tertiary)
         }

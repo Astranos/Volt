@@ -13,9 +13,8 @@ struct RootView: View {
     @State private var connectionSheetStatus: PairingStatusSheetModel?
     @State private var connectionSheetDetent = RootView.connectionStatusDetent
     @State private var keepsConnectionSheetOpenForSessions = false
-    @State private var allowsNextConnectionSheetDismissal = false
 
-    private static let connectionStatusDetent = PresentationDetent.height(112)
+    private static let connectionStatusDetent = PresentationDetent.height(164)
 
     init() {
         _selectedTab = State(initialValue: ScreenshotScenario.current?.initialSection ?? .scan)
@@ -52,9 +51,14 @@ struct RootView: View {
                     }
                 }
             } else {
-                PairingSessionsView {
-                    beginReconnectFromConnectionSheetSessions()
-                }
+                PairingSessionsView(
+                    onReconnectStarted: {
+                        beginReconnectFromConnectionSheetSessions()
+                    },
+                    onPairingCodeAccepted: {
+                        beginPairingFromConnectionSheetSessions()
+                    }
+                )
                     .presentationDetents([.medium, .large], selection: $connectionSheetDetent)
                     .presentationDragIndicator(.visible)
             }
@@ -118,6 +122,7 @@ struct RootView: View {
 
     private func startAppServices() {
         store.reconnectToMostRecentPairedSessionIfNeeded()
+        showPairingSheet(for: store.connectionStatus)
     }
 
     private func showPairingScannerFromWelcome() {
@@ -211,13 +216,6 @@ struct RootView: View {
     }
 
     private func handleConnectionSheetDismiss() {
-        if allowsNextConnectionSheetDismissal {
-            allowsNextConnectionSheetDismissal = false
-            resetConnectionSheetPresentation()
-            showPairingSheet(for: store.connectionStatus)
-            return
-        }
-
         if isConnectionAttemptVisible {
             store.cancelConnectionAttempt()
         }
@@ -240,10 +238,29 @@ struct RootView: View {
     }
 
     private func beginReconnectFromConnectionSheetSessions() {
-        allowsNextConnectionSheetDismissal = true
         keepsConnectionSheetOpenForSessions = false
-        connectionSheetStatus = nil
+        connectionSheetStatus = PairingStatusSheetModel(
+            title: "Reconnecting to Chrome",
+            message: "Opening the saved browser session.",
+            systemImage: "desktopcomputer",
+            isProgressing: true,
+            canCancel: true
+        )
         connectionSheetDetent = Self.connectionStatusDetent
+        isConnectionSheetPresented = true
+    }
+
+    private func beginPairingFromConnectionSheetSessions() {
+        keepsConnectionSheetOpenForSessions = false
+        connectionSheetStatus = PairingStatusSheetModel(
+            title: "Pairing with Chrome",
+            message: "Trying to open the scanner channel.",
+            systemImage: "link",
+            isProgressing: true,
+            canCancel: true
+        )
+        connectionSheetDetent = Self.connectionStatusDetent
+        isConnectionSheetPresented = true
     }
 }
 
@@ -308,50 +325,63 @@ private struct PairingStatusSheet: View {
     let onCancel: () -> Void
 
     var body: some View {
-        HStack(spacing: 14) {
-            if sheet.isProgressing {
-                ProgressView()
-                    .controlSize(.small)
-                    .tint(.primary)
-                    .frame(width: 28, height: 28)
-            } else {
-                Image(systemName: sheet.systemImage)
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(.primary)
-                    .frame(width: 28, height: 28)
-            }
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .center, spacing: 14) {
+                statusIcon
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(sheet.title)
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
-                Text(sheet.message)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-            }
-
-            Spacer(minLength: 0)
-
-            if sheet.canCancel {
-                Button(role: .cancel, action: onCancel) {
-                    Label("Cancel", systemImage: "xmark")
-                        .font(.headline)
-                        .foregroundStyle(.red)
-                        .labelStyle(.titleAndIcon)
-                        .frame(minHeight: 44)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(sheet.title)
+                        .font(.title3.weight(.semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.84)
+                    Text(sheet.message)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(3)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.regular)
-                .tint(.red)
-                .accessibilityLabel("Cancel reconnect")
+
+                Spacer(minLength: 0)
             }
+
+            cancelButton
         }
         .padding(.horizontal, 20)
-        .padding(.top, 8)
-        .padding(.bottom, 16)
+        .padding(.top, 18)
+        .padding(.bottom, 20)
         .accessibilityElement(children: sheet.canCancel ? .contain : .combine)
         .accessibilityLabel("\(sheet.title). \(sheet.message)")
+    }
+
+    @ViewBuilder
+    private var statusIcon: some View {
+        if sheet.isProgressing {
+            ProgressView()
+                .controlSize(.regular)
+                .tint(.primary)
+                .frame(width: 38, height: 38)
+        } else {
+            Image(systemName: sheet.systemImage)
+                .font(.title2.weight(.semibold))
+                .foregroundStyle(.primary)
+                .frame(width: 38, height: 38)
+        }
+    }
+
+    @ViewBuilder
+    private var cancelButton: some View {
+        if sheet.canCancel {
+            Button(role: .cancel, action: onCancel) {
+                Label("Cancel", systemImage: "xmark")
+                    .font(.headline)
+                    .foregroundStyle(.red)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.regular)
+            .tint(.red)
+            .accessibilityLabel("Cancel reconnect")
+        }
     }
 }
 
@@ -516,8 +546,13 @@ private struct WelcomeActions: View {
                 Text("Continue Without Pairing")
                     .font(.headline)
                     .foregroundStyle(.primary)
-                    .frame(maxWidth: .infinity, minHeight: 50)
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .frame(maxWidth: .infinity, minHeight: 52)
+                    .background(.background, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .stroke(.secondary.opacity(0.28), lineWidth: 1)
+                    }
+                    .shadow(color: .black.opacity(0.06), radius: 8, y: 2)
             }
             .buttonStyle(.plain)
         }

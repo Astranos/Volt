@@ -36,6 +36,7 @@ export type NormalizedJoinAttempt = {
 };
 
 export type ReconnectRequest = {
+  browserSessionId?: string;
   pairingId: string;
   requestId: string;
 };
@@ -285,20 +286,30 @@ export class MobileScannerSignalClient {
     const rawRequests = Array.isArray(payload.requests) ? payload.requests : [];
     for (const rawRequest of rawRequests) {
       if (!rawRequest || typeof rawRequest !== "object") continue;
-      const request = rawRequest as { pairingId?: unknown; requestId?: unknown };
+      const request = rawRequest as { browserSessionId?: unknown; pairingId?: unknown; requestId?: unknown };
       if (typeof request.pairingId !== "string" || typeof request.requestId !== "string") continue;
-      requests.push({ pairingId: request.pairingId, requestId: request.requestId });
+      requests.push({
+        browserSessionId: typeof request.browserSessionId === "string" ? request.browserSessionId : undefined,
+        pairingId: request.pairingId,
+        requestId: request.requestId,
+      });
     }
     return { response, requests };
   }
 
-  async postReconnectJoinWindow(pairing: DurablePairingCredential, requestId: string, joinWindow: JoinWindow) {
+  async postReconnectJoinWindow(
+    pairing: DurablePairingCredential,
+    requestId: string,
+    joinWindow: JoinWindow,
+    requestPairingId = pairing.pairingId
+  ) {
     const response = await signalFetch(
-      `${EXTENSION_SCANNER_SIGNAL_URL}/pairings/${encodeURIComponent(pairing.pairingId)}/reconnect/${encodeURIComponent(requestId)}/join-window`,
+      `${EXTENSION_SCANNER_SIGNAL_URL}/pairings/${encodeURIComponent(requestPairingId)}/reconnect/${encodeURIComponent(requestId)}/join-window`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Volt-Pairing-Secret": pairing.pairingSecret },
         body: JSON.stringify({
+          answeringPairingId: pairing.pairingId,
           pairingSecret: pairing.pairingSecret,
           joinUrl: joinWindow.qrCodeUrl,
           joinToken: joinWindow.joinToken,

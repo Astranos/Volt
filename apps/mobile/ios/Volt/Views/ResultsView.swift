@@ -48,7 +48,12 @@ struct UploadView: View {
                         }
                     )
 
-                    if let progress = store.photoUploadProgress {
+                    if isPreparingUploads {
+                        PhotoPreparationProgressSummary(
+                            prepared: selectedUploadPrepared,
+                            total: selectedUploadTotal
+                        )
+                    } else if let progress = store.photoUploadProgress {
                         PhotoUploadProgressSummary(progress: progress)
                     }
 
@@ -90,12 +95,17 @@ struct UploadView: View {
         }
     }
 
+    private var selectedUploadReadCount: Int {
+        guard selectedUploadTotal > 0 else { return 0 }
+        return min(max(selectedUploadPrepared, 1), selectedUploadTotal)
+    }
+
     private var uploadStatusText: String {
         if let uploadError {
             uploadError
         } else if isPreparingUploads {
             if selectedUploadTotal > 0 {
-                "Reading \(min(selectedUploadPrepared + 1, selectedUploadTotal)) of \(selectedUploadTotal) selected photos"
+                "Reading \(selectedUploadReadCount) of \(selectedUploadTotal) selected photos"
             } else {
                 "Preparing uploads..."
             }
@@ -158,9 +168,9 @@ struct UploadView: View {
     }
 
     private func uploadSelectedItems(_ items: [PhotosPickerItem]) async {
-        isPreparingUploads = true
         selectedUploadTotal = items.count
         selectedUploadPrepared = 0
+        isPreparingUploads = true
         uploadError = nil
         defer {
             isPreparingUploads = false
@@ -214,6 +224,46 @@ private struct PhotoUploadBatch: Identifiable {
             return "Uploading \(results.count) of \(expectedTotal) photo\(expectedTotal == 1 ? "" : "s")"
         }
         return "Uploaded \(results.count) photo\(results.count == 1 ? "" : "s")"
+    }
+}
+
+private struct PhotoPreparationProgressSummary: View {
+    let prepared: Int
+    let total: Int
+
+    private var readCount: Int {
+        guard total > 0 else { return 0 }
+        return min(max(prepared, 1), total)
+    }
+
+    private var fractionCompleted: Double {
+        guard total > 0 else { return 0 }
+        return min(1, Double(prepared) / Double(total))
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Label("Reading \(readCount) of \(total) photos", systemImage: "hourglass")
+                    .font(.headline)
+
+                Spacer(minLength: 10)
+
+                Text("\(prepared)/\(total)")
+                    .font(.subheadline.monospacedDigit().weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+
+            ProgressView(value: fractionCompleted)
+                .tint(.green)
+
+            Text("Preparing selected photos for upload")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .padding(14)
+        .background(.background, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -311,28 +361,32 @@ private struct PhotoUploadThumbnail: View {
     let onDelete: () -> Void
 
     var body: some View {
-        ZStack(alignment: .topTrailing) {
-            if let imageData = result.imageData, let image = UIImage(data: imageData) {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
-            } else {
-                Image(systemName: "photo")
-                    .font(.title2.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(.secondary.opacity(0.12))
-            }
+        GeometryReader { proxy in
+            ZStack(alignment: .topTrailing) {
+                if let imageData = result.imageData, let image = UIImage(data: imageData) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: proxy.size.width, height: proxy.size.height)
+                        .clipped()
+                } else {
+                    Image(systemName: "photo")
+                        .font(.title2.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: proxy.size.width, height: proxy.size.height)
+                        .background(.secondary.opacity(0.12))
+                }
 
-            Button(role: .destructive, action: onDelete) {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.title3)
-                    .symbolRenderingMode(.palette)
-                    .foregroundStyle(.white, .black.opacity(0.5))
+                Button(role: .destructive, action: onDelete) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.title3)
+                        .symbolRenderingMode(.palette)
+                        .foregroundStyle(.white, .black.opacity(0.5))
+                }
+                .buttonStyle(.plain)
+                .padding(5)
+                .accessibilityLabel("Remove photo")
             }
-            .buttonStyle(.plain)
-            .padding(5)
-            .accessibilityLabel("Remove photo")
         }
         .aspectRatio(1, contentMode: .fit)
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))

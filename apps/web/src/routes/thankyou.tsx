@@ -120,19 +120,19 @@ function Install() {
 
           <div className="mt-6 flex flex-wrap gap-2">
             <a
+              href="chrome://newtab"
+              className="inline-flex items-center gap-2 rounded-[0.85rem] border border-slate-950 bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-slate-800"
+            >
+              <LayoutDashboard className="h-4 w-4 text-emerald-300" />
+              Continue to Volt
+              <ExternalLink className="h-3.5 w-3.5 text-slate-300" />
+            </a>
+            <a
               href="chrome://extensions"
               className="inline-flex items-center gap-2 rounded-[0.85rem] border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800 hover:border-slate-300 hover:bg-slate-50"
             >
               <Settings className="h-4 w-4 text-slate-500" />
               Manage extensions
-              <ExternalLink className="h-3.5 w-3.5 text-slate-400" />
-            </a>
-            <a
-              href="chrome://newtab"
-              className="inline-flex items-center gap-2 rounded-[0.85rem] border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800 hover:border-slate-300 hover:bg-slate-50"
-            >
-              <LayoutDashboard className="h-4 w-4 text-slate-500" />
-              Open new tab
               <ExternalLink className="h-3.5 w-3.5 text-slate-400" />
             </a>
           </div>
