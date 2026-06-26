@@ -66,6 +66,23 @@ private struct ClipCaptureView: View {
     @Bindable var store: ClipScannerStore
     let onScanQRCode: () -> Void
     @State private var isCaptureSessionPresented = false
+    @State private var captureSessionBatchId: String?
+    @State private var expandedBatchIds: Set<String> = []
+    @State private var previewedPhoto: ClipScannerStore.ClipPhoto?
+
+    private var capturePhotoBatches: [ClipPhotoBatch] {
+        let capturePhotos = store.photos.filter { $0.source == .capture }
+        let grouped = Dictionary(grouping: capturePhotos) { photo in
+            photo.batchId ?? photo.id.uuidString
+        }
+        return grouped.map { key, photos in
+            ClipPhotoBatch(
+                id: key,
+                photos: photos.sorted { $0.capturedAt < $1.capturedAt }
+            )
+        }
+        .sorted { $0.latestCapturedAt > $1.latestCapturedAt }
+    }
 
     var body: some View {
         NavigationStack {
@@ -77,16 +94,27 @@ private struct ClipCaptureView: View {
                         onConnectionTapped: onScanQRCode
                     )
 
-                    ClipRecentPhotosSection(
-                        title: "Previously Captured",
-                        emptyTitle: "No Captures Yet",
-                        emptySystemImage: "doc.text.magnifyingglass",
-                        emptyDescription: "Finished captures will show here after you leave the camera session.",
-                        photos: store.photos.filter { $0.source == .capture },
-                        actionTitle: "Send"
-                    ) { photo in
-                        Task { await store.sendPhoto(photo) }
-                    }
+                    ClipCapturePhotoBatchesSection(
+                        batches: capturePhotoBatches,
+                        expandedBatchIds: expandedBatchIds,
+                        onToggleExpanded: { batch in
+                            if expandedBatchIds.contains(batch.id) {
+                                expandedBatchIds.remove(batch.id)
+                            } else {
+                                expandedBatchIds.insert(batch.id)
+                            }
+                        },
+                        onPreview: { photo in
+                            previewedPhoto = photo
+                        },
+                        onDeletePhoto: { photo in
+                            store.removePhoto(id: photo.id)
+                        },
+                        onDeleteBatch: { batch in
+                            store.removePhotos(batchId: batch.id)
+                            expandedBatchIds.remove(batch.id)
+                        }
+                    )
                 }
                 .padding(ScannerTabLayout.contentPadding)
                 .padding(.top, ScannerTabLayout.topPadding)
@@ -98,7 +126,8 @@ private struct ClipCaptureView: View {
             .fullScreenCover(
                 isPresented: $isCaptureSessionPresented,
                 onDismiss: {
-                    store.endCaptureSession()
+                    store.endCaptureSession(id: captureSessionBatchId)
+                    captureSessionBatchId = nil
                 }
             ) {
                 ClipCaptureSessionView(
@@ -119,7 +148,7 @@ private struct ClipCaptureView: View {
                         case .barcode:
                             break
                         case .photo, .dictation:
-                            Task { await store.capturePhoto(image) }
+                            Task { await store.capturePhoto(image, batchId: captureSessionBatchId) }
                         }
                     },
                     onSendLatest: {
@@ -139,14 +168,21 @@ private struct ClipCaptureView: View {
                     title: "Start Capture",
                     systemImage: store.activeCaptureMode.symbolName,
                     isEnabled: store.isConnected,
+                    isConnecting: store.isPairing,
                     statusText: captureStatusText,
                     disabledHint: store.targetHint,
                     action: {
                         guard store.isConnected else { return }
-                        store.beginCaptureSession()
+                        captureSessionBatchId = store.beginCaptureSession()
                         isCaptureSessionPresented = true
                     }
                 )
+            }
+            .sheet(item: $previewedPhoto) { photo in
+                ClipPhotoPreviewSheet(photo: photo) {
+                    store.removePhoto(id: photo.id)
+                    previewedPhoto = nil
+                }
             }
         }
     }
@@ -166,7 +202,9 @@ private struct ClipCaptureView: View {
     }
 
     private var captureStatusText: String {
-        if store.isConnected {
+        if store.isPairing {
+            store.statusText
+        } else if store.isConnected {
             "Ready to capture into Chrome"
         } else {
             store.targetHint
@@ -215,6 +253,7 @@ private struct ClipDictationView: View {
                 ClipDictationStartAccessory(
                     isRecording: store.isDictating,
                     isConnected: store.isConnected,
+                    isConnecting: store.isPairing,
                     statusText: dictationStatusText,
                     action: {
                         store.isDictating ? store.stopDictation() : store.startDictation()
@@ -241,6 +280,8 @@ private struct ClipDictationView: View {
     private var dictationStatusText: String {
         if store.isDictating {
             "Listening"
+        } else if store.isPairing {
+            store.statusText
         } else if store.isConnected {
             "Ready to dictate into Chrome"
         } else {
@@ -303,6 +344,7 @@ private struct ClipUploadView: View {
                     selectedItems: $pickerItems,
                     isConnected: store.isConnected,
                     isPreparing: isPreparingUploads,
+                    isConnecting: store.isPairing,
                     statusText: uploadStatusText,
                     disabledHint: store.targetHint
                 )
@@ -327,6 +369,8 @@ private struct ClipUploadView: View {
     private var uploadStatusText: String {
         if isPreparingUploads {
             "Preparing uploads..."
+        } else if store.isPairing {
+            store.statusText
         } else if store.isConnected {
             "Ready to upload to Chrome"
         } else {
@@ -370,6 +414,225 @@ private struct ClipRecentPhotosSection: View {
                         ClipPhotoRow(photo: photo, actionTitle: actionTitle) {
                             onSend(photo)
                         }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct ClipPhotoBatch: Identifiable, Equatable {
+    let id: String
+    let photos: [ClipScannerStore.ClipPhoto]
+
+    var latestCapturedAt: Date {
+        photos.map(\.capturedAt).max() ?? .distantPast
+    }
+
+    var title: String {
+        "\(photos.count) captured photo\(photos.count == 1 ? "" : "s")"
+    }
+
+    var statusText: String {
+        if photos.contains(where: { $0.status == "Failed" }) {
+            return "Some failed"
+        }
+        if photos.contains(where: { $0.status == "Sending" }) {
+            return "Sending"
+        }
+        if photos.allSatisfy({ $0.status == "Delivered" }) {
+            return "Delivered"
+        }
+        return "Saved"
+    }
+}
+
+private struct ClipCapturePhotoBatchesSection: View {
+    let batches: [ClipPhotoBatch]
+    let expandedBatchIds: Set<String>
+    let onToggleExpanded: (ClipPhotoBatch) -> Void
+    let onPreview: (ClipScannerStore.ClipPhoto) -> Void
+    let onDeletePhoto: (ClipScannerStore.ClipPhoto) -> Void
+    let onDeleteBatch: (ClipPhotoBatch) -> Void
+
+    private var photoCount: Int {
+        batches.reduce(0) { $0 + $1.photos.count }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Previously Captured")
+                    .font(.headline)
+                Spacer()
+                Text("\(photoCount)")
+                    .font(.subheadline.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+
+            if batches.isEmpty {
+                ContentUnavailableView(
+                    "No Captures Yet",
+                    systemImage: "photo.stack",
+                    description: Text("Finished captures will show here after you leave the camera session.")
+                )
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 34)
+                .background(.background, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            } else {
+                VStack(spacing: 10) {
+                    ForEach(batches) { batch in
+                        ClipCapturePhotoBatchCard(
+                            batch: batch,
+                            isExpanded: expandedBatchIds.contains(batch.id),
+                            onToggleExpanded: {
+                                onToggleExpanded(batch)
+                            },
+                            onPreview: onPreview,
+                            onDeletePhoto: onDeletePhoto,
+                            onDeleteBatch: {
+                                onDeleteBatch(batch)
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct ClipCapturePhotoBatchCard: View {
+    let batch: ClipPhotoBatch
+    let isExpanded: Bool
+    let onToggleExpanded: () -> Void
+    let onPreview: (ClipScannerStore.ClipPhoto) -> Void
+    let onDeletePhoto: (ClipScannerStore.ClipPhoto) -> Void
+    let onDeleteBatch: () -> Void
+
+    private var visiblePhotos: [ClipScannerStore.ClipPhoto] {
+        isExpanded ? batch.photos : Array(batch.photos.prefix(4))
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(batch.title)
+                        .font(.headline)
+                    Text(batch.latestCapturedAt, format: .dateTime.hour().minute())
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer(minLength: 8)
+
+                Text(batch.statusText)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 9)
+                    .frame(minHeight: 26)
+                    .background(.secondary.opacity(0.12), in: Capsule())
+
+                Button(role: .destructive, action: onDeleteBatch) {
+                    Image(systemName: "trash")
+                        .font(.system(size: 16, weight: .semibold))
+                        .frame(width: 36, height: 36)
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel("Delete capture batch")
+            }
+
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 86), spacing: 8)], spacing: 8) {
+                ForEach(visiblePhotos) { photo in
+                    ClipCapturePhotoThumbnail(
+                        photo: photo,
+                        onPreview: {
+                            onPreview(photo)
+                        },
+                        onDelete: {
+                            onDeletePhoto(photo)
+                        }
+                    )
+                }
+            }
+
+            if batch.photos.count > 4 {
+                Button(action: onToggleExpanded) {
+                    Label(
+                        isExpanded ? "Show fewer photos" : "View all \(batch.photos.count) photos",
+                        systemImage: isExpanded ? "chevron.up" : "photo.stack"
+                    )
+                    .font(.subheadline.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+        .padding(14)
+        .background(.background, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+}
+
+private struct ClipCapturePhotoThumbnail: View {
+    let photo: ClipScannerStore.ClipPhoto
+    let onPreview: () -> Void
+    let onDelete: () -> Void
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack(alignment: .topTrailing) {
+                Button(action: onPreview) {
+                    Image(uiImage: photo.image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: proxy.size.width, height: proxy.size.height)
+                        .clipped()
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Preview captured photo")
+
+                Button(role: .destructive, action: onDelete) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.title3)
+                        .symbolRenderingMode(.palette)
+                        .foregroundStyle(.white, .black.opacity(0.5))
+                }
+                .buttonStyle(.plain)
+                .padding(5)
+                .accessibilityLabel("Delete photo")
+            }
+        }
+        .aspectRatio(1, contentMode: .fit)
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+}
+
+private struct ClipPhotoPreviewSheet: View {
+    let photo: ClipScannerStore.ClipPhoto
+    let onDelete: () -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Color.black.ignoresSafeArea()
+                Image(uiImage: photo.image)
+                    .resizable()
+                    .scaledToFit()
+                    .padding()
+            }
+            .navigationTitle(Text(photo.capturedAt, format: .dateTime.hour().minute()))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(role: .destructive, action: onDelete) {
+                        Label("Delete", systemImage: "trash")
                     }
                 }
             }
@@ -587,6 +850,7 @@ private struct ClipDictationTranscriptCard: View {
 private struct ClipDictationStartAccessory: View {
     let isRecording: Bool
     let isConnected: Bool
+    let isConnecting: Bool
     let statusText: String
     let action: () -> Void
 
@@ -599,15 +863,15 @@ private struct ClipDictationStartAccessory: View {
                 .frame(maxWidth: .infinity)
 
             Button(action: action) {
-                Label(isRecording ? "Stop Dictation" : "Start Dictation", systemImage: isRecording ? "stop.fill" : "mic.fill")
+                Label(buttonTitle, systemImage: buttonSystemImage)
                     .font(.headline)
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity, minHeight: 52)
                     .background(buttonColor, in: RoundedRectangle(cornerRadius: ScannerTabLayout.primaryActionCornerRadius, style: .continuous))
-                    .opacity(isConnected || isRecording ? 1 : ScannerTabLayout.disabledPrimaryActionOpacity)
+                    .opacity(isConnected || isRecording || isConnecting ? 1 : ScannerTabLayout.disabledPrimaryActionOpacity)
             }
             .buttonStyle(.plain)
-            .disabled(!isConnected && !isRecording)
+            .disabled((!isConnected && !isRecording) || isConnecting)
             .accessibilityHint(isConnected || isRecording ? "" : "Connect to Chrome before dictating")
         }
         .padding(.horizontal)
@@ -616,8 +880,24 @@ private struct ClipDictationStartAccessory: View {
         .background(.bar)
     }
 
+    private var buttonTitle: String {
+        if isConnecting {
+            return "Connecting..."
+        }
+        return isRecording ? "Stop Dictation" : "Start Dictation"
+    }
+
+    private var buttonSystemImage: String {
+        if isConnecting {
+            return "hourglass"
+        }
+        return isRecording ? "stop.fill" : "mic.fill"
+    }
+
     private var buttonColor: Color {
-        if isRecording {
+        if isConnecting {
+            .gray
+        } else if isRecording {
             .red
         } else if isConnected {
             .green
@@ -657,7 +937,7 @@ private struct ClipCaptureSessionView: View {
     @State private var cameraStateRevision = 0
     private let topToolbarTopPadding: CGFloat = 12
     private let topToolbarHeight: CGFloat = 42
-    private let photoPreviewToolbarGap: CGFloat = 32
+    private let photoPreviewToolbarGap: CGFloat = 0
 
     var body: some View {
         ZStack {
@@ -748,7 +1028,7 @@ private struct ClipCaptureSessionView: View {
 
                 if activeMode == .photo, ocrReviewImage == nil {
                     GeometryReader { previewGeometry in
-                        let side = min(previewGeometry.size.width, previewGeometry.size.height)
+                        let side = previewGeometry.size.width
 
                         ClipPhotoPreview(
                             cameraService: cameraService,
@@ -771,7 +1051,7 @@ private struct ClipCaptureSessionView: View {
                             }
                         )
                         .frame(width: side, height: side)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     }
                     .padding(.top, photoPreviewToolbarGap)
                 } else {
@@ -837,7 +1117,7 @@ private struct ClipCaptureSessionView: View {
                         isRecognizingText: isRecognizingText || isCapturingPhoto,
                         isCaptureEnabled: isConnected && !isCapturingPhoto && !isRecognizingText,
                         barcodeHint: detectedBarcodeBounds == nil ? "Point camera at barcode" : "Barcode found",
-                        hasLatestCapture: latestPhoto != nil,
+                        hasLatestCapture: false,
                         onToggleTorch: {
                             cameraService.setTorchEnabled(!cameraService.torchEnabled)
                         },
@@ -853,7 +1133,7 @@ private struct ClipCaptureSessionView: View {
                         onCapture: {
                             captureCurrentFrame()
                         },
-                        onSendLatest: onSendLatest,
+                        onSendLatest: nil,
                         onFinish: {
                             dismiss()
                         }
@@ -945,7 +1225,7 @@ private struct ClipCaptureSessionView: View {
         }
         isCapturingPhoto = true
         captureError = nil
-        captureNotice = mode == .ocr ? "Capturing text image" : "Capturing photo"
+        captureNotice = mode == .ocr ? "Capturing text image" : nil
 
         Task {
             do {
@@ -960,14 +1240,14 @@ private struct ClipCaptureSessionView: View {
         }
     }
 
-    private func successNotice(for mode: CaptureMode) -> String {
+    private func successNotice(for mode: CaptureMode) -> String? {
         switch mode {
         case .ocr:
             "Text image captured"
         case .barcode:
             "Photo captured; live barcode scans send automatically"
         case .photo, .dictation:
-            "Photo saved"
+            nil
         }
     }
 

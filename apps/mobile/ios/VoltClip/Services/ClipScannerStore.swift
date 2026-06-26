@@ -256,20 +256,26 @@ final class ClipScannerStore {
         _ = addCapturedImage(image, source: .upload)
     }
 
-    func beginCaptureSession() {
-        activeCaptureBatchId = ScannerProtocol.makeMessageId("batch")
+    @discardableResult
+    func beginCaptureSession() -> String {
+        let batchId = ScannerProtocol.makeMessageId("batch")
+        activeCaptureBatchId = batchId
+        return batchId
     }
 
-    func endCaptureSession() {
+    func endCaptureSession(id: String? = nil) {
+        if let id, activeCaptureBatchId != id {
+            return
+        }
         activeCaptureBatchId = nil
     }
 
-    func capturePhoto(_ image: UIImage) async {
+    func capturePhoto(_ image: UIImage, batchId: String? = nil) async {
         let preparedImage = image
             .normalizedForProcessing()
             .centerSquareCropped()
             .resized(maxLongEdge: 2200)
-        let photo = addCapturedImage(preparedImage, source: .capture, batchId: currentCaptureBatchId())
+        let photo = addCapturedImage(preparedImage, source: .capture, batchId: batchId ?? currentCaptureBatchId())
         await sendPhoto(photo)
     }
 
@@ -507,6 +513,14 @@ final class ClipScannerStore {
     private func updatePhoto(_ id: UUID, status: String) {
         guard let index = photos.firstIndex(where: { $0.id == id }) else { return }
         photos[index].status = status
+    }
+
+    func removePhoto(id: UUID) {
+        photos.removeAll { $0.id == id }
+    }
+
+    func removePhotos(batchId: String) {
+        photos.removeAll { ($0.batchId ?? $0.id.uuidString) == batchId }
     }
 
     private func sendCapture(

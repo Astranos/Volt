@@ -89,7 +89,10 @@
         function configureAudioSender() {
           if (!pc) return;
           const offeredAudio = pc.getTransceivers().find((transceiver) => {
-            return transceiver.receiver && transceiver.receiver.track && transceiver.receiver.track.kind === "audio";
+            return (
+              (transceiver.receiver && transceiver.receiver.track && transceiver.receiver.track.kind === "audio") ||
+              (transceiver.sender && transceiver.sender.track && transceiver.sender.track.kind === "audio")
+            );
           });
           const transceiver = offeredAudio || pc.addTransceiver("audio", { direction: "sendonly" });
           transceiver.direction = "sendonly";
@@ -185,6 +188,12 @@
               return;
             }
             track.enabled = true;
+            if (!audioSender) {
+              configureAudioSender();
+            }
+            if (audioSender && audioSender.track !== track) {
+              await audioSender.replaceTrack(track);
+            }
             dictationSessionId = dictationSessionId || messageId("clip-dictation-session");
             sendControl({
               ...baseMessage("dictation", "dictation"),

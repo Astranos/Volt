@@ -108,6 +108,7 @@ struct ScannerBottomActionAccessory: View {
     let title: String
     let systemImage: String
     let isEnabled: Bool
+    var isConnecting = false
     let statusText: String
     let disabledHint: String
     let action: () -> Void
@@ -121,7 +122,7 @@ struct ScannerBottomActionAccessory: View {
                 .frame(maxWidth: .infinity)
 
             Button(action: action) {
-                Label(title, systemImage: systemImage)
+                Label(actionTitle, systemImage: actionSystemImage)
                     .font(.headline)
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity, minHeight: 52)
@@ -140,12 +141,21 @@ struct ScannerBottomActionAccessory: View {
         .padding(.bottom, 10)
         .background(.bar)
     }
+
+    private var actionTitle: String {
+        isConnecting ? "Connecting..." : title
+    }
+
+    private var actionSystemImage: String {
+        isConnecting ? "hourglass" : systemImage
+    }
 }
 
 struct ScannerPhotoPickerAccessory: View {
     @Binding var selectedItems: [PhotosPickerItem]
     let isConnected: Bool
     let isPreparing: Bool
+    var isConnecting = false
     var isUploading = false
     let statusText: String
     var showsError = false
@@ -193,6 +203,9 @@ struct ScannerPhotoPickerAccessory: View {
     }
 
     private var actionTitle: String {
+        if isConnecting {
+            return "Connecting..."
+        }
         if isPreparing {
             return "Preparing Uploads"
         }
@@ -203,6 +216,9 @@ struct ScannerPhotoPickerAccessory: View {
     }
 
     private var actionSystemImage: String {
+        if isConnecting {
+            return "hourglass"
+        }
         if isPreparing {
             return "hourglass"
         }

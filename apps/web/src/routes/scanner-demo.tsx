@@ -34,8 +34,15 @@ import {
 } from "@volt/scanner-protocol";
 
 import {
+  createRemoteSpeechAudioBridge,
+  isRestartableRemoteSpeechError,
+  isTransientRemoteSpeechTrackStartError,
   nextReviewInputAfterLiveDictation,
+  remoteSpeechErrorDetail,
+  WebRemoteSpeechRecognizer,
   type LiveDictationInsertion,
+  type RemoteSpeechAudioBridge,
+  type RemoteSpeechTranscript,
 } from "./-scanner-demo-dictation";
 import {
   PairingDialog,
@@ -56,6 +63,8 @@ const WEB_PROTOCOL_VERSION = {
   major: SCANNER_PROTOCOL_MAJOR_VERSION,
   minor: SCANNER_PROTOCOL_MINOR_VERSION,
 };
+const REMOTE_SPEECH_START_RETRY_DELAY_MS = 250;
+const REMOTE_SPEECH_START_MAX_ATTEMPTS = 20;
 
 export type DemoStatus =
   | "idle"
@@ -278,7 +287,19 @@ export function ScannerDemo() {
   const peersRef = useRef(new Map<string, PeerSession>());
   const pendingPhotosRef = useRef(new Map<string, PendingPhoto>());
   const pollTimerRef = useRef<number | null>(null);
+  const remoteAudioBridgesRef = useRef(
+    new Map<string, RemoteSpeechAudioBridge>(),
+  );
+  const remoteAudioTracksRef = useRef(new Map<string, MediaStreamTrack>());
+  const remoteDictationSessionIdsRef = useRef(new Map<string, string>());
+  const remoteSpeechSinksRef = useRef(new Map<string, HTMLAudioElement>());
+  const remoteSpeechStartAttemptsRef = useRef(new Map<string, number>());
+  const remoteSpeechStartRetryTimersRef = useRef(new Map<string, number>());
+  const remoteSpeechRecognizersRef = useRef(
+    new Map<string, WebRemoteSpeechRecognizer>(),
+  );
   const reviewInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const reviewInputValueRef = useRef("");
 
   const receivedCount = captures.length + photos.length;
 
@@ -299,6 +320,39 @@ export function ScannerDemo() {
     pendingPhotosRef.current.clear();
     capturesRef.current.clear();
     liveDictationInsertionsRef.current.clear();
+    for (const recognizer of remoteSpeechRecognizersRef.current.values()) {
+      recognizer.stop();
+    }
+    for (const retryTimer of remoteSpeechStartRetryTimersRef.current.values()) {
+      window.clearTimeout(retryTimer);
+    }
+    for (const bridge of remoteAudioBridgesRef.current.values()) {
+      try {
+        bridge.source?.disconnect();
+      } catch {}
+      try {
+        bridge.monitorGain?.disconnect();
+      } catch {}
+      try {
+        bridge.destination?.disconnect();
+      } catch {}
+      for (const track of bridge.stream.getTracks()) {
+        if (track !== bridge.track) track.stop();
+      }
+      bridge.track.stop();
+      void bridge.context?.close().catch(() => {});
+    }
+    for (const sink of remoteSpeechSinksRef.current.values()) {
+      sink.srcObject = null;
+      sink.remove();
+    }
+    remoteAudioBridgesRef.current.clear();
+    remoteAudioTracksRef.current.clear();
+    remoteDictationSessionIdsRef.current.clear();
+    remoteSpeechRecognizersRef.current.clear();
+    remoteSpeechSinksRef.current.clear();
+    remoteSpeechStartAttemptsRef.current.clear();
+    remoteSpeechStartRetryTimersRef.current.clear();
     for (const url of objectUrlsRef.current) URL.revokeObjectURL(url);
     objectUrlsRef.current.clear();
     joinWindowRef.current = null;
@@ -367,13 +421,16 @@ export function ScannerDemo() {
     if (!value) return false;
 
     const input = reviewInputRef.current;
-    setReviewInputValue((current) => {
-      if (!input) return current ? `${current}\n${value}` : value;
-
-      const start = input.selectionStart ?? current.length;
-      const end = input.selectionEnd ?? current.length;
-      return `${current.slice(0, start)}${value}${current.slice(end)}`;
-    });
+    const current = reviewInputValueRef.current;
+    const start = input?.selectionStart ?? current.length;
+    const end = input?.selectionEnd ?? current.length;
+    const nextValue = input
+      ? `${current.slice(0, start)}${value}${current.slice(end)}`
+      : current
+        ? `${current}\n${value}`
+        : value;
+    reviewInputValueRef.current = nextValue;
+    setReviewInputValue(nextValue);
 
     window.requestAnimationFrame(() => {
       const inputAfterRender = reviewInputRef.current;
@@ -397,27 +454,27 @@ export function ScannerDemo() {
       const value = message.text?.trim();
       if (!value) return false;
 
-      setReviewInputValue((current) => {
-        const existing = liveDictationInsertionsRef.current.get(liveSessionId);
-        const input = reviewInputRef.current;
-        const result = nextReviewInputAfterLiveDictation({
-          current,
-          existing,
-          phase: message.phase,
-          selectionEnd: input?.selectionEnd ?? current.length,
-          selectionStart: input?.selectionStart ?? current.length,
-          text: value,
-        });
-        if (result.insertion) {
-          liveDictationInsertionsRef.current.set(
-            liveSessionId,
-            result.insertion,
-          );
-        } else {
-          liveDictationInsertionsRef.current.delete(liveSessionId);
-        }
-        return result.value;
+      const current = reviewInputValueRef.current;
+      const existing = liveDictationInsertionsRef.current.get(liveSessionId);
+      const input = reviewInputRef.current;
+      const result = nextReviewInputAfterLiveDictation({
+        current,
+        existing,
+        phase: message.phase,
+        selectionEnd: input?.selectionEnd ?? current.length,
+        selectionStart: input?.selectionStart ?? current.length,
+        text: value,
       });
+      reviewInputValueRef.current = result.value;
+      if (result.insertion) {
+        liveDictationInsertionsRef.current.set(
+          liveSessionId,
+          result.insertion,
+        );
+      } else {
+        liveDictationInsertionsRef.current.delete(liveSessionId);
+      }
+      setReviewInputValue(result.value);
 
       window.requestAnimationFrame(() => {
         const inputAfterRender = reviewInputRef.current;
@@ -442,6 +499,43 @@ export function ScannerDemo() {
       const peer = peersRef.current.get(peerId);
       if (!peer) return;
       peersRef.current.delete(peerId);
+      remoteSpeechRecognizersRef.current.get(peerId)?.stop();
+      remoteSpeechRecognizersRef.current.delete(peerId);
+      const retryTimer = remoteSpeechStartRetryTimersRef.current.get(peerId);
+      if (retryTimer) {
+        window.clearTimeout(retryTimer);
+        remoteSpeechStartRetryTimersRef.current.delete(peerId);
+      }
+      const bridge = remoteAudioBridgesRef.current.get(peerId);
+      remoteAudioBridgesRef.current.delete(peerId);
+      if (bridge) {
+        try {
+          bridge.source?.disconnect();
+        } catch {}
+        try {
+          bridge.monitorGain?.disconnect();
+        } catch {}
+        try {
+          bridge.destination?.disconnect();
+        } catch {}
+        const sourceTrack = remoteAudioTracksRef.current.get(peerId);
+        for (const track of bridge.stream.getTracks()) {
+          if (track !== sourceTrack) track.stop();
+        }
+        if (bridge.track !== sourceTrack) {
+          bridge.track.stop();
+        }
+        void bridge.context?.close().catch(() => {});
+      }
+      const sink = remoteSpeechSinksRef.current.get(peerId);
+      remoteSpeechSinksRef.current.delete(peerId);
+      if (sink) {
+        sink.srcObject = null;
+        sink.remove();
+      }
+      remoteAudioTracksRef.current.delete(peerId);
+      remoteDictationSessionIdsRef.current.delete(peerId);
+      remoteSpeechStartAttemptsRef.current.delete(peerId);
       peer.control?.close();
       peer.photoTransfer?.close();
       peer.pc.close();
@@ -537,6 +631,170 @@ export function ScannerDemo() {
     [insertIntoReviewInput, replaceLiveDictationInReviewInput, sendControl],
   );
 
+  const closeRemoteSpeechAudioBridge = useCallback((peerId: string) => {
+    const bridge = remoteAudioBridgesRef.current.get(peerId);
+    remoteAudioBridgesRef.current.delete(peerId);
+    if (!bridge) return;
+    try {
+      bridge.source?.disconnect();
+    } catch {}
+    try {
+      bridge.monitorGain?.disconnect();
+    } catch {}
+    try {
+      bridge.destination?.disconnect();
+    } catch {}
+    const sourceTrack = remoteAudioTracksRef.current.get(peerId);
+    for (const track of bridge.stream.getTracks()) {
+      if (track !== sourceTrack) track.stop();
+    }
+    if (bridge.track !== sourceTrack) {
+      bridge.track.stop();
+    }
+    void bridge.context?.close().catch(() => {});
+  }, []);
+
+  const attachRemoteSpeechSink = useCallback((peerId: string, track: MediaStreamTrack) => {
+    const previousSink = remoteSpeechSinksRef.current.get(peerId);
+    if (previousSink) {
+      previousSink.srcObject = null;
+      previousSink.remove();
+    }
+
+    const sink = document.createElement("audio");
+    sink.autoplay = true;
+    sink.muted = true;
+    sink.setAttribute("playsinline", "true");
+    sink.srcObject = new MediaStream([track]);
+    sink.style.display = "none";
+    document.body?.appendChild(sink);
+    void sink.play().catch(() => {});
+    remoteSpeechSinksRef.current.set(peerId, sink);
+  }, []);
+
+  const recognitionTrackForRemoteSpeech = useCallback(
+    (peerId: string, track: MediaStreamTrack) => {
+      const existingBridge = remoteAudioBridgesRef.current.get(peerId);
+      if (existingBridge?.track.readyState === "live") return existingBridge.track;
+      closeRemoteSpeechAudioBridge(peerId);
+
+      try {
+        const bridge = createRemoteSpeechAudioBridge(track);
+        if (!bridge) return track;
+        remoteAudioBridgesRef.current.set(peerId, bridge);
+        return bridge.track;
+      } catch (_error) {
+        return track;
+      }
+    },
+    [closeRemoteSpeechAudioBridge],
+  );
+
+  const handleRemoteSpeechTranscript = useCallback(
+    (peer: PeerSession, transcript: RemoteSpeechTranscript) => {
+      const dictationSessionId =
+        remoteDictationSessionIdsRef.current.get(peer.id) ??
+        createMessageId("web-dictation-session");
+      remoteDictationSessionIdsRef.current.set(peer.id, dictationSessionId);
+      addCapture(peer, {
+        type: "dictation",
+        messageId: createMessageId("dictation"),
+        sentAt: new Date().toISOString(),
+        dictationSessionId,
+        phase: transcript.phase,
+        capturedAt: new Date().toISOString(),
+        text: transcript.text,
+        insertIntoCursor: true,
+      });
+    },
+    [addCapture],
+  );
+
+  const stopRemoteSpeechRecognition = useCallback(
+    (peerId: string) => {
+      remoteSpeechRecognizersRef.current.get(peerId)?.stop();
+      remoteSpeechRecognizersRef.current.delete(peerId);
+      remoteDictationSessionIdsRef.current.delete(peerId);
+      remoteSpeechStartAttemptsRef.current.delete(peerId);
+      const retryTimer = remoteSpeechStartRetryTimersRef.current.get(peerId);
+      if (retryTimer) {
+        window.clearTimeout(retryTimer);
+        remoteSpeechStartRetryTimersRef.current.delete(peerId);
+      }
+      closeRemoteSpeechAudioBridge(peerId);
+    },
+    [closeRemoteSpeechAudioBridge],
+  );
+
+  const startRemoteSpeechRecognition = useCallback(
+    (peer: PeerSession) => {
+      if (remoteSpeechRecognizersRef.current.has(peer.id)) return;
+      const retryTimer = remoteSpeechStartRetryTimersRef.current.get(peer.id);
+      if (retryTimer) {
+        window.clearTimeout(retryTimer);
+        remoteSpeechStartRetryTimersRef.current.delete(peer.id);
+      }
+      const track = remoteAudioTracksRef.current.get(peer.id);
+      if (!track) {
+        setError("Waiting for the App Clip microphone track.");
+        return;
+      }
+      if (track.kind !== "audio" || track.readyState !== "live") {
+        setError("Chrome received the App Clip microphone track before it was live. Tap Dictate again.");
+        return;
+      }
+      const recognitionTrack = recognitionTrackForRemoteSpeech(peer.id, track);
+      if (recognitionTrack.kind !== "audio" || recognitionTrack.readyState !== "live") {
+        setError("Chrome could not prepare the App Clip microphone stream for speech recognition.");
+        return;
+      }
+      const recognizer = new WebRemoteSpeechRecognizer({
+        onTranscript: (transcript) =>
+          handleRemoteSpeechTranscript(peer, transcript),
+        onError: (recognitionError) => {
+          if (
+            isRestartableRemoteSpeechError(recognitionError) &&
+            remoteDictationSessionIdsRef.current.has(peer.id)
+          ) {
+            return;
+          }
+          if (
+            isTransientRemoteSpeechTrackStartError(recognitionError) &&
+            remoteDictationSessionIdsRef.current.has(peer.id)
+          ) {
+            const attempts = (remoteSpeechStartAttemptsRef.current.get(peer.id) ?? 0) + 1;
+            remoteSpeechStartAttemptsRef.current.set(peer.id, attempts);
+            if (
+              attempts <= REMOTE_SPEECH_START_MAX_ATTEMPTS &&
+              !remoteSpeechStartRetryTimersRef.current.has(peer.id)
+            ) {
+              const nextTimer = window.setTimeout(() => {
+                remoteSpeechStartRetryTimersRef.current.delete(peer.id);
+                if (remoteDictationSessionIdsRef.current.has(peer.id)) {
+                  startRemoteSpeechRecognition(peer);
+                }
+              }, REMOTE_SPEECH_START_RETRY_DELAY_MS);
+              remoteSpeechStartRetryTimersRef.current.set(peer.id, nextTimer);
+              return;
+            }
+          }
+          setError(remoteSpeechErrorDetail(recognitionError));
+        },
+        onEnd: () => {
+          remoteSpeechRecognizersRef.current.delete(peer.id);
+          if (remoteDictationSessionIdsRef.current.has(peer.id)) {
+            window.setTimeout(() => startRemoteSpeechRecognition(peer), 250);
+          }
+        },
+      });
+      if (recognizer.start(recognitionTrack)) {
+        remoteSpeechStartAttemptsRef.current.delete(peer.id);
+        remoteSpeechRecognizersRef.current.set(peer.id, recognizer);
+      }
+    },
+    [handleRemoteSpeechTranscript, recognitionTrackForRemoteSpeech],
+  );
+
   const handleControlMessage = useCallback(
     (peer: PeerSession, rawData: string) => {
       const message = decodeScannerControlMessage(rawData);
@@ -557,6 +815,20 @@ export function ScannerDemo() {
         refreshPeerCount();
         return;
       }
+      if (message.type === "dictation" && message.phase === "started") {
+        remoteDictationSessionIdsRef.current.set(
+          peer.id,
+          message.dictationSessionId,
+        );
+        startRemoteSpeechRecognition(peer);
+        addCapture(peer, message);
+        return;
+      }
+      if (message.type === "dictation" && message.phase === "stopped") {
+        stopRemoteSpeechRecognition(peer.id);
+        addCapture(peer, message);
+        return;
+      }
       if (message.type === "capture_result" || message.type === "dictation") {
         addCapture(peer, message);
         return;
@@ -565,7 +837,15 @@ export function ScannerDemo() {
         closePeer(peer.id);
       }
     },
-    [addCapture, closePeer, refreshPeerCount, sendControl, sendSessionReady],
+    [
+      addCapture,
+      closePeer,
+      refreshPeerCount,
+      sendControl,
+      sendSessionReady,
+      startRemoteSpeechRecognition,
+      stopRemoteSpeechRecognition,
+    ],
   );
 
   const assemblePhoto = useCallback(
@@ -769,6 +1049,26 @@ export function ScannerDemo() {
       };
       peersRef.current.set(attemptId, peer);
 
+      pc.addTransceiver("audio", { direction: "recvonly" });
+      pc.ontrack = (event) => {
+        if (event.track.kind !== "audio") return;
+        remoteAudioTracksRef.current.set(peer.id, event.track);
+        attachRemoteSpeechSink(peer.id, event.track);
+        event.track.addEventListener(
+          "ended",
+          () => stopRemoteSpeechRecognition(peer.id),
+          { once: true },
+        );
+        event.track.addEventListener("unmute", () => {
+          if (remoteDictationSessionIdsRef.current.has(peer.id)) {
+            startRemoteSpeechRecognition(peer);
+          }
+        });
+        if (remoteDictationSessionIdsRef.current.has(peer.id)) {
+          startRemoteSpeechRecognition(peer);
+        }
+      };
+
       peer.control = pc.createDataChannel(SCANNER_CONTROL_CHANNEL_LABEL, {
         ordered: true,
       });
@@ -806,6 +1106,9 @@ export function ScannerDemo() {
       fetchIceServers,
       postPeerOffer,
       refreshPeerCount,
+      attachRemoteSpeechSink,
+      startRemoteSpeechRecognition,
+      stopRemoteSpeechRecognition,
     ],
   );
 
@@ -893,6 +1196,7 @@ export function ScannerDemo() {
     setPhotos([]);
     setPairingDialogOpen(false);
     setQrDataUrl(null);
+    reviewInputValueRef.current = "";
     setReviewInputValue("");
     setStatus("idle");
   }, [disposeRuntime]);
@@ -981,6 +1285,11 @@ export function ScannerDemo() {
       );
     }
   }, [fetchIceServers, pollJoinAttempts, reset, sessionLabel]);
+
+  const handleReviewInputChange = useCallback((value: string) => {
+    reviewInputValueRef.current = value;
+    setReviewInputValue(value);
+  }, []);
 
   const copyPairingUrl = useCallback(async () => {
     if (!joinWindow?.qrCodeUrl) return;
@@ -1109,7 +1418,7 @@ export function ScannerDemo() {
                 captures={captures}
                 reviewInputRef={reviewInputRef}
                 reviewInputValue={reviewInputValue}
-                onReviewInputChange={setReviewInputValue}
+                onReviewInputChange={handleReviewInputChange}
               />
             </div>
 

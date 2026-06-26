@@ -152,6 +152,10 @@ const clipTransportSwiftSource = readFileSync(
   new URL("../ios/VoltClip/Services/WebKitWebRTCTransport.swift", import.meta.url),
   "utf8"
 );
+const clipWebRTCBridgeSource = readFileSync(
+  new URL("../ios/VoltClip/Resources/webrtc-bridge.html", import.meta.url),
+  "utf8"
+);
 const scannerWebRTCConnectionSwiftSource = readFileSync(
   new URL("../ios/Volt/Services/ScannerWebRTCConnection.swift", import.meta.url),
   "utf8"
@@ -437,10 +441,42 @@ test("native and app clip keep transient WebRTC disconnects alive through backgr
   assert.match(clipRootViewSwiftSource, /ClipWebRTCBridgeView\(webView: store\.bridgeWebView\)/);
   assert.match(clipRootViewSwiftSource, /store\.updateAppIsInBackground\(newValue != \.active\)/);
   assert.match(clipTransportSwiftSource, /setDisconnectGraceMs\(\\\(graceMs\)\)/);
-  const bridgeSource = readFileSync(new URL("../ios/VoltClip/Resources/webrtc-bridge.html", import.meta.url), "utf8");
+  const bridgeSource = clipWebRTCBridgeSource;
   assert.match(bridgeSource, /let disconnectGraceMs = 12000/);
   assert.match(bridgeSource, /setDisconnectGraceMs\(nextGraceMs\)/);
   assert.match(bridgeSource, /pc && pc\.connectionState === "disconnected"[\s\S]*window\.voltBridge\.close\(\)/);
+});
+
+test("app clip capture sessions keep one photo batch per presented camera session", () => {
+  assert.match(clipRootViewSwiftSource, /@State private var captureSessionBatchId: String\?/);
+  assert.match(clipRootViewSwiftSource, /captureSessionBatchId = store\.beginCaptureSession\(\)/);
+  assert.match(clipRootViewSwiftSource, /store\.endCaptureSession\(id: captureSessionBatchId\)/);
+  assert.match(clipRootViewSwiftSource, /await store\.capturePhoto\(image, batchId: captureSessionBatchId\)/);
+  assert.match(clipScannerStoreSwiftSource, /func beginCaptureSession\(\) -> String/);
+  assert.match(clipScannerStoreSwiftSource, /let batchId = ScannerProtocol\.makeMessageId\("batch"\)/);
+  assert.match(clipScannerStoreSwiftSource, /func endCaptureSession\(id: String\? = nil\)/);
+  assert.match(clipScannerStoreSwiftSource, /if let id, activeCaptureBatchId != id \{\s*return\s*\}/);
+  assert.match(clipScannerStoreSwiftSource, /func capturePhoto\(_ image: UIImage, batchId: String\? = nil\) async/);
+  assert.match(clipScannerStoreSwiftSource, /batchId: batchId \?\? currentCaptureBatchId\(\)/);
+});
+
+test("app clip photo mode viewfinder stays edge-to-edge while capture status changes", () => {
+  assert.match(clipRootViewSwiftSource, /if activeMode == \.photo, ocrReviewImage == nil \{[\s\S]*GeometryReader/);
+  assert.match(clipRootViewSwiftSource, /let side = previewGeometry\.size\.width/);
+  assert.doesNotMatch(clipRootViewSwiftSource, /let side = min\(previewGeometry\.size\.width, previewGeometry\.size\.height\)/);
+  assert.match(clipRootViewSwiftSource, /\.frame\(maxWidth: \.infinity, maxHeight: \.infinity, alignment: \.top\)/);
+});
+
+test("app clip dictation attaches the microphone to Chrome's offered audio sender before starting", () => {
+  assert.match(clipWebRTCBridgeSource, /const offeredAudio = pc\.getTransceivers\(\)\.find/);
+  assert.match(clipWebRTCBridgeSource, /transceiver\.direction = "sendonly"/);
+  assert.match(clipWebRTCBridgeSource, /audioSender = transceiver\.sender/);
+  assert.match(clipWebRTCBridgeSource, /if \(!audioSender\) \{\s*configureAudioSender\(\);\s*\}/);
+  assert.match(clipWebRTCBridgeSource, /if \(audioSender && audioSender\.track !== track\) \{\s*await audioSender\.replaceTrack\(track\);\s*\}/);
+  const replaceTrackStart = clipWebRTCBridgeSource.indexOf("await audioSender.replaceTrack(track);");
+  const startedMessageStart = clipWebRTCBridgeSource.indexOf('phase: "started"', replaceTrackStart);
+  assert.ok(replaceTrackStart > -1);
+  assert.ok(startedMessageStart > replaceTrackStart);
 });
 
 test("native screens use the shared header connection control without extra session accessories", () => {
@@ -882,13 +918,51 @@ test("app clip OCR target dialog shares cleanup and styling with the main app", 
 test("app clip capture opens in OCR and keeps capture and upload photo lists separate", () => {
   assert.match(clipScannerStoreSwiftSource, /var activeCaptureMode: CaptureMode = \.ocr/);
   assert.match(clipRootViewSwiftSource, /\.onAppear \{\s*activeMode = \.ocr/);
-  assert.match(clipRootViewSwiftSource, /photos: store\.photos\.filter \{ \$0\.source == \.capture \}/);
+  assert.match(clipRootViewSwiftSource, /let capturePhotos = store\.photos\.filter \{ \$0\.source == \.capture \}/);
+  assert.match(clipRootViewSwiftSource, /ClipCapturePhotoBatchesSection\(/);
   assert.match(clipRootViewSwiftSource, /photos: store\.photos\.filter \{ \$0\.source == \.upload \}/);
   assert.match(clipRootViewSwiftSource, /latestPhoto: store\.photos\.first\(where: \{ \$0\.source == \.capture \}\)/);
 });
 
+test("app clip captured photos are grouped, previewable, and removable after leaving camera", () => {
+  assert.match(clipRootViewSwiftSource, /@State private var expandedBatchIds: Set<String> = \[\]/);
+  assert.match(clipRootViewSwiftSource, /@State private var previewedPhoto: ClipScannerStore\.ClipPhoto\?/);
+  assert.match(clipRootViewSwiftSource, /let grouped = Dictionary\(grouping: capturePhotos\) \{ photo in\s*photo\.batchId \?\? photo\.id\.uuidString\s*\}/);
+  assert.match(clipRootViewSwiftSource, /\.sheet\(item: \$previewedPhoto\)/);
+  assert.match(clipRootViewSwiftSource, /private struct ClipCapturePhotoBatchCard: View/);
+  assert.match(clipRootViewSwiftSource, /private struct ClipCapturePhotoThumbnail: View/);
+  assert.match(clipRootViewSwiftSource, /private struct ClipPhotoPreviewSheet: View/);
+  assert.match(clipRootViewSwiftSource, /store\.removePhoto\(id: photo\.id\)/);
+  assert.match(clipRootViewSwiftSource, /store\.removePhotos\(batchId: batch\.id\)/);
+  assert.match(clipScannerStoreSwiftSource, /func removePhoto\(id: UUID\)/);
+  assert.match(clipScannerStoreSwiftSource, /func removePhotos\(batchId: String\)/);
+});
+
+test("app clip photo capture does not move the viewfinder with saved chips or send latest controls", () => {
+  assert.match(clipRootViewSwiftSource, /private let photoPreviewToolbarGap: CGFloat = 0/);
+  assert.match(clipRootViewSwiftSource, /captureNotice = mode == \.ocr \? "Capturing text image" : nil/);
+  assert.match(clipRootViewSwiftSource, /private func successNotice\(for mode: CaptureMode\) -> String\?/);
+  assert.match(clipRootViewSwiftSource, /case \.photo, \.dictation:\s*nil/);
+  assert.match(clipRootViewSwiftSource, /hasLatestCapture: false/);
+  assert.match(clipRootViewSwiftSource, /onSendLatest: nil/);
+});
+
+test("app clip bottom CTAs show connection progress while pairing", () => {
+  assert.match(sharedScannerTabComponentsSwiftSource, /var isConnecting = false/);
+  assert.match(sharedScannerTabComponentsSwiftSource, /isConnecting \? "Connecting\.\.\." : title/);
+  assert.match(sharedScannerTabComponentsSwiftSource, /isConnecting \? "hourglass" : systemImage/);
+  assert.match(sharedScannerTabComponentsSwiftSource, /if isConnecting \{\s*return "Connecting\.\.\."\s*\}/);
+  assert.match(clipRootViewSwiftSource, /ScannerBottomActionAccessory\([\s\S]*isConnecting: store\.isPairing[\s\S]*statusText: captureStatusText/);
+  assert.match(clipRootViewSwiftSource, /ScannerPhotoPickerAccessory\([\s\S]*isConnecting: store\.isPairing[\s\S]*statusText: uploadStatusText/);
+  assert.match(clipRootViewSwiftSource, /ClipDictationStartAccessory\([\s\S]*isConnecting: store\.isPairing[\s\S]*statusText: dictationStatusText/);
+  assert.match(clipRootViewSwiftSource, /private var captureStatusText: String \{\s*if store\.isPairing \{\s*store\.statusText/);
+  assert.match(clipRootViewSwiftSource, /private var dictationStatusText: String \{[\s\S]*else if store\.isPairing \{\s*store\.statusText/);
+  assert.match(clipRootViewSwiftSource, /private var uploadStatusText: String \{[\s\S]*else if store\.isPairing \{\s*store\.statusText/);
+  assert.match(clipRootViewSwiftSource, /private var buttonTitle: String \{\s*if isConnecting \{\s*return "Connecting\.\.\."/);
+});
+
 test("app clip photo capture and library upload wait for Chrome photo receipts", () => {
-  assert.match(clipScannerStoreSwiftSource, /func capturePhoto\(_ image: UIImage\) async/);
+  assert.match(clipScannerStoreSwiftSource, /func capturePhoto\(_ image: UIImage, batchId: String\? = nil\) async/);
   assert.match(clipScannerStoreSwiftSource, /\.centerSquareCropped\(\)/);
   assert.match(clipScannerStoreSwiftSource, /await sendPhoto\(photo\)/);
   assert.match(clipScannerStoreSwiftSource, /func uploadPhotos\(_ images: \[UIImage\]\) async/);
