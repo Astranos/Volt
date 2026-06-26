@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { motion, type Variants } from "motion/react";
 import { useEffect, useRef } from "react";
 import {
   Bookmark,
@@ -121,6 +122,37 @@ const extensionScreenshots = {
   upc: "/assets/extension/upc-highlighter.png",
 };
 
+const viewportOnce = { once: true, margin: "-80px" };
+
+const fadeUp: Variants = {
+  hidden: { opacity: 0, y: 22 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.7, ease: [0.22, 1, 0.36, 1] },
+  },
+};
+
+const staggerGroup: Variants = {
+  hidden: {},
+  visible: {
+    transition: {
+      staggerChildren: 0.09,
+      delayChildren: 0.08,
+    },
+  },
+};
+
+const softScale: Variants = {
+  hidden: { opacity: 0, scale: 0.96, y: 18 },
+  visible: {
+    opacity: 1,
+    scale: 1,
+    y: 0,
+    transition: { duration: 0.7, ease: [0.22, 1, 0.36, 1] },
+  },
+};
+
 function Home() {
   return (
     <main className="min-h-screen bg-zinc-50 text-zinc-950">
@@ -128,16 +160,30 @@ function Home() {
 
       <section id="top" className="border-b border-zinc-200 bg-white">
         <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8 lg:py-12">
-          <div className="mx-auto max-w-5xl text-center">
-            <h1 className="text-4xl font-semibold leading-[1.02] text-zinc-950 sm:text-6xl">
+          <motion.div
+            className="mx-auto max-w-5xl text-center"
+            initial="hidden"
+            animate="visible"
+            variants={staggerGroup}
+          >
+            <motion.h1
+              className="text-4xl font-semibold leading-[1.02] text-zinc-950 sm:text-6xl"
+              variants={fadeUp}
+            >
               The fastest way to resell electronics.
-            </h1>
-            <p className="mx-auto mt-5 max-w-3xl text-lg leading-8 text-zinc-600 sm:text-xl">
+            </motion.h1>
+            <motion.p
+              className="mx-auto mt-5 max-w-3xl text-lg leading-8 text-zinc-600 sm:text-xl"
+              variants={fadeUp}
+            >
               Volt is a set of tools that makes buying and reselling quicker by
               streamlining the process of evaluating items, capturing details,
               and preparing listings.
-            </p>
-            <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
+            </motion.p>
+            <motion.div
+              className="mt-6 flex flex-col justify-center gap-3 sm:flex-row"
+              variants={fadeUp}
+            >
               <a
                 href={chromeExtensionDownloadUrl}
                 className="inline-flex h-11 items-center justify-center gap-2 rounded-[0.85rem] bg-zinc-950 px-5 text-sm font-semibold text-white hover:bg-zinc-800"
@@ -152,8 +198,8 @@ function Home() {
                 Download mobile app
                 <Smartphone size={16} />
               </a>
-            </div>
-          </div>
+            </motion.div>
+          </motion.div>
           <HeroPanel />
         </div>
       </section>
@@ -167,14 +213,20 @@ function Home() {
 
 function HeroPanel() {
   return (
-    <div className="mx-auto mt-8 max-w-6xl lg:mt-10">
+    <motion.div
+      className="mx-auto mt-8 max-w-6xl lg:mt-10"
+      initial="hidden"
+      animate="visible"
+      variants={softScale}
+      transition={{ delay: 0.18 }}
+    >
       <div className="lg:hidden">
         <MobileNewTabDemo />
       </div>
       <div className="hidden lg:block">
         <BrowserWorkspaceMock />
       </div>
-    </div>
+    </motion.div>
   );
 }
 
@@ -185,8 +237,14 @@ function ProductSurfaceSection() {
       className="border-b border-zinc-200 bg-zinc-950 text-white"
     >
       <div className="mx-auto max-w-7xl px-4 pt-16 sm:px-6 lg:px-8 lg:pt-24">
-        <div className="grid gap-10 lg:grid-cols-[0.78fr_1.22fr]">
-          <div>
+        <motion.div
+          className="grid gap-10 lg:grid-cols-[0.78fr_1.22fr]"
+          initial="hidden"
+          whileInView="visible"
+          viewport={viewportOnce}
+          variants={staggerGroup}
+        >
+          <motion.div variants={fadeUp}>
             <p className="text-sm font-semibold text-emerald-300">
               Mobile capture
             </p>
@@ -199,12 +257,16 @@ function ProductSurfaceSection() {
               take photos, and dictate notes without returning to the keyboard
               for every item.
             </p>
-          </div>
-          <div className="grid gap-4 md:grid-cols-3">
+          </motion.div>
+          <motion.div
+            className="grid gap-4 md:grid-cols-3"
+            variants={staggerGroup}
+          >
             {platformItems.map((item) => (
-              <article
+              <motion.article
                 key={item.title}
                 className="rounded-[1.2rem] border border-white/10 bg-white/[0.06] p-5"
+                variants={softScale}
               >
                 <div className="grid size-10 place-items-center rounded-[0.8rem] bg-white text-zinc-950">
                   <item.icon size={20} />
@@ -213,10 +275,10 @@ function ProductSurfaceSection() {
                 <p className="mt-3 text-sm leading-6 text-zinc-300">
                   {item.body}
                 </p>
-              </article>
+              </motion.article>
             ))}
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       </div>
 
       <div className="py-12 lg:py-16">
@@ -317,21 +379,30 @@ function CaptureSection() {
   return (
     <section className="border-b border-zinc-200 bg-zinc-50">
       <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
-        <div className="flex flex-col justify-between gap-8 lg:flex-row lg:items-end">
-          <div className="max-w-3xl">
+        <motion.div
+          className="flex flex-col justify-between gap-8 lg:flex-row lg:items-end"
+          initial="hidden"
+          whileInView="visible"
+          viewport={viewportOnce}
+          variants={staggerGroup}
+        >
+          <motion.div className="max-w-3xl" variants={fadeUp}>
             <p className="text-sm font-semibold text-zinc-500">
               Chrome extension
             </p>
             <h2 className="mt-3 text-3xl font-semibold leading-tight text-zinc-950 sm:text-4xl">
               Page-aware tools that stay out of the way.
             </h2>
-          </div>
-          <p className="max-w-xl text-base leading-7 text-zinc-600">
+          </motion.div>
+          <motion.p
+            className="max-w-xl text-base leading-7 text-zinc-600"
+            variants={fadeUp}
+          >
             Volt adds focused controls to the browser surfaces resellers already
             use: UPC pages, product pages, Shopify Admin, and eBay sold-listing
             checks.
-          </p>
-        </div>
+          </motion.p>
+        </motion.div>
 
         <div className="mt-10">
           <ChromeExtensionShowcase />
@@ -343,7 +414,13 @@ function CaptureSection() {
 
 function ChromeExtensionShowcase() {
   return (
-    <div className="grid gap-5">
+    <motion.div
+      className="grid gap-5"
+      initial="hidden"
+      whileInView="visible"
+      viewport={viewportOnce}
+      variants={staggerGroup}
+    >
       <div className="grid gap-5 lg:grid-cols-[1fr_1fr]">
         <ExtensionFeatureCard
           body="Highlight product text, then open eBay solds, Google UPC, PriceCharting, mobile scanner, offer calculator, or settings."
@@ -377,7 +454,7 @@ function ChromeExtensionShowcase() {
           title="Shopify search tabs"
         />
       </div>
-    </div>
+    </motion.div>
   );
 }
 
@@ -395,7 +472,10 @@ function ExtensionFeatureCard({
   title: string;
 }) {
   return (
-    <article className="overflow-hidden rounded-[1.2rem] border border-zinc-200 bg-white shadow-sm">
+    <motion.article
+      className="overflow-hidden rounded-[1.2rem] border border-zinc-200 bg-white shadow-sm"
+      variants={softScale}
+    >
       <div
         className={`overflow-hidden border-b border-zinc-200 ${mediaClassName}`}
       >
@@ -411,7 +491,7 @@ function ExtensionFeatureCard({
         <h3 className="text-sm font-semibold text-zinc-950">{title}</h3>
         <p className="mt-2 text-sm leading-6 text-zinc-600">{body}</p>
       </div>
-    </article>
+    </motion.article>
   );
 }
 

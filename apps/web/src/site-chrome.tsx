@@ -1,3 +1,4 @@
+import { motion, type Variants } from "motion/react";
 import { ArrowRight, Chrome, Github, Smartphone } from "lucide-react";
 
 export const chromeExtensionDownloadUrl =
@@ -19,6 +20,22 @@ const footerLinkGroups = [
     ],
   },
 ];
+
+const fadeUp: Variants = {
+  hidden: { opacity: 0, y: 18 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.65, ease: [0.22, 1, 0.36, 1] },
+  },
+};
+
+const staggerGroup: Variants = {
+  hidden: {},
+  visible: {
+    transition: { staggerChildren: 0.08, delayChildren: 0.06 },
+  },
+};
 
 type SiteHeaderProps = {
   anchorPrefix?: "" | "/";
@@ -80,9 +97,15 @@ export function SiteHeader({
 export function SiteFooter() {
   return (
     <footer id="privacy" className="bg-zinc-950 text-white">
-      <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8 lg:py-16">
+      <motion.div
+        className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8 lg:py-16"
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true, margin: "-80px" }}
+        variants={staggerGroup}
+      >
         <div className="grid gap-10 lg:grid-cols-[minmax(0,44rem)_14rem] lg:gap-24">
-          <div className="max-w-2xl">
+          <motion.div className="max-w-2xl" variants={fadeUp}>
             <a
               href="/"
               className="inline-flex items-center gap-2"
@@ -115,9 +138,9 @@ export function SiteFooter() {
                 Chrome extension
               </a>
             </div>
-          </div>
+          </motion.div>
 
-          <div className="grid gap-8">
+          <motion.div className="grid gap-8" variants={fadeUp}>
             {footerLinkGroups.map((group) => (
               <nav key={group.title} aria-label={group.title}>
                 <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
@@ -136,10 +159,13 @@ export function SiteFooter() {
                 </div>
               </nav>
             ))}
-          </div>
+          </motion.div>
         </div>
 
-        <div className="mt-10 flex flex-col gap-3 border-t border-white/10 pt-6 text-xs text-zinc-500 sm:flex-row sm:items-center sm:justify-between">
+        <motion.div
+          className="mt-10 flex flex-col gap-3 border-t border-white/10 pt-6 text-xs text-zinc-500 sm:flex-row sm:items-center sm:justify-between"
+          variants={fadeUp}
+        >
           <p>Copyright {new Date().getFullYear()} Volt Scanner</p>
           <p className="inline-flex items-center gap-1.5">
             Open source on
@@ -151,8 +177,8 @@ export function SiteFooter() {
               GitHub
             </a>
           </p>
-        </div>
-      </div>
+        </motion.div>
+      </motion.div>
     </footer>
   );
 }
