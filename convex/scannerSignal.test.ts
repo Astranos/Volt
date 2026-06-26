@@ -116,6 +116,46 @@ describe("scanner signal route command extraction", () => {
 });
 
 describe("scanner signal rendezvous module", () => {
+  test("schedules reconnect wake push without blocking the request response", async () => {
+    const ctx = {
+      runMutation: vi.fn(async () => ({
+        statusCode: 200,
+        body: {
+          request: { id: "reconnect_request_12345" },
+          pushSubscription: {
+            endpoint: "https://push.example.test/subscription",
+            keys: { auth: "auth", p256dh: "p256dh" },
+          },
+        },
+      })),
+      scheduler: {
+        runAfter: vi.fn(async () => "scheduled_push"),
+      },
+    };
+
+    const result = await executeScannerSignalRendezvous(ctx as never, {
+      command: "createReconnectRequest",
+      parts: ["pairings", "pairing_test_12345", "reconnect"],
+      body: {},
+      origin: "https://example.test",
+      startedAt: Date.now(),
+      pairingSecret: "pairing-secret",
+    });
+
+    expect(result).toEqual({
+      statusCode: 200,
+      body: { request: { id: "reconnect_request_12345" } },
+    });
+    expect(ctx.scheduler.runAfter).toHaveBeenCalledWith(
+      0,
+      internal.scannerPush.sendReconnectWakePush,
+      expect.objectContaining({
+        pairingId: "pairing_test_12345",
+        requestId: "reconnect_request_12345",
+      }),
+    );
+  });
+
   test("maps create join attempt requests to the internal mutation contract", async () => {
     const calls: Array<{ fn: unknown; args: unknown }> = [];
     const ctx = {

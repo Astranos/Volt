@@ -1,11 +1,21 @@
 import Foundation
 import UIKit
 
-struct ScannerSignalingClient {
-    struct ReconnectJoinWindow {
+struct ScannerSignalingClient: Sendable {
+    struct ReconnectJoinWindow: Sendable {
         let token: String
         let sessionId: String?
         let sourceURL: URL
+    }
+
+    private struct ReconnectStatusRequest: Sendable {
+        let requestId: String
+        let statusURL: URL
+    }
+
+    private enum ReconnectRequestCreationResult: Sendable {
+        case success(ReconnectStatusRequest)
+        case failure
     }
 
     func fetchIceServerConfiguration(signalURL: URL = ScannerProtocol.signalURL) async throws -> ScannerProtocol.IceServerConfiguration {
@@ -39,7 +49,9 @@ struct ScannerSignalingClient {
         browserSessionId: String,
         displayName: String,
         phoneDeviceId: String,
-        signalURL: URL = ScannerProtocol.signalURL
+        signalURL: URL = ScannerProtocol.signalURL,
+        retries: Int = 2,
+        timeout: TimeInterval = ScannerProtocol.signalRequestTimeout
     ) async throws {
         let phoneLabel = await MainActor.run { UIDevice.current.name }
         var request = URLRequest(url: signalURL.appending(path: "pairings"))
@@ -53,8 +65,48 @@ struct ScannerSignalingClient {
             "phoneDeviceId": phoneDeviceId,
             "phoneLabel": phoneLabel,
         ])
-        let (data, response) = try await signalData(for: request)
+        let (data, response) = try await signalData(for: request, retries: retries, timeout: timeout)
         try validateSignalResponse(data: data, response: response)
+    }
+
+    @discardableResult
+    func registerPairingCandidates(
+        pairingId: String,
+        pairingSecret: String,
+        browserSessionId: String,
+        displayName: String,
+        phoneDeviceId: String,
+        signalURLs: [URL],
+        retries: Int = 0,
+        timeout: TimeInterval = ScannerProtocol.reconnectCandidateRequestTimeout
+    ) async -> Bool {
+        await withTaskGroup(of: Bool.self) { group in
+            for signalURL in signalURLs {
+                group.addTask {
+                    do {
+                        try await registerPairing(
+                            pairingId: pairingId,
+                            pairingSecret: pairingSecret,
+                            browserSessionId: browserSessionId,
+                            displayName: displayName,
+                            phoneDeviceId: phoneDeviceId,
+                            signalURL: signalURL,
+                            retries: retries,
+                            timeout: timeout
+                        )
+                        return true
+                    } catch {
+                        return false
+                    }
+                }
+            }
+
+            var didRegister = false
+            for await result in group {
+                didRegister = didRegister || result
+            }
+            return didRegister
+        }
     }
 
     func requestReconnect(
@@ -74,25 +126,43 @@ struct ScannerSignalingClient {
         pairingSecret: String,
         signalURLs: [URL]
     ) async throws -> ReconnectJoinWindow {
-        var requests: [(requestId: String, statusURL: URL)] = []
-        var lastError: Error?
-        for signalURL in signalURLs {
-            do {
-                let requestId = try await createReconnectRequest(
-                    pairingId: pairingId,
-                    pairingSecret: pairingSecret,
-                    signalURL: signalURL
-                )
-                requests.append((
-                    requestId,
-                    signalURL
-                        .appending(path: "pairings")
-                        .appending(path: pairingId)
-                        .appending(path: "reconnect")
-                        .appending(path: requestId)
-                ))
-            } catch {
-                lastError = error
+        let isCandidateProbe = signalURLs.count > 1
+        let requestRetries = isCandidateProbe ? 0 : 2
+        let requestTimeout = isCandidateProbe ? ScannerProtocol.reconnectCandidateRequestTimeout : ScannerProtocol.signalRequestTimeout
+        var requests: [ReconnectStatusRequest] = []
+        var lastError: ScannerPairingError?
+        await withTaskGroup(of: ReconnectRequestCreationResult.self) { group in
+            for signalURL in signalURLs {
+                group.addTask {
+                    do {
+                        let requestId = try await createReconnectRequest(
+                            pairingId: pairingId,
+                            pairingSecret: pairingSecret,
+                            signalURL: signalURL,
+                            retries: requestRetries,
+                            timeout: requestTimeout
+                        )
+                        return .success(ReconnectStatusRequest(
+                            requestId: requestId,
+                            statusURL: signalURL
+                                .appending(path: "pairings")
+                                .appending(path: pairingId)
+                                .appending(path: "reconnect")
+                                .appending(path: requestId)
+                        ))
+                    } catch {
+                        return .failure
+                    }
+                }
+            }
+
+            for await result in group {
+                switch result {
+                case .success(let request):
+                    requests.append(request)
+                case .failure:
+                    lastError = ScannerPairingError.requestFailed
+                }
             }
         }
         guard !requests.isEmpty else {
@@ -108,9 +178,13 @@ struct ScannerSignalingClient {
                 let data: Data
                 let response: URLResponse
                 do {
-                    (data, response) = try await signalData(for: request)
+                    (data, response) = try await signalData(
+                        for: request,
+                        retries: 0,
+                        timeout: ScannerProtocol.reconnectCandidateRequestTimeout
+                    )
                 } catch {
-                    lastError = error
+                    lastError = ScannerPairingError.requestFailed
                     continue
                 }
                 let statusCode = (response as? HTTPURLResponse)?.statusCode
@@ -270,7 +344,9 @@ struct ScannerSignalingClient {
     private func createReconnectRequest(
         pairingId: String,
         pairingSecret: String,
-        signalURL: URL = ScannerProtocol.signalURL
+        signalURL: URL = ScannerProtocol.signalURL,
+        retries: Int = 2,
+        timeout: TimeInterval = ScannerProtocol.signalRequestTimeout
     ) async throws -> String {
         var request = URLRequest(
             url: signalURL
@@ -283,7 +359,7 @@ struct ScannerSignalingClient {
         request.setValue(pairingSecret, forHTTPHeaderField: "X-Volt-Pairing-Secret")
         request.httpBody = try JSONSerialization.data(withJSONObject: ["pairingSecret": pairingSecret])
 
-        let (data, response) = try await signalData(for: request)
+        let (data, response) = try await signalData(for: request, retries: retries, timeout: timeout)
         let statusCode = (response as? HTTPURLResponse)?.statusCode
         guard statusCode == 200 else {
             if statusCode == 410 {
@@ -299,13 +375,21 @@ struct ScannerSignalingClient {
         return requestId
     }
 
-    private func signalData(from url: URL, retries: Int = 2) async throws -> (Data, URLResponse) {
-        try await signalData(for: URLRequest(url: url), retries: retries)
+    private func signalData(
+        from url: URL,
+        retries: Int = 2,
+        timeout: TimeInterval = ScannerProtocol.signalRequestTimeout
+    ) async throws -> (Data, URLResponse) {
+        try await signalData(for: URLRequest(url: url), retries: retries, timeout: timeout)
     }
 
-    private func signalData(for request: URLRequest, retries: Int = 2) async throws -> (Data, URLResponse) {
+    private func signalData(
+        for request: URLRequest,
+        retries: Int = 2,
+        timeout: TimeInterval = ScannerProtocol.signalRequestTimeout
+    ) async throws -> (Data, URLResponse) {
         var request = request
-        request.timeoutInterval = ScannerProtocol.signalRequestTimeout
+        request.timeoutInterval = timeout
 
         for attempt in 0...retries {
             do {

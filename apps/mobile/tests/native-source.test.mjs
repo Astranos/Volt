@@ -164,7 +164,7 @@ const xcodeProjectSource = readFileSync(
 test("native saved-session reconnect re-registers durable pairing before requesting reconnect", () => {
   const reconnectStart = scannerStoreSwiftSource.indexOf("private func reconnectWithSavedPairing");
   const requestReconnectStart = scannerStoreSwiftSource.indexOf("let joinWindow = try await signaling.requestReconnect", reconnectStart);
-  const registerStart = scannerStoreSwiftSource.indexOf("try await signaling.registerPairing", reconnectStart);
+  const registerStart = scannerStoreSwiftSource.indexOf("await signaling.registerPairingCandidates", reconnectStart);
   const reconnectEnd = scannerStoreSwiftSource.indexOf("private func isReconnectCurrent", reconnectStart);
   const reconnectSource = scannerStoreSwiftSource.slice(reconnectStart, reconnectEnd);
 
@@ -177,17 +177,20 @@ test("native saved-session reconnect re-registers durable pairing before request
   assert.match(pairedScannerSessionSwiftSource, /var signalURL: URL\? = nil/);
   assert.match(scannerStorePairedSessionsSwiftSource, /signalURL: pairingSession\?\.signalURL \?\? pairingSession\?\.sourceURL\.signalBaseURL/);
   assert.match(reconnectSource, /let signalURLs = pairedSession\.signalURL\.map \{ \[\$0\] \} \?\? ScannerProtocol\.reconnectSignalURLs/);
-  assert.match(reconnectSource, /var didRegisterPairing = false/);
-  assert.match(reconnectSource, /for signalURL in signalURLs \{[\s\S]*phoneDeviceId: contributorId,\s*signalURL: signalURL/);
-  assert.match(reconnectSource, /guard didRegisterPairing else \{[\s\S]*throw registrationError \?\? ScannerPairingError\.requestFailed/);
+  assert.match(reconnectSource, /await signaling\.registerPairingCandidates\([\s\S]*phoneDeviceId: contributorId,\s*signalURLs: signalURLs/);
   assert.match(reconnectSource, /signaling\.requestReconnect\(\s*pairingId: pairedSession\.id,\s*pairingSecret: secret,\s*signalURLs: signalURLs\s*\)/);
   assert.doesNotMatch(reconnectSource, /removePairedSession\(pairedSession\)/);
   assert.match(scannerProtocolSwiftSource, /static let reconnectSignalURLs = \[signalURL\] \+ fallbackSignalURLs/);
+  assert.match(scannerProtocolSwiftSource, /static let reconnectCandidateRequestTimeout: TimeInterval = 3/);
   assert.match(scannerSignalingSwiftSource, /func registerPairing\(\n\s+pairingId: String,/);
   assert.match(scannerSignalingSwiftSource, /phoneDeviceId: String,\s*signalURL: URL = ScannerProtocol\.signalURL/);
+  assert.match(scannerSignalingSwiftSource, /func registerPairingCandidates\(/);
+  assert.match(scannerSignalingSwiftSource, /await withTaskGroup\(of: Bool\.self\)/);
   assert.match(scannerSignalingSwiftSource, /var request = URLRequest\(url: signalURL\.appending\(path: "pairings"\)\)/);
   assert.match(scannerSignalingSwiftSource, /func requestReconnect\([\s\S]*signalURL: URL = ScannerProtocol\.signalURL/);
   assert.match(scannerSignalingSwiftSource, /func requestReconnect\([\s\S]*signalURLs: \[URL\]/);
+  assert.match(scannerSignalingSwiftSource, /let requestRetries = isCandidateProbe \? 0 : 2/);
+  assert.match(scannerSignalingSwiftSource, /let requestTimeout = isCandidateProbe \? ScannerProtocol\.reconnectCandidateRequestTimeout : ScannerProtocol\.signalRequestTimeout/);
   assert.match(scannerSignalingSwiftSource, /let requestId = try await createReconnectRequest\([\s\S]*signalURL: signalURL/);
   assert.match(scannerSignalingSwiftSource, /signalURL\s*\.appending\(path: "pairings"\)[\s\S]*\.appending\(path: requestId\)/);
   assert.match(scannerSignalingSwiftSource, /try validateSignalResponse\(data: data, response: response\)/);

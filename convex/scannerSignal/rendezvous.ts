@@ -58,7 +58,7 @@ async function createReconnectRequest(
     pushSubscription?: NormalizedPushSubscription | null;
   };
   const requestId = typeof responseBody.request?.id === "string" ? responseBody.request.id : "";
-  await ctx.runAction(internal.scannerPush.sendReconnectWakePush, {
+  await ctx.scheduler.runAfter(0, internal.scannerPush.sendReconnectWakePush, {
     subscription: responseBody.pushSubscription ?? null,
     pairingId,
     requestId,
@@ -72,7 +72,7 @@ async function createReconnectRequest(
         elapsedMs: Date.now() - request.startedAt,
         pairingIdTail: scannerSignalIdTail(pairingId),
         requestIdTail: scannerSignalIdTail(requestId),
-        reason: "action_rejected",
+        reason: "schedule_rejected",
       },
       "warn",
     );

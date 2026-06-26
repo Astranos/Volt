@@ -326,26 +326,14 @@ final class ScannerStore {
         do {
             let signalURLs = pairedSession.signalURL.map { [$0] } ?? ScannerProtocol.reconnectSignalURLs
             guard isReconnectCurrent(automaticToken) else { return }
-            var didRegisterPairing = false
-            var registrationError: Error?
-            for signalURL in signalURLs {
-                do {
-                    try await signaling.registerPairing(
-                        pairingId: pairedSession.id,
-                        pairingSecret: secret,
-                        browserSessionId: pairedSession.browserSessionId,
-                        displayName: pairedSession.displayName,
-                        phoneDeviceId: contributorId,
-                        signalURL: signalURL
-                    )
-                    didRegisterPairing = true
-                } catch {
-                    registrationError = error
-                }
-            }
-            guard didRegisterPairing else {
-                throw registrationError ?? ScannerPairingError.requestFailed
-            }
+            await signaling.registerPairingCandidates(
+                pairingId: pairedSession.id,
+                pairingSecret: secret,
+                browserSessionId: pairedSession.browserSessionId,
+                displayName: pairedSession.displayName,
+                phoneDeviceId: contributorId,
+                signalURLs: signalURLs
+            )
             guard isReconnectCurrent(automaticToken) else { return }
             let joinWindow = try await signaling.requestReconnect(
                 pairingId: pairedSession.id,
