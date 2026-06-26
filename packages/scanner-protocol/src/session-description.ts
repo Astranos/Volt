@@ -1,4 +1,4 @@
-import { SCANNER_APP_PAIR_URL } from "./constants.ts";
+import { SCANNER_APP_CLIP_PAIR_URL, SCANNER_APP_PAIR_URL } from "./constants.ts";
 import { isScannerJoinAttemptId, isScannerJoinToken, isScannerSessionId } from "./ids.ts";
 
 export type ScannerSessionDescription = {
@@ -44,6 +44,10 @@ export function buildScannerJoinUrl(parts: ScannerJoinUrlParts): string {
   if (parts.joinAttemptId) url.searchParams.set("joinAttemptId", parts.joinAttemptId);
   if (parts.signalUrl) url.searchParams.set("signalUrl", parts.signalUrl);
   return url.toString();
+}
+
+export function buildScannerAppClipJoinUrl(parts: Omit<ScannerJoinUrlParts, "baseUrl">): string {
+  return buildScannerJoinUrl({ ...parts, baseUrl: SCANNER_APP_CLIP_PAIR_URL });
 }
 
 export function parseScannerJoinUrl(value: string): ScannerJoinUrlParts | null {

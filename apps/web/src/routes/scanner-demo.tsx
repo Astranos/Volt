@@ -19,7 +19,6 @@ import {
 import {
   PHOTO_TRANSFER_CHANNEL_LABEL,
   SCANNER_ANSWER_POLL_INTERVAL_MS,
-  SCANNER_APP_PAIR_URL,
   SCANNER_CONTROL_CHANNEL_LABEL,
   SCANNER_ICE_GATHERING_TIMEOUT_MS,
   SCANNER_JOIN_TOKEN_TTL_MS,
@@ -38,6 +37,7 @@ import {
   type PhotoTransferStartMessage,
   type ScannerControlMessage,
   type ScannerIceServer,
+  buildScannerAppClipJoinUrl,
 } from "@volt/scanner-protocol";
 
 import {
@@ -798,9 +798,11 @@ export function ScannerDemo() {
       const qrCodeUrl =
         typeof payload.qrCodeUrl === "string" && payload.qrCodeUrl
           ? payload.qrCodeUrl
-          : typeof payload.joinUrl === "string" && payload.joinUrl
-            ? payload.joinUrl
-            : `${SCANNER_APP_PAIR_URL}?sessionId=${encodeURIComponent(returnedSessionId)}&session=${encodeURIComponent(returnedSessionId)}&token=${encodeURIComponent(joinToken)}&joinToken=${encodeURIComponent(joinToken)}&transport=webrtc&label=${encodeURIComponent(label)}`;
+          : buildScannerAppClipJoinUrl({
+              token: joinToken,
+              sessionId: returnedSessionId,
+              signalUrl: SIGNAL_URL,
+            });
       const nextWindow: JoinWindow = {
         browserClaim,
         expiresAt: typeof payload.expiresAt === "string" ? payload.expiresAt : null,

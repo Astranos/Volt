@@ -5,6 +5,7 @@ import {
   PHOTO_TRANSFER_CHANNEL_LABEL,
   SCANNER_CONTROL_CHANNEL_LABEL,
   SCANNER_PROTOCOL_VERSION,
+  buildScannerAppClipJoinUrl,
   buildScannerJoinUrl,
   decodePhotoTransferMessage,
   decodeScannerControlMessage,
@@ -53,6 +54,10 @@ test("scanner protocol builds join-token URLs for full app pairing", () => {
   assert.equal(
     buildScannerJoinUrl({ token, sessionId, signalUrl: "https://signal.example.test/api/signal" }),
     `volt://pair?token=${token}&sessionId=${sessionId}&signalUrl=https%3A%2F%2Fsignal.example.test%2Fapi%2Fsignal`,
+  );
+  assert.equal(
+    buildScannerAppClipJoinUrl({ token, sessionId, signalUrl: "https://signal.example.test/api/signal" }),
+    `https://volt-scanner.vercel.app/create-session?token=${token}&sessionId=${sessionId}&signalUrl=https%3A%2F%2Fsignal.example.test%2Fapi%2Fsignal`,
   );
 });
 

@@ -7,6 +7,7 @@ export const SCANNER_SIGNAL_URL_PROD = "https://sincere-trout-414.convex.site/ap
 export const SCANNER_SIGNAL_URL = SCANNER_SIGNAL_URL_PROD;
 export const SCANNER_APP_SCHEME = "volt";
 export const SCANNER_APP_PAIR_URL = `${SCANNER_APP_SCHEME}://pair`;
+export const SCANNER_APP_CLIP_PAIR_URL = `${SCANNER_WEB_APP_URL}/create-session`;
 export const SCANNER_PROTOCOL_VERSION = "1.0.0";
 export const SCANNER_PROTOCOL_MAJOR_VERSION = 1;
 export const SCANNER_PROTOCOL_MINOR_VERSION = 0;

@@ -14,6 +14,7 @@ export const scannerProtocolGolden = {
     signalDev: "https://adorable-hornet-19.convex.site/api/signal",
     signalProd: "https://sincere-trout-414.convex.site/api/signal",
     appPairBase: "volt://pair",
+    appClipPairBase: "https://volt-scanner.vercel.app/create-session",
   },
   labels: {
     controlChannel: "scanner-control",

@@ -17,6 +17,7 @@ import {
   SCANNER_PROTOCOL_VERSION,
   SCANNER_RECONNECT_REQUEST_TTL_MS,
   buildScannerIceServersResponse,
+  buildScannerAppClipJoinUrl,
   buildScannerJoinUrl,
   CAPTURE_MODES,
   decodePhotoTransferMessage,
@@ -109,6 +110,24 @@ test("validates join tokens, join attempt ids, and join URLs", () => {
     `volt://pair?token=${token}&sessionId=${sessionId}&signalUrl=${encodeURIComponent(scannerProtocolGolden.urls.signalDev)}`,
   );
   assert.equal(parseScannerJoinUrl(urlWithSignal)?.signalUrl, scannerProtocolGolden.urls.signalDev);
+
+  const appClipUrl = buildScannerAppClipJoinUrl({
+    token,
+    sessionId,
+    signalUrl: scannerProtocolGolden.urls.signalDev,
+  });
+  assert.equal(
+    appClipUrl,
+    `${scannerProtocolGolden.urls.appClipPairBase}?token=${token}&sessionId=${sessionId}&signalUrl=${encodeURIComponent(scannerProtocolGolden.urls.signalDev)}`,
+  );
+  assert.deepEqual(parseScannerJoinUrl(appClipUrl), {
+    baseUrl: scannerProtocolGolden.urls.appClipPairBase,
+    signalUrl: scannerProtocolGolden.urls.signalDev,
+    token,
+    sessionId,
+    joinAttemptId: undefined,
+  });
+
   assert.equal(parseScannerJoinUrl("volt://pair?token=bad"), null);
 });
 

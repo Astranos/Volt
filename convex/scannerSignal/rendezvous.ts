@@ -1,5 +1,6 @@
 import { internal } from "../_generated/api";
 import type { ActionCtx } from "../_generated/server";
+import { buildScannerAppClipJoinUrl } from "@volt/scanner-protocol";
 import {
   makeSecretId,
   normalizePushSubscription,
@@ -99,7 +100,14 @@ export async function executeScannerSignalRendezvous(
       graceMs: numberFrom(body.graceMs),
       origin,
     });
-    return scannerSignalResult(response);
+    return scannerSignalResult({
+      ...response,
+      qrCodeUrl: buildScannerAppClipJoinUrl({
+        token: response.token,
+        sessionId: response.sessionId,
+        signalUrl: `${origin}/api/signal`,
+      }),
+    });
   }
 
   if (parts[0] === "join-token" && parts.length >= 2) {

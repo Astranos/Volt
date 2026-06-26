@@ -1,7 +1,7 @@
 import {
   PHOTO_TRANSFER_CHANNEL_LABEL,
   SCANNER_CONTROL_CHANNEL_LABEL,
-  buildScannerJoinUrl,
+  buildScannerAppClipJoinUrl,
   normalizeScannerIceServers,
 } from "@volt/scanner-protocol";
 import type { ScannerIceServer } from "@volt/scanner-protocol";
@@ -183,7 +183,7 @@ export class MobileScannerSignalClient {
     const qrCodeUrl =
       typeof payload.qrCodeUrl === "string" && payload.qrCodeUrl
         ? payload.qrCodeUrl
-        : buildScannerJoinUrl({
+        : buildScannerAppClipJoinUrl({
             token: returnedJoinToken,
             sessionId: returnedSessionId,
             signalUrl: EXTENSION_SCANNER_SIGNAL_URL,
