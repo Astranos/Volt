@@ -62,9 +62,9 @@ function Install() {
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-4">
           <div className="flex items-center gap-3">
             <img
-              src="/assets/volt.webp"
+              src="/favicon.svg"
               alt="Volt"
-              className="h-10 w-10 rounded-[0.75rem] border border-slate-200 bg-white"
+              className="h-10 w-10"
             />
             <div>
               <p className="text-sm font-semibold leading-5">Volt</p>
@@ -94,9 +94,9 @@ function Install() {
               </p>
             </div>
             <img
-              src="/assets/volt.webp"
+              src="/favicon.svg"
               alt=""
-              className="hidden h-16 w-16 rounded-[0.95rem] border border-slate-200 bg-white md:block"
+              className="hidden h-16 w-16 md:block"
             />
           </div>
 
@@ -155,7 +155,7 @@ function Install() {
             <div className="rounded-[0.75rem] bg-white p-3 text-slate-950">
               <div className="mb-3 flex items-center justify-between border-b border-slate-200 pb-2">
                 <div className="flex items-center gap-2 text-xs font-semibold">
-                  <img src="/assets/volt.webp" alt="" className="h-5 w-5 rounded-[0.35rem]" />
+                  <img src="/favicon.svg" alt="" className="h-5 w-5" />
                   Volt
                 </div>
                 <LayoutDashboard className="h-4 w-4 text-slate-500" />

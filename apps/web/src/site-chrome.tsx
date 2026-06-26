@@ -51,9 +51,9 @@ export function SiteHeader({
           aria-label="Volt home"
         >
           <img
-            src="/assets/volt.webp"
+            src="/favicon.svg"
             alt=""
-            className="size-8 rounded-[0.65rem] object-cover"
+            className="size-8"
           />
           <span className="hidden text-sm font-semibold sm:inline">Volt</span>
         </a>
@@ -116,9 +116,9 @@ export function SiteFooter() {
               aria-label="Volt home"
             >
               <img
-                src="/assets/volt.webp"
+                src="/favicon.svg"
                 alt=""
-                className="size-9 rounded-[0.75rem]"
+                className="size-9"
               />
               <span className="text-base font-semibold">Volt</span>
             </a>

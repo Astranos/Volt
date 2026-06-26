@@ -421,7 +421,7 @@ function BrowserWorkspaceMock() {
         <div className="relative mx-auto max-w-5xl">
           <div className="mb-8 flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <img src="/assets/volt.webp" alt="" className="size-8 rounded-[0.65rem]" />
+              <img src="/favicon.svg" alt="" className="size-8" />
               <h3 className="text-base font-semibold text-zinc-950">Volt</h3>
             </div>
             <PairingStatus status="paired" />
@@ -518,7 +518,7 @@ function MobileNewTabDemo() {
         <div className="relative">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              <img src="/assets/volt.webp" alt="" className="size-7 rounded-[0.6rem]" />
+              <img src="/favicon.svg" alt="" className="size-7" />
               <span className="text-sm font-semibold text-zinc-950">Volt</span>
             </div>
             <PairingStatus status="paired" />
