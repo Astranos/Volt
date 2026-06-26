@@ -1,11 +1,11 @@
 import SwiftUI
 
 struct PairingSessionSetupContent: View {
-    let onOpenCreateSessionPage: () -> Void
+    private let webScannerURLText = "volt-scanner.vercel.app/session"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Scan the QR code from the Chrome extension, or open the create session page on your computer. This iPhone will connect to that browser session.")
+            Text("Scan the QR code from the Chrome extension, or open the session page on your computer. This iPhone will connect to that browser session.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -14,30 +14,40 @@ struct PairingSessionSetupContent: View {
                 PairingSessionSetupStep(
                     systemImage: "desktopcomputer",
                     title: "Open Volt on your computer",
-                    detail: "Use the Chrome extension side panel, or go to volt-scanner.vercel.app/session."
+                    detail: "Use the Chrome extension side panel, or enter the URL below."
                 )
                 PairingSessionSetupStep(
                     systemImage: "qrcode",
                     title: "Show the pairing QR",
-                    detail: "Start pairing in Chrome or on the create session page."
+                    detail: "Start pairing in Chrome or on the session page."
                 )
                 PairingSessionSetupStep(
                     systemImage: "iphone",
                     title: "Scan the QR with this iPhone",
-                    detail: "Tap the green button below."
+                    detail: "Tap Scan Computer QR below."
                 )
             }
 
-            Button(action: onOpenCreateSessionPage) {
-                Label("Open Create Session Page", systemImage: "safari")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.green)
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Session page")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .textCase(.uppercase)
+
+                Text(webScannerURLText)
+                    .font(.system(.callout, design: .monospaced).weight(.semibold))
+                    .foregroundStyle(.primary)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.82)
-                    .frame(maxWidth: .infinity, minHeight: 44)
-                    .background(.green.opacity(0.10), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .minimumScaleFactor(0.68)
+                    .textSelection(.enabled)
             }
-            .buttonStyle(.plain)
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.background, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(.green.opacity(0.22), lineWidth: 1)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -68,34 +78,6 @@ struct PairingSessionSetupStep: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-struct ScanChromeQRAccessory: View {
-    let onScan: () -> Void
-
-    var body: some View {
-        VStack(spacing: 0) {
-            Button(action: onScan) {
-                Label("Scan Computer QR", systemImage: "qrcode.viewfinder")
-                    .font(.headline)
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity, minHeight: 52)
-                    .background(
-                        ScannerTabLayout.primaryActionBackground(isEnabled: true),
-                        in: RoundedRectangle(cornerRadius: ScannerTabLayout.primaryActionCornerRadius, style: .continuous)
-                    )
-            }
-            .buttonStyle(.plain)
-        }
-        .ignoresSafeArea(edges: .bottom)
-        .padding(.horizontal)
-        .padding(.top, 10)
-        .background {
-            Rectangle()
-                .fill(.bar)
-                .ignoresSafeArea(edges: .bottom)
-        }
     }
 }
 

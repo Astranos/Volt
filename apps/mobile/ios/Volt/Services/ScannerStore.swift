@@ -112,7 +112,7 @@ final class ScannerStore {
     let dictation = DictationModel()
     let contributorId = ScannerProtocol.makeContributorId()
 
-    static let disconnectedPairingHint = "Use the Pair button next to the section title to connect to Chrome."
+    static let disconnectedPairingHint = "Use the connect button in the top right to pair to Chrome."
 
     init() {
         loadPairedSessions()
@@ -271,7 +271,12 @@ final class ScannerStore {
         targetHint = Self.disconnectedPairingHint
     }
 
-    func unpair() {
+    func disconnectFromCurrentSession() {
+        reconnectTask?.cancel()
+        reconnectTask = nil
+        canCancelReconnect = false
+        activeAutomaticReconnectToken = nil
+        preservesReconnectCancelOnNextDisconnect = false
         connection.close()
         pairingSession = nil
         peerTarget = nil

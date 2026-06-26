@@ -284,6 +284,7 @@ private struct ClipUploadView: View {
             .navigationTitle("Upload")
             .toolbar(.hidden, for: .navigationBar)
             .onChange(of: pickerItems) { _, items in
+                guard !items.isEmpty else { return }
                 Task {
                     isPreparingUploads = true
                     defer { isPreparingUploads = false }

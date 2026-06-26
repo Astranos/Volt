@@ -295,6 +295,7 @@ test("native first-install welcome scanner defers pairing progress sheet until s
   assert.match(pairingSessionsViewSwiftSource, /let onPairingCodeAccepted: \(\) -> Void/);
   assert.match(pairingSessionsViewSwiftSource, /init\(isPresented: Binding<Bool>, onPairingCodeAccepted: @escaping \(\) -> Void = \{\}\)/);
   assert.match(pairingSessionsViewSwiftSource, /if store\.pairScannedBarcodeIfNeeded\(\) \{\s*onPairingCodeAccepted\(\)\s*isPresented = false\s*\}/);
+  assert.match(pairingSessionsViewSwiftSource, /PairingScanSessionView\(isPresented: \$isPairingScannerPresented\) \{\s*onPairingCodeAccepted\(\)\s*dismiss\(\)\s*\}/);
 });
 
 test("native connection sheet shows pairing failures instead of silently dismissing", () => {
@@ -308,13 +309,26 @@ test("native connection sheet shows pairing failures instead of silently dismiss
 });
 
 test("native saved-session taps intentionally dismiss sessions before reconnect sheet returns", () => {
-  assert.match(rootViewSwiftSource, /PairingSessionsView \{\s*beginReconnectFromConnectionSheetSessions\(\)\s*\}/);
+  assert.match(rootViewSwiftSource, /PairingSessionsView\(\s*onReconnectStarted: \{\s*beginReconnectFromConnectionSheetSessions\(\)\s*\},\s*onPairingCodeAccepted: \{\s*beginPairingFromConnectionSheetSessions\(\)\s*\}\s*\)/);
   assert.match(rootViewSwiftSource, /@State private var allowsNextConnectionSheetDismissal = false/);
   assert.match(rootViewSwiftSource, /private func beginReconnectFromConnectionSheetSessions\(\) \{\s*allowsNextConnectionSheetDismissal = true\s*keepsConnectionSheetOpenForSessions = false\s*connectionSheetStatus = nil\s*connectionSheetDetent = Self\.connectionStatusDetent\s*\}/);
+  assert.match(rootViewSwiftSource, /private func beginPairingFromConnectionSheetSessions\(\) \{\s*allowsNextConnectionSheetDismissal = true\s*keepsConnectionSheetOpenForSessions = false\s*connectionSheetDetent = Self\.connectionStatusDetent\s*\}/);
   assert.match(rootViewSwiftSource, /private func handleConnectionSheetDismiss\(\) \{\s*if allowsNextConnectionSheetDismissal \{\s*allowsNextConnectionSheetDismissal = false\s*resetConnectionSheetPresentation\(\)\s*showPairingSheet\(for: store\.connectionStatus\)\s*return\s*\}/);
   assert.match(pairingSessionsViewSwiftSource, /let onReconnectStarted: \(\) -> Void/);
-  assert.match(pairingSessionsViewSwiftSource, /init\(onReconnectStarted: @escaping \(\) -> Void = \{\}\)/);
+  assert.match(pairingSessionsViewSwiftSource, /init\(\s*onReconnectStarted: @escaping \(\) -> Void = \{\},\s*onPairingCodeAccepted: @escaping \(\) -> Void = \{\}\s*\)/);
   assert.match(pairingSessionsViewSwiftSource, /Button \{\s*onReconnectStarted\(\)\s*store\.reconnect\(to: session\)\s*dismiss\(\)/);
+  assert.match(pairingSessionsViewSwiftSource, /Label\(pairingButtonTitle, systemImage: pairingButtonSystemImage\)/);
+  assert.match(pairingSessionsViewSwiftSource, /private var pairingButtonTitle: String \{\s*"Disconnect"\s*\}/);
+  assert.match(pairingSessionsViewSwiftSource, /store\.disconnectFromCurrentSession\(\)/);
+  assert.doesNotMatch(pairingSessionsViewSwiftSource, /store\.unpair\(\)/);
+  assert.match(scannerStoreSwiftSource, /func disconnectFromCurrentSession\(\) \{[\s\S]*connection\.close\(\)[\s\S]*applyConnectionStatus\(\.disconnected\)/);
+  const disconnectStart = scannerStoreSwiftSource.indexOf("func disconnectFromCurrentSession()");
+  const disconnectEnd = scannerStoreSwiftSource.indexOf("func pair(with session:", disconnectStart);
+  const disconnectSource = scannerStoreSwiftSource.slice(disconnectStart, disconnectEnd);
+  assert.ok(disconnectStart > -1);
+  assert.ok(disconnectEnd > disconnectStart);
+  assert.doesNotMatch(disconnectSource, /removePairedSession/);
+  assert.doesNotMatch(disconnectSource, /PairingSecretStore\.delete/);
 });
 
 test("native capture session recovers pairing instead of dismissing when the scanner disconnects", () => {
@@ -384,6 +398,8 @@ test("native first launch welcomes users without requesting camera access and ca
   assert.match(rootViewSwiftSource, /\.safeAreaInset\(edge: \.bottom, spacing: 0\) \{\s*WelcomeActions/);
   assert.match(rootViewSwiftSource, /Label\("Scan QR Code to Pair", systemImage: "qrcode\.viewfinder"\)/);
   assert.match(rootViewSwiftSource, /Text\("Continue Without Pairing"\)/);
+  assert.match(rootViewSwiftSource, /\.background\(\.background, in: RoundedRectangle\(cornerRadius: 18/);
+  assert.match(rootViewSwiftSource, /\.stroke\(\.secondary\.opacity\(0\.28\), lineWidth: 1\)/);
   assert.doesNotMatch(rootViewSwiftSource, /Text\("Continue to Volt"\)/);
   assert.match(rootViewSwiftSource, /private func completeWelcome\(opensPairingScanner: Bool\)/);
   assert.match(rootViewSwiftSource, /private func startAppServices\(\) \{\s*store\.reconnectToMostRecentPairedSessionIfNeeded\(\)\s*\}/);
@@ -393,14 +409,14 @@ test("native first launch welcomes users without requesting camera access and ca
   assert.match(rootViewSwiftSource, /\.fullScreenCover\(isPresented: \$isWelcomePairingScannerPresented, onDismiss: handleWelcomePairingScannerDismiss\) \{\s*PairingScanSessionView\(isPresented: \$isWelcomePairingScannerPresented\)/);
   assert.match(rootViewSwiftSource, /private func showPairingScannerFromWelcome\(\) \{\s*store\.activeMode = \.barcode\s*showsConnectionSheetAfterWelcomePairingScan = false\s*isWelcomePairingScannerPresented = true\s*\}/);
   assert.doesNotMatch(rootViewSwiftSource, /private func showSessionsFromWelcome/);
-  assert.match(pairingSessionsViewSwiftSource, /private let webScannerURL = URL\(string: "https:\/\/volt-scanner\.vercel\.app\/session"\)!/);
-  assert.match(pairingSessionsViewSwiftSource, /PairingSessionSetupContent \{[\s\S]*openURL\(webScannerURL\)/);
-  assert.match(sharedPairingSessionComponentsSwiftSource, /Text\("Scan the QR code from the Chrome extension, or open the create session page on your computer\. This iPhone will connect to that browser session\."\)/);
+  assert.doesNotMatch(pairingSessionsViewSwiftSource, /openURL\(webScannerURL\)/);
+  assert.match(sharedPairingSessionComponentsSwiftSource, /private let webScannerURLText = "volt-scanner\.vercel\.app\/session"/);
+  assert.match(sharedPairingSessionComponentsSwiftSource, /Text\("Scan the QR code from the Chrome extension, or open the session page on your computer\. This iPhone will connect to that browser session\."\)/);
   assert.match(sharedPairingSessionComponentsSwiftSource, /title: "Open Volt on your computer"/);
-  assert.match(sharedPairingSessionComponentsSwiftSource, /detail: "Use the Chrome extension side panel, or go to volt-scanner\.vercel\.app\/session\."/);
-  assert.match(sharedPairingSessionComponentsSwiftSource, /detail: "Start pairing in Chrome or on the create session page\."/);
-  assert.match(sharedPairingSessionComponentsSwiftSource, /Label\("Open Create Session Page", systemImage: "safari"\)/);
-  assert.match(sharedPairingSessionComponentsSwiftSource, /Label\("Scan Computer QR", systemImage: "qrcode\.viewfinder"\)/);
+  assert.match(sharedPairingSessionComponentsSwiftSource, /detail: "Use the Chrome extension side panel, or enter the URL below\."/);
+  assert.match(sharedPairingSessionComponentsSwiftSource, /detail: "Start pairing in Chrome or on the session page\."/);
+  assert.doesNotMatch(sharedPairingSessionComponentsSwiftSource, /Label\("Open Create Session Page", systemImage: "safari"\)/);
+  assert.match(pairingSessionsViewSwiftSource, /Label\("Scan Computer QR", systemImage: "qrcode\.viewfinder"\)/);
   assert.match(rootViewSwiftSource, /\.frame\(maxWidth: \.infinity, alignment: \.leading\)\s*\.background\(\.background, in: RoundedRectangle\(cornerRadius: 16/);
 });
 
@@ -598,9 +614,13 @@ test("native upload batches expose clear progress while photos are preparing and
   assert.match(scannerStoreCaptureActionsSwiftSource, /updatePhotoUploadProgress\(batchId: batch, prepared: index \+ 1, phase: \.uploading\)/);
   assert.match(scannerStoreCaptureActionsSwiftSource, /finishPhotoUploadItem\(batchId: batch, resultId: photoResult\.id\)/);
   assert.match(scannerStoreCaptureActionsSwiftSource, /finishPhotoUploadBatch\(batchId: batch\)/);
+  assert.match(uploadViewSwiftSource, /PhotoPreparationProgressSummary\(\s*prepared: selectedUploadPrepared,\s*total: selectedUploadTotal\s*\)/);
   assert.match(uploadViewSwiftSource, /PhotoUploadProgressSummary\(progress: progress\)/);
   assert.match(uploadViewSwiftSource, /ProgressView\(value: progress\.fractionCompleted\)/);
-  assert.match(uploadViewSwiftSource, /"Reading \\\(min\(selectedUploadPrepared \+ 1, selectedUploadTotal\)\) of \\\(selectedUploadTotal\) selected photos"/);
+  assert.match(uploadViewSwiftSource, /"Reading \\\(selectedUploadReadCount\) of \\\(selectedUploadTotal\) selected photos"/);
+  assert.match(uploadViewSwiftSource, /struct PhotoPreparationProgressSummary: View/);
+  assert.match(uploadViewSwiftSource, /GeometryReader \{ proxy in/);
+  assert.match(uploadViewSwiftSource, /\.frame\(width: proxy\.size\.width, height: proxy\.size\.height\)/);
   assert.match(uploadViewSwiftSource, /"\\\(progress\.title\)\. \\\(progress\.detail\)\."/);
   assert.match(uploadViewSwiftSource, /"Uploading \\\(results\.count\) of \\\(expectedTotal\) photo/);
   assert.match(readFileSync(new URL("../ios/Volt/Views/SharedScannerTabComponents.swift", import.meta.url), "utf8"), /var isUploading = false/);
@@ -795,6 +815,7 @@ test("app clip photo capture and library upload wait for Chrome photo receipts",
   assert.match(clipScannerStoreSwiftSource, /func uploadPhotos\(_ images: \[UIImage\]\) async/);
   assert.match(clipScannerStoreSwiftSource, /let batchId = ScannerProtocol\.makeMessageId\("upload-batch"\)/);
   assert.match(clipScannerStoreSwiftSource, /await sendPhoto\(\s*photo,\s*filename: uploadFilename\(index: index, capturedAt: capturedAt\)\s*\)/);
+  assert.match(clipRootViewSwiftSource, /guard !items\.isEmpty else \{ return \}/);
   assert.match(clipTransportSwiftSource, /private var photoContinuations: \[String: CheckedContinuation<ScannerProtocol\.PhotoReceived, Error>\] = \[:\]/);
   assert.match(clipTransportSwiftSource, /ScannerProtocol\.parsePhotoReceived\(rawValue\)/);
   assert.match(clipTransportSwiftSource, /ScannerProtocol\.parsePhotoRejected\(rawValue\)/);
