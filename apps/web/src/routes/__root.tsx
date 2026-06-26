@@ -12,6 +12,10 @@ export const Route = createRootRoute({
         content:
           "Volt combines a Chrome resale workflow with an iPhone scanner for fast research, capture, pricing, and listing prep.",
       },
+      {
+        name: "apple-itunes-app",
+        content: "app-id=6771770148, app-clip-bundle-id=com.volt.mobile.Clip",
+      },
       { title: "Volt - Chrome resale workflow with iPhone scanning" },
     ],
     links: [
