@@ -21,6 +21,7 @@ web-ext.config.ts
 apps/scanner-signal/.tmp/
 apps/mobile/.tmp/
 apps/mobile/build/fastlane/
+apps/mobile/build/fastlane-export/
 apps/mobile/vendor/bundle/
 apps/mobile/fastlane/Preview.html
 apps/mobile/fastlane/README.md
