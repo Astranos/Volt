@@ -89,6 +89,7 @@ final class ScannerStore {
     var selectedSection: AppSection = .scan
     var pairingSession: PairingSession?
     var pairedSessions: [PairedScannerSession] = []
+    var recentBrowserSession: PairedScannerSession?
     var connectionStatus: ScannerConnectionStatus = .idle
     var peerTarget: ScannerPeerTarget?
     var canCancelReconnect = false
@@ -279,6 +280,12 @@ final class ScannerStore {
         preservesReconnectCancelOnNextDisconnect = false
         connection.close()
         pairingSession = nil
+        if let peerTarget {
+            rememberRecentBrowserSession(
+                browserSessionId: peerTarget.chromeSessionId,
+                displayName: peerTarget.displayText
+            )
+        }
         peerTarget = nil
         dictationSessionId = nil
         applyConnectionStatus(.disconnected)
@@ -306,7 +313,6 @@ final class ScannerStore {
     ) async {
         guard isReconnectCurrent(automaticToken) else { return }
         guard let secret = PairingSecretStore.secret(pairingId: pairedSession.id) else {
-            removePairedSession(pairedSession)
             if reportsErrors {
                 applyConnectionStatus(.error("Pairing secret missing. Scan the Chrome QR again."))
             } else {
@@ -444,6 +450,10 @@ final class ScannerStore {
             didChangeChromeInputTarget = false
         }
         peerTarget = nextPeerTarget
+        rememberRecentBrowserSession(
+            browserSessionId: chromeSessionId,
+            displayName: sessionLabel ?? nextPeerTarget.displayText
+        )
         saveCurrentPairingSession(message: message)
         applyConnectionStatus(
             .connected,

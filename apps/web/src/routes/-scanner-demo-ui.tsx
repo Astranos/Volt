@@ -223,7 +223,7 @@ export function PhotosPanel({ photos }: { photos: PhotoItem[] }) {
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 px-4 py-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold">
           <ImageIcon size={16} />
-          Photo batches
+          Photos
         </h2>
         <div className="flex items-center gap-2">
           <span className="text-xs text-zinc-500">{photos.length}</span>
@@ -246,11 +246,11 @@ export function PhotosPanel({ photos }: { photos: PhotoItem[] }) {
             {photoBatches.map((batch) => (
               <article key={batch.id} className="rounded-[0.95rem] border border-zinc-200 bg-zinc-50 p-3">
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                  <h3 className="flex min-w-0 items-center gap-2 text-sm font-semibold text-zinc-950">
+                  <h3 className="flex min-w-0 flex-1 items-center gap-2 text-sm font-semibold text-zinc-950">
                     <Images size={15} />
                     <span className="truncate">Batch {batch.id.slice(-6)}</span>
                   </h3>
-                  <div className="flex items-center gap-2 text-xs text-zinc-500">
+                  <div className="flex min-w-0 flex-wrap items-center justify-end gap-2 text-xs text-zinc-500">
                     <span>{batch.items.length} photo{batch.items.length === 1 ? "" : "s"}</span>
                     <button
                       type="button"
@@ -262,7 +262,7 @@ export function PhotosPanel({ photos }: { photos: PhotoItem[] }) {
                     </button>
                   </div>
                 </div>
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,13rem),1fr))] gap-3">
                   {batch.items.map((photo) => (
                     <article key={photo.id} className="min-w-0 overflow-hidden rounded-[0.95rem] border border-zinc-200 bg-white">
                       <img src={photo.objectUrl} alt={photo.filename} className="aspect-[4/3] w-full bg-zinc-100 object-contain" />

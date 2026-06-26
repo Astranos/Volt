@@ -19,6 +19,34 @@ extension ScannerStore {
         }?.displayName
     }
 
+    var visiblePairingSessions: [PairedScannerSession] {
+        guard let recentBrowserSession else { return pairedSessions }
+        guard !pairedSessions.contains(where: { $0.browserSessionId == recentBrowserSession.browserSessionId }) else {
+            return pairedSessions
+        }
+        return [recentBrowserSession] + pairedSessions
+    }
+
+    func canReconnect(to session: PairedScannerSession) -> Bool {
+        pairedSessions.contains { $0.id == session.id }
+    }
+
+    func rememberRecentBrowserSession(browserSessionId: String?, displayName: String?) {
+        guard let browserSessionId,
+              !browserSessionId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else { return }
+        let fallbackDisplayName = browserSessionId
+        let resolvedDisplayName = displayName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let displayName = resolvedDisplayName?.isEmpty == false ? resolvedDisplayName! : fallbackDisplayName
+        recentBrowserSession = PairedScannerSession(
+            id: "recent-\(browserSessionId)",
+            browserSessionId: browserSessionId,
+            displayName: displayName,
+            pairedAt: .now,
+            lastConnectedAt: .now
+        )
+    }
+
     func loadPairedSessions() {
         guard let data = UserDefaults.standard.data(forKey: Self.pairedSessionsStorageKey),
               let decoded = try? JSONDecoder().decode([PairedScannerSession].self, from: data)

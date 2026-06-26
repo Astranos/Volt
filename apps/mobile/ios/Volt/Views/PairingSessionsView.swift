@@ -18,7 +18,7 @@ struct PairingSessionsView: View {
     var body: some View {
         NavigationStack {
             Group {
-                if store.pairedSessions.isEmpty {
+                if store.visiblePairingSessions.isEmpty {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 18) {
                             sessionsHeader
@@ -30,7 +30,7 @@ struct PairingSessionsView: View {
                         .padding(.bottom, 24)
                     }
                 } else {
-                    VStack(alignment: .leading, spacing: 0) {
+                    ScrollView {
                         VStack(alignment: .leading, spacing: ScannerTabLayout.stackSpacing) {
                             sessionsHeader
 
@@ -39,12 +39,13 @@ struct PairingSessionsView: View {
                                 .foregroundStyle(.secondary)
                                 .padding(.horizontal, 2)
 
+                            pairedSessionsList
+
                             scanPairingCTA
                         }
                         .padding(ScannerTabLayout.contentPadding)
                         .padding(.top, ScannerTabLayout.topPadding)
-
-                        pairedSessionsList
+                        .padding(.bottom, 24)
                     }
                 }
             }
@@ -129,36 +130,42 @@ struct PairingSessionsView: View {
     }
 
     private var pairedSessionsList: some View {
-        List {
-            ForEach(store.pairedSessions) { session in
+        LazyVStack(spacing: 10) {
+            ForEach(store.visiblePairingSessions) { session in
                 Button {
-                    onReconnectStarted()
-                    store.reconnect(to: session)
-                    dismiss()
+                    handleSessionTap(session)
                 } label: {
-                    PairedSessionRow(session: session)
+                    PairedSessionRow(session: session, canReconnect: store.canReconnect(to: session))
                         .padding(14)
                         .background(.background, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 }
                 .buttonStyle(.plain)
-                .listRowInsets(EdgeInsets(top: 5, leading: ScannerTabLayout.contentPadding, bottom: 5, trailing: ScannerTabLayout.contentPadding))
-                .listRowBackground(Color.clear)
-                .listRowSeparator(.hidden)
                 .contextMenu {
-                    Button("Forget", systemImage: "trash", role: .destructive) {
-                        store.removePairedSession(session)
-                    }
-                }
-                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                    Button("Forget", systemImage: "trash", role: .destructive) {
-                        store.removePairedSession(session)
+                    if store.canReconnect(to: session) {
+                        Button("Forget", systemImage: "trash", role: .destructive) {
+                            store.removePairedSession(session)
+                        }
                     }
                 }
             }
         }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
-        .background(ScannerTabLayout.background)
+    }
+
+    private func handleSessionTap(_ session: PairedScannerSession) {
+        if store.canReconnect(to: session) {
+            onReconnectStarted()
+            store.reconnect(to: session)
+            dismiss()
+            return
+        }
+
+        if store.connectionStatus.isConnected,
+           session.browserSessionId == store.peerTarget?.chromeSessionId {
+            dismiss()
+            return
+        }
+
+        startPairingScan()
     }
 
 }
@@ -245,6 +252,7 @@ private enum PairingScanStatusMessage {
 
 private struct PairedSessionRow: View {
     let session: PairedScannerSession
+    let canReconnect: Bool
 
     var body: some View {
         HStack(spacing: 12) {
@@ -264,11 +272,17 @@ private struct PairedSessionRow: View {
                     .font(.caption2.monospaced())
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+                if !canReconnect {
+                    Text("Scan QR again to reconnect")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
             }
 
             Spacer()
 
-            Image(systemName: "chevron.right")
+            Image(systemName: canReconnect ? "chevron.right" : "qrcode.viewfinder")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.tertiary)
         }
