@@ -859,6 +859,10 @@ test("native dictation keeps listening briefly after user stop actions", () => {
   assert.match(dictationViewSwiftSource, /holdEndAction: stopDictation/);
 });
 
+test("native dictation tap is not easily classified as push-to-talk", () => {
+  assert.match(dictationViewSwiftSource, /private let pushToTalkThreshold: TimeInterval = 0\.8/);
+});
+
 test("native dictation start gesture emits a dedicated start haptic", () => {
   const pressGestureStart = dictationViewSwiftSource.indexOf("private var pressGesture");
   const pressGestureSource = dictationViewSwiftSource.slice(pressGestureStart);

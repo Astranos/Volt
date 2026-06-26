@@ -221,7 +221,7 @@ private struct DictationStartAccessory: View {
     @State private var pressStart: Date?
     @State private var didStartRecordingFromPress = false
 
-    private let pushToTalkThreshold: TimeInterval = 0.35
+    private let pushToTalkThreshold: TimeInterval = 0.8
     private let pressFeedback = UIImpactFeedbackGenerator(style: .medium)
     private let startFeedback = UIImpactFeedbackGenerator(style: .heavy)
     private let stopFeedback = UINotificationFeedbackGenerator()
