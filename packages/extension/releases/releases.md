@@ -2,9 +2,9 @@
 
 ## Current Development Version
 
-### v1.0.44
+### v1.0.46
 
-The current manifest/package version is `1.0.44`.
+The current manifest/package version is `1.0.46`.
 
 Current release build command:
 
@@ -25,6 +25,16 @@ packages/extension/releases/
 ```
 
 ## Recent Release History
+
+### v1.0.46
+
+Release date: June 26, 2026
+
+Changes:
+
+- Updated mobile scanner pairing QR codes to use the App Clip-capable HTTPS invocation URL.
+- Kept the signal URL in the QR payload so production and development join tokens resolve against the backend that minted them.
+- Refreshed scanner pairing QR windows before expiry, including connected sessions that still show a QR for adding another phone.
 
 ### v1.0.43
 
