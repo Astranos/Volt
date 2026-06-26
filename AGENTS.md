@@ -16,6 +16,26 @@ xcodebuild -workspace ios/Volt.xcworkspace -scheme Volt -configuration Debug -de
 
 Do not spend time forcing a concrete simulator ID unless you specifically need to install or launch the app; this project may only advertise the generic simulator destination for the `Volt` scheme.
 
+## TestFlight Uploads
+
+For App Store Connect/TestFlight uploads, the App Store Connect API key is stored locally in the repo at:
+
+```sh
+apps/mobile/fastlane/AuthKey_2LA645SSNN.p8
+```
+
+Run Fastlane from the repository root with the repo-local key path:
+
+```sh
+APP_STORE_CONNECT_API_KEY_ID=2LA645SSNN \
+APP_STORE_CONNECT_ISSUER_ID=69a6de87-2df2-47e3-e053-5b8c7c11a4d1 \
+APP_STORE_CONNECT_API_KEY_PATH="$PWD/apps/mobile/fastlane/AuthKey_2LA645SSNN.p8" \
+FASTLANE_SKIP_WAITING_FOR_BUILD_PROCESSING=1 \
+pnpm --filter @volt/mobile ios:beta
+```
+
+The `.p8` file is local signing/upload material. Do not paste its contents into chat or release notes.
+
 <!-- convex-ai-start -->
 
 This project uses [Convex](https://convex.dev) as its backend.
