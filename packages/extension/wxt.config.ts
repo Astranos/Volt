@@ -47,7 +47,7 @@ export default defineConfig({
       },
     ],
     name: "Volt",
-    version: "1.0.46",
+    version: "1.0.47",
     description:
       "A versatile Chrome extension with command palette, mobile scanner pairing, and multi-provider search capabilities.",
     permissions: [

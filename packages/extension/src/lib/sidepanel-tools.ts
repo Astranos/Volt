@@ -1,13 +1,6 @@
-import {
-  Calculator,
-  LucideIcon,
-  Smartphone,
-} from "lucide-react";
+import { Calculator, LucideIcon, Smartphone } from "lucide-react";
 
-export type SidepanelToolId =
-  | "top-offers"
-  | "mobile-scanner"
-  | "mobile-photos";
+export type SidepanelToolId = "top-offers" | "mobile-scanner" | "mobile-photos";
 
 export interface SidepanelToolMetadata {
   id: SidepanelToolId;
@@ -26,14 +19,14 @@ export const SIDEPANEL_TOOLS: SidepanelToolMetadata[] = [
   },
   {
     id: "mobile-scanner",
-    label: "Mobile Scanner",
+    label: "Scanner Results",
     description: "Scan barcodes with your phone",
     icon: Smartphone,
   },
 ];
 
 export function getToolById(
-  id: SidepanelToolId
+  id: SidepanelToolId,
 ): SidepanelToolMetadata | undefined {
   return SIDEPANEL_TOOLS.find((tool) => tool.id === id);
 }

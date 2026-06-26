@@ -38,11 +38,14 @@ body {
   flex-direction: column;
   height: 100%;
   overflow: hidden;
-  padding: 14px;
+  padding: 14px 16px 16px;
 }
 
 .popup-hero {
+  border-top: 1px solid var(--popup-border);
   flex: none;
+  margin-top: 10px;
+  padding-top: 14px;
 }
 
 .popup-title-row {
@@ -50,7 +53,7 @@ body {
   display: grid;
   gap: 10px;
   grid-template-columns: auto minmax(0, 1fr) auto;
-  min-height: 38px;
+  min-height: 34px;
 }
 
 .popup-icon {
@@ -72,7 +75,7 @@ body {
 }
 
 .popup-title-copy h1 {
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 800;
   letter-spacing: 0;
   line-height: 1.12;
@@ -117,9 +120,7 @@ body {
 }
 
 .popup-session-card {
-  border-top: 1px solid var(--popup-border);
   margin-top: 14px;
-  padding-top: 12px;
 }
 
 .popup-session-label {
@@ -155,7 +156,7 @@ body {
   color: var(--popup-text);
   font-size: 15px;
   font-weight: 750;
-  height: 40px;
+  height: 38px;
   margin-top: 8px;
   outline: none;
   padding: 0 15px;
@@ -190,25 +191,30 @@ body {
   flex: 1;
   justify-content: center;
   min-height: 0;
-  padding: 12px 0 14px;
+  padding: 14px 0 0;
 }
 
 .popup-qr-stack {
   align-items: center;
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  flex: 1;
+  gap: 10px;
+  height: 100%;
+  justify-content: center;
+  min-height: 0;
   width: 100%;
 }
 
 .popup-qr-frame {
+  aspect-ratio: 1;
   background: #ffffff;
   border: 1px solid var(--popup-border);
-  border-radius: 24px;
+  border-radius: 22px;
   box-shadow: var(--popup-shadow);
-  height: min(282px, 100%);
-  padding: 12px;
-  width: min(282px, 100%);
+  height: min(calc(100% - 30px), 304px);
+  padding: 11px;
+  width: min(100%, 304px);
 }
 
 .popup-qr-stack p {
@@ -225,7 +231,7 @@ body {
   display: block;
   width: 100%;
   height: 100%;
-  border-radius: 16px;
+  border-radius: 14px;
 }
 
 .popup-message {
@@ -300,23 +306,22 @@ body {
   display: flex;
   flex-wrap: wrap;
   flex: none;
-  gap: 8px;
+  gap: 10px;
   justify-content: center;
-  padding-top: 0;
 }
 
 .popup-action-button {
-  background: var(--popup-panel) !important;
+  background: rgba(255, 255, 255, 0.46) !important;
   border: 1px solid var(--popup-border) !important;
   border-radius: 999px !important;
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08) !important;
+  box-shadow: none !important;
   color: var(--popup-muted) !important;
   flex: 1 1 0;
-  font-size: 12px !important;
+  font-size: 11px !important;
   font-weight: 750 !important;
-  height: 38px !important;
+  height: 34px !important;
   min-width: 0;
-  padding: 0 12px !important;
+  padding: 0 10px !important;
   transition:
     background-color 160ms ease,
     border-color 160ms ease,
@@ -337,8 +342,8 @@ body {
 
 .popup-action-button svg {
   color: #16a34a;
-  height: 16px;
-  width: 16px;
+  height: 15px;
+  width: 15px;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -362,7 +367,8 @@ body {
   }
 
   .popup-action-button {
-    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28) !important;
+    background: rgba(41, 37, 36, 0.46) !important;
+    box-shadow: none !important;
   }
 
   .popup-action-button:hover:not(:disabled) {

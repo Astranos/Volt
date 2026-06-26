@@ -2,9 +2,9 @@
 
 ## Current Development Version
 
-### v1.0.46
+### v1.0.47
 
-The current manifest/package version is `1.0.46`.
+The current manifest/package version is `1.0.47`.
 
 Current release build command:
 
@@ -25,6 +25,16 @@ packages/extension/releases/
 ```
 
 ## Recent Release History
+
+### v1.0.47
+
+Release date: June 26, 2026
+
+Changes:
+
+- Refreshed the extension icon set from the website favicon.
+- Improved Quick Links favicon loading in the new tab page.
+- Reordered and refined the Mobile Scanner QR popup layout.
 
 ### v1.0.46
 

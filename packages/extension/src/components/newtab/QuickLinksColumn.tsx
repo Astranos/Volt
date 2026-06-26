@@ -3,7 +3,7 @@ import { CSVLink, fetchCSVLinks, filterCSVLinks } from "@/src/utils/csv-links";
 import { Skeleton } from "@/src/components/ui/skeleton";
 import { ScrollArea } from "@/src/components/ui/scroll-area";
 import { Search as SearchIcon } from "lucide-react";
-import { getFaviconUrl } from "@/src/utils/favicon";
+import { getDomainFaviconUrl, getFaviconUrl } from "@/src/utils/favicon";
 import "./column-styles.css";
 
 export function QuickLinksColumn({ id }: { id?: string }) {
@@ -114,14 +114,7 @@ export function QuickLinksColumn({ id }: { id?: string }) {
                     title={link.title}
                   >
                     <div className="flex-shrink-0 w-4 h-4 flex items-center justify-center">
-                      <img
-                        src={getFaviconUrl(link.url)}
-                        alt=""
-                        className="w-4 h-4 object-contain"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).style.opacity = "0";
-                        }}
-                      />
+                      <QuickLinkFavicon link={link} />
                     </div>
                     <span className="newtab-column-item-text">
                       {link.title}
@@ -134,5 +127,26 @@ export function QuickLinksColumn({ id }: { id?: string }) {
         </div>
       </ScrollArea>
     </div>
+  );
+}
+
+function QuickLinkFavicon({ link }: { link: CSVLink }) {
+  const faviconSources = useMemo(
+    () =>
+      [getDomainFaviconUrl(link.url), getFaviconUrl(link.url)].filter(Boolean),
+    [link.url]
+  );
+  const [sourceIndex, setSourceIndex] = useState(0);
+  const src = faviconSources[sourceIndex];
+
+  if (!src) return null;
+
+  return (
+    <img
+      src={src}
+      alt=""
+      className="w-4 h-4 object-contain"
+      onError={() => setSourceIndex((index) => index + 1)}
+    />
   );
 }

@@ -251,6 +251,23 @@ function MobileScannerPopup() {
 
   return (
     <div className="popup-shell">
+      <footer className="popup-actions">
+        <SecondaryActionButton
+          onClick={() => void openSidepanelTool("top-offers")}
+          className="popup-action-button"
+        >
+          <Calculator className="h-4 w-4" />
+          Offer Calculator
+        </SecondaryActionButton>
+        <PrimaryActionButton
+          onClick={() => void openSidepanelTool("mobile-scanner")}
+          className="popup-action-button"
+        >
+          <Smartphone className="h-4 w-4" />
+          Scanner Results
+        </PrimaryActionButton>
+      </footer>
+
       <section className="popup-hero">
         <div className="popup-title-row">
           <span className="popup-icon">
@@ -332,23 +349,6 @@ function MobileScannerPopup() {
           </div>
         )}
       </main>
-
-      <footer className="popup-actions">
-        <SecondaryActionButton
-          onClick={() => void openSidepanelTool("top-offers")}
-          className="popup-action-button"
-        >
-          <Calculator className="h-4 w-4" />
-          Offer Calculator
-        </SecondaryActionButton>
-        <PrimaryActionButton
-          onClick={() => void openSidepanelTool("mobile-scanner")}
-          className="popup-action-button"
-        >
-          <Smartphone className="h-4 w-4" />
-          Scanner Results
-        </PrimaryActionButton>
-      </footer>
     </div>
   );
 }
