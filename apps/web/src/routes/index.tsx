@@ -129,19 +129,26 @@ function Home() {
       <section id="top" className="border-b border-zinc-200 bg-white">
         <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8 lg:py-12">
           <div className="mx-auto max-w-5xl text-center">
-
             <h1 className="text-4xl font-semibold leading-[1.02] text-zinc-950 sm:text-6xl">
-             The fastest way to resell electronics.
+              The fastest way to resell electronics.
             </h1>
             <p className="mx-auto mt-5 max-w-3xl text-lg leading-8 text-zinc-600 sm:text-xl">
-              Volt is a set of tools that makes buying and reselling quicker. The Chrome extension and iPhone app work together to streamline the process of evaluating items, capturing details, and preparing listings.
+              Volt is a set of tools that makes buying and reselling quicker by
+              streamlining the process of evaluating items, capturing details,
+              and preparing listings.
             </p>
             <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
-              <a href={chromeExtensionDownloadUrl} className="inline-flex h-11 items-center justify-center gap-2 rounded-[0.85rem] bg-zinc-950 px-5 text-sm font-semibold text-white hover:bg-zinc-800">
+              <a
+                href={chromeExtensionDownloadUrl}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-[0.85rem] bg-zinc-950 px-5 text-sm font-semibold text-white hover:bg-zinc-800"
+              >
                 Download Chrome extension
                 <Chrome size={16} />
               </a>
-              <a href={mobileAppDownloadUrl} className="inline-flex h-11 items-center justify-center gap-2 rounded-[0.85rem] border border-zinc-300 bg-white px-5 text-sm font-semibold text-zinc-800 hover:border-zinc-950">
+              <a
+                href={mobileAppDownloadUrl}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-[0.85rem] border border-zinc-300 bg-white px-5 text-sm font-semibold text-zinc-800 hover:border-zinc-950"
+              >
                 Download mobile app
                 <Smartphone size={16} />
               </a>
@@ -173,26 +180,39 @@ function HeroPanel() {
 
 function ProductSurfaceSection() {
   return (
-    <section id="scanner" className="border-b border-zinc-200 bg-zinc-950 text-white">
+    <section
+      id="scanner"
+      className="border-b border-zinc-200 bg-zinc-950 text-white"
+    >
       <div className="mx-auto max-w-7xl px-4 pt-16 sm:px-6 lg:px-8 lg:pt-24">
         <div className="grid gap-10 lg:grid-cols-[0.78fr_1.22fr]">
           <div>
-            <p className="text-sm font-semibold text-emerald-300">Mobile capture</p>
+            <p className="text-sm font-semibold text-emerald-300">
+              Mobile capture
+            </p>
             <h2 className="mt-3 text-3xl font-semibold leading-tight sm:text-4xl">
               Capture product details with the device already in your hand.
             </h2>
             <p className="mt-5 max-w-xl text-base leading-7 text-zinc-300">
-              The mobile app turns the iPhone camera and microphone into a faster input device for resale work: scan labels, read barcodes, take photos, and dictate notes without returning to the keyboard for every item.
+              The mobile app turns the iPhone camera and microphone into a
+              faster input device for resale work: scan labels, read barcodes,
+              take photos, and dictate notes without returning to the keyboard
+              for every item.
             </p>
           </div>
           <div className="grid gap-4 md:grid-cols-3">
             {platformItems.map((item) => (
-              <article key={item.title} className="rounded-[1.2rem] border border-white/10 bg-white/[0.06] p-5">
+              <article
+                key={item.title}
+                className="rounded-[1.2rem] border border-white/10 bg-white/[0.06] p-5"
+              >
                 <div className="grid size-10 place-items-center rounded-[0.8rem] bg-white text-zinc-950">
                   <item.icon size={20} />
                 </div>
                 <h3 className="mt-8 text-base font-semibold">{item.title}</h3>
-                <p className="mt-3 text-sm leading-6 text-zinc-300">{item.body}</p>
+                <p className="mt-3 text-sm leading-6 text-zinc-300">
+                  {item.body}
+                </p>
               </article>
             ))}
           </div>
@@ -267,7 +287,11 @@ function MobileFeatureCarousel() {
   }, []);
 
   return (
-    <div ref={carouselRef} className="mobile-feature-carousel min-w-0 overflow-x-auto overflow-y-hidden py-1" aria-label="Volt mobile capture screenshots">
+    <div
+      ref={carouselRef}
+      className="mobile-feature-carousel min-w-0 overflow-x-auto overflow-y-hidden py-1"
+      aria-label="Volt mobile capture screenshots"
+    >
       <div className="mobile-feature-track flex w-max">
         {[0, 1, 2].map((groupIndex) => (
           <div
@@ -277,7 +301,10 @@ function MobileFeatureCarousel() {
             aria-hidden={groupIndex !== 1}
           >
             {mobileScreenshots.map((item) => (
-              <MobileFeatureShot key={`${groupIndex}-${item.title}`} {...item} />
+              <MobileFeatureShot
+                key={`${groupIndex}-${item.title}`}
+                {...item}
+              />
             ))}
           </div>
         ))}
@@ -292,13 +319,17 @@ function CaptureSection() {
       <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
         <div className="flex flex-col justify-between gap-8 lg:flex-row lg:items-end">
           <div className="max-w-3xl">
-            <p className="text-sm font-semibold text-zinc-500">Chrome extension</p>
+            <p className="text-sm font-semibold text-zinc-500">
+              Chrome extension
+            </p>
             <h2 className="mt-3 text-3xl font-semibold leading-tight text-zinc-950 sm:text-4xl">
               Page-aware tools that stay out of the way.
             </h2>
           </div>
           <p className="max-w-xl text-base leading-7 text-zinc-600">
-            Volt adds focused controls to the browser surfaces resellers already use: UPC pages, product pages, Shopify Admin, and eBay sold-listing checks.
+            Volt adds focused controls to the browser surfaces resellers already
+            use: UPC pages, product pages, Shopify Admin, and eBay sold-listing
+            checks.
           </p>
         </div>
 
@@ -365,9 +396,15 @@ function ExtensionFeatureCard({
 }) {
   return (
     <article className="overflow-hidden rounded-[1.2rem] border border-zinc-200 bg-white shadow-sm">
-      <div className={`overflow-hidden border-b border-zinc-200 ${mediaClassName}`}>
+      <div
+        className={`overflow-hidden border-b border-zinc-200 ${mediaClassName}`}
+      >
         <div className="overflow-hidden rounded-[0.85rem] bg-white">
-          <img src={image} alt={`${title} demo`} className={`w-full ${imageClassName}`} />
+          <img
+            src={image}
+            alt={`${title} demo`}
+            className={`w-full ${imageClassName}`}
+          />
         </div>
       </div>
       <div className="p-5">
@@ -378,7 +415,11 @@ function ExtensionFeatureCard({
   );
 }
 
-function PairingStatus({ status }: { status: "ready" | "paired" | "inactive" }) {
+function PairingStatus({
+  status,
+}: {
+  status: "ready" | "paired" | "inactive";
+}) {
   const statusConfig = {
     ready: {
       label: "Pairing ready",
@@ -395,7 +436,9 @@ function PairingStatus({ status }: { status: "ready" | "paired" | "inactive" }) 
   }[status];
 
   return (
-    <div className={`inline-flex items-center gap-2 text-sm font-semibold ${statusConfig.text}`}>
+    <div
+      className={`inline-flex items-center gap-2 text-sm font-semibold ${statusConfig.text}`}
+    >
       <Smartphone size={18} />
       {statusConfig.label}
     </div>
@@ -430,7 +473,9 @@ function BrowserWorkspaceMock() {
           <div className="text-center">
             <p className="text-sm font-semibold text-zinc-600">Good evening</p>
             <div className="mt-1 flex items-baseline justify-center gap-2 text-zinc-950">
-              <span className="text-6xl font-bold leading-none tracking-tight">7:21</span>
+              <span className="text-6xl font-bold leading-none tracking-tight">
+                7:21
+              </span>
               <span className="text-xl font-semibold">PM</span>
             </div>
             <p className="mt-2 text-xs font-semibold uppercase tracking-[0.22em] text-zinc-400">
@@ -442,14 +487,25 @@ function BrowserWorkspaceMock() {
             <div className="grid gap-3 border-b border-zinc-200 p-4 lg:grid-cols-[minmax(16rem,1fr)_auto] lg:items-center">
               <div className="flex min-w-0 items-center gap-3 text-zinc-400">
                 <Search size={18} />
-                <span className="truncate text-base">Search eBay sold prices</span>
+                <span className="truncate text-base">
+                  Search eBay sold prices
+                </span>
               </div>
               <div className="flex w-fit items-center gap-1 rounded-[1.15rem] border border-zinc-200 bg-zinc-100 p-1 text-xs font-semibold text-zinc-600">
-                {["Google", "PriceCharting", "UPC", "eBay sold", "Shopify"].map((item) => (
-                  <span key={item} className={item === "eBay sold" ? "inline-flex h-8 items-center justify-center whitespace-nowrap rounded-[0.85rem] bg-emerald-600 px-5 text-white shadow-sm" : "inline-flex h-8 items-center justify-center whitespace-nowrap rounded-[0.85rem] px-3"}>
-                    {item}
-                  </span>
-                ))}
+                {["Google", "PriceCharting", "UPC", "eBay sold", "Shopify"].map(
+                  (item) => (
+                    <span
+                      key={item}
+                      className={
+                        item === "eBay sold"
+                          ? "inline-flex h-8 items-center justify-center whitespace-nowrap rounded-[0.85rem] bg-emerald-600 px-5 text-white shadow-sm"
+                          : "inline-flex h-8 items-center justify-center whitespace-nowrap rounded-[0.85rem] px-3"
+                      }
+                    >
+                      {item}
+                    </span>
+                  ),
+                )}
               </div>
             </div>
 
@@ -459,21 +515,51 @@ function BrowserWorkspaceMock() {
                   <RotateCcw size={13} />
                   Pick up where you left off
                 </span>
-                <span className="hidden normal-case tracking-normal sm:inline">Ctrl+Shift+Z reopens last tab</span>
+                <span className="hidden normal-case tracking-normal sm:inline">
+                  Ctrl+Shift+Z reopens last tab
+                </span>
               </div>
               <div className="grid gap-2 sm:grid-cols-2">
-                <MockTab title="eBay solds - PS5 Slim Disc" url="ebay.com" time="58s" />
-                <MockTab title="Shopify product draft" url="admin.shopify.com" time="2m" />
-                <MockTab title="UPC 711719573364 lookup" url="barcodelookup.com" time="2h" />
-                <MockTab title="PriceCharting: PlayStation 5" url="pricecharting.com" time="3h" />
+                <MockTab
+                  title="eBay solds - PS5 Slim Disc"
+                  url="ebay.com"
+                  time="58s"
+                />
+                <MockTab
+                  title="Shopify product draft"
+                  url="admin.shopify.com"
+                  time="2m"
+                />
+                <MockTab
+                  title="UPC 711719573364 lookup"
+                  url="barcodelookup.com"
+                  time="2h"
+                />
+                <MockTab
+                  title="PriceCharting: PlayStation 5"
+                  url="pricecharting.com"
+                  time="3h"
+                />
               </div>
 
               <div className="mt-5">
-                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">Earlier today</div>
+                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">
+                  Earlier today
+                </div>
                 <div className="space-y-1">
-                  <RecentRow title="Volt - Chrome scanner session" url="volt-scanner.vercel.app/session" active />
-                  <RecentRow title="Browse PlayStation sold listings" url="ebay.com/sch/i.html?_sop=13" />
-                  <RecentRow title="Shopify inventory search" url="admin.shopify.com/store/products" />
+                  <RecentRow
+                    title="Volt - Chrome scanner session"
+                    url="volt-scanner.vercel.app/session"
+                    active
+                  />
+                  <RecentRow
+                    title="Browse PlayStation sold listings"
+                    url="ebay.com/sch/i.html?_sop=13"
+                  />
+                  <RecentRow
+                    title="Shopify inventory search"
+                    url="admin.shopify.com/store/products"
+                  />
                 </div>
               </div>
             </div>
@@ -542,9 +628,15 @@ function MobileNewTabDemo() {
                 <span className="min-w-0 truncate">Search resale prices</span>
               </div>
               <div className="mt-2 grid grid-cols-3 gap-1 rounded-[0.8rem] bg-zinc-100 p-1 text-[0.68rem] font-semibold text-zinc-600">
-                <span className="flex h-7 items-center justify-center rounded-[0.65rem]">Google</span>
-                <span className="flex h-7 items-center justify-center rounded-[0.65rem] bg-emerald-600 text-white shadow-sm">eBay sold</span>
-                <span className="flex h-7 items-center justify-center rounded-[0.65rem]">Shopify</span>
+                <span className="flex h-7 items-center justify-center rounded-[0.65rem]">
+                  Google
+                </span>
+                <span className="flex h-7 items-center justify-center rounded-[0.65rem] bg-emerald-600 text-white shadow-sm">
+                  eBay sold
+                </span>
+                <span className="flex h-7 items-center justify-center rounded-[0.65rem]">
+                  Shopify
+                </span>
               </div>
             </div>
 
@@ -554,9 +646,21 @@ function MobileNewTabDemo() {
                 Pick up where you left off
               </div>
               <div className="space-y-2">
-                <MockTab title="eBay solds - PS5 Slim Disc" url="ebay.com" time="58s" />
-                <MockTab title="Shopify product draft" url="admin.shopify.com" time="2m" />
-                <MockTab title="PriceCharting: PlayStation 5" url="pricecharting.com" time="3h" />
+                <MockTab
+                  title="eBay solds - PS5 Slim Disc"
+                  url="ebay.com"
+                  time="58s"
+                />
+                <MockTab
+                  title="Shopify product draft"
+                  url="admin.shopify.com"
+                  time="2m"
+                />
+                <MockTab
+                  title="PriceCharting: PlayStation 5"
+                  url="pricecharting.com"
+                  time="3h"
+                />
               </div>
             </div>
           </section>
@@ -571,7 +675,13 @@ function MobileNewTabDemo() {
   );
 }
 
-function MobileToolButton({ icon: Icon, label }: { icon: typeof Search; label: string }) {
+function MobileToolButton({
+  icon: Icon,
+  label,
+}: {
+  icon: typeof Search;
+  label: string;
+}) {
   return (
     <div className="flex min-w-0 items-center justify-center gap-1.5 rounded-[0.8rem] border border-zinc-200 bg-white px-2.5 py-2 text-xs font-semibold text-zinc-700 shadow-sm">
       <Icon size={14} className="shrink-0 text-emerald-600" />
@@ -580,14 +690,24 @@ function MobileToolButton({ icon: Icon, label }: { icon: typeof Search; label: s
   );
 }
 
-function MockTab({ time, title, url }: { time: string; title: string; url: string }) {
+function MockTab({
+  time,
+  title,
+  url,
+}: {
+  time: string;
+  title: string;
+  url: string;
+}) {
   return (
     <div className="flex items-center gap-3 rounded-[0.95rem] border border-zinc-200 bg-white p-3">
       <div className="grid size-8 shrink-0 place-items-center rounded-[0.65rem] bg-zinc-100 text-zinc-500">
         <GlobeIcon />
       </div>
       <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-semibold text-zinc-950">{title}</div>
+        <div className="truncate text-sm font-semibold text-zinc-950">
+          {title}
+        </div>
         <div className="mt-0.5 truncate text-xs text-zinc-500">{url}</div>
       </div>
       <span className="shrink-0 text-xs text-zinc-400">{time}</span>
@@ -595,14 +715,30 @@ function MockTab({ time, title, url }: { time: string; title: string; url: strin
   );
 }
 
-function RecentRow({ active, title, url }: { active?: boolean; title: string; url: string }) {
+function RecentRow({
+  active,
+  title,
+  url,
+}: {
+  active?: boolean;
+  title: string;
+  url: string;
+}) {
   return (
-    <div className={active ? "flex items-center gap-3 rounded-[0.95rem] bg-emerald-50 px-3 py-2.5" : "flex items-center gap-3 rounded-[0.95rem] px-3 py-2.5"}>
+    <div
+      className={
+        active
+          ? "flex items-center gap-3 rounded-[0.95rem] bg-emerald-50 px-3 py-2.5"
+          : "flex items-center gap-3 rounded-[0.95rem] px-3 py-2.5"
+      }
+    >
       <div className="grid size-6 shrink-0 place-items-center text-zinc-400">
         <GlobeIcon />
       </div>
       <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-semibold text-zinc-950">{title}</div>
+        <div className="truncate text-sm font-semibold text-zinc-950">
+          {title}
+        </div>
         <div className="truncate text-xs text-zinc-500">{url}</div>
       </div>
       <span className="text-xs text-zinc-400">3h</span>
@@ -610,7 +746,13 @@ function RecentRow({ active, title, url }: { active?: boolean; title: string; ur
   );
 }
 
-function ToolPill({ icon: Icon, label }: { icon: typeof Search; label: string }) {
+function ToolPill({
+  icon: Icon,
+  label,
+}: {
+  icon: typeof Search;
+  label: string;
+}) {
   return (
     <div className="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 shadow-sm">
       <Icon size={16} className="text-emerald-600" />
@@ -635,14 +777,23 @@ function MockColumn({
   return (
     <section className="rounded-[1.35rem] border border-zinc-200 bg-white/85 p-4 shadow-sm backdrop-blur">
       <div className="mb-3 flex items-center justify-between gap-2">
-        <h4 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{title}</h4>
+        <h4 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+          {title}
+        </h4>
         <Icon size={14} className="text-zinc-400" />
       </div>
       <div className="space-y-2">
         {items.map(([category, item]) => (
-          <div key={`${category}-${item}`} className="rounded-[0.85rem] px-2 py-1.5 hover:bg-zinc-50">
-            <div className="text-[0.68rem] font-semibold uppercase tracking-wide text-zinc-400">{category}</div>
-            <div className="truncate text-sm font-medium text-zinc-700">{item}</div>
+          <div
+            key={`${category}-${item}`}
+            className="rounded-[0.85rem] px-2 py-1.5 hover:bg-zinc-50"
+          >
+            <div className="text-[0.68rem] font-semibold uppercase tracking-wide text-zinc-400">
+              {category}
+            </div>
+            <div className="truncate text-sm font-medium text-zinc-700">
+              {item}
+            </div>
           </div>
         ))}
       </div>
@@ -650,16 +801,14 @@ function MockColumn({
   );
 }
 
-function MobileFeatureShot({
-  src,
-  title,
-}: {
-  src: string;
-  title: string;
-}) {
+function MobileFeatureShot({ src, title }: { src: string; title: string }) {
   return (
     <article className="w-[18rem] shrink-0 overflow-hidden rounded-[1.35rem] border border-white/10 bg-white/[0.04] shadow-lg shadow-black/20">
-      <img src={src} alt={`${title} screenshot`} className="w-full object-contain" />
+      <img
+        src={src}
+        alt={`${title} screenshot`}
+        className="w-full object-contain"
+      />
     </article>
   );
 }

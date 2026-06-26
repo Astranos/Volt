@@ -1,4 +1,4 @@
-import { ArrowRight, Chrome, Smartphone } from "lucide-react";
+import { ArrowRight, Chrome, Github, Smartphone } from "lucide-react";
 
 export const chromeExtensionDownloadUrl =
   "https://chromewebstore.google.com/detail/volt/bmgghhmlflbhlnomgnoodpidekpaaifk";
@@ -6,25 +6,16 @@ export const mobileAppDownloadUrl =
   "https://apps.apple.com/us/app/volt-scanner/id6771770148";
 export const repositoryUrl = "https://github.com/JuanQuenga/Volt";
 export const supportUrl = `${repositoryUrl}/issues`;
+export const donateUrl = "https://github.com/sponsors/JuanQuenga";
 
 const footerLinkGroups = [
   {
-    title: "Project",
+    title: "Links",
     links: [
-      ["GitHub repo", repositoryUrl],
+      ["Create Web Session", "/session"],
       ["Support", supportUrl],
-      ["Chrome extension", chromeExtensionDownloadUrl],
-      ["Mobile app", mobileAppDownloadUrl],
-    ],
-  },
-  {
-    title: "Web",
-    links: [
-      ["Home", "/"],
-      ["Mobile capture", "/#scanner"],
-      ["Privacy", "/#privacy"],
-      ["Web scanner", "/session"],
-      ["App review demo", "/scanner-demo"],
+      ["Repository", repositoryUrl],
+      ["Donate", donateUrl],
     ],
   },
 ];
@@ -38,8 +29,6 @@ export function SiteHeader({
   anchorPrefix = "/",
   variant = "marketing",
 }: SiteHeaderProps) {
-  const scannerHref = `${anchorPrefix}#scanner`;
-  const privacyHref = `${anchorPrefix}#privacy`;
   const isScanner = variant === "scanner";
 
   return (
@@ -50,11 +39,7 @@ export function SiteHeader({
           className="flex items-center gap-2"
           aria-label="Volt home"
         >
-          <img
-            src="/favicon.svg"
-            alt=""
-            className="size-8"
-          />
+          <img src="/favicon.svg" alt="" className="size-8" />
           <span className="hidden text-sm font-semibold sm:inline">Volt</span>
         </a>
         {isScanner ? (
@@ -75,26 +60,14 @@ export function SiteHeader({
             className="flex items-center gap-5 text-sm text-zinc-600 sm:gap-7"
             aria-label="Primary"
           >
-            <a
-              className="hidden hover:text-zinc-950 sm:inline"
-              href={scannerHref}
-            >
-              Capture
-            </a>
-            <a className="hidden hover:text-zinc-950 sm:inline" href="/session">
-              Web scanner
-            </a>
-            <a
-              className="hidden hover:text-zinc-950 sm:inline"
-              href={privacyHref}
-            >
-              Privacy
+            <a className="hover:text-zinc-950" href={supportUrl}>
+              Support
             </a>
             <a
               className="inline-flex h-9 items-center justify-center gap-2 rounded-[0.85rem] border border-zinc-300 bg-white px-3 text-sm font-medium text-zinc-800 shadow-sm hover:border-zinc-900"
-              href={supportUrl}
+              href="/session"
             >
-              Support
+              New session
               <ArrowRight size={14} />
             </a>
           </nav>
@@ -108,18 +81,14 @@ export function SiteFooter() {
   return (
     <footer id="privacy" className="bg-zinc-950 text-white">
       <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8 lg:py-16">
-        <div className="grid gap-10 lg:grid-cols-[1fr_1.1fr]">
+        <div className="grid gap-10 lg:grid-cols-[minmax(0,44rem)_14rem] lg:gap-24">
           <div className="max-w-2xl">
             <a
               href="/"
               className="inline-flex items-center gap-2"
               aria-label="Volt home"
             >
-              <img
-                src="/favicon.svg"
-                alt=""
-                className="size-9"
-              />
+              <img src="/favicon.svg" alt="" className="size-9" />
               <span className="text-base font-semibold">Volt</span>
             </a>
             <p className="mt-5 text-sm leading-6 text-zinc-300">
@@ -148,7 +117,7 @@ export function SiteFooter() {
             </div>
           </div>
 
-          <div className="grid gap-8 sm:grid-cols-2">
+          <div className="grid gap-8">
             {footerLinkGroups.map((group) => (
               <nav key={group.title} aria-label={group.title}>
                 <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
@@ -172,7 +141,16 @@ export function SiteFooter() {
 
         <div className="mt-10 flex flex-col gap-3 border-t border-white/10 pt-6 text-xs text-zinc-500 sm:flex-row sm:items-center sm:justify-between">
           <p>Copyright {new Date().getFullYear()} Volt Scanner</p>
-          <p>Free to use and open source.</p>
+          <p className="inline-flex items-center gap-1.5">
+            Open source on
+            <a
+              href={repositoryUrl}
+              className="inline-flex items-center gap-1.5 font-medium text-zinc-400 hover:text-white"
+            >
+              <Github size={14} />
+              GitHub
+            </a>
+          </p>
         </div>
       </div>
     </footer>
