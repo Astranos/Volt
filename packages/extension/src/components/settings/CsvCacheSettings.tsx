@@ -94,7 +94,7 @@ export function CsvCacheSettings({
       console.error("[Settings] Error downloading default CSV:", error);
       chrome.notifications.create({
         type: "basic",
-        iconUrl: "/assets/icons/icon-48.png",
+        iconUrl: "/assets/icons/logo-48.png",
         title: "Download Failed",
         message: "Failed to download CSV. Please try again.",
       });
