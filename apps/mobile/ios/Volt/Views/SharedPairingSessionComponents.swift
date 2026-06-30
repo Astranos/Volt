@@ -1,11 +1,11 @@
 import SwiftUI
 
 struct PairingSessionSetupContent: View {
-    private let webScannerURLText = "volt-scanner.vercel.app/session"
+    private let webScannerURLText = "volt-scanner.vercel.app/clip"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Scan the QR code from the Chrome extension, or open the session page on your computer. This iPhone will connect to that browser session.")
+            Text("Scan the QR code from the Chrome extension, or open the App Clip page on your computer. This iPhone will connect to that browser session.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -19,7 +19,7 @@ struct PairingSessionSetupContent: View {
                 PairingSessionSetupStep(
                     systemImage: "qrcode",
                     title: "Show the pairing QR",
-                    detail: "Start pairing in Chrome or on the session page."
+                    detail: "Start pairing in Chrome or on the App Clip page."
                 )
                 PairingSessionSetupStep(
                     systemImage: "iphone",
