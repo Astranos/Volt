@@ -110,6 +110,18 @@ final class ClipScannerStore {
         pairingSession != nil && !isPairing && !isConnected
     }
 
+    var canReconnectToLastSession: Bool {
+        lastPairingCredential != nil && !isPairing && !isConnected
+    }
+
+    var lastSessionDisplayName: String? {
+        lastPairingCredential?.displayName
+    }
+
+    var connectionAttemptDisplayName: String {
+        pairingLabel ?? lastPairingCredential?.displayName ?? pairingSession?.sessionId ?? "Chrome"
+    }
+
     init() {
         transport.onStatus = { [weak self] status in
             self?.statusText = status
@@ -214,6 +226,11 @@ final class ClipScannerStore {
     func retryPairing() {
         guard pairingSession != nil, !isPairing, !isConnected else { return }
         Task { await pair() }
+    }
+
+    func reconnectToLastSession() {
+        guard !isPairing, !isConnected, let credential = lastPairingCredential else { return }
+        scheduleReconnectIfPossible(reason: "Reconnect requested", using: credential)
     }
 
     func startDictation() {
@@ -409,6 +426,21 @@ final class ClipScannerStore {
         targetHint = "Disconnected"
     }
 
+    func cancelConnectionAttempt() {
+        guard isPairing || reconnectTask != nil else { return }
+        suppressNextReconnect = true
+        reconnectTask?.cancel()
+        reconnectTask = nil
+        transport.close()
+        isPairing = false
+        isConnected = false
+        isDictating = false
+        pairingFailureMessage = nil
+        statusText = "Connection canceled"
+        targetHint = lastPairingCredential == nil ? "Scan a fresh Volt QR code." : "Not connected"
+        suppressNextReconnect = false
+    }
+
     private func savePairingCredential(from sessionReady: ScannerProtocol.SessionReady) {
         guard let pairing = sessionReady.pairing else { return }
         let displayName = pairing.displayName ?? pairing.browserSessionId
@@ -461,10 +493,14 @@ final class ClipScannerStore {
             return
         }
 
+        scheduleReconnectIfPossible(reason: reason, using: credential)
+    }
+
+    private func scheduleReconnectIfPossible(reason: String, using credential: ClipPairingCredential) {
         isConnected = false
         isPairing = true
         targetHint = "Reopening \(credential.displayName)"
-        statusText = "Reconnecting to Chrome"
+        statusText = reason == "Reconnect requested" ? "Reconnecting to \(credential.displayName)" : "Reconnecting to Chrome"
         reconnectTask = Task { [weak self] in
             await self?.reconnect(using: credential)
         }

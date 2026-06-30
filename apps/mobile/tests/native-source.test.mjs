@@ -525,11 +525,11 @@ test("native first launch welcomes users without requesting camera access and ca
   assert.match(rootViewSwiftSource, /private func showPairingScannerFromWelcome\(\) \{\s*store\.activeMode = \.barcode\s*showsConnectionSheetAfterWelcomePairingScan = false\s*isWelcomePairingScannerPresented = true\s*\}/);
   assert.doesNotMatch(rootViewSwiftSource, /private func showSessionsFromWelcome/);
   assert.doesNotMatch(pairingSessionsViewSwiftSource, /openURL\(webScannerURL\)/);
-  assert.match(sharedPairingSessionComponentsSwiftSource, /private let webScannerURLText = "volt-scanner\.vercel\.app\/session"/);
-  assert.match(sharedPairingSessionComponentsSwiftSource, /Text\("Scan the QR code from the Chrome extension, or open the session page on your computer\. This iPhone will connect to that browser session\."\)/);
+  assert.match(sharedPairingSessionComponentsSwiftSource, /private let webScannerURLText = "volt-scanner\.vercel\.app\/clip"/);
+  assert.match(sharedPairingSessionComponentsSwiftSource, /Text\("Scan the QR code from the Chrome extension, or open the App Clip page on your computer\. This iPhone will connect to that browser session\."\)/);
   assert.match(sharedPairingSessionComponentsSwiftSource, /title: "Open Volt on your computer"/);
   assert.match(sharedPairingSessionComponentsSwiftSource, /detail: "Use the Chrome extension side panel, or enter the URL below\."/);
-  assert.match(sharedPairingSessionComponentsSwiftSource, /detail: "Start pairing in Chrome or on the session page\."/);
+  assert.match(sharedPairingSessionComponentsSwiftSource, /detail: "Start pairing in Chrome or on the App Clip page\."/);
   assert.doesNotMatch(sharedPairingSessionComponentsSwiftSource, /Label\("Open Create Session Page", systemImage: "safari"\)/);
   assert.match(pairingSessionsViewSwiftSource, /Label\("Scan Computer QR", systemImage: "qrcode\.viewfinder"\)/);
   assert.match(rootViewSwiftSource, /\.frame\(maxWidth: \.infinity, alignment: \.leading\)\s*\.background\(\.background, in: RoundedRectangle\(cornerRadius: 16/);
@@ -959,6 +959,33 @@ test("app clip bottom CTAs show connection progress while pairing", () => {
   assert.match(clipRootViewSwiftSource, /private var dictationStatusText: String \{[\s\S]*else if store\.isPairing \{\s*store\.statusText/);
   assert.match(clipRootViewSwiftSource, /private var uploadStatusText: String \{[\s\S]*else if store\.isPairing \{\s*store\.statusText/);
   assert.match(clipRootViewSwiftSource, /private var buttonTitle: String \{\s*if isConnecting \{\s*return "Connecting\.\.\."/);
+});
+
+test("app clip connect button offers last-session reconnect before scanning QR", () => {
+  assert.match(clipScannerStoreSwiftSource, /var canReconnectToLastSession: Bool \{\s*lastPairingCredential != nil && !isPairing && !isConnected\s*\}/);
+  assert.match(clipScannerStoreSwiftSource, /var lastSessionDisplayName: String\? \{\s*lastPairingCredential\?\.displayName\s*\}/);
+  assert.match(clipScannerStoreSwiftSource, /func reconnectToLastSession\(\) \{\s*guard !isPairing, !isConnected, let credential = lastPairingCredential else \{ return \}/);
+  assert.match(clipRootViewSwiftSource, /@State private var isConnectChoicesPresented = false/);
+  assert.match(clipRootViewSwiftSource, /private func handleConnectButtonTapped\(\) \{[\s\S]*if store\.canReconnectToLastSession \{\s*isConnectChoicesPresented = true\s*\} else \{\s*showPairingScanner\(\)\s*\}/);
+  assert.match(clipRootViewSwiftSource, /private struct ClipConnectChoicesView: View/);
+  assert.match(clipRootViewSwiftSource, /Text\("Reconnect to \\\(displayName\), or scan a QR code for a different computer session\."\)/);
+  assert.match(clipRootViewSwiftSource, /Label\("Reconnect", systemImage: "arrow\.clockwise"\)/);
+  assert.match(clipRootViewSwiftSource, /Label\("Scan QR", systemImage: "qrcode\.viewfinder"\)/);
+  assert.doesNotMatch(clipRootViewSwiftSource, /onConnectionTapped: \{\s*isPairingScannerPresented = true\s*\}/);
+});
+
+test("app clip connecting sheet can cancel or switch to QR scanning", () => {
+  assert.match(clipScannerStoreSwiftSource, /var connectionAttemptDisplayName: String \{[\s\S]*pairingLabel \?\? lastPairingCredential\?\.displayName \?\? pairingSession\?\.sessionId \?\? "Chrome"[\s\S]*\}/);
+  assert.match(clipScannerStoreSwiftSource, /func cancelConnectionAttempt\(\) \{[\s\S]*reconnectTask\?\.cancel\(\)[\s\S]*transport\.close\(\)[\s\S]*statusText = "Connection canceled"/);
+  assert.match(clipRootViewSwiftSource, /@State private var isConnectionProgressPresented = false/);
+  assert.match(clipRootViewSwiftSource, /\.onChange\(of: store\.isPairing\) \{ _, isPairing in\s*isConnectionProgressPresented = isPairing\s*\}/);
+  assert.match(clipRootViewSwiftSource, /private struct ClipConnectionProgressView: View/);
+  assert.match(clipRootViewSwiftSource, /Text\("Connecting"\)/);
+  assert.match(clipRootViewSwiftSource, /value: store\.connectionAttemptDisplayName,\s*systemImage: "desktopcomputer"/);
+  assert.match(clipRootViewSwiftSource, /value: store\.statusText,\s*systemImage: "waveform\.path\.ecg"/);
+  assert.match(clipRootViewSwiftSource, /Label\("Cancel", systemImage: "xmark\.circle"\)/);
+  assert.match(clipRootViewSwiftSource, /Label\("Scan QR", systemImage: "qrcode\.viewfinder"\)/);
+  assert.match(clipRootViewSwiftSource, /store\.cancelConnectionAttempt\(\)[\s\S]*showPairingScanner\(\)/);
 });
 
 test("app clip photo capture and library upload wait for Chrome photo receipts", () => {
