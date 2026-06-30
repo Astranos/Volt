@@ -211,44 +211,8 @@ final class ScannerStore {
         }
     }
 
-    func reconnectToMostRecentPairedSessionIfNeeded() {
-        switch connectionStatus {
-        case .idle, .disconnected:
-            break
-        case .pairing, .waitingForChrome, .connected, .error:
-            return
-        }
-
-        let now = Date.now
-        if let lastAutomaticReconnectAt,
-           now.timeIntervalSince(lastAutomaticReconnectAt) < 15 {
-            return
-        }
-
-        guard let latestSession = pairedSessions.first else { return }
-        lastAutomaticReconnectAt = now
-        reconnect(to: latestSession, reportsErrors: false, isAutomatic: true)
-    }
-
-    @discardableResult
-    func recoverMostRecentPairedSession() -> Bool {
-        switch connectionStatus {
-        case .idle, .disconnected, .error:
-            break
-        case .pairing, .waitingForChrome, .connected:
-            return true
-        }
-
-        let now = Date.now
-        if let lastAutomaticReconnectAt,
-           now.timeIntervalSince(lastAutomaticReconnectAt) < 15 {
-            return false
-        }
-
-        guard let latestSession = pairedSessions.first else { return false }
-        lastAutomaticReconnectAt = now
-        reconnect(to: latestSession, reportsErrors: false, isAutomatic: true)
-        return true
+    var hasReconnectablePairedSession: Bool {
+        pairedSessions.contains { canReconnect(to: $0) }
     }
 
     func cancelReconnect() {

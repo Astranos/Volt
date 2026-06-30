@@ -107,7 +107,7 @@ struct RootView: View {
         .onChange(of: scenePhase) { _, newValue in
             store.updateAppIsInBackground(newValue != .active)
             if newValue == .active && !ScreenshotScenario.isEnabled && hasSeenWelcome {
-                store.reconnectToMostRecentPairedSessionIfNeeded()
+                showSavedSessionPickerIfNeeded()
             }
         }
     }
@@ -121,8 +121,24 @@ struct RootView: View {
     }
 
     private func startAppServices() {
-        store.reconnectToMostRecentPairedSessionIfNeeded()
-        showPairingSheet(for: store.connectionStatus)
+        if !showSavedSessionPickerIfNeeded() {
+            showPairingSheet(for: store.connectionStatus)
+        }
+    }
+
+    @discardableResult
+    private func showSavedSessionPickerIfNeeded() -> Bool {
+        guard store.hasReconnectablePairedSession else { return false }
+        switch store.connectionStatus {
+        case .idle, .disconnected:
+            keepsConnectionSheetOpenForSessions = true
+            connectionSheetStatus = nil
+            connectionSheetDetent = .medium
+            isConnectionSheetPresented = true
+            return true
+        case .pairing, .waitingForChrome, .connected, .error:
+            return false
+        }
     }
 
     private func showPairingScannerFromWelcome() {
