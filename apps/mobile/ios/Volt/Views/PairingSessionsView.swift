@@ -118,7 +118,7 @@ struct PairingSessionsView: View {
     }
 
     private var pairingButtonTitle: String {
-        store.connectionStatus.isConnected ? "Disconnect" : "Pair"
+        store.connectionStatus.isConnected ? "Disconnect" : "Scan QR"
     }
 
     private var pairingButtonSystemImage: String {
@@ -130,7 +130,7 @@ struct PairingSessionsView: View {
     }
 
     private var pairingButtonAccessibilityLabel: String {
-        store.connectionStatus.isConnected ? "Disconnect from browser" : "Pair with QR code"
+        store.connectionStatus.isConnected ? "Disconnect from browser" : "Scan pairing QR code"
     }
 
     private var pairedSessionsList: some View {

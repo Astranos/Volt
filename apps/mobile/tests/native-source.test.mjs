@@ -297,7 +297,7 @@ test("native pairing URLs can carry the signal deployment that minted the token"
 
 test("native saved-session reconnect toast can cancel manual previous-session taps", () => {
   const reconnectStart = scannerStoreSwiftSource.indexOf("func reconnect(to pairedSession:");
-  const reconnectEnd = scannerStoreSwiftSource.indexOf("func reconnectToMostRecentPairedSessionIfNeeded", reconnectStart);
+  const reconnectEnd = scannerStoreSwiftSource.indexOf("var hasReconnectablePairedSession", reconnectStart);
   const reconnectSource = scannerStoreSwiftSource.slice(reconnectStart, reconnectEnd);
 
   assert.ok(reconnectStart > -1);
@@ -392,10 +392,10 @@ test("native saved-session taps switch sessions sheet to reconnect status withou
   assert.match(pairingSessionsViewSwiftSource, /store\.forgetVisibleSession\(session\)/);
   assert.match(pairingSessionsViewSwiftSource, /Label\(pairingButtonTitle, systemImage: pairingButtonSystemImage\)/);
   assert.match(pairingSessionsViewSwiftSource, /private func handleHeaderPairingAction\(\) \{\s*if store\.connectionStatus\.isConnected \{\s*store\.disconnectFromCurrentSession\(\)\s*return\s*\}[\s\S]*startPairingScan\(\)\s*\}/);
-  assert.match(pairingSessionsViewSwiftSource, /private var pairingButtonTitle: String \{\s*store\.connectionStatus\.isConnected \? "Disconnect" : "Pair"\s*\}/);
+  assert.match(pairingSessionsViewSwiftSource, /private var pairingButtonTitle: String \{\s*store\.connectionStatus\.isConnected \? "Disconnect" : "Scan QR"\s*\}/);
   assert.match(pairingSessionsViewSwiftSource, /private var pairingButtonSystemImage: String \{\s*store\.connectionStatus\.isConnected \? "link\.badge\.minus" : "qrcode\.viewfinder"\s*\}/);
   assert.match(pairingSessionsViewSwiftSource, /private var pairingButtonColor: Color \{\s*store\.connectionStatus\.isConnected \? \.red : \.green\s*\}/);
-  assert.match(pairingSessionsViewSwiftSource, /private var pairingButtonAccessibilityLabel: String \{\s*store\.connectionStatus\.isConnected \? "Disconnect from browser" : "Pair with QR code"\s*\}/);
+  assert.match(pairingSessionsViewSwiftSource, /private var pairingButtonAccessibilityLabel: String \{\s*store\.connectionStatus\.isConnected \? "Disconnect from browser" : "Scan pairing QR code"\s*\}/);
   assert.doesNotMatch(pairingSessionsViewSwiftSource, /store\.unpair\(\)/);
   assert.match(scannerStoreSwiftSource, /var recentBrowserSessions: \[PairedScannerSession\] = \[\]/);
   assert.match(scannerStorePairedSessionsSwiftSource, /var visiblePairingSessions: \[PairedScannerSession\]/);
@@ -414,14 +414,15 @@ test("native saved-session taps switch sessions sheet to reconnect status withou
   assert.doesNotMatch(disconnectSource, /PairingSecretStore\.delete/);
 });
 
-test("native capture session recovers pairing instead of dismissing when the scanner disconnects", () => {
+test("native capture session opens session picker instead of auto-reconnecting when the scanner disconnects", () => {
   assert.match(scannerViewSwiftSource, /CaptureSessionView\(isPresented: \$isCaptureSessionPresented\)/);
   assert.match(scannerViewSwiftSource, /store\.connectionStatus\.isConnected/);
   assert.match(captureSessionViewSwiftSource, /\.onChange\(of: store\.connectionStatus\)/);
   assert.match(captureSessionViewSwiftSource, /handleConnectionStatusChange\(status\)/);
-  assert.match(captureSessionViewSwiftSource, /store\.recoverMostRecentPairedSession\(\)/);
+  assert.doesNotMatch(captureSessionViewSwiftSource, /store\.recoverMostRecentPairedSession\(\)/);
   assert.match(captureSessionViewSwiftSource, /PairingSessionsView\(\)/);
-  assert.match(scannerStoreSwiftSource, /func recoverMostRecentPairedSession\(\) -> Bool/);
+  assert.doesNotMatch(scannerStoreSwiftSource, /func recoverMostRecentPairedSession\(\) -> Bool/);
+  assert.match(captureSessionViewSwiftSource, /case \.idle, \.disconnected, \.error:\s*isConnectionRecoveryPresented = true/);
   assert.match(scannerStoreSwiftSource, /lastAutomaticReconnectAt = nil/);
   const recoveryStart = captureSessionViewSwiftSource.indexOf("private func handleConnectionStatusChange");
   const recoverySource = captureSessionViewSwiftSource.slice(recoveryStart);
@@ -517,7 +518,10 @@ test("native first launch welcomes users without requesting camera access and ca
   assert.match(rootViewSwiftSource, /\.stroke\(\.secondary\.opacity\(0\.28\), lineWidth: 1\)/);
   assert.doesNotMatch(rootViewSwiftSource, /Text\("Continue to Volt"\)/);
   assert.match(rootViewSwiftSource, /private func completeWelcome\(opensPairingScanner: Bool\)/);
-  assert.match(rootViewSwiftSource, /private func startAppServices\(\) \{\s*store\.reconnectToMostRecentPairedSessionIfNeeded\(\)\s*showPairingSheet\(for: store\.connectionStatus\)\s*\}/);
+  assert.match(rootViewSwiftSource, /private func startAppServices\(\) \{\s*if !showSavedSessionPickerIfNeeded\(\) \{\s*showPairingSheet\(for: store\.connectionStatus\)\s*\}\s*\}/);
+  assert.match(rootViewSwiftSource, /private func showSavedSessionPickerIfNeeded\(\) -> Bool \{\s*guard store\.hasReconnectablePairedSession else \{ return false \}/);
+  assert.doesNotMatch(rootViewSwiftSource, /store\.reconnectToMostRecentPairedSessionIfNeeded\(\)/);
+  assert.doesNotMatch(scannerStoreSwiftSource, /func reconnectToMostRecentPairedSessionIfNeeded/);
   assert.doesNotMatch(rootViewSwiftSource, /store\.camera\.requestAccess\(\)/);
   assert.match(captureSessionViewSwiftSource, /\.task \{\s*await store\.camera\.requestAccess\(\)\s*syncCameraForOcrReview/);
   assert.match(pairingSessionsViewSwiftSource, /\.task \{\s*await store\.camera\.requestAccess\(\)\s*store\.camera\.start\(\)\s*\}/);

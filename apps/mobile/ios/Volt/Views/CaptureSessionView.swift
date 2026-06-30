@@ -190,7 +190,7 @@ struct CaptureSessionView: View {
 
         switch status {
         case .idle, .disconnected, .error:
-            isConnectionRecoveryPresented = !store.recoverMostRecentPairedSession()
+            isConnectionRecoveryPresented = true
         case .pairing, .waitingForChrome:
             isConnectionRecoveryPresented = false
         case .connected:
