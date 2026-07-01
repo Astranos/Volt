@@ -725,19 +725,20 @@ test("native scanner normalizes UPC-A barcodes and upload filenames preserve sel
 });
 
 test("native upload batches expose clear progress while photos are preparing and uploading", () => {
-  assert.match(scannerStoreSwiftSource, /struct PhotoUploadProgress: Identifiable, Equatable/);
+  assert.match(sharedScannerTabComponentsSwiftSource, /struct PhotoUploadProgress: Identifiable, Equatable/);
   assert.match(scannerStoreSwiftSource, /var photoUploadProgress: PhotoUploadProgress\?/);
-  assert.match(scannerStoreSwiftSource, /var remainingCount: Int/);
-  assert.match(scannerStoreSwiftSource, /"Uploading \\\(min\(finishedCount \+ 1, total\)\) of \\\(total\)"/);
+  assert.match(sharedScannerTabComponentsSwiftSource, /var remainingCount: Int/);
+  assert.match(sharedScannerTabComponentsSwiftSource, /"Uploading \\\(min\(finishedCount \+ 1, total\)\) of \\\(total\)"/);
   assert.match(scannerStoreCaptureActionsSwiftSource, /photoUploadProgress = PhotoUploadProgress\(/);
   assert.match(scannerStoreCaptureActionsSwiftSource, /updatePhotoUploadProgress\(batchId: batch, prepared: index \+ 1, phase: \.uploading\)/);
   assert.match(scannerStoreCaptureActionsSwiftSource, /finishPhotoUploadItem\(batchId: batch, resultId: photoResult\.id\)/);
   assert.match(scannerStoreCaptureActionsSwiftSource, /finishPhotoUploadBatch\(batchId: batch\)/);
   assert.match(uploadViewSwiftSource, /PhotoPreparationProgressSummary\(\s*prepared: selectedUploadPrepared,\s*total: selectedUploadTotal\s*\)/);
   assert.match(uploadViewSwiftSource, /PhotoUploadProgressSummary\(progress: progress\)/);
-  assert.match(uploadViewSwiftSource, /ProgressView\(value: progress\.fractionCompleted\)/);
+  assert.match(sharedScannerTabComponentsSwiftSource, /ProgressView\(value: progress\.fractionCompleted\)/);
   assert.match(uploadViewSwiftSource, /"Reading \\\(selectedUploadReadCount\) of \\\(selectedUploadTotal\) selected photos"/);
-  assert.match(uploadViewSwiftSource, /struct PhotoPreparationProgressSummary: View/);
+  assert.match(sharedScannerTabComponentsSwiftSource, /struct PhotoPreparationProgressSummary: View/);
+  assert.match(sharedScannerTabComponentsSwiftSource, /struct PhotoUploadProgressSummary: View/);
   assert.match(uploadViewSwiftSource, /GeometryReader \{ proxy in/);
   assert.match(uploadViewSwiftSource, /\.frame\(width: proxy\.size\.width, height: proxy\.size\.height\)/);
   assert.match(uploadViewSwiftSource, /"\\\(progress\.title\)\. \\\(progress\.detail\)\."/);
@@ -924,7 +925,8 @@ test("app clip capture opens in OCR and keeps capture and upload photo lists sep
   assert.match(clipRootViewSwiftSource, /\.onAppear \{\s*activeMode = \.ocr/);
   assert.match(clipRootViewSwiftSource, /let capturePhotos = store\.photos\.filter \{ \$0\.source == \.capture \}/);
   assert.match(clipRootViewSwiftSource, /ClipCapturePhotoBatchesSection\(/);
-  assert.match(clipRootViewSwiftSource, /photos: store\.photos\.filter \{ \$0\.source == \.upload \}/);
+  assert.match(clipRootViewSwiftSource, /let uploadPhotos = store\.photos\.filter \{ \$0\.source == \.upload \}/);
+  assert.match(clipRootViewSwiftSource, /ClipUploadPhotoBatchesSection\(/);
   assert.match(clipRootViewSwiftSource, /latestPhoto: store\.photos\.first\(where: \{ \$0\.source == \.capture \}\)/);
 });
 
@@ -1050,12 +1052,31 @@ test("app clip photo capture and library upload wait for Chrome photo receipts",
   assert.match(clipScannerStoreSwiftSource, /await sendPhoto\(photo\)/);
   assert.match(clipScannerStoreSwiftSource, /func uploadPhotos\(_ images: \[UIImage\]\) async/);
   assert.match(clipScannerStoreSwiftSource, /let batchId = ScannerProtocol\.makeMessageId\("upload-batch"\)/);
-  assert.match(clipScannerStoreSwiftSource, /await sendPhoto\(\s*photo,\s*filename: uploadFilename\(index: index, capturedAt: capturedAt\)\s*\)/);
+  assert.match(clipScannerStoreSwiftSource, /let didSend = await sendPhoto\(\s*photo,\s*filename: uploadFilename\(index: index, capturedAt: capturedAt\)\s*\)/);
   assert.match(clipRootViewSwiftSource, /guard !items\.isEmpty else \{ return \}/);
   assert.match(clipTransportSwiftSource, /private var photoContinuations: \[String: CheckedContinuation<ScannerProtocol\.PhotoReceived, Error>\] = \[:\]/);
   assert.match(clipTransportSwiftSource, /ScannerProtocol\.parsePhotoReceived\(rawValue\)/);
   assert.match(clipTransportSwiftSource, /ScannerProtocol\.parsePhotoRejected\(rawValue\)/);
   assert.match(clipTransportSwiftSource, /ScannerProtocol\.photoReceiptTimeout/);
+});
+
+test("app clip upload tab groups library photos and shows shared upload progress", () => {
+  assert.match(clipScannerStoreSwiftSource, /var photoUploadProgress: PhotoUploadProgress\?/);
+  assert.match(clipScannerStoreSwiftSource, /photoUploadProgress = PhotoUploadProgress\(/);
+  assert.match(clipScannerStoreSwiftSource, /updatePhotoUploadProgress\(batchId: batchId, prepared: index \+ 1, phase: \.uploading\)/);
+  assert.match(clipScannerStoreSwiftSource, /finishPhotoUploadItem\(batchId: batchId, succeeded: didSend\)/);
+  assert.match(clipScannerStoreSwiftSource, /finishPhotoUploadBatch\(batchId: batchId\)/);
+  assert.match(clipRootViewSwiftSource, /private var uploadPhotoBatches: \[ClipUploadPhotoBatch\]/);
+  assert.match(clipRootViewSwiftSource, /let grouped = Dictionary\(grouping: uploadPhotos\) \{ photo in\s*photo\.batchId \?\? photo\.id\.uuidString\s*\}/);
+  assert.match(clipRootViewSwiftSource, /PhotoPreparationProgressSummary\(\s*prepared: selectedUploadPrepared,\s*total: selectedUploadTotal\s*\)/);
+  assert.match(clipRootViewSwiftSource, /PhotoUploadProgressSummary\(progress: progress\)/);
+  assert.match(clipRootViewSwiftSource, /ClipUploadPhotoBatchesSection\(/);
+  assert.match(clipRootViewSwiftSource, /private struct ClipUploadPhotoBatchCard: View/);
+  assert.match(clipRootViewSwiftSource, /private struct ClipUploadPhotoThumbnail: View/);
+  assert.match(clipRootViewSwiftSource, /isUploading: activeUploadProgress != nil/);
+  assert.match(clipRootViewSwiftSource, /"Reading \\\(selectedUploadReadCount\) of \\\(selectedUploadTotal\) selected photos"/);
+  assert.match(clipRootViewSwiftSource, /"\\\(progress\.title\)\. \\\(progress\.detail\)\."/);
+  assert.match(clipRootViewSwiftSource, /store\.removePhotos\(batchId: batch\.id\)/);
 });
 
 test("app clip replays saved captures and photos after connecting", () => {

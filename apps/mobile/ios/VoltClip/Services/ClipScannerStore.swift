@@ -85,6 +85,7 @@ final class ClipScannerStore {
     var isRecognizingText = false
     var photos: [ClipPhoto] = []
     var captures: [ClipCapture] = []
+    var photoUploadProgress: PhotoUploadProgress?
     var ocrReviewImage: UIImage?
     var ocrTextRegions: [RecognizedTextRegion] = []
     var ocrReviewText = ""
@@ -334,6 +335,14 @@ final class ClipScannerStore {
 
         let now = Date.now
         let batchId = ScannerProtocol.makeMessageId("upload-batch")
+        photoUploadProgress = PhotoUploadProgress(
+            id: batchId,
+            total: images.count,
+            prepared: 0,
+            completed: 0,
+            failed: 0,
+            phase: .preparing
+        )
         statusText = "Preparing \(images.count) upload\(images.count == 1 ? "" : "s")"
 
         for (index, image) in images.enumerated() {
@@ -341,22 +350,26 @@ final class ClipScannerStore {
             let preparedImage = image
                 .normalizedForProcessing()
                 .resized(maxLongEdge: 2200)
+            updatePhotoUploadProgress(batchId: batchId, prepared: index + 1, phase: .uploading)
             let photo = addCapturedImage(preparedImage, source: .upload, batchId: batchId, capturedAt: capturedAt)
             statusText = "Uploading \(index + 1) of \(images.count)"
-            await sendPhoto(
+            let didSend = await sendPhoto(
                 photo,
                 filename: uploadFilename(index: index, capturedAt: capturedAt)
             )
+            finishPhotoUploadItem(batchId: batchId, succeeded: didSend)
         }
 
+        finishPhotoUploadBatch(batchId: batchId)
         statusText = "Uploaded \(images.count) photo\(images.count == 1 ? "" : "s")"
     }
 
-    func sendPhoto(_ photo: ClipPhoto, filename: String? = nil) async {
+    @discardableResult
+    func sendPhoto(_ photo: ClipPhoto, filename: String? = nil) async -> Bool {
         guard isConnected else {
             errorMessage = "Connect to Chrome first."
             updatePhoto(photo.id, status: "Saved until connected")
-            return
+            return false
         }
         updatePhoto(photo.id, status: "Sending")
         do {
@@ -370,11 +383,13 @@ final class ClipScannerStore {
             updatePhoto(photo.id, status: "Delivered")
             statusText = "Photo delivered"
             captureSuccessFeedback.notificationOccurred(.success)
+            return true
         } catch {
             updatePhoto(photo.id, status: "Failed")
             errorMessage = error.localizedDescription
             statusText = "Photo send failed"
             playCaptureFailureFeedback()
+            return false
         }
     }
 
@@ -643,6 +658,35 @@ final class ClipScannerStore {
     private func updatePhoto(_ id: UUID, status: String) {
         guard let index = photos.firstIndex(where: { $0.id == id }) else { return }
         photos[index].status = status
+    }
+
+    private func updatePhotoUploadProgress(
+        batchId: String,
+        prepared: Int? = nil,
+        phase: PhotoUploadProgress.Phase? = nil
+    ) {
+        guard photoUploadProgress?.id == batchId else { return }
+        if let prepared {
+            photoUploadProgress?.prepared = prepared
+        }
+        if let phase {
+            photoUploadProgress?.phase = phase
+        }
+    }
+
+    private func finishPhotoUploadItem(batchId: String, succeeded: Bool) {
+        guard photoUploadProgress?.id == batchId else { return }
+        if succeeded {
+            photoUploadProgress?.completed += 1
+        } else {
+            photoUploadProgress?.failed += 1
+        }
+        photoUploadProgress?.phase = .uploading
+    }
+
+    private func finishPhotoUploadBatch(batchId: String) {
+        guard photoUploadProgress?.id == batchId else { return }
+        photoUploadProgress?.phase = .finished
     }
 
     func removePhoto(id: UUID) {
