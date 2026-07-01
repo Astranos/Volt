@@ -9,24 +9,24 @@ import WebKit
 final class ClipScannerStore {
     enum ClipTab: String, CaseIterable, Identifiable {
         case capture
-        case dictate
         case upload
+        case dictate
 
         var id: String { rawValue }
 
         var title: String {
             switch self {
             case .capture: "Capture"
-            case .dictate: "Dictate"
             case .upload: "Upload"
+            case .dictate: "Dictate"
             }
         }
 
         var systemImage: String {
             switch self {
             case .capture: "camera.viewfinder"
-            case .dictate: "mic"
             case .upload: "square.and.arrow.up"
+            case .dictate: "mic"
             }
         }
     }
@@ -59,7 +59,17 @@ final class ClipScannerStore {
         let pairingSecret: String
         let browserSessionId: String
         let displayName: String
+        let signalURL: URL?
     }
+
+    private struct StoredClipPairingCredential: Codable {
+        let pairingId: String
+        let browserSessionId: String
+        let displayName: String
+        let signalURL: URL?
+    }
+
+    private static let lastPairingCredentialStorageKey = "volt.clip.lastPairingCredential.v1"
 
     var selectedTab: ClipTab = .capture
     var activeCaptureMode: CaptureMode = .ocr
@@ -110,6 +120,10 @@ final class ClipScannerStore {
         pairingSession != nil && !isPairing && !isConnected
     }
 
+    var canRetryConnection: Bool {
+        canReconnectToLastSession || canRetryPairing
+    }
+
     var canReconnectToLastSession: Bool {
         lastPairingCredential != nil && !isPairing && !isConnected
     }
@@ -123,8 +137,14 @@ final class ClipScannerStore {
     }
 
     init() {
+        loadLastPairingCredential()
+
         transport.onStatus = { [weak self] status in
-            self?.statusText = status
+            guard let self else { return }
+            if self.isPairing, status == "Connection closed" {
+                return
+            }
+            self.statusText = status
         }
         transport.onConnected = { [weak self] sessionReady in
             guard let self else { return }
@@ -226,6 +246,14 @@ final class ClipScannerStore {
     func retryPairing() {
         guard pairingSession != nil, !isPairing, !isConnected else { return }
         Task { await pair() }
+    }
+
+    func retryFailedConnection() {
+        if canReconnectToLastSession {
+            reconnectToLastSession()
+        } else {
+            retryPairing()
+        }
     }
 
     func reconnectToLastSession() {
@@ -444,16 +472,59 @@ final class ClipScannerStore {
     private func savePairingCredential(from sessionReady: ScannerProtocol.SessionReady) {
         guard let pairing = sessionReady.pairing else { return }
         let displayName = pairing.displayName ?? pairing.browserSessionId
+        PairingSecretStore.save(pairing.pairingSecret, pairingId: pairing.pairingId)
+        let signalURL = pairingSession?.signalURL ?? pairingSession?.sourceURL.signalBaseURL
         lastPairingCredential = ClipPairingCredential(
             pairingId: pairing.pairingId,
             pairingSecret: pairing.pairingSecret,
             browserSessionId: pairing.browserSessionId,
-            displayName: displayName
+            displayName: displayName,
+            signalURL: signalURL
         )
         pairingLabel = displayName
+        persistLastPairingCredential()
         Task {
-            try? await signaling.registerPairing(pairing, phoneDeviceId: contributorId)
+            try? await signaling.registerPairing(
+                pairing,
+                phoneDeviceId: contributorId,
+                signalURL: signalURL ?? ScannerProtocol.signalURL
+            )
         }
+    }
+
+    private func loadLastPairingCredential() {
+        guard let data = UserDefaults.standard.data(forKey: Self.lastPairingCredentialStorageKey),
+              let storedCredential = try? JSONDecoder.scanner.decode(StoredClipPairingCredential.self, from: data)
+        else {
+            return
+        }
+        guard let pairingSecret = PairingSecretStore.secret(pairingId: storedCredential.pairingId) else {
+            UserDefaults.standard.removeObject(forKey: Self.lastPairingCredentialStorageKey)
+            return
+        }
+        lastPairingCredential = ClipPairingCredential(
+            pairingId: storedCredential.pairingId,
+            pairingSecret: pairingSecret,
+            browserSessionId: storedCredential.browserSessionId,
+            displayName: storedCredential.displayName,
+            signalURL: storedCredential.signalURL
+        )
+        pairingLabel = storedCredential.displayName
+    }
+
+    private func persistLastPairingCredential() {
+        guard let lastPairingCredential else {
+            UserDefaults.standard.removeObject(forKey: Self.lastPairingCredentialStorageKey)
+            return
+        }
+        let storedCredential = StoredClipPairingCredential(
+            pairingId: lastPairingCredential.pairingId,
+            browserSessionId: lastPairingCredential.browserSessionId,
+            displayName: lastPairingCredential.displayName,
+            signalURL: lastPairingCredential.signalURL
+        )
+        guard let data = try? JSONEncoder.scanner.encode(storedCredential) else { return }
+        UserDefaults.standard.set(data, forKey: Self.lastPairingCredentialStorageKey)
     }
 
     private func dictationTargetKey(for sessionReady: ScannerProtocol.SessionReady) -> String {
@@ -470,6 +541,10 @@ final class ClipScannerStore {
     }
 
     private func handleTransportClosed() {
+        if isPairing, reconnectTask != nil {
+            return
+        }
+
         let shouldReconnect = isConnected && !suppressNextReconnect
         isConnected = false
         isDictating = false
@@ -512,17 +587,21 @@ final class ClipScannerStore {
         }
 
         do {
-            try await signaling.registerPairing(
+            let signalURLs = credential.signalURL.map { [$0] } ?? ScannerProtocol.reconnectSignalURLs
+            await signaling.registerPairingCandidates(
                 pairingId: credential.pairingId,
                 pairingSecret: credential.pairingSecret,
                 browserSessionId: credential.browserSessionId,
                 displayName: credential.displayName,
-                phoneDeviceId: contributorId
+                phoneDeviceId: contributorId,
+                signalURLs: signalURLs
             )
             let joinWindow = try await signaling.requestReconnect(
                 pairingId: credential.pairingId,
-                pairingSecret: credential.pairingSecret
+                pairingSecret: credential.pairingSecret,
+                signalURLs: signalURLs
             )
+            let parsedJoinSession = PairingURLParser.parse(joinWindow.sourceURL).0
             let session = PairingSession(
                 token: joinWindow.token,
                 sessionId: joinWindow.sessionId ?? credential.browserSessionId,
@@ -530,11 +609,14 @@ final class ClipScannerStore {
                 offer: nil,
                 answerURL: nil,
                 label: credential.displayName,
-                signalURL: joinWindow.sourceURL.signalBaseURL ?? ScannerProtocol.signalURL,
+                signalURL: parsedJoinSession?.signalURL ?? joinWindow.sourceURL.signalBaseURL ?? ScannerProtocol.signalURL,
                 sourceURL: joinWindow.sourceURL
             )
             pairingSession = session
             try await transport.pair(with: session, contributorId: contributorId)
+            try await waitForSessionReady(timeout: .seconds(18))
+        } catch is CancellationError {
+            return
         } catch {
             isPairing = false
             isConnected = false
@@ -544,6 +626,18 @@ final class ClipScannerStore {
             statusText = "Reconnect failed"
             pairingNotificationFeedback.notificationOccurred(.error)
         }
+    }
+
+    private func waitForSessionReady(timeout: Duration) async throws {
+        let deadline = ContinuousClock.now + timeout
+        while ContinuousClock.now < deadline {
+            try Task.checkCancellation()
+            if isConnected && !isPairing {
+                return
+            }
+            try await Task.sleep(for: .milliseconds(250))
+        }
+        throw ScannerPairingError.chromeTimedOut
     }
 
     private func updatePhoto(_ id: UUID, status: String) {

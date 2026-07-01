@@ -84,6 +84,7 @@
 		B3000000000000000000001D /* SharedCaptureSessionOverlays.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000011 /* SharedCaptureSessionOverlays.swift */; };
 		B3000000000000000000001E /* volt.icon in Resources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000001B /* volt.icon */; };
 		B3000000000000000000001F /* VoltClip.app in Embed App Clips */ = {isa = PBXBuildFile; fileRef = C30000000000000000000008 /* VoltClip.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		B30000000000000000000020 /* PairingSecretStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000004 /* PairingSecretStore.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -653,6 +654,7 @@
 				B3000000000000000000000A /* CaptureMode.swift in Sources */,
 				B3000000000000000000000B /* PairingSession.swift in Sources */,
 				B3000000000000000000000C /* PairingURLParser.swift in Sources */,
+				B30000000000000000000020 /* PairingSecretStore.swift in Sources */,
 				B3000000000000000000001A /* CameraDeviceSelector.swift in Sources */,
 				B3000000000000000000000D /* ScannerProtocol.swift in Sources */,
 				B3000000000000000000000E /* ScannerSignalingClient.swift in Sources */,

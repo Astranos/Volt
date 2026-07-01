@@ -21,17 +21,17 @@ struct ClipRootView: View {
                     .tabItem { Label("Capture", systemImage: "camera.viewfinder") }
                     .tag(ClipScannerStore.ClipTab.capture)
 
-                ClipDictationView(store: store) {
-                    handleConnectButtonTapped()
-                }
-                    .tabItem { Label("Dictate", systemImage: "mic") }
-                    .tag(ClipScannerStore.ClipTab.dictate)
-
                 ClipUploadView(store: store) {
                     handleConnectButtonTapped()
                 }
                     .tabItem { Label("Upload", systemImage: "square.and.arrow.up") }
                     .tag(ClipScannerStore.ClipTab.upload)
+
+                ClipDictationView(store: store) {
+                    handleConnectButtonTapped()
+                }
+                    .tabItem { Label("Dictate", systemImage: "mic") }
+                    .tag(ClipScannerStore.ClipTab.dictate)
             }
 
             ClipWebRTCBridgeView(webView: store.bridgeWebView)
@@ -46,13 +46,21 @@ struct ClipRootView: View {
                     isConnectChoicesPresented = false
                     store.reconnectToLastSession()
                 },
+                onDisconnect: {
+                    isConnectChoicesPresented = false
+                    store.disconnect()
+                },
                 onScanQRCode: {
                     isConnectChoicesPresented = false
+                    if store.isConnected {
+                        store.disconnect()
+                    }
                     showPairingScanner()
                 }
             )
             .presentationDetents([.medium])
             .presentationDragIndicator(.visible)
+            .presentationBackground(Color(uiColor: .systemBackground))
         }
         .sheet(isPresented: $isConnectionProgressPresented) {
             ClipConnectionProgressView(
@@ -69,6 +77,7 @@ struct ClipRootView: View {
             )
             .presentationDetents([.medium])
             .presentationDragIndicator(.visible)
+            .presentationBackground(Color(uiColor: .systemBackground))
             .interactiveDismissDisabled(store.isPairing)
         }
         .sheet(isPresented: $isPairingFailurePresented) {
@@ -81,6 +90,7 @@ struct ClipRootView: View {
             )
             .presentationDetents([.medium])
             .presentationDragIndicator(.visible)
+            .presentationBackground(Color(uiColor: .systemBackground))
         }
         .fullScreenCover(isPresented: $isPairingScannerPresented) {
             ClipPairingScannerView(store: store) {
@@ -106,7 +116,7 @@ struct ClipRootView: View {
 
     private func handleConnectButtonTapped() {
         if store.isConnected {
-            store.disconnect()
+            isConnectChoicesPresented = true
             return
         }
         if store.isPairing {
@@ -788,6 +798,7 @@ private struct ClipConnectChoicesView: View {
     @Bindable var store: ClipScannerStore
     @Environment(\.dismiss) private var dismiss
     let onReconnect: () -> Void
+    let onDisconnect: () -> Void
     let onScanQRCode: () -> Void
 
     var body: some View {
@@ -797,7 +808,20 @@ private struct ClipConnectChoicesView: View {
                     .font(.title2.bold())
                     .foregroundStyle(.primary)
 
-                if let displayName = store.lastSessionDisplayName {
+                if store.isConnected {
+                    Text("Manage the current Chrome session, or scan a QR code to connect to a different computer.")
+                        .font(.body)
+                        .foregroundStyle(.primary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    ClipDetailRow(
+                        title: "Connected",
+                        value: store.connectionAttemptDisplayName,
+                        systemImage: "checkmark.circle"
+                    )
+                    .padding(14)
+                    .background(.background.secondary, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                } else if let displayName = store.lastSessionDisplayName {
                     Text("Reconnect to \(displayName), or scan a QR code for a different computer session.")
                         .font(.body)
                         .foregroundStyle(.primary)
@@ -820,13 +844,23 @@ private struct ClipConnectChoicesView: View {
                 Spacer(minLength: 0)
 
                 VStack(spacing: 10) {
-                    if store.lastSessionDisplayName != nil {
+                    if store.isConnected {
+                        Button(role: .destructive) {
+                            onDisconnect()
+                        } label: {
+                            Label("Disconnect", systemImage: "xmark.circle")
+                                .font(.headline)
+                                .frame(maxWidth: .infinity, minHeight: 62)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.red)
+                    } else if store.lastSessionDisplayName != nil {
                         Button {
                             onReconnect()
                         } label: {
                             Label("Reconnect", systemImage: "arrow.clockwise")
                                 .font(.headline)
-                                .frame(maxWidth: .infinity, minHeight: 52)
+                                .frame(maxWidth: .infinity, minHeight: 62)
                         }
                         .buttonStyle(.borderedProminent)
                         .tint(.green)
@@ -837,9 +871,10 @@ private struct ClipConnectChoicesView: View {
                     } label: {
                         Label("Scan QR", systemImage: "qrcode.viewfinder")
                             .font(.headline)
-                            .frame(maxWidth: .infinity, minHeight: 52)
+                            .frame(maxWidth: .infinity, minHeight: 62)
                     }
                     .buttonStyle(.bordered)
+                    .tint(.green)
                 }
             }
             .padding(ScannerTabLayout.contentPadding)
@@ -897,7 +932,7 @@ private struct ClipConnectionProgressView: View {
                     } label: {
                         Label("Cancel", systemImage: "xmark.circle")
                             .font(.headline)
-                            .frame(maxWidth: .infinity, minHeight: 52)
+                            .frame(maxWidth: .infinity, minHeight: 62)
                     }
                     .buttonStyle(.bordered)
 
@@ -906,7 +941,7 @@ private struct ClipConnectionProgressView: View {
                     } label: {
                         Label("Scan QR", systemImage: "qrcode.viewfinder")
                             .font(.headline)
-                            .frame(maxWidth: .infinity, minHeight: 52)
+                            .frame(maxWidth: .infinity, minHeight: 62)
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(.green)
@@ -944,24 +979,25 @@ private struct ClipPairingFailureView: View {
 
                 VStack(spacing: 10) {
                     Button {
-                        store.retryPairing()
+                        store.retryFailedConnection()
                     } label: {
                         Label("Retry", systemImage: "arrow.clockwise")
                             .font(.headline)
-                            .frame(maxWidth: .infinity, minHeight: 52)
+                            .frame(maxWidth: .infinity, minHeight: 62)
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(.green)
-                    .disabled(!store.canRetryPairing)
+                    .disabled(!store.canRetryConnection)
 
                     Button {
                         onScanQRCode()
                     } label: {
                         Label("Scan QR Code", systemImage: "qrcode.viewfinder")
                             .font(.headline)
-                            .frame(maxWidth: .infinity, minHeight: 52)
+                            .frame(maxWidth: .infinity, minHeight: 62)
                     }
                     .buttonStyle(.bordered)
+                    .tint(.green)
                 }
             }
             .padding(ScannerTabLayout.contentPadding)
