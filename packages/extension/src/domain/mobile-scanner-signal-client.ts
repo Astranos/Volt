@@ -187,6 +187,7 @@ export class MobileScannerSignalClient {
         : buildScannerAppClipJoinUrl({
             token: returnedJoinToken,
             sessionId: returnedSessionId,
+            label: deviceLabel,
             signalUrl: EXTENSION_SCANNER_SIGNAL_URL,
           });
     return {

@@ -92,6 +92,7 @@ export async function executeScannerSignalRendezvous(
   if (command === "createJoinToken") {
     const sessionId = stringFrom(body.sessionId, 120) ?? makeSecretId(12);
     const token = makeSecretId();
+    const deviceLabel = stringFrom(body.deviceLabel, 120);
     const response = await ctx.runMutation(internal.scannerSignal.joinTokens.createJoinToken, {
       token,
       sessionId,
@@ -105,6 +106,7 @@ export async function executeScannerSignalRendezvous(
       qrCodeUrl: buildScannerAppClipJoinUrl({
         token: response.token,
         sessionId: response.sessionId,
+        label: deviceLabel,
         signalUrl: `${origin}/api/signal`,
       }),
     });

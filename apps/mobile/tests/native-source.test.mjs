@@ -873,7 +873,8 @@ test("app clip capture controls are wired to camera hardware actions", () => {
   assert.match(clipRootViewSwiftSource, /zoomLabel: cameraService\.zoomDisplayLabel/);
   assert.match(clipRootViewSwiftSource, /cameraService\.setTorchEnabled\(!cameraService\.torchEnabled\)/);
   assert.match(clipRootViewSwiftSource, /onRetake: \{\s*selectedTextRegion = nil\s*selectedCleanedText = nil\s*cameraService\.setTorchEnabled\(false\)\s*onClearOcrReview\(\)/);
-  assert.match(clipRootViewSwiftSource, /if isReviewing \{\s*selectedTextRegion = nil\s*selectedCleanedText = nil\s*cameraService\.setTorchEnabled\(false\)/);
+  assert.match(clipRootViewSwiftSource, /private func syncCameraForOcrPostCapture\(\) \{[\s\S]*let shouldPauseCamera = activeMode == \.ocr && \(isRecognizingText \|\| ocrReviewImage != nil\)[\s\S]*cameraService\.stop\(\)[\s\S]*cameraService\.start\(\)/);
+  assert.match(clipRootViewSwiftSource, /\.onChange\(of: ocrReviewImage != nil\) \{ _, isReviewing in\s*syncCameraForOcrPostCapture\(\)[\s\S]*if isReviewing \{\s*selectedTextRegion = nil\s*selectedCleanedText = nil/);
   assert.match(clipRootViewSwiftSource, /cameraService\.adjustZoom\(by: -0\.25\)/);
   assert.match(clipRootViewSwiftSource, /cameraService\.adjustZoom\(by: 0\.25\)/);
   assert.doesNotMatch(clipRootViewSwiftSource, /onToggleTorch: \{\}/);
@@ -1033,7 +1034,8 @@ test("app clip connection sheets use opaque backgrounds and large system actions
 });
 
 test("app clip connecting sheet can cancel or switch to QR scanning", () => {
-  assert.match(clipScannerStoreSwiftSource, /var connectionAttemptDisplayName: String \{[\s\S]*pairingLabel \?\? lastPairingCredential\?\.displayName \?\? pairingSession\?\.sessionId \?\? "Chrome"[\s\S]*\}/);
+  assert.match(clipScannerStoreSwiftSource, /private var activeConnectionAttemptLabel: String\?/);
+  assert.match(clipScannerStoreSwiftSource, /var connectionAttemptDisplayName: String \{[\s\S]*activeConnectionAttemptLabel \?\? pairingLabel \?\? lastPairingCredential\?\.displayName \?\? "Chrome"[\s\S]*\}/);
   assert.match(clipScannerStoreSwiftSource, /func cancelConnectionAttempt\(\) \{[\s\S]*reconnectTask\?\.cancel\(\)[\s\S]*transport\.close\(\)[\s\S]*statusText = "Connection canceled"/);
   assert.match(clipRootViewSwiftSource, /@State private var isConnectionProgressPresented = false/);
   assert.match(clipRootViewSwiftSource, /\.onChange\(of: store\.isPairing\) \{ _, isPairing in\s*isConnectionProgressPresented = isPairing\s*\}/);
@@ -1044,6 +1046,15 @@ test("app clip connecting sheet can cancel or switch to QR scanning", () => {
   assert.match(clipRootViewSwiftSource, /Label\("Cancel", systemImage: "xmark\.circle"\)/);
   assert.match(clipRootViewSwiftSource, /Label\("Scan QR", systemImage: "qrcode\.viewfinder"\)/);
   assert.match(clipRootViewSwiftSource, /store\.cancelConnectionAttempt\(\)[\s\S]*showPairingScanner\(\)/);
+});
+
+test("app clip fresh qr connection attempt does not reuse saved session name", () => {
+  assert.match(clipScannerStoreSwiftSource, /func handleIncomingURL\(_ url: URL\) \{[\s\S]*pairingLabel = session\.label[\s\S]*activeConnectionAttemptLabel = displayName\(for: session\)[\s\S]*Task \{ await pair\(session\) \}/);
+  assert.match(clipScannerStoreSwiftSource, /private func handlePairingValue\(_ value: String, invalidMessage: String\?\) -> Bool \{[\s\S]*pairingLabel = session\.label[\s\S]*activeConnectionAttemptLabel = displayName\(for: session\)[\s\S]*Task \{ await pair\(session\) \}/);
+  assert.match(clipScannerStoreSwiftSource, /private func displayName\(for session: PairingSession\) -> String \{\s*let label = session\.label\?\.trimmingCharacters\(in: \.whitespacesAndNewlines\) \?\? ""\s*return label\.isEmpty \? "Chrome" : label\s*\}/);
+  assert.doesNotMatch(clipScannerStoreSwiftSource, /session\.label \?\? session\.sessionId/);
+  assert.match(clipScannerStoreSwiftSource, /private func scheduleReconnectIfPossible\(reason: String, using credential: ClipPairingCredential\) \{[\s\S]*activeConnectionAttemptLabel = credential\.displayName[\s\S]*targetHint = "Reopening \\\(credential\.displayName\)"/);
+  assert.doesNotMatch(clipScannerStoreSwiftSource, /pairingLabel = session\.label \?\? pairingLabel/);
 });
 
 test("app clip photo capture and library upload wait for Chrome photo receipts", () => {

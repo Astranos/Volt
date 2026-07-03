@@ -12,6 +12,7 @@ export type ScannerJoinUrlParts = {
   token: string;
   sessionId?: string;
   joinAttemptId?: string;
+  label?: string;
 };
 
 export function encodePairingPayload(description: ScannerSessionDescription): string {
@@ -43,6 +44,7 @@ export function buildScannerJoinUrl(parts: ScannerJoinUrlParts): string {
   if (parts.sessionId) url.searchParams.set("sessionId", parts.sessionId);
   if (parts.joinAttemptId) url.searchParams.set("joinAttemptId", parts.joinAttemptId);
   if (parts.signalUrl) url.searchParams.set("signalUrl", parts.signalUrl);
+  if (parts.label) url.searchParams.set("label", parts.label);
   return url.toString();
 }
 
@@ -57,6 +59,7 @@ export function parseScannerJoinUrl(value: string): ScannerJoinUrlParts | null {
     const signalUrl = url.searchParams.get("signalUrl") ?? undefined;
     const sessionId = url.searchParams.get("sessionId") ?? undefined;
     const joinAttemptId = url.searchParams.get("joinAttemptId") ?? undefined;
+    const label = url.searchParams.get("label") ?? undefined;
     if (!isScannerJoinToken(token)) return null;
     if (sessionId !== undefined && !isScannerSessionId(sessionId)) return null;
     if (joinAttemptId !== undefined && !isScannerJoinAttemptId(joinAttemptId)) return null;
@@ -66,6 +69,7 @@ export function parseScannerJoinUrl(value: string): ScannerJoinUrlParts | null {
       token,
       sessionId,
       joinAttemptId,
+      label,
     };
   } catch (_error) {
     return null;

@@ -1649,7 +1649,7 @@ private struct ClipCaptureSessionView: View {
             }
             Task {
                 await cameraService.requestAccessAndStart()
-                cameraService.setLiveTextScanningEnabled(activeMode == .ocr && ocrReviewImage == nil)
+                syncCameraForOcrPostCapture()
             }
         }
         .onDisappear {
@@ -1661,18 +1661,30 @@ private struct ClipCaptureSessionView: View {
             cameraService.onError = nil
         }
         .onChange(of: activeMode) { _, mode in
-            cameraService.setLiveTextScanningEnabled(mode == .ocr && ocrReviewImage == nil)
+            syncCameraForOcrPostCapture()
             if mode != .barcode {
                 cameraService.clearDetectedBarcode()
             }
         }
         .onChange(of: ocrReviewImage != nil) { _, isReviewing in
-            cameraService.setLiveTextScanningEnabled(activeMode == .ocr && !isReviewing)
+            syncCameraForOcrPostCapture()
             if isReviewing {
                 selectedTextRegion = nil
                 selectedCleanedText = nil
-                cameraService.setTorchEnabled(false)
             }
+        }
+        .onChange(of: isRecognizingText) { _, _ in
+            syncCameraForOcrPostCapture()
+        }
+    }
+
+    private func syncCameraForOcrPostCapture() {
+        let shouldPauseCamera = activeMode == .ocr && (isRecognizingText || ocrReviewImage != nil)
+        if shouldPauseCamera {
+            cameraService.stop()
+        } else {
+            cameraService.start()
+            cameraService.setLiveTextScanningEnabled(activeMode == .ocr)
         }
     }
 
@@ -1715,6 +1727,9 @@ private struct ClipCaptureSessionView: View {
         Task {
             do {
                 let image = try await cameraService.capturePhoto()
+                if mode == .ocr {
+                    cameraService.stop()
+                }
                 onCaptureImage(image, mode)
                 captureNotice = successNotice(for: mode)
             } catch {
