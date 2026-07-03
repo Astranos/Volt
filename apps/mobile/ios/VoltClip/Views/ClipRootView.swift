@@ -508,11 +508,6 @@ private struct ClipUploadView: View {
         selectedUploadPrepared = 0
         isPreparingUploads = true
         uploadError = nil
-        defer {
-            isPreparingUploads = false
-            selectedUploadTotal = 0
-            selectedUploadPrepared = 0
-        }
 
         var images: [UIImage] = []
         for (index, item) in items.enumerated() {
@@ -522,6 +517,10 @@ private struct ClipUploadView: View {
             }
             selectedUploadPrepared = index + 1
         }
+
+        isPreparingUploads = false
+        selectedUploadTotal = 0
+        selectedUploadPrepared = 0
 
         guard !images.isEmpty else {
             uploadError = "Could not read any selected photos."

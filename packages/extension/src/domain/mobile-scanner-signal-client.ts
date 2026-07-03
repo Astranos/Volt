@@ -154,6 +154,7 @@ export class MobileScannerSignalClient {
     target?: SessionTarget | null;
     deviceLabel?: string;
   }): Promise<JoinWindow> {
+    const boundedDeviceLabel = deviceLabel?.slice(0, 120);
     const body = {
       transport: "webrtc",
       webRtcOnly: true,
@@ -161,7 +162,7 @@ export class MobileScannerSignalClient {
       sessionId,
       ttlMs: this.ttlMs,
       target: target ?? undefined,
-      deviceLabel,
+      deviceLabel: boundedDeviceLabel,
       capabilities: ["text", "barcode", "dictation", "photo", "photo-chunk-ack"],
     };
     const response = await signalFetch(`${EXTENSION_SCANNER_SIGNAL_URL}/join-token`, {
@@ -187,7 +188,7 @@ export class MobileScannerSignalClient {
         : buildScannerAppClipJoinUrl({
             token: returnedJoinToken,
             sessionId: returnedSessionId,
-            label: deviceLabel,
+            label: boundedDeviceLabel,
             signalUrl: EXTENSION_SCANNER_SIGNAL_URL,
           });
     return {

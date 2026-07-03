@@ -365,7 +365,15 @@ final class ClipScannerStore {
         }
 
         finishPhotoUploadBatch(batchId: batchId)
-        statusText = "Uploaded \(images.count) photo\(images.count == 1 ? "" : "s")"
+        let failedCount = photoUploadProgress?.failed ?? 0
+        let completedCount = photoUploadProgress?.completed ?? max(0, images.count - failedCount)
+        if failedCount == 0 {
+            statusText = "Uploaded \(images.count) photo\(images.count == 1 ? "" : "s")"
+        } else if completedCount == 0 {
+            statusText = "Upload failed for \(failedCount) photo\(failedCount == 1 ? "" : "s")"
+        } else {
+            statusText = "Uploaded \(completedCount) of \(images.count) photos, \(failedCount) failed"
+        }
     }
 
     @discardableResult
@@ -641,6 +649,7 @@ final class ClipScannerStore {
         } catch is CancellationError {
             return
         } catch {
+            transport.close()
             isPairing = false
             isConnected = false
             pairingFailureMessage = error.localizedDescription
