@@ -420,11 +420,7 @@ extension ScannerStore {
         guard let url = PairingURLParser.pairingURL(in: value) else { return false }
         let parsed = PairingURLParser.parse(url)
         guard let session = parsed.0 else { return false }
-        pairingSession = session
-        if let mode = parsed.1 {
-            activeMode = mode
-        }
-        Task { await pair(with: session) }
+        beginFreshPairing(with: session, mode: parsed.1)
         return true
     }
 

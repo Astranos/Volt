@@ -157,6 +157,63 @@ def build_app_store_ipa
   ipa_path
 end
 
+def project_marketing_version
+  project_path = File.expand_path("ios/Volt.xcodeproj/project.pbxproj", File.expand_path("..", __dir__))
+  project_source = File.read(project_path)
+  match = project_source.match(/MARKETING_VERSION = ([^;]+);/)
+  UI.user_error!("Could not read MARKETING_VERSION from #{project_path}") unless match
+
+  match[1]
+end
+
+def next_testflight_build_number(api_key:, app_version:)
+  latest_build_number = latest_testflight_build_number(
+    api_key: api_key,
+    app_identifier: APP_IDENTIFIER,
+    version: app_version,
+    initial_build_number: 45
+  )
+
+  latest_build_number.to_i + 1
+end
+
+def apply_project_build_number(build_number)
+  increment_build_number(
+    xcodeproj: "ios/Volt.xcodeproj",
+    build_number: build_number.to_s,
+    skip_info_plist: true
+  )
+end
+
+def upload_app_store_release_notes(api_key:, app_version:, build_number:, release_notes:, review_notes:, submit_for_review:)
+  return if release_notes.to_s.strip.empty? && review_notes.to_s.strip.empty? && !submit_for_review
+
+  app_review_information = {}
+  app_review_information[:notes] = review_notes if review_notes.to_s.strip.length.positive?
+  localized_release_notes = {}
+  localized_release_notes["en-US"] = release_notes if release_notes.to_s.strip.length.positive?
+
+  deliver(
+    api_key: api_key,
+    app_identifier: APP_IDENTIFIER,
+    app_version: app_version,
+    build_number: submit_for_review ? build_number.to_s : nil,
+    skip_binary_upload: true,
+    skip_screenshots: true,
+    skip_metadata: false,
+    skip_app_version_update: false,
+    release_notes: localized_release_notes,
+    app_review_information: app_review_information,
+    submit_for_review: submit_for_review,
+    automatic_release: false,
+    submission_information: {
+      export_compliance_uses_encryption: false
+    },
+    run_precheck_before_submit: false,
+    force: true
+  )
+end
+
 def write_screenshot_report(output_directory)
   output_path = File.expand_path(output_directory, File.expand_path("..", __dir__))
   screenshots = Dir.glob(File.join(output_path, "**", "*.png")).sort
@@ -331,14 +388,36 @@ platform :ios do
   desc "Build an App Store IPA and upload it to TestFlight"
   lane :beta do |options|
     api_key = app_store_connect_api_key_from_env
+    app_version = options[:app_version] || ENV["VOLT_IOS_APP_VERSION"] || project_marketing_version
+    build_number = options[:build_number] || ENV["VOLT_IOS_BUILD_NUMBER"] || next_testflight_build_number(api_key: api_key, app_version: app_version)
+    apply_project_build_number(build_number)
+
     ipa_path = build_app_store_ipa
+    testflight_changelog = options[:changelog] || ENV["TESTFLIGHT_CHANGELOG"]
+    app_store_release_notes = options[:release_notes] || ENV["APP_STORE_RELEASE_NOTES"] || testflight_changelog
+    app_review_notes = options[:review_notes] || ENV["APP_REVIEW_NOTES"]
+    submit_for_review = truthy_env?("SUBMIT_FOR_REVIEW")
+    skip_waiting_for_build_processing = truthy_env?("FASTLANE_SKIP_WAITING_FOR_BUILD_PROCESSING", true) && !submit_for_review
 
     upload_to_testflight(
       api_key: api_key,
       app_identifier: APP_IDENTIFIER,
       ipa: ipa_path,
-      changelog: options[:changelog] || ENV["TESTFLIGHT_CHANGELOG"],
-      skip_waiting_for_build_processing: truthy_env?("FASTLANE_SKIP_WAITING_FOR_BUILD_PROCESSING", true)
+      changelog: testflight_changelog,
+      beta_app_review_info: {
+        notes: app_review_notes,
+        demo_account_required: false
+      },
+      skip_waiting_for_build_processing: skip_waiting_for_build_processing
+    )
+
+    upload_app_store_release_notes(
+      api_key: api_key,
+      app_version: app_version,
+      build_number: build_number,
+      release_notes: app_store_release_notes,
+      review_notes: app_review_notes,
+      submit_for_review: submit_for_review
     )
   end
 

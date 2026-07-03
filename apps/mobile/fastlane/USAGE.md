@@ -93,6 +93,11 @@ Supported environment variables:
 - `APP_STORE_CONNECT_API_KEY_CONTENT_BASE64`: set to `true` when `APP_STORE_CONNECT_API_KEY_CONTENT` is base64 encoded.
 - `APP_STORE_CONNECT_API_KEY_DURATION`: token duration in seconds. Defaults to `1200`.
 - `TESTFLIGHT_CHANGELOG`: optional TestFlight "What to Test" text.
+- `APP_STORE_RELEASE_NOTES`: optional App Store "What's New" text for the version prepared for review. If omitted, the beta lane reuses `TESTFLIGHT_CHANGELOG`.
+- `APP_REVIEW_NOTES`: optional App Store/TestFlight reviewer notes. Use this for "What to Review" instructions and any setup details Apple needs.
+- `SUBMIT_FOR_REVIEW`: set to `1` to wait for build processing, attach the uploaded build to the App Store version, and submit it for App Review. The lane leaves release as manual after approval.
+- `VOLT_IOS_BUILD_NUMBER`: optional explicit build number. If omitted, the beta lane queries TestFlight and increments from the latest build for the marketing version.
+- `VOLT_IOS_APP_VERSION`: optional explicit marketing version for App Store Connect metadata. If omitted, the beta lane reads `MARKETING_VERSION` from the Xcode project.
 - `FASTLANE_SKIP_WAITING_FOR_BUILD_PROCESSING`: defaults to `true`. Set to `false` if the lane should wait for Apple processing.
 - `VOLT_IOS_BUNDLE_ID`: defaults to `com.volt.mobile`.
 - `VOLT_APPLE_TEAM_ID`: defaults to `GB5SPLUARQ`.

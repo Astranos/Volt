@@ -119,12 +119,20 @@ final class ScannerStore {
     func handleIncomingURL(_ url: URL) {
         let parsed = PairingURLParser.parse(url)
         if let session = parsed.0 {
-            pairingSession = session
-            Task { await pair(with: session) }
+            beginFreshPairing(with: session)
         }
         if let mode = parsed.1 {
             activeMode = mode
         }
+    }
+
+    func beginFreshPairing(with session: PairingSession, mode: CaptureMode? = nil) {
+        pairingSession = session
+        peerTarget = nil
+        if let mode {
+            activeMode = mode
+        }
+        Task { await pair(with: session) }
     }
 
     func updateAppIsInBackground(_ isInBackground: Bool) {
