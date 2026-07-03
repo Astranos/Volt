@@ -99,6 +99,7 @@ test("validates join tokens, join attempt ids, and join URLs", () => {
     token,
     sessionId,
     joinAttemptId,
+    label: undefined,
   });
   const urlWithSignal = buildScannerJoinUrl({
     token,
@@ -114,11 +115,12 @@ test("validates join tokens, join attempt ids, and join URLs", () => {
   const appClipUrl = buildScannerAppClipJoinUrl({
     token,
     sessionId,
+    label: "Chrome Dev",
     signalUrl: scannerProtocolGolden.urls.signalDev,
   });
   assert.equal(
     appClipUrl,
-    `${scannerProtocolGolden.urls.appClipPairBase}?token=${token}&sessionId=${sessionId}&signalUrl=${encodeURIComponent(scannerProtocolGolden.urls.signalDev)}`,
+    `${scannerProtocolGolden.urls.appClipPairBase}?token=${token}&sessionId=${sessionId}&signalUrl=${encodeURIComponent(scannerProtocolGolden.urls.signalDev)}&label=Chrome+Dev`,
   );
   assert.deepEqual(parseScannerJoinUrl(appClipUrl), {
     baseUrl: scannerProtocolGolden.urls.appClipPairBase,
@@ -126,6 +128,7 @@ test("validates join tokens, join attempt ids, and join URLs", () => {
     token,
     sessionId,
     joinAttemptId: undefined,
+    label: "Chrome Dev",
   });
 
   assert.equal(parseScannerJoinUrl("volt://pair?token=bad"), null);

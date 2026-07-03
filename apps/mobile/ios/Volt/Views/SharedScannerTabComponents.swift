@@ -25,6 +25,133 @@ struct ScannerConnectionSummary: Equatable {
     let statusText: String
 }
 
+struct PhotoUploadProgress: Identifiable, Equatable {
+    enum Phase: Equatable {
+        case preparing
+        case uploading
+        case finished
+    }
+
+    let id: String
+    let total: Int
+    var prepared: Int
+    var completed: Int
+    var failed: Int
+    var phase: Phase
+
+    var finishedCount: Int {
+        completed + failed
+    }
+
+    var remainingCount: Int {
+        max(0, total - finishedCount)
+    }
+
+    var fractionCompleted: Double {
+        guard total > 0 else { return 0 }
+        return min(1, Double(finishedCount) / Double(total))
+    }
+
+    var isActive: Bool {
+        phase != .finished
+    }
+
+    var title: String {
+        switch phase {
+        case .preparing:
+            "Preparing \(min(prepared + 1, total)) of \(total)"
+        case .uploading:
+            "Uploading \(min(finishedCount + 1, total)) of \(total)"
+        case .finished:
+            failed > 0 ? "Uploaded \(completed) of \(total)" : "Uploaded \(total) photo\(total == 1 ? "" : "s")"
+        }
+    }
+
+    var detail: String {
+        if failed > 0 {
+            return "\(completed) sent, \(failed) failed, \(remainingCount) left"
+        }
+        switch phase {
+        case .preparing:
+            return "\(prepared) ready, \(max(0, total - prepared)) left to prepare"
+        case .uploading:
+            return "\(completed) sent, \(remainingCount) left"
+        case .finished:
+            return "All uploads finished"
+        }
+    }
+}
+
+struct PhotoPreparationProgressSummary: View {
+    let prepared: Int
+    let total: Int
+
+    private var readCount: Int {
+        guard total > 0 else { return 0 }
+        return min(max(prepared, 1), total)
+    }
+
+    private var fractionCompleted: Double {
+        guard total > 0 else { return 0 }
+        return min(1, Double(prepared) / Double(total))
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Label("Reading \(readCount) of \(total) photos", systemImage: "hourglass")
+                    .font(.headline)
+
+                Spacer(minLength: 10)
+
+                Text("\(prepared)/\(total)")
+                    .font(.subheadline.monospacedDigit().weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+
+            ProgressView(value: fractionCompleted)
+                .tint(.green)
+
+            Text("Preparing selected photos for upload")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .padding(14)
+        .background(.background, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .accessibilityElement(children: .combine)
+    }
+}
+
+struct PhotoUploadProgressSummary: View {
+    let progress: PhotoUploadProgress
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Label(progress.title, systemImage: progress.isActive ? "arrow.up.circle" : "checkmark.circle.fill")
+                    .font(.headline)
+                    .foregroundStyle(progress.failed > 0 ? .orange : .primary)
+
+                Spacer(minLength: 10)
+
+                Text("\(progress.finishedCount)/\(progress.total)")
+                    .font(.subheadline.monospacedDigit().weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+
+            ProgressView(value: progress.fractionCompleted)
+                .tint(progress.failed > 0 ? .orange : .green)
+
+            Text(progress.detail)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .padding(14)
+        .background(.background, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .accessibilityElement(children: .combine)
+    }
+}
+
 struct ScannerChromeSectionHeader<TrailingAccessory: View>: View {
     let title: String
     let connection: ScannerConnectionSummary

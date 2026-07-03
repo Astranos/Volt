@@ -21,17 +21,17 @@ struct ClipRootView: View {
                     .tabItem { Label("Capture", systemImage: "camera.viewfinder") }
                     .tag(ClipScannerStore.ClipTab.capture)
 
-                ClipDictationView(store: store) {
-                    handleConnectButtonTapped()
-                }
-                    .tabItem { Label("Dictate", systemImage: "mic") }
-                    .tag(ClipScannerStore.ClipTab.dictate)
-
                 ClipUploadView(store: store) {
                     handleConnectButtonTapped()
                 }
                     .tabItem { Label("Upload", systemImage: "square.and.arrow.up") }
                     .tag(ClipScannerStore.ClipTab.upload)
+
+                ClipDictationView(store: store) {
+                    handleConnectButtonTapped()
+                }
+                    .tabItem { Label("Dictate", systemImage: "mic") }
+                    .tag(ClipScannerStore.ClipTab.dictate)
             }
 
             ClipWebRTCBridgeView(webView: store.bridgeWebView)
@@ -46,13 +46,21 @@ struct ClipRootView: View {
                     isConnectChoicesPresented = false
                     store.reconnectToLastSession()
                 },
+                onDisconnect: {
+                    isConnectChoicesPresented = false
+                    store.disconnect()
+                },
                 onScanQRCode: {
                     isConnectChoicesPresented = false
+                    if store.isConnected {
+                        store.disconnect()
+                    }
                     showPairingScanner()
                 }
             )
             .presentationDetents([.medium])
             .presentationDragIndicator(.visible)
+            .presentationBackground(Color(uiColor: .systemBackground))
         }
         .sheet(isPresented: $isConnectionProgressPresented) {
             ClipConnectionProgressView(
@@ -69,6 +77,7 @@ struct ClipRootView: View {
             )
             .presentationDetents([.medium])
             .presentationDragIndicator(.visible)
+            .presentationBackground(Color(uiColor: .systemBackground))
             .interactiveDismissDisabled(store.isPairing)
         }
         .sheet(isPresented: $isPairingFailurePresented) {
@@ -81,6 +90,7 @@ struct ClipRootView: View {
             )
             .presentationDetents([.medium])
             .presentationDragIndicator(.visible)
+            .presentationBackground(Color(uiColor: .systemBackground))
         }
         .fullScreenCover(isPresented: $isPairingScannerPresented) {
             ClipPairingScannerView(store: store) {
@@ -106,7 +116,7 @@ struct ClipRootView: View {
 
     private func handleConnectButtonTapped() {
         if store.isConnected {
-            store.disconnect()
+            isConnectChoicesPresented = true
             return
         }
         if store.isPairing {
@@ -359,6 +369,33 @@ private struct ClipUploadView: View {
     let onScanQRCode: () -> Void
     @State private var pickerItems: [PhotosPickerItem] = []
     @State private var isPreparingUploads = false
+    @State private var selectedUploadTotal = 0
+    @State private var selectedUploadPrepared = 0
+    @State private var uploadError: String?
+    @State private var expandedBatchIds: Set<String> = []
+
+    private var uploadPhotoBatches: [ClipUploadPhotoBatch] {
+        let uploadPhotos = store.photos.filter { $0.source == .upload }
+        let grouped = Dictionary(grouping: uploadPhotos) { photo in
+            photo.batchId ?? photo.id.uuidString
+        }
+
+        return grouped.map { key, photos in
+            let progress = store.photoUploadProgress?.id == key ? store.photoUploadProgress : nil
+            return ClipUploadPhotoBatch(
+                id: key,
+                photos: photos.sorted { $0.capturedAt < $1.capturedAt },
+                expectedTotal: progress?.total ?? photos.count,
+                isActive: progress?.isActive == true
+            )
+        }
+        .sorted { $0.latestCapturedAt > $1.latestCapturedAt }
+    }
+
+    private var activeUploadProgress: PhotoUploadProgress? {
+        guard let progress = store.photoUploadProgress, progress.isActive else { return nil }
+        return progress
+    }
 
     var body: some View {
         NavigationStack {
@@ -370,16 +407,33 @@ private struct ClipUploadView: View {
                         onConnectionTapped: onScanQRCode
                     )
 
-                    ClipRecentPhotosSection(
-                        title: "Recent Uploads",
-                        emptyTitle: "No Uploads Yet",
-                        emptySystemImage: "photo.badge.plus",
-                        emptyDescription: "Camera roll uploads will appear here after they are sent.",
-                        photos: store.photos.filter { $0.source == .upload },
-                        actionTitle: "Send"
-                    ) { photo in
-                        Task { await store.sendPhoto(photo) }
+                    if isPreparingUploads {
+                        PhotoPreparationProgressSummary(
+                            prepared: selectedUploadPrepared,
+                            total: selectedUploadTotal
+                        )
+                    } else if let progress = store.photoUploadProgress {
+                        PhotoUploadProgressSummary(progress: progress)
                     }
+
+                    ClipUploadPhotoBatchesSection(
+                        batches: uploadPhotoBatches,
+                        expandedBatchIds: expandedBatchIds,
+                        onToggleExpanded: { batch in
+                            if expandedBatchIds.contains(batch.id) {
+                                expandedBatchIds.remove(batch.id)
+                            } else {
+                                expandedBatchIds.insert(batch.id)
+                            }
+                        },
+                        onDeletePhoto: { photo in
+                            store.removePhoto(id: photo.id)
+                        },
+                        onDeleteBatch: { batch in
+                            store.removePhotos(batchId: batch.id)
+                            expandedBatchIds.remove(batch.id)
+                        }
+                    )
                 }
                 .padding(ScannerTabLayout.contentPadding)
                 .padding(.top, ScannerTabLayout.topPadding)
@@ -391,15 +445,7 @@ private struct ClipUploadView: View {
             .onChange(of: pickerItems) { _, items in
                 guard !items.isEmpty else { return }
                 Task {
-                    isPreparingUploads = true
-                    defer { isPreparingUploads = false }
-                    var images: [UIImage] = []
-                    for item in items {
-                        guard let data = try? await item.loadTransferable(type: Data.self),
-                              let image = UIImage(data: data) else { continue }
-                        images.append(image)
-                    }
-                    await store.uploadPhotos(images)
+                    await uploadSelectedItems(items)
                     pickerItems = []
                 }
             }
@@ -409,7 +455,9 @@ private struct ClipUploadView: View {
                     isConnected: store.isConnected,
                     isPreparing: isPreparingUploads,
                     isConnecting: store.isPairing,
+                    isUploading: activeUploadProgress != nil,
                     statusText: uploadStatusText,
+                    showsError: uploadError != nil,
                     disabledHint: store.targetHint
                 )
             }
@@ -431,8 +479,16 @@ private struct ClipUploadView: View {
     }
 
     private var uploadStatusText: String {
-        if isPreparingUploads {
-            "Preparing uploads..."
+        if let uploadError {
+            uploadError
+        } else if isPreparingUploads {
+            if selectedUploadTotal > 0 {
+                "Reading \(selectedUploadReadCount) of \(selectedUploadTotal) selected photos"
+            } else {
+                "Preparing uploads..."
+            }
+        } else if let progress = store.photoUploadProgress {
+            "\(progress.title). \(progress.detail)."
         } else if store.isPairing {
             store.statusText
         } else if store.isConnected {
@@ -441,46 +497,251 @@ private struct ClipUploadView: View {
             store.targetHint
         }
     }
+
+    private var selectedUploadReadCount: Int {
+        guard selectedUploadTotal > 0 else { return 0 }
+        return min(max(selectedUploadPrepared, 1), selectedUploadTotal)
+    }
+
+    private func uploadSelectedItems(_ items: [PhotosPickerItem]) async {
+        selectedUploadTotal = items.count
+        selectedUploadPrepared = 0
+        isPreparingUploads = true
+        uploadError = nil
+
+        var images: [UIImage] = []
+        for (index, item) in items.enumerated() {
+            if let data = try? await item.loadTransferable(type: Data.self),
+               let image = UIImage(data: data) {
+                images.append(image)
+            }
+            selectedUploadPrepared = index + 1
+        }
+
+        isPreparingUploads = false
+        selectedUploadTotal = 0
+        selectedUploadPrepared = 0
+
+        guard !images.isEmpty else {
+            uploadError = "Could not read any selected photos."
+            return
+        }
+
+        await store.uploadPhotos(images)
+    }
 }
 
-private struct ClipRecentPhotosSection: View {
-    let title: String
-    let emptyTitle: String
-    let emptySystemImage: String
-    let emptyDescription: String
+private struct ClipUploadPhotoBatch: Identifiable, Equatable {
+    let id: String
     let photos: [ClipScannerStore.ClipPhoto]
-    let actionTitle: String
-    let onSend: (ClipScannerStore.ClipPhoto) -> Void
+    let expectedTotal: Int
+    let isActive: Bool
+
+    var latestCapturedAt: Date {
+        photos.map(\.capturedAt).max() ?? .distantPast
+    }
+
+    var title: String {
+        if isActive {
+            return "Uploading \(photos.count) of \(expectedTotal) photo\(expectedTotal == 1 ? "" : "s")"
+        }
+        return "Uploaded \(photos.count) photo\(photos.count == 1 ? "" : "s")"
+    }
+
+    var statusText: String {
+        if photos.contains(where: { $0.status == "Failed" }) {
+            return "Some failed"
+        }
+        if photos.contains(where: { $0.status == "Sending" }) {
+            return "Sending"
+        }
+        if photos.allSatisfy({ $0.status == "Delivered" }) {
+            return "Delivered"
+        }
+        return "Saved"
+    }
+}
+
+private struct ClipUploadPhotoBatchesSection: View {
+    let batches: [ClipUploadPhotoBatch]
+    let expandedBatchIds: Set<String>
+    let onToggleExpanded: (ClipUploadPhotoBatch) -> Void
+    let onDeletePhoto: (ClipScannerStore.ClipPhoto) -> Void
+    let onDeleteBatch: (ClipUploadPhotoBatch) -> Void
+
+    private var photoCount: Int {
+        batches.reduce(0) { $0 + $1.photos.count }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text(title)
+                Text("Recent Uploads")
                     .font(.headline)
                 Spacer()
-                Text("\(photos.count)")
+                Text("\(photoCount)")
                     .font(.subheadline.monospacedDigit())
                     .foregroundStyle(.secondary)
             }
 
-            if photos.isEmpty {
+            if batches.isEmpty {
                 ContentUnavailableView(
-                    emptyTitle,
-                    systemImage: emptySystemImage,
-                    description: Text(emptyDescription)
+                    "No Uploads Yet",
+                    systemImage: "photo.badge.plus",
+                    description: Text("Camera roll uploads will appear here after they are sent.")
                 )
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 34)
                 .background(.background, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             } else {
                 VStack(spacing: 10) {
-                    ForEach(photos) { photo in
-                        ClipPhotoRow(photo: photo, actionTitle: actionTitle) {
-                            onSend(photo)
-                        }
+                    ForEach(batches) { batch in
+                        ClipUploadPhotoBatchCard(
+                            batch: batch,
+                            isExpanded: expandedBatchIds.contains(batch.id),
+                            onToggleExpanded: {
+                                onToggleExpanded(batch)
+                            },
+                            onDeletePhoto: onDeletePhoto,
+                            onDeleteBatch: {
+                                onDeleteBatch(batch)
+                            }
+                        )
                     }
                 }
             }
+        }
+    }
+}
+
+private struct ClipUploadPhotoBatchCard: View {
+    let batch: ClipUploadPhotoBatch
+    let isExpanded: Bool
+    let onToggleExpanded: () -> Void
+    let onDeletePhoto: (ClipScannerStore.ClipPhoto) -> Void
+    let onDeleteBatch: () -> Void
+
+    private var visiblePhotos: [ClipScannerStore.ClipPhoto] {
+        isExpanded ? batch.photos : Array(batch.photos.prefix(4))
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(batch.title)
+                        .font(.headline)
+                    Text(batch.latestCapturedAt, format: .dateTime.hour().minute())
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer(minLength: 8)
+
+                ClipPhotoStatusBadge(status: batch.statusText)
+
+                Button(role: .destructive, action: onDeleteBatch) {
+                    Image(systemName: "trash")
+                        .font(.system(size: 16, weight: .semibold))
+                        .frame(width: 36, height: 36)
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel("Delete upload batch")
+            }
+
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 86), spacing: 8)], spacing: 8) {
+                ForEach(visiblePhotos) { photo in
+                    ClipUploadPhotoThumbnail(photo: photo) {
+                        onDeletePhoto(photo)
+                    }
+                }
+            }
+
+            if batch.photos.count > 4 {
+                Button(action: onToggleExpanded) {
+                    Label(
+                        isExpanded ? "Show fewer photos" : "View all \(batch.photos.count) photos",
+                        systemImage: isExpanded ? "chevron.up" : "photo.stack"
+                    )
+                    .font(.subheadline.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.regular)
+            }
+        }
+        .padding(14)
+        .background(.background, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+}
+
+private struct ClipPhotoStatusBadge: View {
+    let status: String
+
+    var body: some View {
+        Label(status, systemImage: symbol)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(color)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(color.opacity(0.12), in: Capsule())
+            .lineLimit(1)
+    }
+
+    private var symbol: String {
+        switch status {
+        case "Sending":
+            return "paperplane"
+        case "Delivered":
+            return "checkmark.circle.fill"
+        case "Some failed", "Failed":
+            return "exclamationmark.triangle.fill"
+        default:
+            return "tray"
+        }
+    }
+
+    private var color: Color {
+        switch status {
+        case "Sending", "Delivered":
+            return .green
+        case "Some failed", "Failed":
+            return .red
+        default:
+            return .secondary
+        }
+    }
+}
+
+private struct ClipUploadPhotoThumbnail: View {
+    let photo: ClipScannerStore.ClipPhoto
+    let onDelete: () -> Void
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack(alignment: .topTrailing) {
+                Image(uiImage: photo.image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: proxy.size.width, height: proxy.size.height)
+                    .clipped()
+
+                Button(role: .destructive, action: onDelete) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.title3)
+                        .symbolRenderingMode(.palette)
+                        .foregroundStyle(.white, .black.opacity(0.5))
+                }
+                .buttonStyle(.plain)
+                .padding(5)
+                .accessibilityLabel("Remove photo")
+            }
+        }
+        .aspectRatio(1, contentMode: .fit)
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(.quaternary, lineWidth: 1)
         }
     }
 }
@@ -788,6 +1049,7 @@ private struct ClipConnectChoicesView: View {
     @Bindable var store: ClipScannerStore
     @Environment(\.dismiss) private var dismiss
     let onReconnect: () -> Void
+    let onDisconnect: () -> Void
     let onScanQRCode: () -> Void
 
     var body: some View {
@@ -797,7 +1059,20 @@ private struct ClipConnectChoicesView: View {
                     .font(.title2.bold())
                     .foregroundStyle(.primary)
 
-                if let displayName = store.lastSessionDisplayName {
+                if store.isConnected {
+                    Text("Manage the current Chrome session, or scan a QR code to connect to a different computer.")
+                        .font(.body)
+                        .foregroundStyle(.primary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    ClipDetailRow(
+                        title: "Connected",
+                        value: store.connectionAttemptDisplayName,
+                        systemImage: "checkmark.circle"
+                    )
+                    .padding(14)
+                    .background(.background.secondary, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                } else if let displayName = store.lastSessionDisplayName {
                     Text("Reconnect to \(displayName), or scan a QR code for a different computer session.")
                         .font(.body)
                         .foregroundStyle(.primary)
@@ -820,13 +1095,23 @@ private struct ClipConnectChoicesView: View {
                 Spacer(minLength: 0)
 
                 VStack(spacing: 10) {
-                    if store.lastSessionDisplayName != nil {
+                    if store.isConnected {
+                        Button(role: .destructive) {
+                            onDisconnect()
+                        } label: {
+                            Label("Disconnect", systemImage: "xmark.circle")
+                                .font(.headline)
+                                .frame(maxWidth: .infinity, minHeight: 62)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.red)
+                    } else if store.lastSessionDisplayName != nil {
                         Button {
                             onReconnect()
                         } label: {
                             Label("Reconnect", systemImage: "arrow.clockwise")
                                 .font(.headline)
-                                .frame(maxWidth: .infinity, minHeight: 52)
+                                .frame(maxWidth: .infinity, minHeight: 62)
                         }
                         .buttonStyle(.borderedProminent)
                         .tint(.green)
@@ -837,9 +1122,10 @@ private struct ClipConnectChoicesView: View {
                     } label: {
                         Label("Scan QR", systemImage: "qrcode.viewfinder")
                             .font(.headline)
-                            .frame(maxWidth: .infinity, minHeight: 52)
+                            .frame(maxWidth: .infinity, minHeight: 62)
                     }
                     .buttonStyle(.bordered)
+                    .tint(.green)
                 }
             }
             .padding(ScannerTabLayout.contentPadding)
@@ -897,7 +1183,7 @@ private struct ClipConnectionProgressView: View {
                     } label: {
                         Label("Cancel", systemImage: "xmark.circle")
                             .font(.headline)
-                            .frame(maxWidth: .infinity, minHeight: 52)
+                            .frame(maxWidth: .infinity, minHeight: 62)
                     }
                     .buttonStyle(.bordered)
 
@@ -906,7 +1192,7 @@ private struct ClipConnectionProgressView: View {
                     } label: {
                         Label("Scan QR", systemImage: "qrcode.viewfinder")
                             .font(.headline)
-                            .frame(maxWidth: .infinity, minHeight: 52)
+                            .frame(maxWidth: .infinity, minHeight: 62)
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(.green)
@@ -944,24 +1230,25 @@ private struct ClipPairingFailureView: View {
 
                 VStack(spacing: 10) {
                     Button {
-                        store.retryPairing()
+                        store.retryFailedConnection()
                     } label: {
                         Label("Retry", systemImage: "arrow.clockwise")
                             .font(.headline)
-                            .frame(maxWidth: .infinity, minHeight: 52)
+                            .frame(maxWidth: .infinity, minHeight: 62)
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(.green)
-                    .disabled(!store.canRetryPairing)
+                    .disabled(!store.canRetryConnection)
 
                     Button {
                         onScanQRCode()
                     } label: {
                         Label("Scan QR Code", systemImage: "qrcode.viewfinder")
                             .font(.headline)
-                            .frame(maxWidth: .infinity, minHeight: 52)
+                            .frame(maxWidth: .infinity, minHeight: 62)
                     }
                     .buttonStyle(.bordered)
+                    .tint(.green)
                 }
             }
             .padding(ScannerTabLayout.contentPadding)
@@ -1361,7 +1648,7 @@ private struct ClipCaptureSessionView: View {
             }
             Task {
                 await cameraService.requestAccessAndStart()
-                cameraService.setLiveTextScanningEnabled(activeMode == .ocr && ocrReviewImage == nil)
+                syncCameraForOcrPostCapture()
             }
         }
         .onDisappear {
@@ -1373,18 +1660,30 @@ private struct ClipCaptureSessionView: View {
             cameraService.onError = nil
         }
         .onChange(of: activeMode) { _, mode in
-            cameraService.setLiveTextScanningEnabled(mode == .ocr && ocrReviewImage == nil)
+            syncCameraForOcrPostCapture()
             if mode != .barcode {
                 cameraService.clearDetectedBarcode()
             }
         }
         .onChange(of: ocrReviewImage != nil) { _, isReviewing in
-            cameraService.setLiveTextScanningEnabled(activeMode == .ocr && !isReviewing)
+            syncCameraForOcrPostCapture()
             if isReviewing {
                 selectedTextRegion = nil
                 selectedCleanedText = nil
-                cameraService.setTorchEnabled(false)
             }
+        }
+        .onChange(of: isRecognizingText) { _, _ in
+            syncCameraForOcrPostCapture()
+        }
+    }
+
+    private func syncCameraForOcrPostCapture() {
+        let shouldPauseCamera = activeMode == .ocr && (isRecognizingText || ocrReviewImage != nil)
+        if shouldPauseCamera {
+            cameraService.stop()
+        } else {
+            cameraService.start()
+            cameraService.setLiveTextScanningEnabled(activeMode == .ocr)
         }
     }
 
@@ -1427,6 +1726,9 @@ private struct ClipCaptureSessionView: View {
         Task {
             do {
                 let image = try await cameraService.capturePhoto()
+                if mode == .ocr {
+                    cameraService.stop()
+                }
                 onCaptureImage(image, mode)
                 captureNotice = successNotice(for: mode)
             } catch {
@@ -1833,37 +2135,6 @@ private struct ClipQRCodeScannerView: UIViewRepresentable {
         var previewLayer: AVCaptureVideoPreviewLayer {
             layer as! AVCaptureVideoPreviewLayer
         }
-    }
-}
-
-private struct ClipPhotoRow: View {
-    let photo: ClipScannerStore.ClipPhoto
-    let actionTitle: String
-    let action: () -> Void
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(uiImage: photo.image)
-                .resizable()
-                .scaledToFill()
-                .frame(width: 72, height: 72)
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Product photo")
-                    .font(.headline)
-                Text(photo.status)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer()
-
-            Button(actionTitle, systemImage: "paperplane.fill", action: action)
-                .buttonStyle(.bordered)
-        }
-        .padding()
-        .background(.background, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 }
 

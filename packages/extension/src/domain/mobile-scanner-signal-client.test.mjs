@@ -93,6 +93,7 @@ test("createJoinWindow fallback QR includes the signal URL that minted the token
     assert.equal(url.searchParams.get("token"), token);
     assert.equal(url.searchParams.get("sessionId"), sessionId);
     assert.equal(url.searchParams.get("signalUrl"), SCANNER_SIGNAL_URL_DEV);
+    assert.equal(url.searchParams.get("label"), "Chrome Dev");
   } finally {
     globalThis.fetch = originalFetch;
   }
