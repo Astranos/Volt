@@ -2,9 +2,9 @@
 
 ## Current Development Version
 
-### v1.0.47
+### v1.0.49
 
-The current manifest/package version is `1.0.47`.
+The current manifest/package version is `1.0.49`.
 
 Current release build command:
 
@@ -25,6 +25,24 @@ packages/extension/releases/
 ```
 
 ## Recent Release History
+
+### v1.0.49
+
+Release date: July 3, 2026
+
+Changes:
+
+- Included the App Clip pairing QR label fix so freshly scanned sessions show the extension-provided computer name.
+- Built a fresh Chrome extension release artifact.
+
+### v1.0.48
+
+Release date: July 1, 2026
+
+Changes:
+
+- Included the latest extension updates for mobile scanner reconnect and shared photo upload progress UI.
+- Built a fresh Chrome extension release artifact.
 
 ### v1.0.47
 
