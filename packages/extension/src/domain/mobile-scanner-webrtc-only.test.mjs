@@ -45,7 +45,7 @@ test("unified Mobile Scanner can drag the selected photo batch", () => {
 
   assert.equal(payload.photos.length, 1);
   assert.equal(payload.photos[0].id, "photo-1");
-  assert.equal(payload.mime, "application/x-volt-mobile-photos");
+  assert.equal(payload.mime, "application/x-volt-mobile-photos-v2");
   assert.equal(
     buildMobilePhotoDownloadFilename(photo),
     "Volt Photos/photo-1-volt-photo-photo-1.jpg",

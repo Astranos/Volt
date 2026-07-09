@@ -90,9 +90,11 @@ export function formatPhotoSize(bytes: number) {
 export function installPhotoDropBridge(dropMime: string) {
   const root = window as typeof window & {
     __voltPhotoDropBridgeInstalled?: boolean;
+    __voltPhotoDropBridgeVersion?: number;
   };
+  const bridgeVersion = 2;
 
-  if (root.__voltPhotoDropBridgeInstalled) return;
+  if (root.__voltPhotoDropBridgeVersion === bridgeVersion) return;
 
   const normalizeImageMimeTypeInPage = (mimeType: string) => {
     const normalized = mimeType.toLowerCase().trim();
@@ -223,10 +225,34 @@ export function installPhotoDropBridge(dropMime: string) {
     );
   };
 
-  const findFileInput = (target: EventTarget | null) => {
+  const findFileInput = (event: DragEvent) => {
+    for (const node of event.composedPath()) {
+      if (
+        node instanceof HTMLInputElement &&
+        node.type === "file" &&
+        acceptsImages(node)
+      ) {
+        return node;
+      }
+      if (!(node instanceof Element)) continue;
+      const nestedInput = node.querySelector("input[type='file']");
+      if (
+        nestedInput instanceof HTMLInputElement &&
+        acceptsImages(nestedInput)
+      ) {
+        return nestedInput;
+      }
+    }
+
+    const target = event.target;
     const element = target instanceof Element ? target : document.activeElement;
     const closestInput = element?.closest?.("input[type='file']");
-    if (closestInput instanceof HTMLInputElement) return closestInput;
+    if (
+      closestInput instanceof HTMLInputElement &&
+      acceptsImages(closestInput)
+    ) {
+      return closestInput;
+    }
 
     const closestContainer = element?.closest?.(
       "form, [role='button'], label, div",
@@ -234,7 +260,9 @@ export function installPhotoDropBridge(dropMime: string) {
     const localInput = closestContainer?.querySelector?.(
       "input[type='file']",
     );
-    if (localInput instanceof HTMLInputElement) return localInput;
+    if (localInput instanceof HTMLInputElement && acceptsImages(localInput)) {
+      return localInput;
+    }
 
     const fileInputs = Array.from(
       document.querySelectorAll<HTMLInputElement>("input[type='file']"),
@@ -356,7 +384,7 @@ export function installPhotoDropBridge(dropMime: string) {
       files.forEach((file) => transfer.items.add(file));
 
       const target = event.target instanceof Element ? event.target : document.body;
-      const fileInput = findFileInput(target);
+      const fileInput = findFileInput(event);
       if (fileInput) {
         fileInput.files = transfer.files;
         fileInput.dispatchEvent(new Event("input", { bubbles: true }));
@@ -378,6 +406,7 @@ export function installPhotoDropBridge(dropMime: string) {
   );
 
   root.__voltPhotoDropBridgeInstalled = true;
+  root.__voltPhotoDropBridgeVersion = bridgeVersion;
 }
 
 /**

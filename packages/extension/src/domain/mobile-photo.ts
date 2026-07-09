@@ -1,4 +1,4 @@
-export const PHOTO_DROP_MIME = "application/x-volt-mobile-photos";
+export const PHOTO_DROP_MIME = "application/x-volt-mobile-photos-v2";
 export const IMAGE_FILE_EXTENSIONS = /\.(avif|gif|heic|heif|jpe?g|png|webp)$/i;
 
 export type MobilePhoto = {
