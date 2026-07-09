@@ -27,7 +27,10 @@ export type PeerConnectionEvents = {
   log?: (...args: unknown[]) => void;
 };
 
-const PEER_DISCONNECT_GRACE_MS = 5_000;
+// iOS can briefly suspend the phone-side WebRTC stack during an ordinary app
+// switch. Keep Chrome's peer around long enough for that same connection to
+// recover instead of forcing a full signaling round trip after five seconds.
+const PEER_DISCONNECT_GRACE_MS = 60_000;
 
 export class MobileScannerPeerConnections {
   readonly peers = new Map<string, PeerSession>();

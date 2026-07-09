@@ -107,6 +107,8 @@ final class ScannerStore {
     var preservesReconnectCancelOnNextDisconnect = false
     var lastPairingCandidateValue: String?
     @ObservationIgnored var reconnectTask: Task<Void, Never>?
+    @ObservationIgnored var foregroundRecoveryTask: Task<Void, Never>?
+    @ObservationIgnored var wasConnectedBeforeBackground = false
     @ObservationIgnored var dictationGraceStopTask: Task<Void, Never>?
     @ObservationIgnored let pairingImpactFeedback = UIImpactFeedbackGenerator(style: .medium)
     @ObservationIgnored let pairingNotificationFeedback = UINotificationFeedbackGenerator()
@@ -136,7 +138,25 @@ final class ScannerStore {
     }
 
     func updateAppIsInBackground(_ isInBackground: Bool) {
+        foregroundRecoveryTask?.cancel()
+        if isInBackground {
+            wasConnectedBeforeBackground = wasConnectedBeforeBackground || connectionStatus.isConnected
+        }
         connection.setAppIsInBackground(isInBackground)
+        guard !isInBackground, wasConnectedBeforeBackground else { return }
+        wasConnectedBeforeBackground = false
+        foregroundRecoveryTask = Task { [weak self] in
+            // Give an existing ICE path one brief chance to resume before
+            // starting the durable-pairing handshake.
+            try? await Task.sleep(for: .milliseconds(750))
+            guard !Task.isCancelled, let self, !self.connection.isConnected else { return }
+            guard !self.connectionStatus.isConnecting, self.reconnectTask == nil else { return }
+            let previousBrowserSessionId = self.peerTarget?.chromeSessionId
+            guard let pairedSession = self.pairedSessions.first(where: {
+                $0.browserSessionId == previousBrowserSessionId
+            }) ?? self.pairedSessions.first else { return }
+            self.reconnect(to: pairedSession, reportsErrors: false, isAutomatic: true)
+        }
     }
 
     func reconnect(to pairedSession: PairedScannerSession, reportsErrors: Bool = true, isAutomatic: Bool = false) {
@@ -189,6 +209,9 @@ final class ScannerStore {
     }
 
     func disconnectFromCurrentSession() {
+        foregroundRecoveryTask?.cancel()
+        foregroundRecoveryTask = nil
+        wasConnectedBeforeBackground = false
         reconnectTask?.cancel()
         reconnectTask = nil
         canCancelReconnect = false

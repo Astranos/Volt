@@ -436,15 +436,20 @@ test("native and app clip keep transient WebRTC disconnects alive through backgr
   assert.match(scannerWebRTCConnectionSwiftSource, /func setAppIsInBackground\(_ isInBackground: Bool\)/);
   assert.match(scannerWebRTCConnectionSwiftSource, /let graceDuration: Duration = isAppInBackground \? \.seconds\(45\) : \.seconds\(12\)/);
   assert.match(scannerWebRTCConnectionSwiftSource, /UIApplication\.shared\.beginBackgroundTask\(withName: "Volt WebRTC grace"/);
+  assert.match(scannerWebRTCConnectionSwiftSource, /if peerConnection\?\.connectionState == \.disconnected \{\s*cancelDisconnectGrace\(\)\s*scheduleDisconnectGrace\(\)/);
   assert.match(rootViewSwiftSource, /store\.updateAppIsInBackground\(newValue != \.active\)/);
+  assert.match(scannerStoreSwiftSource, /wasConnectedBeforeBackground = wasConnectedBeforeBackground \|\| connectionStatus\.isConnected/);
+  assert.match(scannerStoreSwiftSource, /Task\.sleep\(for: \.milliseconds\(750\)\)/);
+  assert.match(scannerStoreSwiftSource, /reconnect\(to: pairedSession, reportsErrors: false, isAutomatic: true\)/);
   assert.match(scannerWebRTCConnectionSwiftSource, /case \.disconnected:\s*scheduleDisconnectGrace\(\)/);
   assert.match(scannerWebRTCConnectionSwiftSource, /guard peerConnection\?\.connectionState == \.disconnected else \{ return \}\s*close\(\)/);
   assert.match(clipRootViewSwiftSource, /ClipWebRTCBridgeView\(webView: store\.bridgeWebView\)/);
   assert.match(clipRootViewSwiftSource, /store\.updateAppIsInBackground\(newValue != \.active\)/);
-  assert.match(clipTransportSwiftSource, /setDisconnectGraceMs\(\\\(graceMs\)\)/);
+  assert.match(clipTransportSwiftSource, /setAppIsInBackground\(\\\(isInBackground\)\)/);
   const bridgeSource = clipWebRTCBridgeSource;
   assert.match(bridgeSource, /let disconnectGraceMs = 12000/);
-  assert.match(bridgeSource, /setDisconnectGraceMs\(nextGraceMs\)/);
+  assert.match(bridgeSource, /setAppIsInBackground\(nextIsInBackground\)/);
+  assert.match(bridgeSource, /if \(!pc \|\| pc\.connectionState !== "disconnected" \|\| isAppInBackground \|\| disconnectTimer\) return/);
   assert.match(bridgeSource, /pc && pc\.connectionState === "disconnected"[\s\S]*window\.voltBridge\.close\(\)/);
 });
 

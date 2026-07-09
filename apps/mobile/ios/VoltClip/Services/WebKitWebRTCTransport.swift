@@ -141,8 +141,7 @@ final class WebKitWebRTCTransport: NSObject {
 
     func setAppIsInBackground(_ isInBackground: Bool) {
         isAppInBackground = isInBackground
-        let graceMs = isInBackground ? 45_000 : 12_000
-        evaluate("window.voltBridge && window.voltBridge.setDisconnectGraceMs(\(graceMs))")
+        evaluate("window.voltBridge && window.voltBridge.setAppIsInBackground(\(isInBackground))")
         if isInBackground {
             beginBackgroundTaskIfNeeded()
         } else {

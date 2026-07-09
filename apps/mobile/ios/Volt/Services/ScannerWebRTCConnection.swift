@@ -65,6 +65,12 @@ final class ScannerWebRTCConnection: NSObject {
             beginBackgroundTaskIfNeeded()
         } else if !isInBackground {
             endBackgroundTask()
+            // A sleep that elapsed while iOS suspended the process must not
+            // tear the peer down before WebRTC gets a chance to recover.
+            if peerConnection?.connectionState == .disconnected {
+                cancelDisconnectGrace()
+                scheduleDisconnectGrace()
+            }
         }
     }
 

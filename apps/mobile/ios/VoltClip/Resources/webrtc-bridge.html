@@ -20,6 +20,7 @@
         let dictationRequested = false;
         let disconnectTimer = null;
         let disconnectGraceMs = 12000;
+        let isAppInBackground = false;
         let options = {};
 
         function post(message) {
@@ -99,6 +100,22 @@
           audioSender = transceiver.sender;
         }
 
+        function clearDisconnectTimer() {
+          if (!disconnectTimer) return;
+          clearTimeout(disconnectTimer);
+          disconnectTimer = null;
+        }
+
+        function scheduleDisconnect() {
+          if (!pc || pc.connectionState !== "disconnected" || isAppInBackground || disconnectTimer) return;
+          disconnectTimer = setTimeout(() => {
+            disconnectTimer = null;
+            if (pc && pc.connectionState === "disconnected") {
+              window.voltBridge.close();
+            }
+          }, disconnectGraceMs);
+        }
+
         window.voltBridge = {
           async start(nextOptions) {
             options = nextOptions || {};
@@ -113,18 +130,8 @@
             };
             pc.onconnectionstatechange = () => {
               status(`WebRTC ${pc.connectionState}`);
-              if (pc.connectionState === "connected" && disconnectTimer) {
-                clearTimeout(disconnectTimer);
-                disconnectTimer = null;
-              }
-              if (pc.connectionState === "disconnected" && !disconnectTimer) {
-                disconnectTimer = setTimeout(() => {
-                  disconnectTimer = null;
-                  if (pc && pc.connectionState === "disconnected") {
-                    window.voltBridge.close();
-                  }
-                }, disconnectGraceMs);
-              }
+              if (pc.connectionState === "connected") clearDisconnectTimer();
+              if (pc.connectionState === "disconnected") scheduleDisconnect();
               if (pc.connectionState === "failed" || pc.connectionState === "closed") {
                 post({ type: "closed" });
               }
@@ -223,10 +230,31 @@
             status("Microphone stream paused");
           },
 
-          setDisconnectGraceMs(nextGraceMs) {
-            const parsed = Number(nextGraceMs);
-            if (Number.isFinite(parsed) && parsed >= 5000) {
-              disconnectGraceMs = parsed;
+          setAppIsInBackground(nextIsInBackground) {
+            isAppInBackground = Boolean(nextIsInBackground);
+            if (isAppInBackground) {
+              // App Clips are suspended in the background. Do not let an
+              // already-expired JavaScript timer close the peer immediately
+              // when WebKit resumes.
+              clearDisconnectTimer();
+              return;
+            }
+            if (
+              pc &&
+              pc.connectionState === "connected" &&
+              controlChannel &&
+              controlChannel.readyState === "open"
+            ) {
+              sendControl(helloMessage());
+            } else if (
+              pc &&
+              (pc.connectionState === "failed" ||
+                pc.connectionState === "closed" ||
+                (controlChannel && controlChannel.readyState === "closed"))
+            ) {
+              post({ type: "closed" });
+            } else {
+              scheduleDisconnect();
             }
           },
 
@@ -242,10 +270,7 @@
           },
 
           close() {
-            if (disconnectTimer) {
-              clearTimeout(disconnectTimer);
-              disconnectTimer = null;
-            }
+            clearDisconnectTimer();
             if (localStream) {
               for (const track of localStream.getTracks()) track.stop();
             }

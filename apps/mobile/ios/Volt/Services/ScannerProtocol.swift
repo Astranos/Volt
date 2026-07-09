@@ -18,7 +18,7 @@ enum ScannerProtocol {
     static let chunkSize = 64 * 1024
     static let joinAttemptTTL: Duration = .seconds(32)
     static let reconnectRequestTTL: Duration = .seconds(95)
-    static let joinAttemptPollInterval: Duration = .milliseconds(650)
+    static let joinAttemptPollInterval: Duration = .milliseconds(300)
     static let iceGatheringTimeout: Duration = .seconds(2)
     static let photoReceiptTimeout: Duration = .seconds(20)
     static let signalRequestTimeout: TimeInterval = 8

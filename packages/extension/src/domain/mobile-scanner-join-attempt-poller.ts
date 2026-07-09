@@ -6,7 +6,7 @@ import type { JoinWindow, MobileScannerSignalClient } from "./mobile-scanner-sig
 type SessionTimer = ReturnType<typeof setTimeout>;
 
 const HIDDEN_JOIN_ATTEMPT_POLL_GRACE_MS = 60 * 1000;
-const JOIN_ATTEMPT_INITIAL_POLL_INTERVAL_MS = 1000;
+const JOIN_ATTEMPT_INITIAL_POLL_INTERVAL_MS = 400;
 const JOIN_ATTEMPT_MAX_POLL_INTERVAL_MS = 10 * 1000;
 const RECONNECT_FALLBACK_POLL_INTERVAL_MS = 5000;
 const RECONNECT_ACTIVE_WINDOW_POLL_INTERVAL_MS = 1000;
@@ -96,7 +96,10 @@ export class MobileScannerJoinAttemptPoller {
             this.hiddenPollingExpiresAt = null;
             return;
           }
-          this.pollDelayMs = hadActivity
+          // The QR window is short-lived and user-facing. Keep it on the fast
+          // cadence so scanning after the popup has been open for a while does
+          // not inherit the idle exponential backoff.
+          this.pollDelayMs = hadActivity || this.options.getActiveJoinWindow()
             ? this.initialPollIntervalMs
             : Math.min(Math.ceil(this.pollDelayMs * 1.5), this.maxPollIntervalMs);
           this.schedule(this.pollDelayMs);
