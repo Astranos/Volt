@@ -8,6 +8,8 @@ struct UploadView: View {
     @State private var selectedUploadTotal = 0
     @State private var selectedUploadPrepared = 0
     @State private var uploadError: String?
+    @State private var queuedUploadSelections: [[PhotosPickerItem]] = []
+    @State private var isProcessingUploadQueue = false
     @State private var expandedBatchIds: Set<String> = []
     @State private var isSessionsPresented = false
 
@@ -53,7 +55,7 @@ struct UploadView: View {
                             prepared: selectedUploadPrepared,
                             total: selectedUploadTotal
                         )
-                    } else if let progress = store.photoUploadProgress {
+                    } else if let progress = activeUploadProgress {
                         PhotoUploadProgressSummary(progress: progress)
                     }
 
@@ -73,13 +75,16 @@ struct UploadView: View {
             }
             .onChange(of: selectedItems) { _, newItems in
                 guard !newItems.isEmpty else { return }
-                Task {
-                    await uploadSelectedItems(newItems)
-                    selectedItems = []
-                }
+                selectedItems = []
+                enqueueUploadSelection(newItems)
             }
             .onAppear {
                 store.selectedSection = .upload
+            }
+            .onChange(of: store.connectionStatus) { _, status in
+                if status.isConnected {
+                    startUploadQueueIfNeeded()
+                }
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 ScannerPhotoPickerAccessory(
@@ -101,21 +106,25 @@ struct UploadView: View {
     }
 
     private var uploadStatusText: String {
+        let status: String
         if let uploadError {
-            uploadError
+            status = uploadError
         } else if isPreparingUploads {
             if selectedUploadTotal > 0 {
-                "Reading \(selectedUploadReadCount) of \(selectedUploadTotal) selected photos"
+                status = "Reading \(selectedUploadReadCount) of \(selectedUploadTotal) selected photos"
             } else {
-                "Preparing uploads..."
+                status = "Preparing uploads..."
             }
-        } else if let progress = store.photoUploadProgress {
-            "\(progress.title). \(progress.detail)."
+        } else if let progress = activeUploadProgress {
+            status = "\(progress.title). \(progress.detail)."
         } else if store.connectionStatus.isConnected {
-            "Ready to upload to Chrome"
+            status = "Ready to upload to Chrome"
         } else {
-            store.targetHint
+            status = store.targetHint
         }
+
+        guard queuedUploadPhotoCount > 0 else { return status }
+        return "\(status) \(queuedUploadPhotoCount) more photo\(queuedUploadPhotoCount == 1 ? "" : "s") queued."
     }
 
     private var recentUploads: some View {
@@ -172,11 +181,6 @@ struct UploadView: View {
         selectedUploadPrepared = 0
         isPreparingUploads = true
         uploadError = nil
-        defer {
-            isPreparingUploads = false
-            selectedUploadTotal = 0
-            selectedUploadPrepared = 0
-        }
 
         var images: [UIImage] = []
         for (index, item) in items.enumerated() {
@@ -187,12 +191,44 @@ struct UploadView: View {
             selectedUploadPrepared = index + 1
         }
 
+        isPreparingUploads = false
+        selectedUploadTotal = 0
+        selectedUploadPrepared = 0
+
         guard !images.isEmpty else {
             uploadError = "Could not read any selected photos."
             return
         }
 
         await store.uploadPhotos(images)
+    }
+
+    private var queuedUploadPhotoCount: Int {
+        queuedUploadSelections.reduce(0) { count, selection in
+            count + selection.count
+        }
+    }
+
+    private func enqueueUploadSelection(_ items: [PhotosPickerItem]) {
+        queuedUploadSelections.append(items)
+        startUploadQueueIfNeeded()
+    }
+
+    private func startUploadQueueIfNeeded() {
+        guard store.connectionStatus.isConnected,
+              !queuedUploadSelections.isEmpty,
+              !isProcessingUploadQueue
+        else { return }
+        isProcessingUploadQueue = true
+        Task { await processQueuedUploads() }
+    }
+
+    private func processQueuedUploads() async {
+        while store.connectionStatus.isConnected, !queuedUploadSelections.isEmpty {
+            let items = queuedUploadSelections.removeFirst()
+            await uploadSelectedItems(items)
+        }
+        isProcessingUploadQueue = false
     }
 }
 

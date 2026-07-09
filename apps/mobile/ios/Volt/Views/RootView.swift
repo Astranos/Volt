@@ -313,7 +313,7 @@ struct SettingsView: View {
     }
 }
 
-private struct PairingStatusSheetModel: Identifiable, Equatable {
+struct PairingStatusSheetModel: Identifiable, Equatable {
     let id = UUID()
     let title: String
     let message: String
@@ -336,7 +336,7 @@ private struct PairingStatusSheetModel: Identifiable, Equatable {
     }
 }
 
-private struct PairingStatusSheet: View {
+struct PairingStatusSheet: View {
     let sheet: PairingStatusSheetModel
     let onCancel: () -> Void
 
@@ -365,7 +365,7 @@ private struct PairingStatusSheet: View {
         .padding(.horizontal, 20)
         .padding(.top, 18)
         .padding(.bottom, 20)
-        .accessibilityElement(children: sheet.canCancel ? .contain : .combine)
+        .accessibilityElement(children: .contain)
         .accessibilityLabel("\(sheet.title). \(sheet.message)")
     }
 
@@ -396,7 +396,15 @@ private struct PairingStatusSheet: View {
             .buttonStyle(.bordered)
             .controlSize(.regular)
             .tint(.red)
-            .accessibilityLabel("Cancel reconnect")
+            .accessibilityLabel("Cancel connection attempt")
+        } else {
+            Button(action: onCancel) {
+                Label("View Sessions", systemImage: "desktopcomputer")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.regular)
         }
     }
 }

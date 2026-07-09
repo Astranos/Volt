@@ -8,6 +8,7 @@ struct CaptureSessionView: View {
     @State private var selectedCleanedText: String?
     @State private var isCleaningSelectedText = false
     @State private var isConnectionRecoveryPresented = false
+    @State private var showsConnectionSessions = false
 
     var body: some View {
         @Bindable var store = store
@@ -119,9 +120,27 @@ struct CaptureSessionView: View {
             }
         }
         .sheet(isPresented: $isConnectionRecoveryPresented) {
-            PairingSessionsView()
+            if let connectionStatusSheet {
+                PairingStatusSheet(sheet: connectionStatusSheet) {
+                    showsConnectionSessions = true
+                    if connectionStatusSheet.canCancel {
+                        store.cancelConnectionAttempt()
+                    }
+                }
+                .presentationDetents([.height(164), .medium, .large])
+                .presentationDragIndicator(.visible)
+            } else {
+                PairingSessionsView(
+                    onReconnectStarted: {
+                        showConnectionProgress()
+                    },
+                    onPairingCodeAccepted: {
+                        showConnectionProgress()
+                    }
+                )
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
+            }
         }
         .onAppear {
             store.activeMode = ScreenshotScenario.current?.initialCaptureMode ?? .ocr
@@ -192,9 +211,47 @@ struct CaptureSessionView: View {
         case .idle, .disconnected, .error:
             isConnectionRecoveryPresented = true
         case .pairing, .waitingForChrome:
-            isConnectionRecoveryPresented = false
+            showsConnectionSessions = false
+            isConnectionRecoveryPresented = true
         case .connected:
             break
+        }
+    }
+
+    private func showConnectionProgress() {
+        showsConnectionSessions = false
+        isConnectionRecoveryPresented = true
+    }
+
+    private var connectionStatusSheet: PairingStatusSheetModel? {
+        guard !showsConnectionSessions else { return nil }
+        switch store.connectionStatus {
+        case .pairing:
+            PairingStatusSheetModel(
+                title: store.canCancelReconnect ? "Reconnecting to Chrome" : "Pairing with Chrome",
+                message: store.peerTarget?.displayText ?? "Trying to open the scanner channel.",
+                systemImage: "link",
+                isProgressing: true,
+                canCancel: true
+            )
+        case .waitingForChrome:
+            PairingStatusSheetModel(
+                title: "Waiting for Chrome",
+                message: "Finishing the secure scanner handshake.",
+                systemImage: "desktopcomputer",
+                isProgressing: true,
+                canCancel: true
+            )
+        case .error:
+            PairingStatusSheetModel(
+                title: "Pairing failed",
+                message: store.targetHint,
+                systemImage: "exclamationmark.triangle",
+                isProgressing: false,
+                canCancel: false
+            )
+        case .idle, .connected, .disconnected:
+            nil
         }
     }
 

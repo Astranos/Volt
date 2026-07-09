@@ -210,6 +210,7 @@ function openResultsDb(): Promise<IDBDatabase> {
       MOBILE_SCANNER_RESULTS_DB,
       MOBILE_SCANNER_RESULTS_VERSION,
     );
+    let settled = false;
     request.onupgradeneeded = () => {
       const db = request.result;
       if (!db.objectStoreNames.contains("results")) {
@@ -229,8 +230,23 @@ function openResultsDb(): Promise<IDBDatabase> {
         db.createObjectStore("meta", { keyPath: "key" });
       }
     };
-    request.onerror = () => reject(request.error ?? new Error("idb_open_failed"));
-    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => {
+      settled = true;
+      reject(request.error ?? new Error("idb_open_failed"));
+    };
+    request.onblocked = () => {
+      settled = true;
+      reject(new Error("idb_open_blocked"));
+    };
+    request.onsuccess = () => {
+      if (settled) {
+        request.result.close();
+        return;
+      }
+      settled = true;
+      request.result.onversionchange = () => request.result.close();
+      resolve(request.result);
+    };
   });
 }
 
@@ -241,6 +257,22 @@ function promisifyRequest<T>(request: IDBRequest<T>) {
   });
 }
 
+export async function runIndexedDbTransaction<T>(
+  transaction: IDBTransaction,
+  run: (transaction: IDBTransaction) => Promise<T> | T,
+) {
+  const completion = new Promise<void>((resolve, reject) => {
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () =>
+      reject(transaction.error ?? new Error("idb_transaction_failed"));
+    transaction.onabort = () =>
+      reject(transaction.error ?? new Error("idb_transaction_aborted"));
+  });
+
+  const [result] = await Promise.all([run(transaction), completion]);
+  return result;
+}
+
 async function withStore<T>(
   names: string | string[],
   mode: IDBTransactionMode,
@@ -249,15 +281,7 @@ async function withStore<T>(
   const db = await openResultsDb();
   try {
     const transaction = db.transaction(names, mode);
-    const result = await run(transaction);
-    await new Promise<void>((resolve, reject) => {
-      transaction.oncomplete = () => resolve();
-      transaction.onerror = () =>
-        reject(transaction.error ?? new Error("idb_transaction_failed"));
-      transaction.onabort = () =>
-        reject(transaction.error ?? new Error("idb_transaction_aborted"));
-    });
-    return result;
+    return await runIndexedDbTransaction(transaction, run);
   } finally {
     db.close();
   }

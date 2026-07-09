@@ -50,10 +50,16 @@ export function useMobileScannerHistory({
   );
 
   const refreshResults = useCallback(async () => {
-    const loaded = await listMobileScannerResults();
-    setResults(loaded as TimelineEntry[]);
-    setLoadingResults(false);
-  }, []);
+    try {
+      const loaded = await listMobileScannerResults();
+      setResults(loaded as TimelineEntry[]);
+    } catch (error) {
+      console.error("[Volt Mobile Scanner] Failed to load scanner results", error);
+      flashFeedback("Could not load scanner results", "error");
+    } finally {
+      setLoadingResults(false);
+    }
+  }, [flashFeedback]);
 
   const deleteResults = useCallback(
     (ids: string[], label: string) => {

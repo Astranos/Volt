@@ -8,8 +8,38 @@ import {
   normalizeScannerScanResult,
   persistAndBroadcastMobileScannerPhoto,
   resolvePhotoBatchId,
+  runIndexedDbTransaction,
   shouldPersistScannerScan,
 } from "./mobile-scanner-results.ts";
+
+test(
+  "transaction completion is observed while photo hydration is still running",
+  { timeout: 1000 },
+  async () => {
+    let finishHydration;
+    const hydration = new Promise((resolve) => {
+      finishHydration = resolve;
+    });
+    const transaction = {
+      error: null,
+      onabort: null,
+      oncomplete: null,
+      onerror: null,
+    };
+
+    const resultPromise = runIndexedDbTransaction(transaction, async () => {
+      await hydration;
+      return "hydrated";
+    });
+
+    await Promise.resolve();
+    assert.equal(typeof transaction.oncomplete, "function");
+    transaction.oncomplete?.();
+    finishHydration();
+
+    assert.equal(await resultPromise, "hydrated");
+  },
+);
 
 test("dictation scanner messages are not persisted", () => {
   assert.equal(

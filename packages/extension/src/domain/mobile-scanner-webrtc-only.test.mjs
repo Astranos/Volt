@@ -46,7 +46,10 @@ test("unified Mobile Scanner can drag the selected photo batch", () => {
   assert.equal(payload.photos.length, 1);
   assert.equal(payload.photos[0].id, "photo-1");
   assert.equal(payload.mime, "application/x-volt-mobile-photos");
-  assert.match(buildMobilePhotoDownloadFilename(photo), /unbatched/);
+  assert.equal(
+    buildMobilePhotoDownloadFilename(photo),
+    "Volt Photos/photo-1-volt-photo-photo-1.jpg",
+  );
 });
 
 test("photo drag bridge sends scanner photos as Shopify-compatible files", async () => {

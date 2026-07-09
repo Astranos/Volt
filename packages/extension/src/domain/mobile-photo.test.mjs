@@ -40,7 +40,7 @@ test("normalizeMobilePhoto validates and completes captured photo metadata", () 
   assert.ok(photo?.capturedAt);
 });
 
-test("buildMobilePhotoDownloadFilename groups photos by scanner session and batch", () => {
+test("buildMobilePhotoDownloadFilename avoids disposable session and batch folders", () => {
   assert.equal(
     buildMobilePhotoDownloadFilename({
       id: "photo-1",
@@ -49,6 +49,6 @@ test("buildMobilePhotoDownloadFilename groups photos by scanner session and batc
       photoBatchId: "batch/456",
       sessionId: "abc/123",
     }),
-    "Volt Photos/abc-123/batch-456/front-label.webp"
+    "Volt Photos/photo-1-front-label.webp"
   );
 });

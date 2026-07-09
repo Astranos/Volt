@@ -136,10 +136,12 @@ export function normalizeMobilePhoto(photo: unknown): MobilePhoto | null {
 }
 
 export function buildMobilePhotoDownloadFilename(
-  photo: Pick<MobilePhoto, "id" | "mimeType" | "name" | "photoBatchId" | "sessionId">,
+  photo: Pick<MobilePhoto, "id" | "mimeType" | "name">,
 ) {
-  const sessionFolder = sanitizeDownloadPathSegment(photo.sessionId, "unpaired-session");
-  const batchFolder = sanitizeDownloadPathSegment(photo.photoBatchId, "unbatched");
-  const filename = normalizeImageFilename(photo.name || photo.id || "volt-photo", photo.mimeType);
-  return `Volt Photos/${sessionFolder}/${batchFolder}/${filename}`;
+  const photoId = sanitizeDownloadPathSegment(photo.id, "volt-photo");
+  const filename = normalizeImageFilename(
+    photo.name || photo.id || "volt-photo",
+    photo.mimeType,
+  );
+  return `Volt Photos/${photoId}-${filename}`;
 }

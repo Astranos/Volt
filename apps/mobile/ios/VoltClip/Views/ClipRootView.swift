@@ -7,9 +7,7 @@ import WebKit
 struct ClipRootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Bindable var store: ClipScannerStore
-    @State private var isConnectChoicesPresented = false
-    @State private var isConnectionProgressPresented = false
-    @State private var isPairingFailurePresented = false
+    @State private var isConnectionSheetPresented = false
     @State private var isPairingScannerPresented = false
 
     var body: some View {
@@ -39,19 +37,15 @@ struct ClipRootView: View {
                 .opacity(0.01)
                 .allowsHitTesting(false)
         }
-        .sheet(isPresented: $isConnectChoicesPresented) {
-            ClipConnectChoicesView(
+        .sheet(isPresented: $isConnectionSheetPresented) {
+            ClipConnectionSheet(
                 store: store,
-                onReconnect: {
-                    isConnectChoicesPresented = false
-                    store.reconnectToLastSession()
-                },
                 onDisconnect: {
-                    isConnectChoicesPresented = false
+                    isConnectionSheetPresented = false
                     store.disconnect()
                 },
                 onScanQRCode: {
-                    isConnectChoicesPresented = false
+                    isConnectionSheetPresented = false
                     if store.isConnected {
                         store.disconnect()
                     }
@@ -61,36 +55,7 @@ struct ClipRootView: View {
             .presentationDetents([.medium])
             .presentationDragIndicator(.visible)
             .presentationBackground(Color(uiColor: .systemBackground))
-        }
-        .sheet(isPresented: $isConnectionProgressPresented) {
-            ClipConnectionProgressView(
-                store: store,
-                onCancel: {
-                    store.cancelConnectionAttempt()
-                    isConnectionProgressPresented = false
-                },
-                onScanQRCode: {
-                    store.cancelConnectionAttempt()
-                    isConnectionProgressPresented = false
-                    showPairingScanner()
-                }
-            )
-            .presentationDetents([.medium])
-            .presentationDragIndicator(.visible)
-            .presentationBackground(Color(uiColor: .systemBackground))
             .interactiveDismissDisabled(store.isPairing)
-        }
-        .sheet(isPresented: $isPairingFailurePresented) {
-            ClipPairingFailureView(
-                store: store,
-                onScanQRCode: {
-                    isPairingFailurePresented = false
-                    showPairingScanner()
-                }
-            )
-            .presentationDetents([.medium])
-            .presentationDragIndicator(.visible)
-            .presentationBackground(Color(uiColor: .systemBackground))
         }
         .fullScreenCover(isPresented: $isPairingScannerPresented) {
             ClipPairingScannerView(store: store) {
@@ -98,15 +63,18 @@ struct ClipRootView: View {
             }
         }
         .onChange(of: store.pairingFailureMessage) { _, message in
-            isPairingFailurePresented = message != nil && !store.isConnected
+            if message != nil && !store.isConnected {
+                isConnectionSheetPresented = true
+            }
         }
         .onChange(of: store.isPairing) { _, isPairing in
-            isConnectionProgressPresented = isPairing
+            if isPairing {
+                isConnectionSheetPresented = true
+            }
         }
         .onChange(of: store.isConnected) { _, isConnected in
             if isConnected {
-                isConnectChoicesPresented = false
-                isConnectionProgressPresented = false
+                isConnectionSheetPresented = false
             }
         }
         .onChange(of: scenePhase) { _, newValue in
@@ -116,22 +84,22 @@ struct ClipRootView: View {
 
     private func handleConnectButtonTapped() {
         if store.isConnected {
-            isConnectChoicesPresented = true
+            isConnectionSheetPresented = true
             return
         }
         if store.isPairing {
-            isConnectionProgressPresented = true
+            isConnectionSheetPresented = true
             return
         }
-        if store.canReconnectToLastSession {
-            isConnectChoicesPresented = true
+        if store.canReconnectToLastSession || store.pairingFailureMessage != nil {
+            isConnectionSheetPresented = true
         } else {
             showPairingScanner()
         }
     }
 
     private func showPairingScanner() {
-        isPairingFailurePresented = false
+        isConnectionSheetPresented = false
         isPairingScannerPresented = true
     }
 }
@@ -141,6 +109,7 @@ private struct ClipCaptureView: View {
     let onScanQRCode: () -> Void
     @State private var isCaptureSessionPresented = false
     @State private var captureSessionBatchId: String?
+    @State private var opensPairingScannerAfterCapture = false
     @State private var expandedBatchIds: Set<String> = []
     @State private var previewedPhoto: ClipScannerStore.ClipPhoto?
 
@@ -202,9 +171,14 @@ private struct ClipCaptureView: View {
                 onDismiss: {
                     store.endCaptureSession(id: captureSessionBatchId)
                     captureSessionBatchId = nil
+                    if opensPairingScannerAfterCapture {
+                        opensPairingScannerAfterCapture = false
+                        onScanQRCode()
+                    }
                 }
             ) {
                 ClipCaptureSessionView(
+                    store: store,
                     activeMode: $store.activeCaptureMode,
                     isConnected: store.isConnected,
                     isRecognizingText: store.isRecognizingText,
@@ -234,6 +208,9 @@ private struct ClipCaptureView: View {
                     },
                     onClearOcrReview: {
                         store.clearOcrReview()
+                    },
+                    onConnectionScannerRequested: {
+                        opensPairingScannerAfterCapture = true
                     }
                 )
             }
@@ -372,6 +349,8 @@ private struct ClipUploadView: View {
     @State private var selectedUploadTotal = 0
     @State private var selectedUploadPrepared = 0
     @State private var uploadError: String?
+    @State private var queuedUploadSelections: [[PhotosPickerItem]] = []
+    @State private var isProcessingUploadQueue = false
     @State private var expandedBatchIds: Set<String> = []
 
     private var uploadPhotoBatches: [ClipUploadPhotoBatch] {
@@ -412,7 +391,7 @@ private struct ClipUploadView: View {
                             prepared: selectedUploadPrepared,
                             total: selectedUploadTotal
                         )
-                    } else if let progress = store.photoUploadProgress {
+                    } else if let progress = activeUploadProgress {
                         PhotoUploadProgressSummary(progress: progress)
                     }
 
@@ -444,9 +423,12 @@ private struct ClipUploadView: View {
             .toolbar(.hidden, for: .navigationBar)
             .onChange(of: pickerItems) { _, items in
                 guard !items.isEmpty else { return }
-                Task {
-                    await uploadSelectedItems(items)
-                    pickerItems = []
+                pickerItems = []
+                enqueueUploadSelection(items)
+            }
+            .onChange(of: store.isConnected) { _, isConnected in
+                if isConnected {
+                    startUploadQueueIfNeeded()
                 }
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -479,23 +461,27 @@ private struct ClipUploadView: View {
     }
 
     private var uploadStatusText: String {
+        let status: String
         if let uploadError {
-            uploadError
+            status = uploadError
         } else if isPreparingUploads {
             if selectedUploadTotal > 0 {
-                "Reading \(selectedUploadReadCount) of \(selectedUploadTotal) selected photos"
+                status = "Reading \(selectedUploadReadCount) of \(selectedUploadTotal) selected photos"
             } else {
-                "Preparing uploads..."
+                status = "Preparing uploads..."
             }
-        } else if let progress = store.photoUploadProgress {
-            "\(progress.title). \(progress.detail)."
+        } else if let progress = activeUploadProgress {
+            status = "\(progress.title). \(progress.detail)."
         } else if store.isPairing {
-            store.statusText
+            status = store.statusText
         } else if store.isConnected {
-            "Ready to upload to Chrome"
+            status = "Ready to upload to Chrome"
         } else {
-            store.targetHint
+            status = store.targetHint
         }
+
+        guard queuedUploadPhotoCount > 0 else { return status }
+        return "\(status) \(queuedUploadPhotoCount) more photo\(queuedUploadPhotoCount == 1 ? "" : "s") queued."
     }
 
     private var selectedUploadReadCount: Int {
@@ -528,6 +514,34 @@ private struct ClipUploadView: View {
         }
 
         await store.uploadPhotos(images)
+    }
+
+    private var queuedUploadPhotoCount: Int {
+        queuedUploadSelections.reduce(0) { count, selection in
+            count + selection.count
+        }
+    }
+
+    private func enqueueUploadSelection(_ items: [PhotosPickerItem]) {
+        queuedUploadSelections.append(items)
+        startUploadQueueIfNeeded()
+    }
+
+    private func startUploadQueueIfNeeded() {
+        guard store.isConnected,
+              !queuedUploadSelections.isEmpty,
+              !isProcessingUploadQueue
+        else { return }
+        isProcessingUploadQueue = true
+        Task { await processQueuedUploads() }
+    }
+
+    private func processQueuedUploads() async {
+        while store.isConnected, !queuedUploadSelections.isEmpty {
+            let items = queuedUploadSelections.removeFirst()
+            await uploadSelectedItems(items)
+        }
+        isProcessingUploadQueue = false
     }
 }
 
@@ -1045,6 +1059,40 @@ private struct ClipChromeSectionHeader: View {
     }
 }
 
+private struct ClipConnectionSheet: View {
+    @Bindable var store: ClipScannerStore
+    let onDisconnect: () -> Void
+    let onScanQRCode: () -> Void
+
+    var body: some View {
+        Group {
+            if store.isPairing {
+                ClipConnectionProgressView(
+                    store: store,
+                    onCancel: {
+                        store.cancelConnectionAttempt()
+                    },
+                    onScanQRCode: {
+                        store.cancelConnectionAttempt()
+                        onScanQRCode()
+                    }
+                )
+            } else if store.pairingFailureMessage != nil {
+                ClipPairingFailureView(store: store, onScanQRCode: onScanQRCode)
+            } else {
+                ClipConnectChoicesView(
+                    store: store,
+                    onReconnect: {
+                        store.reconnectToLastSession()
+                    },
+                    onDisconnect: onDisconnect,
+                    onScanQRCode: onScanQRCode
+                )
+            }
+        }
+    }
+}
+
 private struct ClipConnectChoicesView: View {
     @Bindable var store: ClipScannerStore
     @Environment(\.dismiss) private var dismiss
@@ -1392,6 +1440,7 @@ private struct ClipDictationStartAccessory: View {
 }
 
 private struct ClipCaptureSessionView: View {
+    @Bindable var store: ClipScannerStore
     @Binding var activeMode: CaptureMode
     let isConnected: Bool
     let isRecognizingText: Bool
@@ -1404,6 +1453,7 @@ private struct ClipCaptureSessionView: View {
     let onSendLatest: () -> Void
     let onSendRecognizedText: (String) -> Void
     let onClearOcrReview: () -> Void
+    let onConnectionScannerRequested: () -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var cameraService = ClipBarcodeScannerService()
@@ -1419,6 +1469,7 @@ private struct ClipCaptureSessionView: View {
     @State private var isCleaningSelectedText = false
     @State private var focusPoint: CGPoint?
     @State private var cameraStateRevision = 0
+    @State private var isConnectionSheetPresented = false
     private let topToolbarTopPadding: CGFloat = 12
     private let topToolbarHeight: CGFloat = 42
     private let photoPreviewToolbarGap: CGFloat = 0
@@ -1626,6 +1677,23 @@ private struct ClipCaptureSessionView: View {
             }
         }
         .animation(.spring(response: 0.28, dampingFraction: 0.86), value: selectedTextRegion?.id)
+        .sheet(isPresented: $isConnectionSheetPresented) {
+            ClipConnectionSheet(
+                store: store,
+                onDisconnect: {
+                    store.disconnect()
+                },
+                onScanQRCode: {
+                    isConnectionSheetPresented = false
+                    onConnectionScannerRequested()
+                    dismiss()
+                }
+            )
+            .presentationDetents([.medium])
+            .presentationDragIndicator(.visible)
+            .presentationBackground(Color(uiColor: .systemBackground))
+            .interactiveDismissDisabled(store.isPairing)
+        }
         .onAppear {
             activeMode = .ocr
             cameraService.onScan = { scan in
@@ -1674,6 +1742,24 @@ private struct ClipCaptureSessionView: View {
         }
         .onChange(of: isRecognizingText) { _, _ in
             syncCameraForOcrPostCapture()
+        }
+        .onChange(of: store.isConnected) { _, isConnected in
+            isConnectionSheetPresented = !isConnected
+            if !isConnected {
+                selectedTextRegion = nil
+                selectedCleanedText = nil
+                onClearOcrReview()
+            }
+        }
+        .onChange(of: store.isPairing) { _, isPairing in
+            if isPairing {
+                isConnectionSheetPresented = true
+            }
+        }
+        .onChange(of: store.pairingFailureMessage) { _, message in
+            if message != nil && !store.isConnected {
+                isConnectionSheetPresented = true
+            }
         }
     }
 

@@ -288,12 +288,8 @@ struct ScannerPhotoPickerAccessory: View {
     var showsError = false
     let disabledHint: String
 
-    private var isBusy: Bool {
-        isPreparing || isUploading
-    }
-
     var body: some View {
-        let isPickerEnabled = isConnected && !isBusy
+        let isPickerEnabled = isConnected
         let pickerTitle = actionTitle
         let pickerSystemImage = actionSystemImage
 
@@ -333,11 +329,8 @@ struct ScannerPhotoPickerAccessory: View {
         if isConnecting {
             return "Connecting..."
         }
-        if isPreparing {
-            return "Preparing Uploads"
-        }
-        if isUploading {
-            return "Uploading Photos"
+        if isPreparing || isUploading {
+            return "Add More Photos"
         }
         return "Choose Photos"
     }
@@ -346,11 +339,8 @@ struct ScannerPhotoPickerAccessory: View {
         if isConnecting {
             return "hourglass"
         }
-        if isPreparing {
-            return "hourglass"
-        }
-        if isUploading {
-            return "arrow.up.circle"
+        if isPreparing || isUploading {
+            return "photo.badge.plus"
         }
         return "photo.on.rectangle.angled"
     }

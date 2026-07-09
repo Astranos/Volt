@@ -420,7 +420,7 @@ test("native capture session opens session picker instead of auto-reconnecting w
   assert.match(captureSessionViewSwiftSource, /\.onChange\(of: store\.connectionStatus\)/);
   assert.match(captureSessionViewSwiftSource, /handleConnectionStatusChange\(status\)/);
   assert.doesNotMatch(captureSessionViewSwiftSource, /store\.recoverMostRecentPairedSession\(\)/);
-  assert.match(captureSessionViewSwiftSource, /PairingSessionsView\(\)/);
+  assert.match(captureSessionViewSwiftSource, /PairingSessionsView\(/);
   assert.doesNotMatch(scannerStoreSwiftSource, /func recoverMostRecentPairedSession\(\) -> Bool/);
   assert.match(captureSessionViewSwiftSource, /case \.idle, \.disconnected, \.error:\s*isConnectionRecoveryPresented = true/);
   assert.match(scannerStoreSwiftSource, /lastAutomaticReconnectAt = nil/);
@@ -428,6 +428,14 @@ test("native capture session opens session picker instead of auto-reconnecting w
   const recoverySource = captureSessionViewSwiftSource.slice(recoveryStart);
   assert.ok(recoveryStart > -1);
   assert.doesNotMatch(recoverySource, /isPresented = false/);
+});
+
+test("native capture session keeps one visible connection sheet through reconnect", () => {
+  assert.match(captureSessionViewSwiftSource, /\.sheet\(isPresented: \$isConnectionRecoveryPresented\)/);
+  assert.match(captureSessionViewSwiftSource, /if let connectionStatusSheet[\s\S]*PairingStatusSheet\(sheet: connectionStatusSheet\)[\s\S]*else \{[\s\S]*PairingSessionsView\(/);
+  assert.match(captureSessionViewSwiftSource, /case \.pairing, \.waitingForChrome:[\s\S]*isConnectionRecoveryPresented = true/);
+  assert.match(captureSessionViewSwiftSource, /onReconnectStarted:[\s\S]*showConnectionProgress\(\)/);
+  assert.match(captureSessionViewSwiftSource, /onPairingCodeAccepted:[\s\S]*showConnectionProgress\(\)/);
 });
 
 test("native and app clip keep transient WebRTC disconnects alive through background grace", () => {
@@ -751,6 +759,18 @@ test("native upload batches expose clear progress while photos are preparing and
   assert.match(readFileSync(new URL("../ios/Volt/Views/SharedScannerTabComponents.swift", import.meta.url), "utf8"), /var isUploading = false/);
 });
 
+test("native upload picker accepts and queues more photos while a batch is active", () => {
+  assert.match(uploadViewSwiftSource, /@State private var queuedUploadSelections: \[\[PhotosPickerItem\]\] = \[\]/);
+  assert.match(uploadViewSwiftSource, /private func enqueueUploadSelection\(_ items: \[PhotosPickerItem\]\)/);
+  assert.match(uploadViewSwiftSource, /while store\.connectionStatus\.isConnected, !queuedUploadSelections\.isEmpty/);
+  assert.match(uploadViewSwiftSource, /\.onChange\(of: store\.connectionStatus\)[\s\S]*if status\.isConnected \{\s*startUploadQueueIfNeeded\(\)/);
+  assert.match(uploadViewSwiftSource, /selectedItems = \[\][\s\S]*enqueueUploadSelection\(newItems\)/);
+  assert.match(uploadViewSwiftSource, /else if let progress = activeUploadProgress/);
+  assert.doesNotMatch(uploadViewSwiftSource, /defer \{[\s\S]*isPreparingUploads = false/);
+  assert.match(sharedScannerTabComponentsSwiftSource, /let isPickerEnabled = isConnected/);
+  assert.match(sharedScannerTabComponentsSwiftSource, /return "Add More Photos"/);
+});
+
 test("native barcode scanning favors guided UPC codes over adjacent supplemental barcodes", () => {
   assert.match(cameraModelSwiftSource, /private struct BarcodeCandidate/);
   assert.match(cameraModelSwiftSource, /barcodeGuideOverlapRatio\(candidate\.bounds, guideRect\) >= 0\.35/);
@@ -969,7 +989,7 @@ test("app clip bottom CTAs show connection progress while pairing", () => {
   assert.match(clipRootViewSwiftSource, /ClipDictationStartAccessory\([\s\S]*isConnecting: store\.isPairing[\s\S]*statusText: dictationStatusText/);
   assert.match(clipRootViewSwiftSource, /private var captureStatusText: String \{\s*if store\.isPairing \{\s*store\.statusText/);
   assert.match(clipRootViewSwiftSource, /private var dictationStatusText: String \{[\s\S]*else if store\.isPairing \{\s*store\.statusText/);
-  assert.match(clipRootViewSwiftSource, /private var uploadStatusText: String \{[\s\S]*else if store\.isPairing \{\s*store\.statusText/);
+  assert.match(clipRootViewSwiftSource, /private var uploadStatusText: String \{[\s\S]*else if store\.isPairing \{\s*status = store\.statusText/);
   assert.match(clipRootViewSwiftSource, /private var buttonTitle: String \{\s*if isConnecting \{\s*return "Connecting\.\.\."/);
 });
 
@@ -1005,8 +1025,8 @@ test("app clip connect button offers last-session reconnect before scanning QR",
   assert.match(clipScannerStoreSwiftSource, /var canReconnectToLastSession: Bool \{\s*lastPairingCredential != nil && !isPairing && !isConnected\s*\}/);
   assert.match(clipScannerStoreSwiftSource, /var lastSessionDisplayName: String\? \{\s*lastPairingCredential\?\.displayName\s*\}/);
   assert.match(clipScannerStoreSwiftSource, /func reconnectToLastSession\(\) \{\s*guard !isPairing, !isConnected, let credential = lastPairingCredential else \{ return \}/);
-  assert.match(clipRootViewSwiftSource, /@State private var isConnectChoicesPresented = false/);
-  assert.match(clipRootViewSwiftSource, /private func handleConnectButtonTapped\(\) \{[\s\S]*if store\.canReconnectToLastSession \{\s*isConnectChoicesPresented = true\s*\} else \{\s*showPairingScanner\(\)\s*\}/);
+  assert.match(clipRootViewSwiftSource, /@State private var isConnectionSheetPresented = false/);
+  assert.match(clipRootViewSwiftSource, /private func handleConnectButtonTapped\(\) \{[\s\S]*if store\.canReconnectToLastSession \|\| store\.pairingFailureMessage != nil \{\s*isConnectionSheetPresented = true\s*\} else \{\s*showPairingScanner\(\)\s*\}/);
   assert.match(clipRootViewSwiftSource, /private struct ClipConnectChoicesView: View/);
   assert.match(clipRootViewSwiftSource, /Text\("Reconnect to \\\(displayName\), or scan a QR code for a different computer session\."\)/);
   assert.match(clipRootViewSwiftSource, /Label\("Reconnect", systemImage: "arrow\.clockwise"\)/);
@@ -1015,7 +1035,7 @@ test("app clip connect button offers last-session reconnect before scanning QR",
 });
 
 test("app clip connected session button opens session actions instead of disconnecting", () => {
-  assert.match(clipRootViewSwiftSource, /private func handleConnectButtonTapped\(\) \{\s*if store\.isConnected \{\s*isConnectChoicesPresented = true\s*return\s*\}/);
+  assert.match(clipRootViewSwiftSource, /private func handleConnectButtonTapped\(\) \{\s*if store\.isConnected \{\s*isConnectionSheetPresented = true\s*return\s*\}/);
   assert.doesNotMatch(clipRootViewSwiftSource, /if store\.isConnected \{\s*store\.disconnect\(\)\s*return\s*\}/);
   assert.match(clipRootViewSwiftSource, /let onDisconnect: \(\) -> Void/);
   assert.match(clipRootViewSwiftSource, /if store\.isConnected \{[\s\S]*Text\("Manage the current Chrome session, or scan a QR code to connect to a different computer\."\)/);
@@ -1042,15 +1062,25 @@ test("app clip connecting sheet can cancel or switch to QR scanning", () => {
   assert.match(clipScannerStoreSwiftSource, /private var activeConnectionAttemptLabel: String\?/);
   assert.match(clipScannerStoreSwiftSource, /var connectionAttemptDisplayName: String \{[\s\S]*activeConnectionAttemptLabel \?\? pairingLabel \?\? lastPairingCredential\?\.displayName \?\? "Chrome"[\s\S]*\}/);
   assert.match(clipScannerStoreSwiftSource, /func cancelConnectionAttempt\(\) \{[\s\S]*reconnectTask\?\.cancel\(\)[\s\S]*transport\.close\(\)[\s\S]*statusText = "Connection canceled"/);
-  assert.match(clipRootViewSwiftSource, /@State private var isConnectionProgressPresented = false/);
-  assert.match(clipRootViewSwiftSource, /\.onChange\(of: store\.isPairing\) \{ _, isPairing in\s*isConnectionProgressPresented = isPairing\s*\}/);
+  assert.match(clipRootViewSwiftSource, /@State private var isConnectionSheetPresented = false/);
+  assert.match(clipRootViewSwiftSource, /\.onChange\(of: store\.isPairing\) \{ _, isPairing in\s*if isPairing \{\s*isConnectionSheetPresented = true\s*\}\s*\}/);
   assert.match(clipRootViewSwiftSource, /private struct ClipConnectionProgressView: View/);
   assert.match(clipRootViewSwiftSource, /Text\("Connecting"\)/);
   assert.match(clipRootViewSwiftSource, /value: store\.connectionAttemptDisplayName,\s*systemImage: "desktopcomputer"/);
   assert.match(clipRootViewSwiftSource, /value: store\.statusText,\s*systemImage: "waveform\.path\.ecg"/);
   assert.match(clipRootViewSwiftSource, /Label\("Cancel", systemImage: "xmark\.circle"\)/);
   assert.match(clipRootViewSwiftSource, /Label\("Scan QR", systemImage: "qrcode\.viewfinder"\)/);
-  assert.match(clipRootViewSwiftSource, /store\.cancelConnectionAttempt\(\)[\s\S]*showPairingScanner\(\)/);
+  assert.match(clipRootViewSwiftSource, /store\.cancelConnectionAttempt\(\)[\s\S]*onScanQRCode\(\)/);
+});
+
+test("app clip pairing, reconnect, and failure reuse one connection sheet", () => {
+  assert.match(clipRootViewSwiftSource, /@State private var isConnectionSheetPresented = false/);
+  assert.match(clipRootViewSwiftSource, /\.sheet\(isPresented: \$isConnectionSheetPresented\)/);
+  assert.doesNotMatch(clipRootViewSwiftSource, /isConnectChoicesPresented|isConnectionProgressPresented|isPairingFailurePresented/);
+  assert.match(clipRootViewSwiftSource, /private struct ClipConnectionSheet: View/);
+  assert.match(clipRootViewSwiftSource, /if store\.isPairing[\s\S]*ClipConnectionProgressView[\s\S]*else if store\.pairingFailureMessage != nil[\s\S]*ClipPairingFailureView[\s\S]*else[\s\S]*ClipConnectChoicesView/);
+  assert.match(clipRootViewSwiftSource, /private struct ClipCaptureSessionView: View[\s\S]*\.sheet\(isPresented: \$isConnectionSheetPresented\)[\s\S]*ClipConnectionSheet\(/);
+  assert.match(clipRootViewSwiftSource, /\.onChange\(of: store\.isConnected\)[\s\S]*isConnectionSheetPresented = !isConnected/);
 });
 
 test("app clip fresh qr connection attempt does not reuse saved session name", () => {
@@ -1093,6 +1123,15 @@ test("app clip upload tab groups library photos and shows shared upload progress
   assert.match(clipRootViewSwiftSource, /"Reading \\\(selectedUploadReadCount\) of \\\(selectedUploadTotal\) selected photos"/);
   assert.match(clipRootViewSwiftSource, /"\\\(progress\.title\)\. \\\(progress\.detail\)\."/);
   assert.match(clipRootViewSwiftSource, /store\.removePhotos\(batchId: batch\.id\)/);
+});
+
+test("app clip upload picker accepts and queues more photos while a batch is active", () => {
+  assert.match(clipRootViewSwiftSource, /@State private var queuedUploadSelections: \[\[PhotosPickerItem\]\] = \[\]/);
+  assert.match(clipRootViewSwiftSource, /private func enqueueUploadSelection\(_ items: \[PhotosPickerItem\]\)/);
+  assert.match(clipRootViewSwiftSource, /while store\.isConnected, !queuedUploadSelections\.isEmpty/);
+  assert.match(clipRootViewSwiftSource, /\.onChange\(of: store\.isConnected\)[\s\S]*if isConnected \{\s*startUploadQueueIfNeeded\(\)/);
+  assert.match(clipRootViewSwiftSource, /pickerItems = \[\][\s\S]*enqueueUploadSelection\(items\)/);
+  assert.match(clipRootViewSwiftSource, /else if let progress = activeUploadProgress/);
 });
 
 test("app clip replays saved captures and photos after connecting", () => {
