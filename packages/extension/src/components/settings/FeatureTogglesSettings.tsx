@@ -134,7 +134,7 @@ export function FeatureTogglesSettings({
         enabled={settings.contextMenu?.enabled ?? true}
         details={[
           "Quick actions: Copy, Paste, Open in New Tab, Save As",
-          "Search tools: Google UPC, eBay Sold, UPCItemDB, PriceCharting",
+          "Search tools: eBay Prices, Search for UPC, PriceCharting",
           "Ctrl+Right-click to show native menu instead",
           "Click dismiss button to disable until page refresh",
         ]}
@@ -152,6 +152,37 @@ export function FeatureTogglesSettings({
               "context-menu-settings-changed",
               Boolean(newContextMenu.enabled)
             )
+          );
+        }}
+      />
+
+      <ToggleSection
+        id="selection-suggestions"
+        title="Selection Suggestions"
+        description="Choose whether Volt offers actions beside selected page text."
+        itemTitle="Show Selection Suggestions"
+        itemDescription="Shows a compact eBay Prices, Search for UPC, and PriceCharting toolbar after selecting non-editable text on a page."
+        enabled={settings.contextMenu?.selectionSuggestionsEnabled ?? true}
+        details={[
+          "Appears after selection settles",
+          "Stays hidden in text fields and editable content",
+          "Dismisses on scroll, click-away, right-click, or Escape",
+          "Never changes the page unless you choose an action",
+        ]}
+        onToggle={() => {
+          const selectionSuggestionsEnabled =
+            !(settings.contextMenu?.selectionSuggestionsEnabled ?? true);
+          void saveSettings({
+            ...settings,
+            contextMenu: {
+              ...settings.contextMenu,
+              selectionSuggestionsEnabled,
+            },
+          }).then(() =>
+            notifyTabs(
+              "selection-suggestions-settings-changed",
+              selectionSuggestionsEnabled,
+            ),
           );
         }}
       />

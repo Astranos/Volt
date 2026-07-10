@@ -65,6 +65,7 @@ export const DEFAULT_SETTINGS: CmdkSettings = {
   },
   contextMenu: {
     enabled: true,
+    selectionSuggestionsEnabled: true,
   },
   mobilePhotoDownloads: {
     autoDeleteEnabled: true,

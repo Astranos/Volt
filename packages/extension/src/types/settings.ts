@@ -85,6 +85,7 @@ export interface CmdkSettings {
   };
   contextMenu?: {
     enabled?: boolean;
+    selectionSuggestionsEnabled?: boolean;
   };
   mobilePhotoDownloads?: {
     autoDeleteEnabled?: boolean;

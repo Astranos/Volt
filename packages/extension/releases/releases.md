@@ -2,9 +2,9 @@
 
 ## Current Development Version
 
-### v1.0.49
+### v1.0.51
 
-The current manifest/package version is `1.0.49`.
+The current manifest/package version is `1.0.51`.
 
 Current release build command:
 
@@ -25,6 +25,28 @@ packages/extension/releases/
 ```
 
 ## Recent Release History
+
+### v1.0.51
+
+Release date: July 9, 2026
+
+Changes:
+
+- Added a compact toolbar that appears after selecting non-editable page text.
+- Added one-click eBay Prices, Search for UPC, and PriceCharting actions for the selection.
+- Refined the right-click menu with clearer grouping, selected-text context, improved keyboard navigation, and a more polished icon-action row.
+- Added an independent Selection Suggestions setting plus click-away, right-click, scroll, resize, and Escape dismissal behavior.
+
+### v1.0.50
+
+Release date: July 9, 2026
+
+Changes:
+
+- Fixed Scanner Results getting stuck loading while persisted photo blobs were being restored.
+- Flattened new scanner photo downloads into one Volt Photos folder to prevent empty session and batch folders from accumulating.
+- Fixed dragging photo batches into Shopify's Shadow DOM-based product media uploader.
+- Versioned the photo drag bridge so repaired drag behavior replaces stale page integrations without requiring a Shopify page reload.
 
 ### v1.0.49
 
