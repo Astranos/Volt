@@ -304,6 +304,7 @@ extension ScannerStore {
     }
 
     func captureSquarePhoto() async {
+        let batchId = resumedPhotoBatchId
         guard let image = await camera.capturePhoto() else { return }
         let preparedImage = image
             .normalizedForProcessing()
@@ -317,7 +318,7 @@ extension ScannerStore {
             imageData: preparedImage.previewJPEGData()
         )
         results.insert(photoResult, at: 0)
-        await sendPhoto(preparedImage, resultId: photoResult.id)
+        await sendPhoto(preparedImage, resultId: photoResult.id, batchId: batchId)
     }
 
     func uploadPhotos(_ images: [UIImage]) async {
@@ -402,6 +403,7 @@ extension ScannerStore {
             await sendPhoto(
                 image,
                 resultId: id,
+                batchId: result.batchId,
                 filename: "volt-photo-resend-\(Int(Date.now.timeIntervalSince1970)).jpg",
                 capturedAt: result.capturedAt
             )
@@ -599,7 +601,18 @@ extension ScannerStore {
         }
     }
 
+    func resumePhotoBatch(id: String) {
+        resumedPhotoBatchId = id
+    }
+
+    func endResumedPhotoBatch() {
+        resumedPhotoBatchId = nil
+    }
+
     func currentPhotoBatch(now: Date) -> String {
+        if let resumedPhotoBatchId {
+            return resumedPhotoBatchId
+        }
         if let photoBatch, photoBatch.expiresAt > now {
             return photoBatch.id
         }

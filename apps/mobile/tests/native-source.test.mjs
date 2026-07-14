@@ -465,13 +465,37 @@ test("app clip capture sessions keep one photo batch per presented camera sessio
   assert.match(clipRootViewSwiftSource, /@State private var captureSessionBatchId: String\?/);
   assert.match(clipRootViewSwiftSource, /captureSessionBatchId = store\.beginCaptureSession\(\)/);
   assert.match(clipRootViewSwiftSource, /store\.endCaptureSession\(id: captureSessionBatchId\)/);
-  assert.match(clipRootViewSwiftSource, /await store\.capturePhoto\(image, batchId: captureSessionBatchId\)/);
+  assert.match(clipRootViewSwiftSource, /captureBatchId: captureSessionBatchId/);
+  assert.match(clipRootViewSwiftSource, /await store\.capturePhoto\(image, batchId: batchId\)/);
   assert.match(clipScannerStoreSwiftSource, /func beginCaptureSession\(\) -> String/);
   assert.match(clipScannerStoreSwiftSource, /let batchId = ScannerProtocol\.makeMessageId\("batch"\)/);
   assert.match(clipScannerStoreSwiftSource, /func endCaptureSession\(id: String\? = nil\)/);
   assert.match(clipScannerStoreSwiftSource, /if let id, activeCaptureBatchId != id \{\s*return\s*\}/);
   assert.match(clipScannerStoreSwiftSource, /func capturePhoto\(_ image: UIImage, batchId: String\? = nil\) async/);
   assert.match(clipScannerStoreSwiftSource, /batchId: batchId \?\? currentCaptureBatchId\(\)/);
+});
+
+test("native and app clip can reopen photo capture into a selected batch", () => {
+  assert.match(scannerStoreSwiftSource, /var resumedPhotoBatchId: String\?/);
+  assert.match(scannerStoreCaptureActionsSwiftSource, /func resumePhotoBatch\(id: String\) \{\s*resumedPhotoBatchId = id\s*\}/);
+  assert.match(scannerStoreCaptureActionsSwiftSource, /func endResumedPhotoBatch\(\) \{\s*resumedPhotoBatchId = nil\s*\}/);
+  assert.match(scannerStoreCaptureActionsSwiftSource, /func currentPhotoBatch\(now: Date\) -> String \{\s*if let resumedPhotoBatchId \{\s*return resumedPhotoBatchId\s*\}/);
+  assert.match(scannerStoreCaptureActionsSwiftSource, /func captureSquarePhoto\(\) async \{\s*let batchId = resumedPhotoBatchId[\s\S]*sendPhoto\(preparedImage, resultId: photoResult\.id, batchId: batchId\)/);
+  assert.match(scannerStoreCaptureActionsSwiftSource, /resultId: id,\s*batchId: result\.batchId,\s*filename: "volt-photo-resend/);
+  assert.match(scannerViewSwiftSource, /private var capturePhotoBatches: \[CapturePhotoBatch\]/);
+  assert.match(scannerViewSwiftSource, /Label\("Add Photos", systemImage: "plus\.viewfinder"\)/);
+  assert.match(scannerViewSwiftSource, /accessibilityLabel\("Add photos to \\\(batch\.title\) from/);
+  assert.match(scannerViewSwiftSource, /store\.activeMode = \.photo\s*store\.resumePhotoBatch\(id: batch\.id\)\s*isCaptureSessionPresented = true/);
+  assert.match(scannerViewSwiftSource, /onDismiss: \{\s*store\.endResumedPhotoBatch\(\)\s*\}/);
+  assert.match(scannerViewSwiftSource, /private func startCapture\(\) \{[\s\S]*store\.endResumedPhotoBatch\(\)/);
+  assert.doesNotMatch(captureSessionViewSwiftSource, /\.onAppear \{\s*store\.activeMode =/);
+
+  assert.match(clipScannerStoreSwiftSource, /func resumeCaptureSession\(batchId: String\) -> String \{\s*activeCaptureBatchId = batchId\s*return batchId\s*\}/);
+  assert.match(clipRootViewSwiftSource, /Label\("Add Photos", systemImage: "plus\.viewfinder"\)/);
+  assert.match(clipRootViewSwiftSource, /store\.activeCaptureMode = \.photo\s*captureSessionBatchId = store\.resumeCaptureSession\(batchId: batch\.id\)\s*isCaptureSessionPresented = true/);
+  assert.match(clipRootViewSwiftSource, /let batchId = captureBatchId[\s\S]*onCaptureImage\(image, mode, batchId\)/);
+  assert.match(clipRootViewSwiftSource, /store\.activeCaptureMode = \.ocr\s*captureSessionBatchId = store\.beginCaptureSession\(\)/);
+  assert.doesNotMatch(clipRootViewSwiftSource, /\.onAppear \{\s*activeMode = \.ocr/);
 });
 
 test("app clip photo mode viewfinder stays edge-to-edge while capture status changes", () => {
@@ -948,7 +972,7 @@ test("app clip OCR target dialog shares cleanup and styling with the main app", 
 
 test("app clip capture opens in OCR and keeps capture and upload photo lists separate", () => {
   assert.match(clipScannerStoreSwiftSource, /var activeCaptureMode: CaptureMode = \.ocr/);
-  assert.match(clipRootViewSwiftSource, /\.onAppear \{\s*activeMode = \.ocr/);
+  assert.match(clipRootViewSwiftSource, /store\.activeCaptureMode = \.ocr\s*captureSessionBatchId = store\.beginCaptureSession\(\)/);
   assert.match(clipRootViewSwiftSource, /let capturePhotos = store\.photos\.filter \{ \$0\.source == \.capture \}/);
   assert.match(clipRootViewSwiftSource, /ClipCapturePhotoBatchesSection\(/);
   assert.match(clipRootViewSwiftSource, /let uploadPhotos = store\.photos\.filter \{ \$0\.source == \.upload \}/);
@@ -962,6 +986,8 @@ test("app clip captured photos are grouped, previewable, and removable after lea
   assert.match(clipRootViewSwiftSource, /let grouped = Dictionary\(grouping: capturePhotos\) \{ photo in\s*photo\.batchId \?\? photo\.id\.uuidString\s*\}/);
   assert.match(clipRootViewSwiftSource, /\.sheet\(item: \$previewedPhoto\)/);
   assert.match(clipRootViewSwiftSource, /private struct ClipCapturePhotoBatchCard: View/);
+  assert.match(clipRootViewSwiftSource, /isExpanded \? batch\.photos : Array\(batch\.photos\.suffix\(4\)\)/);
+  assert.match(clipRootViewSwiftSource, /accessibilityLabel\("Add photos to \\\(batch\.title\) from/);
   assert.match(clipRootViewSwiftSource, /private struct ClipCapturePhotoThumbnail: View/);
   assert.match(clipRootViewSwiftSource, /private struct ClipPhotoPreviewSheet: View/);
   assert.match(clipRootViewSwiftSource, /store\.removePhoto\(id: photo\.id\)/);

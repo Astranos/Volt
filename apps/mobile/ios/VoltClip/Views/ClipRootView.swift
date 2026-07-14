@@ -140,6 +140,14 @@ private struct ClipCaptureView: View {
                     ClipCapturePhotoBatchesSection(
                         batches: capturePhotoBatches,
                         expandedBatchIds: expandedBatchIds,
+                        canAddPhotos: store.isConnected,
+                        onAddPhotos: { batch in
+                            guard store.isConnected else { return }
+                            store.clearOcrReview()
+                            store.activeCaptureMode = .photo
+                            captureSessionBatchId = store.resumeCaptureSession(batchId: batch.id)
+                            isCaptureSessionPresented = true
+                        },
                         onToggleExpanded: { batch in
                             if expandedBatchIds.contains(batch.id) {
                                 expandedBatchIds.remove(batch.id)
@@ -186,17 +194,18 @@ private struct ClipCaptureView: View {
                     ocrReviewImage: store.ocrReviewImage,
                     ocrTextRegions: store.ocrTextRegions,
                     statusText: captureStatusText,
+                    captureBatchId: captureSessionBatchId,
                     onBarcodeScan: { scan in
                         store.handleBarcodeScan(scan)
                     },
-                    onCaptureImage: { image, mode in
+                    onCaptureImage: { image, mode, batchId in
                         switch mode {
                         case .ocr:
                             Task { await store.recognizeText(in: image) }
                         case .barcode:
                             break
                         case .photo, .dictation:
-                            Task { await store.capturePhoto(image, batchId: captureSessionBatchId) }
+                            Task { await store.capturePhoto(image, batchId: batchId) }
                         }
                     },
                     onSendLatest: {
@@ -224,6 +233,8 @@ private struct ClipCaptureView: View {
                     disabledHint: store.targetHint,
                     action: {
                         guard store.isConnected else { return }
+                        store.clearOcrReview()
+                        store.activeCaptureMode = .ocr
                         captureSessionBatchId = store.beginCaptureSession()
                         isCaptureSessionPresented = true
                     }
@@ -789,6 +800,8 @@ private struct ClipPhotoBatch: Identifiable, Equatable {
 private struct ClipCapturePhotoBatchesSection: View {
     let batches: [ClipPhotoBatch]
     let expandedBatchIds: Set<String>
+    let canAddPhotos: Bool
+    let onAddPhotos: (ClipPhotoBatch) -> Void
     let onToggleExpanded: (ClipPhotoBatch) -> Void
     let onPreview: (ClipScannerStore.ClipPhoto) -> Void
     let onDeletePhoto: (ClipScannerStore.ClipPhoto) -> Void
@@ -824,6 +837,10 @@ private struct ClipCapturePhotoBatchesSection: View {
                         ClipCapturePhotoBatchCard(
                             batch: batch,
                             isExpanded: expandedBatchIds.contains(batch.id),
+                            canAddPhotos: canAddPhotos,
+                            onAddPhotos: {
+                                onAddPhotos(batch)
+                            },
                             onToggleExpanded: {
                                 onToggleExpanded(batch)
                             },
@@ -843,13 +860,15 @@ private struct ClipCapturePhotoBatchesSection: View {
 private struct ClipCapturePhotoBatchCard: View {
     let batch: ClipPhotoBatch
     let isExpanded: Bool
+    let canAddPhotos: Bool
+    let onAddPhotos: () -> Void
     let onToggleExpanded: () -> Void
     let onPreview: (ClipScannerStore.ClipPhoto) -> Void
     let onDeletePhoto: (ClipScannerStore.ClipPhoto) -> Void
     let onDeleteBatch: () -> Void
 
     private var visiblePhotos: [ClipScannerStore.ClipPhoto] {
-        isExpanded ? batch.photos : Array(batch.photos.prefix(4))
+        isExpanded ? batch.photos : Array(batch.photos.suffix(4))
     }
 
     var body: some View {
@@ -858,6 +877,7 @@ private struct ClipCapturePhotoBatchCard: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(batch.title)
                         .font(.headline)
+                        .accessibilityAddTraits(.isHeader)
                     Text(batch.latestCapturedAt, format: .dateTime.hour().minute())
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -894,6 +914,15 @@ private struct ClipCapturePhotoBatchCard: View {
                     )
                 }
             }
+
+            Button(action: onAddPhotos) {
+                Label("Add Photos", systemImage: "plus.viewfinder")
+                    .font(.subheadline.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(!canAddPhotos)
+            .accessibilityLabel("Add photos to \(batch.title) from \(batch.latestCapturedAt.formatted(date: .abbreviated, time: .shortened))")
 
             if batch.photos.count > 4 {
                 Button(action: onToggleExpanded) {
@@ -1448,8 +1477,9 @@ private struct ClipCaptureSessionView: View {
     let ocrReviewImage: UIImage?
     let ocrTextRegions: [RecognizedTextRegion]
     let statusText: String
+    let captureBatchId: String?
     let onBarcodeScan: (ClipBarcodeScan) -> Void
-    let onCaptureImage: (UIImage, CaptureMode) -> Void
+    let onCaptureImage: (UIImage, CaptureMode, String?) -> Void
     let onSendLatest: () -> Void
     let onSendRecognizedText: (String) -> Void
     let onClearOcrReview: () -> Void
@@ -1695,7 +1725,6 @@ private struct ClipCaptureSessionView: View {
             .interactiveDismissDisabled(store.isPairing)
         }
         .onAppear {
-            activeMode = .ocr
             cameraService.onScan = { scan in
                 if activeMode == .barcode || scan.isQRCode {
                     onBarcodeScan(scan)
@@ -1794,6 +1823,7 @@ private struct ClipCaptureSessionView: View {
     private func captureCurrentFrame() {
         guard !isCapturingPhoto else { return }
         let mode = activeMode
+        let batchId = captureBatchId
         if mode == .barcode {
             if let latestScan = cameraService.latestScan {
                 captureError = nil
@@ -1815,7 +1845,7 @@ private struct ClipCaptureSessionView: View {
                 if mode == .ocr {
                     cameraService.stop()
                 }
-                onCaptureImage(image, mode)
+                onCaptureImage(image, mode, batchId)
                 captureNotice = successNotice(for: mode)
             } catch {
                 captureError = error.localizedDescription

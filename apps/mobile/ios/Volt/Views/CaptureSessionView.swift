@@ -143,7 +143,6 @@ struct CaptureSessionView: View {
             }
         }
         .onAppear {
-            store.activeMode = ScreenshotScenario.current?.initialCaptureMode ?? .ocr
             if ScreenshotScenario.current == .captureReviewSend,
                let region = store.ocrTextRegions.first {
                 selectedTextRegion = region

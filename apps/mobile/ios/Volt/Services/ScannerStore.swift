@@ -96,6 +96,7 @@ final class ScannerStore {
     var lastBarcodeValue: String?
     var lastBarcodeSentAt: Date?
     var photoBatch: (id: String, expiresAt: Date)?
+    var resumedPhotoBatchId: String?
     var dictationSessionId: String?
     var lastDictationPartialText = ""
     var dictationStartToken: UUID?

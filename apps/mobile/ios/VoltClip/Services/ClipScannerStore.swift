@@ -313,6 +313,12 @@ final class ClipScannerStore {
         return batchId
     }
 
+    @discardableResult
+    func resumeCaptureSession(batchId: String) -> String {
+        activeCaptureBatchId = batchId
+        return batchId
+    }
+
     func endCaptureSession(id: String? = nil) {
         if let id, activeCaptureBatchId != id {
             return
