@@ -54,6 +54,7 @@ struct RootView: View {
         .onChange(of: scenePhase) { _, newValue in
             if newValue == .active && !ScreenshotScenario.isEnabled {
                 store.cloudWorkspace.requestSync()
+                Task { await store.refreshDeliveryStatuses() }
             }
         }
     }

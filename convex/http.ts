@@ -225,6 +225,18 @@ const queueMobileCursorDelivery = makeFunctionReference<
   },
   { deliveryId: string; idempotent: boolean; state: "pending" | "delivered" | "failed" }
 >("cloudWorkspace:queueCursorDelivery");
+const cursorDeliveryStatus = makeFunctionReference<
+  "query",
+  { deviceId: string; deviceSecret: string; deliveryIds: string[] },
+  {
+    statuses: Array<{
+      deliveryId: string;
+      state: "pending" | "delivered" | "failed";
+      errorCode?: string;
+      deliveredAt?: number;
+    }>;
+  }
+>("cloudWorkspace:cursorDeliveryStatus");
 const putCloudBatch = makeFunctionReference<
   "mutation",
   {
@@ -649,6 +661,21 @@ const mobileCursorDeliveryQueueHandler = httpAction(async (ctx, request) => {
   }));
 });
 
+const mobileCursorDeliveryStatusHandler = httpAction(async (ctx, request) => {
+  if (request.method === "OPTIONS") return emptyResponse();
+  const body = await signalBodyFromRequest(request);
+  const deviceId = stringFrom(body.deviceId, 120);
+  const deviceSecret = stringFrom(body.deviceSecret, 240);
+  const rawDeliveryIds = objectFrom(body).deliveryIds;
+  const deliveryIds = Array.isArray(rawDeliveryIds)
+    ? rawDeliveryIds
+      .filter((item): item is string => typeof item === "string" && item.length <= 160)
+      .slice(0, 100)
+    : [];
+  if (!deviceId || !deviceSecret) return jsonResponse({ error: "Missing device credentials" }, 400);
+  return jsonResponse(await ctx.runQuery(cursorDeliveryStatus, { deviceId, deviceSecret, deliveryIds }));
+});
+
 const workspaceEnrollmentHandler = httpAction(async (ctx, request) => {
   if (request.method === "OPTIONS") return emptyResponse();
   if (!(await ctx.auth.getUserIdentity())) return jsonResponse({ error: "Clerk authentication required" }, 401);
@@ -853,6 +880,8 @@ http.route({ path: "/api/mobile/cursor-target", method: "POST", handler: mobileC
 http.route({ path: "/api/mobile/cursor-target", method: "OPTIONS", handler: mobileCursorTargetHandler });
 http.route({ path: "/api/mobile/deliveries/queue", method: "POST", handler: mobileCursorDeliveryQueueHandler });
 http.route({ path: "/api/mobile/deliveries/queue", method: "OPTIONS", handler: mobileCursorDeliveryQueueHandler });
+http.route({ path: "/api/mobile/deliveries/status", method: "POST", handler: mobileCursorDeliveryStatusHandler });
+http.route({ path: "/api/mobile/deliveries/status", method: "OPTIONS", handler: mobileCursorDeliveryStatusHandler });
 http.route({ path: "/api/mobile/outbox/sync", method: "POST", handler: mobileOutboxSyncHandler });
 http.route({ path: "/api/mobile/outbox/sync", method: "OPTIONS", handler: mobileOutboxSyncHandler });
 http.route({ path: "/api/mobile/photos/upload-url", method: "POST", handler: mobilePhotoUploadHandler });

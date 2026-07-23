@@ -150,7 +150,7 @@ Changes:
 - Stored lightweight photo metadata in extension storage to avoid quota failures.
 - Normalized UPC-A scans that arrive as EAN-13 with a leading zero.
 
-Historical note: this release still referred to App Clip paths in release copy. The active architecture is now full-app WebRTC-only mobile scanner; App Clip/object-transfer work is historical.
+Historical note: this release still referred to App Clip paths in release copy. At the time, the active architecture for the full app was WebRTC-only mobile scanner, with App Clip/object-transfer work treated as historical; the full app has since moved to the account-cloud-first workspace described in ADR 0004, and only the App Clip still uses WebRTC.
 
 ### v1.0.29
 

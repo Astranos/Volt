@@ -1061,15 +1061,58 @@ export const acknowledgeCursorDelivery = mutation({
 
     const now = Date.now();
     const attempts = delivery.attempts + 1;
+    // A delivered acknowledgement that arrives after expiry is recorded as
+    // failed/expired so a soft-expired status report can never later flip to
+    // delivered (the phone already showed "failed").
+    const expired = args.state === "delivered" && delivery.expiresAt <= now;
+    const effectiveState = expired ? "failed" : args.state;
     await ctx.db.patch(delivery._id, {
-      state: args.state,
+      state: effectiveState,
       attempts,
-      ...(args.state === "delivered"
+      ...(effectiveState === "delivered"
         ? { deliveredAt: now, errorCode: undefined }
-        : { errorCode: args.errorCode }),
+        : { errorCode: expired ? "expired" : args.errorCode }),
       updatedAt: now,
     });
-    return { state: args.state, idempotent: false, attempts };
+    return { state: effectiveState, idempotent: false, attempts };
+  },
+});
+
+const CURSOR_DELIVERY_STATUS_LIMIT = 100;
+
+export const cursorDeliveryStatus = query({
+  args: { ...credentialArgs, deliveryIds: v.array(v.string()) },
+  handler: async (ctx, args) => {
+    const { workspace, device } = await requireDevicePrincipal(ctx, args);
+    if (!device) throw new ConvexError("Device required");
+    const deliveryIds = [...new Set(args.deliveryIds)].slice(0, CURSOR_DELIVERY_STATUS_LIMIT);
+    const now = Date.now();
+    const statuses: Array<{
+      deliveryId: string;
+      state: "pending" | "delivered" | "failed";
+      errorCode?: string;
+      deliveredAt?: number;
+    }> = [];
+    for (const deliveryId of deliveryIds) {
+      const delivery = await ctx.db
+        .query("cursorDeliveries")
+        .withIndex("by_workspaceId_and_deliveryId", (q) =>
+          q.eq("workspaceId", workspace._id).eq("deliveryId", deliveryId),
+        )
+        .unique();
+      if (!delivery || delivery.sourceDeviceId !== device.deviceId) continue;
+      if (delivery.state === "pending" && delivery.expiresAt <= now) {
+        statuses.push({ deliveryId, state: "failed", errorCode: "expired" });
+        continue;
+      }
+      statuses.push({
+        deliveryId,
+        state: delivery.state,
+        ...(delivery.errorCode !== undefined ? { errorCode: delivery.errorCode } : {}),
+        ...(delivery.deliveredAt !== undefined ? { deliveredAt: delivery.deliveredAt } : {}),
+      });
+    }
+    return { statuses };
   },
 });
 

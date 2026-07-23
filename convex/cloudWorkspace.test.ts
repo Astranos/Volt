@@ -124,6 +124,18 @@ const acknowledgeCursorDelivery = makeFunctionReference<
   },
   { state: "pending" | "delivered" | "failed"; idempotent: boolean; attempts: number }
 >("cloudWorkspace:acknowledgeCursorDelivery");
+const cursorDeliveryStatus = makeFunctionReference<
+  "query",
+  DeviceCredential & { deliveryIds: string[] },
+  {
+    statuses: Array<{
+      deliveryId: string;
+      state: "pending" | "delivered" | "failed";
+      errorCode?: string;
+      deliveredAt?: number;
+    }>;
+  }
+>("cloudWorkspace:cursorDeliveryStatus");
 const deleteWorkspaceResults = makeFunctionReference<
   "mutation",
   { resultIds: string[] },
@@ -554,6 +566,215 @@ describe("cloud scanner workspace", () => {
       state: "failed",
       errorCode: "target-rebound",
     });
+  });
+
+  test("reports cursor delivery status only for the calling device's own workspace deliveries", async () => {
+    const t = convexTest(schema, modules);
+    const alice = t.withIdentity({ subject: "status-owner" });
+    const bob = t.withIdentity({ subject: "status-other-owner" });
+    const phone = await alice.mutation(bootstrapMobileDevice, {
+      installationId: "status-phone",
+      label: "Alice phone",
+    });
+    const otherPhone = await alice.mutation(bootstrapMobileDevice, {
+      installationId: "status-phone-2",
+      label: "Alice second phone",
+    });
+    await alice.mutation(registerComputer, {
+      installationId: "status-chrome",
+      label: "Alice Chrome",
+      capabilities: ["cursor-insertion"],
+    });
+    const credential = { deviceId: phone.deviceId, deviceSecret: phone.deviceSecret };
+
+    await t.mutation(putBatch, {
+      ...credential,
+      batchId: "status-batch",
+      clientCreatedAt: Date.now(),
+      results: [result("delivered-result"), result("failed-result"), result("pending-result")],
+    });
+    for (const [deliveryId, resultId] of [
+      ["delivered-delivery", "delivered-result"],
+      ["failed-delivery", "failed-result"],
+      ["pending-delivery", "pending-result"],
+    ]) {
+      await t.mutation(queueCursorDelivery, {
+        ...credential,
+        deliveryId,
+        resultId,
+        targetDeviceId: "status-chrome",
+        kind: "text",
+        text: resultId,
+        clientCreatedAt: Date.now(),
+      });
+    }
+    await alice.mutation(acknowledgeCursorDelivery, {
+      installationId: "status-chrome",
+      deliveryId: "delivered-delivery",
+      state: "delivered",
+    });
+    await alice.mutation(acknowledgeCursorDelivery, {
+      installationId: "status-chrome",
+      deliveryId: "failed-delivery",
+      state: "failed",
+      errorCode: "no-editable-field",
+    });
+
+    // Another device in the same workspace queues its own delivery.
+    const otherCredential = { deviceId: otherPhone.deviceId, deviceSecret: otherPhone.deviceSecret };
+    await t.mutation(putBatch, {
+      ...otherCredential,
+      batchId: "status-other-device-batch",
+      clientCreatedAt: Date.now(),
+      results: [result("other-device-result")],
+    });
+    await t.mutation(queueCursorDelivery, {
+      ...otherCredential,
+      deliveryId: "other-device-delivery",
+      resultId: "other-device-result",
+      targetDeviceId: "status-chrome",
+      kind: "text",
+      text: "other-device-result",
+      clientCreatedAt: Date.now(),
+    });
+
+    // Another workspace queues a delivery whose id collides by name only.
+    const bobPhone = await bob.mutation(bootstrapMobileDevice, {
+      installationId: "status-bob-phone",
+      label: "Bob phone",
+    });
+    await bob.mutation(registerComputer, {
+      installationId: "status-bob-chrome",
+      label: "Bob Chrome",
+      capabilities: ["cursor-insertion"],
+    });
+    const bobCredential = { deviceId: bobPhone.deviceId, deviceSecret: bobPhone.deviceSecret };
+    await t.mutation(putBatch, {
+      ...bobCredential,
+      batchId: "status-bob-batch",
+      clientCreatedAt: Date.now(),
+      results: [result("delivered-result")],
+    });
+    await t.mutation(queueCursorDelivery, {
+      ...bobCredential,
+      deliveryId: "delivered-delivery",
+      resultId: "delivered-result",
+      targetDeviceId: "status-bob-chrome",
+      kind: "text",
+      text: "delivered-result",
+      clientCreatedAt: Date.now(),
+    });
+
+    const { statuses } = await t.query(cursorDeliveryStatus, {
+      ...credential,
+      deliveryIds: [
+        "delivered-delivery",
+        "failed-delivery",
+        "pending-delivery",
+        "other-device-delivery",
+        "unknown-delivery",
+      ],
+    });
+    const byId = Object.fromEntries(statuses.map((status) => [status.deliveryId, status]));
+    expect(statuses).toHaveLength(3);
+    expect(byId["delivered-delivery"]).toMatchObject({ state: "delivered" });
+    expect(byId["delivered-delivery"].deliveredAt).toBeTypeOf("number");
+    expect(byId["delivered-delivery"].errorCode).toBeUndefined();
+    expect(byId["failed-delivery"]).toMatchObject({ state: "failed", errorCode: "no-editable-field" });
+    expect(byId["pending-delivery"]).toMatchObject({ state: "pending" });
+    expect(byId["other-device-delivery"]).toBeUndefined();
+    expect(byId["unknown-delivery"]).toBeUndefined();
+  });
+
+  test("marks an expired but still-pending cursor delivery as failed with an expired error code", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-23T12:00:00Z"));
+    const t = convexTest(schema, modules);
+    const alice = t.withIdentity({ subject: "expiry-owner" });
+    const phone = await alice.mutation(bootstrapMobileDevice, {
+      installationId: "expiry-phone",
+      label: "Alice phone",
+    });
+    await alice.mutation(registerComputer, {
+      installationId: "expiry-chrome",
+      label: "Alice Chrome",
+      capabilities: ["cursor-insertion"],
+    });
+    const credential = { deviceId: phone.deviceId, deviceSecret: phone.deviceSecret };
+    await t.mutation(putBatch, {
+      ...credential,
+      batchId: "expiry-batch",
+      clientCreatedAt: Date.now(),
+      results: [result("expiry-result")],
+    });
+    await t.mutation(queueCursorDelivery, {
+      ...credential,
+      deliveryId: "expiry-delivery",
+      resultId: "expiry-result",
+      targetDeviceId: "expiry-chrome",
+      kind: "text",
+      text: "expiry-result",
+      clientCreatedAt: Date.now(),
+    });
+
+    vi.advanceTimersByTime(CURSOR_DELIVERY_TTL_MS + 1);
+    const { statuses } = await t.query(cursorDeliveryStatus, {
+      ...credential,
+      deliveryIds: ["expiry-delivery"],
+    });
+    expect(statuses).toEqual([{ deliveryId: "expiry-delivery", state: "failed", errorCode: "expired" }]);
+  });
+
+  test("records a delivered acknowledgement after expiry as failed/expired", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-23T12:00:00Z"));
+    const t = convexTest(schema, modules);
+    const alice = t.withIdentity({ subject: "ack-expiry-owner" });
+    const phone = await alice.mutation(bootstrapMobileDevice, {
+      installationId: "ack-expiry-phone",
+      label: "Alice phone",
+    });
+    await alice.mutation(registerComputer, {
+      installationId: "ack-expiry-chrome",
+      label: "Alice Chrome",
+      capabilities: ["cursor-insertion"],
+    });
+    const credential = { deviceId: phone.deviceId, deviceSecret: phone.deviceSecret };
+    await t.mutation(putBatch, {
+      ...credential,
+      batchId: "ack-expiry-batch",
+      clientCreatedAt: Date.now(),
+      results: [result("ack-expiry-result")],
+    });
+    await t.mutation(queueCursorDelivery, {
+      ...credential,
+      deliveryId: "ack-expiry-delivery",
+      resultId: "ack-expiry-result",
+      targetDeviceId: "ack-expiry-chrome",
+      kind: "text",
+      text: "ack-expiry-result",
+      clientCreatedAt: Date.now(),
+    });
+
+    // The extension delivers after the soft-expiry window has already passed.
+    vi.advanceTimersByTime(CURSOR_DELIVERY_TTL_MS + 1);
+    const ack = await alice.mutation(acknowledgeCursorDelivery, {
+      installationId: "ack-expiry-chrome",
+      deliveryId: "ack-expiry-delivery",
+      state: "delivered",
+    });
+    expect(ack).toMatchObject({ state: "failed", idempotent: false });
+
+    const stored = await t.run((ctx) => ctx.db.query("cursorDeliveries").unique());
+    expect(stored).toMatchObject({ state: "failed", errorCode: "expired" });
+    expect(stored?.deliveredAt).toBeUndefined();
+
+    // The phone's status endpoint now agrees: the delivery can never be delivered.
+    const { statuses } = await t.query(cursorDeliveryStatus, {
+      ...credential,
+      deliveryIds: ["ack-expiry-delivery"],
+    });
+    expect(statuses).toEqual([{ deliveryId: "ack-expiry-delivery", state: "failed", errorCode: "expired" }]);
   });
 
   test("bootstraps only iOS credentials, rotates them, and rejects cross-workspace rotation", async () => {

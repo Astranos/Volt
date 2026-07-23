@@ -140,6 +140,52 @@ test("cloud cursor target and per-result delivery are optional downstream work",
   assert.match(scannerViewSource, /"No computer"/);
 });
 
+test("queued cursor deliveries are tracked and polled for terminal status feedback", () => {
+  assert.match(cloudAPISource, /api\/mobile\/deliveries\/status/);
+  assert.match(cloudAPISource, /func cursorDeliveryStatus\(_ request: CursorDeliveryStatusRequest\)/);
+  assert.match(contractsSource, /struct CursorDeliveryStatusRequest/);
+  assert.match(contractsSource, /let deliveryIds: \[String\]/);
+  assert.match(contractsSource, /struct CursorDeliveryStatus/);
+  assert.match(contractsSource, /var isTerminal: Bool \{ state == "delivered" \|\| state == "failed" \}/);
+
+  assert.match(workspaceSource, /private var inFlightDeliveries: \[String: InFlightDelivery\] = \[:\]/);
+  assert.match(workspaceSource, /private struct InFlightDelivery: Equatable, Sendable \{[\s\S]*?let resultId: UUID[\s\S]*?let giveUpAt: Date/);
+  assert.match(workspaceSource, /func trackCursorDelivery\(deliveryId: String, resultId: UUID\)/);
+  assert.match(workspaceSource, /giveUpAt: Date\.now\.addingTimeInterval\(Self\.deliveryGiveUpInterval\)/);
+  assert.match(workspaceSource, /func pollCursorDeliveryStatuses\(\) async -> \[CursorDeliveryResolution\]/);
+  assert.match(workspaceSource, /api\.cursorDeliveryStatus\(/);
+  assert.match(workspaceSource, /for status in response\.statuses where status\.isTerminal/);
+  assert.match(workspaceSource, /inFlightDeliveries\.removeValue\(forKey: status\.deliveryId\)/);
+
+  // F3: per-delivery give-up deadline pruning resolves lingering ids as expired.
+  assert.match(workspaceSource, /inFlightDeliveries\.filter\(\{ \$0\.value\.giveUpAt <= now \}\)\.keys/);
+  assert.match(workspaceSource, /errorCode: "expired"/);
+  // F4: overlapping polls are coalesced behind a MainActor Bool guard.
+  assert.match(workspaceSource, /private var isPollingDeliveries = false/);
+  assert.match(workspaceSource, /guard !isPollingDeliveries else \{ return resolutions \}/);
+  // F5: the client caps each poll to the server's 100-id slice.
+  assert.match(workspaceSource, /inFlightDeliveries\.keys\.prefix\(Self\.deliveryStatusBatchLimit\)/);
+  // F2: sign-out/revocation buffers .saved resolutions drained before the guard.
+  assert.match(workspaceSource, /private var bufferedDeliveryResolutions: \[CursorDeliveryResolution\] = \[\]/);
+  assert.match(workspaceSource, /var resolutions = drainBufferedResolutions\(\)/);
+  assert.match(workspaceSource, /private func bufferClearedDeliveryTracking\(\)/);
+  const revokeLocal = workspaceSource.match(/func revokeLocalCredential\(\)[\s\S]*?\n    \}/)?.[0] ?? "";
+  assert.match(revokeLocal, /bufferClearedDeliveryTracking\(\)/);
+  const pauseSignOut = workspaceSource.match(/private func pauseForSignOut\(\)[\s\S]*?\n    \}/)?.[0] ?? "";
+  assert.match(pauseSignOut, /bufferClearedDeliveryTracking\(\)/);
+
+  const queueInsertion = captureSource.match(/private func queueCursorInsertion[\s\S]*?^    \}/m)?.[0] ?? "";
+  assert.match(queueInsertion, /cloudWorkspace\.trackCursorDelivery\(deliveryId: deliveryId, resultId: result\.id\)/);
+  assert.match(captureSource, /func refreshDeliveryStatuses\(\) async/);
+  assert.match(captureSource, /await cloudWorkspace\.pollCursorDeliveryStatuses\(\)/);
+  assert.match(captureSource, /case "expired":/);
+  assert.match(captureSource, /case "no-editable-field":/);
+  assert.match(captureSource, /case "target-rebound":/);
+
+  assert.match(scannerViewSource, /await store\.refreshDeliveryStatuses\(\)/);
+  assert.match(rootSource, /await store\.refreshDeliveryStatuses\(\)/);
+});
+
 test("full-app capture and photo selection are not gated on WebRTC", () => {
   assert.match(scannerViewSource, /ScannerBottomActionAccessory\([\s\S]*isEnabled: true/);
   assert.doesNotMatch(scannerViewSource, /guard store\.connectionStatus\.isConnected/);

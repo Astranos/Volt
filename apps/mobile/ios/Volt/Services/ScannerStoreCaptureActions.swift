@@ -220,6 +220,7 @@ extension ScannerStore {
         )
         switch queued {
         case true:
+            cloudWorkspace.trackCursorDelivery(deliveryId: deliveryId, resultId: result.id)
             statusText = result.kind == .barcode ? "Barcode insertion pending" : "Text insertion pending"
             targetHint = cloudWorkspace.selectedComputer.map { "Queued for \($0.label)." } ?? "Insertion queued."
         case false:
@@ -277,6 +278,38 @@ extension ScannerStore {
     func updateResultDeliveryState(id: ScanResult.ID, state: ScanResult.DeliveryState) {
         guard let index = results.firstIndex(where: { $0.id == id }) else { return }
         results[index].deliveryState = state
+    }
+
+    func refreshDeliveryStatuses() async {
+        for resolution in await cloudWorkspace.pollCursorDeliveryStatuses() {
+            applyDeliveryResolution(resolution)
+        }
+    }
+
+    private func applyDeliveryResolution(_ resolution: CursorDeliveryResolution) {
+        guard let result = results.first(where: { $0.id == resolution.resultId }),
+              result.deliveryState == .sending
+        else { return }
+        updateResultDeliveryState(id: resolution.resultId, state: resolution.state)
+        switch resolution.state {
+        case .sent:
+            statusText = "Computer insertion complete"
+        case .failed:
+            statusText = cursorDeliveryFailureMessage(for: resolution.errorCode)
+            playCaptureFailureFeedback()
+            showCaptureDeliveryToast(for: result, state: .failed)
+        case .saved, .sending:
+            break
+        }
+    }
+
+    func cursorDeliveryFailureMessage(for errorCode: String?) -> String {
+        switch errorCode {
+        case "expired": "Insertion expired before a computer accepted it"
+        case "no-editable-field": "No editable field was focused on the computer"
+        case "target-rebound": "The selected computer switched to another account"
+        default: "Computer insertion failed"
+        }
     }
 
     func updatePhotoUploadProgress(batchId: String, prepared: Int, phase: PhotoUploadProgress.Phase) {

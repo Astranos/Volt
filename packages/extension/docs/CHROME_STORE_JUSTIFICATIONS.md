@@ -12,7 +12,7 @@
 
 ### alarms
 
-**Justification:** The alarms permission is used to periodically wake the extension's background service worker so the paired mobile scanner can reconnect to a previously authorized Chrome session after Chrome or the mobile app is closed and reopened. The alarm only starts local extension maintenance needed for saved mobile scanner pairings; it does not collect browsing activity or trigger user-facing actions without an existing pairing.
+**Justification:** The alarms permission periodically wakes the extension's background service worker for local scanner maintenance: renewing this Chrome installation's presence as a registered cloud workspace computer, reconnecting a previously authorized WebRTC session for temporary App Clip scanner sessions after Chrome or the mobile app is closed and reopened, enforcing free-tier access session limits, and cleaning up expired downloaded scanner photo file references. It does not collect browsing activity or trigger user-facing actions on its own.
 
 ### bookmarks
 
@@ -48,7 +48,7 @@
 
 ### offscreen
 
-**Justification:** Volt uses an offscreen document for the DOM-capable background context required by Clerk session synchronization and WebRTC mobile-scanner signaling and connection support under Manifest V3. It is not used to display hidden ads, track browsing, or execute remote code.
+**Justification:** Volt uses an offscreen document for the DOM-capable background context required by Clerk session synchronization, the reactive Convex connection that syncs the signed-in user's Scanner Results and cursor deliveries, and WebRTC mobile-scanner signaling and connection support under Manifest V3. It is not used to display hidden ads, track browsing, or execute remote code.
 
 ### remote code
 
@@ -72,7 +72,7 @@
 
 ### downloads
 
-**Justification:** The downloads permission saves photos explicitly captured and sent from the paired Volt mobile app into the user's Downloads folder and supports other user-requested exports. Volt does not download files without a user-initiated scanner or export action.
+**Justification:** The downloads permission saves photos explicitly captured on the signed-in Volt mobile app and synchronized to the user's Volt account workspace into the user's Downloads folder and supports other user-requested exports. Volt does not download files without a user-initiated scanner or export action.
 
 ### favicon
 

@@ -17,6 +17,17 @@ struct CaptureOwnershipConflict: Identifiable, Equatable {
     var count: Int { recordIds.count }
 }
 
+struct CursorDeliveryResolution: Equatable, Sendable {
+    let resultId: UUID
+    let state: ScanResult.DeliveryState
+    let errorCode: String?
+}
+
+private struct InFlightDelivery: Equatable, Sendable {
+    let resultId: UUID
+    let giveUpAt: Date
+}
+
 @MainActor
 @Observable
 final class CloudWorkspaceStore {
@@ -37,6 +48,9 @@ final class CloudWorkspaceStore {
     @ObservationIgnored private var syncTask: Task<Void, Never>?
     @ObservationIgnored private var retryTask: Task<Void, Never>?
     @ObservationIgnored private var syncRequestedWhileDraining = false
+    @ObservationIgnored private var inFlightDeliveries: [String: InFlightDelivery] = [:]
+    @ObservationIgnored private var bufferedDeliveryResolutions: [CursorDeliveryResolution] = []
+    @ObservationIgnored private var isPollingDeliveries = false
 
     init(
         api: MobileCloudAPI = MobileCloudAPIClient(baseURL: AppConfiguration.convexSiteURL),
@@ -245,6 +259,91 @@ final class CloudWorkspaceStore {
         return false
     }
 
+    func trackCursorDelivery(deliveryId: String, resultId: UUID) {
+        inFlightDeliveries[deliveryId] = InFlightDelivery(
+            resultId: resultId,
+            giveUpAt: Date.now.addingTimeInterval(Self.deliveryGiveUpInterval)
+        )
+    }
+
+    func pollCursorDeliveryStatuses() async -> [CursorDeliveryResolution] {
+        // Drain buffered resolutions first — before (and regardless of) the
+        // credential/network guard — so sign-out/revocation clears pending
+        // badges on the next refresh even while signed out.
+        var resolutions = drainBufferedResolutions()
+
+        // Give up on deliveries past their deadline (the server TTL is 120s, so
+        // 15 min is generous). This also resolves ids a success response omits
+        // (unknown/other-device) so they cannot linger forever.
+        let now = Date.now
+        let expiredIds = Array(inFlightDeliveries.filter({ $0.value.giveUpAt <= now }).keys)
+        for deliveryId in expiredIds {
+            guard let tracked = inFlightDeliveries.removeValue(forKey: deliveryId) else { continue }
+            resolutions.append(CursorDeliveryResolution(
+                resultId: tracked.resultId,
+                state: .failed,
+                errorCode: "expired"
+            ))
+        }
+
+        // Coalesce overlapping polls (ScannerView's loop + scene-active trigger).
+        guard !isPollingDeliveries else { return resolutions }
+        guard let credential = activeCredential, !inFlightDeliveries.isEmpty else { return resolutions }
+
+        isPollingDeliveries = true
+        defer { isPollingDeliveries = false }
+
+        // Cap the batch at 100 ids (server slices to 100); leftovers poll next round.
+        let deliveryIds = Array(inFlightDeliveries.keys.prefix(Self.deliveryStatusBatchLimit))
+        do {
+            let response = try await api.cursorDeliveryStatus(CursorDeliveryStatusRequest(
+                deviceId: credential.deviceId,
+                deviceSecret: credential.value,
+                deliveryIds: deliveryIds
+            ))
+            lastError = nil
+            for status in response.statuses where status.isTerminal {
+                guard let tracked = inFlightDeliveries.removeValue(forKey: status.deliveryId) else { continue }
+                resolutions.append(CursorDeliveryResolution(
+                    resultId: tracked.resultId,
+                    state: status.state == "delivered" ? .sent : .failed,
+                    errorCode: status.errorCode
+                ))
+            }
+            return resolutions
+        } catch is CancellationError {
+            return resolutions
+        } catch MobileCloudError.credentialRevoked {
+            revokeLocalCredential()
+            lastError = MobileCloudError.credentialRevoked.localizedDescription
+            return resolutions + drainBufferedResolutions()
+        } catch {
+            lastError = error.localizedDescription
+            return resolutions
+        }
+    }
+
+    private func drainBufferedResolutions() -> [CursorDeliveryResolution] {
+        guard !bufferedDeliveryResolutions.isEmpty else { return [] }
+        let drained = bufferedDeliveryResolutions
+        bufferedDeliveryResolutions.removeAll()
+        return drained
+    }
+
+    // Convert cleared in-flight tracking into buffered .saved resolutions so a
+    // sign-out/revocation never leaves a result stuck on .sending. The insertion
+    // outcome is unknown, so .saved just clears the pending badge (no failure toast).
+    private func bufferClearedDeliveryTracking() {
+        for tracked in inFlightDeliveries.values {
+            bufferedDeliveryResolutions.append(CursorDeliveryResolution(
+                resultId: tracked.resultId,
+                state: .saved,
+                errorCode: nil
+            ))
+        }
+        inFlightDeliveries.removeAll()
+    }
+
     func retainConflictingCaptures() {
         guard let conflict = accountSwitchConflict else { return }
         do {
@@ -289,6 +388,7 @@ final class CloudWorkspaceStore {
         lastBootstrappedClerkUserId = nil
         computers = []
         selectedTargetDeviceId = nil
+        bufferClearedDeliveryTracking()
         cancelUploadTasks()
     }
 
@@ -322,6 +422,7 @@ final class CloudWorkspaceStore {
         computers = []
         selectedTargetDeviceId = nil
         accountSwitchConflict = nil
+        bufferClearedDeliveryTracking()
         try? outbox.pauseUploads()
     }
 
@@ -517,6 +618,10 @@ final class CloudWorkspaceStore {
             }
         )
     }
+
+    // Server TTL is 120s; 15 min is a generous client-side give-up window.
+    private static let deliveryGiveUpInterval: TimeInterval = 15 * 60
+    private static let deliveryStatusBatchLimit = 100
 
     private static let installationIdKey = "volt.mobile.installation-id.v1"
 

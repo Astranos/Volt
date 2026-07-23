@@ -118,6 +118,7 @@ struct ScannerView: View {
     private func refreshCloudTargetsPeriodically() async {
         while !Task.isCancelled {
             await store.cloudWorkspace.refreshComputers()
+            await store.refreshDeliveryStatuses()
             try? await Task.sleep(for: .seconds(30))
         }
     }

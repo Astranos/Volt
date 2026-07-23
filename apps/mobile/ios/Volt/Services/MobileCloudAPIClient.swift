@@ -10,6 +10,7 @@ protocol MobileCloudAPI: Sendable {
     func listComputers(_ request: ListCloudComputersRequest) async throws -> ListCloudComputersResponse
     func setCursorTarget(_ request: SetCursorTargetRequest) async throws -> SetCursorTargetResponse
     func queueCursorDelivery(_ request: QueueCursorDeliveryRequest) async throws -> QueueCursorDeliveryResponse
+    func cursorDeliveryStatus(_ request: CursorDeliveryStatusRequest) async throws -> CursorDeliveryStatusResponse
 }
 
 struct MobileCloudAPIClient: MobileCloudAPI {
@@ -22,6 +23,7 @@ struct MobileCloudAPIClient: MobileCloudAPI {
         case listComputers
         case cursorTarget
         case queueCursorDelivery
+        case cursorDeliveryStatus
 
         var path: String {
             switch self {
@@ -33,6 +35,7 @@ struct MobileCloudAPIClient: MobileCloudAPI {
             case .listComputers: "api/mobile/computers/list"
             case .cursorTarget: "api/mobile/cursor-target"
             case .queueCursorDelivery: "api/mobile/deliveries/queue"
+            case .cursorDeliveryStatus: "api/mobile/deliveries/status"
             }
         }
     }
@@ -89,6 +92,10 @@ struct MobileCloudAPIClient: MobileCloudAPI {
 
     func queueCursorDelivery(_ request: QueueCursorDeliveryRequest) async throws -> QueueCursorDeliveryResponse {
         try await post(request, to: .queueCursorDelivery)
+    }
+
+    func cursorDeliveryStatus(_ request: CursorDeliveryStatusRequest) async throws -> CursorDeliveryStatusResponse {
+        try await post(request, to: .cursorDeliveryStatus)
     }
 
     private func post<Request: Encodable & Sendable, Response: Decodable & Sendable>(

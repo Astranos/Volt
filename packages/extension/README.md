@@ -13,11 +13,11 @@ The extension manifest version lives in [wxt.config.ts](wxt.config.ts), and the 
 ## What It Does
 
 - Speeds up buying decisions with market-search shortcuts, eBay sold-price helpers, PriceCharting search, and offer calculation.
-- Speeds up listing by receiving barcodes, OCR text, dictation, and photos from the Volt mobile app.
+- Speeds up listing by reactively syncing barcodes, OCR text, and photos from the signed-in Volt mobile app's account cloud workspace.
 - Command palette popup with tabs, quick links, bookmarks, history, search providers, and Mobile Scanner launch.
 - Custom new-tab page with closed tabs, quick links, bookmarks, and search modes.
 - Unified sidepanel with Mobile Scanner and Offer Calculator.
-- Mobile scanner pairing over WebRTC through Convex-backed signaling.
+- Registers as a Cloud Scanner Workspace computer and, when selected as the live cursor target, receives per-result cursor deliveries over a reactive Convex subscription.
 - eBay sold/completed-listing warning content script.
 - Shopify admin quick-action buttons and product search helpers.
 - UPC highlighter with click-to-copy behavior.
@@ -140,13 +140,16 @@ Current built-in providers include Google, Volt Search, Amazon, Best Buy, eBay s
 
 ## Mobile Scanner
 
-The extension pairs with the full mobile app through short-lived Convex-backed join tokens. After signaling, capture payloads move over WebRTC data channels only. Convex does not relay OCR, barcode, dictation, or photo payloads.
+The full mobile app is cloud-first: every accepted capture belongs to the signed-in Clerk user's Cloud Scanner Workspace and syncs through Convex (metadata) and Cloudflare R2 (photo bytes), with no pairing, WebRTC connection, or Chrome-generated QR required. A signed-in Chrome installation registers as an Enrolled Computer and subscribes to the reactive Convex `workspaceSnapshot` query for Scanner Results. When the phone selects this computer as its live cursor target, the extension also subscribes to `pendingCursorDeliveries` and inserts each result into the last-focused editable field, then acknowledges it back to Convex. The `ConvexClient` lives in the offscreen document and drives both subscriptions whenever the user is signed in.
+
+The App Clip remains a temporary, QR-triggered WebRTC session to one selected Chrome computer. It mirrors its session results into the owning workspace through a short-lived guest cloud grant, but never holds an account Device Credential or Clerk session.
 
 Relevant implementation:
 
-- [src/domain/mobile-scanner-session.ts](src/domain/mobile-scanner-session.ts)
-- [src/domain/mobile-scanner-photo-receiver.ts](src/domain/mobile-scanner-photo-receiver.ts)
-- [src/background/scanner-offscreen.ts](src/background/scanner-offscreen.ts)
+- [src/offscreen/mobile-scanner-offscreen.ts](src/offscreen/mobile-scanner-offscreen.ts)
+- [src/cloud-scanner/workspace-snapshot.ts](src/cloud-scanner/workspace-snapshot.ts)
+- [src/background/cloud-workspace-controller.ts](src/background/cloud-workspace-controller.ts)
+- [src/background/mobile-capture-delivery.ts](src/background/mobile-capture-delivery.ts)
 - [entrypoints/mobile-scanner-popup/main.tsx](entrypoints/mobile-scanner-popup/main.tsx)
 
 ## Release Notes

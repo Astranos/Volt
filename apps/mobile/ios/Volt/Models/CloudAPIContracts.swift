@@ -133,3 +133,22 @@ struct QueueCursorDeliveryResponse: Codable, Sendable {
     let idempotent: Bool
     let state: String
 }
+
+struct CursorDeliveryStatusRequest: Codable, Sendable {
+    let deviceId: String
+    let deviceSecret: String
+    let deliveryIds: [String]
+}
+
+struct CursorDeliveryStatus: Codable, Sendable {
+    let deliveryId: String
+    let state: String
+    let errorCode: String?
+    let deliveredAt: Double?
+
+    var isTerminal: Bool { state == "delivered" || state == "failed" }
+}
+
+struct CursorDeliveryStatusResponse: Codable, Sendable {
+    let statuses: [CursorDeliveryStatus]
+}
