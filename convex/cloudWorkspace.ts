@@ -16,8 +16,14 @@ import {
 export const FREE_CLOUD_RESULT_LIMIT = 100;
 export const FREE_CLOUD_BYTE_LIMIT = 50 * 1024 * 1024;
 export const ENROLLMENT_TTL_MS = 5 * 60 * 1000;
+export const CURSOR_DELIVERY_TTL_MS = 120 * 1000;
 export const PRESIGN_TTL_SECONDS = 5 * 60;
 
+const CANONICAL_CAPABILITIES = new Set([
+  "workspace-results",
+  "cursor-insertion",
+  "photo-download",
+]);
 const deviceKind = v.union(v.literal("ios"), v.literal("chrome"));
 const credentialArgs = { deviceId: v.string(), deviceSecret: v.string() };
 const guestCredentialArgs = { guestCloudGrant: v.string() };
@@ -73,6 +79,22 @@ async function sha256Hex(value: string | Uint8Array) {
   const input = typeof value === "string" ? new TextEncoder().encode(value) : Uint8Array.from(value);
   const digest = await crypto.subtle.digest("SHA-256", input);
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function normalizeCapabilities(capabilities: string[]) {
+  const normalized: string[] = [];
+  const seen = new Set<string>();
+  for (const rawCapability of capabilities) {
+    const trimmed = rawCapability.trim();
+    if (!trimmed) continue;
+    const lowercase = trimmed.toLowerCase();
+    const capability = CANONICAL_CAPABILITIES.has(lowercase) ? lowercase : trimmed;
+    if (seen.has(capability)) continue;
+    seen.add(capability);
+    normalized.push(capability);
+    if (normalized.length === 50) break;
+  }
+  return normalized;
 }
 
 async function workspaceForUser(ctx: DatabaseReaderCtx, clerkUserId: string) {
@@ -309,6 +331,63 @@ export const exchangeEnrollment = mutation({
   },
 });
 
+export const bootstrapMobileDevice = mutation({
+  args: {
+    installationId: v.string(),
+    label: v.string(),
+    existingDeviceId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    if (!args.installationId.trim() || !args.label.trim()) {
+      throw new ConvexError("Installation id and label are required");
+    }
+    const workspace = await requireOrCreateAuthenticatedWorkspace(ctx);
+    const now = Date.now();
+    const existingDeviceId = args.existingDeviceId;
+    if (existingDeviceId) {
+      const existing = await ctx.db
+        .query("workspaceDevices")
+        .withIndex("by_deviceId", (q) => q.eq("deviceId", existingDeviceId))
+        .unique();
+      if (existing && existing.workspaceId !== workspace._id) {
+        throw new ConvexError("Existing device belongs to another workspace");
+      }
+      if (existing && existing.revokedAt === undefined) {
+        const deviceSecret = randomOpaqueSecret();
+        await ctx.db.patch(existing._id, {
+          credentialHash: await sha256Hex(deviceSecret),
+          label: args.label,
+          lastSeenAt: now,
+        });
+        return {
+          deviceId: existing.deviceId,
+          deviceSecret,
+          workspaceId: workspace._id,
+          clerkUserId: workspace.ownerClerkUserId,
+        };
+      }
+    }
+
+    const deviceId = crypto.randomUUID();
+    const deviceSecret = randomOpaqueSecret();
+    await ctx.db.insert("workspaceDevices", {
+      workspaceId: workspace._id,
+      deviceId,
+      credentialHash: await sha256Hex(deviceSecret),
+      kind: "ios",
+      label: args.label,
+      createdAt: now,
+      lastSeenAt: now,
+    });
+    return {
+      deviceId,
+      deviceSecret,
+      workspaceId: workspace._id,
+      clerkUserId: workspace.ownerClerkUserId,
+    };
+  },
+});
+
 export const registerComputer = mutation({
   args: {
     installationId: v.string(),
@@ -354,7 +433,7 @@ export const registerComputer = mutation({
       workspaceId: workspace._id,
       deviceId: args.installationId,
       state: "online" as const,
-      capabilities: args.capabilities ?? [],
+      capabilities: normalizeCapabilities(args.capabilities ?? []),
       lastSeenAt: now,
       expiresAt: now + ttlMs,
     };
@@ -404,7 +483,7 @@ export const updatePresence = mutation({
       workspaceId: workspace._id,
       deviceId: device.deviceId,
       state: "online" as const,
-      capabilities: args.capabilities,
+      capabilities: normalizeCapabilities(args.capabilities),
       lastSeenAt: now,
       expiresAt: now + ttlMs,
     };
@@ -412,6 +491,66 @@ export const updatePresence = mutation({
     else await ctx.db.insert("workspacePresence", value);
     await ctx.db.patch(device._id, { lastSeenAt: now });
     return { expiresAt: now + ttlMs };
+  },
+});
+
+export const listComputersForDevice = query({
+  args: credentialArgs,
+  handler: async (ctx, args) => {
+    const { workspace, device } = await requireDevicePrincipal(ctx, args);
+    if (!device) throw new ConvexError("Device required");
+    const devices = await ctx.db
+      .query("workspaceDevices")
+      .withIndex("by_workspaceId", (q) => q.eq("workspaceId", workspace._id))
+      .collect();
+    const presence = await ctx.db
+      .query("workspacePresence")
+      .withIndex("by_workspaceId", (q) => q.eq("workspaceId", workspace._id))
+      .collect();
+    const byDevice = new Map(presence.map((item) => [item.deviceId, item]));
+    const now = Date.now();
+    return {
+      cursorTargetDeviceId: device.cursorTargetDeviceId ?? null,
+      computers: devices.filter((item) => item.kind === "chrome" && !item.revokedAt).map((item) => {
+        const current = byDevice.get(item.deviceId);
+        return {
+          deviceId: item.deviceId,
+          label: item.label,
+          capabilities: normalizeCapabilities(current?.capabilities ?? []),
+          online: Boolean(current && current.state === "online" && current.expiresAt > now),
+        };
+      }),
+    };
+  },
+});
+
+export const setCursorTarget = mutation({
+  args: { ...credentialArgs, cursorTargetDeviceId: v.union(v.string(), v.null()) },
+  handler: async (ctx, args) => {
+    const { workspace, device } = await requireDevicePrincipal(ctx, args);
+    if (!device || device.kind !== "ios") throw new ConvexError("iOS device credential required");
+    if (args.cursorTargetDeviceId === null) {
+      await ctx.db.patch(device._id, { cursorTargetDeviceId: undefined });
+      return { cursorTargetDeviceId: null };
+    }
+
+    const cursorTargetDeviceId = args.cursorTargetDeviceId;
+    const target = await ctx.db
+      .query("workspaceDevices")
+      .withIndex("by_deviceId", (q) => q.eq("deviceId", cursorTargetDeviceId))
+      .unique();
+    if (!target || target.workspaceId !== workspace._id || target.revokedAt || target.kind !== "chrome") {
+      throw new ConvexError("Target computer not found");
+    }
+    const presence = await ctx.db
+      .query("workspacePresence")
+      .withIndex("by_deviceId", (q) => q.eq("deviceId", target.deviceId))
+      .unique();
+    if (!presence || !normalizeCapabilities(presence.capabilities).includes("cursor-insertion")) {
+      throw new ConvexError("Target computer does not support cursor insertion");
+    }
+    await ctx.db.patch(device._id, { cursorTargetDeviceId: target.deviceId });
+    return { cursorTargetDeviceId: target.deviceId };
   },
 });
 
@@ -735,6 +874,168 @@ export const acknowledgeDeliveryAsComputer = mutation({
       updatedAt: now,
     });
     return { state: args.state };
+  },
+});
+
+export const queueCursorDelivery = mutation({
+  args: {
+    ...credentialArgs,
+    deliveryId: v.string(),
+    resultId: v.string(),
+    targetDeviceId: v.string(),
+    kind: v.union(v.literal("barcode"), v.literal("text")),
+    text: v.string(),
+    format: v.optional(v.string()),
+    clientCreatedAt: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const { workspace, device } = await requireDevicePrincipal(ctx, args);
+    if (!device) throw new ConvexError("Device required");
+    const existing = await ctx.db
+      .query("cursorDeliveries")
+      .withIndex("by_workspaceId_and_deliveryId", (q) =>
+        q.eq("workspaceId", workspace._id).eq("deliveryId", args.deliveryId),
+      )
+      .unique();
+    if (existing) {
+      if (
+        existing.sourceDeviceId !== device.deviceId
+        || existing.resultId !== args.resultId
+        || existing.targetDeviceId !== args.targetDeviceId
+        || existing.kind !== args.kind
+        || existing.text !== args.text
+        || existing.format !== args.format
+        || existing.clientCreatedAt !== args.clientCreatedAt
+      ) {
+        throw new ConvexError("Delivery id conflicts with an existing delivery");
+      }
+      return { deliveryId: existing.deliveryId, idempotent: true, state: existing.state };
+    }
+
+    const result = await ctx.db
+      .query("scanResults")
+      .withIndex("by_workspaceId_and_resultId", (q) =>
+        q.eq("workspaceId", workspace._id).eq("resultId", args.resultId),
+      )
+      .unique();
+    if (
+      !result
+      || result.sourceDeviceId !== device.deviceId
+      || result.deletedAt !== undefined
+      || (result.kind !== "barcode" && result.kind !== "text")
+    ) {
+      throw new ConvexError("Deliverable result not found");
+    }
+    if (result.kind !== args.kind || result.text !== args.text || result.format !== args.format) {
+      throw new ConvexError("Delivery payload does not match the stored result");
+    }
+
+    const target = await ctx.db
+      .query("workspaceDevices")
+      .withIndex("by_deviceId", (q) => q.eq("deviceId", args.targetDeviceId))
+      .unique();
+    if (!target || target.workspaceId !== workspace._id || target.revokedAt || target.kind !== "chrome") {
+      throw new ConvexError("Target computer not found");
+    }
+
+    const now = Date.now();
+    await ctx.db.insert("cursorDeliveries", {
+      workspaceId: workspace._id,
+      deliveryId: args.deliveryId,
+      resultId: args.resultId,
+      sourceDeviceId: device.deviceId,
+      targetDeviceId: target.deviceId,
+      kind: args.kind,
+      text: args.text,
+      ...(args.format !== undefined ? { format: args.format } : {}),
+      state: "pending",
+      attempts: 0,
+      clientCreatedAt: args.clientCreatedAt,
+      expiresAt: args.clientCreatedAt + CURSOR_DELIVERY_TTL_MS,
+      createdAt: now,
+      updatedAt: now,
+    });
+    return { deliveryId: args.deliveryId, idempotent: false, state: "pending" as const };
+  },
+});
+
+export const pendingCursorDeliveries = query({
+  args: { installationId: v.string() },
+  handler: async (ctx, args) => {
+    const workspace = await requireAuthenticatedWorkspace(ctx);
+    const computer = await ctx.db
+      .query("workspaceDevices")
+      .withIndex("by_deviceId", (q) => q.eq("deviceId", args.installationId))
+      .unique();
+    if (!computer || computer.workspaceId !== workspace._id || computer.kind !== "chrome" || computer.revokedAt) {
+      throw new ConvexError("Registered computer not found");
+    }
+    const deliveries = await ctx.db
+      .query("cursorDeliveries")
+      .withIndex("by_targetDeviceId_and_state", (q) =>
+        q.eq("targetDeviceId", computer.deviceId).eq("state", "pending"),
+      )
+      .collect();
+    return deliveries.filter((delivery) =>
+      delivery.workspaceId === workspace._id
+    ).map((delivery) => ({
+      deliveryId: delivery.deliveryId,
+      resultId: delivery.resultId,
+      sourceDeviceId: delivery.sourceDeviceId,
+      targetDeviceId: delivery.targetDeviceId,
+      kind: delivery.kind,
+      text: delivery.text,
+      ...(delivery.format !== undefined ? { format: delivery.format } : {}),
+      state: delivery.state,
+      attempts: delivery.attempts,
+      clientCreatedAt: delivery.clientCreatedAt,
+      expiresAt: delivery.expiresAt,
+      createdAt: delivery.createdAt,
+      updatedAt: delivery.updatedAt,
+    }));
+  },
+});
+
+export const acknowledgeCursorDelivery = mutation({
+  args: {
+    installationId: v.string(),
+    deliveryId: v.string(),
+    state: v.union(v.literal("delivered"), v.literal("failed")),
+    errorCode: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const workspace = await requireOrCreateAuthenticatedWorkspace(ctx);
+    const computer = await ctx.db
+      .query("workspaceDevices")
+      .withIndex("by_deviceId", (q) => q.eq("deviceId", args.installationId))
+      .unique();
+    if (!computer || computer.workspaceId !== workspace._id || computer.kind !== "chrome" || computer.revokedAt) {
+      throw new ConvexError("Registered computer not found");
+    }
+    const delivery = await ctx.db
+      .query("cursorDeliveries")
+      .withIndex("by_workspaceId_and_deliveryId", (q) =>
+        q.eq("workspaceId", workspace._id).eq("deliveryId", args.deliveryId),
+      )
+      .unique();
+    if (!delivery || delivery.targetDeviceId !== computer.deviceId) {
+      throw new ConvexError("Cursor delivery not found");
+    }
+    if (delivery.state !== "pending") {
+      return { state: delivery.state, idempotent: true, attempts: delivery.attempts };
+    }
+
+    const now = Date.now();
+    const attempts = delivery.attempts + 1;
+    await ctx.db.patch(delivery._id, {
+      state: args.state,
+      attempts,
+      ...(args.state === "delivered"
+        ? { deliveredAt: now, errorCode: undefined }
+        : { errorCode: args.errorCode }),
+      updatedAt: now,
+    });
+    return { state: args.state, idempotent: false, attempts };
   },
 });
 

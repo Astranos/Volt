@@ -1,17 +1,39 @@
+import ClerkKit
 import Foundation
 import Observation
 import UIKit
+
+struct CaptureOwnershipConflict: Identifiable, Equatable {
+    let currentClerkUserId: String
+    let recordIds: Set<UUID>
+    let priorOwnerClerkUserIds: [String]
+    let exportText: String
+    let exportPhotoURLs: [URL]
+
+    var id: String {
+        ([currentClerkUserId] + priorOwnerClerkUserIds + recordIds.map(\.uuidString).sorted()).joined(separator: ":")
+    }
+
+    var count: Int { recordIds.count }
+}
 
 @MainActor
 @Observable
 final class CloudWorkspaceStore {
     private(set) var credential: CloudDeviceCredential?
     private(set) var isEnrolling = false
+    private(set) var isBootstrapping = false
     private(set) var isSyncing = false
     private(set) var lastError: String?
+    private(set) var computers: [CloudComputer] = []
+    private(set) var selectedTargetDeviceId: String?
+    private(set) var accountSwitchConflict: CaptureOwnershipConflict?
 
     @ObservationIgnored private let api: MobileCloudAPI
     @ObservationIgnored private let outbox: DurableCaptureOutbox
+    @ObservationIgnored private var authenticatedClerkUserId: String?
+    @ObservationIgnored private var lastBootstrappedClerkUserId: String?
+    @ObservationIgnored private var clerkForBootstrap: Clerk?
     @ObservationIgnored private var syncTask: Task<Void, Never>?
     @ObservationIgnored private var retryTask: Task<Void, Never>?
 
@@ -24,17 +46,95 @@ final class CloudWorkspaceStore {
         self.credential = DeviceCredentialStore.load()
     }
 
-    var workspaceId: String? { credential?.workspaceId }
+    var workspaceId: String? { activeCredential?.workspaceId }
     var pendingCount: Int { outbox.records.count { $0.state != .uploaded } }
     var restoredResults: [ScanResult] { outbox.restoredResults }
+    var availableComputers: [CloudComputer] {
+        computers
+            .filter { $0.online && $0.supportsCursorInsertion }
+            .sorted { $0.label.localizedCaseInsensitiveCompare($1.label) == .orderedAscending }
+    }
+    var selectedComputer: CloudComputer? {
+        guard let selectedTargetDeviceId else { return nil }
+        return availableComputers.first { $0.deviceId == selectedTargetDeviceId }
+    }
 
     func persist(_ result: ScanResult, photoData: Data? = nil) throws {
-        try outbox.enqueue(result: result, photoData: photoData)
+        let credential = activeCredential
+        try outbox.enqueue(
+            result: result,
+            photoData: photoData,
+            ownerClerkUserId: credential?.clerkUserId,
+            workspaceId: credential?.workspaceId
+        )
         requestSync()
     }
 
     func remove(resultId: UUID) {
         try? outbox.remove(id: resultId)
+        updateOwnershipConflict()
+    }
+
+    func bootstrapIfNeeded(using clerk: Clerk) async {
+        guard let clerkUserId = clerk.user?.id else {
+            pauseForSignOut()
+            return
+        }
+        authenticatedClerkUserId = clerkUserId
+        clerkForBootstrap = clerk
+
+        if let credential,
+           credential.clerkUserId == clerkUserId,
+           lastBootstrappedClerkUserId == clerkUserId {
+            do {
+                try outbox.reconcileOwnership(
+                    ownerClerkUserId: clerkUserId,
+                    workspaceId: credential.workspaceId
+                )
+                updateOwnershipConflict()
+                requestSync()
+                await refreshComputers()
+            } catch {
+                lastError = error.localizedDescription
+            }
+            return
+        }
+
+        guard !isBootstrapping else { return }
+        cancelUploadTasks()
+        isBootstrapping = true
+        defer { isBootstrapping = false }
+
+        do {
+            let bearerToken = try await freshBearerToken(using: clerk)
+            let response = try await bootstrapResponse(
+                bearerToken: bearerToken,
+                clerkUserId: clerkUserId
+            )
+            let nextCredential = CloudDeviceCredential(
+                value: response.deviceSecret,
+                deviceId: response.deviceId,
+                workspaceId: response.workspaceId,
+                ownerClerkUserId: response.clerkUserId,
+                enrolledAt: .now
+            )
+            try DeviceCredentialStore.save(nextCredential)
+            credential = nextCredential
+            lastBootstrappedClerkUserId = response.clerkUserId
+            try outbox.reconcileOwnership(
+                ownerClerkUserId: response.clerkUserId,
+                workspaceId: response.workspaceId
+            )
+            updateOwnershipConflict()
+            lastError = nil
+            requestSync()
+            await refreshComputers()
+        } catch is CancellationError {
+            return
+        } catch {
+            lastError = error.localizedDescription
+            requestSync()
+        }
     }
 
     func enroll(_ enrollment: DeviceEnrollment) async {
@@ -44,18 +144,139 @@ final class CloudWorkspaceStore {
         do {
             let response = try await api.exchangeEnrollment(DeviceEnrollmentRequest(
                 enrollmentCode: enrollment.token,
-                label: UIDevice.current.name
+                label: Self.installationLabel
             ))
             let credential = CloudDeviceCredential(
                 value: response.deviceSecret,
                 deviceId: response.deviceId,
                 workspaceId: response.workspaceId,
+                ownerClerkUserId: nil,
                 enrolledAt: .now
             )
             try DeviceCredentialStore.save(credential)
             self.credential = credential
             lastError = nil
+            if let clerkForBootstrap {
+                await bootstrapIfNeeded(using: clerkForBootstrap)
+            }
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
+
+    func refreshComputers() async {
+        guard let credential = activeCredential else {
+            computers = []
+            selectedTargetDeviceId = nil
+            return
+        }
+        do {
+            let response = try await api.listComputers(ListCloudComputersRequest(
+                deviceId: credential.deviceId,
+                deviceSecret: credential.value
+            ))
+            computers = response.computers
+            selectedTargetDeviceId = response.cursorTargetDeviceId
+            lastError = nil
+        } catch is CancellationError {
+            return
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
+
+    func selectTarget(deviceId: String?) async {
+        guard let credential = activeCredential else { return }
+        do {
+            let response = try await api.setCursorTarget(SetCursorTargetRequest(
+                deviceId: credential.deviceId,
+                deviceSecret: credential.value,
+                cursorTargetDeviceId: deviceId
+            ))
+            selectedTargetDeviceId = response.cursorTargetDeviceId
+            lastError = nil
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
+
+    func queueCursorDelivery(result: ScanResult, deliveryId: String) async -> Bool? {
+        guard result.kind == .barcode || result.kind == .text,
+              let credential = activeCredential,
+              let target = selectedComputer
+        else { return nil }
+
+        requestSync()
+        if let syncTask { await syncTask.value }
+        guard outbox.records.first(where: { $0.id == result.id })?.state == .uploaded else {
+            return false
+        }
+        let request = QueueCursorDeliveryRequest(
+            deviceId: credential.deviceId,
+            deviceSecret: credential.value,
+            deliveryId: deliveryId,
+            resultId: result.id.uuidString.lowercased(),
+            targetDeviceId: target.deviceId,
+            kind: result.kind.rawValue,
+            text: result.value,
+            format: result.format,
+            clientCreatedAt: Date.now.timeIntervalSince1970 * 1_000
+        )
+        for attempt in 0..<3 {
+            do {
+                guard credential.deviceId == activeCredential?.deviceId else { return false }
+                if attempt > 0 {
+                    try await Task.sleep(for: .seconds(Double(attempt) * 0.5))
+                    guard credential.deviceId == activeCredential?.deviceId else { return false }
+                }
+                _ = try await api.queueCursorDelivery(request)
+                lastError = nil
+                return true
+            } catch is CancellationError {
+                return false
+            } catch {
+                if attempt == 2 {
+                    lastError = "Capture saved. Computer insertion could not be queued."
+                    return false
+                }
+            }
+        }
+        return false
+    }
+
+    func retainConflictingCaptures() {
+        guard let conflict = accountSwitchConflict else { return }
+        do {
+            try outbox.retain(ids: conflict.recordIds)
+            accountSwitchConflict = nil
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
+
+    func attachConflictingCaptures() {
+        guard let conflict = accountSwitchConflict,
+              let credential = activeCredential,
+              let ownerClerkUserId = credential.clerkUserId
+        else { return }
+        do {
+            try outbox.attach(
+                ids: conflict.recordIds,
+                ownerClerkUserId: ownerClerkUserId,
+                workspaceId: credential.workspaceId
+            )
+            accountSwitchConflict = nil
             requestSync()
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
+
+    func deleteConflictingCaptures() {
+        guard let conflict = accountSwitchConflict else { return }
+        do {
+            try outbox.remove(ids: conflict.recordIds)
+            accountSwitchConflict = nil
         } catch {
             lastError = error.localizedDescription
         }
@@ -64,19 +285,45 @@ final class CloudWorkspaceStore {
     func revokeLocalCredential() {
         try? DeviceCredentialStore.remove()
         credential = nil
-        syncTask?.cancel()
-        syncTask = nil
-        retryTask?.cancel()
-        retryTask = nil
+        lastBootstrappedClerkUserId = nil
+        computers = []
+        selectedTargetDeviceId = nil
+        cancelUploadTasks()
     }
 
     func requestSync() {
-        guard credential != nil, syncTask == nil else { return }
+        guard activeCredential != nil, syncTask == nil else { return }
         retryTask?.cancel()
         retryTask = nil
         syncTask = Task { [weak self] in
             await self?.drainOutbox()
         }
+    }
+
+    private var activeCredential: CloudDeviceCredential? {
+        guard let credential,
+              let authenticatedClerkUserId,
+              credential.clerkUserId == authenticatedClerkUserId
+        else { return nil }
+        return credential
+    }
+
+    private func pauseForSignOut() {
+        authenticatedClerkUserId = nil
+        lastBootstrappedClerkUserId = nil
+        clerkForBootstrap = nil
+        cancelUploadTasks()
+        computers = []
+        selectedTargetDeviceId = nil
+        accountSwitchConflict = nil
+        try? outbox.pauseUploads()
+    }
+
+    private func cancelUploadTasks() {
+        syncTask?.cancel()
+        syncTask = nil
+        retryTask?.cancel()
+        retryTask = nil
     }
 
     private func drainOutbox() async {
@@ -86,8 +333,14 @@ final class CloudWorkspaceStore {
             syncTask = nil
             scheduleRetryIfNeeded()
         }
-        guard let credential else { return }
-        let batches = Dictionary(grouping: outbox.readyRecords, by: \.batchId)
+        guard let credential,
+              credential.deviceId == activeCredential?.deviceId,
+              let ownerClerkUserId = credential.clerkUserId
+        else { return }
+        let batches = Dictionary(
+            grouping: outbox.readyRecords(ownerClerkUserId: ownerClerkUserId),
+            by: \.batchId
+        )
             .values
             .sorted { ($0.first?.capturedAt ?? .distantPast) < ($1.first?.capturedAt ?? .distantPast) }
         for records in batches {
@@ -122,13 +375,17 @@ final class CloudWorkspaceStore {
                         batchId: batchId
                     ))
                 }
+                guard !Task.isCancelled, credential.deviceId == activeCredential?.deviceId else { return }
                 for record in records { try outbox.markUploaded(id: record.id) }
                 lastError = nil
+            } catch is CancellationError {
+                return
             } catch MobileCloudError.credentialRevoked {
                 revokeLocalCredential()
                 lastError = MobileCloudError.credentialRevoked.localizedDescription
                 return
             } catch {
+                guard !Task.isCancelled else { return }
                 for record in records { try? outbox.markFailed(id: record.id) }
                 lastError = error.localizedDescription
             }
@@ -136,8 +393,12 @@ final class CloudWorkspaceStore {
     }
 
     private func scheduleRetryIfNeeded() {
-        guard credential != nil,
-              let retryAt = outbox.records.compactMap(\.nextAttemptAt).min()
+        guard let credential = activeCredential,
+              let ownerClerkUserId = credential.clerkUserId,
+              let retryAt = outbox.records
+                .filter { $0.ownerClerkUserId == ownerClerkUserId && $0.state == .failed }
+                .compactMap(\.nextAttemptAt)
+                .min()
         else { return }
         let delay = max(0, retryAt.timeIntervalSinceNow)
         retryTask = Task { [weak self] in
@@ -146,6 +407,72 @@ final class CloudWorkspaceStore {
             self?.retryTask = nil
             self?.requestSync()
         }
+    }
+
+    private func updateOwnershipConflict() {
+        guard let credential = activeCredential,
+              let ownerClerkUserId = credential.clerkUserId
+        else {
+            accountSwitchConflict = nil
+            return
+        }
+        let records = outbox.pendingOwnershipConflicts(for: ownerClerkUserId)
+        guard !records.isEmpty else {
+            accountSwitchConflict = nil
+            return
+        }
+        let ids = Set(records.map(\.id))
+        accountSwitchConflict = CaptureOwnershipConflict(
+            currentClerkUserId: ownerClerkUserId,
+            recordIds: ids,
+            priorOwnerClerkUserIds: Array(Set(records.compactMap(\.ownerClerkUserId))).sorted(),
+            exportText: outbox.exportText(for: ids),
+            exportPhotoURLs: outbox.exportPhotoURLs(for: ids)
+        )
+    }
+
+    private func bootstrapResponse(
+        bearerToken: String,
+        clerkUserId: String
+    ) async throws -> BootstrapMobileDeviceResponse {
+        let canReuseExistingDevice = credential?.clerkUserId == clerkUserId || credential?.clerkUserId == nil
+        let existingDeviceId = canReuseExistingDevice ? credential?.deviceId : nil
+        do {
+            return try await api.bootstrapDevice(
+                BootstrapMobileDeviceRequest(
+                    installationId: Self.installationId,
+                    label: Self.installationLabel,
+                    existingDeviceId: existingDeviceId
+                ),
+                bearerToken: bearerToken
+            )
+        } catch MobileCloudError.httpStatus(let status) where status == 500 {
+            guard existingDeviceId != nil, credential?.clerkUserId == nil else {
+                throw MobileCloudError.httpStatus(status)
+            }
+            return try await api.bootstrapDevice(
+                BootstrapMobileDeviceRequest(
+                    installationId: Self.installationId,
+                    label: Self.installationLabel,
+                    existingDeviceId: nil
+                ),
+                bearerToken: bearerToken
+            )
+        }
+    }
+
+    private func freshBearerToken(using clerk: Clerk) async throws -> String {
+        guard clerk.user != nil,
+              let token = try await clerk.auth.getToken(
+                  .init(
+                      template: AppConfiguration.clerkJWTTemplate,
+                      skipCache: true
+                  )
+              )
+        else {
+            throw MobileAccessError.signInRequired
+        }
+        return token
     }
 
     private func batchRequest(
@@ -172,5 +499,24 @@ final class CloudWorkspaceStore {
                 )
             }
         )
+    }
+
+    private static let installationIdKey = "volt.mobile.installation-id.v1"
+
+    private static var installationId: String {
+        if let existing = UserDefaults.standard.string(forKey: installationIdKey), !existing.isEmpty {
+            return existing
+        }
+        let value = "ios-install-\(UUID().uuidString.lowercased())"
+        UserDefaults.standard.set(value, forKey: installationIdKey)
+        return value
+    }
+
+    private static var installationLabel: String {
+        let name = UIDevice.current.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let model = UIDevice.current.model.trimmingCharacters(in: .whitespacesAndNewlines)
+        if name.isEmpty { return model.isEmpty ? "iPhone" : model }
+        if model.isEmpty || name.localizedCaseInsensitiveContains(model) { return name }
+        return "\(name) (\(model))"
     }
 }

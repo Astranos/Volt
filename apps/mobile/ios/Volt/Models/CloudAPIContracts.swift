@@ -11,6 +11,19 @@ struct DeviceEnrollmentResponse: Codable, Sendable {
     let workspaceId: String
 }
 
+struct BootstrapMobileDeviceRequest: Codable, Sendable {
+    let installationId: String
+    let label: String
+    let existingDeviceId: String?
+}
+
+struct BootstrapMobileDeviceResponse: Codable, Sendable {
+    let deviceId: String
+    let deviceSecret: String
+    let workspaceId: String
+    let clerkUserId: String
+}
+
 struct PutCloudBatchRequest: Codable, Sendable {
     let deviceId: String
     let deviceSecret: String
@@ -54,4 +67,69 @@ struct MarkCloudBatchReadyRequest: Codable, Sendable {
     let deviceId: String
     let deviceSecret: String
     let batchId: String
+}
+
+struct CloudComputer: Codable, Equatable, Identifiable, Sendable {
+    let deviceId: String
+    let label: String
+    let capabilities: [String]
+    let online: Bool
+
+    var id: String { deviceId }
+    var supportsCursorInsertion: Bool { capabilities.contains("cursor-insertion") }
+}
+
+struct ListCloudComputersRequest: Codable, Sendable {
+    let deviceId: String
+    let deviceSecret: String
+}
+
+struct ListCloudComputersResponse: Codable, Sendable {
+    let cursorTargetDeviceId: String?
+    let computers: [CloudComputer]
+}
+
+struct SetCursorTargetRequest: Encodable, Sendable {
+    let deviceId: String
+    let deviceSecret: String
+    let cursorTargetDeviceId: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case deviceId
+        case deviceSecret
+        case cursorTargetDeviceId
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(deviceId, forKey: .deviceId)
+        try container.encode(deviceSecret, forKey: .deviceSecret)
+        if let cursorTargetDeviceId {
+            try container.encode(cursorTargetDeviceId, forKey: .cursorTargetDeviceId)
+        } else {
+            try container.encodeNil(forKey: .cursorTargetDeviceId)
+        }
+    }
+}
+
+struct SetCursorTargetResponse: Codable, Sendable {
+    let cursorTargetDeviceId: String?
+}
+
+struct QueueCursorDeliveryRequest: Codable, Sendable {
+    let deviceId: String
+    let deviceSecret: String
+    let deliveryId: String
+    let resultId: String
+    let targetDeviceId: String
+    let kind: String
+    let text: String
+    let format: String?
+    let clientCreatedAt: Double
+}
+
+struct QueueCursorDeliveryResponse: Codable, Sendable {
+    let deliveryId: String
+    let idempotent: Bool
+    let state: String
 }

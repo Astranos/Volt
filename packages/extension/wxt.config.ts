@@ -24,6 +24,13 @@ export default defineConfig({
       },
       {
         matches: ["<all_urls>"],
+        js: ["mobile-scanner-editable-tracker.js"],
+        run_at: "document_idle",
+        all_frames: true,
+        match_about_blank: true,
+      },
+      {
+        matches: ["<all_urls>"],
         js: ["upc-highlighter.js"],
         run_at: "document_idle",
         all_frames: true,

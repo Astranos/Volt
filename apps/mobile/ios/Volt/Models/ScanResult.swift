@@ -23,9 +23,9 @@ struct ScanResult: Identifiable, Equatable {
         var label: String {
             switch self {
             case .saved: "Saved on device"
-            case .sending: "Sending to Chrome"
-            case .sent: "Sent to Chrome"
-            case .failed: "Send failed"
+            case .sending: "Insertion pending"
+            case .sent: "Synced"
+            case .failed: "Insertion failed"
             }
         }
     }

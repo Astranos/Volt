@@ -6,6 +6,7 @@ struct CloudCaptureRecord: Codable, Equatable, Identifiable, Sendable {
         case syncing
         case uploaded
         case failed
+        case held
     }
 
     let id: UUID
@@ -17,6 +18,9 @@ struct CloudCaptureRecord: Codable, Equatable, Identifiable, Sendable {
     let batchId: String
     let photoFilename: String?
     let photoContentType: String?
+    var ownerClerkUserId: String?
+    var workspaceId: String?
+    var retainedLocally: Bool?
     var state: State
     var attemptCount: Int
     var nextAttemptAt: Date?

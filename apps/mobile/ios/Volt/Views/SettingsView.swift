@@ -17,7 +17,7 @@ struct SettingsView: View {
                     AccessSettingsSection()
                 } else {
                     Section("Cloud Workspace") {
-                        Text("Capture works offline. Enroll this device by scanning a one-time QR from signed-in Chrome.")
+                        Text("Capture works offline. Sign in from a configured Volt build to sync captures to your account workspace.")
                             .foregroundStyle(.secondary)
                     }
                 }

@@ -189,6 +189,42 @@ const exchangeWorkspaceEnrollment = makeFunctionReference<
   { enrollmentCode: string; label?: string },
   { deviceId: string; deviceSecret: string; workspaceId: string }
 >("cloudWorkspace:exchangeEnrollment");
+const bootstrapMobileDevice = makeFunctionReference<
+  "mutation",
+  { installationId: string; label: string; existingDeviceId?: string },
+  { deviceId: string; deviceSecret: string; workspaceId: string; clerkUserId: string }
+>("cloudWorkspace:bootstrapMobileDevice");
+type MobileComputer = {
+  deviceId: string;
+  label: string;
+  capabilities: string[];
+  online: boolean;
+};
+const listMobileComputers = makeFunctionReference<
+  "query",
+  { deviceId: string; deviceSecret: string },
+  { cursorTargetDeviceId: string | null; computers: MobileComputer[] }
+>("cloudWorkspace:listComputersForDevice");
+const setMobileCursorTarget = makeFunctionReference<
+  "mutation",
+  { deviceId: string; deviceSecret: string; cursorTargetDeviceId: string | null },
+  { cursorTargetDeviceId: string | null }
+>("cloudWorkspace:setCursorTarget");
+const queueMobileCursorDelivery = makeFunctionReference<
+  "mutation",
+  {
+    deviceId: string;
+    deviceSecret: string;
+    deliveryId: string;
+    resultId: string;
+    targetDeviceId: string;
+    kind: "barcode" | "text";
+    text: string;
+    format?: string;
+    clientCreatedAt: number;
+  },
+  { deliveryId: string; idempotent: boolean; state: "pending" | "delivered" | "failed" }
+>("cloudWorkspace:queueCursorDelivery");
 const putCloudBatch = makeFunctionReference<
   "mutation",
   {
@@ -532,6 +568,87 @@ const mobileEnrollmentExchangeHandler = httpAction(async (ctx, request) => {
   }));
 });
 
+const mobileDeviceBootstrapHandler = httpAction(async (ctx, request) => {
+  if (request.method === "OPTIONS") return emptyResponse();
+  if (!(await ctx.auth.getUserIdentity())) return jsonResponse({ error: "Clerk authentication required" }, 401);
+  const body = await signalBodyFromRequest(request);
+  const installationId = stringFrom(body.installationId, 240);
+  const label = stringFrom(body.label, 120);
+  const existingDeviceId = stringFrom(body.existingDeviceId, 120);
+  if (!installationId || !label) return jsonResponse({ error: "Missing installationId or label" }, 400);
+  return jsonResponse(await ctx.runMutation(bootstrapMobileDevice, {
+    installationId,
+    label,
+    ...(existingDeviceId ? { existingDeviceId } : {}),
+  }));
+});
+
+const mobileComputerListHandler = httpAction(async (ctx, request) => {
+  if (request.method === "OPTIONS") return emptyResponse();
+  const body = await signalBodyFromRequest(request);
+  const deviceId = stringFrom(body.deviceId, 120);
+  const deviceSecret = stringFrom(body.deviceSecret, 240);
+  if (!deviceId || !deviceSecret) return jsonResponse({ error: "Missing device credentials" }, 400);
+  return jsonResponse(await ctx.runQuery(listMobileComputers, { deviceId, deviceSecret }));
+});
+
+const mobileCursorTargetHandler = httpAction(async (ctx, request) => {
+  if (request.method === "OPTIONS") return emptyResponse();
+  const body = await signalBodyFromRequest(request);
+  const deviceId = stringFrom(body.deviceId, 120);
+  const deviceSecret = stringFrom(body.deviceSecret, 240);
+  const rawCursorTargetDeviceId = objectFrom(body).cursorTargetDeviceId;
+  if (
+    !deviceId
+    || !deviceSecret
+    || (rawCursorTargetDeviceId !== null && typeof rawCursorTargetDeviceId !== "string")
+  ) {
+    return jsonResponse({ error: "Invalid device credentials or cursor target" }, 400);
+  }
+  return jsonResponse(await ctx.runMutation(setMobileCursorTarget, {
+    deviceId,
+    deviceSecret,
+    cursorTargetDeviceId: rawCursorTargetDeviceId,
+  }));
+});
+
+const mobileCursorDeliveryQueueHandler = httpAction(async (ctx, request) => {
+  if (request.method === "OPTIONS") return emptyResponse();
+  const body = await signalBodyFromRequest(request);
+  const deviceId = stringFrom(body.deviceId, 120);
+  const deviceSecret = stringFrom(body.deviceSecret, 240);
+  const deliveryId = stringFrom(body.deliveryId, 240);
+  const resultId = stringFrom(body.resultId, 240);
+  const targetDeviceId = stringFrom(body.targetDeviceId, 240);
+  const kind = stringFrom(body.kind, 20);
+  const text = stringFrom(body.text, 100_000);
+  const format = stringFrom(body.format, 120);
+  const clientCreatedAt = numberField(body, "clientCreatedAt");
+  if (
+    !deviceId
+    || !deviceSecret
+    || !deliveryId
+    || !resultId
+    || !targetDeviceId
+    || (kind !== "barcode" && kind !== "text")
+    || text === undefined
+    || clientCreatedAt === undefined
+  ) {
+    return jsonResponse({ error: "Invalid cursor delivery" }, 400);
+  }
+  return jsonResponse(await ctx.runMutation(queueMobileCursorDelivery, {
+    deviceId,
+    deviceSecret,
+    deliveryId,
+    resultId,
+    targetDeviceId,
+    kind,
+    text,
+    ...(format ? { format } : {}),
+    clientCreatedAt,
+  }));
+});
+
 const workspaceEnrollmentHandler = httpAction(async (ctx, request) => {
   if (request.method === "OPTIONS") return emptyResponse();
   if (!(await ctx.auth.getUserIdentity())) return jsonResponse({ error: "Clerk authentication required" }, 401);
@@ -728,6 +845,14 @@ const appClipGuestPhotoUploadHandler = appClipGuestBatchActionHandler("upload");
 const appClipGuestBatchFinalizeHandler = appClipGuestBatchActionHandler("finalize");
 http.route({ path: "/api/mobile/enrollment/exchange", method: "POST", handler: mobileEnrollmentExchangeHandler });
 http.route({ path: "/api/mobile/enrollment/exchange", method: "OPTIONS", handler: mobileEnrollmentExchangeHandler });
+http.route({ path: "/api/mobile/devices/bootstrap", method: "POST", handler: mobileDeviceBootstrapHandler });
+http.route({ path: "/api/mobile/devices/bootstrap", method: "OPTIONS", handler: mobileDeviceBootstrapHandler });
+http.route({ path: "/api/mobile/computers/list", method: "POST", handler: mobileComputerListHandler });
+http.route({ path: "/api/mobile/computers/list", method: "OPTIONS", handler: mobileComputerListHandler });
+http.route({ path: "/api/mobile/cursor-target", method: "POST", handler: mobileCursorTargetHandler });
+http.route({ path: "/api/mobile/cursor-target", method: "OPTIONS", handler: mobileCursorTargetHandler });
+http.route({ path: "/api/mobile/deliveries/queue", method: "POST", handler: mobileCursorDeliveryQueueHandler });
+http.route({ path: "/api/mobile/deliveries/queue", method: "OPTIONS", handler: mobileCursorDeliveryQueueHandler });
 http.route({ path: "/api/mobile/outbox/sync", method: "POST", handler: mobileOutboxSyncHandler });
 http.route({ path: "/api/mobile/outbox/sync", method: "OPTIONS", handler: mobileOutboxSyncHandler });
 http.route({ path: "/api/mobile/photos/upload-url", method: "POST", handler: mobilePhotoUploadHandler });

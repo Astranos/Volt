@@ -31,13 +31,13 @@ struct CapturedResultRow: View {
 
             VStack(spacing: 6) {
                 Button(action: onResend) {
-                    Label("Resend \(title) to Chrome", systemImage: result.deliveryState == .sending ? "hourglass" : "paperplane")
+                    Label(actionLabel, systemImage: result.deliveryState == .sending ? "hourglass" : "paperplane")
                         .labelStyle(.iconOnly)
                         .font(.system(size: 16, weight: .semibold))
                         .frame(width: 44, height: 44)
                 }
                 .buttonStyle(.borderless)
-                .disabled(!canResend || result.deliveryState == .sending)
+                .disabled(!canResend)
 
                 if let onDelete {
                     Button(role: .destructive, action: onDelete) {
@@ -53,10 +53,10 @@ struct CapturedResultRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .swipeActions(edge: .leading, allowsFullSwipe: true) {
             Button(action: onResend) {
-                Label("Resend", systemImage: "paperplane")
+                Label(result.kind == .barcode || result.kind == .text ? "Insert" : "Resend", systemImage: "paperplane")
             }
             .tint(.green)
-            .disabled(!canResend || result.deliveryState == .sending)
+            .disabled(!canResend)
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             if let onDelete {
@@ -108,6 +108,15 @@ struct CapturedResultRow: View {
             result.imageData == nil ? "Photo preview unavailable" : result.value
         default:
             result.value
+        }
+    }
+
+    private var actionLabel: String {
+        switch result.kind {
+        case .barcode, .text:
+            "Insert \(title) into selected computer"
+        case .photo, .dictation:
+            "Resend \(title)"
         }
     }
 

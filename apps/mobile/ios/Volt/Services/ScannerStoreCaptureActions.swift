@@ -218,7 +218,7 @@ extension ScannerStore {
             capturedAt: now,
             deliveryState: initialDeliveryState
         )
-        saveResultLocally(result)
+        guard saveResultLocally(result) else { return }
         sendCaptureResult(result, insertIntoCursor: true)
     }
 
@@ -298,9 +298,9 @@ extension ScannerStore {
         guard !text.isEmpty else { return }
         if handlePairingValue(text) { return }
         let result = ScanResult(kind: .text, value: text, format: format, deliveryState: initialDeliveryState)
-        saveResultLocally(result)
+        guard saveResultLocally(result) else { return }
         sendCaptureResult(result, insertIntoCursor: true)
-        statusText = connectionStatus.isConnected ? "Text sent" : "Text saved"
+        statusText = cloudWorkspace.selectedComputer == nil ? "Text saved" : "Text insertion queued"
     }
 
     func captureSquarePhoto() async {
@@ -371,22 +371,24 @@ extension ScannerStore {
     }
 
     func removeResult(id: ScanResult.ID) {
+        cloudWorkspace.remove(resultId: id)
         results.removeAll { $0.id == id }
     }
 
-    func resendResultToChrome(id: ScanResult.ID) async {
+    func insertResultIntoComputer(id: ScanResult.ID) async {
         guard let result = results.first(where: { $0.id == id }) else { return }
-        guard connectionStatus.isConnected else {
-            statusText = "Pair with Chrome before resending."
-            targetHint = Self.disconnectedPairingHint
-            return
-        }
 
-        updateResultDeliveryState(id: id, state: .sending)
         switch result.kind {
         case .barcode, .text:
-            sendCaptureResult(result, insertIntoCursor: true)
-            statusText = result.kind == .barcode ? "Barcode resent" : "Text resent"
+            guard cloudWorkspace.selectedComputer != nil else {
+                updateResultDeliveryState(id: id, state: .saved)
+                statusText = "Choose an online computer before inserting."
+                return
+            }
+            await queueCursorInsertion(
+                result,
+                deliveryId: "del-\(UUID().uuidString.lowercased())"
+            )
         case .photo:
             guard let imageData = result.imageData, let image = UIImage(data: imageData) else {
                 updateResultDeliveryState(id: id, state: .failed)
@@ -403,9 +405,12 @@ extension ScannerStore {
             )
         case .dictation:
             sendDictation(result.value, phase: "final")
-            updateResultDeliveryState(id: id, state: .sent)
-            statusText = "Dictation resent"
+            statusText = connectionStatus.isConnected ? "Dictation resent" : "Dictation stays saved on this iPhone"
         }
+    }
+
+    func resendResultToChrome(id: ScanResult.ID) async {
+        await insertResultIntoComputer(id: id)
     }
 
     func removeResults(at offsets: IndexSet) {
@@ -431,6 +436,36 @@ extension ScannerStore {
     }
 
     func sendCaptureResult(_ result: ScanResult, insertIntoCursor: Bool) {
+        guard insertIntoCursor, cloudWorkspace.selectedComputer != nil else { return }
+        Task {
+            await queueCursorInsertion(
+                result,
+                deliveryId: "del-\(result.id.uuidString.lowercased())"
+            )
+        }
+    }
+
+    private func queueCursorInsertion(_ result: ScanResult, deliveryId: String) async {
+        updateResultDeliveryState(id: result.id, state: .sending)
+        let queued = await cloudWorkspace.queueCursorDelivery(
+            result: result,
+            deliveryId: deliveryId
+        )
+        switch queued {
+        case true:
+            statusText = result.kind == .barcode ? "Barcode insertion pending" : "Text insertion pending"
+            targetHint = cloudWorkspace.selectedComputer.map { "Queued for \($0.label)." } ?? "Insertion queued."
+        case false:
+            updateResultDeliveryState(id: result.id, state: .failed)
+            statusText = "Capture saved; insertion failed"
+            playCaptureFailureFeedback()
+            showCaptureDeliveryToast(for: result, state: .failed)
+        case nil:
+            updateResultDeliveryState(id: result.id, state: .saved)
+        }
+    }
+
+    func sendCaptureResultOverWebRTC(_ result: ScanResult, insertIntoCursor: Bool) {
         guard connectionStatus.isConnected else { return }
         let kind = result.kind == .barcode ? "barcode" : "text"
         do {
@@ -443,11 +478,7 @@ extension ScannerStore {
                 insertIntoCursor: insertIntoCursor,
                 contributorId: contributorId
             ))
-            updateResultDeliveryState(id: result.id, state: .sending)
         } catch {
-            updateResultDeliveryState(id: result.id, state: .failed)
-            playCaptureFailureFeedback()
-            showCaptureDeliveryToast(for: result, state: .failed)
             applyConnectionStatus(.error(error.localizedDescription))
         }
     }
@@ -535,15 +566,18 @@ extension ScannerStore {
         .saved
     }
 
-    func saveResultLocally(_ result: ScanResult) {
+    @discardableResult
+    func saveResultLocally(_ result: ScanResult) -> Bool {
         do {
             try cloudWorkspace.persist(result)
             results.insert(result, at: 0)
+            return true
         } catch {
             var failedResult = result
             failedResult.deliveryState = .failed
             results.insert(failedResult, at: 0)
             statusText = "Could not save capture on this device"
+            return false
         }
     }
 

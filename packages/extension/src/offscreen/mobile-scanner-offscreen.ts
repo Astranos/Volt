@@ -4,9 +4,12 @@ import type {
 } from "@volt/scanner-protocol";
 import { buildScannerAppClipJoinUrl } from "@volt/scanner-protocol";
 import { createClerkClient } from "@clerk/chrome-extension/client";
+import { ConvexClient } from "convex/browser";
+import { api } from "../../../../convex/_generated/api";
 import {
   CLERK_PUBLISHABLE_KEY,
   CLERK_SYNC_HOST,
+  convexDeploymentUrlFromHttpActionsUrl,
 } from "../access/config";
 import {
   MobileScannerSession,
@@ -16,6 +19,7 @@ import {
   type PhotoMessage,
   type SessionTarget,
 } from "../domain/mobile-scanner-session";
+import { getMobileScannerExtensionIdentity } from "../domain/mobile-scanner-identity";
 import { EXTENSION_SCANNER_SIGNAL_URL } from "../domain/mobile-scanner-signal-url";
 
 function serializeLogArg(arg: unknown) {
@@ -89,6 +93,145 @@ async function getClerkToken() {
     organizationId: clerk.organization?.id,
     skipCache: true,
   });
+}
+
+function clerkSubjectFromToken(token: string | null) {
+  if (!token) return null;
+  try {
+    const payload = token.split(".")[1];
+    if (!payload) return null;
+    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const decoded = JSON.parse(atob(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=")));
+    const record = objectFrom(decoded);
+    return typeof record?.sub === "string" && record.sub ? record.sub : null;
+  } catch {
+    return null;
+  }
+}
+
+class CloudWorkspaceSubscriptions {
+  private readonly client = new ConvexClient(
+    convexDeploymentUrlFromHttpActionsUrl(EXTENSION_SCANNER_SIGNAL_URL),
+  );
+  private workspaceSnapshotUnsubscribe: (() => void) | null = null;
+  private cursorDeliveriesUnsubscribe: (() => void) | null = null;
+  private installationId: string | null = null;
+  private clerkSubject: string | null = null;
+  private hasReconciledSubject = false;
+  private lastSnapshot: unknown = null;
+  private started = false;
+  private reconciling: Promise<void> | null = null;
+
+  constructor() {
+    this.client.setAuth(getClerkToken, () => {
+      void this.reconcileAuthentication();
+    });
+  }
+
+  start() {
+    if (this.started) return;
+    this.started = true;
+    void this.reconcileAuthentication();
+    window.setInterval(() => {
+      void this.reconcileAuthentication();
+    }, 15_000);
+  }
+
+  private stopSubscriptions() {
+    this.workspaceSnapshotUnsubscribe?.();
+    this.cursorDeliveriesUnsubscribe?.();
+    this.workspaceSnapshotUnsubscribe = null;
+    this.cursorDeliveriesUnsubscribe = null;
+  }
+
+  private async reconcileAuthenticationNow() {
+    const token = await getClerkToken();
+    const subject = clerkSubjectFromToken(token);
+    const subscriptionsActive =
+      this.workspaceSnapshotUnsubscribe !== null
+      && this.cursorDeliveriesUnsubscribe !== null;
+    if (
+      this.hasReconciledSubject
+      && subject === this.clerkSubject
+      && (subject === null || subscriptionsActive)
+    ) return;
+
+    this.stopSubscriptions();
+    const accountResponse = await chrome.runtime.sendMessage({
+      action: "workspaceOffscreenAccountChanged",
+      subject,
+    });
+    const accountRecord = objectFrom(accountResponse);
+    if (accountRecord?.success !== true) return;
+
+    this.clerkSubject = subject;
+    this.hasReconciledSubject = true;
+    this.lastSnapshot = null;
+    if (!subject) return;
+
+    const identity = await getMobileScannerExtensionIdentity();
+    this.installationId = identity.installId;
+    this.workspaceSnapshotUnsubscribe = this.client.onUpdate(
+      api.cloudWorkspace.workspaceSnapshot,
+      {},
+      (snapshot) => {
+        this.lastSnapshot = snapshot;
+        void chrome.runtime.sendMessage({
+          action: "workspaceOffscreenSnapshotChanged",
+          snapshot,
+        }).catch(() => undefined);
+      },
+      (error) => console.warn("[Volt Cloud Workspace] snapshot subscription failed", error),
+    );
+    this.cursorDeliveriesUnsubscribe = this.client.onUpdate(
+      api.cloudWorkspace.pendingCursorDeliveries,
+      { installationId: identity.installId },
+      (deliveries) => {
+        void chrome.runtime.sendMessage({
+          action: "workspaceOffscreenCursorDeliveriesChanged",
+          deliveries,
+        }).catch(() => undefined);
+      },
+      (error) => console.warn("[Volt Cloud Workspace] cursor subscription failed", error),
+    );
+  }
+
+  reconcileAuthentication() {
+    if (!this.reconciling) {
+      this.reconciling = this.reconcileAuthenticationNow().finally(() => {
+        this.reconciling = null;
+      });
+    }
+    return this.reconciling;
+  }
+
+  async reconcileSnapshot() {
+    await this.reconcileAuthentication();
+    if (!this.clerkSubject) return null;
+    try {
+      const snapshot = await this.client.query(api.cloudWorkspace.workspaceSnapshot, {});
+      this.lastSnapshot = snapshot;
+      return snapshot;
+    } catch (error) {
+      if (this.lastSnapshot !== null) return this.lastSnapshot;
+      throw error;
+    }
+  }
+
+  async acknowledgeCursorDelivery(
+    deliveryId: string,
+    state: "delivered" | "failed",
+    errorCode?: string,
+  ) {
+    await this.reconcileAuthentication();
+    if (!this.installationId) throw new Error("Cloud workspace is not signed in.");
+    return this.client.mutation(api.cloudWorkspace.acknowledgeCursorDelivery, {
+      installationId: this.installationId,
+      deliveryId,
+      state,
+      ...(errorCode ? { errorCode } : {}),
+    });
+  }
 }
 
 class MobileScannerOffscreenSession {
@@ -283,6 +426,8 @@ class MobileScannerOffscreenSession {
 }
 
 const mobileScannerSession = new MobileScannerOffscreenSession();
+const cloudWorkspaceSubscriptions = new CloudWorkspaceSubscriptions();
+cloudWorkspaceSubscriptions.start();
 
 function sendScannerError(sendResponse: (response?: unknown) => void, err: unknown) {
   sendResponse({
@@ -294,6 +439,54 @@ function sendScannerError(sendResponse: (response?: unknown) => void, err: unkno
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (
+    message.action === "workspaceOffscreenStartSubscriptions"
+    || message.action === "workspaceOffscreenReconcile"
+    || message.action === "workspaceOffscreenAcknowledgeCursorDelivery"
+  ) {
+    if (sender.id !== chrome.runtime.id || sender.tab) {
+      sendResponse({ success: false, error: "unauthorized_extension_sender" });
+      return false;
+    }
+    if (message.action === "workspaceOffscreenStartSubscriptions") {
+      cloudWorkspaceSubscriptions.start();
+      void cloudWorkspaceSubscriptions.reconcileAuthentication()
+        .then(() => sendResponse({ success: true }))
+        .catch((error: unknown) => sendResponse({
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        }));
+      return true;
+    }
+    if (message.action === "workspaceOffscreenReconcile") {
+      void cloudWorkspaceSubscriptions.reconcileSnapshot()
+        .then((snapshot) => sendResponse({ success: true, snapshot }))
+        .catch((error: unknown) => sendResponse({
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        }));
+      return true;
+    }
+    const deliveryId = typeof message.deliveryId === "string" ? message.deliveryId : "";
+    const state = message.state === "delivered" || message.state === "failed"
+      ? message.state
+      : null;
+    if (!deliveryId || !state) {
+      sendResponse({ success: false, error: "invalid_cursor_delivery_ack" });
+      return false;
+    }
+    void cloudWorkspaceSubscriptions.acknowledgeCursorDelivery(
+      deliveryId,
+      state,
+      typeof message.errorCode === "string" ? message.errorCode : undefined,
+    ).then((value) => sendResponse({ success: true, value }))
+      .catch((error: unknown) => sendResponse({
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    return true;
+  }
+
   if (message.action === "accessOffscreenGetClerkToken") {
     if (sender.id !== chrome.runtime.id || sender.tab) {
       sendResponse({ success: false, error: "unauthorized_extension_sender" });

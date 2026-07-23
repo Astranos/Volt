@@ -81,15 +81,10 @@ struct UploadView: View {
             .onAppear {
                 store.selectedSection = .upload
             }
-            .onChange(of: store.connectionStatus) { _, status in
-                if status.isConnected {
-                    startUploadQueueIfNeeded()
-                }
-            }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 ScannerPhotoPickerAccessory(
                     selectedItems: $selectedItems,
-                    isConnected: store.connectionStatus.isConnected,
+                    isConnected: true,
                     isPreparing: isPreparingUploads,
                     isUploading: activeUploadProgress != nil,
                     statusText: uploadStatusText,
@@ -117,10 +112,8 @@ struct UploadView: View {
             }
         } else if let progress = activeUploadProgress {
             status = "\(progress.title). \(progress.detail)."
-        } else if store.connectionStatus.isConnected {
-            status = "Ready to upload to Chrome"
         } else {
-            status = store.targetHint
+            status = "Selected photos save locally and sync to your Volt workspace when signed in."
         }
 
         guard queuedUploadPhotoCount > 0 else { return status }
@@ -215,8 +208,7 @@ struct UploadView: View {
     }
 
     private func startUploadQueueIfNeeded() {
-        guard store.connectionStatus.isConnected,
-              !queuedUploadSelections.isEmpty,
+        guard !queuedUploadSelections.isEmpty,
               !isProcessingUploadQueue
         else { return }
         isProcessingUploadQueue = true
@@ -224,7 +216,7 @@ struct UploadView: View {
     }
 
     private func processQueuedUploads() async {
-        while store.connectionStatus.isConnected, !queuedUploadSelections.isEmpty {
+        while !queuedUploadSelections.isEmpty {
             let items = queuedUploadSelections.removeFirst()
             await uploadSelectedItems(items)
         }

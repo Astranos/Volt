@@ -418,28 +418,23 @@ test("native saved-session taps switch sessions sheet to reconnect status withou
   assert.doesNotMatch(disconnectSource, /PairingSecretStore\.delete/);
 });
 
-test("native capture session opens session picker instead of auto-reconnecting when the scanner disconnects", () => {
+test("native capture session remains available without a WebRTC connection", () => {
   assert.match(scannerViewSwiftSource, /CaptureSessionView\(isPresented: \$isCaptureSessionPresented\)/);
-  assert.match(scannerViewSwiftSource, /store\.connectionStatus\.isConnected/);
-  assert.match(captureSessionViewSwiftSource, /\.onChange\(of: store\.connectionStatus\)/);
-  assert.match(captureSessionViewSwiftSource, /handleConnectionStatusChange\(status\)/);
-  assert.doesNotMatch(captureSessionViewSwiftSource, /store\.recoverMostRecentPairedSession\(\)/);
-  assert.match(captureSessionViewSwiftSource, /PairingSessionsView\(/);
+  assert.match(scannerViewSwiftSource, /ScannerBottomActionAccessory\([\s\S]*isEnabled: true/);
+  assert.doesNotMatch(scannerViewSwiftSource, /guard store\.connectionStatus\.isConnected/);
+  assert.match(captureSessionViewSwiftSource, /isCaptureEnabled: true/);
+  assert.doesNotMatch(captureSessionViewSwiftSource, /\.onChange\(of: store\.connectionStatus\)/);
+  assert.doesNotMatch(captureSessionViewSwiftSource, /isConnectionRecoveryPresented|handleConnectionStatusChange/);
   assert.doesNotMatch(scannerStoreSwiftSource, /func recoverMostRecentPairedSession\(\) -> Bool/);
-  assert.match(captureSessionViewSwiftSource, /case \.idle, \.disconnected, \.error:\s*isConnectionRecoveryPresented = true/);
-  assert.match(scannerStoreSwiftSource, /lastAutomaticReconnectAt = nil/);
-  const recoveryStart = captureSessionViewSwiftSource.indexOf("private func handleConnectionStatusChange");
-  const recoverySource = captureSessionViewSwiftSource.slice(recoveryStart);
-  assert.ok(recoveryStart > -1);
-  assert.doesNotMatch(recoverySource, /isPresented = false/);
 });
 
-test("native capture session keeps one visible connection sheet through reconnect", () => {
-  assert.match(captureSessionViewSwiftSource, /\.sheet\(isPresented: \$isConnectionRecoveryPresented\)/);
-  assert.match(captureSessionViewSwiftSource, /if let connectionStatusSheet[\s\S]*PairingStatusSheet\(sheet: connectionStatusSheet\)[\s\S]*else \{[\s\S]*PairingSessionsView\(/);
-  assert.match(captureSessionViewSwiftSource, /case \.pairing, \.waitingForChrome:[\s\S]*isConnectionRecoveryPresented = true/);
-  assert.match(captureSessionViewSwiftSource, /onReconnectStarted:[\s\S]*showConnectionProgress\(\)/);
-  assert.match(captureSessionViewSwiftSource, /onPairingCodeAccepted:[\s\S]*showConnectionProgress\(\)/);
+test("native capture session exposes the optional cloud cursor target", () => {
+  assert.match(scannerViewSwiftSource, /CloudTargetButton/);
+  assert.match(scannerViewSwiftSource, /CloudTargetPickerSheet/);
+  assert.match(scannerViewSwiftSource, /"No computer"/);
+  assert.match(scannerViewSwiftSource, /availableComputers/);
+  assert.match(captureSessionViewSwiftSource, /CloudTargetButton/);
+  assert.match(captureSessionViewSwiftSource, /cloudWorkspace\.refreshComputers\(\)/);
 });
 
 test("native and app clip keep transient WebRTC disconnects alive through background grace", () => {
@@ -776,8 +771,9 @@ test("native upload batches expose clear progress while photos are preparing and
 test("native upload picker accepts and queues more photos while a batch is active", () => {
   assert.match(uploadViewSwiftSource, /@State private var queuedUploadSelections: \[\[PhotosPickerItem\]\] = \[\]/);
   assert.match(uploadViewSwiftSource, /private func enqueueUploadSelection\(_ items: \[PhotosPickerItem\]\)/);
-  assert.match(uploadViewSwiftSource, /while store\.connectionStatus\.isConnected, !queuedUploadSelections\.isEmpty/);
-  assert.match(uploadViewSwiftSource, /\.onChange\(of: store\.connectionStatus\)[\s\S]*if status\.isConnected \{\s*startUploadQueueIfNeeded\(\)/);
+  assert.match(uploadViewSwiftSource, /while !queuedUploadSelections\.isEmpty/);
+  assert.doesNotMatch(uploadViewSwiftSource, /guard store\.connectionStatus\.isConnected/);
+  assert.doesNotMatch(uploadViewSwiftSource, /\.onChange\(of: store\.connectionStatus\)/);
   assert.match(uploadViewSwiftSource, /selectedItems = \[\][\s\S]*enqueueUploadSelection\(newItems\)/);
   assert.match(uploadViewSwiftSource, /else if let progress = activeUploadProgress/);
   assert.doesNotMatch(uploadViewSwiftSource, /defer \{[\s\S]*isPreparingUploads = false/);

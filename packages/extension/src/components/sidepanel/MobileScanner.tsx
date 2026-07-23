@@ -24,8 +24,7 @@ import {
   resolveTimelineMessage,
   upsertTimelineEntry,
 } from "../../domain/mobile-scanner-timeline";
-import { cloudResultIds, hydrateWorkspaceReplica } from "../../cloud-scanner/workspace-hydration";
-import type { WorkspaceReplica } from "../../cloud-scanner/workspace-types";
+import { cloudResultIds } from "../../cloud-scanner/workspace-hydration";
 
 /*
  * Source-contract breadcrumbs for scanner domain tests. Implementations live in:
@@ -48,7 +47,6 @@ interface MobileScannerProps {
 export default function MobileScanner({ onClose: _onClose }: MobileScannerProps) {
   const [previewPhoto, setPreviewPhoto] = useState<MobilePhoto | null>(null);
   const [now, setNow] = useState(Date.now());
-  const cloudSyncRunning = useRef(false);
   const lastCloudDeletedIds = useRef<string[]>([]);
 
   const flashFeedback = useCallback(
@@ -119,21 +117,9 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
     [flashFeedback],
   );
 
-  const syncCloudWorkspace = useCallback(async () => {
-    if (cloudSyncRunning.current) return;
-    cloudSyncRunning.current = true;
-    try {
-      const response: unknown = await chrome.runtime.sendMessage({ action: "workspaceGetSnapshot" });
-      if (!response || typeof response !== "object" || Array.isArray(response)) return;
-      const value = (response as { success?: unknown; value?: unknown });
-      if (value.success !== true || !value.value || typeof value.value !== "object" || Array.isArray(value.value)) return;
-      const replica = value.value as Partial<WorkspaceReplica>;
-      if (typeof replica.workspaceId !== "string" || !Array.isArray(replica.batches) || !replica.tombstones) return;
-      await hydrateWorkspaceReplica(replica as WorkspaceReplica);
-      await refreshResults();
-    } finally {
-      cloudSyncRunning.current = false;
-    }
+  const reconcileCloudWorkspace = useCallback(async () => {
+    await chrome.runtime.sendMessage({ action: "workspaceReconcile" });
+    await refreshResults();
   }, [refreshResults]);
 
   const deleteSyncedResults = useCallback(async (ids: string[], label: string) => {
@@ -176,12 +162,8 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
   useEffect(() => {
     void refreshResults();
     void primeCursorTarget();
-    void syncCloudWorkspace().catch(() => undefined);
-    const interval = window.setInterval(() => {
-      void syncCloudWorkspace().catch(() => undefined);
-    }, 10_000);
-    return () => window.clearInterval(interval);
-  }, [primeCursorTarget, refreshResults, syncCloudWorkspace]);
+    void reconcileCloudWorkspace().catch(() => undefined);
+  }, [primeCursorTarget, reconcileCloudWorkspace, refreshResults]);
 
   useEffect(() => {
     const prepareActiveTab = () => {
@@ -189,7 +171,11 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
       if (photos.length > 0) void prepareActiveTabForPhotoDrop();
     };
     const onActivated = () => prepareActiveTab();
-    const onUpdated = (_tabId: number, changeInfo: any, tab: any) => {
+    const onUpdated: Parameters<typeof chrome.tabs.onUpdated.addListener>[0] = (
+      _tabId,
+      changeInfo,
+      tab,
+    ) => {
       if (tab.active && (changeInfo.status === "complete" || changeInfo.url)) {
         prepareActiveTab();
       }
@@ -208,12 +194,16 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
   }, [photos.length, prepareActiveTabForPhotoDrop, primeCursorTarget]);
 
   useEffect(() => {
-    const handleMessage = (message: any) => {
-      if (message?.action === "scannerStateChanged") {
+    const handleMessage = (message: unknown) => {
+      if (!message || typeof message !== "object" || Array.isArray(message)) return;
+      const record = message as Record<string, unknown>;
+      if (record.action === "scannerStateChanged") return;
+      if (record.action === "workspaceReplicaChanged") {
+        void refreshResults();
         return;
       }
-      if (message?.action === "scannerScan" || message?.action === "scannerPhoto") {
-        void resolveTimelineMessage(message as MobileScannerResultBroadcastMessage, {
+      if (record.action === "scannerScan" || record.action === "scannerPhoto") {
+        void resolveTimelineMessage(record as MobileScannerResultBroadcastMessage, {
           saveScan: saveMobileScannerScan,
           savePhoto: saveMobileScannerPhoto,
         }).then((saved) => {
@@ -227,7 +217,7 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
     };
     chrome.runtime.onMessage.addListener(handleMessage);
     return () => chrome.runtime.onMessage.removeListener(handleMessage);
-  }, [prepareActiveTabForPhotoDrop, setResults]);
+  }, [prepareActiveTabForPhotoDrop, refreshResults, setResults]);
 
   useEffect(() => {
     if (photos.length > 0) void prepareActiveTabForPhotoDrop();

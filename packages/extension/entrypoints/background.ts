@@ -6,6 +6,7 @@
 import { defineBackground } from "wxt/utils/define-background";
 import { createActiveTabTracker } from "../src/background/active-tab-tracker";
 import { createAccessController } from "../src/background/access-controller";
+import { createCloudCursorDeliveryController } from "../src/background/cloud-cursor-delivery-controller";
 import { createCloudWorkspaceController } from "../src/background/cloud-workspace-controller";
 import { createClipboardController } from "../src/background/clipboard-controller";
 import { createContextMenuController } from "../src/background/context-menu-controller";
@@ -111,11 +112,6 @@ export default defineBackground({
       },
       signalUrl: EXTENSION_SCANNER_SIGNAL_URL,
     });
-    const cloudWorkspace = createCloudWorkspaceController({
-      chromeApi: chrome,
-      getClerkToken: access.getClerkToken,
-      siteUrl: EXTENSION_SCANNER_SIGNAL_URL,
-    });
     const photoDownloadCleanup = createMobilePhotoDownloadCleanup({
       chromeApi: chrome,
       log,
@@ -136,6 +132,34 @@ export default defineBackground({
       getTrackedTarget: scannerTargets.getTrackedTarget,
       copyWithOffscreen: (text) =>
         clipboard.handleClipboardWithOffscreen("copyToClipboard", text),
+    });
+    const cloudCursorDeliveries = createCloudCursorDeliveryController({
+      chromeApi: chrome,
+      insertScannerText: scannerTextInserter.insertScannerText,
+      acknowledgeDelivery: async (deliveryId, outcome) => {
+        const response = await scannerOffscreen.sendScannerOffscreenMessage({
+          action: "workspaceOffscreenAcknowledgeCursorDelivery",
+          deliveryId,
+          state: outcome.state,
+          ...(outcome.errorCode ? { errorCode: outcome.errorCode } : {}),
+        });
+        const record = parseMessageRecord(response);
+        if (record?.success !== true) {
+          throw new Error(
+            typeof record?.error === "string"
+              ? record.error
+              : "Cursor delivery acknowledgement failed.",
+          );
+        }
+      },
+      log,
+    });
+    const cloudWorkspace = createCloudWorkspaceController({
+      chromeApi: chrome,
+      getClerkToken: access.getClerkToken,
+      handleCursorDeliveries: cloudCursorDeliveries.handleDeliveries,
+      sendOffscreenMessage: scannerOffscreen.sendScannerOffscreenMessage,
+      siteUrl: EXTENSION_SCANNER_SIGNAL_URL,
     });
     const tabDelivery = createTabDeliveryController({ chromeApi: chrome, log });
     const previewPopups = createPreviewPopupController({ chromeApi: chrome, log });

@@ -34,3 +34,15 @@ export const CLERK_SIGN_IN_URL =
 export const VOLT_FULL_APP_URL =
   extensionEnv?.WXT_VOLT_FULL_APP_URL?.trim() ||
   "https://apps.apple.com/us/app/volt-scanner/id6771770148";
+
+export function convexDeploymentUrlFromHttpActionsUrl(httpActionsUrl: string) {
+  const url = new URL(httpActionsUrl);
+  if (!url.hostname.endsWith(".convex.site")) {
+    throw new Error("Convex HTTP Actions URL must use a .convex.site host.");
+  }
+  url.hostname = `${url.hostname.slice(0, -".convex.site".length)}.convex.cloud`;
+  url.pathname = "";
+  url.search = "";
+  url.hash = "";
+  return url.origin;
+}

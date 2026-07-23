@@ -5,6 +5,7 @@ struct VoltRootScene: View {
     @Environment(Clerk.self) private var clerk
     @Environment(AccessStore.self) private var accessStore
     @Environment(StoreKitSubscriptionStore.self) private var subscriptionStore
+    @Environment(ScannerStore.self) private var scannerStore
 
     var body: some View {
         RootView()
@@ -28,6 +29,7 @@ struct VoltRootScene: View {
     }
 
     private func refreshAuthenticatedAccess() async {
+        await scannerStore.cloudWorkspace.bootstrapIfNeeded(using: clerk)
         await accessStore.refresh(using: clerk)
         guard clerk.user != nil else { return }
 

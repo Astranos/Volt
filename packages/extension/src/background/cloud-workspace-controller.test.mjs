@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { convexDeploymentUrlFromHttpActionsUrl } from "../access/config.ts";
 
 const controller = readFileSync(new URL("./cloud-workspace-controller.ts", import.meta.url), "utf8");
 const background = readFileSync(new URL("../../entrypoints/background.ts", import.meta.url), "utf8");
@@ -13,6 +14,34 @@ const sidepanel = readFileSync(
   new URL("../components/sidepanel/UnifiedSidepanel.tsx", import.meta.url),
   "utf8",
 );
+const mobileScanner = readFileSync(
+  new URL("../components/sidepanel/MobileScanner.tsx", import.meta.url),
+  "utf8",
+);
+const offscreen = readFileSync(
+  new URL("../offscreen/mobile-scanner-offscreen.ts", import.meta.url),
+  "utf8",
+);
+const editableTracker = readFileSync(
+  new URL("../../entrypoints/mobile-scanner-editable-tracker.ts", import.meta.url),
+  "utf8",
+);
+const editableBridge = readFileSync(
+  new URL("../components/sidepanel/mobile-scanner-page-bridge.ts", import.meta.url),
+  "utf8",
+);
+const manifest = readFileSync(new URL("../../wxt.config.ts", import.meta.url), "utf8");
+
+test("Convex deployment URL maps explicitly from HTTP Actions", () => {
+  assert.equal(
+    convexDeploymentUrlFromHttpActionsUrl("https://sincere-trout-414.convex.site/api/signal"),
+    "https://sincere-trout-414.convex.cloud",
+  );
+  assert.throws(
+    () => convexDeploymentUrlFromHttpActionsUrl("https://api.example.com/api/signal"),
+    /\.convex\.site/,
+  );
+});
 
 test("workspace HTTP actions stay in the authenticated background controller", () => {
   assert.match(controller, /getClerkToken: \(\) => Promise<string \| null>/);
@@ -45,4 +74,32 @@ test("full-app enrollment uses the signed-in sidepanel Clerk session", () => {
   assert.match(controller, /clerkToken: string/);
   assert.match(controller, /registerComputer\(clerkToken\)/);
   assert.match(controller, /request\("\/api\/workspace\/enrollment", "POST", \{ kind: "ios", label \}, clerkToken\)/);
+});
+
+test("workspace sync is reactive and the sidepanel only requests an immediate reconcile", () => {
+  assert.match(offscreen, /new ConvexClient/);
+  assert.match(offscreen, /setAuth\(getClerkToken/);
+  assert.match(offscreen, /api\.cloudWorkspace\.workspaceSnapshot/);
+  assert.match(offscreen, /api\.cloudWorkspace\.pendingCursorDeliveries/);
+  assert.match(offscreen, /getMobileScannerExtensionIdentity/);
+  assert.match(offscreen, /api\.cloudWorkspace\.acknowledgeCursorDelivery/);
+  assert.match(mobileScanner, /action: "workspaceReconcile"/);
+  assert.doesNotMatch(mobileScanner, /10_000|workspaceGetSnapshot/);
+});
+
+test("editable tracking is a document-idle all-frame content script", () => {
+  assert.match(editableTracker, /installEditableTracker\(\)/);
+  assert.match(editableTracker, /runAt: "document_idle"/);
+  assert.match(editableTracker, /allFrames: true/);
+  assert.match(manifest, /mobile-scanner-editable-tracker\.js/);
+  assert.match(manifest, /match_about_blank: true/);
+  assert.match(editableBridge, /if \(root\.__voltEditableTrackerInstalled\) return null/);
+});
+
+test("computer registration advertises the canonical cloud capabilities", () => {
+  assert.match(
+    controller,
+    /capabilities: \["workspace-results", "cursor-insertion", "photo-download"\]/,
+  );
+  assert.doesNotMatch(controller, /capabilities: \[[^\]]*"dictation"/);
 });

@@ -53,6 +53,7 @@ export default defineSchema({
     credentialHash: v.string(),
     kind: v.union(v.literal("ios"), v.literal("chrome")),
     label: v.string(),
+    cursorTargetDeviceId: v.optional(v.string()),
     createdAt: v.number(),
     lastSeenAt: v.number(),
     revokedAt: v.optional(v.number()),
@@ -117,6 +118,28 @@ export default defineSchema({
   })
     .index("by_workspaceId_and_batchId", ["workspaceId", "batchId"])
     .index("by_targetDeviceId", ["targetDeviceId"]),
+
+  cursorDeliveries: defineTable({
+    workspaceId: v.id("workspaces"),
+    deliveryId: v.string(),
+    resultId: v.string(),
+    sourceDeviceId: v.string(),
+    targetDeviceId: v.string(),
+    kind: v.union(v.literal("barcode"), v.literal("text")),
+    text: v.string(),
+    format: v.optional(v.string()),
+    state: v.union(v.literal("pending"), v.literal("delivered"), v.literal("failed")),
+    attempts: v.number(),
+    errorCode: v.optional(v.string()),
+    clientCreatedAt: v.number(),
+    expiresAt: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    deliveredAt: v.optional(v.number()),
+  })
+    .index("by_workspaceId_and_deliveryId", ["workspaceId", "deliveryId"])
+    .index("by_targetDeviceId_and_state", ["targetDeviceId", "state"])
+    .index("by_workspaceId_and_resultId", ["workspaceId", "resultId"]),
 
   users: defineTable({
     clerkUserId: v.string(),

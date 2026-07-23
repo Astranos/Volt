@@ -2,7 +2,7 @@ import { convexTest } from "convex-test";
 import { makeFunctionReference } from "convex/server";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
-import { FREE_CLOUD_RESULT_LIMIT } from "./cloudWorkspace";
+import { CURSOR_DELIVERY_TTL_MS, FREE_CLOUD_RESULT_LIMIT } from "./cloudWorkspace";
 import schema from "./schema";
 
 const modules = import.meta.glob("./**/*.ts");
@@ -74,9 +74,56 @@ const createPhotoDownloadUrl = makeFunctionReference<
 >("cloudWorkspace:createPhotoDownloadUrl");
 const registerComputer = makeFunctionReference<
   "mutation",
-  { installationId: string; label: string; capabilities?: string[] },
+  { installationId: string; label: string; capabilities?: string[]; ttlMs?: number },
   { deviceId: string; workspaceId: string; registrationId: string; expiresAt: number }
 >("cloudWorkspace:registerComputer");
+const bootstrapMobileDevice = makeFunctionReference<
+  "mutation",
+  { installationId: string; label: string; existingDeviceId?: string },
+  DeviceCredential & { workspaceId: string; clerkUserId: string }
+>("cloudWorkspace:bootstrapMobileDevice");
+const listComputersForDevice = makeFunctionReference<
+  "query",
+  DeviceCredential,
+  {
+    cursorTargetDeviceId: string | null;
+    computers: Array<{ deviceId: string; label: string; capabilities: string[]; online: boolean }>;
+  }
+>("cloudWorkspace:listComputersForDevice");
+const setCursorTarget = makeFunctionReference<
+  "mutation",
+  DeviceCredential & { cursorTargetDeviceId: string | null },
+  { cursorTargetDeviceId: string | null }
+>("cloudWorkspace:setCursorTarget");
+type CursorDeliveryInput = DeviceCredential & {
+  deliveryId: string;
+  resultId: string;
+  targetDeviceId: string;
+  kind: "barcode" | "text";
+  text: string;
+  format?: string;
+  clientCreatedAt: number;
+};
+const queueCursorDelivery = makeFunctionReference<
+  "mutation",
+  CursorDeliveryInput,
+  { deliveryId: string; idempotent: boolean; state: "pending" | "delivered" | "failed" }
+>("cloudWorkspace:queueCursorDelivery");
+const pendingCursorDeliveries = makeFunctionReference<
+  "query",
+  { installationId: string },
+  Array<{ deliveryId: string; state: "pending"; expiresAt: number }>
+>("cloudWorkspace:pendingCursorDeliveries");
+const acknowledgeCursorDelivery = makeFunctionReference<
+  "mutation",
+  {
+    installationId: string;
+    deliveryId: string;
+    state: "delivered" | "failed";
+    errorCode?: string;
+  },
+  { state: "pending" | "delivered" | "failed"; idempotent: boolean; attempts: number }
+>("cloudWorkspace:acknowledgeCursorDelivery");
 const deleteWorkspaceResults = makeFunctionReference<
   "mutation",
   { resultIds: string[] },
@@ -465,6 +512,355 @@ describe("cloud scanner workspace", () => {
       }),
     ).rejects.toThrow(/already registered/);
     expect(await t.run((ctx) => ctx.db.query("workspaceDevices").collect())).toHaveLength(1);
+  });
+
+  test("bootstraps an account-owned phone credential, rotates it, and rejects cross-workspace rotation", async () => {
+    const t = convexTest(schema, modules);
+    const alice = t.withIdentity({ subject: "bootstrap-alice", name: "Alice" });
+    const bob = t.withIdentity({ subject: "bootstrap-bob", name: "Bob" });
+    const issued = await alice.mutation(bootstrapMobileDevice, {
+      installationId: "alice-installation",
+      label: "Alice iPhone",
+    });
+    expect(issued).toMatchObject({ clerkUserId: "bootstrap-alice" });
+    expect(issued.deviceSecret).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(await alice.query(listComputersForDevice, {
+      deviceId: issued.deviceId,
+      deviceSecret: issued.deviceSecret,
+    })).toMatchObject({ cursorTargetDeviceId: null });
+
+    const rotated = await alice.mutation(bootstrapMobileDevice, {
+      installationId: "alice-installation",
+      label: "Alice iPhone renamed",
+      existingDeviceId: issued.deviceId,
+    });
+    expect(rotated.deviceId).toBe(issued.deviceId);
+    expect(rotated.deviceSecret).not.toBe(issued.deviceSecret);
+    await expect(alice.query(listComputersForDevice, {
+      deviceId: issued.deviceId,
+      deviceSecret: issued.deviceSecret,
+    })).rejects.toThrow(/Invalid or revoked device credential/);
+    expect(await t.run((ctx) => ctx.db.query("workspaceDevices").collect())).toHaveLength(1);
+
+    const bobDevice = await bob.mutation(bootstrapMobileDevice, {
+      installationId: "bob-installation",
+      label: "Bob iPhone",
+    });
+    await expect(alice.mutation(bootstrapMobileDevice, {
+      installationId: "alice-installation",
+      label: "Not Alice's device",
+      existingDeviceId: bobDevice.deviceId,
+    })).rejects.toThrow(/another workspace/);
+  });
+
+  test("lists device-authenticated computers with lease state, capabilities, and the phone cursor target", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-23T12:00:00Z"));
+    const t = convexTest(schema, modules);
+    const signedIn = t.withIdentity({ subject: "computer-list-owner" });
+    const phone = await signedIn.mutation(bootstrapMobileDevice, {
+      installationId: "phone-installation",
+      label: "Phone",
+    });
+    await signedIn.mutation(registerComputer, {
+      installationId: "online-chrome",
+      label: "Online Chrome",
+      capabilities: ["Cursor-Insertion", "dictation", "cursor-insertion"],
+      ttlMs: 120_000,
+    });
+    await signedIn.mutation(registerComputer, {
+      installationId: "expired-chrome",
+      label: "Expired Chrome",
+      capabilities: ["workspace-results", "unknown-legacy"],
+      ttlMs: 10_000,
+    });
+    await signedIn.mutation(setCursorTarget, {
+      deviceId: phone.deviceId,
+      deviceSecret: phone.deviceSecret,
+      cursorTargetDeviceId: "online-chrome",
+    });
+    vi.advanceTimersByTime(10_001);
+
+    const listed = await t.query(listComputersForDevice, {
+      deviceId: phone.deviceId,
+      deviceSecret: phone.deviceSecret,
+    });
+    expect(listed.cursorTargetDeviceId).toBe("online-chrome");
+    expect(listed.computers).toEqual(expect.arrayContaining([
+      {
+        deviceId: "online-chrome",
+        label: "Online Chrome",
+        capabilities: ["cursor-insertion", "dictation"],
+        online: true,
+      },
+      {
+        deviceId: "expired-chrome",
+        label: "Expired Chrome",
+        capabilities: ["workspace-results", "unknown-legacy"],
+        online: false,
+      },
+    ]));
+  });
+
+  test("sets and clears only same-workspace cursor-capable Chrome targets", async () => {
+    const t = convexTest(schema, modules);
+    const alice = t.withIdentity({ subject: "cursor-target-alice" });
+    const bob = t.withIdentity({ subject: "cursor-target-bob" });
+    const phone = await alice.mutation(bootstrapMobileDevice, {
+      installationId: "cursor-phone",
+      label: "Alice phone",
+    });
+    const otherPhone = await alice.mutation(bootstrapMobileDevice, {
+      installationId: "cursor-other-phone",
+      label: "Alice second phone",
+    });
+    await alice.mutation(registerComputer, {
+      installationId: "cursor-valid-chrome",
+      label: "Valid Chrome",
+      capabilities: ["cursor-insertion"],
+    });
+    await alice.mutation(registerComputer, {
+      installationId: "cursor-no-capability",
+      label: "No cursor capability",
+      capabilities: ["workspace-results"],
+    });
+    await bob.mutation(registerComputer, {
+      installationId: "cursor-bob-chrome",
+      label: "Bob Chrome",
+      capabilities: ["cursor-insertion"],
+    });
+    const credential = { deviceId: phone.deviceId, deviceSecret: phone.deviceSecret };
+
+    await expect(t.mutation(setCursorTarget, {
+      ...credential,
+      cursorTargetDeviceId: "cursor-bob-chrome",
+    })).rejects.toThrow(/Target computer not found/);
+    await expect(t.mutation(setCursorTarget, {
+      ...credential,
+      cursorTargetDeviceId: otherPhone.deviceId,
+    })).rejects.toThrow(/Target computer not found/);
+    await expect(t.mutation(setCursorTarget, {
+      ...credential,
+      cursorTargetDeviceId: "cursor-no-capability",
+    })).rejects.toThrow(/does not support cursor insertion/);
+    await expect(t.mutation(setCursorTarget, {
+      ...credential,
+      cursorTargetDeviceId: "cursor-valid-chrome",
+    })).resolves.toEqual({ cursorTargetDeviceId: "cursor-valid-chrome" });
+    await expect(t.mutation(setCursorTarget, {
+      ...credential,
+      cursorTargetDeviceId: null,
+    })).resolves.toEqual({ cursorTargetDeviceId: null });
+  });
+
+  test("queues cursor deliveries idempotently by workspace and client delivery id", async () => {
+    const t = convexTest(schema, modules);
+    const signedIn = t.withIdentity({ subject: "delivery-queue-owner" });
+    const phone = await signedIn.mutation(bootstrapMobileDevice, {
+      installationId: "delivery-phone",
+      label: "Delivery phone",
+    });
+    await signedIn.mutation(registerComputer, {
+      installationId: "delivery-chrome",
+      label: "Delivery Chrome",
+      capabilities: ["cursor-insertion"],
+    });
+    const credential = { deviceId: phone.deviceId, deviceSecret: phone.deviceSecret };
+    await t.mutation(putBatch, {
+      ...credential,
+      batchId: "delivery-batch",
+      clientCreatedAt: 1,
+      results: [result("delivery-result")],
+    });
+    const input: CursorDeliveryInput = {
+      ...credential,
+      deliveryId: "cursor-delivery-id",
+      resultId: "delivery-result",
+      targetDeviceId: "delivery-chrome",
+      kind: "text",
+      text: "delivery-result",
+      clientCreatedAt: 1_000,
+    };
+
+    expect(await t.mutation(queueCursorDelivery, input)).toEqual({
+      deliveryId: "cursor-delivery-id",
+      idempotent: false,
+      state: "pending",
+    });
+    expect(await t.mutation(queueCursorDelivery, input)).toEqual({
+      deliveryId: "cursor-delivery-id",
+      idempotent: true,
+      state: "pending",
+    });
+    const stored = await t.run((ctx) => ctx.db.query("cursorDeliveries").unique());
+    expect(stored).toMatchObject({
+      deliveryId: "cursor-delivery-id",
+      resultId: "delivery-result",
+      expiresAt: 1_000 + CURSOR_DELIVERY_TTL_MS,
+      attempts: 0,
+    });
+  });
+
+  test("scopes pending cursor deliveries to the authenticated registered computer", async () => {
+    const t = convexTest(schema, modules);
+    const alice = t.withIdentity({ subject: "pending-alice" });
+    const bob = t.withIdentity({ subject: "pending-bob" });
+    const alicePhone = await alice.mutation(bootstrapMobileDevice, {
+      installationId: "pending-alice-phone",
+      label: "Alice phone",
+    });
+    await alice.mutation(registerComputer, {
+      installationId: "pending-alice-chrome",
+      label: "Alice Chrome",
+      capabilities: ["cursor-insertion"],
+    });
+    await bob.mutation(registerComputer, {
+      installationId: "pending-bob-chrome",
+      label: "Bob Chrome",
+      capabilities: ["cursor-insertion"],
+    });
+    const credential = { deviceId: alicePhone.deviceId, deviceSecret: alicePhone.deviceSecret };
+    await t.mutation(putBatch, {
+      ...credential,
+      batchId: "pending-batch",
+      clientCreatedAt: Date.now(),
+      results: [result("pending-result")],
+    });
+    await t.mutation(queueCursorDelivery, {
+      ...credential,
+      deliveryId: "pending-delivery",
+      resultId: "pending-result",
+      targetDeviceId: "pending-alice-chrome",
+      kind: "text",
+      text: "pending-result",
+      clientCreatedAt: Date.now(),
+    });
+
+    expect(await alice.query(pendingCursorDeliveries, {
+      installationId: "pending-alice-chrome",
+    })).toHaveLength(1);
+    expect(await bob.query(pendingCursorDeliveries, {
+      installationId: "pending-bob-chrome",
+    })).toEqual([]);
+    await expect(bob.query(pendingCursorDeliveries, {
+      installationId: "pending-alice-chrome",
+    })).rejects.toThrow(/Registered computer not found/);
+  });
+
+  test("guards cursor delivery acknowledgement transitions and keeps terminal states immutable", async () => {
+    const t = convexTest(schema, modules);
+    const signedIn = t.withIdentity({ subject: "cursor-ack-owner" });
+    const phone = await signedIn.mutation(bootstrapMobileDevice, {
+      installationId: "cursor-ack-phone",
+      label: "Ack phone",
+    });
+    await signedIn.mutation(registerComputer, {
+      installationId: "cursor-ack-chrome",
+      label: "Ack Chrome",
+      capabilities: ["cursor-insertion"],
+    });
+    const credential = { deviceId: phone.deviceId, deviceSecret: phone.deviceSecret };
+    await t.mutation(putBatch, {
+      ...credential,
+      batchId: "cursor-ack-batch",
+      clientCreatedAt: Date.now(),
+      results: [result("delivered-result"), result("failed-result")],
+    });
+    for (const [deliveryId, resultId] of [
+      ["delivered-delivery", "delivered-result"],
+      ["failed-delivery", "failed-result"],
+    ] as const) {
+      await t.mutation(queueCursorDelivery, {
+        ...credential,
+        deliveryId,
+        resultId,
+        targetDeviceId: "cursor-ack-chrome",
+        kind: "text",
+        text: resultId,
+        clientCreatedAt: Date.now(),
+      });
+    }
+
+    expect(await signedIn.mutation(acknowledgeCursorDelivery, {
+      installationId: "cursor-ack-chrome",
+      deliveryId: "delivered-delivery",
+      state: "delivered",
+    })).toMatchObject({ state: "delivered", idempotent: false, attempts: 1 });
+    expect(await signedIn.mutation(acknowledgeCursorDelivery, {
+      installationId: "cursor-ack-chrome",
+      deliveryId: "delivered-delivery",
+      state: "failed",
+      errorCode: "no-editable-field",
+    })).toMatchObject({ state: "delivered", idempotent: true, attempts: 1 });
+    expect(await signedIn.mutation(acknowledgeCursorDelivery, {
+      installationId: "cursor-ack-chrome",
+      deliveryId: "failed-delivery",
+      state: "failed",
+      errorCode: "no-editable-field",
+    })).toMatchObject({ state: "failed", idempotent: false, attempts: 1 });
+    expect(await signedIn.mutation(acknowledgeCursorDelivery, {
+      installationId: "cursor-ack-chrome",
+      deliveryId: "failed-delivery",
+      state: "delivered",
+    })).toMatchObject({ state: "failed", idempotent: true, attempts: 1 });
+    const deliveries = await t.run((ctx) => ctx.db.query("cursorDeliveries").collect());
+    expect(deliveries.find((item) => item.deliveryId === "delivered-delivery")).toMatchObject({
+      state: "delivered",
+      attempts: 1,
+    });
+    expect(deliveries.find((item) => item.deliveryId === "failed-delivery")).toMatchObject({
+      state: "failed",
+      attempts: 1,
+      errorCode: "no-editable-field",
+    });
+  });
+
+  test("returns expired cursor deliveries so the extension can fail them", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-23T12:00:00Z"));
+    const t = convexTest(schema, modules);
+    const signedIn = t.withIdentity({ subject: "cursor-expiry-owner" });
+    const phone = await signedIn.mutation(bootstrapMobileDevice, {
+      installationId: "cursor-expiry-phone",
+      label: "Expiry phone",
+    });
+    await signedIn.mutation(registerComputer, {
+      installationId: "cursor-expiry-chrome",
+      label: "Expiry Chrome",
+      capabilities: ["cursor-insertion"],
+    });
+    const credential = { deviceId: phone.deviceId, deviceSecret: phone.deviceSecret };
+    await t.mutation(putBatch, {
+      ...credential,
+      batchId: "cursor-expiry-batch",
+      clientCreatedAt: Date.now(),
+      results: [result("expired-result"), result("current-result")],
+    });
+    await t.mutation(queueCursorDelivery, {
+      ...credential,
+      deliveryId: "expired-delivery",
+      resultId: "expired-result",
+      targetDeviceId: "cursor-expiry-chrome",
+      kind: "text",
+      text: "expired-result",
+      clientCreatedAt: Date.now() - CURSOR_DELIVERY_TTL_MS,
+    });
+    await t.mutation(queueCursorDelivery, {
+      ...credential,
+      deliveryId: "current-delivery",
+      resultId: "current-result",
+      targetDeviceId: "cursor-expiry-chrome",
+      kind: "text",
+      text: "current-result",
+      clientCreatedAt: Date.now(),
+    });
+
+    expect((await signedIn.query(pendingCursorDeliveries, {
+      installationId: "cursor-expiry-chrome",
+    })).map((delivery) => delivery.deliveryId)).toEqual([
+      "expired-delivery",
+      "current-delivery",
+    ]);
   });
 
   test("tombstones workspace results idempotently without crossing tenants", async () => {

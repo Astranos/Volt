@@ -14,6 +14,8 @@ export function installEditableTracker() {
     __voltEditableTrackerInstalled?: boolean;
   };
 
+  if (root.__voltEditableTrackerInstalled) return null;
+
   const isEditable = (element: Element | null): element is HTMLElement => {
     if (!(element instanceof HTMLElement)) return false;
     if (element.getAttribute("contenteditable") === "false") return false;

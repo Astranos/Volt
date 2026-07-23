@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct RootView: View {
     @Environment(ScannerStore.self) private var store
@@ -15,6 +16,13 @@ struct RootView: View {
     private let showsAccountSettings: Bool
 
     private static let connectionStatusDetent = PresentationDetent.height(164)
+
+    private var ownershipConflictIsPresented: Binding<Bool> {
+        Binding(
+            get: { store.cloudWorkspace.accountSwitchConflict != nil },
+            set: { _ in }
+        )
+    }
 
     init(showsAccountSettings: Bool = true) {
         self.showsAccountSettings = showsAccountSettings
@@ -62,6 +70,17 @@ struct RootView: View {
                 )
                     .presentationDetents([.medium, .large], selection: $connectionSheetDetent)
                     .presentationDragIndicator(.visible)
+            }
+        }
+        .sheet(isPresented: ownershipConflictIsPresented) {
+            if let conflict = store.cloudWorkspace.accountSwitchConflict {
+                AccountSwitchCaptureDecisionView(
+                    conflict: conflict,
+                    onRetain: store.cloudWorkspace.retainConflictingCaptures,
+                    onAttach: store.cloudWorkspace.attachConflictingCaptures,
+                    onDelete: store.cloudWorkspace.deleteConflictingCaptures
+                )
+                .interactiveDismissDisabled()
             }
         }
         .fullScreenCover(isPresented: $isWelcomePresented) {
@@ -277,6 +296,85 @@ struct RootView: View {
     }
 }
 
+private struct AccountSwitchCaptureDecisionView: View {
+    @State private var isExportPresented = false
+    let conflict: CaptureOwnershipConflict
+    let onRetain: () -> Void
+    let onAttach: () -> Void
+    let onDelete: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 18) {
+                Image(systemName: "person.crop.circle.badge.exclamationmark")
+                    .font(.system(size: 42, weight: .semibold))
+                    .foregroundStyle(.orange)
+
+                Text("Captures from another account")
+                    .font(.title2.bold())
+
+                Text("\(conflict.count) pending capture\(conflict.count == 1 ? "" : "s") will stay on this iPhone until you choose what to do. Volt will never upload them to the new account automatically.")
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                VStack(spacing: 10) {
+                    Button(action: onAttach) {
+                        Label("Attach to Current Account", systemImage: "person.crop.circle.badge.plus")
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.green)
+
+                    Button {
+                        isExportPresented = true
+                    } label: {
+                        Label("Export Captures", systemImage: "square.and.arrow.up")
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                    }
+                    .buttonStyle(.bordered)
+
+                    Button(action: onRetain) {
+                        Label("Retain on This iPhone", systemImage: "internaldrive")
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                    }
+                    .buttonStyle(.bordered)
+
+                    Button(role: .destructive, action: onDelete) {
+                        Label("Delete Pending Captures", systemImage: "trash")
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                    }
+                    .buttonStyle(.bordered)
+                }
+
+                Spacer()
+            }
+            .padding(24)
+            .navigationTitle("Account Change")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+        .presentationDetents([.large])
+        .sheet(isPresented: $isExportPresented) {
+            CaptureExportShareSheet(items: exportItems)
+        }
+    }
+
+    private var exportItems: [Any] {
+        var items: [Any] = [conflict.exportText]
+        items.append(contentsOf: conflict.exportPhotoURLs.map { $0 as Any })
+        return items
+    }
+}
+
+private struct CaptureExportShareSheet: UIViewControllerRepresentable {
+    let items: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}
+
 enum AppSection: Hashable {
     case scan
     case dictation
@@ -476,7 +574,7 @@ private struct WelcomeView: View {
                                     .font(.largeTitle.bold())
                                     .lineLimit(2)
                                     .minimumScaleFactor(0.82)
-                                Text("Thanks for installing. Volt turns your iPhone into a scanner for your computer.")
+                                Text("Capture on your iPhone anytime, then sync results to your Volt account when you sign in.")
                                     .font(.body)
                                     .foregroundStyle(.secondary)
                                     .fixedSize(horizontal: false, vertical: true)
@@ -485,19 +583,19 @@ private struct WelcomeView: View {
 
                         VStack(spacing: 12) {
                             WelcomeStep(
-                                systemImage: "safari",
-                                title: "Open Volt on your computer",
-                                message: "Use the Volt website or the Chrome extension."
-                            )
-                            WelcomeStep(
-                                systemImage: "qrcode.viewfinder",
-                                title: "Scan the pairing QR",
-                                message: "Scan the QR from Chrome or the create session page."
-                            )
-                            WelcomeStep(
                                 systemImage: "camera.viewfinder",
-                                title: "Send scans from your phone",
-                                message: "Capture barcodes, text, voice notes, and photos."
+                                title: "Capture anywhere",
+                                message: "Barcodes, text, and photos save on this iPhone even when you are offline."
+                            )
+                            WelcomeStep(
+                                systemImage: "person.crop.circle",
+                                title: "Sign in to sync",
+                                message: "Volt automatically connects this installation to your account workspace."
+                            )
+                            WelcomeStep(
+                                systemImage: "cursorarrow.motionlines",
+                                title: "Choose a computer when needed",
+                                message: "A live computer is optional and only controls cursor insertion."
                             )
                         }
                     }
@@ -525,8 +623,8 @@ private struct WelcomeActions: View {
 
     var body: some View {
         VStack(spacing: 10) {
-            Button(action: onScanPairingQR) {
-                Label("Scan QR Code to Pair", systemImage: "qrcode.viewfinder")
+            Button(action: onContinue) {
+                Label("Start Capturing", systemImage: "camera.viewfinder")
                     .font(.headline)
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity, minHeight: 54)
@@ -537,8 +635,8 @@ private struct WelcomeActions: View {
             }
             .buttonStyle(.plain)
 
-            Button(action: onContinue) {
-                Text("Continue Without Pairing")
+            Button(action: onScanPairingQR) {
+                Label("Pair a Legacy Chrome Session", systemImage: "qrcode.viewfinder")
                     .font(.headline)
                     .foregroundStyle(.primary)
                     .frame(maxWidth: .infinity, minHeight: 52)

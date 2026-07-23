@@ -7,8 +7,7 @@ struct CaptureSessionView: View {
     @State private var selectedTextRegion: RecognizedTextRegion?
     @State private var selectedCleanedText: String?
     @State private var isCleaningSelectedText = false
-    @State private var isConnectionRecoveryPresented = false
-    @State private var showsConnectionSessions = false
+    @State private var isTargetPickerPresented = false
 
     var body: some View {
         @Bindable var store = store
@@ -52,12 +51,20 @@ struct CaptureSessionView: View {
         }
         .background(.black)
         .overlay(alignment: .top) {
-            if let toast = store.captureDeliveryToast {
-                CaptureDeliveryToastView(toast: toast)
-                    .padding(.horizontal, 16)
-                    .padding(.top, 10)
-                    .transition(.move(edge: .top).combined(with: .opacity))
+            VStack(spacing: 8) {
+                HStack {
+                    Spacer()
+                    CloudTargetButton {
+                        isTargetPickerPresented = true
+                    }
+                }
+                if let toast = store.captureDeliveryToast {
+                    CaptureDeliveryToastView(toast: toast)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
             }
+            .padding(.horizontal, 16)
+            .padding(.top, 10)
         }
         .animation(.spring(response: 0.28, dampingFraction: 0.86), value: store.captureDeliveryToast?.id)
         .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -94,7 +101,7 @@ struct CaptureSessionView: View {
                         gridVisible: gridVisible,
                         hasLiveTextCandidates: !store.camera.liveTextCandidates.isEmpty,
                         isRecognizingText: store.isRecognizingText,
-                        isCaptureEnabled: store.connectionStatus.isConnected,
+                        isCaptureEnabled: true,
                         barcodeHint: ScreenshotScenario.current == .captureBarcode ? "Send '883929739929'" : "Point camera at barcode",
                         onToggleTorch: {
                             store.camera.setTorchEnabled(!store.camera.torchEnabled)
@@ -119,28 +126,8 @@ struct CaptureSessionView: View {
                 }
             }
         }
-        .sheet(isPresented: $isConnectionRecoveryPresented) {
-            if let connectionStatusSheet {
-                PairingStatusSheet(sheet: connectionStatusSheet) {
-                    showsConnectionSessions = true
-                    if connectionStatusSheet.canCancel {
-                        store.cancelConnectionAttempt()
-                    }
-                }
-                .presentationDetents([.height(164), .medium, .large])
-                .presentationDragIndicator(.visible)
-            } else {
-                PairingSessionsView(
-                    onReconnectStarted: {
-                        showConnectionProgress()
-                    },
-                    onPairingCodeAccepted: {
-                        showConnectionProgress()
-                    }
-                )
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
-            }
+        .sheet(isPresented: $isTargetPickerPresented) {
+            CloudTargetPickerSheet()
         }
         .onAppear {
             if ScreenshotScenario.current == .captureReviewSend,
@@ -155,8 +142,11 @@ struct CaptureSessionView: View {
         .onChange(of: store.ocrReviewImage != nil) { _, isReviewingOcr in
             syncCameraForOcrReview(isReviewingOcr: isReviewingOcr)
         }
-        .onChange(of: store.connectionStatus) { _, status in
-            handleConnectionStatusChange(status)
+        .task {
+            while !Task.isCancelled {
+                await store.cloudWorkspace.refreshComputers()
+                try? await Task.sleep(for: .seconds(30))
+            }
         }
         .task(id: store.captureDeliveryToast?.id) {
             guard let toast = store.captureDeliveryToast else { return }
@@ -193,64 +183,6 @@ struct CaptureSessionView: View {
             selectedTextRegion = region
             isCleaningSelectedText = false
             store.statusText = result.usedFoundationModel ? "Text cleaned on device" : "Text cleaned"
-        }
-    }
-
-    private func handleConnectionStatusChange(_ status: ScannerConnectionStatus) {
-        if status.isConnected {
-            isConnectionRecoveryPresented = false
-            return
-        }
-
-        selectedTextRegion = nil
-        selectedCleanedText = nil
-        store.clearOcrReview()
-
-        switch status {
-        case .idle, .disconnected, .error:
-            isConnectionRecoveryPresented = true
-        case .pairing, .waitingForChrome:
-            showsConnectionSessions = false
-            isConnectionRecoveryPresented = true
-        case .connected:
-            break
-        }
-    }
-
-    private func showConnectionProgress() {
-        showsConnectionSessions = false
-        isConnectionRecoveryPresented = true
-    }
-
-    private var connectionStatusSheet: PairingStatusSheetModel? {
-        guard !showsConnectionSessions else { return nil }
-        switch store.connectionStatus {
-        case .pairing:
-            return PairingStatusSheetModel(
-                title: store.canCancelReconnect ? "Reconnecting to Chrome" : "Pairing with Chrome",
-                message: store.peerTarget?.displayText ?? "Trying to open the scanner channel.",
-                systemImage: "link",
-                isProgressing: true,
-                canCancel: true
-            )
-        case .waitingForChrome:
-            return PairingStatusSheetModel(
-                title: "Waiting for Chrome",
-                message: "Finishing the secure scanner handshake.",
-                systemImage: "desktopcomputer",
-                isProgressing: true,
-                canCancel: true
-            )
-        case .error:
-            return PairingStatusSheetModel(
-                title: "Pairing failed",
-                message: store.targetHint,
-                systemImage: "exclamationmark.triangle",
-                isProgressing: false,
-                canCancel: false
-            )
-        case .idle, .connected, .disconnected:
-            return nil
         }
     }
 

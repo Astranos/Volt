@@ -19,15 +19,6 @@ final class DurableCaptureOutbox {
         load()
     }
 
-    var readyRecords: [CloudCaptureRecord] {
-        let now = Date.now
-        return records.filter { record in
-            guard record.state != .uploaded else { return false }
-            guard let nextAttemptAt = record.nextAttemptAt else { return true }
-            return nextAttemptAt <= now
-        }
-    }
-
     var restoredResults: [ScanResult] {
         records.compactMap { record in
             guard let kind = ScanResult.Kind(rawValue: record.kind),
@@ -40,7 +31,7 @@ final class DurableCaptureOutbox {
                 value: record.value,
                 format: record.format,
                 capturedAt: record.capturedAt,
-                deliveryState: record.state == .uploaded ? .sent : (record.state == .failed ? .failed : .saved),
+                deliveryState: deliveryState(for: record),
                 imageData: try? photoData(for: record),
                 batchId: record.batchId
             )
@@ -48,8 +39,32 @@ final class DurableCaptureOutbox {
         .sorted { $0.capturedAt > $1.capturedAt }
     }
 
+    func readyRecords(ownerClerkUserId: String) -> [CloudCaptureRecord] {
+        let now = Date.now
+        return records.filter { record in
+            guard record.ownerClerkUserId == ownerClerkUserId,
+                  record.state != .uploaded,
+                  record.state != .held
+            else { return false }
+            guard let nextAttemptAt = record.nextAttemptAt else { return true }
+            return nextAttemptAt <= now
+        }
+    }
+
+    func pendingOwnershipConflicts(for ownerClerkUserId: String) -> [CloudCaptureRecord] {
+        records.filter { record in
+            guard record.state != .uploaded, record.retainedLocally != true else { return false }
+            return record.ownerClerkUserId == nil || record.ownerClerkUserId != ownerClerkUserId
+        }
+    }
+
     @discardableResult
-    func enqueue(result: ScanResult, photoData: Data? = nil) throws -> CloudCaptureRecord {
+    func enqueue(
+        result: ScanResult,
+        photoData: Data? = nil,
+        ownerClerkUserId: String?,
+        workspaceId: String?
+    ) throws -> CloudCaptureRecord {
         try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
         let storedFilename = photoData == nil ? nil : "\(result.id.uuidString.lowercased()).jpg"
         if let photoData, let storedFilename {
@@ -65,6 +80,9 @@ final class DurableCaptureOutbox {
             batchId: result.batchId ?? result.id.uuidString.lowercased(),
             photoFilename: storedFilename,
             photoContentType: storedFilename == nil ? nil : "image/jpeg",
+            ownerClerkUserId: ownerClerkUserId,
+            workspaceId: workspaceId,
+            retainedLocally: false,
             state: .pending,
             attemptCount: 0,
             nextAttemptAt: nil
@@ -88,6 +106,92 @@ final class DurableCaptureOutbox {
         return try Data(contentsOf: directoryURL.appending(path: filename))
     }
 
+    func reconcileOwnership(ownerClerkUserId: String, workspaceId: String) throws {
+        let hasForeignOwner = records.contains { record in
+            record.state != .uploaded
+                && record.retainedLocally != true
+                && record.ownerClerkUserId != nil
+                && record.ownerClerkUserId != ownerClerkUserId
+        }
+        for index in records.indices where records[index].state != .uploaded {
+            if records[index].ownerClerkUserId == ownerClerkUserId {
+                if records[index].state == .held && records[index].retainedLocally != true {
+                    records[index].state = .pending
+                    records[index].nextAttemptAt = nil
+                }
+                continue
+            }
+            if records[index].ownerClerkUserId == nil && !hasForeignOwner {
+                records[index].ownerClerkUserId = ownerClerkUserId
+                records[index].workspaceId = workspaceId
+                records[index].retainedLocally = false
+                records[index].state = .pending
+                records[index].nextAttemptAt = nil
+            } else {
+                records[index].state = .held
+                records[index].nextAttemptAt = nil
+            }
+        }
+        try save()
+    }
+
+    func pauseUploads() throws {
+        for index in records.indices where records[index].state != .uploaded {
+            records[index].state = .held
+            records[index].nextAttemptAt = nil
+        }
+        try save()
+    }
+
+    func retain(ids: Set<UUID>) throws {
+        for index in records.indices where ids.contains(records[index].id) {
+            records[index].state = .held
+            records[index].retainedLocally = true
+            records[index].nextAttemptAt = nil
+        }
+        try save()
+    }
+
+    func attach(ids: Set<UUID>, ownerClerkUserId: String, workspaceId: String) throws {
+        for index in records.indices where ids.contains(records[index].id) {
+            records[index].ownerClerkUserId = ownerClerkUserId
+            records[index].workspaceId = workspaceId
+            records[index].retainedLocally = false
+            records[index].state = .pending
+            records[index].attemptCount = 0
+            records[index].nextAttemptAt = nil
+        }
+        try save()
+    }
+
+    func remove(ids: Set<UUID>) throws {
+        for record in records where ids.contains(record.id) {
+            if let filename = record.photoFilename {
+                try? fileManager.removeItem(at: directoryURL.appending(path: filename))
+            }
+        }
+        records.removeAll { ids.contains($0.id) }
+        try save()
+    }
+
+    func exportPhotoURLs(for ids: Set<UUID>) -> [URL] {
+        records.compactMap { record in
+            guard ids.contains(record.id), let filename = record.photoFilename else { return nil }
+            let url = directoryURL.appending(path: filename)
+            return fileManager.fileExists(atPath: url.path) ? url : nil
+        }
+    }
+
+    func exportText(for ids: Set<UUID>) -> String {
+        let selected = records
+            .filter { ids.contains($0.id) }
+            .sorted { $0.capturedAt < $1.capturedAt }
+        guard let data = try? Self.encoder.encode(selected),
+              let text = String(data: data, encoding: .utf8)
+        else { return "[]" }
+        return text
+    }
+
     func markSyncing(id: UUID) throws { try update(id: id, state: .syncing, retryAt: nil) }
 
     func markUploaded(id: UUID) throws {
@@ -108,11 +212,18 @@ final class DurableCaptureOutbox {
     }
 
     func remove(id: UUID) throws {
-        if let filename = records.first(where: { $0.id == id })?.photoFilename {
-            try? fileManager.removeItem(at: directoryURL.appending(path: filename))
+        try remove(ids: Set([id]))
+    }
+
+    private func deliveryState(for record: CloudCaptureRecord) -> ScanResult.DeliveryState {
+        switch record.state {
+        case .uploaded:
+            .sent
+        case .failed:
+            .failed
+        case .pending, .syncing, .held:
+            .saved
         }
-        records.removeAll { $0.id == id }
-        try save()
     }
 
     private func update(id: UUID, state: CloudCaptureRecord.State, retryAt: Date?) throws {

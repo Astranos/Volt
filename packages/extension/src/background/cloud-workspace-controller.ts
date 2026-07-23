@@ -1,15 +1,19 @@
 import { isTrustedExtensionPageSender, type ExtensionMessageSender } from "../access/sender-policy";
 import { chromeLocalKeyValueStorage, createWorkspaceStore } from "../cloud-scanner/workspace-store.ts";
+import { hydrateWorkspaceReplica, resetWorkspaceHydration } from "../cloud-scanner/workspace-hydration.ts";
 import { normalizeWorkspaceSnapshot } from "../cloud-scanner/workspace-snapshot.ts";
 import { getMobileScannerExtensionIdentity } from "../domain/mobile-scanner-identity";
 
 const COMPUTER_REGISTRATION_KEY = "volt.cloudScanner.computerRegistration.v1";
+const ACTIVE_WORKSPACE_KEY = "volt.cloudScanner.activeWorkspace.v1";
+const ACTIVE_CLERK_SUBJECT_KEY = "volt.cloudScanner.activeClerkSubject.v1";
 const COMPUTER_PRESENCE_ALARM = "volt.cloudScanner.computerPresence";
 const COMPUTER_PRESENCE_TTL_MS = 2 * 60 * 1000;
 
 type WorkspaceMessage =
   | { action: "workspaceCreateEnrollment"; label: string; clerkToken: string }
   | { action: "workspaceGetSnapshot" }
+  | { action: "workspaceReconcile" }
   | { action: "workspaceGetPhotoDownload"; batchId: string; resultId: string }
   | { action: "workspaceDeleteResults"; resultIds: string[] }
   | { action: "workspaceRestoreResults"; resultIds: string[] };
@@ -17,6 +21,8 @@ type WorkspaceMessage =
 type ControllerOptions = {
   chromeApi: typeof chrome;
   getClerkToken: () => Promise<string | null>;
+  handleCursorDeliveries: (deliveries: unknown) => Promise<void>;
+  sendOffscreenMessage: (message: unknown) => Promise<unknown>;
   siteUrl: string;
 };
 
@@ -28,7 +34,9 @@ function recordFrom(value: unknown): Record<string, unknown> | null {
 
 function parseMessage(value: unknown): WorkspaceMessage | null {
   const record = recordFrom(value);
-  if (record?.action === "workspaceGetSnapshot") return { action: record.action };
+  if (record?.action === "workspaceGetSnapshot" || record?.action === "workspaceReconcile") {
+    return { action: record.action };
+  }
   if (record?.action === "workspaceGetPhotoDownload") {
     return typeof record.batchId === "string" && typeof record.resultId === "string"
       ? { action: record.action, batchId: record.batchId, resultId: record.resultId }
@@ -53,6 +61,7 @@ function parseMessage(value: unknown): WorkspaceMessage | null {
 
 export function createCloudWorkspaceController(options: ControllerOptions) {
   const store = createWorkspaceStore(chromeLocalKeyValueStorage(options.chromeApi));
+  let snapshotQueue = Promise.resolve();
 
   function routeUrl(path: string) {
     const url = new URL(options.siteUrl);
@@ -100,12 +109,76 @@ export function createCloudWorkspaceController(options: ControllerOptions) {
     return { enrollmentCode, enrollmentUrl, expiresAt };
   }
 
+  async function resetActiveHistory() {
+    await resetWorkspaceHydration();
+    await options.chromeApi.storage.local.remove(ACTIVE_WORKSPACE_KEY);
+    void options.chromeApi.runtime.sendMessage({ action: "workspaceReplicaChanged" }).catch(() => undefined);
+  }
+
+  async function activateWorkspace(workspaceId: string) {
+    const stored = await options.chromeApi.storage.local.get(ACTIVE_WORKSPACE_KEY);
+    const activeWorkspaceId = stored[ACTIVE_WORKSPACE_KEY];
+    if (typeof activeWorkspaceId === "string" && activeWorkspaceId !== workspaceId) {
+      await resetActiveHistory();
+    }
+    await options.chromeApi.storage.local.set({ [ACTIVE_WORKSPACE_KEY]: workspaceId });
+  }
+
+  async function applySnapshotNow(payload: unknown) {
+    const page = normalizeWorkspaceSnapshot(payload);
+    if (!page) throw new Error("Workspace snapshot was invalid.");
+    await activateWorkspace(page.workspaceId);
+    const replica = await store.mergePage(page);
+    await hydrateWorkspaceReplica(replica, { getPhotoDownload }).catch(() => undefined);
+    void options.chromeApi.runtime.sendMessage({
+      action: "workspaceReplicaChanged",
+      workspaceId: replica.workspaceId,
+    }).catch(() => undefined);
+    return replica;
+  }
+
+  function applySnapshot(payload: unknown) {
+    const operation = snapshotQueue.then(() => applySnapshotNow(payload));
+    snapshotQueue = operation.then(() => undefined, () => undefined);
+    return operation;
+  }
+
   async function getSnapshot() {
     await registerComputer();
     const payload = await request("/api/workspace/snapshot", "GET");
-    const page = normalizeWorkspaceSnapshot(payload);
-    if (!page) throw new Error("Workspace snapshot was invalid.");
-    return store.mergePage(page);
+    return applySnapshot(payload);
+  }
+
+  async function reconcileWorkspace() {
+    await registerComputer();
+    const response = await options.sendOffscreenMessage({
+      action: "workspaceOffscreenReconcile",
+    });
+    const record = recordFrom(response);
+    if (record?.success !== true || record.snapshot === undefined) {
+      return getSnapshot();
+    }
+    return applySnapshot(record.snapshot);
+  }
+
+  async function handleAccountChangedNow(subject: string | null) {
+    const stored = await options.chromeApi.storage.local.get(ACTIVE_CLERK_SUBJECT_KEY);
+    const previousSubject = stored[ACTIVE_CLERK_SUBJECT_KEY];
+    const didChange = typeof previousSubject === "string" && previousSubject !== subject;
+    const didSignOut = subject === null && typeof previousSubject === "string";
+    if (didChange || didSignOut) await resetActiveHistory();
+    if (subject === null) {
+      await options.chromeApi.storage.local.remove(ACTIVE_CLERK_SUBJECT_KEY);
+      return;
+    }
+    await options.chromeApi.storage.local.set({ [ACTIVE_CLERK_SUBJECT_KEY]: subject });
+    await registerComputer();
+  }
+
+  function handleAccountChanged(subject: string | null) {
+    const operation = snapshotQueue.then(() => handleAccountChangedNow(subject));
+    snapshotQueue = operation.then(() => undefined, () => undefined);
+    return operation;
   }
 
   async function getPhotoDownload(batchId: string, resultId: string) {
@@ -137,7 +210,7 @@ export function createCloudWorkspaceController(options: ControllerOptions) {
     const payload = await request("/api/workspace/computers/register", "POST", {
       installationId: identity.installId,
       label: identity.sessionLabel,
-      capabilities: ["workspace-results", "cursor-insertion", "dictation"],
+      capabilities: ["workspace-results", "cursor-insertion", "photo-download"],
       ttlMs: COMPUTER_PRESENCE_TTL_MS,
     }, clerkToken);
     const record = recordFrom(payload);
@@ -162,6 +235,34 @@ export function createCloudWorkspaceController(options: ControllerOptions) {
     sender: ExtensionMessageSender,
     sendResponse: (response?: unknown) => void,
   ) {
+    const rawRecord = recordFrom(rawMessage);
+    const isOffscreenMessage =
+      rawRecord?.action === "workspaceOffscreenSnapshotChanged"
+      || rawRecord?.action === "workspaceOffscreenCursorDeliveriesChanged"
+      || rawRecord?.action === "workspaceOffscreenAccountChanged";
+    if (isOffscreenMessage) {
+      if (!isTrustedExtensionPageSender(
+        sender,
+        options.chromeApi.runtime.id,
+        ["/offscreen.html"],
+      )) {
+        sendResponse({ success: false, error: "unauthorized_extension_sender" });
+        return true;
+      }
+      const operation = rawRecord.action === "workspaceOffscreenSnapshotChanged"
+        ? applySnapshot(rawRecord.snapshot)
+        : rawRecord.action === "workspaceOffscreenCursorDeliveriesChanged"
+          ? options.handleCursorDeliveries(rawRecord.deliveries)
+          : handleAccountChanged(typeof rawRecord.subject === "string" ? rawRecord.subject : null);
+      void operation
+        .then((value) => sendResponse({ success: true, value }))
+        .catch((error: unknown) => sendResponse({
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        }));
+      return true;
+    }
+
     const message = parseMessage(rawMessage);
     if (!message) return false;
     if (!isTrustedExtensionPageSender(
@@ -176,6 +277,7 @@ export function createCloudWorkspaceController(options: ControllerOptions) {
       switch (message.action) {
         case "workspaceCreateEnrollment": return createEnrollment(message.label, message.clerkToken);
         case "workspaceGetSnapshot": return getSnapshot();
+        case "workspaceReconcile": return reconcileWorkspace();
         case "workspaceGetPhotoDownload": return getPhotoDownload(message.batchId, message.resultId);
         case "workspaceDeleteResults": return deleteResults(message.resultIds);
         case "workspaceRestoreResults": return restoreResults(message.resultIds);
@@ -202,6 +304,9 @@ export function createCloudWorkspaceController(options: ControllerOptions) {
         periodInMinutes: 1,
       });
       await registerComputer().catch(() => undefined);
+      await options.sendOffscreenMessage({
+        action: "workspaceOffscreenStartSubscriptions",
+      }).catch(() => undefined);
     },
   };
 }

@@ -1,4 +1,5 @@
 import {
+  clearMobileScannerResultsStore,
   deleteMobileScannerResults,
   listMobileScannerResults,
   saveMobileScannerPhoto,
@@ -52,34 +53,68 @@ export function planWorkspaceHydration(
   return { available, deletedIds };
 }
 
-async function photoBlob(result: CloudScannerResult) {
+type PhotoDownload = {
+  url: string;
+  headers?: Record<string, string>;
+};
+
+type WorkspaceHydrationOptions = {
+  getPhotoDownload?: (batchId: string, resultId: string) => Promise<PhotoDownload>;
+};
+
+async function defaultPhotoDownload(batchId: string, resultId: string) {
   const response: unknown = await chrome.runtime.sendMessage({
     action: "workspaceGetPhotoDownload",
-    batchId: result.batchId,
-    resultId: result.id,
+    batchId,
+    resultId,
   });
   const responseRecord = recordFrom(response);
   const value = recordFrom(responseRecord?.value);
   if (responseRecord?.success !== true || typeof value?.url !== "string") return null;
   const headers = recordFrom(value.headers);
-  const download = await fetch(value.url, {
+  return {
+    url: value.url,
     headers: headers
       ? Object.fromEntries(Object.entries(headers).filter((entry): entry is [string, string] => typeof entry[1] === "string"))
       : undefined,
-  });
+  };
+}
+
+async function photoBlob(result: CloudScannerResult, options: WorkspaceHydrationOptions) {
+  const source = options.getPhotoDownload
+    ? await options.getPhotoDownload(result.batchId, result.id)
+    : await defaultPhotoDownload(result.batchId, result.id);
+  if (!source) return null;
+  const download = await fetch(source.url, { headers: source.headers });
   return download.ok ? download.blob() : null;
 }
 
-function blobToDataUrl(blob: Blob) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(reader.error ?? new Error("Cloud photo read failed"));
-    reader.onload = () => resolve(String(reader.result || ""));
-    reader.readAsDataURL(blob);
-  });
+async function blobToDataUrl(blob: Blob) {
+  if (typeof FileReader !== "undefined") {
+    return new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(reader.error ?? new Error("Cloud photo read failed"));
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.readAsDataURL(blob);
+    });
+  }
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+  }
+  return `data:${blob.type || "application/octet-stream"};base64,${btoa(binary)}`;
 }
 
-export async function hydrateWorkspaceReplica(replica: WorkspaceReplica) {
+export async function resetWorkspaceHydration() {
+  await clearMobileScannerResultsStore();
+  await chrome.storage.local.remove(CLOUD_ORIGINS_KEY);
+}
+
+export async function hydrateWorkspaceReplica(
+  replica: WorkspaceReplica,
+  options: WorkspaceHydrationOptions = {},
+) {
   const existing = await listMobileScannerResults();
   let origins = await loadOrigins();
   for (const batch of replica.batches) {
@@ -101,7 +136,7 @@ export async function hydrateWorkspaceReplica(replica: WorkspaceReplica) {
   origins = removeAppliedTombstoneOrigins(origins, plan.deletedIds);
   for (const result of plan.available) {
     if (result.kind === "photo") {
-      const blob = await photoBlob(result);
+      const blob = await photoBlob(result, options);
       if (!blob) continue;
       await saveMobileScannerPhoto({
         id: result.id,
