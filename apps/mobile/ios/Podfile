@@ -4,5 +4,4 @@ install! 'cocoapods',
   :deterministic_uuids => false
 
 target 'Volt' do
-  pod 'JitsiWebRTC', '~> 124.0.0'
 end

@@ -11,7 +11,6 @@ struct UploadView: View {
     @State private var queuedUploadSelections: [[PhotosPickerItem]] = []
     @State private var isProcessingUploadQueue = false
     @State private var expandedBatchIds: Set<String> = []
-    @State private var isSessionsPresented = false
 
     private var recentPhotoResults: [ScanResult] {
         store.results.filter { $0.kind == .photo && $0.source == .upload }
@@ -43,12 +42,8 @@ struct UploadView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: ScannerTabLayout.stackSpacing) {
-                    ScannerSectionHeader(
-                        title: "Upload",
-                        onConnectionControlTapped: {
-                            isSessionsPresented = true
-                        }
-                    )
+                    Text("Upload")
+                        .font(.largeTitle.bold())
 
                     if isPreparingUploads {
                         PhotoPreparationProgressSummary(
@@ -68,11 +63,6 @@ struct UploadView: View {
             .background(ScannerTabLayout.background)
             .navigationTitle("Upload")
             .toolbar(.hidden, for: .navigationBar)
-            .sheet(isPresented: $isSessionsPresented) {
-                PairingSessionsView()
-                    .presentationDetents([.medium, .large])
-                    .presentationDragIndicator(.visible)
-            }
             .onChange(of: selectedItems) { _, newItems in
                 guard !newItems.isEmpty else { return }
                 selectedItems = []
@@ -89,7 +79,7 @@ struct UploadView: View {
                     isUploading: activeUploadProgress != nil,
                     statusText: uploadStatusText,
                     showsError: uploadError != nil,
-                    disabledHint: uploadError ?? store.targetHint
+                    disabledHint: uploadError ?? "Photos save on this iPhone before cloud sync."
                 )
             }
         }

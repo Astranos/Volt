@@ -1,7 +1,4 @@
 import Observation
-import CoreImage
-import CoreImage.CIFilterBuiltins
-import Security
 import UIKit
 
 struct CaptureDeliveryToast: Identifiable, Equatable {
@@ -20,25 +17,16 @@ struct CaptureDeliveryToast: Identifiable, Equatable {
 @MainActor
 @Observable
 final class ScannerStore {
-    static let pairedSessionsStorageKey = "volt.pairedScannerSessions.v2"
     static let barcodeRecognitionModeStorageKey = "volt.barcodeRecognitionMode.v1"
 
     let ocrCaptureMaxDimension: CGFloat = 1800
     let photoLongEdge: CGFloat = 2200
-    let dictationRequestLimit: Duration = .seconds(55)
-    let dictationReleaseGraceDelay: Duration = .milliseconds(1500)
 
     var activeMode: CaptureMode = .ocr
     var selectedSection: AppSection = .scan
-    var pairingSession: PairingSession?
-    var pairedSessions: [PairedScannerSession] = []
-    var recentBrowserSessions: [PairedScannerSession] = []
-    var connectionStatus: ScannerConnectionStatus = .idle
-    var peerTarget: ScannerPeerTarget?
-    var canCancelReconnect = false
     var results: [ScanResult] = []
-    var statusText = "Not paired"
-    var targetHint = ScannerStore.disconnectedPairingHint
+    var statusText = "Ready to capture"
+    var targetHint = "Captures save on this iPhone and sync to your Volt workspace when signed in."
     var ocrReviewImage: UIImage?
     var ocrReviewText = ""
     var ocrTextRegions: [RecognizedTextRegion] = []
@@ -53,21 +41,20 @@ final class ScannerStore {
     }
 
     let camera = CameraModel()
-    let dictation = DictationModel()
     let cloudWorkspace: CloudWorkspaceStore
-    let contributorId = ScannerProtocol.makeContributorId()
 
-    static let disconnectedPairingHint = "Use the connect button in the top right to pair to Chrome."
+    var lastBarcodeValue: String?
+    var lastBarcodeSentAt: Date?
+    var photoBatch: (id: String, expiresAt: Date)?
+    var resumedPhotoBatchId: String?
+    @ObservationIgnored let captureFailureFeedback = UINotificationFeedbackGenerator()
+    @ObservationIgnored let captureFailureImpactFeedback = UIImpactFeedbackGenerator(style: .heavy)
 
     init(cloudWorkspace: CloudWorkspaceStore = CloudWorkspaceStore()) {
         self.cloudWorkspace = cloudWorkspace
         self.results = cloudWorkspace.restoredResults
-        loadPairedSessions()
         barcodeRecognitionMode = Self.savedBarcodeRecognitionMode()
         camera.updateBarcodeRecognitionMode(barcodeRecognitionMode)
-        dictation.onTranscriptChange = { [weak self] text in
-            self?.handleDictationTranscriptChange(text)
-        }
         applyScreenshotFixturesIfNeeded()
     }
 
@@ -78,406 +65,15 @@ final class ScannerStore {
         return mode
     }
 
-    @ObservationIgnored lazy var connection: ScannerWebRTCConnection = {
-        let connection = ScannerWebRTCConnection(contributorId: contributorId)
-        connection.onStatusChange = { [weak self] status in
-            self?.applyConnectionStatus(status)
-        }
-        connection.onSessionReady = { [weak self] message in
-            self?.applySessionReady(message)
-        }
-        connection.onResultReceived = { [weak self] receipt in
-            self?.applyResultReceived(receipt)
-        }
-        connection.onPhotoTransferCompleted = { [weak self] photoId in
-            self?.applyPhotoTransferCompleted(photoId: photoId)
-        }
-        return connection
-    }()
-    @ObservationIgnored let signaling = ScannerSignalingClient()
-    @ObservationIgnored var photoRetryQueue = MobilePhotoRetryQueue()
-    var lastBarcodeValue: String?
-    var lastBarcodeSentAt: Date?
-    var photoBatch: (id: String, expiresAt: Date)?
-    var resumedPhotoBatchId: String?
-    var dictationSessionId: String?
-    var lastDictationPartialText = ""
-    var dictationStartToken: UUID?
-    var shouldStopDictationAfterStart = false
-    @ObservationIgnored var dictationLimitTask: Task<Void, Never>?
-    var dictationTargetKey: String?
-    var lastAutomaticReconnectAt: Date?
-    var activeAutomaticReconnectToken: UUID?
-    var preservesReconnectCancelOnNextDisconnect = false
-    var lastPairingCandidateValue: String?
-    @ObservationIgnored var reconnectTask: Task<Void, Never>?
-    @ObservationIgnored var foregroundRecoveryTask: Task<Void, Never>?
-    @ObservationIgnored var wasConnectedBeforeBackground = false
-    @ObservationIgnored var dictationGraceStopTask: Task<Void, Never>?
-    @ObservationIgnored let pairingImpactFeedback = UIImpactFeedbackGenerator(style: .medium)
-    @ObservationIgnored let pairingNotificationFeedback = UINotificationFeedbackGenerator()
-    @ObservationIgnored let dictationImpactFeedback = UIImpactFeedbackGenerator(style: .light)
-    @ObservationIgnored let dictationNotificationFeedback = UINotificationFeedbackGenerator()
-    @ObservationIgnored let captureSuccessFeedback = UINotificationFeedbackGenerator()
-    @ObservationIgnored let captureFailureFeedback = UINotificationFeedbackGenerator()
-    @ObservationIgnored let captureFailureImpactFeedback = UIImpactFeedbackGenerator(style: .heavy)
-
     func handleIncomingURL(_ url: URL) {
-        if let enrollment = EnrollmentURLParser.parse(url) {
-            Task { await cloudWorkspace.enroll(enrollment) }
-            selectedSection = .scan
-            statusText = "Enrolling this device"
-            return
-        }
-        let parsed = PairingURLParser.parse(url)
-        if let session = parsed.0 {
-            beginFreshPairing(with: session)
-        }
-        if let mode = parsed.1 {
-            activeMode = mode
-        }
-    }
-
-    func beginFreshPairing(with session: PairingSession, mode: CaptureMode? = nil) {
-        pairingSession = session
-        peerTarget = nil
-        if let mode {
-            activeMode = mode
-        }
-        Task { await pair(with: session) }
-    }
-
-    func updateAppIsInBackground(_ isInBackground: Bool) {
-        foregroundRecoveryTask?.cancel()
-        if isInBackground {
-            wasConnectedBeforeBackground = wasConnectedBeforeBackground || connectionStatus.isConnected
-        }
-        connection.setAppIsInBackground(isInBackground)
-        guard !isInBackground, wasConnectedBeforeBackground else { return }
-        wasConnectedBeforeBackground = false
-        foregroundRecoveryTask = Task { [weak self] in
-            // Give an existing ICE path one brief chance to resume before
-            // starting the durable-pairing handshake.
-            try? await Task.sleep(for: .milliseconds(750))
-            guard !Task.isCancelled, let self, !self.connection.isConnected else { return }
-            guard !self.connectionStatus.isConnecting, self.reconnectTask == nil else { return }
-            let previousBrowserSessionId = self.peerTarget?.chromeSessionId
-            guard let pairedSession = self.pairedSessions.first(where: {
-                $0.browserSessionId == previousBrowserSessionId
-            }) ?? self.pairedSessions.first else { return }
-            self.reconnect(to: pairedSession, reportsErrors: false, isAutomatic: true)
-        }
-    }
-
-    func reconnect(to pairedSession: PairedScannerSession, reportsErrors: Bool = true, isAutomatic: Bool = false) {
-        reconnectTask?.cancel()
-        let automaticToken = isAutomatic ? UUID() : nil
-        activeAutomaticReconnectToken = automaticToken
-        canCancelReconnect = true
-        peerTarget = ScannerPeerTarget(
-            chromeSessionId: pairedSession.browserSessionId,
-            sessionLabel: pairedSession.displayName,
-            tabTitle: pairedSession.displayName,
-            tabURL: nil,
-            cursorLabel: nil,
-            browser: "Chrome"
-        )
-        applyConnectionStatus(.pairing)
-        reconnectTask = Task { [weak self] in
-            await self?.reconnectWithSavedPairing(
-                pairedSession,
-                reportsErrors: reportsErrors,
-                automaticToken: automaticToken
-            )
-        }
-    }
-
-    var hasReconnectablePairedSession: Bool {
-        pairedSessions.contains { canReconnect(to: $0) }
-    }
-
-    func cancelReconnect() {
-        cancelConnectionAttempt()
-    }
-
-    func cancelConnectionAttempt() {
-        guard canCancelReconnect || reconnectTask != nil || connectionStatus.isConnecting else { return }
-        let wasAutomaticReconnect = activeAutomaticReconnectToken != nil
-        reconnectTask?.cancel()
-        reconnectTask = nil
-        activeAutomaticReconnectToken = nil
-        canCancelReconnect = false
-        preservesReconnectCancelOnNextDisconnect = false
-        if wasAutomaticReconnect {
-            lastAutomaticReconnectAt = .now
-        }
-        pairingSession = nil
-        connection.close()
-        connectionStatus = .disconnected
-        statusText = "Connection canceled"
-        targetHint = Self.disconnectedPairingHint
-    }
-
-    func disconnectFromCurrentSession() {
-        foregroundRecoveryTask?.cancel()
-        foregroundRecoveryTask = nil
-        wasConnectedBeforeBackground = false
-        reconnectTask?.cancel()
-        reconnectTask = nil
-        canCancelReconnect = false
-        activeAutomaticReconnectToken = nil
-        preservesReconnectCancelOnNextDisconnect = false
-        connection.close()
-        pairingSession = nil
-        if let peerTarget {
-            rememberRecentBrowserSession(
-                browserSessionId: peerTarget.chromeSessionId,
-                displayName: peerTarget.displayText,
-                platform: peerTarget.isWebPageSession ? "web" : "chrome_extension"
-            )
-        }
-        peerTarget = nil
-        dictationSessionId = nil
-        applyConnectionStatus(.disconnected)
-    }
-
-    func pair(with session: PairingSession) async {
-        do {
-            let shouldRestoreReconnectCancel = canCancelReconnect
-            preservesReconnectCancelOnNextDisconnect = shouldRestoreReconnectCancel
-            connection.close()
-            if shouldRestoreReconnectCancel {
-                canCancelReconnect = true
-            }
-            try await connection.pair(with: session)
-        } catch {
-            guard !Task.isCancelled else { return }
-            applyConnectionStatus(.error(error.localizedDescription))
-        }
-    }
-
-    private func reconnectWithSavedPairing(
-        _ pairedSession: PairedScannerSession,
-        reportsErrors: Bool,
-        automaticToken: UUID?
-    ) async {
-        guard isReconnectCurrent(automaticToken) else { return }
-        guard let secret = PairingSecretStore.secret(pairingId: pairedSession.id) else {
-            if reportsErrors {
-                applyConnectionStatus(.error("Pairing secret missing. Scan the Chrome QR again."))
-            } else {
-                applyAutomaticReconnectUnavailable(for: pairedSession)
-            }
-            return
-        }
-
-        do {
-            let signalURLs = pairedSession.signalURL.map { [$0] } ?? ScannerProtocol.reconnectSignalURLs
-            guard isReconnectCurrent(automaticToken) else { return }
-            await signaling.registerPairingCandidates(
-                pairingId: pairedSession.id,
-                pairingSecret: secret,
-                browserSessionId: pairedSession.browserSessionId,
-                displayName: pairedSession.displayName,
-                phoneDeviceId: contributorId,
-                signalURLs: signalURLs
-            )
-            guard isReconnectCurrent(automaticToken) else { return }
-            let joinWindow = try await signaling.requestReconnect(
-                pairingId: pairedSession.id,
-                pairingSecret: secret,
-                signalURLs: signalURLs
-            )
-            guard isReconnectCurrent(automaticToken) else { return }
-            let session = PairingSession(
-                token: joinWindow.token,
-                sessionId: joinWindow.sessionId ?? pairedSession.browserSessionId,
-                attemptId: nil,
-                offer: nil,
-                answerURL: nil,
-                label: pairedSession.displayName,
-                signalURL: joinWindow.sourceURL.signalBaseURL,
-                sourceURL: joinWindow.sourceURL
-            )
-            pairingSession = session
-            await pair(with: session)
-            guard isReconnectCurrent(automaticToken) else { return }
-        } catch {
-            guard isReconnectCurrent(automaticToken) else { return }
-            if reportsErrors {
-                applyConnectionStatus(.error(error.localizedDescription))
-            } else {
-                applyAutomaticReconnectUnavailable(for: pairedSession)
-            }
-        }
-    }
-
-    private func isReconnectCurrent(_ automaticToken: UUID?) -> Bool {
-        guard !Task.isCancelled else { return false }
-        guard let automaticToken else { return true }
-        return canCancelReconnect && activeAutomaticReconnectToken == automaticToken
-    }
-
-    private func applyAutomaticReconnectUnavailable(for pairedSession: PairedScannerSession) {
-        canCancelReconnect = false
-        activeAutomaticReconnectToken = nil
-        reconnectTask = nil
-        connectionStatus = .disconnected
-        statusText = "Chrome not reachable"
-        targetHint = "Open \(pairedSession.displayName) in Chrome to reconnect, or tap the session button to try again."
-    }
-
-    func applyConnectionStatus(_ status: ScannerConnectionStatus, allowsConnectedFeedback: Bool = true) {
-        connectionStatus = status
-        switch status {
-        case .idle:
-            canCancelReconnect = false
-            activeAutomaticReconnectToken = nil
-            preservesReconnectCancelOnNextDisconnect = false
-            statusText = "Not paired"
-            targetHint = Self.disconnectedPairingHint
-        case .pairing:
-            statusText = "QR read"
-            targetHint = "Creating the secure Chrome connection..."
-            pairingImpactFeedback.impactOccurred(intensity: 0.85)
-        case .waitingForChrome:
-            statusText = "Chrome is responding"
-            targetHint = "Waiting for the browser to finish the WebRTC handshake."
-            pairingImpactFeedback.impactOccurred(intensity: 0.55)
-        case .connected:
-            canCancelReconnect = false
-            activeAutomaticReconnectToken = nil
-            lastAutomaticReconnectAt = nil
-            preservesReconnectCancelOnNextDisconnect = false
-            statusText = "Connected to Chrome"
-            targetHint = peerTarget?.displayText ?? "Ready to send captures."
-            if allowsConnectedFeedback {
-                pairingNotificationFeedback.notificationOccurred(.success)
-            }
-        case .disconnected:
-            if preservesReconnectCancelOnNextDisconnect {
-                preservesReconnectCancelOnNextDisconnect = false
-                statusText = "Reconnecting to Chrome"
-                targetHint = peerTarget?.displayText ?? "Opening the saved Chrome scanner session."
-                return
-            }
-            canCancelReconnect = false
-            activeAutomaticReconnectToken = nil
-            preservesReconnectCancelOnNextDisconnect = false
-            statusText = "Disconnected"
-            targetHint = Self.disconnectedPairingHint
-        case .error(let message):
-            canCancelReconnect = false
-            activeAutomaticReconnectToken = nil
-            preservesReconnectCancelOnNextDisconnect = false
-            statusText = "Pairing failed"
-            targetHint = message
-            pairingNotificationFeedback.notificationOccurred(.error)
-        }
-    }
-
-    func applySessionReady(_ message: ScannerProtocol.SessionReady) {
-        if let activeMode = message.activeMode {
-            self.activeMode = activeMode
-        }
-        let wasConnected = connectionStatus.isConnected
-        let chromeSessionId = message.peer?.chromeSessionId ?? message.pairing?.browserSessionId ?? pairingSession?.sessionId
-        let sessionLabel = firstNonEmpty(
-            message.peer?.deviceLabel,
-            message.pairing?.displayName,
-            peerTarget?.sessionLabel,
-            savedSessionLabel(sessionId: chromeSessionId)
-        )
-        let browserName = message.peer?.platform == "web" ? "Browser" : "Chrome"
-        let previousPeerTarget = peerTarget
-        let nextPeerTarget = ScannerPeerTarget(
-            chromeSessionId: chromeSessionId,
-            sessionLabel: sessionLabel,
-            tabTitle: message.cursorTarget?.tabTitle,
-            tabURL: message.cursorTarget?.url,
-            cursorLabel: message.cursorTarget?.label,
-            browser: browserName
-        )
-        let didChangeChromeInputTarget: Bool
-        if let previousPeerTarget {
-            didChangeChromeInputTarget = wasConnected && dictationTargetKey(for: previousPeerTarget) != dictationTargetKey(for: nextPeerTarget)
-        } else {
-            didChangeChromeInputTarget = false
-        }
-        peerTarget = nextPeerTarget
-        rememberRecentBrowserSession(
-            browserSessionId: chromeSessionId,
-            displayName: sessionLabel ?? nextPeerTarget.displayText,
-            platform: message.peer?.platform
-        )
-        saveCurrentPairingSession(message: message)
-        applyConnectionStatus(
-            .connected,
-            allowsConnectedFeedback: !wasConnected || (didChangeChromeInputTarget && selectedSection == .dictation)
-        )
-        resetDictationForTargetChangeIfNeeded(from: previousPeerTarget, to: nextPeerTarget)
-        Task { await sendRetryablePhotos() }
-    }
-
-    private func firstNonEmpty(_ values: String?...) -> String? {
-        values.first { value in
-            guard let value else { return false }
-            return !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        } ?? nil
-    }
-
-    func applyResultReceived(_ receipt: ScannerProtocol.ResultReceived) {
-        guard let id = UUID(uuidString: receipt.resultId),
-              let index = results.firstIndex(where: { $0.id == id })
-        else {
-            return
-        }
-
-        if receipt.insertedIntoCursor == false {
-            if peerTarget?.isWebPageSession == true && receipt.savedToResults {
-                let previousDeliveryState = results[index].deliveryState
-                results[index].deliveryState = .sent
-                if results[index].deliveryState != previousDeliveryState {
-                    showCaptureDeliveryToast(for: results[index], state: .sent)
-                }
-                captureSuccessFeedback.notificationOccurred(.success)
-                statusText = "Successfully sent to browser"
-                targetHint = peerTarget?.displayText ?? "The web session received it."
-                return
-            }
-
-            results[index].deliveryState = .failed
-            playCaptureFailureFeedback()
-            if receipt.savedToResults {
-                showCaptureTypingFallbackToast(for: results[index])
-            } else {
-                showCaptureDeliveryToast(for: results[index], state: .failed)
-            }
-            let browserName = peerTarget?.browser ?? "Chrome"
-            statusText = "\(browserName) received text"
-            targetHint = "\(browserName) saved it, but no focused cursor target was available."
-            return
-        }
-
-        let previousDeliveryState = results[index].deliveryState
-        results[index].deliveryState = receipt.savedToResults ? .sent : .failed
-        if results[index].deliveryState != previousDeliveryState {
-            showCaptureDeliveryToast(for: results[index], state: results[index].deliveryState)
-        }
-        if receipt.insertedIntoCursor == true {
-            captureSuccessFeedback.notificationOccurred(.success)
-            statusText = results[index].kind == .barcode ? "Barcode inserted" : "Text inserted"
-            if let cursorLabel = receipt.cursorTarget?.label, !cursorLabel.isEmpty {
-                targetHint = "Inserted into \(cursorLabel)."
-            }
-        } else if !receipt.savedToResults {
-            playCaptureFailureFeedback()
-        }
+        guard let enrollment = EnrollmentURLParser.parse(url) else { return }
+        Task { await cloudWorkspace.enroll(enrollment) }
+        selectedSection = .scan
+        statusText = "Enrolling this device"
     }
 
     func playCaptureFailureFeedback() {
         captureFailureImpactFeedback.impactOccurred(intensity: 1)
         captureFailureFeedback.notificationOccurred(.error)
     }
-
 }

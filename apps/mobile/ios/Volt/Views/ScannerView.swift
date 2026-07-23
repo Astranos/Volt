@@ -3,7 +3,6 @@ import SwiftUI
 struct ScannerView: View {
     @Environment(ScannerStore.self) private var store
     @State private var isCaptureSessionPresented = false
-    @State private var isSessionsPresented = false
     @State private var isTargetPickerPresented = false
     let showsCameraLayer: Bool
 
@@ -12,7 +11,7 @@ struct ScannerView: View {
     }
 
     private var captureResults: [ScanResult] {
-        store.results.filter { $0.source == .capture }
+        store.results.filter { $0.source != .upload }
     }
 
     private var capturePhotoBatches: [CapturePhotoBatch] {
@@ -42,12 +41,10 @@ struct ScannerView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: ScannerTabLayout.stackSpacing) {
-                    ScannerSectionHeader(
-                        title: "Capture",
-                        onConnectionControlTapped: {
-                            isSessionsPresented = true
-                        }
-                    ) {
+                    HStack(spacing: 12) {
+                        Text("Capture")
+                            .font(.largeTitle.bold())
+                        Spacer()
                         CloudTargetButton {
                             isTargetPickerPresented = true
                         }
@@ -69,11 +66,6 @@ struct ScannerView: View {
                 }
             ) {
                 CaptureSessionView(isPresented: $isCaptureSessionPresented)
-            }
-            .sheet(isPresented: $isSessionsPresented) {
-                PairingSessionsView()
-                    .presentationDetents([.medium, .large])
-                    .presentationDragIndicator(.visible)
             }
             .sheet(isPresented: $isTargetPickerPresented) {
                 CloudTargetPickerSheet()
@@ -171,7 +163,7 @@ struct ScannerView: View {
                         case .result(let result):
                             CapturedResultRow(
                                 result: result,
-                                canResend: true,
+                                canResend: result.kind != .dictation,
                                 onResend: {
                                     Task { await store.insertResultIntoComputer(id: result.id) }
                                 },

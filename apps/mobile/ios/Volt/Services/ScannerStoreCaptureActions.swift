@@ -3,203 +3,10 @@ import CoreImage.CIFilterBuiltins
 import UIKit
 
 @MainActor
-final class MobilePhotoRetryQueue {
-    static let recoveryWindow: TimeInterval = 24 * 60 * 60
-
-    enum Status: String, Codable, Equatable {
-        case queued
-        case sending
-        case sent
-        case failed
-        case received
-        case cancelled
-    }
-
-    struct Entry: Codable, Equatable, Identifiable {
-        let id: String
-        let resultId: UUID
-        let batchId: String
-        let filename: String
-        let width: Int
-        let height: Int
-        let capturedAt: Date
-        let queuedAt: Date
-        let expiresAt: Date
-        let dataFilename: String
-        var status: Status
-
-        var isExpired: Bool {
-            expiresAt <= Date.now
-        }
-    }
-
-    private struct Manifest: Codable {
-        var entries: [Entry]
-    }
-
-    private let fileManager: FileManager
-    private let directoryURL: URL
-    private let manifestURL: URL
-    private(set) var entries: [Entry] = []
-
-    init(fileManager: FileManager = .default, directoryURL: URL? = nil) {
-        self.fileManager = fileManager
-        let baseURL = directoryURL ?? fileManager
-            .urls(for: .applicationSupportDirectory, in: .userDomainMask)
-            .first!
-            .appendingPathComponent("VoltPhotoRetryQueue", isDirectory: true)
-        self.directoryURL = baseURL
-        self.manifestURL = baseURL.appendingPathComponent("manifest.json")
-        load()
-        expireEntries()
-    }
-
-    var retryableEntries: [Entry] {
-        entries.filter { entry in
-            !entry.isExpired && [.queued, .sent, .failed].contains(entry.status)
-        }
-    }
-
-    @discardableResult
-    func enqueue(payload: ScannerProtocol.PhotoPayload, resultId: UUID, now: Date = .now) -> Entry? {
-        do {
-            try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
-            let dataFilename = "\(payload.id).jpg"
-            try payload.data.write(to: directoryURL.appendingPathComponent(dataFilename), options: .atomic)
-            let entry = Entry(
-                id: payload.id,
-                resultId: resultId,
-                batchId: payload.batchId,
-                filename: payload.filename,
-                width: payload.width,
-                height: payload.height,
-                capturedAt: payload.capturedAt,
-                queuedAt: now,
-                expiresAt: now.addingTimeInterval(Self.recoveryWindow),
-                dataFilename: dataFilename,
-                status: .queued
-            )
-            entries.removeAll { $0.id == entry.id }
-            entries.append(entry)
-            save()
-            return entry
-        } catch {
-            return nil
-        }
-    }
-
-    func payload(for photoId: String) -> ScannerProtocol.PhotoPayload? {
-        guard let entry = entries.first(where: { $0.id == photoId }),
-              !entry.isExpired,
-              let data = try? Data(contentsOf: directoryURL.appendingPathComponent(entry.dataFilename))
-        else {
-            markStatus(.cancelled, photoId: photoId)
-            return nil
-        }
-        return ScannerProtocol.PhotoPayload(
-            id: entry.id,
-            batchId: entry.batchId,
-            filename: entry.filename,
-            data: data,
-            width: entry.width,
-            height: entry.height,
-            capturedAt: entry.capturedAt
-        )
-    }
-
-    func resultId(for photoId: String) -> UUID? {
-        entries.first { $0.id == photoId }?.resultId
-    }
-
-    func markSending(photoId: String) {
-        markStatus(.sending, photoId: photoId)
-    }
-
-    func markSent(photoId: String) {
-        markStatus(.sent, photoId: photoId)
-    }
-
-    func markReceived(photoId: String) {
-        markStatus(.received, photoId: photoId)
-        removeData(photoId: photoId)
-    }
-
-    func markFailed(photoId: String) {
-        markStatus(.failed, photoId: photoId)
-    }
-
-    func cancel(photoId: String) {
-        markStatus(.cancelled, photoId: photoId)
-        removeData(photoId: photoId)
-    }
-
-    @discardableResult
-    func expireEntries(now: Date = .now) -> [Entry] {
-        let expired = entries.filter { $0.expiresAt <= now && $0.status != .received && $0.status != .cancelled }
-        for entry in expired {
-            cancel(photoId: entry.id)
-        }
-        return expired
-    }
-
-    private func markStatus(_ status: Status, photoId: String) {
-        guard let index = entries.firstIndex(where: { $0.id == photoId }) else { return }
-        entries[index].status = status
-        save()
-    }
-
-    private func removeData(photoId: String) {
-        guard let entry = entries.first(where: { $0.id == photoId }) else { return }
-        try? fileManager.removeItem(at: directoryURL.appendingPathComponent(entry.dataFilename))
-    }
-
-    private func load() {
-        guard let data = try? Data(contentsOf: manifestURL),
-              let manifest = try? Self.decoder.decode(Manifest.self, from: data)
-        else { return }
-        entries = manifest.entries.map { entry in
-            guard entry.status == .sending else { return entry }
-            var retryableEntry = entry
-            retryableEntry.status = .failed
-            return retryableEntry
-        }
-    }
-
-    private func save() {
-        do {
-            try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
-            let data = try JSONEncoder.scanner.encode(Manifest(entries: entries))
-            try data.write(to: manifestURL, options: .atomic)
-        } catch {
-            return
-        }
-    }
-
-    private static var decoder: JSONDecoder {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return decoder
-    }
-}
-
-extension ScanResult.DeliveryState {
-    init(photoRetryStatus status: MobilePhotoRetryQueue.Status) {
-        switch status {
-        case .queued: self = .saved
-        case .sending: self = .sending
-        case .sent: self = .sent
-        case .failed: self = .failed
-        case .received: self = .sent
-        case .cancelled: self = .failed
-        }
-    }
-}
-
-@MainActor
 extension ScannerStore {
     func saveBarcodeIfNeeded() {
         guard let value = camera.lastBarcode, !value.isEmpty else { return }
-        if handlePairingValue(value) { return }
+        if handleEnrollmentValue(value) { return }
         guard activeMode == .barcode else { return }
         let normalized = normalizedBarcodeScan(value: value, format: camera.lastBarcodeFormat ?? "barcode")
         let now = Date.now
@@ -222,20 +29,6 @@ extension ScannerStore {
         sendCaptureResult(result, insertIntoCursor: true)
     }
 
-    @discardableResult
-    func pairScannedBarcodeIfNeeded() -> Bool {
-        guard let value = camera.lastBarcode, !value.isEmpty else { return false }
-        guard lastPairingCandidateValue != value else { return false }
-        lastPairingCandidateValue = value
-        pairingImpactFeedback.impactOccurred(intensity: 0.72)
-        if handlePairingValue(value) {
-            return true
-        }
-
-        statusText = isDetectedQRCode ? "QR code found" : "Barcode found"
-        targetHint = "That code is not a Chrome scanner pairing QR."
-        return false
-    }
 
     func capture() async {
         switch activeMode {
@@ -268,7 +61,7 @@ extension ScannerStore {
             let recognizedRegions = try await TextRecognizer.recognizeTextRegions(in: preparedImage)
             ocrTextRegions = DeviceIdentifierRegionExtractor.reviewRegions(from: recognizedRegions)
             ocrReviewText = ocrTextRegions.map(\.text).joined(separator: "\n")
-            if handlePairingValue(ocrReviewText) {
+            if handleEnrollmentValue(ocrReviewText) {
                 clearOcrReview()
             } else if ocrTextRegions.isEmpty {
                 statusText = "No text found"
@@ -289,14 +82,14 @@ extension ScannerStore {
     func sendOcrReviewText() {
         let text = ocrReviewText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
-        if handlePairingValue(text) { return }
+        if handleEnrollmentValue(text) { return }
         sendRecognizedText(text, format: "live-text")
     }
 
     func sendRecognizedText(_ text: String, format: String = "ocr-region") {
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
-        if handlePairingValue(text) { return }
+        if handleEnrollmentValue(text) { return }
         let result = ScanResult(kind: .text, value: text, format: format, deliveryState: initialDeliveryState)
         guard saveResultLocally(result) else { return }
         sendCaptureResult(result, insertIntoCursor: true)
@@ -323,7 +116,7 @@ extension ScannerStore {
     func uploadPhotos(_ images: [UIImage]) async {
         guard !images.isEmpty else { return }
         let now = Date.now
-        let batch = ScannerProtocol.makeMessageId("upload-batch")
+        let batch = "upload-batch-\(UUID().uuidString.lowercased())"
         photoBatch = (batch, now.addingTimeInterval(5 * 60))
         photoUploadProgress = PhotoUploadProgress(
             id: batch,
@@ -355,9 +148,7 @@ extension ScannerStore {
             await sendPhoto(
                 preparedImage,
                 result: photoResult,
-                batchId: batch,
-                filename: uploadFilename(index: index, capturedAt: capturedAt),
-                capturedAt: capturedAt
+                batchId: batch
             )
             finishPhotoUploadItem(batchId: batch, resultId: photoResult.id)
         }
@@ -390,49 +181,25 @@ extension ScannerStore {
                 deliveryId: "del-\(UUID().uuidString.lowercased())"
             )
         case .photo:
-            guard let imageData = result.imageData, let image = UIImage(data: imageData) else {
-                updateResultDeliveryState(id: id, state: .failed)
-                statusText = "Photo preview unavailable"
-                return
-            }
-            await sendPhoto(
-                image,
-                result: result,
-                batchId: result.batchId,
-                filename: "volt-photo-resend-\(Int(Date.now.timeIntervalSince1970)).jpg",
-                capturedAt: result.capturedAt,
-                acceptsNewResult: false
-            )
+            cloudWorkspace.requestSync()
+            updateResultDeliveryState(id: id, state: .saved)
+            statusText = "Photo sync requested"
         case .dictation:
-            sendDictation(result.value, phase: "final")
-            statusText = connectionStatus.isConnected ? "Dictation resent" : "Dictation stays saved on this iPhone"
+            statusText = "Historical dictation stays saved in Volt"
         }
     }
 
-    func resendResultToChrome(id: ScanResult.ID) async {
-        await insertResultIntoComputer(id: id)
-    }
 
     func removeResults(at offsets: IndexSet) {
         results.remove(atOffsets: offsets)
     }
 
-    func handlePairingValue(_ value: String) -> Bool {
-        if let enrollment = EnrollmentURLParser.enrollment(in: value) {
-            Task { await cloudWorkspace.enroll(enrollment) }
-            statusText = "Enrolling this device"
-            targetHint = "Capture stays available while enrollment completes."
-            return true
-        }
-        guard let url = PairingURLParser.pairingURL(in: value) else { return false }
-        let parsed = PairingURLParser.parse(url)
-        guard let session = parsed.0 else { return false }
-        beginFreshPairing(with: session, mode: parsed.1)
+    func handleEnrollmentValue(_ value: String) -> Bool {
+        guard let enrollment = EnrollmentURLParser.enrollment(in: value) else { return false }
+        Task { await cloudWorkspace.enroll(enrollment) }
+        statusText = "Enrolling this device"
+        targetHint = "Capture stays available while enrollment completes."
         return true
-    }
-
-    var isDetectedQRCode: Bool {
-        normalizedBarcodeFormat(camera.detectedBarcodeFormat ?? camera.lastBarcodeFormat ?? "").contains("qr")
     }
 
     func sendCaptureResult(_ result: ScanResult, insertIntoCursor: Bool) {
@@ -465,101 +232,27 @@ extension ScannerStore {
         }
     }
 
-    func sendCaptureResultOverWebRTC(_ result: ScanResult, insertIntoCursor: Bool) {
-        guard connectionStatus.isConnected else { return }
-        let kind = result.kind == .barcode ? "barcode" : "text"
-        do {
-            try connection.sendControl(ScannerProtocol.captureResult(
-                id: result.id.uuidString,
-                kind: kind,
-                value: result.value,
-                format: result.format,
-                capturedAt: result.capturedAt,
-                insertIntoCursor: insertIntoCursor,
-                contributorId: contributorId
-            ))
-        } catch {
-            applyConnectionStatus(.error(error.localizedDescription))
-        }
-    }
 
     func sendPhoto(
         _ image: UIImage,
         result: ScanResult,
-        batchId: String? = nil,
-        filename: String? = nil,
-        capturedAt: Date? = nil,
-        acceptsNewResult: Bool = true
+        batchId: String? = nil
     ) async {
         guard let data = image.jpegData(compressionQuality: 0.76) else {
             statusText = "Could not prepare photo"
             updateResultDeliveryState(id: result.id, state: .failed)
             return
         }
-        let now = capturedAt ?? Date.now
-        let batch = batchId ?? currentPhotoBatch(now: now)
-        let payload = ScannerProtocol.PhotoPayload(
-            id: ScannerProtocol.makeMessageId("photo"),
-            batchId: batch,
-            filename: filename ?? "volt-photo-\(Int(now.timeIntervalSince1970)).jpg",
-            data: data,
-            width: Int(image.size.width),
-            height: Int(image.size.height),
-            capturedAt: now
-        )
-        if acceptsNewResult {
-            do {
-                var cloudResult = result
-                cloudResult.batchId = batch
-                try cloudWorkspace.persist(cloudResult, photoData: data)
-                results.insert(cloudResult, at: 0)
-            } catch {
-                statusText = "Could not save photo on this device"
-                return
-            }
-        }
-        guard let entry = photoRetryQueue.enqueue(payload: payload, resultId: result.id, now: now) else {
-            statusText = "Photo saved; live send unavailable"
-            return
-        }
-        updateResultDeliveryState(id: result.id, state: ScanResult.DeliveryState(photoRetryStatus: entry.status))
-        guard connectionStatus.isConnected else { return }
-        await sendQueuedPhoto(photoId: payload.id)
-    }
-
-    func sendRetryablePhotos() async {
-        photoRetryQueue.expireEntries()
-        for entry in photoRetryQueue.retryableEntries {
-            await sendQueuedPhoto(photoId: entry.id)
-        }
-    }
-
-    func sendQueuedPhoto(photoId: String) async {
-        guard connectionStatus.isConnected else { return }
-        guard let resultId = photoRetryQueue.resultId(for: photoId),
-              let payload = photoRetryQueue.payload(for: photoId)
-        else { return }
-        photoRetryQueue.markSending(photoId: photoId)
-        updateResultDeliveryState(id: resultId, state: .sending)
+        let batch = batchId ?? currentPhotoBatch(now: .now)
         do {
-            let receipt = try await connection.sendPhoto(payload)
-            if case .received = receipt {
-                photoRetryQueue.markReceived(photoId: photoId)
-                updateResultDeliveryState(id: resultId, state: .sent)
-                statusText = "Photo delivered"
-            }
+            var cloudResult = result
+            cloudResult.batchId = batch
+            try cloudWorkspace.persist(cloudResult, photoData: data)
+            results.insert(cloudResult, at: 0)
+            statusText = "Photo saved"
         } catch {
-            photoRetryQueue.markFailed(photoId: photoId)
-            updateResultDeliveryState(id: resultId, state: .failed)
-            applyConnectionStatus(.error(error.localizedDescription))
+            statusText = "Could not save photo on this device"
         }
-    }
-
-    func applyPhotoTransferCompleted(photoId: String) {
-        guard let resultId = photoRetryQueue.resultId(for: photoId) else { return }
-        photoRetryQueue.markSent(photoId: photoId)
-        updateResultDeliveryState(id: resultId, state: .sent)
-        statusText = "Photo sent"
     }
 
     var initialDeliveryState: ScanResult.DeliveryState {
@@ -618,7 +311,7 @@ extension ScannerStore {
         switch state {
         case .sent:
             captureDeliveryToast = CaptureDeliveryToast(
-                title: peerTarget?.isWebPageSession == true ? "Sent to browser" : "Sent to Chrome",
+                title: "Saved to Volt",
                 message: captureDeliveryMessage(for: result),
                 systemImage: "checkmark.circle.fill",
                 tone: .success
@@ -635,15 +328,6 @@ extension ScannerStore {
         }
     }
 
-    func showCaptureTypingFallbackToast(for result: ScanResult) {
-        guard result.source == .capture else { return }
-        captureDeliveryToast = CaptureDeliveryToast(
-            title: "Failed to type",
-            message: "\(captureDeliveryMessage(for: result)) was saved to Chrome sidepanel results.",
-            systemImage: "exclamationmark.triangle.fill",
-            tone: .failure
-        )
-    }
 
     private func captureDeliveryMessage(for result: ScanResult) -> String {
         switch result.kind {
@@ -673,7 +357,7 @@ extension ScannerStore {
         if let photoBatch, photoBatch.expiresAt > now {
             return photoBatch.id
         }
-        let batch = ScannerProtocol.makeMessageId("batch")
+        let batch = "batch-\(UUID().uuidString.lowercased())"
         photoBatch = (batch, now.addingTimeInterval(5 * 60))
         return batch
     }
@@ -704,11 +388,6 @@ extension ScannerStore {
         return (trimmedValue, normalizedFormat)
     }
 
-    func uploadFilename(index: Int, capturedAt: Date) -> String {
-        let uploadNumber = String(format: "%03d", index + 1)
-        let timestampMs = Int(capturedAt.timeIntervalSince1970 * 1000)
-        return "volt-upload-\(uploadNumber)-\(timestampMs).jpg"
-    }
 }
 
 

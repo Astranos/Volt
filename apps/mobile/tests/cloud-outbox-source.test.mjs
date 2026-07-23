@@ -7,7 +7,6 @@ const appSource = read("../ios/Volt/App/VoltApp.swift");
 const rootSource = read("../ios/Volt/Views/RootView.swift");
 const scannerSource = read("../ios/Volt/Services/ScannerStore.swift");
 const captureSource = read("../ios/Volt/Services/ScannerStoreCaptureActions.swift");
-const dictationSource = read("../ios/Volt/Services/ScannerStoreDictation.swift");
 const outboxSource = read("../ios/Volt/Services/DurableCaptureOutbox.swift");
 const workspaceSource = read("../ios/Volt/Services/CloudWorkspaceStore.swift");
 const credentialSource = read("../ios/Volt/Services/DeviceCredentialStore.swift");
@@ -24,29 +23,28 @@ const pairingSource = read("../ios/Volt/Services/PairingURLParser.swift");
 const clipStoreSource = read("../ios/VoltClip/Services/ClipScannerStore.swift");
 const clipGuestCloudSource = read("../ios/VoltClip/Services/AppClipGuestCloudClient.swift");
 
-test("full app opens capture without Clerk or a WebRTC target", () => {
+test("full app opens capture without Clerk, pairing, dictation, or a WebRTC target", () => {
   assert.match(appSource, /RootView\(showsAccountSettings: false\)\s*\.environment\(scannerStore\)/);
   assert.doesNotMatch(appSource, /else \{\s*ClerkConfigurationRequiredView\(\)/);
-  assert.doesNotMatch(rootSource, /guard hasSeenWelcome/);
-  assert.doesNotMatch(captureSource.match(/func uploadPhotos[\s\S]*?func capturePhoto/)?.[0] ?? "", /guard connectionStatus\.isConnected/);
-  assert.doesNotMatch(dictationSource.match(/func startDictation[\s\S]*?func finishDictation/)?.[0] ?? "", /guard connectionStatus\.isConnected/);
+  assert.doesNotMatch(appSource, /PairingURLParser/);
+  assert.doesNotMatch(rootSource, /DictationView|PairingSessionsView|AppSection\.dictation/);
+  assert.doesNotMatch(scannerSource, /ScannerWebRTCConnection|connectionStatus|peerTarget|DictationModel/);
+  assert.doesNotMatch(captureSource, /guard connectionStatus\.isConnected|sendCaptureResultOverWebRTC|sendDictation/);
 });
 
-test("accepted captures commit to durable outbox before UI and optional WebRTC", () => {
-  const saveBarcode = captureSource.match(/func saveBarcodeIfNeeded\(\)[\s\S]*?func pairScannedBarcodeIfNeeded/)?.[0] ?? "";
+test("accepted captures commit to durable outbox before UI and optional cloud delivery", () => {
+  const saveBarcode = captureSource.match(/func saveBarcodeIfNeeded\(\)[\s\S]*?func capture\(\)/)?.[0] ?? "";
   assert.ok(saveBarcode.indexOf("saveResultLocally(result)") < saveBarcode.indexOf("sendCaptureResult(result"));
 
   const saveText = captureSource.match(/func sendRecognizedText[\s\S]*?func captureSquarePhoto/)?.[0] ?? "";
   assert.ok(saveText.indexOf("saveResultLocally(result)") < saveText.indexOf("sendCaptureResult(result"));
 
-  const sendPhoto = captureSource.match(/func sendPhoto\([\s\S]*?func sendRetryablePhotos/)?.[0] ?? "";
+  const sendPhoto = captureSource.match(/func sendPhoto\([\s\S]*?var initialDeliveryState/)?.[0] ?? "";
   const persistIndex = sendPhoto.indexOf("try cloudWorkspace.persist");
   const insertIndex = sendPhoto.indexOf("results.insert(cloudResult");
-  const connectionIndex = sendPhoto.indexOf("guard connectionStatus.isConnected");
-  assert.ok(persistIndex >= 0 && persistIndex < insertIndex && insertIndex < connectionIndex);
+  assert.ok(persistIndex >= 0 && persistIndex < insertIndex);
+  assert.doesNotMatch(sendPhoto, /connectionStatus|photoRetryQueue|connection\.sendPhoto/);
 
-  const commitDictation = dictationSource.match(/func commitDictation[\s\S]*?func beginDictationSession/)?.[0] ?? "";
-  assert.ok(commitDictation.indexOf("saveResultLocally(result)") < commitDictation.indexOf("sendDictation(text"));
   assert.match(scannerSource, /self\.results = cloudWorkspace\.restoredResults/);
   assert.match(outboxSource, /write\(to: manifestURL, options: \[\.atomic, \.completeFileProtection\]\)/);
 });

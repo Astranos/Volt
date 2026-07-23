@@ -25,10 +25,8 @@ enum ScreenshotScenario: String {
 
     var initialSection: AppSection {
         switch self {
-        case .sessions, .captureTextPre, .captureReview, .captureReviewSend, .captureBarcode, .capturePhoto, .captureResults:
+        case .sessions, .captureTextPre, .captureReview, .captureReviewSend, .captureBarcode, .capturePhoto, .captureResults, .dictation:
             .scan
-        case .dictation:
-            .dictation
         case .upload:
             .upload
         }
@@ -79,22 +77,8 @@ extension ScannerStore {
     func applyScreenshotFixturesIfNeeded() {
         guard let scenario = ScreenshotScenario.current else { return }
 
-        let sessions = Self.screenshotPairedSessions
-        pairedSessions = sessions
-        peerTarget = Self.screenshotPeerTarget(for: scenario)
-        pairingSession = PairingSession(
-            token: "mock-token",
-            sessionId: peerTarget?.chromeSessionId,
-            attemptId: nil,
-            offer: nil,
-            answerURL: nil,
-            label: nil,
-            signalURL: nil,
-            sourceURL: URL(string: "volt://screenshots/mock-session")!
-        )
-        connectionStatus = .connected
-        statusText = "Connected to Chrome"
-        targetHint = peerTarget?.displayText ?? "Ready to send captures."
+        statusText = "Ready to capture"
+        targetHint = "Captures save on this iPhone and sync to your Volt workspace when signed in."
         selectedSection = scenario.initialSection
         activeMode = scenario.initialCaptureMode
 
@@ -115,51 +99,9 @@ extension ScannerStore {
             results = Self.captureResults
         case .dictation:
             results = Self.dictationResults
-            dictation.transcript = Self.dictationTranscript
-            dictation.isRecording = true
         case .upload:
             results = Self.uploadResults
         }
-    }
-
-    static var screenshotPairedSessions: [PairedScannerSession] {
-        [
-            ("left-buyer", "browser-left-buyer", "Left Buyer", -300),
-            ("right-buyer", "browser-right-buyer", "Right Buyer", -900),
-            ("left-lister", "browser-left-lister", "Left Lister", -1_800),
-            ("right-lister", "browser-right-lister", "Right Lister", -2_700),
-            ("shipping", "browser-shipping", "Shipping", -3_600),
-        ].map { id, browserSessionId, displayName, offset in
-            PairedScannerSession(
-                id: id,
-                browserSessionId: browserSessionId,
-                displayName: displayName,
-                platform: "chrome_extension",
-                pairedAt: Date(timeIntervalSince1970: 1_780_000_000 + TimeInterval(offset)),
-                lastConnectedAt: Date.now.addingTimeInterval(TimeInterval(offset))
-            )
-        }
-    }
-
-    static func screenshotPeerTarget(for scenario: ScreenshotScenario) -> ScannerPeerTarget {
-        let session: PairedScannerSession
-        switch scenario {
-        case .sessions, .captureTextPre, .captureReview, .captureReviewSend, .captureBarcode, .capturePhoto, .captureResults:
-            session = screenshotPairedSessions[2]
-        case .dictation:
-            session = screenshotPairedSessions[0]
-        case .upload:
-            session = screenshotPairedSessions[4]
-        }
-
-        return ScannerPeerTarget(
-            chromeSessionId: session.browserSessionId,
-            sessionLabel: session.displayName,
-            tabTitle: scenario.tabTitle,
-            tabURL: scenario.tabURL,
-            cursorLabel: scenario.cursorLabel,
-            browser: "Chrome"
-        )
     }
 
     static let ocrReviewText = """
@@ -231,7 +173,7 @@ extension ScannerStore {
                 value: dictationTranscript,
                 format: "dictation",
                 capturedAt: Date.now.addingTimeInterval(-40),
-                deliveryState: .sending
+                deliveryState: .saved
             )
         ]
     }
@@ -332,54 +274,13 @@ extension ScannerStore {
 }
 
 extension ScreenshotScenario {
-    var tabTitle: String {
-        switch self {
-        case .sessions:
-            "Volt Command Center"
-        case .captureTextPre, .captureReview, .captureReviewSend, .captureBarcode, .capturePhoto, .captureResults:
-            "Inventory Draft - Console"
-        case .dictation:
-            "eBay Listing Description"
-        case .upload:
-            "Shipping Batch Upload"
-        }
-    }
-
-    var tabURL: String {
-        switch self {
-        case .sessions:
-            "chrome://extensions"
-        case .captureTextPre, .captureReview, .captureReviewSend, .captureBarcode, .capturePhoto, .captureResults:
-            "https://seller.example.local/inventory/ps5"
-        case .dictation:
-            "https://www.ebay.com/sl/list"
-        case .upload:
-            "https://shipping.example.local/batches"
-        }
-    }
-
-    var cursorLabel: String {
-        switch self {
-        case .sessions:
-            "Scanner command menu"
-        case .captureTextPre, .captureReview, .captureReviewSend, .captureBarcode, .capturePhoto, .captureResults:
-            "SKU and serial number field"
-        case .dictation:
-            "Description field"
-        case .upload:
-            "Upload drop zone"
-        }
-    }
-
     var initialCaptureMode: CaptureMode {
         switch self {
         case .captureBarcode:
             .barcode
         case .capturePhoto:
             .photo
-        case .dictation:
-            .dictation
-        case .sessions, .captureTextPre, .captureReview, .captureReviewSend, .captureResults, .upload:
+        case .sessions, .captureTextPre, .captureReview, .captureReviewSend, .captureResults, .dictation, .upload:
             .ocr
         }
     }

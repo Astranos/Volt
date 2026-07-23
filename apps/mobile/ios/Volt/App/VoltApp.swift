@@ -58,14 +58,11 @@ struct VoltApp: App {
     }
 
     private func handleIncomingURL(_ url: URL) {
-        let scannerPayload = PairingURLParser.parse(url)
-        let enrollment = EnrollmentURLParser.parse(url)
-        scannerStore.handleIncomingURL(url)
-        guard scannerPayload.0 == nil,
-              scannerPayload.1 == nil,
-              enrollment == nil,
-              let clerk
-        else { return }
+        if EnrollmentURLParser.parse(url) != nil {
+            scannerStore.handleIncomingURL(url)
+            return
+        }
+        guard let clerk else { return }
         Task { @MainActor in
             do {
                 try await clerk.handle(url)

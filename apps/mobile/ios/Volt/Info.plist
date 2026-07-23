@@ -46,13 +46,9 @@
       <true/>
     </dict>
     <key>NSCameraUsageDescription</key>
-    <string>Volt uses the camera to scan barcodes, capture photos, model numbers, serial numbers, and other text for the paired Chrome extension.</string>
-    <key>NSMicrophoneUsageDescription</key>
-    <string>Volt uses the microphone for hold-to-speak dictation into the paired Chrome browser.</string>
+    <string>Volt uses the camera to scan barcodes and capture photos, model numbers, serial numbers, and other text.</string>
     <key>NSPhotoLibraryUsageDescription</key>
-    <string>Volt may request photo library access if an imported image is used for scanning product codes, model numbers, serial numbers, or other text for the paired Chrome extension.</string>
-    <key>NSSpeechRecognitionUsageDescription</key>
-    <string>Volt uses speech recognition to turn dictated speech into text for the paired Chrome browser.</string>
+    <string>Volt uses selected photos to save and sync product images to your workspace.</string>
     <key>UILaunchStoryboardName</key>
     <string>SplashScreen</string>
     <key>UIRequiredDeviceCapabilities</key>

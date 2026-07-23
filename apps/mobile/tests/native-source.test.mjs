@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 
 import { scannerProtocolGolden } from "@volt/scanner-protocol/protocol-fixtures";
@@ -16,16 +16,12 @@ function swiftRawValueList(values) {
   return values.map((value) => `MessageType\\.${value}.rawValue`).join(",\\s*");
 }
 
+const appSwiftSource = readFileSync(
+  new URL("../ios/Volt/App/VoltApp.swift", import.meta.url),
+  "utf8"
+);
 const scannerStoreSwiftSource = readFileSync(
   new URL("../ios/Volt/Services/ScannerStore.swift", import.meta.url),
-  "utf8"
-);
-const scannerStorePairedSessionsSwiftSource = readFileSync(
-  new URL("../ios/Volt/Services/ScannerStorePairedSessions.swift", import.meta.url),
-  "utf8"
-);
-const pairedScannerSessionSwiftSource = readFileSync(
-  new URL("../ios/Volt/Models/PairedScannerSession.swift", import.meta.url),
   "utf8"
 );
 const scannerStoreCaptureActionsSwiftSource = readFileSync(
@@ -42,14 +38,6 @@ const cameraZoomControllerSwiftSource = readFileSync(
 );
 const cameraDeviceSelectorSwiftSource = readFileSync(
   new URL("../ios/Volt/Services/CameraDeviceSelector.swift", import.meta.url),
-  "utf8"
-);
-const scannerStoreDictationSwiftSource = readFileSync(
-  new URL("../ios/Volt/Services/ScannerStoreDictation.swift", import.meta.url),
-  "utf8"
-);
-const dictationModelSwiftSource = readFileSync(
-  new URL("../ios/Volt/Services/DictationModel.swift", import.meta.url),
   "utf8"
 );
 const scannerSignalingSwiftSource = readFileSync(
@@ -76,12 +64,12 @@ const settingsViewSwiftSource = readFileSync(
   new URL("../ios/Volt/Views/SettingsView.swift", import.meta.url),
   "utf8"
 );
-const pairingSessionsViewSwiftSource = readFileSync(
-  new URL("../ios/Volt/Views/PairingSessionsView.swift", import.meta.url),
-  "utf8"
-);
 const scannerViewSwiftSource = readFileSync(
   new URL("../ios/Volt/Views/ScannerView.swift", import.meta.url),
+  "utf8"
+);
+const capturedResultRowSwiftSource = readFileSync(
+  new URL("../ios/Volt/Views/CapturedResultRow.swift", import.meta.url),
   "utf8"
 );
 const scannerCameraLayerSwiftSource = readFileSync(
@@ -128,10 +116,6 @@ const ocrTextCleanerSwiftSource = readFileSync(
   new URL("../ios/Volt/Services/OcrTextCleaner.swift", import.meta.url),
   "utf8"
 );
-const dictationViewSwiftSource = readFileSync(
-  new URL("../ios/Volt/Views/DictationView.swift", import.meta.url),
-  "utf8"
-);
 const uploadViewSwiftSource = readFileSync(
   new URL("../ios/Volt/Views/ResultsView.swift", import.meta.url),
   "utf8"
@@ -160,51 +144,52 @@ const clipWebRTCBridgeSource = readFileSync(
   new URL("../ios/VoltClip/Resources/webrtc-bridge.html", import.meta.url),
   "utf8"
 );
-const scannerWebRTCConnectionSwiftSource = readFileSync(
-  new URL("../ios/Volt/Services/ScannerWebRTCConnection.swift", import.meta.url),
-  "utf8"
-);
 const xcodeProjectSource = readFileSync(
   new URL("../ios/Volt.xcodeproj/project.pbxproj", import.meta.url),
   "utf8"
 );
+const infoPlistSource = readFileSync(
+  new URL("../ios/Volt/Info.plist", import.meta.url),
+  "utf8"
+);
+const podfileSource = readFileSync(
+  new URL("../ios/Podfile", import.meta.url),
+  "utf8"
+);
 
-test("native saved-session reconnect re-registers durable pairing before requesting reconnect", () => {
-  const reconnectStart = scannerStoreSwiftSource.indexOf("private func reconnectWithSavedPairing");
-  const requestReconnectStart = scannerStoreSwiftSource.indexOf("let joinWindow = try await signaling.requestReconnect", reconnectStart);
-  const registerStart = scannerStoreSwiftSource.indexOf("await signaling.registerPairingCandidates", reconnectStart);
-  const reconnectEnd = scannerStoreSwiftSource.indexOf("private func isReconnectCurrent", reconnectStart);
-  const reconnectSource = scannerStoreSwiftSource.slice(reconnectStart, reconnectEnd);
+const removedFullAppSources = [
+  "ScannerWebRTCConnection.swift",
+  "ScannerStorePairedSessions.swift",
+  "ScannerStoreDictation.swift",
+  "DictationModel.swift",
+  "PairingSessionsView.swift",
+  "DictationView.swift",
+];
 
-  assert.ok(reconnectStart > -1);
-  assert.ok(reconnectEnd > reconnectStart);
-  assert.ok(registerStart > reconnectStart);
-  assert.ok(requestReconnectStart > registerStart);
-  assert.match(scannerStoreSwiftSource, /browserSessionId: pairedSession\.browserSessionId/);
-  assert.match(scannerStoreSwiftSource, /pairingSecret: secret/);
-  assert.match(pairedScannerSessionSwiftSource, /var signalURL: URL\? = nil/);
-  assert.match(scannerStorePairedSessionsSwiftSource, /signalURL: pairingSession\?\.signalURL \?\? pairingSession\?\.sourceURL\.signalBaseURL/);
-  assert.match(reconnectSource, /let signalURLs = pairedSession\.signalURL\.map \{ \[\$0\] \} \?\? ScannerProtocol\.reconnectSignalURLs/);
-  assert.match(reconnectSource, /await signaling\.registerPairingCandidates\([\s\S]*phoneDeviceId: contributorId,\s*signalURLs: signalURLs/);
-  assert.match(reconnectSource, /signaling\.requestReconnect\(\s*pairingId: pairedSession\.id,\s*pairingSecret: secret,\s*signalURLs: signalURLs\s*\)/);
-  assert.doesNotMatch(reconnectSource, /removePairedSession\(pairedSession\)/);
-  assert.match(scannerProtocolSwiftSource, /static let reconnectSignalURLs = \[signalURL\] \+ fallbackSignalURLs/);
-  assert.match(scannerProtocolSwiftSource, /static let reconnectCandidateRequestTimeout: TimeInterval = 3/);
-  assert.match(scannerSignalingSwiftSource, /func registerPairing\(\n\s+pairingId: String,/);
-  assert.match(scannerSignalingSwiftSource, /phoneDeviceId: String,\s*signalURL: URL = ScannerProtocol\.signalURL/);
-  assert.match(scannerSignalingSwiftSource, /func registerPairingCandidates\(/);
-  assert.match(scannerSignalingSwiftSource, /await withTaskGroup\(of: Bool\.self\)/);
-  assert.match(scannerSignalingSwiftSource, /var request = URLRequest\(url: signalURL\.appending\(path: "pairings"\)\)/);
-  assert.match(scannerSignalingSwiftSource, /func requestReconnect\([\s\S]*signalURL: URL = ScannerProtocol\.signalURL/);
-  assert.match(scannerSignalingSwiftSource, /func requestReconnect\([\s\S]*signalURLs: \[URL\]/);
-  assert.match(scannerSignalingSwiftSource, /let requestRetries = isCandidateProbe \? 0 : 2/);
-  assert.match(scannerSignalingSwiftSource, /let requestTimeout = isCandidateProbe \? ScannerProtocol\.reconnectCandidateRequestTimeout : ScannerProtocol\.signalRequestTimeout/);
-  assert.match(scannerSignalingSwiftSource, /let requestId = try await createReconnectRequest\([\s\S]*signalURL: signalURL/);
-  assert.match(scannerSignalingSwiftSource, /signalURL\s*\.appending\(path: "pairings"\)[\s\S]*\.appending\(path: requestId\)/);
-  assert.match(scannerSignalingSwiftSource, /try validateSignalResponse\(data: data, response: response\)/);
+test("installed app excludes WebRTC pairing and dictation sources without changing App Clip membership", () => {
+  for (const filename of removedFullAppSources) {
+    assert.equal(existsSync(new URL(`../ios/Volt/Services/${filename}`, import.meta.url)), false);
+    assert.equal(existsSync(new URL(`../ios/Volt/Views/${filename}`, import.meta.url)), false);
+    assert.doesNotMatch(xcodeProjectSource, new RegExp(escapeRegExp(filename)));
+  }
+  assert.doesNotMatch(appSwiftSource, /PairingURLParser|volt:\/\/pair/);
+  assert.doesNotMatch(scannerStoreSwiftSource, /ScannerWebRTCConnection|ScannerSignalingClient|PairingURLParser|PairingSecretStore|connectionStatus|peerTarget|DictationModel/);
+  assert.doesNotMatch(scannerStoreCaptureActionsSwiftSource, /sendCaptureResultOverWebRTC|photoRetryQueue|sendRetryablePhotos|sendQueuedPhoto|sendDictation/);
+  assert.doesNotMatch(rootViewSwiftSource, /DictationView|PairingSessionsView|PairingStatusSheet|case dictation/);
+  assert.doesNotMatch(infoPlistSource, /NSMicrophoneUsageDescription|NSSpeechRecognitionUsageDescription/);
+  assert.doesNotMatch(podfileSource, /JitsiWebRTC/);
+  assert.doesNotMatch(scannerProtocolSwiftSource, /PhotoDeliveryReceipt|struct PhotoChunkAck|parsePhotoChunkAck|static func helloMessage|static func dictationMessage/);
+  assert.match(scannerViewSwiftSource, /store\.results\.filter \{ \$0\.source != \.upload \}/);
+  assert.match(scannerViewSwiftSource, /canResend: result\.kind != \.dictation/);
+  assert.match(capturedResultRowSwiftSource, /case \.dictation: "Dictation"/);
+  assert.match(capturedResultRowSwiftSource, /case \.dictation: "mic"/);
+  assert.match(xcodeProjectSource, /B3000000000000000000000D \/\* ScannerProtocol\.swift in Sources \*\//);
+  assert.match(xcodeProjectSource, /B3000000000000000000000E \/\* ScannerSignalingClient\.swift in Sources \*\//);
+  assert.match(xcodeProjectSource, /B3000000000000000000000C \/\* PairingURLParser\.swift in Sources \*\//);
+  assert.match(xcodeProjectSource, /B30000000000000000000020 \/\* PairingSecretStore\.swift in Sources \*\//);
 });
 
-test("native saved-session reconnect waits longer than QR pairing for sleeping Chrome extensions", () => {
+test("App Clip saved-session reconnect waits longer than QR pairing for sleeping Chrome extensions", () => {
   assert.match(scannerProtocolSwiftSource, new RegExp(`static let joinAttemptTTL: Duration = \\.seconds\\(${scannerProtocolGolden.timing.joinAttemptTtlMs / 1000}\\)`));
   assert.match(scannerProtocolSwiftSource, new RegExp(`static let reconnectRequestTTL: Duration = \\.seconds\\(${scannerProtocolGolden.timing.reconnectRequestTtlMs / 1000}\\)`));
   assert.match(scannerProtocolSwiftSource, new RegExp(`static let iceGatheringTimeout: Duration = \\.seconds\\(${scannerProtocolGolden.timing.iceGatheringTimeoutMs / 1000}\\)`));
@@ -245,7 +230,10 @@ test("native scanner protocol constants match shared scanner protocol fixtures",
     scannerProtocolSwiftSource,
     new RegExp(`static let supportedPeerPlatforms = ${swiftStringArrayLiteral(scannerProtocolGolden.surface.peerPlatforms)}`)
   );
-  assert.match(scannerProtocolSwiftSource, /"capabilities": supportedCapabilities/);
+  assert.match(
+    clipWebRTCBridgeSource,
+    new RegExp(`capabilities: ${swiftStringArrayLiteral(scannerProtocolGolden.surface.mobileCapabilities)}`)
+  );
 });
 
 test("native scanner protocol message surfaces match shared scanner protocol fixtures", () => {
@@ -294,128 +282,8 @@ test("native pairing URLs can carry the signal deployment that minted the token"
   assert.match(scannerSignalingSwiftSource, /func createJoinAttemptResolvingSignalURL\([\s\S]*allowFallback: Bool/);
   assert.match(scannerSignalingSwiftSource, /ScannerProtocol\.fallbackSignalURLs/);
   assert.match(scannerSignalingSwiftSource, /where statusCode == 404 && detail == "Join token not found" && allowFallback/);
-  assert.match(scannerWebRTCConnectionSwiftSource, /createJoinAttemptResolvingSignalURL\([\s\S]*allowFallback: session\.signalURL == nil/);
   assert.match(clipTransportSwiftSource, /createJoinAttemptResolvingSignalURL\([\s\S]*allowFallback: session\.signalURL == nil/);
   assert.match(clipTransportSwiftSource, /fetchIceServerConfiguration\([\s\S]*signalURL: resolved\.signalURL/);
-});
-
-test("native saved-session reconnect toast can cancel manual previous-session taps", () => {
-  const reconnectStart = scannerStoreSwiftSource.indexOf("func reconnect(to pairedSession:");
-  const reconnectEnd = scannerStoreSwiftSource.indexOf("var hasReconnectablePairedSession", reconnectStart);
-  const reconnectSource = scannerStoreSwiftSource.slice(reconnectStart, reconnectEnd);
-
-  assert.ok(reconnectStart > -1);
-  assert.match(reconnectSource, /canCancelReconnect = true/);
-  assert.match(reconnectSource, /applyConnectionStatus\(\.pairing\)[\s\S]*reconnectTask = Task/);
-  assert.doesNotMatch(reconnectSource, /canCancelReconnect = isAutomatic/);
-  assert.match(scannerStoreSwiftSource, /func cancelReconnect\(\)/);
-  assert.match(scannerStoreSwiftSource, /func cancelConnectionAttempt\(\)/);
-  assert.match(scannerStoreSwiftSource, /connectionStatus\.isConnecting/);
-  assert.match(rootViewSwiftSource, /store\.cancelConnectionAttempt\(\)/);
-  assert.match(rootViewSwiftSource, /canCancel: true/);
-  assert.match(rootViewSwiftSource, /if sheet\.canCancel \{\s*Button\(role: \.cancel, action: onCancel\)/);
-});
-
-test("native paired sessions merge duplicate Chrome extension rows without global browser-session dedupe", () => {
-  assert.match(pairedScannerSessionSwiftSource, /var platform: String\? = nil/);
-  assert.match(scannerStoreSwiftSource, /var recentBrowserSessions: \[PairedScannerSession\] = \[\]/);
-  assert.doesNotMatch(scannerStoreSwiftSource, /var recentBrowserSession: PairedScannerSession\?/);
-  assert.match(scannerStorePairedSessionsSwiftSource, /message\.peer\?\.platform == "chrome_extension"/);
-  assert.match(scannerStorePairedSessionsSwiftSource, /\$0\.browserSessionId == pairedSession\.browserSessionId/);
-  assert.match(scannerStorePairedSessionsSwiftSource, /\$0\.displayName == pairedSession\.displayName/);
-  assert.match(scannerStorePairedSessionsSwiftSource, /\$0\.platform == nil \|\| \$0\.platform == "chrome_extension"/);
-  assert.match(scannerStorePairedSessionsSwiftSource, /private func isSameVisibleSession\(_ lhs: PairedScannerSession, _ rhs: PairedScannerSession\)/);
-  assert.match(scannerStorePairedSessionsSwiftSource, /let visibleRecentSessions = recentBrowserSessions\.filter/);
-  assert.match(scannerStorePairedSessionsSwiftSource, /return \(visibleRecentSessions \+ pairedSessions\)/);
-  assert.match(scannerStorePairedSessionsSwiftSource, /recentSessionId\(browserSessionId: browserSessionId, platform: platform\)/);
-  assert.doesNotMatch(scannerStorePairedSessionsSwiftSource, /pairedSessions\.removeAll \{ \$0\.id == pairedSession\.id \|\| \$0\.browserSessionId == pairedSession\.browserSessionId \}/);
-});
-
-test("native connection sheet is always visible while connecting and user dismissal cancels", () => {
-  assert.match(rootViewSwiftSource, /\.sheet\(isPresented: \$isConnectionSheetPresented, onDismiss: handleConnectionSheetDismiss\)/);
-  assert.doesNotMatch(rootViewSwiftSource, /interactiveDismissDisabled\(connectionSheetStatus\.isProgressing\)/);
-  assert.match(rootViewSwiftSource, /case \.pairing:[\s\S]*keepsConnectionSheetOpenForSessions = false[\s\S]*isConnectionSheetPresented = true/);
-  assert.match(rootViewSwiftSource, /case \.waitingForChrome:[\s\S]*keepsConnectionSheetOpenForSessions = false[\s\S]*isConnectionSheetPresented = true/);
-  assert.match(rootViewSwiftSource, /private func handleConnectionSheetDismiss\(\) \{[\s\S]*if isConnectionAttemptVisible \{\s*store\.cancelConnectionAttempt\(\)\s*\}[\s\S]*resetConnectionSheetPresentation\(\)/);
-  assert.match(rootViewSwiftSource, /private var isConnectionAttemptVisible: Bool \{[\s\S]*case \.pairing, \.waitingForChrome:/);
-});
-
-test("native first-install welcome scanner defers progress while sessions scanner updates in place", () => {
-  assert.match(rootViewSwiftSource, /@State private var showsConnectionSheetAfterWelcomePairingScan = false/);
-  assert.match(rootViewSwiftSource, /\.fullScreenCover\(isPresented: \$isWelcomePairingScannerPresented, onDismiss: handleWelcomePairingScannerDismiss\)/);
-  assert.match(rootViewSwiftSource, /PairingScanSessionView\(isPresented: \$isWelcomePairingScannerPresented\) \{\s*showsConnectionSheetAfterWelcomePairingScan = true\s*\}/);
-  assert.match(rootViewSwiftSource, /private func handleWelcomePairingScannerDismiss\(\) \{\s*guard showsConnectionSheetAfterWelcomePairingScan else \{ return \}\s*showsConnectionSheetAfterWelcomePairingScan = false\s*resetConnectionSheetPresentation\(\)\s*showPairingSheet\(for: store\.connectionStatus\)/);
-  assert.match(pairingSessionsViewSwiftSource, /let onPairingCodeAccepted: \(\) -> Void/);
-  assert.match(pairingSessionsViewSwiftSource, /init\(isPresented: Binding<Bool>, onPairingCodeAccepted: @escaping \(\) -> Void = \{\}\)/);
-  assert.match(pairingSessionsViewSwiftSource, /if store\.pairScannedBarcodeIfNeeded\(\) \{\s*onPairingCodeAccepted\(\)\s*isPresented = false\s*\}/);
-  assert.match(pairingSessionsViewSwiftSource, /PairingScanSessionView\(isPresented: \$isPairingScannerPresented\) \{\s*onPairingCodeAccepted\(\)\s*\}/);
-  const sessionsScannerStart = pairingSessionsViewSwiftSource.indexOf("PairingScanSessionView(isPresented: $isPairingScannerPresented)");
-  const sessionsScannerEnd = pairingSessionsViewSwiftSource.indexOf(".onAppear", sessionsScannerStart);
-  const sessionsScannerSource = pairingSessionsViewSwiftSource.slice(sessionsScannerStart, sessionsScannerEnd);
-  assert.doesNotMatch(sessionsScannerSource, /dismiss\(\)/);
-});
-
-test("native connection sheet shows pairing failures instead of silently dismissing", () => {
-  assert.match(rootViewSwiftSource, /case \.error:/);
-  assert.match(rootViewSwiftSource, /title: "Pairing failed"/);
-  assert.match(rootViewSwiftSource, /message: store\.targetHint/);
-  assert.match(rootViewSwiftSource, /systemImage: "exclamationmark\.triangle"/);
-  assert.match(rootViewSwiftSource, /isProgressing: false/);
-  assert.match(rootViewSwiftSource, /canCancel: false/);
-  assert.match(rootViewSwiftSource, /case \.idle, \.disconnected:/);
-});
-
-test("native saved-session taps switch sessions sheet to reconnect status without dismiss race", () => {
-  assert.match(rootViewSwiftSource, /PairingSessionsView\(\s*onReconnectStarted: \{\s*beginReconnectFromConnectionSheetSessions\(\)\s*\},\s*onPairingCodeAccepted: \{\s*beginPairingFromConnectionSheetSessions\(\)\s*\}\s*\)/);
-  assert.doesNotMatch(rootViewSwiftSource, /@State private var allowsNextConnectionSheetDismissal/);
-  assert.doesNotMatch(rootViewSwiftSource, /@State private var pendingConnectionSheetStatus/);
-  assert.match(rootViewSwiftSource, /private func beginReconnectFromConnectionSheetSessions\(\) \{\s*keepsConnectionSheetOpenForSessions = false\s*connectionSheetStatus = PairingStatusSheetModel\(\s*title: "Reconnecting to Chrome"/);
-  assert.match(rootViewSwiftSource, /private func beginPairingFromConnectionSheetSessions\(\) \{\s*keepsConnectionSheetOpenForSessions = false\s*connectionSheetStatus = PairingStatusSheetModel\(\s*title: "Pairing with Chrome"/);
-  assert.doesNotMatch(rootViewSwiftSource, /if allowsNextConnectionSheetDismissal/);
-  assert.match(pairingSessionsViewSwiftSource, /let onReconnectStarted: \(\) -> Void/);
-  assert.match(pairingSessionsViewSwiftSource, /init\(\s*onReconnectStarted: @escaping \(\) -> Void = \{\},\s*onPairingCodeAccepted: @escaping \(\) -> Void = \{\}\s*\)/);
-  const nonEmptySessionsStart = pairingSessionsViewSwiftSource.indexOf("} else {");
-  const nonEmptySessionsEnd = pairingSessionsViewSwiftSource.indexOf(".background(ScannerTabLayout.background)", nonEmptySessionsStart);
-  const nonEmptySessionsSource = pairingSessionsViewSwiftSource.slice(nonEmptySessionsStart, nonEmptySessionsEnd);
-  assert.ok(nonEmptySessionsStart > -1);
-  assert.ok(nonEmptySessionsEnd > nonEmptySessionsStart);
-  assert.match(pairingSessionsViewSwiftSource, /if store\.visiblePairingSessions\.isEmpty/);
-  assert.match(pairingSessionsViewSwiftSource, /ForEach\(store\.visiblePairingSessions\)/);
-  assert.match(pairingSessionsViewSwiftSource, /private func handleSessionTap\(_ session: PairedScannerSession\)/);
-  assert.match(pairingSessionsViewSwiftSource, /if store\.canReconnect\(to: session\) \{\s*onReconnectStarted\(\)\s*store\.reconnect\(to: session\)\s*return\s*\}/);
-  const reconnectTapStart = pairingSessionsViewSwiftSource.indexOf("if store.canReconnect(to: session)");
-  const reconnectTapEnd = pairingSessionsViewSwiftSource.indexOf("if store.connectionStatus.isConnected", reconnectTapStart);
-  const reconnectTapSource = pairingSessionsViewSwiftSource.slice(reconnectTapStart, reconnectTapEnd);
-  assert.doesNotMatch(reconnectTapSource, /dismiss\(\)/);
-  assert.match(pairingSessionsViewSwiftSource, /if store\.connectionStatus\.isConnected,[\s\S]*session\.browserSessionId == store\.peerTarget\?\.chromeSessionId \{\s*dismiss\(\)\s*return\s*\}/);
-  assert.match(pairingSessionsViewSwiftSource, /Recent web-only sessions are informational; use the Pair button to scan a fresh QR\./);
-  assert.match(nonEmptySessionsSource, /Text\("Previously Paired"\)[\s\S]*pairedSessionsList/);
-  assert.doesNotMatch(nonEmptySessionsSource, /scanPairingCTA/);
-  assert.match(pairingSessionsViewSwiftSource, /private var pairedSessionsList: some View \{\s*List \{\s*ForEach\(store\.visiblePairingSessions\)/);
-  assert.match(pairingSessionsViewSwiftSource, /\.swipeActions\(edge: \.trailing, allowsFullSwipe: true\)/);
-  assert.match(pairingSessionsViewSwiftSource, /store\.forgetVisibleSession\(session\)/);
-  assert.match(pairingSessionsViewSwiftSource, /Label\(pairingButtonTitle, systemImage: pairingButtonSystemImage\)/);
-  assert.match(pairingSessionsViewSwiftSource, /private func handleHeaderPairingAction\(\) \{\s*if store\.connectionStatus\.isConnected \{\s*store\.disconnectFromCurrentSession\(\)\s*return\s*\}[\s\S]*startPairingScan\(\)\s*\}/);
-  assert.match(pairingSessionsViewSwiftSource, /private var pairingButtonTitle: String \{\s*store\.connectionStatus\.isConnected \? "Disconnect" : "Scan QR"\s*\}/);
-  assert.match(pairingSessionsViewSwiftSource, /private var pairingButtonSystemImage: String \{\s*store\.connectionStatus\.isConnected \? "link\.badge\.minus" : "qrcode\.viewfinder"\s*\}/);
-  assert.match(pairingSessionsViewSwiftSource, /private var pairingButtonColor: Color \{\s*store\.connectionStatus\.isConnected \? \.red : \.green\s*\}/);
-  assert.match(pairingSessionsViewSwiftSource, /private var pairingButtonAccessibilityLabel: String \{\s*store\.connectionStatus\.isConnected \? "Disconnect from browser" : "Scan pairing QR code"\s*\}/);
-  assert.doesNotMatch(pairingSessionsViewSwiftSource, /store\.unpair\(\)/);
-  assert.match(scannerStoreSwiftSource, /var recentBrowserSessions: \[PairedScannerSession\] = \[\]/);
-  assert.match(scannerStorePairedSessionsSwiftSource, /var visiblePairingSessions: \[PairedScannerSession\]/);
-  assert.match(scannerStorePairedSessionsSwiftSource, /let visibleRecentSessions = recentBrowserSessions\.filter/);
-  assert.match(scannerStorePairedSessionsSwiftSource, /return \(visibleRecentSessions \+ pairedSessions\)/);
-  assert.match(scannerStorePairedSessionsSwiftSource, /func rememberRecentBrowserSession\(browserSessionId: String\?, displayName: String\?, platform: String\? = nil\)/);
-  assert.match(scannerStorePairedSessionsSwiftSource, /func forgetVisibleSession\(_ session: PairedScannerSession\)/);
-  assert.match(scannerStoreSwiftSource, /rememberRecentBrowserSession\(\s*browserSessionId: chromeSessionId,\s*displayName: sessionLabel \?\? nextPeerTarget\.displayText,\s*platform: message\.peer\?\.platform\s*\)/);
-  assert.match(scannerStoreSwiftSource, /func disconnectFromCurrentSession\(\) \{[\s\S]*connection\.close\(\)[\s\S]*applyConnectionStatus\(\.disconnected\)/);
-  const disconnectStart = scannerStoreSwiftSource.indexOf("func disconnectFromCurrentSession()");
-  const disconnectEnd = scannerStoreSwiftSource.indexOf("func pair(with session:", disconnectStart);
-  const disconnectSource = scannerStoreSwiftSource.slice(disconnectStart, disconnectEnd);
-  assert.ok(disconnectStart > -1);
-  assert.ok(disconnectEnd > disconnectStart);
-  assert.doesNotMatch(disconnectSource, /removePairedSession/);
-  assert.doesNotMatch(disconnectSource, /PairingSecretStore\.delete/);
 });
 
 test("native capture session remains available without a WebRTC connection", () => {
@@ -437,27 +305,14 @@ test("native capture session exposes the optional cloud cursor target", () => {
   assert.match(captureSessionViewSwiftSource, /cloudWorkspace\.refreshComputers\(\)/);
 });
 
-test("native and app clip keep transient WebRTC disconnects alive through background grace", () => {
-  assert.match(scannerWebRTCConnectionSwiftSource, /private var disconnectGraceTask: Task<Void, Never>\?/);
-  assert.match(scannerWebRTCConnectionSwiftSource, /private var backgroundTaskIdentifier: UIBackgroundTaskIdentifier = \.invalid/);
-  assert.match(scannerWebRTCConnectionSwiftSource, /func setAppIsInBackground\(_ isInBackground: Bool\)/);
-  assert.match(scannerWebRTCConnectionSwiftSource, /let graceDuration: Duration = isAppInBackground \? \.seconds\(45\) : \.seconds\(12\)/);
-  assert.match(scannerWebRTCConnectionSwiftSource, /UIApplication\.shared\.beginBackgroundTask\(withName: "Volt WebRTC grace"/);
-  assert.match(scannerWebRTCConnectionSwiftSource, /if peerConnection\?\.connectionState == \.disconnected \{\s*cancelDisconnectGrace\(\)\s*scheduleDisconnectGrace\(\)/);
-  assert.match(rootViewSwiftSource, /store\.updateAppIsInBackground\(newValue != \.active\)/);
-  assert.match(scannerStoreSwiftSource, /wasConnectedBeforeBackground = wasConnectedBeforeBackground \|\| connectionStatus\.isConnected/);
-  assert.match(scannerStoreSwiftSource, /Task\.sleep\(for: \.milliseconds\(750\)\)/);
-  assert.match(scannerStoreSwiftSource, /reconnect\(to: pairedSession, reportsErrors: false, isAutomatic: true\)/);
-  assert.match(scannerWebRTCConnectionSwiftSource, /case \.disconnected:\s*scheduleDisconnectGrace\(\)/);
-  assert.match(scannerWebRTCConnectionSwiftSource, /guard peerConnection\?\.connectionState == \.disconnected else \{ return \}\s*close\(\)/);
+test("App Clip keeps transient WebRTC disconnects alive through background grace", () => {
   assert.match(clipRootViewSwiftSource, /ClipWebRTCBridgeView\(webView: store\.bridgeWebView\)/);
   assert.match(clipRootViewSwiftSource, /store\.updateAppIsInBackground\(newValue != \.active\)/);
   assert.match(clipTransportSwiftSource, /setAppIsInBackground\(\\\(isInBackground\)\)/);
-  const bridgeSource = clipWebRTCBridgeSource;
-  assert.match(bridgeSource, /let disconnectGraceMs = 12000/);
-  assert.match(bridgeSource, /setAppIsInBackground\(nextIsInBackground\)/);
-  assert.match(bridgeSource, /if \(!pc \|\| pc\.connectionState !== "disconnected" \|\| isAppInBackground \|\| disconnectTimer\) return/);
-  assert.match(bridgeSource, /pc && pc\.connectionState === "disconnected"[\s\S]*window\.voltBridge\.close\(\)/);
+  assert.match(clipWebRTCBridgeSource, /let disconnectGraceMs = 12000/);
+  assert.match(clipWebRTCBridgeSource, /setAppIsInBackground\(nextIsInBackground\)/);
+  assert.match(clipWebRTCBridgeSource, /if \(!pc \|\| pc\.connectionState !== "disconnected" \|\| isAppInBackground \|\| disconnectTimer\) return/);
+  assert.match(clipWebRTCBridgeSource, /pc && pc\.connectionState === "disconnected"[\s\S]*window\.voltBridge\.close\(\)/);
 });
 
 test("app clip capture sessions keep one photo batch per presented camera session", () => {
@@ -480,7 +335,6 @@ test("native and app clip can reopen photo capture into a selected batch", () =>
   assert.match(scannerStoreCaptureActionsSwiftSource, /func endResumedPhotoBatch\(\) \{\s*resumedPhotoBatchId = nil\s*\}/);
   assert.match(scannerStoreCaptureActionsSwiftSource, /func currentPhotoBatch\(now: Date\) -> String \{\s*if let resumedPhotoBatchId \{\s*return resumedPhotoBatchId\s*\}/);
   assert.match(scannerStoreCaptureActionsSwiftSource, /func captureSquarePhoto\(\) async \{\s*let batchId = resumedPhotoBatchId[\s\S]*sendPhoto\(preparedImage, result: photoResult, batchId: batchId\)/);
-  assert.match(scannerStoreCaptureActionsSwiftSource, /result: result,\s*batchId: result\.batchId,\s*filename: "volt-photo-resend/);
   assert.match(scannerViewSwiftSource, /private var capturePhotoBatches: \[CapturePhotoBatch\]/);
   assert.match(scannerViewSwiftSource, /Label\("Add Photos", systemImage: "plus\.viewfinder"\)/);
   assert.match(scannerViewSwiftSource, /accessibilityLabel\("Add photos to \\\(batch\.title\) from/);
@@ -516,49 +370,25 @@ test("app clip dictation attaches the microphone to Chrome's offered audio sende
   assert.ok(startedMessageStart > replaceTrackStart);
 });
 
-test("native screens use the shared header connection control without extra session accessories", () => {
-  assert.match(rootViewSwiftSource, /struct ScannerSectionHeader<TrailingAccessory: View>: View/);
-  assert.match(rootViewSwiftSource, /trailingAccessory\(\)/);
-  assert.doesNotMatch(rootViewSwiftSource, /onSessions/);
-  assert.doesNotMatch(rootViewSwiftSource, /struct ScannerSessionsButton: View/);
-  assert.match(scannerViewSwiftSource, /ScannerSectionHeader\(\s*title: "Capture",\s*onConnectionControlTapped:/);
-  assert.match(dictationViewSwiftSource, /ScannerSectionHeader\(\s*title: "Dictate",\s*onConnectionControlTapped:/);
-  assert.match(uploadViewSwiftSource, /ScannerSectionHeader\(\s*title: "Upload",\s*onConnectionControlTapped:/);
-  assert.match(rootViewSwiftSource, /private var connectionTitle: String/);
-  assert.match(rootViewSwiftSource, /store\.connectionStatus == \.pairing \|\| store\.connectionStatus == \.waitingForChrome[\s\S]*return "Connecting"/);
-  assert.match(sharedScannerTabComponentsSwiftSource, /private var connectionColor: Color \{[\s\S]*if connection\.isConnected \{\s*return \.green\s*\}[\s\S]*return \.secondary/);
-  assert.doesNotMatch(sharedScannerTabComponentsSwiftSource, /connection\.isBusy \? \.orange : \.secondary/);
-  assert.match(clipRootViewSwiftSource, /private func clipConnectionTitle\(\s*isConnected: Bool,\s*isPairing: Bool,\s*pairingLabel: String\?,\s*pairingFailureMessage: String\?\s*\) -> String/);
+test("installed app removes pairing headers while App Clip keeps connection controls", () => {
+  assert.doesNotMatch(rootViewSwiftSource, /ScannerSectionHeader|ScannerConnectionSummary|PairingStatusSheet/);
+  assert.doesNotMatch(scannerViewSwiftSource, /PairingSessionsView|isSessionsPresented|onConnectionControlTapped/);
+  assert.doesNotMatch(uploadViewSwiftSource, /PairingSessionsView|isSessionsPresented|onConnectionControlTapped/);
+  assert.match(scannerViewSwiftSource, /CloudTargetButton/);
+  assert.match(clipRootViewSwiftSource, /private func clipConnectionTitle\(/);
   assert.match(clipRootViewSwiftSource, /if isPairing \{\s*return "Connecting"\s*\}/);
-  assert.match(clipRootViewSwiftSource, /return pairingLabel \?\? "Chrome"/);
-  assert.match(clipRootViewSwiftSource, /if pairingFailureMessage != nil \{\s*return "Failed"\s*\}/);
   assert.match(clipRootViewSwiftSource, /private struct ClipPairingFailureView: View/);
-  assert.match(clipRootViewSwiftSource, /Label\("Retry", systemImage: "arrow\.clockwise"\)/);
   assert.match(clipRootViewSwiftSource, /Label\("Scan QR Code", systemImage: "qrcode\.viewfinder"\)/);
   assert.doesNotMatch(clipRootViewSwiftSource, /private struct ClipPairingSessionsView: View/);
-  assert.doesNotMatch(scannerViewSwiftSource, /trailingAccessory: \{\s*ScannerSessionsButton/);
-  assert.doesNotMatch(dictationViewSwiftSource, /trailingAccessory: \{\s*ScannerSessionsButton/);
-  assert.doesNotMatch(uploadViewSwiftSource, /trailingAccessory: \{\s*ScannerSessionsButton/);
 });
 
-test("native first launch opens capture without auto-pairing or requesting camera early", () => {
-  assert.doesNotMatch(rootViewSwiftSource, /guard hasSeenWelcome/);
-  assert.match(rootViewSwiftSource, /private func startAppServices\(\) \{[\s\S]*store\.cloudWorkspace\.requestSync\(\)\s*\}/);
-  assert.match(rootViewSwiftSource, /private func showSavedSessionPickerIfNeeded\(\) -> Bool \{\s*guard store\.hasReconnectablePairedSession else \{ return false \}/);
-  assert.doesNotMatch(rootViewSwiftSource, /store\.reconnectToMostRecentPairedSessionIfNeeded\(\)/);
-  assert.doesNotMatch(scannerStoreSwiftSource, /func reconnectToMostRecentPairedSessionIfNeeded/);
+test("native first launch opens capture without pairing or requesting camera early", () => {
+  assert.doesNotMatch(rootViewSwiftSource, /Pairing|Reconnect|connectionStatus|updateAppIsInBackground/);
+  assert.match(rootViewSwiftSource, /store\.cloudWorkspace\.requestSync\(\)/);
   assert.doesNotMatch(rootViewSwiftSource, /store\.camera\.requestAccess\(\)/);
   assert.match(captureSessionViewSwiftSource, /\.task \{\s*await store\.camera\.requestAccess\(\)\s*syncCameraForOcrReview/);
-  assert.match(pairingSessionsViewSwiftSource, /\.task \{\s*await store\.camera\.requestAccess\(\)\s*store\.camera\.start\(\)\s*\}/);
-  assert.doesNotMatch(pairingSessionsViewSwiftSource, /openURL\(webScannerURL\)/);
   assert.match(sharedPairingSessionComponentsSwiftSource, /private let webScannerURLText = "volt\.juanquenga\.com\/clip"/);
   assert.match(sharedPairingSessionComponentsSwiftSource, /Text\("Scan the QR code from the Chrome extension, or open the App Clip page on your computer\. This iPhone will connect to that browser session\."\)/);
-  assert.match(sharedPairingSessionComponentsSwiftSource, /title: "Open Volt on your computer"/);
-  assert.match(sharedPairingSessionComponentsSwiftSource, /detail: "Use the Chrome extension side panel, or enter the URL below\."/);
-  assert.match(sharedPairingSessionComponentsSwiftSource, /detail: "Start pairing in Chrome or on the App Clip page\."/);
-  assert.doesNotMatch(sharedPairingSessionComponentsSwiftSource, /Label\("Open Create Session Page", systemImage: "safari"\)/);
-  assert.match(pairingSessionsViewSwiftSource, /Label\("Scan Computer QR", systemImage: "qrcode\.viewfinder"\)/);
-  assert.match(rootViewSwiftSource, /\.frame\(maxWidth: \.infinity, alignment: \.leading\)\s*\.background\(\.background, in: RoundedRectangle\(cornerRadius: 16/);
 });
 
 test("app clip uses the same app icon resource as the main app", () => {
@@ -737,13 +567,13 @@ test("native OCR target dialog can clean selected text before sending", () => {
   assert.match(captureSessionViewSwiftSource, /private var selectedTextPreview: String/);
 });
 
-test("native scanner normalizes UPC-A barcodes and upload filenames preserve selection order", () => {
+test("native scanner normalizes UPC-A barcodes and preserves upload selection order", () => {
   assert.match(scannerStoreCaptureActionsSwiftSource, /normalizedBarcodeScan\(value: value, format: camera\.lastBarcodeFormat \?\? "barcode"\)/);
   assert.match(scannerStoreCaptureActionsSwiftSource, /trimmedValue\.count == 13/);
   assert.match(scannerStoreCaptureActionsSwiftSource, /trimmedValue\.first == "0"/);
   assert.match(scannerStoreCaptureActionsSwiftSource, /return \(String\(trimmedValue\.dropFirst\(\)\), "upc_a"\)/);
-  assert.match(scannerStoreCaptureActionsSwiftSource, /String\(format: "%03d", index \+ 1\)/);
-  assert.match(scannerStoreCaptureActionsSwiftSource, /filename: uploadFilename\(index: index, capturedAt: capturedAt\)/);
+  assert.match(scannerStoreCaptureActionsSwiftSource, /let capturedAt = now\.addingTimeInterval\(Double\(index\) \/ 1000\)/);
+  assert.ok(scannerStoreCaptureActionsSwiftSource.includes('value: "Upload \\(index + 1)"'));
 });
 
 test("native upload batches expose clear progress while photos are preparing and uploading", () => {
@@ -821,14 +651,6 @@ test("native barcode reticle only renders in barcode capture mode", () => {
   assert.match(scannerCameraLayerSwiftSource, /guard store\.activeMode == \.barcode else \{\s*store\.camera\.updateBarcodeGuideRect\(nil\)\s*store\.camera\.clearDetectedBarcode\(\)/);
   assert.match(scannerCameraLayerSwiftSource, /store\.camera\.updateBarcodeGuideRect\(nil\)/);
   assert.match(scannerCameraLayerSwiftSource, /if guideVisible,\s*store\.activeMode == \.barcode,\s*let barcodeBounds = store\.camera\.detectedBarcodeBounds/);
-});
-
-test("native pairing QR scan temporarily enables QR recognition without clearing hidden-guide detections", () => {
-  assert.match(pairingSessionsViewSwiftSource, /@State private var previousBarcodeRecognitionMode: BarcodeRecognitionMode\?/);
-  assert.match(pairingSessionsViewSwiftSource, /previousBarcodeRecognitionMode = store\.camera\.barcodeRecognitionMode/);
-  assert.match(pairingSessionsViewSwiftSource, /store\.camera\.updateBarcodeRecognitionMode\(\.qr\)/);
-  assert.match(pairingSessionsViewSwiftSource, /if let previousBarcodeRecognitionMode \{\s*store\.camera\.updateBarcodeRecognitionMode\(previousBarcodeRecognitionMode\)/);
-  assert.match(pairingSessionsViewSwiftSource, /ScannerCameraLayer\(guideVisible: false\)/);
 });
 
 test("native camera resets capture sessions to display 1x zoom", () => {
@@ -1206,50 +1028,7 @@ test("app clip OCR reuses the main async recognizer and identifier extractor", (
   assert.match(clipOCRServiceSwiftSource, /DeviceIdentifierRegionExtractor\.reviewRegions\(from: recognizedRegions\)/);
 });
 
-test("native dictation keeps listening briefly after user stop actions", () => {
-  assert.match(scannerStoreSwiftSource, /let dictationReleaseGraceDelay: Duration = \.milliseconds\(1500\)/);
-  assert.match(scannerStoreDictationSwiftSource, /func finishDictationAfterGrace\(\)/);
-  assert.match(scannerStoreDictationSwiftSource, /try\? await Task\.sleep\(for: delay\)/);
-  assert.match(scannerStoreDictationSwiftSource, /cancelDictationGraceStop\(\)/);
-  assert.match(dictationViewSwiftSource, /private func stopDictation\(\) \{\s*store\.finishDictationAfterGrace\(\)\s*\}/);
-  assert.match(dictationViewSwiftSource, /holdEndAction: stopDictation/);
-});
-
-test("native dictation tap is not easily classified as push-to-talk", () => {
-  assert.match(dictationViewSwiftSource, /private let pushToTalkThreshold: TimeInterval = 0\.8/);
-});
-
-test("native dictation start gesture emits a dedicated start haptic", () => {
-  const pressGestureStart = dictationViewSwiftSource.indexOf("private var pressGesture");
-  const pressGestureSource = dictationViewSwiftSource.slice(pressGestureStart);
-
-  assert.ok(pressGestureStart > -1);
-  assert.match(pressGestureSource, /if !isRecording && !isStarting \{[\s\S]*startFeedback\.prepare\(\)[\s\S]*startFeedback\.impactOccurred\(intensity: 1\)[\s\S]*holdStartAction\(\)/);
-  assert.doesNotMatch(pressGestureSource, /pressFeedback\.impactOccurred\(intensity: 1\)[\s\S]*if !isRecording && !isStarting/);
-});
-
-test("native dictation recognition results do not automatically stop recording", () => {
-  const recognitionTaskStart = dictationModelSwiftSource.indexOf("nonisolated private static func makeRecognitionTask");
-  const recognitionTaskSource = dictationModelSwiftSource.slice(recognitionTaskStart);
-
-  assert.ok(recognitionTaskStart > -1);
-  assert.doesNotMatch(recognitionTaskSource, /result\?\.isFinal[\s\S]*owner\?\.stop\(\)/);
-  assert.doesNotMatch(recognitionTaskSource, /error\s*!=\s*nil[\s\S]*owner\?\.stop\(\)/);
-});
-
-test("native Chrome input-change haptics are gated to the Dictate tab", () => {
-  assert.match(scannerStoreSwiftSource, /func applyConnectionStatus\(_ status: ScannerConnectionStatus, allowsConnectedFeedback: Bool = true\)/);
-  assert.match(scannerStoreSwiftSource, /if allowsConnectedFeedback \{\s*pairingNotificationFeedback\.notificationOccurred\(\.success\)\s*\}/);
-  assert.match(scannerStoreSwiftSource, /let didChangeChromeInputTarget: Bool/);
-  assert.match(scannerStoreSwiftSource, /wasConnected && dictationTargetKey\(for: previousPeerTarget\) != dictationTargetKey\(for: nextPeerTarget\)/);
-  assert.match(scannerStoreSwiftSource, /allowsConnectedFeedback: !wasConnected \|\| \(didChangeChromeInputTarget && selectedSection == \.dictation\)/);
-  assert.doesNotMatch(scannerStoreSwiftSource, /allowsConnectedFeedback: !didChangeChromeInputTarget \|\| selectedSection == \.dictation/);
-  assert.match(scannerViewSwiftSource, /\.onAppear \{\s*store\.selectedSection = \.scan\s*store\.activeMode = ScreenshotScenario\.current\?\.initialCaptureMode \?\? \.ocr/);
-  assert.match(dictationViewSwiftSource, /\.onAppear \{\s*store\.selectedSection = \.dictation\s*store\.activeMode = \.dictation\s*\}/);
-  assert.match(uploadViewSwiftSource, /\.onAppear \{\s*store\.selectedSection = \.upload\s*\}/);
-  assert.match(scannerStoreDictationSwiftSource, /func allowsDictationFeedback\(_ requested: Bool = true\) -> Bool \{\s*requested && selectedSection == \.dictation\s*\}/);
-  assert.match(scannerStoreDictationSwiftSource, /if allowsDictationFeedback\(allowsFeedback\) \{\s*dictationNotificationFeedback\.notificationOccurred\(\.success\)\s*\}/);
-  assert.match(scannerStoreDictationSwiftSource, /if wasRecording, allowsDictationFeedback\(\) \{\s*dictationImpactFeedback\.impactOccurred\(intensity: 0\.7\)\s*\}/);
+test("App Clip Chrome input-change haptics remain gated to the Dictate tab", () => {
   assert.match(clipScannerStoreSwiftSource, /private var dictationTargetKey: String\?/);
   assert.match(clipScannerStoreSwiftSource, /let didChangeChromeInputTarget = wasConnected[\s\S]*self\.dictationTargetKey != nextTargetKey/);
   assert.match(clipScannerStoreSwiftSource, /if !wasConnected \|\| \(didChangeChromeInputTarget && self\.selectedTab == \.dictate\) \{\s*self\.pairingNotificationFeedback\.notificationOccurred\(\.success\)\s*\}/);
@@ -1257,38 +1036,9 @@ test("native Chrome input-change haptics are gated to the Dictate tab", () => {
   assert.match(clipScannerStoreSwiftSource, /sessionReady\.cursorTarget\?\.url/);
 });
 
-test("native scanner handles Chrome result receipts for cursor insertion feedback", () => {
+test("App Clip retains Chrome result receipts for cursor insertion feedback", () => {
   assert.match(scannerProtocolSwiftSource, /struct ResultReceived: Decodable, Equatable/);
   assert.match(scannerProtocolSwiftSource, /static func parseResultReceived\(_ rawValue: String\) -> ResultReceived\?/);
-  assert.match(scannerWebRTCConnectionSwiftSource, /var onResultReceived: \(\(ScannerProtocol\.ResultReceived\) -> Void\)\?/);
-  assert.match(scannerWebRTCConnectionSwiftSource, /ScannerProtocol\.parseResultReceived\(rawValue\)/);
-  assert.match(scannerStoreSwiftSource, /func applyResultReceived\(_ receipt: ScannerProtocol\.ResultReceived\)/);
-  assert.match(scannerStoreSwiftSource, /receipt\.insertedIntoCursor == false/);
-  assert.match(scannerProtocolSwiftSource, /let platform: String\?/);
-  assert.match(scannerStoreSwiftSource, /message\.peer\?\.platform == "web" \? "Browser" : "Chrome"/);
-  assert.match(scannerStoreSwiftSource, /peerTarget\?\.isWebPageSession == true && receipt\.savedToResults/);
-  assert.match(scannerStoreSwiftSource, /statusText = "Successfully sent to browser"/);
-  assert.match(scannerStoreCaptureActionsSwiftSource, /peerTarget\?\.isWebPageSession == true \? "Sent to browser" : "Sent to Chrome"/);
-  assert.match(scannerStoreSwiftSource, /if receipt\.savedToResults \{\s*showCaptureTypingFallbackToast\(for: results\[index\]\)\s*\} else \{\s*showCaptureDeliveryToast\(for: results\[index\], state: \.failed\)\s*\}/);
-  assert.match(scannerStoreCaptureActionsSwiftSource, /func showCaptureTypingFallbackToast\(for result: ScanResult\)/);
-  assert.match(scannerStoreCaptureActionsSwiftSource, /title: "Failed to type"/);
-  assert.match(scannerStoreCaptureActionsSwiftSource, /was saved to Chrome sidepanel results/);
-  assert.match(scannerStoreSwiftSource, /\(browserName\) saved it, but no focused cursor target was available\./);
-});
-
-test("native photo delivery uses a durable retry queue until browser receipt", () => {
-  assert.match(scannerStoreCaptureActionsSwiftSource, /final class MobilePhotoRetryQueue/);
-  assert.match(scannerStoreCaptureActionsSwiftSource, /static let recoveryWindow: TimeInterval = 24 \* 60 \* 60/);
-  assert.match(scannerStoreCaptureActionsSwiftSource, /enum Status: String, Codable, Equatable \{[\s\S]*case queued[\s\S]*case sending[\s\S]*case sent[\s\S]*case failed[\s\S]*case received[\s\S]*case cancelled/);
-  assert.match(scannerStoreCaptureActionsSwiftSource, /appendingPathComponent\("VoltPhotoRetryQueue", isDirectory: true\)/);
-  assert.match(scannerStoreCaptureActionsSwiftSource, /func enqueue\(payload: ScannerProtocol\.PhotoPayload, resultId: UUID, now: Date = \.now\) -> Entry\?/);
-  assert.match(scannerStoreCaptureActionsSwiftSource, /func expireEntries\(now: Date = \.now\) -> \[Entry\]/);
-  assert.match(scannerStoreSwiftSource, /@ObservationIgnored var photoRetryQueue = MobilePhotoRetryQueue\(\)/);
-  assert.match(scannerStoreSwiftSource, /Task \{ await sendRetryablePhotos\(\) \}/);
-  assert.match(scannerWebRTCConnectionSwiftSource, /var onPhotoTransferCompleted: \(\(String\) -> Void\)\?/);
-  assert.match(scannerWebRTCConnectionSwiftSource, /func sendPhoto\(_ payload: ScannerProtocol\.PhotoPayload\) async throws -> ScannerProtocol\.PhotoDeliveryReceipt/);
-  assert.match(scannerWebRTCConnectionSwiftSource, /onPhotoTransferCompleted\?\(payload\.id\)/);
-  assert.match(scannerStoreCaptureActionsSwiftSource, /photoRetryQueue\.markSent\(photoId: photoId\)/);
-  assert.match(scannerStoreCaptureActionsSwiftSource, /photoRetryQueue\.markReceived\(photoId: photoId\)/);
-  assert.match(scannerStoreCaptureActionsSwiftSource, /removeData\(photoId: photoId\)/);
+  assert.match(clipTransportSwiftSource, /CheckedContinuation<ScannerProtocol\.ResultReceived, Error>/);
+  assert.match(clipTransportSwiftSource, /ScannerProtocol\.parseResultReceived\(rawValue\)/);
 });

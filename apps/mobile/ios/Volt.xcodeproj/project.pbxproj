@@ -18,12 +18,10 @@
 		B0000000000000000000001E /* CameraZoomController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000020 /* CameraZoomController.swift */; };
 		B0000000000000000000001F /* OcrTextCleaner.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000021 /* OcrTextCleaner.swift */; };
 		B00000000000000000000007 /* TextRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000007 /* TextRecognizer.swift */; };
-		B00000000000000000000008 /* DictationModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000008 /* DictationModel.swift */; };
 		B00000000000000000000009 /* ScannerStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000009 /* ScannerStore.swift */; };
 		B0000000000000000000000A /* CameraPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000000A /* CameraPreview.swift */; };
 		B0000000000000000000000B /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000000B /* RootView.swift */; };
 		B0000000000000000000000C /* ScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000000C /* ScannerView.swift */; };
-		B0000000000000000000000D /* DictationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000000D /* DictationView.swift */; };
 		B0000000000000000000000E /* ResultsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000000E /* ResultsView.swift */; };
 		B0000000000000000000000F /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000000F /* Images.xcassets */; };
 		B00000000000000000000010 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000010 /* SplashScreen.storyboard */; };
@@ -33,13 +31,9 @@
 		B00000000000000000000013 /* ScannerPeerTarget.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000017 /* ScannerPeerTarget.swift */; };
 		B00000000000000000000014 /* ScannerProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000018 /* ScannerProtocol.swift */; };
 		B00000000000000000000015 /* ScannerSignalingClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000019 /* ScannerSignalingClient.swift */; };
-		B00000000000000000000016 /* ScannerWebRTCConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000001A /* ScannerWebRTCConnection.swift */; };
 		B00000000000000000000019 /* PairedScannerSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000001C /* PairedScannerSession.swift */; };
-		B0000000000000000000001A /* PairingSessionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000001D /* PairingSessionsView.swift */; };
 		B0000000000000000000001C /* ScannerRecognitionModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000001E /* ScannerRecognitionModels.swift */; };
 		B10000000000000000000001 /* ScannerStoreCaptureActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000001 /* ScannerStoreCaptureActions.swift */; };
-		B10000000000000000000002 /* ScannerStoreDictation.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000002 /* ScannerStoreDictation.swift */; };
-		B10000000000000000000003 /* ScannerStorePairedSessions.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000003 /* ScannerStorePairedSessions.swift */; };
 		B10000000000000000000004 /* PairingSecretStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000004 /* PairingSecretStore.swift */; };
 		B10000000000000000000005 /* CaptureSessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000005 /* CaptureSessionView.swift */; };
 		B10000000000000000000006 /* CameraSessionControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000006 /* CameraSessionControls.swift */; };
@@ -157,12 +151,10 @@
 		C00000000000000000000005 /* PairingURLParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingURLParser.swift; sourceTree = "<group>"; };
 		C00000000000000000000006 /* CameraModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraModel.swift; sourceTree = "<group>"; };
 		C00000000000000000000007 /* TextRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextRecognizer.swift; sourceTree = "<group>"; };
-		C00000000000000000000008 /* DictationModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationModel.swift; sourceTree = "<group>"; };
 		C00000000000000000000009 /* ScannerStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannerStore.swift; sourceTree = "<group>"; };
 		C0000000000000000000000A /* CameraPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraPreview.swift; sourceTree = "<group>"; };
 		C0000000000000000000000B /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		C0000000000000000000000C /* ScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannerView.swift; sourceTree = "<group>"; };
-		C0000000000000000000000D /* DictationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationView.swift; sourceTree = "<group>"; };
 		C0000000000000000000000E /* ResultsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResultsView.swift; sourceTree = "<group>"; };
 		C0000000000000000000000F /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Images.xcassets; sourceTree = "<group>"; };
 		C00000000000000000000010 /* SplashScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = SplashScreen.storyboard; sourceTree = "<group>"; };
@@ -174,17 +166,13 @@
 		C00000000000000000000017 /* ScannerPeerTarget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannerPeerTarget.swift; sourceTree = "<group>"; };
 		C00000000000000000000018 /* ScannerProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannerProtocol.swift; sourceTree = "<group>"; };
 		C00000000000000000000019 /* ScannerSignalingClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannerSignalingClient.swift; sourceTree = "<group>"; };
-		C0000000000000000000001A /* ScannerWebRTCConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannerWebRTCConnection.swift; sourceTree = "<group>"; };
 		C0000000000000000000001B /* volt.icon */ = {isa = PBXFileReference; explicitFileType = "com.apple.iconcomposer.icon"; path = volt.icon; sourceTree = "<group>"; };
 		C0000000000000000000001C /* PairedScannerSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairedScannerSession.swift; sourceTree = "<group>"; };
-		C0000000000000000000001D /* PairingSessionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingSessionsView.swift; sourceTree = "<group>"; };
 		C0000000000000000000001E /* ScannerRecognitionModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannerRecognitionModels.swift; sourceTree = "<group>"; };
 		C0000000000000000000001F /* CameraDeviceSelector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraDeviceSelector.swift; sourceTree = "<group>"; };
 		C00000000000000000000020 /* CameraZoomController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraZoomController.swift; sourceTree = "<group>"; };
 		C00000000000000000000021 /* OcrTextCleaner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OcrTextCleaner.swift; sourceTree = "<group>"; };
 		C10000000000000000000001 /* ScannerStoreCaptureActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannerStoreCaptureActions.swift; sourceTree = "<group>"; };
-		C10000000000000000000002 /* ScannerStoreDictation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannerStoreDictation.swift; sourceTree = "<group>"; };
-		C10000000000000000000003 /* ScannerStorePairedSessions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannerStorePairedSessions.swift; sourceTree = "<group>"; };
 		C10000000000000000000004 /* PairingSecretStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingSecretStore.swift; sourceTree = "<group>"; };
 		C10000000000000000000005 /* CaptureSessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureSessionView.swift; sourceTree = "<group>"; };
 		C10000000000000000000006 /* CameraSessionControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraSessionControls.swift; sourceTree = "<group>"; };
@@ -380,16 +368,12 @@
 				C00000000000000000000006 /* CameraModel.swift */,
 				C00000000000000000000021 /* OcrTextCleaner.swift */,
 				C00000000000000000000007 /* TextRecognizer.swift */,
-				C00000000000000000000008 /* DictationModel.swift */,
 				C00000000000000000000009 /* ScannerStore.swift */,
 				C10000000000000000000001 /* ScannerStoreCaptureActions.swift */,
-				C10000000000000000000002 /* ScannerStoreDictation.swift */,
-				C10000000000000000000003 /* ScannerStorePairedSessions.swift */,
 				C10000000000000000000004 /* PairingSecretStore.swift */,
 				C1000000000000000000000C /* ScreenshotFixtures.swift */,
 				C00000000000000000000018 /* ScannerProtocol.swift */,
 				C00000000000000000000019 /* ScannerSignalingClient.swift */,
-				C0000000000000000000001A /* ScannerWebRTCConnection.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -419,8 +403,6 @@
 				C10000000000000000000009 /* CaptureDocks.swift */,
 				C1000000000000000000000A /* OcrReviewLayer.swift */,
 				C1000000000000000000000B /* CaptureGuideOverlay.swift */,
-				C0000000000000000000001D /* PairingSessionsView.swift */,
-				C0000000000000000000000D /* DictationView.swift */,
 				C0000000000000000000000E /* ResultsView.swift */,
 			);
 			path = Views;
@@ -706,13 +688,10 @@
 				B00000000000000000000006 /* CameraModel.swift in Sources */,
 				B0000000000000000000001F /* OcrTextCleaner.swift in Sources */,
 				B00000000000000000000007 /* TextRecognizer.swift in Sources */,
-				B00000000000000000000008 /* DictationModel.swift in Sources */,
 				B00000000000000000000009 /* ScannerStore.swift in Sources */,
 				B0000000000000000000000A /* CameraPreview.swift in Sources */,
 				B0000000000000000000000B /* RootView.swift in Sources */,
 				B0000000000000000000000C /* ScannerView.swift in Sources */,
-				B0000000000000000000001A /* PairingSessionsView.swift in Sources */,
-				B0000000000000000000000D /* DictationView.swift in Sources */,
 				B0000000000000000000000E /* ResultsView.swift in Sources */,
 				B00000000000000000000012 /* ScannerConnectionStatus.swift in Sources */,
 				B00000000000000000000013 /* ScannerPeerTarget.swift in Sources */,
@@ -720,10 +699,7 @@
 				B0000000000000000000001C /* ScannerRecognitionModels.swift in Sources */,
 				B00000000000000000000014 /* ScannerProtocol.swift in Sources */,
 				B00000000000000000000015 /* ScannerSignalingClient.swift in Sources */,
-				B00000000000000000000016 /* ScannerWebRTCConnection.swift in Sources */,
 				B10000000000000000000001 /* ScannerStoreCaptureActions.swift in Sources */,
-				B10000000000000000000002 /* ScannerStoreDictation.swift in Sources */,
-				B10000000000000000000003 /* ScannerStorePairedSessions.swift in Sources */,
 				B10000000000000000000004 /* PairingSecretStore.swift in Sources */,
 				B10000000000000000000005 /* CaptureSessionView.swift in Sources */,
 				B1000000000000000000000D /* SharedCameraSessionControls.swift in Sources */,

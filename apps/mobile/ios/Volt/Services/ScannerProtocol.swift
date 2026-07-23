@@ -1,5 +1,4 @@
 import Foundation
-import UIKit
 
 enum ScannerProtocol {
     static let developmentSignalURL = URL(string: "https://adorable-hornet-19.convex.site/api/signal")!
@@ -189,12 +188,6 @@ enum ScannerProtocol {
         let cursorTarget: SessionReady.CursorTarget?
     }
 
-    struct PhotoChunkAck: Decodable, Equatable {
-        let photoId: String
-        let chunkIndex: Int
-        let totalChunks: Int
-    }
-
     struct PhotoReceived: Decodable, Equatable {
         let photoId: String
         let photoBatchId: String
@@ -220,11 +213,6 @@ enum ScannerProtocol {
         let phase: String
         let text: String?
         let insertIntoCursor: Bool?
-    }
-
-    enum PhotoDeliveryReceipt: Equatable {
-        case received(PhotoReceived)
-        case rejected(PhotoRejected)
     }
 
     struct PhotoPayload {
@@ -288,21 +276,6 @@ enum ScannerProtocol {
         ]
     }
 
-    @MainActor
-    static func helloMessage(contributorId: String, chromeSessionId: String = "local") -> [String: Any] {
-        var message = baseMessage(type: .hello, prefix: "hello")
-        message["peer"] = [
-            "protocolVersion": ["major": protocolVersion.major, "minor": protocolVersion.minor, "patch": protocolVersion.patch ?? 0],
-            "appVersion": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.1",
-            "platform": "ios",
-            "capabilities": supportedCapabilities,
-            "contributorId": contributorId,
-            "deviceLabel": UIDevice.current.name,
-            "chromeSessionId": chromeSessionId,
-        ]
-        return message
-    }
-
     static func captureResult(
         id: String,
         kind: String,
@@ -320,18 +293,6 @@ enum ScannerProtocol {
         message["capturedAt"] = scannerDateString(from: capturedAt)
         message["insertIntoCursor"] = insertIntoCursor
         message["contributorId"] = contributorId
-        return message
-    }
-
-    static func dictationMessage(sessionId: String, phase: String, text: String?, insertIntoCursor: Bool) -> [String: Any] {
-        var message = baseMessage(type: .dictation, prefix: "dictation")
-        message["dictationSessionId"] = sessionId
-        message["phase"] = phase
-        message["capturedAt"] = scannerDateString(from: .now)
-        message["insertIntoCursor"] = insertIntoCursor
-        if let text {
-            message["text"] = text
-        }
         return message
     }
 
@@ -388,11 +349,6 @@ enum ScannerProtocol {
               (transcript.phase == "partial" || transcript.phase == "final")
         else { return nil }
         return transcript
-    }
-
-    static func parsePhotoChunkAck(_ rawValue: String) -> PhotoChunkAck? {
-        guard let data = data(for: rawValue, matching: .photoChunkAck) else { return nil }
-        return try? JSONDecoder().decode(PhotoChunkAck.self, from: data)
     }
 
     static func parsePhotoReceived(_ rawValue: String) -> PhotoReceived? {
