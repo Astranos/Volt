@@ -85,6 +85,35 @@
 		B3000000000000000000001E /* volt.icon in Resources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000001B /* volt.icon */; };
 		B3000000000000000000001F /* VoltClip.app in Embed App Clips */ = {isa = PBXBuildFile; fileRef = C30000000000000000000008 /* VoltClip.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		B30000000000000000000020 /* PairingSecretStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000004 /* PairingSecretStore.swift */; };
+		B30000000000000000000021 /* AppClipGuestCloudClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = C30000000000000000000010 /* AppClipGuestCloudClient.swift */; };
+		B40000000000000000000001 /* AppConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = C40000000000000000000001 /* AppConfiguration.swift */; };
+		B40000000000000000000002 /* AccessKind.swift in Sources */ = {isa = PBXBuildFile; fileRef = C40000000000000000000002 /* AccessKind.swift */; };
+		B40000000000000000000003 /* AccessStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = C40000000000000000000003 /* AccessStatus.swift */; };
+		B40000000000000000000004 /* MobileAccessErrorResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = C40000000000000000000004 /* MobileAccessErrorResponse.swift */; };
+		B40000000000000000000005 /* VoltSubscriptionStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = C40000000000000000000005 /* VoltSubscriptionStatus.swift */; };
+		B40000000000000000000006 /* AccessStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C40000000000000000000006 /* AccessStore.swift */; };
+		B40000000000000000000007 /* MobileAccessAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = C40000000000000000000007 /* MobileAccessAPIClient.swift */; };
+		B40000000000000000000008 /* MobileAccessError.swift in Sources */ = {isa = PBXBuildFile; fileRef = C40000000000000000000008 /* MobileAccessError.swift */; };
+		B40000000000000000000009 /* StoreKitSubscriptionError.swift in Sources */ = {isa = PBXBuildFile; fileRef = C40000000000000000000009 /* StoreKitSubscriptionError.swift */; };
+		B4000000000000000000000A /* StoreKitSubscriptionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4000000000000000000000A /* StoreKitSubscriptionStore.swift */; };
+		B4000000000000000000000B /* AccessSettingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4000000000000000000000B /* AccessSettingsSection.swift */; };
+		B4000000000000000000000C /* AccountAccessView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4000000000000000000000C /* AccountAccessView.swift */; };
+		B4000000000000000000000D /* ClerkImagePrefetchModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4000000000000000000000D /* ClerkImagePrefetchModifier.swift */; };
+		B4000000000000000000000E /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4000000000000000000000E /* SettingsView.swift */; };
+		B4000000000000000000000F /* SubscriptionActionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4000000000000000000000F /* SubscriptionActionsView.swift */; };
+		B40000000000000000000010 /* VoltRootScene.swift in Sources */ = {isa = PBXBuildFile; fileRef = C40000000000000000000010 /* VoltRootScene.swift */; };
+		B40000000000000000000011 /* ClipUpgradeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C40000000000000000000011 /* ClipUpgradeView.swift */; };
+		B40000000000000000000012 /* ClerkKit in Frameworks */ = {isa = PBXBuildFile; productRef = R40000000000000000000002 /* ClerkKit */; };
+		B40000000000000000000013 /* ClerkKitUI in Frameworks */ = {isa = PBXBuildFile; productRef = R40000000000000000000003 /* ClerkKitUI */; };
+		B40000000000000000000014 /* ClerkConfigurationRequiredView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C40000000000000000000012 /* ClerkConfigurationRequiredView.swift */; };
+		B50000000000000000000001 /* CloudDeviceCredential.swift in Sources */ = {isa = PBXBuildFile; fileRef = C50000000000000000000001 /* CloudDeviceCredential.swift */; };
+		B50000000000000000000002 /* CloudCaptureRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = C50000000000000000000002 /* CloudCaptureRecord.swift */; };
+		B50000000000000000000003 /* CloudAPIContracts.swift in Sources */ = {isa = PBXBuildFile; fileRef = C50000000000000000000003 /* CloudAPIContracts.swift */; };
+		B50000000000000000000004 /* EnrollmentURLParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = C50000000000000000000004 /* EnrollmentURLParser.swift */; };
+		B50000000000000000000005 /* DeviceCredentialStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C50000000000000000000005 /* DeviceCredentialStore.swift */; };
+		B50000000000000000000006 /* DurableCaptureOutbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = C50000000000000000000006 /* DurableCaptureOutbox.swift */; };
+		B50000000000000000000007 /* MobileCloudAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = C50000000000000000000007 /* MobileCloudAPIClient.swift */; };
+		B50000000000000000000008 /* CloudWorkspaceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C50000000000000000000008 /* CloudWorkspaceStore.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -186,6 +215,33 @@
 		C3000000000000000000000D /* ClipBarcodeScannerService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipBarcodeScannerService.swift; sourceTree = "<group>"; };
 		C3000000000000000000000E /* ClipOCRService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipOCRService.swift; sourceTree = "<group>"; };
 		C3000000000000000000000F /* ClipAssets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = ClipAssets.xcassets; sourceTree = "<group>"; };
+		C30000000000000000000010 /* AppClipGuestCloudClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppClipGuestCloudClient.swift; sourceTree = "<group>"; };
+		C40000000000000000000001 /* AppConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfiguration.swift; sourceTree = "<group>"; };
+		C40000000000000000000002 /* AccessKind.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessKind.swift; sourceTree = "<group>"; };
+		C40000000000000000000003 /* AccessStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessStatus.swift; sourceTree = "<group>"; };
+		C40000000000000000000004 /* MobileAccessErrorResponse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileAccessErrorResponse.swift; sourceTree = "<group>"; };
+		C40000000000000000000005 /* VoltSubscriptionStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoltSubscriptionStatus.swift; sourceTree = "<group>"; };
+		C40000000000000000000006 /* AccessStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessStore.swift; sourceTree = "<group>"; };
+		C40000000000000000000007 /* MobileAccessAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileAccessAPIClient.swift; sourceTree = "<group>"; };
+		C40000000000000000000008 /* MobileAccessError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileAccessError.swift; sourceTree = "<group>"; };
+		C40000000000000000000009 /* StoreKitSubscriptionError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreKitSubscriptionError.swift; sourceTree = "<group>"; };
+		C4000000000000000000000A /* StoreKitSubscriptionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreKitSubscriptionStore.swift; sourceTree = "<group>"; };
+		C4000000000000000000000B /* AccessSettingsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessSettingsSection.swift; sourceTree = "<group>"; };
+		C4000000000000000000000C /* AccountAccessView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountAccessView.swift; sourceTree = "<group>"; };
+		C4000000000000000000000D /* ClerkImagePrefetchModifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClerkImagePrefetchModifier.swift; sourceTree = "<group>"; };
+		C4000000000000000000000E /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		C4000000000000000000000F /* SubscriptionActionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubscriptionActionsView.swift; sourceTree = "<group>"; };
+		C40000000000000000000010 /* VoltRootScene.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoltRootScene.swift; sourceTree = "<group>"; };
+		C40000000000000000000011 /* ClipUpgradeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipUpgradeView.swift; sourceTree = "<group>"; };
+		C40000000000000000000012 /* ClerkConfigurationRequiredView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClerkConfigurationRequiredView.swift; sourceTree = "<group>"; };
+		C50000000000000000000001 /* CloudDeviceCredential.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudDeviceCredential.swift; sourceTree = "<group>"; };
+		C50000000000000000000002 /* CloudCaptureRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudCaptureRecord.swift; sourceTree = "<group>"; };
+		C50000000000000000000003 /* CloudAPIContracts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudAPIContracts.swift; sourceTree = "<group>"; };
+		C50000000000000000000004 /* EnrollmentURLParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnrollmentURLParser.swift; sourceTree = "<group>"; };
+		C50000000000000000000005 /* DeviceCredentialStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceCredentialStore.swift; sourceTree = "<group>"; };
+		C50000000000000000000006 /* DurableCaptureOutbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DurableCaptureOutbox.swift; sourceTree = "<group>"; };
+		C50000000000000000000007 /* MobileCloudAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileCloudAPIClient.swift; sourceTree = "<group>"; };
+		C50000000000000000000008 /* CloudWorkspaceStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudWorkspaceStore.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -193,6 +249,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B40000000000000000000012 /* ClerkKit in Frameworks */,
+				B40000000000000000000013 /* ClerkKitUI in Frameworks */,
 				54EEE472295587B576FFFE34 /* libPods-Volt.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -277,6 +335,7 @@
 			isa = PBXGroup;
 			children = (
 				C00000000000000000000001 /* VoltApp.swift */,
+				C40000000000000000000001 /* AppConfiguration.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -284,6 +343,13 @@
 		E00000000000000000000005 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				C50000000000000000000003 /* CloudAPIContracts.swift */,
+				C50000000000000000000002 /* CloudCaptureRecord.swift */,
+				C50000000000000000000001 /* CloudDeviceCredential.swift */,
+				C40000000000000000000002 /* AccessKind.swift */,
+				C40000000000000000000003 /* AccessStatus.swift */,
+				C40000000000000000000004 /* MobileAccessErrorResponse.swift */,
+				C40000000000000000000005 /* VoltSubscriptionStatus.swift */,
 				C00000000000000000000002 /* CaptureMode.swift */,
 				C00000000000000000000003 /* ScanResult.swift */,
 				C00000000000000000000004 /* PairingSession.swift */,
@@ -298,6 +364,16 @@
 		E00000000000000000000006 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				C50000000000000000000008 /* CloudWorkspaceStore.swift */,
+				C50000000000000000000005 /* DeviceCredentialStore.swift */,
+				C50000000000000000000006 /* DurableCaptureOutbox.swift */,
+				C50000000000000000000004 /* EnrollmentURLParser.swift */,
+				C50000000000000000000007 /* MobileCloudAPIClient.swift */,
+				C40000000000000000000006 /* AccessStore.swift */,
+				C40000000000000000000007 /* MobileAccessAPIClient.swift */,
+				C40000000000000000000008 /* MobileAccessError.swift */,
+				C40000000000000000000009 /* StoreKitSubscriptionError.swift */,
+				C4000000000000000000000A /* StoreKitSubscriptionStore.swift */,
 				C00000000000000000000005 /* PairingURLParser.swift */,
 				C0000000000000000000001F /* CameraDeviceSelector.swift */,
 				C00000000000000000000020 /* CameraZoomController.swift */,
@@ -321,6 +397,13 @@
 		E00000000000000000000007 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				C4000000000000000000000B /* AccessSettingsSection.swift */,
+				C4000000000000000000000C /* AccountAccessView.swift */,
+				C40000000000000000000012 /* ClerkConfigurationRequiredView.swift */,
+				C4000000000000000000000D /* ClerkImagePrefetchModifier.swift */,
+				C4000000000000000000000E /* SettingsView.swift */,
+				C4000000000000000000000F /* SubscriptionActionsView.swift */,
+				C40000000000000000000010 /* VoltRootScene.swift */,
 				C0000000000000000000000A /* CameraPreview.swift */,
 				C0000000000000000000000B /* RootView.swift */,
 				C0000000000000000000000C /* ScannerView.swift */,
@@ -378,6 +461,7 @@
 			isa = PBXGroup;
 			children = (
 				C30000000000000000000002 /* ClipRootView.swift */,
+				C40000000000000000000011 /* ClipUpgradeView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -385,6 +469,7 @@
 		E30000000000000000000004 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				C30000000000000000000010 /* AppClipGuestCloudClient.swift */,
 				C3000000000000000000000A /* ClipScannerStore.swift */,
 				C3000000000000000000000B /* WebKitWebRTCTransport.swift */,
 				C3000000000000000000000D /* ClipBarcodeScannerService.swift */,
@@ -421,6 +506,10 @@
 				K30000000000000000000001 /* PBXTargetDependency */,
 			);
 			name = Volt;
+			packageProductDependencies = (
+				R40000000000000000000002 /* ClerkKit */,
+				R40000000000000000000003 /* ClerkKitUI */,
+			);
 			productName = Volt;
 			productReference = C00000000000000000000015 /* Volt.app */;
 			productType = "com.apple.product-type.application";
@@ -491,6 +580,9 @@
 			);
 			mainGroup = E00000000000000000000001;
 			productRefGroup = E00000000000000000000002 /* Products */;
+			packageReferences = (
+				R40000000000000000000001 /* XCRemoteSwiftPackageReference "clerk-ios" */,
+			);
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -579,6 +671,31 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B50000000000000000000003 /* CloudAPIContracts.swift in Sources */,
+				B50000000000000000000002 /* CloudCaptureRecord.swift in Sources */,
+				B50000000000000000000001 /* CloudDeviceCredential.swift in Sources */,
+				B50000000000000000000008 /* CloudWorkspaceStore.swift in Sources */,
+				B50000000000000000000005 /* DeviceCredentialStore.swift in Sources */,
+				B50000000000000000000006 /* DurableCaptureOutbox.swift in Sources */,
+				B50000000000000000000004 /* EnrollmentURLParser.swift in Sources */,
+				B50000000000000000000007 /* MobileCloudAPIClient.swift in Sources */,
+				B40000000000000000000001 /* AppConfiguration.swift in Sources */,
+				B40000000000000000000002 /* AccessKind.swift in Sources */,
+				B40000000000000000000003 /* AccessStatus.swift in Sources */,
+				B40000000000000000000004 /* MobileAccessErrorResponse.swift in Sources */,
+				B40000000000000000000005 /* VoltSubscriptionStatus.swift in Sources */,
+				B40000000000000000000006 /* AccessStore.swift in Sources */,
+				B40000000000000000000007 /* MobileAccessAPIClient.swift in Sources */,
+				B40000000000000000000008 /* MobileAccessError.swift in Sources */,
+				B40000000000000000000009 /* StoreKitSubscriptionError.swift in Sources */,
+				B4000000000000000000000A /* StoreKitSubscriptionStore.swift in Sources */,
+				B4000000000000000000000B /* AccessSettingsSection.swift in Sources */,
+				B4000000000000000000000C /* AccountAccessView.swift in Sources */,
+				B40000000000000000000014 /* ClerkConfigurationRequiredView.swift in Sources */,
+				B4000000000000000000000D /* ClerkImagePrefetchModifier.swift in Sources */,
+				B4000000000000000000000E /* SettingsView.swift in Sources */,
+				B4000000000000000000000F /* SubscriptionActionsView.swift in Sources */,
+				B40000000000000000000010 /* VoltRootScene.swift in Sources */,
 				B00000000000000000000001 /* VoltApp.swift in Sources */,
 				B00000000000000000000002 /* CaptureMode.swift in Sources */,
 				B00000000000000000000003 /* ScanResult.swift in Sources */,
@@ -637,6 +754,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B30000000000000000000021 /* AppClipGuestCloudClient.swift in Sources */,
+				B40000000000000000000011 /* ClipUpgradeView.swift in Sources */,
 				B30000000000000000000001 /* VoltClipApp.swift in Sources */,
 				B30000000000000000000002 /* ClipRootView.swift in Sources */,
 				B30000000000000000000006 /* ClipScannerStore.swift in Sources */,
@@ -689,7 +808,7 @@
 				CODE_SIGN_ENTITLEMENTS = Volt/Volt.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 49;
+				CURRENT_PROJECT_VERSION = 50;
 				DEVELOPMENT_TEAM = GB5SPLUARQ;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Volt/Info.plist;
@@ -698,7 +817,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1.5;
+				MARKETING_VERSION = 0.1.6;
 				PRODUCT_BUNDLE_IDENTIFIER = com.volt.mobile;
 				PRODUCT_NAME = Volt;
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -706,6 +825,12 @@
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = 1;
 				VERSIONING_SYSTEM = "apple-generic";
+				VOLT_APP_STORE_ID = 6771770148;
+				VOLT_CLERK_FRONTEND_API_DOMAIN = REPLACE_ME;
+				VOLT_CLERK_JWT_TEMPLATE = convex;
+				VOLT_CLERK_PUBLISHABLE_KEY = REPLACE_ME;
+				VOLT_CONVEX_SITE_URL = "https://adorable-hornet-19.convex.site";
+				VOLT_STOREKIT_PRODUCT_ID = com.volt.mobile.pro.monthly;
 			};
 			name = Debug;
 		};
@@ -718,7 +843,7 @@
 				CODE_SIGN_ENTITLEMENTS = Volt/Volt.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 49;
+				CURRENT_PROJECT_VERSION = 50;
 				DEVELOPMENT_TEAM = GB5SPLUARQ;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Volt/Info.plist;
@@ -727,7 +852,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1.5;
+				MARKETING_VERSION = 0.1.6;
 				PRODUCT_BUNDLE_IDENTIFIER = com.volt.mobile;
 				PRODUCT_NAME = Volt;
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -735,6 +860,12 @@
 				TARGETED_DEVICE_FAMILY = 1;
 				VALIDATE_PRODUCT = YES;
 				VERSIONING_SYSTEM = "apple-generic";
+				VOLT_APP_STORE_ID = 6771770148;
+				VOLT_CLERK_FRONTEND_API_DOMAIN = REPLACE_ME;
+				VOLT_CLERK_JWT_TEMPLATE = convex;
+				VOLT_CLERK_PUBLISHABLE_KEY = REPLACE_ME;
+				VOLT_CONVEX_SITE_URL = "https://sincere-trout-414.convex.site";
+				VOLT_STOREKIT_PRODUCT_ID = com.volt.mobile.pro.monthly;
 			};
 			name = Release;
 		};
@@ -743,7 +874,7 @@
 			buildSettings = {
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 49;
+				CURRENT_PROJECT_VERSION = 50;
 				DEVELOPMENT_TEAM = GB5SPLUARQ;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = VoltScreenshots;
@@ -763,7 +894,7 @@
 			buildSettings = {
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 49;
+				CURRENT_PROJECT_VERSION = 50;
 				DEVELOPMENT_TEAM = GB5SPLUARQ;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = VoltScreenshots;
@@ -785,7 +916,7 @@
 				CODE_SIGN_ENTITLEMENTS = VoltClip/VoltClip.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 49;
+				CURRENT_PROJECT_VERSION = 50;
 				DEVELOPMENT_TEAM = GB5SPLUARQ;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = VoltClip/Info.plist;
@@ -794,7 +925,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1.5;
+				MARKETING_VERSION = 0.1.6;
 				PRODUCT_BUNDLE_IDENTIFIER = com.volt.mobile.Clip;
 				PRODUCT_NAME = VoltClip;
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -803,6 +934,7 @@
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = 1;
 				VERSIONING_SYSTEM = "apple-generic";
+				VOLT_APP_STORE_ID = 6771770148;
 			};
 			name = Debug;
 		};
@@ -814,7 +946,7 @@
 				CODE_SIGN_ENTITLEMENTS = VoltClip/VoltClip.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 49;
+				CURRENT_PROJECT_VERSION = 50;
 				DEVELOPMENT_TEAM = GB5SPLUARQ;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = VoltClip/Info.plist;
@@ -823,7 +955,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1.5;
+				MARKETING_VERSION = 0.1.6;
 				PRODUCT_BUNDLE_IDENTIFIER = com.volt.mobile.Clip;
 				PRODUCT_NAME = VoltClip;
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -832,6 +964,7 @@
 				TARGETED_DEVICE_FAMILY = 1;
 				VALIDATE_PRODUCT = YES;
 				VERSIONING_SYSTEM = "apple-generic";
+				VOLT_APP_STORE_ID = 6771770148;
 			};
 			name = Release;
 		};
@@ -988,6 +1121,30 @@
 			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		R40000000000000000000001 /* XCRemoteSwiftPackageReference "clerk-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/clerk/clerk-ios";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.3.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		R40000000000000000000002 /* ClerkKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = R40000000000000000000001 /* XCRemoteSwiftPackageReference "clerk-ios" */;
+			productName = ClerkKit;
+		};
+		R40000000000000000000003 /* ClerkKitUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = R40000000000000000000001 /* XCRemoteSwiftPackageReference "clerk-ios" */;
+			productName = ClerkKitUI;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = I00000000000000000000001 /* Project object */;
 }

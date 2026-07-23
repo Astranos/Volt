@@ -117,10 +117,12 @@ test("validates join tokens, join attempt ids, and join URLs", () => {
     sessionId,
     label: "Chrome Dev",
     signalUrl: scannerProtocolGolden.urls.signalDev,
+    guestCloudGrant: "guest-cloud-secret",
+    guestCloudExpiresAt: 1_800_000_000_000,
   });
   assert.equal(
     appClipUrl,
-    `${scannerProtocolGolden.urls.appClipPairBase}?token=${token}&sessionId=${sessionId}&signalUrl=${encodeURIComponent(scannerProtocolGolden.urls.signalDev)}&label=Chrome+Dev`,
+    `${scannerProtocolGolden.urls.appClipPairBase}?token=${token}&sessionId=${sessionId}&signalUrl=${encodeURIComponent(scannerProtocolGolden.urls.signalDev)}&label=Chrome+Dev&guestCloudGrant=guest-cloud-secret&guestCloudExpiresAt=1800000000000`,
   );
   assert.deepEqual(parseScannerJoinUrl(appClipUrl), {
     baseUrl: scannerProtocolGolden.urls.appClipPairBase,
@@ -129,6 +131,8 @@ test("validates join tokens, join attempt ids, and join URLs", () => {
     sessionId,
     joinAttemptId: undefined,
     label: "Chrome Dev",
+    guestCloudGrant: "guest-cloud-secret",
+    guestCloudExpiresAt: 1_800_000_000_000,
   });
 
   assert.equal(parseScannerJoinUrl("volt://pair?token=bad"), null);
@@ -309,6 +313,21 @@ test("round-trips scanner-control messages", () => {
   assert.equal(barcodeMessage?.value, "012345678905");
   assert.equal(barcodeMessage?.format, "ean13");
   assert.equal(barcodeMessage?.insertIntoCursor, true);
+});
+
+test("round-trips access exhaustion as a machine-readable protocol error", () => {
+  const error = {
+    type: "protocol_error",
+    messageId: "access-denied-1",
+    sentAt: now,
+    code: "access_exhausted",
+    receivedType: "hello",
+    detail: "Subscribe in the full app",
+  };
+  assert.deepEqual(
+    stripUndefined(decodeScannerControlMessage(encodeScannerControlMessage(error))),
+    error,
+  );
 });
 
 test("rejects unsupported and invalid scanner-control messages", () => {

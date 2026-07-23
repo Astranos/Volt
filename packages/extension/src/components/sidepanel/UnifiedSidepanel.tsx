@@ -22,6 +22,7 @@ import {
   type SidepanelToastDetail,
   type SidepanelToastTone,
 } from "../../lib/sidepanel-toast";
+import { ExtensionAccessPanel } from "../access/ExtensionAccess";
 
 type ActiveToast = {
   message: string;
@@ -216,6 +217,7 @@ export default function UnifiedSidepanel() {
 
   return (
     <div className="sidepanel-shell sidepanel-frame h-full w-full flex flex-col">
+      <ExtensionAccessPanel surface="sidepanel" />
       {/* Main content - Flex 1 to take remaining space, overflow hidden to prevent double scrollbars */}
       <div className="sidepanel-content-frame flex flex-1 flex-col overflow-hidden">
         <div className="sidepanel-inline-tool-title-wrap">

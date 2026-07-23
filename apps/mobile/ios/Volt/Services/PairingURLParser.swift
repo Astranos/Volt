@@ -16,6 +16,10 @@ enum PairingURLParser {
             answerURL: query["answerUrl"].flatMap(URL.init(string:)),
             label: query["label"],
             signalURL: query["signalUrl"].flatMap(URL.init(string:))?.signalBaseURL ?? url.signalBaseURL,
+            guestCloudGrant: query["guestCloudGrant"],
+            guestCloudExpiresAt: query["guestCloudExpiresAt"]
+                .flatMap(Double.init)
+                .map { Date(timeIntervalSince1970: $0 / 1_000) },
             sourceURL: url
         )
 

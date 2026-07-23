@@ -56,6 +56,29 @@ pnpm test:scanner
 
 The production extension build is written to `.output/volt/`.
 
+### Authentication and access configuration
+
+Set these public build-time values before packaging the extension:
+
+```sh
+WXT_CLERK_PUBLISHABLE_KEY=pk_...
+WXT_EXTENSION_PUBLIC_KEY=<Chrome manifest public key>
+WXT_VOLT_FULL_APP_URL=https://apps.apple.com/us/app/volt-scanner/id6771770148
+```
+
+`WXT_EXTENSION_PUBLIC_KEY` keeps the Chrome extension ID stable. In the Clerk
+Dashboard, add `chrome-extension://<extension-id>` to the instance's allowed
+origins, enable the instance's Native API, and create a JWT template named
+`convex`. Include Clerk's organization ID claim in that template so selecting
+the complimentary workplace in the extension can be authorized by Convex.
+
+Only the background service worker asks Clerk for the `convex` token. It asks
+freshly for every Convex access request, never sends a JWT to content scripts or
+the offscreen document, and never writes a raw token to extension storage.
+Anonymous grant credentials are issued by Convex and stored in
+`chrome.storage.local`; they are claimed/merged by `/api/access/anonymous` after
+sign-in. Subscription checkout remains in the full iPhone app.
+
 ## Loading In Chrome
 
 1. Run `pnpm dev:extension` or `pnpm build:extension`.

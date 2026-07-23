@@ -28,6 +28,7 @@ export class MobileScannerSessionLifecycle {
       connectedPeerCount: 0,
       joinWindowExpiresAt: null,
       sessionId: options.initialSessionId,
+      usageSessionId: undefined,
       target: null,
       extensionIdentity: null,
     };
@@ -47,6 +48,10 @@ export class MobileScannerSessionLifecycle {
 
   getSessionId() {
     return this.state.sessionId;
+  }
+
+  getUsageSessionId() {
+    return this.state.usageSessionId;
   }
 
   getExtensionIdentity() {
@@ -70,6 +75,7 @@ export class MobileScannerSessionLifecycle {
       qrCodeUrl: joinWindow.qrCodeUrl,
       error: null,
       joinWindowExpiresAt: joinWindow.expiresAt ?? null,
+      usageSessionId: joinWindow.usageSessionId,
       extensionIdentity: extensionIdentity ?? this.state.extensionIdentity,
     });
   }
@@ -78,6 +84,16 @@ export class MobileScannerSessionLifecycle {
     this.activeJoinWindow = null;
     this.emit({
       status: this.statusWhileConnecting("error"),
+      error,
+      qrCodeUrl: null,
+      joinWindowExpiresAt: null,
+    });
+  }
+
+  sessionAccessDenied(error: string) {
+    this.activeJoinWindow = null;
+    this.emit({
+      status: "error",
       error,
       qrCodeUrl: null,
       joinWindowExpiresAt: null,
@@ -108,6 +124,7 @@ export class MobileScannerSessionLifecycle {
       connectedAt: null,
       connectedPeerCount: 0,
       joinWindowExpiresAt: null,
+      usageSessionId: undefined,
     });
   }
 

@@ -1,5 +1,6 @@
 @preconcurrency import AVFoundation
 import PhotosUI
+import StoreKit
 import SwiftUI
 import UIKit
 import WebKit
@@ -9,6 +10,7 @@ struct ClipRootView: View {
     @Bindable var store: ClipScannerStore
     @State private var isConnectionSheetPresented = false
     @State private var isPairingScannerPresented = false
+    @State private var isUpgradeOverlayPresented = false
 
     var body: some View {
         ZStack {
@@ -50,6 +52,9 @@ struct ClipRootView: View {
                         store.disconnect()
                     }
                     showPairingScanner()
+                },
+                onInstallFullApp: {
+                    isUpgradeOverlayPresented = true
                 }
             )
             .presentationDetents([.medium])
@@ -77,8 +82,16 @@ struct ClipRootView: View {
                 isConnectionSheetPresented = false
             }
         }
+        .onChange(of: store.requiresFullApp) { _, requiresFullApp in
+            guard requiresFullApp else { return }
+            isConnectionSheetPresented = true
+            isUpgradeOverlayPresented = true
+        }
         .onChange(of: scenePhase) { _, newValue in
             store.updateAppIsInBackground(newValue != .active)
+        }
+        .appStoreOverlay(isPresented: $isUpgradeOverlayPresented) {
+            SKOverlay.AppClipConfiguration(position: .bottom)
         }
     }
 
@@ -1092,10 +1105,13 @@ private struct ClipConnectionSheet: View {
     @Bindable var store: ClipScannerStore
     let onDisconnect: () -> Void
     let onScanQRCode: () -> Void
+    let onInstallFullApp: () -> Void
 
     var body: some View {
         Group {
-            if store.isPairing {
+            if store.requiresFullApp {
+                ClipUpgradeView(onShowAppStoreOverlay: onInstallFullApp)
+            } else if store.isPairing {
                 ClipConnectionProgressView(
                     store: store,
                     onCancel: {
@@ -1500,12 +1516,13 @@ private struct ClipCaptureSessionView: View {
     @State private var focusPoint: CGPoint?
     @State private var cameraStateRevision = 0
     @State private var isConnectionSheetPresented = false
+    @State private var isUpgradeOverlayPresented = false
     private let topToolbarTopPadding: CGFloat = 12
     private let topToolbarHeight: CGFloat = 42
     private let photoPreviewToolbarGap: CGFloat = 0
 
     var body: some View {
-        ZStack {
+        let captureSurface = ZStack {
             if let ocrReviewImage {
                 OcrReviewLayer(
                     image: ocrReviewImage,
@@ -1706,6 +1723,7 @@ private struct ClipCaptureSessionView: View {
                 }
             }
         }
+        return captureSurface
         .animation(.spring(response: 0.28, dampingFraction: 0.86), value: selectedTextRegion?.id)
         .sheet(isPresented: $isConnectionSheetPresented) {
             ClipConnectionSheet(
@@ -1717,6 +1735,9 @@ private struct ClipCaptureSessionView: View {
                     isConnectionSheetPresented = false
                     onConnectionScannerRequested()
                     dismiss()
+                },
+                onInstallFullApp: {
+                    isUpgradeOverlayPresented = true
                 }
             )
             .presentationDetents([.medium])
@@ -1789,6 +1810,9 @@ private struct ClipCaptureSessionView: View {
             if message != nil && !store.isConnected {
                 isConnectionSheetPresented = true
             }
+        }
+        .appStoreOverlay(isPresented: $isUpgradeOverlayPresented) {
+            SKOverlay.AppClipConfiguration(position: .bottom)
         }
     }
 

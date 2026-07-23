@@ -1,4 +1,4 @@
-import { httpRouter } from "convex/server";
+import { httpRouter, makeFunctionReference } from "convex/server";
 import {
   SCANNER_STUN_ONLY_ICE_SERVERS,
   buildScannerIceServersResponse,
@@ -6,7 +6,11 @@ import {
   scannerStunOnlyIceServersResponse,
 } from "@volt/scanner-protocol";
 
-import { httpAction } from "./_generated/server";
+import { httpAction, type ActionCtx } from "./_generated/server";
+import {
+  clerkAuthContextFromIdentity,
+  type ClerkAuthContext,
+} from "./access";
 import {
   browserClaimFrom,
   pairingSecretFrom,
@@ -34,7 +38,8 @@ const STUN_FALLBACK_TTL_SECONDS = 300;
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, X-Volt-Browser-Claim, X-Volt-Pairing-Secret",
+  "Access-Control-Allow-Headers":
+    "Authorization, Content-Type, X-Volt-Anonymous-Id, X-Volt-Anonymous-Secret, X-Volt-Browser-Claim, X-Volt-Pairing-Secret",
   "Cache-Control": "no-store",
 };
 
@@ -132,6 +137,239 @@ async function runAndRespond<T extends { statusCode: number; body: unknown }>(
   return jsonResponse(response.body, response.statusCode);
 }
 
+type AccessHttpArgs = ClerkAuthContext & {
+  anonymousId?: string;
+  anonymousSecret?: string;
+};
+
+type AccessHttpResult = { statusCode: number; body: unknown };
+
+const anonymousTrialForHttp = makeFunctionReference<
+  "mutation",
+  AccessHttpArgs,
+  AccessHttpResult
+>("access:anonymousTrialForHttp");
+const getStatusForHttp = makeFunctionReference<
+  "mutation",
+  AccessHttpArgs,
+  AccessHttpResult
+>("access:getStatusForHttp");
+const disconnectSessionForHttp = makeFunctionReference<
+  "mutation",
+  AccessHttpArgs & { usageSessionId: string },
+  AccessHttpResult
+>("access:disconnectSessionForHttp");
+const endSessionForHttp = makeFunctionReference<
+  "mutation",
+  AccessHttpArgs & { usageSessionId: string },
+  AccessHttpResult
+>("access:endSessionForHttp");
+const syncStoreKitForHttp = makeFunctionReference<
+  "action",
+  ClerkAuthContext & { signedTransaction: string },
+  AccessHttpResult
+>("storeKit:syncForHttp");
+const acceptStoreKitNotification = makeFunctionReference<
+  "action",
+  { signedPayload: string },
+  AccessHttpResult
+>("storeKit:acceptNotification");
+type CloudResultInput = {
+  resultId: string;
+  kind: "text" | "barcode" | "photo" | "dictation";
+  text?: string;
+  format?: string;
+  contentType?: string;
+  byteCount: number;
+  checksum?: string;
+  clientCreatedAt: number;
+};
+const exchangeWorkspaceEnrollment = makeFunctionReference<
+  "mutation",
+  { enrollmentCode: string; label?: string },
+  { deviceId: string; deviceSecret: string; workspaceId: string }
+>("cloudWorkspace:exchangeEnrollment");
+const putCloudBatch = makeFunctionReference<
+  "mutation",
+  {
+    deviceId: string;
+    deviceSecret: string;
+    batchId: string;
+    clientCreatedAt: number;
+    results: CloudResultInput[];
+  },
+  { batchId: string; idempotent: boolean; status: string }
+>("cloudWorkspace:putBatch");
+const createPhotoUploadUrl = makeFunctionReference<
+  "action",
+  { deviceId: string; deviceSecret: string; batchId: string; resultId: string },
+  { url: string; method: string; expiresAt: number; headers: Record<string, string> }
+>("cloudWorkspace:createPhotoUploadUrl");
+const finalizeBatchUploads = makeFunctionReference<
+  "action",
+  { deviceId: string; deviceSecret: string; batchId: string },
+  { idempotent: boolean }
+>("cloudWorkspace:finalizeBatchUploads");
+const putGuestCloudBatch = makeFunctionReference<
+  "mutation",
+  {
+    guestCloudGrant: string;
+    batchId: string;
+    clientCreatedAt: number;
+    results: CloudResultInput[];
+  },
+  { batchId: string; idempotent: boolean; status: string }
+>("cloudWorkspace:putGuestBatch");
+const createGuestPhotoUploadUrl = makeFunctionReference<
+  "action",
+  { guestCloudGrant: string; batchId: string; resultId: string },
+  { url: string; method: string; expiresAt: number; headers: Record<string, string> }
+>("cloudWorkspace:createGuestPhotoUploadUrl");
+const finalizeGuestBatchUploads = makeFunctionReference<
+  "action",
+  { guestCloudGrant: string; batchId: string },
+  { idempotent: boolean }
+>("cloudWorkspace:finalizeGuestBatchUploads");
+const createWorkspaceEnrollment = makeFunctionReference<
+  "mutation",
+  { kind: "ios" | "chrome"; label: string },
+  { enrollmentCode: string; expiresAt: number }
+>("cloudWorkspace:createEnrollment");
+type WorkspaceSnapshot = {
+  workspaceId: string;
+  revision: number;
+  batches: Array<{
+    id: string;
+    createdAt: string;
+    updatedAt: string;
+    deliveryState: string;
+    deliveries: Array<{ targetDeviceId: string; state: string; attempts: number }>;
+    results: Array<{
+      id: string;
+      type: string;
+      deliveryState: "available" | "deleted";
+      value?: string;
+      format?: string;
+      photoObjectKey?: string;
+      contentType?: string;
+      byteCount: number;
+      createdAt: string;
+    }>;
+  }>;
+};
+const getWorkspaceSnapshot = makeFunctionReference<"query", Record<string, never>, WorkspaceSnapshot>(
+  "cloudWorkspace:workspaceSnapshot",
+);
+const createAuthenticatedPhotoDownloadUrl = makeFunctionReference<
+  "action",
+  { batchId: string; resultId: string },
+  { url: string; method: string; expiresAt: number; headers: Record<string, string> }
+>("cloudWorkspace:createPhotoDownloadUrl");
+const registerWorkspaceComputer = makeFunctionReference<
+  "mutation",
+  { installationId: string; label: string; capabilities?: string[]; ttlMs?: number },
+  { deviceId: string; workspaceId: string; registrationId: string; expiresAt: number }
+>("cloudWorkspace:registerComputer");
+const acknowledgeWorkspaceDelivery = makeFunctionReference<
+  "mutation",
+  {
+    installationId: string;
+    batchId: string;
+    state: "delivered" | "failed";
+    errorCode?: string;
+  },
+  { state: "delivered" | "failed" }
+>("cloudWorkspace:acknowledgeDeliveryAsComputer");
+const deleteWorkspaceResults = makeFunctionReference<
+  "mutation",
+  { resultIds: string[] },
+  {
+    deletedIds: string[];
+    newlyDeletedIds: string[];
+    deleted: number;
+    idempotent: number;
+    requested: number;
+    revision: number;
+  }
+>("cloudWorkspace:deleteWorkspaceResults");
+const restoreWorkspaceResults = makeFunctionReference<
+  "mutation",
+  { resultIds: string[] },
+  {
+    restoredIds: string[];
+    newlyRestoredIds: string[];
+    restored: number;
+    idempotent: number;
+    requested: number;
+    revision: number;
+  }
+>("cloudWorkspace:restoreWorkspaceResults");
+
+function anonymousCredentialsFromRequest(request: Request): Pick<AccessHttpArgs, "anonymousId" | "anonymousSecret"> {
+  const anonymousId = request.headers.get("X-Volt-Anonymous-Id") ?? undefined;
+  const anonymousSecret = request.headers.get("X-Volt-Anonymous-Secret") ?? undefined;
+  return {
+    ...(anonymousId ? { anonymousId } : {}),
+    ...(anonymousSecret ? { anonymousSecret } : {}),
+  };
+}
+
+async function accessArgsFromRequest(
+  ctx: Pick<ActionCtx, "auth">,
+  request: Request,
+): Promise<{ ok: true; args: AccessHttpArgs } | { ok: false }> {
+  const anonymousCredentials = anonymousCredentialsFromRequest(request);
+  if (!request.headers.get("Authorization")) {
+    return { ok: true, args: anonymousCredentials };
+  }
+  try {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return { ok: false };
+    return {
+      ok: true,
+      args: { ...clerkAuthContextFromIdentity(identity), ...anonymousCredentials },
+    };
+  } catch (_error) {
+    return { ok: false };
+  }
+}
+
+const anonymousTrialHandler = httpAction(async (ctx, request) => {
+  if (request.method === "OPTIONS") return emptyResponse();
+  const access = await accessArgsFromRequest(ctx, request);
+  if (!access.ok) return jsonResponse({ error: "Invalid Clerk authorization" }, 401);
+  return runAndRespond(
+    ctx.runMutation(anonymousTrialForHttp, access.args),
+  );
+});
+
+const accessStatusHandler = httpAction(async (ctx, request) => {
+  if (request.method === "OPTIONS") return emptyResponse();
+  const access = await accessArgsFromRequest(ctx, request);
+  if (!access.ok) return jsonResponse({ error: "Invalid Clerk authorization" }, 401);
+  return runAndRespond(
+    ctx.runMutation(getStatusForHttp, access.args),
+  );
+});
+
+function sessionStateHandler(end: boolean) {
+  return httpAction(async (ctx, request) => {
+    if (request.method === "OPTIONS") return emptyResponse();
+    const body = await signalBodyFromRequest(request);
+    const usageSessionId = stringFrom(body.usageSessionId, 120);
+    if (!usageSessionId) return jsonResponse({ error: "Missing usageSessionId" }, 400);
+    const access = await accessArgsFromRequest(ctx, request);
+    if (!access.ok) return jsonResponse({ error: "Invalid Clerk authorization" }, 401);
+    const args = {
+      ...access.args,
+      usageSessionId,
+    };
+    return runAndRespond(
+      ctx.runMutation(end ? endSessionForHttp : disconnectSessionForHttp, args),
+    );
+  });
+}
+
 function cloudflareTurnTtlSecondsFromEnv() {
   const raw = process.env.CLOUDFLARE_TURN_TTL_SECONDS;
   if (!raw) return DEFAULT_CLOUDFLARE_TURN_TTL_SECONDS;
@@ -208,6 +446,8 @@ const signalHandler = httpAction(async (ctx, request) => {
     command === "getPendingReconnectRequests"
       ? { browserSessionId: reconnectBrowserSessionId ?? "" }
       : body;
+  const access = await accessArgsFromRequest(ctx, request);
+  if (!access.ok) return jsonResponse({ error: "Invalid Clerk authorization" }, 401);
   return runAndRespond(
     executeScannerSignalRendezvous(ctx, {
       command,
@@ -218,10 +458,302 @@ const signalHandler = httpAction(async (ctx, request) => {
       browserClaim: browserClaimFrom(request, body),
       pairingSecret: pairingSecretFrom(request, body),
       pendingReconnectBrowserSessionId: reconnectBrowserSessionId,
+      auth: access.args,
+      anonymousId: access.args.anonymousId,
+      anonymousSecret: access.args.anonymousSecret,
     }),
     { ...logContext, requestBody: rendezvousBody },
   );
 });
+
+const storeKitTransactionHandler = httpAction(async (ctx, request) => {
+  if (request.method === "OPTIONS") return emptyResponse();
+  const access = await accessArgsFromRequest(ctx, request);
+  if (!access.ok || !access.args.clerkUserId) {
+    return jsonResponse({ error: "Clerk authentication required" }, 401);
+  }
+  const body = await signalBodyFromRequest(request);
+  const signedTransaction = stringFrom(body.signedTransaction, 100_000);
+  if (!signedTransaction) return jsonResponse({ error: "Missing signedTransaction" }, 400);
+  return runAndRespond(
+    ctx.runAction(syncStoreKitForHttp, { ...access.args, signedTransaction }),
+  );
+});
+
+const storeKitNotificationHandler = httpAction(async (ctx, request) => {
+  if (request.method === "OPTIONS") return emptyResponse();
+  const body = await signalBodyFromRequest(request);
+  const signedPayload = stringFrom(body.signedPayload, 500_000);
+  if (!signedPayload) return jsonResponse({ error: "Missing signedPayload" }, 400);
+  return runAndRespond(ctx.runAction(acceptStoreKitNotification, { signedPayload }));
+});
+
+function numberField(value: unknown, key: string) {
+  const field = objectFrom(value)[key];
+  return typeof field === "number" && Number.isFinite(field) ? field : undefined;
+}
+
+function cloudResultFrom(value: unknown): CloudResultInput | null {
+  const resultId = stringField(value, "resultId");
+  const kind = stringField(value, "kind");
+  const byteCount = numberField(value, "byteCount");
+  const clientCreatedAt = numberField(value, "clientCreatedAt");
+  if (
+    !resultId ||
+    (kind !== "text" && kind !== "barcode" && kind !== "photo" && kind !== "dictation") ||
+    byteCount === undefined ||
+    clientCreatedAt === undefined
+  ) return null;
+  const text = stringField(value, "text");
+  const contentType = stringField(value, "contentType");
+  const format = stringField(value, "format");
+  const checksum = stringField(value, "checksum");
+  return {
+    resultId,
+    kind,
+    ...(text ? { text } : {}),
+    ...(format ? { format } : {}),
+    ...(contentType ? { contentType } : {}),
+    byteCount,
+    ...(checksum ? { checksum } : {}),
+    clientCreatedAt,
+  };
+}
+
+const mobileEnrollmentExchangeHandler = httpAction(async (ctx, request) => {
+  if (request.method === "OPTIONS") return emptyResponse();
+  const body = await signalBodyFromRequest(request);
+  const enrollmentCode = stringFrom(body.enrollmentCode, 240);
+  const label = stringFrom(body.label, 120);
+  if (!enrollmentCode) return jsonResponse({ error: "Missing enrollmentCode" }, 400);
+  return jsonResponse(await ctx.runMutation(exchangeWorkspaceEnrollment, {
+    enrollmentCode,
+    ...(label ? { label } : {}),
+  }));
+});
+
+const workspaceEnrollmentHandler = httpAction(async (ctx, request) => {
+  if (request.method === "OPTIONS") return emptyResponse();
+  if (!(await ctx.auth.getUserIdentity())) return jsonResponse({ error: "Clerk authentication required" }, 401);
+  const body = await signalBodyFromRequest(request);
+  const kind = stringFrom(body.kind, 20);
+  const label = stringFrom(body.label, 120);
+  if ((kind !== "ios" && kind !== "chrome") || !label) {
+    return jsonResponse({ error: "Invalid enrollment kind or label" }, 400);
+  }
+  const enrollment = await ctx.runMutation(createWorkspaceEnrollment, { kind, label });
+  return jsonResponse({
+    ...enrollment,
+    enrollmentUrl: `volt://enroll?enrollmentToken=${encodeURIComponent(enrollment.enrollmentCode)}`,
+  });
+});
+
+const workspaceSnapshotHandler = httpAction(async (ctx, request) => {
+  if (request.method === "OPTIONS") return emptyResponse();
+  if (!(await ctx.auth.getUserIdentity())) return jsonResponse({ error: "Clerk authentication required" }, 401);
+  return jsonResponse(await ctx.runQuery(getWorkspaceSnapshot, {}));
+});
+
+const workspacePhotoDownloadHandler = httpAction(async (ctx, request) => {
+  if (request.method === "OPTIONS") return emptyResponse();
+  if (!(await ctx.auth.getUserIdentity())) return jsonResponse({ error: "Clerk authentication required" }, 401);
+  const body = await signalBodyFromRequest(request);
+  const batchId = stringFrom(body.batchId, 240);
+  const resultId = stringFrom(body.resultId, 240);
+  if (!batchId || !resultId) return jsonResponse({ error: "Missing batchId or resultId" }, 400);
+  return jsonResponse(await ctx.runAction(createAuthenticatedPhotoDownloadUrl, { batchId, resultId }));
+});
+
+const workspaceComputerRegistrationHandler = httpAction(async (ctx, request) => {
+  if (request.method === "OPTIONS") return emptyResponse();
+  if (!(await ctx.auth.getUserIdentity())) return jsonResponse({ error: "Clerk authentication required" }, 401);
+  const body = await signalBodyFromRequest(request);
+  const installationId = stringFrom(body.installationId, 240);
+  const label = stringFrom(body.label, 120);
+  const ttlMs = numberField(body, "ttlMs");
+  const rawCapabilities = objectFrom(body).capabilities;
+  const capabilities = Array.isArray(rawCapabilities)
+    ? rawCapabilities.filter((item): item is string => typeof item === "string").slice(0, 50)
+    : undefined;
+  if (!installationId || !label) return jsonResponse({ error: "Missing installationId or label" }, 400);
+  return jsonResponse(await ctx.runMutation(registerWorkspaceComputer, {
+    installationId,
+    label,
+    ...(capabilities ? { capabilities } : {}),
+    ...(ttlMs !== undefined ? { ttlMs } : {}),
+  }));
+});
+
+const workspaceDeliveryAcknowledgementHandler = httpAction(async (ctx, request) => {
+  if (request.method === "OPTIONS") return emptyResponse();
+  if (!(await ctx.auth.getUserIdentity())) return jsonResponse({ error: "Clerk authentication required" }, 401);
+  const body = await signalBodyFromRequest(request);
+  const installationId = stringFrom(body.installationId, 240);
+  const batchId = stringFrom(body.batchId, 240);
+  const state = stringFrom(body.state, 20);
+  const errorCode = stringFrom(body.errorCode, 120);
+  if (!installationId || !batchId || (state !== "delivered" && state !== "failed")) {
+    return jsonResponse({ error: "Invalid delivery acknowledgement" }, 400);
+  }
+  return jsonResponse(await ctx.runMutation(acknowledgeWorkspaceDelivery, {
+    installationId,
+    batchId,
+    state,
+    ...(errorCode ? { errorCode } : {}),
+  }));
+});
+
+const workspaceResultDeletionHandler = httpAction(async (ctx, request) => {
+  if (request.method === "OPTIONS") return emptyResponse();
+  if (!(await ctx.auth.getUserIdentity())) return jsonResponse({ error: "Clerk authentication required" }, 401);
+  const body = await signalBodyFromRequest(request);
+  const rawResultIds = objectFrom(body).resultIds;
+  if (!Array.isArray(rawResultIds) || rawResultIds.some((item) => typeof item !== "string")) {
+    return jsonResponse({ error: "resultIds must be an array of strings" }, 400);
+  }
+  return jsonResponse(await ctx.runMutation(deleteWorkspaceResults, {
+    resultIds: rawResultIds.slice(0, 500),
+  }));
+});
+
+const workspaceResultRestoreHandler = httpAction(async (ctx, request) => {
+  if (request.method === "OPTIONS") return emptyResponse();
+  if (!(await ctx.auth.getUserIdentity())) return jsonResponse({ error: "Clerk authentication required" }, 401);
+  const body = await signalBodyFromRequest(request);
+  const rawResultIds = objectFrom(body).resultIds;
+  if (!Array.isArray(rawResultIds) || rawResultIds.some((item) => typeof item !== "string")) {
+    return jsonResponse({ error: "resultIds must be an array of strings" }, 400);
+  }
+  return jsonResponse(await ctx.runMutation(restoreWorkspaceResults, {
+    resultIds: rawResultIds.slice(0, 500),
+  }));
+});
+
+const mobileOutboxSyncHandler = httpAction(async (ctx, request) => {
+  if (request.method === "OPTIONS") return emptyResponse();
+  const body = await signalBodyFromRequest(request);
+  const deviceId = stringFrom(body.deviceId, 120);
+  const deviceSecret = stringFrom(body.deviceSecret, 240);
+  const batchId = stringFrom(body.batchId, 240);
+  const clientCreatedAt = numberField(body, "clientCreatedAt");
+  const rawResults = objectFrom(body).results;
+  const results = Array.isArray(rawResults) ? rawResults.map(cloudResultFrom) : [];
+  if (!deviceId || !deviceSecret || !batchId || clientCreatedAt === undefined || results.some((item) => !item)) {
+    return jsonResponse({ error: "Invalid outbox batch" }, 400);
+  }
+  return jsonResponse(await ctx.runMutation(putCloudBatch, {
+    deviceId,
+    deviceSecret,
+    batchId,
+    clientCreatedAt,
+    results: results.filter((item): item is CloudResultInput => item !== null),
+  }));
+});
+
+const appClipGuestOutboxSyncHandler = httpAction(async (ctx, request) => {
+  if (request.method === "OPTIONS") return emptyResponse();
+  const body = await signalBodyFromRequest(request);
+  const guestCloudGrant = stringFrom(body.guestCloudGrant, 240);
+  const batchId = stringFrom(body.batchId, 240);
+  const clientCreatedAt = numberField(body, "clientCreatedAt");
+  const rawResults = objectFrom(body).results;
+  const results = Array.isArray(rawResults) ? rawResults.map(cloudResultFrom) : [];
+  if (!guestCloudGrant || !batchId || clientCreatedAt === undefined || results.some((item) => !item)) {
+    return jsonResponse({ error: "Invalid App Clip guest batch" }, 400);
+  }
+  return jsonResponse(await ctx.runMutation(putGuestCloudBatch, {
+    guestCloudGrant,
+    batchId,
+    clientCreatedAt,
+    results: results.filter((item): item is CloudResultInput => item !== null),
+  }));
+});
+
+function appClipGuestBatchActionHandler(kind: "upload" | "finalize") {
+  return httpAction(async (ctx, request) => {
+    if (request.method === "OPTIONS") return emptyResponse();
+    const body = await signalBodyFromRequest(request);
+    const guestCloudGrant = stringFrom(body.guestCloudGrant, 240);
+    const batchId = stringFrom(body.batchId, 240);
+    if (!guestCloudGrant || !batchId) {
+      return jsonResponse({ error: "Missing guest cloud grant or batch id" }, 400);
+    }
+    if (kind === "finalize") {
+      return jsonResponse(await ctx.runAction(finalizeGuestBatchUploads, { guestCloudGrant, batchId }));
+    }
+    const resultId = stringFrom(body.resultId, 240);
+    if (!resultId) return jsonResponse({ error: "Missing resultId" }, 400);
+    return jsonResponse(await ctx.runAction(createGuestPhotoUploadUrl, {
+      guestCloudGrant,
+      batchId,
+      resultId,
+    }));
+  });
+}
+
+function mobileBatchActionHandler(kind: "upload" | "finalize") {
+  return httpAction(async (ctx, request) => {
+    if (request.method === "OPTIONS") return emptyResponse();
+    const body = await signalBodyFromRequest(request);
+    const deviceId = stringFrom(body.deviceId, 120);
+    const deviceSecret = stringFrom(body.deviceSecret, 240);
+    const batchId = stringFrom(body.batchId, 240);
+    if (!deviceId || !deviceSecret || !batchId) return jsonResponse({ error: "Missing device credentials or batch id" }, 400);
+    if (kind === "finalize") {
+      return jsonResponse(await ctx.runAction(finalizeBatchUploads, { deviceId, deviceSecret, batchId }));
+    }
+    const resultId = stringFrom(body.resultId, 240);
+    if (!resultId) return jsonResponse({ error: "Missing resultId" }, 400);
+    return jsonResponse(await ctx.runAction(createPhotoUploadUrl, { deviceId, deviceSecret, batchId, resultId }));
+  });
+}
+
+http.route({ path: "/api/access/anonymous", method: "POST", handler: anonymousTrialHandler });
+http.route({ path: "/api/access/anonymous", method: "OPTIONS", handler: anonymousTrialHandler });
+http.route({ path: "/api/access/status", method: "GET", handler: accessStatusHandler });
+http.route({ path: "/api/access/status", method: "OPTIONS", handler: accessStatusHandler });
+const disconnectSessionHandler = sessionStateHandler(false);
+const endSessionHandler = sessionStateHandler(true);
+http.route({ path: "/api/access/session/disconnect", method: "POST", handler: disconnectSessionHandler });
+http.route({ path: "/api/access/session/disconnect", method: "OPTIONS", handler: disconnectSessionHandler });
+http.route({ path: "/api/access/session/end", method: "POST", handler: endSessionHandler });
+http.route({ path: "/api/access/session/end", method: "OPTIONS", handler: endSessionHandler });
+http.route({ path: "/api/storekit/transactions", method: "POST", handler: storeKitTransactionHandler });
+http.route({ path: "/api/storekit/transactions", method: "OPTIONS", handler: storeKitTransactionHandler });
+http.route({ path: "/api/storekit/notifications", method: "POST", handler: storeKitNotificationHandler });
+http.route({ path: "/api/storekit/notifications", method: "OPTIONS", handler: storeKitNotificationHandler });
+const mobilePhotoUploadHandler = mobileBatchActionHandler("upload");
+const mobileBatchFinalizeHandler = mobileBatchActionHandler("finalize");
+const appClipGuestPhotoUploadHandler = appClipGuestBatchActionHandler("upload");
+const appClipGuestBatchFinalizeHandler = appClipGuestBatchActionHandler("finalize");
+http.route({ path: "/api/mobile/enrollment/exchange", method: "POST", handler: mobileEnrollmentExchangeHandler });
+http.route({ path: "/api/mobile/enrollment/exchange", method: "OPTIONS", handler: mobileEnrollmentExchangeHandler });
+http.route({ path: "/api/mobile/outbox/sync", method: "POST", handler: mobileOutboxSyncHandler });
+http.route({ path: "/api/mobile/outbox/sync", method: "OPTIONS", handler: mobileOutboxSyncHandler });
+http.route({ path: "/api/mobile/photos/upload-url", method: "POST", handler: mobilePhotoUploadHandler });
+http.route({ path: "/api/mobile/photos/upload-url", method: "OPTIONS", handler: mobilePhotoUploadHandler });
+http.route({ path: "/api/mobile/batches/finalize", method: "POST", handler: mobileBatchFinalizeHandler });
+http.route({ path: "/api/mobile/batches/finalize", method: "OPTIONS", handler: mobileBatchFinalizeHandler });
+http.route({ path: "/api/app-clip/outbox/sync", method: "POST", handler: appClipGuestOutboxSyncHandler });
+http.route({ path: "/api/app-clip/outbox/sync", method: "OPTIONS", handler: appClipGuestOutboxSyncHandler });
+http.route({ path: "/api/app-clip/photos/upload-url", method: "POST", handler: appClipGuestPhotoUploadHandler });
+http.route({ path: "/api/app-clip/photos/upload-url", method: "OPTIONS", handler: appClipGuestPhotoUploadHandler });
+http.route({ path: "/api/app-clip/batches/finalize", method: "POST", handler: appClipGuestBatchFinalizeHandler });
+http.route({ path: "/api/app-clip/batches/finalize", method: "OPTIONS", handler: appClipGuestBatchFinalizeHandler });
+http.route({ path: "/api/workspace/enrollment", method: "POST", handler: workspaceEnrollmentHandler });
+http.route({ path: "/api/workspace/enrollment", method: "OPTIONS", handler: workspaceEnrollmentHandler });
+http.route({ path: "/api/workspace/snapshot", method: "GET", handler: workspaceSnapshotHandler });
+http.route({ path: "/api/workspace/snapshot", method: "OPTIONS", handler: workspaceSnapshotHandler });
+http.route({ path: "/api/workspace/photos/download-url", method: "POST", handler: workspacePhotoDownloadHandler });
+http.route({ path: "/api/workspace/photos/download-url", method: "OPTIONS", handler: workspacePhotoDownloadHandler });
+http.route({ path: "/api/workspace/computers/register", method: "POST", handler: workspaceComputerRegistrationHandler });
+http.route({ path: "/api/workspace/computers/register", method: "OPTIONS", handler: workspaceComputerRegistrationHandler });
+http.route({ path: "/api/workspace/deliveries/ack", method: "POST", handler: workspaceDeliveryAcknowledgementHandler });
+http.route({ path: "/api/workspace/deliveries/ack", method: "OPTIONS", handler: workspaceDeliveryAcknowledgementHandler });
+http.route({ path: "/api/workspace/results/delete", method: "POST", handler: workspaceResultDeletionHandler });
+http.route({ path: "/api/workspace/results/delete", method: "OPTIONS", handler: workspaceResultDeletionHandler });
+http.route({ path: "/api/workspace/results/restore", method: "POST", handler: workspaceResultRestoreHandler });
+http.route({ path: "/api/workspace/results/restore", method: "OPTIONS", handler: workspaceResultRestoreHandler });
 
 http.route({ path: "/api/signal", method: "GET", handler: signalHandler });
 http.route({ path: "/api/signal", method: "POST", handler: signalHandler });

@@ -8,6 +8,8 @@
  * @module
  */
 
+import type * as access from "../access.js";
+import type * as cloudWorkspace from "../cloudWorkspace.js";
 import type * as crons from "../crons.js";
 import type * as http from "../http.js";
 import type * as scannerPush from "../scannerPush.js";
@@ -24,6 +26,8 @@ import type * as scannerSignal_responses from "../scannerSignal/responses.js";
 import type * as scannerSignal_routeCommands from "../scannerSignal/routeCommands.js";
 import type * as scannerSignal_transitions from "../scannerSignal/transitions.js";
 import type * as scannerSignal_validators from "../scannerSignal/validators.js";
+import type * as storeKit from "../storeKit.js";
+import type * as storeKitData from "../storeKitData.js";
 
 import type {
   ApiFromModules,
@@ -32,6 +36,8 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  access: typeof access;
+  cloudWorkspace: typeof cloudWorkspace;
   crons: typeof crons;
   http: typeof http;
   scannerPush: typeof scannerPush;
@@ -48,6 +54,8 @@ declare const fullApi: ApiFromModules<{
   "scannerSignal/routeCommands": typeof scannerSignal_routeCommands;
   "scannerSignal/transitions": typeof scannerSignal_transitions;
   "scannerSignal/validators": typeof scannerSignal_validators;
+  storeKit: typeof storeKit;
+  storeKitData: typeof storeKitData;
 }>;
 
 /**

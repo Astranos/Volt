@@ -5,6 +5,8 @@
 /* global chrome */
 import { defineBackground } from "wxt/utils/define-background";
 import { createActiveTabTracker } from "../src/background/active-tab-tracker";
+import { createAccessController } from "../src/background/access-controller";
+import { createCloudWorkspaceController } from "../src/background/cloud-workspace-controller";
 import { createClipboardController } from "../src/background/clipboard-controller";
 import { createContextMenuController } from "../src/background/context-menu-controller";
 import { registerDisabledSiteActions } from "../src/background/disabled-site-controller";
@@ -92,6 +94,20 @@ export default defineBackground({
       getOffscreenContexts: offscreenDocument.getOffscreenContexts,
       signalUrl: EXTENSION_SCANNER_SIGNAL_URL,
       reconnectAlarmName: SCANNER_RECONNECT_ALARM_NAME,
+    });
+    const access = createAccessController({
+      chromeApi: chrome,
+      disconnectScanner: () =>
+        scannerOffscreen.sendScannerOffscreenMessage({
+          action: "scannerOffscreenDisconnect",
+        }),
+      log,
+      signalUrl: EXTENSION_SCANNER_SIGNAL_URL,
+    });
+    const cloudWorkspace = createCloudWorkspaceController({
+      chromeApi: chrome,
+      getClerkToken: access.getClerkToken,
+      siteUrl: EXTENSION_SCANNER_SIGNAL_URL,
     });
     const photoDownloadCleanup = createMobilePhotoDownloadCleanup({
       chromeApi: chrome,
@@ -334,10 +350,20 @@ export default defineBackground({
       });
 
       void scannerOffscreen.pollScannerReconnectRequests("background-main");
+      void access.initialize();
+      void cloudWorkspace.initialize();
       scannerOffscreen.ensureScannerReconnectAlarm();
       photoDownloadCleanup.ensureCleanupAlarm();
 
       chrome.alarms?.onAlarm?.addListener((alarm) => {
+        if (alarm?.name === cloudWorkspace.alarmName) {
+          void cloudWorkspace.handleAlarm();
+          return;
+        }
+        if (alarm?.name === access.alarmName) {
+          void access.handleAlarm();
+          return;
+        }
         if (alarm?.name === scannerOffscreen.alarmName) {
           void scannerOffscreen.pollScannerReconnectRequests("alarm");
           return;
@@ -365,6 +391,8 @@ export default defineBackground({
       sender: RuntimeMessageSender,
       sendResponse: RuntimeSendResponse
     ) {
+      if (access.handleMessage(rawMessage, sender, sendResponse)) return true;
+      if (cloudWorkspace.handleMessage(rawMessage, sender, sendResponse)) return true;
       const message = parseRuntimeMessage(rawMessage);
 
       if (message && isScannerOffscreenRuntimeMessage(message)) {

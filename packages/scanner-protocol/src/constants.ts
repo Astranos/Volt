@@ -1,7 +1,7 @@
 import type { ScannerIceServer } from "./ice-servers.ts";
 export type { ScannerIceServer } from "./ice-servers.ts";
 
-export const SCANNER_WEB_APP_URL = "https://volt-scanner.vercel.app";
+export const SCANNER_WEB_APP_URL = "https://volt.juanquenga.com";
 export const SCANNER_SIGNAL_URL_DEV = "https://adorable-hornet-19.convex.site/api/signal";
 export const SCANNER_SIGNAL_URL_PROD = "https://sincere-trout-414.convex.site/api/signal";
 export const SCANNER_SIGNAL_URL = SCANNER_SIGNAL_URL_PROD;

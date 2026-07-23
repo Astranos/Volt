@@ -194,6 +194,93 @@ body {
   padding: 14px 0 0;
 }
 
+.popup-enrollment-trigger {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: #047857;
+  cursor: pointer;
+  display: flex;
+  flex: none;
+  font-size: 11px;
+  font-weight: 800;
+  gap: 6px;
+  justify-content: center;
+  padding: 8px 4px 0;
+}
+
+.popup-enrollment-trigger:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.popup-enrollment-overlay {
+  align-items: center;
+  background: rgba(15, 23, 42, 0.62);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 24px;
+  position: absolute;
+  z-index: 20;
+}
+
+.popup-enrollment-card {
+  align-items: center;
+  background: var(--popup-panel-strong);
+  border: 1px solid var(--popup-border);
+  border-radius: 20px;
+  box-shadow: var(--popup-shadow);
+  display: flex;
+  flex-direction: column;
+  max-width: 320px;
+  padding: 22px;
+  position: relative;
+  text-align: center;
+  width: 100%;
+}
+
+.popup-enrollment-card h2 {
+  font-size: 17px;
+  margin: 8px 0 12px;
+}
+
+.popup-enrollment-card p {
+  color: var(--popup-muted);
+  font-size: 11px;
+  line-height: 1.4;
+  margin: 12px 0 0;
+}
+
+.popup-enrollment-close {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: var(--popup-muted);
+  cursor: pointer;
+  display: flex;
+  padding: 6px;
+  position: absolute;
+  right: 8px;
+  top: 8px;
+}
+
+.popup-enrollment-qr-frame {
+  background: #fff;
+  border-radius: 16px;
+  padding: 10px;
+  width: 220px;
+}
+
+.popup-enrollment-qr-frame img {
+  display: block;
+  width: 100%;
+}
+
+.popup-enrollment-card .popup-enrollment-error {
+  color: #b91c1c;
+}
+
 .popup-qr-stack {
   align-items: center;
   display: flex;
@@ -300,6 +387,25 @@ body {
 
 .popup-pair-another-button svg {
   color: #16a34a;
+}
+
+.popup-disconnect-button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: #b91c1c;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 750;
+  gap: 6px;
+  margin-top: 9px;
+  padding: 4px 8px;
+}
+
+.popup-disconnect-button:hover {
+  color: #7f1d1d;
+  text-decoration: underline;
 }
 
 .popup-actions {

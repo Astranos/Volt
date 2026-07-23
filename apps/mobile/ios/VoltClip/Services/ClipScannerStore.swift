@@ -78,6 +78,7 @@ final class ClipScannerStore {
     var targetHint = "Not connected"
     var pairingLabel: String?
     var pairingFailureMessage: String?
+    var requiresFullApp = false
     var transcript = ""
     var isPairing = false
     var isConnected = false
@@ -95,6 +96,7 @@ final class ClipScannerStore {
     @ObservationIgnored private let ocrService = ClipOCRService()
     @ObservationIgnored private let signaling = ScannerSignalingClient()
     @ObservationIgnored private let transport = WebKitWebRTCTransport()
+    @ObservationIgnored private let guestCloudClient = AppClipGuestCloudClient()
     @ObservationIgnored private let pairingImpactFeedback = UIImpactFeedbackGenerator(style: .medium)
     @ObservationIgnored private let pairingNotificationFeedback = UINotificationFeedbackGenerator()
     @ObservationIgnored private let dictationImpactFeedback = UIImpactFeedbackGenerator(style: .light)
@@ -109,6 +111,8 @@ final class ClipScannerStore {
     private var activeConnectionAttemptLabel: String?
     private var dictationTargetKey: String?
     private var activeCaptureBatchId: String?
+    private var guestCloudSession: AppClipGuestCloudSession?
+    private var lastMirroredDictationText: String?
 
     var bridgeWebView: WKWebView {
         transport.embeddedWebView
@@ -160,6 +164,7 @@ final class ClipScannerStore {
             self.isConnected = true
             self.isPairing = false
             self.pairingFailureMessage = nil
+            self.requiresFullApp = false
             self.targetHint = sessionReady.cursorTarget?.label ?? "Ready for Chrome"
             self.statusText = "Connected to \(self.pairingLabel ?? "Chrome")"
             self.activeConnectionAttemptLabel = nil
@@ -172,13 +177,18 @@ final class ClipScannerStore {
             self?.transcript = text
             if final {
                 self?.statusText = "Dictation recognized"
+                self?.mirrorFinalDictationToCloud(text)
             }
         }
         transport.onClosed = { [weak self] in
             self?.handleTransportClosed()
         }
+        transport.onProtocolError = { [weak self] protocolError in
+            self?.handleProtocolError(protocolError)
+        }
         transport.onError = { [weak self] message in
             guard let self else { return }
+            guard !self.requiresFullApp else { return }
             let wasConnected = self.isConnected
             self.isPairing = false
             self.isDictating = false
@@ -200,10 +210,12 @@ final class ClipScannerStore {
         }
         guard let session else { return }
         pairingSession = session
+        guestCloudSession = AppClipGuestCloudSession(pairingSession: session)
         pairingURLText = url.absoluteString
         pairingLabel = session.label
         activeConnectionAttemptLabel = displayName(for: session)
         pairingFailureMessage = nil
+        requiresFullApp = false
         Task { await pair(session) }
     }
 
@@ -234,6 +246,7 @@ final class ClipScannerStore {
         isPairing = true
         errorMessage = nil
         pairingFailureMessage = nil
+        requiresFullApp = false
         activeConnectionAttemptLabel = activeConnectionAttemptLabel ?? displayName(for: nextSession)
         statusText = "Pairing with Chrome"
         pairingImpactFeedback.impactOccurred(intensity: 0.85)
@@ -241,6 +254,7 @@ final class ClipScannerStore {
             try await transport.pair(with: nextSession, contributorId: contributorId)
         } catch {
             isPairing = false
+            requiresFullApp = Self.isAccessExhausted(error)
             errorMessage = error.localizedDescription
             pairingFailureMessage = error.localizedDescription
             statusText = "Pairing failed"
@@ -276,6 +290,7 @@ final class ClipScannerStore {
         statusText = "Starting dictation"
         isDictating = true
         transcript = ""
+        lastMirroredDictationText = nil
         transport.startDictation()
         dictationNotificationFeedback.notificationOccurred(.success)
     }
@@ -390,17 +405,19 @@ final class ClipScannerStore {
             return false
         }
         updatePhoto(photo.id, status: "Sending")
+        let resolvedFilename = filename ?? photoFilename(for: photo)
         do {
             _ = try await transport.sendPhoto(
                 photo.image,
                 contributorId: contributorId,
                 batchId: photo.batchId,
-                filename: filename ?? photoFilename(for: photo),
+                filename: resolvedFilename,
                 capturedAt: photo.capturedAt
             )
             updatePhoto(photo.id, status: "Delivered")
             statusText = "Photo delivered"
             captureSuccessFeedback.notificationOccurred(.success)
+            mirrorPhotoToCloud(photo, filename: resolvedFilename)
             return true
         } catch {
             updatePhoto(photo.id, status: "Failed")
@@ -658,6 +675,7 @@ final class ClipScannerStore {
             transport.close()
             isPairing = false
             isConnected = false
+            requiresFullApp = Self.isAccessExhausted(error)
             pairingFailureMessage = error.localizedDescription
             errorMessage = error.localizedDescription
             targetHint = "Scan a fresh Volt QR code."
@@ -676,6 +694,43 @@ final class ClipScannerStore {
             try await Task.sleep(for: .milliseconds(250))
         }
         throw ScannerPairingError.chromeTimedOut
+    }
+
+    private static func isAccessExhausted(_ error: Error) -> Bool {
+        guard let pairingError = error as? ScannerPairingError else { return false }
+        guard case .signalRejected(let statusCode, let detail) = pairingError else { return false }
+
+        if statusCode == 402 {
+            return true
+        }
+        guard statusCode == 401 || statusCode == 403 else { return false }
+
+        let normalizedDetail = detail?.lowercased() ?? ""
+        return normalizedDetail.contains("access")
+            || normalizedDetail.contains("session")
+            || normalizedDetail.contains("subscription")
+    }
+
+    private func handleProtocolError(_ error: ScannerProtocol.ProtocolError) {
+        guard error.code == "access_exhausted" else { return }
+
+        suppressNextReconnect = true
+        reconnectTask?.cancel()
+        reconnectTask = nil
+        requiresFullApp = true
+        isPairing = false
+        let message = error.detail ?? "Your free Volt sessions are used. Continue in the full app."
+        if isConnected {
+            transport.close()
+        } else {
+            isConnected = false
+        }
+        suppressNextReconnect = true
+        pairingFailureMessage = message
+        errorMessage = message
+        targetHint = "Install Volt to continue."
+        statusText = "Full app required"
+        pairingNotificationFeedback.notificationOccurred(.warning)
     }
 
     private func updatePhoto(_ id: UUID, status: String) {
@@ -785,6 +840,7 @@ final class ClipScannerStore {
                         targetHint = label
                     }
                 }
+                mirrorCaptureToCloud(capture)
             } catch {
                 updateCapture(capture.id, status: "Failed")
                 errorMessage = error.localizedDescription
@@ -820,6 +876,7 @@ final class ClipScannerStore {
             selectMode(mode)
         }
         pairingSession = session
+        guestCloudSession = AppClipGuestCloudSession(pairingSession: session)
         pairingURLText = url.absoluteString
         pairingLabel = session.label
         activeConnectionAttemptLabel = displayName(for: session)
@@ -836,6 +893,51 @@ final class ClipScannerStore {
     private func updateCapture(_ id: UUID, status: String) {
         guard let index = captures.firstIndex(where: { $0.id == id }) else { return }
         captures[index].status = status
+    }
+
+    private func mirrorCaptureToCloud(_ capture: ClipCapture) {
+        guard let guestCloudSession, !guestCloudSession.isExpired else { return }
+        let kind = capture.mode == .barcode ? "barcode" : "text"
+        Task {
+            try? await guestCloudClient.mirrorCapture(
+                session: guestCloudSession,
+                kind: kind,
+                value: capture.value,
+                format: capture.format,
+                capturedAt: capture.capturedAt
+            )
+        }
+    }
+
+    private func mirrorFinalDictationToCloud(_ text: String) {
+        let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty, value != lastMirroredDictationText else { return }
+        lastMirroredDictationText = value
+        guard let guestCloudSession, !guestCloudSession.isExpired else { return }
+        Task {
+            try? await guestCloudClient.mirrorCapture(
+                session: guestCloudSession,
+                kind: "dictation",
+                value: value,
+                format: "dictation",
+                capturedAt: .now
+            )
+        }
+    }
+
+    private func mirrorPhotoToCloud(_ photo: ClipPhoto, filename: String) {
+        guard let guestCloudSession,
+              !guestCloudSession.isExpired,
+              let data = photo.image.jpegData(compressionQuality: 0.82)
+        else { return }
+        Task {
+            try? await guestCloudClient.mirrorPhoto(
+                session: guestCloudSession,
+                data: data,
+                filename: filename,
+                capturedAt: photo.capturedAt
+            )
+        }
     }
 
     private func normalizedBarcodeScan(value: String, format: String) -> (value: String, format: String) {

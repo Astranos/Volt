@@ -1,6 +1,4 @@
 import {
-  SCANNER_PROTOCOL_MAJOR_VERSION,
-  SCANNER_PROTOCOL_MINOR_VERSION,
   decodeScannerControlMessage,
   encodeScannerControlMessage,
   isScannerSessionId,
@@ -20,9 +18,12 @@ import {
   saveMobileScannerSessionLabel,
 } from "./mobile-scanner-identity";
 import { createId, createMessageId, createSecret } from "./mobile-scanner-ids";
+import { authorizeSessionReady } from "./mobile-scanner-access-decision";
 import { MobileScannerJoinAttemptPoller, MobileScannerReconnectPoller } from "./mobile-scanner-join-attempt-poller";
+import { MobileScannerPeerCoordinator } from "./mobile-scanner-peer-coordinator";
 import { type PeerSession, MobileScannerPeerConnections } from "./mobile-scanner-peer-connection";
 import { MobileScannerPhotoReceiver } from "./mobile-scanner-photo-receiver";
+import { EXTENSION_CAPABILITIES, EXTENSION_PROTOCOL_VERSION, JOIN_CAPABILITIES, JOIN_WINDOW_TTL_MS } from "./mobile-scanner-protocol-config";
 import { MobileScannerSessionLifecycle } from "./mobile-scanner-session-lifecycle";
 import {
   type JoinWindow,
@@ -54,14 +55,8 @@ export {
   type SessionTarget,
 };
 
-const JOIN_WINDOW_TTL_MS = 2 * 60 * 1000;
 const REMOTE_SPEECH_START_RETRY_DELAY_MS = 250;
 const REMOTE_SPEECH_START_MAX_ATTEMPTS = 20;
-
-const EXTENSION_PROTOCOL_VERSION = {
-  major: SCANNER_PROTOCOL_MAJOR_VERSION,
-  minor: SCANNER_PROTOCOL_MINOR_VERSION,
-};
 
 type RemoteSpeechAudioBridge = {
   context?: AudioContext;
@@ -185,6 +180,7 @@ export class MobileScannerSession {
   private browserSessionPairings = new Map<string, DurablePairingCredential>();
   private readonly joinAttemptPoller: MobileScannerJoinAttemptPoller;
   private readonly identityReady: Promise<void>;
+  private readonly peerCoordinator: MobileScannerPeerCoordinator;
   private readonly peerConnections: MobileScannerPeerConnections;
   private readonly photoReceiver: MobileScannerPhotoReceiver;
   private readonly reconnectPoller: MobileScannerReconnectPoller;
@@ -223,6 +219,20 @@ export class MobileScannerSession {
     this.photoReceiver = new MobileScannerPhotoReceiver({
       onPhoto: (message) => this.events.onPhoto(message),
       sendControl: (peer, message) => this.sendControl(peer, message),
+    });
+    this.peerCoordinator = new MobileScannerPeerCoordinator({
+      isActive: (peer) => this.peerConnections.peers.get(peer.id) === peer,
+      deliverControl: (peer, rawData) => this.handleControlMessage(peer, rawData),
+      deliverPhoto: (peer, data) => this.photoReceiver.handlePhotoTransferMessage(peer, data),
+      sendInvalidState: (peer, receivedType) =>
+        this.sendProtocolError(
+          peer,
+          "invalid_state",
+          receivedType,
+          "Complete the hello/session_ready handshake before sending scanner work.",
+        ),
+      closePeer: (peer, explicitlyEnded) => this.closePeer(peer.id, explicitlyEnded),
+      log: (...args) => this.events.log?.(...args),
     });
     this.identityReady = this.refreshExtensionIdentity().then(
       () => {},
@@ -283,14 +293,18 @@ export class MobileScannerSession {
   }
 
   async disconnect() {
+    const usageSessionId = this.lifecycle.getUsageSessionId();
     await this.closeJoinWindow();
     for (const peer of Array.from(this.peerConnections.peers.values())) {
-      this.closePeer(peer.id);
+      this.closePeer(peer.id, true);
     }
     this.peerConnections.peers.clear();
     this.photoReceiver.clear();
     this.joinAttemptPoller.clear();
     this.lifecycle.disconnected();
+    if (usageSessionId) {
+      await this.events.onSessionEnded?.(usageSessionId);
+    }
     return this.getState();
   }
 
@@ -329,11 +343,20 @@ export class MobileScannerSession {
   private async createJoinWindow(target?: SessionTarget | null): Promise<JoinWindow> {
     const activeSessionId = this.lifecycle.getSessionId();
     const sessionId = isScannerSessionId(activeSessionId) ? activeSessionId : createId("global-session");
-    const joinWindow = await this.signalClient.createJoinWindow({
-      sessionId,
-      target,
-      deviceLabel: this.lifecycle.getExtensionIdentity()?.sessionLabel,
-    });
+    const deviceLabel = this.lifecycle.getExtensionIdentity()?.sessionLabel;
+    const joinWindow = this.events.createJoinWindow
+      ? await this.events.createJoinWindow({
+          sessionId,
+          target,
+          deviceLabel,
+          ttlMs: JOIN_WINDOW_TTL_MS,
+          capabilities: JOIN_CAPABILITIES,
+        })
+      : await this.signalClient.createJoinWindow({
+          sessionId,
+          target,
+          deviceLabel,
+        });
     this.lifecycle.setSessionId(joinWindow.sessionId);
     return joinWindow;
   }
@@ -361,7 +384,7 @@ export class MobileScannerSession {
         protocolVersion: EXTENSION_PROTOCOL_VERSION,
         extensionVersion: "1.0.35",
         platform: "chrome_extension",
-        capabilities: ["ocr", "barcode", "dictation", "photo", "cursor_insert", "sidepanel_results"],
+        capabilities: EXTENSION_CAPABILITIES,
         chromeSessionId: state.sessionId,
         deviceLabel: identity?.sessionLabel,
       },
@@ -448,7 +471,7 @@ export class MobileScannerSession {
           protocolVersion: EXTENSION_PROTOCOL_VERSION,
           extensionVersion: "1.0.35",
           platform: "chrome_extension",
-          capabilities: ["ocr", "barcode", "dictation", "photo", "cursor_insert", "sidepanel_results"],
+          capabilities: EXTENSION_CAPABILITIES,
           chromeSessionId: this.lifecycle.getSessionId(),
           deviceLabel: this.lifecycle.getExtensionIdentity()?.sessionLabel,
         },
@@ -465,18 +488,14 @@ export class MobileScannerSession {
     };
     channel.onmessage = (event) => {
       if (typeof event.data !== "string") return;
-      void this.handleControlMessage(peer, event.data).catch((error) => {
-        this.events.log?.("Failed to handle scanner control message", error);
-      });
+      this.peerCoordinator.enqueueControl(peer, event.data);
     };
   }
 
   private configurePhotoChannel(peer: PeerSession, channel: RTCDataChannel) {
     channel.binaryType = "arraybuffer";
     channel.onmessage = (event) => {
-      void this.photoReceiver.handlePhotoTransferMessage(peer, event.data).catch((error) => {
-        this.events.log?.("Failed to handle scanner photo message", error);
-      });
+      this.peerCoordinator.enqueuePhoto(peer, event.data);
     };
   }
 
@@ -491,7 +510,15 @@ export class MobileScannerSession {
     if (!control) {
       if (type === "hello" && !isScannerProtocolVersionSupported(protocolVersionFromRawControl(rawData))) {
         this.sendProtocolError(peer, "unsupported_protocol", type);
-        this.closePeer(peer.id);
+        await this.peerCoordinator.closeAfterControlFlush(peer, true);
+        return;
+      }
+      if (!peer.ready && type === "session_closed") {
+        this.closePeer(peer.id, true);
+        return;
+      }
+      if (!peer.ready) {
+        await this.peerCoordinator.deliverReadyWork(peer, type ?? "unknown", () => undefined);
         return;
       }
       if (type) return;
@@ -500,8 +527,22 @@ export class MobileScannerSession {
     }
 
     if (control.type === "hello") {
-      peer.ready = true;
-      this.sendSessionReady(peer);
+      if (peer.ready) return;
+      const accepted = await authorizeSessionReady({
+        joinWindow: this.lifecycle.getJoinWindow(),
+        authorize: this.events.onSessionReady,
+        actions: {
+          sendProtocolError: (code, receivedType, detail) =>
+            this.sendProtocolError(peer, code, receivedType, detail),
+          denySession: (detail) => this.lifecycle.sessionAccessDenied(detail),
+          closePeer: () => this.peerCoordinator.closeAfterControlFlush(peer, true),
+          sendSessionReady: () => {
+            peer.ready = true;
+            this.sendSessionReady(peer);
+          },
+        },
+      });
+      if (!accepted) return;
       this.events.log?.("[Volt Scanner Pairing] session_ready sent", { joinAttemptId: peer.id });
       this.handlePeerConnected();
       void this.closeJoinWindow();
@@ -509,10 +550,20 @@ export class MobileScannerSession {
     }
 
     if (control.type === "session_closed") {
-      this.closePeer(peer.id);
+      const usageSessionId = this.lifecycle.getUsageSessionId();
+      this.closePeer(peer.id, true);
+      if (usageSessionId && this.peerConnections.countConnectedPeers() === 0) {
+        await this.events.onSessionEnded?.(usageSessionId);
+      }
       return;
     }
 
+    await this.peerCoordinator.deliverReadyWork(peer, control.type, () =>
+      this.handleReadyControlMessage(peer, control),
+    );
+  }
+
+  private async handleReadyControlMessage(peer: PeerSession, control: ScannerControlMessage) {
     if (control.type === "dictation" && control.phase === "started") {
       this.pendingRemoteSpeechStarts.add(peer.id);
       this.remoteSpeechStartAttempts.set(peer.id, 0);
@@ -855,7 +906,7 @@ export class MobileScannerSession {
     void this.closeJoinWindow();
   }
 
-  private closePeer(joinAttemptId: string) {
+  private closePeer(joinAttemptId: string, explicitlyEnded = false) {
     this.stopRemoteSpeechRecognition(joinAttemptId);
     this.remoteSpeechTracks.delete(joinAttemptId);
     this.closeRemoteSpeechAudioBridge(joinAttemptId);
@@ -870,6 +921,12 @@ export class MobileScannerSession {
     this.peerPairings.delete(joinAttemptId);
     this.lifecycle.peerClosed();
     this.joinAttemptPoller.stopIfIdle();
+    if (!explicitlyEnded && this.peerConnections.countConnectedPeers() === 0) {
+      const usageSessionId = this.lifecycle.getUsageSessionId();
+      if (usageSessionId) {
+        void this.events.onSessionDisconnected?.(usageSessionId);
+      }
+    }
   }
 
   private stopRemoteSpeechRecognition(joinAttemptId: string) {

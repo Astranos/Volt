@@ -92,6 +92,8 @@ Supported environment variables:
 - `APP_STORE_CONNECT_API_KEY_CONTENT`: raw `.p8` contents when a file path is not used.
 - `APP_STORE_CONNECT_API_KEY_CONTENT_BASE64`: set to `true` when `APP_STORE_CONNECT_API_KEY_CONTENT` is base64 encoded.
 - `APP_STORE_CONNECT_API_KEY_DURATION`: token duration in seconds. Defaults to `1200`.
+- `VOLT_CLERK_PUBLISHABLE_KEY`: required Clerk production publishable key injected into the signed Release archive. The lane rejects test keys and leaves the project file credential-free.
+- `VOLT_CLERK_FRONTEND_API_DOMAIN`: required Clerk production Frontend API domain injected into the signed Release archive for Clerk's `webcredentials:` associated-domain entitlement.
 - `TESTFLIGHT_CHANGELOG`: optional TestFlight "What to Test" text.
 - `APP_STORE_RELEASE_NOTES`: optional App Store "What's New" text for the version prepared for review. If omitted, the beta lane reuses `TESTFLIGHT_CHANGELOG`.
 - `APP_REVIEW_NOTES`: optional App Store/TestFlight reviewer notes. Use this for "What to Review" instructions and any setup details Apple needs.

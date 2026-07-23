@@ -13,6 +13,7 @@ export function publicJoinToken(token: Doc<"scannerJoinTokens">) {
     graceExpiresAt: scannerSignalIso(token.graceExpiresAt),
     revokedAt: token.revokedAt ? scannerSignalIso(token.revokedAt) : undefined,
     rotatedTo: token.rotatedTo,
+    usageSessionId: token.usageSessionId,
   });
 }
 

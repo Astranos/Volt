@@ -67,6 +67,7 @@ export type ScannerPeerInfo = {
 
 export type ScannerProtocolErrorCode =
   | "unsupported_protocol"
+  | "access_exhausted"
   | "invalid_message"
   | "invalid_state"
   | "transfer_rejected"
@@ -501,6 +502,7 @@ export function decodeScannerControlMessage(data: string): ScannerControlMessage
   if (parsed.type === "protocol_error") {
     if (
       parsed.code !== "unsupported_protocol" &&
+      parsed.code !== "access_exhausted" &&
       parsed.code !== "invalid_message" &&
       parsed.code !== "invalid_state" &&
       parsed.code !== "transfer_rejected" &&

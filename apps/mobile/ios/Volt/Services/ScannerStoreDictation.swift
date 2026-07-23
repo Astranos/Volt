@@ -8,7 +8,6 @@ extension ScannerStore {
     }
 
     func startDictation(allowsFeedback: Bool = true) async {
-        guard connectionStatus.isConnected else { return }
         cancelDictationGraceStop()
         let startToken = UUID()
         dictationStartToken = startToken
@@ -71,7 +70,7 @@ extension ScannerStore {
         let text = dictation.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
         if !text.isEmpty {
             let result = ScanResult(kind: .dictation, source: .dictation, value: text, format: "dictation", deliveryState: initialDeliveryState)
-            results.insert(result, at: 0)
+            saveResultLocally(result)
             sendDictation(text, phase: "final")
         }
         sendDictation(nil, phase: "stopped")

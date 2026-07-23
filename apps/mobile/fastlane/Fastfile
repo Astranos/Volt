@@ -92,8 +92,21 @@ def xcode_auth_xcargs_from_env
   ].join(" ")
 end
 
+def clerk_release_xcargs_from_env
+  publishable_key = ENV["VOLT_CLERK_PUBLISHABLE_KEY"].to_s.strip
+  frontend_api_domain = ENV["VOLT_CLERK_FRONTEND_API_DOMAIN"].to_s.strip
+  UI.user_error!("VOLT_CLERK_PUBLISHABLE_KEY must be a Clerk production publishable key") unless publishable_key.start_with?("pk_live_")
+  UI.user_error!("VOLT_CLERK_FRONTEND_API_DOMAIN must be the Clerk production Frontend API domain") if frontend_api_domain.empty? || frontend_api_domain == "REPLACE_ME"
+
+  [
+    "VOLT_CLERK_PUBLISHABLE_KEY=#{Shellwords.escape(publishable_key)}",
+    "VOLT_CLERK_FRONTEND_API_DOMAIN=#{Shellwords.escape(frontend_api_domain)}"
+  ].join(" ")
+end
+
 def build_app_store_ipa
   xcode_auth_xcargs = xcode_auth_xcargs_from_env
+  clerk_release_xcargs = clerk_release_xcargs_from_env
   app_root = File.expand_path("..", __dir__)
   workspace_path = File.join(app_root, WORKSPACE)
   output_directory = File.join(app_root, BUILD_OUTPUT_DIRECTORY)
@@ -138,6 +151,7 @@ def build_app_store_ipa
     "-destination", Shellwords.escape("generic/platform=iOS"),
     "-archivePath", Shellwords.escape(archive_path),
     "clean", "archive",
+    clerk_release_xcargs,
     xcode_auth_xcargs
   ].compact.join(" ")
   sh(archive_command)

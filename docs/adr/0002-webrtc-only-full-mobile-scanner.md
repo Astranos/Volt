@@ -2,7 +2,7 @@
 
 ## Status
 
-Planned.
+Superseded by ADR 0003. Retained as historical context for the direct-WebRTC full-app design and as input to the temporary App Clip/live-target transport.
 
 ## Context
 

@@ -629,7 +629,7 @@ function BrowserWorkspaceMock() {
                 <div className="space-y-1">
                   <RecentRow
                     title="Volt - Chrome scanner session"
-                    url="volt-scanner.vercel.app/clip"
+                    url="volt.juanquenga.com/clip"
                     active
                   />
                   <RecentRow

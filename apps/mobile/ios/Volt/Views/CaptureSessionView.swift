@@ -226,7 +226,7 @@ struct CaptureSessionView: View {
         guard !showsConnectionSessions else { return nil }
         switch store.connectionStatus {
         case .pairing:
-            PairingStatusSheetModel(
+            return PairingStatusSheetModel(
                 title: store.canCancelReconnect ? "Reconnecting to Chrome" : "Pairing with Chrome",
                 message: store.peerTarget?.displayText ?? "Trying to open the scanner channel.",
                 systemImage: "link",
@@ -234,7 +234,7 @@ struct CaptureSessionView: View {
                 canCancel: true
             )
         case .waitingForChrome:
-            PairingStatusSheetModel(
+            return PairingStatusSheetModel(
                 title: "Waiting for Chrome",
                 message: "Finishing the secure scanner handshake.",
                 systemImage: "desktopcomputer",
@@ -242,7 +242,7 @@ struct CaptureSessionView: View {
                 canCancel: true
             )
         case .error:
-            PairingStatusSheetModel(
+            return PairingStatusSheetModel(
                 title: "Pairing failed",
                 message: store.targetHint,
                 systemImage: "exclamationmark.triangle",
@@ -250,7 +250,7 @@ struct CaptureSessionView: View {
                 canCancel: false
             )
         case .idle, .connected, .disconnected:
-            nil
+            return nil
         }
     }
 

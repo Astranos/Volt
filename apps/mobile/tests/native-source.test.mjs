@@ -72,6 +72,10 @@ const rootViewSwiftSource = readFileSync(
   new URL("../ios/Volt/Views/RootView.swift", import.meta.url),
   "utf8"
 );
+const settingsViewSwiftSource = readFileSync(
+  new URL("../ios/Volt/Views/SettingsView.swift", import.meta.url),
+  "utf8"
+);
 const pairingSessionsViewSwiftSource = readFileSync(
   new URL("../ios/Volt/Views/PairingSessionsView.swift", import.meta.url),
   "utf8"
@@ -480,8 +484,8 @@ test("native and app clip can reopen photo capture into a selected batch", () =>
   assert.match(scannerStoreCaptureActionsSwiftSource, /func resumePhotoBatch\(id: String\) \{\s*resumedPhotoBatchId = id\s*\}/);
   assert.match(scannerStoreCaptureActionsSwiftSource, /func endResumedPhotoBatch\(\) \{\s*resumedPhotoBatchId = nil\s*\}/);
   assert.match(scannerStoreCaptureActionsSwiftSource, /func currentPhotoBatch\(now: Date\) -> String \{\s*if let resumedPhotoBatchId \{\s*return resumedPhotoBatchId\s*\}/);
-  assert.match(scannerStoreCaptureActionsSwiftSource, /func captureSquarePhoto\(\) async \{\s*let batchId = resumedPhotoBatchId[\s\S]*sendPhoto\(preparedImage, resultId: photoResult\.id, batchId: batchId\)/);
-  assert.match(scannerStoreCaptureActionsSwiftSource, /resultId: id,\s*batchId: result\.batchId,\s*filename: "volt-photo-resend/);
+  assert.match(scannerStoreCaptureActionsSwiftSource, /func captureSquarePhoto\(\) async \{\s*let batchId = resumedPhotoBatchId[\s\S]*sendPhoto\(preparedImage, result: photoResult, batchId: batchId\)/);
+  assert.match(scannerStoreCaptureActionsSwiftSource, /result: result,\s*batchId: result\.batchId,\s*filename: "volt-photo-resend/);
   assert.match(scannerViewSwiftSource, /private var capturePhotoBatches: \[CapturePhotoBatch\]/);
   assert.match(scannerViewSwiftSource, /Label\("Add Photos", systemImage: "plus\.viewfinder"\)/);
   assert.match(scannerViewSwiftSource, /accessibilityLabel\("Add photos to \\\(batch\.title\) from/);
@@ -542,31 +546,17 @@ test("native screens use the shared header connection control without extra sess
   assert.doesNotMatch(uploadViewSwiftSource, /trailingAccessory: \{\s*ScannerSessionsButton/);
 });
 
-test("native first launch welcomes users without requesting camera access and can open session setup", () => {
-  assert.match(rootViewSwiftSource, /@AppStorage\("volt\.hasSeenWelcome\.v1"\) private var hasSeenWelcome = false/);
-  assert.match(rootViewSwiftSource, /guard hasSeenWelcome else \{\s*isWelcomePresented = true\s*return\s*\}/);
-  assert.match(rootViewSwiftSource, /private struct WelcomeView: View/);
-  assert.match(rootViewSwiftSource, /Text\("Welcome to Volt"\)/);
-  assert.match(rootViewSwiftSource, /Image\("VoltLogo"\)/);
-  assert.match(rootViewSwiftSource, /\.safeAreaInset\(edge: \.bottom, spacing: 0\) \{\s*WelcomeActions/);
-  assert.match(rootViewSwiftSource, /Label\("Scan QR Code to Pair", systemImage: "qrcode\.viewfinder"\)/);
-  assert.match(rootViewSwiftSource, /Text\("Continue Without Pairing"\)/);
-  assert.match(rootViewSwiftSource, /\.background\(\.background, in: RoundedRectangle\(cornerRadius: 18/);
-  assert.match(rootViewSwiftSource, /\.stroke\(\.secondary\.opacity\(0\.28\), lineWidth: 1\)/);
-  assert.doesNotMatch(rootViewSwiftSource, /Text\("Continue to Volt"\)/);
-  assert.match(rootViewSwiftSource, /private func completeWelcome\(opensPairingScanner: Bool\)/);
-  assert.match(rootViewSwiftSource, /private func startAppServices\(\) \{\s*if !showSavedSessionPickerIfNeeded\(\) \{\s*showPairingSheet\(for: store\.connectionStatus\)\s*\}\s*\}/);
+test("native first launch opens capture without auto-pairing or requesting camera early", () => {
+  assert.doesNotMatch(rootViewSwiftSource, /guard hasSeenWelcome/);
+  assert.match(rootViewSwiftSource, /private func startAppServices\(\) \{[\s\S]*store\.cloudWorkspace\.requestSync\(\)\s*\}/);
   assert.match(rootViewSwiftSource, /private func showSavedSessionPickerIfNeeded\(\) -> Bool \{\s*guard store\.hasReconnectablePairedSession else \{ return false \}/);
   assert.doesNotMatch(rootViewSwiftSource, /store\.reconnectToMostRecentPairedSessionIfNeeded\(\)/);
   assert.doesNotMatch(scannerStoreSwiftSource, /func reconnectToMostRecentPairedSessionIfNeeded/);
   assert.doesNotMatch(rootViewSwiftSource, /store\.camera\.requestAccess\(\)/);
   assert.match(captureSessionViewSwiftSource, /\.task \{\s*await store\.camera\.requestAccess\(\)\s*syncCameraForOcrReview/);
   assert.match(pairingSessionsViewSwiftSource, /\.task \{\s*await store\.camera\.requestAccess\(\)\s*store\.camera\.start\(\)\s*\}/);
-  assert.match(rootViewSwiftSource, /\.fullScreenCover\(isPresented: \$isWelcomePairingScannerPresented, onDismiss: handleWelcomePairingScannerDismiss\) \{\s*PairingScanSessionView\(isPresented: \$isWelcomePairingScannerPresented\)/);
-  assert.match(rootViewSwiftSource, /private func showPairingScannerFromWelcome\(\) \{\s*store\.activeMode = \.barcode\s*showsConnectionSheetAfterWelcomePairingScan = false\s*isWelcomePairingScannerPresented = true\s*\}/);
-  assert.doesNotMatch(rootViewSwiftSource, /private func showSessionsFromWelcome/);
   assert.doesNotMatch(pairingSessionsViewSwiftSource, /openURL\(webScannerURL\)/);
-  assert.match(sharedPairingSessionComponentsSwiftSource, /private let webScannerURLText = "volt-scanner\.vercel\.app\/clip"/);
+  assert.match(sharedPairingSessionComponentsSwiftSource, /private let webScannerURLText = "volt\.juanquenga\.com\/clip"/);
   assert.match(sharedPairingSessionComponentsSwiftSource, /Text\("Scan the QR code from the Chrome extension, or open the App Clip page on your computer\. This iPhone will connect to that browser session\."\)/);
   assert.match(sharedPairingSessionComponentsSwiftSource, /title: "Open Volt on your computer"/);
   assert.match(sharedPairingSessionComponentsSwiftSource, /detail: "Use the Chrome extension side panel, or enter the URL below\."/);
@@ -816,9 +806,9 @@ test("native barcode recognition defaults to UPC with settings override", () => 
   assert.match(scannerStoreSwiftSource, /var barcodeRecognitionMode: BarcodeRecognitionMode = \.upc/);
   assert.match(scannerStoreSwiftSource, /UserDefaults\.standard\.set\(barcodeRecognitionMode\.rawValue, forKey: Self\.barcodeRecognitionModeStorageKey\)/);
   assert.match(scannerStoreSwiftSource, /camera\.updateBarcodeRecognitionMode\(barcodeRecognitionMode\)/);
-  assert.match(rootViewSwiftSource, /SettingsView\(\)\s*\.tabItem \{ Label\("Settings", systemImage: "gearshape"\) \}/);
-  assert.match(rootViewSwiftSource, /Picker\("Recognized Codes", selection: \$store\.barcodeRecognitionMode\)/);
-  assert.match(rootViewSwiftSource, /ForEach\(BarcodeRecognitionMode\.allCases\)/);
+  assert.match(rootViewSwiftSource, /SettingsView\(showsAccountSettings: showsAccountSettings\)\s*\.tabItem \{ Label\("Settings", systemImage: "gearshape"\) \}/);
+  assert.match(settingsViewSwiftSource, /Picker\("Recognized Codes", selection: \$store\.barcodeRecognitionMode\)/);
+  assert.match(settingsViewSwiftSource, /ForEach\(BarcodeRecognitionMode\.allCases\)/);
 });
 
 test("native barcode reticles expire when detections stop refreshing", () => {

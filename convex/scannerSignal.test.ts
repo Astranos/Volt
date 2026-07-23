@@ -1,4 +1,3 @@
-/// <reference types="vite/client" />
 import { convexTest } from "convex-test";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
@@ -83,6 +82,7 @@ describe("scanner signal logging", () => {
 describe("scanner signal route command extraction", () => {
   test.each([
     ["POST", ["join-token"], "createJoinToken"],
+    ["POST", ["join-token", "token", "session-ready"], "sessionReady"],
     ["GET", ["join-token", "token"], "getJoinTokenStatus"],
     ["POST", ["join-token", "token", "revoke"], "revokeJoinToken"],
     ["POST", ["join-token", "token", "rotate"], "rotateJoinToken"],
@@ -139,6 +139,7 @@ describe("scanner signal rendezvous module", () => {
       body: {},
       origin: "https://example.test",
       startedAt: Date.now(),
+      auth: {},
       pairingSecret: "pairing-secret",
     });
 
@@ -177,6 +178,7 @@ describe("scanner signal rendezvous module", () => {
       },
       origin: "https://example.test",
       startedAt: Date.now(),
+      auth: {},
     });
 
     expect(result).toMatchObject({ statusCode: 200 });
@@ -206,11 +208,71 @@ describe("scanner signal rendezvous module", () => {
       },
       origin: "https://example.test",
       startedAt: Date.now(),
+      auth: {},
       pairingSecret: "secret",
     });
 
     expect(result).toEqual({ statusCode: 400, body: { error: "Invalid join window" } });
     expect(ctx.runMutation).not.toHaveBeenCalled();
+  });
+
+  test("rejects join-token creation before writing signaling state when access is unauthorized", async () => {
+    const ctx = {
+      runMutation: vi.fn(async () => ({
+        statusCode: 401,
+        body: { error: "Authentication or anonymous trial credentials required" },
+      })),
+    };
+
+    const result = await executeScannerSignalRendezvous(ctx as never, {
+      command: "createJoinToken",
+      parts: ["join-token"],
+      body: { sessionId: "browser-session", usageSessionId: "usage-session" },
+      origin: "https://example.test",
+      startedAt: Date.now(),
+      auth: {},
+    });
+
+    expect(result).toEqual({
+      statusCode: 401,
+      body: { error: "Authentication or anonymous trial credentials required" },
+    });
+    expect(ctx.runMutation).toHaveBeenCalledTimes(1);
+  });
+
+  test("embeds a session-bound guest cloud grant only for a signed-in Chrome owner", async () => {
+    const ctx = {
+      runMutation: vi.fn()
+        .mockResolvedValueOnce({
+          statusCode: 200,
+          body: { isAuthorized: true },
+          owner: { clerkUserId: "user-123" },
+        })
+        .mockResolvedValueOnce({
+          token: "abcdefghijklmnopqrstuvwxyzABCDEF",
+          sessionId: "browser-session",
+          expiresAt: "2026-07-22T21:00:00.000Z",
+        })
+        .mockResolvedValueOnce({
+          guestCloudGrant: "guest-cloud-secret",
+          expiresAt: 1_800_000_000_000,
+        }),
+    };
+
+    const result = await executeScannerSignalRendezvous(ctx as never, {
+      command: "createJoinToken",
+      parts: ["join-token"],
+      body: { sessionId: "browser-session", usageSessionId: "usage-session" },
+      origin: "https://example.test",
+      startedAt: Date.now(),
+      auth: { clerkUserId: "user-123", tokenIdentifier: "token-123" },
+    });
+
+    const qrCodeUrl = (result.body as { qrCodeUrl: string }).qrCodeUrl;
+    const url = new URL(qrCodeUrl);
+    expect(url.searchParams.get("guestCloudGrant")).toBe("guest-cloud-secret");
+    expect(url.searchParams.get("guestCloudExpiresAt")).toBe("1800000000000");
+    expect(ctx.runMutation).toHaveBeenCalledTimes(3);
   });
 });
 
@@ -260,7 +322,7 @@ describe("scanner signal Convex lifecycle", () => {
       browserClaim: "browser-secret",
       offer,
     });
-    expect(postedOffer.body.attempt.status).toBe("offer_posted");
+    expect(postedOffer.body.attempt?.status).toBe("offer_posted");
 
     const fetchedOffer = await t.mutation(internal.scannerSignal.joinAttempts.getJoinOffer, {
       token: created.token,
@@ -274,7 +336,7 @@ describe("scanner signal Convex lifecycle", () => {
       attemptId: "join_attempt_12345",
       answer,
     });
-    expect(postedAnswer.body.attempt.status).toBe("answer_posted");
+    expect(postedAnswer.body.attempt?.status).toBe("answer_posted");
 
     const fetchedAnswer = await t.mutation(internal.scannerSignal.joinAttempts.getJoinAnswer, {
       token: created.token,

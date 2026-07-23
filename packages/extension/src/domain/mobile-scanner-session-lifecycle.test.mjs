@@ -8,6 +8,7 @@ const joinWindow = {
   joinToken: "join-token-test",
   qrCodeUrl: "https://scanner.example.test/pair",
   expiresAt: "2026-06-20T12:00:00.000Z",
+  usageSessionId: "usage-session-test",
 };
 
 test("session lifecycle owns join window and peer status ordering", () => {
@@ -32,6 +33,7 @@ test("session lifecycle owns join window and peer status ordering", () => {
   assert.equal(states.at(-1).qrCodeUrl, joinWindow.qrCodeUrl);
   assert.equal(states.at(-1).joinWindowExpiresAt, joinWindow.expiresAt);
   assert.equal(lifecycle.getSessionId(), joinWindow.sessionId);
+  assert.equal(lifecycle.getUsageSessionId(), joinWindow.usageSessionId);
 
   connectedPeerCount = 1;
   lifecycle.peerConnected();
@@ -50,6 +52,10 @@ test("session lifecycle owns join window and peer status ordering", () => {
   assert.equal(states.at(-1).status, "disconnected");
   assert.equal(states.at(-1).connectedAt, null);
   assert.equal(states.at(-1).connectedPeerCount, 0);
+  assert.equal(states.at(-1).usageSessionId, joinWindow.usageSessionId);
+
+  lifecycle.disconnected();
+  assert.equal(states.at(-1).usageSessionId, undefined);
 });
 
 test("session lifecycle keeps waiting state when a peer closes during an active join window", () => {

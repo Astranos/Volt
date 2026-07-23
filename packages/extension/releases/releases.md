@@ -2,9 +2,9 @@
 
 ## Current Development Version
 
-### v1.0.51
+### v1.0.52
 
-The current manifest/package version is `1.0.51`.
+The current manifest/package version is `1.0.52`.
 
 Current release build command:
 
@@ -25,6 +25,18 @@ packages/extension/releases/
 ```
 
 ## Recent Release History
+
+### v1.0.52
+
+Release date: July 22, 2026
+
+Changes:
+
+- Added Clerk-backed production account access and server-authoritative subscription status.
+- Added the durable Cloud Scanner Workspace for account-wide result batches, enrolled devices, and enrolled Chrome computers.
+- Added private photo synchronization through short-lived Cloudflare R2 upload and download grants.
+- Added stable Chrome extension identity, background token refresh, push-assisted reconnects, and production Convex routing.
+- Added temporary App Clip guest cloud grants so successful WebRTC captures can also appear on the QR-issuing account workspace.
 
 ### v1.0.51
 

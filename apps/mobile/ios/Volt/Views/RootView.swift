@@ -3,7 +3,6 @@ import SwiftUI
 struct RootView: View {
     @Environment(ScannerStore.self) private var store
     @Environment(\.scenePhase) private var scenePhase
-    @AppStorage("volt.hasSeenWelcome.v1") private var hasSeenWelcome = false
     @State private var selectedTab = AppSection.scan
     @State private var isWelcomePresented = false
     @State private var opensPairingScannerAfterWelcome = false
@@ -13,10 +12,12 @@ struct RootView: View {
     @State private var connectionSheetStatus: PairingStatusSheetModel?
     @State private var connectionSheetDetent = RootView.connectionStatusDetent
     @State private var keepsConnectionSheetOpenForSessions = false
+    private let showsAccountSettings: Bool
 
     private static let connectionStatusDetent = PresentationDetent.height(164)
 
-    init() {
+    init(showsAccountSettings: Bool = true) {
+        self.showsAccountSettings = showsAccountSettings
         _selectedTab = State(initialValue: ScreenshotScenario.current?.initialSection ?? .scan)
     }
 
@@ -34,7 +35,7 @@ struct RootView: View {
                 .tabItem { Label("Dictate", systemImage: "mic") }
                 .tag(AppSection.dictation)
 
-            SettingsView()
+            SettingsView(showsAccountSettings: showsAccountSettings)
                 .tabItem { Label("Settings", systemImage: "gearshape") }
                 .tag(AppSection.settings)
         }
@@ -91,6 +92,7 @@ struct RootView: View {
         }
         .task {
             applySelectedTab(selectedTab)
+            store.cloudWorkspace.requestSync()
             if ScreenshotScenario.current == .sessions {
                 connectionSheetStatus = nil
                 connectionSheetDetent = .large
@@ -98,22 +100,17 @@ struct RootView: View {
                 return
             }
             guard !ScreenshotScenario.isEnabled else { return }
-            guard hasSeenWelcome else {
-                isWelcomePresented = true
-                return
-            }
             startAppServices()
         }
         .onChange(of: scenePhase) { _, newValue in
             store.updateAppIsInBackground(newValue != .active)
-            if newValue == .active && !ScreenshotScenario.isEnabled && hasSeenWelcome {
-                showSavedSessionPickerIfNeeded()
+            if newValue == .active && !ScreenshotScenario.isEnabled {
+                store.cloudWorkspace.requestSync()
             }
         }
     }
 
     private func completeWelcome(opensPairingScanner: Bool) {
-        hasSeenWelcome = true
         opensPairingScannerAfterWelcome = opensPairingScanner
         isWelcomePresented = false
 
@@ -121,9 +118,9 @@ struct RootView: View {
     }
 
     private func startAppServices() {
-        if !showSavedSessionPickerIfNeeded() {
-            showPairingSheet(for: store.connectionStatus)
-        }
+        // Capture is always available immediately. Pairing is an explicit,
+        // optional live-target action initiated from the capture UI.
+        store.cloudWorkspace.requestSync()
     }
 
     @discardableResult
@@ -285,32 +282,6 @@ enum AppSection: Hashable {
     case dictation
     case upload
     case settings
-}
-
-struct SettingsView: View {
-    @Environment(ScannerStore.self) private var store
-
-    var body: some View {
-        @Bindable var store = store
-
-        NavigationStack {
-            Form {
-                Section("Barcodes") {
-                    Picker("Recognized Codes", selection: $store.barcodeRecognitionMode) {
-                        ForEach(BarcodeRecognitionMode.allCases) { mode in
-                            Text(mode.title)
-                                .tag(mode)
-                        }
-                    }
-                    .pickerStyle(.navigationLink)
-                }
-            }
-            .navigationTitle("Settings")
-            .onAppear {
-                store.selectedSection = .settings
-            }
-        }
-    }
 }
 
 struct PairingStatusSheetModel: Identifiable, Equatable {

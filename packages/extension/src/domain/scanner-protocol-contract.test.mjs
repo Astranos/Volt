@@ -57,7 +57,7 @@ test("scanner protocol builds join-token URLs for full app pairing", () => {
   );
   assert.equal(
     buildScannerAppClipJoinUrl({ token, sessionId, signalUrl: "https://signal.example.test/api/signal" }),
-    `https://volt-scanner.vercel.app/clip?token=${token}&sessionId=${sessionId}&signalUrl=https%3A%2F%2Fsignal.example.test%2Fapi%2Fsignal`,
+    `https://volt.juanquenga.com/clip?token=${token}&sessionId=${sessionId}&signalUrl=https%3A%2F%2Fsignal.example.test%2Fapi%2Fsignal`,
   );
 });
 

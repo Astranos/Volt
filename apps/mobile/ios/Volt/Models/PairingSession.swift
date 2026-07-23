@@ -8,6 +8,8 @@ struct PairingSession: Equatable {
     var answerURL: URL?
     var label: String?
     var signalURL: URL?
+    var guestCloudGrant: String? = nil
+    var guestCloudExpiresAt: Date? = nil
     var sourceURL: URL
 
     var isPresent: Bool {

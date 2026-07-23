@@ -13,6 +13,8 @@ export type ScannerJoinUrlParts = {
   sessionId?: string;
   joinAttemptId?: string;
   label?: string;
+  guestCloudGrant?: string;
+  guestCloudExpiresAt?: number;
 };
 
 export function encodePairingPayload(description: ScannerSessionDescription): string {
@@ -45,6 +47,10 @@ export function buildScannerJoinUrl(parts: ScannerJoinUrlParts): string {
   if (parts.joinAttemptId) url.searchParams.set("joinAttemptId", parts.joinAttemptId);
   if (parts.signalUrl) url.searchParams.set("signalUrl", parts.signalUrl);
   if (parts.label) url.searchParams.set("label", parts.label);
+  if (parts.guestCloudGrant) url.searchParams.set("guestCloudGrant", parts.guestCloudGrant);
+  if (parts.guestCloudExpiresAt !== undefined) {
+    url.searchParams.set("guestCloudExpiresAt", String(parts.guestCloudExpiresAt));
+  }
   return url.toString();
 }
 
@@ -60,9 +66,15 @@ export function parseScannerJoinUrl(value: string): ScannerJoinUrlParts | null {
     const sessionId = url.searchParams.get("sessionId") ?? undefined;
     const joinAttemptId = url.searchParams.get("joinAttemptId") ?? undefined;
     const label = url.searchParams.get("label") ?? undefined;
+    const guestCloudGrant = url.searchParams.get("guestCloudGrant") ?? undefined;
+    const rawGuestCloudExpiresAt = url.searchParams.get("guestCloudExpiresAt");
+    const guestCloudExpiresAt = rawGuestCloudExpiresAt === null
+      ? undefined
+      : Number(rawGuestCloudExpiresAt);
     if (!isScannerJoinToken(token)) return null;
     if (sessionId !== undefined && !isScannerSessionId(sessionId)) return null;
     if (joinAttemptId !== undefined && !isScannerJoinAttemptId(joinAttemptId)) return null;
+    if (guestCloudExpiresAt !== undefined && !Number.isFinite(guestCloudExpiresAt)) return null;
     return {
       baseUrl: `${url.protocol}//${url.host}${url.pathname}`,
       signalUrl,
@@ -70,6 +82,8 @@ export function parseScannerJoinUrl(value: string): ScannerJoinUrlParts | null {
       sessionId,
       joinAttemptId,
       label,
+      ...(guestCloudGrant ? { guestCloudGrant } : {}),
+      ...(guestCloudExpiresAt !== undefined ? { guestCloudExpiresAt } : {}),
     };
   } catch (_error) {
     return null;

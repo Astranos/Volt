@@ -77,5 +77,15 @@
     <string>Light</string>
     <key>UIViewControllerBasedStatusBarAppearance</key>
     <false/>
+    <key>VoltAppStoreID</key>
+    <string>$(VOLT_APP_STORE_ID)</string>
+    <key>VoltClerkJWTTemplate</key>
+    <string>$(VOLT_CLERK_JWT_TEMPLATE)</string>
+    <key>VoltClerkPublishableKey</key>
+    <string>$(VOLT_CLERK_PUBLISHABLE_KEY)</string>
+    <key>VoltConvexSiteURL</key>
+    <string>$(VOLT_CONVEX_SITE_URL)</string>
+    <key>VoltStoreKitProductID</key>
+    <string>$(VOLT_STOREKIT_PRODUCT_ID)</string>
   </dict>
 </plist>

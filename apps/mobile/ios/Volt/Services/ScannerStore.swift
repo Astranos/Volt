@@ -54,11 +54,14 @@ final class ScannerStore {
 
     let camera = CameraModel()
     let dictation = DictationModel()
+    let cloudWorkspace: CloudWorkspaceStore
     let contributorId = ScannerProtocol.makeContributorId()
 
     static let disconnectedPairingHint = "Use the connect button in the top right to pair to Chrome."
 
-    init() {
+    init(cloudWorkspace: CloudWorkspaceStore = CloudWorkspaceStore()) {
+        self.cloudWorkspace = cloudWorkspace
+        self.results = cloudWorkspace.restoredResults
         loadPairedSessions()
         barcodeRecognitionMode = Self.savedBarcodeRecognitionMode()
         camera.updateBarcodeRecognitionMode(barcodeRecognitionMode)
@@ -120,6 +123,12 @@ final class ScannerStore {
     @ObservationIgnored let captureFailureImpactFeedback = UIImpactFeedbackGenerator(style: .heavy)
 
     func handleIncomingURL(_ url: URL) {
+        if let enrollment = EnrollmentURLParser.parse(url) {
+            Task { await cloudWorkspace.enroll(enrollment) }
+            selectedSection = .scan
+            statusText = "Enrolling this device"
+            return
+        }
         let parsed = PairingURLParser.parse(url)
         if let session = parsed.0 {
             beginFreshPairing(with: session)

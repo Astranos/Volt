@@ -14,6 +14,11 @@ const footerLinkGroups = [
     title: "Links",
     links: [
       ["Create Web Session", "/session"],
+      ["Privacy", "/privacy"],
+      [
+        "Terms of Use",
+        "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/",
+      ],
       ["Support", supportUrl],
       ["Repository", repositoryUrl],
       ["Donate", donateUrl],

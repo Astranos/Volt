@@ -2,6 +2,7 @@ import type {
   CaptureMode,
   ScannerConnectionStatus,
 } from "@volt/scanner-protocol";
+import { buildScannerAppClipJoinUrl } from "@volt/scanner-protocol";
 import {
   MobileScannerSession,
   type BarcodeMessage,
@@ -10,6 +11,7 @@ import {
   type PhotoMessage,
   type SessionTarget,
 } from "../domain/mobile-scanner-session";
+import { EXTENSION_SCANNER_SIGNAL_URL } from "../domain/mobile-scanner-signal-url";
 
 function serializeLogArg(arg: unknown) {
   if (arg instanceof Error) {
@@ -27,9 +29,30 @@ type ScannerState = {
   connectedPeerCount?: number;
   joinWindowExpiresAt?: string | null;
   sessionId?: string;
+  usageSessionId?: string;
   target?: SessionTarget | null;
   extensionIdentity?: ExtensionIdentity | null;
 };
+
+function objectFrom(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function accessErrorMessage(response: unknown) {
+  const record = objectFrom(response);
+  const status = objectFrom(record?.accessStatus);
+  if (status?.requiresSignIn === true) {
+    return "Your five free sessions are used. Sign in to continue.";
+  }
+  if (status?.requiresSubscription === true) {
+    return "A Volt Pro subscription is required. Subscribe in the full iPhone app.";
+  }
+  return typeof record?.error === "string"
+    ? record.error
+    : "Scanner access could not be verified.";
+}
 
 function normalizeCaptureMode(value: unknown): CaptureMode | null {
   return value === "ocr" || value === "barcode" || value === "dictation" || value === "photo"
@@ -63,6 +86,71 @@ class MobileScannerOffscreenSession {
       onState: (state) => this.handleWebRtcState(state),
       onScan: (scan) => this.sendScan(scan),
       onPhoto: (photo) => this.sendPhoto(photo),
+      createJoinWindow: async (input) => {
+        const response = await chrome.runtime.sendMessage({
+          action: "accessCreateJoinWindow",
+          ...input,
+        });
+        const responseRecord = objectFrom(response);
+        const value = objectFrom(responseRecord?.value);
+        if (responseRecord?.success !== true || !value) {
+          throw new Error(accessErrorMessage(response));
+        }
+        const joinToken =
+          typeof value.token === "string"
+            ? value.token
+            : typeof value.joinToken === "string"
+              ? value.joinToken
+              : "";
+        const sessionId =
+          typeof value.sessionId === "string" ? value.sessionId : input.sessionId;
+        const usageSessionId =
+          typeof value.usageSessionId === "string" ? value.usageSessionId : "";
+        if (!joinToken || !usageSessionId) {
+          throw new Error("Scanner access response omitted session credentials.");
+        }
+        const qrCodeUrl =
+          typeof value.qrCodeUrl === "string"
+            ? value.qrCodeUrl
+            : buildScannerAppClipJoinUrl({
+                token: joinToken,
+                sessionId,
+                label: input.deviceLabel,
+                signalUrl: EXTENSION_SCANNER_SIGNAL_URL,
+              });
+        return {
+          joinToken,
+          qrCodeUrl,
+          sessionId,
+          usageSessionId,
+          expiresAt:
+            typeof value.expiresAt === "string" ? value.expiresAt : undefined,
+        };
+      },
+      onSessionReady: async ({ joinToken, usageSessionId }) => {
+        const response = await chrome.runtime.sendMessage({
+          action: "accessSessionReady",
+          joinToken,
+          usageSessionId,
+        });
+        const record = objectFrom(response);
+        return record?.success === true
+          ? { allowed: true }
+          : { allowed: false, error: accessErrorMessage(response) };
+      },
+      onSessionDisconnected: async (usageSessionId) => {
+        await chrome.runtime
+          .sendMessage({
+            action: "accessSessionDisconnected",
+            usageSessionId,
+          })
+          .catch(() => undefined);
+      },
+      onSessionEnded: async (usageSessionId) => {
+        await chrome.runtime
+          .sendMessage({ action: "accessSessionEnded", usageSessionId })
+          .catch(() => undefined);
+      },
       log: (...args) => {
         console.warn(...args);
         void chrome.runtime.sendMessage({
@@ -87,6 +175,7 @@ class MobileScannerOffscreenSession {
       connectedPeerCount: state.connectedPeerCount,
       joinWindowExpiresAt: state.joinWindowExpiresAt,
       sessionId: state.sessionId,
+      usageSessionId: state.usageSessionId,
       target: state.target,
       extensionIdentity: state.extensionIdentity,
     });

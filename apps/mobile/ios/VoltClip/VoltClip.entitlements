@@ -4,8 +4,8 @@
 	<dict>
 		<key>com.apple.developer.associated-domains</key>
 		<array>
-			<string>appclips:volt-scanner.vercel.app</string>
-			<string>applinks:volt-scanner.vercel.app</string>
+			<string>appclips:volt.juanquenga.com</string>
+			<string>applinks:volt.juanquenga.com</string>
 		</array>
 		<key>com.apple.developer.parent-application-identifiers</key>
 	<array>

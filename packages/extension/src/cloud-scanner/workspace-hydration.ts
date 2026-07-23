@@ -1,0 +1,135 @@
+import {
+  deleteMobileScannerResults,
+  listMobileScannerResults,
+  saveMobileScannerPhoto,
+  saveMobileScannerScan,
+} from "../domain/mobile-scanner-results.ts";
+import type { CloudScannerResult, WorkspaceReplica } from "./workspace-types.ts";
+
+const CLOUD_ORIGINS_KEY = "volt.cloudScanner.resultOrigins.v1";
+
+type CloudOrigin = { workspaceId: string; batchId: string };
+type CloudOrigins = Record<string, CloudOrigin>;
+
+export function removeAppliedTombstoneOrigins(origins: CloudOrigins, ids: string[]) {
+  const next = { ...origins };
+  for (const id of ids) delete next[id];
+  return next;
+}
+
+function recordFrom(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+async function loadOrigins(): Promise<CloudOrigins> {
+  const stored = await chrome.storage.local.get(CLOUD_ORIGINS_KEY);
+  const record = recordFrom(stored[CLOUD_ORIGINS_KEY]) ?? {};
+  const origins: CloudOrigins = {};
+  for (const [id, value] of Object.entries(record)) {
+    const origin = recordFrom(value);
+    if (typeof origin?.workspaceId === "string" && typeof origin.batchId === "string") {
+      origins[id] = { workspaceId: origin.workspaceId, batchId: origin.batchId };
+    }
+  }
+  return origins;
+}
+
+export function planWorkspaceHydration(
+  replica: WorkspaceReplica,
+  existingIds: Set<string>,
+  cloudOriginIds: Set<string>,
+) {
+  const available: CloudScannerResult[] = [];
+  const deletedIds = Object.keys(replica.tombstones.results)
+    .filter((id) => cloudOriginIds.has(id));
+  for (const batch of replica.batches) {
+    for (const result of batch.results) {
+      if (!existingIds.has(result.id) && result.deliveryState === "available") available.push(result);
+    }
+  }
+  return { available, deletedIds };
+}
+
+async function photoBlob(result: CloudScannerResult) {
+  const response: unknown = await chrome.runtime.sendMessage({
+    action: "workspaceGetPhotoDownload",
+    batchId: result.batchId,
+    resultId: result.id,
+  });
+  const responseRecord = recordFrom(response);
+  const value = recordFrom(responseRecord?.value);
+  if (responseRecord?.success !== true || typeof value?.url !== "string") return null;
+  const headers = recordFrom(value.headers);
+  const download = await fetch(value.url, {
+    headers: headers
+      ? Object.fromEntries(Object.entries(headers).filter((entry): entry is [string, string] => typeof entry[1] === "string"))
+      : undefined,
+  });
+  return download.ok ? download.blob() : null;
+}
+
+function blobToDataUrl(blob: Blob) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error ?? new Error("Cloud photo read failed"));
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.readAsDataURL(blob);
+  });
+}
+
+export async function hydrateWorkspaceReplica(replica: WorkspaceReplica) {
+  const existing = await listMobileScannerResults();
+  let origins = await loadOrigins();
+  for (const batch of replica.batches) {
+    for (const result of batch.results) {
+      origins[result.id] = { workspaceId: replica.workspaceId, batchId: batch.id };
+    }
+  }
+  const workspaceOriginIds = new Set(
+    Object.entries(origins)
+      .filter(([, origin]) => origin.workspaceId === replica.workspaceId)
+      .map(([id]) => id),
+  );
+  const plan = planWorkspaceHydration(
+    replica,
+    new Set(existing.map((result) => result.id)),
+    workspaceOriginIds,
+  );
+  if (plan.deletedIds.length > 0) await deleteMobileScannerResults(plan.deletedIds);
+  origins = removeAppliedTombstoneOrigins(origins, plan.deletedIds);
+  for (const result of plan.available) {
+    if (result.kind === "photo") {
+      const blob = await photoBlob(result);
+      if (!blob) continue;
+      await saveMobileScannerPhoto({
+        id: result.id,
+        kind: "photo",
+        photoBatchId: result.batchId,
+        name: `${result.id}.jpg`,
+        mimeType: result.contentType ?? blob.type ?? "image/jpeg",
+        size: result.byteCount ?? blob.size,
+        capturedAt: result.capturedAt,
+        dataUrl: await blobToDataUrl(blob),
+      });
+    } else {
+      if (!result.value || result.format === "dictation") continue;
+      await saveMobileScannerScan({
+        id: result.id,
+        barcode: result.value,
+        format: result.format,
+        kind: result.kind,
+        scannedAt: result.capturedAt,
+      });
+    }
+    origins[result.id] = { workspaceId: replica.workspaceId, batchId: result.batchId };
+  }
+  await chrome.storage.local.set({ [CLOUD_ORIGINS_KEY]: origins });
+  return plan;
+}
+
+export async function cloudResultIds(ids: string[]) {
+  const origins = await loadOrigins();
+  return ids.filter((id) => origins[id] !== undefined);
+}

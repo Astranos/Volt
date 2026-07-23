@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Calculator, CheckCircle2, Loader2, Pencil, PlusCircle, Settings, Smartphone, X } from "lucide-react";
+import { Calculator, CheckCircle2, Cloud, Loader2, Pencil, PlusCircle, Settings, Smartphone, Unplug, X } from "lucide-react";
 import QRCode from "qrcode";
 import type { ScannerConnectionStatus } from "@volt/scanner-protocol";
 import {
@@ -13,6 +13,10 @@ import {
   saveMobileScannerSessionLabel,
   type ExtensionIdentity,
 } from "../../src/domain/mobile-scanner-session";
+import {
+  ExtensionAccessPanel,
+  ExtensionClerkProvider,
+} from "../../src/components/access/ExtensionAccess";
 import "../sidepanel/sidepanel.css";
 import "./mobile-scanner-popup.css";
 
@@ -42,6 +46,12 @@ function normalizeMode(value: string | null): MobileCaptureMode | null {
     : null;
 }
 
+function recordFrom(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
 function isJoinWindowActive(state?: Pick<MobileScannerState, "qrCodeUrl" | "joinWindowExpiresAt"> | null) {
   if (!state?.qrCodeUrl) return false;
   if (!state.joinWindowExpiresAt) return true;
@@ -63,6 +73,9 @@ function MobileScannerPopup() {
   const [sessionLabel, setSessionLabel] = useState("");
   const [identityLoaded, setIdentityLoaded] = useState(false);
   const [labelSaved, setLabelSaved] = useState(false);
+  const [enrollmentQrDataUrl, setEnrollmentQrDataUrl] = useState<string | null>(null);
+  const [enrollmentError, setEnrollmentError] = useState<string | null>(null);
+  const [creatingEnrollment, setCreatingEnrollment] = useState(false);
 
   const applyScannerState = useCallback((nextState: Partial<MobileScannerState> | null | undefined) => {
     if (!nextState) return;
@@ -157,9 +170,14 @@ function MobileScannerPopup() {
   }, [ensureJoinWindow, refreshState]);
 
   useEffect(() => {
-    const listener = (message: any) => {
-      if (message?.action !== "scannerStateChanged") return;
-      applyScannerState(message.state);
+    const listener = (message: unknown) => {
+      if (!message || typeof message !== "object") return;
+      const event = message as {
+        action?: unknown;
+        state?: Partial<MobileScannerState>;
+      };
+      if (event.action !== "scannerStateChanged") return;
+      applyScannerState(event.state);
     };
     chrome.runtime.onMessage.addListener(listener);
     return () => chrome.runtime.onMessage.removeListener(listener);
@@ -237,6 +255,40 @@ function MobileScannerPopup() {
     window.close();
   }, []);
 
+  const disconnect = useCallback(async () => {
+    const response = await chrome.runtime.sendMessage({
+      action: "scannerDisconnect",
+    });
+    applyScannerState(response?.state);
+  }, [applyScannerState]);
+
+  const createFullAppEnrollment = useCallback(async () => {
+    setCreatingEnrollment(true);
+    setEnrollmentError(null);
+    try {
+      const response: unknown = await chrome.runtime.sendMessage({
+        action: "workspaceCreateEnrollment",
+        label: sessionLabel || "Volt for iPhone",
+      });
+      const responseRecord = recordFrom(response);
+      const value = recordFrom(responseRecord?.value);
+      if (responseRecord?.success !== true || typeof value?.enrollmentUrl !== "string") {
+        throw new Error(typeof responseRecord?.error === "string" ? responseRecord.error : "Could not create enrollment QR.");
+      }
+      const qr = await QRCode.toDataURL(value.enrollmentUrl, {
+        width: 768,
+        margin: 3,
+        errorCorrectionLevel: "H",
+        color: { dark: "#1c1917", light: "#ffffff" },
+      });
+      setEnrollmentQrDataUrl(qr);
+    } catch (error) {
+      setEnrollmentError(error instanceof Error ? error.message : "Could not create enrollment QR.");
+    } finally {
+      setCreatingEnrollment(false);
+    }
+  }, [sessionLabel]);
+
   const title = "Mobile Scanner";
   const connectedCount = state.connectedPeerCount ?? 0;
   const subtitle = state.status === "connected"
@@ -267,6 +319,8 @@ function MobileScannerPopup() {
           Scanner Results
         </PrimaryActionButton>
       </footer>
+
+      <ExtensionAccessPanel surface="popup" />
 
       <section className="popup-hero">
         <div className="popup-title-row">
@@ -334,6 +388,14 @@ function MobileScannerPopup() {
               <PlusCircle className="h-4 w-4" />
               Pair another phone
             </button>
+            <button
+              type="button"
+              className="popup-disconnect-button"
+              onClick={() => void disconnect()}
+            >
+              <Unplug className="h-4 w-4" />
+              End work session
+            </button>
           </div>
         ) : (
           <div className="popup-message">
@@ -349,6 +411,46 @@ function MobileScannerPopup() {
           </div>
         )}
       </main>
+
+      <button
+        type="button"
+        className="popup-enrollment-trigger"
+        onClick={() => void createFullAppEnrollment()}
+        disabled={creatingEnrollment}
+      >
+        {creatingEnrollment ? <Loader2 className="h-4 w-4 animate-spin" /> : <Cloud className="h-4 w-4" />}
+        Enroll full app for cloud sync
+      </button>
+
+      {enrollmentQrDataUrl || enrollmentError ? (
+        <div className="popup-enrollment-overlay" role="dialog" aria-modal="true" aria-label="Enroll full Volt app">
+          <div className="popup-enrollment-card">
+            <button
+              type="button"
+              className="popup-enrollment-close"
+              onClick={() => {
+                setEnrollmentQrDataUrl(null);
+                setEnrollmentError(null);
+              }}
+              aria-label="Close enrollment QR"
+            >
+              <X className="h-4 w-4" />
+            </button>
+            <Cloud className="h-6 w-6" />
+            <h2>Enroll full app</h2>
+            {enrollmentQrDataUrl ? (
+              <>
+                <div className="popup-enrollment-qr-frame">
+                  <img src={enrollmentQrDataUrl} alt="One-time QR to enroll Volt for iPhone" />
+                </div>
+                <p>Scan in the full Volt app once. This QR contains a short-lived enrollment code, never your account token.</p>
+              </>
+            ) : (
+              <p className="popup-enrollment-error">{enrollmentError}</p>
+            )}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -373,4 +475,8 @@ if (!container) {
   throw new Error("Mobile scanner popup root element not found");
 }
 
-createRoot(container).render(<MobileScannerPopup />);
+createRoot(container).render(
+  <ExtensionClerkProvider>
+    <MobileScannerPopup />
+  </ExtensionClerkProvider>,
+);

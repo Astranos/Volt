@@ -27,6 +27,7 @@ export type JoinWindow = {
   joinToken: string;
   qrCodeUrl: string;
   sessionId: string;
+  usageSessionId?: string;
 };
 
 export type NormalizedJoinAttempt = {

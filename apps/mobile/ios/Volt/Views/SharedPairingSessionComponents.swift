@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct PairingSessionSetupContent: View {
-    private let webScannerURLText = "volt-scanner.vercel.app/clip"
+    private let webScannerURLText = "volt.juanquenga.com/clip"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {

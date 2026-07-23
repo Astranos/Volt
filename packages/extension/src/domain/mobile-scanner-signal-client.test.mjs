@@ -88,7 +88,7 @@ test("createJoinWindow fallback QR includes the signal URL that minted the token
     const window = await client.createJoinWindow({ sessionId, deviceLabel: "Chrome Dev" });
     const url = new URL(window.qrCodeUrl);
 
-    assert.equal(url.origin, "https://volt-scanner.vercel.app");
+    assert.equal(url.origin, "https://volt.juanquenga.com");
     assert.equal(url.pathname, "/clip");
     assert.equal(url.searchParams.get("token"), token);
     assert.equal(url.searchParams.get("sessionId"), sessionId);

@@ -1,5 +1,6 @@
 import { createRoot } from "react-dom/client";
 import UnifiedSidepanel from "../../src/components/sidepanel/UnifiedSidepanel";
+import { ExtensionClerkProvider } from "../../src/components/access/ExtensionAccess";
 import "./sidepanel.css";
 
 /**
@@ -19,7 +20,11 @@ const initSidepanel = () => {
   }
 
   const root = createRoot(container);
-  root.render(<UnifiedSidepanel />);
+  root.render(
+    <ExtensionClerkProvider>
+      <UnifiedSidepanel />
+    </ExtensionClerkProvider>,
+  );
 };
 
 // Try to initialize immediately

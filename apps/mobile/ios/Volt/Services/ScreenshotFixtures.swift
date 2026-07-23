@@ -1,4 +1,5 @@
 import UIKit
+import SwiftUI
 
 enum ScreenshotScenario: String {
     case sessions
@@ -31,6 +32,45 @@ enum ScreenshotScenario: String {
         case .upload:
             .upload
         }
+    }
+}
+
+struct SubscriptionReviewScreenshotView: View {
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Account") {
+                    LabeledContent("Signed in as", value: "appreview@volt.app")
+                    LabeledContent("Workspace", value: "Personal")
+                }
+
+                Section("Volt Pro") {
+                    Label("Sync scanner results and private photos across Volt on iPhone and Chrome.", systemImage: "icloud.fill")
+                        .foregroundStyle(.secondary)
+
+                    Button(action: {}) {
+                        Label("Subscribe for $9.00 per month", systemImage: "bolt.fill")
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                    }
+                    .buttonStyle(.borderedProminent)
+
+                    Button("Restore Purchases", systemImage: "arrow.clockwise", action: {})
+                        .frame(maxWidth: .infinity, minHeight: 44)
+
+                    Text("One-month auto-renewable subscription. Payment is charged to your Apple Account and renews unless canceled at least 24 hours before the current period ends. Manage or cancel in App Store account settings.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+
+                    HStack(spacing: 16) {
+                        Link("Privacy Policy", destination: AppConfiguration.privacyPolicyURL)
+                        Link("Terms of Use", destination: AppConfiguration.termsOfUseURL)
+                    }
+                    .font(.footnote.weight(.semibold))
+                }
+            }
+            .navigationTitle("Volt Access")
+        }
+        .tint(.green)
     }
 }
 

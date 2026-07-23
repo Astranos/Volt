@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { FolderOpen } from "lucide-react";
 import {
   saveMobileScannerPhoto,
@@ -24,6 +24,8 @@ import {
   resolveTimelineMessage,
   upsertTimelineEntry,
 } from "../../domain/mobile-scanner-timeline";
+import { cloudResultIds, hydrateWorkspaceReplica } from "../../cloud-scanner/workspace-hydration";
+import type { WorkspaceReplica } from "../../cloud-scanner/workspace-types";
 
 /*
  * Source-contract breadcrumbs for scanner domain tests. Implementations live in:
@@ -46,6 +48,8 @@ interface MobileScannerProps {
 export default function MobileScanner({ onClose: _onClose }: MobileScannerProps) {
   const [previewPhoto, setPreviewPhoto] = useState<MobilePhoto | null>(null);
   const [now, setNow] = useState(Date.now());
+  const cloudSyncRunning = useRef(false);
+  const lastCloudDeletedIds = useRef<string[]>([]);
 
   const flashFeedback = useCallback(
     (message: string, tone: SidepanelToastTone = "success") => {
@@ -115,6 +119,55 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
     [flashFeedback],
   );
 
+  const syncCloudWorkspace = useCallback(async () => {
+    if (cloudSyncRunning.current) return;
+    cloudSyncRunning.current = true;
+    try {
+      const response: unknown = await chrome.runtime.sendMessage({ action: "workspaceGetSnapshot" });
+      if (!response || typeof response !== "object" || Array.isArray(response)) return;
+      const value = (response as { success?: unknown; value?: unknown });
+      if (value.success !== true || !value.value || typeof value.value !== "object" || Array.isArray(value.value)) return;
+      const replica = value.value as Partial<WorkspaceReplica>;
+      if (typeof replica.workspaceId !== "string" || !Array.isArray(replica.batches) || !replica.tombstones) return;
+      await hydrateWorkspaceReplica(replica as WorkspaceReplica);
+      await refreshResults();
+    } finally {
+      cloudSyncRunning.current = false;
+    }
+  }, [refreshResults]);
+
+  const deleteSyncedResults = useCallback(async (ids: string[], label: string) => {
+    const cloudIds = await cloudResultIds(ids);
+    if (cloudIds.length > 0) {
+      const response: unknown = await chrome.runtime.sendMessage({
+        action: "workspaceDeleteResults",
+        resultIds: cloudIds,
+      });
+      if (!response || typeof response !== "object" || (response as { success?: unknown }).success !== true) {
+        flashFeedback("Could not delete cloud results", "error");
+        return;
+      }
+    }
+    lastCloudDeletedIds.current = cloudIds;
+    deleteResults(ids, label);
+  }, [deleteResults, flashFeedback]);
+
+  const undoSyncedDelete = useCallback(async () => {
+    const cloudIds = lastCloudDeletedIds.current;
+    if (cloudIds.length > 0) {
+      const response: unknown = await chrome.runtime.sendMessage({
+        action: "workspaceRestoreResults",
+        resultIds: cloudIds,
+      });
+      if (!response || typeof response !== "object" || (response as { success?: unknown }).success !== true) {
+        flashFeedback("Could not restore cloud results", "error");
+        return;
+      }
+    }
+    lastCloudDeletedIds.current = [];
+    await undoDelete();
+  }, [flashFeedback, undoDelete]);
+
   useEffect(() => {
     const interval = window.setInterval(() => setNow(Date.now()), 30000);
     return () => window.clearInterval(interval);
@@ -123,7 +176,12 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
   useEffect(() => {
     void refreshResults();
     void primeCursorTarget();
-  }, [primeCursorTarget, refreshResults]);
+    void syncCloudWorkspace().catch(() => undefined);
+    const interval = window.setInterval(() => {
+      void syncCloudWorkspace().catch(() => undefined);
+    }, 10_000);
+    return () => window.clearInterval(interval);
+  }, [primeCursorTarget, refreshResults, syncCloudWorkspace]);
 
   useEffect(() => {
     const prepareActiveTab = () => {
@@ -214,8 +272,8 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
                   selectedPhotoIds={selectedPhotoIds}
                   onToggleCollapse={() => toggleBatchExpansion(group.key)}
                   onOpenBatchFolder={() => openBatchDownloadsFolder(group.entries)}
-                  onDeleteBatch={() => deleteResults(group.entries.map((entry) => entry.id), "Photo batch deleted")}
-                  onDeletePhoto={(photoId) => deleteResults([photoId], "Photo deleted")}
+                  onDeleteBatch={() => void deleteSyncedResults(group.entries.map((entry) => entry.id), "Photo batch deleted")}
+                  onDeletePhoto={(photoId) => void deleteSyncedResults([photoId], "Photo deleted")}
                   onCopyPhoto={copyPhoto}
                   onDownloadPhoto={downloadPhoto}
                   onPreviewPhoto={setPreviewPhoto}
@@ -232,7 +290,7 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
                   now={now}
                   removing={removingIds.has(group.key)}
                   onCopy={() => copyScan(group.entries[0])}
-                  onDelete={() => deleteResults([group.key], "Result deleted")}
+                  onDelete={() => void deleteSyncedResults([group.key], "Result deleted")}
                 />
               ),
             )
@@ -241,7 +299,7 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
       </ScrollArea>
 
       {deletedSnapshot ? (
-        <UndoDeleteToast label={deletedSnapshot.label} onUndo={undoDelete} />
+        <UndoDeleteToast label={deletedSnapshot.label} onUndo={undoSyncedDelete} />
       ) : null}
 
       {previewPhoto ? (

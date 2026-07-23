@@ -136,7 +136,7 @@ test("join attempt poller retries offer creation when posting the first offer fa
   });
 
   poller.start(joinWindow);
-  await new Promise((resolve) => setTimeout(resolve, 50));
+  await waitFor(() => offerAttempts === 2);
   activeJoinWindow = null;
   poller.clear();
 
@@ -324,4 +324,12 @@ test("reconnect poller skips invalid session ids before fetching pairings", asyn
 
 function waitForPoll() {
   return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+async function waitFor(condition, timeoutMs = 500) {
+  const deadline = Date.now() + timeoutMs;
+  while (!condition()) {
+    if (Date.now() >= deadline) throw new Error("Timed out waiting for test condition");
+    await new Promise((resolve) => setTimeout(resolve, 1));
+  }
 }

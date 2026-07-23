@@ -34,6 +34,19 @@ export type SessionTarget = {
   cursor?: string;
 };
 
+export type UsageJoinWindow = {
+  expiresAt?: string;
+  joinToken: string;
+  qrCodeUrl: string;
+  sessionId: string;
+  usageSessionId?: string;
+};
+
+export type SessionReadyAccessDecision = {
+  allowed: boolean;
+  error?: string;
+};
+
 export type MobileScannerSessionState = {
   status: ScannerConnectionStatus;
   qrCodeUrl: string | null;
@@ -42,6 +55,7 @@ export type MobileScannerSessionState = {
   connectedPeerCount: number;
   joinWindowExpiresAt: string | null;
   sessionId: string;
+  usageSessionId?: string;
   target: SessionTarget | null;
   extensionIdentity: ExtensionIdentity | null;
 };
@@ -51,6 +65,19 @@ export type MobileScannerSessionEvents = {
   onScan: (message: BarcodeMessage) => Promise<boolean | { saved: boolean; insertedIntoCursor?: boolean }> | boolean | { saved: boolean; insertedIntoCursor?: boolean };
   onPhoto: (message: PhotoMessage) => Promise<boolean | BrowserPhotoDeliveryReceipt> | boolean | BrowserPhotoDeliveryReceipt;
   onInsert?: (text: string, message: BarcodeMessage) => Promise<boolean> | boolean;
+  createJoinWindow?: (input: {
+    sessionId: string;
+    ttlMs: number;
+    target?: SessionTarget | null;
+    deviceLabel?: string;
+    capabilities: string[];
+  }) => Promise<UsageJoinWindow>;
+  onSessionReady?: (input: {
+    joinToken: string;
+    usageSessionId: string;
+  }) => Promise<SessionReadyAccessDecision>;
+  onSessionDisconnected?: (usageSessionId: string) => Promise<void> | void;
+  onSessionEnded?: (usageSessionId: string) => Promise<void> | void;
   log?: (...args: unknown[]) => void;
 };
 

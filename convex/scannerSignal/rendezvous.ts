@@ -1,6 +1,8 @@
 import { internal } from "../_generated/api";
 import type { ActionCtx } from "../_generated/server";
+import { makeFunctionReference } from "convex/server";
 import { buildScannerAppClipJoinUrl } from "@volt/scanner-protocol";
+import type { ClerkAuthContext, AccessStatus } from "../access";
 import {
   makeSecretId,
   normalizePushSubscription,
@@ -31,7 +33,49 @@ export type ScannerSignalRendezvousRequest = {
   browserClaim?: string;
   pairingSecret?: string;
   pendingReconnectBrowserSessionId?: string;
+  auth: ClerkAuthContext;
+  anonymousId?: string;
+  anonymousSecret?: string;
 };
+
+type AccessMutationArgs = ClerkAuthContext & {
+  anonymousId?: string;
+  anonymousSecret?: string;
+};
+
+type JoinAuthorizationArgs = AccessMutationArgs & { usageSessionId: string };
+
+type AccessMutationResult = {
+  statusCode: number;
+  body: AccessStatus | { error: string } | Record<string, unknown>;
+  owner?: { clerkUserId?: string; anonymousId?: string };
+};
+
+const authorizeJoinToken = makeFunctionReference<
+  "mutation",
+  JoinAuthorizationArgs,
+  AccessMutationResult
+>("access:authorizeJoinToken");
+
+const sessionReady = makeFunctionReference<
+  "mutation",
+  AccessMutationArgs & { token: string; usageSessionId?: string },
+  AccessMutationResult
+>("access:sessionReadyForHttp");
+
+const createGuestGrant = makeFunctionReference<
+  "mutation",
+  { clerkUserId: string; joinToken: string; usageSessionId: string },
+  { guestCloudGrant: string; expiresAt: number }
+>("cloudWorkspace:createGuestGrant");
+
+function accessArgs(request: ScannerSignalRendezvousRequest): AccessMutationArgs {
+  return {
+    ...request.auth,
+    ...(request.anonymousId ? { anonymousId: request.anonymousId } : {}),
+    ...(request.anonymousSecret ? { anonymousSecret: request.anonymousSecret } : {}),
+  };
+}
 
 function scannerSignalResult(body: unknown, statusCode = 200): ScannerSignalRendezvousResult {
   return { statusCode, body };
@@ -90,6 +134,13 @@ export async function executeScannerSignalRendezvous(
   const { command, parts, body, origin } = request;
 
   if (command === "createJoinToken") {
+    const usageSessionId = stringFrom(body.usageSessionId, 120);
+    if (!usageSessionId) return missingField("Missing usageSessionId");
+    const authorization = await ctx.runMutation(authorizeJoinToken, {
+      ...accessArgs(request),
+      usageSessionId,
+    });
+    if (authorization.statusCode !== 200) return authorization;
     const sessionId = stringFrom(body.sessionId, 120) ?? makeSecretId(12);
     const token = makeSecretId();
     const deviceLabel = stringFrom(body.deviceLabel, 120);
@@ -100,7 +151,17 @@ export async function executeScannerSignalRendezvous(
       ttlMs: numberFrom(body.ttlMs),
       graceMs: numberFrom(body.graceMs),
       origin,
+      usageSessionId,
+      anonymousId: authorization.owner?.anonymousId,
+      clerkUserId: authorization.owner?.clerkUserId,
     });
+    const guestCloud = authorization.owner?.clerkUserId
+      ? await ctx.runMutation(createGuestGrant, {
+          clerkUserId: authorization.owner.clerkUserId,
+          joinToken: response.token,
+          usageSessionId,
+        })
+      : undefined;
     return scannerSignalResult({
       ...response,
       qrCodeUrl: buildScannerAppClipJoinUrl({
@@ -108,12 +169,21 @@ export async function executeScannerSignalRendezvous(
         sessionId: response.sessionId,
         label: deviceLabel,
         signalUrl: `${origin}/api/signal`,
+        guestCloudGrant: guestCloud?.guestCloudGrant,
+        guestCloudExpiresAt: guestCloud?.expiresAt,
       }),
     });
   }
 
   if (parts[0] === "join-token" && parts.length >= 2) {
     const token = parts[1];
+    if (command === "sessionReady") {
+      return ctx.runMutation(sessionReady, {
+        ...accessArgs(request),
+        token,
+        usageSessionId: stringFrom(body.usageSessionId, 120),
+      });
+    }
     if (command === "getJoinTokenStatus") {
       return ctx.runMutation(internal.scannerSignal.joinTokens.getJoinTokenStatus, { token });
     }

@@ -12,6 +12,8 @@ export default defineConfig({
   outDir: ".output", // Base output directory
   outDirTemplate: "volt", // Custom output directory name (removes browser/manifest folder nesting)
   manifest: {
+    // Stable public key => stable extension ID for Clerk's allowed origin.
+    key: process.env.WXT_EXTENSION_PUBLIC_KEY || undefined,
     content_scripts: [
       {
         matches: ["<all_urls>"],
@@ -47,7 +49,7 @@ export default defineConfig({
       },
     ],
     name: "Volt",
-    version: "1.0.51",
+    version: "1.0.52",
     description:
       "A versatile Chrome extension with command palette, mobile scanner pairing, and multi-provider search capabilities.",
     permissions: [
@@ -132,4 +134,4 @@ export default defineConfig({
       newtab: "newtab.html",
     },
   },
-} as any);
+});

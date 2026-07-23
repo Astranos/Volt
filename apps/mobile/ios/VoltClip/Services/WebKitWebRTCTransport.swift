@@ -9,6 +9,7 @@ final class WebKitWebRTCTransport: NSObject {
     var onTranscript: ((String, Bool) -> Void)?
     var onClosed: (() -> Void)?
     var onError: ((String) -> Void)?
+    var onProtocolError: ((ScannerProtocol.ProtocolError) -> Void)?
 
     private let signaling = ScannerSignalingClient()
     private var webView: WKWebView?
@@ -312,6 +313,7 @@ final class WebKitWebRTCTransport: NSObject {
             return
         }
         if let protocolError = ScannerProtocol.parseProtocolError(rawValue) {
+            onProtocolError?(protocolError)
             onError?(protocolError.detail ?? "Chrome reported \(protocolError.code).")
         }
     }

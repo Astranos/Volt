@@ -2,6 +2,7 @@ import type { SignalRouteCommand } from "./routeCommands";
 
 export type ScannerSignalEventName =
   | "join_token_created"
+  | "usage_session_ready"
   | "join_attempt_created"
   | "offer_posted"
   | "answer_posted"
@@ -42,6 +43,8 @@ export function scannerSignalRouteTemplate(command: SignalRouteCommand) {
   switch (command) {
     case "createJoinToken":
       return "/api/signal/join-token";
+    case "sessionReady":
+      return "/api/signal/join-token/:token/session-ready";
     case "getJoinTokenStatus":
       return "/api/signal/join-token/:token";
     case "revokeJoinToken":
@@ -83,6 +86,8 @@ export function scannerSignalEventForCommand(command: SignalRouteCommand): Scann
   switch (command) {
     case "createJoinToken":
       return "join_token_created";
+    case "sessionReady":
+      return "usage_session_ready";
     case "createJoinAttempt":
       return "join_attempt_created";
     case "postJoinOffer":

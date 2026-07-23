@@ -1,5 +1,6 @@
 export type SignalRouteCommand =
   | "createJoinToken"
+  | "sessionReady"
   | "getJoinTokenStatus"
   | "revokeJoinToken"
   | "rotateJoinToken"
@@ -22,6 +23,7 @@ export function signalRouteCommand(method: string, parts: string[]): SignalRoute
   if (method === "POST" && parts.length === 1 && parts[0] === "join-token") return "createJoinToken";
 
   if (parts[0] === "join-token" && parts.length >= 2) {
+    if (method === "POST" && parts[2] === "session-ready" && parts.length === 3) return "sessionReady";
     if (method === "GET" && parts.length === 2) return "getJoinTokenStatus";
     if (method === "POST" && parts[2] === "revoke" && parts.length === 3) return "revokeJoinToken";
     if (method === "POST" && parts[2] === "rotate" && parts.length === 3) return "rotateJoinToken";

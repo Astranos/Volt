@@ -36,5 +36,7 @@
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 	</array>
+	<key>VoltAppStoreID</key>
+	<string>$(VOLT_APP_STORE_ID)</string>
 </dict>
 </plist>

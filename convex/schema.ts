@@ -11,6 +11,207 @@ const pushSubscription = v.object({
 });
 
 export default defineSchema({
+  workspaces: defineTable({
+    ownerClerkUserId: v.string(),
+    name: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_ownerClerkUserId", ["ownerClerkUserId"]),
+
+  workspaceEnrollments: defineTable({
+    workspaceId: v.id("workspaces"),
+    createdByClerkUserId: v.string(),
+    codeHash: v.string(),
+    deviceKind: v.union(v.literal("ios"), v.literal("chrome")),
+    label: v.string(),
+    expiresAt: v.number(),
+    consumedAt: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index("by_codeHash", ["codeHash"])
+    .index("by_workspaceId", ["workspaceId"]),
+
+  workspaceGuestGrants: defineTable({
+    workspaceId: v.id("workspaces"),
+    scannerJoinTokenId: v.id("scannerJoinTokens"),
+    usageSessionId: v.string(),
+    createdByClerkUserId: v.string(),
+    grantHash: v.string(),
+    sourceDeviceId: v.string(),
+    createdAt: v.number(),
+    expiresAt: v.number(),
+    lastUsedAt: v.optional(v.number()),
+    revokedAt: v.optional(v.number()),
+  })
+    .index("by_grantHash", ["grantHash"])
+    .index("by_usageSessionId", ["usageSessionId"])
+    .index("by_expiresAt", ["expiresAt"]),
+
+  workspaceDevices: defineTable({
+    workspaceId: v.id("workspaces"),
+    deviceId: v.string(),
+    credentialHash: v.string(),
+    kind: v.union(v.literal("ios"), v.literal("chrome")),
+    label: v.string(),
+    createdAt: v.number(),
+    lastSeenAt: v.number(),
+    revokedAt: v.optional(v.number()),
+  })
+    .index("by_deviceId", ["deviceId"])
+    .index("by_workspaceId", ["workspaceId"]),
+
+  workspacePresence: defineTable({
+    workspaceId: v.id("workspaces"),
+    deviceId: v.string(),
+    state: v.union(v.literal("online"), v.literal("offline")),
+    capabilities: v.array(v.string()),
+    lastSeenAt: v.number(),
+    expiresAt: v.number(),
+  })
+    .index("by_deviceId", ["deviceId"])
+    .index("by_workspaceId", ["workspaceId"]),
+
+  resultBatches: defineTable({
+    workspaceId: v.id("workspaces"),
+    batchId: v.string(),
+    sourceDeviceId: v.string(),
+    clientCreatedAt: v.number(),
+    status: v.union(v.literal("uploading"), v.literal("ready"), v.literal("deleted")),
+    resultCount: v.number(),
+    byteCount: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_workspaceId", ["workspaceId"])
+    .index("by_workspaceId_and_batchId", ["workspaceId", "batchId"]),
+
+  scanResults: defineTable({
+    workspaceId: v.id("workspaces"),
+    batchId: v.string(),
+    resultId: v.string(),
+    sourceDeviceId: v.string(),
+    kind: v.union(v.literal("text"), v.literal("barcode"), v.literal("photo"), v.literal("dictation")),
+    text: v.optional(v.string()),
+    format: v.optional(v.string()),
+    objectKey: v.optional(v.string()),
+    contentType: v.optional(v.string()),
+    byteCount: v.number(),
+    checksum: v.optional(v.string()),
+    deletedAt: v.optional(v.number()),
+    clientCreatedAt: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_workspaceId_and_batchId", ["workspaceId", "batchId"])
+    .index("by_workspaceId_and_resultId", ["workspaceId", "resultId"]),
+
+  resultDeliveries: defineTable({
+    workspaceId: v.id("workspaces"),
+    batchId: v.string(),
+    targetDeviceId: v.string(),
+    state: v.union(v.literal("pending"), v.literal("delivered"), v.literal("failed")),
+    attempts: v.number(),
+    lastAttemptAt: v.optional(v.number()),
+    deliveredAt: v.optional(v.number()),
+    errorCode: v.optional(v.string()),
+    updatedAt: v.number(),
+  })
+    .index("by_workspaceId_and_batchId", ["workspaceId", "batchId"])
+    .index("by_targetDeviceId", ["targetDeviceId"]),
+
+  users: defineTable({
+    clerkUserId: v.string(),
+    tokenIdentifier: v.string(),
+    appAccountToken: v.string(),
+    email: v.optional(v.string()),
+    name: v.optional(v.string()),
+    freeSessionsConsumed: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_clerkUserId", ["clerkUserId"])
+    .index("by_appAccountToken", ["appAccountToken"]),
+
+  anonymousTrialGrants: defineTable({
+    anonymousId: v.string(),
+    credentialHash: v.string(),
+    freeSessionLimit: v.number(),
+    sessionsConsumed: v.number(),
+    claimedByClerkUserId: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_anonymousId", ["anonymousId"]),
+
+  entitlements: defineTable({
+    clerkUserId: v.string(),
+    kind: v.union(v.literal("storekit"), v.literal("manual")),
+    sourceIdentifier: v.string(),
+    productId: v.string(),
+    status: v.union(v.literal("active"), v.literal("expired"), v.literal("revoked")),
+    validFrom: v.number(),
+    expiresAt: v.optional(v.number()),
+    updatedAt: v.number(),
+  })
+    .index("by_clerkUserId", ["clerkUserId"])
+    .index("by_clerkUserId_and_sourceIdentifier", ["clerkUserId", "sourceIdentifier"]),
+
+  organizationEntitlements: defineTable({
+    clerkOrganizationId: v.string(),
+    displayName: v.optional(v.string()),
+    status: v.union(v.literal("active"), v.literal("inactive")),
+    source: v.literal("complimentary"),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_clerkOrganizationId", ["clerkOrganizationId"]),
+
+  usageSessions: defineTable({
+    usageSessionId: v.string(),
+    browserSessionId: v.optional(v.string()),
+    ownerType: v.union(v.literal("anonymous"), v.literal("user")),
+    anonymousId: v.optional(v.string()),
+    clerkUserId: v.optional(v.string()),
+    accessSource: v.union(v.literal("trial"), v.literal("complimentary"), v.literal("subscription")),
+    startedAt: v.number(),
+    lastConnectedAt: v.number(),
+    disconnectedAt: v.optional(v.number()),
+    endedAt: v.optional(v.number()),
+    endedReason: v.optional(
+      v.union(v.literal("explicit_disconnect"), v.literal("disconnected_timeout"), v.literal("max_duration")),
+    ),
+    consumedAt: v.number(),
+  })
+    .index("by_usageSessionId", ["usageSessionId"])
+    .index("by_anonymousId", ["anonymousId"])
+    .index("by_clerkUserId", ["clerkUserId"])
+    .index("by_disconnectedAt", ["disconnectedAt"])
+    .index("by_endedAt", ["endedAt"]),
+
+  storeKitTransactions: defineTable({
+    transactionId: v.string(),
+    originalTransactionId: v.string(),
+    clerkUserId: v.string(),
+    appAccountToken: v.string(),
+    productId: v.string(),
+    environment: v.string(),
+    purchaseDate: v.number(),
+    expiresDate: v.number(),
+    revocationDate: v.optional(v.number()),
+    signedDate: v.optional(v.number()),
+    source: v.union(v.literal("client"), v.literal("notification")),
+    updatedAt: v.number(),
+  })
+    .index("by_transactionId", ["transactionId"])
+    .index("by_originalTransactionId", ["originalTransactionId"])
+    .index("by_clerkUserId", ["clerkUserId"]),
+
+  storeKitNotifications: defineTable({
+    notificationUUID: v.string(),
+    notificationType: v.string(),
+    subtype: v.optional(v.string()),
+    signedDate: v.optional(v.number()),
+    transactionId: v.optional(v.string()),
+    receivedAt: v.number(),
+  }).index("by_notificationUUID", ["notificationUUID"]),
+
   scannerJoinTokens: defineTable({
     token: v.string(),
     sessionId: v.string(),
@@ -20,6 +221,9 @@ export default defineSchema({
     graceExpiresAt: v.number(),
     revokedAt: v.optional(v.number()),
     rotatedTo: v.optional(v.string()),
+    usageSessionId: v.optional(v.string()),
+    anonymousId: v.optional(v.string()),
+    clerkUserId: v.optional(v.string()),
   })
     .index("by_token", ["token"])
     .index("by_graceExpiresAt", ["graceExpiresAt"]),

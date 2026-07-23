@@ -218,7 +218,7 @@ extension ScannerStore {
             capturedAt: now,
             deliveryState: initialDeliveryState
         )
-        results.insert(result, at: 0)
+        saveResultLocally(result)
         sendCaptureResult(result, insertIntoCursor: true)
     }
 
@@ -298,7 +298,7 @@ extension ScannerStore {
         guard !text.isEmpty else { return }
         if handlePairingValue(text) { return }
         let result = ScanResult(kind: .text, value: text, format: format, deliveryState: initialDeliveryState)
-        results.insert(result, at: 0)
+        saveResultLocally(result)
         sendCaptureResult(result, insertIntoCursor: true)
         statusText = connectionStatus.isConnected ? "Text sent" : "Text saved"
     }
@@ -317,17 +317,11 @@ extension ScannerStore {
             deliveryState: .saved,
             imageData: preparedImage.previewJPEGData()
         )
-        results.insert(photoResult, at: 0)
-        await sendPhoto(preparedImage, resultId: photoResult.id, batchId: batchId)
+        await sendPhoto(preparedImage, result: photoResult, batchId: batchId)
     }
 
     func uploadPhotos(_ images: [UIImage]) async {
         guard !images.isEmpty else { return }
-        guard connectionStatus.isConnected else {
-            statusText = "Pair with Chrome before uploading."
-            return
-        }
-
         let now = Date.now
         let batch = ScannerProtocol.makeMessageId("upload-batch")
         photoBatch = (batch, now.addingTimeInterval(5 * 60))
@@ -357,11 +351,10 @@ extension ScannerStore {
                 imageData: preparedImage.previewJPEGData(),
                 batchId: batch
             )
-            results.insert(photoResult, at: 0)
             statusText = "Uploading \(index + 1) of \(images.count)"
             await sendPhoto(
                 preparedImage,
-                resultId: photoResult.id,
+                result: photoResult,
                 batchId: batch,
                 filename: uploadFilename(index: index, capturedAt: capturedAt),
                 capturedAt: capturedAt
@@ -402,10 +395,11 @@ extension ScannerStore {
             }
             await sendPhoto(
                 image,
-                resultId: id,
+                result: result,
                 batchId: result.batchId,
                 filename: "volt-photo-resend-\(Int(Date.now.timeIntervalSince1970)).jpg",
-                capturedAt: result.capturedAt
+                capturedAt: result.capturedAt,
+                acceptsNewResult: false
             )
         case .dictation:
             sendDictation(result.value, phase: "final")
@@ -419,6 +413,12 @@ extension ScannerStore {
     }
 
     func handlePairingValue(_ value: String) -> Bool {
+        if let enrollment = EnrollmentURLParser.enrollment(in: value) {
+            Task { await cloudWorkspace.enroll(enrollment) }
+            statusText = "Enrolling this device"
+            targetHint = "Capture stays available while enrollment completes."
+            return true
+        }
         guard let url = PairingURLParser.pairingURL(in: value) else { return false }
         let parsed = PairingURLParser.parse(url)
         guard let session = parsed.0 else { return false }
@@ -454,14 +454,15 @@ extension ScannerStore {
 
     func sendPhoto(
         _ image: UIImage,
-        resultId: ScanResult.ID,
+        result: ScanResult,
         batchId: String? = nil,
         filename: String? = nil,
-        capturedAt: Date? = nil
+        capturedAt: Date? = nil,
+        acceptsNewResult: Bool = true
     ) async {
         guard let data = image.jpegData(compressionQuality: 0.76) else {
             statusText = "Could not prepare photo"
-            updateResultDeliveryState(id: resultId, state: .failed)
+            updateResultDeliveryState(id: result.id, state: .failed)
             return
         }
         let now = capturedAt ?? Date.now
@@ -475,12 +476,22 @@ extension ScannerStore {
             height: Int(image.size.height),
             capturedAt: now
         )
-        guard let entry = photoRetryQueue.enqueue(payload: payload, resultId: resultId, now: now) else {
-            updateResultDeliveryState(id: resultId, state: .failed)
-            statusText = "Could not queue photo"
+        if acceptsNewResult {
+            do {
+                var cloudResult = result
+                cloudResult.batchId = batch
+                try cloudWorkspace.persist(cloudResult, photoData: data)
+                results.insert(cloudResult, at: 0)
+            } catch {
+                statusText = "Could not save photo on this device"
+                return
+            }
+        }
+        guard let entry = photoRetryQueue.enqueue(payload: payload, resultId: result.id, now: now) else {
+            statusText = "Photo saved; live send unavailable"
             return
         }
-        updateResultDeliveryState(id: resultId, state: ScanResult.DeliveryState(photoRetryStatus: entry.status))
+        updateResultDeliveryState(id: result.id, state: ScanResult.DeliveryState(photoRetryStatus: entry.status))
         guard connectionStatus.isConnected else { return }
         await sendQueuedPhoto(photoId: payload.id)
     }
@@ -521,7 +532,19 @@ extension ScannerStore {
     }
 
     var initialDeliveryState: ScanResult.DeliveryState {
-        connectionStatus.isConnected ? .sending : .saved
+        .saved
+    }
+
+    func saveResultLocally(_ result: ScanResult) {
+        do {
+            try cloudWorkspace.persist(result)
+            results.insert(result, at: 0)
+        } catch {
+            var failedResult = result
+            failedResult.deliveryState = .failed
+            results.insert(failedResult, at: 0)
+            statusText = "Could not save capture on this device"
+        }
     }
 
     func updateResultDeliveryState(id: ScanResult.ID, state: ScanResult.DeliveryState) {

@@ -20,6 +20,9 @@ export const createJoinToken = internalMutation({
     ttlMs: v.optional(v.number()),
     graceMs: v.optional(v.number()),
     origin: v.string(),
+    usageSessionId: optionalString,
+    anonymousId: optionalString,
+    clerkUserId: optionalString,
   },
   handler: async (ctx, args) => {
     const now = Date.now();
@@ -33,6 +36,9 @@ export const createJoinToken = internalMutation({
       createdAt: now,
       expiresAt: now + tokenTtlMs,
       graceExpiresAt: now + tokenTtlMs + graceMs,
+      ...(args.usageSessionId ? { usageSessionId: args.usageSessionId } : {}),
+      ...(args.anonymousId ? { anonymousId: args.anonymousId } : {}),
+      ...(args.clerkUserId ? { clerkUserId: args.clerkUserId } : {}),
     });
     const record = await getJoinTokenByToken(ctx, args.token);
     if (!record) throw new Error("Join token insert failed");
@@ -109,6 +115,9 @@ export const rotateJoinToken = internalMutation({
       createdAt: now,
       expiresAt: now + tokenTtlMs,
       graceExpiresAt: now + tokenTtlMs + graceMs,
+      ...(token.usageSessionId ? { usageSessionId: token.usageSessionId } : {}),
+      ...(token.anonymousId ? { anonymousId: token.anonymousId } : {}),
+      ...(token.clerkUserId ? { clerkUserId: token.clerkUserId } : {}),
     });
     const previous = await ctx.db.get(token._id);
     const next = await getJoinTokenByToken(ctx, args.nextToken);
