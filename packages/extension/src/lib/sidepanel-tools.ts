@@ -19,7 +19,7 @@ export const SIDEPANEL_TOOLS: SidepanelToolMetadata[] = [
   },
   {
     id: "mobile-scanner",
-    label: "Scanner Results",
+    label: "Scanner",
     description: "Scan barcodes with your phone",
     icon: Smartphone,
   },

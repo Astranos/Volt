@@ -1,6 +1,6 @@
 import { createRoot } from "react-dom/client";
 import UnifiedSidepanel from "../../src/components/sidepanel/UnifiedSidepanel";
-import { ExtensionClerkProvider } from "../../src/components/access/ExtensionAccess";
+import { SidepanelClerkProvider } from "../../src/components/access/ExtensionAccess";
 import "./sidepanel.css";
 
 /**
@@ -21,14 +21,14 @@ const initSidepanel = () => {
 
   const root = createRoot(container);
   root.render(
-    <ExtensionClerkProvider>
+    <SidepanelClerkProvider>
       <UnifiedSidepanel />
-    </ExtensionClerkProvider>,
+    </SidepanelClerkProvider>,
   );
 };
 
-// Try to initialize immediately
-initSidepanel();
-
-// Also initialize on DOMContentLoaded as a fallback
-document.addEventListener("DOMContentLoaded", initSidepanel);
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initSidepanel, { once: true });
+} else {
+  initSidepanel();
+}

@@ -62,6 +62,8 @@ Set these public build-time values before packaging the extension:
 
 ```sh
 WXT_CLERK_PUBLISHABLE_KEY=pk_...
+WXT_CLERK_SYNC_HOST=https://clerk.volt.juanquenga.com # optional override
+WXT_CLERK_SIGN_IN_URL=https://accounts.volt.juanquenga.com/sign-in
 WXT_EXTENSION_PUBLIC_KEY=<Chrome manifest public key>
 WXT_VOLT_FULL_APP_URL=https://apps.apple.com/us/app/volt-scanner/id6771770148
 ```
@@ -71,6 +73,12 @@ Dashboard, add `chrome-extension://<extension-id>` to the instance's allowed
 origins, enable the instance's Native API, and create a JWT template named
 `convex`. Include Clerk's organization ID claim in that template so selecting
 the complimentary workplace in the extension can be authorized by Convex.
+
+Google OAuth runs on `WXT_CLERK_SIGN_IN_URL`, then `WXT_CLERK_SYNC_HOST`
+shares the resulting Clerk session with the popup and background worker. OAuth
+must not redirect directly back into an extension popup or side panel. When the
+sync host is omitted, the extension derives it from the publishable key so the
+cookie host and Clerk Frontend API cannot drift apart.
 
 Only the background service worker asks Clerk for the `convex` token. It asks
 freshly for every Convex access request, never sends a JWT to content scripts or

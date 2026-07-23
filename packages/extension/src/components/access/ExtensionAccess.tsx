@@ -1,48 +1,120 @@
-import type { PropsWithChildren } from "react";
-import { useCallback, useEffect, useState } from "react";
+import type { ErrorInfo, ReactNode } from "react";
 import {
+  Component,
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
+import {
+  ClerkLoaded,
+  ClerkLoading,
   ClerkProvider,
   OrganizationSwitcher,
-  SignInButton,
   UserButton,
   useAuth,
   useOrganization,
   useUser,
 } from "@clerk/chrome-extension";
-import { Building2, ExternalLink, RefreshCw, ShieldCheck } from "lucide-react";
+import { Building2, ExternalLink, LogIn, RefreshCw, ShieldCheck } from "lucide-react";
 import {
   parseExtensionAccessStatus,
   type ExtensionAccessStatus,
 } from "../../access/access-contract";
-import { CLERK_PUBLISHABLE_KEY } from "../../access/config";
+import {
+  CLERK_PUBLISHABLE_KEY,
+  CLERK_SIGN_IN_URL,
+  CLERK_SYNC_HOST,
+} from "../../access/config";
 import { cn } from "../../lib/utils";
 
 type AccessSurface = "popup" | "sidepanel";
+type AccountControlSurface = "newtab" | "sidepanel";
+type ClerkTokenGetter = () => Promise<string | null>;
 
-function objectFrom(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
+const SidepanelClerkTokenContext = createContext<ClerkTokenGetter>(async () => null);
+
+function accountControlClassName(
+  surface: AccountControlSurface,
+  state: string,
+) {
+  return `${surface}-account-control ${state}`;
 }
 
-export function ExtensionClerkProvider({ children }: PropsWithChildren) {
-  if (!CLERK_PUBLISHABLE_KEY) return children;
-  const currentPath =
-    location.pathname === "/sidepanel.html"
-      ? "/sidepanel.html"
-      : "/mobile-scanner-popup.html";
-  const currentExtensionPage = chrome.runtime.getURL(currentPath);
+function isClerkReturnUrl(value: string | undefined) {
+  if (!value) return false;
+  try {
+    return new URL(value).origin === "https://volt.juanquenga.com";
+  } catch {
+    return false;
+  }
+}
+
+function useClerkReturnReload() {
+  useEffect(() => {
+    let reloadStarted = false;
+    const handleTabUpdated: Parameters<
+      typeof chrome.tabs.onUpdated.addListener
+    >[0] = (_tabId, changeInfo, tab) => {
+      if (reloadStarted || changeInfo.status !== "complete") return;
+      if (!isClerkReturnUrl(changeInfo.url ?? tab.url)) return;
+      reloadStarted = true;
+      window.location.reload();
+    };
+
+    chrome.tabs.onUpdated.addListener(handleTabUpdated);
+    return () => chrome.tabs.onUpdated.removeListener(handleTabUpdated);
+  }, []);
+}
+
+function SidepanelClerkTokenBridge({ children }: { children: ReactNode }) {
+  const { getToken, isLoaded, isSignedIn } = useAuth();
+  const getFreshToken = useCallback(async () => {
+    if (!isLoaded || !isSignedIn) return null;
+    return getToken({ template: "convex", skipCache: true });
+  }, [getToken, isLoaded, isSignedIn]);
+
+  return (
+    <SidepanelClerkTokenContext.Provider value={getFreshToken}>
+      {children}
+    </SidepanelClerkTokenContext.Provider>
+  );
+}
+
+export function SidepanelClerkProvider({ children }: { children: ReactNode }) {
+  if (!CLERK_PUBLISHABLE_KEY) {
+    return (
+      <SidepanelClerkTokenContext.Provider value={async () => null}>
+        {children}
+      </SidepanelClerkTokenContext.Provider>
+    );
+  }
+
+  const currentExtensionPage = chrome.runtime.getURL("/sidepanel.html");
   return (
     <ClerkProvider
+      __experimental_syncHostListener
       publishableKey={CLERK_PUBLISHABLE_KEY}
+      syncHost={CLERK_SYNC_HOST}
       afterSignOutUrl={currentExtensionPage}
       signInFallbackRedirectUrl={currentExtensionPage}
       signUpFallbackRedirectUrl={currentExtensionPage}
       allowedRedirectProtocols={["chrome-extension:"]}
     >
-      {children}
+      <SidepanelClerkTokenBridge>{children}</SidepanelClerkTokenBridge>
     </ClerkProvider>
   );
+}
+
+export function useSidepanelClerkToken() {
+  return useContext(SidepanelClerkTokenContext);
+}
+
+function objectFrom(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
 }
 
 function statusCopy(status: ExtensionAccessStatus | null) {
@@ -78,6 +150,53 @@ function MissingClerkConfiguration({ surface }: { surface: AccessSurface }) {
   );
 }
 
+function AccountAccessMessage({
+  surface,
+  message,
+}: {
+  surface: AccessSurface;
+  message: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "rounded-xl border border-border/70 bg-background/75 px-3 py-2 text-[11px] text-muted-foreground shadow-sm",
+        surface === "sidepanel" ? "mx-3 mt-2" : "mt-2",
+      )}
+      aria-live="polite"
+    >
+      {message}
+    </div>
+  );
+}
+
+class ExtensionAccessErrorBoundary extends Component<
+  { children: ReactNode; surface: AccessSurface },
+  { failed: boolean }
+> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error("Volt account access failed", error, info.componentStack);
+  }
+
+  render() {
+    if (this.state.failed) {
+      return (
+        <AccountAccessMessage
+          surface={this.props.surface}
+          message="Account access is temporarily unavailable. Scanner tools are still ready."
+        />
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export function ExtensionAccessPanel({
   surface,
 }: {
@@ -86,7 +205,142 @@ export function ExtensionAccessPanel({
   if (!CLERK_PUBLISHABLE_KEY) {
     return <MissingClerkConfiguration surface={surface} />;
   }
-  return <ClerkAccessPanel surface={surface} />;
+  const currentExtensionPage = chrome.runtime.getURL(
+    surface === "sidepanel" ? "/sidepanel.html" : "/mobile-scanner-popup.html",
+  );
+  return (
+    <ExtensionAccessErrorBoundary surface={surface}>
+      <ClerkProvider
+        __experimental_syncHostListener
+        publishableKey={CLERK_PUBLISHABLE_KEY}
+        syncHost={CLERK_SYNC_HOST}
+        afterSignOutUrl={currentExtensionPage}
+        signInFallbackRedirectUrl={currentExtensionPage}
+        signUpFallbackRedirectUrl={currentExtensionPage}
+        allowedRedirectProtocols={["chrome-extension:"]}
+      >
+        <ClerkLoading>
+          <AccountAccessMessage
+            surface={surface}
+            message="Connecting Volt account…"
+          />
+        </ClerkLoading>
+        <ClerkLoaded>
+          <ClerkAccessPanel surface={surface} />
+        </ClerkLoaded>
+      </ClerkProvider>
+    </ExtensionAccessErrorBoundary>
+  );
+}
+
+class ExtensionAccountControlErrorBoundary extends Component<
+  { children: ReactNode; surface: AccountControlSurface },
+  { failed: boolean }
+> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error("Volt account control failed", error, info.componentStack);
+  }
+
+  render() {
+    if (this.state.failed) {
+      return (
+        <span
+          className={accountControlClassName(this.props.surface, "is-unavailable")}
+          title="Account unavailable"
+        >
+          <LogIn />
+        </span>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+export function ExtensionAccountControl({
+  surface = "sidepanel",
+  sharedClerkContext = false,
+}: {
+  surface?: AccountControlSurface;
+  sharedClerkContext?: boolean;
+}) {
+  useClerkReturnReload();
+  if (!CLERK_PUBLISHABLE_KEY) return null;
+  const currentExtensionPage = chrome.runtime.getURL(
+    surface === "newtab" ? "/newtab.html" : "/sidepanel.html",
+  );
+
+  const control = (
+    <>
+      <ClerkLoading>
+        <span
+          className={accountControlClassName(surface, "is-loading")}
+          aria-label="Loading Volt account"
+        />
+      </ClerkLoading>
+      <ClerkLoaded>
+        <ClerkAccountControl surface={surface} />
+      </ClerkLoaded>
+    </>
+  );
+
+  return (
+    <ExtensionAccountControlErrorBoundary surface={surface}>
+      {sharedClerkContext ? control : (
+        <ClerkProvider
+          __experimental_syncHostListener
+          publishableKey={CLERK_PUBLISHABLE_KEY}
+          syncHost={CLERK_SYNC_HOST}
+          afterSignOutUrl={currentExtensionPage}
+          signInFallbackRedirectUrl={currentExtensionPage}
+          signUpFallbackRedirectUrl={currentExtensionPage}
+          allowedRedirectProtocols={["chrome-extension:"]}
+        >
+          {control}
+        </ClerkProvider>
+      )}
+    </ExtensionAccountControlErrorBoundary>
+  );
+}
+
+function ClerkAccountControl({ surface }: { surface: AccountControlSurface }) {
+  const { isLoaded, isSignedIn } = useAuth();
+  const { user } = useUser();
+
+  useEffect(() => {
+    if (!isLoaded) return;
+    void chrome.runtime
+      .sendMessage({ action: "accessAuthChanged" })
+      .catch(() => undefined);
+  }, [isLoaded, isSignedIn, user?.id]);
+
+  if (isSignedIn) {
+    return (
+      <span
+        className={accountControlClassName(surface, "is-signed-in")}
+        title={user?.fullName ? `Volt account: ${user.fullName}` : "Volt account"}
+      >
+        <UserButton />
+      </span>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      className={accountControlClassName(surface, "is-signed-out")}
+      onClick={() => void chrome.tabs.create({ url: CLERK_SIGN_IN_URL })}
+      title="Sign in to Volt"
+    >
+      <LogIn />
+      <span>Sign in</span>
+    </button>
+  );
 }
 
 function ClerkAccessPanel({ surface }: { surface: AccessSurface }) {
@@ -152,12 +406,15 @@ function ClerkAccessPanel({ surface }: { surface: AccessSurface }) {
     : "Guest";
   const workspaceName = organization?.name ?? "Personal workspace";
   const exhausted = status?.access === "exhausted";
+  const openWebSignIn = () => {
+    void chrome.tabs.create({ url: CLERK_SIGN_IN_URL });
+  };
 
   return (
     <section
       className={cn(
         "rounded-xl border border-border/70 bg-background/75 px-3 py-2 shadow-sm backdrop-blur",
-        surface === "sidepanel" ? "mx-3 mt-2" : "mt-2",
+        surface === "sidepanel" ? "mx-3 mt-2" : "volt-access-panel--popup mt-2",
       )}
       aria-live="polite"
     >
@@ -191,18 +448,19 @@ function ClerkAccessPanel({ surface }: { surface: AccessSurface }) {
         {isSignedIn ? (
           <UserButton />
         ) : (
-          <SignInButton mode="modal">
-            <button
-              type="button"
-              className="rounded-full bg-emerald-600 px-2.5 py-1 text-[10px] font-bold text-white hover:bg-emerald-700"
-            >
-              Sign in
-            </button>
-          </SignInButton>
+          <button
+            type="button"
+            onClick={openWebSignIn}
+            className="inline-flex items-center gap-1 rounded-full bg-emerald-600 px-2.5 py-1 text-[10px] font-bold text-white hover:bg-emerald-700"
+            title="Sign in to Volt in a browser tab"
+          >
+            Sign in
+            <ExternalLink className="h-3 w-3" />
+          </button>
         )}
       </div>
 
-      {isSignedIn ? (
+      {isSignedIn && surface === "sidepanel" ? (
         <div className="mt-1.5 flex items-center justify-between gap-2 border-t border-border/60 pt-1.5">
           <span className="text-[10px] font-medium text-muted-foreground">
             Workspace

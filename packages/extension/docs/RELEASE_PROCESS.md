@@ -9,7 +9,8 @@ Keep these two versions identical:
 - `packages/extension/package.json`
 - `packages/extension/wxt.config.ts`, under `manifest.version`
 
-Current version: `1.0.52`.
+Current submitted version: `1.0.53`. Keep this version unchanged while testing
+local fixes. Increase it only when a new package is submitted.
 
 ## Build And Test
 

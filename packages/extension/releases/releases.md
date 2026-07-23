@@ -1,10 +1,13 @@
 # Volt Chrome Extension Releases
 
-## Current Development Version
+## Current Submitted Version
 
-### v1.0.52
+### v1.0.53
 
-The current manifest/package version is `1.0.52`.
+The manifest/package version remains `1.0.53` until the next package is
+submitted.
+
+Submitted to the Chrome Web Store for review on July 23, 2026.
 
 Current release build command:
 
@@ -24,7 +27,24 @@ The generated zip is moved into:
 packages/extension/releases/
 ```
 
+## Unreleased Changes
+
+- None.
+
 ## Recent Release History
+
+### v1.0.53
+
+Release date: July 23, 2026
+
+Changes:
+
+- Reworked the toolbar action to open a unified side panel with clean Offer Calculator and Scanner tabs.
+- Reduced the pairing popup to the QR flow and moved the editable computer name into that popup.
+- Simplified the new-tab controls with compact account and settings actions.
+- Fixed Clerk authentication returning to Volt without refreshing the open side panel account state.
+- Added production Clerk Sync Host configuration and resilient scanner access checks so account loading cannot block QR pairing.
+- Refined scanner controls, cloud workspace access, and signed-in workspace presentation throughout the extension.
 
 ### v1.0.52
 

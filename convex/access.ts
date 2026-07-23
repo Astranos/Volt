@@ -12,6 +12,9 @@ export const FREE_SESSION_LIMIT = 5;
 export const RECONNECT_WINDOW_MS = 30 * 60 * 1000;
 export const MAX_SESSION_DURATION_MS = 8 * 60 * 60 * 1000;
 export const DEFAULT_STOREKIT_PRODUCT_ID = "com.volt.mobile.pro.monthly";
+const COMPLIMENTARY_EMAIL_ENTITLEMENT_PREFIX = "complimentary-email:";
+const COMPLIMENTARY_ACCOUNT_EMAILS = new Set(["juanquenga@gmail.com"]);
+const COMPLIMENTARY_ACCOUNT_DOMAINS = new Set(["paymore.com"]);
 
 export type ClerkAuthContext = {
   clerkUserId?: string;
@@ -19,6 +22,7 @@ export type ClerkAuthContext = {
   organizationId?: string;
   organizationName?: string;
   email?: string;
+  emailVerified?: boolean;
   name?: string;
 };
 
@@ -46,6 +50,7 @@ const authArgs = {
   organizationId: optionalString,
   organizationName: optionalString,
   email: optionalString,
+  emailVerified: v.optional(v.boolean()),
   name: optionalString,
 };
 const anonymousArgs = {
@@ -65,6 +70,11 @@ function nestedOrganizationClaim(identity: UserIdentity, key: string) {
   return typeof value === "string" && value ? value : undefined;
 }
 
+function booleanClaim(identity: UserIdentity, key: string) {
+  const value = identity[key];
+  return typeof value === "boolean" ? value : undefined;
+}
+
 export function clerkAuthContextFromIdentity(identity: UserIdentity | null): ClerkAuthContext {
   if (!identity) return {};
   return {
@@ -79,12 +89,24 @@ export function clerkAuthContextFromIdentity(identity: UserIdentity | null): Cle
       stringClaim(identity, "organization_name") ??
       nestedOrganizationClaim(identity, "name"),
     ...(identity.email ? { email: identity.email } : {}),
+    ...(booleanClaim(identity, "email_verified") !== undefined
+      ? { emailVerified: booleanClaim(identity, "email_verified") }
+      : {}),
     ...(identity.name ? { name: identity.name } : {}),
   };
 }
 
 export function storeKitProductId() {
   return process.env.STOREKIT_PRODUCT_ID || DEFAULT_STOREKIT_PRODUCT_ID;
+}
+
+export function isComplimentaryAccountEmail(email: string | undefined) {
+  if (!email) return false;
+  const normalized = email.trim().toLowerCase();
+  const separator = normalized.lastIndexOf("@");
+  if (separator <= 0 || separator === normalized.length - 1) return false;
+  return COMPLIMENTARY_ACCOUNT_EMAILS.has(normalized)
+    || COMPLIMENTARY_ACCOUNT_DOMAINS.has(normalized.slice(separator + 1));
 }
 
 function randomUuid() {
@@ -125,6 +147,59 @@ async function usageById(ctx: MutationCtx, usageSessionId: string) {
     .unique();
 }
 
+async function syncComplimentaryEmailEntitlement(
+  ctx: MutationCtx,
+  clerkUserId: string,
+  email: string | undefined,
+  emailVerified: boolean | undefined,
+  now: number,
+) {
+  if (!email) return;
+  const normalizedEmail = email.trim().toLowerCase();
+  const sourceIdentifier = `${COMPLIMENTARY_EMAIL_ENTITLEMENT_PREFIX}${normalizedEmail}`;
+  const eligible = emailVerified === true && isComplimentaryAccountEmail(normalizedEmail);
+  const entitlements = await ctx.db
+    .query("entitlements")
+    .withIndex("by_clerkUserId", (query) => query.eq("clerkUserId", clerkUserId))
+    .take(100);
+  const complimentaryEntitlements = entitlements.filter(
+    (entitlement) => entitlement.kind === "manual"
+      && entitlement.sourceIdentifier.startsWith(COMPLIMENTARY_EMAIL_ENTITLEMENT_PREFIX),
+  );
+
+  for (const entitlement of complimentaryEntitlements) {
+    if ((!eligible || entitlement.sourceIdentifier !== sourceIdentifier) && entitlement.status === "active") {
+      await ctx.db.patch(entitlement._id, { status: "revoked", updatedAt: now });
+    }
+  }
+  if (!eligible) return;
+
+  const existing = complimentaryEntitlements.find(
+    (entitlement) => entitlement.sourceIdentifier === sourceIdentifier,
+  );
+  if (existing) {
+    if (existing.status !== "active" || existing.expiresAt !== undefined) {
+      await ctx.db.patch(existing._id, {
+        status: "active",
+        expiresAt: undefined,
+        productId: storeKitProductId(),
+        updatedAt: now,
+      });
+    }
+    return;
+  }
+
+  await ctx.db.insert("entitlements", {
+    clerkUserId,
+    kind: "manual",
+    sourceIdentifier,
+    productId: storeKitProductId(),
+    status: "active",
+    validFrom: now,
+    updatedAt: now,
+  });
+}
+
 async function ensureUser(ctx: MutationCtx, auth: ClerkAuthContext, now: number) {
   if (!auth.clerkUserId || !auth.tokenIdentifier) return null;
   const existing = await userByClerkId(ctx, auth.clerkUserId);
@@ -136,6 +211,13 @@ async function ensureUser(ctx: MutationCtx, auth: ClerkAuthContext, now: number)
       updatedAt: now,
     };
     await ctx.db.patch(existing._id, updates);
+    await syncComplimentaryEmailEntitlement(
+      ctx,
+      existing.clerkUserId,
+      auth.email,
+      auth.emailVerified,
+      now,
+    );
     return { ...existing, ...updates };
   }
 
@@ -149,7 +231,17 @@ async function ensureUser(ctx: MutationCtx, auth: ClerkAuthContext, now: number)
     createdAt: now,
     updatedAt: now,
   });
-  return ctx.db.get(id);
+  const user = await ctx.db.get(id);
+  if (user) {
+    await syncComplimentaryEmailEntitlement(
+      ctx,
+      user.clerkUserId,
+      auth.email,
+      auth.emailVerified,
+      now,
+    );
+  }
+  return user;
 }
 
 async function validateAnonymousGrant(
@@ -233,17 +325,31 @@ async function subscriptionForUser(ctx: MutationCtx, clerkUserId: string, now: n
   const entitlements = await ctx.db
     .query("entitlements")
     .withIndex("by_clerkUserId", (query) => query.eq("clerkUserId", clerkUserId))
-    .collect();
-  const relevant = entitlements.filter((entitlement) => entitlement.kind === "storekit");
-  const active = relevant
+    .take(100);
+  const activeComplimentary = entitlements.find(
+    (entitlement) => entitlement.kind === "manual"
+      && entitlement.status === "active"
+      && (entitlement.expiresAt === undefined || entitlement.expiresAt > now),
+  );
+  if (activeComplimentary) {
+    return {
+      status: "active" as const,
+      entitlement: activeComplimentary,
+      source: "complimentary" as const,
+    };
+  }
+  const storeKitEntitlements = entitlements.filter((entitlement) => entitlement.kind === "storekit");
+  const active = storeKitEntitlements
     .filter(
       (entitlement) =>
         entitlement.status === "active" &&
         (entitlement.expiresAt === undefined || entitlement.expiresAt > now),
     )
     .sort((left, right) => (right.expiresAt ?? Number.MAX_SAFE_INTEGER) - (left.expiresAt ?? Number.MAX_SAFE_INTEGER))[0];
-  if (active) return { status: "active" as const, entitlement: active };
-  return { status: relevant.length ? ("expired" as const) : ("none" as const) };
+  if (active) {
+    return { status: "active" as const, entitlement: active, source: "subscription" as const };
+  }
+  return { status: storeKitEntitlements.length ? ("expired" as const) : ("none" as const) };
 }
 
 type ResolvedPrincipal = {
@@ -266,7 +372,7 @@ async function resolvePrincipal(
   const grant = hasAnonymousCredentials
     ? await validateAnonymousGrant(ctx, anonymousId, anonymousSecret)
     : null;
-  if (hasAnonymousCredentials && !grant) {
+  if (hasAnonymousCredentials && !grant && !user) {
     return { ok: false, statusCode: 401, error: "Invalid anonymous trial credentials" };
   }
 
@@ -316,7 +422,7 @@ async function buildAccessStatus(
     ...(auth.organizationId ? { organizationId: auth.organizationId } : {}),
   };
 
-  if (organization) {
+  if (organization || (subscription.status === "active" && subscription.source === "complimentary")) {
     return {
       ...shared,
       access: "complimentary",

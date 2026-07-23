@@ -4,19 +4,8 @@ import { QuickLinksColumn } from "../../src/components/newtab/QuickLinksColumn";
 import { BookmarksColumn } from "../../src/components/newtab/BookmarksColumn";
 import { HeroBlock } from "../../src/components/newtab/HeroBlock";
 import type { SearchMode } from "../../src/components/newtab/NewTabHelp";
-import { Button } from "../../src/components/ui/button";
-import type { ScannerConnectionStatus } from "@volt/scanner-protocol";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "../../src/components/ui/tooltip";
-import {
-  SIDEPANEL_TOOLS,
-  type SidepanelToolId,
-} from "../../src/lib/sidepanel-tools";
-import { Loader2, QrCode, Smartphone } from "lucide-react";
+import { ExtensionAccountControl } from "../../src/components/access/ExtensionAccess";
+import { Settings } from "lucide-react";
 import { searchProviders } from "../../src/components/cmdk-palette/SearchProviders";
 import { TabManager } from "../../src/utils/tab-manager";
 import type { SyncStorageResult } from "../../src/types/settings";
@@ -36,8 +25,6 @@ export default function NewTab() {
   const [shopifyStore, setShopifyStore] = useState<string | null>(null);
   const [resolvingShopifyStore, setResolvingShopifyStore] = useState(false);
   const [overrideEnabled, setOverrideEnabled] = useState<boolean | null>(null);
-  const [scannerStatus, setScannerStatus] =
-    useState<ScannerConnectionStatus>("disconnected");
 
   // Randomize the aurora blobs' starting offset + animation phase on every
   // new-tab load so the bg looks fresh each time.
@@ -120,27 +107,6 @@ export default function NewTab() {
     );
   }, []);
 
-  useEffect(() => {
-    if (typeof chrome === "undefined" || !chrome.runtime) return;
-
-    chrome.runtime.sendMessage({ action: "scannerGetState" }, (response) => {
-      if (chrome.runtime.lastError) return;
-      if (response?.state?.status) {
-        setScannerStatus(response.state.status as ScannerConnectionStatus);
-      }
-    });
-
-    const listener = (message: any) => {
-      if (message?.action !== "scannerStateChanged") return;
-      if (message?.state?.status) {
-        setScannerStatus(message.state.status as ScannerConnectionStatus);
-      }
-    };
-
-    chrome.runtime.onMessage.addListener(listener);
-    return () => chrome.runtime.onMessage.removeListener(listener);
-  }, []);
-
   const toggleSearchMode = (mode: SearchMode) => {
     setActiveMode((current) => {
       const newMode = current === mode ? "google" : mode;
@@ -156,31 +122,6 @@ export default function NewTab() {
     if (typeof chrome !== "undefined" && chrome.storage?.local) {
       chrome.storage.local.set({ scout_search_mode: mode });
     }
-  };
-
-  const handleSidepanelToolClick = (toolId: SidepanelToolId) => {
-    if (typeof chrome === "undefined" || !chrome.runtime) return;
-
-    chrome.runtime.sendMessage(
-      {
-        action: "openInSidebar",
-        mode: "open",
-        tool: toolId,
-      },
-      () => {
-        const error = chrome.runtime.lastError;
-        if (error) {
-          console.error("[NewTab] Failed to open sidepanel tool:", error);
-        }
-      }
-    );
-  };
-
-  const openMobilePairingPopup = () => {
-    if (typeof chrome === "undefined" || !chrome.runtime) return;
-    chrome.runtime.sendMessage({
-      action: "openMobileCapturePopup",
-    });
   };
 
   const resolveShopifyStoreFromTabs = async (): Promise<string | null> => {
@@ -353,17 +294,23 @@ export default function NewTab() {
             <h1 className="newtab-header-title">Volt</h1>
           </div>
           <div className="newtab-header-actions">
-            <MobilePairingStatus
-              status={scannerStatus}
-              onClick={openMobilePairingPopup}
-            />
+            <button
+              type="button"
+              className="newtab-settings-button"
+              onClick={() => void chrome.runtime.sendMessage({ action: "open-settings" })}
+              aria-label="Open Volt settings"
+              title="Open Volt settings"
+            >
+              <Settings />
+            </button>
+            <ExtensionAccountControl surface="newtab" />
           </div>
         </header>
 
         {/* Hero: greeting + clock */}
         <HeroBlock />
 
-        {/* Search + sidepanel tools */}
+        {/* Search */}
         <section className="newtab-search-section">
           <div
             id="tour-search-history"
@@ -377,33 +324,6 @@ export default function NewTab() {
             />
           </div>
 
-          <TooltipProvider>
-            <div id="tour-tools" className="newtab-tool-tiles">
-              {SIDEPANEL_TOOLS.map((tool) => {
-                const Icon = tool.icon;
-                return (
-                  <Tooltip key={tool.id}>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        onClick={() => handleSidepanelToolClick(tool.id)}
-                        className="newtab-tool-tile cursor-pointer"
-                        aria-label={tool.label}
-                      >
-                        <Icon className="newtab-tool-tile-icon" />
-                        <span className="newtab-tool-tile-label">
-                          {tool.label}
-                        </span>
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent className="border-gray-200">
-                      <p>{tool.description}</p>
-                    </TooltipContent>
-                  </Tooltip>
-                );
-              })}
-            </div>
-          </TooltipProvider>
         </section>
 
         {/* Side columns: Quick Links & Bookmarks */}
@@ -413,39 +333,5 @@ export default function NewTab() {
         </section>
       </div>
     </div>
-  );
-}
-
-function MobilePairingStatus({
-  onClick,
-  status,
-}: {
-  onClick: () => void;
-  status: ScannerConnectionStatus;
-}) {
-  const isPaired = status === "connected";
-  const isCreating = status === "creating";
-  const isReady = status === "waiting";
-  const label = isPaired ? "Connected" : isCreating ? "Connecting" : isReady ? "Pair Phone" : "Connect Phone";
-  const Icon = isPaired ? Smartphone : isCreating ? Loader2 : isReady ? QrCode : Smartphone;
-  const tone = isPaired
-    ? "is-paired"
-    : isReady
-      ? "is-ready"
-      : isCreating
-        ? "is-creating"
-        : "is-inactive";
-
-  return (
-    <button
-      type="button"
-      className={`newtab-mobile-status ${tone}`}
-      onClick={onClick}
-      aria-label="Open mobile pairing"
-      title="Open mobile pairing"
-    >
-      <Icon className={isCreating ? "animate-spin" : undefined} />
-      <span>{label}</span>
-    </button>
   );
 }

@@ -11,7 +11,7 @@ export default defineConfig({
   vite: () => ({ plugins: [tailwindcss()] }) as WxtViteConfig,
   outDir: ".output", // Base output directory
   outDirTemplate: "volt", // Custom output directory name (removes browser/manifest folder nesting)
-  manifest: {
+  manifest: () => ({
     // Stable public key => stable extension ID for Clerk's allowed origin.
     key: process.env.WXT_EXTENSION_PUBLIC_KEY || undefined,
     content_scripts: [
@@ -49,11 +49,12 @@ export default defineConfig({
       },
     ],
     name: "Volt",
-    version: "1.0.52",
+    version: "1.0.53",
     description:
       "A versatile Chrome extension with command palette, mobile scanner pairing, and multi-provider search capabilities.",
     permissions: [
       "storage",
+      "cookies",
       "tabs",
       "activeTab",
       "scripting",
@@ -85,7 +86,6 @@ export default defineConfig({
       128: "assets/icons/logo-128.png",
     },
     action: {
-      default_popup: "mobile-scanner-popup.html",
       default_icon: {
         16: "assets/icons/logo-16.png",
         32: "assets/icons/logo-32.png",
@@ -133,5 +133,5 @@ export default defineConfig({
     chrome_url_overrides: {
       newtab: "newtab.html",
     },
-  },
+  }),
 });

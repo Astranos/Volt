@@ -8,7 +8,7 @@ const COMPUTER_PRESENCE_ALARM = "volt.cloudScanner.computerPresence";
 const COMPUTER_PRESENCE_TTL_MS = 2 * 60 * 1000;
 
 type WorkspaceMessage =
-  | { action: "workspaceCreateEnrollment"; label: string }
+  | { action: "workspaceCreateEnrollment"; label: string; clerkToken: string }
   | { action: "workspaceGetSnapshot" }
   | { action: "workspaceGetPhotoDownload"; batchId: string; resultId: string }
   | { action: "workspaceDeleteResults"; resultIds: string[] }
@@ -41,11 +41,13 @@ function parseMessage(value: unknown): WorkspaceMessage | null {
     return resultIds.length > 0 ? { action: record.action, resultIds } : null;
   }
   if (record?.action !== "workspaceCreateEnrollment") return null;
+  if (typeof record.clerkToken !== "string" || !record.clerkToken) return null;
   return {
     action: record.action,
     label: typeof record.label === "string" && record.label.trim()
       ? record.label.trim().slice(0, 80)
       : "Volt for iPhone",
+    clerkToken: record.clerkToken,
   };
 }
 
@@ -60,8 +62,13 @@ export function createCloudWorkspaceController(options: ControllerOptions) {
     return url;
   }
 
-  async function request(path: string, method: "GET" | "POST", body?: unknown) {
-    const token = await options.getClerkToken();
+  async function request(
+    path: string,
+    method: "GET" | "POST",
+    body?: unknown,
+    clerkToken?: string,
+  ) {
+    const token = clerkToken || await options.getClerkToken();
     if (!token) throw new Error("Sign in to enroll Volt for iPhone.");
     const response = await fetch(routeUrl(path), {
       method,
@@ -80,9 +87,9 @@ export function createCloudWorkspaceController(options: ControllerOptions) {
     return payload;
   }
 
-  async function createEnrollment(label: string) {
-    await registerComputer();
-    const payload = await request("/api/workspace/enrollment", "POST", { kind: "ios", label });
+  async function createEnrollment(label: string, clerkToken: string) {
+    await registerComputer(clerkToken);
+    const payload = await request("/api/workspace/enrollment", "POST", { kind: "ios", label }, clerkToken);
     const record = recordFrom(payload);
     const enrollmentCode = typeof record?.enrollmentCode === "string" ? record.enrollmentCode : null;
     const expiresAt = typeof record?.expiresAt === "number" ? record.expiresAt : null;
@@ -125,14 +132,14 @@ export function createCloudWorkspaceController(options: ControllerOptions) {
     return request("/api/workspace/results/restore", "POST", { resultIds });
   }
 
-  async function registerComputer() {
+  async function registerComputer(clerkToken?: string) {
     const identity = await getMobileScannerExtensionIdentity();
     const payload = await request("/api/workspace/computers/register", "POST", {
       installationId: identity.installId,
       label: identity.sessionLabel,
       capabilities: ["workspace-results", "cursor-insertion", "dictation"],
       ttlMs: COMPUTER_PRESENCE_TTL_MS,
-    });
+    }, clerkToken);
     const record = recordFrom(payload);
     if (
       typeof record?.deviceId !== "string" ||
@@ -167,7 +174,7 @@ export function createCloudWorkspaceController(options: ControllerOptions) {
     }
     const operation = (() => {
       switch (message.action) {
-        case "workspaceCreateEnrollment": return createEnrollment(message.label);
+        case "workspaceCreateEnrollment": return createEnrollment(message.label, message.clerkToken);
         case "workspaceGetSnapshot": return getSnapshot();
         case "workspaceGetPhotoDownload": return getPhotoDownload(message.batchId, message.resultId);
         case "workspaceDeleteResults": return deleteResults(message.resultIds);

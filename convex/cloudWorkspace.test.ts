@@ -18,6 +18,11 @@ const createEnrollment = makeFunctionReference<
   { kind: "ios" | "chrome"; label: string },
   { enrollmentCode: string; expiresAt: number }
 >("cloudWorkspace:createEnrollment");
+const getAccessStatus = makeFunctionReference<
+  "mutation",
+  { anonymousId?: string; anonymousSecret?: string },
+  { statusCode: number; body: { access: string } }
+>("access:getStatus");
 const exchangeEnrollment = makeFunctionReference<
   "mutation",
   { enrollmentCode: string; label?: string },
@@ -335,6 +340,37 @@ describe("cloud scanner workspace", () => {
     expect(await t.run((ctx) => ctx.db.query("scanResults").collect())).toHaveLength(
       FREE_CLOUD_RESULT_LIMIT,
     );
+  });
+
+  test("does not apply the free cloud quota to complimentary email accounts", async () => {
+    const t = convexTest(schema, modules);
+    const clerkUserId = "complimentary-paymore-user";
+    const signedIn = t.withIdentity({
+      subject: clerkUserId,
+      tokenIdentifier: `clerk|${clerkUserId}`,
+      email: "scanner@paymore.com",
+      email_verified: true,
+    });
+    expect((await signedIn.mutation(getAccessStatus, {})).body.access).toBe("complimentary");
+
+    const enrollment = await signedIn.mutation(createEnrollment, {
+      kind: "ios",
+      label: "PayMore iPhone",
+    });
+    const credential = await t.mutation(exchangeEnrollment, {
+      enrollmentCode: enrollment.enrollmentCode,
+    });
+    const results = Array.from({ length: FREE_CLOUD_RESULT_LIMIT + 1 }, (_, index) =>
+      result(`complimentary-result-${index}`),
+    );
+
+    await expect(t.mutation(putBatch, {
+      deviceId: credential.deviceId,
+      deviceSecret: credential.deviceSecret,
+      batchId: "complimentary-over-free-limit",
+      clientCreatedAt: 1,
+      results,
+    })).resolves.toMatchObject({ idempotent: false });
   });
 
   test("authorizes presigns only for the owning workspace and correct batch state", async () => {

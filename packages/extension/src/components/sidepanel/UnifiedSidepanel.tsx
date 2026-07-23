@@ -1,13 +1,16 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import QRCode from "qrcode";
 import TopOffersPage from "./TopOffers";
 import MobileScanner from "./MobileScanner";
 import {
   AlertTriangle,
   CheckCircle2,
+  Cloud,
   Info,
   Loader2,
   QrCode,
   Smartphone,
+  X,
   XCircle,
 } from "lucide-react";
 import type { ScannerConnectionStatus } from "@volt/scanner-protocol";
@@ -22,7 +25,13 @@ import {
   type SidepanelToastDetail,
   type SidepanelToastTone,
 } from "../../lib/sidepanel-toast";
-import { ExtensionAccessPanel } from "../access/ExtensionAccess";
+import {
+  getMobileScannerExtensionIdentity,
+} from "../../domain/mobile-scanner-session";
+import {
+  ExtensionAccountControl,
+  useSidepanelClerkToken,
+} from "../access/ExtensionAccess";
 
 type ActiveToast = {
   message: string;
@@ -31,6 +40,12 @@ type ActiveToast = {
 };
 
 const TOAST_DURATION_MS = 1900;
+
+function objectFrom(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
 
 const TOAST_TONE_STYLES: Record<
   SidepanelToastTone,
@@ -209,43 +224,49 @@ export default function UnifiedSidepanel() {
 
   const ActiveComponent =
     tools.find((t) => t.id === activeTool)?.component || MobileScanner;
-  const activeToolMeta = tools.find((tool) => tool.id === activeTool) ?? tools[0];
-  const ActiveToolIcon = activeToolMeta.icon;
 
   const toneStyles = toast ? TOAST_TONE_STYLES[toast.tone] : null;
   const ToastIcon = toneStyles?.icon;
 
   return (
     <div className="sidepanel-shell sidepanel-frame h-full w-full flex flex-col">
-      <ExtensionAccessPanel surface="sidepanel" />
-      {/* Main content - Flex 1 to take remaining space, overflow hidden to prevent double scrollbars */}
       <div className="sidepanel-content-frame flex flex-1 flex-col overflow-hidden">
-        <div className="sidepanel-inline-tool-title-wrap">
-          <div
-            aria-label={`Current tool: ${activeToolMeta.label}`}
-            className={cn(
-              "sidepanel-inline-tool-title",
-              toast ? "-translate-y-1 opacity-0" : "translate-y-0 opacity-100",
-            )}
-            aria-hidden={toast ? "true" : undefined}
-          >
-            <ActiveToolIcon className="sidepanel-inline-tool-icon" />
-            <span>{activeToolMeta.label}</span>
+        <div className="sidepanel-tool-header">
+          <div className="sidepanel-tool-row">
+            <div className="sidepanel-tool-tabs" role="tablist" aria-label="Volt tools">
+              {SIDEPANEL_TOOLS.map((tool) => {
+                const ToolIcon = tool.icon;
+                const selected = activeTool === tool.id;
+                return (
+                  <button
+                    key={tool.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={selected}
+                    className={cn("sidepanel-tool-tab", selected && "is-active")}
+                    onClick={() => handleToolChange(tool.id)}
+                  >
+                    <ToolIcon />
+                    <span>{tool.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <ExtensionAccountControl sharedClerkContext />
           </div>
-          {!toast && activeTool === "mobile-scanner" ? (
-            <SidepanelMobilePairingStatus
+
+          {activeTool === "mobile-scanner" ? (
+            <SidepanelScannerControls
               status={scannerStatus}
-              onClick={openMobilePairingPopup}
+              onPair={openMobilePairingPopup}
             />
           ) : null}
+
           {toast && ToastIcon ? (
             <span
               key={toast.id}
               aria-live="polite"
-              className={cn(
-                "volt-toast-enter sidepanel-inline-toast",
-                toneStyles?.text,
-              )}
+              className={cn("volt-toast-enter sidepanel-tool-toast", toneStyles?.text)}
             >
               <ToastIcon className="h-4 w-4 shrink-0" />
               <span className="min-w-0 truncate">{toast.message}</span>
@@ -262,6 +283,133 @@ export default function UnifiedSidepanel() {
   );
 }
 
+function SidepanelScannerControls({
+  onPair,
+  status,
+}: {
+  onPair: () => void;
+  status: ScannerConnectionStatus;
+}) {
+  const getClerkToken = useSidepanelClerkToken();
+  const [sessionLabel, setSessionLabel] = useState("");
+  const [creatingEnrollment, setCreatingEnrollment] = useState(false);
+  const [enrollmentQrDataUrl, setEnrollmentQrDataUrl] = useState<string | null>(null);
+  const [enrollmentError, setEnrollmentError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void getMobileScannerExtensionIdentity()
+      .then((identity) => {
+        if (cancelled) return;
+        setSessionLabel(identity.sessionLabel);
+        void chrome.runtime
+          .sendMessage({ action: "scannerUpdateExtensionIdentity", identity })
+          .catch(() => undefined);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setSessionLabel("Volt for iPhone");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const createFullAppEnrollment = useCallback(async () => {
+    setCreatingEnrollment(true);
+    setEnrollmentError(null);
+    try {
+      const clerkToken = await getClerkToken();
+      if (!clerkToken) throw new Error("Sign in to enroll Volt for iPhone.");
+      const response: unknown = await chrome.runtime.sendMessage({
+        action: "workspaceCreateEnrollment",
+        label: sessionLabel || "Volt for iPhone",
+        clerkToken,
+      });
+      const responseRecord = objectFrom(response);
+      const value = objectFrom(responseRecord?.value);
+      if (responseRecord?.success !== true || typeof value?.enrollmentUrl !== "string") {
+        throw new Error(
+          typeof responseRecord?.error === "string"
+            ? responseRecord.error
+            : "Could not create enrollment QR.",
+        );
+      }
+      const qr = await QRCode.toDataURL(value.enrollmentUrl, {
+        width: 768,
+        margin: 3,
+        errorCorrectionLevel: "H",
+        color: { dark: "#1c1917", light: "#ffffff" },
+      });
+      setEnrollmentQrDataUrl(qr);
+    } catch (error) {
+      setEnrollmentError(
+        error instanceof Error ? error.message : "Could not create enrollment QR.",
+      );
+    } finally {
+      setCreatingEnrollment(false);
+    }
+  }, [getClerkToken, sessionLabel]);
+
+  const closeEnrollment = () => {
+    setEnrollmentQrDataUrl(null);
+    setEnrollmentError(null);
+  };
+
+  return (
+    <>
+      <div className="sidepanel-scanner-controls">
+        <div className="sidepanel-scanner-actions">
+          <button
+            type="button"
+            className="sidepanel-cloud-action"
+            onClick={() => void createFullAppEnrollment()}
+            disabled={creatingEnrollment}
+            aria-label="Connect installed iPhone app"
+            title="Connect installed iPhone app for cloud sync"
+          >
+            {creatingEnrollment ? <Loader2 className="animate-spin" /> : <Cloud />}
+            <span>Cloud sync</span>
+          </button>
+          <SidepanelMobilePairingStatus status={status} onClick={onPair} />
+        </div>
+      </div>
+
+      {enrollmentQrDataUrl || enrollmentError ? (
+        <div
+          className="sidepanel-enrollment-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Connect installed Volt app"
+        >
+          <div className="sidepanel-enrollment-card">
+            <button
+              type="button"
+              className="sidepanel-enrollment-close"
+              onClick={closeEnrollment}
+              aria-label="Close enrollment QR"
+            >
+              <X />
+            </button>
+            <Cloud className="sidepanel-enrollment-icon" />
+            <h2>Connect installed iPhone app</h2>
+            {enrollmentQrDataUrl ? (
+              <>
+                <div className="sidepanel-enrollment-qr">
+                  <img src={enrollmentQrDataUrl} alt="One-time QR to enroll Volt for iPhone" />
+                </div>
+                <p>Scan once in the installed Volt app to enable account-wide cloud sync.</p>
+              </>
+            ) : (
+              <p className="sidepanel-enrollment-error">{enrollmentError}</p>
+            )}
+          </div>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
 function SidepanelMobilePairingStatus({
   onClick,
   status,
@@ -271,12 +419,11 @@ function SidepanelMobilePairingStatus({
 }) {
   const isPaired = status === "connected";
   const isCreating = status === "creating";
-  const isReady = status === "waiting";
-  const label = isPaired ? "Connected" : isCreating ? "Connecting" : isReady ? "Pair Phone" : "Connect Phone";
-  const Icon = isPaired ? Smartphone : isCreating ? Loader2 : isReady ? QrCode : Smartphone;
+  const label = isPaired ? "Connected" : isCreating ? "Connecting" : "Pair phone";
+  const Icon = isPaired ? Smartphone : isCreating ? Loader2 : QrCode;
   const tone = isPaired
     ? "is-paired"
-    : isReady
+    : status === "waiting"
       ? "is-ready"
       : isCreating
         ? "is-creating"

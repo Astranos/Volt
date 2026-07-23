@@ -6,6 +6,10 @@
 
 **Justification:** The activeTab permission allows the extension to access the currently active tab when the user explicitly interacts with the extension. This is used to provide context-aware functionality and display relevant information about the current page when the user opens the sidepanel or popup.
 
+### cookies
+
+**Justification:** The cookies permission lets Clerk's Sync Host securely share the user's existing Volt sign-in session with the extension. Volt uses it only for authentication and workspace access; it does not inspect unrelated site cookies or use cookies for advertising or browsing tracking.
+
 ### alarms
 
 **Justification:** The alarms permission is used to periodically wake the extension's background service worker so the paired mobile scanner can reconnect to a previously authorized Chrome session after Chrome or the mobile app is closed and reopened. The alarm only starts local extension maintenance needed for saved mobile scanner pairings; it does not collect browsing activity or trigger user-facing actions without an existing pairing.
@@ -40,7 +44,11 @@
 
 ### host permissions
 
-**Justification:** Host permissions are required for the extension to interact with specific websites as needed for its core functionality. This includes reading page content for context-aware features and providing enhanced functionality on supported sites.
+**Justification:** Host access powers Volt's selected-text toolbar, UPC highlighter, link previews, and context tools across pages, plus its Shopify and eBay resale helpers. Page content is processed locally unless the user explicitly sends a capture to their private Volt workspace.
+
+### offscreen
+
+**Justification:** Volt uses an offscreen document for the DOM-capable background context required by Clerk session synchronization and WebRTC mobile-scanner signaling and connection support under Manifest V3. It is not used to display hidden ads, track browsing, or execute remote code.
 
 ### remote code
 
@@ -48,15 +56,15 @@
 
 ### scripting
 
-**Justification:** The scripting permission is used to inject content scripts into web pages to provide enhanced functionality and integration with the extension's features. This allows the extension to display UI elements and interact with page content when needed.
+**Justification:** The scripting permission injects Volt's user-facing resale helpers, including selected-text actions, UPC highlighting and copying, link previews, and supported Shopify and eBay tools. Scripts run locally and only send content when the user explicitly uses a sync or scanner action.
 
 ### sidePanel
 
-**Justification:** The sidePanel permission enables the extension to display a persistent side panel in the browser, providing access to Mobile Scanner results, WebRTC pairing controls, and the Offer Calculator while browsing.
+**Justification:** The sidePanel permission provides the unified Volt workspace for the Offer Calculator and mobile Scanner results while the user works in other tabs. It keeps pricing and user-initiated capture tools visible without replacing the current page.
 
 ### storage
 
-**Justification:** Local storage is used to save user preferences, settings, and cached data to improve performance and maintain user customization across browser sessions. No sensitive personal data is stored.
+**Justification:** The storage permission saves extension settings, stable device and pairing identifiers, cached scanner results, and user preferences in Chrome local storage so workflows survive browser restarts. Raw Clerk tokens are not written to extension storage.
 
 ### system.display
 
@@ -64,7 +72,7 @@
 
 ### downloads
 
-**Justification:** The downloads permission is used to save files that users create or request through Volt. This includes saving photos captured from the paired mobile app into the user's Downloads folder, organized under per-session folders, so large image files are stored on the user's computer instead of consuming Chrome extension storage quota. It is also used for explicit file downloads from extension features.
+**Justification:** The downloads permission saves photos explicitly captured and sent from the paired Volt mobile app into the user's Downloads folder and supports other user-requested exports. Volt does not download files without a user-initiated scanner or export action.
 
 ### favicon
 
@@ -76,7 +84,7 @@
 
 ## Single Purpose Description
 
-Volt is a browser extension that provides a command palette, mobile scanner pairing, resale search helpers, and productivity tools for resale workflows.
+Volt provides a resale workflow that combines price research, purchase-offer calculation, browser productivity tools, and user-initiated mobile capture of product text, barcodes, notes, and photos.
 
 ## Detailed Description
 
@@ -85,3 +93,14 @@ Volt is a comprehensive browser extension designed to improve productivity and b
 ## Data Usage Certification
 
 I certify that this extension's data usage complies with the Chrome Web Store Developer Program Policies. The extension minimizes data collection, processes most functionality locally, and only requests permissions that are necessary for its core features. No sensitive personal information is collected or transmitted without explicit user consent.
+
+Disclosed handled-data categories:
+
+- Personally identifiable information.
+- Financial and payment information, limited to subscription/access status.
+- Authentication information handled through Clerk.
+- Location information, including IP-derived connection metadata used by hosted services and WebRTC signaling.
+- Web history processed locally for the user-facing command palette and new-tab experience.
+- Website content processed locally or explicitly captured and synchronized by the user.
+
+Privacy policy: <https://volt.juanquenga.com/privacy>

@@ -237,6 +237,285 @@ body {
   overflow: visible;
 }
 
+.sidepanel-tool-header {
+  flex: none;
+  padding: 12px 12px 6px;
+  position: relative;
+  z-index: 4;
+}
+
+.sidepanel-tool-row {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+.sidepanel-tool-tabs {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0;
+  display: grid;
+  flex: 1;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 0;
+}
+
+.sidepanel-account-control {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  color: #d6d3d1;
+  display: inline-flex;
+  flex: none;
+  font-size: 11px;
+  font-weight: 750;
+  gap: 6px;
+  height: 38px;
+  justify-content: center;
+  min-width: 38px;
+}
+
+button.sidepanel-account-control {
+  cursor: pointer;
+  padding: 0 11px;
+}
+
+.sidepanel-account-control:hover {
+  background: rgba(255, 255, 255, 0.075);
+  border-color: rgba(74, 222, 128, 0.3);
+  color: #f5f5f4;
+}
+
+.sidepanel-account-control > svg {
+  height: 15px;
+  width: 15px;
+}
+
+.sidepanel-account-control.is-signed-in {
+  background: transparent;
+  border: 0;
+}
+
+.sidepanel-account-control.is-loading {
+  opacity: 0.55;
+}
+
+.sidepanel-account-control.is-loading::after {
+  animation: spin 900ms linear infinite;
+  border: 2px solid rgba(168, 162, 158, 0.3);
+  border-radius: 999px;
+  border-top-color: #4ade80;
+  content: "";
+  height: 15px;
+  width: 15px;
+}
+
+.sidepanel-account-control.is-unavailable {
+  opacity: 0.5;
+}
+
+.sidepanel-tool-tab {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  color: rgba(214, 211, 209, 0.72);
+  cursor: pointer;
+  display: flex;
+  font-size: 12px;
+  font-weight: 750;
+  gap: 7px;
+  height: 42px;
+  justify-content: center;
+  min-width: 0;
+  padding: 0 10px;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.sidepanel-tool-tab svg {
+  flex: none;
+  height: 15px;
+  width: 15px;
+}
+
+.sidepanel-tool-tab span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidepanel-tool-tab:hover {
+  background: transparent;
+  color: #f5f5f4;
+}
+
+.sidepanel-tool-tab.is-active {
+  background: transparent;
+  border-bottom-color: #4ade80;
+  box-shadow: none;
+  color: #f5f5f4;
+}
+
+.sidepanel-tool-tab.is-active svg {
+  color: #4ade80;
+}
+
+.sidepanel-scanner-controls {
+  margin-top: 8px;
+}
+
+.sidepanel-scanner-actions {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.sidepanel-scanner-actions .sidepanel-mobile-status {
+  max-width: none;
+  width: 100%;
+}
+
+.sidepanel-cloud-action {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  color: rgba(214, 211, 209, 0.82);
+  cursor: pointer;
+  display: flex;
+  font-size: 12px;
+  font-weight: 750;
+  gap: 7px;
+  height: 34px;
+  justify-content: center;
+  min-width: 0;
+  padding: 0 11px;
+}
+
+.sidepanel-cloud-action:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(74, 222, 128, 0.3);
+  color: #f5f5f4;
+}
+
+.sidepanel-cloud-action:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.sidepanel-cloud-action svg {
+  flex: none;
+  height: 15px;
+  width: 15px;
+}
+
+.sidepanel-cloud-action span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidepanel-tool-toast {
+  align-items: center;
+  display: flex;
+  font-size: 12px;
+  font-weight: 800;
+  gap: 7px;
+  margin-top: 7px;
+  min-width: 0;
+  padding: 0 4px;
+}
+
+.sidepanel-enrollment-overlay {
+  align-items: center;
+  background: rgba(12, 10, 9, 0.72);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 20px;
+  position: fixed;
+  z-index: 50;
+}
+
+.sidepanel-enrollment-card {
+  align-items: center;
+  background: #1c1917;
+  border: 1px solid rgba(214, 211, 209, 0.16);
+  border-radius: 20px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.58);
+  display: flex;
+  flex-direction: column;
+  max-width: 320px;
+  padding: 22px;
+  position: relative;
+  text-align: center;
+  width: 100%;
+}
+
+.sidepanel-enrollment-close {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: #a8a29e;
+  cursor: pointer;
+  display: flex;
+  height: 32px;
+  justify-content: center;
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  width: 32px;
+}
+
+.sidepanel-enrollment-close svg {
+  height: 16px;
+  width: 16px;
+}
+
+.sidepanel-enrollment-icon {
+  color: #4ade80;
+  height: 22px;
+  width: 22px;
+}
+
+.sidepanel-enrollment-card h2 {
+  color: #fafaf9;
+  font-size: 17px;
+  margin: 8px 24px 13px;
+}
+
+.sidepanel-enrollment-card p {
+  color: #a8a29e;
+  font-size: 11px;
+  line-height: 1.45;
+  margin: 12px 0 0;
+}
+
+.sidepanel-enrollment-qr {
+  background: #fff;
+  border-radius: 16px;
+  padding: 10px;
+  width: min(220px, 100%);
+}
+
+.sidepanel-enrollment-qr img {
+  display: block;
+  width: 100%;
+}
+
+.sidepanel-enrollment-card .sidepanel-enrollment-error {
+  color: #fca5a5;
+}
+
 .sidepanel-inline-tool-title-wrap {
   align-items: center;
   display: flex;
@@ -289,6 +568,7 @@ body {
   font-weight: 750;
   gap: 7px;
   height: 34px;
+  justify-content: center;
   max-width: 46%;
   min-width: 0;
   position: relative;
@@ -525,6 +805,18 @@ body {
 }
 
 @media (prefers-color-scheme: light) {
+  .sidepanel-account-control {
+    background: rgba(255, 255, 255, 0.72);
+    border-color: rgba(15, 23, 42, 0.1);
+    color: #57534e;
+  }
+
+  .sidepanel-account-control:hover {
+    background: rgba(255, 255, 255, 0.96);
+    border-color: rgba(22, 163, 74, 0.28);
+    color: #1c1917;
+  }
+
   .top-offers-input-card,
   .top-offers-card,
   .top-offers-value-button,
@@ -580,6 +872,56 @@ body {
 }
 
 @media (prefers-color-scheme: light) {
+  .sidepanel-tool-tabs {
+    background: transparent;
+    border-color: rgba(15, 23, 42, 0.12);
+  }
+
+  .sidepanel-tool-tab {
+    color: #78716c;
+  }
+
+  .sidepanel-tool-tab:hover {
+    color: #1c1917;
+  }
+
+  .sidepanel-tool-tab.is-active {
+    background: transparent;
+    border-bottom-color: #16a34a;
+    box-shadow: none;
+    color: #1c1917;
+  }
+
+  .sidepanel-tool-tab.is-active svg {
+    color: #16a34a;
+  }
+
+  .sidepanel-cloud-action {
+    background: rgba(255, 255, 255, 0.64);
+    border-color: rgba(15, 23, 42, 0.1);
+    color: #78716c;
+  }
+
+  .sidepanel-cloud-action:hover {
+    background: rgba(255, 255, 255, 0.88);
+    border-color: rgba(22, 163, 74, 0.24);
+    color: #1c1917;
+  }
+
+  .sidepanel-enrollment-card {
+    background: #ffffff;
+    border-color: rgba(15, 23, 42, 0.1);
+    box-shadow: 0 24px 70px rgba(15, 23, 42, 0.18);
+  }
+
+  .sidepanel-enrollment-card h2 {
+    color: #1c1917;
+  }
+
+  .sidepanel-enrollment-card p {
+    color: #78716c;
+  }
+
   .sidepanel-inline-tool-title {
     color: #1c1917;
   }
@@ -683,6 +1025,32 @@ body {
 }
 
 @container (max-width: 430px) {
+  .sidepanel-tool-header {
+    padding: 10px 10px 5px;
+  }
+
+  .sidepanel-tool-row {
+    gap: 6px;
+  }
+
+  button.sidepanel-account-control span {
+    display: none;
+  }
+
+  button.sidepanel-account-control {
+    padding: 0;
+    width: 38px;
+  }
+
+  .sidepanel-scanner-actions {
+    gap: 6px;
+  }
+
+  .sidepanel-mobile-status {
+    padding-left: 9px;
+    padding-right: 9px;
+  }
+
   .sidepanel-inline-tool-title-wrap {
     min-height: 50px;
     padding: 10px 18px 5px 10px;

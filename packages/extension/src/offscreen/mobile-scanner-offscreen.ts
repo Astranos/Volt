@@ -3,6 +3,11 @@ import type {
   ScannerConnectionStatus,
 } from "@volt/scanner-protocol";
 import { buildScannerAppClipJoinUrl } from "@volt/scanner-protocol";
+import { createClerkClient } from "@clerk/chrome-extension/client";
+import {
+  CLERK_PUBLISHABLE_KEY,
+  CLERK_SYNC_HOST,
+} from "../access/config";
 import {
   MobileScannerSession,
   type BarcodeMessage,
@@ -69,6 +74,21 @@ function isJoinWindowActive(state: MobileScannerSessionState) {
   if (!state.joinWindowExpiresAt) return true;
   const expiresAt = Date.parse(state.joinWindowExpiresAt);
   return Number.isFinite(expiresAt) && expiresAt > Date.now();
+}
+
+async function getClerkToken() {
+  if (!CLERK_PUBLISHABLE_KEY) return null;
+  const clerk = await createClerkClient({
+    publishableKey: CLERK_PUBLISHABLE_KEY,
+    syncHost: CLERK_SYNC_HOST,
+    background: true,
+  });
+  if (!clerk.session) return null;
+  return clerk.session.getToken({
+    template: "convex",
+    organizationId: clerk.organization?.id,
+    skipCache: true,
+  });
 }
 
 class MobileScannerOffscreenSession {
@@ -152,7 +172,7 @@ class MobileScannerOffscreenSession {
           .catch(() => undefined);
       },
       log: (...args) => {
-        console.warn(...args);
+        console.debug(...args);
         void chrome.runtime.sendMessage({
           action: "scannerDebugLog",
           source: "scanner-offscreen",
@@ -273,7 +293,24 @@ function sendScannerError(sendResponse: (response?: unknown) => void, err: unkno
   });
 }
 
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.action === "accessOffscreenGetClerkToken") {
+    if (sender.id !== chrome.runtime.id || sender.tab) {
+      sendResponse({ success: false, error: "unauthorized_extension_sender" });
+      return false;
+    }
+    getClerkToken()
+      .then((token) => sendResponse({ success: true, token }))
+      .catch((error: unknown) =>
+        sendResponse({
+          success: false,
+          token: null,
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
+    return true;
+  }
+
   if (message.action === "scannerOffscreenPing") {
     sendResponse({ ready: true });
     return false;
@@ -324,13 +361,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 
   if (message.action === "scannerOffscreenPollReconnectRequests") {
-    console.warn("[Volt Scanner Reconnect] offscreen poll requested", {
+    console.debug("[Volt Scanner Reconnect] offscreen poll requested", {
       reason: message.reason,
     });
     mobileScannerSession
       .pollReconnectRequestsNow()
       .then((state) => {
-        console.warn("[Volt Scanner Reconnect] offscreen poll completed", {
+        console.debug("[Volt Scanner Reconnect] offscreen poll completed", {
           reason: message.reason,
           status: state.status,
           sessionId: state.sessionId,

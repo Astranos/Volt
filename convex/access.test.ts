@@ -375,6 +375,60 @@ describe("account and entitlement access", () => {
     expect((await firstUser.mutation(getStatus, credentials)).body.freeSessionsRemaining).toBe(4);
   });
 
+  test("does not let stale anonymous credentials block a valid Clerk account", async () => {
+    const t = convexTest(schema, modules);
+    const signedIn = t.withIdentity({
+      subject: "user_with_stale_trial",
+      tokenIdentifier: "clerk|user_with_stale_trial",
+      email: "person@example.com",
+    });
+
+    const status = await signedIn.mutation(getStatus, {
+      anonymousId: "stale-anonymous-id",
+      anonymousSecret: "stale-anonymous-secret",
+    });
+
+    expect(status).toMatchObject({
+      statusCode: 200,
+      body: {
+        clerkUserId: "user_with_stale_trial",
+        access: "trial",
+        isAuthorized: true,
+      },
+    });
+  });
+
+  test.each([
+    ["juanquenga@gmail.com", true, true],
+    ["JUANQUENGA@GMAIL.COM", true, true],
+    ["manager@paymore.com", true, true],
+    ["MANAGER@PAYMORE.COM", true, true],
+    ["unverified@paymore.com", false, false],
+    ["manager@sub.paymore.com", true, false],
+    ["manager@paymore.com.evil.test", true, false],
+    ["manager@notpaymore.com", true, false],
+  ])("resolves complimentary paid access for %s", async (email, emailVerified, complimentary) => {
+    const t = convexTest(schema, modules);
+    const signedIn = t.withIdentity({
+      subject: `user_${email.toLowerCase()}`,
+      tokenIdentifier: `clerk|${email.toLowerCase()}`,
+      email,
+      email_verified: emailVerified,
+    });
+
+    const status = await signedIn.mutation(getStatus, {});
+    expect(status.body).toMatchObject(
+      complimentary
+        ? {
+            access: "complimentary",
+            isAuthorized: true,
+            requiresSubscription: false,
+            subscriptionStatus: "active",
+          }
+        : { access: "trial", subscriptionStatus: "none" },
+    );
+  });
+
   test("grants unlimited complimentary access to the configured Clerk organization", async () => {
     vi.stubEnv("CLERK_COMPLIMENTARY_ORGANIZATION_ID", "org_volt_workplace");
     const t = convexTest(schema, modules);

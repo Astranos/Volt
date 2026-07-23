@@ -1,11 +1,11 @@
-import { createClerkClient } from "@clerk/chrome-extension/client";
 import {
   accessStatusFromPayload,
   errorMessageFromPayload,
   type AccessRequestResult,
   type ExtensionAccessStatus,
 } from "../access/access-contract";
-import { CLERK_PUBLISHABLE_KEY, VOLT_FULL_APP_URL } from "../access/config";
+import { VOLT_FULL_APP_URL } from "../access/config";
+import { settleWithin } from "../access/async-timeout";
 import {
   isTrustedExtensionPageSender,
   type ExtensionMessageSender,
@@ -20,6 +20,7 @@ import {
 const ANONYMOUS_CREDENTIALS_KEY = "volt.access.anonymousCredentials";
 const ACTIVE_USAGE_SESSION_KEY = "volt.access.activeUsageSession";
 const ACCESS_HARD_STOP_ALARM = "volt.access.sessionHardStop";
+const CLERK_TOKEN_TIMEOUT_MS = 10_000;
 
 type LogFn = (...args: unknown[]) => void;
 
@@ -32,6 +33,7 @@ type AccessControllerOptions = {
   chromeApi: typeof chrome;
   disconnectScanner: () => Promise<unknown>;
   log: LogFn;
+  requestClerkToken: () => Promise<string | null>;
   signalUrl: string;
 };
 
@@ -139,31 +141,21 @@ export function createAccessController({
   chromeApi,
   disconnectScanner,
   log,
+  requestClerkToken,
   signalUrl,
 }: AccessControllerOptions) {
-  async function freshClerkClient() {
-    if (!CLERK_PUBLISHABLE_KEY) return null;
+  let anonymousRegistration: Promise<void> | null = null;
+
+  async function getClerkToken() {
     try {
-      return await createClerkClient({
-        publishableKey: CLERK_PUBLISHABLE_KEY,
-        background: true,
-      })
+      return await settleWithin(requestClerkToken(), CLERK_TOKEN_TIMEOUT_MS);
     } catch (error) {
       log(
-        "Failed to load the current Clerk session in the service worker",
+        "Failed to refresh the Clerk token; continuing with scanner fallback access",
         error instanceof Error ? error.message : error,
       );
       return null;
     }
-  }
-  let anonymousRegistration: Promise<void> | null = null;
-
-  async function getClerkToken() {
-    const clerk = await freshClerkClient();
-    return clerk?.session?.getToken({
-      template: "convex",
-      organizationId: clerk.organization?.id,
-    }) ?? null;
   }
 
   function accessUrl(path: string) {
@@ -192,8 +184,9 @@ export function createAccessController({
     }
     if (hasBody) headers.set("Content-Type", "application/json");
 
-    // A fresh background client reloads the latest sign-in and organization
-    // selection from Clerk's SDK-managed extension storage for every request.
+    // The DOM-capable offscreen document reloads Clerk's latest sign-in and
+    // organization selection for every request. Keeping Clerk out of this
+    // module prevents its browser UI bundle from crashing the service worker.
     const token = await getClerkToken();
     if (token) headers.set("Authorization", `Bearer ${token}`);
     return headers;
@@ -224,7 +217,8 @@ export function createAccessController({
     if (!force && anonymousRegistration) return anonymousRegistration;
     anonymousRegistration = (async () => {
       const existing = await anonymousCredentials();
-      const { payload, response } = await requestJson(
+      let replacedInvalidCredentials = false;
+      let { payload, response } = await requestJson(
         accessUrl("/api/access/anonymous"),
         {
           method: "POST",
@@ -232,6 +226,18 @@ export function createAccessController({
           includeAnonymous: Boolean(existing),
         },
       );
+      if (
+        existing
+        && response.status === 401
+        && errorMessageFromPayload(payload, "") === "Invalid anonymous trial credentials"
+      ) {
+        await chromeApi.storage.local.remove(ANONYMOUS_CREDENTIALS_KEY);
+        replacedInvalidCredentials = true;
+        ({ payload, response } = await requestJson(
+          accessUrl("/api/access/anonymous"),
+          { method: "POST", body: {}, includeAnonymous: false },
+        ));
+      }
       if (!response.ok) {
         throw new Error(
           errorMessageFromPayload(
@@ -240,7 +246,7 @@ export function createAccessController({
           ),
         );
       }
-      if (existing) return;
+      if (existing && !replacedInvalidCredentials) return;
 
       const record = objectFrom(payload);
       const anonymousId = nonEmptyString(record?.anonymousId);

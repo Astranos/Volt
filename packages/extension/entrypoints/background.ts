@@ -29,7 +29,6 @@ import { createTabDeliveryController } from "../src/background/tab-delivery";
 import { createToolPopupController } from "../src/background/tool-popup-controller";
 import { registerUtilityActions } from "../src/background/utility-action-controller";
 import { handleTabMessage } from "../src/background/tab-message-handler";
-import { installEditableTracker } from "../src/components/sidepanel/mobile-scanner-page-bridge";
 import {
   getMessageAction,
   isScannerOffscreenRuntimeMessage,
@@ -102,6 +101,14 @@ export default defineBackground({
           action: "scannerOffscreenDisconnect",
         }),
       log,
+      requestClerkToken: async () => {
+        const response = await scannerOffscreen.sendScannerOffscreenMessage({
+          action: "accessOffscreenGetClerkToken",
+          source: "volt-service-worker",
+        });
+        const record = parseMessageRecord(response);
+        return typeof record?.token === "string" ? record.token : null;
+      },
       signalUrl: EXTENSION_SCANNER_SIGNAL_URL,
     });
     const cloudWorkspace = createCloudWorkspaceController({
@@ -153,7 +160,7 @@ export default defineBackground({
 
     async function resetMobileScannerActionPopup() {
       try {
-        await chrome.action.setPopup({ popup: MOBILE_SCANNER_POPUP_PATH });
+        await chrome.action.setPopup({ popup: "" });
       } catch (_) {}
     }
 
@@ -170,35 +177,8 @@ export default defineBackground({
       });
       try {
         await chrome.action.openPopup();
-      } catch (error) {
+      } finally {
         await resetMobileScannerActionPopup();
-        throw error;
-      }
-    }
-
-    async function primeActiveTabCursorTarget(tab?: { id?: number } | null) {
-      const targetTab =
-        typeof tab?.id === "number"
-          ? tab
-          : (await chrome.tabs.query({ active: true, currentWindow: true }))[0];
-      if (typeof targetTab?.id !== "number") return null;
-
-      try {
-        const results = await chrome.scripting.executeScript({
-          target: { tabId: targetTab.id, allFrames: true },
-          func: installEditableTracker,
-        });
-        const match = results.find((result) => result.result);
-        if (!match?.result) return null;
-        const sender = {
-          tab: { id: targetTab.id },
-          frameId: match.frameId,
-        } as Parameters<typeof scannerTargets.updateMobileCaptureTarget>[1];
-        await scannerTargets.updateMobileCaptureTarget(match.result, sender);
-        return match.result;
-      } catch (error) {
-        log("Failed to prime mobile cursor target", error instanceof Error ? error.message : error);
-        return null;
       }
     }
 
@@ -273,13 +253,7 @@ export default defineBackground({
       }).register();
 
       chrome.action.onClicked.addListener((tab) => {
-        void primeActiveTabCursorTarget(tab).then((target) => {
-          scannerMessages.handleScannerMessage(
-            { action: "openMobileCapture", surface: "popup", target },
-            { tab },
-            () => {}
-          );
-        });
+        void sidepanelTools.toggleForTab(tab.id, "mobile-scanner", "open");
       });
 
       chrome.commands.onCommand.addListener((command) => {
