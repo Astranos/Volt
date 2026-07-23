@@ -1,13 +1,20 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
   CURSOR_DELIVERY_LEDGER_KEY,
+  CURSOR_DELIVERY_LEDGER_LIMIT,
   createCloudCursorDeliveryController,
 } from "./cloud-cursor-delivery-controller.ts";
 
-function createChromeStorage() {
-  const values = {};
+const controllerSource = readFileSync(
+  new URL("./cloud-cursor-delivery-controller.ts", import.meta.url),
+  "utf8",
+);
+
+function createChromeStorage(initialValues = {}, onSet = () => {}) {
+  const values = { ...initialValues };
   return {
     chromeApi: {
       storage: {
@@ -17,6 +24,7 @@ function createChromeStorage() {
           },
           async set(next) {
             Object.assign(values, next);
+            onSet(next);
           },
         },
       },
@@ -35,6 +43,71 @@ function delivery(overrides = {}) {
     ...overrides,
   };
 }
+
+test("source persists the ledger before attempting cursor insertion", () => {
+  const processBatch = controllerSource.match(
+    /async function processBatch[\s\S]*?function handleDeliveries/,
+  )?.[0] ?? "";
+  const saveIndex = processBatch.indexOf("await saveLedger(ledger)");
+  const insertIndex = processBatch.indexOf("await insertScannerText");
+  assert.ok(saveIndex >= 0 && saveIndex < insertIndex);
+});
+
+test("persists the delivery attempt before inserting", async () => {
+  const events = [];
+  const { chromeApi } = createChromeStorage({}, () => events.push("ledger"));
+  const controller = createCloudCursorDeliveryController({
+    chromeApi,
+    insertScannerText: async () => {
+      events.push("insert");
+      return true;
+    },
+    acknowledgeDelivery: async () => events.push("ack"),
+    log: () => {},
+    now: () => 1_000,
+  });
+
+  await controller.handleDeliveries([delivery()]);
+
+  assert.equal(events[0], "ledger");
+  assert.ok(events.indexOf("ledger") < events.indexOf("insert"));
+  assert.ok(events.indexOf("insert") < events.indexOf("ack"));
+});
+
+test("never caps away unacknowledged ledger entries", async () => {
+  const unacknowledged = Object.fromEntries(
+    Array.from({ length: CURSOR_DELIVERY_LEDGER_LIMIT + 1 }, (_, index) => [
+      `existing-${index}`,
+      {
+        state: "failed",
+        errorCode: "no-editable-field",
+        processedAt: index,
+        acknowledged: false,
+      },
+    ]),
+  );
+  const { chromeApi, values } = createChromeStorage({
+    [CURSOR_DELIVERY_LEDGER_KEY]: unacknowledged,
+  });
+  const controller = createCloudCursorDeliveryController({
+    chromeApi,
+    insertScannerText: async () => false,
+    acknowledgeDelivery: async () => {
+      throw new Error("offline");
+    },
+    log: () => {},
+    now: () => 1_000,
+  });
+
+  await controller.handleDeliveries([delivery({ deliveryId: "new-unacknowledged" })]);
+
+  assert.equal(
+    Object.keys(values[CURSOR_DELIVERY_LEDGER_KEY]).length,
+    CURSOR_DELIVERY_LEDGER_LIMIT + 2,
+  );
+  assert.ok(values[CURSOR_DELIVERY_LEDGER_KEY]["existing-0"]);
+  assert.ok(values[CURSOR_DELIVERY_LEDGER_KEY]["new-unacknowledged"]);
+});
 
 test("expired cursor deliveries are failed without insertion and recorded", async () => {
   const { chromeApi, values } = createChromeStorage();

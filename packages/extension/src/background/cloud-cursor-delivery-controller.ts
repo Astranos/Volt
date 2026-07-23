@@ -105,9 +105,7 @@ export function createCloudCursorDeliveryController({
     const entries = Object.entries(ledger)
       .filter(([, outcome]) => !outcome.acknowledged || outcome.processedAt >= cutoff)
       .sort((lhs, rhs) => rhs[1].processedAt - lhs[1].processedAt);
-    const unacknowledged = entries
-      .filter(([, outcome]) => !outcome.acknowledged)
-      .slice(0, CURSOR_DELIVERY_LEDGER_LIMIT);
+    const unacknowledged = entries.filter(([, outcome]) => !outcome.acknowledged);
     const acknowledged = entries
       .filter(([, outcome]) => outcome.acknowledged)
       .slice(0, Math.max(0, CURSOR_DELIVERY_LEDGER_LIMIT - unacknowledged.length));
@@ -145,27 +143,45 @@ export function createCloudCursorDeliveryController({
         continue;
       }
 
-      const outcome: CursorDeliveryOutcome = delivery.expiresAt <= now()
+      const processedAt = now();
+      let outcome: CursorDeliveryOutcome = delivery.expiresAt <= processedAt
         ? {
             state: "failed",
             errorCode: "expired",
-            processedAt: now(),
+            processedAt,
             acknowledged: false,
           }
-        : await insertScannerText(delivery.text, {
-            kind: delivery.kind,
-            ...(delivery.format ? { format: delivery.format } : {}),
-          })
-          ? { state: "delivered", processedAt: now(), acknowledged: false }
-          : {
-              state: "failed",
-              errorCode: "no-editable-field",
-              processedAt: now(),
-              acknowledged: false,
-            };
+        : {
+            state: "failed",
+            errorCode: "no-editable-field",
+            processedAt,
+            acknowledged: false,
+          };
 
+      // Persist the attempt before insertion: a crash may miss one insert, but can never duplicate one.
       ledger[delivery.deliveryId] = outcome;
       await saveLedger(ledger);
+
+      if (outcome.errorCode !== "expired") {
+        try {
+          const inserted = await insertScannerText(delivery.text, {
+            kind: delivery.kind,
+            ...(delivery.format ? { format: delivery.format } : {}),
+          });
+          if (inserted) {
+            outcome = { state: "delivered", processedAt, acknowledged: false };
+          }
+        } catch (error) {
+          log(
+            "cloud cursor delivery insertion failed",
+            delivery.deliveryId,
+            error instanceof Error ? error.message : error,
+          );
+        }
+        ledger[delivery.deliveryId] = outcome;
+        await saveLedger(ledger);
+      }
+
       await acknowledge(ledger, delivery.deliveryId, outcome);
     }
   }

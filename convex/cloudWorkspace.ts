@@ -352,7 +352,7 @@ export const bootstrapMobileDevice = mutation({
       if (existing && existing.workspaceId !== workspace._id) {
         throw new ConvexError("Existing device belongs to another workspace");
       }
-      if (existing && existing.revokedAt === undefined) {
+      if (existing?.kind === "ios" && existing.revokedAt === undefined) {
         const deviceSecret = randomOpaqueSecret();
         await ctx.db.patch(existing._id, {
           credentialHash: await sha256Hex(deviceSecret),
@@ -402,11 +402,42 @@ export const registerComputer = mutation({
       .query("workspaceDevices")
       .withIndex("by_deviceId", (q) => q.eq("deviceId", args.installationId))
       .unique();
-    if (existing && existing.workspaceId !== workspace._id) {
+    if (existing && existing.kind !== "chrome") {
       throw new ConvexError("Computer installation id is already registered");
     }
     let deviceId: Id<"workspaceDevices">;
-    if (existing) {
+    if (existing && existing.workspaceId !== workspace._id) {
+      const staleDeliveries = await ctx.db
+        .query("cursorDeliveries")
+        .withIndex("by_targetDeviceId_and_state", (q) =>
+          q.eq("targetDeviceId", args.installationId).eq("state", "pending"),
+        )
+        .collect();
+      for (const delivery of staleDeliveries) {
+        if (delivery.workspaceId === existing.workspaceId) {
+          await ctx.db.patch(delivery._id, {
+            state: "failed",
+            errorCode: "target-rebound",
+            updatedAt: now,
+          });
+        }
+      }
+      const stalePresence = await ctx.db
+        .query("workspacePresence")
+        .withIndex("by_deviceId", (q) => q.eq("deviceId", args.installationId))
+        .unique();
+      if (stalePresence) await ctx.db.delete(stalePresence._id);
+      await ctx.db.delete(existing._id);
+      deviceId = await ctx.db.insert("workspaceDevices", {
+        workspaceId: workspace._id,
+        deviceId: args.installationId,
+        credentialHash: await sha256Hex(randomOpaqueSecret()),
+        kind: "chrome",
+        label: args.label,
+        createdAt: now,
+        lastSeenAt: now,
+      });
+    } else if (existing) {
       await ctx.db.patch(existing._id, {
         label: args.label,
         lastSeenAt: now,
@@ -951,7 +982,10 @@ export const queueCursorDelivery = mutation({
       state: "pending",
       attempts: 0,
       clientCreatedAt: args.clientCreatedAt,
-      expiresAt: args.clientCreatedAt + CURSOR_DELIVERY_TTL_MS,
+      expiresAt: Math.min(
+        args.clientCreatedAt + CURSOR_DELIVERY_TTL_MS,
+        now + CURSOR_DELIVERY_TTL_MS,
+      ),
       createdAt: now,
       updatedAt: now,
     });
@@ -968,7 +1002,7 @@ export const pendingCursorDeliveries = query({
       .withIndex("by_deviceId", (q) => q.eq("deviceId", args.installationId))
       .unique();
     if (!computer || computer.workspaceId !== workspace._id || computer.kind !== "chrome" || computer.revokedAt) {
-      throw new ConvexError("Registered computer not found");
+      return [];
     }
     const deliveries = await ctx.db
       .query("cursorDeliveries")

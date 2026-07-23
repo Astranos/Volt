@@ -36,6 +36,7 @@ final class CloudWorkspaceStore {
     @ObservationIgnored private var clerkForBootstrap: Clerk?
     @ObservationIgnored private var syncTask: Task<Void, Never>?
     @ObservationIgnored private var retryTask: Task<Void, Never>?
+    @ObservationIgnored private var syncRequestedWhileDraining = false
 
     init(
         api: MobileCloudAPI = MobileCloudAPIClient(baseURL: AppConfiguration.convexSiteURL),
@@ -292,7 +293,12 @@ final class CloudWorkspaceStore {
     }
 
     func requestSync() {
-        guard activeCredential != nil, syncTask == nil else { return }
+        guard activeCredential != nil else { return }
+        if syncTask != nil {
+            syncRequestedWhileDraining = true
+            return
+        }
+        syncRequestedWhileDraining = false
         retryTask?.cancel()
         retryTask = nil
         syncTask = Task { [weak self] in
@@ -322,6 +328,7 @@ final class CloudWorkspaceStore {
     private func cancelUploadTasks() {
         syncTask?.cancel()
         syncTask = nil
+        syncRequestedWhileDraining = false
         retryTask?.cancel()
         retryTask = nil
     }
@@ -331,7 +338,12 @@ final class CloudWorkspaceStore {
         defer {
             isSyncing = false
             syncTask = nil
-            scheduleRetryIfNeeded()
+            if syncRequestedWhileDraining || hasReadyRecordsForActiveCredential {
+                syncRequestedWhileDraining = false
+                requestSync()
+            } else {
+                scheduleRetryIfNeeded()
+            }
         }
         guard let credential,
               credential.deviceId == activeCredential?.deviceId,
@@ -392,11 +404,16 @@ final class CloudWorkspaceStore {
         }
     }
 
+    private var hasReadyRecordsForActiveCredential: Bool {
+        guard let ownerClerkUserId = activeCredential?.clerkUserId else { return false }
+        return !outbox.readyRecords(ownerClerkUserId: ownerClerkUserId).isEmpty
+    }
+
     private func scheduleRetryIfNeeded() {
         guard let credential = activeCredential,
               let ownerClerkUserId = credential.clerkUserId,
               let retryAt = outbox.records
-                .filter { $0.ownerClerkUserId == ownerClerkUserId && $0.state == .failed }
+                .filter({ $0.ownerClerkUserId == ownerClerkUserId && $0.state == .failed })
                 .compactMap(\.nextAttemptAt)
                 .min()
         else { return }

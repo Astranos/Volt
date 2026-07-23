@@ -106,6 +106,24 @@ test("outbox ownership prevents silent cross-account upload and requires a decis
   assert.match(rootSource, /Delete Pending Captures/);
 });
 
+test("outbox sync requests during a drain schedule an immediate follow-up drain", () => {
+  assert.match(workspaceSource, /private var syncRequestedWhileDraining = false/);
+  const requestSync = workspaceSource.match(/func requestSync\(\)[\s\S]*?private var activeCredential/)?.[0] ?? "";
+  assert.match(
+    requestSync,
+    /if syncTask != nil \{\s*syncRequestedWhileDraining = true\s*return\s*\}/,
+  );
+  const drainOutbox = workspaceSource.match(/private func drainOutbox\(\) async[\s\S]*?private func scheduleRetryIfNeeded/)?.[0] ?? "";
+  assert.match(
+    drainOutbox,
+    /syncTask = nil\s*if syncRequestedWhileDraining \|\| hasReadyRecordsForActiveCredential \{\s*syncRequestedWhileDraining = false\s*requestSync\(\)/,
+  );
+  assert.match(
+    drainOutbox,
+    /return !outbox\.readyRecords\(ownerClerkUserId: ownerClerkUserId\)\.isEmpty/,
+  );
+});
+
 test("cloud cursor target and per-result delivery are optional downstream work", () => {
   assert.match(cloudAPISource, /api\/mobile\/computers\/list/);
   assert.match(cloudAPISource, /api\/mobile\/cursor-target/);

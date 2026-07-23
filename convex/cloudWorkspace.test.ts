@@ -490,10 +490,14 @@ describe("cloud scanner workspace", () => {
     await expect(t.mutation(ensureWorkspace, {})).rejects.toThrow(/Authentication required/);
   });
 
-  test("registers a signed-in Chrome installation idempotently within its tenant", async () => {
+  test("rebinds a signed-in Chrome installation across accounts without leaking pending deliveries", async () => {
     const t = convexTest(schema, modules);
     const alice = t.withIdentity({ subject: "computer-owner" });
     const bob = t.withIdentity({ subject: "different-owner" });
+    const phone = await alice.mutation(bootstrapMobileDevice, {
+      installationId: "computer-owner-phone",
+      label: "Alice phone",
+    });
     const first = await alice.mutation(registerComputer, {
       installationId: "stable-extension-installation",
       label: "Desk Chrome",
@@ -505,16 +509,54 @@ describe("cloud scanner workspace", () => {
       capabilities: ["cursor-insertion", "dictation"],
     });
     expect(heartbeat.registrationId).toBe(first.registrationId);
-    await expect(
-      bob.mutation(registerComputer, {
-        installationId: "stable-extension-installation",
-        label: "Not Bob's computer",
-      }),
-    ).rejects.toThrow(/already registered/);
-    expect(await t.run((ctx) => ctx.db.query("workspaceDevices").collect())).toHaveLength(1);
+
+    const credential = { deviceId: phone.deviceId, deviceSecret: phone.deviceSecret };
+    await t.mutation(putBatch, {
+      ...credential,
+      batchId: "pre-rebind-batch",
+      clientCreatedAt: Date.now(),
+      results: [result("pre-rebind-result")],
+    });
+    await t.mutation(queueCursorDelivery, {
+      ...credential,
+      deliveryId: "pre-rebind-delivery",
+      resultId: "pre-rebind-result",
+      targetDeviceId: "stable-extension-installation",
+      kind: "text",
+      text: "pre-rebind-result",
+      clientCreatedAt: Date.now(),
+    });
+
+    const rebound = await bob.mutation(registerComputer, {
+      installationId: "stable-extension-installation",
+      label: "Bob's computer",
+      capabilities: ["cursor-insertion"],
+    });
+    expect(rebound.workspaceId).not.toBe(first.workspaceId);
+    expect(rebound.registrationId).not.toBe(first.registrationId);
+    expect(await alice.query(pendingCursorDeliveries, {
+      installationId: "stable-extension-installation",
+    })).toEqual([]);
+    expect(await bob.query(pendingCursorDeliveries, {
+      installationId: "stable-extension-installation",
+    })).toEqual([]);
+
+    const devices = await t.run((ctx) => ctx.db.query("workspaceDevices").collect());
+    expect(devices).toHaveLength(2);
+    expect(devices.find((device) => device.deviceId === "stable-extension-installation")).toMatchObject({
+      workspaceId: rebound.workspaceId,
+      kind: "chrome",
+      label: "Bob's computer",
+    });
+    const staleDelivery = await t.run((ctx) => ctx.db.query("cursorDeliveries").unique());
+    expect(staleDelivery).toMatchObject({
+      workspaceId: first.workspaceId,
+      state: "failed",
+      errorCode: "target-rebound",
+    });
   });
 
-  test("bootstraps an account-owned phone credential, rotates it, and rejects cross-workspace rotation", async () => {
+  test("bootstraps only iOS credentials, rotates them, and rejects cross-workspace rotation", async () => {
     const t = convexTest(schema, modules);
     const alice = t.withIdentity({ subject: "bootstrap-alice", name: "Alice" });
     const bob = t.withIdentity({ subject: "bootstrap-bob", name: "Bob" });
@@ -541,6 +583,27 @@ describe("cloud scanner workspace", () => {
       deviceSecret: issued.deviceSecret,
     })).rejects.toThrow(/Invalid or revoked device credential/);
     expect(await t.run((ctx) => ctx.db.query("workspaceDevices").collect())).toHaveLength(1);
+
+    await alice.mutation(registerComputer, {
+      installationId: "bootstrap-alice-chrome",
+      label: "Alice Chrome",
+      capabilities: ["cursor-insertion"],
+    });
+    const chromeBefore = await t.run(async (ctx) => ctx.db
+      .query("workspaceDevices")
+      .withIndex("by_deviceId", (q) => q.eq("deviceId", "bootstrap-alice-chrome"))
+      .unique());
+    const issuedFromChromeId = await alice.mutation(bootstrapMobileDevice, {
+      installationId: "alice-installation",
+      label: "Alice replacement iPhone",
+      existingDeviceId: "bootstrap-alice-chrome",
+    });
+    expect(issuedFromChromeId.deviceId).not.toBe("bootstrap-alice-chrome");
+    const devicesAfterChromeReuseAttempt = await t.run((ctx) => ctx.db.query("workspaceDevices").collect());
+    expect(devicesAfterChromeReuseAttempt.find((device) => device.deviceId === "bootstrap-alice-chrome"))
+      .toMatchObject({ kind: "chrome", credentialHash: chromeBefore?.credentialHash });
+    expect(devicesAfterChromeReuseAttempt.find((device) => device.deviceId === issuedFromChromeId.deviceId))
+      .toMatchObject({ kind: "ios" });
 
     const bobDevice = await bob.mutation(bootstrapMobileDevice, {
       installationId: "bob-installation",
@@ -701,6 +764,42 @@ describe("cloud scanner workspace", () => {
     });
   });
 
+  test("caps future-dated cursor delivery expiry at one server-side TTL", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-23T12:00:00Z"));
+    const t = convexTest(schema, modules);
+    const signedIn = t.withIdentity({ subject: "future-delivery-owner" });
+    const phone = await signedIn.mutation(bootstrapMobileDevice, {
+      installationId: "future-delivery-phone",
+      label: "Future delivery phone",
+    });
+    await signedIn.mutation(registerComputer, {
+      installationId: "future-delivery-chrome",
+      label: "Future delivery Chrome",
+      capabilities: ["cursor-insertion"],
+    });
+    const credential = { deviceId: phone.deviceId, deviceSecret: phone.deviceSecret };
+    await t.mutation(putBatch, {
+      ...credential,
+      batchId: "future-delivery-batch",
+      clientCreatedAt: Date.now(),
+      results: [result("future-delivery-result")],
+    });
+    const serverNow = Date.now();
+    await t.mutation(queueCursorDelivery, {
+      ...credential,
+      deliveryId: "future-delivery",
+      resultId: "future-delivery-result",
+      targetDeviceId: "future-delivery-chrome",
+      kind: "text",
+      text: "future-delivery-result",
+      clientCreatedAt: serverNow + 365 * 24 * 60 * 60 * 1000,
+    });
+
+    const stored = await t.run((ctx) => ctx.db.query("cursorDeliveries").unique());
+    expect(stored?.expiresAt).toBe(serverNow + CURSOR_DELIVERY_TTL_MS);
+  });
+
   test("scopes pending cursor deliveries to the authenticated registered computer", async () => {
     const t = convexTest(schema, modules);
     const alice = t.withIdentity({ subject: "pending-alice" });
@@ -742,9 +841,9 @@ describe("cloud scanner workspace", () => {
     expect(await bob.query(pendingCursorDeliveries, {
       installationId: "pending-bob-chrome",
     })).toEqual([]);
-    await expect(bob.query(pendingCursorDeliveries, {
+    expect(await bob.query(pendingCursorDeliveries, {
       installationId: "pending-alice-chrome",
-    })).rejects.toThrow(/Registered computer not found/);
+    })).toEqual([]);
   });
 
   test("guards cursor delivery acknowledgement transitions and keeps terminal states immutable", async () => {
