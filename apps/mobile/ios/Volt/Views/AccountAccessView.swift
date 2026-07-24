@@ -5,7 +5,6 @@ import SwiftUI
 struct AccountAccessView: View {
     @Environment(Clerk.self) private var clerk
     @Environment(AccessStore.self) private var accessStore
-    @State private var isAuthPresented = false
 
     var body: some View {
         Form {
@@ -24,9 +23,6 @@ struct AccountAccessView: View {
             }
         }
         .navigationTitle("Volt Access")
-        .sheet(isPresented: $isAuthPresented) {
-            AuthView()
-        }
         .refreshable {
             await accessStore.refresh(using: clerk)
         }
@@ -34,10 +30,7 @@ struct AccountAccessView: View {
 
     private var accountSection: some View {
         Section("Account") {
-            UserButton(signedOutContent: {
-                Button("Sign in or create account", systemImage: "person.crop.circle", action: presentAuth)
-                    .frame(minHeight: 44)
-            })
+            UserButton()
 
             if let user = clerk.user {
                 LabeledContent(
@@ -45,7 +38,7 @@ struct AccountAccessView: View {
                     value: user.primaryEmailAddress?.emailAddress ?? user.id
                 )
             } else {
-                Text("Your five free scanner sessions are managed anonymously by Chrome. Sign in here to use workplace access or subscribe across devices.")
+                Text("Sign in again to access your Volt workspace.")
                     .foregroundStyle(.secondary)
             }
         }
@@ -60,7 +53,7 @@ struct AccountAccessView: View {
                     value: clerk.organization?.name ?? accessStore.status?.organizationId ?? "Personal"
                 )
             } else {
-                LabeledContent("Current", value: "Chrome trial")
+                LabeledContent("Current", value: "Signed out")
             }
         }
     }
@@ -79,7 +72,8 @@ struct AccountAccessView: View {
             } else if accessStore.isRefreshing {
                 ProgressView("Checking Volt access…")
             } else if clerk.user == nil {
-                LabeledContent("Free Sessions", value: "Up to 5 in Chrome")
+                Text("Sign in to check your access.")
+                    .foregroundStyle(.secondary)
             } else {
                 Text("Pull to refresh your Volt access status.")
                     .foregroundStyle(.secondary)
@@ -109,10 +103,6 @@ struct AccountAccessView: View {
         case .expired:
             "Expired"
         }
-    }
-
-    private func presentAuth() {
-        isAuthPresented = true
     }
 
     private func refreshAccess() {

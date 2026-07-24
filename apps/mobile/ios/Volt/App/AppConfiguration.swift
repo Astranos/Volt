@@ -1,14 +1,11 @@
 import Foundation
 
 enum AppConfiguration {
+    static let clerkPublishableKey = "pk_live_Y2xlcmsudm9sdC5qdWFucXVlbmdhLmNvbSQ"
     static let privacyPolicyURL = URL(string: "https://volt-scanner.vercel.app/privacy")!
     static let termsOfUseURL = URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")!
     static let defaultStoreKitProductID = "com.volt.mobile.pro.monthly"
     static let defaultAppStoreID = "6771770148"
-
-    static var clerkPublishableKey: String? {
-        configuredString(for: "VoltClerkPublishableKey")
-    }
 
     static var clerkJWTTemplate: String {
         configuredString(for: "VoltClerkJWTTemplate") ?? "convex"

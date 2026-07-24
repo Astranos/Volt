@@ -1,4 +1,5 @@
 import ClerkKit
+import ClerkKitUI
 import SwiftUI
 
 struct VoltRootScene: View {
@@ -8,10 +9,19 @@ struct VoltRootScene: View {
     @Environment(ScannerStore.self) private var scannerStore
 
     var body: some View {
-        RootView()
+        Group {
+            if clerk.user != nil || ScreenshotScenario.isEnabled {
+                RootView()
+            } else {
+                AuthenticationLandingView()
+            }
+        }
+            .environment(\.clerkTheme, VoltBrand.clerkTheme)
+            .clerkAppIcon(Image("VoltLogo"))
+            .clerkAppIcon(maxHeight: 56)
             .modifier(
                 ClerkImagePrefetchModifier(
-                    isEnabled: AppConfiguration.clerkPublishableKey != nil
+                    isEnabled: true
                 )
             )
             .task {

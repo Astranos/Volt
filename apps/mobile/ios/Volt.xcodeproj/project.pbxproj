@@ -11,8 +11,6 @@
 		B00000000000000000000001 /* VoltApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000001 /* VoltApp.swift */; };
 		B00000000000000000000002 /* CaptureMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000002 /* CaptureMode.swift */; };
 		B00000000000000000000003 /* ScanResult.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000003 /* ScanResult.swift */; };
-		B00000000000000000000004 /* PairingSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000004 /* PairingSession.swift */; };
-		B00000000000000000000005 /* PairingURLParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000005 /* PairingURLParser.swift */; };
 		B00000000000000000000006 /* CameraModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000006 /* CameraModel.swift */; };
 		B00000000000000000000007 /* TextRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000007 /* TextRecognizer.swift */; };
 		B00000000000000000000009 /* ScannerStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000009 /* ScannerStore.swift */; };
@@ -23,18 +21,12 @@
 		B0000000000000000000000F /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000000F /* Images.xcassets */; };
 		B00000000000000000000010 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000010 /* SplashScreen.storyboard */; };
 		B00000000000000000000011 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000011 /* PrivacyInfo.xcprivacy */; };
-		B00000000000000000000012 /* ScannerConnectionStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000016 /* ScannerConnectionStatus.swift */; };
-		B00000000000000000000013 /* ScannerPeerTarget.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000017 /* ScannerPeerTarget.swift */; };
-		B00000000000000000000014 /* ScannerProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000018 /* ScannerProtocol.swift */; };
-		B00000000000000000000015 /* ScannerSignalingClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000019 /* ScannerSignalingClient.swift */; };
-		B00000000000000000000019 /* PairedScannerSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000001C /* PairedScannerSession.swift */; };
 		B0000000000000000000001B /* volt.icon in Resources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000001B /* volt.icon */; };
 		B0000000000000000000001C /* ScannerRecognitionModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000001E /* ScannerRecognitionModels.swift */; };
 		B0000000000000000000001D /* CameraDeviceSelector.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000001F /* CameraDeviceSelector.swift */; };
 		B0000000000000000000001E /* CameraZoomController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000020 /* CameraZoomController.swift */; };
 		B0000000000000000000001F /* OcrTextCleaner.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000021 /* OcrTextCleaner.swift */; };
 		B10000000000000000000001 /* ScannerStoreCaptureActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000001 /* ScannerStoreCaptureActions.swift */; };
-		B10000000000000000000004 /* PairingSecretStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000004 /* PairingSecretStore.swift */; };
 		B10000000000000000000005 /* CaptureSessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000005 /* CaptureSessionView.swift */; };
 		B10000000000000000000006 /* CameraSessionControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000006 /* CameraSessionControls.swift */; };
 		B10000000000000000000007 /* ScannerCameraLayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000007 /* ScannerCameraLayer.swift */; };
@@ -45,7 +37,6 @@
 		B1000000000000000000000C /* ScreenshotFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1000000000000000000000C /* ScreenshotFixtures.swift */; };
 		B1000000000000000000000D /* SharedCameraSessionControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1000000000000000000000D /* SharedCameraSessionControls.swift */; };
 		B1000000000000000000000E /* SharedScannerTabComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1000000000000000000000E /* SharedScannerTabComponents.swift */; };
-		B1000000000000000000000F /* SharedPairingSessionComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1000000000000000000000F /* SharedPairingSessionComponents.swift */; };
 		B10000000000000000000010 /* BarcodeDetectionReticle.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000010 /* BarcodeDetectionReticle.swift */; };
 		B10000000000000000000011 /* SharedCaptureSessionOverlays.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000011 /* SharedCaptureSessionOverlays.swift */; };
 		B20000000000000000000001 /* SnapshotHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000001 /* SnapshotHelper.swift */; };
@@ -99,15 +90,18 @@
 		B40000000000000000000011 /* ClipUpgradeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C40000000000000000000011 /* ClipUpgradeView.swift */; };
 		B40000000000000000000012 /* ClerkKit in Frameworks */ = {isa = PBXBuildFile; productRef = R40000000000000000000002 /* ClerkKit */; };
 		B40000000000000000000013 /* ClerkKitUI in Frameworks */ = {isa = PBXBuildFile; productRef = R40000000000000000000003 /* ClerkKitUI */; };
-		B40000000000000000000014 /* ClerkConfigurationRequiredView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C40000000000000000000012 /* ClerkConfigurationRequiredView.swift */; };
 		B50000000000000000000001 /* CloudDeviceCredential.swift in Sources */ = {isa = PBXBuildFile; fileRef = C50000000000000000000001 /* CloudDeviceCredential.swift */; };
 		B50000000000000000000002 /* CloudCaptureRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = C50000000000000000000002 /* CloudCaptureRecord.swift */; };
 		B50000000000000000000003 /* CloudAPIContracts.swift in Sources */ = {isa = PBXBuildFile; fileRef = C50000000000000000000003 /* CloudAPIContracts.swift */; };
-		B50000000000000000000004 /* EnrollmentURLParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = C50000000000000000000004 /* EnrollmentURLParser.swift */; };
 		B50000000000000000000005 /* DeviceCredentialStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C50000000000000000000005 /* DeviceCredentialStore.swift */; };
 		B50000000000000000000006 /* DurableCaptureOutbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = C50000000000000000000006 /* DurableCaptureOutbox.swift */; };
 		B50000000000000000000007 /* MobileCloudAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = C50000000000000000000007 /* MobileCloudAPIClient.swift */; };
 		B50000000000000000000008 /* CloudWorkspaceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C50000000000000000000008 /* CloudWorkspaceStore.swift */; };
+		B60000000000000000000001 /* CaptureModeCards.swift in Sources */ = {isa = PBXBuildFile; fileRef = C60000000000000000000001 /* CaptureModeCards.swift */; };
+		B60000000000000000000002 /* SessionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C60000000000000000000002 /* SessionsView.swift */; };
+		B60000000000000000000003 /* CloudTargetPickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = C60000000000000000000003 /* CloudTargetPickerSheet.swift */; };
+		B60000000000000000000004 /* AuthenticationLandingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C60000000000000000000004 /* AuthenticationLandingView.swift */; };
+		B60000000000000000000005 /* VoltBrand.swift in Sources */ = {isa = PBXBuildFile; fileRef = C60000000000000000000005 /* VoltBrand.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -162,12 +156,9 @@
 		C00000000000000000000013 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		C00000000000000000000014 /* Volt.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Volt.entitlements; sourceTree = "<group>"; };
 		C00000000000000000000015 /* Volt.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Volt.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		C00000000000000000000016 /* ScannerConnectionStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannerConnectionStatus.swift; sourceTree = "<group>"; };
-		C00000000000000000000017 /* ScannerPeerTarget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannerPeerTarget.swift; sourceTree = "<group>"; };
 		C00000000000000000000018 /* ScannerProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannerProtocol.swift; sourceTree = "<group>"; };
 		C00000000000000000000019 /* ScannerSignalingClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannerSignalingClient.swift; sourceTree = "<group>"; };
 		C0000000000000000000001B /* volt.icon */ = {isa = PBXFileReference; explicitFileType = com.apple.iconcomposer.icon; path = volt.icon; sourceTree = "<group>"; };
-		C0000000000000000000001C /* PairedScannerSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairedScannerSession.swift; sourceTree = "<group>"; };
 		C0000000000000000000001E /* ScannerRecognitionModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannerRecognitionModels.swift; sourceTree = "<group>"; };
 		C0000000000000000000001F /* CameraDeviceSelector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraDeviceSelector.swift; sourceTree = "<group>"; };
 		C00000000000000000000020 /* CameraZoomController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraZoomController.swift; sourceTree = "<group>"; };
@@ -221,15 +212,18 @@
 		C4000000000000000000000F /* SubscriptionActionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubscriptionActionsView.swift; sourceTree = "<group>"; };
 		C40000000000000000000010 /* VoltRootScene.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoltRootScene.swift; sourceTree = "<group>"; };
 		C40000000000000000000011 /* ClipUpgradeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipUpgradeView.swift; sourceTree = "<group>"; };
-		C40000000000000000000012 /* ClerkConfigurationRequiredView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClerkConfigurationRequiredView.swift; sourceTree = "<group>"; };
 		C50000000000000000000001 /* CloudDeviceCredential.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudDeviceCredential.swift; sourceTree = "<group>"; };
 		C50000000000000000000002 /* CloudCaptureRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudCaptureRecord.swift; sourceTree = "<group>"; };
 		C50000000000000000000003 /* CloudAPIContracts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudAPIContracts.swift; sourceTree = "<group>"; };
-		C50000000000000000000004 /* EnrollmentURLParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EnrollmentURLParser.swift; sourceTree = "<group>"; };
 		C50000000000000000000005 /* DeviceCredentialStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceCredentialStore.swift; sourceTree = "<group>"; };
 		C50000000000000000000006 /* DurableCaptureOutbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DurableCaptureOutbox.swift; sourceTree = "<group>"; };
 		C50000000000000000000007 /* MobileCloudAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileCloudAPIClient.swift; sourceTree = "<group>"; };
 		C50000000000000000000008 /* CloudWorkspaceStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudWorkspaceStore.swift; sourceTree = "<group>"; };
+		C60000000000000000000001 /* CaptureModeCards.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureModeCards.swift; sourceTree = "<group>"; };
+		C60000000000000000000002 /* SessionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionsView.swift; sourceTree = "<group>"; };
+		C60000000000000000000003 /* CloudTargetPickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudTargetPickerSheet.swift; sourceTree = "<group>"; };
+		C60000000000000000000004 /* AuthenticationLandingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthenticationLandingView.swift; sourceTree = "<group>"; };
+		C60000000000000000000005 /* VoltBrand.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoltBrand.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -341,9 +335,6 @@
 				C00000000000000000000002 /* CaptureMode.swift */,
 				C00000000000000000000003 /* ScanResult.swift */,
 				C00000000000000000000004 /* PairingSession.swift */,
-				C0000000000000000000001C /* PairedScannerSession.swift */,
-				C00000000000000000000016 /* ScannerConnectionStatus.swift */,
-				C00000000000000000000017 /* ScannerPeerTarget.swift */,
 				C0000000000000000000001E /* ScannerRecognitionModels.swift */,
 			);
 			path = Models;
@@ -355,7 +346,6 @@
 				C50000000000000000000008 /* CloudWorkspaceStore.swift */,
 				C50000000000000000000005 /* DeviceCredentialStore.swift */,
 				C50000000000000000000006 /* DurableCaptureOutbox.swift */,
-				C50000000000000000000004 /* EnrollmentURLParser.swift */,
 				C50000000000000000000007 /* MobileCloudAPIClient.swift */,
 				C40000000000000000000006 /* AccessStore.swift */,
 				C40000000000000000000007 /* MobileAccessAPIClient.swift */,
@@ -383,14 +373,18 @@
 			children = (
 				C4000000000000000000000B /* AccessSettingsSection.swift */,
 				C4000000000000000000000C /* AccountAccessView.swift */,
-				C40000000000000000000012 /* ClerkConfigurationRequiredView.swift */,
 				C4000000000000000000000D /* ClerkImagePrefetchModifier.swift */,
 				C4000000000000000000000E /* SettingsView.swift */,
 				C4000000000000000000000F /* SubscriptionActionsView.swift */,
 				C40000000000000000000010 /* VoltRootScene.swift */,
+				C60000000000000000000004 /* AuthenticationLandingView.swift */,
+				C60000000000000000000005 /* VoltBrand.swift */,
 				C0000000000000000000000A /* CameraPreview.swift */,
 				C0000000000000000000000B /* RootView.swift */,
 				C0000000000000000000000C /* ScannerView.swift */,
+				C60000000000000000000001 /* CaptureModeCards.swift */,
+				C60000000000000000000002 /* SessionsView.swift */,
+				C60000000000000000000003 /* CloudTargetPickerSheet.swift */,
 				C10000000000000000000005 /* CaptureSessionView.swift */,
 				C1000000000000000000000D /* SharedCameraSessionControls.swift */,
 				C1000000000000000000000E /* SharedScannerTabComponents.swift */,
@@ -641,7 +635,6 @@
 				B50000000000000000000008 /* CloudWorkspaceStore.swift in Sources */,
 				B50000000000000000000005 /* DeviceCredentialStore.swift in Sources */,
 				B50000000000000000000006 /* DurableCaptureOutbox.swift in Sources */,
-				B50000000000000000000004 /* EnrollmentURLParser.swift in Sources */,
 				B50000000000000000000007 /* MobileCloudAPIClient.swift in Sources */,
 				B40000000000000000000001 /* AppConfiguration.swift in Sources */,
 				B40000000000000000000002 /* AccessKind.swift in Sources */,
@@ -655,7 +648,6 @@
 				B4000000000000000000000A /* StoreKitSubscriptionStore.swift in Sources */,
 				B4000000000000000000000B /* AccessSettingsSection.swift in Sources */,
 				B4000000000000000000000C /* AccountAccessView.swift in Sources */,
-				B40000000000000000000014 /* ClerkConfigurationRequiredView.swift in Sources */,
 				B4000000000000000000000D /* ClerkImagePrefetchModifier.swift in Sources */,
 				B4000000000000000000000E /* SettingsView.swift in Sources */,
 				B4000000000000000000000F /* SubscriptionActionsView.swift in Sources */,
@@ -663,8 +655,6 @@
 				B00000000000000000000001 /* VoltApp.swift in Sources */,
 				B00000000000000000000002 /* CaptureMode.swift in Sources */,
 				B00000000000000000000003 /* ScanResult.swift in Sources */,
-				B00000000000000000000004 /* PairingSession.swift in Sources */,
-				B00000000000000000000005 /* PairingURLParser.swift in Sources */,
 				B0000000000000000000001D /* CameraDeviceSelector.swift in Sources */,
 				B0000000000000000000001E /* CameraZoomController.swift in Sources */,
 				B00000000000000000000006 /* CameraModel.swift in Sources */,
@@ -674,19 +664,17 @@
 				B0000000000000000000000A /* CameraPreview.swift in Sources */,
 				B0000000000000000000000B /* RootView.swift in Sources */,
 				B0000000000000000000000C /* ScannerView.swift in Sources */,
+				B60000000000000000000001 /* CaptureModeCards.swift in Sources */,
+				B60000000000000000000002 /* SessionsView.swift in Sources */,
+				B60000000000000000000003 /* CloudTargetPickerSheet.swift in Sources */,
+				B60000000000000000000004 /* AuthenticationLandingView.swift in Sources */,
+				B60000000000000000000005 /* VoltBrand.swift in Sources */,
 				B0000000000000000000000E /* ResultsView.swift in Sources */,
-				B00000000000000000000012 /* ScannerConnectionStatus.swift in Sources */,
-				B00000000000000000000013 /* ScannerPeerTarget.swift in Sources */,
-				B00000000000000000000019 /* PairedScannerSession.swift in Sources */,
 				B0000000000000000000001C /* ScannerRecognitionModels.swift in Sources */,
-				B00000000000000000000014 /* ScannerProtocol.swift in Sources */,
-				B00000000000000000000015 /* ScannerSignalingClient.swift in Sources */,
 				B10000000000000000000001 /* ScannerStoreCaptureActions.swift in Sources */,
-				B10000000000000000000004 /* PairingSecretStore.swift in Sources */,
 				B10000000000000000000005 /* CaptureSessionView.swift in Sources */,
 				B1000000000000000000000D /* SharedCameraSessionControls.swift in Sources */,
 				B1000000000000000000000E /* SharedScannerTabComponents.swift in Sources */,
-				B1000000000000000000000F /* SharedPairingSessionComponents.swift in Sources */,
 				B10000000000000000000011 /* SharedCaptureSessionOverlays.swift in Sources */,
 				B10000000000000000000006 /* CameraSessionControls.swift in Sources */,
 				B10000000000000000000007 /* ScannerCameraLayer.swift in Sources */,
@@ -784,9 +772,8 @@
 				TARGETED_DEVICE_FAMILY = 1;
 				VERSIONING_SYSTEM = "apple-generic";
 				VOLT_APP_STORE_ID = 6771770148;
-				VOLT_CLERK_FRONTEND_API_DOMAIN = REPLACE_ME;
+				VOLT_CLERK_FRONTEND_API_DOMAIN = clerk.volt.juanquenga.com;
 				VOLT_CLERK_JWT_TEMPLATE = convex;
-				VOLT_CLERK_PUBLISHABLE_KEY = REPLACE_ME;
 				VOLT_CONVEX_SITE_URL = "https://adorable-hornet-19.convex.site";
 				VOLT_STOREKIT_PRODUCT_ID = com.volt.mobile.pro.monthly;
 			};
@@ -819,9 +806,8 @@
 				VALIDATE_PRODUCT = YES;
 				VERSIONING_SYSTEM = "apple-generic";
 				VOLT_APP_STORE_ID = 6771770148;
-				VOLT_CLERK_FRONTEND_API_DOMAIN = REPLACE_ME;
+				VOLT_CLERK_FRONTEND_API_DOMAIN = clerk.volt.juanquenga.com;
 				VOLT_CLERK_JWT_TEMPLATE = convex;
-				VOLT_CLERK_PUBLISHABLE_KEY = REPLACE_ME;
 				VOLT_CONVEX_SITE_URL = "https://sincere-trout-414.convex.site";
 				VOLT_STOREKIT_PRODUCT_ID = com.volt.mobile.pro.monthly;
 			};

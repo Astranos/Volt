@@ -69,7 +69,7 @@ struct UploadView: View {
                 enqueueUploadSelection(newItems)
             }
             .onAppear {
-                store.selectedSection = .upload
+                store.selectedSection = .sessions
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 ScannerPhotoPickerAccessory(

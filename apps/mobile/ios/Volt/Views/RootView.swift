@@ -4,7 +4,7 @@ import UIKit
 struct RootView: View {
     @Environment(ScannerStore.self) private var store
     @Environment(\.scenePhase) private var scenePhase
-    @State private var selectedTab = AppSection.scan
+    @State private var selectedTab = AppSection.text
     private let showsAccountSettings: Bool
 
     private var ownershipConflictIsPresented: Binding<Bool> {
@@ -16,18 +16,26 @@ struct RootView: View {
 
     init(showsAccountSettings: Bool = true) {
         self.showsAccountSettings = showsAccountSettings
-        _selectedTab = State(initialValue: ScreenshotScenario.current?.initialSection ?? .scan)
+        _selectedTab = State(initialValue: ScreenshotScenario.current?.initialSection ?? .text)
     }
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            ScannerView()
-                .tabItem { Label("Capture", systemImage: "camera") }
-                .tag(AppSection.scan)
+            CaptureModeTabView(mode: .ocr)
+                .tabItem { Label("Text", systemImage: "doc.text.viewfinder") }
+                .tag(AppSection.text)
 
-            UploadView()
-                .tabItem { Label("Upload", systemImage: "square.and.arrow.up") }
-                .tag(AppSection.upload)
+            CaptureModeTabView(mode: .barcode)
+                .tabItem { Label("Barcode", systemImage: "barcode.viewfinder") }
+                .tag(AppSection.barcode)
+
+            CaptureModeTabView(mode: .photo)
+                .tabItem { Label("Photos", systemImage: "camera.viewfinder") }
+                .tag(AppSection.photos)
+
+            SessionsView()
+                .tabItem { Label("Sessions", systemImage: "clock.arrow.circlepath") }
+                .tag(AppSection.sessions)
 
             SettingsView(showsAccountSettings: showsAccountSettings)
                 .tabItem { Label("Settings", systemImage: "gearshape") }
@@ -61,8 +69,15 @@ struct RootView: View {
 
     private func applySelectedTab(_ newTab: AppSection) {
         store.selectedSection = newTab
-        if store.activeMode == .dictation {
+        switch newTab {
+        case .text:
             store.activeMode = .ocr
+        case .barcode:
+            store.activeMode = .barcode
+        case .photos:
+            store.activeMode = .photo
+        case .sessions, .settings:
+            break
         }
     }
 }
@@ -147,7 +162,9 @@ private struct CaptureExportShareSheet: UIViewControllerRepresentable {
 }
 
 enum AppSection: Hashable {
-    case scan
-    case upload
+    case text
+    case barcode
+    case photos
+    case sessions
     case settings
 }

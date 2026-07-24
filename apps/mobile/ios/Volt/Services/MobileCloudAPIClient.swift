@@ -2,7 +2,6 @@ import Foundation
 
 protocol MobileCloudAPI: Sendable {
     func bootstrapDevice(_ request: BootstrapMobileDeviceRequest, bearerToken: String) async throws -> BootstrapMobileDeviceResponse
-    func exchangeEnrollment(_ request: DeviceEnrollmentRequest) async throws -> DeviceEnrollmentResponse
     func putBatch(_ request: PutCloudBatchRequest) async throws -> PutCloudBatchResponse
     func createPhotoUploadURL(_ request: CreatePhotoUploadURLRequest) async throws -> PresignedPhotoUpload
     func uploadPhoto(_ data: Data, using upload: PresignedPhotoUpload) async throws
@@ -16,7 +15,6 @@ protocol MobileCloudAPI: Sendable {
 struct MobileCloudAPIClient: MobileCloudAPI {
     enum Endpoint {
         case deviceBootstrap
-        case enrollmentExchange
         case putBatch
         case createPhotoUploadURL
         case markBatchReady
@@ -28,7 +26,6 @@ struct MobileCloudAPIClient: MobileCloudAPI {
         var path: String {
             switch self {
             case .deviceBootstrap: "api/mobile/devices/bootstrap"
-            case .enrollmentExchange: "api/mobile/enrollment/exchange"
             case .putBatch: "api/mobile/outbox/sync"
             case .createPhotoUploadURL: "api/mobile/photos/upload-url"
             case .markBatchReady: "api/mobile/batches/finalize"
@@ -53,10 +50,6 @@ struct MobileCloudAPIClient: MobileCloudAPI {
         bearerToken: String
     ) async throws -> BootstrapMobileDeviceResponse {
         try await post(request, to: .deviceBootstrap, bearerToken: bearerToken)
-    }
-
-    func exchangeEnrollment(_ request: DeviceEnrollmentRequest) async throws -> DeviceEnrollmentResponse {
-        try await post(request, to: .enrollmentExchange)
     }
 
     func putBatch(_ request: PutCloudBatchRequest) async throws -> PutCloudBatchResponse {

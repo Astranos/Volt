@@ -6,7 +6,6 @@ import UIKit
 extension ScannerStore {
     func saveBarcodeIfNeeded() {
         guard let value = camera.lastBarcode, !value.isEmpty else { return }
-        if handleEnrollmentValue(value) { return }
         guard activeMode == .barcode else { return }
         let normalized = normalizedBarcodeScan(value: value, format: camera.lastBarcodeFormat ?? "barcode")
         let now = Date.now
@@ -61,9 +60,7 @@ extension ScannerStore {
             let recognizedRegions = try await TextRecognizer.recognizeTextRegions(in: preparedImage)
             ocrTextRegions = DeviceIdentifierRegionExtractor.reviewRegions(from: recognizedRegions)
             ocrReviewText = ocrTextRegions.map(\.text).joined(separator: "\n")
-            if handleEnrollmentValue(ocrReviewText) {
-                clearOcrReview()
-            } else if ocrTextRegions.isEmpty {
+            if ocrTextRegions.isEmpty {
                 statusText = "No text found"
             }
         } catch {
@@ -82,14 +79,12 @@ extension ScannerStore {
     func sendOcrReviewText() {
         let text = ocrReviewText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
-        if handleEnrollmentValue(text) { return }
         sendRecognizedText(text, format: "live-text")
     }
 
     func sendRecognizedText(_ text: String, format: String = "ocr-region") {
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
-        if handleEnrollmentValue(text) { return }
         let result = ScanResult(kind: .text, value: text, format: format, deliveryState: initialDeliveryState)
         guard saveResultLocally(result) else { return }
         sendCaptureResult(result, insertIntoCursor: true)
@@ -192,14 +187,6 @@ extension ScannerStore {
 
     func removeResults(at offsets: IndexSet) {
         results.remove(atOffsets: offsets)
-    }
-
-    func handleEnrollmentValue(_ value: String) -> Bool {
-        guard let enrollment = EnrollmentURLParser.enrollment(in: value) else { return false }
-        Task { await cloudWorkspace.enroll(enrollment) }
-        statusText = "Enrolling this device"
-        targetHint = "Capture stays available while enrollment completes."
-        return true
     }
 
     func sendCaptureResult(_ result: ScanResult, insertIntoCursor: Bool) {

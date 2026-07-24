@@ -32,7 +32,6 @@ private struct InFlightDelivery: Equatable, Sendable {
 @Observable
 final class CloudWorkspaceStore {
     private(set) var credential: CloudDeviceCredential?
-    private(set) var isEnrolling = false
     private(set) var isBootstrapping = false
     private(set) var isSyncing = false
     private(set) var lastError: String?
@@ -44,7 +43,6 @@ final class CloudWorkspaceStore {
     @ObservationIgnored private let outbox: DurableCaptureOutbox
     @ObservationIgnored private var authenticatedClerkUserId: String?
     @ObservationIgnored private var lastBootstrappedClerkUserId: String?
-    @ObservationIgnored private var clerkForBootstrap: Clerk?
     @ObservationIgnored private var syncTask: Task<Void, Never>?
     @ObservationIgnored private var retryTask: Task<Void, Never>?
     @ObservationIgnored private var syncRequestedWhileDraining = false
@@ -69,9 +67,18 @@ final class CloudWorkspaceStore {
             .filter { $0.online && $0.supportsCursorInsertion }
             .sorted { $0.label.localizedCaseInsensitiveCompare($1.label) == .orderedAscending }
     }
-    var selectedComputer: CloudComputer? {
+    var unavailableComputers: [CloudComputer] {
+        computers
+            .filter { !$0.online && $0.supportsCursorInsertion }
+            .sorted { $0.label.localizedCaseInsensitiveCompare($1.label) == .orderedAscending }
+    }
+    var selectedTargetComputer: CloudComputer? {
         guard let selectedTargetDeviceId else { return nil }
-        return availableComputers.first { $0.deviceId == selectedTargetDeviceId }
+        return computers.first { $0.deviceId == selectedTargetDeviceId }
+    }
+    var selectedComputer: CloudComputer? {
+        guard let selectedTargetComputer, selectedTargetComputer.online else { return nil }
+        return selectedTargetComputer
     }
 
     func persist(_ result: ScanResult, photoData: Data? = nil) throws {
@@ -96,7 +103,6 @@ final class CloudWorkspaceStore {
             return
         }
         authenticatedClerkUserId = clerkUserId
-        clerkForBootstrap = clerk
 
         if let credential,
            credential.clerkUserId == clerkUserId,
@@ -149,33 +155,6 @@ final class CloudWorkspaceStore {
         } catch {
             lastError = error.localizedDescription
             requestSync()
-        }
-    }
-
-    func enroll(_ enrollment: DeviceEnrollment) async {
-        guard !isEnrolling else { return }
-        isEnrolling = true
-        defer { isEnrolling = false }
-        do {
-            let response = try await api.exchangeEnrollment(DeviceEnrollmentRequest(
-                enrollmentCode: enrollment.token,
-                label: Self.installationLabel
-            ))
-            let credential = CloudDeviceCredential(
-                value: response.deviceSecret,
-                deviceId: response.deviceId,
-                workspaceId: response.workspaceId,
-                ownerClerkUserId: nil,
-                enrolledAt: .now
-            )
-            try DeviceCredentialStore.save(credential)
-            self.credential = credential
-            lastError = nil
-            if let clerkForBootstrap {
-                await bootstrapIfNeeded(using: clerkForBootstrap)
-            }
-        } catch {
-            lastError = error.localizedDescription
         }
     }
 
@@ -417,7 +396,6 @@ final class CloudWorkspaceStore {
     private func pauseForSignOut() {
         authenticatedClerkUserId = nil
         lastBootstrappedClerkUserId = nil
-        clerkForBootstrap = nil
         cancelUploadTasks()
         computers = []
         selectedTargetDeviceId = nil

@@ -11,6 +11,7 @@ struct CameraSessionControls: View {
     let hasLiveTextCandidates: Bool
     let isRecognizingText: Bool
     var isCaptureEnabled = true
+    var showsModePicker = true
     var barcodeHint = "Point camera at barcode"
     var hasLatestCapture = false
     let onToggleTorch: () -> Void
@@ -45,23 +46,25 @@ struct CameraSessionControls: View {
             }
             .frame(height: 96)
 
-            Picker("Capture mode", selection: $activeMode) {
-                Text("Text").tag(CaptureMode.ocr)
-                Text("Barcodes").tag(CaptureMode.barcode)
-                Text("Photos").tag(CaptureMode.photo)
+            if showsModePicker {
+                Picker("Capture mode", selection: $activeMode) {
+                    Text("Text").tag(CaptureMode.ocr)
+                    Text("Barcodes").tag(CaptureMode.barcode)
+                    Text("Photos").tag(CaptureMode.photo)
+                }
+                .pickerStyle(.segmented)
+                .controlSize(.large)
+                .tint(.green)
+                .colorScheme(.light)
+                .padding(4)
+                .frame(maxWidth: 360)
+                .background(.white.opacity(0.92), in: Capsule())
+                .overlay {
+                    Capsule().stroke(.white.opacity(0.35), lineWidth: 1)
+                }
+                .disabled(!isCaptureEnabled)
+                .opacity(isCaptureEnabled ? 1 : 0.55)
             }
-            .pickerStyle(.segmented)
-            .controlSize(.large)
-            .tint(.green)
-            .colorScheme(.light)
-            .padding(4)
-            .frame(maxWidth: 360)
-            .background(.white.opacity(0.92), in: Capsule())
-            .overlay {
-                Capsule().stroke(.white.opacity(0.35), lineWidth: 1)
-            }
-            .disabled(!isCaptureEnabled)
-            .opacity(isCaptureEnabled ? 1 : 0.55)
 
             Button("End session", systemImage: "xmark", action: onFinish)
                 .font(.subheadline.bold())

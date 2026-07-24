@@ -6,16 +6,11 @@ struct VoltApp: App {
     @State private var scannerStore = ScannerStore()
     @State private var accessStore: AccessStore
     @State private var subscriptionStore: StoreKitSubscriptionStore
-    private let clerk: Clerk?
+    private let clerk: Clerk
 
     init() {
-        let publishableKey = AppConfiguration.clerkPublishableKey
-        if let publishableKey {
-            Clerk.configure(publishableKey: publishableKey)
-            clerk = Clerk.shared
-        } else {
-            clerk = nil
-        }
+        Clerk.configure(publishableKey: AppConfiguration.clerkPublishableKey)
+        clerk = Clerk.shared
 
         let accessStore = AccessStore(
             apiClient: MobileAccessAPIClient(baseURL: AppConfiguration.convexSiteURL)
@@ -34,15 +29,12 @@ struct VoltApp: App {
             Group {
                 if ProcessInfo.processInfo.environment["VOLT_SUBSCRIPTION_REVIEW_SCREENSHOT"] == "1" {
                     SubscriptionReviewScreenshotView()
-                } else if let clerk {
+                } else {
                     VoltRootScene()
                         .environment(scannerStore)
                         .environment(accessStore)
                         .environment(subscriptionStore)
                         .environment(clerk)
-                } else {
-                    RootView(showsAccountSettings: false)
-                        .environment(scannerStore)
                 }
             }
                 .tint(.green)
@@ -58,11 +50,6 @@ struct VoltApp: App {
     }
 
     private func handleIncomingURL(_ url: URL) {
-        if EnrollmentURLParser.parse(url) != nil {
-            scannerStore.handleIncomingURL(url)
-            return
-        }
-        guard let clerk else { return }
         Task { @MainActor in
             do {
                 try await clerk.handle(url)

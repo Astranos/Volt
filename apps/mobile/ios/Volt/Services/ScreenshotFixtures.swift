@@ -25,10 +25,14 @@ enum ScreenshotScenario: String {
 
     var initialSection: AppSection {
         switch self {
-        case .sessions, .captureTextPre, .captureReview, .captureReviewSend, .captureBarcode, .capturePhoto, .captureResults, .dictation:
-            .scan
-        case .upload:
-            .upload
+        case .captureTextPre, .captureReview, .captureReviewSend:
+            .text
+        case .captureBarcode:
+            .barcode
+        case .capturePhoto:
+            .photos
+        case .sessions, .captureResults, .dictation, .upload:
+            .sessions
         }
     }
 }

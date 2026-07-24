@@ -23,7 +23,7 @@ final class ScannerStore {
     let photoLongEdge: CGFloat = 2200
 
     var activeMode: CaptureMode = .ocr
-    var selectedSection: AppSection = .scan
+    var selectedSection: AppSection = .text
     var results: [ScanResult] = []
     var statusText = "Ready to capture"
     var targetHint = "Captures save on this iPhone and sync to your Volt workspace when signed in."
@@ -63,13 +63,6 @@ final class ScannerStore {
               let mode = BarcodeRecognitionMode(rawValue: rawValue)
         else { return .upc }
         return mode
-    }
-
-    func handleIncomingURL(_ url: URL) {
-        guard let enrollment = EnrollmentURLParser.parse(url) else { return }
-        Task { await cloudWorkspace.enroll(enrollment) }
-        selectedSection = .scan
-        statusText = "Enrolling this device"
     }
 
     func playCaptureFailureFeedback() {

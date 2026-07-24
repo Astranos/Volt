@@ -369,61 +369,6 @@ button.sidepanel-account-control {
   color: #4ade80;
 }
 
-.sidepanel-scanner-controls {
-  margin-top: 8px;
-}
-
-.sidepanel-scanner-actions {
-  display: grid;
-  gap: 6px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.sidepanel-scanner-actions .sidepanel-mobile-status {
-  max-width: none;
-  width: 100%;
-}
-
-.sidepanel-cloud-action {
-  align-items: center;
-  background: rgba(255, 255, 255, 0.045);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 999px;
-  color: rgba(214, 211, 209, 0.82);
-  cursor: pointer;
-  display: flex;
-  font-size: 12px;
-  font-weight: 750;
-  gap: 7px;
-  height: 34px;
-  justify-content: center;
-  min-width: 0;
-  padding: 0 11px;
-}
-
-.sidepanel-cloud-action:hover {
-  background: rgba(255, 255, 255, 0.07);
-  border-color: rgba(74, 222, 128, 0.3);
-  color: #f5f5f4;
-}
-
-.sidepanel-cloud-action:disabled {
-  cursor: wait;
-  opacity: 0.55;
-}
-
-.sidepanel-cloud-action svg {
-  flex: none;
-  height: 15px;
-  width: 15px;
-}
-
-.sidepanel-cloud-action span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .sidepanel-tool-toast {
   align-items: center;
   display: flex;
@@ -433,87 +378,6 @@ button.sidepanel-account-control {
   margin-top: 7px;
   min-width: 0;
   padding: 0 4px;
-}
-
-.sidepanel-enrollment-overlay {
-  align-items: center;
-  background: rgba(12, 10, 9, 0.72);
-  display: flex;
-  inset: 0;
-  justify-content: center;
-  padding: 20px;
-  position: fixed;
-  z-index: 50;
-}
-
-.sidepanel-enrollment-card {
-  align-items: center;
-  background: #1c1917;
-  border: 1px solid rgba(214, 211, 209, 0.16);
-  border-radius: 20px;
-  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.58);
-  display: flex;
-  flex-direction: column;
-  max-width: 320px;
-  padding: 22px;
-  position: relative;
-  text-align: center;
-  width: 100%;
-}
-
-.sidepanel-enrollment-close {
-  align-items: center;
-  background: transparent;
-  border: 0;
-  color: #a8a29e;
-  cursor: pointer;
-  display: flex;
-  height: 32px;
-  justify-content: center;
-  position: absolute;
-  right: 8px;
-  top: 8px;
-  width: 32px;
-}
-
-.sidepanel-enrollment-close svg {
-  height: 16px;
-  width: 16px;
-}
-
-.sidepanel-enrollment-icon {
-  color: #4ade80;
-  height: 22px;
-  width: 22px;
-}
-
-.sidepanel-enrollment-card h2 {
-  color: #fafaf9;
-  font-size: 17px;
-  margin: 8px 24px 13px;
-}
-
-.sidepanel-enrollment-card p {
-  color: #a8a29e;
-  font-size: 11px;
-  line-height: 1.45;
-  margin: 12px 0 0;
-}
-
-.sidepanel-enrollment-qr {
-  background: #fff;
-  border-radius: 16px;
-  padding: 10px;
-  width: min(220px, 100%);
-}
-
-.sidepanel-enrollment-qr img {
-  display: block;
-  width: 100%;
-}
-
-.sidepanel-enrollment-card .sidepanel-enrollment-error {
-  color: #fca5a5;
 }
 
 .sidepanel-inline-tool-title-wrap {
@@ -555,64 +419,6 @@ button.sidepanel-account-control {
   white-space: nowrap;
 }
 
-.sidepanel-mobile-status {
-  align-items: center;
-  background: rgba(255, 255, 255, 0.045);
-  border: 1px solid rgba(255, 255, 255, 0.11);
-  border-radius: 999px;
-  color: rgba(214, 211, 209, 0.82);
-  cursor: pointer;
-  display: inline-flex;
-  flex: none;
-  font-size: 12px;
-  font-weight: 750;
-  gap: 7px;
-  height: 34px;
-  justify-content: center;
-  max-width: 46%;
-  min-width: 0;
-  position: relative;
-  padding: 0 11px;
-  z-index: 2;
-  transition:
-    background-color 160ms ease,
-    border-color 160ms ease,
-    color 160ms ease,
-    transform 160ms ease;
-}
-
-.sidepanel-mobile-status svg {
-  color: currentColor;
-  flex: none;
-  height: 15px;
-  width: 15px;
-}
-
-.sidepanel-mobile-status span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.sidepanel-mobile-status:hover {
-  background: rgba(255, 255, 255, 0.075);
-  border-color: rgba(74, 222, 128, 0.34);
-  color: #f5f5f4;
-  transform: translateY(-1px);
-}
-
-.sidepanel-mobile-status.is-paired,
-.sidepanel-mobile-status.is-creating {
-  color: #86efac;
-}
-
-.sidepanel-mobile-status.is-ready {
-  background: rgba(38, 38, 38, 0.72);
-  border-color: rgba(212, 212, 212, 0.14);
-  color: #d4d4d4;
-}
-
 .sidepanel-inline-toast {
   align-items: center;
   display: flex;
@@ -644,43 +450,18 @@ button.sidepanel-account-control {
   min-width: 0;
 }
 
-.top-offers-input-card,
-.top-offers-card,
 .top-offers-value-button,
 .top-offers-input-shell,
 .top-offers-secondary-action {
   border: 1px solid rgba(255, 255, 255, 0.11);
   background: rgba(255, 255, 255, 0.045);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.055);
-}
-
-.top-offers-input-card {
-  border-radius: 20px;
-  padding: 12px;
-}
-
-.top-offers-card {
-  border-radius: 18px;
-  transition:
-    background-color 180ms ease,
-    border-color 180ms ease,
-    transform 180ms ease;
-}
-
-.top-offers-result-card,
-.top-offers-custom-card {
-  padding: 14px;
-}
-
-.top-offers-card:hover {
-  background: rgba(255, 255, 255, 0.07);
-  border-color: rgba(255, 255, 255, 0.16);
-}
-
-.top-offers-value-button,
-.top-offers-input-shell,
-.top-offers-secondary-action {
   border-radius: 14px;
+}
+
+.top-offers-input-section,
+.top-offers-result-section {
+  min-width: 0;
 }
 
 .top-offers-input-shell {
@@ -695,10 +476,6 @@ button.sidepanel-account-control {
 .top-offers-value-button {
   min-height: 96px;
   padding: 12px;
-}
-
-.top-offers-custom-card {
-  min-height: 92px;
 }
 
 .top-offers-amount {
@@ -817,8 +594,6 @@ button.sidepanel-account-control {
     color: #1c1917;
   }
 
-  .top-offers-input-card,
-  .top-offers-card,
   .top-offers-value-button,
   .top-offers-input-shell,
   .top-offers-secondary-action,
@@ -833,7 +608,6 @@ button.sidepanel-account-control {
       0 8px 24px rgba(15, 23, 42, 0.06);
   }
 
-  .top-offers-card:hover,
   .top-offers-value-button:hover,
   .top-offers-secondary-action:hover,
   .mobile-scanner-action:hover,
@@ -896,62 +670,12 @@ button.sidepanel-account-control {
     color: #16a34a;
   }
 
-  .sidepanel-cloud-action {
-    background: rgba(255, 255, 255, 0.64);
-    border-color: rgba(15, 23, 42, 0.1);
-    color: #78716c;
-  }
-
-  .sidepanel-cloud-action:hover {
-    background: rgba(255, 255, 255, 0.88);
-    border-color: rgba(22, 163, 74, 0.24);
-    color: #1c1917;
-  }
-
-  .sidepanel-enrollment-card {
-    background: #ffffff;
-    border-color: rgba(15, 23, 42, 0.1);
-    box-shadow: 0 24px 70px rgba(15, 23, 42, 0.18);
-  }
-
-  .sidepanel-enrollment-card h2 {
-    color: #1c1917;
-  }
-
-  .sidepanel-enrollment-card p {
-    color: #78716c;
-  }
-
   .sidepanel-inline-tool-title {
     color: #1c1917;
   }
 
   .sidepanel-inline-tool-icon {
     color: #16a34a;
-  }
-
-  .sidepanel-mobile-status {
-    background: rgba(255, 255, 255, 0.72);
-    border-color: rgba(15, 23, 42, 0.1);
-    color: #78716c;
-    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
-  }
-
-  .sidepanel-mobile-status:hover {
-    background: rgba(255, 255, 255, 0.92);
-    border-color: rgba(22, 163, 74, 0.28);
-    color: #1c1917;
-  }
-
-  .sidepanel-mobile-status.is-paired,
-  .sidepanel-mobile-status.is-creating {
-    color: #047857;
-  }
-
-  .sidepanel-mobile-status.is-ready {
-    background: rgba(255, 255, 255, 0.72);
-    border-color: rgba(15, 23, 42, 0.1);
-    color: #78716c;
   }
 }
 
@@ -1042,15 +766,6 @@ button.sidepanel-account-control {
     width: 38px;
   }
 
-  .sidepanel-scanner-actions {
-    gap: 6px;
-  }
-
-  .sidepanel-mobile-status {
-    padding-left: 9px;
-    padding-right: 9px;
-  }
-
   .sidepanel-inline-tool-title-wrap {
     min-height: 50px;
     padding: 10px 18px 5px 10px;
@@ -1094,10 +809,6 @@ button.sidepanel-account-control {
     line-height: 1.35;
   }
 
-  .sidepanel-scanner-actions {
-    gap: 6px;
-  }
-
   .sidepanel-scanner-action {
     gap: 6px;
     height: 34px;
@@ -1124,12 +835,6 @@ button.sidepanel-account-control {
     gap: 10px;
   }
 
-  .top-offers-input-card,
-  .top-offers-result-card,
-  .top-offers-custom-card {
-    padding: 10px;
-  }
-
   .top-offers-input-shell {
     height: 50px;
     padding: 0 10px;
@@ -1142,10 +847,6 @@ button.sidepanel-account-control {
   .top-offers-value-button {
     min-height: 82px;
     padding: 10px;
-  }
-
-  .top-offers-custom-card {
-    min-height: 78px;
   }
 
   .top-offers-amount {
@@ -1202,12 +903,6 @@ button.sidepanel-account-control {
     gap: 9px;
   }
 
-  .top-offers-input-card,
-  .top-offers-result-card,
-  .top-offers-custom-card {
-    padding: 10px;
-  }
-
   .top-offers-input-shell {
     height: 48px;
   }
@@ -1216,10 +911,6 @@ button.sidepanel-account-control {
     min-height: 76px;
     padding-bottom: 9px;
     padding-top: 9px;
-  }
-
-  .top-offers-custom-card {
-    min-height: 72px;
   }
 }
 

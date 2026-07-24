@@ -49,8 +49,8 @@ function OfferResultCard({
     );
 
   return (
-    <div className="top-offers-card top-offers-result-card min-w-0 select-none">
-      <div className="mb-3 flex items-center gap-3">
+    <div className="top-offers-result-section min-w-0 select-none">
+      <div className="mb-2 flex items-center gap-3">
         <div className="min-w-0 truncate text-sm font-bold text-stone-900 dark:text-stone-50">
           {offer.label}
         </div>
@@ -62,7 +62,7 @@ function OfferResultCard({
           className="top-offers-value-button flex min-w-0 flex-col text-left transition active:scale-[0.99]"
         >
           <div className="text-[11px] font-bold uppercase tracking-normal text-stone-500 dark:text-stone-400">
-            Start
+            Suggestion
           </div>
           <div className="mt-1 flex min-h-8 min-w-0 flex-1 items-center">
             {renderCopyValue(offer.startingValue, startingId)}
@@ -211,7 +211,7 @@ function TopOfferCalculator() {
   return (
     <SidepanelLayout className="top-offers-root bg-transparent">
       <div className="top-offers-content">
-        <div className="top-offers-input-card">
+        <div className="top-offers-input-section">
           <label className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-normal text-stone-500 dark:text-stone-400">
             Projected sale price
           </label>

@@ -1,19 +1,12 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import QRCode from "qrcode";
+import React, { useEffect, useRef, useState } from "react";
 import TopOffersPage from "./TopOffers";
 import MobileScanner from "./MobileScanner";
 import {
   AlertTriangle,
   CheckCircle2,
-  Cloud,
   Info,
-  Loader2,
-  QrCode,
-  Smartphone,
-  X,
   XCircle,
 } from "lucide-react";
-import type { ScannerConnectionStatus } from "@volt/scanner-protocol";
 import { cn } from "../../lib/utils";
 import {
   SIDEPANEL_TOOLS,
@@ -25,13 +18,7 @@ import {
   type SidepanelToastDetail,
   type SidepanelToastTone,
 } from "../../lib/sidepanel-toast";
-import {
-  getMobileScannerExtensionIdentity,
-} from "../../domain/mobile-scanner-session";
-import {
-  ExtensionAccountControl,
-  useSidepanelClerkToken,
-} from "../access/ExtensionAccess";
+import { ExtensionAccountControl } from "../access/ExtensionAccess";
 
 type ActiveToast = {
   message: string;
@@ -40,12 +27,6 @@ type ActiveToast = {
 };
 
 const TOAST_DURATION_MS = 1900;
-
-function objectFrom(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
-}
 
 const TOAST_TONE_STYLES: Record<
   SidepanelToastTone,
@@ -72,8 +53,6 @@ const TOAST_TONE_STYLES: Record<
 export default function UnifiedSidepanel() {
   const [activeTool, setActiveTool] =
     useState<SidepanelToolId>("mobile-scanner");
-  const [scannerStatus, setScannerStatus] =
-    useState<ScannerConnectionStatus>("disconnected");
   const [toast, setToast] = useState<ActiveToast | null>(null);
   const toastTimer = useRef<number | null>(null);
   const toastCounter = useRef(0);
@@ -104,27 +83,6 @@ export default function UnifiedSidepanel() {
       );
       if (toastTimer.current) window.clearTimeout(toastTimer.current);
     };
-  }, []);
-
-  useEffect(() => {
-    if (typeof chrome === "undefined" || !chrome.runtime) return;
-
-    chrome.runtime.sendMessage({ action: "scannerGetState" }, (response) => {
-      if (chrome.runtime.lastError) return;
-      if (response?.state?.status) {
-        setScannerStatus(response.state.status as ScannerConnectionStatus);
-      }
-    });
-
-    const listener = (message: any) => {
-      if (message?.action !== "scannerStateChanged") return;
-      if (message?.state?.status) {
-        setScannerStatus(message.state.status as ScannerConnectionStatus);
-      }
-    };
-
-    chrome.runtime.onMessage.addListener(listener);
-    return () => chrome.runtime.onMessage.removeListener(listener);
   }, []);
 
   useEffect(() => {
@@ -201,13 +159,6 @@ export default function UnifiedSidepanel() {
     }
   };
 
-  const openMobilePairingPopup = () => {
-    if (typeof chrome === "undefined" || !chrome.runtime) return;
-    chrome.runtime.sendMessage({
-      action: "openMobileCapturePopup",
-    });
-  };
-
   const componentMap: Record<
     SidepanelToolId,
     React.ComponentType<{ onClose?: () => void }>
@@ -255,13 +206,6 @@ export default function UnifiedSidepanel() {
             <ExtensionAccountControl sharedClerkContext />
           </div>
 
-          {activeTool === "mobile-scanner" ? (
-            <SidepanelScannerControls
-              status={scannerStatus}
-              onPair={openMobilePairingPopup}
-            />
-          ) : null}
-
           {toast && ToastIcon ? (
             <span
               key={toast.id}
@@ -280,165 +224,5 @@ export default function UnifiedSidepanel() {
         </div>
       </div>
     </div>
-  );
-}
-
-function SidepanelScannerControls({
-  onPair,
-  status,
-}: {
-  onPair: () => void;
-  status: ScannerConnectionStatus;
-}) {
-  const getClerkToken = useSidepanelClerkToken();
-  const [sessionLabel, setSessionLabel] = useState("");
-  const [creatingEnrollment, setCreatingEnrollment] = useState(false);
-  const [enrollmentQrDataUrl, setEnrollmentQrDataUrl] = useState<string | null>(null);
-  const [enrollmentError, setEnrollmentError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    void getMobileScannerExtensionIdentity()
-      .then((identity) => {
-        if (cancelled) return;
-        setSessionLabel(identity.sessionLabel);
-        void chrome.runtime
-          .sendMessage({ action: "scannerUpdateExtensionIdentity", identity })
-          .catch(() => undefined);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setSessionLabel("Volt for iPhone");
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const createFullAppEnrollment = useCallback(async () => {
-    setCreatingEnrollment(true);
-    setEnrollmentError(null);
-    try {
-      const clerkToken = await getClerkToken();
-      if (!clerkToken) throw new Error("Sign in to enroll Volt for iPhone.");
-      const response: unknown = await chrome.runtime.sendMessage({
-        action: "workspaceCreateEnrollment",
-        label: sessionLabel || "Volt for iPhone",
-        clerkToken,
-      });
-      const responseRecord = objectFrom(response);
-      const value = objectFrom(responseRecord?.value);
-      if (responseRecord?.success !== true || typeof value?.enrollmentUrl !== "string") {
-        throw new Error(
-          typeof responseRecord?.error === "string"
-            ? responseRecord.error
-            : "Could not create enrollment QR.",
-        );
-      }
-      const qr = await QRCode.toDataURL(value.enrollmentUrl, {
-        width: 768,
-        margin: 3,
-        errorCorrectionLevel: "H",
-        color: { dark: "#1c1917", light: "#ffffff" },
-      });
-      setEnrollmentQrDataUrl(qr);
-    } catch (error) {
-      setEnrollmentError(
-        error instanceof Error ? error.message : "Could not create enrollment QR.",
-      );
-    } finally {
-      setCreatingEnrollment(false);
-    }
-  }, [getClerkToken, sessionLabel]);
-
-  const closeEnrollment = () => {
-    setEnrollmentQrDataUrl(null);
-    setEnrollmentError(null);
-  };
-
-  return (
-    <>
-      <div className="sidepanel-scanner-controls">
-        <div className="sidepanel-scanner-actions">
-          <button
-            type="button"
-            className="sidepanel-cloud-action"
-            onClick={() => void createFullAppEnrollment()}
-            disabled={creatingEnrollment}
-            aria-label="Connect installed iPhone app"
-            title="Connect installed iPhone app for cloud sync"
-          >
-            {creatingEnrollment ? <Loader2 className="animate-spin" /> : <Cloud />}
-            <span>Cloud sync</span>
-          </button>
-          <SidepanelMobilePairingStatus status={status} onClick={onPair} />
-        </div>
-      </div>
-
-      {enrollmentQrDataUrl || enrollmentError ? (
-        <div
-          className="sidepanel-enrollment-overlay"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Connect installed Volt app"
-        >
-          <div className="sidepanel-enrollment-card">
-            <button
-              type="button"
-              className="sidepanel-enrollment-close"
-              onClick={closeEnrollment}
-              aria-label="Close enrollment QR"
-            >
-              <X />
-            </button>
-            <Cloud className="sidepanel-enrollment-icon" />
-            <h2>Connect installed iPhone app</h2>
-            {enrollmentQrDataUrl ? (
-              <>
-                <div className="sidepanel-enrollment-qr">
-                  <img src={enrollmentQrDataUrl} alt="One-time QR to enroll Volt for iPhone" />
-                </div>
-                <p>Scan once in the installed Volt app to enable account-wide cloud sync.</p>
-              </>
-            ) : (
-              <p className="sidepanel-enrollment-error">{enrollmentError}</p>
-            )}
-          </div>
-        </div>
-      ) : null}
-    </>
-  );
-}
-
-function SidepanelMobilePairingStatus({
-  onClick,
-  status,
-}: {
-  onClick: () => void;
-  status: ScannerConnectionStatus;
-}) {
-  const isPaired = status === "connected";
-  const isCreating = status === "creating";
-  const label = isPaired ? "Connected" : isCreating ? "Connecting" : "Pair phone";
-  const Icon = isPaired ? Smartphone : isCreating ? Loader2 : QrCode;
-  const tone = isPaired
-    ? "is-paired"
-    : status === "waiting"
-      ? "is-ready"
-      : isCreating
-        ? "is-creating"
-        : "is-inactive";
-
-  return (
-    <button
-      type="button"
-      className={`sidepanel-mobile-status ${tone}`}
-      onClick={onClick}
-      aria-label="Open mobile pairing"
-      title="Open mobile pairing"
-    >
-      <Icon className={isCreating ? "animate-spin" : undefined} />
-      <span>{label}</span>
-    </button>
   );
 }

@@ -1,16 +1,5 @@
 import Foundation
 
-struct DeviceEnrollmentRequest: Codable, Sendable {
-    let enrollmentCode: String
-    let label: String?
-}
-
-struct DeviceEnrollmentResponse: Codable, Sendable {
-    let deviceId: String
-    let deviceSecret: String
-    let workspaceId: String
-}
-
 struct BootstrapMobileDeviceRequest: Codable, Sendable {
     let installationId: String
     let label: String

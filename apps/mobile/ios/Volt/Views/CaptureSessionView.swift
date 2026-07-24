@@ -3,6 +3,7 @@ import SwiftUI
 struct CaptureSessionView: View {
     @Environment(ScannerStore.self) private var store
     @Binding var isPresented: Bool
+    let mode: CaptureMode
     @State private var gridVisible = true
     @State private var selectedTextRegion: RecognizedTextRegion?
     @State private var selectedCleanedText: String?
@@ -102,6 +103,7 @@ struct CaptureSessionView: View {
                         hasLiveTextCandidates: !store.camera.liveTextCandidates.isEmpty,
                         isRecognizingText: store.isRecognizingText,
                         isCaptureEnabled: true,
+                        showsModePicker: false,
                         barcodeHint: ScreenshotScenario.current == .captureBarcode ? "Send '883929739929'" : "Point camera at barcode",
                         onToggleTorch: {
                             store.camera.setTorchEnabled(!store.camera.torchEnabled)
@@ -130,6 +132,7 @@ struct CaptureSessionView: View {
             CloudTargetPickerSheet()
         }
         .onAppear {
+            store.activeMode = mode
             if ScreenshotScenario.current == .captureReviewSend,
                let region = store.ocrTextRegions.first {
                 selectedTextRegion = region
