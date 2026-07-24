@@ -23,10 +23,13 @@ export function clerkFrontendApiFromPublishableKey(
   }
 }
 
-// Sync from the web app origin where users complete Clerk sign-in, not the
-// Frontend API host decoded from the publishable key.
+// Production Clerk sets the __client session cookie on the Frontend API
+// domain (Domain=clerk.volt.juanquenga.com), not the web app origin — the
+// SDK's chrome.cookies.get(syncHost) can only see it there.
 export const CLERK_SYNC_HOST =
-  extensionEnv?.WXT_CLERK_SYNC_HOST?.trim() || "https://volt.juanquenga.com";
+  extensionEnv?.WXT_CLERK_SYNC_HOST?.trim() ||
+  clerkFrontendApiFromPublishableKey(CLERK_PUBLISHABLE_KEY) ||
+  "https://clerk.volt.juanquenga.com";
 
 export const CLERK_SIGN_IN_URL =
   extensionEnv?.WXT_CLERK_SIGN_IN_URL?.trim() ||
