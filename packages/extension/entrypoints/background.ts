@@ -160,6 +160,7 @@ export default defineBackground({
       handleCursorDeliveries: cloudCursorDeliveries.handleDeliveries,
       sendOffscreenMessage: scannerOffscreen.sendScannerOffscreenMessage,
       siteUrl: EXTENSION_SCANNER_SIGNAL_URL,
+      log,
     });
     const tabDelivery = createTabDeliveryController({ chromeApi: chrome, log });
     const previewPopups = createPreviewPopupController({ chromeApi: chrome, log });

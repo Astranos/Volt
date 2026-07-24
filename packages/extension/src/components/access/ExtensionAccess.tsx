@@ -27,6 +27,7 @@ import {
   CLERK_SIGN_IN_URL,
   CLERK_SYNC_HOST,
 } from "../../access/config";
+import { publishClerkConvexToken } from "../../access/clerk-convex-token";
 import { cn } from "../../lib/utils";
 
 type AccessSurface = "popup" | "sidepanel";
@@ -74,6 +75,34 @@ function SidepanelClerkTokenBridge({ children }: { children: ReactNode }) {
     if (!isLoaded || !isSignedIn) return null;
     return getToken({ template: "convex", skipCache: true });
   }, [getToken, isLoaded, isSignedIn]);
+
+  useEffect(() => {
+    if (!isLoaded) return;
+    let cancelled = false;
+
+    const publish = async () => {
+      if (!isSignedIn) {
+        await publishClerkConvexToken(null);
+        return;
+      }
+      const token = await getFreshToken();
+      if (cancelled) return;
+      await publishClerkConvexToken(token);
+      if (!token) return;
+      await chrome.runtime
+        .sendMessage({ action: "workspaceReconcile", clerkToken: token })
+        .catch(() => undefined);
+    };
+
+    void publish();
+    const intervalId = window.setInterval(() => {
+      void publish();
+    }, 30_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [getFreshToken, isLoaded, isSignedIn]);
 
   return (
     <SidepanelClerkTokenContext.Provider value={getFreshToken}>

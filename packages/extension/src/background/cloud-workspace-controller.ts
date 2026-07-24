@@ -12,8 +12,8 @@ const COMPUTER_PRESENCE_TTL_MS = 2 * 60 * 1000;
 
 type WorkspaceMessage =
   | { action: "workspaceCreateEnrollment"; label: string; clerkToken: string }
-  | { action: "workspaceGetSnapshot" }
-  | { action: "workspaceReconcile" }
+  | { action: "workspaceGetSnapshot"; clerkToken?: string }
+  | { action: "workspaceReconcile"; clerkToken?: string }
   | { action: "workspaceGetPhotoDownload"; batchId: string; resultId: string }
   | { action: "workspaceDeleteResults"; resultIds: string[] }
   | { action: "workspaceRestoreResults"; resultIds: string[] };
@@ -24,6 +24,7 @@ type ControllerOptions = {
   handleCursorDeliveries: (deliveries: unknown) => Promise<void>;
   sendOffscreenMessage: (message: unknown) => Promise<unknown>;
   siteUrl: string;
+  log?: (...args: unknown[]) => void;
 };
 
 function recordFrom(value: unknown): Record<string, unknown> | null {
@@ -35,7 +36,12 @@ function recordFrom(value: unknown): Record<string, unknown> | null {
 function parseMessage(value: unknown): WorkspaceMessage | null {
   const record = recordFrom(value);
   if (record?.action === "workspaceGetSnapshot" || record?.action === "workspaceReconcile") {
-    return { action: record.action };
+    return {
+      action: record.action,
+      ...(typeof record.clerkToken === "string" && record.clerkToken
+        ? { clerkToken: record.clerkToken }
+        : {}),
+    };
   }
   if (record?.action === "workspaceGetPhotoDownload") {
     return typeof record.batchId === "string" && typeof record.resultId === "string"
@@ -61,6 +67,7 @@ function parseMessage(value: unknown): WorkspaceMessage | null {
 
 export function createCloudWorkspaceController(options: ControllerOptions) {
   const store = createWorkspaceStore(chromeLocalKeyValueStorage(options.chromeApi));
+  const log = options.log ?? ((...args: unknown[]) => console.warn("[Volt Cloud Workspace]", ...args));
   let snapshotQueue = Promise.resolve();
 
   function routeUrl(path: string) {
@@ -143,20 +150,22 @@ export function createCloudWorkspaceController(options: ControllerOptions) {
     return operation;
   }
 
-  async function getSnapshot() {
-    await registerComputer();
-    const payload = await request("/api/workspace/snapshot", "GET");
+  async function getSnapshot(clerkToken?: string) {
+    await registerComputer(clerkToken);
+    const payload = await request("/api/workspace/snapshot", "GET", undefined, clerkToken);
     return applySnapshot(payload);
   }
 
-  async function reconcileWorkspace() {
-    await registerComputer();
+  async function reconcileWorkspace(clerkToken?: string) {
+    await registerComputer(clerkToken);
     const response = await options.sendOffscreenMessage({
       action: "workspaceOffscreenReconcile",
     });
     const record = recordFrom(response);
-    if (record?.success !== true || record.snapshot === undefined) {
-      return getSnapshot();
+    // The offscreen document returns snapshot: null when it has no Clerk
+    // subject yet — fall back to the HTTP snapshot rather than applying null.
+    if (record?.success !== true || record.snapshot === undefined || record.snapshot === null) {
+      return getSnapshot(clerkToken);
     }
     return applySnapshot(record.snapshot);
   }
@@ -276,8 +285,8 @@ export function createCloudWorkspaceController(options: ControllerOptions) {
     const operation = (() => {
       switch (message.action) {
         case "workspaceCreateEnrollment": return createEnrollment(message.label, message.clerkToken);
-        case "workspaceGetSnapshot": return getSnapshot();
-        case "workspaceReconcile": return reconcileWorkspace();
+        case "workspaceGetSnapshot": return getSnapshot(message.clerkToken);
+        case "workspaceReconcile": return reconcileWorkspace(message.clerkToken);
         case "workspaceGetPhotoDownload": return getPhotoDownload(message.batchId, message.resultId);
         case "workspaceDeleteResults": return deleteResults(message.resultIds);
         case "workspaceRestoreResults": return restoreResults(message.resultIds);
@@ -295,7 +304,14 @@ export function createCloudWorkspaceController(options: ControllerOptions) {
   return {
     alarmName: COMPUTER_PRESENCE_ALARM,
     handleAlarm: async () => {
-      await registerComputer().catch(() => undefined);
+      try {
+        await registerComputer();
+      } catch (error) {
+        log(
+          "Computer presence heartbeat failed",
+          error instanceof Error ? error.message : error,
+        );
+      }
     },
     handleMessage,
     initialize: async () => {
@@ -303,10 +319,31 @@ export function createCloudWorkspaceController(options: ControllerOptions) {
         delayInMinutes: 1,
         periodInMinutes: 1,
       });
-      await registerComputer().catch(() => undefined);
-      await options.sendOffscreenMessage({
-        action: "workspaceOffscreenStartSubscriptions",
-      }).catch(() => undefined);
+      try {
+        await registerComputer();
+      } catch (error) {
+        log(
+          "Initial computer registration failed",
+          error instanceof Error ? error.message : error,
+        );
+      }
+      try {
+        const response = await options.sendOffscreenMessage({
+          action: "workspaceOffscreenStartSubscriptions",
+        });
+        const record = recordFrom(response);
+        if (record?.success !== true) {
+          log(
+            "Workspace subscription start failed",
+            typeof record?.error === "string" ? record.error : response,
+          );
+        }
+      } catch (error) {
+        log(
+          "Workspace subscription start failed",
+          error instanceof Error ? error.message : error,
+        );
+      }
     },
   };
 }

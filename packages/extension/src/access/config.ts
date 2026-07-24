@@ -23,9 +23,10 @@ export function clerkFrontendApiFromPublishableKey(
   }
 }
 
+// Sync from the web app origin where users complete Clerk sign-in, not the
+// Frontend API host decoded from the publishable key.
 export const CLERK_SYNC_HOST =
-  extensionEnv?.WXT_CLERK_SYNC_HOST?.trim() ||
-  clerkFrontendApiFromPublishableKey(CLERK_PUBLISHABLE_KEY);
+  extensionEnv?.WXT_CLERK_SYNC_HOST?.trim() || "https://volt.juanquenga.com";
 
 export const CLERK_SIGN_IN_URL =
   extensionEnv?.WXT_CLERK_SIGN_IN_URL?.trim() ||

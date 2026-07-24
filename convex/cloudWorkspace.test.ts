@@ -368,6 +368,39 @@ describe("cloud scanner workspace", () => {
     expect(new Set(batches.map((batch) => batch.workspaceId)).size).toBe(2);
   });
 
+  test("appends new results to an existing uploading photo batch", async () => {
+    const t = convexTest(schema, modules);
+    const { credential } = await enroll(t, "photo-session-user");
+    const first = await t.mutation(putBatch, {
+      ...credential,
+      batchId: "photo-session",
+      clientCreatedAt: 1,
+      results: [result("photo-1", "photo")],
+    });
+    expect(first).toMatchObject({ idempotent: false, status: "uploading" });
+
+    const appended = await t.mutation(putBatch, {
+      ...credential,
+      batchId: "photo-session",
+      clientCreatedAt: 2,
+      results: [result("photo-1", "photo"), result("photo-2", "photo")],
+    });
+    expect(appended).toMatchObject({ idempotent: false, status: "uploading" });
+
+    const stored = await t.run(async (ctx) => {
+      const batch = await ctx.db.query("resultBatches").unique();
+      const results = await ctx.db.query("scanResults").collect();
+      return { batch, resultIds: results.map((item) => item.resultId).sort() };
+    });
+    expect(stored.batch).toMatchObject({
+      batchId: "photo-session",
+      status: "uploading",
+      resultCount: 2,
+      byteCount: 20,
+    });
+    expect(stored.resultIds).toEqual(["photo-1", "photo-2"]);
+  });
+
   test("deduplicates batch retries without charging quota twice and enforces the free allowance", async () => {
     const t = convexTest(schema, modules);
     const { credential } = await enroll(t, "free-user");

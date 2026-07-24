@@ -585,6 +585,55 @@ export const setCursorTarget = mutation({
   },
 });
 
+async function insertBatchResults(
+  ctx: MutationCtx,
+  workspaceId: Id<"workspaces">,
+  sourceDeviceId: string,
+  batchId: string,
+  results: CloudBatchInput["results"],
+  now: number,
+) {
+  for (const result of results) {
+    const objectKey = result.kind === "photo"
+      ? `workspaces/${workspaceId}/batches/${encodeURIComponent(batchId)}/${encodeURIComponent(result.resultId)}`
+      : undefined;
+    await ctx.db.insert("scanResults", {
+      workspaceId,
+      batchId,
+      resultId: result.resultId,
+      sourceDeviceId,
+      kind: result.kind,
+      ...(result.text !== undefined ? { text: result.text } : {}),
+      ...(result.format !== undefined ? { format: result.format } : {}),
+      ...(objectKey ? { objectKey } : {}),
+      ...(result.contentType ? { contentType: result.contentType } : {}),
+      byteCount: result.byteCount,
+      ...(result.checksum ? { checksum: result.checksum } : {}),
+      clientCreatedAt: result.clientCreatedAt,
+      createdAt: now,
+    });
+  }
+}
+
+async function assertResultsAreBatchCompatible(
+  ctx: MutationCtx,
+  workspaceId: Id<"workspaces">,
+  results: CloudBatchInput["results"],
+) {
+  const seen = new Set<string>();
+  for (const result of results) {
+    if (seen.has(result.resultId)) throw new ConvexError("Duplicate result id in batch");
+    seen.add(result.resultId);
+    const conflicting = await ctx.db
+      .query("scanResults")
+      .withIndex("by_workspaceId_and_resultId", (q) =>
+        q.eq("workspaceId", workspaceId).eq("resultId", result.resultId),
+      )
+      .first();
+    if (conflicting) throw new ConvexError("Result id already belongs to another batch");
+  }
+}
+
 async function putBatchForPrincipal(
   ctx: MutationCtx,
   principal: Principal,
@@ -603,21 +652,47 @@ async function putBatchForPrincipal(
       if (existing.sourceDeviceId !== sourceDeviceId) {
         throw new ConvexError("Batch id belongs to another source");
       }
-      return { batchId: existing.batchId, idempotent: true, status: existing.status };
+      if (existing.status === "deleted") {
+        throw new ConvexError("Batch was deleted");
+      }
+
+      const existingResults = await ctx.db
+        .query("scanResults")
+        .withIndex("by_workspaceId_and_batchId", (q) =>
+          q.eq("workspaceId", workspace._id).eq("batchId", args.batchId),
+        )
+        .take(500);
+      const existingIds = new Set(existingResults.map((item) => item.resultId));
+      const appendedResults = args.results.filter((result) => !existingIds.has(result.resultId));
+      if (appendedResults.length === 0) {
+        return { batchId: existing.batchId, idempotent: true, status: existing.status };
+      }
+      if (existingResults.length + appendedResults.length > 500) {
+        throw new ConvexError("A batch may contain at most 500 results");
+      }
+
+      await assertResultsAreBatchCompatible(ctx, workspace._id, appendedResults);
+      const addedBytes = appendedResults.reduce((sum, result) => sum + result.byteCount, 0);
+      await enforceQuota(ctx, workspace, appendedResults.length, addedBytes);
+      const now = Date.now();
+      await insertBatchResults(
+        ctx,
+        workspace._id,
+        sourceDeviceId,
+        args.batchId,
+        appendedResults,
+        now,
+      );
+      await ctx.db.patch(existing._id, {
+        status: "uploading",
+        resultCount: existingResults.length + appendedResults.length,
+        byteCount: existing.byteCount + addedBytes,
+        updatedAt: now,
+      });
+      return { batchId: args.batchId, idempotent: false, status: "uploading" as const };
     }
 
-    const seen = new Set<string>();
-    for (const result of args.results) {
-      if (seen.has(result.resultId)) throw new ConvexError("Duplicate result id in batch");
-      seen.add(result.resultId);
-      const conflicting = await ctx.db
-        .query("scanResults")
-        .withIndex("by_workspaceId_and_resultId", (q) =>
-          q.eq("workspaceId", workspace._id).eq("resultId", result.resultId),
-        )
-        .first();
-      if (conflicting) throw new ConvexError("Result id already belongs to another batch");
-    }
+    await assertResultsAreBatchCompatible(ctx, workspace._id, args.results);
     const byteCount = args.results.reduce((sum, result) => sum + result.byteCount, 0);
     await enforceQuota(ctx, workspace, args.results.length, byteCount);
     const now = Date.now();
@@ -632,26 +707,14 @@ async function putBatchForPrincipal(
       createdAt: now,
       updatedAt: now,
     });
-    for (const result of args.results) {
-      const objectKey = result.kind === "photo"
-        ? `workspaces/${workspace._id}/batches/${encodeURIComponent(args.batchId)}/${encodeURIComponent(result.resultId)}`
-        : undefined;
-      await ctx.db.insert("scanResults", {
-        workspaceId: workspace._id,
-        batchId: args.batchId,
-        resultId: result.resultId,
-        sourceDeviceId,
-        kind: result.kind,
-        ...(result.text !== undefined ? { text: result.text } : {}),
-        ...(result.format !== undefined ? { format: result.format } : {}),
-        ...(objectKey ? { objectKey } : {}),
-        ...(result.contentType ? { contentType: result.contentType } : {}),
-        byteCount: result.byteCount,
-        ...(result.checksum ? { checksum: result.checksum } : {}),
-        clientCreatedAt: result.clientCreatedAt,
-        createdAt: now,
-      });
-    }
+    await insertBatchResults(
+      ctx,
+      workspace._id,
+      sourceDeviceId,
+      args.batchId,
+      args.results,
+      now,
+    );
     return { batchId: args.batchId, idempotent: false, status: "uploading" as const };
 }
 

@@ -12,6 +12,10 @@ import {
   convexDeploymentUrlFromHttpActionsUrl,
 } from "../access/config";
 import {
+  CLERK_CONVEX_TOKEN_STORAGE_KEY,
+  readPublishedClerkConvexToken,
+} from "../access/clerk-convex-token";
+import {
   MobileScannerSession,
   type BarcodeMessage,
   type ExtensionIdentity,
@@ -81,6 +85,8 @@ function isJoinWindowActive(state: MobileScannerSessionState) {
 }
 
 async function getClerkToken() {
+  const published = await readPublishedClerkConvexToken();
+  if (published) return published;
   if (!CLERK_PUBLISHABLE_KEY) return null;
   const clerk = await createClerkClient({
     publishableKey: CLERK_PUBLISHABLE_KEY,
@@ -121,11 +127,24 @@ class CloudWorkspaceSubscriptions {
   private lastSnapshot: unknown = null;
   private started = false;
   private reconciling: Promise<void> | null = null;
+  private reconcileAgain = false;
 
   constructor() {
+    this.armClientAuth();
+  }
+
+  // ConvexClient auth is not self-healing: if the fetcher returns null at
+  // setAuth time (plus one forced refetch), the client settles into noAuth
+  // and never calls the fetcher again. Re-arming is the only way back.
+  private armClientAuth() {
     this.client.setAuth(getClerkToken, () => {
       void this.reconcileAuthentication();
     });
+  }
+
+  private clientAuthSubject() {
+    const claims = this.client.getAuth()?.decoded;
+    return typeof claims?.sub === "string" && claims.sub ? claims.sub : null;
   }
 
   start() {
@@ -135,6 +154,11 @@ class CloudWorkspaceSubscriptions {
     window.setInterval(() => {
       void this.reconcileAuthentication();
     }, 15_000);
+    chrome.storage.session.onChanged.addListener((changes) => {
+      if (CLERK_CONVEX_TOKEN_STORAGE_KEY in changes) {
+        void this.reconcileAuthentication();
+      }
+    });
   }
 
   private stopSubscriptions() {
@@ -150,13 +174,15 @@ class CloudWorkspaceSubscriptions {
     const subscriptionsActive =
       this.workspaceSnapshotUnsubscribe !== null
       && this.cursorDeliveriesUnsubscribe !== null;
+    const clientAuthenticated = subject !== null && this.clientAuthSubject() === subject;
     if (
       this.hasReconciledSubject
       && subject === this.clerkSubject
-      && (subject === null || subscriptionsActive)
+      && (subject === null || (subscriptionsActive && clientAuthenticated))
     ) return;
 
     this.stopSubscriptions();
+    if (subject !== null && !clientAuthenticated) this.armClientAuth();
     const accountResponse = await chrome.runtime.sendMessage({
       action: "workspaceOffscreenAccountChanged",
       subject,
@@ -197,11 +223,21 @@ class CloudWorkspaceSubscriptions {
   }
 
   reconcileAuthentication() {
-    if (!this.reconciling) {
-      this.reconciling = this.reconcileAuthenticationNow().finally(() => {
-        this.reconciling = null;
-      });
+    // A request landing while a pass is in flight must trigger one more full
+    // pass, not coalesce into the current one — the in-flight pass may have
+    // already read stale auth state (e.g. setAuth's onChange fires mid-pass).
+    if (this.reconciling) {
+      this.reconcileAgain = true;
+      return this.reconciling;
     }
+    this.reconciling = this.reconcileAuthenticationNow()
+      .finally(() => {
+        this.reconciling = null;
+        if (this.reconcileAgain) {
+          this.reconcileAgain = false;
+          void this.reconcileAuthentication();
+        }
+      });
     return this.reconciling;
   }
 
