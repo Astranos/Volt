@@ -88,10 +88,6 @@ function SidepanelClerkTokenBridge({ children }: { children: ReactNode }) {
       const token = await getFreshToken();
       if (cancelled) return;
       await publishClerkConvexToken(token);
-      if (!token) return;
-      await chrome.runtime
-        .sendMessage({ action: "workspaceReconcile", clerkToken: token })
-        .catch(() => undefined);
     };
 
     void publish();

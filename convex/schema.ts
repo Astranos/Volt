@@ -139,7 +139,8 @@ export default defineSchema({
   })
     .index("by_workspaceId_and_deliveryId", ["workspaceId", "deliveryId"])
     .index("by_targetDeviceId_and_state", ["targetDeviceId", "state"])
-    .index("by_workspaceId_and_resultId", ["workspaceId", "resultId"]),
+    .index("by_workspaceId_and_resultId", ["workspaceId", "resultId"])
+    .index("by_state", ["state"]),
 
   users: defineTable({
     clerkUserId: v.string(),

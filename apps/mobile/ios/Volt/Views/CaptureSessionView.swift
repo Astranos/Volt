@@ -145,12 +145,6 @@ struct CaptureSessionView: View {
         .onChange(of: store.ocrReviewImage != nil) { _, isReviewingOcr in
             syncCameraForOcrReview(isReviewingOcr: isReviewingOcr)
         }
-        .task {
-            while !Task.isCancelled {
-                await store.cloudWorkspace.refreshComputers()
-                try? await Task.sleep(for: .seconds(30))
-            }
-        }
         .task(id: store.captureDeliveryToast?.id) {
             guard let toast = store.captureDeliveryToast else { return }
             try? await Task.sleep(for: .seconds(toast.tone == .failure ? 3 : 2))

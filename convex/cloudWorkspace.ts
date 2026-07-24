@@ -525,6 +525,49 @@ export const updatePresence = mutation({
   },
 });
 
+// Convex subscriptions only re-fire on writes, so a client that dies silently
+// (no revokeDevice call) would otherwise show as online forever since
+// listComputersForDevice only evaluates expiresAt at read time. This sweep
+// forces a write once a lease expires so subscribers observe the flip.
+export const sweepExpiredPresence = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const now = Date.now();
+    const presence = await ctx.db.query("workspacePresence").collect();
+    for (const item of presence) {
+      if (item.state === "online" && item.expiresAt <= now) {
+        await ctx.db.patch(item._id, { state: "offline" });
+      }
+    }
+  },
+});
+
+// cursorDeliveryStatus synthesizes a pending-and-past-expiresAt delivery as
+// failed/expired without writing anything, so (like presence) a Convex
+// subscriber never observes the flip until some other write touches the row.
+// This sweep performs that write explicitly, using the state index so cost
+// stays bounded by the pending set rather than the full (unbounded, never
+// pruned) cursorDeliveries table.
+export const sweepExpiredCursorDeliveries = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const now = Date.now();
+    const pending = await ctx.db
+      .query("cursorDeliveries")
+      .withIndex("by_state", (q) => q.eq("state", "pending"))
+      .collect();
+    for (const delivery of pending) {
+      if (delivery.expiresAt <= now) {
+        await ctx.db.patch(delivery._id, {
+          state: "failed",
+          errorCode: "expired",
+          updatedAt: now,
+        });
+      }
+    }
+  },
+});
+
 export const listComputersForDevice = query({
   args: credentialArgs,
   handler: async (ctx, args) => {

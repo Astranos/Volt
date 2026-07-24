@@ -86,9 +86,6 @@ struct SessionsView: View {
                     .presentationDragIndicator(.visible)
             }
             .onAppear(perform: prepareSessions)
-            .task {
-                await refreshCloudTargetsPeriodically()
-            }
         }
     }
 
@@ -116,14 +113,6 @@ struct SessionsView: View {
 
     private func delete(_ result: ScanResult) {
         store.removeResult(id: result.id)
-    }
-
-    private func refreshCloudTargetsPeriodically() async {
-        while !Task.isCancelled {
-            await store.cloudWorkspace.refreshComputers()
-            await store.refreshDeliveryStatuses()
-            try? await Task.sleep(for: .seconds(30))
-        }
     }
 }
 

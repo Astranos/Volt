@@ -73,9 +73,6 @@ struct CaptureModeTabView: View {
                 )
             }
             .onAppear(perform: prepareMode)
-            .task {
-                await refreshCloudTargetsPeriodically()
-            }
         }
     }
 
@@ -107,13 +104,5 @@ struct CaptureModeTabView: View {
         store.clearOcrReview()
         store.activeMode = mode
         isCaptureSessionPresented = true
-    }
-
-    private func refreshCloudTargetsPeriodically() async {
-        while !Task.isCancelled {
-            await store.cloudWorkspace.refreshComputers()
-            await store.refreshDeliveryStatuses()
-            try? await Task.sleep(for: .seconds(30))
-        }
     }
 }

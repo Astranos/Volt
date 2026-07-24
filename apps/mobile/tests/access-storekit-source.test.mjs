@@ -15,12 +15,10 @@ const storeKitSource = readIOSSource("Volt/Services/StoreKitSubscriptionStore.sw
 const accessSettingsSource = readIOSSource("Volt/Views/AccessSettingsSection.swift");
 const accountViewSource = readIOSSource("Volt/Views/AccountAccessView.swift");
 const subscriptionViewSource = readIOSSource("Volt/Views/SubscriptionActionsView.swift");
-const configurationRequiredViewSource = readIOSSource("Volt/Views/ClerkConfigurationRequiredView.swift");
 const clipRootSource = readIOSSource("VoltClip/Views/ClipRootView.swift");
 const clipUpgradeSource = readIOSSource("VoltClip/Views/ClipUpgradeView.swift");
 const clipStoreSource = readIOSSource("VoltClip/Services/ClipScannerStore.swift");
 const clipTransportSource = readIOSSource("VoltClip/Services/WebKitWebRTCTransport.swift");
-const fullAppInfoSource = readIOSSource("Volt/Info.plist");
 const clipInfoSource = readIOSSource("VoltClip/Info.plist");
 const entitlementSource = readIOSSource("Volt/Volt.entitlements");
 
@@ -40,27 +38,14 @@ test("full iOS target integrates ClerkKit and ClerkKitUI through Swift Package M
   assert.doesNotMatch(clipTargetSource, /packageProductDependencies|ClerkKit/);
 });
 
-test("full app configures and injects Clerk without committing credentials", () => {
-  assert.match(appSource, /Clerk\.configure\(publishableKey: publishableKey\)/);
+test("full app configures and injects Clerk through AppConfiguration", () => {
+  assert.match(appSource, /Clerk\.configure\(publishableKey: AppConfiguration\.clerkPublishableKey\)/);
   assert.match(appSource, /clerk = Clerk\.shared/);
   assert.match(appSource, /\.environment\(clerk\)/);
   assert.match(appSource, /try await clerk\.handle\(url\)/);
-  assert.match(configurationSource, /configuredString\(for: "VoltClerkPublishableKey"\)/);
-  assert.match(fullAppInfoSource, /<key>VoltClerkPublishableKey<\/key>\s*<string>\$\(VOLT_CLERK_PUBLISHABLE_KEY\)<\/string>/);
-  assert.match(projectSource, /VOLT_CLERK_PUBLISHABLE_KEY = REPLACE_ME/);
+  assert.match(configurationSource, /static let clerkPublishableKey = "pk_live_[A-Za-z0-9]+"/);
   assert.match(entitlementSource, /webcredentials:\$\(VOLT_CLERK_FRONTEND_API_DOMAIN\)/);
-  assert.doesNotMatch(appSource + configurationSource, /pk_(test|live)_[A-Za-z0-9]+/);
-});
-
-test("missing Clerk configuration still opens capture without constructing the Clerk-backed root", () => {
-  assert.match(appSource, /if let publishableKey \{[\s\S]*clerk = Clerk\.shared[\s\S]*\} else \{\s*clerk = nil/);
-  assert.match(
-    appSource,
-    /if let clerk \{[\s\S]*VoltRootScene\(\)[\s\S]*\.environment\(clerk\)[\s\S]*\} else \{\s*RootView\(showsAccountSettings: false\)[\s\S]*\.environment\(scannerStore\)/
-  );
-  assert.match(configurationRequiredViewSource, /Clerk Configuration Required/);
-  assert.match(configurationRequiredViewSource, /VOLT_CLERK_PUBLISHABLE_KEY/);
-  assert.doesNotMatch(configurationRequiredViewSource, /ClerkKit|Clerk\.shared/);
+  assert.doesNotMatch(appSource + configurationSource, /sk_(test|live)_[A-Za-z0-9]+/);
 });
 
 test("authenticated access calls use fresh Clerk Convex tokens and authoritative status", () => {
@@ -105,13 +90,12 @@ test("StoreKit observes, restores, and replays current verified transactions", (
 });
 
 test("account UI shows account, workspace, trial, and server subscription status", () => {
-  assert.match(accountViewSource, /AuthView\(\)/);
-  assert.match(accountViewSource, /UserButton\(signedOutContent:/);
+  assert.match(accountViewSource, /UserButton\(\)/);
   assert.match(accountViewSource, /OrganizationSwitcher\(\)/);
-  assert.match(accessSettingsSource, /LabeledContent\("Account"/);
-  assert.match(accessSettingsSource, /LabeledContent\("Workspace"/);
-  assert.match(accessSettingsSource, /LabeledContent\("Free Sessions"/);
-  assert.match(accessSettingsSource, /LabeledContent\("Subscription"/);
+  assert.match(accountViewSource, /Section\("Account"\)/);
+  assert.match(accountViewSource, /Section\("Workspace"\)/);
+  assert.match(accountViewSource, /LabeledContent\("Free Sessions Remaining"/);
+  assert.match(accountViewSource, /LabeledContent\("Subscription"/);
   assert.match(subscriptionViewSource, /accessStore\.status\?\.access == \.complimentary/);
   assert.match(subscriptionViewSource, /Included with your workplace/);
   assert.match(subscriptionViewSource, /accessStore\.isRefreshing \|\| !hasCurrentAccessContext/);

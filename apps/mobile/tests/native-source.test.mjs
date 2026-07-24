@@ -68,6 +68,14 @@ const scannerViewSwiftSource = readFileSync(
   new URL("../ios/Volt/Views/ScannerView.swift", import.meta.url),
   "utf8"
 );
+const sessionsViewSwiftSource = readFileSync(
+  new URL("../ios/Volt/Views/SessionsView.swift", import.meta.url),
+  "utf8"
+);
+const cloudTargetPickerSwiftSource = readFileSync(
+  new URL("../ios/Volt/Views/CloudTargetPickerSheet.swift", import.meta.url),
+  "utf8"
+);
 const capturedResultRowSwiftSource = readFileSync(
   new URL("../ios/Volt/Views/CapturedResultRow.swift", import.meta.url),
   "utf8"
@@ -179,8 +187,8 @@ test("installed app excludes WebRTC pairing and dictation sources without changi
   assert.doesNotMatch(infoPlistSource, /NSMicrophoneUsageDescription|NSSpeechRecognitionUsageDescription/);
   assert.doesNotMatch(podfileSource, /JitsiWebRTC/);
   assert.doesNotMatch(scannerProtocolSwiftSource, /PhotoDeliveryReceipt|struct PhotoChunkAck|parsePhotoChunkAck|static func helloMessage|static func dictationMessage/);
-  assert.match(scannerViewSwiftSource, /store\.results\.filter \{ \$0\.source != \.upload \}/);
-  assert.match(scannerViewSwiftSource, /canResend: result\.kind != \.dictation/);
+  assert.match(sessionsViewSwiftSource, /store\.results\.filter \{ \$0\.source != \.upload \}/);
+  assert.match(sessionsViewSwiftSource, /canResend: result\.kind != \.dictation/);
   assert.match(capturedResultRowSwiftSource, /case \.dictation: "Dictation"/);
   assert.match(capturedResultRowSwiftSource, /case \.dictation: "mic"/);
   assert.match(xcodeProjectSource, /B3000000000000000000000D \/\* ScannerProtocol\.swift in Sources \*\//);
@@ -287,7 +295,7 @@ test("native pairing URLs can carry the signal deployment that minted the token"
 });
 
 test("native capture session remains available without a WebRTC connection", () => {
-  assert.match(scannerViewSwiftSource, /CaptureSessionView\(isPresented: \$isCaptureSessionPresented\)/);
+  assert.match(scannerViewSwiftSource, /CaptureSessionView\(\s*isPresented: \$isCaptureSessionPresented,\s*mode: mode\s*\)/);
   assert.match(scannerViewSwiftSource, /ScannerBottomActionAccessory\([\s\S]*isEnabled: true/);
   assert.doesNotMatch(scannerViewSwiftSource, /guard store\.connectionStatus\.isConnected/);
   assert.match(captureSessionViewSwiftSource, /isCaptureEnabled: true/);
@@ -299,10 +307,12 @@ test("native capture session remains available without a WebRTC connection", () 
 test("native capture session exposes the optional cloud cursor target", () => {
   assert.match(scannerViewSwiftSource, /CloudTargetButton/);
   assert.match(scannerViewSwiftSource, /CloudTargetPickerSheet/);
-  assert.match(scannerViewSwiftSource, /"No computer"/);
-  assert.match(scannerViewSwiftSource, /availableComputers/);
+  assert.match(cloudTargetPickerSwiftSource, /"This iPhone"/);
+  assert.match(cloudTargetPickerSwiftSource, /availableComputers/);
   assert.match(captureSessionViewSwiftSource, /CloudTargetButton/);
-  assert.match(captureSessionViewSwiftSource, /cloudWorkspace\.refreshComputers\(\)/);
+  // Computer availability now streams continuously over a live Convex subscription
+  // (CloudWorkspaceStore.startComputersSubscriptionIfNeeded), so the view no longer
+  // needs to trigger a manual refresh on appear.
 });
 
 test("App Clip keeps transient WebRTC disconnects alive through background grace", () => {
@@ -335,13 +345,14 @@ test("native and app clip can reopen photo capture into a selected batch", () =>
   assert.match(scannerStoreCaptureActionsSwiftSource, /func endResumedPhotoBatch\(\) \{\s*resumedPhotoBatchId = nil\s*\}/);
   assert.match(scannerStoreCaptureActionsSwiftSource, /func currentPhotoBatch\(now: Date\) -> String \{\s*if let resumedPhotoBatchId \{\s*return resumedPhotoBatchId\s*\}/);
   assert.match(scannerStoreCaptureActionsSwiftSource, /func captureSquarePhoto\(\) async \{\s*let batchId = resumedPhotoBatchId[\s\S]*sendPhoto\(preparedImage, result: photoResult, batchId: batchId\)/);
-  assert.match(scannerViewSwiftSource, /private var capturePhotoBatches: \[CapturePhotoBatch\]/);
-  assert.match(scannerViewSwiftSource, /Label\("Add Photos", systemImage: "plus\.viewfinder"\)/);
-  assert.match(scannerViewSwiftSource, /accessibilityLabel\("Add photos to \\\(batch\.title\) from/);
-  assert.match(scannerViewSwiftSource, /store\.activeMode = \.photo\s*store\.resumePhotoBatch\(id: batch\.id\)\s*isCaptureSessionPresented = true/);
-  assert.match(scannerViewSwiftSource, /onDismiss: \{\s*store\.endResumedPhotoBatch\(\)\s*\}/);
+  assert.match(sessionsViewSwiftSource, /private var capturePhotoBatches: \[CapturePhotoBatch\]/);
+  assert.match(sessionsViewSwiftSource, /Label\("Continue", systemImage: "plus\.viewfinder"\)/);
+  assert.match(sessionsViewSwiftSource, /accessibilityLabel\("Continue \\\(batch\.title\) from/);
+  assert.match(sessionsViewSwiftSource, /store\.activeMode = \.photo[\s\S]*store\.resumePhotoBatch\(id: batch\.id\)\s*isCaptureSessionPresented = true/);
+  assert.match(sessionsViewSwiftSource, /onDismiss: store\.endResumedPhotoBatch/);
   assert.match(scannerViewSwiftSource, /private func startCapture\(\) \{[\s\S]*store\.endResumedPhotoBatch\(\)/);
-  assert.doesNotMatch(captureSessionViewSwiftSource, /\.onAppear \{\s*store\.activeMode =/);
+  assert.match(captureSessionViewSwiftSource, /\.onAppear \{\s*store\.activeMode = mode/);
+  assert.doesNotMatch(captureSessionViewSwiftSource, /\.onAppear \{\s*store\.activeMode = \.ocr/);
 
   assert.match(clipScannerStoreSwiftSource, /func resumeCaptureSession\(batchId: String\) -> String \{\s*activeCaptureBatchId = batchId\s*return batchId\s*\}/);
   assert.match(clipRootViewSwiftSource, /Label\("Add Photos", systemImage: "plus\.viewfinder"\)/);

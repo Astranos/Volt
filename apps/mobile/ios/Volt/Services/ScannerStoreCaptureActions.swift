@@ -267,13 +267,7 @@ extension ScannerStore {
         results[index].deliveryState = state
     }
 
-    func refreshDeliveryStatuses() async {
-        for resolution in await cloudWorkspace.pollCursorDeliveryStatuses() {
-            applyDeliveryResolution(resolution)
-        }
-    }
-
-    private func applyDeliveryResolution(_ resolution: CursorDeliveryResolution) {
+    func applyDeliveryResolution(_ resolution: CursorDeliveryResolution) {
         guard let result = results.first(where: { $0.id == resolution.resultId }),
               result.deliveryState == .sending
         else { return }

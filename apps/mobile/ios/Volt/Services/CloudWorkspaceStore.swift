@@ -1,4 +1,6 @@
 import ClerkKit
+import Combine
+import ConvexMobile
 import Foundation
 import Observation
 import UIKit
@@ -40,21 +42,27 @@ final class CloudWorkspaceStore {
     private(set) var accountSwitchConflict: CaptureOwnershipConflict?
 
     @ObservationIgnored private let api: MobileCloudAPI
+    @ObservationIgnored private let client: ConvexClient
     @ObservationIgnored private let outbox: DurableCaptureOutbox
     @ObservationIgnored private var authenticatedClerkUserId: String?
     @ObservationIgnored private var lastBootstrappedClerkUserId: String?
     @ObservationIgnored private var syncTask: Task<Void, Never>?
     @ObservationIgnored private var retryTask: Task<Void, Never>?
+    @ObservationIgnored private var computersSubscriptionTask: Task<Void, Never>?
+    @ObservationIgnored private var deliveryStatusSubscriptionTask: Task<Void, Never>?
+    @ObservationIgnored private var deliveryExpiryTask: Task<Void, Never>?
+    @ObservationIgnored private var subscriptionsAreActive = false
     @ObservationIgnored private var syncRequestedWhileDraining = false
     @ObservationIgnored private var inFlightDeliveries: [String: InFlightDelivery] = [:]
     @ObservationIgnored private var bufferedDeliveryResolutions: [CursorDeliveryResolution] = []
-    @ObservationIgnored private var isPollingDeliveries = false
+    @ObservationIgnored private var deliveryResolutionHandler: ((CursorDeliveryResolution) -> Void)?
 
     init(
         api: MobileCloudAPI = MobileCloudAPIClient(baseURL: AppConfiguration.convexSiteURL),
         outbox: DurableCaptureOutbox? = nil
     ) {
         self.api = api
+        self.client = ConvexClient(deploymentUrl: AppConfiguration.convexCloudURL.absoluteString)
         self.outbox = outbox ?? DurableCaptureOutbox()
         self.credential = DeviceCredentialStore.load()
     }
@@ -114,7 +122,7 @@ final class CloudWorkspaceStore {
                 )
                 updateOwnershipConflict()
                 requestSync()
-                await refreshComputers()
+                startSubscriptionsIfNeeded()
             } catch {
                 lastError = error.localizedDescription
             }
@@ -149,7 +157,7 @@ final class CloudWorkspaceStore {
             updateOwnershipConflict()
             lastError = nil
             requestSync()
-            await refreshComputers()
+            restartSubscriptions()
         } catch is CancellationError {
             return
         } catch {
@@ -158,24 +166,89 @@ final class CloudWorkspaceStore {
         }
     }
 
-    func refreshComputers() async {
-        guard let credential = activeCredential else {
-            computers = []
-            selectedTargetDeviceId = nil
-            return
+    func setSubscriptionsActive(_ isActive: Bool) {
+        guard subscriptionsAreActive != isActive else { return }
+        subscriptionsAreActive = isActive
+        if isActive {
+            startSubscriptionsIfNeeded()
+        } else {
+            cancelSubscriptionTasks()
         }
-        do {
-            let response = try await api.listComputers(ListCloudComputersRequest(
-                deviceId: credential.deviceId,
-                deviceSecret: credential.value
-            ))
-            computers = response.computers
-            selectedTargetDeviceId = response.cursorTargetDeviceId
-            lastError = nil
-        } catch is CancellationError {
-            return
-        } catch {
-            lastError = error.localizedDescription
+    }
+
+    func setDeliveryResolutionHandler(_ handler: @escaping (CursorDeliveryResolution) -> Void) {
+        deliveryResolutionHandler = handler
+        deliverBufferedResolutions()
+    }
+
+    private func startSubscriptionsIfNeeded() {
+        guard subscriptionsAreActive, activeCredential != nil else { return }
+        startComputersSubscriptionIfNeeded()
+        startDeliveryStatusSubscriptionIfNeeded()
+        scheduleDeliveryExpiryTimer()
+    }
+
+    private func restartSubscriptions() {
+        cancelSubscriptionTasks()
+        startSubscriptionsIfNeeded()
+    }
+
+    private func cancelSubscriptionTasks() {
+        computersSubscriptionTask?.cancel()
+        computersSubscriptionTask = nil
+        deliveryStatusSubscriptionTask?.cancel()
+        deliveryStatusSubscriptionTask = nil
+        deliveryExpiryTask?.cancel()
+        deliveryExpiryTask = nil
+    }
+
+    private func startComputersSubscriptionIfNeeded() {
+        guard computersSubscriptionTask == nil,
+              subscriptionsAreActive,
+              let credential = activeCredential
+        else { return }
+        let deviceId = credential.deviceId
+        let publisher = client.subscribe(
+            to: "cloudWorkspace:listComputersForDevice",
+            with: [
+                "deviceId": credential.deviceId,
+                "deviceSecret": credential.value,
+            ],
+            yielding: ListCloudComputersResponse.self
+        )
+        computersSubscriptionTask = Task { [weak self] in
+            do {
+                for try await response in publisher.values {
+                    guard let self,
+                          self.subscriptionsAreActive,
+                          self.activeCredential?.deviceId == deviceId
+                    else { return }
+                    self.computers = response.computers
+                    self.selectedTargetDeviceId = response.cursorTargetDeviceId
+                    self.lastError = nil
+                }
+            } catch {
+                guard !Task.isCancelled, let self else { return }
+                if self.handleSubscriptionError(error, deviceId: deviceId) { return }
+            }
+            guard !Task.isCancelled, let self else { return }
+            self.scheduleComputersSubscriptionRetry(deviceId: deviceId)
+        }
+    }
+
+    private func scheduleComputersSubscriptionRetry(deviceId: String) {
+        computersSubscriptionTask = Task { [weak self] in
+            do {
+                try await Task.sleep(for: Self.subscriptionRetryDelay)
+            } catch {
+                return
+            }
+            guard let self,
+                  self.subscriptionsAreActive,
+                  self.activeCredential?.deviceId == deviceId
+            else { return }
+            self.computersSubscriptionTask = nil
+            self.startComputersSubscriptionIfNeeded()
         }
     }
 
@@ -243,75 +316,160 @@ final class CloudWorkspaceStore {
             resultId: resultId,
             giveUpAt: Date.now.addingTimeInterval(Self.deliveryGiveUpInterval)
         )
+        restartDeliveryStatusSubscription()
+        scheduleDeliveryExpiryTimer()
     }
 
-    func pollCursorDeliveryStatuses() async -> [CursorDeliveryResolution] {
-        // Drain buffered resolutions first — before (and regardless of) the
-        // credential/network guard — so sign-out/revocation clears pending
-        // badges on the next refresh even while signed out.
-        var resolutions = drainBufferedResolutions()
+    private func startDeliveryStatusSubscriptionIfNeeded() {
+        guard deliveryStatusSubscriptionTask == nil,
+              subscriptionsAreActive,
+              let credential = activeCredential,
+              !inFlightDeliveries.isEmpty
+        else { return }
+        let deviceId = credential.deviceId
+        let deliveryIds = Array(inFlightDeliveries.keys.sorted().prefix(Self.deliveryStatusBatchLimit))
+        let encodedDeliveryIds = deliveryIds.map { $0 as ConvexEncodable? }
+        let publisher = client.subscribe(
+            to: "cloudWorkspace:cursorDeliveryStatus",
+            with: [
+                "deviceId": credential.deviceId,
+                "deviceSecret": credential.value,
+                "deliveryIds": encodedDeliveryIds,
+            ],
+            yielding: CursorDeliveryStatusResponse.self
+        )
+        deliveryStatusSubscriptionTask = Task { [weak self] in
+            do {
+                for try await response in publisher.values {
+                    guard let self,
+                          self.subscriptionsAreActive,
+                          self.activeCredential?.deviceId == deviceId
+                    else { return }
+                    var removedDelivery = false
+                    for status in response.statuses where status.isTerminal {
+                        guard let tracked = self.inFlightDeliveries.removeValue(forKey: status.deliveryId) else {
+                            continue
+                        }
+                        removedDelivery = true
+                        self.publishDeliveryResolution(CursorDeliveryResolution(
+                            resultId: tracked.resultId,
+                            state: status.state == "delivered" ? .sent : .failed,
+                            errorCode: status.errorCode
+                        ))
+                    }
+                    self.lastError = nil
+                    if removedDelivery {
+                        self.deliveryStatusSubscriptionTask = nil
+                        self.startDeliveryStatusSubscriptionIfNeeded()
+                        self.scheduleDeliveryExpiryTimer()
+                        return
+                    }
+                }
+            } catch {
+                guard !Task.isCancelled, let self else { return }
+                if self.handleSubscriptionError(error, deviceId: deviceId) { return }
+            }
+            guard !Task.isCancelled, let self else { return }
+            self.scheduleDeliveryStatusSubscriptionRetry(deviceId: deviceId)
+        }
+    }
 
-        // Give up on deliveries past their deadline (the server TTL is 120s, so
-        // 15 min is generous). This also resolves ids a success response omits
-        // (unknown/other-device) so they cannot linger forever.
+    private func restartDeliveryStatusSubscription() {
+        deliveryStatusSubscriptionTask?.cancel()
+        deliveryStatusSubscriptionTask = nil
+        startDeliveryStatusSubscriptionIfNeeded()
+    }
+
+    private func scheduleDeliveryStatusSubscriptionRetry(deviceId: String) {
+        deliveryStatusSubscriptionTask = Task { [weak self] in
+            do {
+                try await Task.sleep(for: Self.subscriptionRetryDelay)
+            } catch {
+                return
+            }
+            guard let self,
+                  self.subscriptionsAreActive,
+                  self.activeCredential?.deviceId == deviceId
+            else { return }
+            self.deliveryStatusSubscriptionTask = nil
+            self.startDeliveryStatusSubscriptionIfNeeded()
+        }
+    }
+
+    private func scheduleDeliveryExpiryTimer() {
+        deliveryExpiryTask?.cancel()
+        deliveryExpiryTask = nil
+        guard subscriptionsAreActive,
+              let deadline = inFlightDeliveries.values.map(\.giveUpAt).min()
+        else { return }
+        let delay = max(0, deadline.timeIntervalSinceNow)
+        deliveryExpiryTask = Task { [weak self] in
+            do {
+                try await Task.sleep(for: .seconds(delay))
+            } catch {
+                return
+            }
+            guard !Task.isCancelled, let self else { return }
+            self.deliveryExpiryTask = nil
+            self.expireOverdueDeliveries()
+        }
+    }
+
+    private func expireOverdueDeliveries() {
         let now = Date.now
-        let expiredIds = Array(inFlightDeliveries.filter({ $0.value.giveUpAt <= now }).keys)
+        let expiredIds = inFlightDeliveries
+            .filter { $0.value.giveUpAt <= now }
+            .map(\.key)
         for deliveryId in expiredIds {
             guard let tracked = inFlightDeliveries.removeValue(forKey: deliveryId) else { continue }
-            resolutions.append(CursorDeliveryResolution(
+            publishDeliveryResolution(CursorDeliveryResolution(
                 resultId: tracked.resultId,
                 state: .failed,
                 errorCode: "expired"
             ))
         }
+        if !expiredIds.isEmpty {
+            restartDeliveryStatusSubscription()
+        }
+        scheduleDeliveryExpiryTimer()
+    }
 
-        // Coalesce overlapping polls (ScannerView's loop + scene-active trigger).
-        guard !isPollingDeliveries else { return resolutions }
-        guard let credential = activeCredential, !inFlightDeliveries.isEmpty else { return resolutions }
+    private func publishDeliveryResolution(_ resolution: CursorDeliveryResolution) {
+        guard let deliveryResolutionHandler else {
+            bufferedDeliveryResolutions.append(resolution)
+            return
+        }
+        deliveryResolutionHandler(resolution)
+    }
 
-        isPollingDeliveries = true
-        defer { isPollingDeliveries = false }
-
-        // Cap the batch at 100 ids (server slices to 100); leftovers poll next round.
-        let deliveryIds = Array(inFlightDeliveries.keys.prefix(Self.deliveryStatusBatchLimit))
-        do {
-            let response = try await api.cursorDeliveryStatus(CursorDeliveryStatusRequest(
-                deviceId: credential.deviceId,
-                deviceSecret: credential.value,
-                deliveryIds: deliveryIds
-            ))
-            lastError = nil
-            for status in response.statuses where status.isTerminal {
-                guard let tracked = inFlightDeliveries.removeValue(forKey: status.deliveryId) else { continue }
-                resolutions.append(CursorDeliveryResolution(
-                    resultId: tracked.resultId,
-                    state: status.state == "delivered" ? .sent : .failed,
-                    errorCode: status.errorCode
-                ))
-            }
-            return resolutions
-        } catch is CancellationError {
-            return resolutions
-        } catch MobileCloudError.credentialRevoked {
-            revokeLocalCredential()
-            lastError = MobileCloudError.credentialRevoked.localizedDescription
-            return resolutions + drainBufferedResolutions()
-        } catch {
-            lastError = error.localizedDescription
-            return resolutions
+    private func deliverBufferedResolutions() {
+        guard let deliveryResolutionHandler, !bufferedDeliveryResolutions.isEmpty else { return }
+        let resolutions = bufferedDeliveryResolutions
+        bufferedDeliveryResolutions.removeAll()
+        for resolution in resolutions {
+            deliveryResolutionHandler(resolution)
         }
     }
 
-    private func drainBufferedResolutions() -> [CursorDeliveryResolution] {
-        guard !bufferedDeliveryResolutions.isEmpty else { return [] }
-        let drained = bufferedDeliveryResolutions
-        bufferedDeliveryResolutions.removeAll()
-        return drained
+    private func handleSubscriptionError(_ error: Error, deviceId: String) -> Bool {
+        guard activeCredential?.deviceId == deviceId else { return true }
+        if Self.isRevokedCredentialError(error) {
+            revokeLocalCredential()
+            lastError = MobileCloudError.credentialRevoked.localizedDescription
+            return true
+        }
+        lastError = error.localizedDescription
+        return false
     }
 
-    // Convert cleared in-flight tracking into buffered .saved resolutions so a
-    // sign-out/revocation never leaves a result stuck on .sending. The insertion
-    // outcome is unknown, so .saved just clears the pending badge (no failure toast).
+    private static func isRevokedCredentialError(_ error: Error) -> Bool {
+        guard let clientError = error as? ClientError,
+              case let .ConvexError(data) = clientError
+        else { return false }
+        let decodedMessage = try? JSONDecoder().decode(String.self, from: Data(data.utf8))
+        return decodedMessage == revokedCredentialMessage || data == revokedCredentialMessage
+    }
+
     private func bufferClearedDeliveryTracking() {
         for tracked in inFlightDeliveries.values {
             bufferedDeliveryResolutions.append(CursorDeliveryResolution(
@@ -362,12 +520,14 @@ final class CloudWorkspaceStore {
     }
 
     func revokeLocalCredential() {
+        cancelSubscriptionTasks()
         try? DeviceCredentialStore.remove()
         credential = nil
         lastBootstrappedClerkUserId = nil
         computers = []
         selectedTargetDeviceId = nil
         bufferClearedDeliveryTracking()
+        deliverBufferedResolutions()
         cancelUploadTasks()
     }
 
@@ -396,11 +556,13 @@ final class CloudWorkspaceStore {
     private func pauseForSignOut() {
         authenticatedClerkUserId = nil
         lastBootstrappedClerkUserId = nil
+        cancelSubscriptionTasks()
         cancelUploadTasks()
         computers = []
         selectedTargetDeviceId = nil
         accountSwitchConflict = nil
         bufferClearedDeliveryTracking()
+        deliverBufferedResolutions()
         try? outbox.pauseUploads()
     }
 
@@ -600,6 +762,8 @@ final class CloudWorkspaceStore {
     // Server TTL is 120s; 15 min is a generous client-side give-up window.
     private static let deliveryGiveUpInterval: TimeInterval = 15 * 60
     private static let deliveryStatusBatchLimit = 100
+    private static let subscriptionRetryDelay: Duration = .seconds(2)
+    private static let revokedCredentialMessage = "Invalid or revoked device credential"
 
     private static let installationIdKey = "volt.mobile.installation-id.v1"
 

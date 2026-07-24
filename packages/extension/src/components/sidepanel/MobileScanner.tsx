@@ -25,7 +25,6 @@ import {
   upsertTimelineEntry,
 } from "../../domain/mobile-scanner-timeline";
 import { cloudResultIds } from "../../cloud-scanner/workspace-hydration";
-import { useSidepanelClerkToken } from "../access/ExtensionAccess";
 
 /*
  * Source-contract breadcrumbs for scanner domain tests. Implementations live in:
@@ -46,7 +45,6 @@ interface MobileScannerProps {
 }
 
 export default function MobileScanner({ onClose: _onClose }: MobileScannerProps) {
-  const getClerkToken = useSidepanelClerkToken();
   const [previewPhoto, setPreviewPhoto] = useState<MobilePhoto | null>(null);
   const [now, setNow] = useState(Date.now());
   const lastCloudDeletedIds = useRef<string[]>([]);
@@ -59,7 +57,6 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
   );
 
   const {
-    results,
     setResults,
     loadingResults,
     selectedPhotoIds,
@@ -119,15 +116,6 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
     [flashFeedback],
   );
 
-  const reconcileCloudWorkspace = useCallback(async () => {
-    const clerkToken = await getClerkToken();
-    await chrome.runtime.sendMessage({
-      action: "workspaceReconcile",
-      ...(clerkToken ? { clerkToken } : {}),
-    });
-    await refreshResults();
-  }, [getClerkToken, refreshResults]);
-
   const deleteSyncedResults = useCallback(async (ids: string[], label: string) => {
     const cloudIds = await cloudResultIds(ids);
     if (cloudIds.length > 0) {
@@ -168,8 +156,7 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
   useEffect(() => {
     void refreshResults();
     void primeCursorTarget();
-    void reconcileCloudWorkspace().catch(() => undefined);
-  }, [primeCursorTarget, reconcileCloudWorkspace, refreshResults]);
+  }, [primeCursorTarget, refreshResults]);
 
   useEffect(() => {
     const prepareActiveTab = () => {

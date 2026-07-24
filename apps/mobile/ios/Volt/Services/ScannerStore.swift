@@ -56,6 +56,9 @@ final class ScannerStore {
         barcodeRecognitionMode = Self.savedBarcodeRecognitionMode()
         camera.updateBarcodeRecognitionMode(barcodeRecognitionMode)
         applyScreenshotFixturesIfNeeded()
+        cloudWorkspace.setDeliveryResolutionHandler { [weak self] resolution in
+            self?.applyDeliveryResolution(resolution)
+        }
     }
 
     private static func savedBarcodeRecognitionMode() -> BarcodeRecognitionMode {

@@ -91,12 +91,6 @@ struct CloudTargetPickerSheet: View {
                     Button("Done") { dismiss() }
                 }
             }
-            .task {
-                await store.cloudWorkspace.refreshComputers()
-            }
-            .refreshable {
-                await store.cloudWorkspace.refreshComputers()
-            }
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)

@@ -26,6 +26,15 @@ import {
 import { getMobileScannerExtensionIdentity } from "../domain/mobile-scanner-identity";
 import { EXTENSION_SCANNER_SIGNAL_URL } from "../domain/mobile-scanner-signal-url";
 
+const COMPUTER_REGISTRATION_KEY = "volt.cloudScanner.computerRegistration.v1";
+const COMPUTER_REGISTRATION_TTL_MS = 120_000;
+const COMPUTER_REGISTRATION_INTERVAL_MS = 60_000;
+const COMPUTER_CAPABILITIES = [
+  "workspace-results",
+  "cursor-insertion",
+  "photo-download",
+];
+
 function serializeLogArg(arg: unknown) {
   if (arg instanceof Error) {
     return { name: arg.name, message: arg.message, stack: arg.stack };
@@ -121,6 +130,7 @@ class CloudWorkspaceSubscriptions {
   );
   private workspaceSnapshotUnsubscribe: (() => void) | null = null;
   private cursorDeliveriesUnsubscribe: (() => void) | null = null;
+  private computerRegistrationInterval: number | null = null;
   private installationId: string | null = null;
   private clerkSubject: string | null = null;
   private hasReconciledSubject = false;
@@ -166,6 +176,37 @@ class CloudWorkspaceSubscriptions {
     this.cursorDeliveriesUnsubscribe?.();
     this.workspaceSnapshotUnsubscribe = null;
     this.cursorDeliveriesUnsubscribe = null;
+    if (this.computerRegistrationInterval !== null) {
+      window.clearInterval(this.computerRegistrationInterval);
+      this.computerRegistrationInterval = null;
+    }
+    this.installationId = null;
+  }
+
+  private async registerComputer() {
+    if (!this.installationId) throw new Error("Cloud workspace is not signed in.");
+    const identity = await getMobileScannerExtensionIdentity();
+    const registration = await this.client.mutation(api.cloudWorkspace.registerComputer, {
+      installationId: this.installationId,
+      label: identity.sessionLabel,
+      capabilities: COMPUTER_CAPABILITIES,
+      ttlMs: COMPUTER_REGISTRATION_TTL_MS,
+    });
+    await chrome.storage.local.set({ [COMPUTER_REGISTRATION_KEY]: registration });
+    return registration;
+  }
+
+  private startComputerRegistration() {
+    const register = () => {
+      void this.registerComputer().catch((error: unknown) => {
+        console.warn("[Volt Cloud Workspace] computer registration failed", error);
+      });
+    };
+    register();
+    this.computerRegistrationInterval = window.setInterval(
+      register,
+      COMPUTER_REGISTRATION_INTERVAL_MS,
+    );
   }
 
   private async reconcileAuthenticationNow() {
@@ -220,6 +261,7 @@ class CloudWorkspaceSubscriptions {
       },
       (error) => console.warn("[Volt Cloud Workspace] cursor subscription failed", error),
     );
+    this.startComputerRegistration();
   }
 
   reconcileAuthentication() {
@@ -252,6 +294,36 @@ class CloudWorkspaceSubscriptions {
       if (this.lastSnapshot !== null) return this.lastSnapshot;
       throw error;
     }
+  }
+
+  async createEnrollment(label: string) {
+    await this.reconcileAuthentication();
+    if (!this.clerkSubject) throw new Error("Cloud workspace is not signed in.");
+    return this.client.mutation(api.cloudWorkspace.createEnrollment, {
+      kind: "ios",
+      label,
+    });
+  }
+
+  async createPhotoDownloadUrl(batchId: string, resultId: string) {
+    await this.reconcileAuthentication();
+    if (!this.clerkSubject) throw new Error("Cloud workspace is not signed in.");
+    return this.client.action(api.cloudWorkspace.createPhotoDownloadUrl, {
+      batchId,
+      resultId,
+    });
+  }
+
+  async deleteWorkspaceResults(resultIds: string[]) {
+    await this.reconcileAuthentication();
+    if (!this.clerkSubject) throw new Error("Cloud workspace is not signed in.");
+    return this.client.mutation(api.cloudWorkspace.deleteWorkspaceResults, { resultIds });
+  }
+
+  async restoreWorkspaceResults(resultIds: string[]) {
+    await this.reconcileAuthentication();
+    if (!this.clerkSubject) throw new Error("Cloud workspace is not signed in.");
+    return this.client.mutation(api.cloudWorkspace.restoreWorkspaceResults, { resultIds });
   }
 
   async acknowledgeCursorDelivery(
@@ -474,10 +546,27 @@ function sendScannerError(sendResponse: (response?: unknown) => void, err: unkno
   });
 }
 
+function sendWorkspaceOperation(
+  sendResponse: (response?: unknown) => void,
+  operation: Promise<unknown>,
+) {
+  void operation
+    .then((value) => sendResponse({ success: true, value }))
+    .catch((error: unknown) => sendResponse({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    }));
+  return true;
+}
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (
     message.action === "workspaceOffscreenStartSubscriptions"
     || message.action === "workspaceOffscreenReconcile"
+    || message.action === "workspaceOffscreenCreateEnrollment"
+    || message.action === "workspaceOffscreenCreatePhotoDownloadUrl"
+    || message.action === "workspaceOffscreenDeleteResults"
+    || message.action === "workspaceOffscreenRestoreResults"
     || message.action === "workspaceOffscreenAcknowledgeCursorDelivery"
   ) {
     if (sender.id !== chrome.runtime.id || sender.tab) {
@@ -486,13 +575,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
     if (message.action === "workspaceOffscreenStartSubscriptions") {
       cloudWorkspaceSubscriptions.start();
-      void cloudWorkspaceSubscriptions.reconcileAuthentication()
-        .then(() => sendResponse({ success: true }))
-        .catch((error: unknown) => sendResponse({
-          success: false,
-          error: error instanceof Error ? error.message : String(error),
-        }));
-      return true;
+      return sendWorkspaceOperation(
+        sendResponse,
+        cloudWorkspaceSubscriptions.reconcileAuthentication(),
+      );
     }
     if (message.action === "workspaceOffscreenReconcile") {
       void cloudWorkspaceSubscriptions.reconcileSnapshot()
@@ -503,6 +589,49 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }));
       return true;
     }
+    if (message.action === "workspaceOffscreenCreateEnrollment") {
+      const label = typeof message.label === "string" ? message.label.trim().slice(0, 80) : "";
+      if (!label) {
+        sendResponse({ success: false, error: "invalid_enrollment_label" });
+        return false;
+      }
+      return sendWorkspaceOperation(
+        sendResponse,
+        cloudWorkspaceSubscriptions.createEnrollment(label),
+      );
+    }
+    if (message.action === "workspaceOffscreenCreatePhotoDownloadUrl") {
+      const batchId = typeof message.batchId === "string" ? message.batchId : "";
+      const resultId = typeof message.resultId === "string" ? message.resultId : "";
+      if (!batchId || !resultId) {
+        sendResponse({ success: false, error: "invalid_photo_download_request" });
+        return false;
+      }
+      return sendWorkspaceOperation(
+        sendResponse,
+        cloudWorkspaceSubscriptions.createPhotoDownloadUrl(batchId, resultId),
+      );
+    }
+    if (
+      message.action === "workspaceOffscreenDeleteResults"
+      || message.action === "workspaceOffscreenRestoreResults"
+    ) {
+      const resultIds = Array.isArray(message.resultIds)
+        ? message.resultIds
+          .filter((id: unknown): id is string => typeof id === "string" && id.length > 0)
+          .slice(0, 100)
+        : [];
+      if (resultIds.length === 0) {
+        sendResponse({ success: false, error: "invalid_workspace_result_ids" });
+        return false;
+      }
+      return sendWorkspaceOperation(
+        sendResponse,
+        message.action === "workspaceOffscreenDeleteResults"
+          ? cloudWorkspaceSubscriptions.deleteWorkspaceResults(resultIds)
+          : cloudWorkspaceSubscriptions.restoreWorkspaceResults(resultIds),
+      );
+    }
     const deliveryId = typeof message.deliveryId === "string" ? message.deliveryId : "";
     const state = message.state === "delivered" || message.state === "failed"
       ? message.state
@@ -511,16 +640,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ success: false, error: "invalid_cursor_delivery_ack" });
       return false;
     }
-    void cloudWorkspaceSubscriptions.acknowledgeCursorDelivery(
-      deliveryId,
-      state,
-      typeof message.errorCode === "string" ? message.errorCode : undefined,
-    ).then((value) => sendResponse({ success: true, value }))
-      .catch((error: unknown) => sendResponse({
-        success: false,
-        error: error instanceof Error ? error.message : String(error),
-      }));
-    return true;
+    return sendWorkspaceOperation(
+      sendResponse,
+      cloudWorkspaceSubscriptions.acknowledgeCursorDelivery(
+        deliveryId,
+        state,
+        typeof message.errorCode === "string" ? message.errorCode : undefined,
+      ),
+    );
   }
 
   if (message.action === "accessOffscreenGetClerkToken") {

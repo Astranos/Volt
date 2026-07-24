@@ -21,4 +21,18 @@ crons.interval(
   {},
 );
 
+crons.interval(
+  "sweep expired workspace presence",
+  { seconds: 60 },
+  internal.cloudWorkspace.sweepExpiredPresence,
+  {},
+);
+
+crons.interval(
+  "sweep expired cursor deliveries",
+  { seconds: 60 },
+  internal.cloudWorkspace.sweepExpiredCursorDeliveries,
+  {},
+);
+
 export default crons;

@@ -90,6 +90,12 @@ const listComputersForDevice = makeFunctionReference<
     computers: Array<{ deviceId: string; label: string; capabilities: string[]; online: boolean }>;
   }
 >("cloudWorkspace:listComputersForDevice");
+const sweepExpiredPresence = makeFunctionReference<"mutation", Record<string, never>, null>(
+  "cloudWorkspace:sweepExpiredPresence",
+);
+const sweepExpiredCursorDeliveries = makeFunctionReference<"mutation", Record<string, never>, null>(
+  "cloudWorkspace:sweepExpiredCursorDeliveries",
+);
 const setCursorTarget = makeFunctionReference<
   "mutation",
   DeviceCredential & { cursorTargetDeviceId: string | null },
@@ -1282,5 +1288,191 @@ describe("cloud scanner workspace", () => {
       restored: 0,
       idempotent: 1,
     });
+  });
+
+  test("sweeps an expired online presence lease to offline", async () => {
+    const t = convexTest(schema, modules);
+    const signedIn = t.withIdentity({ subject: "sweep-owner" });
+    await signedIn.mutation(registerComputer, {
+      installationId: "sweep-expired-chrome",
+      label: "Expired Chrome",
+      ttlMs: 10_000,
+    });
+    const now = Date.now();
+    await t.run(async (ctx) => {
+      const presence = await ctx.db
+        .query("workspacePresence")
+        .withIndex("by_deviceId", (q) => q.eq("deviceId", "sweep-expired-chrome"))
+        .unique();
+      if (presence) await ctx.db.patch(presence._id, { expiresAt: now - 1 });
+    });
+
+    await t.mutation(sweepExpiredPresence, {});
+
+    const presence = await t.run((ctx) =>
+      ctx.db
+        .query("workspacePresence")
+        .withIndex("by_deviceId", (q) => q.eq("deviceId", "sweep-expired-chrome"))
+        .unique(),
+    );
+    expect(presence).toMatchObject({ state: "offline" });
+  });
+
+  test("leaves a non-expired online presence lease untouched", async () => {
+    const t = convexTest(schema, modules);
+    const signedIn = t.withIdentity({ subject: "sweep-owner-2" });
+    await signedIn.mutation(registerComputer, {
+      installationId: "sweep-live-chrome",
+      label: "Live Chrome",
+      ttlMs: 60_000,
+    });
+
+    await t.mutation(sweepExpiredPresence, {});
+
+    const presence = await t.run((ctx) =>
+      ctx.db
+        .query("workspacePresence")
+        .withIndex("by_deviceId", (q) => q.eq("deviceId", "sweep-live-chrome"))
+        .unique(),
+    );
+    expect(presence).toMatchObject({ state: "online" });
+  });
+
+  test("sweeps an expired pending cursor delivery to failed/expired identically to synthesized status", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-23T12:00:00Z"));
+    const t = convexTest(schema, modules);
+    const alice = t.withIdentity({ subject: "sweep-delivery-owner" });
+    const phone = await alice.mutation(bootstrapMobileDevice, {
+      installationId: "sweep-delivery-phone",
+      label: "Alice phone",
+    });
+    await alice.mutation(registerComputer, {
+      installationId: "sweep-delivery-chrome",
+      label: "Alice Chrome",
+      capabilities: ["cursor-insertion"],
+    });
+    const credential = { deviceId: phone.deviceId, deviceSecret: phone.deviceSecret };
+    await t.mutation(putBatch, {
+      ...credential,
+      batchId: "sweep-delivery-batch",
+      clientCreatedAt: Date.now(),
+      results: [result("sweep-delivery-result")],
+    });
+    await t.mutation(queueCursorDelivery, {
+      ...credential,
+      deliveryId: "sweep-delivery-delivery",
+      resultId: "sweep-delivery-result",
+      targetDeviceId: "sweep-delivery-chrome",
+      kind: "text",
+      text: "sweep-delivery-result",
+      clientCreatedAt: Date.now(),
+    });
+
+    vi.advanceTimersByTime(CURSOR_DELIVERY_TTL_MS + 1);
+    await t.mutation(sweepExpiredCursorDeliveries, {});
+
+    const stored = await t.run((ctx) => ctx.db.query("cursorDeliveries").unique());
+    expect(stored).toMatchObject({ state: "failed", errorCode: "expired" });
+    expect(stored?.deliveredAt).toBeUndefined();
+    expect(stored?.attempts).toBe(0);
+
+    // cursorDeliveryStatus reports the swept row exactly as it would have
+    // synthesized it on the fly before the sweep ran.
+    const { statuses } = await t.query(cursorDeliveryStatus, {
+      ...credential,
+      deliveryIds: ["sweep-delivery-delivery"],
+    });
+    expect(statuses).toEqual([
+      { deliveryId: "sweep-delivery-delivery", state: "failed", errorCode: "expired" },
+    ]);
+
+    // A swept delivery must not resurface as pending for the extension.
+    expect(await alice.query(pendingCursorDeliveries, {
+      installationId: "sweep-delivery-chrome",
+    })).toEqual([]);
+  });
+
+  test("leaves a non-expired pending cursor delivery untouched by the sweep", async () => {
+    const t = convexTest(schema, modules);
+    const alice = t.withIdentity({ subject: "sweep-delivery-owner-2" });
+    const phone = await alice.mutation(bootstrapMobileDevice, {
+      installationId: "sweep-delivery-live-phone",
+      label: "Alice phone",
+    });
+    await alice.mutation(registerComputer, {
+      installationId: "sweep-delivery-live-chrome",
+      label: "Alice Chrome",
+      capabilities: ["cursor-insertion"],
+    });
+    const credential = { deviceId: phone.deviceId, deviceSecret: phone.deviceSecret };
+    await t.mutation(putBatch, {
+      ...credential,
+      batchId: "sweep-delivery-live-batch",
+      clientCreatedAt: Date.now(),
+      results: [result("sweep-delivery-live-result")],
+    });
+    await t.mutation(queueCursorDelivery, {
+      ...credential,
+      deliveryId: "sweep-delivery-live-delivery",
+      resultId: "sweep-delivery-live-result",
+      targetDeviceId: "sweep-delivery-live-chrome",
+      kind: "text",
+      text: "sweep-delivery-live-result",
+      clientCreatedAt: Date.now(),
+    });
+
+    await t.mutation(sweepExpiredCursorDeliveries, {});
+
+    const stored = await t.run((ctx) => ctx.db.query("cursorDeliveries").unique());
+    expect(stored).toMatchObject({ state: "pending" });
+    expect(await alice.query(pendingCursorDeliveries, {
+      installationId: "sweep-delivery-live-chrome",
+    })).toHaveLength(1);
+  });
+
+  test("acknowledging a delivery the sweeper already expired does not throw", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-23T12:00:00Z"));
+    const t = convexTest(schema, modules);
+    const alice = t.withIdentity({ subject: "sweep-ack-race-owner" });
+    const phone = await alice.mutation(bootstrapMobileDevice, {
+      installationId: "sweep-ack-race-phone",
+      label: "Alice phone",
+    });
+    await alice.mutation(registerComputer, {
+      installationId: "sweep-ack-race-chrome",
+      label: "Alice Chrome",
+      capabilities: ["cursor-insertion"],
+    });
+    const credential = { deviceId: phone.deviceId, deviceSecret: phone.deviceSecret };
+    await t.mutation(putBatch, {
+      ...credential,
+      batchId: "sweep-ack-race-batch",
+      clientCreatedAt: Date.now(),
+      results: [result("sweep-ack-race-result")],
+    });
+    await t.mutation(queueCursorDelivery, {
+      ...credential,
+      deliveryId: "sweep-ack-race-delivery",
+      resultId: "sweep-ack-race-result",
+      targetDeviceId: "sweep-ack-race-chrome",
+      kind: "text",
+      text: "sweep-ack-race-result",
+      clientCreatedAt: Date.now(),
+    });
+
+    vi.advanceTimersByTime(CURSOR_DELIVERY_TTL_MS + 1);
+    await t.mutation(sweepExpiredCursorDeliveries, {});
+
+    // The extension was mid-flight delivering when the sweeper ran; its
+    // acknowledgement lands on an already-swept row and must resolve
+    // idempotently rather than throw.
+    const ack = await alice.mutation(acknowledgeCursorDelivery, {
+      installationId: "sweep-ack-race-chrome",
+      deliveryId: "sweep-ack-race-delivery",
+      state: "delivered",
+    });
+    expect(ack).toMatchObject({ state: "failed", idempotent: true });
   });
 });

@@ -32,6 +32,24 @@ enum AppConfiguration {
         #endif
     }
 
+    static var convexCloudURL: URL {
+        if let configuredValue = configuredString(for: "VoltConvexCloudURL"),
+           let configuredURL = URL(string: configuredValue) {
+            return configuredURL
+        }
+
+        if let configuredSiteValue = configuredString(for: "VoltConvexSiteURL"),
+           let derivedURL = URL(string: configuredSiteValue.replacingOccurrences(of: ".convex.site", with: ".convex.cloud")) {
+            return derivedURL
+        }
+
+        #if DEBUG
+        return requiredURL("https://adorable-hornet-19.convex.cloud")
+        #else
+        return requiredURL("https://sincere-trout-414.convex.cloud")
+        #endif
+    }
+
     private static func configuredString(for key: String) -> String? {
         guard let rawValue = Bundle.main.object(forInfoDictionaryKey: key) as? String else {
             return nil

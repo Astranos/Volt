@@ -18,6 +18,10 @@ const mobileScanner = readFileSync(
   new URL("../components/sidepanel/MobileScanner.tsx", import.meta.url),
   "utf8",
 );
+const extensionAccess = readFileSync(
+  new URL("../components/access/ExtensionAccess.tsx", import.meta.url),
+  "utf8",
+);
 const offscreen = readFileSync(
   new URL("../offscreen/mobile-scanner-offscreen.ts", import.meta.url),
   "utf8",
@@ -43,19 +47,17 @@ test("Convex deployment URL maps explicitly from HTTP Actions", () => {
   );
 });
 
-test("workspace HTTP actions stay in the authenticated background controller", () => {
-  assert.match(controller, /getClerkToken: \(\) => Promise<string \| null>/);
-  assert.match(controller, /Authorization: `Bearer \$\{token\}`/);
-  assert.match(controller, /"\/api\/workspace\/enrollment"/);
-  assert.match(controller, /"\/api\/workspace\/snapshot"/);
-  assert.match(controller, /"\/api\/workspace\/photos\/download-url"/);
-  assert.match(controller, /"\/api\/workspace\/results\/delete"/);
-  assert.match(controller, /"\/api\/workspace\/results\/restore"/);
-  assert.match(controller, /"\/api\/workspace\/computers\/register"/);
-  assert.match(controller, /installationId: identity\.installId/);
-  assert.match(controller, /const COMPUTER_PRESENCE_TTL_MS = 2 \* 60 \* 1000/);
-  assert.match(controller, /periodInMinutes: 1/);
-  assert.match(background, /getClerkToken: access\.getClerkToken/);
+test("workspace operations relay through the authenticated offscreen Convex client", () => {
+  assert.doesNotMatch(controller, /fetch\(|Authorization|\/api\/workspace/);
+  assert.match(controller, /action: "workspaceOffscreenCreateEnrollment"/);
+  assert.match(controller, /action: "workspaceOffscreenCreatePhotoDownloadUrl"/);
+  assert.match(controller, /action: "workspaceOffscreenDeleteResults"/);
+  assert.match(controller, /action: "workspaceOffscreenRestoreResults"/);
+  assert.match(offscreen, /api\.cloudWorkspace\.createEnrollment/);
+  assert.match(offscreen, /api\.cloudWorkspace\.createPhotoDownloadUrl/);
+  assert.match(offscreen, /api\.cloudWorkspace\.deleteWorkspaceResults/);
+  assert.match(offscreen, /api\.cloudWorkspace\.restoreWorkspaceResults/);
+  assert.match(background, /ensureOffscreenDocument: scannerOffscreen\.ensureScannerOffscreenDocument/);
   assert.doesNotMatch(popup, /Authorization|Bearer|deviceSecret|Clerk JWT/);
 });
 
@@ -69,22 +71,21 @@ test("full-app enrollment is a second explicit QR and preserves WebRTC pairing",
 
 test("full-app enrollment uses the signed-in sidepanel Clerk session", () => {
   assert.match(sidepanelEntry, /SidepanelClerkProvider/);
-  assert.match(sidepanel, /useSidepanelClerkToken/);
-  assert.match(sidepanel, /clerkToken/);
-  assert.match(controller, /clerkToken: string/);
-  assert.match(controller, /registerComputer\(clerkToken\)/);
-  assert.match(controller, /request\("\/api\/workspace\/enrollment", "POST", \{ kind: "ios", label \}, clerkToken\)/);
+  assert.match(extensionAccess, /publishClerkConvexToken\(token\)/);
+  assert.match(offscreen, /setAuth\(getClerkToken/);
+  assert.match(offscreen, /api\.cloudWorkspace\.createEnrollment/);
+  assert.doesNotMatch(controller, /clerkToken|getClerkToken/);
 });
 
-test("workspace sync is reactive and the sidepanel only requests an immediate reconcile", () => {
+test("workspace sync is reactive without sidepanel reconciliation chatter", () => {
   assert.match(offscreen, /new ConvexClient/);
   assert.match(offscreen, /setAuth\(getClerkToken/);
   assert.match(offscreen, /api\.cloudWorkspace\.workspaceSnapshot/);
   assert.match(offscreen, /api\.cloudWorkspace\.pendingCursorDeliveries/);
   assert.match(offscreen, /getMobileScannerExtensionIdentity/);
   assert.match(offscreen, /api\.cloudWorkspace\.acknowledgeCursorDelivery/);
-  assert.match(mobileScanner, /action: "workspaceReconcile"/);
-  assert.doesNotMatch(mobileScanner, /10_000|workspaceGetSnapshot/);
+  assert.doesNotMatch(mobileScanner, /workspaceReconcile|10_000/);
+  assert.doesNotMatch(extensionAccess, /workspaceReconcile/);
 });
 
 test("editable tracking is a document-idle all-frame content script", () => {
@@ -96,10 +97,20 @@ test("editable tracking is a document-idle all-frame content script", () => {
   assert.match(editableBridge, /if \(root\.__voltEditableTrackerInstalled\) return null/);
 });
 
-test("computer registration advertises the canonical cloud capabilities", () => {
+test("offscreen owns computer registration and persists the canonical capabilities", () => {
   assert.match(
-    controller,
-    /capabilities: \["workspace-results", "cursor-insertion", "photo-download"\]/,
+    offscreen,
+    /const COMPUTER_CAPABILITIES = \[\s*"workspace-results",\s*"cursor-insertion",\s*"photo-download",?\s*\]/,
   );
-  assert.doesNotMatch(controller, /capabilities: \[[^\]]*"dictation"/);
+  assert.match(offscreen, /api\.cloudWorkspace\.registerComputer/);
+  assert.match(offscreen, /chrome\.storage\.local\.set\(\{ \[COMPUTER_REGISTRATION_KEY\]: registration \}\)/);
+  assert.match(offscreen, /ttlMs: COMPUTER_REGISTRATION_TTL_MS/);
+  assert.doesNotMatch(controller, /registerComputer|computerRegistration|COMPUTER_PRESENCE/);
+});
+
+test("workspace alarm only keeps the offscreen document alive", () => {
+  assert.match(controller, /WORKSPACE_OFFSCREEN_LIVENESS_ALARM/);
+  assert.match(controller, /periodInMinutes: 1/);
+  assert.match(controller, /handleAlarm: options\.ensureOffscreenDocument/);
+  assert.doesNotMatch(controller, /presence heartbeat|Initial computer registration/);
 });

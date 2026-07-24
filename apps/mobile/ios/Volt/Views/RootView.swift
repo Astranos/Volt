@@ -58,11 +58,22 @@ struct RootView: View {
         .task {
             applySelectedTab(selectedTab)
             store.cloudWorkspace.requestSync()
+            if !ScreenshotScenario.isEnabled {
+                store.cloudWorkspace.setSubscriptionsActive(scenePhase == .active)
+            }
         }
         .onChange(of: scenePhase) { _, newValue in
-            if newValue == .active && !ScreenshotScenario.isEnabled {
+            guard !ScreenshotScenario.isEnabled else { return }
+            switch newValue {
+            case .active:
+                store.cloudWorkspace.setSubscriptionsActive(true)
                 store.cloudWorkspace.requestSync()
-                Task { await store.refreshDeliveryStatuses() }
+            case .background:
+                store.cloudWorkspace.setSubscriptionsActive(false)
+            case .inactive:
+                break
+            @unknown default:
+                break
             }
         }
     }

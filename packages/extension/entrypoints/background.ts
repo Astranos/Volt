@@ -47,7 +47,6 @@ type RuntimePath =
   | `/options.html${string}`;
 
 const SCANNER_RECONNECT_ALARM_NAME = "volt.mobileScanner.reconnectPoll";
-const MOBILE_SCANNER_POPUP_PATH = "mobile-scanner-popup.html";
 
 function asMessageRecord(message: unknown) {
   return parseMessageRecord(message) ?? {};
@@ -156,10 +155,9 @@ export default defineBackground({
     });
     const cloudWorkspace = createCloudWorkspaceController({
       chromeApi: chrome,
-      getClerkToken: access.getClerkToken,
+      ensureOffscreenDocument: scannerOffscreen.ensureScannerOffscreenDocument,
       handleCursorDeliveries: cloudCursorDeliveries.handleDeliveries,
       sendOffscreenMessage: scannerOffscreen.sendScannerOffscreenMessage,
-      siteUrl: EXTENSION_SCANNER_SIGNAL_URL,
       log,
     });
     const tabDelivery = createTabDeliveryController({ chromeApi: chrome, log });

@@ -10,8 +10,10 @@ const captureSource = read("../ios/Volt/Services/ScannerStoreCaptureActions.swif
 const outboxSource = read("../ios/Volt/Services/DurableCaptureOutbox.swift");
 const workspaceSource = read("../ios/Volt/Services/CloudWorkspaceStore.swift");
 const credentialSource = read("../ios/Volt/Services/DeviceCredentialStore.swift");
-const enrollmentSource = read("../ios/Volt/Services/EnrollmentURLParser.swift");
 const contractsSource = read("../ios/Volt/Models/CloudAPIContracts.swift");
+const configurationSource = read("../ios/Volt/App/AppConfiguration.swift");
+const xcodeProjectSource = read("../ios/Volt.xcodeproj/project.pbxproj");
+const packageResolvedSource = read("../ios/Volt.xcworkspace/xcshareddata/swiftpm/Package.resolved");
 const cloudCredentialSource = read("../ios/Volt/Models/CloudDeviceCredential.swift");
 const cloudRecordSource = read("../ios/Volt/Models/CloudCaptureRecord.swift");
 const cloudAPISource = read("../ios/Volt/Services/MobileCloudAPIClient.swift");
@@ -22,10 +24,9 @@ const uploadViewSource = read("../ios/Volt/Views/ResultsView.swift");
 const pairingSource = read("../ios/Volt/Services/PairingURLParser.swift");
 const clipStoreSource = read("../ios/VoltClip/Services/ClipScannerStore.swift");
 const clipGuestCloudSource = read("../ios/VoltClip/Services/AppClipGuestCloudClient.swift");
+const captureModeCardsSource = read("../ios/Volt/Views/CaptureModeCards.swift");
 
-test("full app opens capture without Clerk, pairing, dictation, or a WebRTC target", () => {
-  assert.match(appSource, /RootView\(showsAccountSettings: false\)\s*\.environment\(scannerStore\)/);
-  assert.doesNotMatch(appSource, /else \{\s*ClerkConfigurationRequiredView\(\)/);
+test("full app opens capture without pairing, dictation, or a WebRTC target", () => {
   assert.doesNotMatch(appSource, /PairingURLParser/);
   assert.doesNotMatch(rootSource, /DictationView|PairingSessionsView|AppSection\.dictation/);
   assert.doesNotMatch(scannerSource, /ScannerWebRTCConnection|connectionStatus|peerTarget|DictationModel/);
@@ -62,13 +63,8 @@ test("cloud photos use presigned direct PUT and batch idempotency contracts", ()
   assert.match(workspaceSource, /clientCreatedAt: createdAt\.timeIntervalSince1970 \* 1_000/);
 });
 
-test("legacy one-time enrollment remains available alongside account bootstrap", () => {
-  assert.match(enrollmentSource, /!looksLikeJWT\(token\)/);
-  assert.match(contractsSource, /let enrollmentCode: String/);
-  assert.match(contractsSource, /let deviceSecret: String/);
+test("device credentials are stored in the keychain and revoked deterministically", () => {
   assert.match(credentialSource, /kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly/);
-  assert.match(workspaceSource, /api\.exchangeEnrollment/);
-  assert.match(workspaceSource, /ownerClerkUserId: nil/);
   assert.match(workspaceSource, /catch MobileCloudError\.credentialRevoked/);
   assert.match(workspaceSource, /revokeLocalCredential\(\)/);
 });
@@ -137,53 +133,72 @@ test("cloud cursor target and per-result delivery are optional downstream work",
   assert.match(workspaceSource, /state == \.uploaded/);
   assert.match(workspaceSource, /clientCreatedAt: Date\.now\.timeIntervalSince1970 \* 1_000/);
   assert.match(workspaceSource, /for attempt in 0\.\.<3/);
-  assert.match(scannerViewSource, /"No computer"/);
+  assert.match(captureModeCardsSource, /No computers are online\. Capture still works and syncs to Volt\./);
 });
 
-test("queued cursor deliveries are tracked and polled for terminal status feedback", () => {
-  assert.match(cloudAPISource, /api\/mobile\/deliveries\/status/);
-  assert.match(cloudAPISource, /func cursorDeliveryStatus\(_ request: CursorDeliveryStatusRequest\)/);
-  assert.match(contractsSource, /struct CursorDeliveryStatusRequest/);
-  assert.match(contractsSource, /let deliveryIds: \[String\]/);
-  assert.match(contractsSource, /struct CursorDeliveryStatus/);
+test("queued cursor deliveries are tracked and resolved via a live Convex subscription", () => {
+  assert.match(contractsSource, /struct CursorDeliveryStatus\b/);
   assert.match(contractsSource, /var isTerminal: Bool \{ state == "delivered" \|\| state == "failed" \}/);
 
   assert.match(workspaceSource, /private var inFlightDeliveries: \[String: InFlightDelivery\] = \[:\]/);
   assert.match(workspaceSource, /private struct InFlightDelivery: Equatable, Sendable \{[\s\S]*?let resultId: UUID[\s\S]*?let giveUpAt: Date/);
   assert.match(workspaceSource, /func trackCursorDelivery\(deliveryId: String, resultId: UUID\)/);
   assert.match(workspaceSource, /giveUpAt: Date\.now\.addingTimeInterval\(Self\.deliveryGiveUpInterval\)/);
-  assert.match(workspaceSource, /func pollCursorDeliveryStatuses\(\) async -> \[CursorDeliveryResolution\]/);
-  assert.match(workspaceSource, /api\.cursorDeliveryStatus\(/);
+
+  // Delivery status now arrives over a live Convex subscription, not HTTP polling.
+  assert.match(workspaceSource, /client\.subscribe\(\s*to: "cloudWorkspace:cursorDeliveryStatus",/);
+  assert.match(workspaceSource, /"deviceId": credential\.deviceId,\s*"deviceSecret": credential\.value,\s*"deliveryIds": encodedDeliveryIds,/);
+  assert.match(workspaceSource, /yielding: CursorDeliveryStatusResponse\.self/);
+  assert.doesNotMatch(workspaceSource, /func pollCursorDeliveryStatuses/);
+  assert.doesNotMatch(workspaceSource, /api\.cursorDeliveryStatus\(/);
+  assert.doesNotMatch(workspaceSource, /isPollingDeliveries/);
+
   assert.match(workspaceSource, /for status in response\.statuses where status\.isTerminal/);
   assert.match(workspaceSource, /inFlightDeliveries\.removeValue\(forKey: status\.deliveryId\)/);
 
   // F3: per-delivery give-up deadline pruning resolves lingering ids as expired.
-  assert.match(workspaceSource, /inFlightDeliveries\.filter\(\{ \$0\.value\.giveUpAt <= now \}\)\.keys/);
+  assert.match(workspaceSource, /\.filter \{ \$0\.value\.giveUpAt <= now \}\s*\.map\(\\\.key\)/);
   assert.match(workspaceSource, /errorCode: "expired"/);
-  // F4: overlapping polls are coalesced behind a MainActor Bool guard.
-  assert.match(workspaceSource, /private var isPollingDeliveries = false/);
-  assert.match(workspaceSource, /guard !isPollingDeliveries else \{ return resolutions \}/);
-  // F5: the client caps each poll to the server's 100-id slice.
-  assert.match(workspaceSource, /inFlightDeliveries\.keys\.prefix\(Self\.deliveryStatusBatchLimit\)/);
-  // F2: sign-out/revocation buffers .saved resolutions drained before the guard.
+  // F5: the client caps each subscription request to the server's 100-id slice.
+  assert.match(workspaceSource, /Array\(inFlightDeliveries\.keys\.sorted\(\)\.prefix\(Self\.deliveryStatusBatchLimit\)\)/);
+  // F2: sign-out/revocation buffers .saved resolutions until a handler is attached.
   assert.match(workspaceSource, /private var bufferedDeliveryResolutions: \[CursorDeliveryResolution\] = \[\]/);
-  assert.match(workspaceSource, /var resolutions = drainBufferedResolutions\(\)/);
+  assert.match(workspaceSource, /func setDeliveryResolutionHandler\(_ handler: @escaping \(CursorDeliveryResolution\) -> Void\)/);
+  assert.match(workspaceSource, /private func deliverBufferedResolutions\(\)/);
   assert.match(workspaceSource, /private func bufferClearedDeliveryTracking\(\)/);
   const revokeLocal = workspaceSource.match(/func revokeLocalCredential\(\)[\s\S]*?\n    \}/)?.[0] ?? "";
   assert.match(revokeLocal, /bufferClearedDeliveryTracking\(\)/);
   const pauseSignOut = workspaceSource.match(/private func pauseForSignOut\(\)[\s\S]*?\n    \}/)?.[0] ?? "";
   assert.match(pauseSignOut, /bufferClearedDeliveryTracking\(\)/);
 
+  // Subscriptions start/stop with app foreground state instead of a poll loop.
+  assert.match(workspaceSource, /func setSubscriptionsActive\(_ isActive: Bool\)/);
+  assert.match(rootSource, /store\.cloudWorkspace\.setSubscriptionsActive\(scenePhase == \.active\)/);
+  assert.doesNotMatch(rootSource, /refreshDeliveryStatuses/);
+  assert.doesNotMatch(scannerViewSource, /refreshDeliveryStatuses/);
+
   const queueInsertion = captureSource.match(/private func queueCursorInsertion[\s\S]*?^    \}/m)?.[0] ?? "";
   assert.match(queueInsertion, /cloudWorkspace\.trackCursorDelivery\(deliveryId: deliveryId, resultId: result\.id\)/);
-  assert.match(captureSource, /func refreshDeliveryStatuses\(\) async/);
-  assert.match(captureSource, /await cloudWorkspace\.pollCursorDeliveryStatuses\(\)/);
+  assert.doesNotMatch(captureSource, /func refreshDeliveryStatuses\(\) async/);
+  assert.match(captureSource, /func applyDeliveryResolution\(_ resolution: CursorDeliveryResolution\)/);
+  assert.match(scannerSource, /cloudWorkspace\.setDeliveryResolutionHandler \{ \[weak self\] resolution in/);
   assert.match(captureSource, /case "expired":/);
   assert.match(captureSource, /case "no-editable-field":/);
   assert.match(captureSource, /case "target-rebound":/);
+});
 
-  assert.match(scannerViewSource, /await store\.refreshDeliveryStatuses\(\)/);
-  assert.match(rootSource, /await store\.refreshDeliveryStatuses\(\)/);
+test("convex-swift is pinned safely and the socket URL cannot diverge from the site URL", () => {
+  // Pre-0.8.1 crashes when cancelling an already-terminated subscription —
+  // exactly the scenePhase background/foreground lifecycle above.
+  assert.match(xcodeProjectSource, /convex-swift[\s\S]*?minimumVersion = 0\.8\.1;/);
+  assert.match(packageResolvedSource, /"identity" : "convex-swift"[\s\S]*?"version" : "0\.8\.1"/);
+
+  assert.match(configurationSource, /static var convexCloudURL: URL \{/);
+  assert.match(configurationSource, /configuredString\(for: "VoltConvexCloudURL"\)/);
+  assert.match(
+    configurationSource,
+    /configuredString\(for: "VoltConvexSiteURL"\)[\s\S]*?replacingOccurrences\(of: "\.convex\.site", with: "\.convex\.cloud"\)/,
+  );
 });
 
 test("full-app capture and photo selection are not gated on WebRTC", () => {

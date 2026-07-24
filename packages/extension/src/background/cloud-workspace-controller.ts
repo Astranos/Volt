@@ -2,28 +2,23 @@ import { isTrustedExtensionPageSender, type ExtensionMessageSender } from "../ac
 import { chromeLocalKeyValueStorage, createWorkspaceStore } from "../cloud-scanner/workspace-store.ts";
 import { hydrateWorkspaceReplica, resetWorkspaceHydration } from "../cloud-scanner/workspace-hydration.ts";
 import { normalizeWorkspaceSnapshot } from "../cloud-scanner/workspace-snapshot.ts";
-import { getMobileScannerExtensionIdentity } from "../domain/mobile-scanner-identity";
 
-const COMPUTER_REGISTRATION_KEY = "volt.cloudScanner.computerRegistration.v1";
 const ACTIVE_WORKSPACE_KEY = "volt.cloudScanner.activeWorkspace.v1";
 const ACTIVE_CLERK_SUBJECT_KEY = "volt.cloudScanner.activeClerkSubject.v1";
-const COMPUTER_PRESENCE_ALARM = "volt.cloudScanner.computerPresence";
-const COMPUTER_PRESENCE_TTL_MS = 2 * 60 * 1000;
+const WORKSPACE_OFFSCREEN_LIVENESS_ALARM = "volt.cloudScanner.offscreenLiveness";
 
 type WorkspaceMessage =
-  | { action: "workspaceCreateEnrollment"; label: string; clerkToken: string }
-  | { action: "workspaceGetSnapshot"; clerkToken?: string }
-  | { action: "workspaceReconcile"; clerkToken?: string }
+  | { action: "workspaceCreateEnrollment"; label: string }
+  | { action: "workspaceReconcile" }
   | { action: "workspaceGetPhotoDownload"; batchId: string; resultId: string }
   | { action: "workspaceDeleteResults"; resultIds: string[] }
   | { action: "workspaceRestoreResults"; resultIds: string[] };
 
 type ControllerOptions = {
   chromeApi: typeof chrome;
-  getClerkToken: () => Promise<string | null>;
+  ensureOffscreenDocument: () => Promise<boolean>;
   handleCursorDeliveries: (deliveries: unknown) => Promise<void>;
   sendOffscreenMessage: (message: unknown) => Promise<unknown>;
-  siteUrl: string;
   log?: (...args: unknown[]) => void;
 };
 
@@ -35,14 +30,7 @@ function recordFrom(value: unknown): Record<string, unknown> | null {
 
 function parseMessage(value: unknown): WorkspaceMessage | null {
   const record = recordFrom(value);
-  if (record?.action === "workspaceGetSnapshot" || record?.action === "workspaceReconcile") {
-    return {
-      action: record.action,
-      ...(typeof record.clerkToken === "string" && record.clerkToken
-        ? { clerkToken: record.clerkToken }
-        : {}),
-    };
-  }
+  if (record?.action === "workspaceReconcile") return { action: record.action };
   if (record?.action === "workspaceGetPhotoDownload") {
     return typeof record.batchId === "string" && typeof record.resultId === "string"
       ? { action: record.action, batchId: record.batchId, resultId: record.resultId }
@@ -55,13 +43,11 @@ function parseMessage(value: unknown): WorkspaceMessage | null {
     return resultIds.length > 0 ? { action: record.action, resultIds } : null;
   }
   if (record?.action !== "workspaceCreateEnrollment") return null;
-  if (typeof record.clerkToken !== "string" || !record.clerkToken) return null;
   return {
     action: record.action,
     label: typeof record.label === "string" && record.label.trim()
       ? record.label.trim().slice(0, 80)
       : "Volt for iPhone",
-    clerkToken: record.clerkToken,
   };
 }
 
@@ -70,50 +56,33 @@ export function createCloudWorkspaceController(options: ControllerOptions) {
   const log = options.log ?? ((...args: unknown[]) => console.warn("[Volt Cloud Workspace]", ...args));
   let snapshotQueue = Promise.resolve();
 
-  function routeUrl(path: string) {
-    const url = new URL(options.siteUrl);
-    url.pathname = path;
-    url.search = "";
-    url.hash = "";
-    return url;
-  }
-
-  async function request(
-    path: string,
-    method: "GET" | "POST",
-    body?: unknown,
-    clerkToken?: string,
-  ) {
-    const token = clerkToken || await options.getClerkToken();
-    if (!token) throw new Error("Sign in to enroll Volt for iPhone.");
-    const response = await fetch(routeUrl(path), {
-      method,
-      headers: {
-        Accept: "application/json",
-        Authorization: `Bearer ${token}`,
-        ...(body === undefined ? {} : { "Content-Type": "application/json" }),
-      },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
-    const payload: unknown = await response.json().catch(() => null);
-    if (!response.ok) {
-      const record = recordFrom(payload);
-      throw new Error(typeof record?.error === "string" ? record.error : `Workspace request failed (${response.status})`);
+  async function relayOffscreenOperation(message: unknown) {
+    const response = await options.sendOffscreenMessage(message);
+    const record = recordFrom(response);
+    if (record?.success !== true) {
+      throw new Error(
+        typeof record?.error === "string"
+          ? record.error
+          : "Cloud workspace operation failed.",
+      );
     }
-    return payload;
+    return record.value;
   }
 
-  async function createEnrollment(label: string, clerkToken: string) {
-    await registerComputer(clerkToken);
-    const payload = await request("/api/workspace/enrollment", "POST", { kind: "ios", label }, clerkToken);
+  async function createEnrollment(label: string) {
+    const payload = await relayOffscreenOperation({
+      action: "workspaceOffscreenCreateEnrollment",
+      label,
+    });
     const record = recordFrom(payload);
     const enrollmentCode = typeof record?.enrollmentCode === "string" ? record.enrollmentCode : null;
     const expiresAt = typeof record?.expiresAt === "number" ? record.expiresAt : null;
     if (!enrollmentCode || expiresAt === null) throw new Error("Enrollment response omitted required fields.");
-    const enrollmentUrl = typeof record?.enrollmentUrl === "string"
-      ? record.enrollmentUrl
-      : `volt://enroll?enrollmentToken=${encodeURIComponent(enrollmentCode)}`;
-    return { enrollmentCode, enrollmentUrl, expiresAt };
+    return {
+      enrollmentCode,
+      enrollmentUrl: `volt://enroll?enrollmentToken=${encodeURIComponent(enrollmentCode)}`,
+      expiresAt,
+    };
   }
 
   async function resetActiveHistory() {
@@ -150,23 +119,19 @@ export function createCloudWorkspaceController(options: ControllerOptions) {
     return operation;
   }
 
-  async function getSnapshot(clerkToken?: string) {
-    await registerComputer(clerkToken);
-    const payload = await request("/api/workspace/snapshot", "GET", undefined, clerkToken);
-    return applySnapshot(payload);
-  }
-
-  async function reconcileWorkspace(clerkToken?: string) {
-    await registerComputer(clerkToken);
+  async function reconcileWorkspace() {
     const response = await options.sendOffscreenMessage({
       action: "workspaceOffscreenReconcile",
     });
     const record = recordFrom(response);
-    // The offscreen document returns snapshot: null when it has no Clerk
-    // subject yet — fall back to the HTTP snapshot rather than applying null.
-    if (record?.success !== true || record.snapshot === undefined || record.snapshot === null) {
-      return getSnapshot(clerkToken);
+    if (record?.success !== true) {
+      throw new Error(
+        typeof record?.error === "string"
+          ? record.error
+          : "Cloud workspace reconciliation failed.",
+      );
     }
+    if (record.snapshot === undefined || record.snapshot === null) return null;
     return applySnapshot(record.snapshot);
   }
 
@@ -181,7 +146,6 @@ export function createCloudWorkspaceController(options: ControllerOptions) {
       return;
     }
     await options.chromeApi.storage.local.set({ [ACTIVE_CLERK_SUBJECT_KEY]: subject });
-    await registerComputer();
   }
 
   function handleAccountChanged(subject: string | null) {
@@ -191,7 +155,11 @@ export function createCloudWorkspaceController(options: ControllerOptions) {
   }
 
   async function getPhotoDownload(batchId: string, resultId: string) {
-    const payload = await request("/api/workspace/photos/download-url", "POST", { batchId, resultId });
+    const payload = await relayOffscreenOperation({
+      action: "workspaceOffscreenCreatePhotoDownloadUrl",
+      batchId,
+      resultId,
+    });
     const record = recordFrom(payload);
     if (typeof record?.url !== "string" || (record.method !== undefined && record.method !== "GET")) {
       throw new Error("Photo download response was invalid.");
@@ -206,37 +174,18 @@ export function createCloudWorkspaceController(options: ControllerOptions) {
     };
   }
 
-  async function deleteResults(resultIds: string[]) {
-    return request("/api/workspace/results/delete", "POST", { resultIds });
+  function deleteResults(resultIds: string[]) {
+    return relayOffscreenOperation({
+      action: "workspaceOffscreenDeleteResults",
+      resultIds,
+    });
   }
 
-  async function restoreResults(resultIds: string[]) {
-    return request("/api/workspace/results/restore", "POST", { resultIds });
-  }
-
-  async function registerComputer(clerkToken?: string) {
-    const identity = await getMobileScannerExtensionIdentity();
-    const payload = await request("/api/workspace/computers/register", "POST", {
-      installationId: identity.installId,
-      label: identity.sessionLabel,
-      capabilities: ["workspace-results", "cursor-insertion", "photo-download"],
-      ttlMs: COMPUTER_PRESENCE_TTL_MS,
-    }, clerkToken);
-    const record = recordFrom(payload);
-    if (
-      typeof record?.deviceId !== "string" ||
-      typeof record.workspaceId !== "string" ||
-      typeof record.registrationId !== "string" ||
-      typeof record.expiresAt !== "number"
-    ) throw new Error("Computer registration response was invalid.");
-    const registration = {
-      deviceId: record.deviceId,
-      workspaceId: record.workspaceId,
-      registrationId: record.registrationId,
-      expiresAt: record.expiresAt,
-    };
-    await options.chromeApi.storage.local.set({ [COMPUTER_REGISTRATION_KEY]: registration });
-    return registration;
+  function restoreResults(resultIds: string[]) {
+    return relayOffscreenOperation({
+      action: "workspaceOffscreenRestoreResults",
+      resultIds,
+    });
   }
 
   function handleMessage(
@@ -284,9 +233,8 @@ export function createCloudWorkspaceController(options: ControllerOptions) {
     }
     const operation = (() => {
       switch (message.action) {
-        case "workspaceCreateEnrollment": return createEnrollment(message.label, message.clerkToken);
-        case "workspaceGetSnapshot": return getSnapshot(message.clerkToken);
-        case "workspaceReconcile": return reconcileWorkspace(message.clerkToken);
+        case "workspaceCreateEnrollment": return createEnrollment(message.label);
+        case "workspaceReconcile": return reconcileWorkspace();
         case "workspaceGetPhotoDownload": return getPhotoDownload(message.batchId, message.resultId);
         case "workspaceDeleteResults": return deleteResults(message.resultIds);
         case "workspaceRestoreResults": return restoreResults(message.resultIds);
@@ -302,31 +250,16 @@ export function createCloudWorkspaceController(options: ControllerOptions) {
   }
 
   return {
-    alarmName: COMPUTER_PRESENCE_ALARM,
-    handleAlarm: async () => {
-      try {
-        await registerComputer();
-      } catch (error) {
-        log(
-          "Computer presence heartbeat failed",
-          error instanceof Error ? error.message : error,
-        );
-      }
-    },
+    alarmName: WORKSPACE_OFFSCREEN_LIVENESS_ALARM,
+    handleAlarm: options.ensureOffscreenDocument,
     handleMessage,
     initialize: async () => {
-      await options.chromeApi.alarms.create(COMPUTER_PRESENCE_ALARM, {
+      // Upgraded installs may still carry the retired HTTP-heartbeat alarm.
+      await options.chromeApi.alarms.clear("volt.cloudScanner.computerPresence").catch(() => false);
+      await options.chromeApi.alarms.create(WORKSPACE_OFFSCREEN_LIVENESS_ALARM, {
         delayInMinutes: 1,
         periodInMinutes: 1,
       });
-      try {
-        await registerComputer();
-      } catch (error) {
-        log(
-          "Initial computer registration failed",
-          error instanceof Error ? error.message : error,
-        );
-      }
       try {
         const response = await options.sendOffscreenMessage({
           action: "workspaceOffscreenStartSubscriptions",
