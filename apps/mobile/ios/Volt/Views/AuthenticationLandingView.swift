@@ -97,17 +97,14 @@ struct AuthenticationLandingView: View {
 
     private var signInActions: some View {
         VStack(spacing: 14) {
-            Button {
+            Button("Sign in") {
                 isAuthPresented = true
-            } label: {
-                Text("Sign in")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
             }
-            .buttonStyle(.borderedProminent)
+            .font(.headline)
+            .frame(maxWidth: .infinity)
+            .controlSize(.large)
+            .buttonStyle(.glassProminent)
             .tint(VoltBrand.green)
-            .clipShape(RoundedRectangle(cornerRadius: ScannerTabLayout.primaryActionCornerRadius))
             .accessibilityIdentifier("volt-sign-in-button")
 
             Text("Use the same account as Volt on Chrome.")
