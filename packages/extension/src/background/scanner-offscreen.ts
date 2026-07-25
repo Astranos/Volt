@@ -24,6 +24,12 @@ type ScannerOffscreenControllerOptions = {
 // before it can answer. 10 x 150ms only covered a warm start, so an ordinary
 // slow load looked like a broken document and got one torn down. The backoff
 // keeps the common case fast and still waits ~8s before giving up.
+type EnsureResult = { ok: true } | { ok: false; reason: string };
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
 const PING_ATTEMPTS = 12;
 const PING_RETRY_DELAY_MS = 100;
 const PING_MAX_RETRY_DELAY_MS = 1_000;
@@ -48,7 +54,7 @@ export function createScannerOffscreenController({
   reconnectAlarmName,
 }: ScannerOffscreenControllerOptions) {
   let pushSubscriptionPromise: Promise<PushSubscriptionJSON | null> | null = null;
-  let ensurePromise: Promise<boolean> | null = null;
+  let ensurePromise: Promise<EnsureResult> | null = null;
 
   const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -57,14 +63,18 @@ export function createScannerOffscreenController({
   // not "broken". Treating the two as the same tore the document down while it
   // was still starting.
   async function pingScannerOffscreen(attempts = 1) {
+    let lastError: unknown = null;
+    let lastResponse: unknown = null;
     for (let attempt = 0; attempt < attempts; attempt += 1) {
       try {
         const response = await chromeApi.runtime.sendMessage({
           action: "scannerOffscreenPing",
         });
-        if (response?.ready === true) return true;
-      } catch (_) {
+        if (response?.ready === true) return { ready: true as const };
+        lastResponse = response;
+      } catch (error) {
         // No listener yet; fall through to the retry delay.
+        lastError = error;
       }
       if (attempt + 1 < attempts) {
         await delay(
@@ -72,45 +82,74 @@ export function createScannerOffscreenController({
         );
       }
     }
-    return false;
+    // Which of these it is matters: an error every time means the document has
+    // no listener at all (still loading, or its module threw), while a reply
+    // that is not `ready` means something else in the extension answered first.
+    return {
+      ready: false as const,
+      detail: lastError
+        ? `no listener (${errorMessage(lastError)})`
+        : `unexpected ping reply (${JSON.stringify(lastResponse) ?? "undefined"})`,
+    };
   }
 
-  async function ensureScannerOffscreenDocumentOnce() {
+  async function ensureScannerOffscreenDocumentOnce(): Promise<EnsureResult> {
     const offscreenCreated = await createOffscreenDocument();
-    if (!offscreenCreated) return false;
+    if (!offscreenCreated) return { ok: false, reason: "offscreen.createDocument failed" };
 
-    if (await pingScannerOffscreen(PING_ATTEMPTS)) return true;
+    const firstPing = await pingScannerOffscreen(PING_ATTEMPTS);
+    if (firstPing.ready) return { ok: true };
 
     const existingContexts = await getOffscreenContexts();
     if (existingContexts.length > 0) {
       try {
         await chromeApi.offscreen.closeDocument();
       } catch (error) {
-        log("Failed to close stale offscreen document", error instanceof Error ? error.message : error);
-        return false;
+        return {
+          ok: false,
+          reason: `unresponsive document could not be closed: ${errorMessage(error)}`,
+        };
       }
     }
 
     const recreated = await createOffscreenDocument();
-    if (!recreated) return false;
-    return pingScannerOffscreen(PING_ATTEMPTS);
+    if (!recreated) {
+      return { ok: false, reason: "offscreen.createDocument failed after close" };
+    }
+    const secondPing = await pingScannerOffscreen(PING_ATTEMPTS);
+    if (secondPing.ready) return { ok: true };
+    return {
+      ok: false,
+      reason: `document never became ready — ${secondPing.detail}; contexts before recreate: ${existingContexts.length}`,
+    };
   }
 
   // Callers race at startup and again on every 1-minute alarm. Without a single
   // flight, one caller could close the document another had just created and
   // was about to message, which stranded the cloud workspace with no error.
-  async function ensureScannerOffscreenDocument() {
+  async function ensureScannerOffscreenDocumentDetailed() {
     if (ensurePromise) return ensurePromise;
-    ensurePromise = ensureScannerOffscreenDocumentOnce().finally(() => {
-      ensurePromise = null;
-    });
+    ensurePromise = ensureScannerOffscreenDocumentOnce()
+      .then((result) => {
+        if (!result.ok) log("Scanner offscreen document not ready:", result.reason);
+        return result;
+      })
+      .finally(() => {
+        ensurePromise = null;
+      });
     return ensurePromise;
   }
 
+  async function ensureScannerOffscreenDocument() {
+    return (await ensureScannerOffscreenDocumentDetailed()).ok;
+  }
+
   async function sendScannerOffscreenMessage<TResponse = unknown>(message: unknown): Promise<TResponse> {
-    const offscreenReady = await ensureScannerOffscreenDocument();
-    if (!offscreenReady) {
-      throw new Error("Failed to initialize scanner offscreen document");
+    const ensured = await ensureScannerOffscreenDocumentDetailed();
+    if (!ensured.ok) {
+      // Callers only ever log this string, so it has to carry the reason or the
+      // failure is indistinguishable from every other way this can go wrong.
+      throw new Error(`Failed to initialize scanner offscreen document: ${ensured.reason}`);
     }
     return chromeApi.runtime.sendMessage(message);
   }

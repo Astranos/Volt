@@ -68,9 +68,12 @@ export function createOffscreenDocumentController({
     }
 
     if (existingContexts.length > 0) {
+      // Reported as success because MV3 allows only one offscreen document, so
+      // there is nothing to create — but the document that exists is not ours,
+      // and every message sent to it will go unanswered.
       log(
         "Non-matching offscreen document already exists",
-        existingContexts.map((context) => context.documentUrl)
+        { expected: offscreenUrl, found: existingContexts.map((context) => context.documentUrl) }
       );
       return true;
     }
