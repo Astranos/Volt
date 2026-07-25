@@ -51,6 +51,10 @@ export function createWorkspaceSync(options: WorkspaceSyncOptions) {
   }
 
   async function applySnapshotNow(payload: unknown) {
+    // An account with no workspace yet reads as null rather than as a failure.
+    // There is nothing to merge, and nothing to clear either: the account has
+    // never held cloud results for this replica to have gone stale against.
+    if (payload === null) return null;
     const page = normalizeWorkspaceSnapshot(payload);
     if (!page) throw new Error("Workspace snapshot was invalid.");
     await activateWorkspace(page.workspaceId);

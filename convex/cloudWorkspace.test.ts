@@ -155,7 +155,7 @@ const restoreWorkspaceResults = makeFunctionReference<
 const workspaceSnapshot = makeFunctionReference<
   "query",
   Record<string, never>,
-  { batches: Array<{ results: Array<{ id: string; deliveryState: "available" | "deleted" }> }> }
+  { batches: Array<{ results: Array<{ id: string; deliveryState: "available" | "deleted" }> }> } | null
 >("cloudWorkspace:workspaceSnapshot");
 const createGuestGrant = makeFunctionReference<
   "mutation",
@@ -1257,11 +1257,11 @@ describe("cloud scanner workspace", () => {
       deleted: 0,
       idempotent: 1,
     });
-    expect((await alice.signedIn.query(workspaceSnapshot, {})).batches[0].results[0]).toMatchObject({
+    expect((await alice.signedIn.query(workspaceSnapshot, {}))!.batches[0].results[0]).toMatchObject({
       id: "alice-delete-result",
       deliveryState: "deleted",
     });
-    expect((await bob.signedIn.query(workspaceSnapshot, {})).batches[0].results[0]).toMatchObject({
+    expect((await bob.signedIn.query(workspaceSnapshot, {}))!.batches[0].results[0]).toMatchObject({
       id: "bob-delete-result",
       deliveryState: "available",
     });
@@ -1275,7 +1275,7 @@ describe("cloud scanner workspace", () => {
       restored: 1,
       idempotent: 0,
     });
-    expect((await alice.signedIn.query(workspaceSnapshot, {})).batches[0].results[0]).toMatchObject({
+    expect((await alice.signedIn.query(workspaceSnapshot, {}))!.batches[0].results[0]).toMatchObject({
       id: "alice-delete-result",
       deliveryState: "available",
     });
@@ -1288,6 +1288,16 @@ describe("cloud scanner workspace", () => {
       restored: 0,
       idempotent: 1,
     });
+  });
+
+  test("reads an untouched account as an empty snapshot rather than an error", async () => {
+    const t = convexTest(schema, modules);
+    // Only mutations create the workspace row, so signing in is not enough to
+    // make one exist. Throwing here surfaced as "Cloud sync failed" on every
+    // account's very first open.
+    const newcomer = t.withIdentity({ subject: "never-captured-anything" });
+
+    expect(await newcomer.query(workspaceSnapshot, {})).toBeNull();
   });
 
   test("sweeps an expired online presence lease to offline", async () => {

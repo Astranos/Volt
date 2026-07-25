@@ -112,6 +112,16 @@ async function requireAuthenticatedWorkspace(ctx: QueryCtx) {
   return workspace;
 }
 
+// Only mutations create a workspace, so an account that has signed in but never
+// captured anything owns no workspace row at all. Reading that state is not an
+// error — it is an empty timeline — and treating it as one made every new
+// account's first sign-in look like a broken sync.
+async function authenticatedWorkspaceOrNull(ctx: QueryCtx) {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) throw new ConvexError("Authentication required");
+  return await workspaceForUser(ctx, identity.subject);
+}
+
 async function requireOrCreateAuthenticatedWorkspace(ctx: MutationCtx) {
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) throw new ConvexError("Authentication required");
@@ -1364,7 +1374,8 @@ export const restoreWorkspaceResults = mutation({
 export const workspaceSnapshot = query({
   args: {},
   handler: async (ctx) => {
-    const workspace = await requireAuthenticatedWorkspace(ctx);
+    const workspace = await authenticatedWorkspaceOrNull(ctx);
+    if (!workspace) return null;
     const batches = await ctx.db
       .query("resultBatches")
       .withIndex("by_workspaceId", (q) => q.eq("workspaceId", workspace._id))
