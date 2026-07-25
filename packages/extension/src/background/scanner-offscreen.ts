@@ -20,6 +20,9 @@ type ScannerOffscreenControllerOptions = {
   reconnectAlarmName: string;
 };
 
+const PING_ATTEMPTS = 10;
+const PING_RETRY_DELAY_MS = 150;
+
 function base64UrlToUint8Array(value: string) {
   const padding = "=".repeat((4 - (value.length % 4)) % 4);
   const base64 = `${value}${padding}`.replace(/-/g, "+").replace(/_/g, "/");
@@ -40,23 +43,34 @@ export function createScannerOffscreenController({
   reconnectAlarmName,
 }: ScannerOffscreenControllerOptions) {
   let pushSubscriptionPromise: Promise<PushSubscriptionJSON | null> | null = null;
+  let ensurePromise: Promise<boolean> | null = null;
 
-  async function pingScannerOffscreen() {
-    try {
-      const response = await chromeApi.runtime.sendMessage({
-        action: "scannerOffscreenPing",
-      });
-      return response?.ready === true;
-    } catch (_) {
-      return false;
+  const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  // A freshly created offscreen document has no message listener until its
+  // module finishes evaluating, so a single missed ping means "not ready yet",
+  // not "broken". Treating the two as the same tore the document down while it
+  // was still starting.
+  async function pingScannerOffscreen(attempts = 1) {
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+      try {
+        const response = await chromeApi.runtime.sendMessage({
+          action: "scannerOffscreenPing",
+        });
+        if (response?.ready === true) return true;
+      } catch (_) {
+        // No listener yet; fall through to the retry delay.
+      }
+      if (attempt + 1 < attempts) await delay(PING_RETRY_DELAY_MS);
     }
+    return false;
   }
 
-  async function ensureScannerOffscreenDocument() {
+  async function ensureScannerOffscreenDocumentOnce() {
     const offscreenCreated = await createOffscreenDocument();
     if (!offscreenCreated) return false;
 
-    if (await pingScannerOffscreen()) return true;
+    if (await pingScannerOffscreen(PING_ATTEMPTS)) return true;
 
     const existingContexts = await getOffscreenContexts();
     if (existingContexts.length > 0) {
@@ -70,7 +84,18 @@ export function createScannerOffscreenController({
 
     const recreated = await createOffscreenDocument();
     if (!recreated) return false;
-    return pingScannerOffscreen();
+    return pingScannerOffscreen(PING_ATTEMPTS);
+  }
+
+  // Callers race at startup and again on every 1-minute alarm. Without a single
+  // flight, one caller could close the document another had just created and
+  // was about to message, which stranded the cloud workspace with no error.
+  async function ensureScannerOffscreenDocument() {
+    if (ensurePromise) return ensurePromise;
+    ensurePromise = ensureScannerOffscreenDocumentOnce().finally(() => {
+      ensurePromise = null;
+    });
+    return ensurePromise;
   }
 
   async function sendScannerOffscreenMessage<TResponse = unknown>(message: unknown): Promise<TResponse> {

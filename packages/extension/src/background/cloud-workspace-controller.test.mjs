@@ -108,6 +108,21 @@ test("offscreen owns computer registration and persists the canonical capabiliti
   assert.doesNotMatch(controller, /registerComputer|computerRegistration|COMPUTER_PRESENCE/);
 });
 
+test("ensuring the offscreen document is single flight and survives a slow start", () => {
+  const scannerOffscreen = readFileSync(
+    new URL("./scanner-offscreen.ts", import.meta.url),
+    "utf8",
+  );
+
+  // Startup and two 1-minute alarms all ensure the document concurrently. One
+  // caller closing the document another just created is what stranded the
+  // cloud workspace with no error anywhere.
+  assert.match(scannerOffscreen, /if \(ensurePromise\) return ensurePromise/);
+  // A document that has not finished evaluating its module has no listener yet;
+  // one missed ping must not be read as a broken document.
+  assert.match(scannerOffscreen, /pingScannerOffscreen\(PING_ATTEMPTS\)/);
+});
+
 test("workspace sync failures are recorded and named in the panel", () => {
   // A blank results panel is indistinguishable from a broken one, so every
   // stage that can strand the workspace records why, and the empty state says it.
