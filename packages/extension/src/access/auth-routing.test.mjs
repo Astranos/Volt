@@ -55,6 +55,12 @@ test("extension auth delegates web sign-in and syncs the Clerk session", async (
   );
   assert.doesNotMatch(providerSource, /<SignInButton/);
   assert.match(offscreenSource, /syncHost: CLERK_SYNC_HOST/);
+  // An unreachable Clerk is not a sign-out: reporting one wipes the local
+  // result history, and tearing down subscriptions on it stranded the
+  // workspace. The reconcile pass must leave both intact.
+  assert.match(offscreenSource, /if \(auth\.status === "unknown"\) return;/);
+  // One cached background client, not a Frontend API handshake per reconcile.
+  assert.match(offscreenSource, /backgroundClerkPromise/);
   assert.doesNotMatch(backgroundSource, /@clerk\/chrome-extension/);
   assert.match(providerSource, /<ClerkProvider/);
   assert.match(providerSource, /__experimental_syncHostListener/);

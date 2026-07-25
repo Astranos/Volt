@@ -108,9 +108,12 @@ test("offscreen owns computer registration and persists the canonical capabiliti
   assert.doesNotMatch(controller, /registerComputer|computerRegistration|COMPUTER_PRESENCE/);
 });
 
-test("workspace alarm only keeps the offscreen document alive", () => {
+test("workspace alarm keeps the offscreen document and its subscriptions alive", () => {
   assert.match(controller, /WORKSPACE_OFFSCREEN_LIVENESS_ALARM/);
   assert.match(controller, /periodInMinutes: 1/);
-  assert.match(controller, /handleAlarm: options\.ensureOffscreenDocument/);
+  assert.match(controller, /await options\.ensureOffscreenDocument\(\)/);
+  // A live document with dead subscriptions is the failure that stranded the
+  // workspace until a service worker restart, so the alarm re-asserts them.
+  assert.match(controller, /if \(ready\) await startSubscriptions\(\)/);
   assert.doesNotMatch(controller, /presence heartbeat|Initial computer registration/);
 });

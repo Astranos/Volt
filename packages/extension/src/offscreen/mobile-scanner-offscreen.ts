@@ -93,21 +93,78 @@ function isJoinWindowActive(state: MobileScannerSessionState) {
   return Number.isFinite(expiresAt) && expiresAt > Date.now();
 }
 
-async function getClerkToken() {
+// "unknown" means we could not reach Clerk, not that the user signed out.
+// The two must stay distinct: a sign-out wipes the local result history, so
+// treating a failed handshake as one destroys already-synced captures.
+type ClerkAuthState =
+  | { status: "signed-in"; token: string }
+  | { status: "signed-out" }
+  | { status: "unknown" };
+
+const SIGNED_OUT_RECHECK_MS = 60_000;
+
+// createClerkClient({ background: true }) performs a full Frontend API
+// handshake on every call, so the reconcile loop must reuse one client instead
+// of minting one every 15s and getting rate limited into a permanent outage.
+let backgroundClerkPromise: Promise<Awaited<
+  ReturnType<typeof createClerkClient>
+>> | null = null;
+let lastSignedOutAt = 0;
+
+function backgroundClerkClient() {
+  if (!backgroundClerkPromise) {
+    backgroundClerkPromise = createClerkClient({
+      publishableKey: CLERK_PUBLISHABLE_KEY,
+      syncHost: CLERK_SYNC_HOST,
+      background: true,
+    }).catch((error: unknown) => {
+      backgroundClerkPromise = null;
+      throw error;
+    });
+  }
+  return backgroundClerkPromise;
+}
+
+async function resolveClerkAuth(): Promise<ClerkAuthState> {
   const published = await readPublishedClerkConvexToken();
-  if (published) return published;
-  if (!CLERK_PUBLISHABLE_KEY) return null;
-  const clerk = await createClerkClient({
-    publishableKey: CLERK_PUBLISHABLE_KEY,
-    syncHost: CLERK_SYNC_HOST,
-    background: true,
-  });
-  if (!clerk.session) return null;
-  return clerk.session.getToken({
-    template: "convex",
-    organizationId: clerk.organization?.id,
-    skipCache: true,
-  });
+  if (published) {
+    lastSignedOutAt = 0;
+    return { status: "signed-in", token: published };
+  }
+  if (!CLERK_PUBLISHABLE_KEY) return { status: "unknown" };
+  if (!backgroundClerkPromise && Date.now() - lastSignedOutAt < SIGNED_OUT_RECHECK_MS) {
+    return { status: "signed-out" };
+  }
+  try {
+    const clerk = await backgroundClerkClient();
+    if (!clerk.session) {
+      // Drop the cached client so a later sign-in is picked up, but rate limit
+      // how often the signed-out state is re-verified against Clerk.
+      backgroundClerkPromise = null;
+      lastSignedOutAt = Date.now();
+      return { status: "signed-out" };
+    }
+    const token = await clerk.session.getToken({
+      template: "convex",
+      organizationId: clerk.organization?.id,
+      skipCache: true,
+    });
+    if (!token) {
+      backgroundClerkPromise = null;
+      return { status: "unknown" };
+    }
+    lastSignedOutAt = 0;
+    return { status: "signed-in", token };
+  } catch (error) {
+    console.warn("[Volt Cloud Workspace] Clerk token fetch failed", error);
+    backgroundClerkPromise = null;
+    return { status: "unknown" };
+  }
+}
+
+async function getClerkToken() {
+  const auth = await resolveClerkAuth();
+  return auth.status === "signed-in" ? auth.token : null;
 }
 
 function clerkSubjectFromToken(token: string | null) {
@@ -210,7 +267,11 @@ class CloudWorkspaceSubscriptions {
   }
 
   private async reconcileAuthenticationNow() {
-    const token = await getClerkToken();
+    const auth = await resolveClerkAuth();
+    // A transient Clerk failure must not tear down subscriptions or report a
+    // sign-out to the background — the next pass retries with state intact.
+    if (auth.status === "unknown") return;
+    const token = auth.status === "signed-in" ? auth.token : null;
     const subject = clerkSubjectFromToken(token);
     const subscriptionsActive =
       this.workspaceSnapshotUnsubscribe !== null

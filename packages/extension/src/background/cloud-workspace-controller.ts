@@ -249,9 +249,38 @@ export function createCloudWorkspaceController(options: ControllerOptions) {
     return true;
   }
 
+  // Creating the offscreen document is not enough on its own: it can survive
+  // while its Convex subscriptions are gone (a failed start, a torn-down
+  // socket, an auth pass that stopped them). start() is idempotent, so the
+  // liveness heartbeat re-asserts them rather than waiting for a service
+  // worker restart.
+  async function startSubscriptions() {
+    try {
+      const response = await options.sendOffscreenMessage({
+        action: "workspaceOffscreenStartSubscriptions",
+      });
+      const record = recordFrom(response);
+      if (record?.success !== true) {
+        log(
+          "Workspace subscription start failed",
+          typeof record?.error === "string" ? record.error : response,
+        );
+      }
+    } catch (error) {
+      log(
+        "Workspace subscription start failed",
+        error instanceof Error ? error.message : error,
+      );
+    }
+  }
+
   return {
     alarmName: WORKSPACE_OFFSCREEN_LIVENESS_ALARM,
-    handleAlarm: options.ensureOffscreenDocument,
+    handleAlarm: async () => {
+      const ready = await options.ensureOffscreenDocument();
+      if (ready) await startSubscriptions();
+      return ready;
+    },
     handleMessage,
     initialize: async () => {
       // Upgraded installs may still carry the retired HTTP-heartbeat alarm.
@@ -260,23 +289,7 @@ export function createCloudWorkspaceController(options: ControllerOptions) {
         delayInMinutes: 1,
         periodInMinutes: 1,
       });
-      try {
-        const response = await options.sendOffscreenMessage({
-          action: "workspaceOffscreenStartSubscriptions",
-        });
-        const record = recordFrom(response);
-        if (record?.success !== true) {
-          log(
-            "Workspace subscription start failed",
-            typeof record?.error === "string" ? record.error : response,
-          );
-        }
-      } catch (error) {
-        log(
-          "Workspace subscription start failed",
-          error instanceof Error ? error.message : error,
-        );
-      }
+      await startSubscriptions();
     },
   };
 }
