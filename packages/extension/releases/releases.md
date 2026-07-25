@@ -7,7 +7,7 @@
 The manifest/package version remains `1.0.54` until the next package is
 submitted.
 
-Submitted to the Chrome Web Store for review on July 25, 2026.
+Packaged on July 25, 2026. Not yet uploaded to the Chrome Web Store.
 
 Current release build command:
 
@@ -46,6 +46,7 @@ Changes:
 - Surfaced workspace sync failures in the panel instead of showing an empty timeline.
 - Added a skeleton timeline while results load, so a signed-in account no longer looks empty on first open.
 - Fixed an account that had never captured anything reporting "Cloud sync failed" on its first sign-in.
+- Fixed the phone never showing this computer as online by registering it from the side panel as well as the background page.
 
 ### v1.0.53
 

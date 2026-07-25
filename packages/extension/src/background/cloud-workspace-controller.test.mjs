@@ -26,6 +26,14 @@ const offscreen = readFileSync(
   new URL("../offscreen/mobile-scanner-offscreen.ts", import.meta.url),
   "utf8",
 );
+const computerRegistration = readFileSync(
+  new URL("../cloud-scanner/computer-registration.ts", import.meta.url),
+  "utf8",
+);
+const useComputerRegistration = readFileSync(
+  new URL("../hooks/useComputerRegistration.ts", import.meta.url),
+  "utf8",
+);
 const editableTracker = readFileSync(
   new URL("../../entrypoints/mobile-scanner-editable-tracker.ts", import.meta.url),
   "utf8",
@@ -176,15 +184,37 @@ test("editable tracking is a document-idle all-frame content script", () => {
   assert.match(editableBridge, /if \(root\.__voltEditableTrackerInstalled\) return null/);
 });
 
-test("offscreen owns computer registration and persists the canonical capabilities", () => {
+test("computer registration is shared and persists the canonical capabilities", () => {
   assert.match(
-    offscreen,
+    computerRegistration,
     /const COMPUTER_CAPABILITIES = \[\s*"workspace-results",\s*"cursor-insertion",\s*"photo-download",?\s*\]/,
   );
-  assert.match(offscreen, /api\.cloudWorkspace\.registerComputer/);
-  assert.match(offscreen, /chrome\.storage\.local\.set\(\{ \[COMPUTER_REGISTRATION_KEY\]: registration \}\)/);
-  assert.match(offscreen, /ttlMs: COMPUTER_REGISTRATION_TTL_MS/);
+  assert.match(computerRegistration, /api\.cloudWorkspace\.registerComputer/);
+  assert.match(
+    computerRegistration,
+    /storage\.local\.set\(\{ \[COMPUTER_REGISTRATION_KEY\]: registration \}\)/,
+  );
+  assert.match(computerRegistration, /ttlMs: COMPUTER_REGISTRATION_TTL_MS/);
+  // Keyed by install id so a second registering context refreshes the same row
+  // rather than listing the computer twice on the phone.
+  assert.match(computerRegistration, /installationId: identity\.installId/);
   assert.doesNotMatch(controller, /registerComputer|computerRegistration|COMPUTER_PRESENCE/);
+});
+
+test("the panel registers this computer so presence does not depend on the offscreen document", () => {
+  // The offscreen document reaches Clerk through the mirrored account cookie.
+  // When that produces no session it stops without erroring, which left the
+  // phone with no computer to show and no failure to explain it.
+  assert.match(useComputerRegistration, /registerComputer\(convex\)/);
+  assert.match(useComputerRegistration, /if \(!isAuthenticated\) return/);
+  assert.match(useComputerRegistration, /setInterval\(beat, COMPUTER_REGISTRATION_INTERVAL_MS\)/);
+  assert.match(useComputerRegistration, /clearInterval\(timer\)/);
+  // Mounted at the panel root: MobileScanner unmounts on every tool switch,
+  // which would let presence lapse while another tool is open.
+  assert.match(sidepanel, /useComputerRegistration\(\)/);
+  assert.doesNotMatch(mobileScanner, /useComputerRegistration/);
+  // A signed-out offscreen document is no longer silent about it.
+  assert.match(offscreen, /offscreen has no Clerk session/);
 });
 
 test("ensuring the offscreen document is single flight and survives a slow start", () => {

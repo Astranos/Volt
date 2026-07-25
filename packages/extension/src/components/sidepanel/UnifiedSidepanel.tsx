@@ -19,6 +19,7 @@ import {
   type SidepanelToastTone,
 } from "../../lib/sidepanel-toast";
 import { ExtensionAccountControl } from "../access/ExtensionAccess";
+import { useComputerRegistration } from "../../hooks/useComputerRegistration";
 
 type ActiveToast = {
   message: string;
@@ -58,6 +59,11 @@ export default function UnifiedSidepanel() {
   const toastCounter = useRef(0);
   const windowIdRef = useRef<number | null>(null);
   const closeReportedRef = useRef(false);
+
+  // Registered from the panel root rather than from MobileScanner, which
+  // unmounts on every tool switch and would let presence lapse while the user
+  // is on another tool.
+  useComputerRegistration();
 
   useEffect(() => {
     const handler = (event: Event) => {

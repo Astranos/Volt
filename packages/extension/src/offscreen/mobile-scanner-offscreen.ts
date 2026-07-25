@@ -21,15 +21,10 @@ import {
 } from "../domain/mobile-scanner-session";
 import { getMobileScannerExtensionIdentity } from "../domain/mobile-scanner-identity";
 import { EXTENSION_SCANNER_SIGNAL_URL } from "../domain/mobile-scanner-signal-url";
-
-const COMPUTER_REGISTRATION_KEY = "volt.cloudScanner.computerRegistration.v1";
-const COMPUTER_REGISTRATION_TTL_MS = 120_000;
-const COMPUTER_REGISTRATION_INTERVAL_MS = 60_000;
-const COMPUTER_CAPABILITIES = [
-  "workspace-results",
-  "cursor-insertion",
-  "photo-download",
-];
+import {
+  COMPUTER_REGISTRATION_INTERVAL_MS,
+  registerComputer,
+} from "../cloud-scanner/computer-registration";
 
 function serializeLogArg(arg: unknown) {
   if (arg instanceof Error) {
@@ -280,15 +275,7 @@ class CloudWorkspaceSubscriptions {
 
   private async registerComputer() {
     if (!this.installationId) throw new Error("Cloud workspace is not signed in.");
-    const identity = await getMobileScannerExtensionIdentity();
-    const registration = await this.client.mutation(api.cloudWorkspace.registerComputer, {
-      installationId: this.installationId,
-      label: identity.sessionLabel,
-      capabilities: COMPUTER_CAPABILITIES,
-      ttlMs: COMPUTER_REGISTRATION_TTL_MS,
-    });
-    await chrome.storage.local.set({ [COMPUTER_REGISTRATION_KEY]: registration });
-    return registration;
+    return await registerComputer(this.client);
   }
 
   private startComputerRegistration() {
@@ -345,7 +332,17 @@ class CloudWorkspaceSubscriptions {
     this.clerkSubject = subject;
     this.hasReconciledSubject = true;
     this.lastSnapshot = null;
-    if (!subject) return;
+    if (!subject) {
+      // Not an error on its own — but this document reads the account from the
+      // cookie the service worker mirrors into storage, so it can sit here
+      // signed out while the panel is signed in perfectly well. Nothing else
+      // reports that split, and it is the difference between a computer the
+      // phone can see and one it cannot.
+      console.warn(
+        "[Volt Cloud Workspace] offscreen has no Clerk session; this computer will not register from here",
+      );
+      return;
+    }
 
     const identity = await getMobileScannerExtensionIdentity();
     this.installationId = identity.installId;
