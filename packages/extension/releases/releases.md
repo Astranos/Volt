@@ -48,6 +48,7 @@ Changes:
 - Fixed an account that had never captured anything reporting "Cloud sync failed" on its first sign-in.
 - Fixed the phone never showing this computer as online by registering it from the side panel as well as the background page.
 - Fixed scans from the phone never reaching the cursor, which happened because the background page could not read extension storage and so both signed itself out of the account and identified this computer as a second, different one.
+- Fixed a photo reporting "Cloud sync failed" while it was still uploading, moments before it arrived.
 
 ### v1.0.53
 

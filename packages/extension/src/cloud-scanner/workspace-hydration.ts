@@ -47,7 +47,13 @@ export function planWorkspaceHydration(
     .filter((id) => cloudOriginIds.has(id));
   for (const batch of replica.batches) {
     for (const result of batch.results) {
-      if (!existingIds.has(result.id) && result.deliveryState === "available") available.push(result);
+      if (existingIds.has(result.id) || result.deliveryState !== "available") continue;
+      // A result row is available the moment the phone records it, but a photo's
+      // bytes only exist once the batch is verified ready. Downloading before
+      // that reported a sync failure for a photo that was merely still
+      // uploading, which then cleared itself when the photo arrived.
+      if (result.kind === "photo" && batch.deliveryState !== "available") continue;
+      available.push(result);
     }
   }
   return { available, deletedIds };

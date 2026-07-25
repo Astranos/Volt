@@ -142,6 +142,32 @@ test("Convex workspace snapshots normalize into the account-wide replica shape",
   assert.equal("selectedComputerId" in snapshot.batches[0], false);
 });
 
+test("hydration waits for the batch before downloading a photo", () => {
+  const photo = { ...result("photo-1", 1, undefined), kind: "photo" };
+  const scan = result("scan-1", 1, "012345678905");
+  const pending = mergeWorkspaceReplica(null, {
+    workspaceId: "workspace-1",
+    batches: [batch({ state: "pending", results: [photo, scan] })],
+  });
+
+  // A result row is available the moment the phone records it, but the photo
+  // bytes only exist once the batch is verified ready. Downloading before that
+  // reported a sync failure for a photo that was merely still uploading.
+  assert.deepEqual(
+    planWorkspaceHydration(pending, new Set(), new Set()).available.map(({ id }) => id),
+    ["scan-1"],
+  );
+
+  const ready = mergeWorkspaceReplica(null, {
+    workspaceId: "workspace-1",
+    batches: [batch({ revision: 2, results: [photo, scan] })],
+  });
+  assert.deepEqual(
+    planWorkspaceHydration(ready, new Set(), new Set()).available.map(({ id }) => id),
+    ["photo-1", "scan-1"],
+  );
+});
+
 test("hydration dedupes visible results and applies tombstones only to same-workspace cloud origins", () => {
   const replica = mergeWorkspaceReplica(null, {
     workspaceId: "workspace-1",
