@@ -2,9 +2,9 @@
 
 ## Current Submitted Version
 
-### v1.0.54
+### v1.0.55
 
-The manifest/package version remains `1.0.54` until the next package is
+The manifest/package version remains `1.0.55` until the next package is
 submitted.
 
 Packaged on July 25, 2026. Not yet uploaded to the Chrome Web Store.
@@ -33,9 +33,12 @@ packages/extension/releases/
 
 ## Recent Release History
 
-### v1.0.54
+### v1.0.55
 
 Release date: July 25, 2026
+
+v1.0.54 was packaged but never uploaded, so its changes ship here. The last
+version on the Chrome Web Store is v1.0.53.
 
 Changes:
 
