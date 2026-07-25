@@ -108,6 +108,19 @@ test("offscreen owns computer registration and persists the canonical capabiliti
   assert.doesNotMatch(controller, /registerComputer|computerRegistration|COMPUTER_PRESENCE/);
 });
 
+test("workspace sync failures are recorded and named in the panel", () => {
+  // A blank results panel is indistinguishable from a broken one, so every
+  // stage that can strand the workspace records why, and the empty state says it.
+  assert.match(offscreen, /recordWorkspaceDiagnostic/);
+  assert.match(offscreen, /offscreen_cookies_unavailable/);
+  assert.match(offscreen, /stage: "registration"/);
+  assert.match(extensionAccess, /stage: "sidepanel-token"/);
+  assert.match(mobileScanner, /summarizeWorkspaceDiagnostics/);
+  assert.match(mobileScanner, /syncIssue=\{syncIssue\}/);
+  // The reconcile pass must not be able to reject into silence again.
+  assert.match(offscreen, /auth reconcile failed/);
+});
+
 test("workspace alarm keeps the offscreen document and its subscriptions alive", () => {
   assert.match(controller, /WORKSPACE_OFFSCREEN_LIVENESS_ALARM/);
   assert.match(controller, /periodInMinutes: 1/);

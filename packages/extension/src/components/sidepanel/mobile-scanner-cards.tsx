@@ -2,6 +2,7 @@ import React from "react";
 import {
   Check,
   ChevronDown,
+  CloudOff,
   Copy,
   Download,
   Eye,
@@ -33,17 +34,19 @@ export function LoadingHistory() {
   );
 }
 
-export function EmptyHistory() {
+// An empty timeline has two very different causes — nothing captured yet, and
+// sync being broken. Naming the second one turns a dead panel into a diagnosis.
+export function EmptyHistory({ syncIssue }: { syncIssue?: string | null }) {
   return (
     <div className="mobile-scanner-card sidepanel-empty-history flex flex-col items-center border-dashed px-4 py-9 text-center">
       <div className="mobile-scanner-icon mb-3 flex h-12 w-12 items-center justify-center rounded-full text-stone-400 dark:text-stone-500">
-        <Scan className="h-5 w-5" />
+        {syncIssue ? <CloudOff className="h-5 w-5" /> : <Scan className="h-5 w-5" />}
       </div>
       <p className="text-sm font-semibold text-stone-700 dark:text-stone-200">
-        No results yet
+        {syncIssue ? "Phone sync is not connected" : "No results yet"}
       </p>
       <p className="mt-1 max-w-[260px] text-xs text-stone-500 dark:text-stone-400">
-        Text captures, barcodes, and fully received photos appear in this timeline.
+        {syncIssue ?? "Text captures, barcodes, and fully received photos appear in this timeline."}
       </p>
     </div>
   );

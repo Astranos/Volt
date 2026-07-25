@@ -15,6 +15,7 @@ import {
   CLERK_CONVEX_TOKEN_STORAGE_KEY,
   readPublishedClerkConvexToken,
 } from "../access/clerk-convex-token";
+import { recordWorkspaceDiagnostic } from "../cloud-scanner/workspace-diagnostics";
 import {
   MobileScannerSession,
   type BarcodeMessage,
@@ -125,13 +126,48 @@ function backgroundClerkClient() {
   return backgroundClerkPromise;
 }
 
+async function readPublishedTokenSafely() {
+  try {
+    return await readPublishedClerkConvexToken();
+  } catch (error) {
+    // chrome.storage.session is not guaranteed to this context. A throw here
+    // used to reject the whole reconcile pass and strand the workspace.
+    void recordWorkspaceDiagnostic({
+      stage: "clerk-token",
+      status: "error",
+      detail: `session_storage_unavailable: ${error instanceof Error ? error.message : String(error)}`,
+    });
+    return null;
+  }
+}
+
 async function resolveClerkAuth(): Promise<ClerkAuthState> {
-  const published = await readPublishedClerkConvexToken();
+  const published = await readPublishedTokenSafely();
   if (published) {
     lastSignedOutAt = 0;
+    void recordWorkspaceDiagnostic({ stage: "clerk-token", status: "ok", detail: "sidepanel" });
     return { status: "signed-in", token: published };
   }
-  if (!CLERK_PUBLISHABLE_KEY) return { status: "unknown" };
+  if (!CLERK_PUBLISHABLE_KEY) {
+    void recordWorkspaceDiagnostic({
+      stage: "clerk-token",
+      status: "error",
+      detail: "missing_publishable_key",
+    });
+    return { status: "unknown" };
+  }
+  // Offscreen documents get a reduced extension API surface, and Clerk's
+  // syncHost handshake reads the __client cookie through chrome.cookies. When
+  // that API is absent no token can be minted here at all, so report it rather
+  // than retrying a handshake that can never succeed.
+  if (!chrome.cookies) {
+    void recordWorkspaceDiagnostic({
+      stage: "clerk-token",
+      status: "error",
+      detail: "offscreen_cookies_unavailable",
+    });
+    return { status: "unknown" };
+  }
   if (!backgroundClerkPromise && Date.now() - lastSignedOutAt < SIGNED_OUT_RECHECK_MS) {
     return { status: "signed-out" };
   }
@@ -142,6 +178,7 @@ async function resolveClerkAuth(): Promise<ClerkAuthState> {
       // how often the signed-out state is re-verified against Clerk.
       backgroundClerkPromise = null;
       lastSignedOutAt = Date.now();
+      void recordWorkspaceDiagnostic({ stage: "clerk-token", status: "signed-out" });
       return { status: "signed-out" };
     }
     const token = await clerk.session.getToken({
@@ -151,13 +188,24 @@ async function resolveClerkAuth(): Promise<ClerkAuthState> {
     });
     if (!token) {
       backgroundClerkPromise = null;
+      void recordWorkspaceDiagnostic({
+        stage: "clerk-token",
+        status: "error",
+        detail: "convex_template_returned_no_token",
+      });
       return { status: "unknown" };
     }
     lastSignedOutAt = 0;
+    void recordWorkspaceDiagnostic({ stage: "clerk-token", status: "ok", detail: "background" });
     return { status: "signed-in", token };
   } catch (error) {
     console.warn("[Volt Cloud Workspace] Clerk token fetch failed", error);
     backgroundClerkPromise = null;
+    void recordWorkspaceDiagnostic({
+      stage: "clerk-token",
+      status: "error",
+      detail: error instanceof Error ? error.message : String(error),
+    });
     return { status: "unknown" };
   }
 }
@@ -255,15 +303,27 @@ class CloudWorkspaceSubscriptions {
 
   private startComputerRegistration() {
     const register = () => {
-      void this.registerComputer().catch((error: unknown) => {
-        console.warn("[Volt Cloud Workspace] computer registration failed", error);
-      });
+      if (!this.installationId) return;
+      void this.registerComputer()
+        .then(() => recordWorkspaceDiagnostic({ stage: "registration", status: "ok" }))
+        .catch((error: unknown) => {
+          console.warn("[Volt Cloud Workspace] computer registration failed", error);
+          void recordWorkspaceDiagnostic({
+            stage: "registration",
+            status: "error",
+            detail: error instanceof Error ? error.message : String(error),
+          });
+          // The first attempt races the Convex client's auth handshake. Without
+          // a short retry the phone shows this computer offline for a full
+          // registration interval even though everything else recovered.
+          window.setTimeout(register, 5_000);
+        });
     };
-    register();
     this.computerRegistrationInterval = window.setInterval(
       register,
       COMPUTER_REGISTRATION_INTERVAL_MS,
     );
+    register();
   }
 
   private async reconcileAuthenticationNow() {
@@ -290,7 +350,14 @@ class CloudWorkspaceSubscriptions {
       subject,
     });
     const accountRecord = objectFrom(accountResponse);
-    if (accountRecord?.success !== true) return;
+    if (accountRecord?.success !== true) {
+      void recordWorkspaceDiagnostic({
+        stage: "account-sync",
+        status: "error",
+        detail: typeof accountRecord?.error === "string" ? accountRecord.error : "no_response",
+      });
+      return;
+    }
 
     this.clerkSubject = subject;
     this.hasReconciledSubject = true;
@@ -304,12 +371,20 @@ class CloudWorkspaceSubscriptions {
       {},
       (snapshot) => {
         this.lastSnapshot = snapshot;
+        void recordWorkspaceDiagnostic({ stage: "subscriptions", status: "ok" });
         void chrome.runtime.sendMessage({
           action: "workspaceOffscreenSnapshotChanged",
           snapshot,
         }).catch(() => undefined);
       },
-      (error) => console.warn("[Volt Cloud Workspace] snapshot subscription failed", error),
+      (error) => {
+        console.warn("[Volt Cloud Workspace] snapshot subscription failed", error);
+        void recordWorkspaceDiagnostic({
+          stage: "subscriptions",
+          status: "error",
+          detail: error instanceof Error ? error.message : String(error),
+        });
+      },
     );
     this.cursorDeliveriesUnsubscribe = this.client.onUpdate(
       api.cloudWorkspace.pendingCursorDeliveries,
@@ -334,6 +409,16 @@ class CloudWorkspaceSubscriptions {
       return this.reconciling;
     }
     this.reconciling = this.reconcileAuthenticationNow()
+      // An unexpected throw anywhere in the pass used to reject into nothing and
+      // leave the workspace unsubscribed until the next service worker restart.
+      .catch((error: unknown) => {
+        console.warn("[Volt Cloud Workspace] auth reconcile failed", error);
+        void recordWorkspaceDiagnostic({
+          stage: "account-sync",
+          status: "error",
+          detail: error instanceof Error ? error.message : String(error),
+        });
+      })
       .finally(() => {
         this.reconciling = null;
         if (this.reconcileAgain) {

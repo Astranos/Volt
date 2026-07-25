@@ -28,6 +28,10 @@ import {
   CLERK_SYNC_HOST,
 } from "../../access/config";
 import { publishClerkConvexToken } from "../../access/clerk-convex-token";
+import { recordWorkspaceDiagnostic } from "../../cloud-scanner/workspace-diagnostics";
+
+const TOKEN_PUBLISH_INTERVAL_MS = 30_000;
+const TOKEN_PUBLISH_RETRY_MS = 5_000;
 import { cn } from "../../lib/utils";
 
 type AccessSurface = "popup" | "sidepanel";
@@ -79,24 +83,50 @@ function SidepanelClerkTokenBridge({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!isLoaded) return;
     let cancelled = false;
+    let timeoutId = 0;
 
+    // getToken() rejects when the session or the "convex" JWT template is
+    // unusable. Swallowing that left the offscreen worker with no token and no
+    // explanation, which surfaces as a permanently empty results panel.
     const publish = async () => {
-      if (!isSignedIn) {
-        await publishClerkConvexToken(null);
-        return;
+      try {
+        if (!isSignedIn) {
+          await publishClerkConvexToken(null);
+          await recordWorkspaceDiagnostic({ stage: "sidepanel-token", status: "signed-out" });
+          return TOKEN_PUBLISH_INTERVAL_MS;
+        }
+        const token = await getFreshToken();
+        if (cancelled) return TOKEN_PUBLISH_INTERVAL_MS;
+        await publishClerkConvexToken(token);
+        await recordWorkspaceDiagnostic(
+          token
+            ? { stage: "sidepanel-token", status: "ok" }
+            : {
+              stage: "sidepanel-token",
+              status: "error",
+              detail: "convex_template_returned_no_token",
+            },
+        );
+        return token ? TOKEN_PUBLISH_INTERVAL_MS : TOKEN_PUBLISH_RETRY_MS;
+      } catch (error) {
+        await recordWorkspaceDiagnostic({
+          stage: "sidepanel-token",
+          status: "error",
+          detail: error instanceof Error ? error.message : String(error),
+        });
+        return TOKEN_PUBLISH_RETRY_MS;
       }
-      const token = await getFreshToken();
-      if (cancelled) return;
-      await publishClerkConvexToken(token);
     };
 
-    void publish();
-    const intervalId = window.setInterval(() => {
-      void publish();
-    }, 30_000);
+    const run = () => {
+      void publish().then((delayMs) => {
+        if (!cancelled) timeoutId = window.setTimeout(run, delayMs);
+      });
+    };
+    run();
     return () => {
       cancelled = true;
-      window.clearInterval(intervalId);
+      window.clearTimeout(timeoutId);
     };
   }, [getFreshToken, isLoaded, isSignedIn]);
 
