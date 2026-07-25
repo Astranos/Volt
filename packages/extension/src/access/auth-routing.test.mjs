@@ -63,6 +63,11 @@ test("extension auth delegates web sign-in and syncs the Clerk session", async (
   assert.match(offscreenSource, /if \(auth\.status === "unknown"\) return;/);
   // One cached background client, not a Frontend API handshake per reconcile.
   assert.match(offscreenSource, /backgroundClerkPromise/);
+  // Clerk validates the manifest before it will mint a token, but offscreen
+  // documents have no chrome.runtime.getManifest, so every token fetch died on
+  // a TypeError. The manifest has to be readable before Clerk is imported.
+  assert.match(offscreenSource, /ensureManifestAccess\(\)\s*\n?\s*\.then\(\(\) => import\("@clerk\/chrome-extension\/client"\)\)/);
+  assert.match(offscreenSource, /fetch\("\/manifest\.json"\)/);
   assert.doesNotMatch(backgroundSource, /@clerk\/chrome-extension/);
   assert.match(providerSource, /<ClerkProvider/);
   assert.match(providerSource, /__experimental_syncHostListener/);

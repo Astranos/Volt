@@ -107,6 +107,34 @@ let backgroundClerkPromise: Promise<Awaited<
 >> | null = null;
 let lastSignedOutAt = 0;
 
+// Offscreen documents get only the messaging half of chrome.runtime, so
+// getManifest is absent here — and Clerk calls it to check that "storage" is
+// permitted before it will mint a token, so every token fetch died on a
+// TypeError. The document can still read the manifest over its own origin,
+// which is the same file Clerk would have been handed anyway.
+let manifestAccessPromise: Promise<void> | null = null;
+
+// The chrome types agree it is absent, so the patch goes through a structural
+// view of runtime rather than pretending the declared surface has it.
+type ManifestReader = { getManifest?: () => unknown };
+
+function ensureManifestAccess(): Promise<void> {
+  const runtime: ManifestReader = chrome.runtime;
+  if (typeof runtime.getManifest === "function") return Promise.resolve();
+  if (!manifestAccessPromise) {
+    manifestAccessPromise = fetch("/manifest.json")
+      .then((response) => response.json())
+      .then((manifest: unknown) => {
+        runtime.getManifest = () => manifest;
+      })
+      .catch((error: unknown) => {
+        manifestAccessPromise = null;
+        throw error;
+      });
+  }
+  return manifestAccessPromise;
+}
+
 function backgroundClerkClient() {
   if (!backgroundClerkPromise) {
     // Imported lazily: clerk-js is by far the heaviest thing this document
@@ -118,7 +146,8 @@ function backgroundClerkClient() {
     // documents have no chrome.cookies to run it with. Clerk instead reads the
     // client JWT the service worker mirrors into chrome.storage.local, which is
     // what puts this document on the same account as every other Volt surface.
-    backgroundClerkPromise = import("@clerk/chrome-extension/client")
+    backgroundClerkPromise = ensureManifestAccess()
+      .then(() => import("@clerk/chrome-extension/client"))
       .then((clerk) =>
         clerk.createClerkClient({
           publishableKey: CLERK_PUBLISHABLE_KEY,
