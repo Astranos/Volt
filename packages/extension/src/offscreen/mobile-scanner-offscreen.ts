@@ -3,7 +3,7 @@ import type {
   ScannerConnectionStatus,
 } from "@volt/scanner-protocol";
 import { buildScannerAppClipJoinUrl } from "@volt/scanner-protocol";
-import { createClerkClient } from "@clerk/chrome-extension/client";
+import type { createClerkClient } from "@clerk/chrome-extension/client";
 import { ConvexClient } from "convex/browser";
 import { api } from "../../../../convex/_generated/api";
 import {
@@ -109,17 +109,26 @@ let lastSignedOutAt = 0;
 
 function backgroundClerkClient() {
   if (!backgroundClerkPromise) {
+    // Imported lazily: clerk-js is by far the heaviest thing this document
+    // touches, and pulling it into the startup path delayed the message
+    // listener past the service worker's readiness ping, which then tore the
+    // document down as broken. Nothing here is needed until a token is minted.
+    //
     // The cookie handshake is deliberately left unconfigured: offscreen
     // documents have no chrome.cookies to run it with. Clerk instead reads the
     // client JWT the service worker mirrors into chrome.storage.local, which is
     // what puts this document on the same account as every other Volt surface.
-    backgroundClerkPromise = createClerkClient({
-      publishableKey: CLERK_PUBLISHABLE_KEY,
-      background: true,
-    }).catch((error: unknown) => {
-      backgroundClerkPromise = null;
-      throw error;
-    });
+    backgroundClerkPromise = import("@clerk/chrome-extension/client")
+      .then((clerk) =>
+        clerk.createClerkClient({
+          publishableKey: CLERK_PUBLISHABLE_KEY,
+          background: true,
+        }),
+      )
+      .catch((error: unknown) => {
+        backgroundClerkPromise = null;
+        throw error;
+      });
   }
   return backgroundClerkPromise;
 }
@@ -613,6 +622,14 @@ class MobileScannerOffscreenSession {
   }
 }
 
+// Answering the readiness ping is what keeps the service worker from closing
+// this document, so claim it before opening sockets or scheduling any work.
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message?.action !== "scannerOffscreenPing") return false;
+  sendResponse({ ready: true });
+  return false;
+});
+
 const mobileScannerSession = new MobileScannerOffscreenSession();
 const cloudWorkspaceSubscriptions = new CloudWorkspaceSubscriptions();
 cloudWorkspaceSubscriptions.start();
@@ -745,11 +762,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }),
       );
     return true;
-  }
-
-  if (message.action === "scannerOffscreenPing") {
-    sendResponse({ ready: true });
-    return false;
   }
 
   if (message.action === "scannerOffscreenStart") {

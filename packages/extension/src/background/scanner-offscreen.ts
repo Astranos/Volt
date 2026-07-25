@@ -20,8 +20,13 @@ type ScannerOffscreenControllerOptions = {
   reconnectAlarmName: string;
 };
 
-const PING_ATTEMPTS = 10;
-const PING_RETRY_DELAY_MS = 150;
+// A cold offscreen document has to fetch and evaluate its whole module graph
+// before it can answer. 10 x 150ms only covered a warm start, so an ordinary
+// slow load looked like a broken document and got one torn down. The backoff
+// keeps the common case fast and still waits ~8s before giving up.
+const PING_ATTEMPTS = 12;
+const PING_RETRY_DELAY_MS = 100;
+const PING_MAX_RETRY_DELAY_MS = 1_000;
 
 function base64UrlToUint8Array(value: string) {
   const padding = "=".repeat((4 - (value.length % 4)) % 4);
@@ -61,7 +66,11 @@ export function createScannerOffscreenController({
       } catch (_) {
         // No listener yet; fall through to the retry delay.
       }
-      if (attempt + 1 < attempts) await delay(PING_RETRY_DELAY_MS);
+      if (attempt + 1 < attempts) {
+        await delay(
+          Math.min(PING_RETRY_DELAY_MS * 2 ** attempt, PING_MAX_RETRY_DELAY_MS),
+        );
+      }
     }
     return false;
   }

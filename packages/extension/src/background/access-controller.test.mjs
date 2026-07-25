@@ -74,9 +74,16 @@ test("the DOM-capable offscreen document owns the Clerk background client", asyn
     "utf8",
   );
 
+  // clerk-js is loaded on demand, not at startup: keeping it out of the module
+  // graph is what lets this document answer the readiness ping before the
+  // service worker gives up and closes it.
   assert.match(
     offscreenSource,
-    /import \{ createClerkClient \} from "@clerk\/chrome-extension\/client"/,
+    /await import\("@clerk\/chrome-extension\/client"\)|import\("@clerk\/chrome-extension\/client"\)/,
+  );
+  assert.match(
+    offscreenSource,
+    /import type \{ createClerkClient \} from "@clerk\/chrome-extension\/client"/,
   );
   assert.match(offscreenSource, /action === "accessOffscreenGetClerkToken"/);
   assert.match(offscreenSource, /background: true/);

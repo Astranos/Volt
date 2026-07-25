@@ -132,6 +132,13 @@ test("ensuring the offscreen document is single flight and survives a slow start
   // A document that has not finished evaluating its module has no listener yet;
   // one missed ping must not be read as a broken document.
   assert.match(scannerOffscreen, /pingScannerOffscreen\(PING_ATTEMPTS\)/);
+  // A cold start has to evaluate the whole module graph first, so the ping
+  // budget backs off instead of expiring in a fixed 1.5s.
+  assert.match(scannerOffscreen, /PING_MAX_RETRY_DELAY_MS/);
+  // And the document answers that ping before it opens any sockets.
+  const pingIndex = offscreen.indexOf('"scannerOffscreenPing"');
+  assert.ok(pingIndex > 0);
+  assert.ok(pingIndex < offscreen.indexOf("cloudWorkspaceSubscriptions.start()"));
 });
 
 test("the service worker mirrors the Clerk session the offscreen document reads", () => {
