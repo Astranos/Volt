@@ -192,7 +192,7 @@ test("computer registration is shared and persists the canonical capabilities", 
   assert.match(computerRegistration, /api\.cloudWorkspace\.registerComputer/);
   assert.match(
     computerRegistration,
-    /storage\.local\.set\(\{ \[COMPUTER_REGISTRATION_KEY\]: registration \}\)/,
+    /storageLocal\.set\(\{ \[COMPUTER_REGISTRATION_KEY\]: registration \}\)/,
   );
   assert.match(computerRegistration, /ttlMs: COMPUTER_REGISTRATION_TTL_MS/);
   // Keyed by install id so a second registering context refreshes the same row
@@ -254,13 +254,53 @@ test("the service worker mirrors the Clerk session the offscreen document reads"
   assert.match(background, /clerkSessionMirror\.initialize\(\)/);
   assert.match(background, /void clerkSessionMirror\.sync\(\)/);
   // Clerk rewrites that key after every Frontend API response; rebuilding the
-  // client on an unchanged value spins the handshake into a rate limit.
-  assert.match(offscreen, /change\.oldValue === change\.newValue/);
+  // client on an unchanged value spins the handshake into a rate limit, so the
+  // mirror reports a change only when the value actually changed.
+  assert.match(
+    sessionMirror,
+    /if \(\(stored\[CLERK_CLIENT_JWT_CACHE_KEY\] \?\? null\) === value\) return/,
+  );
+  // The offscreen document cannot watch chrome.storage for that key, so the
+  // account change is pushed to it and drops its cached Clerk client.
+  assert.match(background, /cloudWorkspace\.handleAccountSessionChanged\(\)/);
+  assert.match(controller, /startSubscriptions\(true\)/);
+  assert.match(offscreen, /accountChanged\(\)/);
+  assert.doesNotMatch(offscreen, /chrome\.storage\.onChanged|chrome\.storage\.local\./);
   // The empty panel states the one thing that can actually be missing.
   assert.match(mobileScanner, /signedOut=\{isSignedIn === false\}/);
   assert.doesNotMatch(mobileScannerCards, /Phone sync is not connected/);
   // The reconcile pass must not be able to reject into silence again.
   assert.match(offscreen, /auth reconcile failed/);
+});
+
+test("the offscreen document shares the service worker's storage", () => {
+  const storageLocal = readFileSync(
+    new URL("../access/storage-local.ts", import.meta.url),
+    "utf8",
+  );
+  const identity = readFileSync(
+    new URL("../domain/mobile-scanner-identity.ts", import.meta.url),
+    "utf8",
+  );
+  const storageCache = readFileSync(
+    new URL("../offscreen/offscreen-storage-cache.ts", import.meta.url),
+    "utf8",
+  );
+
+  // chrome.storage is absent in an offscreen document, so a context that fell
+  // back to its own localStorage minted a second install id and listened for
+  // cursor deliveries on a computer the phone never addresses.
+  assert.match(storageLocal, /action: OFFSCREEN_STORAGE_ACTION/);
+  assert.match(identity, /storageLocal\.get\(keys\)/);
+  assert.match(identity, /storageLocal\.set\(values\)/);
+  assert.doesNotMatch(identity, /chrome\?\.storage/);
+  // Clerk's key stays unprefixed so it resolves to the one the mirror writes.
+  assert.match(storageCache, /keys\.filter\(Boolean\)\.join\("\|"\)/);
+  assert.match(storageCache, /storageLocal\.get\(\[key\]\)/);
+  // Served only to the offscreen document, over the existing trust gate.
+  assert.match(controller, /rawRecord\?\.action === "workspaceOffscreenStorage"/);
+  assert.match(controller, /case "workspaceOffscreenStorage":/);
+  assert.match(controller, /\["\/offscreen\.html"\]/);
 });
 
 test("workspace alarm keeps the offscreen document and its subscriptions alive", () => {

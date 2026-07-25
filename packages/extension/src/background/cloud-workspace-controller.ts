@@ -151,6 +151,32 @@ export function createCloudWorkspaceController(options: ControllerOptions) {
     });
   }
 
+  // Offscreen documents have no chrome.storage, so their reads and writes are
+  // served from here. Both the Clerk token cache and this computer's install id
+  // live in that store; a document left to its own devices minted a second
+  // install id and listened for scans on a computer the phone never targets.
+  async function offscreenStorage(record: Record<string, unknown>) {
+    const keys = Array.isArray(record.keys)
+      ? record.keys.filter((key): key is string => typeof key === "string" && key.length > 0)
+      : [];
+    if (record.operation === "get") {
+      if (keys.length === 0) throw new Error("Storage request omitted a key.");
+      return await options.chromeApi.storage.local.get(keys);
+    }
+    if (record.operation === "set") {
+      const values = recordFrom(record.values);
+      if (!values) throw new Error("Storage request omitted values.");
+      await options.chromeApi.storage.local.set(values);
+      return null;
+    }
+    if (record.operation === "remove") {
+      if (keys.length === 0) throw new Error("Storage request omitted a key.");
+      await options.chromeApi.storage.local.remove(keys);
+      return null;
+    }
+    throw new Error("Storage request used an unknown operation.");
+  }
+
   function handleMessage(
     rawMessage: unknown,
     sender: ExtensionMessageSender,
@@ -160,7 +186,8 @@ export function createCloudWorkspaceController(options: ControllerOptions) {
     const isOffscreenMessage =
       rawRecord?.action === "workspaceOffscreenSnapshotChanged"
       || rawRecord?.action === "workspaceOffscreenCursorDeliveriesChanged"
-      || rawRecord?.action === "workspaceOffscreenAccountChanged";
+      || rawRecord?.action === "workspaceOffscreenAccountChanged"
+      || rawRecord?.action === "workspaceOffscreenStorage";
     if (isOffscreenMessage) {
       if (!isTrustedExtensionPageSender(
         sender,
@@ -170,11 +197,20 @@ export function createCloudWorkspaceController(options: ControllerOptions) {
         sendResponse({ success: false, error: "unauthorized_extension_sender" });
         return true;
       }
-      const operation = rawRecord.action === "workspaceOffscreenSnapshotChanged"
-        ? sync.applySnapshot(rawRecord.snapshot)
-        : rawRecord.action === "workspaceOffscreenCursorDeliveriesChanged"
-          ? options.handleCursorDeliveries(rawRecord.deliveries)
-          : handleAccountChanged(typeof rawRecord.subject === "string" ? rawRecord.subject : null);
+      const operation = (() => {
+        switch (rawRecord.action) {
+          case "workspaceOffscreenSnapshotChanged":
+            return sync.applySnapshot(rawRecord.snapshot);
+          case "workspaceOffscreenCursorDeliveriesChanged":
+            return options.handleCursorDeliveries(rawRecord.deliveries);
+          case "workspaceOffscreenStorage":
+            return offscreenStorage(rawRecord);
+          default:
+            return handleAccountChanged(
+              typeof rawRecord.subject === "string" ? rawRecord.subject : null,
+            );
+        }
+      })();
       void operation
         .then((value) => sendResponse({ success: true, value }))
         .catch((error: unknown) => sendResponse({
@@ -217,10 +253,11 @@ export function createCloudWorkspaceController(options: ControllerOptions) {
   // socket, an auth pass that stopped them). start() is idempotent, so the
   // liveness heartbeat re-asserts them rather than waiting for a service
   // worker restart.
-  async function startSubscriptions() {
+  async function startSubscriptions(accountChanged = false) {
     try {
       const response = await options.sendOffscreenMessage({
         action: "workspaceOffscreenStartSubscriptions",
+        accountChanged,
       });
       const record = recordFrom(response);
       if (record?.success !== true) {
@@ -241,6 +278,13 @@ export function createCloudWorkspaceController(options: ControllerOptions) {
       return ready;
     },
     handleMessage,
+    // The offscreen document cannot watch chrome.storage for the mirrored
+    // client JWT, so the account change has to be pushed to it from here.
+    handleAccountSessionChanged: async () => {
+      const ready = await options.ensureOffscreenDocument();
+      if (ready) await startSubscriptions(true);
+      return ready;
+    },
     initialize: async () => {
       // Upgraded installs may still carry the retired HTTP-heartbeat alarm.
       await options.chromeApi.alarms.clear("volt.cloudScanner.computerPresence").catch(() => false);

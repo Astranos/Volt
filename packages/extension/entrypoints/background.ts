@@ -165,7 +165,7 @@ export default defineBackground({
       chromeApi: chrome,
       log,
       onChanged: () => {
-        void cloudWorkspace.handleAlarm();
+        void cloudWorkspace.handleAccountSessionChanged();
       },
     });
     const tabDelivery = createTabDeliveryController({ chromeApi: chrome, log });

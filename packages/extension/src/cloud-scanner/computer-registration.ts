@@ -1,6 +1,7 @@
 import type { FunctionReturnType } from "convex/server";
 import { api } from "../../../../convex/_generated/api";
 import { getMobileScannerExtensionIdentity } from "../domain/mobile-scanner-identity";
+import { storageLocal } from "../access/storage-local";
 
 export const COMPUTER_REGISTRATION_KEY = "volt.cloudScanner.computerRegistration.v1";
 export const COMPUTER_REGISTRATION_TTL_MS = 120_000;
@@ -38,7 +39,6 @@ export type ComputerRegistrationClient = {
  */
 export async function registerComputer(
   client: ComputerRegistrationClient,
-  chromeApi: typeof chrome = chrome,
 ): Promise<ComputerRegistration> {
   const identity = await getMobileScannerExtensionIdentity();
   const registration = await client.mutation(api.cloudWorkspace.registerComputer, {
@@ -47,6 +47,6 @@ export async function registerComputer(
     capabilities: COMPUTER_CAPABILITIES,
     ttlMs: COMPUTER_REGISTRATION_TTL_MS,
   });
-  await chromeApi.storage.local.set({ [COMPUTER_REGISTRATION_KEY]: registration });
+  await storageLocal.set({ [COMPUTER_REGISTRATION_KEY]: registration });
   return registration;
 }

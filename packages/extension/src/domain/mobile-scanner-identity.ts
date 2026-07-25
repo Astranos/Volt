@@ -1,5 +1,6 @@
 import { isScannerSessionId } from "@volt/scanner-protocol";
 import { createId } from "./mobile-scanner-ids";
+import { storageLocal } from "../access/storage-local";
 
 export const MOBILE_SCANNER_IDENTITY_STORAGE_KEYS = {
   installId: "volt.mobileScanner.extensionInstallId",
@@ -46,47 +47,12 @@ function defaultSessionLabel() {
   return "Chrome session";
 }
 
-function storageLocalGet(keys: string[]) {
-  const chromeApi = globalThis as typeof globalThis & { chrome?: typeof chrome };
-  if (chromeApi.chrome?.storage?.local?.get) {
-    return chromeApi.chrome.storage.local.get(keys) as Promise<Record<string, unknown>>;
-  }
-  const fallback: Record<string, unknown> = {};
-  try {
-    for (const key of keys) {
-      const storedValue = globalThis.localStorage?.getItem(key);
-      if (storedValue === null || typeof storedValue === "undefined") {
-        fallback[key] = undefined;
-        continue;
-      }
-      try {
-        fallback[key] = JSON.parse(storedValue);
-      } catch (_error) {
-        fallback[key] = storedValue;
-      }
-    }
-  } catch (_error) {}
-  return Promise.resolve(fallback);
-}
-
-function storageLocalSet(values: Record<string, unknown>) {
-  const chromeApi = globalThis as typeof globalThis & { chrome?: typeof chrome };
-  if (chromeApi.chrome?.storage?.local?.set) {
-    return chromeApi.chrome.storage.local.set(values) as Promise<void>;
-  }
-  try {
-    for (const [key, value] of Object.entries(values)) {
-      if (typeof value === "undefined") {
-        globalThis.localStorage?.removeItem(key);
-      } else if (typeof value === "string") {
-        globalThis.localStorage?.setItem(key, value);
-      } else {
-        globalThis.localStorage?.setItem(key, JSON.stringify(value));
-      }
-    }
-  } catch (_error) {}
-  return Promise.resolve();
-}
+// The install id has to be the same in every context: it is the computer the
+// phone addresses. storageLocal keeps the offscreen document, which has no
+// chrome.storage of its own, reading the service worker's store instead of
+// minting its own id in localStorage.
+const storageLocalGet = (keys: string[]) => storageLocal.get(keys);
+const storageLocalSet = (values: Record<string, unknown>) => storageLocal.set(values);
 
 function normalizePairingCredential(value: unknown): DurablePairingCredential | null {
   if (!value || typeof value !== "object") return null;

@@ -56,7 +56,9 @@ test("extension auth delegates web sign-in and syncs the Clerk session", async (
   assert.doesNotMatch(providerSource, /<SignInButton/);
   // The offscreen document has no chrome.cookies to run the syncHost handshake
   // with, so it reads the client JWT the service worker mirrors for it instead.
-  assert.match(offscreenSource, /CLERK_CLIENT_JWT_CACHE_KEY/);
+  // It has no chrome.storage either, and Clerk's default cache goes straight to
+  // browser.storage.local, so the cache has to be supplied.
+  assert.match(offscreenSource, /storageCache: offscreenStorageCache/);
   // An unreachable Clerk is not a sign-out: reporting one wipes the local
   // result history, and tearing down subscriptions on it stranded the
   // workspace. The reconcile pass must leave both intact.

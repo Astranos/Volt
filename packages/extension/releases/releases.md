@@ -47,6 +47,7 @@ Changes:
 - Added a skeleton timeline while results load, so a signed-in account no longer looks empty on first open.
 - Fixed an account that had never captured anything reporting "Cloud sync failed" on its first sign-in.
 - Fixed the phone never showing this computer as online by registering it from the side panel as well as the background page.
+- Fixed scans from the phone never reaching the cursor, which happened because the background page could not read extension storage and so both signed itself out of the account and identified this computer as a second, different one.
 
 ### v1.0.53
 

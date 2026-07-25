@@ -10,7 +10,7 @@ import {
   CLERK_PUBLISHABLE_KEY,
   convexDeploymentUrlFromHttpActionsUrl,
 } from "../access/config";
-import { CLERK_CLIENT_JWT_CACHE_KEY } from "../access/clerk-client-jwt";
+import { offscreenStorageCache } from "./offscreen-storage-cache";
 import {
   MobileScannerSession,
   type BarcodeMessage,
@@ -141,12 +141,15 @@ function backgroundClerkClient() {
     // documents have no chrome.cookies to run it with. Clerk instead reads the
     // client JWT the service worker mirrors into chrome.storage.local, which is
     // what puts this document on the same account as every other Volt surface.
+    // It reads it through storageCache, because chrome.storage is missing here
+    // too and Clerk's default cache goes straight to browser.storage.local.
     backgroundClerkPromise = ensureManifestAccess()
       .then(() => import("@clerk/chrome-extension/client"))
       .then((clerk) =>
         clerk.createClerkClient({
           publishableKey: CLERK_PUBLISHABLE_KEY,
           background: true,
+          storageCache: offscreenStorageCache,
         }),
       )
       .catch((error: unknown) => {
@@ -248,17 +251,16 @@ class CloudWorkspaceSubscriptions {
     window.setInterval(() => {
       void this.reconcileAuthentication();
     }, 15_000);
-    chrome.storage.onChanged.addListener((changes, areaName) => {
-      if (areaName !== "local") return;
-      const change = changes[CLERK_CLIENT_JWT_CACHE_KEY];
-      // Clerk rewrites this key after every Frontend API response, usually with
-      // the same value. Rebuilding the client on those would spin the handshake
-      // into a rate limit, so only an actual account change counts.
-      if (!change || change.oldValue === change.newValue) return;
-      backgroundClerkPromise = null;
-      lastSignedOutAt = 0;
-      void this.reconcileAuthentication();
-    });
+  }
+
+  // The service worker owns the mirrored client JWT and tells this document
+  // when it changes; watching chrome.storage from here is not an option since
+  // the API is absent. The cached Clerk client holds the old session, so it has
+  // to be dropped before the account change can take effect.
+  accountChanged() {
+    backgroundClerkPromise = null;
+    lastSignedOutAt = 0;
+    return this.reconcileAuthentication();
   }
 
   private stopSubscriptions() {
@@ -700,7 +702,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       cloudWorkspaceSubscriptions.start();
       return sendWorkspaceOperation(
         sendResponse,
-        cloudWorkspaceSubscriptions.reconcileAuthentication(),
+        message.accountChanged === true
+          ? cloudWorkspaceSubscriptions.accountChanged()
+          : cloudWorkspaceSubscriptions.reconcileAuthentication(),
       );
     }
     if (message.action === "workspaceOffscreenReconcile") {
