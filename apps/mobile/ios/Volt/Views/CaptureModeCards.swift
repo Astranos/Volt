@@ -99,31 +99,111 @@ struct ComputerAvailabilityCard: View {
     }
 }
 
-struct CaptureModeActivityCard: View {
+/// The captures this tab has taken, newest first, shown in place of a bare saved-item count.
+struct CaptureModeCapturesSection: View {
+    private let photoColumns = [GridItem(.adaptive(minimum: 96), spacing: 8)]
+
     let mode: CaptureMode
-    let count: Int
+    /// Newest-first captures of this tab's kind.
+    let results: [ScanResult]
+    let onResend: (ScanResult) -> Void
+    let onDelete: (ScanResult) -> Void
+
+    private var visibleResults: [ScanResult] {
+        Array(results.prefix(mode == .photo ? 9 : 5))
+    }
+
+    private var hiddenCount: Int {
+        max(0, results.count - visibleResults.count)
+    }
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Recent \(mode.activityNoun)")
+                .font(.headline)
+
+            if results.isEmpty {
+                emptyState
+            } else if mode == .photo {
+                photoGrid
+            } else {
+                resultRows
+            }
+
+            if hiddenCount > 0 {
+                Text("\(hiddenCount) more in Sessions")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var emptyState: some View {
         HStack(spacing: 14) {
-            Image(systemName: "clock")
+            Image(systemName: mode.symbolName)
                 .font(.title3.weight(.semibold))
                 .foregroundStyle(.secondary)
                 .frame(width: 44, height: 44)
                 .background(.secondary.opacity(0.1), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Saved \(mode.activityNoun)")
-                    .font(.headline)
-                Text("\(count) in Sessions")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
+            Text("Captures from this session will appear here.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
 
-            Spacer()
+            Spacer(minLength: 0)
         }
         .padding(16)
         .background(.background, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .accessibilityElement(children: .combine)
+    }
+
+    private var photoGrid: some View {
+        LazyVGrid(columns: photoColumns, spacing: 8) {
+            ForEach(visibleResults) { result in
+                photoThumbnail(result)
+            }
+        }
+        .padding(12)
+        .background(.background, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+
+    private func photoThumbnail(_ result: ScanResult) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
+
+        return Color.clear
+            .aspectRatio(1, contentMode: .fit)
+            .overlay {
+                if let imageData = result.imageData, let image = UIImage(data: imageData) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    Image(systemName: "photo")
+                        .font(.title3)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .clipShape(shape)
+            .overlay {
+                shape.stroke(.quaternary, lineWidth: 1)
+            }
+            .accessibilityLabel("Photo captured at \(result.capturedAt.formatted(date: .omitted, time: .shortened))")
+    }
+
+    private var resultRows: some View {
+        VStack(spacing: 10) {
+            ForEach(visibleResults) { result in
+                CapturedResultRow(
+                    result: result,
+                    canResend: true,
+                    onResend: { onResend(result) },
+                    onDelete: { onDelete(result) }
+                )
+                .padding(14)
+                .background(.background, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            }
+        }
     }
 }
 

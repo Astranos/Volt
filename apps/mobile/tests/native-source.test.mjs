@@ -68,6 +68,10 @@ const scannerViewSwiftSource = readFileSync(
   new URL("../ios/Volt/Views/ScannerView.swift", import.meta.url),
   "utf8"
 );
+const captureModeCardsSwiftSource = readFileSync(
+  new URL("../ios/Volt/Views/CaptureModeCards.swift", import.meta.url),
+  "utf8"
+);
 const sessionsViewSwiftSource = readFileSync(
   new URL("../ios/Volt/Views/SessionsView.swift", import.meta.url),
   "utf8"
@@ -296,12 +300,39 @@ test("native pairing URLs can carry the signal deployment that minted the token"
 
 test("native capture session remains available without a WebRTC connection", () => {
   assert.match(scannerViewSwiftSource, /CaptureSessionView\(\s*isPresented: \$isCaptureSessionPresented,\s*mode: mode\s*\)/);
-  assert.match(scannerViewSwiftSource, /ScannerBottomActionAccessory\([\s\S]*isEnabled: true/);
+  assert.match(scannerViewSwiftSource, /CaptureModeLaunchCard\(mode: mode, action: startCapture\)/);
   assert.doesNotMatch(scannerViewSwiftSource, /guard store\.connectionStatus\.isConnected/);
   assert.match(captureSessionViewSwiftSource, /isCaptureEnabled: true/);
   assert.doesNotMatch(captureSessionViewSwiftSource, /\.onChange\(of: store\.connectionStatus\)/);
   assert.doesNotMatch(captureSessionViewSwiftSource, /isConnectionRecoveryPresented|handleConnectionStatusChange/);
   assert.doesNotMatch(scannerStoreSwiftSource, /func recoverMostRecentPairedSession\(\) -> Bool/);
+});
+
+test("capture mode tabs start from the hero card and list their own captures", () => {
+  // The bottom accessory duplicated the hero launch card, so the tab keeps only the card.
+  assert.doesNotMatch(scannerViewSwiftSource, /ScannerBottomActionAccessory/);
+  assert.doesNotMatch(scannerViewSwiftSource, /safeAreaInset/);
+  assert.doesNotMatch(scannerViewSwiftSource, /bottomAccessoryContentPadding/);
+  // The App Clip still needs its accessory, so the shared component stays.
+  assert.match(clipRootViewSwiftSource, /ScannerBottomActionAccessory/);
+
+  // A saved-item count is replaced by the captures themselves.
+  assert.doesNotMatch(captureModeCardsSwiftSource, /CaptureModeActivityCard/);
+  assert.match(captureModeCardsSwiftSource, /struct CaptureModeCapturesSection: View/);
+  assert.match(captureModeCardsSwiftSource, /Text\("Recent \\\(mode\.activityNoun\)"\)/);
+  assert.match(captureModeCardsSwiftSource, /Array\(results\.prefix\(mode == \.photo \? 9 : 5\)\)/);
+  assert.match(captureModeCardsSwiftSource, /mode == \.photo \{\s*photoGrid/);
+  assert.match(captureModeCardsSwiftSource, /LazyVGrid\(columns: photoColumns/);
+  assert.match(captureModeCardsSwiftSource, /CapturedResultRow\(\s*result: result,\s*canResend: true/);
+  // Truncation is disclosed rather than silent.
+  assert.match(captureModeCardsSwiftSource, /Text\("\\\(hiddenCount\) more in Sessions"\)/);
+
+  assert.match(
+    scannerViewSwiftSource,
+    /CaptureModeCapturesSection\(\s*mode: mode,\s*results: matchingResults,\s*onResend: resend,\s*onDelete: delete\s*\)/
+  );
+  assert.match(scannerViewSwiftSource, /private func resend\(_ result: ScanResult\)[\s\S]*insertResultIntoComputer\(id: result\.id\)/);
+  assert.match(scannerViewSwiftSource, /private func delete\(_ result: ScanResult\) \{\s*store\.removeResult\(id: result\.id\)/);
 });
 
 test("native capture session exposes the optional cloud cursor target", () => {

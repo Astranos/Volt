@@ -202,7 +202,7 @@ test("convex-swift is pinned safely and the socket URL cannot diverge from the s
 });
 
 test("full-app capture and photo selection are not gated on WebRTC", () => {
-  assert.match(scannerViewSource, /ScannerBottomActionAccessory\([\s\S]*isEnabled: true/);
+  assert.match(scannerViewSource, /CaptureModeLaunchCard\(mode: mode, action: startCapture\)/);
   assert.doesNotMatch(scannerViewSource, /guard store\.connectionStatus\.isConnected/);
   assert.match(captureViewSource, /isCaptureEnabled: true/);
   assert.doesNotMatch(captureViewSource, /\.onChange\(of: store\.connectionStatus\)/);

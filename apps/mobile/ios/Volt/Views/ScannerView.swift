@@ -44,11 +44,16 @@ struct CaptureModeTabView: View {
                         isTargetPickerPresented = true
                     }
 
-                    CaptureModeActivityCard(mode: mode, count: matchingResults.count)
+                    CaptureModeCapturesSection(
+                        mode: mode,
+                        results: matchingResults,
+                        onResend: resend,
+                        onDelete: delete
+                    )
                 }
                 .padding(ScannerTabLayout.contentPadding)
                 .padding(.top, ScannerTabLayout.topPadding)
-                .padding(.bottom, ScannerTabLayout.bottomAccessoryContentPadding)
+                .padding(.bottom, 32)
             }
             .background(ScannerTabLayout.background)
             .navigationTitle(mode.tabTitle)
@@ -62,27 +67,7 @@ struct CaptureModeTabView: View {
             .sheet(isPresented: $isTargetPickerPresented) {
                 CloudTargetPickerSheet()
             }
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                ScannerBottomActionAccessory(
-                    title: mode.startActionTitle,
-                    systemImage: mode.symbolName,
-                    isEnabled: true,
-                    statusText: captureStatusText,
-                    disabledHint: store.targetHint,
-                    action: startCapture
-                )
-            }
             .onAppear(perform: prepareMode)
-        }
-    }
-
-    private var captureStatusText: String {
-        if let computer = store.cloudWorkspace.selectedComputer {
-            "New captures will insert into \(computer.label)."
-        } else if let computer = store.cloudWorkspace.selectedTargetComputer {
-            "\(computer.label) is offline. Captures will stay saved until you choose an online computer."
-        } else {
-            "Captures save to your Volt workspace without a computer connection."
         }
     }
 
@@ -104,5 +89,13 @@ struct CaptureModeTabView: View {
         store.clearOcrReview()
         store.activeMode = mode
         isCaptureSessionPresented = true
+    }
+
+    private func resend(_ result: ScanResult) {
+        Task { await store.insertResultIntoComputer(id: result.id) }
+    }
+
+    private func delete(_ result: ScanResult) {
+        store.removeResult(id: result.id)
     }
 }
