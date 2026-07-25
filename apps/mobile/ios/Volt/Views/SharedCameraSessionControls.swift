@@ -1,5 +1,16 @@
 import SwiftUI
 
+/// One frame in the bottom-left capture strip shown while a photo session is running.
+struct SessionPhotoThumbnail: Identifiable, Equatable {
+    let id: UUID
+    let image: UIImage
+
+    init(id: UUID = UUID(), image: UIImage) {
+        self.id = id
+        self.image = image
+    }
+}
+
 struct CameraSessionControls: View {
     private let sideToolSlotWidth: CGFloat = 64
     private let toolRowMaxWidth: CGFloat = 380
@@ -14,6 +25,9 @@ struct CameraSessionControls: View {
     var showsModePicker = true
     var barcodeHint = "Point camera at barcode"
     var hasLatestCapture = false
+    var capturedThumbnails: [SessionPhotoThumbnail] = []
+    var capturedCount = 0
+    var controlRotation: Angle = .zero
     let onToggleTorch: () -> Void
     let onZoomOut: () -> Void
     let onZoomIn: () -> Void
@@ -34,8 +48,7 @@ struct CameraSessionControls: View {
 
             ZStack {
                 HStack {
-                    Color.clear
-                        .frame(width: 88, height: 48)
+                    leadingSlot
 
                     Spacer()
 
@@ -111,16 +124,20 @@ struct CameraSessionControls: View {
                 systemImage: "minus.magnifyingglass",
                 isEnabled: isCaptureEnabled,
                 label: "Zoom out",
+                rotation: controlRotation,
                 action: onZoomOut
             )
             Text(zoomLabel)
                 .font(.subheadline.monospacedDigit().bold())
                 .foregroundStyle(.white)
+                .rotationEffect(controlRotation)
+                .animation(.easeInOut(duration: 0.24), value: controlRotation)
                 .frame(minWidth: 58)
             SessionIconButton(
                 systemImage: "plus.magnifyingglass",
                 isEnabled: isCaptureEnabled,
                 label: "Zoom in",
+                rotation: controlRotation,
                 action: onZoomIn
             )
         }
@@ -140,6 +157,7 @@ struct CameraSessionControls: View {
                     isActive: gridVisible,
                     isEnabled: isCaptureEnabled,
                     label: gridVisible ? "Hide grid lines" : "Show grid lines",
+                    rotation: controlRotation,
                     action: onToggleGrid
                 )
             }
@@ -153,6 +171,7 @@ struct CameraSessionControls: View {
                 isActive: torchEnabled,
                 isEnabled: isCaptureEnabled,
                 label: torchEnabled ? "Turn flash off" : "Turn flash on",
+                rotation: controlRotation,
                 action: onToggleTorch
             )
         }
@@ -166,6 +185,21 @@ struct CameraSessionControls: View {
         .frame(width: sideToolSlotWidth, height: sideToolSlotWidth)
     }
 
+    private var leadingSlot: some View {
+        ZStack {
+            Color.clear
+            if !capturedThumbnails.isEmpty {
+                CapturedPhotoStrip(
+                    thumbnails: capturedThumbnails,
+                    count: capturedCount,
+                    badgeRotation: controlRotation
+                )
+            }
+        }
+        .frame(width: 88, height: 96)
+        .animation(.spring(response: 0.3, dampingFraction: 0.78), value: capturedThumbnails.first?.id)
+    }
+
     private var trailingSlot: some View {
         ZStack {
             Color.clear
@@ -173,6 +207,7 @@ struct CameraSessionControls: View {
                 SessionIconButton(
                     systemImage: "paperplane.fill",
                     label: "Send latest capture",
+                    rotation: controlRotation,
                     action: onSendLatest
                 )
             }
@@ -237,6 +272,8 @@ struct CameraSessionControls: View {
                 Image(systemName: shutterSymbol)
                     .font(.system(size: 30, weight: .semibold))
                     .foregroundStyle(.black)
+                    .rotationEffect(controlRotation)
+                    .animation(.easeInOut(duration: 0.24), value: controlRotation)
             }
         }
         .disabled(isRecognizingText || !isCaptureEnabled)
@@ -245,11 +282,68 @@ struct CameraSessionControls: View {
     }
 }
 
+/// Newest-first stack of shots taken in this session, mirroring the Camera app's bottom-left corner.
+struct CapturedPhotoStrip: View {
+    private let side: CGFloat = 58
+    private let cornerRadius: CGFloat = 13
+
+    let thumbnails: [SessionPhotoThumbnail]
+    let count: Int
+    var badgeRotation: Angle = .zero
+
+    var body: some View {
+        ZStack {
+            ForEach(Array(thumbnails.enumerated()).reversed(), id: \.element.id) { index, thumbnail in
+                thumbnailCard(thumbnail, depth: index)
+            }
+        }
+        .shadow(color: .black.opacity(0.4), radius: 6, y: 3)
+        .overlay(alignment: .bottomTrailing) {
+            countBadge
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(count) photo\(count == 1 ? "" : "s") captured this session")
+    }
+
+    private func thumbnailCard(_ thumbnail: SessionPhotoThumbnail, depth: Int) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        let isTop = depth == 0
+
+        return Image(uiImage: thumbnail.image)
+            .resizable()
+            .scaledToFill()
+            .frame(width: side, height: side)
+            .clipShape(shape)
+            .overlay {
+                shape.stroke(.white.opacity(isTop ? 0.85 : 0.4), lineWidth: 1.5)
+            }
+            .offset(x: CGFloat(depth) * -3, y: CGFloat(depth) * -4)
+            .opacity(isTop ? 1 : 0.68)
+            .zIndex(Double(thumbnails.count - depth))
+            .transition(.scale(scale: 0.55).combined(with: .opacity))
+    }
+
+    @ViewBuilder
+    private var countBadge: some View {
+        if count > 1 {
+            Text("\(count)")
+                .font(.caption2.monospacedDigit().bold())
+                .foregroundStyle(.black)
+                .rotationEffect(badgeRotation)
+                .animation(.easeInOut(duration: 0.24), value: badgeRotation)
+                .frame(minWidth: 22, minHeight: 22)
+                .background(.white, in: Capsule())
+                .offset(x: 8, y: 6)
+        }
+    }
+}
+
 struct SessionIconButton: View {
     let systemImage: String
     var isActive = false
     var isEnabled = true
     let label: String
+    var rotation: Angle = .zero
     let action: () -> Void
 
     var body: some View {
@@ -257,6 +351,8 @@ struct SessionIconButton: View {
             Image(systemName: systemImage)
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(isActive ? .yellow : .white)
+                .rotationEffect(rotation)
+                .animation(.easeInOut(duration: 0.24), value: rotation)
                 .frame(width: 44, height: 44)
                 .background(.black.opacity(0.52), in: Circle())
                 .overlay {

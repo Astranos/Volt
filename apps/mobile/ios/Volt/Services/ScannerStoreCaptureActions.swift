@@ -93,7 +93,7 @@ extension ScannerStore {
 
     func captureSquarePhoto() async {
         let batchId = resumedPhotoBatchId
-        guard let image = await camera.capturePhoto() else { return }
+        guard let image = await camera.capturePhoto(matchingDeviceOrientation: true) else { return }
         let preparedImage = image
             .normalizedForProcessing()
             .croppedToVisiblePreview(previewSize: camera.previewLayer.bounds.size)
@@ -105,7 +105,37 @@ extension ScannerStore {
             deliveryState: .saved,
             imageData: preparedImage.previewJPEGData()
         )
+        appendSessionPhotoThumbnail(preparedImage)
         await sendPhoto(preparedImage, result: photoResult, batchId: batchId)
+    }
+
+    /// Rebuilds the bottom-left strip when a photo session opens, so continuing a batch still shows
+    /// the shots already in it.
+    func startSessionPhotoStrip() {
+        guard let resumedPhotoBatchId else {
+            sessionPhotoThumbnails = []
+            sessionPhotoCount = 0
+            return
+        }
+        let batchPhotos = results
+            .filter { $0.kind == .photo && $0.batchId == resumedPhotoBatchId }
+            .sorted { $0.capturedAt > $1.capturedAt }
+        sessionPhotoCount = batchPhotos.count
+        sessionPhotoThumbnails = batchPhotos
+            .prefix(Self.sessionPhotoStripLimit)
+            .compactMap { result in
+                result.imageData
+                    .flatMap(UIImage.init(data:))
+                    .map { SessionPhotoThumbnail(id: result.id, image: $0) }
+            }
+    }
+
+    func appendSessionPhotoThumbnail(_ image: UIImage) {
+        sessionPhotoCount += 1
+        let thumbnail = SessionPhotoThumbnail(image: image.resized(maxLongEdge: 240))
+        sessionPhotoThumbnails = Array(
+            ([thumbnail] + sessionPhotoThumbnails).prefix(Self.sessionPhotoStripLimit)
+        )
     }
 
     func uploadPhotos(_ images: [UIImage]) async {

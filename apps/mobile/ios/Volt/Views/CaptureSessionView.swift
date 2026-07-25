@@ -25,8 +25,11 @@ struct CaptureSessionView: View {
                 )
                     .ignoresSafeArea()
             } else {
+                // Photo mode stays inside the safe area so the square viewfinder can centre itself in
+                // whatever the status bar and the control deck leave behind. Text and barcode keep
+                // their full-bleed preview.
                 ScannerCameraLayer(gridVisible: gridVisible)
-                    .ignoresSafeArea()
+                    .ignoresSafeArea(edges: store.activeMode == .photo ? [] : .all)
             }
 
             if selectedTextRegion != nil {
@@ -50,7 +53,7 @@ struct CaptureSessionView: View {
                 .transition(.scale(scale: 0.96).combined(with: .opacity))
             }
         }
-        .background(.black)
+        .background(Color.black.ignoresSafeArea())
         .overlay(alignment: .top) {
             VStack(spacing: 8) {
                 HStack {
@@ -105,6 +108,9 @@ struct CaptureSessionView: View {
                         isCaptureEnabled: true,
                         showsModePicker: false,
                         barcodeHint: ScreenshotScenario.current == .captureBarcode ? "Send '883929739929'" : "Point camera at barcode",
+                        capturedThumbnails: store.activeMode == .photo ? store.sessionPhotoThumbnails : [],
+                        capturedCount: store.sessionPhotoCount,
+                        controlRotation: .degrees(store.camera.captureOrientation.controlRotationDegrees),
                         onToggleTorch: {
                             store.camera.setTorchEnabled(!store.camera.torchEnabled)
                         },
@@ -133,6 +139,7 @@ struct CaptureSessionView: View {
         }
         .onAppear {
             store.activeMode = mode
+            store.startSessionPhotoStrip()
             if ScreenshotScenario.current == .captureReviewSend,
                let region = store.ocrTextRegions.first {
                 selectedTextRegion = region

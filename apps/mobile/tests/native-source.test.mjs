@@ -362,6 +362,72 @@ test("native and app clip can reopen photo capture into a selected batch", () =>
   assert.doesNotMatch(clipRootViewSwiftSource, /\.onAppear \{\s*activeMode = \.ocr/);
 });
 
+test("native photo viewfinder sits below the status bar and the floating cloud target button", () => {
+  assert.match(scannerCameraLayerSwiftSource, /private let photoTopClearance: CGFloat = 62/);
+  assert.doesNotMatch(scannerCameraLayerSwiftSource, /photoControlsReservedHeight/);
+  assert.match(
+    scannerCameraLayerSwiftSource,
+    /private func photoPreviewLayout\(in proxy: GeometryProxy\) -> \(side: CGFloat, topOffset: CGFloat\) \{\s*let availableHeight = max\(0, proxy\.size\.height - photoTopClearance\)/
+  );
+  assert.doesNotMatch(scannerCameraLayerSwiftSource, /proxy\.safeAreaInsets/);
+  // Photo mode alone respects the safe area; text and barcode keep their full-bleed preview.
+  assert.match(
+    captureSessionViewSwiftSource,
+    /ScannerCameraLayer\(gridVisible: gridVisible\)\s*\.ignoresSafeArea\(edges: store\.activeMode == \.photo \? \[\] : \.all\)/
+  );
+  assert.match(captureSessionViewSwiftSource, /\.background\(Color\.black\.ignoresSafeArea\(\)\)/);
+  assert.match(scannerCameraLayerSwiftSource, /cameraPreview\s*\.ignoresSafeArea\(\)/);
+});
+
+test("native photo sessions stack captured shots in the bottom-left of the controls", () => {
+  assert.match(scannerStoreSwiftSource, /static let sessionPhotoStripLimit = 3/);
+  assert.match(scannerStoreSwiftSource, /var sessionPhotoThumbnails: \[SessionPhotoThumbnail\] = \[\]/);
+  assert.match(scannerStoreSwiftSource, /var sessionPhotoCount = 0/);
+  assert.match(scannerStoreCaptureActionsSwiftSource, /appendSessionPhotoThumbnail\(preparedImage\)\s*await sendPhoto\(/);
+  assert.match(
+    scannerStoreCaptureActionsSwiftSource,
+    /func startSessionPhotoStrip\(\) \{\s*guard let resumedPhotoBatchId else \{\s*sessionPhotoThumbnails = \[\]\s*sessionPhotoCount = 0/
+  );
+  assert.match(
+    scannerStoreCaptureActionsSwiftSource,
+    /func appendSessionPhotoThumbnail\(_ image: UIImage\) \{\s*sessionPhotoCount \+= 1/
+  );
+  assert.match(captureSessionViewSwiftSource, /store\.activeMode = mode\s*store\.startSessionPhotoStrip\(\)/);
+  assert.match(
+    captureSessionViewSwiftSource,
+    /capturedThumbnails: store\.activeMode == \.photo \? store\.sessionPhotoThumbnails : \[\],\s*capturedCount: store\.sessionPhotoCount/
+  );
+  assert.match(sharedCameraSessionControlsSwiftSource, /struct CapturedPhotoStrip: View/);
+  assert.match(sharedCameraSessionControlsSwiftSource, /private var leadingSlot: some View \{[\s\S]*CapturedPhotoStrip\(/);
+});
+
+test("native photo capture follows the phone sideways without unlocking portrait", () => {
+  assert.match(cameraModelSwiftSource, /enum CaptureOrientation: String, CaseIterable/);
+  assert.match(cameraModelSwiftSource, /init\?\(deviceOrientation: UIDeviceOrientation\)/);
+  assert.match(
+    cameraModelSwiftSource,
+    /var controlRotationDegrees: Double \{\s*switch self \{\s*case \.portrait:\s*0\s*case \.portraitUpsideDown:\s*180\s*case \.landscapeLeft:\s*90\s*case \.landscapeRight:\s*-90/
+  );
+  assert.match(
+    cameraModelSwiftSource,
+    /var videoRotationAngle: CGFloat \{\s*switch self \{\s*case \.portrait:\s*90\s*case \.portraitUpsideDown:\s*270\s*case \.landscapeLeft:\s*0\s*case \.landscapeRight:\s*180/
+  );
+  assert.match(cameraModelSwiftSource, /func capturePhoto\(matchingDeviceOrientation: Bool = false\) async -> UIImage\?/);
+  assert.match(
+    cameraModelSwiftSource,
+    /applyCaptureRotationAngle\(matchingDeviceOrientation \? captureOrientation : \.portrait\)/
+  );
+  assert.match(cameraModelSwiftSource, /guard connection\.isVideoRotationAngleSupported\(angle\) else \{ return \}/);
+  // Text and barcode crops are measured against the portrait preview, so only photos re-tag.
+  assert.match(scannerStoreCaptureActionsSwiftSource, /camera\.capturePhoto\(matchingDeviceOrientation: true\)/);
+  assert.match(scannerStoreCaptureActionsSwiftSource, /guard let image = await camera\.capturePhoto\(\) else \{ return \}/);
+  assert.match(cameraModelSwiftSource, /func start\(\) \{[\s\S]*startObservingDeviceOrientation\(\)/);
+  assert.match(cameraModelSwiftSource, /func stop\(\) \{\s*stopObservingDeviceOrientation\(\)/);
+  assert.match(captureSessionViewSwiftSource, /controlRotation: \.degrees\(store\.camera\.captureOrientation\.controlRotationDegrees\)/);
+  assert.match(sharedCameraSessionControlsSwiftSource, /var controlRotation: Angle = \.zero/);
+  assert.match(sharedCameraSessionControlsSwiftSource, /var rotation: Angle = \.zero/);
+});
+
 test("app clip photo mode viewfinder stays edge-to-edge while capture status changes", () => {
   assert.match(clipRootViewSwiftSource, /if activeMode == \.photo, ocrReviewImage == nil \{[\s\S]*GeometryReader/);
   assert.match(clipRootViewSwiftSource, /let side = previewGeometry\.size\.width/);

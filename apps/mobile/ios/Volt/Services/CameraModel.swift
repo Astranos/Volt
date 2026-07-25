@@ -75,6 +75,60 @@ enum BarcodeRecognitionMode: String, CaseIterable, Identifiable {
     ]
 }
 
+/// Physical orientation of the device while capturing.
+///
+/// The app window stays locked to portrait, so — like the system Camera app — turning the phone
+/// sideways rotates the control glyphs in place and re-tags the capture instead of relaying the UI.
+enum CaptureOrientation: String, CaseIterable {
+    case portrait
+    case portraitUpsideDown
+    case landscapeLeft
+    case landscapeRight
+
+    init?(deviceOrientation: UIDeviceOrientation) {
+        switch deviceOrientation {
+        case .portrait:
+            self = .portrait
+        case .portraitUpsideDown:
+            self = .portraitUpsideDown
+        case .landscapeLeft:
+            self = .landscapeLeft
+        case .landscapeRight:
+            self = .landscapeRight
+        default:
+            return nil
+        }
+    }
+
+    /// Clockwise degrees a portrait-locked control rotates by to stay upright in the hand.
+    var controlRotationDegrees: Double {
+        switch self {
+        case .portrait:
+            0
+        case .portraitUpsideDown:
+            180
+        case .landscapeLeft:
+            90
+        case .landscapeRight:
+            -90
+        }
+    }
+
+    /// `AVCaptureConnection.videoRotationAngle` that keeps the saved photo level with the horizon.
+    var videoRotationAngle: CGFloat {
+        switch self {
+        case .portrait:
+            90
+        case .portraitUpsideDown:
+            270
+        case .landscapeLeft:
+            0
+        case .landscapeRight:
+            180
+        }
+    }
+}
+
 @MainActor
 @Observable
 final class CameraModel: NSObject {
@@ -107,6 +161,8 @@ final class CameraModel: NSObject {
     var minDisplayZoomFactor: CGFloat = 1
     var maxDisplayZoomFactor: CGFloat = 1
     var barcodeRecognitionMode: BarcodeRecognitionMode = .upc
+    var captureOrientation: CaptureOrientation = .portrait
+    @ObservationIgnored private var isObservingDeviceOrientation = false
     private var barcodeGuideRect: CGRect?
     private var barcodeDetectionRevision = 0
     private var barcodeClearTask: Task<Void, Never>?
@@ -134,6 +190,7 @@ final class CameraModel: NSObject {
 
     func start() {
         guard authorizationStatus == .authorized else { return }
+        startObservingDeviceOrientation()
         configureIfNeeded()
         let session = session
         let videoDevice = videoDevice
@@ -148,6 +205,7 @@ final class CameraModel: NSObject {
     }
 
     func stop() {
+        stopObservingDeviceOrientation()
         clearDetectedBarcode()
         clearLiveTextCandidates()
         setTorchEnabled(false)
@@ -157,6 +215,42 @@ final class CameraModel: NSObject {
                 session.stopRunning()
             }
         }
+    }
+
+    func startObservingDeviceOrientation() {
+        guard !isObservingDeviceOrientation else { return }
+        isObservingDeviceOrientation = true
+        UIDevice.current.beginGeneratingDeviceOrientationNotifications()
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(deviceOrientationDidChange),
+            name: UIDevice.orientationDidChangeNotification,
+            object: nil
+        )
+        applyDeviceOrientation(UIDevice.current.orientation)
+    }
+
+    func stopObservingDeviceOrientation() {
+        guard isObservingDeviceOrientation else { return }
+        isObservingDeviceOrientation = false
+        NotificationCenter.default.removeObserver(
+            self,
+            name: UIDevice.orientationDidChangeNotification,
+            object: nil
+        )
+        UIDevice.current.endGeneratingDeviceOrientationNotifications()
+    }
+
+    @objc private func deviceOrientationDidChange() {
+        applyDeviceOrientation(UIDevice.current.orientation)
+    }
+
+    /// Face up / face down / unknown carry no usable rotation, so the last real orientation stands.
+    private func applyDeviceOrientation(_ deviceOrientation: UIDeviceOrientation) {
+        guard let orientation = CaptureOrientation(deviceOrientation: deviceOrientation),
+              orientation != captureOrientation
+        else { return }
+        captureOrientation = orientation
     }
 
     func clearDetectedBarcode() {
@@ -187,11 +281,22 @@ final class CameraModel: NSObject {
         barcodeGuideRect = rect
     }
 
-    func capturePhoto() async -> UIImage? {
-        await withCheckedContinuation { continuation in
+    /// - Parameter matchingDeviceOrientation: tags the still with the way the phone is being held so
+    ///   sideways shots come out upright. Text and barcode captures leave it off because their crop
+    ///   is measured against the portrait preview.
+    func capturePhoto(matchingDeviceOrientation: Bool = false) async -> UIImage? {
+        applyCaptureRotationAngle(matchingDeviceOrientation ? captureOrientation : .portrait)
+        return await withCheckedContinuation { continuation in
             photoContinuation = continuation
             photoOutput.capturePhoto(with: AVCapturePhotoSettings(), delegate: self)
         }
+    }
+
+    private func applyCaptureRotationAngle(_ orientation: CaptureOrientation) {
+        guard let connection = photoOutput.connection(with: .video) else { return }
+        let angle = orientation.videoRotationAngle
+        guard connection.isVideoRotationAngleSupported(angle) else { return }
+        connection.videoRotationAngle = angle
     }
 
     private func configureIfNeeded() {

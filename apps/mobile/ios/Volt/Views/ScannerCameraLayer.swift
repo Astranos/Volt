@@ -5,8 +5,8 @@ struct ScannerCameraLayer: View {
     @State private var focusPoint: CGPoint?
     var gridVisible = false
     var guideVisible = true
-    private let photoTopClearance: CGFloat = 12
-    private let photoControlsReservedHeight: CGFloat = 360
+    /// Room for the cloud-target button that floats over the top of the session.
+    private let photoTopClearance: CGFloat = 62
 
     var body: some View {
         Group {
@@ -127,16 +127,12 @@ struct ScannerCameraLayer: View {
     }
 
     private func screenshotPhotoPreview(image: UIImage, in proxy: GeometryProxy) -> some View {
-        let topInset = proxy.safeAreaInsets.top + photoTopClearance
-        let bottomInset = proxy.safeAreaInsets.bottom
-        let availableHeight = max(0, proxy.size.height - topInset - bottomInset - photoControlsReservedHeight)
-        let side = min(proxy.size.width, availableHeight)
-        let topOffset = topInset + max(0, (availableHeight - side) / 2)
+        let layout = photoPreviewLayout(in: proxy)
 
         return Image(uiImage: image)
             .resizable()
             .scaledToFill()
-            .frame(width: side, height: side)
+            .frame(width: layout.side, height: layout.side)
             .clipped()
             .overlay {
                 if gridVisible {
@@ -150,7 +146,7 @@ struct ScannerCameraLayer: View {
                     .allowsHitTesting(false)
             }
             .frame(maxWidth: .infinity, alignment: .center)
-            .padding(.top, topOffset)
+            .padding(.top, layout.topOffset)
     }
 
     private var cameraPreview: some View {
@@ -194,15 +190,20 @@ struct ScannerCameraLayer: View {
         }
     }
 
+    /// The photo layer is laid out inside the safe area, so `proxy` already excludes the status bar
+    /// and the control deck that `safeAreaInset` reserves at the bottom. Only the floating top
+    /// button still needs manual clearance.
+    private func photoPreviewLayout(in proxy: GeometryProxy) -> (side: CGFloat, topOffset: CGFloat) {
+        let availableHeight = max(0, proxy.size.height - photoTopClearance)
+        let side = max(0, min(proxy.size.width, availableHeight))
+        return (side, photoTopClearance + max(0, (availableHeight - side) / 2))
+    }
+
     private func photoPreview(in proxy: GeometryProxy) -> some View {
-        let topInset = proxy.safeAreaInsets.top + photoTopClearance
-        let bottomInset = proxy.safeAreaInsets.bottom
-        let availableHeight = max(0, proxy.size.height - topInset - bottomInset - photoControlsReservedHeight)
-        let side = min(proxy.size.width, availableHeight)
-        let topOffset = topInset + max(0, (availableHeight - side) / 2)
+        let layout = photoPreviewLayout(in: proxy)
 
         return cameraPreview
-            .frame(width: side, height: side)
+            .frame(width: layout.side, height: layout.side)
             .clipped()
             .overlay {
                 if gridVisible {
@@ -216,6 +217,6 @@ struct ScannerCameraLayer: View {
                     .allowsHitTesting(false)
             }
             .frame(maxWidth: .infinity, alignment: .center)
-            .padding(.top, topOffset)
+            .padding(.top, layout.topOffset)
     }
 }

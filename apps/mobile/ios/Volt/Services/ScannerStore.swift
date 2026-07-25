@@ -18,6 +18,7 @@ struct CaptureDeliveryToast: Identifiable, Equatable {
 @Observable
 final class ScannerStore {
     static let barcodeRecognitionModeStorageKey = "volt.barcodeRecognitionMode.v1"
+    static let sessionPhotoStripLimit = 3
 
     let ocrCaptureMaxDimension: CGFloat = 1800
     let photoLongEdge: CGFloat = 2200
@@ -33,6 +34,8 @@ final class ScannerStore {
     var isRecognizingText = false
     var captureDeliveryToast: CaptureDeliveryToast?
     var photoUploadProgress: PhotoUploadProgress?
+    var sessionPhotoThumbnails: [SessionPhotoThumbnail] = []
+    var sessionPhotoCount = 0
     var barcodeRecognitionMode: BarcodeRecognitionMode = .upc {
         didSet {
             UserDefaults.standard.set(barcodeRecognitionMode.rawValue, forKey: Self.barcodeRecognitionModeStorageKey)
