@@ -27,18 +27,13 @@ import {
   CLERK_SIGN_IN_URL,
   CLERK_SYNC_HOST,
 } from "../../access/config";
-import { publishClerkConvexToken } from "../../access/clerk-convex-token";
-import { recordWorkspaceDiagnostic } from "../../cloud-scanner/workspace-diagnostics";
-
-const TOKEN_PUBLISH_INTERVAL_MS = 30_000;
-const TOKEN_PUBLISH_RETRY_MS = 5_000;
 import { cn } from "../../lib/utils";
 
 type AccessSurface = "popup" | "sidepanel";
 type AccountControlSurface = "newtab" | "sidepanel";
-type ClerkTokenGetter = () => Promise<string | null>;
-
-const SidepanelClerkTokenContext = createContext<ClerkTokenGetter>(async () => null);
+// null while Clerk is still loading — the panel must not claim a signed-out
+// account before it knows one way or the other.
+const SidepanelAuthContext = createContext<boolean | null>(null);
 
 function accountControlClassName(
   surface: AccountControlSurface,
@@ -73,76 +68,21 @@ function useClerkReturnReload() {
   }, []);
 }
 
-function SidepanelClerkTokenBridge({ children }: { children: ReactNode }) {
-  const { getToken, isLoaded, isSignedIn } = useAuth();
-  const getFreshToken = useCallback(async () => {
-    if (!isLoaded || !isSignedIn) return null;
-    return getToken({ template: "convex", skipCache: true });
-  }, [getToken, isLoaded, isSignedIn]);
-
-  useEffect(() => {
-    if (!isLoaded) return;
-    let cancelled = false;
-    let timeoutId = 0;
-
-    // getToken() rejects when the session or the "convex" JWT template is
-    // unusable. Swallowing that left the offscreen worker with no token and no
-    // explanation, which surfaces as a permanently empty results panel.
-    const publish = async () => {
-      try {
-        if (!isSignedIn) {
-          await publishClerkConvexToken(null);
-          await recordWorkspaceDiagnostic({ stage: "sidepanel-token", status: "signed-out" });
-          return TOKEN_PUBLISH_INTERVAL_MS;
-        }
-        const token = await getFreshToken();
-        if (cancelled) return TOKEN_PUBLISH_INTERVAL_MS;
-        await publishClerkConvexToken(token);
-        await recordWorkspaceDiagnostic(
-          token
-            ? { stage: "sidepanel-token", status: "ok" }
-            : {
-              stage: "sidepanel-token",
-              status: "error",
-              detail: "convex_template_returned_no_token",
-            },
-        );
-        return token ? TOKEN_PUBLISH_INTERVAL_MS : TOKEN_PUBLISH_RETRY_MS;
-      } catch (error) {
-        await recordWorkspaceDiagnostic({
-          stage: "sidepanel-token",
-          status: "error",
-          detail: error instanceof Error ? error.message : String(error),
-        });
-        return TOKEN_PUBLISH_RETRY_MS;
-      }
-    };
-
-    const run = () => {
-      void publish().then((delayMs) => {
-        if (!cancelled) timeoutId = window.setTimeout(run, delayMs);
-      });
-    };
-    run();
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timeoutId);
-    };
-  }, [getFreshToken, isLoaded, isSignedIn]);
-
+function SidepanelAuthBridge({ children }: { children: ReactNode }) {
+  const { isLoaded, isSignedIn } = useAuth();
   return (
-    <SidepanelClerkTokenContext.Provider value={getFreshToken}>
+    <SidepanelAuthContext.Provider value={isLoaded ? isSignedIn : null}>
       {children}
-    </SidepanelClerkTokenContext.Provider>
+    </SidepanelAuthContext.Provider>
   );
 }
 
 export function SidepanelClerkProvider({ children }: { children: ReactNode }) {
   if (!CLERK_PUBLISHABLE_KEY) {
     return (
-      <SidepanelClerkTokenContext.Provider value={async () => null}>
+      <SidepanelAuthContext.Provider value={null}>
         {children}
-      </SidepanelClerkTokenContext.Provider>
+      </SidepanelAuthContext.Provider>
     );
   }
 
@@ -157,13 +97,13 @@ export function SidepanelClerkProvider({ children }: { children: ReactNode }) {
       signUpFallbackRedirectUrl={currentExtensionPage}
       allowedRedirectProtocols={["chrome-extension:"]}
     >
-      <SidepanelClerkTokenBridge>{children}</SidepanelClerkTokenBridge>
+      <SidepanelAuthBridge>{children}</SidepanelAuthBridge>
     </ClerkProvider>
   );
 }
 
-export function useSidepanelClerkToken() {
-  return useContext(SidepanelClerkTokenContext);
+export function useSidepanelSignedIn() {
+  return useContext(SidepanelAuthContext);
 }
 
 function objectFrom(value: unknown): Record<string, unknown> | null {

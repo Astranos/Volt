@@ -8,6 +8,7 @@ import { createActiveTabTracker } from "../src/background/active-tab-tracker";
 import { createAccessController } from "../src/background/access-controller";
 import { createCloudCursorDeliveryController } from "../src/background/cloud-cursor-delivery-controller";
 import { createCloudWorkspaceController } from "../src/background/cloud-workspace-controller";
+import { createClerkSessionMirror } from "../src/background/clerk-session-mirror";
 import { createClipboardController } from "../src/background/clipboard-controller";
 import { createContextMenuController } from "../src/background/context-menu-controller";
 import { registerDisabledSiteActions } from "../src/background/disabled-site-controller";
@@ -159,6 +160,13 @@ export default defineBackground({
       handleCursorDeliveries: cloudCursorDeliveries.handleDeliveries,
       sendOffscreenMessage: scannerOffscreen.sendScannerOffscreenMessage,
       log,
+    });
+    const clerkSessionMirror = createClerkSessionMirror({
+      chromeApi: chrome,
+      log,
+      onChanged: () => {
+        void cloudWorkspace.handleAlarm();
+      },
     });
     const tabDelivery = createTabDeliveryController({ chromeApi: chrome, log });
     const previewPopups = createPreviewPopupController({ chromeApi: chrome, log });
@@ -348,12 +356,16 @@ export default defineBackground({
 
       void scannerOffscreen.pollScannerReconnectRequests("background-main");
       void access.initialize();
+      clerkSessionMirror.initialize();
       void cloudWorkspace.initialize();
       scannerOffscreen.ensureScannerReconnectAlarm();
       photoDownloadCleanup.ensureCleanupAlarm();
 
       chrome.alarms?.onAlarm?.addListener((alarm) => {
         if (alarm?.name === cloudWorkspace.alarmName) {
+          // cookies.onChanged does not fire while the worker is asleep, so the
+          // workspace alarm is also when a missed sign-in gets picked up.
+          void clerkSessionMirror.sync();
           void cloudWorkspace.handleAlarm();
           return;
         }

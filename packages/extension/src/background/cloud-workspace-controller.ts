@@ -2,7 +2,6 @@ import { isTrustedExtensionPageSender, type ExtensionMessageSender } from "../ac
 import { chromeLocalKeyValueStorage, createWorkspaceStore } from "../cloud-scanner/workspace-store.ts";
 import { hydrateWorkspaceReplica, resetWorkspaceHydration } from "../cloud-scanner/workspace-hydration.ts";
 import { normalizeWorkspaceSnapshot } from "../cloud-scanner/workspace-snapshot.ts";
-import { recordWorkspaceDiagnostic } from "../cloud-scanner/workspace-diagnostics.ts";
 
 const ACTIVE_WORKSPACE_KEY = "volt.cloudScanner.activeWorkspace.v1";
 const ACTIVE_CLERK_SUBJECT_KEY = "volt.cloudScanner.activeClerkSubject.v1";
@@ -264,12 +263,10 @@ export function createCloudWorkspaceController(options: ControllerOptions) {
       if (record?.success !== true) {
         const detail = typeof record?.error === "string" ? record.error : "no_response";
         log("Workspace subscription start failed", detail);
-        await recordWorkspaceDiagnostic({ stage: "subscriptions", status: "error", detail });
       }
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       log("Workspace subscription start failed", detail);
-      await recordWorkspaceDiagnostic({ stage: "subscriptions", status: "error", detail });
     }
   }
 

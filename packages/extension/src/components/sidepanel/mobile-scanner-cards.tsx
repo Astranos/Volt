@@ -2,13 +2,13 @@ import React from "react";
 import {
   Check,
   ChevronDown,
-  CloudOff,
   Copy,
   Download,
   Eye,
   FolderOpen,
   ImagePlus,
   Loader2,
+  LogIn,
   Scan,
   ScanLine,
   Trash2,
@@ -34,19 +34,21 @@ export function LoadingHistory() {
   );
 }
 
-// An empty timeline has two very different causes — nothing captured yet, and
-// sync being broken. Naming the second one turns a dead panel into a diagnosis.
-export function EmptyHistory({ syncIssue }: { syncIssue?: string | null }) {
+// Captures follow the account, not a pairing, so the only thing an empty
+// timeline can be missing is a signed-in account on this browser.
+export function EmptyHistory({ signedOut }: { signedOut?: boolean }) {
   return (
     <div className="mobile-scanner-card sidepanel-empty-history flex flex-col items-center border-dashed px-4 py-9 text-center">
       <div className="mobile-scanner-icon mb-3 flex h-12 w-12 items-center justify-center rounded-full text-stone-400 dark:text-stone-500">
-        {syncIssue ? <CloudOff className="h-5 w-5" /> : <Scan className="h-5 w-5" />}
+        {signedOut ? <LogIn className="h-5 w-5" /> : <Scan className="h-5 w-5" />}
       </div>
       <p className="text-sm font-semibold text-stone-700 dark:text-stone-200">
-        {syncIssue ? "Phone sync is not connected" : "No results yet"}
+        {signedOut ? "Sign in to see your captures" : "No results yet"}
       </p>
       <p className="mt-1 max-w-[260px] text-xs text-stone-500 dark:text-stone-400">
-        {syncIssue ?? "Text captures, barcodes, and fully received photos appear in this timeline."}
+        {signedOut
+          ? "Sign in to Volt here and captures from your phone on the same account appear automatically."
+          : "Text captures, barcodes, and fully received photos appear in this timeline."}
       </p>
     </div>
   );

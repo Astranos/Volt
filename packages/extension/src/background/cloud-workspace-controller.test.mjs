@@ -34,6 +34,10 @@ const editableBridge = readFileSync(
   new URL("../components/sidepanel/mobile-scanner-page-bridge.ts", import.meta.url),
   "utf8",
 );
+const mobileScannerCards = readFileSync(
+  new URL("../components/sidepanel/mobile-scanner-cards.tsx", import.meta.url),
+  "utf8",
+);
 const manifest = readFileSync(new URL("../../wxt.config.ts", import.meta.url), "utf8");
 
 test("Convex deployment URL maps explicitly from HTTP Actions", () => {
@@ -61,20 +65,27 @@ test("workspace operations relay through the authenticated offscreen Convex clie
   assert.doesNotMatch(popup, /Authorization|Bearer|deviceSecret|Clerk JWT/);
 });
 
-test("full-app enrollment is a second explicit QR and preserves WebRTC pairing", () => {
-  assert.match(sidepanel, /action: "workspaceCreateEnrollment"/);
-  assert.match(sidepanel, /Connect installed iPhone app/);
+test("the phone joins by account, not by an enrollment ceremony in the UI", () => {
+  // Enrollment survives only as a background compatibility path for older app
+  // builds; nothing in the extension UI asks the user to connect a phone.
+  assert.doesNotMatch(sidepanel, /workspaceCreateEnrollment/);
   assert.doesNotMatch(popup, /workspaceCreateEnrollment/);
   assert.match(popup, /state\.qrCodeUrl/);
   assert.match(popup, /action: "scannerStartForMode"/);
 });
 
-test("full-app enrollment uses the signed-in sidepanel Clerk session", () => {
+test("the offscreen workspace signs in from the shared Clerk session itself", () => {
   assert.match(sidepanelEntry, /SidepanelClerkProvider/);
-  assert.match(extensionAccess, /publishClerkConvexToken\(token\)/);
   assert.match(offscreen, /setAuth\(getClerkToken/);
   assert.match(offscreen, /api\.cloudWorkspace\.createEnrollment/);
   assert.doesNotMatch(controller, /clerkToken|getClerkToken/);
+  // Offscreen documents have no chrome.cookies, so Clerk cannot run its syncHost
+  // handshake there and must fall back to the mirrored client JWT.
+  assert.doesNotMatch(offscreen, /syncHost:/);
+  assert.match(offscreen, /background: true/);
+  // The sidepanel no longer hands the workspace a token, so cloud sync cannot
+  // depend on the panel being open.
+  assert.doesNotMatch(extensionAccess, /publishClerkConvexToken|getToken\(\{ template/);
 });
 
 test("workspace sync is reactive without sidepanel reconciliation chatter", () => {
@@ -123,15 +134,26 @@ test("ensuring the offscreen document is single flight and survives a slow start
   assert.match(scannerOffscreen, /pingScannerOffscreen\(PING_ATTEMPTS\)/);
 });
 
-test("workspace sync failures are recorded and named in the panel", () => {
-  // A blank results panel is indistinguishable from a broken one, so every
-  // stage that can strand the workspace records why, and the empty state says it.
-  assert.match(offscreen, /recordWorkspaceDiagnostic/);
-  assert.match(offscreen, /offscreen_cookies_unavailable/);
-  assert.match(offscreen, /stage: "registration"/);
-  assert.match(extensionAccess, /stage: "sidepanel-token"/);
-  assert.match(mobileScanner, /summarizeWorkspaceDiagnostics/);
-  assert.match(mobileScanner, /syncIssue=\{syncIssue\}/);
+test("the service worker mirrors the Clerk session the offscreen document reads", () => {
+  const sessionMirror = readFileSync(
+    new URL("./clerk-session-mirror.ts", import.meta.url),
+    "utf8",
+  );
+
+  // chrome.cookies exists only in the service worker, so it is the one surface
+  // that can turn the browser's __client cookie into the storage cache Clerk
+  // falls back to everywhere else.
+  assert.match(sessionMirror, /cookies\.get\(/);
+  assert.match(sessionMirror, /CLERK_CLIENT_JWT_CACHE_KEY/);
+  assert.match(sessionMirror, /cookies\?\.onChanged\.addListener/);
+  assert.match(background, /clerkSessionMirror\.initialize\(\)/);
+  assert.match(background, /void clerkSessionMirror\.sync\(\)/);
+  // Clerk rewrites that key after every Frontend API response; rebuilding the
+  // client on an unchanged value spins the handshake into a rate limit.
+  assert.match(offscreen, /change\.oldValue === change\.newValue/);
+  // The empty panel states the one thing that can actually be missing.
+  assert.match(mobileScanner, /signedOut=\{isSignedIn === false\}/);
+  assert.doesNotMatch(mobileScannerCards, /Phone sync is not connected/);
   // The reconcile pass must not be able to reject into silence again.
   assert.match(offscreen, /auth reconcile failed/);
 });

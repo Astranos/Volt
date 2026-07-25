@@ -23,6 +23,14 @@ export function clerkFrontendApiFromPublishableKey(
   }
 }
 
+// Clerk keys its storage cache by the bare Frontend API host, not the origin.
+export function clerkFrontendApiHostFromPublishableKey(
+  publishableKey: string,
+): string {
+  const origin = clerkFrontendApiFromPublishableKey(publishableKey);
+  return origin ? new URL(origin).host : "";
+}
+
 // Production Clerk sets the __client session cookie on the Frontend API
 // domain (Domain=clerk.volt.juanquenga.com), not the web app origin — the
 // SDK's chrome.cookies.get(syncHost) can only see it there.

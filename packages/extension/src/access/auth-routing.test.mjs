@@ -54,7 +54,9 @@ test("extension auth delegates web sign-in and syncs the Clerk session", async (
     /chrome\.tabs\.create\(\{ url: CLERK_SIGN_IN_URL \}\)/,
   );
   assert.doesNotMatch(providerSource, /<SignInButton/);
-  assert.match(offscreenSource, /syncHost: CLERK_SYNC_HOST/);
+  // The offscreen document has no chrome.cookies to run the syncHost handshake
+  // with, so it reads the client JWT the service worker mirrors for it instead.
+  assert.match(offscreenSource, /CLERK_CLIENT_JWT_CACHE_KEY/);
   // An unreachable Clerk is not a sign-out: reporting one wipes the local
   // result history, and tearing down subscriptions on it stranded the
   // workspace. The reconcile pass must leave both intact.
@@ -131,7 +133,7 @@ test("pairing popup stays QR-only while sidepanel owns tools and setup", async (
   );
   assert.match(unifiedSidepanelSource, /role="tablist"/);
   assert.match(unifiedSidepanelSource, /SIDEPANEL_TOOLS\.map/);
-  assert.match(unifiedSidepanelSource, /workspaceCreateEnrollment/);
+  assert.doesNotMatch(unifiedSidepanelSource, /workspaceCreateEnrollment/);
   assert.doesNotMatch(unifiedSidepanelSource, /saveMobileScannerSessionLabel/);
   assert.match(popupSource, /saveMobileScannerSessionLabel/);
 });

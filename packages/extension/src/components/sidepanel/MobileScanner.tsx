@@ -25,11 +25,7 @@ import {
   upsertTimelineEntry,
 } from "../../domain/mobile-scanner-timeline";
 import { cloudResultIds } from "../../cloud-scanner/workspace-hydration";
-import {
-  readWorkspaceDiagnostics,
-  summarizeWorkspaceDiagnostics,
-  WORKSPACE_DIAGNOSTICS_KEY,
-} from "../../cloud-scanner/workspace-diagnostics";
+import { useSidepanelSignedIn } from "../access/ExtensionAccess";
 
 /*
  * Source-contract breadcrumbs for scanner domain tests. Implementations live in:
@@ -51,7 +47,7 @@ interface MobileScannerProps {
 
 export default function MobileScanner({ onClose: _onClose }: MobileScannerProps) {
   const [previewPhoto, setPreviewPhoto] = useState<MobilePhoto | null>(null);
-  const [syncIssue, setSyncIssue] = useState<string | null>(null);
+  const isSignedIn = useSidepanelSignedIn();
   const [now, setNow] = useState(Date.now());
   const lastCloudDeletedIds = useRef<string[]>([]);
 
@@ -160,23 +156,6 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
   }, []);
 
   useEffect(() => {
-    const refresh = () => {
-      void readWorkspaceDiagnostics().then((entries) => {
-        setSyncIssue(summarizeWorkspaceDiagnostics(entries));
-      });
-    };
-    refresh();
-    const onChanged: Parameters<typeof chrome.storage.onChanged.addListener>[0] = (
-      changes,
-      area,
-    ) => {
-      if (area === "local" && WORKSPACE_DIAGNOSTICS_KEY in changes) refresh();
-    };
-    chrome.storage.onChanged.addListener(onChanged);
-    return () => chrome.storage.onChanged.removeListener(onChanged);
-  }, []);
-
-  useEffect(() => {
     void refreshResults();
     void primeCursorTarget();
   }, [primeCursorTarget, refreshResults]);
@@ -265,7 +244,7 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
           {loadingResults ? (
             <LoadingHistory />
           ) : groups.length === 0 ? (
-            <EmptyHistory syncIssue={syncIssue} />
+            <EmptyHistory signedOut={isSignedIn === false} />
           ) : (
             groups.map((group) =>
               group.type === "photo" ? (

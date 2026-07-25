@@ -8,14 +8,9 @@ import { ConvexClient } from "convex/browser";
 import { api } from "../../../../convex/_generated/api";
 import {
   CLERK_PUBLISHABLE_KEY,
-  CLERK_SYNC_HOST,
   convexDeploymentUrlFromHttpActionsUrl,
 } from "../access/config";
-import {
-  CLERK_CONVEX_TOKEN_STORAGE_KEY,
-  readPublishedClerkConvexToken,
-} from "../access/clerk-convex-token";
-import { recordWorkspaceDiagnostic } from "../cloud-scanner/workspace-diagnostics";
+import { CLERK_CLIENT_JWT_CACHE_KEY } from "../access/clerk-client-jwt";
 import {
   MobileScannerSession,
   type BarcodeMessage,
@@ -114,9 +109,12 @@ let lastSignedOutAt = 0;
 
 function backgroundClerkClient() {
   if (!backgroundClerkPromise) {
+    // The cookie handshake is deliberately left unconfigured: offscreen
+    // documents have no chrome.cookies to run it with. Clerk instead reads the
+    // client JWT the service worker mirrors into chrome.storage.local, which is
+    // what puts this document on the same account as every other Volt surface.
     backgroundClerkPromise = createClerkClient({
       publishableKey: CLERK_PUBLISHABLE_KEY,
-      syncHost: CLERK_SYNC_HOST,
       background: true,
     }).catch((error: unknown) => {
       backgroundClerkPromise = null;
@@ -126,48 +124,8 @@ function backgroundClerkClient() {
   return backgroundClerkPromise;
 }
 
-async function readPublishedTokenSafely() {
-  try {
-    return await readPublishedClerkConvexToken();
-  } catch (error) {
-    // chrome.storage.session is not guaranteed to this context. A throw here
-    // used to reject the whole reconcile pass and strand the workspace.
-    void recordWorkspaceDiagnostic({
-      stage: "clerk-token",
-      status: "error",
-      detail: `session_storage_unavailable: ${error instanceof Error ? error.message : String(error)}`,
-    });
-    return null;
-  }
-}
-
 async function resolveClerkAuth(): Promise<ClerkAuthState> {
-  const published = await readPublishedTokenSafely();
-  if (published) {
-    lastSignedOutAt = 0;
-    void recordWorkspaceDiagnostic({ stage: "clerk-token", status: "ok", detail: "sidepanel" });
-    return { status: "signed-in", token: published };
-  }
-  if (!CLERK_PUBLISHABLE_KEY) {
-    void recordWorkspaceDiagnostic({
-      stage: "clerk-token",
-      status: "error",
-      detail: "missing_publishable_key",
-    });
-    return { status: "unknown" };
-  }
-  // Offscreen documents get a reduced extension API surface, and Clerk's
-  // syncHost handshake reads the __client cookie through chrome.cookies. When
-  // that API is absent no token can be minted here at all, so report it rather
-  // than retrying a handshake that can never succeed.
-  if (!chrome.cookies) {
-    void recordWorkspaceDiagnostic({
-      stage: "clerk-token",
-      status: "error",
-      detail: "offscreen_cookies_unavailable",
-    });
-    return { status: "unknown" };
-  }
+  if (!CLERK_PUBLISHABLE_KEY) return { status: "unknown" };
   if (!backgroundClerkPromise && Date.now() - lastSignedOutAt < SIGNED_OUT_RECHECK_MS) {
     return { status: "signed-out" };
   }
@@ -178,7 +136,6 @@ async function resolveClerkAuth(): Promise<ClerkAuthState> {
       // how often the signed-out state is re-verified against Clerk.
       backgroundClerkPromise = null;
       lastSignedOutAt = Date.now();
-      void recordWorkspaceDiagnostic({ stage: "clerk-token", status: "signed-out" });
       return { status: "signed-out" };
     }
     const token = await clerk.session.getToken({
@@ -188,24 +145,13 @@ async function resolveClerkAuth(): Promise<ClerkAuthState> {
     });
     if (!token) {
       backgroundClerkPromise = null;
-      void recordWorkspaceDiagnostic({
-        stage: "clerk-token",
-        status: "error",
-        detail: "convex_template_returned_no_token",
-      });
       return { status: "unknown" };
     }
     lastSignedOutAt = 0;
-    void recordWorkspaceDiagnostic({ stage: "clerk-token", status: "ok", detail: "background" });
     return { status: "signed-in", token };
   } catch (error) {
     console.warn("[Volt Cloud Workspace] Clerk token fetch failed", error);
     backgroundClerkPromise = null;
-    void recordWorkspaceDiagnostic({
-      stage: "clerk-token",
-      status: "error",
-      detail: error instanceof Error ? error.message : String(error),
-    });
     return { status: "unknown" };
   }
 }
@@ -269,10 +215,16 @@ class CloudWorkspaceSubscriptions {
     window.setInterval(() => {
       void this.reconcileAuthentication();
     }, 15_000);
-    chrome.storage.session.onChanged.addListener((changes) => {
-      if (CLERK_CONVEX_TOKEN_STORAGE_KEY in changes) {
-        void this.reconcileAuthentication();
-      }
+    chrome.storage.onChanged.addListener((changes, areaName) => {
+      if (areaName !== "local") return;
+      const change = changes[CLERK_CLIENT_JWT_CACHE_KEY];
+      // Clerk rewrites this key after every Frontend API response, usually with
+      // the same value. Rebuilding the client on those would spin the handshake
+      // into a rate limit, so only an actual account change counts.
+      if (!change || change.oldValue === change.newValue) return;
+      backgroundClerkPromise = null;
+      lastSignedOutAt = 0;
+      void this.reconcileAuthentication();
     });
   }
 
@@ -305,14 +257,8 @@ class CloudWorkspaceSubscriptions {
     const register = () => {
       if (!this.installationId) return;
       void this.registerComputer()
-        .then(() => recordWorkspaceDiagnostic({ stage: "registration", status: "ok" }))
         .catch((error: unknown) => {
           console.warn("[Volt Cloud Workspace] computer registration failed", error);
-          void recordWorkspaceDiagnostic({
-            stage: "registration",
-            status: "error",
-            detail: error instanceof Error ? error.message : String(error),
-          });
           // The first attempt races the Convex client's auth handshake. Without
           // a short retry the phone shows this computer offline for a full
           // registration interval even though everything else recovered.
@@ -351,11 +297,10 @@ class CloudWorkspaceSubscriptions {
     });
     const accountRecord = objectFrom(accountResponse);
     if (accountRecord?.success !== true) {
-      void recordWorkspaceDiagnostic({
-        stage: "account-sync",
-        status: "error",
-        detail: typeof accountRecord?.error === "string" ? accountRecord.error : "no_response",
-      });
+      console.warn(
+        "[Volt Cloud Workspace] account sync rejected",
+        typeof accountRecord?.error === "string" ? accountRecord.error : "no_response",
+      );
       return;
     }
 
@@ -371,7 +316,6 @@ class CloudWorkspaceSubscriptions {
       {},
       (snapshot) => {
         this.lastSnapshot = snapshot;
-        void recordWorkspaceDiagnostic({ stage: "subscriptions", status: "ok" });
         void chrome.runtime.sendMessage({
           action: "workspaceOffscreenSnapshotChanged",
           snapshot,
@@ -379,11 +323,6 @@ class CloudWorkspaceSubscriptions {
       },
       (error) => {
         console.warn("[Volt Cloud Workspace] snapshot subscription failed", error);
-        void recordWorkspaceDiagnostic({
-          stage: "subscriptions",
-          status: "error",
-          detail: error instanceof Error ? error.message : String(error),
-        });
       },
     );
     this.cursorDeliveriesUnsubscribe = this.client.onUpdate(
@@ -413,11 +352,6 @@ class CloudWorkspaceSubscriptions {
       // leave the workspace unsubscribed until the next service worker restart.
       .catch((error: unknown) => {
         console.warn("[Volt Cloud Workspace] auth reconcile failed", error);
-        void recordWorkspaceDiagnostic({
-          stage: "account-sync",
-          status: "error",
-          detail: error instanceof Error ? error.message : String(error),
-        });
       })
       .finally(() => {
         this.reconciling = null;
