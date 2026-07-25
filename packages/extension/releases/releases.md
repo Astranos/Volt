@@ -2,12 +2,12 @@
 
 ## Current Submitted Version
 
-### v1.0.53
+### v1.0.54
 
-The manifest/package version remains `1.0.53` until the next package is
+The manifest/package version remains `1.0.54` until the next package is
 submitted.
 
-Submitted to the Chrome Web Store for review on July 23, 2026.
+Submitted to the Chrome Web Store for review on July 25, 2026.
 
 Current release build command:
 
@@ -32,6 +32,19 @@ packages/extension/releases/
 - None.
 
 ## Recent Release History
+
+### v1.0.54
+
+Release date: July 25, 2026
+
+Changes:
+
+- Replaced phone pairing with a shared account session, so the phone and the extension see the same captures by signing into the same account.
+- Gave the side panel its own live workspace subscription instead of rendering a cache relayed through the background page.
+- Fixed scanner results never arriving because the offscreen document could not read the manifest Clerk needs to mint a token.
+- Moved every client onto live Convex subscriptions and removed the polling loops.
+- Surfaced workspace sync failures in the panel instead of showing an empty timeline.
+- Added a skeleton timeline while results load, so a signed-in account no longer looks empty on first open.
 
 ### v1.0.53
 
