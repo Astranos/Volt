@@ -1,5 +1,8 @@
 import { motion, type Variants } from "motion/react";
+import { useAuth } from "@clerk/clerk-react";
 import { ArrowRight, Chrome, Github, Smartphone } from "lucide-react";
+
+import { authConfigured } from "./components/app-providers";
 
 export const chromeExtensionDownloadUrl =
   "https://chromewebstore.google.com/detail/volt/bmgghhmlflbhlnomgnoodpidekpaaifk";
@@ -13,7 +16,7 @@ const footerLinkGroups = [
   {
     title: "Links",
     links: [
-      ["Create Web Session", "/session"],
+      ["Workspace dashboard", "/dashboard"],
       ["Privacy", "/privacy"],
       [
         "Terms of Use",
@@ -85,17 +88,44 @@ export function SiteHeader({
             <a className="hover:text-zinc-950" href={supportUrl}>
               Support
             </a>
-            <a
-              className="inline-flex h-9 items-center justify-center gap-2 rounded-[0.85rem] border border-zinc-300 bg-white px-3 text-sm font-medium text-zinc-800 shadow-sm hover:border-zinc-900"
-              href="/session"
-            >
-              New session
-              <ArrowRight size={14} />
-            </a>
+            <AccountLink />
           </nav>
         )}
       </div>
     </header>
+  );
+}
+
+/**
+ * Splitting on `authConfigured` — a build-time constant — keeps the Clerk hook
+ * out of builds that have no publishable key and therefore no provider.
+ */
+function AccountLink() {
+  return authConfigured ? (
+    <ClerkAccountLink />
+  ) : (
+    <NavCta href="/dashboard" label="Dashboard" />
+  );
+}
+
+function ClerkAccountLink() {
+  const { isSignedIn } = useAuth();
+  return isSignedIn ? (
+    <NavCta href="/dashboard" label="Dashboard" />
+  ) : (
+    <NavCta href="/sign-in" label="Sign in" />
+  );
+}
+
+function NavCta({ href, label }: { href: string; label: string }) {
+  return (
+    <a
+      className="inline-flex h-9 items-center justify-center gap-2 rounded-[0.85rem] border border-zinc-300 bg-white px-3 text-sm font-medium text-zinc-800 shadow-sm hover:border-zinc-900"
+      href={href}
+    >
+      {label}
+      <ArrowRight size={14} />
+    </a>
   );
 }
 

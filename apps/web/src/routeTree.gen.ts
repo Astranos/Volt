@@ -10,10 +10,11 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as ThankyouRouteImport } from './routes/thankyou'
-import { Route as SessionRouteImport } from './routes/session'
+import { Route as SignUpRouteImport } from './routes/sign-up'
+import { Route as SignInRouteImport } from './routes/sign-in'
 import { Route as ScannerDemoRouteImport } from './routes/scanner-demo'
 import { Route as PrivacyRouteImport } from './routes/privacy'
-import { Route as CreateSessionRouteImport } from './routes/create-session'
+import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as IndexRouteImport } from './routes/index'
 
 const ThankyouRoute = ThankyouRouteImport.update({
@@ -21,9 +22,14 @@ const ThankyouRoute = ThankyouRouteImport.update({
   path: '/thankyou',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SessionRoute = SessionRouteImport.update({
-  id: '/session',
-  path: '/session',
+const SignUpRoute = SignUpRouteImport.update({
+  id: '/sign-up',
+  path: '/sign-up',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SignInRoute = SignInRouteImport.update({
+  id: '/sign-in',
+  path: '/sign-in',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ScannerDemoRoute = ScannerDemoRouteImport.update({
@@ -36,9 +42,9 @@ const PrivacyRoute = PrivacyRouteImport.update({
   path: '/privacy',
   getParentRoute: () => rootRouteImport,
 } as any)
-const CreateSessionRoute = CreateSessionRouteImport.update({
-  id: '/create-session',
-  path: '/create-session',
+const DashboardRoute = DashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -49,62 +55,69 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/create-session': typeof CreateSessionRoute
+  '/dashboard': typeof DashboardRoute
   '/privacy': typeof PrivacyRoute
   '/scanner-demo': typeof ScannerDemoRoute
-  '/session': typeof SessionRoute
+  '/sign-in': typeof SignInRoute
+  '/sign-up': typeof SignUpRoute
   '/thankyou': typeof ThankyouRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/create-session': typeof CreateSessionRoute
+  '/dashboard': typeof DashboardRoute
   '/privacy': typeof PrivacyRoute
   '/scanner-demo': typeof ScannerDemoRoute
-  '/session': typeof SessionRoute
+  '/sign-in': typeof SignInRoute
+  '/sign-up': typeof SignUpRoute
   '/thankyou': typeof ThankyouRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/create-session': typeof CreateSessionRoute
+  '/dashboard': typeof DashboardRoute
   '/privacy': typeof PrivacyRoute
   '/scanner-demo': typeof ScannerDemoRoute
-  '/session': typeof SessionRoute
+  '/sign-in': typeof SignInRoute
+  '/sign-up': typeof SignUpRoute
   '/thankyou': typeof ThankyouRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/create-session'
+    | '/dashboard'
     | '/privacy'
     | '/scanner-demo'
-    | '/session'
+    | '/sign-in'
+    | '/sign-up'
     | '/thankyou'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/create-session'
+    | '/dashboard'
     | '/privacy'
     | '/scanner-demo'
-    | '/session'
+    | '/sign-in'
+    | '/sign-up'
     | '/thankyou'
   id:
     | '__root__'
     | '/'
-    | '/create-session'
+    | '/dashboard'
     | '/privacy'
     | '/scanner-demo'
-    | '/session'
+    | '/sign-in'
+    | '/sign-up'
     | '/thankyou'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  CreateSessionRoute: typeof CreateSessionRoute
+  DashboardRoute: typeof DashboardRoute
   PrivacyRoute: typeof PrivacyRoute
   ScannerDemoRoute: typeof ScannerDemoRoute
-  SessionRoute: typeof SessionRoute
+  SignInRoute: typeof SignInRoute
+  SignUpRoute: typeof SignUpRoute
   ThankyouRoute: typeof ThankyouRoute
 }
 
@@ -117,11 +130,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ThankyouRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/session': {
-      id: '/session'
-      path: '/session'
-      fullPath: '/session'
-      preLoaderRoute: typeof SessionRouteImport
+    '/sign-up': {
+      id: '/sign-up'
+      path: '/sign-up'
+      fullPath: '/sign-up'
+      preLoaderRoute: typeof SignUpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sign-in': {
+      id: '/sign-in'
+      path: '/sign-in'
+      fullPath: '/sign-in'
+      preLoaderRoute: typeof SignInRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/scanner-demo': {
@@ -138,11 +158,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PrivacyRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/create-session': {
-      id: '/create-session'
-      path: '/create-session'
-      fullPath: '/create-session'
-      preLoaderRoute: typeof CreateSessionRouteImport
+    '/dashboard': {
+      id: '/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof DashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -157,10 +177,11 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  CreateSessionRoute: CreateSessionRoute,
+  DashboardRoute: DashboardRoute,
   PrivacyRoute: PrivacyRoute,
   ScannerDemoRoute: ScannerDemoRoute,
-  SessionRoute: SessionRoute,
+  SignInRoute: SignInRoute,
+  SignUpRoute: SignUpRoute,
   ThankyouRoute: ThankyouRoute,
 }
 export const routeTree = rootRouteImport
