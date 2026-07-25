@@ -45,6 +45,7 @@ Changes:
 - Moved every client onto live Convex subscriptions and removed the polling loops.
 - Surfaced workspace sync failures in the panel instead of showing an empty timeline.
 - Added a skeleton timeline while results load, so a signed-in account no longer looks empty on first open.
+- Fixed an account that had never captured anything reporting "Cloud sync failed" on its first sign-in.
 
 ### v1.0.53
 
