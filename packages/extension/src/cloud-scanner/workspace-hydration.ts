@@ -134,33 +134,50 @@ export async function hydrateWorkspaceReplica(
   );
   if (plan.deletedIds.length > 0) await deleteMobileScannerResults(plan.deletedIds);
   origins = removeAppliedTombstoneOrigins(origins, plan.deletedIds);
+  // One unreachable photo must not strand the results behind it, and it must
+  // not pass for success either: the failures are counted and reported once
+  // everything reachable has landed.
+  let failedCount = 0;
   for (const result of plan.available) {
-    if (result.kind === "photo") {
-      const blob = await photoBlob(result, options);
-      if (!blob) continue;
-      await saveMobileScannerPhoto({
-        id: result.id,
-        kind: "photo",
-        photoBatchId: result.batchId,
-        name: `${result.id}.jpg`,
-        mimeType: result.contentType ?? blob.type ?? "image/jpeg",
-        size: result.byteCount ?? blob.size,
-        capturedAt: result.capturedAt,
-        dataUrl: await blobToDataUrl(blob),
-      });
-    } else {
-      if (!result.value || result.format === "dictation") continue;
-      await saveMobileScannerScan({
-        id: result.id,
-        barcode: result.value,
-        format: result.format,
-        kind: result.kind,
-        scannedAt: result.capturedAt,
-      });
+    try {
+      if (result.kind === "photo") {
+        const blob = await photoBlob(result, options);
+        if (!blob) {
+          failedCount += 1;
+          continue;
+        }
+        await saveMobileScannerPhoto({
+          id: result.id,
+          kind: "photo",
+          photoBatchId: result.batchId,
+          name: `${result.id}.jpg`,
+          mimeType: result.contentType ?? blob.type ?? "image/jpeg",
+          size: result.byteCount ?? blob.size,
+          capturedAt: result.capturedAt,
+          dataUrl: await blobToDataUrl(blob),
+        });
+      } else {
+        if (!result.value || result.format === "dictation") continue;
+        await saveMobileScannerScan({
+          id: result.id,
+          barcode: result.value,
+          format: result.format,
+          kind: result.kind,
+          scannedAt: result.capturedAt,
+        });
+      }
+    } catch (_error) {
+      failedCount += 1;
+      continue;
     }
     origins[result.id] = { workspaceId: replica.workspaceId, batchId: result.batchId };
   }
   await chrome.storage.local.set({ [CLOUD_ORIGINS_KEY]: origins });
+  if (failedCount > 0) {
+    throw new Error(
+      `${failedCount} cloud result${failedCount === 1 ? "" : "s"} could not be downloaded.`,
+    );
+  }
   return plan;
 }
 

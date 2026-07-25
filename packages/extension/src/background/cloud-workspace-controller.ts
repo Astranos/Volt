@@ -1,9 +1,6 @@
 import { isTrustedExtensionPageSender, type ExtensionMessageSender } from "../access/sender-policy";
-import { chromeLocalKeyValueStorage, createWorkspaceStore } from "../cloud-scanner/workspace-store.ts";
-import { hydrateWorkspaceReplica, resetWorkspaceHydration } from "../cloud-scanner/workspace-hydration.ts";
-import { normalizeWorkspaceSnapshot } from "../cloud-scanner/workspace-snapshot.ts";
+import { createWorkspaceSync } from "../cloud-scanner/workspace-sync.ts";
 
-const ACTIVE_WORKSPACE_KEY = "volt.cloudScanner.activeWorkspace.v1";
 const ACTIVE_CLERK_SUBJECT_KEY = "volt.cloudScanner.activeClerkSubject.v1";
 const WORKSPACE_OFFSCREEN_LIVENESS_ALARM = "volt.cloudScanner.offscreenLiveness";
 
@@ -52,9 +49,13 @@ function parseMessage(value: unknown): WorkspaceMessage | null {
 }
 
 export function createCloudWorkspaceController(options: ControllerOptions) {
-  const store = createWorkspaceStore(chromeLocalKeyValueStorage(options.chromeApi));
   const log = options.log ?? ((...args: unknown[]) => console.warn("[Volt Cloud Workspace]", ...args));
-  let snapshotQueue = Promise.resolve();
+  // Shared with the sidepanel, which subscribes to Convex itself; the sync
+  // module serializes both writers so either context can apply a snapshot.
+  const sync = createWorkspaceSync({
+    chromeApi: options.chromeApi,
+    getPhotoDownload: (batchId, resultId) => getPhotoDownload(batchId, resultId),
+  });
 
   async function relayOffscreenOperation(message: unknown) {
     const response = await options.sendOffscreenMessage(message);
@@ -85,40 +86,6 @@ export function createCloudWorkspaceController(options: ControllerOptions) {
     };
   }
 
-  async function resetActiveHistory() {
-    await resetWorkspaceHydration();
-    await options.chromeApi.storage.local.remove(ACTIVE_WORKSPACE_KEY);
-    void options.chromeApi.runtime.sendMessage({ action: "workspaceReplicaChanged" }).catch(() => undefined);
-  }
-
-  async function activateWorkspace(workspaceId: string) {
-    const stored = await options.chromeApi.storage.local.get(ACTIVE_WORKSPACE_KEY);
-    const activeWorkspaceId = stored[ACTIVE_WORKSPACE_KEY];
-    if (typeof activeWorkspaceId === "string" && activeWorkspaceId !== workspaceId) {
-      await resetActiveHistory();
-    }
-    await options.chromeApi.storage.local.set({ [ACTIVE_WORKSPACE_KEY]: workspaceId });
-  }
-
-  async function applySnapshotNow(payload: unknown) {
-    const page = normalizeWorkspaceSnapshot(payload);
-    if (!page) throw new Error("Workspace snapshot was invalid.");
-    await activateWorkspace(page.workspaceId);
-    const replica = await store.mergePage(page);
-    await hydrateWorkspaceReplica(replica, { getPhotoDownload }).catch(() => undefined);
-    void options.chromeApi.runtime.sendMessage({
-      action: "workspaceReplicaChanged",
-      workspaceId: replica.workspaceId,
-    }).catch(() => undefined);
-    return replica;
-  }
-
-  function applySnapshot(payload: unknown) {
-    const operation = snapshotQueue.then(() => applySnapshotNow(payload));
-    snapshotQueue = operation.then(() => undefined, () => undefined);
-    return operation;
-  }
-
   async function reconcileWorkspace() {
     const response = await options.sendOffscreenMessage({
       action: "workspaceOffscreenReconcile",
@@ -132,26 +99,22 @@ export function createCloudWorkspaceController(options: ControllerOptions) {
       );
     }
     if (record.snapshot === undefined || record.snapshot === null) return null;
-    return applySnapshot(record.snapshot);
-  }
-
-  async function handleAccountChangedNow(subject: string | null) {
-    const stored = await options.chromeApi.storage.local.get(ACTIVE_CLERK_SUBJECT_KEY);
-    const previousSubject = stored[ACTIVE_CLERK_SUBJECT_KEY];
-    const didChange = typeof previousSubject === "string" && previousSubject !== subject;
-    const didSignOut = subject === null && typeof previousSubject === "string";
-    if (didChange || didSignOut) await resetActiveHistory();
-    if (subject === null) {
-      await options.chromeApi.storage.local.remove(ACTIVE_CLERK_SUBJECT_KEY);
-      return;
-    }
-    await options.chromeApi.storage.local.set({ [ACTIVE_CLERK_SUBJECT_KEY]: subject });
+    return sync.applySnapshot(record.snapshot);
   }
 
   function handleAccountChanged(subject: string | null) {
-    const operation = snapshotQueue.then(() => handleAccountChangedNow(subject));
-    snapshotQueue = operation.then(() => undefined, () => undefined);
-    return operation;
+    return sync.runExclusive(async ({ resetActiveHistory }) => {
+      const stored = await options.chromeApi.storage.local.get(ACTIVE_CLERK_SUBJECT_KEY);
+      const previousSubject = stored[ACTIVE_CLERK_SUBJECT_KEY];
+      const didChange = typeof previousSubject === "string" && previousSubject !== subject;
+      const didSignOut = subject === null && typeof previousSubject === "string";
+      if (didChange || didSignOut) await resetActiveHistory();
+      if (subject === null) {
+        await options.chromeApi.storage.local.remove(ACTIVE_CLERK_SUBJECT_KEY);
+        return;
+      }
+      await options.chromeApi.storage.local.set({ [ACTIVE_CLERK_SUBJECT_KEY]: subject });
+    });
   }
 
   async function getPhotoDownload(batchId: string, resultId: string) {
@@ -208,7 +171,7 @@ export function createCloudWorkspaceController(options: ControllerOptions) {
         return true;
       }
       const operation = rawRecord.action === "workspaceOffscreenSnapshotChanged"
-        ? applySnapshot(rawRecord.snapshot)
+        ? sync.applySnapshot(rawRecord.snapshot)
         : rawRecord.action === "workspaceOffscreenCursorDeliveriesChanged"
           ? options.handleCursorDeliveries(rawRecord.deliveries)
           : handleAccountChanged(typeof rawRecord.subject === "string" ? rawRecord.subject : null);

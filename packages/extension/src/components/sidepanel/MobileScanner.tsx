@@ -7,6 +7,7 @@ import {
   type MobileScannerScanResult,
 } from "../../domain/mobile-scanner-results";
 import { showSidepanelToast, type SidepanelToastTone } from "../../lib/sidepanel-toast";
+import { useCloudWorkspaceSnapshot } from "../../hooks/useCloudWorkspaceSnapshot";
 import { useMobileScannerHistory } from "../../hooks/useMobileScannerHistory";
 import { useMobileScannerPhotoActions } from "../../hooks/useMobileScannerPhotoActions";
 import { ScrollArea } from "../ui/scroll-area";
@@ -48,6 +49,7 @@ interface MobileScannerProps {
 export default function MobileScanner({ onClose: _onClose }: MobileScannerProps) {
   const [previewPhoto, setPreviewPhoto] = useState<MobilePhoto | null>(null);
   const isSignedIn = useSidepanelSignedIn();
+  const cloudWorkspace = useCloudWorkspaceSnapshot();
   const [now, setNow] = useState(Date.now());
   const lastCloudDeletedIds = useRef<string[]>([]);
 
@@ -160,6 +162,13 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
     void primeCursorTarget();
   }, [primeCursorTarget, refreshResults]);
 
+  // The panel's own Convex subscription merges into the same local history the
+  // service worker writes, so a snapshot it applied is read back the same way.
+  useEffect(() => {
+    if (cloudWorkspace.version === 0) return;
+    void refreshResults();
+  }, [cloudWorkspace.version, refreshResults]);
+
   useEffect(() => {
     const prepareActiveTab = () => {
       void primeCursorTarget();
@@ -238,6 +247,15 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
           </button>
         </div>
       </div>
+
+      {cloudWorkspace.error ? (
+        <div
+          className="mx-3 mb-2 flex-none rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-800 dark:text-amber-200"
+          aria-live="polite"
+        >
+          Cloud sync failed: {cloudWorkspace.error}
+        </div>
+      ) : null}
 
       <ScrollArea className="min-h-0 min-w-0 flex-1 px-3 pb-3 [&>div]:!overflow-x-hidden">
         <div className="min-w-0 space-y-3">

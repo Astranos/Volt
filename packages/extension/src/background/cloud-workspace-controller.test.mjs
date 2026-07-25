@@ -99,6 +99,74 @@ test("workspace sync is reactive without sidepanel reconciliation chatter", () =
   assert.doesNotMatch(extensionAccess, /workspaceReconcile/);
 });
 
+test("the sidepanel owns a Convex subscription that cannot be stranded by the offscreen document", () => {
+  const workspaceSync = readFileSync(
+    new URL("../cloud-scanner/workspace-sync.ts", import.meta.url),
+    "utf8",
+  );
+  const snapshotHook = readFileSync(
+    new URL("../hooks/useCloudWorkspaceSnapshot.ts", import.meta.url),
+    "utf8",
+  );
+
+  // Both the panel and the service worker apply snapshots now, and applying one
+  // is a read-modify-write over chrome.storage. Web Locks are what keeps the
+  // two from dropping each other's results.
+  assert.match(workspaceSync, /navigator\.locks\.request\(WORKSPACE_SYNC_LOCK/);
+  assert.match(workspaceSync, /const WORKSPACE_SYNC_LOCK = "volt\.cloudScanner\.workspaceSync"/);
+  // One definition of the pipeline: the controller must not keep a private copy.
+  assert.match(controller, /createWorkspaceSync/);
+  assert.doesNotMatch(controller, /mergePage|hydrateWorkspaceReplica|normalizeWorkspaceSnapshot/);
+  // The panel talks to Convex directly — no relay through the service worker or
+  // the offscreen document, which is exactly what used to leave it empty.
+  assert.match(snapshotHook, /useConvex\(\)/);
+  assert.match(snapshotHook, /api\.cloudWorkspace\.workspaceSnapshot/);
+  assert.match(snapshotHook, /api\.cloudWorkspace\.createPhotoDownloadUrl/);
+  assert.doesNotMatch(snapshotHook, /chrome\.runtime\.sendMessage/);
+  assert.match(sidepanelEntry, /ConvexProviderWithClerk/);
+  assert.match(sidepanelEntry, /useAuth=\{useAuth\}/);
+  // The offscreen subscription stays: it is the panel-closed path.
+  assert.match(offscreen, /api\.cloudWorkspace\.workspaceSnapshot/);
+  // A failed sync says so instead of showing an empty timeline.
+  assert.match(mobileScanner, /useCloudWorkspaceSnapshot\(\)/);
+  assert.match(mobileScanner, /cloudWorkspace\.error/);
+});
+
+test("panel-side cloud sync survives unmounts, sign-out and a refused handshake", () => {
+  const workspaceSync = readFileSync(
+    new URL("../cloud-scanner/workspace-sync.ts", import.meta.url),
+    "utf8",
+  );
+  const hydration = readFileSync(
+    new URL("../cloud-scanner/workspace-hydration.ts", import.meta.url),
+    "utf8",
+  );
+  const snapshotHook = readFileSync(
+    new URL("../hooks/useCloudWorkspaceSnapshot.ts", import.meta.url),
+    "utf8",
+  );
+
+  // MobileScanner unmounts on every tool switch, and this document never
+  // receives its own runtime.sendMessage broadcast, so apply results have to
+  // live outside component state or a remount waits forever.
+  assert.match(snapshotHook, /useSyncExternalStore\(subscribeToApplyState, readApplyState\)/);
+  // Signing out drops the previous account's cloud rows even with no offscreen
+  // document to send workspaceOffscreenAccountChanged.
+  assert.match(snapshotHook, /clerkSignedIn === false\) clearAppliedWorkspace\(\)/);
+  assert.match(snapshotHook, /resetActiveHistory\(\)/);
+  // A Clerk session Convex refuses is named instead of leaving a silent empty
+  // timeline behind a skipped query.
+  assert.match(snapshotHook, /handshakeStalled/);
+  // Every branch of the entry gives useConvexAuth a provider to read.
+  assert.doesNotMatch(sidepanelEntry, /<ConvexProvider[\s>]/);
+  assert.match(sidepanelEntry, /ConvexProviderWithAuth client=\{convexClient\} useAuth=\{useNoAuth\}/);
+  // Hydration failures reach the panel instead of being swallowed, and one bad
+  // photo does not strand the results behind it.
+  assert.doesNotMatch(workspaceSync, /hydrateWorkspaceReplica\([^)]*\)[\s\S]{0,80}catch\(\(\) => undefined\)/);
+  assert.match(workspaceSync, /if \(hydrationError\) throw hydrationError/);
+  assert.match(hydration, /could not be downloaded/);
+});
+
 test("editable tracking is a document-idle all-frame content script", () => {
   assert.match(editableTracker, /installEditableTracker\(\)/);
   assert.match(editableTracker, /runAt: "document_idle"/);
