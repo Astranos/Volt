@@ -960,6 +960,50 @@ button.sidepanel-account-control {
   animation: volt-fade-in 200ms ease-out both;
 }
 
+/* A light sweeps across the placeholder rather than the whole block pulsing,
+   which reads as "arriving" instead of "broken". The tint matches the card
+   surfaces so the bones look carved out of a card, not laid on top of one. */
+@keyframes volt-skeleton-sweep {
+  from {
+    background-position: -150% 0;
+  }
+  to {
+    background-position: 250% 0;
+  }
+}
+
+.volt-skeleton {
+  border-radius: 6px;
+  background-color: rgba(255, 255, 255, 0.07);
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.12) 50%,
+    transparent 100%
+  );
+  background-repeat: no-repeat;
+  background-size: 200% 100%;
+  animation: volt-skeleton-sweep 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@media (prefers-color-scheme: light) {
+  .volt-skeleton {
+    background-color: rgba(15, 23, 42, 0.07);
+    background-image: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(15, 23, 42, 0.055) 50%,
+      transparent 100%
+    );
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .volt-skeleton {
+    animation: none;
+  }
+}
+
 @keyframes volt-toast-in {
   0% {
     opacity: 0;

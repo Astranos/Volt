@@ -162,6 +162,12 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
     void primeCursorTarget();
   }, [primeCursorTarget, refreshResults]);
 
+  // The local store loads in milliseconds; the first cloud snapshot does not.
+  // Showing an empty timeline in that gap tells a signed-in user their captures
+  // are missing when they are still on the way.
+  const awaitingCloudResults =
+    isSignedIn === true && cloudWorkspace.status === "loading" && groups.length === 0;
+
   // The panel's own Convex subscription merges into the same local history the
   // service worker writes, so a snapshot it applied is read back the same way.
   useEffect(() => {
@@ -259,7 +265,7 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
 
       <ScrollArea className="min-h-0 min-w-0 flex-1 px-3 pb-3 [&>div]:!overflow-x-hidden">
         <div className="min-w-0 space-y-3">
-          {loadingResults ? (
+          {loadingResults || awaitingCloudResults ? (
             <LoadingHistory />
           ) : groups.length === 0 ? (
             <EmptyHistory signedOut={isSignedIn === false} />

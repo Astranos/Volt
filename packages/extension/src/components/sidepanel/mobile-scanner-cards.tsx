@@ -7,7 +7,6 @@ import {
   Eye,
   FolderOpen,
   ImagePlus,
-  Loader2,
   LogIn,
   Scan,
   ScanLine,
@@ -25,11 +24,74 @@ import {
   type TimelineGroup,
 } from "../../domain/mobile-scanner-timeline";
 
-export function LoadingHistory() {
+function Bone({ className }: { className?: string }) {
+  return <div className={cn("volt-skeleton", className)} />;
+}
+
+function SkeletonScanCard({ valueWidth }: { valueWidth: string }) {
   return (
-    <div className="mobile-scanner-card flex items-center justify-center gap-2 px-4 py-8 text-xs font-semibold text-stone-500 dark:text-stone-400">
-      <Loader2 className="h-4 w-4 animate-spin" />
-      Loading results
+    <div className="mobile-scanner-card min-w-0 overflow-hidden px-3 py-3">
+      <div className="mb-2 flex min-w-0 items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <Bone className="h-7 w-7 shrink-0 rounded-full" />
+          <div className="min-w-0 space-y-1.5">
+            <Bone className="h-3 w-24" />
+            <Bone className="h-2 w-14" />
+          </div>
+        </div>
+        <Bone className="h-7 w-7 shrink-0 rounded-full" />
+      </div>
+      <div className="mobile-scanner-inset rounded-lg px-3 py-2">
+        <Bone className="h-3 w-full" />
+        <Bone className={cn("mt-1.5 h-3", valueWidth)} />
+        <Bone className="mt-2.5 h-7 w-16 rounded-full" />
+      </div>
+    </div>
+  );
+}
+
+function SkeletonPhotoCard() {
+  return (
+    <div className="mobile-scanner-card min-w-0 overflow-hidden px-3 py-3">
+      <div className="mb-2 flex min-w-0 items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <Bone className="h-7 w-7 shrink-0 rounded-full" />
+          <div className="min-w-0 space-y-1.5">
+            <Bone className="h-3 w-20" />
+            <Bone className="h-2 w-16" />
+          </div>
+        </div>
+        <Bone className="h-7 w-7 shrink-0 rounded-full" />
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        {[0, 1, 2, 3].map((cell) => (
+          <Bone key={cell} className="aspect-square w-full rounded-xl" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Shaped like the cards it stands in for — a capture, a photo batch, a capture
+// — so arriving results settle into the same rhythm instead of reflowing the
+// list. The stagger is the same one real items enter with.
+export function LoadingHistory() {
+  const cards = [
+    <SkeletonScanCard key="scan-first" valueWidth="w-4/5" />,
+    <SkeletonPhotoCard key="photos" />,
+    <SkeletonScanCard key="scan-second" valueWidth="w-1/2" />,
+  ];
+  return (
+    <div role="status" aria-label="Loading results" className="space-y-3">
+      {cards.map((card, index) => (
+        <div
+          key={card.key}
+          className="volt-item-enter"
+          style={{ animationDelay: `${index * 70}ms` }}
+        >
+          {card}
+        </div>
+      ))}
     </div>
   );
 }
