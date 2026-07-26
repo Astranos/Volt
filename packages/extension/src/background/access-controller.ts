@@ -43,6 +43,7 @@ type AccessMessage =
   | { action: "accessGetStatus" }
   | { action: "accessAuthChanged" }
   | { action: "accessOpenFullApp" }
+  | { action: "accessCreateAppClipGrant"; label?: string }
   | {
       action: "accessCreateJoinWindow";
       sessionId: string;
@@ -95,6 +96,11 @@ function parseAccessMessage(value: unknown): AccessMessage | null {
     case "accessAuthChanged":
     case "accessOpenFullApp":
       return { action: record.action };
+    case "accessCreateAppClipGrant":
+      return {
+        action: record.action,
+        label: nonEmptyString(record.label) ?? undefined,
+      };
     case "accessCreateJoinWindow": {
       const sessionId = nonEmptyString(record.sessionId);
       const ttlMs = finiteNumber(record.ttlMs);
@@ -381,6 +387,33 @@ export function createAccessController({
     };
   }
 
+  async function createAppClipGrant(
+    message: Extract<AccessMessage, { action: "accessCreateAppClipGrant" }>,
+  ): Promise<AccessRequestResult<Record<string, unknown>>> {
+    const { payload, response } = await requestJson(
+      accessUrl("/api/app-clip/grants/create"),
+      {
+        method: "POST",
+        body: { ...(message.label ? { label: message.label } : {}) },
+        includeAnonymous: false,
+      },
+    );
+    const record = objectFrom(payload);
+    const qrCodeUrl = nonEmptyString(record?.qrCodeUrl);
+    const expiresAt = finiteNumber(record?.expiresAt);
+    if (!response.ok || !record) {
+      return failedResult(
+        payload,
+        response,
+        `Failed to create App Clip QR (${response.status})`,
+      );
+    }
+    if (!qrCodeUrl || expiresAt === null) {
+      return { success: false, error: "App Clip grant response omitted required fields" };
+    }
+    return { success: true, value: { qrCodeUrl, expiresAt } };
+  }
+
   async function scheduleHardStop(session: StoredUsageSession) {
     if (!session.maxEndsAt) return;
     await chromeApi.alarms.create(ACCESS_HARD_STOP_ALARM, {
@@ -498,7 +531,8 @@ export function createAccessController({
     if (
       message.action === "accessGetStatus" ||
       message.action === "accessAuthChanged" ||
-      message.action === "accessOpenFullApp"
+      message.action === "accessOpenFullApp" ||
+      message.action === "accessCreateAppClipGrant"
     ) {
       return isTrustedExtensionPageSender(
         sender,
@@ -535,6 +569,8 @@ export function createAccessController({
         case "accessOpenFullApp":
           await chromeApi.tabs.create({ url: VOLT_FULL_APP_URL, active: true });
           return { success: true };
+        case "accessCreateAppClipGrant":
+          return createAppClipGrant(message);
         case "accessCreateJoinWindow":
           return createJoinWindow(message);
         case "accessSessionReady":

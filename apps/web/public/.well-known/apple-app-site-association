@@ -4,12 +4,21 @@
     "details": [
       {
         "appIDs": [
-          "GB5SPLUARQ.com.volt.mobile",
-          "GB5SPLUARQ.com.volt.mobile.Clip"
+          "GB5SPLUARQ.com.volt.mobile"
         ],
         "components": [
           {
             "/": "/*"
+          }
+        ]
+      },
+      {
+        "appIDs": [
+          "GB5SPLUARQ.com.volt.mobile.Clip"
+        ],
+        "components": [
+          {
+            "/": "/clip*"
           }
         ]
       }

@@ -142,7 +142,7 @@ Current built-in providers include Google, Volt Search, Amazon, Best Buy, eBay s
 
 The full mobile app is cloud-first: every accepted capture belongs to the signed-in Clerk user's Cloud Scanner Workspace and syncs through Convex (metadata) and Cloudflare R2 (photo bytes), with no pairing, WebRTC connection, or Chrome-generated QR required. A signed-in Chrome installation registers as an Enrolled Computer and subscribes to the reactive Convex `workspaceSnapshot` query for Scanner Results. When the phone selects this computer as its live cursor target, the extension also subscribes to `pendingCursorDeliveries` and inserts each result into the last-focused editable field, then acknowledges it back to Convex. The `ConvexClient` lives in the offscreen document and drives both subscriptions whenever the user is signed in.
 
-The App Clip remains a temporary, QR-triggered WebRTC session to one selected Chrome computer. It mirrors its session results into the owning workspace through a short-lived guest cloud grant, but never holds an account Device Credential or Clerk session.
+The App Clip is a free, temporary, cloud-only client for the signed-in Chrome account's workspace. The new-tab phone button creates a short-lived workspace grant QR that opens `/clip`; the App Clip can then choose among the workspace's online computers for text and barcode insertion without WebRTC, an account Device Credential, or a Clerk session.
 
 Relevant implementation:
 

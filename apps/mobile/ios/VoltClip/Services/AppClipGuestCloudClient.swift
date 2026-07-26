@@ -8,8 +8,10 @@ struct AppClipGuestCloudSession: Sendable, Equatable {
     init?(pairingSession: PairingSession) {
         guard let grant = pairingSession.guestCloudGrant?.trimmingCharacters(in: .whitespacesAndNewlines),
               !grant.isEmpty,
-              let signalURL = pairingSession.signalURL ?? pairingSession.sourceURL.signalBaseURL,
-              var components = URLComponents(url: signalURL, resolvingAgainstBaseURL: false)
+              let cloudURL = pairingSession.cloudURL
+                ?? pairingSession.signalURL
+                ?? pairingSession.sourceURL.signalBaseURL,
+              var components = URLComponents(url: cloudURL, resolvingAgainstBaseURL: false)
         else { return nil }
 
         components.path = "/"
@@ -26,9 +28,21 @@ struct AppClipGuestCloudSession: Sendable, Equatable {
     }
 }
 
+struct AppClipWorkspaceComputer: Codable, Identifiable, Sendable, Equatable {
+    let deviceId: String
+    let label: String
+    let capabilities: [String]
+    let online: Bool
+
+    var id: String { deviceId }
+    var supportsCursorInsertion: Bool { capabilities.contains("cursor-insertion") }
+}
+
 struct AppClipGuestCloudClient: Sendable {
     private enum Endpoint: String {
         case putBatch = "api/app-clip/outbox/sync"
+        case listComputers = "api/app-clip/computers/list"
+        case queueCursorDelivery = "api/app-clip/deliveries/queue"
         case createPhotoUploadURL = "api/app-clip/photos/upload-url"
         case finalizeBatch = "api/app-clip/batches/finalize"
     }
@@ -44,12 +58,15 @@ struct AppClipGuestCloudClient: Sendable {
         kind: String,
         value: String,
         format: String,
-        capturedAt: Date
+        capturedAt: Date,
+        resultId: String? = nil,
+        targetDeviceId: String? = nil
     ) async throws {
         try requireActive(session)
         let batchId = "appclip-batch-\(UUID().uuidString.lowercased())"
+        let resolvedResultId = resultId ?? "appclip-result-\(UUID().uuidString.lowercased())"
         let result = GuestCloudResult(
-            resultId: "appclip-result-\(UUID().uuidString.lowercased())",
+            resultId: resolvedResultId,
             kind: kind,
             text: value,
             format: format,
@@ -73,6 +90,32 @@ struct AppClipGuestCloudClient: Sendable {
             to: .finalizeBatch,
             baseURL: session.baseURL
         )
+        if let targetDeviceId, (kind == "text" || kind == "barcode") {
+            let _: GuestCloudCursorDeliveryResponse = try await post(
+                GuestCloudCursorDeliveryRequest(
+                    guestCloudGrant: session.grant,
+                    deliveryId: "appclip-delivery-\(UUID().uuidString.lowercased())",
+                    resultId: resolvedResultId,
+                    targetDeviceId: targetDeviceId,
+                    kind: kind,
+                    text: value,
+                    format: format,
+                    clientCreatedAt: capturedAt.millisecondsSince1970
+                ),
+                to: .queueCursorDelivery,
+                baseURL: session.baseURL
+            )
+        }
+    }
+
+    func listComputers(session: AppClipGuestCloudSession) async throws -> [AppClipWorkspaceComputer] {
+        try requireActive(session)
+        let response: GuestCloudComputerListResponse = try await post(
+            GuestCloudGrantRequest(guestCloudGrant: session.grant),
+            to: .listComputers,
+            baseURL: session.baseURL
+        )
+        return response.computers
     }
 
     func mirrorPhoto(
@@ -165,6 +208,31 @@ private struct GuestCloudBatchRequest: Codable, Sendable {
     let batchId: String
     let clientCreatedAt: Double
     let results: [GuestCloudResult]
+}
+
+private struct GuestCloudGrantRequest: Codable, Sendable {
+    let guestCloudGrant: String
+}
+
+private struct GuestCloudComputerListResponse: Codable, Sendable {
+    let computers: [AppClipWorkspaceComputer]
+}
+
+private struct GuestCloudCursorDeliveryRequest: Codable, Sendable {
+    let guestCloudGrant: String
+    let deliveryId: String
+    let resultId: String
+    let targetDeviceId: String
+    let kind: String
+    let text: String
+    let format: String
+    let clientCreatedAt: Double
+}
+
+private struct GuestCloudCursorDeliveryResponse: Codable, Sendable {
+    let deliveryId: String
+    let idempotent: Bool
+    let state: String
 }
 
 private struct GuestCloudResult: Codable, Sendable {

@@ -154,6 +154,27 @@ body {
   color: #16a34a;
 }
 
+.popup-retry {
+  align-items: center;
+  background: #16a34a;
+  border: 0;
+  border-radius: 10px;
+  color: white;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 750;
+  gap: 6px;
+  padding: 9px 13px;
+}
+
+.popup-retry svg {
+  color: currentColor;
+  height: 14px;
+  width: 14px;
+}
+
 @media (prefers-color-scheme: dark) {
   body {
     background: #12110f;

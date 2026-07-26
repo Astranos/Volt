@@ -1,32 +1,35 @@
 import Foundation
 import Observation
-import SwiftUI
 import UIKit
-import WebKit
 
 @MainActor
 @Observable
 final class ClipScannerStore {
+    static let sessionPhotoStripLimit = 3
+
     enum ClipTab: String, CaseIterable, Identifiable {
-        case capture
+        case text
+        case barcode
+        case photos
         case upload
-        case dictate
 
         var id: String { rawValue }
 
         var title: String {
             switch self {
-            case .capture: "Capture"
+            case .text: "Text"
+            case .barcode: "Barcode"
+            case .photos: "Photos"
             case .upload: "Upload"
-            case .dictate: "Dictate"
             }
         }
 
         var systemImage: String {
             switch self {
-            case .capture: "camera.viewfinder"
+            case .text: "doc.text.viewfinder"
+            case .barcode: "barcode.viewfinder"
+            case .photos: "camera.viewfinder"
             case .upload: "square.and.arrow.up"
-            case .dictate: "mic"
             }
         }
     }
@@ -54,258 +57,187 @@ final class ClipScannerStore {
         var status: String
     }
 
-    private struct ClipPairingCredential {
-        let pairingId: String
-        let pairingSecret: String
-        let browserSessionId: String
-        let displayName: String
-        let signalURL: URL?
-    }
-
-    private struct StoredClipPairingCredential: Codable {
-        let pairingId: String
-        let browserSessionId: String
-        let displayName: String
-        let signalURL: URL?
-    }
-
-    private static let lastPairingCredentialStorageKey = "volt.clip.lastPairingCredential.v1"
-
-    var selectedTab: ClipTab = .capture
+    var selectedTab: ClipTab = .text
     var activeCaptureMode: CaptureMode = .ocr
     var pairingURLText = ""
-    var statusText = "Open Volt in Chrome and scan the pairing code."
+    var statusText = "Scan the workspace QR from Volt in Chrome."
     var targetHint = "Not connected"
     var pairingLabel: String?
     var pairingFailureMessage: String?
-    var requiresFullApp = false
-    var transcript = ""
     var isPairing = false
     var isConnected = false
-    var isDictating = false
     var isRecognizingText = false
     var photos: [ClipPhoto] = []
     var captures: [ClipCapture] = []
+    var workspaceComputers: [AppClipWorkspaceComputer] = []
+    var selectedWorkspaceComputerId: String?
+    var isLoadingWorkspaceComputers = false
+    var workspaceComputerError: String?
     var photoUploadProgress: PhotoUploadProgress?
     var ocrReviewImage: UIImage?
     var ocrTextRegions: [RecognizedTextRegion] = []
     var ocrReviewText = ""
     var errorMessage: String?
 
-    private let contributorId = ScannerProtocol.makeContributorId()
     @ObservationIgnored private let ocrService = ClipOCRService()
-    @ObservationIgnored private let signaling = ScannerSignalingClient()
-    @ObservationIgnored private let transport = WebKitWebRTCTransport()
     @ObservationIgnored private let guestCloudClient = AppClipGuestCloudClient()
     @ObservationIgnored private let pairingImpactFeedback = UIImpactFeedbackGenerator(style: .medium)
     @ObservationIgnored private let pairingNotificationFeedback = UINotificationFeedbackGenerator()
-    @ObservationIgnored private let dictationImpactFeedback = UIImpactFeedbackGenerator(style: .light)
-    @ObservationIgnored private let dictationNotificationFeedback = UINotificationFeedbackGenerator()
     @ObservationIgnored private let captureSuccessFeedback = UINotificationFeedbackGenerator()
     @ObservationIgnored private let captureFailureFeedback = UINotificationFeedbackGenerator()
     @ObservationIgnored private let captureFailureImpactFeedback = UIImpactFeedbackGenerator(style: .heavy)
     private var pairingSession: PairingSession?
-    private var reconnectTask: Task<Void, Never>?
-    private var suppressNextReconnect = false
-    private var lastPairingCredential: ClipPairingCredential?
-    private var activeConnectionAttemptLabel: String?
-    private var dictationTargetKey: String?
-    private var activeCaptureBatchId: String?
     private var guestCloudSession: AppClipGuestCloudSession?
-    private var lastMirroredDictationText: String?
+    private var activeConnectionAttemptLabel: String?
+    private var activeCaptureBatchId: String?
 
-    var bridgeWebView: WKWebView {
-        transport.embeddedWebView
-    }
-
-    func updateAppIsInBackground(_ isInBackground: Bool) {
-        transport.setAppIsInBackground(isInBackground)
-    }
-
-    var canRetryPairing: Bool {
-        pairingSession != nil && !isPairing && !isConnected
-    }
-
-    var canRetryConnection: Bool {
-        canReconnectToLastSession || canRetryPairing
-    }
-
-    var canReconnectToLastSession: Bool {
-        lastPairingCredential != nil && !isPairing && !isConnected
-    }
-
-    var lastSessionDisplayName: String? {
-        lastPairingCredential?.displayName
-    }
+    var canRetryPairing: Bool { pairingSession != nil && !isPairing && !isConnected }
+    var canRetryConnection: Bool { canRetryPairing }
+    var canReconnectToLastSession: Bool { false }
+    var lastSessionDisplayName: String? { nil }
 
     var connectionAttemptDisplayName: String {
-        activeConnectionAttemptLabel ?? pairingLabel ?? lastPairingCredential?.displayName ?? "Chrome"
+        activeConnectionAttemptLabel ?? pairingLabel ?? "Volt workspace"
     }
 
-    init() {
-        loadLastPairingCredential()
-
-        transport.onStatus = { [weak self] status in
-            guard let self else { return }
-            if self.isPairing, status == "Connection closed" {
-                return
-            }
-            self.statusText = status
-        }
-        transport.onConnected = { [weak self] sessionReady in
-            guard let self else { return }
-            let wasConnected = self.isConnected
-            let nextTargetKey = self.dictationTargetKey(for: sessionReady)
-            let didChangeChromeInputTarget = wasConnected
-                && self.dictationTargetKey != nil
-                && self.dictationTargetKey != nextTargetKey
-            self.savePairingCredential(from: sessionReady)
-            self.dictationTargetKey = nextTargetKey
-            self.isConnected = true
-            self.isPairing = false
-            self.pairingFailureMessage = nil
-            self.requiresFullApp = false
-            self.targetHint = sessionReady.cursorTarget?.label ?? "Ready for Chrome"
-            self.statusText = "Connected to \(self.pairingLabel ?? "Chrome")"
-            self.activeConnectionAttemptLabel = nil
-            if !wasConnected || (didChangeChromeInputTarget && self.selectedTab == .dictate) {
-                self.pairingNotificationFeedback.notificationOccurred(.success)
-            }
-            self.sendSavedItemsAfterConnect()
-        }
-        transport.onTranscript = { [weak self] text, final in
-            self?.transcript = text
-            if final {
-                self?.statusText = "Dictation recognized"
-                self?.mirrorFinalDictationToCloud(text)
-            }
-        }
-        transport.onClosed = { [weak self] in
-            self?.handleTransportClosed()
-        }
-        transport.onProtocolError = { [weak self] protocolError in
-            self?.handleProtocolError(protocolError)
-        }
-        transport.onError = { [weak self] message in
-            guard let self else { return }
-            guard !self.requiresFullApp else { return }
-            let wasConnected = self.isConnected
-            self.isPairing = false
-            self.isDictating = false
-            self.errorMessage = message
-            if wasConnected {
-                self.scheduleReconnectIfPossible(reason: "Connection interrupted")
-            } else {
-                self.pairingFailureMessage = message
-                self.pairingNotificationFeedback.notificationOccurred(.error)
-                self.statusText = "Connection failed"
-            }
-        }
+    var availableWorkspaceComputers: [AppClipWorkspaceComputer] {
+        workspaceComputers
+            .filter { $0.online && $0.supportsCursorInsertion }
+            .sorted { $0.label.localizedCaseInsensitiveCompare($1.label) == .orderedAscending }
     }
+
+    var unavailableWorkspaceComputers: [AppClipWorkspaceComputer] {
+        workspaceComputers
+            .filter { !$0.online && $0.supportsCursorInsertion }
+            .sorted { $0.label.localizedCaseInsensitiveCompare($1.label) == .orderedAscending }
+    }
+
+    var selectedWorkspaceComputer: AppClipWorkspaceComputer? {
+        guard let selectedWorkspaceComputerId else { return nil }
+        return availableWorkspaceComputers.first { $0.deviceId == selectedWorkspaceComputerId }
+    }
+
+    var typingTargetLabel: String {
+        selectedWorkspaceComputer?.label ?? "Choose a computer"
+    }
+
+    var canChooseWorkspaceComputer: Bool { isConnected }
 
     func handleIncomingURL(_ url: URL) {
         let (session, mode) = PairingURLParser.parse(url)
-        if let mode {
-            selectMode(mode)
-        }
+        if let mode { selectMode(mode) }
         guard let session else { return }
-        pairingSession = session
-        guestCloudSession = AppClipGuestCloudSession(pairingSession: session)
-        pairingURLText = url.absoluteString
-        pairingLabel = session.label
-        activeConnectionAttemptLabel = displayName(for: session)
-        pairingFailureMessage = nil
-        requiresFullApp = false
+        preparePairing(session: session, url: url)
         Task { await pair(session) }
     }
 
     func pairFromText() {
         guard let url = PairingURLParser.pairingURL(in: pairingURLText) ?? URL(string: pairingURLText) else {
-            errorMessage = "Paste a Volt pairing URL from Chrome."
+            errorMessage = "Paste a Volt workspace URL from Chrome."
             return
         }
         handleIncomingURL(url)
     }
 
-    func pairFromScannedValue(_ value: String) -> Bool {
-        guard !isPairing, !isConnected else { return true }
-        return handlePairingValue(value, invalidMessage: "That QR is not a Volt pairing QR.")
-    }
-
     func pair(_ session: PairingSession? = nil) async {
         let nextSession = session ?? pairingSession
-        guard let nextSession else {
-            errorMessage = "Open a pairing link first."
-            pairingFailureMessage = "Open a Volt App Clip link or scan the Chrome pairing QR."
+        guard let nextSession,
+              let cloudSession = AppClipGuestCloudSession(pairingSession: nextSession)
+        else {
+            pairingFailureMessage = "This QR does not contain a valid workspace grant."
+            errorMessage = pairingFailureMessage
             return
         }
 
-        reconnectTask?.cancel()
-        reconnectTask = nil
-        suppressNextReconnect = false
         isPairing = true
+        isConnected = false
         errorMessage = nil
         pairingFailureMessage = nil
-        requiresFullApp = false
-        activeConnectionAttemptLabel = activeConnectionAttemptLabel ?? displayName(for: nextSession)
-        statusText = "Pairing with Chrome"
-        pairingImpactFeedback.impactOccurred(intensity: 0.85)
+        statusText = "Connecting to workspace"
+        pairingImpactFeedback.impactOccurred(intensity: 0.8)
         do {
-            try await transport.pair(with: nextSession, contributorId: contributorId)
+            let computers = try await guestCloudClient.listComputers(session: cloudSession)
+            guestCloudSession = cloudSession
+            workspaceComputers = computers
+            selectInitialComputer()
+            isPairing = false
+            isConnected = true
+            activeConnectionAttemptLabel = nil
+            statusText = "Connected to workspace"
+            targetHint = typingTargetLabel
+            pairingNotificationFeedback.notificationOccurred(.success)
+            sendSavedItemsAfterConnect()
         } catch {
             isPairing = false
-            requiresFullApp = Self.isAccessExhausted(error)
-            errorMessage = error.localizedDescription
-            pairingFailureMessage = error.localizedDescription
-            statusText = "Pairing failed"
+            guestCloudSession = nil
+            let message = "Could not open this workspace. Create a new QR in Chrome and try again."
+            pairingFailureMessage = message
+            errorMessage = message
+            statusText = "Connection failed"
+            targetHint = "Scan a fresh Volt QR code"
             pairingNotificationFeedback.notificationOccurred(.error)
         }
     }
 
     func retryPairing() {
-        guard pairingSession != nil, !isPairing, !isConnected else { return }
+        guard canRetryPairing else { return }
         Task { await pair() }
     }
 
     func retryFailedConnection() {
-        if canReconnectToLastSession {
-            reconnectToLastSession()
-        } else {
-            retryPairing()
-        }
+        retryPairing()
     }
 
     func reconnectToLastSession() {
-        guard !isPairing, !isConnected, let credential = lastPairingCredential else { return }
-        scheduleReconnectIfPossible(reason: "Reconnect requested", using: credential)
+        retryPairing()
     }
 
-    func startDictation() {
-        guard isConnected else {
-            errorMessage = "Connect to Chrome first."
-            statusText = "Connect to Chrome first"
+    func cancelConnectionAttempt() {
+        guard isPairing else { return }
+        isPairing = false
+        statusText = "Connection canceled"
+        targetHint = "Scan a workspace QR"
+    }
+
+    func refreshWorkspaceComputers() async {
+        guard let guestCloudSession, !guestCloudSession.isExpired else {
+            workspaceComputers = []
+            selectedWorkspaceComputerId = nil
+            workspaceComputerError = nil
             return
         }
-        errorMessage = nil
-        statusText = "Starting dictation"
-        isDictating = true
-        transcript = ""
-        lastMirroredDictationText = nil
-        transport.startDictation()
-        dictationNotificationFeedback.notificationOccurred(.success)
+        isLoadingWorkspaceComputers = true
+        defer { isLoadingWorkspaceComputers = false }
+        do {
+            workspaceComputers = try await guestCloudClient.listComputers(session: guestCloudSession)
+            if selectedWorkspaceComputer == nil { selectInitialComputer() }
+            workspaceComputerError = nil
+        } catch {
+            workspaceComputerError = "Could not refresh workspace computers."
+        }
     }
 
-    func stopDictation() {
-        let wasDictating = isDictating
-        isDictating = false
-        transport.stopDictation()
-        if wasDictating {
-            dictationImpactFeedback.impactOccurred(intensity: 0.7)
+    func selectWorkspaceComputer(deviceId: String?) {
+        if let deviceId,
+           !availableWorkspaceComputers.contains(where: { $0.deviceId == deviceId }) {
+            return
         }
+        selectedWorkspaceComputerId = deviceId
+        targetHint = typingTargetLabel
+    }
+
+    func pairFromScannedValue(_ value: String) -> Bool {
+        guard !isPairing else { return true }
+        return handlePairingValue(value, invalidMessage: "That QR is not a Volt workspace QR.")
     }
 
     @discardableResult
-    func addCapturedImage(_ image: UIImage, source: ClipPhoto.Source, batchId: String? = nil, capturedAt: Date = .now) -> ClipPhoto {
+    func addCapturedImage(
+        _ image: UIImage,
+        source: ClipPhoto.Source,
+        batchId: String? = nil,
+        capturedAt: Date = .now
+    ) -> ClipPhoto {
         let photo = ClipPhoto(
             image: image,
             source: source,
@@ -323,7 +255,7 @@ final class ClipScannerStore {
 
     @discardableResult
     func beginCaptureSession() -> String {
-        let batchId = ScannerProtocol.makeMessageId("batch")
+        let batchId = Self.makeMessageId("batch")
         activeCaptureBatchId = batchId
         return batchId
     }
@@ -335,31 +267,36 @@ final class ClipScannerStore {
     }
 
     func endCaptureSession(id: String? = nil) {
-        if let id, activeCaptureBatchId != id {
-            return
-        }
+        if let id, activeCaptureBatchId != id { return }
         activeCaptureBatchId = nil
     }
 
-    func capturePhoto(_ image: UIImage, batchId: String? = nil) async {
-        let preparedImage = image
+    private func prepareCapturedPhoto(_ image: UIImage) -> UIImage {
+        image
             .normalizedForProcessing()
             .centerSquareCropped()
             .resized(maxLongEdge: 2200)
-        let photo = addCapturedImage(preparedImage, source: .capture, batchId: batchId ?? currentCaptureBatchId())
+    }
+
+    func capturePhoto(_ image: UIImage, batchId: String? = nil) async {
+        let preparedImage = prepareCapturedPhoto(image)
+        let photo = addCapturedImage(
+            preparedImage,
+            source: .capture,
+            batchId: batchId ?? currentCaptureBatchId()
+        )
         await sendPhoto(photo)
     }
 
     func uploadPhotos(_ images: [UIImage]) async {
         guard !images.isEmpty else { return }
         guard isConnected else {
-            statusText = "Pair with Chrome before uploading."
-            targetHint = "Connect to Chrome first"
+            statusText = "Connect to a workspace before uploading."
+            targetHint = "Connect to workspace first"
             return
         }
-
         let now = Date.now
-        let batchId = ScannerProtocol.makeMessageId("upload-batch")
+        let batchId = Self.makeMessageId("upload-batch")
         photoUploadProgress = PhotoUploadProgress(
             id: batchId,
             total: images.count,
@@ -369,22 +306,15 @@ final class ClipScannerStore {
             phase: .preparing
         )
         statusText = "Preparing \(images.count) upload\(images.count == 1 ? "" : "s")"
-
         for (index, image) in images.enumerated() {
             let capturedAt = now.addingTimeInterval(Double(index) / 1000)
-            let preparedImage = image
-                .normalizedForProcessing()
-                .resized(maxLongEdge: 2200)
+            let preparedImage = image.normalizedForProcessing().resized(maxLongEdge: 2200)
             updatePhotoUploadProgress(batchId: batchId, prepared: index + 1, phase: .uploading)
             let photo = addCapturedImage(preparedImage, source: .upload, batchId: batchId, capturedAt: capturedAt)
             statusText = "Uploading \(index + 1) of \(images.count)"
-            let didSend = await sendPhoto(
-                photo,
-                filename: uploadFilename(index: index, capturedAt: capturedAt)
-            )
+            let didSend = await sendPhoto(photo, filename: uploadFilename(index: index, capturedAt: capturedAt))
             finishPhotoUploadItem(batchId: batchId, succeeded: didSend)
         }
-
         finishPhotoUploadBatch(batchId: batchId)
         let failedCount = photoUploadProgress?.failed ?? 0
         let completedCount = photoUploadProgress?.completed ?? max(0, images.count - failedCount)
@@ -399,47 +329,39 @@ final class ClipScannerStore {
 
     @discardableResult
     func sendPhoto(_ photo: ClipPhoto, filename: String? = nil) async -> Bool {
-        guard isConnected else {
-            errorMessage = "Connect to Chrome first."
+        guard let session = guestCloudSession,
+              let data = photo.image.jpegData(compressionQuality: 0.82)
+        else {
+            errorMessage = "Connect to a workspace first."
             updatePhoto(photo.id, status: "Saved until connected")
             return false
         }
         updatePhoto(photo.id, status: "Sending")
-        let resolvedFilename = filename ?? photoFilename(for: photo)
         do {
-            _ = try await transport.sendPhoto(
-                photo.image,
-                contributorId: contributorId,
-                batchId: photo.batchId,
-                filename: resolvedFilename,
+            try await guestCloudClient.mirrorPhoto(
+                session: session,
+                data: data,
+                filename: filename ?? photoFilename(for: photo),
                 capturedAt: photo.capturedAt
             )
             updatePhoto(photo.id, status: "Delivered")
-            statusText = "Photo delivered"
+            statusText = "Photo uploaded to workspace"
             captureSuccessFeedback.notificationOccurred(.success)
-            mirrorPhotoToCloud(photo, filename: resolvedFilename)
             return true
         } catch {
             updatePhoto(photo.id, status: "Failed")
             errorMessage = error.localizedDescription
-            statusText = "Photo send failed"
+            statusText = "Photo upload failed"
             playCaptureFailureFeedback()
             return false
         }
     }
 
     func handleBarcodeScan(_ scan: ClipBarcodeScan) {
-        if scan.isQRCode, handlePairingValue(scan.value, invalidMessage: nil) {
-            return
-        }
+        if scan.isQRCode, handlePairingValue(scan.value, invalidMessage: nil) { return }
         guard activeCaptureMode == .barcode else { return }
         let normalized = normalizedBarcodeScan(value: scan.value, format: scan.format)
-        sendCapture(
-            mode: .barcode,
-            value: normalized.value,
-            format: normalized.format,
-            capturedAt: scan.capturedAt
-        )
+        sendCapture(mode: .barcode, value: normalized.value, format: normalized.format, capturedAt: scan.capturedAt)
     }
 
     func recognizeText(in image: UIImage) async {
@@ -448,7 +370,6 @@ final class ClipScannerStore {
         errorMessage = nil
         statusText = "Recognizing text"
         defer { isRecognizingText = false }
-
         do {
             let result = try await ocrService.recognizeText(in: image)
             guard !result.isEmpty else {
@@ -481,9 +402,7 @@ final class ClipScannerStore {
     func sendRecognizedText(_ text: String, format: String = "vision-text") {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        if handlePairingValue(trimmed, invalidMessage: nil) {
-            return
-        }
+        if handlePairingValue(trimmed, invalidMessage: nil) { return }
         sendCapture(mode: .ocr, value: trimmed, format: format, capturedAt: .now)
     }
 
@@ -493,244 +412,100 @@ final class ClipScannerStore {
     }
 
     func disconnect() {
-        suppressNextReconnect = true
-        reconnectTask?.cancel()
-        reconnectTask = nil
-        transport.close()
+        guestCloudSession = nil
+        pairingSession = nil
+        workspaceComputers = []
+        selectedWorkspaceComputerId = nil
         isConnected = false
-        isDictating = false
         isPairing = false
-        activeConnectionAttemptLabel = nil
         statusText = "Disconnected"
         targetHint = "Disconnected"
     }
 
-    func cancelConnectionAttempt() {
-        guard isPairing || reconnectTask != nil else { return }
-        suppressNextReconnect = true
-        reconnectTask?.cancel()
-        reconnectTask = nil
-        transport.close()
-        isPairing = false
-        isConnected = false
-        isDictating = false
+    func removePhoto(id: UUID) {
+        photos.removeAll { $0.id == id }
+    }
+
+    func removePhotos(batchId: String) {
+        photos.removeAll { ($0.batchId ?? $0.id.uuidString) == batchId }
+    }
+
+    private func preparePairing(session: PairingSession, url: URL) {
+        pairingSession = session
+        pairingURLText = url.absoluteString
+        pairingLabel = session.label
+        activeConnectionAttemptLabel = displayName(for: session)
         pairingFailureMessage = nil
-        activeConnectionAttemptLabel = nil
-        statusText = "Connection canceled"
-        targetHint = lastPairingCredential == nil ? "Scan a fresh Volt QR code." : "Not connected"
-        suppressNextReconnect = false
     }
 
-    private func savePairingCredential(from sessionReady: ScannerProtocol.SessionReady) {
-        guard let pairing = sessionReady.pairing else { return }
-        let displayName = pairing.displayName ?? pairing.browserSessionId
-        PairingSecretStore.save(pairing.pairingSecret, pairingId: pairing.pairingId)
-        let signalURL = pairingSession?.signalURL ?? pairingSession?.sourceURL.signalBaseURL
-        lastPairingCredential = ClipPairingCredential(
-            pairingId: pairing.pairingId,
-            pairingSecret: pairing.pairingSecret,
-            browserSessionId: pairing.browserSessionId,
-            displayName: displayName,
-            signalURL: signalURL
+    private func selectInitialComputer() {
+        if selectedWorkspaceComputer != nil { return }
+        let preferredLabel = pairingLabel?.trimmingCharacters(in: .whitespacesAndNewlines)
+        selectedWorkspaceComputerId = availableWorkspaceComputers.first(where: {
+            guard let preferredLabel, !preferredLabel.isEmpty else { return false }
+            return $0.label.compare(preferredLabel, options: .caseInsensitive) == .orderedSame
+        })?.deviceId ?? availableWorkspaceComputers.first?.deviceId
+    }
+
+    private func sendCapture(
+        mode: CaptureMode,
+        value: String,
+        format: String,
+        capturedAt: Date
+    ) {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let capture = ClipCapture(
+            mode: mode,
+            value: trimmed,
+            format: format,
+            capturedAt: capturedAt,
+            status: isConnected ? "Sending" : "Saved until connected"
         )
-        pairingLabel = displayName
-        persistLastPairingCredential()
+        captures.insert(capture, at: 0)
+        guard isConnected else {
+            statusText = mode == .barcode ? "Barcode saved" : "Text saved"
+            return
+        }
+        sendCaptureToWorkspace(capture)
+    }
+
+    private func sendSavedItemsAfterConnect() {
+        for capture in captures where capture.status == "Saved until connected" {
+            sendCaptureToWorkspace(capture)
+        }
+        let savedPhotos = photos.filter { $0.status == "Saved until connected" }
         Task {
-            try? await signaling.registerPairing(
-                pairing,
-                phoneDeviceId: contributorId,
-                signalURL: signalURL ?? ScannerProtocol.signalURL
-            )
+            for photo in savedPhotos { await sendPhoto(photo) }
         }
     }
 
-    private func loadLastPairingCredential() {
-        guard let data = UserDefaults.standard.data(forKey: Self.lastPairingCredentialStorageKey),
-              let storedCredential = try? JSONDecoder.scanner.decode(StoredClipPairingCredential.self, from: data)
-        else {
-            return
-        }
-        guard let pairingSecret = PairingSecretStore.secret(pairingId: storedCredential.pairingId) else {
-            UserDefaults.standard.removeObject(forKey: Self.lastPairingCredentialStorageKey)
-            return
-        }
-        lastPairingCredential = ClipPairingCredential(
-            pairingId: storedCredential.pairingId,
-            pairingSecret: pairingSecret,
-            browserSessionId: storedCredential.browserSessionId,
-            displayName: storedCredential.displayName,
-            signalURL: storedCredential.signalURL
-        )
-        pairingLabel = storedCredential.displayName
-    }
-
-    private func persistLastPairingCredential() {
-        guard let lastPairingCredential else {
-            UserDefaults.standard.removeObject(forKey: Self.lastPairingCredentialStorageKey)
-            return
-        }
-        let storedCredential = StoredClipPairingCredential(
-            pairingId: lastPairingCredential.pairingId,
-            browserSessionId: lastPairingCredential.browserSessionId,
-            displayName: lastPairingCredential.displayName,
-            signalURL: lastPairingCredential.signalURL
-        )
-        guard let data = try? JSONEncoder.scanner.encode(storedCredential) else { return }
-        UserDefaults.standard.set(data, forKey: Self.lastPairingCredentialStorageKey)
-    }
-
-    private func dictationTargetKey(for sessionReady: ScannerProtocol.SessionReady) -> String {
-        [
-            sessionReady.peer?.chromeSessionId,
-            sessionReady.cursorTarget?.url,
-            sessionReady.cursorTarget?.tabTitle,
-            sessionReady.cursorTarget?.label,
-        ]
-            .map { value in
-                value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    private func sendCaptureToWorkspace(_ capture: ClipCapture) {
+        guard let session = guestCloudSession else { return }
+        let target = selectedWorkspaceComputer
+        updateCapture(capture.id, status: "Sending")
+        Task {
+            do {
+                try await guestCloudClient.mirrorCapture(
+                    session: session,
+                    kind: capture.mode == .barcode ? "barcode" : "text",
+                    value: capture.value,
+                    format: capture.format,
+                    capturedAt: capture.capturedAt,
+                    resultId: "appclip-result-\(capture.id.uuidString.lowercased())",
+                    targetDeviceId: target?.deviceId
+                )
+                updateCapture(capture.id, status: target == nil ? "Saved" : "Queued")
+                statusText = target.map { "Queued for \($0.label)" } ?? "Saved to workspace"
+                targetHint = typingTargetLabel
+                captureSuccessFeedback.notificationOccurred(.success)
+            } catch {
+                updateCapture(capture.id, status: "Failed")
+                errorMessage = error.localizedDescription
+                statusText = "Send failed"
+                playCaptureFailureFeedback()
             }
-            .joined(separator: "\u{1F}")
-    }
-
-    private func handleTransportClosed() {
-        if isPairing, reconnectTask != nil {
-            return
         }
-
-        let shouldReconnect = isConnected && !suppressNextReconnect
-        isConnected = false
-        isDictating = false
-
-        if shouldReconnect {
-            scheduleReconnectIfPossible(reason: "Connection closed")
-        } else {
-            suppressNextReconnect = false
-            targetHint = "Disconnected"
-            statusText = "Connection closed"
-            activeConnectionAttemptLabel = nil
-        }
-    }
-
-    private func scheduleReconnectIfPossible(reason: String) {
-        suppressNextReconnect = false
-        guard reconnectTask == nil else { return }
-        guard let credential = lastPairingCredential else {
-            isConnected = false
-            targetHint = "Scan a fresh Volt QR code."
-            statusText = reason
-            return
-        }
-
-        scheduleReconnectIfPossible(reason: reason, using: credential)
-    }
-
-    private func scheduleReconnectIfPossible(reason: String, using credential: ClipPairingCredential) {
-        isConnected = false
-        isPairing = true
-        activeConnectionAttemptLabel = credential.displayName
-        targetHint = "Reopening \(credential.displayName)"
-        statusText = reason == "Reconnect requested" ? "Reconnecting to \(credential.displayName)" : "Reconnecting to Chrome"
-        reconnectTask = Task { [weak self] in
-            await self?.reconnect(using: credential)
-        }
-    }
-
-    private func reconnect(using credential: ClipPairingCredential) async {
-        defer {
-            reconnectTask = nil
-        }
-
-        do {
-            let signalURLs = credential.signalURL.map { [$0] } ?? ScannerProtocol.reconnectSignalURLs
-            await signaling.registerPairingCandidates(
-                pairingId: credential.pairingId,
-                pairingSecret: credential.pairingSecret,
-                browserSessionId: credential.browserSessionId,
-                displayName: credential.displayName,
-                phoneDeviceId: contributorId,
-                signalURLs: signalURLs
-            )
-            let joinWindow = try await signaling.requestReconnect(
-                pairingId: credential.pairingId,
-                pairingSecret: credential.pairingSecret,
-                signalURLs: signalURLs
-            )
-            let parsedJoinSession = PairingURLParser.parse(joinWindow.sourceURL).0
-            let session = PairingSession(
-                token: joinWindow.token,
-                sessionId: joinWindow.sessionId ?? credential.browserSessionId,
-                attemptId: nil,
-                offer: nil,
-                answerURL: nil,
-                label: credential.displayName,
-                signalURL: parsedJoinSession?.signalURL ?? joinWindow.sourceURL.signalBaseURL ?? ScannerProtocol.signalURL,
-                sourceURL: joinWindow.sourceURL
-            )
-            pairingSession = session
-            try await transport.pair(with: session, contributorId: contributorId)
-            try await waitForSessionReady(timeout: .seconds(18))
-        } catch is CancellationError {
-            return
-        } catch {
-            transport.close()
-            isPairing = false
-            isConnected = false
-            requiresFullApp = Self.isAccessExhausted(error)
-            pairingFailureMessage = error.localizedDescription
-            errorMessage = error.localizedDescription
-            targetHint = "Scan a fresh Volt QR code."
-            statusText = "Reconnect failed"
-            pairingNotificationFeedback.notificationOccurred(.error)
-        }
-    }
-
-    private func waitForSessionReady(timeout: Duration) async throws {
-        let deadline = ContinuousClock.now + timeout
-        while ContinuousClock.now < deadline {
-            try Task.checkCancellation()
-            if isConnected && !isPairing {
-                return
-            }
-            try await Task.sleep(for: .milliseconds(250))
-        }
-        throw ScannerPairingError.chromeTimedOut
-    }
-
-    private static func isAccessExhausted(_ error: Error) -> Bool {
-        guard let pairingError = error as? ScannerPairingError else { return false }
-        guard case .signalRejected(let statusCode, let detail) = pairingError else { return false }
-
-        if statusCode == 402 {
-            return true
-        }
-        guard statusCode == 401 || statusCode == 403 else { return false }
-
-        let normalizedDetail = detail?.lowercased() ?? ""
-        return normalizedDetail.contains("access")
-            || normalizedDetail.contains("session")
-            || normalizedDetail.contains("subscription")
-    }
-
-    private func handleProtocolError(_ error: ScannerProtocol.ProtocolError) {
-        guard error.code == "access_exhausted" else { return }
-
-        suppressNextReconnect = true
-        reconnectTask?.cancel()
-        reconnectTask = nil
-        requiresFullApp = true
-        isPairing = false
-        let message = error.detail ?? "Your free Volt sessions are used. Continue in the full app."
-        if isConnected {
-            transport.close()
-        } else {
-            isConnected = false
-        }
-        suppressNextReconnect = true
-        pairingFailureMessage = message
-        errorMessage = message
-        targetHint = "Install Volt to continue."
-        statusText = "Full app required"
-        pairingNotificationFeedback.notificationOccurred(.warning)
     }
 
     private func updatePhoto(_ id: UUID, status: String) {
@@ -744,21 +519,13 @@ final class ClipScannerStore {
         phase: PhotoUploadProgress.Phase? = nil
     ) {
         guard photoUploadProgress?.id == batchId else { return }
-        if let prepared {
-            photoUploadProgress?.prepared = prepared
-        }
-        if let phase {
-            photoUploadProgress?.phase = phase
-        }
+        if let prepared { photoUploadProgress?.prepared = prepared }
+        if let phase { photoUploadProgress?.phase = phase }
     }
 
     private func finishPhotoUploadItem(batchId: String, succeeded: Bool) {
         guard photoUploadProgress?.id == batchId else { return }
-        if succeeded {
-            photoUploadProgress?.completed += 1
-        } else {
-            photoUploadProgress?.failed += 1
-        }
+        if succeeded { photoUploadProgress?.completed += 1 } else { photoUploadProgress?.failed += 1 }
         photoUploadProgress?.phase = .uploading
     }
 
@@ -767,127 +534,26 @@ final class ClipScannerStore {
         photoUploadProgress?.phase = .finished
     }
 
-    func removePhoto(id: UUID) {
-        photos.removeAll { $0.id == id }
-    }
-
-    func removePhotos(batchId: String) {
-        photos.removeAll { ($0.batchId ?? $0.id.uuidString) == batchId }
-    }
-
-    private func sendCapture(
-        mode: CaptureMode,
-        value: String,
-        format: String,
-        capturedAt: Date
-    ) {
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-
-        let initialStatus = isConnected ? "Sending" : "Saved until connected"
-        let capture = ClipCapture(
-            mode: mode,
-            value: trimmed,
-            format: format,
-            capturedAt: capturedAt,
-            status: initialStatus
-        )
-        captures.insert(capture, at: 0)
-
-        guard isConnected else {
-            statusText = mode == .barcode ? "Barcode saved" : "Text saved"
-            return
-        }
-
-        sendCaptureToChrome(capture)
-    }
-
-    private func sendSavedItemsAfterConnect() {
-        let savedCaptures = captures.filter { $0.status == "Saved until connected" }
-        let savedPhotos = photos.filter { $0.status == "Saved until connected" }
-        guard !savedCaptures.isEmpty || !savedPhotos.isEmpty else { return }
-
-        for capture in savedCaptures {
-            sendCaptureToChrome(capture)
-        }
-
-        Task {
-            for photo in savedPhotos {
-                await sendPhoto(photo)
-            }
-        }
-    }
-
-    private func sendCaptureToChrome(_ capture: ClipCapture) {
-        updateCapture(capture.id, status: "Sending")
-        Task {
-            do {
-                let receipt = try await transport.sendCaptureResult(
-                    kind: capture.mode == .barcode ? "barcode" : "text",
-                    value: capture.value,
-                    format: capture.format,
-                    capturedAt: capture.capturedAt,
-                    contributorId: contributorId
-                )
-                if receipt.insertedIntoCursor == true {
-                    updateCapture(capture.id, status: "Inserted")
-                    statusText = capture.mode == .barcode ? "Barcode inserted" : "Text inserted"
-                    captureSuccessFeedback.notificationOccurred(.success)
-                } else {
-                    updateCapture(capture.id, status: "Received")
-                    statusText = "Chrome received it, but no cursor target was available."
-                    if let label = receipt.cursorTarget?.label {
-                        targetHint = label
-                    }
-                }
-                mirrorCaptureToCloud(capture)
-            } catch {
-                updateCapture(capture.id, status: "Failed")
-                errorMessage = error.localizedDescription
-                statusText = "Send failed"
-                playCaptureFailureFeedback()
-            }
-        }
-    }
-
-    private func playCaptureFailureFeedback() {
-        captureFailureImpactFeedback.impactOccurred(intensity: 1)
-        captureFailureFeedback.notificationOccurred(.error)
-    }
-
     @discardableResult
     private func handlePairingValue(_ value: String, invalidMessage: String?) -> Bool {
         guard let url = PairingURLParser.pairingURL(in: value) ?? URL(string: value) else {
-            if let invalidMessage {
-                errorMessage = invalidMessage
-            }
+            if let invalidMessage { errorMessage = invalidMessage }
             return false
         }
-
         let (session, mode) = PairingURLParser.parse(url)
         guard let session else {
-            if let invalidMessage {
-                errorMessage = invalidMessage
-            }
+            if let invalidMessage { errorMessage = invalidMessage }
             return false
         }
-
-        if let mode {
-            selectMode(mode)
-        }
-        pairingSession = session
-        guestCloudSession = AppClipGuestCloudSession(pairingSession: session)
-        pairingURLText = url.absoluteString
-        pairingLabel = session.label
-        activeConnectionAttemptLabel = displayName(for: session)
-        pairingFailureMessage = nil
+        if let mode { selectMode(mode) }
+        preparePairing(session: session, url: url)
         Task { await pair(session) }
         return true
     }
 
     private func displayName(for session: PairingSession) -> String {
         let label = session.label?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return label.isEmpty ? "Chrome" : label
+        return label.isEmpty ? "Volt workspace" : label
     }
 
     private func updateCapture(_ id: UUID, status: String) {
@@ -895,49 +561,9 @@ final class ClipScannerStore {
         captures[index].status = status
     }
 
-    private func mirrorCaptureToCloud(_ capture: ClipCapture) {
-        guard let guestCloudSession, !guestCloudSession.isExpired else { return }
-        let kind = capture.mode == .barcode ? "barcode" : "text"
-        Task {
-            try? await guestCloudClient.mirrorCapture(
-                session: guestCloudSession,
-                kind: kind,
-                value: capture.value,
-                format: capture.format,
-                capturedAt: capture.capturedAt
-            )
-        }
-    }
-
-    private func mirrorFinalDictationToCloud(_ text: String) {
-        let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !value.isEmpty, value != lastMirroredDictationText else { return }
-        lastMirroredDictationText = value
-        guard let guestCloudSession, !guestCloudSession.isExpired else { return }
-        Task {
-            try? await guestCloudClient.mirrorCapture(
-                session: guestCloudSession,
-                kind: "dictation",
-                value: value,
-                format: "dictation",
-                capturedAt: .now
-            )
-        }
-    }
-
-    private func mirrorPhotoToCloud(_ photo: ClipPhoto, filename: String) {
-        guard let guestCloudSession,
-              !guestCloudSession.isExpired,
-              let data = photo.image.jpegData(compressionQuality: 0.82)
-        else { return }
-        Task {
-            try? await guestCloudClient.mirrorPhoto(
-                session: guestCloudSession,
-                data: data,
-                filename: filename,
-                capturedAt: photo.capturedAt
-            )
-        }
+    private func playCaptureFailureFeedback() {
+        captureFailureImpactFeedback.impactOccurred(intensity: 1)
+        captureFailureFeedback.notificationOccurred(.error)
     }
 
     private func normalizedBarcodeScan(value: String, format: String) -> (value: String, format: String) {
@@ -953,33 +579,32 @@ final class ClipScannerStore {
 
     private func photoFilename(for photo: ClipPhoto) -> String {
         switch photo.source {
-        case .capture:
-            "volt-clip-photo-\(Int(photo.capturedAt.timeIntervalSince1970 * 1000)).jpg"
-        case .upload:
-            "volt-upload-\(Int(photo.capturedAt.timeIntervalSince1970 * 1000)).jpg"
+        case .capture: "volt-clip-photo-\(Int(photo.capturedAt.timeIntervalSince1970 * 1000)).jpg"
+        case .upload: "volt-upload-\(Int(photo.capturedAt.timeIntervalSince1970 * 1000)).jpg"
         }
     }
 
     private func uploadFilename(index: Int, capturedAt: Date) -> String {
         let uploadNumber = String(format: "%03d", index + 1)
-        let timestampMs = Int(capturedAt.timeIntervalSince1970 * 1000)
-        return "volt-upload-\(uploadNumber)-\(timestampMs).jpg"
+        return "volt-upload-\(uploadNumber)-\(Int(capturedAt.timeIntervalSince1970 * 1000)).jpg"
     }
 
     private func currentCaptureBatchId() -> String {
-        if let activeCaptureBatchId {
-            return activeCaptureBatchId
-        }
-        let batchId = ScannerProtocol.makeMessageId("batch")
+        if let activeCaptureBatchId { return activeCaptureBatchId }
+        let batchId = Self.makeMessageId("batch")
         activeCaptureBatchId = batchId
         return batchId
     }
 
+    private static func makeMessageId(_ prefix: String) -> String {
+        "\(prefix)-\(UUID().uuidString.lowercased())"
+    }
+
     private func tab(for mode: CaptureMode) -> ClipTab {
         switch mode {
-        case .dictation: .dictate
-        case .photo: .upload
-        case .ocr, .barcode: .capture
+        case .dictation, .ocr: .text
+        case .photo: .photos
+        case .barcode: .barcode
         }
     }
 }
@@ -990,9 +615,7 @@ private extension UIImage {
         let format = UIGraphicsImageRendererFormat()
         format.scale = scale
         let renderer = UIGraphicsImageRenderer(size: size, format: format)
-        return renderer.image { _ in
-            draw(in: CGRect(origin: .zero, size: size))
-        }
+        return renderer.image { _ in draw(in: CGRect(origin: .zero, size: size)) }
     }
 
     func centerSquareCropped() -> UIImage {
@@ -1016,8 +639,6 @@ private extension UIImage {
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
         let renderer = UIGraphicsImageRenderer(size: targetSize, format: format)
-        return renderer.image { _ in
-            draw(in: CGRect(origin: .zero, size: targetSize))
-        }
+        return renderer.image { _ in draw(in: CGRect(origin: .zero, size: targetSize)) }
     }
 }

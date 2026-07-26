@@ -1,13 +1,13 @@
 # Volt Chrome Extension Releases
 
-## Current Submitted Version
+## Current Package Version
 
-### v1.0.55
+### v1.0.56
 
-The manifest/package version remains `1.0.55` until the next package is
+The manifest/package version remains `1.0.56` until the next package is
 submitted.
 
-Packaged on July 25, 2026. Not yet uploaded to the Chrome Web Store.
+Packaged on July 26, 2026. Not yet uploaded to the Chrome Web Store.
 
 Current release build command:
 
@@ -32,6 +32,25 @@ packages/extension/releases/
 - None.
 
 ## Recent Release History
+
+### v1.0.56
+
+Release date: July 26, 2026
+
+Changes:
+
+- Added a phone action to the new-tab header that opens the App Clip pairing QR.
+- Kept App Clip pairing free after the legacy five-session counter is exhausted.
+- Bound App Clip captures to the QR issuer's Clerk and Convex workspace through a short-lived cloud-only grant.
+- Added live in-place typing at the saved Chrome cursor for the installed app's new Dictation tab.
+- Added workspace-computer selection for App Clip text delivery and removed App Clip WebRTC pairing.
+
+Verification:
+
+- Passed the scanner protocol, Convex, extension, and mobile source test suites.
+- Passed extension TypeScript compilation and the production web and extension builds.
+- Packaged `voltextension-1.0.56-chrome.zip` and verified the production manifest.
+- Built, signed, validated, and installed the Release App Clip on a physical iPhone over Wi-Fi.
 
 ### v1.0.55
 
@@ -170,7 +189,7 @@ Changes:
 - Stored lightweight photo metadata in extension storage to avoid quota failures.
 - Normalized UPC-A scans that arrive as EAN-13 with a leading zero.
 
-Historical note: this release still referred to App Clip paths in release copy. At the time, the active architecture for the full app was WebRTC-only mobile scanner, with App Clip/object-transfer work treated as historical; the full app has since moved to the account-cloud-first workspace described in ADR 0004, and only the App Clip still uses WebRTC.
+Historical note: this release still referred to App Clip paths in release copy. Both iOS targets have since moved to the account-cloud-first workspace, and the current App Clip contains neither WebRTC nor dictation.
 
 ### v1.0.29
 

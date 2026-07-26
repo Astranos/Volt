@@ -1,20 +1,16 @@
 # Historical: Deferred App Clip Photo Capture
 
 This proposal is not part of the active mobile scanner architecture. Volt now
-ships an App Clip that joins the same direct WebRTC scanner protocol as the full
-app. The App Clip remains checkout-free and recommends the full app when a user
-needs account or subscription access.
+ships a checkout-free App Clip that redeems a short-lived guest grant into the
+same Clerk/Convex workspace as Chrome. It sends captures through Convex/R2,
+can target any online computer in that workspace, and contains neither WebRTC
+nor dictation.
 
-ADR 0002 remains the source of truth for capture transport: the iPhone app pairs
-through short-lived Convex-backed join tokens and sends OCR, barcode, dictation,
-and photo payloads over direct WebRTC data channels. App Clip relay, HTTPS
-result relay, and Photo Object Transfer remain obsolete.
-
-Keep this note only as a future product option: a photo-only App Clip might still be useful for no-install capture, but it must be designed as a separate feature with its own constraints rather than mixed into the full mobile app scanner.
+Keep this note only as historical context for the earlier deferred design.
 
 ## Reactivation Criteria
 
-Reopen App Clip work only after the full mobile app WebRTC scanner is stable and the product requirement is specifically no-install photo capture.
+Revisit the App Clip architecture only when its no-install capture constraints change.
 
 Before implementation, write a new ADR covering:
 

@@ -1,7 +1,7 @@
 import PhotosUI
 import SwiftUI
 
-struct UploadView: View {
+struct PhotoLibraryUploadSection: View {
     @Environment(ScannerStore.self) private var store
     @State private var selectedItems: [PhotosPickerItem] = []
     @State private var isPreparingUploads = false
@@ -39,49 +39,36 @@ struct UploadView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: ScannerTabLayout.stackSpacing) {
-                    Text("Upload")
-                        .font(.largeTitle.bold())
+        VStack(alignment: .leading, spacing: 12) {
+            Text("From Photo Library")
+                .font(.headline)
 
-                    if isPreparingUploads {
-                        PhotoPreparationProgressSummary(
-                            prepared: selectedUploadPrepared,
-                            total: selectedUploadTotal
-                        )
-                    } else if let progress = activeUploadProgress {
-                        PhotoUploadProgressSummary(progress: progress)
-                    }
-
-                    recentUploads
-                }
-                .padding(ScannerTabLayout.contentPadding)
-                .padding(.top, ScannerTabLayout.topPadding)
-                .padding(.bottom, ScannerTabLayout.bottomAccessoryContentPadding)
-            }
-            .background(ScannerTabLayout.background)
-            .navigationTitle("Upload")
-            .toolbar(.hidden, for: .navigationBar)
-            .onChange(of: selectedItems) { _, newItems in
-                guard !newItems.isEmpty else { return }
-                selectedItems = []
-                enqueueUploadSelection(newItems)
-            }
-            .onAppear {
-                store.selectedSection = .sessions
-            }
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                ScannerPhotoPickerAccessory(
-                    selectedItems: $selectedItems,
-                    isConnected: true,
-                    isPreparing: isPreparingUploads,
-                    isUploading: activeUploadProgress != nil,
-                    statusText: uploadStatusText,
-                    showsError: uploadError != nil,
-                    disabledHint: uploadError ?? "Photos save on this iPhone before cloud sync."
+            if isPreparingUploads {
+                PhotoPreparationProgressSummary(
+                    prepared: selectedUploadPrepared,
+                    total: selectedUploadTotal
                 )
+            } else if let progress = activeUploadProgress {
+                PhotoUploadProgressSummary(progress: progress)
             }
+
+            ScannerPhotoPickerAccessory(
+                selectedItems: $selectedItems,
+                isConnected: true,
+                isPreparing: isPreparingUploads,
+                isUploading: activeUploadProgress != nil,
+                statusText: uploadStatusText,
+                showsError: uploadError != nil,
+                disabledHint: uploadError ?? "Photos save on this iPhone before cloud sync."
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+
+            recentUploads
+        }
+        .onChange(of: selectedItems) { _, newItems in
+            guard !newItems.isEmpty else { return }
+            selectedItems = []
+            enqueueUploadSelection(newItems)
         }
     }
 

@@ -205,6 +205,9 @@ const listMobileComputers = makeFunctionReference<
   { deviceId: string; deviceSecret: string },
   { cursorTargetDeviceId: string | null; computers: MobileComputer[] }
 >("cloudWorkspace:listComputersForDevice");
+const listAppClipComputers = makeFunctionReference<
+  "query", { guestCloudGrant: string }, { computers: MobileComputer[] }
+>("cloudWorkspace:listComputersForGuest");
 const setMobileCursorTarget = makeFunctionReference<
   "mutation",
   { deviceId: string; deviceSecret: string; cursorTargetDeviceId: string | null },
@@ -225,6 +228,15 @@ const queueMobileCursorDelivery = makeFunctionReference<
   },
   { deliveryId: string; idempotent: boolean; state: "pending" | "delivered" | "failed" }
 >("cloudWorkspace:queueCursorDelivery");
+const queueAppClipCursorDelivery = makeFunctionReference<
+  "mutation",
+  {
+    guestCloudGrant: string; deliveryId: string; resultId: string;
+    targetDeviceId: string; kind: "barcode" | "text"; text: string;
+    format?: string; clientCreatedAt: number;
+  },
+  { deliveryId: string; idempotent: boolean; state: "pending" | "delivered" | "failed" }
+>("cloudWorkspace:queueGuestCursorDelivery");
 const cursorDeliveryStatus = makeFunctionReference<
   "query",
   { deviceId: string; deviceSecret: string; deliveryIds: string[] },
@@ -268,6 +280,10 @@ const putGuestCloudBatch = makeFunctionReference<
   },
   { batchId: string; idempotent: boolean; status: string }
 >("cloudWorkspace:putGuestBatch");
+const createAppClipWorkspaceGrant = makeFunctionReference<
+  "mutation", { clerkUserId: string; ownerName?: string },
+  { guestCloudGrant: string; expiresAt: number }
+>("cloudWorkspace:createAppClipWorkspaceGrantForHttp");
 const createGuestPhotoUploadUrl = makeFunctionReference<
   "action",
   { guestCloudGrant: string; batchId: string; resultId: string },
@@ -526,6 +542,26 @@ const storeKitTransactionHandler = httpAction(async (ctx, request) => {
   return runAndRespond(
     ctx.runAction(syncStoreKitForHttp, { ...access.args, signedTransaction }),
   );
+});
+
+const appClipGrantCreateHandler = httpAction(async (ctx, request) => {
+  if (request.method === "OPTIONS") return emptyResponse();
+  const access = await accessArgsFromRequest(ctx, request);
+  if (!access.ok || !access.args.clerkUserId) {
+    return jsonResponse({ error: "Clerk authentication required" }, 401);
+  }
+  const body = await signalBodyFromRequest(request);
+  const label = stringFrom(body.label, 120);
+  const grant = await ctx.runMutation(createAppClipWorkspaceGrant, {
+    clerkUserId: access.args.clerkUserId,
+    ...(access.args.name ? { ownerName: access.args.name } : {}),
+  });
+  const url = new URL("https://volt.juanquenga.com/clip");
+  url.searchParams.set("guestCloudGrant", grant.guestCloudGrant);
+  url.searchParams.set("guestCloudExpiresAt", String(grant.expiresAt));
+  url.searchParams.set("cloudUrl", new URL(request.url).origin);
+  if (label) url.searchParams.set("label", label);
+  return jsonResponse({ ...grant, qrCodeUrl: url.toString() });
 });
 
 const storeKitNotificationHandler = httpAction(async (ctx, request) => {
@@ -813,6 +849,44 @@ const appClipGuestOutboxSyncHandler = httpAction(async (ctx, request) => {
   }));
 });
 
+const appClipComputerListHandler = httpAction(async (ctx, request) => {
+  if (request.method === "OPTIONS") return emptyResponse();
+  const body = await signalBodyFromRequest(request);
+  const guestCloudGrant = stringFrom(body.guestCloudGrant, 240);
+  if (!guestCloudGrant) return jsonResponse({ error: "Missing guest cloud grant" }, 400);
+  return jsonResponse(await ctx.runQuery(listAppClipComputers, { guestCloudGrant }));
+});
+
+const appClipCursorDeliveryQueueHandler = httpAction(async (ctx, request) => {
+  if (request.method === "OPTIONS") return emptyResponse();
+  const body = await signalBodyFromRequest(request);
+  const guestCloudGrant = stringFrom(body.guestCloudGrant, 240);
+  const deliveryId = stringFrom(body.deliveryId, 240);
+  const resultId = stringFrom(body.resultId, 240);
+  const targetDeviceId = stringFrom(body.targetDeviceId, 240);
+  const kind = stringFrom(body.kind, 20);
+  const text = stringFrom(body.text, 100_000);
+  const format = stringFrom(body.format, 120);
+  const clientCreatedAt = numberField(body, "clientCreatedAt");
+  if (!guestCloudGrant || !deliveryId || !resultId || !targetDeviceId
+    || (kind !== "barcode" && kind !== "text")
+    || text === undefined
+    || clientCreatedAt === undefined
+  ) {
+    return jsonResponse({ error: "Invalid App Clip cursor delivery" }, 400);
+  }
+  return jsonResponse(await ctx.runMutation(queueAppClipCursorDelivery, {
+    guestCloudGrant,
+    deliveryId,
+    resultId,
+    targetDeviceId,
+    kind,
+    text,
+    ...(format ? { format } : {}),
+    clientCreatedAt,
+  }));
+});
+
 function appClipGuestBatchActionHandler(kind: "upload" | "finalize") {
   return httpAction(async (ctx, request) => {
     if (request.method === "OPTIONS") return emptyResponse();
@@ -890,6 +964,12 @@ http.route({ path: "/api/mobile/batches/finalize", method: "POST", handler: mobi
 http.route({ path: "/api/mobile/batches/finalize", method: "OPTIONS", handler: mobileBatchFinalizeHandler });
 http.route({ path: "/api/app-clip/outbox/sync", method: "POST", handler: appClipGuestOutboxSyncHandler });
 http.route({ path: "/api/app-clip/outbox/sync", method: "OPTIONS", handler: appClipGuestOutboxSyncHandler });
+http.route({ path: "/api/app-clip/grants/create", method: "POST", handler: appClipGrantCreateHandler });
+http.route({ path: "/api/app-clip/grants/create", method: "OPTIONS", handler: appClipGrantCreateHandler });
+http.route({ path: "/api/app-clip/computers/list", method: "POST", handler: appClipComputerListHandler });
+http.route({ path: "/api/app-clip/computers/list", method: "OPTIONS", handler: appClipComputerListHandler });
+http.route({ path: "/api/app-clip/deliveries/queue", method: "POST", handler: appClipCursorDeliveryQueueHandler });
+http.route({ path: "/api/app-clip/deliveries/queue", method: "OPTIONS", handler: appClipCursorDeliveryQueueHandler });
 http.route({ path: "/api/app-clip/photos/upload-url", method: "POST", handler: appClipGuestPhotoUploadHandler });
 http.route({ path: "/api/app-clip/photos/upload-url", method: "OPTIONS", handler: appClipGuestPhotoUploadHandler });
 http.route({ path: "/api/app-clip/batches/finalize", method: "POST", handler: appClipGuestBatchFinalizeHandler });

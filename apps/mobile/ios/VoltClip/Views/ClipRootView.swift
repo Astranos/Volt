@@ -1,43 +1,38 @@
 @preconcurrency import AVFoundation
 import PhotosUI
-import StoreKit
 import SwiftUI
 import UIKit
-import WebKit
 
 struct ClipRootView: View {
-    @Environment(\.scenePhase) private var scenePhase
     @Bindable var store: ClipScannerStore
     @State private var isConnectionSheetPresented = false
     @State private var isPairingScannerPresented = false
-    @State private var isUpgradeOverlayPresented = false
 
     var body: some View {
-        ZStack {
-            TabView(selection: $store.selectedTab) {
-                ClipCaptureView(store: store) {
+        TabView(selection: $store.selectedTab) {
+                ClipCaptureView(store: store, mode: .ocr) {
                     handleConnectButtonTapped()
                 }
-                    .tabItem { Label("Capture", systemImage: "camera.viewfinder") }
-                    .tag(ClipScannerStore.ClipTab.capture)
+                    .tabItem { Label("Text", systemImage: "doc.text.viewfinder") }
+                    .tag(ClipScannerStore.ClipTab.text)
+
+                ClipCaptureView(store: store, mode: .barcode) {
+                    handleConnectButtonTapped()
+                }
+                    .tabItem { Label("Barcode", systemImage: "barcode.viewfinder") }
+                    .tag(ClipScannerStore.ClipTab.barcode)
+
+                ClipCaptureView(store: store, mode: .photo) {
+                    handleConnectButtonTapped()
+                }
+                    .tabItem { Label("Photos", systemImage: "camera.viewfinder") }
+                    .tag(ClipScannerStore.ClipTab.photos)
 
                 ClipUploadView(store: store) {
                     handleConnectButtonTapped()
                 }
                     .tabItem { Label("Upload", systemImage: "square.and.arrow.up") }
                     .tag(ClipScannerStore.ClipTab.upload)
-
-                ClipDictationView(store: store) {
-                    handleConnectButtonTapped()
-                }
-                    .tabItem { Label("Dictate", systemImage: "mic") }
-                    .tag(ClipScannerStore.ClipTab.dictate)
-            }
-
-            ClipWebRTCBridgeView(webView: store.bridgeWebView)
-                .frame(width: 1, height: 1)
-                .opacity(0.01)
-                .allowsHitTesting(false)
         }
         .sheet(isPresented: $isConnectionSheetPresented) {
             ClipConnectionSheet(
@@ -52,9 +47,6 @@ struct ClipRootView: View {
                         store.disconnect()
                     }
                     showPairingScanner()
-                },
-                onInstallFullApp: {
-                    isUpgradeOverlayPresented = true
                 }
             )
             .presentationDetents([.medium])
@@ -82,17 +74,6 @@ struct ClipRootView: View {
                 isConnectionSheetPresented = false
             }
         }
-        .onChange(of: store.requiresFullApp) { _, requiresFullApp in
-            guard requiresFullApp else { return }
-            isConnectionSheetPresented = true
-            isUpgradeOverlayPresented = true
-        }
-        .onChange(of: scenePhase) { _, newValue in
-            store.updateAppIsInBackground(newValue != .active)
-        }
-        .appStoreOverlay(isPresented: $isUpgradeOverlayPresented) {
-            SKOverlay.AppClipConfiguration(position: .bottom)
-        }
     }
 
     private func handleConnectButtonTapped() {
@@ -119,12 +100,14 @@ struct ClipRootView: View {
 
 private struct ClipCaptureView: View {
     @Bindable var store: ClipScannerStore
+    let mode: CaptureMode
     let onScanQRCode: () -> Void
     @State private var isCaptureSessionPresented = false
     @State private var captureSessionBatchId: String?
     @State private var opensPairingScannerAfterCapture = false
     @State private var expandedBatchIds: Set<String> = []
     @State private var previewedPhoto: ClipScannerStore.ClipPhoto?
+    @State private var isTargetPickerPresented = false
 
     private var capturePhotoBatches: [ClipPhotoBatch] {
         let capturePhotos = store.photos.filter { $0.source == .capture }
@@ -140,57 +123,75 @@ private struct ClipCaptureView: View {
         .sorted { $0.latestCapturedAt > $1.latestCapturedAt }
     }
 
+    private var matchingCaptures: [ClipScannerStore.ClipCapture] {
+        store.captures
+            .filter { $0.mode == mode }
+            .sorted { $0.capturedAt > $1.capturedAt }
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: ScannerTabLayout.stackSpacing) {
                     ClipChromeSectionHeader(
-                        title: "Capture",
+                        title: mode.clipTabTitle,
                         connection: connectionSummary,
                         onConnectionTapped: onScanQRCode
                     )
 
-                    ClipCapturePhotoBatchesSection(
-                        batches: capturePhotoBatches,
-                        expandedBatchIds: expandedBatchIds,
-                        canAddPhotos: store.isConnected,
-                        onAddPhotos: { batch in
-                            guard store.isConnected else { return }
-                            store.clearOcrReview()
-                            store.activeCaptureMode = .photo
-                            captureSessionBatchId = store.resumeCaptureSession(batchId: batch.id)
-                            isCaptureSessionPresented = true
-                        },
-                        onToggleExpanded: { batch in
-                            if expandedBatchIds.contains(batch.id) {
-                                expandedBatchIds.remove(batch.id)
-                            } else {
-                                expandedBatchIds.insert(batch.id)
-                            }
-                        },
-                        onPreview: { photo in
-                            previewedPhoto = photo
-                        },
-                        onDeletePhoto: { photo in
-                            store.removePhoto(id: photo.id)
-                        },
-                        onDeleteBatch: { batch in
-                            store.removePhotos(batchId: batch.id)
-                            expandedBatchIds.remove(batch.id)
+                    if (mode == .ocr || mode == .barcode) && store.canChooseWorkspaceComputer {
+                        ClipWorkspaceTargetCard(store: store) {
+                            isTargetPickerPresented = true
                         }
-                    )
+                    }
+
+                    if mode == .photo {
+                        ClipCapturePhotoBatchesSection(
+                            batches: capturePhotoBatches,
+                            expandedBatchIds: expandedBatchIds,
+                            canAddPhotos: store.isConnected,
+                            onAddPhotos: { batch in
+                                guard store.isConnected else { return }
+                                store.clearOcrReview()
+                                store.activeCaptureMode = .photo
+                                captureSessionBatchId = store.resumeCaptureSession(batchId: batch.id)
+                                isCaptureSessionPresented = true
+                            },
+                            onToggleExpanded: { batch in
+                                if expandedBatchIds.contains(batch.id) {
+                                    expandedBatchIds.remove(batch.id)
+                                } else {
+                                    expandedBatchIds.insert(batch.id)
+                                }
+                            },
+                            onPreview: { photo in
+                                previewedPhoto = photo
+                            },
+                            onDeletePhoto: { photo in
+                                store.removePhoto(id: photo.id)
+                            },
+                            onDeleteBatch: { batch in
+                                store.removePhotos(batchId: batch.id)
+                                expandedBatchIds.remove(batch.id)
+                            }
+                        )
+                    } else {
+                        ClipRecentCapturesSection(mode: mode, captures: matchingCaptures)
+                    }
                 }
                 .padding(ScannerTabLayout.contentPadding)
                 .padding(.top, ScannerTabLayout.topPadding)
                 .padding(.bottom, ScannerTabLayout.bottomAccessoryContentPadding)
             }
             .background(ScannerTabLayout.background)
-            .navigationTitle("Capture")
+            .navigationTitle(mode.clipTabTitle)
             .toolbar(.hidden, for: .navigationBar)
             .fullScreenCover(
                 isPresented: $isCaptureSessionPresented,
                 onDismiss: {
-                    store.endCaptureSession(id: captureSessionBatchId)
+                    if mode == .photo {
+                        store.endCaptureSession(id: captureSessionBatchId)
+                    }
                     captureSessionBatchId = nil
                     if opensPairingScannerAfterCapture {
                         opensPairingScannerAfterCapture = false
@@ -203,7 +204,6 @@ private struct ClipCaptureView: View {
                     activeMode: $store.activeCaptureMode,
                     isConnected: store.isConnected,
                     isRecognizingText: store.isRecognizingText,
-                    latestPhoto: store.photos.first(where: { $0.source == .capture }),
                     ocrReviewImage: store.ocrReviewImage,
                     ocrTextRegions: store.ocrTextRegions,
                     statusText: captureStatusText,
@@ -221,10 +221,6 @@ private struct ClipCaptureView: View {
                             Task { await store.capturePhoto(image, batchId: batchId) }
                         }
                     },
-                    onSendLatest: {
-                        guard let latest = store.photos.first(where: { $0.source == .capture }) else { return }
-                        Task { await store.sendPhoto(latest) }
-                    },
                     onSendRecognizedText: { text in
                         store.sendRecognizedText(text)
                     },
@@ -238,8 +234,8 @@ private struct ClipCaptureView: View {
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 ScannerBottomActionAccessory(
-                    title: "Start Capture",
-                    systemImage: store.activeCaptureMode.symbolName,
+                    title: mode.clipStartActionTitle,
+                    systemImage: mode.symbolName,
                     isEnabled: store.isConnected,
                     isConnecting: store.isPairing,
                     statusText: captureStatusText,
@@ -247,8 +243,8 @@ private struct ClipCaptureView: View {
                     action: {
                         guard store.isConnected else { return }
                         store.clearOcrReview()
-                        store.activeCaptureMode = .ocr
-                        captureSessionBatchId = store.beginCaptureSession()
+                        store.activeCaptureMode = mode
+                        captureSessionBatchId = mode == .photo ? store.beginCaptureSession() : nil
                         isCaptureSessionPresented = true
                     }
                 )
@@ -258,6 +254,12 @@ private struct ClipCaptureView: View {
                     store.removePhoto(id: photo.id)
                     previewedPhoto = nil
                 }
+            }
+            .sheet(isPresented: $isTargetPickerPresented) {
+                ClipWorkspaceTargetPickerSheet(store: store)
+            }
+            .onAppear {
+                store.activeCaptureMode = mode
             }
         }
     }
@@ -280,87 +282,221 @@ private struct ClipCaptureView: View {
         if store.isPairing {
             store.statusText
         } else if store.isConnected {
-            "Ready to capture into Chrome"
+            "Ready to \(mode.clipActionVerb) into \(store.typingTargetLabel)"
         } else {
             store.targetHint
         }
     }
 }
 
-private struct ClipDictationView: View {
+private struct ClipWorkspaceTargetCard: View {
     @Bindable var store: ClipScannerStore
-    let onScanQRCode: () -> Void
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 14) {
+                Image(systemName: "cursorarrow.motionlines")
+                    .font(.title2.weight(.semibold))
+                    .foregroundStyle(.green)
+                    .frame(width: 46, height: 46)
+                    .background(.green.opacity(0.12), in: RoundedRectangle(cornerRadius: 14))
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Typing to \(store.typingTargetLabel)")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                    Text("Choose from \(store.availableWorkspaceComputers.count) online workspace computer\(store.availableWorkspaceComputers.count == 1 ? "" : "s")")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.right")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(16)
+            .background(.background, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("Changes the computer that receives text and barcode captures.")
+    }
+}
+
+private struct ClipWorkspaceTargetPickerSheet: View {
+    @Bindable var store: ClipScannerStore
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: ScannerTabLayout.stackSpacing) {
-                    ClipChromeSectionHeader(
-                        title: "Dictate",
-                        connection: connectionSummary,
-                        onConnectionTapped: onScanQRCode
-                    )
+            List {
+                Section("Workspace Computers") {
+                    if store.isLoadingWorkspaceComputers && store.workspaceComputers.isEmpty {
+                        HStack(spacing: 12) {
+                            ProgressView()
+                            Text("Loading computers…")
+                                .foregroundStyle(.secondary)
+                        }
+                    } else if store.availableWorkspaceComputers.isEmpty {
+                        ContentUnavailableView(
+                            "No Computers Online",
+                            systemImage: "desktopcomputer",
+                            description: Text("Open the signed-in Volt extension on a computer to make it available.")
+                        )
+                    } else {
+                        ForEach(store.availableWorkspaceComputers) { computer in
+                            targetButton(
+                                title: computer.label,
+                                subtitle: "Online · Ready for text and barcode captures",
+                                deviceId: computer.deviceId
+                            )
+                        }
+                    }
+                }
 
-                    ClipDictationConnectionCard(
-                        session: store.isConnected ? "Chrome" : "No Chrome session connected",
-                        target: store.isConnected ? store.targetHint : "Connect to Chrome first"
-                    )
+                if !store.unavailableWorkspaceComputers.isEmpty {
+                    Section("Offline") {
+                        ForEach(store.unavailableWorkspaceComputers) { computer in
+                            Label(computer.label, systemImage: "desktopcomputer")
+                                .foregroundStyle(.secondary)
+                                .accessibilityLabel("\(computer.label), offline")
+                        }
+                    }
+                }
 
-                    ClipDictationTranscriptCard(
-                        transcript: store.transcript,
-                        isRecording: store.isDictating
-                    )
-
-                    if let error = store.errorMessage {
-                        Label(error, systemImage: "exclamationmark.triangle.fill")
-                            .font(.footnote)
+                if let error = store.workspaceComputerError {
+                    Section {
+                        Text(error)
                             .foregroundStyle(.red)
                     }
                 }
-                .padding(ScannerTabLayout.contentPadding)
-                .padding(.top, ScannerTabLayout.topPadding)
-                .padding(.bottom, ScannerTabLayout.bottomAccessoryContentPadding)
             }
-            .background(ScannerTabLayout.background)
-            .navigationTitle("Dictate")
-            .toolbar(.hidden, for: .navigationBar)
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                ClipDictationStartAccessory(
-                    isRecording: store.isDictating,
-                    isConnected: store.isConnected,
-                    isConnecting: store.isPairing,
-                    statusText: dictationStatusText,
-                    action: {
-                        store.isDictating ? store.stopDictation() : store.startDictation()
-                    }
-                )
+            .navigationTitle("Type to Computer")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+            .refreshable {
+                await store.refreshWorkspaceComputers()
+            }
+            .task {
+                await store.refreshWorkspaceComputers()
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+    }
+
+    private func targetButton(title: String, subtitle: String, deviceId: String?) -> some View {
+        Button {
+            store.selectWorkspaceComputer(deviceId: deviceId)
+            dismiss()
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: deviceId == nil ? "link" : "desktopcomputer")
+                    .foregroundStyle(.green)
+                    .frame(width: 28)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .foregroundStyle(.primary)
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                if store.selectedWorkspaceComputerId == deviceId {
+                    Image(systemName: "checkmark")
+                        .font(.headline)
+                        .foregroundStyle(.green)
+                }
             }
         }
     }
+}
 
-    private var connectionSummary: ScannerConnectionSummary {
-        ScannerConnectionSummary(
-            isConnected: store.isConnected,
-            isBusy: store.isPairing,
-            title: clipConnectionTitle(
-                isConnected: store.isConnected,
-                isPairing: store.isPairing,
-                pairingLabel: store.pairingLabel,
-                pairingFailureMessage: store.pairingFailureMessage
-            ),
-            statusText: store.statusText
-        )
+private struct ClipRecentCapturesSection: View {
+    let mode: CaptureMode
+    let captures: [ClipScannerStore.ClipCapture]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Recent \(mode.clipActivityNoun)")
+                .font(.headline)
+
+            if captures.isEmpty {
+                ContentUnavailableView(
+                    "No \(mode.clipTabTitle) Yet",
+                    systemImage: mode.symbolName,
+                    description: Text("Captures from this App Clip session will appear here.")
+                )
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 34)
+                .background(.background, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            } else {
+                VStack(spacing: 10) {
+                    ForEach(captures.prefix(5)) { capture in
+                        HStack(alignment: .top, spacing: 12) {
+                            Image(systemName: mode.symbolName)
+                                .font(.headline)
+                                .foregroundStyle(.green)
+                                .frame(width: 36, height: 36)
+                                .background(.green.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(capture.value)
+                                    .font(.body)
+                                    .lineLimit(3)
+                                    .textSelection(.enabled)
+                                Text(capture.capturedAt, format: .dateTime.hour().minute())
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            Spacer(minLength: 8)
+                            ClipPhotoStatusBadge(status: capture.status)
+                        }
+                        .padding(14)
+                        .background(.background, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    }
+                }
+            }
+        }
+    }
+}
+
+private extension CaptureMode {
+    var clipTabTitle: String {
+        switch self {
+        case .ocr, .dictation: "Text"
+        case .barcode: "Barcode"
+        case .photo: "Photos"
+        }
     }
 
-    private var dictationStatusText: String {
-        if store.isDictating {
-            "Listening"
-        } else if store.isPairing {
-            store.statusText
-        } else if store.isConnected {
-            "Ready to dictate into Chrome"
-        } else {
-            store.targetHint
+    var clipActivityNoun: String {
+        switch self {
+        case .ocr, .dictation: "text captures"
+        case .barcode: "barcodes"
+        case .photo: "photos"
+        }
+    }
+
+    var clipActionVerb: String {
+        switch self {
+        case .ocr, .dictation: "scan text"
+        case .barcode: "scan a barcode"
+        case .photo: "capture photos"
+        }
+    }
+
+    var clipStartActionTitle: String {
+        switch self {
+        case .ocr, .dictation: "Scan Text"
+        case .barcode: "Scan Barcode"
+        case .photo: "Start Photo Session"
         }
     }
 }
@@ -1075,7 +1211,7 @@ private struct ClipChromeSectionHeader: View {
             }
             .buttonStyle(.plain)
             .accessibilityElement(children: .combine)
-            .accessibilityLabel(connection.isConnected ? connection.statusText : "Connect to Chrome")
+            .accessibilityLabel(connection.isConnected ? connection.statusText : "Connect to workspace")
             .accessibilityHint(connection.isBusy ? "Shows connection progress." : "Shows connection options.")
         }
     }
@@ -1105,13 +1241,10 @@ private struct ClipConnectionSheet: View {
     @Bindable var store: ClipScannerStore
     let onDisconnect: () -> Void
     let onScanQRCode: () -> Void
-    let onInstallFullApp: () -> Void
 
     var body: some View {
         Group {
-            if store.requiresFullApp {
-                ClipUpgradeView(onShowAppStoreOverlay: onInstallFullApp)
-            } else if store.isPairing {
+            if store.isPairing {
                 ClipConnectionProgressView(
                     store: store,
                     onCancel: {
@@ -1148,12 +1281,12 @@ private struct ClipConnectChoicesView: View {
     var body: some View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 18) {
-                Label("Connect to Chrome", systemImage: "desktopcomputer")
+                Label("Workspace", systemImage: "desktopcomputer")
                     .font(.title2.bold())
                     .foregroundStyle(.primary)
 
                 if store.isConnected {
-                    Text("Manage the current Chrome session, or scan a QR code to connect to a different computer.")
+                    Text("Choose which workspace computer receives captures, or scan a QR code for a different workspace.")
                         .font(.body)
                         .foregroundStyle(.primary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -1166,7 +1299,7 @@ private struct ClipConnectChoicesView: View {
                     .padding(14)
                     .background(.background.secondary, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 } else if let displayName = store.lastSessionDisplayName {
-                    Text("Reconnect to \(displayName), or scan a QR code for a different computer session.")
+                    Text("Reconnect to \(displayName), or scan a QR code for a different workspace.")
                         .font(.body)
                         .foregroundStyle(.primary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -1179,7 +1312,7 @@ private struct ClipConnectChoicesView: View {
                     .padding(14)
                     .background(.background.secondary, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 } else {
-                    Text("Scan a Volt QR code from Chrome to connect this App Clip.")
+                    Text("Scan the Volt App Clip QR from Chrome to open its workspace.")
                         .font(.body)
                         .foregroundStyle(.primary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -1222,7 +1355,7 @@ private struct ClipConnectChoicesView: View {
                 }
             }
             .padding(ScannerTabLayout.contentPadding)
-            .navigationTitle("Chrome Session")
+            .navigationTitle("Workspace")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") {
@@ -1257,7 +1390,7 @@ private struct ClipConnectionProgressView: View {
                 }
 
                 ClipDetailRow(
-                    title: "Computer",
+                    title: "Workspace",
                     value: store.connectionAttemptDisplayName,
                     systemImage: "desktopcomputer"
                 )
@@ -1309,12 +1442,12 @@ private struct ClipPairingFailureView: View {
                     .font(.title2.bold())
                     .foregroundStyle(.red)
 
-                Text(store.pairingFailureMessage ?? "The App Clip could not connect to the Chrome session.")
+                Text(store.pairingFailureMessage ?? "The App Clip could not connect to the workspace.")
                     .font(.body)
                     .foregroundStyle(.primary)
                     .fixedSize(horizontal: false, vertical: true)
 
-                Text("Retry can help if Chrome or the network was slow. If the QR expired or opened the wrong session, scan a fresh Volt QR code.")
+                Text("Retry can help if the network was slow. If the QR expired or opened the wrong workspace, create and scan a fresh Volt QR code.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1357,27 +1490,6 @@ private struct ClipPairingFailureView: View {
     }
 }
 
-private struct ClipDictationConnectionCard: View {
-    let session: String
-    let target: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Label("Chrome Session", systemImage: "desktopcomputer")
-                .font(.headline)
-                .foregroundStyle(.secondary)
-
-            VStack(spacing: 12) {
-                ClipDetailRow(title: "Session", value: session, systemImage: "desktopcomputer")
-                ClipDetailRow(title: "Typing Into", value: target, systemImage: "cursorarrow")
-            }
-        }
-        .padding()
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.background.secondary, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-    }
-}
-
 private struct ClipDetailRow: View {
     let title: String
     let value: String
@@ -1404,99 +1516,17 @@ private struct ClipDetailRow: View {
     }
 }
 
-private struct ClipDictationTranscriptCard: View {
-    let transcript: String
-    let isRecording: Bool
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Label(isRecording ? "Listening" : "Transcript", systemImage: isRecording ? "waveform" : "text.quote")
-                .font(.headline)
-
-            Text(transcript.isEmpty ? "Dictated text will appear here while you speak." : transcript)
-                .font(.title3)
-                .foregroundStyle(transcript.isEmpty ? .secondary : .primary)
-                .frame(maxWidth: .infinity, minHeight: 160, alignment: .topLeading)
-        }
-        .padding()
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.background.secondary, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-    }
-}
-
-private struct ClipDictationStartAccessory: View {
-    let isRecording: Bool
-    let isConnected: Bool
-    let isConnecting: Bool
-    let statusText: String
-    let action: () -> Void
-
-    var body: some View {
-        VStack(spacing: 10) {
-            Text(statusText)
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: .infinity)
-
-            Button(action: action) {
-                Label(buttonTitle, systemImage: buttonSystemImage)
-                    .font(.headline)
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity, minHeight: 52)
-                    .background(buttonColor, in: RoundedRectangle(cornerRadius: ScannerTabLayout.primaryActionCornerRadius, style: .continuous))
-                    .opacity(isConnected || isRecording || isConnecting ? 1 : ScannerTabLayout.disabledPrimaryActionOpacity)
-            }
-            .buttonStyle(.plain)
-            .disabled((!isConnected && !isRecording) || isConnecting)
-            .accessibilityHint(isConnected || isRecording ? "" : "Connect to Chrome before dictating")
-        }
-        .padding(.horizontal)
-        .padding(.top, 12)
-        .padding(.bottom, 10)
-        .background(.bar)
-    }
-
-    private var buttonTitle: String {
-        if isConnecting {
-            return "Connecting..."
-        }
-        return isRecording ? "Stop Dictation" : "Start Dictation"
-    }
-
-    private var buttonSystemImage: String {
-        if isConnecting {
-            return "hourglass"
-        }
-        return isRecording ? "stop.fill" : "mic.fill"
-    }
-
-    private var buttonColor: Color {
-        if isConnecting {
-            .gray
-        } else if isRecording {
-            .red
-        } else if isConnected {
-            .green
-        } else {
-            .gray
-        }
-    }
-}
-
 private struct ClipCaptureSessionView: View {
     @Bindable var store: ClipScannerStore
     @Binding var activeMode: CaptureMode
     let isConnected: Bool
     let isRecognizingText: Bool
-    let latestPhoto: ClipScannerStore.ClipPhoto?
     let ocrReviewImage: UIImage?
     let ocrTextRegions: [RecognizedTextRegion]
     let statusText: String
     let captureBatchId: String?
     let onBarcodeScan: (ClipBarcodeScan) -> Void
     let onCaptureImage: (UIImage, CaptureMode, String?) -> Void
-    let onSendLatest: () -> Void
     let onSendRecognizedText: (String) -> Void
     let onClearOcrReview: () -> Void
     let onConnectionScannerRequested: () -> Void
@@ -1516,10 +1546,24 @@ private struct ClipCaptureSessionView: View {
     @State private var focusPoint: CGPoint?
     @State private var cameraStateRevision = 0
     @State private var isConnectionSheetPresented = false
-    @State private var isUpgradeOverlayPresented = false
     private let topToolbarTopPadding: CGFloat = 12
     private let topToolbarHeight: CGFloat = 42
     private let photoPreviewToolbarGap: CGFloat = 0
+
+    private var capturedSessionPhotos: [ClipScannerStore.ClipPhoto] {
+        store.photos
+            .filter { photo in
+                photo.source == .capture
+                    && (captureBatchId == nil || photo.batchId == captureBatchId)
+            }
+            .sorted { $0.capturedAt > $1.capturedAt }
+    }
+
+    private var capturedThumbnails: [SessionPhotoThumbnail] {
+        capturedSessionPhotos
+            .prefix(ClipScannerStore.sessionPhotoStripLimit)
+            .map { SessionPhotoThumbnail(id: $0.id, image: $0.image) }
+    }
 
     var body: some View {
         let captureSurface = ZStack {
@@ -1698,8 +1742,12 @@ private struct ClipCaptureSessionView: View {
                         hasLiveTextCandidates: !liveTextCandidates.isEmpty,
                         isRecognizingText: isRecognizingText || isCapturingPhoto,
                         isCaptureEnabled: isConnected && !isCapturingPhoto && !isRecognizingText,
+                        showsModePicker: false,
                         barcodeHint: detectedBarcodeBounds == nil ? "Point camera at barcode" : "Barcode found",
                         hasLatestCapture: false,
+                        capturedThumbnails: activeMode == .photo ? capturedThumbnails : [],
+                        capturedCount: activeMode == .photo ? capturedSessionPhotos.count : 0,
+                        controlRotation: .degrees(cameraService.captureOrientation.controlRotationDegrees),
                         onToggleTorch: {
                             cameraService.setTorchEnabled(!cameraService.torchEnabled)
                         },
@@ -1735,9 +1783,6 @@ private struct ClipCaptureSessionView: View {
                     isConnectionSheetPresented = false
                     onConnectionScannerRequested()
                     dismiss()
-                },
-                onInstallFullApp: {
-                    isUpgradeOverlayPresented = true
                 }
             )
             .presentationDetents([.medium])
@@ -1811,13 +1856,11 @@ private struct ClipCaptureSessionView: View {
                 isConnectionSheetPresented = true
             }
         }
-        .appStoreOverlay(isPresented: $isUpgradeOverlayPresented) {
-            SKOverlay.AppClipConfiguration(position: .bottom)
-        }
     }
 
     private func syncCameraForOcrPostCapture() {
-        let shouldPauseCamera = activeMode == .ocr && (isRecognizingText || ocrReviewImage != nil)
+        let shouldPauseCamera = activeMode == .ocr
+            && (isRecognizingText || ocrReviewImage != nil)
         if shouldPauseCamera {
             cameraService.stop()
         } else {
@@ -1861,16 +1904,24 @@ private struct ClipCaptureSessionView: View {
         }
         isCapturingPhoto = true
         captureError = nil
-        captureNotice = mode == .ocr ? "Capturing text image" : nil
+        captureNotice = mode == .ocr ? "Capturing text image" : "Capturing photo"
 
         Task {
             do {
-                let image = try await cameraService.capturePhoto()
+                let image = try await cameraService.capturePhoto(
+                    matchingDeviceOrientation: mode == .photo
+                )
                 if mode == .ocr {
                     cameraService.stop()
+                    onCaptureImage(image, mode, batchId)
+                    captureNotice = successNotice(for: mode)
+                } else if mode == .photo {
+                    onCaptureImage(image, mode, batchId)
+                    captureNotice = nil
+                } else {
+                    onCaptureImage(image, mode, batchId)
+                    captureNotice = successNotice(for: mode)
                 }
-                onCaptureImage(image, mode, batchId)
-                captureNotice = successNotice(for: mode)
             } catch {
                 captureError = error.localizedDescription
                 captureNotice = nil
@@ -2276,14 +2327,4 @@ private struct ClipQRCodeScannerView: UIViewRepresentable {
             layer as! AVCaptureVideoPreviewLayer
         }
     }
-}
-
-private struct ClipWebRTCBridgeView: UIViewRepresentable {
-    let webView: WKWebView
-
-    func makeUIView(context: Context) -> WKWebView {
-        webView
-    }
-
-    func updateUIView(_ uiView: WKWebView, context: Context) {}
 }

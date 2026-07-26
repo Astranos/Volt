@@ -195,7 +195,7 @@ extension ScannerStore {
         guard let result = results.first(where: { $0.id == id }) else { return }
 
         switch result.kind {
-        case .barcode, .text:
+        case .barcode, .text, .dictation:
             guard cloudWorkspace.selectedComputer != nil else {
                 updateResultDeliveryState(id: id, state: .saved)
                 statusText = "Choose an online computer before inserting."
@@ -209,8 +209,6 @@ extension ScannerStore {
             cloudWorkspace.requestSync()
             updateResultDeliveryState(id: id, state: .saved)
             statusText = "Photo sync requested"
-        case .dictation:
-            statusText = "Historical dictation stays saved in Volt"
         }
     }
 

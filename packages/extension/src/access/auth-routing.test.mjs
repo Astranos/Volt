@@ -88,20 +88,32 @@ test("extension auth delegates web sign-in and syncs the Clerk session", async (
   );
 });
 
-test("new tab has a compact account control and no duplicate tool buttons", async () => {
+test("new tab has compact account, App Clip, and settings controls", async () => {
   const newTabSource = await readFile(
     new URL("../../entrypoints/newtab/NewTab.tsx", import.meta.url),
+    "utf8",
+  );
+  const scannerMessageHandlerSource = await readFile(
+    new URL("../background/scanner-message-handler.ts", import.meta.url),
     "utf8",
   );
 
   assert.match(newTabSource, /ExtensionAccountControl/);
   assert.match(newTabSource, /surface="newtab"/);
+  assert.match(newTabSource, /<Smartphone \/>/);
+  assert.match(newTabSource, /action: "openMobileCapturePopup"/);
+  assert.match(newTabSource, /aria-label="Open Volt App Clip QR code"/);
+  assert.match(
+    scannerMessageHandlerSource,
+    /case "openMobileCapturePopup":\s*void handleOpenAppClipPopup/,
+  );
+  assert.doesNotMatch(
+    scannerMessageHandlerSource,
+    /case "openMobileCapturePopup":[\s\S]{0,120}scannerOffscreenStart/,
+  );
   assert.match(newTabSource, /action: "open-settings"/);
   assert.doesNotMatch(newTabSource, /SIDEPANEL_TOOLS\.map/);
-  assert.doesNotMatch(
-    newTabSource,
-    /openMobileCapturePopup|Pair Phone|action: "openInSidebar"/,
-  );
+  assert.doesNotMatch(newTabSource, /Pair Phone|action: "openInSidebar"/);
 });
 
 test("toolbar opens the sidepanel while Pair Phone owns the QR popup", async () => {

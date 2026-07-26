@@ -1,3 +1,5 @@
+import type { ScannerTextInsertOptions } from "./scanner-text-insertion";
+
 const CURSOR_DELIVERY_LEDGER_KEY = "volt.cloudScanner.cursorDeliveryLedger.v1";
 const CURSOR_DELIVERY_LEDGER_LIMIT = 500;
 const CURSOR_DELIVERY_LEDGER_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
@@ -24,8 +26,9 @@ type CloudCursorDeliveryControllerOptions = {
   chromeApi: typeof chrome;
   insertScannerText: (
     text: string,
-    options?: { format?: string; kind?: string },
+    options?: ScannerTextInsertOptions,
   ) => Promise<boolean>;
+  finalizeLiveDictation?: (draftId: string) => void;
   acknowledgeDelivery: (
     deliveryId: string,
     outcome: Pick<CursorDeliveryOutcome, "state" | "errorCode">,
@@ -83,6 +86,7 @@ export function normalizePendingCursorDeliveries(value: unknown): PendingCursorD
 export function createCloudCursorDeliveryController({
   chromeApi,
   insertScannerText,
+  finalizeLiveDictation,
   acknowledgeDelivery,
   log,
   now = Date.now,
@@ -164,9 +168,18 @@ export function createCloudCursorDeliveryController({
 
       if (outcome.errorCode !== "expired") {
         try {
+          if (delivery.format === "dictation") {
+            finalizeLiveDictation?.(delivery.resultId);
+          }
           const inserted = await insertScannerText(delivery.text, {
             kind: delivery.kind,
             ...(delivery.format ? { format: delivery.format } : {}),
+            ...(delivery.format === "dictation"
+              ? {
+                  dictationPhase: "final" as const,
+                  dictationSessionId: delivery.resultId,
+                }
+              : {}),
           });
           if (inserted) {
             outcome = { state: "delivered", processedAt, acknowledged: false };

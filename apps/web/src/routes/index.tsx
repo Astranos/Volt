@@ -23,6 +23,14 @@ import {
 } from "../site-chrome";
 
 export const Route = createFileRoute("/")({
+  head: () => ({
+    meta: [
+      {
+        name: "apple-itunes-app",
+        content: "app-id=6771770148, app-argument=https://volt.juanquenga.com/",
+      },
+    ],
+  }),
   component: Home,
 });
 

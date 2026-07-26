@@ -26,11 +26,16 @@ const clipStoreSource = read("../ios/VoltClip/Services/ClipScannerStore.swift");
 const clipGuestCloudSource = read("../ios/VoltClip/Services/AppClipGuestCloudClient.swift");
 const captureModeCardsSource = read("../ios/Volt/Views/CaptureModeCards.swift");
 
-test("full app opens capture without pairing, dictation, or a WebRTC target", () => {
+test("full app opens capture without pairing or a WebRTC target and keeps Speech dictation", () => {
   assert.doesNotMatch(appSource, /PairingURLParser/);
-  assert.doesNotMatch(rootSource, /DictationView|PairingSessionsView|AppSection\.dictation/);
+  assert.match(rootSource, /DictationView\(\)|AppSection\.dictation/);
   assert.doesNotMatch(scannerSource, /ScannerWebRTCConnection|connectionStatus|peerTarget|DictationModel/);
   assert.doesNotMatch(captureSource, /guard connectionStatus\.isConnected|sendCaptureResultOverWebRTC|sendDictation/);
+  assert.doesNotMatch(cloudAPISource, /dictation-drafts/);
+  assert.match(workspaceSource, /func updateDictationDraft\(draftId:/);
+  assert.match(workspaceSource, /client\.mutation\(\s*"cloudWorkspace:updateDictationDraft"/);
+  assert.match(workspaceSource, /client\.mutation\(\s*"cloudWorkspace:clearDictationDraft"/);
+  assert.match(workspaceSource, /result\.kind == \.dictation \? "text" : result\.kind\.rawValue/);
 });
 
 test("accepted captures commit to durable outbox before UI and optional cloud delivery", () => {
@@ -211,15 +216,17 @@ test("full-app capture and photo selection are not gated on WebRTC", () => {
   assert.match(uploadViewSource, /while !queuedUploadSelections\.isEmpty/);
 });
 
-test("App Clip mirrors successful WebRTC captures with an ephemeral QR guest grant", () => {
+test("App Clip sends captures through an ephemeral QR guest grant", () => {
   assert.match(pairingSource, /guestCloudGrant: query\["guestCloudGrant"\]/);
   assert.match(pairingSource, /guestCloudExpiresAt: query\["guestCloudExpiresAt"\]/);
+  assert.match(pairingSource, /cloudURL: query\["cloudUrl"\]/);
   assert.match(clipGuestCloudSource, /api\/app-clip\/outbox\/sync/);
   assert.match(clipGuestCloudSource, /api\/app-clip\/photos\/upload-url/);
   assert.match(clipGuestCloudSource, /api\/app-clip\/batches\/finalize/);
-  assert.match(clipStoreSource, /mirrorCaptureToCloud\(capture\)/);
-  assert.match(clipStoreSource, /mirrorPhotoToCloud\(photo, filename: resolvedFilename\)/);
-  assert.match(clipStoreSource, /mirrorFinalDictationToCloud\(text\)/);
-  assert.ok(clipStoreSource.indexOf("transport.sendCaptureResult") < clipStoreSource.indexOf("mirrorCaptureToCloud(capture)"));
+  assert.match(clipStoreSource, /guestCloudClient\.mirrorCapture\(/);
+  assert.match(clipStoreSource, /guestCloudClient\.mirrorPhoto\(/);
+  assert.doesNotMatch(clipStoreSource, /kind: "dictation"|sendDictation|updateDictationDraft/);
+  assert.doesNotMatch(clipGuestCloudSource, /dictation-drafts|updateDictationDraft|clearDictationDraft/);
+  assert.doesNotMatch(clipStoreSource, /WebRTC|transport\.|ScannerSignalingClient/);
   assert.doesNotMatch(clipGuestCloudSource, /Keychain|UserDefaults|Clerk|StoreKit/);
 });

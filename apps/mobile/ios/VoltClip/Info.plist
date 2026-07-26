@@ -24,10 +24,8 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>Volt Clip uses the camera to scan pairing QR codes, scan barcodes, and capture text or photos.</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>Volt Clip uses the microphone for WebRTC capture and browser dictation.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Volt Clip can import photos you choose for upload to Chrome.</string>
+	<string>Volt Clip can import photos you choose for upload to your workspace.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchScreen</key>
@@ -35,8 +33,7 @@
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
 	</array>
-	<key>VoltAppStoreID</key>
-	<string>$(VOLT_APP_STORE_ID)</string>
 </dict>
 </plist>

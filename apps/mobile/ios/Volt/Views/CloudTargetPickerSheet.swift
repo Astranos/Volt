@@ -56,7 +56,7 @@ struct CloudTargetPickerSheet: View {
                         ForEach(store.cloudWorkspace.availableComputers) { computer in
                             targetButton(
                                 title: computer.label,
-                                subtitle: "Online · Ready for text and barcodes",
+                                subtitle: "Online · Ready for text, barcodes, and dictation",
                                 systemImage: "desktopcomputer",
                                 deviceId: computer.deviceId
                             )

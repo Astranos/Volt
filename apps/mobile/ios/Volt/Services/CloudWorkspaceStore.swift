@@ -42,7 +42,8 @@ final class CloudWorkspaceStore {
     private(set) var accountSwitchConflict: CaptureOwnershipConflict?
 
     @ObservationIgnored private let api: MobileCloudAPI
-    @ObservationIgnored private let client: ConvexClient
+    // ConvexClient owns a thread-safe websocket runtime but has not adopted Sendable.
+    @ObservationIgnored nonisolated(unsafe) private let client: ConvexClient
     @ObservationIgnored private let outbox: DurableCaptureOutbox
     @ObservationIgnored private var authenticatedClerkUserId: String?
     @ObservationIgnored private var lastBootstrappedClerkUserId: String?
@@ -268,7 +269,7 @@ final class CloudWorkspaceStore {
     }
 
     func queueCursorDelivery(result: ScanResult, deliveryId: String) async -> Bool? {
-        guard result.kind == .barcode || result.kind == .text,
+        guard result.kind == .barcode || result.kind == .text || result.kind == .dictation,
               let credential = activeCredential,
               let target = selectedComputer
         else { return nil }
@@ -278,13 +279,14 @@ final class CloudWorkspaceStore {
         guard outbox.records.first(where: { $0.id == result.id })?.state == .uploaded else {
             return false
         }
+        let deliveryKind = result.kind == .dictation ? "text" : result.kind.rawValue
         let request = QueueCursorDeliveryRequest(
             deviceId: credential.deviceId,
             deviceSecret: credential.value,
             deliveryId: deliveryId,
             resultId: result.id.uuidString.lowercased(),
             targetDeviceId: target.deviceId,
-            kind: result.kind.rawValue,
+            kind: deliveryKind,
             text: result.value,
             format: result.format,
             clientCreatedAt: Date.now.timeIntervalSince1970 * 1_000
@@ -309,6 +311,48 @@ final class CloudWorkspaceStore {
             }
         }
         return false
+    }
+
+    func updateDictationDraft(draftId: String, text: String) async -> String? {
+        guard let credential = activeCredential,
+              let target = selectedComputer
+        else {
+            return "Choose an online computer before dictating."
+        }
+        do {
+            try await client.mutation(
+                "cloudWorkspace:updateDictationDraft",
+                with: [
+                    "deviceId": credential.deviceId,
+                    "deviceSecret": credential.value,
+                    "draftId": draftId,
+                    "targetDeviceId": target.deviceId,
+                    "text": text,
+                ]
+            )
+            lastError = nil
+            return nil
+        } catch {
+            lastError = error.localizedDescription
+            return error.localizedDescription
+        }
+    }
+
+    func clearDictationDraft(draftId: String) async {
+        guard let credential = activeCredential else { return }
+        do {
+            try await client.mutation(
+                "cloudWorkspace:clearDictationDraft",
+                with: [
+                    "deviceId": credential.deviceId,
+                    "deviceSecret": credential.value,
+                    "draftId": draftId,
+                ]
+            )
+            lastError = nil
+        } catch {
+            // Best-effort cleanup; drafts expire server-side.
+        }
     }
 
     func trackCursorDelivery(deliveryId: String, resultId: UUID) {

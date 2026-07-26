@@ -51,6 +51,7 @@ final class ClipBarcodeScannerService: NSObject {
     private(set) var liveTextCandidates: [LiveTextCandidate] = []
     private(set) var torchEnabled = false
     private(set) var zoomDisplayLabel = "1x"
+    private(set) var captureOrientation: CaptureOrientation = .portrait
     var onCameraStateChanged: (() -> Void)?
 
     private let metadataOutput = AVCaptureMetadataOutput()
@@ -61,6 +62,7 @@ final class ClipBarcodeScannerService: NSObject {
     private let metadataQueue = DispatchQueue(label: "com.volt.clip.barcode-metadata")
     private let videoQueue = DispatchQueue(label: "com.volt.clip.video-text")
     private var isConfigured = false
+    private var isObservingDeviceOrientation = false
     private var lastEmittedValue: String?
     private var lastEmittedAt: Date?
     private var photoCaptureDelegates: [ClipPhotoCaptureDelegate] = []
@@ -92,11 +94,13 @@ final class ClipBarcodeScannerService: NSObject {
             onError?("Camera access is required to scan barcodes.")
             return
         }
+        startObservingDeviceOrientation()
         await startRunningIfNeeded(resetZoom: true)
     }
 
     func start() {
         configureIfNeeded()
+        startObservingDeviceOrientation()
         let session = session
         let videoDevice = videoDevice
         sessionQueue.async {
@@ -109,6 +113,7 @@ final class ClipBarcodeScannerService: NSObject {
     }
 
     func stop() {
+        stopObservingDeviceOrientation()
         clearDetectedBarcode()
         setLiveTextScanningEnabled(false)
         setTorchEnabled(false)
@@ -219,7 +224,7 @@ final class ClipBarcodeScannerService: NSObject {
         }
     }
 
-    func capturePhoto() async throws -> UIImage {
+    func capturePhoto(matchingDeviceOrientation: Bool = false) async throws -> UIImage {
         configureIfNeeded()
         guard AVCaptureDevice.authorizationStatus(for: .video) == .authorized else {
             throw ClipCameraCaptureError.cameraAccessDenied
@@ -228,6 +233,7 @@ final class ClipBarcodeScannerService: NSObject {
             throw ClipCameraCaptureError.photoCaptureUnavailable
         }
         await startRunningIfNeeded()
+        applyCaptureRotationAngle(matchingDeviceOrientation ? captureOrientation : .portrait)
 
         return try await withCheckedThrowingContinuation { continuation in
             let settings: AVCapturePhotoSettings
@@ -249,6 +255,49 @@ final class ClipBarcodeScannerService: NSObject {
             photoCaptureDelegates.append(delegate)
             photoOutput.capturePhoto(with: settings, delegate: delegate)
         }
+    }
+
+    private func startObservingDeviceOrientation() {
+        guard !isObservingDeviceOrientation else { return }
+        isObservingDeviceOrientation = true
+        UIDevice.current.beginGeneratingDeviceOrientationNotifications()
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(deviceOrientationDidChange),
+            name: UIDevice.orientationDidChangeNotification,
+            object: nil
+        )
+        applyDeviceOrientation(UIDevice.current.orientation)
+    }
+
+    private func stopObservingDeviceOrientation() {
+        guard isObservingDeviceOrientation else { return }
+        isObservingDeviceOrientation = false
+        NotificationCenter.default.removeObserver(
+            self,
+            name: UIDevice.orientationDidChangeNotification,
+            object: nil
+        )
+        UIDevice.current.endGeneratingDeviceOrientationNotifications()
+    }
+
+    @objc private func deviceOrientationDidChange() {
+        applyDeviceOrientation(UIDevice.current.orientation)
+    }
+
+    private func applyDeviceOrientation(_ deviceOrientation: UIDeviceOrientation) {
+        guard let orientation = CaptureOrientation(deviceOrientation: deviceOrientation),
+              orientation != captureOrientation
+        else { return }
+        captureOrientation = orientation
+        onCameraStateChanged?()
+    }
+
+    private func applyCaptureRotationAngle(_ orientation: CaptureOrientation) {
+        guard let connection = photoOutput.connection(with: .video) else { return }
+        let angle = orientation.videoRotationAngle
+        guard connection.isVideoRotationAngleSupported(angle) else { return }
+        connection.videoRotationAngle = angle
     }
 
     private func startRunningIfNeeded(resetZoom: Bool = false) async {

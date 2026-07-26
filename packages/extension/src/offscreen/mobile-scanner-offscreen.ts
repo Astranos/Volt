@@ -217,6 +217,7 @@ class CloudWorkspaceSubscriptions {
   );
   private workspaceSnapshotUnsubscribe: (() => void) | null = null;
   private cursorDeliveriesUnsubscribe: (() => void) | null = null;
+  private dictationDraftsUnsubscribe: (() => void) | null = null;
   private computerRegistrationInterval: number | null = null;
   private installationId: string | null = null;
   private clerkSubject: string | null = null;
@@ -266,8 +267,10 @@ class CloudWorkspaceSubscriptions {
   private stopSubscriptions() {
     this.workspaceSnapshotUnsubscribe?.();
     this.cursorDeliveriesUnsubscribe?.();
+    this.dictationDraftsUnsubscribe?.();
     this.workspaceSnapshotUnsubscribe = null;
     this.cursorDeliveriesUnsubscribe = null;
+    this.dictationDraftsUnsubscribe = null;
     if (this.computerRegistrationInterval !== null) {
       window.clearInterval(this.computerRegistrationInterval);
       this.computerRegistrationInterval = null;
@@ -308,7 +311,8 @@ class CloudWorkspaceSubscriptions {
     const subject = clerkSubjectFromToken(token);
     const subscriptionsActive =
       this.workspaceSnapshotUnsubscribe !== null
-      && this.cursorDeliveriesUnsubscribe !== null;
+      && this.cursorDeliveriesUnsubscribe !== null
+      && this.dictationDraftsUnsubscribe !== null;
     const clientAuthenticated = subject !== null && this.clientAuthSubject() === subject;
     if (
       this.hasReconciledSubject
@@ -372,6 +376,17 @@ class CloudWorkspaceSubscriptions {
         }).catch(() => undefined);
       },
       (error) => console.warn("[Volt Cloud Workspace] cursor subscription failed", error),
+    );
+    this.dictationDraftsUnsubscribe = this.client.onUpdate(
+      api.cloudWorkspace.liveDictationDraftsForComputer,
+      { installationId: identity.installId },
+      (drafts) => {
+        void chrome.runtime.sendMessage({
+          action: "workspaceOffscreenDictationDraftsChanged",
+          drafts,
+        }).catch(() => undefined);
+      },
+      (error) => console.warn("[Volt Cloud Workspace] dictation subscription failed", error),
     );
     this.startComputerRegistration();
   }

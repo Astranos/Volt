@@ -74,12 +74,21 @@ test("workspace operations relay through the authenticated offscreen Convex clie
 });
 
 test("the phone joins by account, not by an enrollment ceremony in the UI", () => {
-  // Enrollment survives only as a background compatibility path for older app
-  // builds; nothing in the extension UI asks the user to connect a phone.
+  // The App Clip QR is now a cloud-only workspace grant. The full app's
+  // enrollment and WebRTC compatibility paths remain outside this popup.
   assert.doesNotMatch(sidepanel, /workspaceCreateEnrollment/);
   assert.doesNotMatch(popup, /workspaceCreateEnrollment/);
   assert.match(popup, /state\.qrCodeUrl/);
-  assert.match(popup, /action: "scannerStartForMode"/);
+  assert.match(popup, /action: "accessCreateAppClipGrant"/);
+  assert.doesNotMatch(popup, /scannerStartForMode|ScannerConnectionStatus|joinWindowExpiresAt/);
+});
+
+test("Chrome reactively inserts installed-app speech dictation at the tracked cursor", () => {
+  assert.match(offscreen, /api\.cloudWorkspace\.liveDictationDraftsForComputer/);
+  assert.match(offscreen, /action: "workspaceOffscreenDictationDraftsChanged"/);
+  assert.match(controller, /case "workspaceOffscreenDictationDraftsChanged":/);
+  assert.match(background, /createCloudLiveDictationController/);
+  assert.doesNotMatch(mobileScanner, /Live from iPhone|liveDictationDraftsForComputer/);
 });
 
 test("the offscreen workspace signs in from the shared Clerk session itself", () => {

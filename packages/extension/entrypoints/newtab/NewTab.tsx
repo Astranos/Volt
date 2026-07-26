@@ -5,7 +5,7 @@ import { BookmarksColumn } from "../../src/components/newtab/BookmarksColumn";
 import { HeroBlock } from "../../src/components/newtab/HeroBlock";
 import type { SearchMode } from "../../src/components/newtab/NewTabHelp";
 import { ExtensionAccountControl } from "../../src/components/access/ExtensionAccess";
-import { Settings } from "lucide-react";
+import { Settings, Smartphone } from "lucide-react";
 import { searchProviders } from "../../src/components/cmdk-palette/SearchProviders";
 import { TabManager } from "../../src/utils/tab-manager";
 import type { SyncStorageResult } from "../../src/types/settings";
@@ -294,6 +294,17 @@ export default function NewTab() {
             <h1 className="newtab-header-title">Volt</h1>
           </div>
           <div className="newtab-header-actions">
+            <button
+              type="button"
+              className="newtab-settings-button"
+              onClick={() =>
+                void chrome.runtime.sendMessage({ action: "openMobileCapturePopup" })
+              }
+              aria-label="Open Volt App Clip QR code"
+              title="Connect Volt App Clip"
+            >
+              <Smartphone />
+            </button>
             <button
               type="button"
               className="newtab-settings-button"

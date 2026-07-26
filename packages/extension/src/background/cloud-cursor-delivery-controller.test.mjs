@@ -74,6 +74,37 @@ test("persists the delivery attempt before inserting", async () => {
   assert.ok(events.indexOf("insert") < events.indexOf("ack"));
 });
 
+test("final dictation delivery replaces the matching live draft instead of appending", async () => {
+  const insertions = [];
+  const finalized = [];
+  const { chromeApi } = createChromeStorage();
+  const controller = createCloudCursorDeliveryController({
+    chromeApi,
+    insertScannerText: async (...args) => {
+      insertions.push(args);
+      return true;
+    },
+    finalizeLiveDictation: (draftId) => finalized.push(draftId),
+    acknowledgeDelivery: async () => {},
+    log: () => {},
+    now: () => 1_000,
+  });
+
+  await controller.handleDeliveries([delivery({
+    resultId: "draft-1",
+    text: "final transcript",
+    format: "dictation",
+  })]);
+
+  assert.deepEqual(finalized, ["draft-1"]);
+  assert.deepEqual(insertions, [["final transcript", {
+    kind: "text",
+    format: "dictation",
+    dictationPhase: "final",
+    dictationSessionId: "draft-1",
+  }]]);
+});
+
 test("never caps away unacknowledged ledger entries", async () => {
   const unacknowledged = Object.fromEntries(
     Array.from({ length: CURSOR_DELIVERY_LEDGER_LIMIT + 1 }, (_, index) => [

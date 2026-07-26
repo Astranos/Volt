@@ -29,10 +29,12 @@ enum ScreenshotScenario: String {
             .text
         case .captureBarcode:
             .barcode
-        case .capturePhoto:
+        case .capturePhoto, .sessions, .captureResults:
             .photos
-        case .sessions, .captureResults, .dictation, .upload:
-            .sessions
+        case .upload:
+            .photos
+        case .dictation:
+            .dictation
         }
     }
 }

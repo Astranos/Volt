@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted. Supersedes ADR 0002 for the full app. ADR 0002 remains historical context and still informs the App Clip's temporary WebRTC flow and the full app's optional live-target acceleration.
+Accepted for the cloud-workspace model. Its WebRTC migration notes are historical: neither current iOS target uses WebRTC.
 
 ## Context
 
@@ -10,7 +10,7 @@ WebRTC-only delivery makes capture success depend on a selected Chrome computer 
 
 Volt already has Convex identity, signaling, access, and verified StoreKit work. The cloud design deepens that module into an account workspace control plane while keeping large private photo bytes out of Convex.
 
-The App Clip has different constraints and remains intentionally temporary. It is free, QR-triggered, connected by WebRTC to one selected Chrome computer, and does not become a durable account device. A signed-in Chrome pairing QR may additionally grant short-lived guest access to mirror that App Clip session's successful captures into the same account workspace.
+The App Clip has different constraints and remains intentionally temporary. It is free, QR-triggered, redeems a short-lived guest grant into the signed-in Chrome account's workspace, and does not become a durable account device.
 
 ## Decision
 
@@ -20,8 +20,8 @@ The full app uses a capture-first, durable, cloud-backed workflow:
 2. It commits each accepted result and any photo rendition to a durable Local Capture Outbox before showing success.
 3. A background synchronization worker uploads result metadata to Convex and photo bytes directly to private Cloudflare R2 using short-lived presigned URLs.
 4. Every Chrome installation signed into the same Volt account subscribes to the account's Cloud Scanner Workspace and sees the same Result Batches.
-5. Selecting a computer affects only cursor insertion, live dictation, and optional WebRTC acceleration. It never changes ownership or visibility of ordinary batches.
-6. The App Clip keeps WebRTC as its required live transport, but a QR-scoped guest cloud grant may mirror successful captures to the signed-in Chrome account's workspace without Clerk or durable enrollment in the App Clip.
+5. Selecting a computer affects cursor insertion and installed-app live dictation. It never changes ownership or visibility of ordinary batches.
+6. The App Clip uses a QR-scoped guest cloud grant for capture and computer targeting without Clerk, dictation, WebRTC, or durable enrollment.
 
 Convex owns the control plane: account/workspace identity, enrolled devices and computers, presence, batches and result metadata, delivery state, entitlement and quota decisions, device revocation, and realtime subscriptions. Convex does not proxy photo uploads or downloads.
 
@@ -52,7 +52,7 @@ The Local Capture Outbox is the full app's acceptance seam. Its interface guaran
 
 Camera, OCR, barcode, and photo controls never wait for WebRTC or cloud delivery. The synchronization worker operates independently and resumes after app relaunch and network recovery. iOS background execution is opportunistic; correctness depends on the durable outbox, not on guaranteed background runtime.
 
-WebRTC may deliver a low-latency copy to the selected Live Computer Target. That copy is acceleration only. It does not remove the outbox item, consume the durable idempotency key, or count as cloud delivery.
+Convex cursor delivery may route a low-latency copy to the selected Live Computer Target. It does not remove the outbox item, consume the durable idempotency key, or count as cloud synchronization.
 
 ## Synchronization, Retries, and Delivery State
 
@@ -99,7 +99,7 @@ R2 lifecycle rules are defense in depth; Convex deletion jobs remain the authori
 
 ## Presence and Live Targeting
 
-Enrolled Computers renew short presence leases. The phone may select one present computer as its Live Computer Target. The selection is workspace metadata used only to route cursor insertion, live dictation, and optional WebRTC acceleration.
+Enrolled Computers renew short presence leases. The phone may select one present computer as its Live Computer Target. The selection is workspace metadata used only to route cursor insertion and installed-app live dictation.
 
 Result Batches never carry a required destination computer id. All Enrolled Computers query the same account workspace. A computer that returns after being offline catches up through Convex instead of asking the phone to resend.
 
@@ -111,14 +111,14 @@ The phone keeps uncopied captures in its Local Capture Outbox after revocation. 
 
 ## Migration from ADR 0002
 
-Migration is incremental and does not break the App Clip:
+This completed migration did not discard local captures:
 
 1. Add the Convex workspace schema, enrollment, quotas, delivery state, and private R2 presign module behind configuration flags.
 2. Add full-app Device Credential enrollment and the Local Capture Outbox. During this phase, existing WebRTC delivery may run as acceleration, but outbox persistence happens first.
 3. Add Chrome account-workspace subscription and merge cloud results into the sidepanel using stable result ids. Keep existing live peer handling for cursor insertion/dictation and mint an optional short-lived guest cloud grant for App Clip pairing.
 4. Enable cloud synchronization for enrolled full-app devices. Treat WebRTC receipts as live-delivery telemetry, not durable completion.
 5. Stop creating new WebRTC-only full-app retry records after cloud delivery is verified. Existing 24-hour retry records remain readable until they expire; do not bulk-upload them without user consent.
-6. Remove obsolete full-app-only WebRTC requirements after telemetry confirms capture, upload, cross-install convergence, quota, and deletion behavior. Preserve the App Clip WebRTC path and its QR-scoped guest mirror.
+6. Remove obsolete WebRTC requirements from both iOS targets and use the App Clip's QR-scoped guest workspace grant as its only capture transport.
 
 No migration step may discard a local pending capture. Schema changes are additive until all supported clients understand the new delivery states.
 
@@ -126,4 +126,4 @@ No migration step may discard a local pending capture. Schema changes are additi
 
 The full app works offline and no longer depends on a selected computer. Account results converge across Chrome installations, and capture acceptance has one durable local seam. Photo bytes avoid Convex bandwidth and size limits.
 
-The system now operates two intentionally different products: a temporary App Clip WebRTC path with an optional QR-scoped guest mirror, and a durable full-app cloud path. It also assumes responsibility for private object storage, retention jobs, quota reservations, device credentials, guest grants, tombstones, and migration compatibility. These costs are accepted because they are required for reliable capture and account-wide synchronization.
+The system now operates two intentionally different products: a temporary App Clip cloud path authorized by a QR-scoped guest grant, and a durable full-app cloud path. It also assumes responsibility for private object storage, retention jobs, quota reservations, device credentials, guest grants, tombstones, and migration compatibility. These costs are accepted because they are required for reliable capture and account-wide synchronization.

@@ -12,7 +12,7 @@ export type MobileCursorTarget = {
 };
 
 export type ScannerTextInsertOptions = {
-  dictationPhase?: "partial" | "final";
+  dictationPhase?: "partial" | "final" | "cancel";
   dictationSessionId?: string;
   format?: string;
   kind?: string;
@@ -65,7 +65,9 @@ export function insertTextAtTrackedEditableFromBackground(
   const liveSessionId =
     typeof options.dictationSessionId === "string" ? options.dictationSessionId : null;
   const livePhase =
-    options.dictationPhase === "partial" || options.dictationPhase === "final"
+    options.dictationPhase === "partial" ||
+    options.dictationPhase === "final" ||
+    options.dictationPhase === "cancel"
       ? options.dictationPhase
       : null;
   const isLiveDictation = options.format === "dictation" && liveSessionId;
@@ -75,12 +77,22 @@ export function insertTextAtTrackedEditableFromBackground(
       : 0;
   const dictationResult = () =>
     isLiveDictation
-      ? { inserted: true, dictationSessionId: liveSessionId, final: livePhase === "final", sourceLength: value.length }
+      ? {
+          inserted: true,
+          dictationSessionId: liveSessionId,
+          final: livePhase === "final" || livePhase === "cancel",
+          sourceLength: value.length,
+        }
       : null;
   const insertedResult = () => dictationResult() ?? { inserted: true };
   const notInsertedResult = () =>
     isLiveDictation
-      ? { inserted: false, dictationSessionId: liveSessionId, final: livePhase === "final", sourceLength: value.length }
+      ? {
+          inserted: false,
+          dictationSessionId: liveSessionId,
+          final: livePhase === "final" || livePhase === "cancel",
+          sourceLength: value.length,
+        }
       : { inserted: false };
   const liveDictationDelta = (sourceLength: number) => {
     const delta = value.slice(sourceLength);
@@ -226,7 +238,7 @@ export function insertTextAtTrackedEditableFromBackground(
       range.collapse(true);
       selection?.removeAllRanges();
       selection?.addRange(range);
-      if (livePhase === "final") root.__voltLiveDictation = null;
+      if (livePhase === "final" || livePhase === "cancel") root.__voltLiveDictation = null;
       dispatchTextInputEvents(target, live.node.nodeValue || "", "insertReplacementText");
     } else if (isLiveDictation && selection) {
       const nextValue = live?.sessionId === liveSessionId ? liveDictationDelta(liveSourceLength) : value;
@@ -294,9 +306,20 @@ export function insertTextAtTrackedEditableFromBackground(
     isLiveDictation && live?.sessionId === liveSessionId
       ? liveDictationDelta(replaceLiveInput ? liveSourceStart : liveSourceLength)
       : value;
+  if (isLiveDictation && livePhase === "cancel" && replaceLiveInput) {
+    const start = live.start ?? 0;
+    const end = live.end ?? start;
+    setNativeTextControlValue(input, input.value.slice(0, start) + input.value.slice(end));
+    input.selectionStart = input.selectionEnd = start;
+    root.__voltLiveDictation = null;
+    dispatchTextInputEvents(input, "", "insertReplacementText");
+    input.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
+    root.__voltLastEditableSelection = null;
+    return insertedResult();
+  }
   if (isLiveDictation && !nextValue) {
     root.__voltLiveDictation =
-      livePhase === "final"
+      livePhase === "final" || livePhase === "cancel"
         ? null
         : { sessionId: liveSessionId, sourceStart: value.length, sourceLength: value.length };
     return insertedResult();
@@ -316,7 +339,7 @@ export function insertTextAtTrackedEditableFromBackground(
   input.selectionStart = input.selectionEnd = replacementEnd;
   if (isLiveDictation) {
     root.__voltLiveDictation =
-      livePhase === "final"
+      livePhase === "final" || livePhase === "cancel"
         ? null
         : {
             sessionId: liveSessionId,
@@ -340,8 +363,9 @@ export function createScannerTextInserter({
   copyWithOffscreen,
 }: ScannerTextInserterOptions) {
   const liveDictationSourceLengths = new Map<string, number>();
+  let insertionQueue = Promise.resolve();
 
-  async function insertScannerText(text: string, options: ScannerTextInsertOptions = {}) {
+  async function performInsertion(text: string, options: ScannerTextInsertOptions = {}) {
     try {
       const [tab] = await chromeApi.tabs.query({
         active: true,
@@ -415,6 +439,12 @@ export function createScannerTextInserter({
       }
       return false;
     }
+  }
+
+  function insertScannerText(text: string, options: ScannerTextInsertOptions = {}) {
+    const operation = insertionQueue.then(() => performInsertion(text, options));
+    insertionQueue = operation.then(() => undefined, () => undefined);
+    return operation;
   }
 
   return { insertScannerText };

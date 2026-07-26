@@ -12,7 +12,7 @@
 
 ### alarms
 
-**Justification:** The alarms permission periodically wakes the extension's background service worker for local scanner maintenance: keeping the offscreen document available for reactive workspace synchronization, reconnecting a previously authorized WebRTC session for temporary App Clip scanner sessions after Chrome or the mobile app is closed and reopened, enforcing free-tier access session limits, and cleaning up expired downloaded scanner photo file references. The offscreen-liveness watchdog performs no network request; it only verifies that Chrome's local offscreen context is running. It does not collect browsing activity or trigger user-facing actions on its own.
+**Justification:** The alarms permission periodically wakes the extension's background service worker for local scanner maintenance: keeping the offscreen document available for reactive workspace synchronization, enforcing legacy free-tier access session limits, and cleaning up expired downloaded scanner photo file references. The offscreen-liveness watchdog performs no network request; it only verifies that Chrome's local offscreen context is running. It does not collect browsing activity or trigger user-facing actions on its own.
 
 ### bookmarks
 

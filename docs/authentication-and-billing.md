@@ -1,6 +1,6 @@
 # Authentication and billing setup
 
-Volt uses Clerk for identity, Convex for authorization, usage, and cloud-workspace metadata, Cloudflare R2 for private photo bytes, and StoreKit for the iOS subscription. There is no Stripe integration. Live scanner control remains peer-to-peer WebRTC traffic. Captures are also copied to the authenticated Cloud Scanner Workspace when an enrolled full app or a QR-scoped App Clip guest grant is present.
+Volt uses Clerk for identity, Convex for authorization, usage, cloud-workspace metadata, cursor delivery, and live dictation drafts; Cloudflare R2 stores private photo bytes; StoreKit manages the iOS subscription. There is no Stripe integration. The installed app uses an enrolled device credential, while the App Clip uses a short-lived workspace guest grant created by signed-in Chrome.
 
 ## Clerk and Convex
 
@@ -144,7 +144,7 @@ Use the same authorization or anonymous headers. The response includes `startedA
 
 Report an involuntary connection loss with `POST /api/access/session/disconnect`. Report an explicit user disconnect with `POST /api/access/session/end`. Both accept `{"usageSessionId":"..."}` and the same access headers. A reconnect within, but not at, 30 minutes reuses the session. At 30 minutes disconnected, or at the 8-hour maximum, the server ends it. Reconnecting afterward requires a new `usageSessionId`.
 
-The App Clip may issue/use anonymous access but must not show StoreKit checkout. A signed-in Chrome session may include a short-lived, workspace-scoped guest cloud grant in its pairing QR so successful App Clip captures are mirrored to that account's workspace without adding Clerk or a durable account credential to the App Clip. When access is exhausted, it should hand off to the full app's App Store page. The full app requires `hasFullAppAccess`, performs Clerk sign-in and StoreKit purchase/restore, and treats an active introductory trial like any other active StoreKit entitlement. The Chrome extension reads the resulting entitlement through the same Clerk user and Convex status endpoint.
+The current App Clip is free and uses a short-lived, workspace-scoped cloud grant created by signed-in Chrome. It does not use the legacy join-token/WebRTC session, does not hold Clerk or a durable account credential, and does not show StoreKit checkout or a Pro blocker. The full app separately requires `hasFullAppAccess`, performs Clerk sign-in and StoreKit purchase/restore, and treats an active introductory trial like any other active StoreKit entitlement. The Chrome extension reads the resulting entitlement through the same Clerk user and Convex status endpoint.
 
 ## Local completion checklist
 
@@ -158,4 +158,4 @@ These values and dashboard actions cannot be completed from the repository:
 - production and sandbox purchase/restore tests with real signed transactions
 - private R2 bucket credentials scoped to object read/write for the production bucket
 
-No capture, photo, OCR result, SDP, or ICE payload is added to the access tables. Signaling data remains limited to rendezvous metadata. Cloud-workspace tables may store synchronized OCR text, barcodes, dictation, and private-photo metadata; photo bytes travel directly between clients and private R2 storage through short-lived signed URLs.
+No capture, photo, OCR result, or live dictation draft is added to the access tables. Cloud-workspace tables may store synchronized OCR text, barcodes, dictation, and private-photo metadata; photo bytes travel directly between clients and private R2 storage through short-lived signed URLs.

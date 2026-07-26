@@ -7,6 +7,7 @@ import { defineBackground } from "wxt/utils/define-background";
 import { createActiveTabTracker } from "../src/background/active-tab-tracker";
 import { createAccessController } from "../src/background/access-controller";
 import { createCloudCursorDeliveryController } from "../src/background/cloud-cursor-delivery-controller";
+import { createCloudLiveDictationController } from "../src/background/cloud-live-dictation-controller";
 import { createCloudWorkspaceController } from "../src/background/cloud-workspace-controller";
 import { createClerkSessionMirror } from "../src/background/clerk-session-mirror";
 import { createClipboardController } from "../src/background/clipboard-controller";
@@ -133,9 +134,14 @@ export default defineBackground({
       copyWithOffscreen: (text) =>
         clipboard.handleClipboardWithOffscreen("copyToClipboard", text),
     });
+    const cloudLiveDictation = createCloudLiveDictationController({
+      insertScannerText: scannerTextInserter.insertScannerText,
+      log,
+    });
     const cloudCursorDeliveries = createCloudCursorDeliveryController({
       chromeApi: chrome,
       insertScannerText: scannerTextInserter.insertScannerText,
+      finalizeLiveDictation: cloudLiveDictation.finalizeDraft,
       acknowledgeDelivery: async (deliveryId, outcome) => {
         const response = await scannerOffscreen.sendScannerOffscreenMessage({
           action: "workspaceOffscreenAcknowledgeCursorDelivery",
@@ -158,6 +164,7 @@ export default defineBackground({
       chromeApi: chrome,
       ensureOffscreenDocument: scannerOffscreen.ensureScannerOffscreenDocument,
       handleCursorDeliveries: cloudCursorDeliveries.handleDeliveries,
+      handleLiveDictationDrafts: cloudLiveDictation.handleDrafts,
       sendOffscreenMessage: scannerOffscreen.sendScannerOffscreenMessage,
       log,
     });

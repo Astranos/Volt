@@ -264,6 +264,28 @@ export function createScannerMessageHandler({
     }
   }
 
+  async function handleOpenAppClipPopup(
+    message: OpenMobileCaptureMessage,
+    sender: MessageSender,
+    sendResponse: SendResponse,
+  ) {
+    try {
+      if (message.target) {
+        await updateMobileCaptureTarget(message.target, sender);
+      }
+      await openMobileScannerPairingPopup(
+        normalizeMobileCaptureMode(message.mode),
+        { status: "workspace" },
+      );
+      sendResponse({ success: true });
+    } catch (error) {
+      sendResponse({
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
   async function handleScannerDisconnect(sendResponse: SendResponse) {
     try {
       const state = await sendScannerOffscreenMessage({
@@ -357,7 +379,7 @@ export function createScannerMessageHandler({
         void handleOpenMobileCapture(message, sender, sendResponse);
         return true;
       case "openMobileCapturePopup":
-        void handleOpenMobileCapture({ mode: message.mode, target: message.target, surface: "popup" }, sender, sendResponse);
+        void handleOpenAppClipPopup(message, sender, sendResponse);
         return true;
       case "scannerDisconnect":
         void handleScannerDisconnect(sendResponse);

@@ -18,9 +18,22 @@ struct CaptureModeTabView: View {
             case .photo:
                 result.kind == .photo && result.source == .capture
             case .dictation:
-                false
+                result.kind == .dictation
             }
         }
+    }
+
+    private var capturePhotoBatches: [CapturePhotoBatch] {
+        let grouped = Dictionary(grouping: matchingResults) { result in
+            result.batchId ?? result.id.uuidString
+        }
+        return grouped.map { id, results in
+            CapturePhotoBatch(
+                id: id,
+                results: results.sorted { $0.capturedAt < $1.capturedAt }
+            )
+        }
+        .sorted { $0.latestCapturedAt > $1.latestCapturedAt }
     }
 
     var body: some View {
@@ -44,12 +57,23 @@ struct CaptureModeTabView: View {
                         isTargetPickerPresented = true
                     }
 
-                    CaptureModeCapturesSection(
-                        mode: mode,
-                        results: matchingResults,
-                        onResend: resend,
-                        onDelete: delete
-                    )
+                    if mode == .photo {
+                        PhotoSessionHistorySection(
+                            batches: capturePhotoBatches,
+                            onContinue: continuePhotos,
+                            onResend: resend,
+                            onDelete: delete
+                        )
+
+                        PhotoLibraryUploadSection()
+                    } else {
+                        CaptureModeCapturesSection(
+                            mode: mode,
+                            results: matchingResults,
+                            onResend: resend,
+                            onDelete: delete
+                        )
+                    }
                 }
                 .padding(ScannerTabLayout.contentPadding)
                 .padding(.top, ScannerTabLayout.topPadding)
@@ -58,7 +82,10 @@ struct CaptureModeTabView: View {
             .background(ScannerTabLayout.background)
             .navigationTitle(mode.tabTitle)
             .toolbar(.hidden, for: .navigationBar)
-            .fullScreenCover(isPresented: $isCaptureSessionPresented) {
+            .fullScreenCover(
+                isPresented: $isCaptureSessionPresented,
+                onDismiss: store.endResumedPhotoBatch
+            ) {
                 CaptureSessionView(
                     isPresented: $isCaptureSessionPresented,
                     mode: mode
@@ -88,6 +115,13 @@ struct CaptureModeTabView: View {
         store.endResumedPhotoBatch()
         store.clearOcrReview()
         store.activeMode = mode
+        isCaptureSessionPresented = true
+    }
+
+    private func continuePhotos(in batch: CapturePhotoBatch) {
+        store.clearOcrReview()
+        store.activeMode = .photo
+        store.resumePhotoBatch(id: batch.id)
         isCaptureSessionPresented = true
     }
 

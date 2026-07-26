@@ -18,7 +18,9 @@ import {
 } from "./_generated/server";
 
 export const ENROLLMENT_TTL_MS = 5 * 60 * 1000;
+export const APP_CLIP_GRANT_TTL_MS = 8 * 60 * 60 * 1000;
 export const CURSOR_DELIVERY_TTL_MS = 120 * 1000;
+export const DICTATION_DRAFT_TTL_MS = 5 * 60 * 1000;
 export const PRESIGN_TTL_SECONDS = 5 * 60;
 
 const CANONICAL_CAPABILITIES = new Set([
@@ -63,6 +65,15 @@ type CloudBatchInput = {
   batchId: string;
   clientCreatedAt: number;
   results: CloudResultInput[];
+};
+type CursorDeliveryInput = {
+  deliveryId: string;
+  resultId: string;
+  targetDeviceId: string;
+  kind: "barcode" | "text";
+  text: string;
+  format?: string;
+  clientCreatedAt: number;
 };
 
 function randomOpaqueSecret() {
@@ -189,31 +200,38 @@ async function requireGuestPrincipal(
     throw new ConvexError("Guest cloud grant is invalid or expired");
   }
 
-  const usageSession = await ctx.db
-    .query("usageSessions")
-    .withIndex("by_usageSessionId", (q) => q.eq("usageSessionId", grant.usageSessionId))
-    .unique();
-  if (usageSession) {
-    const reconnectExpired = usageSession.disconnectedAt !== undefined
-      && usageSession.disconnectedAt + RECONNECT_WINDOW_MS <= now;
-    if (
-      usageSession.clerkUserId !== grant.createdByClerkUserId
-      || usageSession.endedAt !== undefined
-      || usageSession.startedAt + MAX_SESSION_DURATION_MS <= now
-      || reconnectExpired
-    ) {
-      throw new ConvexError("Guest cloud session has ended");
+  if (grant.usageSessionId !== undefined || grant.scannerJoinTokenId !== undefined) {
+    if (grant.usageSessionId === undefined || grant.scannerJoinTokenId === undefined) {
+      throw new ConvexError("Guest cloud session is malformed");
     }
-  } else {
-    const joinToken = await ctx.db.get(grant.scannerJoinTokenId);
-    if (
-      !joinToken
-      || joinToken.revokedAt !== undefined
-      || joinToken.expiresAt <= now
-      || joinToken.usageSessionId !== grant.usageSessionId
-      || joinToken.clerkUserId !== grant.createdByClerkUserId
-    ) {
-      throw new ConvexError("Guest cloud session is not active");
+    const usageSessionId = grant.usageSessionId;
+    const scannerJoinTokenId = grant.scannerJoinTokenId;
+    const usageSession = await ctx.db
+      .query("usageSessions")
+      .withIndex("by_usageSessionId", (q) => q.eq("usageSessionId", usageSessionId))
+      .unique();
+    if (usageSession) {
+      const reconnectExpired = usageSession.disconnectedAt !== undefined
+        && usageSession.disconnectedAt + RECONNECT_WINDOW_MS <= now;
+      if (
+        usageSession.clerkUserId !== grant.createdByClerkUserId
+        || usageSession.endedAt !== undefined
+        || usageSession.startedAt + MAX_SESSION_DURATION_MS <= now
+        || reconnectExpired
+      ) {
+        throw new ConvexError("Guest cloud session has ended");
+      }
+    } else {
+      const joinToken = await ctx.db.get(scannerJoinTokenId);
+      if (
+        !joinToken
+        || joinToken.revokedAt !== undefined
+        || joinToken.expiresAt <= now
+        || joinToken.usageSessionId !== grant.usageSessionId
+        || joinToken.clerkUserId !== grant.createdByClerkUserId
+      ) {
+        throw new ConvexError("Guest cloud session is not active");
+      }
     }
   }
 
@@ -273,6 +291,183 @@ export const createGuestGrant = internalMutation({
       expiresAt,
     });
     return { guestCloudGrant, expiresAt };
+  },
+});
+
+export const createAppClipWorkspaceGrantForHttp = internalMutation({
+  args: {
+    clerkUserId: v.string(),
+    ownerName: v.optional(v.string()),
+  },
+  returns: v.object({
+    guestCloudGrant: v.string(),
+    expiresAt: v.number(),
+  }),
+  handler: async (ctx, args) => {
+    const workspace = await requireOrCreateWorkspaceForClerkUser(
+      ctx,
+      args.clerkUserId,
+      args.ownerName,
+    );
+    const now = Date.now();
+    const existing = await ctx.db
+      .query("workspaceGuestGrants")
+      .withIndex("by_createdByClerkUserId", (q) =>
+        q.eq("createdByClerkUserId", args.clerkUserId),
+      )
+      .order("desc")
+      .take(20);
+    for (const grant of existing) {
+      if (
+        grant.scannerJoinTokenId === undefined
+        && grant.usageSessionId === undefined
+        && grant.revokedAt === undefined
+      ) {
+        await ctx.db.patch(grant._id, { revokedAt: now });
+      }
+    }
+
+    const guestCloudGrant = randomOpaqueSecret();
+    const expiresAt = now + APP_CLIP_GRANT_TTL_MS;
+    await ctx.db.insert("workspaceGuestGrants", {
+      workspaceId: workspace._id,
+      createdByClerkUserId: args.clerkUserId,
+      grantHash: await sha256Hex(guestCloudGrant),
+      sourceDeviceId: `appclip:${crypto.randomUUID()}`,
+      createdAt: now,
+      expiresAt,
+    });
+    return { guestCloudGrant, expiresAt };
+  },
+});
+
+export const updateDictationDraft = mutation({
+  args: {
+    ...credentialArgs,
+    draftId: v.string(),
+    targetDeviceId: v.string(),
+    text: v.string(),
+  },
+  returns: v.object({ draftId: v.string(), updatedAt: v.number() }),
+  handler: async (ctx, args) => {
+    return upsertDictationDraft(ctx, await requireDevicePrincipal(ctx, args), args);
+  },
+});
+
+export const clearDictationDraft = mutation({
+  args: { ...credentialArgs, draftId: v.string() },
+  returns: v.object({ cleared: v.boolean() }),
+  handler: async (ctx, args) => {
+    return clearDictationDraftForPrincipal(
+      ctx,
+      await requireDevicePrincipal(ctx, args),
+      args.draftId,
+    );
+  },
+});
+
+async function upsertDictationDraft(
+  ctx: MutationCtx,
+  principal: Principal,
+  args: { draftId: string; targetDeviceId: string; text: string },
+): Promise<{ draftId: string; updatedAt: number }> {
+  if (!args.draftId.trim() || args.text.length > 100_000) {
+    throw new ConvexError("Invalid dictation draft");
+  }
+  const target = await ctx.db
+    .query("workspaceDevices")
+    .withIndex("by_deviceId", (q) => q.eq("deviceId", args.targetDeviceId))
+    .unique();
+  if (
+    !target
+    || target.workspaceId !== principal.workspace._id
+    || target.kind !== "chrome"
+    || target.revokedAt !== undefined
+  ) {
+    throw new ConvexError("Target computer not found");
+  }
+  const existing = await ctx.db
+    .query("dictationDrafts")
+    .withIndex("by_workspaceId_and_draftId", (q) =>
+      q.eq("workspaceId", principal.workspace._id).eq("draftId", args.draftId),
+    )
+    .unique();
+  const now = Date.now();
+  const value = {
+    targetDeviceId: target.deviceId,
+    text: args.text,
+    updatedAt: now,
+    expiresAt: now + DICTATION_DRAFT_TTL_MS,
+  };
+  if (existing) {
+    if (existing.sourceDeviceId !== principal.sourceDeviceId) {
+      throw new ConvexError("Dictation draft id conflicts with another source");
+    }
+    await ctx.db.patch(existing._id, value);
+  } else {
+    await ctx.db.insert("dictationDrafts", {
+      workspaceId: principal.workspace._id,
+      draftId: args.draftId,
+      sourceDeviceId: principal.sourceDeviceId,
+      ...value,
+    });
+  }
+  return { draftId: args.draftId, updatedAt: now };
+}
+
+async function clearDictationDraftForPrincipal(
+  ctx: MutationCtx,
+  principal: Principal,
+  draftId: string,
+): Promise<{ cleared: boolean }> {
+  const existing = await ctx.db
+    .query("dictationDrafts")
+    .withIndex("by_workspaceId_and_draftId", (q) =>
+      q.eq("workspaceId", principal.workspace._id).eq("draftId", draftId),
+    )
+    .unique();
+  if (!existing) return { cleared: false };
+  if (existing.sourceDeviceId !== principal.sourceDeviceId) {
+    throw new ConvexError("Dictation draft does not belong to this device");
+  }
+  await ctx.db.delete(existing._id);
+  return { cleared: true };
+}
+
+export const liveDictationDraftsForComputer = query({
+  args: { installationId: v.string() },
+  returns: v.array(v.object({
+    draftId: v.string(),
+    text: v.string(),
+    updatedAt: v.number(),
+  })),
+  handler: async (ctx, args) => {
+    const workspace = await requireAuthenticatedWorkspace(ctx);
+    const computer = await ctx.db
+      .query("workspaceDevices")
+      .withIndex("by_deviceId", (q) => q.eq("deviceId", args.installationId))
+      .unique();
+    if (
+      !computer
+      || computer.workspaceId !== workspace._id
+      || computer.kind !== "chrome"
+      || computer.revokedAt !== undefined
+    ) {
+      return [];
+    }
+    const now = Date.now();
+    const drafts = await ctx.db
+      .query("dictationDrafts")
+      .withIndex("by_targetDeviceId_and_expiresAt", (q) =>
+        q.eq("targetDeviceId", computer.deviceId).gt("expiresAt", now),
+      )
+      .order("desc")
+      .take(20);
+    return drafts.map((draft) => ({
+        draftId: draft.draftId,
+        text: draft.text,
+        updatedAt: draft.updatedAt,
+      }));
   },
 });
 
@@ -590,6 +785,36 @@ export const listComputersForDevice = query({
         };
       }),
     };
+  },
+});
+
+async function listWorkspaceComputers(ctx: DatabaseReaderCtx, workspaceId: Id<"workspaces">) {
+  const devices = await ctx.db
+    .query("workspaceDevices")
+    .withIndex("by_workspaceId", (q) => q.eq("workspaceId", workspaceId))
+    .collect();
+  const presence = await ctx.db
+    .query("workspacePresence")
+    .withIndex("by_workspaceId", (q) => q.eq("workspaceId", workspaceId))
+    .collect();
+  const byDevice = new Map(presence.map((item) => [item.deviceId, item]));
+  const now = Date.now();
+  return devices.filter((item) => item.kind === "chrome" && !item.revokedAt).map((item) => {
+    const current = byDevice.get(item.deviceId);
+    return {
+      deviceId: item.deviceId,
+      label: item.label,
+      capabilities: normalizeCapabilities(current?.capabilities ?? []),
+      online: Boolean(current && current.state === "online" && current.expiresAt > now),
+    };
+  });
+}
+
+export const listComputersForGuest = query({
+  args: guestCredentialArgs,
+  handler: async (ctx, args) => {
+    const { workspace } = await requireGuestPrincipal(ctx, args);
+    return { computers: await listWorkspaceComputers(ctx, workspace._id) };
   },
 });
 
@@ -1007,20 +1232,12 @@ export const acknowledgeDeliveryAsComputer = mutation({
   },
 });
 
-export const queueCursorDelivery = mutation({
-  args: {
-    ...credentialArgs,
-    deliveryId: v.string(),
-    resultId: v.string(),
-    targetDeviceId: v.string(),
-    kind: v.union(v.literal("barcode"), v.literal("text")),
-    text: v.string(),
-    format: v.optional(v.string()),
-    clientCreatedAt: v.number(),
-  },
-  handler: async (ctx, args) => {
-    const { workspace, device } = await requireDevicePrincipal(ctx, args);
-    if (!device) throw new ConvexError("Device required");
+async function queueCursorDeliveryForPrincipal(
+  ctx: MutationCtx,
+  principal: Principal,
+  args: CursorDeliveryInput,
+) {
+    const { workspace, sourceDeviceId } = principal;
     const existing = await ctx.db
       .query("cursorDeliveries")
       .withIndex("by_workspaceId_and_deliveryId", (q) =>
@@ -1029,7 +1246,7 @@ export const queueCursorDelivery = mutation({
       .unique();
     if (existing) {
       if (
-        existing.sourceDeviceId !== device.deviceId
+        existing.sourceDeviceId !== sourceDeviceId
         || existing.resultId !== args.resultId
         || existing.targetDeviceId !== args.targetDeviceId
         || existing.kind !== args.kind
@@ -1050,13 +1267,14 @@ export const queueCursorDelivery = mutation({
       .unique();
     if (
       !result
-      || result.sourceDeviceId !== device.deviceId
+      || result.sourceDeviceId !== sourceDeviceId
       || result.deletedAt !== undefined
-      || (result.kind !== "barcode" && result.kind !== "text")
+      || (result.kind !== "barcode" && result.kind !== "text" && result.kind !== "dictation")
     ) {
       throw new ConvexError("Deliverable result not found");
     }
-    if (result.kind !== args.kind || result.text !== args.text || result.format !== args.format) {
+    const deliveryKind = result.kind === "dictation" ? "text" : result.kind;
+    if (deliveryKind !== args.kind || result.text !== args.text || result.format !== args.format) {
       throw new ConvexError("Delivery payload does not match the stored result");
     }
 
@@ -1073,7 +1291,7 @@ export const queueCursorDelivery = mutation({
       workspaceId: workspace._id,
       deliveryId: args.deliveryId,
       resultId: args.resultId,
-      sourceDeviceId: device.deviceId,
+      sourceDeviceId,
       targetDeviceId: target.deviceId,
       kind: args.kind,
       text: args.text,
@@ -1089,6 +1307,33 @@ export const queueCursorDelivery = mutation({
       updatedAt: now,
     });
     return { deliveryId: args.deliveryId, idempotent: false, state: "pending" as const };
+}
+
+const cursorDeliveryArgs = {
+  deliveryId: v.string(),
+  resultId: v.string(),
+  targetDeviceId: v.string(),
+  kind: v.union(v.literal("barcode"), v.literal("text")),
+  text: v.string(),
+  format: v.optional(v.string()),
+  clientCreatedAt: v.number(),
+};
+
+export const queueCursorDelivery = mutation({
+  args: { ...credentialArgs, ...cursorDeliveryArgs },
+  handler: async (ctx, args) => {
+    return queueCursorDeliveryForPrincipal(ctx, await requireDevicePrincipal(ctx, args), args);
+  },
+});
+
+export const queueGuestCursorDelivery = mutation({
+  args: { ...guestCredentialArgs, ...cursorDeliveryArgs },
+  handler: async (ctx, args) => {
+    const principal = await requireGuestPrincipal(ctx, args);
+    if (principal.guestGrant) {
+      await ctx.db.patch(principal.guestGrant._id, { lastUsedAt: Date.now() });
+    }
+    return queueCursorDeliveryForPrincipal(ctx, principal, args);
   },
 });
 

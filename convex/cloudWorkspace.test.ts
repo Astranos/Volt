@@ -162,6 +162,11 @@ const createGuestGrant = makeFunctionReference<
   { clerkUserId: string; joinToken: string; usageSessionId: string },
   GuestCredential & { expiresAt: number }
 >("cloudWorkspace:createGuestGrant");
+const createAppClipWorkspaceGrant = makeFunctionReference<
+  "mutation",
+  { clerkUserId: string; ownerName?: string },
+  GuestCredential & { expiresAt: number }
+>("cloudWorkspace:createAppClipWorkspaceGrantForHttp");
 const putGuestBatch = makeFunctionReference<
   "mutation",
   GuestCredential & {
@@ -176,6 +181,31 @@ const markGuestBatchReady = makeFunctionReference<
   GuestCredential & { batchId: string },
   { idempotent: boolean }
 >("cloudWorkspace:markGuestBatchReady");
+const listComputersForGuest = makeFunctionReference<
+  "query",
+  GuestCredential,
+  { computers: Array<{ deviceId: string; label: string; capabilities: string[]; online: boolean }> }
+>("cloudWorkspace:listComputersForGuest");
+const queueGuestCursorDelivery = makeFunctionReference<
+  "mutation",
+  GuestCredential & Omit<CursorDeliveryInput, keyof DeviceCredential>,
+  { deliveryId: string; idempotent: boolean; state: "pending" | "delivered" | "failed" }
+>("cloudWorkspace:queueGuestCursorDelivery");
+const updateDictationDraft = makeFunctionReference<
+  "mutation",
+  DeviceCredential & { draftId: string; targetDeviceId: string; text: string },
+  { draftId: string; updatedAt: number }
+>("cloudWorkspace:updateDictationDraft");
+const clearDictationDraft = makeFunctionReference<
+  "mutation",
+  DeviceCredential & { draftId: string },
+  { cleared: boolean }
+>("cloudWorkspace:clearDictationDraft");
+const liveDictationDraftsForComputer = makeFunctionReference<
+  "query",
+  { installationId: string },
+  Array<{ draftId: string; text: string; updatedAt: number }>
+>("cloudWorkspace:liveDictationDraftsForComputer");
 const authorizeGuestPhotoAccess = makeFunctionReference<
   "query",
   GuestCredential & { batchId: string; resultId: string; operation: "put" | "get" },
@@ -218,11 +248,11 @@ async function enroll(
   };
 }
 
-function result(resultId: string, kind: "text" | "photo" = "text") {
+function result(resultId: string, kind: "text" | "photo" | "dictation" = "text") {
   return {
     resultId,
     kind,
-    ...(kind === "text" ? { text: resultId } : { contentType: "image/jpeg" }),
+    ...(kind === "photo" ? { contentType: "image/jpeg" } : { text: resultId }),
     byteCount: 10,
     clientCreatedAt: 1,
   };
@@ -293,6 +323,117 @@ describe("cloud scanner workspace", () => {
     expect(storedGrant?.grantHash).not.toBe(grant.guestCloudGrant);
     expect(storedGrant?.lastUsedAt).toBeTypeOf("number");
     expect(await t.run((ctx) => ctx.db.query("workspaceDevices").collect())).toEqual([]);
+  });
+
+  test("lets an App Clip guest list workspace computers and queue typing to its selected computer", async () => {
+    const t = convexTest(schema, modules);
+    const ownerId = "guest-target-owner";
+    const grant = await guestGrant(t, ownerId);
+    await startGuestUsageSession(t, ownerId);
+    await grantFullAppAccess(t, ownerId);
+    const signedIn = t.withIdentity({ subject: ownerId });
+    await signedIn.mutation(registerComputer, {
+      installationId: "guest-target-chrome",
+      label: "Front Counter",
+      capabilities: ["cursor-insertion"],
+      ttlMs: 120_000,
+    });
+
+    const guestCredential = { guestCloudGrant: grant.guestCloudGrant };
+    expect(await t.query(listComputersForGuest, guestCredential)).toEqual({
+      computers: [{
+        deviceId: "guest-target-chrome",
+        label: "Front Counter",
+        capabilities: ["cursor-insertion"],
+        online: true,
+      }],
+    });
+
+    await t.mutation(putGuestBatch, {
+      ...guestCredential,
+      batchId: "guest-target-batch",
+      clientCreatedAt: 1,
+      results: [result("guest-target-result")],
+    });
+    await expect(t.mutation(queueGuestCursorDelivery, {
+      ...guestCredential,
+      deliveryId: "guest-target-delivery",
+      resultId: "guest-target-result",
+      targetDeviceId: "guest-target-chrome",
+      kind: "text",
+      text: "guest-target-result",
+      clientCreatedAt: Date.now(),
+    })).resolves.toMatchObject({ state: "pending" });
+
+    expect(await signedIn.query(pendingCursorDeliveries, {
+      installationId: "guest-target-chrome",
+    })).toEqual([expect.objectContaining({
+      deliveryId: "guest-target-delivery",
+      sourceDeviceId: expect.stringMatching(/^appclip:/),
+      targetDeviceId: "guest-target-chrome",
+    })]);
+  });
+
+  test("streams an authenticated iPhone dictation draft and delivers the final transcript as text", async () => {
+    const t = convexTest(schema, modules);
+    const ownerId = "iphone-dictation-owner";
+    await grantFullAppAccess(t, ownerId);
+    const signedIn = t.withIdentity({ subject: ownerId });
+    const phone = await signedIn.mutation(bootstrapMobileDevice, {
+      installationId: "iphone-dictation",
+      label: "Warehouse iPhone",
+    });
+    await signedIn.mutation(registerComputer, {
+      installationId: "iphone-dictation-chrome",
+      label: "Shipping Desk",
+      capabilities: ["cursor-insertion"],
+      ttlMs: 120_000,
+    });
+
+    const phoneCredential = { deviceId: phone.deviceId, deviceSecret: phone.deviceSecret };
+    await t.mutation(updateDictationDraft, {
+      ...phoneCredential,
+      draftId: "iphone-live-draft",
+      targetDeviceId: "iphone-dictation-chrome",
+      text: "Provisional transcript from Speech",
+    });
+    expect(await signedIn.query(liveDictationDraftsForComputer, {
+      installationId: "iphone-dictation-chrome",
+    })).toEqual([expect.objectContaining({
+      draftId: "iphone-live-draft",
+      text: "Provisional transcript from Speech",
+    })]);
+
+    await t.mutation(putBatch, {
+      ...phoneCredential,
+      batchId: "iphone-dictation-batch",
+      clientCreatedAt: 1,
+      results: [{
+        resultId: "iphone-live-draft",
+        kind: "dictation",
+        text: "Final Speech transcript",
+        format: "dictation",
+        byteCount: 10,
+        clientCreatedAt: 1,
+      }],
+    });
+    await expect(t.mutation(queueCursorDelivery, {
+      ...phoneCredential,
+      deliveryId: "iphone-dictation-delivery",
+      resultId: "iphone-live-draft",
+      targetDeviceId: "iphone-dictation-chrome",
+      kind: "text",
+      text: "Final Speech transcript",
+      format: "dictation",
+      clientCreatedAt: Date.now(),
+    })).resolves.toMatchObject({ state: "pending" });
+    expect(await t.mutation(clearDictationDraft, {
+      ...phoneCredential,
+      draftId: "iphone-live-draft",
+    })).toEqual({ cleared: true });
+    expect(await signedIn.query(liveDictationDraftsForComputer, {
+      installationId: "iphone-dictation-chrome",
+    })).toEqual([]);
   });
 
   test("expires guest access when its usage session ends", async () => {

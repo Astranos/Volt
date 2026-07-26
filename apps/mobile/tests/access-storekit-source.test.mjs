@@ -17,9 +17,7 @@ const accountViewSource = readIOSSource("Volt/Views/AccountAccessView.swift");
 const subscriptionViewSource = readIOSSource("Volt/Views/SubscriptionActionsView.swift");
 const rootSceneSource = readIOSSource("Volt/Views/VoltRootScene.swift");
 const clipRootSource = readIOSSource("VoltClip/Views/ClipRootView.swift");
-const clipUpgradeSource = readIOSSource("VoltClip/Views/ClipUpgradeView.swift");
 const clipStoreSource = readIOSSource("VoltClip/Services/ClipScannerStore.swift");
-const clipTransportSource = readIOSSource("VoltClip/Services/WebKitWebRTCTransport.swift");
 const clipInfoSource = readIOSSource("VoltClip/Info.plist");
 const entitlementSource = readIOSSource("Volt/Volt.entitlements");
 
@@ -118,20 +116,18 @@ test("account UI shows account, workspace, full-app access, and server subscript
   assert.doesNotMatch(subscriptionViewSource + accessSettingsSource, /Transaction\.currentEntitlements/);
 });
 
-test("App Clip has upgrade handoff but no authentication or checkout", () => {
-  assert.match(clipRootSource, /SKOverlay\.AppClipConfiguration\(position: \.bottom\)/);
-  assert.match(clipRootSource, /store\.requiresFullApp/);
-  assert.match(clipUpgradeSource, /The App Clip stays free and does not offer checkout/);
-  assert.match(clipUpgradeSource, /6771770148/);
-  assert.match(clipInfoSource, /<key>VoltAppStoreID<\/key>\s*<string>\$\(VOLT_APP_STORE_ID\)<\/string>/);
-  assert.doesNotMatch(clipRootSource + clipUpgradeSource, /ClerkKit|AuthView|UserButton|\.purchase\(|AppStore\.sync/);
+test("App Clip has no full-app entitlement blocker, authentication, or checkout", () => {
+  assert.doesNotMatch(projectSource, /ClipUpgradeView/);
+  assert.doesNotMatch(clipRootSource + clipStoreSource, /requiresFullApp|Full app required/);
+  assert.doesNotMatch(clipRootSource, /SKOverlay|appStoreOverlay/);
+  assert.doesNotMatch(clipInfoSource, /VoltAppStoreID/);
+  assert.doesNotMatch(clipRootSource, /ClerkKit|AuthView|UserButton|\.purchase\(|AppStore\.sync/);
 });
 
-test("App Clip recognizes machine-readable access exhaustion", () => {
-  assert.match(clipTransportSource, /var onProtocolError: \(\(ScannerProtocol\.ProtocolError\) -> Void\)\?/);
-  assert.match(clipTransportSource, /onProtocolError\?\(protocolError\)/);
-  assert.match(clipStoreSource, /transport\.onProtocolError = \{ \[weak self\] protocolError in/);
-  assert.match(clipStoreSource, /guard error\.code == "access_exhausted" else \{ return \}/);
-  assert.match(clipStoreSource, /requiresFullApp = true/);
-  assert.match(clipStoreSource, /statusText = "Full app required"/);
+test("App Clip treats an invalid cloud workspace grant as retryable", () => {
+  assert.match(clipStoreSource, /AppClipGuestCloudSession\(pairingSession: nextSession\)/);
+  assert.match(clipStoreSource, /pairingFailureMessage = "This QR does not contain a valid workspace grant\."/);
+  assert.match(clipStoreSource, /targetHint = "Scan a fresh Volt QR code"/);
+  assert.match(clipStoreSource, /statusText = "Connection failed"/);
+  assert.doesNotMatch(clipStoreSource, /requiresFullApp = true|Full app required/);
 });

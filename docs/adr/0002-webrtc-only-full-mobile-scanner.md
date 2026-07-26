@@ -2,7 +2,7 @@
 
 ## Status
 
-Superseded by ADR 0003, and for the installed full app, superseded by ADR 0004: the full app no longer uses WebRTC, pairing, or Chrome-generated QR enrollment for any capture or delivery path. This document is retained as historical context for the direct-WebRTC full-app design and remains informative for the App Clip, which still uses this WebRTC pairing/transport model unchanged.
+Superseded by ADR 0003. Neither the installed app nor App Clip uses WebRTC for current capture or delivery. This document is retained only as historical context for the retired direct-WebRTC design.
 
 ## Context
 

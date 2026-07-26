@@ -33,9 +33,9 @@ struct RootView: View {
                 .tabItem { Label("Photos", systemImage: "camera.viewfinder") }
                 .tag(AppSection.photos)
 
-            SessionsView()
-                .tabItem { Label("Sessions", systemImage: "clock.arrow.circlepath") }
-                .tag(AppSection.sessions)
+            DictationView()
+                .tabItem { Label("Dictate", systemImage: "mic") }
+                .tag(AppSection.dictation)
 
             SettingsView(showsAccountSettings: showsAccountSettings)
                 .tabItem { Label("Settings", systemImage: "gearshape") }
@@ -70,6 +70,7 @@ struct RootView: View {
                 store.cloudWorkspace.requestSync()
             case .background:
                 store.cloudWorkspace.setSubscriptionsActive(false)
+                Task { await store.cancelLiveDictation() }
             case .inactive:
                 break
             @unknown default:
@@ -79,6 +80,7 @@ struct RootView: View {
         .onDisappear {
             guard !ScreenshotScenario.isEnabled else { return }
             store.cloudWorkspace.setSubscriptionsActive(false)
+            Task { await store.cancelLiveDictation() }
         }
     }
 
@@ -91,7 +93,9 @@ struct RootView: View {
             store.activeMode = .barcode
         case .photos:
             store.activeMode = .photo
-        case .sessions, .settings:
+        case .dictation:
+            store.activeMode = .dictation
+        case .settings:
             break
         }
     }
@@ -180,6 +184,6 @@ enum AppSection: Hashable {
     case text
     case barcode
     case photos
-    case sessions
+    case dictation
     case settings
 }

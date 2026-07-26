@@ -33,6 +33,14 @@
       "source": "/apple-app-site-association",
       "destination": "/apple-app-site-association"
     },
+    {
+      "source": "/clip",
+      "destination": "/clip.html"
+    },
+    {
+      "source": "/clip/",
+      "destination": "/clip.html"
+    },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }

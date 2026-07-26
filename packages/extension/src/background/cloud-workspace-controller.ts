@@ -15,6 +15,7 @@ type ControllerOptions = {
   chromeApi: typeof chrome;
   ensureOffscreenDocument: () => Promise<boolean>;
   handleCursorDeliveries: (deliveries: unknown) => Promise<void>;
+  handleLiveDictationDrafts: (drafts: unknown) => Promise<void>;
   sendOffscreenMessage: (message: unknown) => Promise<unknown>;
   log?: (...args: unknown[]) => void;
 };
@@ -186,6 +187,7 @@ export function createCloudWorkspaceController(options: ControllerOptions) {
     const isOffscreenMessage =
       rawRecord?.action === "workspaceOffscreenSnapshotChanged"
       || rawRecord?.action === "workspaceOffscreenCursorDeliveriesChanged"
+      || rawRecord?.action === "workspaceOffscreenDictationDraftsChanged"
       || rawRecord?.action === "workspaceOffscreenAccountChanged"
       || rawRecord?.action === "workspaceOffscreenStorage";
     if (isOffscreenMessage) {
@@ -203,6 +205,8 @@ export function createCloudWorkspaceController(options: ControllerOptions) {
             return sync.applySnapshot(rawRecord.snapshot);
           case "workspaceOffscreenCursorDeliveriesChanged":
             return options.handleCursorDeliveries(rawRecord.deliveries);
+          case "workspaceOffscreenDictationDraftsChanged":
+            return options.handleLiveDictationDrafts(rawRecord.drafts);
           case "workspaceOffscreenStorage":
             return offscreenStorage(rawRecord);
           default:

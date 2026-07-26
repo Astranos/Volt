@@ -200,10 +200,30 @@ def apply_project_build_number(build_number)
   )
 end
 
+# Volt gates everything behind a Clerk sign-in, and the production Clerk
+# instance offers only Google OAuth and email one-time codes as first factors —
+# neither of which App Review can complete unaided. Whichever account is handed
+# over has to be supplied here, or the reviewer stops at the sign-in screen.
+def app_review_demo_account_from_env
+  demo_user = ENV["APP_REVIEW_DEMO_USER"].to_s.strip
+  demo_password = ENV["APP_REVIEW_DEMO_PASSWORD"].to_s.strip
+  return { demo_account_required: false } if demo_user.empty? && demo_password.empty?
+
+  if demo_user.empty? || demo_password.empty?
+    UI.user_error!("APP_REVIEW_DEMO_USER and APP_REVIEW_DEMO_PASSWORD must be set together")
+  end
+
+  {
+    demo_account_required: true,
+    demo_account_name: demo_user,
+    demo_account_password: demo_password
+  }
+end
+
 def upload_app_store_release_notes(api_key:, app_version:, build_number:, release_notes:, review_notes:, submit_for_review:)
   return if release_notes.to_s.strip.empty? && review_notes.to_s.strip.empty? && !submit_for_review
 
-  app_review_information = {}
+  app_review_information = app_review_demo_account_from_env
   app_review_information[:notes] = review_notes if review_notes.to_s.strip.length.positive?
   localized_release_notes = {}
   localized_release_notes["en-US"] = release_notes if release_notes.to_s.strip.length.positive?
@@ -436,7 +456,7 @@ platform :ios do
       changelog: testflight_changelog,
       beta_app_review_info: {
         notes: app_review_notes,
-        demo_account_required: false
+        **app_review_demo_account_from_env
       },
       skip_waiting_for_build_processing: skip_waiting_for_build_processing
     )

@@ -131,7 +131,7 @@ struct CaptureModeCapturesSection: View {
             }
 
             if hiddenCount > 0 {
-                Text("\(hiddenCount) more in Sessions")
+                Text("\(hiddenCount) more saved")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -213,7 +213,7 @@ extension CaptureMode {
         case .ocr: .text
         case .barcode: .barcode
         case .photo: .photos
-        case .dictation: .sessions
+        case .dictation: .dictation
         }
     }
 
@@ -222,7 +222,7 @@ extension CaptureMode {
         case .ocr: "Text"
         case .barcode: "Barcode"
         case .photo: "Photos"
-        case .dictation: "Sessions"
+        case .dictation: "Dictate"
         }
     }
 
@@ -231,7 +231,7 @@ extension CaptureMode {
         case .ocr: "Extract text instantly"
         case .barcode: "Scan a barcode"
         case .photo: "Start a photo session"
-        case .dictation: "Capture"
+        case .dictation: "Dictate to Chrome"
         }
     }
 
@@ -244,7 +244,7 @@ extension CaptureMode {
         case .photo:
             "Capture a group of product photos, leave when you need to, and continue the same session later."
         case .dictation:
-            "Capture information with Volt."
+            "Speak with the iPhone microphone and stream live words into the selected Chrome cursor."
         }
     }
 
@@ -253,7 +253,7 @@ extension CaptureMode {
         case .ocr: "Scan Text"
         case .barcode: "Scan Barcode"
         case .photo: "Start Photo Session"
-        case .dictation: "Start Capture"
+        case .dictation: "Start Dictation"
         }
     }
 
@@ -262,7 +262,7 @@ extension CaptureMode {
         case .ocr: "text captures"
         case .barcode: "barcodes"
         case .photo: "photos"
-        case .dictation: "captures"
+        case .dictation: "dictation"
         }
     }
 
@@ -271,7 +271,98 @@ extension CaptureMode {
         case .ocr: .green
         case .barcode: .blue
         case .photo: .indigo
-        case .dictation: .green
+        case .dictation: .orange
         }
+    }
+}
+
+struct CapturePhotoBatch: Identifiable {
+    let id: String
+    let results: [ScanResult]
+
+    var latestCapturedAt: Date {
+        results.map(\.capturedAt).max() ?? .distantPast
+    }
+
+    var title: String {
+        "\(results.count) captured photo\(results.count == 1 ? "" : "s")"
+    }
+}
+
+struct PhotoSessionHistorySection: View {
+    let batches: [CapturePhotoBatch]
+    let onContinue: (CapturePhotoBatch) -> Void
+    let onResend: (ScanResult) -> Void
+    let onDelete: (ScanResult) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Recent photos")
+                .font(.headline)
+
+            if batches.isEmpty {
+                ContentUnavailableView(
+                    "No Photos Yet",
+                    systemImage: "camera.viewfinder",
+                    description: Text("Photo sessions from this tab will appear here.")
+                )
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 34)
+                .background(.background, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            } else {
+                LazyVStack(spacing: 10) {
+                    ForEach(batches) { batch in
+                        CapturePhotoBatchCard(
+                            batch: batch,
+                            onContinue: { onContinue(batch) },
+                            onResend: onResend,
+                            onDelete: onDelete
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct CapturePhotoBatchCard: View {
+    let batch: CapturePhotoBatch
+    let onContinue: () -> Void
+    let onResend: (ScanResult) -> Void
+    let onDelete: (ScanResult) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(batch.title)
+                        .font(.headline)
+                        .accessibilityAddTraits(.isHeader)
+                    Text(batch.latestCapturedAt, format: .dateTime.month().day().hour().minute())
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer(minLength: 8)
+
+                Button(action: onContinue) {
+                    Label("Continue", systemImage: "plus.viewfinder")
+                }
+                .buttonStyle(.bordered)
+                .accessibilityLabel("Continue \(batch.title) from \(batch.latestCapturedAt.formatted(date: .abbreviated, time: .shortened))")
+            }
+
+            ForEach(batch.results) { result in
+                CapturedResultRow(
+                    result: result,
+                    canResend: true,
+                    onResend: { onResend(result) },
+                    onDelete: { onDelete(result) }
+                )
+                .padding(.top, 2)
+            }
+        }
+        .padding(14)
+        .background(.background, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 }

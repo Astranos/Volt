@@ -188,6 +188,58 @@ test("scanner text insertion uses native setters and composed input events", () 
   ]);
 });
 
+test("live dictation replaces the provisional text at the tracked input cursor", () => {
+  const events = [];
+  const input = installFakeDom({ tagName: "INPUT", value: "Before: ", events });
+
+  const partial = insertTextAtTrackedEditableFromBackground("hello", {
+    dictationPhase: "partial",
+    dictationSessionId: "draft-1",
+    format: "dictation",
+  });
+  const updated = insertTextAtTrackedEditableFromBackground("hello world", {
+    dictationPhase: "partial",
+    dictationSessionId: "draft-1",
+    format: "dictation",
+  });
+  const final = insertTextAtTrackedEditableFromBackground("hello world", {
+    dictationPhase: "final",
+    dictationSessionId: "draft-1",
+    format: "dictation",
+  });
+
+  assert.equal(input.value, "Before: hello world");
+  assert.deepEqual(partial, {
+    inserted: true,
+    dictationSessionId: "draft-1",
+    final: false,
+    sourceLength: 5,
+  });
+  assert.equal(updated.inserted, true);
+  assert.equal(final.final, true);
+  assert.equal(globalThis.window.__voltLiveDictation, null);
+});
+
+test("canceling live dictation removes provisional text at the tracked input cursor", () => {
+  const events = [];
+  const input = installFakeDom({ tagName: "INPUT", value: "Before: ", events });
+
+  insertTextAtTrackedEditableFromBackground("temporary", {
+    dictationPhase: "partial",
+    dictationSessionId: "draft-cancel",
+    format: "dictation",
+  });
+  const canceled = insertTextAtTrackedEditableFromBackground("", {
+    dictationPhase: "cancel",
+    dictationSessionId: "draft-cancel",
+    format: "dictation",
+  });
+
+  assert.equal(input.value, "Before: ");
+  assert.equal(canceled.inserted, true);
+  assert.equal(globalThis.window.__voltLiveDictation, null);
+});
+
 function installFakeDom({ tagName, value = "", isContentEditable = false, events }) {
   class FakeHTMLElement {
     constructor() {
