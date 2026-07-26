@@ -45,6 +45,20 @@ final class ScannerStore {
 
     let camera = CameraModel()
     let cloudWorkspace: CloudWorkspaceStore
+    let speechDictation = SpeechDictationService()
+
+    var dictationDraftStatus = "Tap Start Dictation to begin."
+    var dictationPublishError: String?
+    var dictationSessionId: UUID?
+    /// Fires once per finished dictation so the view can play the matching haptic.
+    var dictationOutcome: DictationOutcomeSignal?
+    @ObservationIgnored var dictationDraftTask: Task<Void, Never>?
+    @ObservationIgnored private var dictationOutcomeTick = 0
+
+    func noteDictationOutcome(_ kind: DictationOutcomeSignal.Kind) {
+        dictationOutcomeTick += 1
+        dictationOutcome = DictationOutcomeSignal(kind: kind, tick: dictationOutcomeTick)
+    }
 
     var lastBarcodeValue: String?
     var lastBarcodeSentAt: Date?

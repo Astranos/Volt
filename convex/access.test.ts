@@ -700,3 +700,67 @@ describe("account and entitlement access", () => {
     });
   });
 });
+
+const adminOverview = makeFunctionReference<
+  "query",
+  Record<string, never>,
+  {
+    isAdmin: boolean;
+    accounts: Array<{ clerkUserId: string; email: string | null; hasProAccess: boolean; isComped: boolean }>;
+    grants: Array<{ id: string; email: string | null; status: string }>;
+  }
+>("admin:overview");
+const adminGrantPro = makeFunctionReference<
+  "mutation",
+  { clerkUserId?: string; email?: string; note?: string },
+  { ok: true }
+>("admin:grantPro");
+const adminRevokePro = makeFunctionReference<"mutation", { grantId: string }, { ok: true }>(
+  "admin:revokePro",
+);
+
+describe("admin comped Pro access", () => {
+  const admin = { subject: "user_admin", tokenIdentifier: "clerk|user_admin", email: "juanquenga@gmail.com" };
+
+  test("only an admin identity can read the console or hand out Pro", async () => {
+    const t = convexTest(schema, modules);
+    const stranger = t.withIdentity({ subject: "user_stranger", tokenIdentifier: "clerk|user_stranger", email: "someone@example.com" });
+
+    expect(await stranger.query(adminOverview, {})).toMatchObject({ isAdmin: false });
+    await expect(stranger.mutation(adminGrantPro, { email: "friend@example.com" })).rejects.toThrow();
+    expect(await t.withIdentity(admin).query(adminOverview, {})).toMatchObject({ isAdmin: true });
+  });
+
+  test("comps an email before that person signs in, then takes it back", async () => {
+    const t = convexTest(schema, modules);
+    const adminSession = t.withIdentity(admin);
+    await adminSession.mutation(adminGrantPro, { email: "Friend@Example.com", note: "beta tester" });
+
+    const friend = t.withIdentity({
+      subject: "user_friend",
+      tokenIdentifier: "clerk|user_friend",
+      email: "friend@example.com",
+    });
+    expect((await friend.mutation(getStatus, {})).body).toMatchObject({
+      access: "complimentary",
+      hasFullAppAccess: true,
+      subscriptionStatus: "active",
+    });
+
+    const overview = await adminSession.query(adminOverview, {});
+    expect(overview.accounts.find((account) => account.clerkUserId === "user_friend")).toMatchObject({
+      hasProAccess: true,
+      isComped: true,
+    });
+
+    const grant = overview.grants.find((entry) => entry.email === "friend@example.com");
+    expect(grant?.status).toBe("active");
+    await adminSession.mutation(adminRevokePro, { grantId: grant!.id });
+
+    expect((await friend.mutation(getStatus, {})).body).toMatchObject({
+      access: "trial",
+      hasFullAppAccess: false,
+      subscriptionStatus: "none",
+    });
+  });
+});

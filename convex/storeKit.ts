@@ -70,6 +70,12 @@ const authArgs = {
   emailVerified: v.optional(v.boolean()),
   name: v.optional(v.string()),
 };
+// The HTTP layer forwards whatever it resolved from the request, which can carry
+// anonymous trial credentials alongside the Clerk identity.
+const anonymousArgs = {
+  anonymousId: v.optional(v.string()),
+  anonymousSecret: v.optional(v.string()),
+};
 
 function certificateStrings() {
   const raw = process.env.APPLE_ROOT_CA_CERTIFICATES_BASE64;
@@ -205,8 +211,11 @@ export const sync = action({
 });
 
 export const syncForHttp = internalAction({
-  args: { ...authArgs, signedTransaction: v.string() },
-  handler: (ctx, args) => syncTransaction(ctx, args, args.signedTransaction),
+  args: { ...authArgs, ...anonymousArgs, signedTransaction: v.string() },
+  // `signedTransaction` has to be split off here: `auth` is forwarded verbatim to
+  // `access:getStatusForHttp`, whose validator rejects any extra field, and that
+  // rejection surfaces to the app as a bare 500 on every purchase sync.
+  handler: (ctx, { signedTransaction, ...auth }) => syncTransaction(ctx, auth, signedTransaction),
 });
 
 async function verifiedNotification(signedPayload: string) {

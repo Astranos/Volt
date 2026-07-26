@@ -33,8 +33,8 @@ export default defineSchema({
 
   workspaceGuestGrants: defineTable({
     workspaceId: v.id("workspaces"),
-    scannerJoinTokenId: v.id("scannerJoinTokens"),
-    usageSessionId: v.string(),
+    scannerJoinTokenId: v.optional(v.id("scannerJoinTokens")),
+    usageSessionId: v.optional(v.string()),
     createdByClerkUserId: v.string(),
     grantHash: v.string(),
     sourceDeviceId: v.string(),
@@ -45,6 +45,7 @@ export default defineSchema({
   })
     .index("by_grantHash", ["grantHash"])
     .index("by_usageSessionId", ["usageSessionId"])
+    .index("by_createdByClerkUserId", ["createdByClerkUserId"])
     .index("by_expiresAt", ["expiresAt"]),
 
   workspaceDevices: defineTable({
@@ -71,6 +72,18 @@ export default defineSchema({
   })
     .index("by_deviceId", ["deviceId"])
     .index("by_workspaceId", ["workspaceId"]),
+
+  dictationDrafts: defineTable({
+    workspaceId: v.id("workspaces"),
+    draftId: v.string(),
+    sourceDeviceId: v.string(),
+    targetDeviceId: v.string(),
+    text: v.string(),
+    updatedAt: v.number(),
+    expiresAt: v.number(),
+  })
+    .index("by_workspaceId_and_draftId", ["workspaceId", "draftId"])
+    .index("by_targetDeviceId_and_expiresAt", ["targetDeviceId", "expiresAt"]),
 
   resultBatches: defineTable({
     workspaceId: v.id("workspaces"),
@@ -177,6 +190,24 @@ export default defineSchema({
   })
     .index("by_clerkUserId", ["clerkUserId"])
     .index("by_clerkUserId_and_sourceIdentifier", ["clerkUserId", "sourceIdentifier"]),
+
+  // Pro handed out by an admin from the web dashboard. Kept separate from
+  // `entitlements` so the grant survives independently of the derived
+  // entitlement row that `access.ts` syncs on every status check.
+  compedGrants: defineTable({
+    // Exactly one of these identifies the target. An email grant lets an admin
+    // comp somebody who has not signed into the app yet.
+    email: v.optional(v.string()),
+    clerkUserId: v.optional(v.string()),
+    note: v.optional(v.string()),
+    status: v.union(v.literal("active"), v.literal("revoked")),
+    grantedByClerkUserId: v.string(),
+    grantedByEmail: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_email", ["email"])
+    .index("by_clerkUserId", ["clerkUserId"]),
 
   organizationEntitlements: defineTable({
     clerkOrganizationId: v.string(),

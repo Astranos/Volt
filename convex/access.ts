@@ -16,6 +16,8 @@ export const DEFAULT_STOREKIT_PRODUCT_ID = "com.volt.mobile.pro.monthly";
 const COMPLIMENTARY_EMAIL_ENTITLEMENT_PREFIX = "complimentary-email:";
 const COMPLIMENTARY_USER_ENTITLEMENT_PREFIX = "complimentary-user:";
 const COMPLIMENTARY_ORGANIZATION_ENTITLEMENT_PREFIX = "complimentary-organization:";
+/** Grants handed out by an admin from the web dashboard. */
+export const COMPLIMENTARY_ADMIN_ENTITLEMENT_PREFIX = "complimentary-admin:";
 const COMPLIMENTARY_ACCOUNT_EMAILS = new Set(["juanquenga@gmail.com"]);
 const COMPLIMENTARY_ACCOUNT_DOMAINS = new Set(["paymore.com"]);
 
@@ -167,11 +169,39 @@ async function usageById(ctx: MutationCtx, usageSessionId: string) {
     .unique();
 }
 
+/**
+ * True when an admin comped this account from the web dashboard, matched either
+ * by Clerk user id or by the email the account signed in with.
+ */
+export async function hasActiveCompedGrant(
+  ctx: Pick<MutationCtx, "db"> | Pick<QueryCtx, "db">,
+  clerkUserId: string | undefined,
+  email: string | undefined,
+) {
+  if (clerkUserId) {
+    const byUser = await ctx.db
+      .query("compedGrants")
+      .withIndex("by_clerkUserId", (query) => query.eq("clerkUserId", clerkUserId))
+      .take(10);
+    if (byUser.some((grant) => grant.status === "active")) return true;
+  }
+  const normalizedEmail = email?.trim().toLowerCase();
+  if (!normalizedEmail) return false;
+  const byEmail = await ctx.db
+    .query("compedGrants")
+    .withIndex("by_email", (query) => query.eq("email", normalizedEmail))
+    .take(10);
+  return byEmail.some((grant) => grant.status === "active");
+}
+
 async function syncComplimentaryAccountEntitlements(
   ctx: MutationCtx,
   clerkUserId: string,
   auth: ClerkAuthContext,
   now: number,
+  // The identity token does not always carry an email claim, so `ensureUser`
+  // passes the address already stored on the user row as a fallback.
+  storedEmail?: string,
 ) {
   const entitlements = await ctx.db
     .query("entitlements")
@@ -183,6 +213,7 @@ async function syncComplimentaryAccountEntitlements(
         entitlement.sourceIdentifier.startsWith(COMPLIMENTARY_EMAIL_ENTITLEMENT_PREFIX)
         || entitlement.sourceIdentifier.startsWith(COMPLIMENTARY_USER_ENTITLEMENT_PREFIX)
         || entitlement.sourceIdentifier.startsWith(COMPLIMENTARY_ORGANIZATION_ENTITLEMENT_PREFIX)
+        || entitlement.sourceIdentifier.startsWith(COMPLIMENTARY_ADMIN_ENTITLEMENT_PREFIX)
       ),
   );
 
@@ -201,6 +232,9 @@ async function syncComplimentaryAccountEntitlements(
         desiredSourceIdentifiers.add(entitlement.sourceIdentifier);
       }
     }
+  }
+  if (await hasActiveCompedGrant(ctx, clerkUserId, auth.email ?? storedEmail)) {
+    desiredSourceIdentifiers.add(`${COMPLIMENTARY_ADMIN_ENTITLEMENT_PREFIX}${clerkUserId}`);
   }
   const configuredOrganizationId = process.env.CLERK_COMPLIMENTARY_ORGANIZATION_ID;
   if (configuredOrganizationId && configuredOrganizationId === auth.organizationId) {
@@ -254,7 +288,7 @@ async function ensureUser(ctx: MutationCtx, auth: ClerkAuthContext, now: number)
       updatedAt: now,
     };
     await ctx.db.patch(existing._id, updates);
-    await syncComplimentaryAccountEntitlements(ctx, existing.clerkUserId, auth, now);
+    await syncComplimentaryAccountEntitlements(ctx, existing.clerkUserId, auth, now, existing.email);
     return { ...existing, ...updates };
   }
 
@@ -270,7 +304,7 @@ async function ensureUser(ctx: MutationCtx, auth: ClerkAuthContext, now: number)
   });
   const user = await ctx.db.get(id);
   if (user) {
-    await syncComplimentaryAccountEntitlements(ctx, user.clerkUserId, auth, now);
+    await syncComplimentaryAccountEntitlements(ctx, user.clerkUserId, auth, now, user.email);
   }
   return user;
 }
