@@ -217,23 +217,40 @@ end
 def app_review_demo_account_from_env
   demo_user = ENV["APP_REVIEW_DEMO_USER"].to_s.strip
   demo_password = ENV["APP_REVIEW_DEMO_PASSWORD"].to_s.strip
-  return { demo_account_required: false } if demo_user.empty? && demo_password.empty?
+  return nil if demo_user.empty? && demo_password.empty?
 
   if demo_user.empty? || demo_password.empty?
     UI.user_error!("APP_REVIEW_DEMO_USER and APP_REVIEW_DEMO_PASSWORD must be set together")
   end
 
+  [demo_user, demo_password]
+end
+
+# deliver and upload_to_testflight spell the same two fields differently, and each
+# silently drops keys it does not recognise — passing the wrong pair means the
+# submission goes out with no demo account and the reviewer is stuck at sign-in.
+def deliver_demo_account_from_env
+  account = app_review_demo_account_from_env
+  return {} if account.nil?
+
+  { demo_user: account[0], demo_password: account[1] }
+end
+
+def testflight_demo_account_from_env
+  account = app_review_demo_account_from_env
+  return { demo_account_required: false } if account.nil?
+
   {
     demo_account_required: true,
-    demo_account_name: demo_user,
-    demo_account_password: demo_password
+    demo_account_name: account[0],
+    demo_account_password: account[1]
   }
 end
 
 def upload_app_store_release_notes(api_key:, app_version:, build_number:, release_notes:, review_notes:, submit_for_review:)
   return if release_notes.to_s.strip.empty? && review_notes.to_s.strip.empty? && !submit_for_review
 
-  app_review_information = app_review_demo_account_from_env
+  app_review_information = deliver_demo_account_from_env
   app_review_information[:notes] = review_notes if review_notes.to_s.strip.length.positive?
   localized_release_notes = {}
   localized_release_notes["en-US"] = release_notes if release_notes.to_s.strip.length.positive?
@@ -466,7 +483,7 @@ platform :ios do
       changelog: testflight_changelog,
       beta_app_review_info: {
         notes: app_review_notes,
-        **app_review_demo_account_from_env
+        **testflight_demo_account_from_env
       },
       skip_waiting_for_build_processing: skip_waiting_for_build_processing
     )
