@@ -62,7 +62,7 @@ struct AccountAccessView: View {
         Section("Server Access") {
             if let status = accessStore.status {
                 LabeledContent("Access", value: accessLabel(for: status))
-                LabeledContent("Free Sessions Remaining", value: "\(status.freeSessionsRemaining)")
+                LabeledContent("Full App Access", value: status.hasFullAppAccess ? "Unlocked" : "Locked")
                 LabeledContent("Subscription", value: subscriptionLabel(for: status))
                 if let expiresAt = status.expiresAt {
                     LabeledContent("Renews or Expires") {
@@ -84,7 +84,7 @@ struct AccountAccessView: View {
     private func accessLabel(for status: AccessStatus) -> String {
         switch status.access {
         case .trial:
-            "Free trial"
+            "Subscription required"
         case .complimentary:
             "Complimentary workplace"
         case .subscription:

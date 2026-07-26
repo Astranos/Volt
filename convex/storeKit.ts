@@ -67,6 +67,7 @@ const authArgs = {
   organizationId: v.optional(v.string()),
   organizationName: v.optional(v.string()),
   email: v.optional(v.string()),
+  emailVerified: v.optional(v.boolean()),
   name: v.optional(v.string()),
 };
 

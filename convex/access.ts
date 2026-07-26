@@ -6,6 +6,7 @@ import {
   internalMutation,
   mutation,
   type MutationCtx,
+  type QueryCtx,
 } from "./_generated/server";
 
 export const FREE_SESSION_LIMIT = 5;
@@ -13,6 +14,8 @@ export const RECONNECT_WINDOW_MS = 30 * 60 * 1000;
 export const MAX_SESSION_DURATION_MS = 8 * 60 * 60 * 1000;
 export const DEFAULT_STOREKIT_PRODUCT_ID = "com.volt.mobile.pro.monthly";
 const COMPLIMENTARY_EMAIL_ENTITLEMENT_PREFIX = "complimentary-email:";
+const COMPLIMENTARY_USER_ENTITLEMENT_PREFIX = "complimentary-user:";
+const COMPLIMENTARY_ORGANIZATION_ENTITLEMENT_PREFIX = "complimentary-organization:";
 const COMPLIMENTARY_ACCOUNT_EMAILS = new Set(["juanquenga@gmail.com"]);
 const COMPLIMENTARY_ACCOUNT_DOMAINS = new Set(["paymore.com"]);
 
@@ -32,6 +35,7 @@ type SubscriptionStatus = "none" | "active" | "expired";
 export type AccessStatus = {
   access: AccessSource | "exhausted";
   isAuthorized: boolean;
+  hasFullAppAccess: boolean;
   freeSessionsRemaining: number;
   requiresSignIn: boolean;
   requiresSubscription: boolean;
@@ -100,13 +104,29 @@ export function storeKitProductId() {
   return process.env.STOREKIT_PRODUCT_ID || DEFAULT_STOREKIT_PRODUCT_ID;
 }
 
+function configuredValues(name: string) {
+  return new Set(
+    (process.env[name] ?? "")
+      .split(/[\n,]/)
+      .map((value) => value.trim().toLowerCase())
+      .filter(Boolean),
+  );
+}
+
 export function isComplimentaryAccountEmail(email: string | undefined) {
   if (!email) return false;
   const normalized = email.trim().toLowerCase();
   const separator = normalized.lastIndexOf("@");
   if (separator <= 0 || separator === normalized.length - 1) return false;
   return COMPLIMENTARY_ACCOUNT_EMAILS.has(normalized)
-    || COMPLIMENTARY_ACCOUNT_DOMAINS.has(normalized.slice(separator + 1));
+    || configuredValues("CLERK_COMPLIMENTARY_EMAILS").has(normalized)
+    || COMPLIMENTARY_ACCOUNT_DOMAINS.has(normalized.slice(separator + 1))
+    || configuredValues("CLERK_COMPLIMENTARY_EMAIL_DOMAINS").has(normalized.slice(separator + 1));
+}
+
+export function isComplimentaryClerkUser(clerkUserId: string | undefined) {
+  if (!clerkUserId) return false;
+  return configuredValues("CLERK_COMPLIMENTARY_USER_IDS").has(clerkUserId.trim().toLowerCase());
 }
 
 function randomUuid() {
@@ -147,57 +167,80 @@ async function usageById(ctx: MutationCtx, usageSessionId: string) {
     .unique();
 }
 
-async function syncComplimentaryEmailEntitlement(
+async function syncComplimentaryAccountEntitlements(
   ctx: MutationCtx,
   clerkUserId: string,
-  email: string | undefined,
-  emailVerified: boolean | undefined,
+  auth: ClerkAuthContext,
   now: number,
 ) {
-  if (!email) return;
-  const normalizedEmail = email.trim().toLowerCase();
-  const sourceIdentifier = `${COMPLIMENTARY_EMAIL_ENTITLEMENT_PREFIX}${normalizedEmail}`;
-  const eligible = emailVerified === true && isComplimentaryAccountEmail(normalizedEmail);
   const entitlements = await ctx.db
     .query("entitlements")
     .withIndex("by_clerkUserId", (query) => query.eq("clerkUserId", clerkUserId))
     .take(100);
   const complimentaryEntitlements = entitlements.filter(
     (entitlement) => entitlement.kind === "manual"
-      && entitlement.sourceIdentifier.startsWith(COMPLIMENTARY_EMAIL_ENTITLEMENT_PREFIX),
+      && (
+        entitlement.sourceIdentifier.startsWith(COMPLIMENTARY_EMAIL_ENTITLEMENT_PREFIX)
+        || entitlement.sourceIdentifier.startsWith(COMPLIMENTARY_USER_ENTITLEMENT_PREFIX)
+        || entitlement.sourceIdentifier.startsWith(COMPLIMENTARY_ORGANIZATION_ENTITLEMENT_PREFIX)
+      ),
   );
 
+  const desiredSourceIdentifiers = new Set<string>();
+  if (isComplimentaryClerkUser(clerkUserId)) {
+    desiredSourceIdentifiers.add(`${COMPLIMENTARY_USER_ENTITLEMENT_PREFIX}${clerkUserId}`);
+  }
+  if (auth.email) {
+    const normalizedEmail = auth.email.trim().toLowerCase();
+    if (auth.emailVerified === true && isComplimentaryAccountEmail(normalizedEmail)) {
+      desiredSourceIdentifiers.add(`${COMPLIMENTARY_EMAIL_ENTITLEMENT_PREFIX}${normalizedEmail}`);
+    }
+  } else {
+    for (const entitlement of complimentaryEntitlements) {
+      if (entitlement.sourceIdentifier.startsWith(COMPLIMENTARY_EMAIL_ENTITLEMENT_PREFIX)) {
+        desiredSourceIdentifiers.add(entitlement.sourceIdentifier);
+      }
+    }
+  }
+  const configuredOrganizationId = process.env.CLERK_COMPLIMENTARY_ORGANIZATION_ID;
+  if (configuredOrganizationId && configuredOrganizationId === auth.organizationId) {
+    desiredSourceIdentifiers.add(
+      `${COMPLIMENTARY_ORGANIZATION_ENTITLEMENT_PREFIX}${configuredOrganizationId}`,
+    );
+  }
+
   for (const entitlement of complimentaryEntitlements) {
-    if ((!eligible || entitlement.sourceIdentifier !== sourceIdentifier) && entitlement.status === "active") {
+    if (!desiredSourceIdentifiers.has(entitlement.sourceIdentifier) && entitlement.status === "active") {
       await ctx.db.patch(entitlement._id, { status: "revoked", updatedAt: now });
     }
   }
-  if (!eligible) return;
 
-  const existing = complimentaryEntitlements.find(
-    (entitlement) => entitlement.sourceIdentifier === sourceIdentifier,
-  );
-  if (existing) {
-    if (existing.status !== "active" || existing.expiresAt !== undefined) {
-      await ctx.db.patch(existing._id, {
-        status: "active",
-        expiresAt: undefined,
-        productId: storeKitProductId(),
-        updatedAt: now,
-      });
+  for (const sourceIdentifier of desiredSourceIdentifiers) {
+    const existing = complimentaryEntitlements.find(
+      (entitlement) => entitlement.sourceIdentifier === sourceIdentifier,
+    );
+    if (existing) {
+      if (existing.status !== "active" || existing.expiresAt !== undefined) {
+        await ctx.db.patch(existing._id, {
+          status: "active",
+          expiresAt: undefined,
+          productId: storeKitProductId(),
+          updatedAt: now,
+        });
+      }
+      continue;
     }
-    return;
-  }
 
-  await ctx.db.insert("entitlements", {
-    clerkUserId,
-    kind: "manual",
-    sourceIdentifier,
-    productId: storeKitProductId(),
-    status: "active",
-    validFrom: now,
-    updatedAt: now,
-  });
+    await ctx.db.insert("entitlements", {
+      clerkUserId,
+      kind: "manual",
+      sourceIdentifier,
+      productId: storeKitProductId(),
+      status: "active",
+      validFrom: now,
+      updatedAt: now,
+    });
+  }
 }
 
 async function ensureUser(ctx: MutationCtx, auth: ClerkAuthContext, now: number) {
@@ -211,13 +254,7 @@ async function ensureUser(ctx: MutationCtx, auth: ClerkAuthContext, now: number)
       updatedAt: now,
     };
     await ctx.db.patch(existing._id, updates);
-    await syncComplimentaryEmailEntitlement(
-      ctx,
-      existing.clerkUserId,
-      auth.email,
-      auth.emailVerified,
-      now,
-    );
+    await syncComplimentaryAccountEntitlements(ctx, existing.clerkUserId, auth, now);
     return { ...existing, ...updates };
   }
 
@@ -233,13 +270,7 @@ async function ensureUser(ctx: MutationCtx, auth: ClerkAuthContext, now: number)
   });
   const user = await ctx.db.get(id);
   if (user) {
-    await syncComplimentaryEmailEntitlement(
-      ctx,
-      user.clerkUserId,
-      auth.email,
-      auth.emailVerified,
-      now,
-    );
+    await syncComplimentaryAccountEntitlements(ctx, user.clerkUserId, auth, now);
   }
   return user;
 }
@@ -352,6 +383,21 @@ async function subscriptionForUser(ctx: MutationCtx, clerkUserId: string, now: n
   return { status: storeKitEntitlements.length ? ("expired" as const) : ("none" as const) };
 }
 
+export async function hasFullAppEntitlement(
+  ctx: Pick<MutationCtx, "db"> | Pick<QueryCtx, "db">,
+  clerkUserId: string,
+  now = Date.now(),
+) {
+  const entitlements = await ctx.db
+    .query("entitlements")
+    .withIndex("by_clerkUserId", (query) => query.eq("clerkUserId", clerkUserId))
+    .take(100);
+  return entitlements.some(
+    (entitlement) => entitlement.status === "active"
+      && (entitlement.expiresAt === undefined || entitlement.expiresAt > now),
+  );
+}
+
 type ResolvedPrincipal = {
   user?: Doc<"users">;
   grant?: Doc<"anonymousTrialGrants">;
@@ -427,6 +473,7 @@ async function buildAccessStatus(
       ...shared,
       access: "complimentary",
       isAuthorized: true,
+      hasFullAppAccess: true,
       requiresSignIn: false,
       requiresSubscription: false,
     };
@@ -436,6 +483,7 @@ async function buildAccessStatus(
       ...shared,
       access: "subscription",
       isAuthorized: true,
+      hasFullAppAccess: true,
       requiresSignIn: false,
       requiresSubscription: false,
       ...(subscription.entitlement.expiresAt !== undefined
@@ -448,6 +496,7 @@ async function buildAccessStatus(
       ...shared,
       access: "trial",
       isAuthorized: true,
+      hasFullAppAccess: false,
       requiresSignIn: false,
       requiresSubscription: false,
     };
@@ -456,6 +505,7 @@ async function buildAccessStatus(
     ...shared,
     access: "exhausted",
     isAuthorized: false,
+    hasFullAppAccess: false,
     requiresSignIn: !principal.user,
     requiresSubscription: Boolean(principal.user),
   };

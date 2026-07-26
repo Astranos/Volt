@@ -9,6 +9,7 @@ final class StoreKitSubscriptionStore {
     private(set) var isLoadingProduct = false
     private(set) var isPurchasing = false
     private(set) var isRestoring = false
+    private(set) var introductoryTrialPeriod: String?
     private(set) var errorMessage: String?
     private(set) var noticeMessage: String?
 
@@ -19,6 +20,27 @@ final class StoreKitSubscriptionStore {
     init(productID: String, accessStore: AccessStore) {
         self.productID = productID
         self.accessStore = accessStore
+    }
+
+    var purchaseButtonTitle: String {
+        if accessStore.status?.hasFullAppAccess == true {
+            return "Volt Pro Active"
+        }
+        if let introductoryTrialPeriod {
+            return "Start \(introductoryTrialPeriod) Free Trial"
+        }
+        if let product {
+            return "Subscribe for \(product.displayPrice) per month"
+        }
+        return "Subscribe for $9 per month"
+    }
+
+    var purchaseDisclosure: String {
+        let renewalPrice = product?.displayPrice ?? "$9"
+        if let introductoryTrialPeriod {
+            return "\(introductoryTrialPeriod) free, then \(renewalPrice) per month. The subscription renews automatically unless canceled at least 24 hours before the current period ends."
+        }
+        return "\(renewalPrice) per month. The subscription renews automatically unless canceled at least 24 hours before the current period ends."
     }
 
     func prepare(using clerk: Clerk) async {
@@ -107,9 +129,39 @@ final class StoreKitSubscriptionStore {
             if product == nil {
                 throw StoreKitSubscriptionError.productUnavailable
             }
+            await refreshIntroductoryOfferEligibility()
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    private func refreshIntroductoryOfferEligibility() async {
+        guard let subscription = product?.subscription,
+              let offer = subscription.introductoryOffer,
+              offer.paymentMode == .freeTrial,
+              await subscription.isEligibleForIntroOffer
+        else {
+            introductoryTrialPeriod = nil
+            return
+        }
+        introductoryTrialPeriod = Self.periodDescription(offer.period)
+    }
+
+    private static func periodDescription(_ period: Product.SubscriptionPeriod) -> String {
+        let unit: String
+        switch period.unit {
+        case .day:
+            unit = "Day"
+        case .week:
+            unit = "Week"
+        case .month:
+            unit = "Month"
+        case .year:
+            unit = "Year"
+        @unknown default:
+            unit = "Period"
+        }
+        return "\(period.value) \(unit)\(period.value == 1 ? "" : "s")"
     }
 
     private func availableProduct() async throws -> Product {

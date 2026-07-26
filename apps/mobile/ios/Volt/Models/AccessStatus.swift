@@ -3,6 +3,7 @@ import Foundation
 struct AccessStatus: Decodable, Sendable {
     let access: AccessKind
     let isAuthorized: Bool
+    let hasFullAppAccess: Bool
     let freeSessionsRemaining: Int
     let requiresSignIn: Bool
     let requiresSubscription: Bool
@@ -16,6 +17,7 @@ struct AccessStatus: Decodable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case access
         case isAuthorized
+        case hasFullAppAccess
         case freeSessionsRemaining
         case requiresSignIn
         case requiresSubscription
@@ -31,6 +33,8 @@ struct AccessStatus: Decodable, Sendable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         access = try container.decode(AccessKind.self, forKey: .access)
         isAuthorized = try container.decode(Bool.self, forKey: .isAuthorized)
+        hasFullAppAccess = try container.decodeIfPresent(Bool.self, forKey: .hasFullAppAccess)
+            ?? (access == .complimentary || access == .subscription)
         freeSessionsRemaining = try container.decode(Int.self, forKey: .freeSessionsRemaining)
         requiresSignIn = try container.decode(Bool.self, forKey: .requiresSignIn)
         requiresSubscription = try container.decode(Bool.self, forKey: .requiresSubscription)

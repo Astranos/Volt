@@ -29,13 +29,13 @@ The App Clip remains a separate free, temporary QR-triggered WebRTC experience c
 - Capture Result: one durable OCR, barcode, or photo result with a stable client-generated idempotency key and delivery state. The schema still accepts a legacy "dictation" kind for backward-compatible reads; the full app no longer creates new dictation results.
 - Cloud Photo Object: a private Cloudflare R2 object containing a Transfer Photo Rendition. Convex stores its workspace-scoped key and metadata, never its bytes.
 - Delivery State: the server-authoritative per-result synchronization lifecycle, including pending upload, available, acknowledged, failed, and deleted.
-- Cloud Allowance: the limited free quota available to the full app; verified subscription entitlement unlocks the robust cloud workflow and higher limits.
+- Full App Entitlement: an active, server-verified StoreKit subscription (including its introductory trial) or a complimentary manual/organization entitlement. The installed app and durable cloud workspace require it.
 - Live Computer Target: the one Enrolled Computer currently selected on the phone (`cursorTargetDeviceId`) for optional per-result cursor insertion, set and cleared through a device-credentialed endpoint with no handshake. It does not own ordinary Result Batches.
 - Browser Capture Target: the latest editable browser target reported by the selected Live Computer Target for cursor insertion.
 - Cursor-Targeted Capture: an OCR or barcode capture optionally queued as a per-result Cursor Delivery into the Browser Capture Target in addition to durable workspace synchronization.
 - Cursor Delivery: a short-lived (120s), idempotent per-result delivery record synchronized through Convex from a source mobile device to a target Enrolled Computer; it carries its own payload so no join with the Capture Result is needed. Once past expiry a delivery can never become delivered: the extension acknowledges expired pending deliveries as failed/expired when it sees them, the phone's status endpoint reports expired pending deliveries as failed, and the server refuses to record a delivered acknowledgement after expiry.
 - Mobile Scanner Session: a short-lived WebRTC connection between a phone capture surface and a Chrome target. The full app no longer uses this; it is the App Clip's only delivery path.
-- Scanner Work Session: the legacy WebRTC work period used for session-based access accounting. Cloud Allowance replaces it for the full cloud workflow, while it remains relevant during migration and for temporary live sessions.
+- Scanner Work Session: the legacy WebRTC work period used for session-based access accounting. It remains relevant to the App Clip and temporary live sessions, but never unlocks the installed app.
 - Usage Session ID: the idempotency-safe identifier for a Scanner Work Session, distinct from a browser session id, Enrollment Grant, Device Credential, and result idempotency key.
 - Session Capability: a live transport capability such as OCR insertion, barcode insertion, dictation, or photo acceleration.
 - Starting Capture Mode: the mode selected by the full app when capture opens; enrollment or live pairing does not choose it.
@@ -59,5 +59,5 @@ The App Clip remains a separate free, temporary QR-triggered WebRTC experience c
 - Ordinary Result Batches belong to the Cloud Scanner Workspace and appear on all Enrolled Computers. Choosing a Live Computer Target changes only optional per-result cursor insertion and never gates capture or durable delivery.
 - A revoked Device Credential can no longer request metadata or presigned URLs. Existing URLs expire quickly, and server-side state records the revocation for audit and retry behavior.
 - Offline captures remain in the Local Capture Outbox and retry asynchronously with bounded exponential backoff and jitter. Delivery resumes after relaunch or connectivity recovery.
-- Full-app access is enforced by Cloud Allowance plus verified StoreKit entitlement tied to the account's stable `appAccountToken`. Client claims alone never unlock subscription access.
+- Full-app access is enforced by a verified StoreKit or complimentary entitlement. StoreKit entitlement is tied to the account's stable `appAccountToken`; client claims alone never unlock access.
 - The App Clip stays free and temporary: its QR selects one Chrome computer and its WebRTC session carries its results. It mirrors its session results into the owning workspace through a short-lived guest cloud grant, but never holds an account Device Credential or Clerk session.

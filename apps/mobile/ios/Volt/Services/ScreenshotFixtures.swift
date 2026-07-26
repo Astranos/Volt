@@ -51,7 +51,7 @@ struct SubscriptionReviewScreenshotView: View {
                         .foregroundStyle(.secondary)
 
                     Button(action: {}) {
-                        Label("Subscribe for $9.00 per month", systemImage: "bolt.fill")
+                        Label("Start 1 Week Free Trial", systemImage: "bolt.fill")
                             .frame(maxWidth: .infinity, minHeight: 44)
                     }
                     .buttonStyle(.borderedProminent)
@@ -59,7 +59,7 @@ struct SubscriptionReviewScreenshotView: View {
                     Button("Restore Purchases", systemImage: "arrow.clockwise", action: {})
                         .frame(maxWidth: .infinity, minHeight: 44)
 
-                    Text("One-month auto-renewable subscription. Payment is charged to your Apple Account and renews unless canceled at least 24 hours before the current period ends. Manage or cancel in App Store account settings.")
+                    Text("1 week free, then $9.00 per month. The subscription renews automatically unless canceled at least 24 hours before the current period ends. Manage or cancel in App Store account settings.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
 

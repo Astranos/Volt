@@ -2,7 +2,11 @@ import { makeFunctionReference } from "convex/server";
 import { ConvexError, v } from "convex/values";
 
 import type { Doc, Id } from "./_generated/dataModel";
-import { MAX_SESSION_DURATION_MS, RECONNECT_WINDOW_MS } from "./access";
+import {
+  hasFullAppEntitlement,
+  MAX_SESSION_DURATION_MS,
+  RECONNECT_WINDOW_MS,
+} from "./access";
 import {
   action,
   internalMutation,
@@ -13,8 +17,6 @@ import {
   type QueryCtx,
 } from "./_generated/server";
 
-export const FREE_CLOUD_RESULT_LIMIT = 100;
-export const FREE_CLOUD_BYTE_LIMIT = 50 * 1024 * 1024;
 export const ENROLLMENT_TTL_MS = 5 * 60 * 1000;
 export const CURSOR_DELIVERY_TTL_MS = 120 * 1000;
 export const PRESIGN_TTL_SECONDS = 5 * 60;
@@ -104,9 +106,16 @@ async function workspaceForUser(ctx: DatabaseReaderCtx, clerkUserId: string) {
     .unique();
 }
 
+async function requireFullAppEntitlement(ctx: DatabaseReaderCtx, clerkUserId: string) {
+  if (!(await hasFullAppEntitlement(ctx, clerkUserId))) {
+    throw new ConvexError("Volt Pro subscription or complimentary access required");
+  }
+}
+
 async function requireAuthenticatedWorkspace(ctx: QueryCtx) {
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) throw new ConvexError("Authentication required");
+  await requireFullAppEntitlement(ctx, identity.subject);
   const workspace = await workspaceForUser(ctx, identity.subject);
   if (!workspace) throw new ConvexError("Workspace has not been created");
   return workspace;
@@ -119,12 +128,14 @@ async function requireAuthenticatedWorkspace(ctx: QueryCtx) {
 async function authenticatedWorkspaceOrNull(ctx: QueryCtx) {
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) throw new ConvexError("Authentication required");
+  await requireFullAppEntitlement(ctx, identity.subject);
   return await workspaceForUser(ctx, identity.subject);
 }
 
 async function requireOrCreateAuthenticatedWorkspace(ctx: MutationCtx) {
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) throw new ConvexError("Authentication required");
+  await requireFullAppEntitlement(ctx, identity.subject);
   return requireOrCreateWorkspaceForClerkUser(ctx, identity.subject, identity.name);
 }
 
@@ -160,6 +171,7 @@ async function requireDevicePrincipal(
   }
   const workspace = await ctx.db.get(device.workspaceId);
   if (!workspace) throw new ConvexError("Workspace no longer exists");
+  await requireFullAppEntitlement(ctx, workspace.ownerClerkUserId);
   return { workspace, sourceDeviceId: device.deviceId, device };
 }
 
@@ -210,36 +222,6 @@ async function requireGuestPrincipal(
     throw new ConvexError("Guest cloud workspace no longer exists");
   }
   return { workspace, sourceDeviceId: grant.sourceDeviceId, guestGrant: grant };
-}
-
-async function hasCloudSubscription(ctx: DatabaseReaderCtx, clerkUserId: string, now: number) {
-  const entitlements = await ctx.db
-    .query("entitlements")
-    .withIndex("by_clerkUserId", (q) => q.eq("clerkUserId", clerkUserId))
-    .take(100);
-  return entitlements.some(
-    (item) => item.status === "active" && (item.expiresAt === undefined || item.expiresAt > now),
-  );
-}
-
-async function enforceQuota(
-  ctx: MutationCtx,
-  workspace: Doc<"workspaces">,
-  addedResults: number,
-  addedBytes: number,
-) {
-  if (addedResults < 0 || addedBytes < 0) throw new ConvexError("Invalid quota usage");
-  if (await hasCloudSubscription(ctx, workspace.ownerClerkUserId, Date.now())) return;
-  const batches = await ctx.db
-    .query("resultBatches")
-    .withIndex("by_workspaceId", (q) => q.eq("workspaceId", workspace._id))
-    .take(FREE_CLOUD_RESULT_LIMIT + 1);
-  const active = batches.filter((batch) => batch.status !== "deleted");
-  const resultCount = active.reduce((sum, batch) => sum + batch.resultCount, 0);
-  const byteCount = active.reduce((sum, batch) => sum + batch.byteCount, 0);
-  if (resultCount + addedResults > FREE_CLOUD_RESULT_LIMIT || byteCount + addedBytes > FREE_CLOUD_BYTE_LIMIT) {
-    throw new ConvexError("Free cloud allowance exceeded");
-  }
 }
 
 export const ensureWorkspace = mutation({
@@ -325,6 +307,9 @@ export const exchangeEnrollment = mutation({
     if (!enrollment || enrollment.consumedAt || enrollment.expiresAt <= now) {
       throw new ConvexError("Enrollment code is invalid, expired, or already used");
     }
+    const workspace = await ctx.db.get(enrollment.workspaceId);
+    if (!workspace) throw new ConvexError("Workspace no longer exists");
+    await requireFullAppEntitlement(ctx, workspace.ownerClerkUserId);
     const deviceId = crypto.randomUUID();
     const deviceSecret = randomOpaqueSecret();
     await ctx.db.insert("workspaceDevices", {
@@ -726,7 +711,6 @@ async function putBatchForPrincipal(
 
       await assertResultsAreBatchCompatible(ctx, workspace._id, appendedResults);
       const addedBytes = appendedResults.reduce((sum, result) => sum + result.byteCount, 0);
-      await enforceQuota(ctx, workspace, appendedResults.length, addedBytes);
       const now = Date.now();
       await insertBatchResults(
         ctx,
@@ -747,7 +731,6 @@ async function putBatchForPrincipal(
 
     await assertResultsAreBatchCompatible(ctx, workspace._id, args.results);
     const byteCount = args.results.reduce((sum, result) => sum + result.byteCount, 0);
-    await enforceQuota(ctx, workspace, args.results.length, byteCount);
     const now = Date.now();
     await ctx.db.insert("resultBatches", {
       workspaceId: workspace._id,
@@ -1333,9 +1316,6 @@ export const restoreWorkspaceResults = mutation({
       restoredIds.push(resultId);
       if (result.deletedAt !== undefined) matches.push(result);
     }
-    const addedBytes = matches.reduce((sum, result) => sum + result.byteCount, 0);
-    await enforceQuota(ctx, workspace, matches.length, addedBytes);
-
     const now = Date.now();
     const affectedBatches = new Map<string, { resultCount: number; byteCount: number }>();
     for (const result of matches) {
@@ -1476,7 +1456,10 @@ export const authorizePhotoAccess = internalQuery({
   handler: async (ctx, args): Promise<PresignAuthorization> => {
     let workspace: Doc<"workspaces"> | null = null;
     let sourceDeviceId: string | undefined;
-    if (args.clerkUserId) workspace = await workspaceForUser(ctx, args.clerkUserId);
+    if (args.clerkUserId) {
+      await requireFullAppEntitlement(ctx, args.clerkUserId);
+      workspace = await workspaceForUser(ctx, args.clerkUserId);
+    }
     else if (args.guestCloudGrant) {
       const principal = await requireGuestPrincipal(ctx, { guestCloudGrant: args.guestCloudGrant });
       workspace = principal.workspace;

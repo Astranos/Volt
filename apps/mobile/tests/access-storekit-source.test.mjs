@@ -15,6 +15,7 @@ const storeKitSource = readIOSSource("Volt/Services/StoreKitSubscriptionStore.sw
 const accessSettingsSource = readIOSSource("Volt/Views/AccessSettingsSection.swift");
 const accountViewSource = readIOSSource("Volt/Views/AccountAccessView.swift");
 const subscriptionViewSource = readIOSSource("Volt/Views/SubscriptionActionsView.swift");
+const rootSceneSource = readIOSSource("Volt/Views/VoltRootScene.swift");
 const clipRootSource = readIOSSource("VoltClip/Views/ClipRootView.swift");
 const clipUpgradeSource = readIOSSource("VoltClip/Views/ClipUpgradeView.swift");
 const clipStoreSource = readIOSSource("VoltClip/Services/ClipScannerStore.swift");
@@ -61,6 +62,7 @@ test("authenticated access calls use fresh Clerk Convex tokens and authoritative
     )
   );
   assert.match(accessStatusSource, /let access: AccessKind/);
+  assert.match(accessStatusSource, /let hasFullAppAccess: Bool/);
   assert.match(accessStatusSource, /let freeSessionsRemaining: Int/);
   assert.match(accessStatusSource, /let subscriptionStatus: VoltSubscriptionStatus/);
   assert.match(accessStatusSource, /let organizationId: String\?/);
@@ -89,18 +91,30 @@ test("StoreKit observes, restores, and replays current verified transactions", (
   assert.match(storeKitSource, /await accessStore\.refresh\(using: clerk\)/);
 });
 
-test("account UI shows account, workspace, trial, and server subscription status", () => {
+test("full app gates capture behind subscription or complimentary access", () => {
+  assert.match(rootSceneSource, /accessStore\.status\?\.hasFullAppAccess == true/);
+  assert.match(rootSceneSource, /SubscriptionPaywallView\(\)/);
+  assert.match(rootSceneSource, /activateCloudWorkspaceIfAuthorized/);
+  assert.match(subscriptionViewSource, /struct SubscriptionPaywallView: View/);
+  assert.match(subscriptionViewSource, /subscriptionStore\.purchaseButtonTitle/);
+  assert.match(storeKitSource, /subscription\.isEligibleForIntroOffer/);
+  assert.match(storeKitSource, /offer\.paymentMode == \.freeTrial/);
+  assert.ok(storeKitSource.includes('return "Start \\(introductoryTrialPeriod) Free Trial"'));
+});
+
+test("account UI shows account, workspace, full-app access, and server subscription status", () => {
   assert.match(accountViewSource, /UserButton\(\)/);
   assert.match(accountViewSource, /OrganizationSwitcher\(\)/);
   assert.match(accountViewSource, /Section\("Account"\)/);
   assert.match(accountViewSource, /Section\("Workspace"\)/);
-  assert.match(accountViewSource, /LabeledContent\("Free Sessions Remaining"/);
+  assert.match(accountViewSource, /LabeledContent\("Full App Access"/);
   assert.match(accountViewSource, /LabeledContent\("Subscription"/);
   assert.match(subscriptionViewSource, /accessStore\.status\?\.access == \.complimentary/);
-  assert.match(subscriptionViewSource, /Included with your workplace/);
+  assert.match(subscriptionViewSource, /Complimentary Volt Pro access/);
   assert.match(subscriptionViewSource, /accessStore\.isRefreshing \|\| !hasCurrentAccessContext/);
   assert.match(subscriptionViewSource, /status\.organizationId == clerk\.organization\?\.id/);
-  assert.match(subscriptionViewSource, /Subscribe for \$9 per month/);
+  assert.match(subscriptionViewSource, /purchaseButtonTitle/);
+  assert.doesNotMatch(accountViewSource + accessSettingsSource, /Free Sessions/);
   assert.doesNotMatch(subscriptionViewSource + accessSettingsSource, /Transaction\.currentEntitlements/);
 });
 

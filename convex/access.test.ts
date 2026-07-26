@@ -422,11 +422,51 @@ describe("account and entitlement access", () => {
         ? {
             access: "complimentary",
             isAuthorized: true,
+            hasFullAppAccess: true,
             requiresSubscription: false,
             subscriptionStatus: "active",
           }
-        : { access: "trial", subscriptionStatus: "none" },
+        : { access: "trial", hasFullAppAccess: false, subscriptionStatus: "none" },
     );
+  });
+
+  test.each([
+    {
+      label: "Clerk user id",
+      env: "CLERK_COMPLIMENTARY_USER_IDS",
+      value: "user_explicit_access,user_someone_else",
+      subject: "user_explicit_access",
+      email: "ordinary@example.com",
+    },
+    {
+      label: "verified email",
+      env: "CLERK_COMPLIMENTARY_EMAILS",
+      value: "vip@example.com,other@example.com",
+      subject: "user_email_access",
+      email: "VIP@example.com",
+    },
+  ])("grants configurable complimentary access by $label", async ({ env, value, subject, email }) => {
+    vi.stubEnv(env, value);
+    const t = convexTest(schema, modules);
+    const signedIn = t.withIdentity({
+      subject,
+      tokenIdentifier: `clerk|${subject}`,
+      email,
+      email_verified: true,
+    });
+
+    expect((await signedIn.mutation(getStatus, {})).body).toMatchObject({
+      access: "complimentary",
+      hasFullAppAccess: true,
+      subscriptionStatus: "active",
+    });
+
+    vi.stubEnv(env, "");
+    expect((await signedIn.mutation(getStatus, {})).body).toMatchObject({
+      access: "trial",
+      hasFullAppAccess: false,
+      subscriptionStatus: "none",
+    });
   });
 
   test("grants unlimited complimentary access to the configured Clerk organization", async () => {
@@ -442,6 +482,7 @@ describe("account and entitlement access", () => {
     expect(status.body).toMatchObject({
       access: "complimentary",
       isAuthorized: true,
+      hasFullAppAccess: true,
       organizationId: "org_volt_workplace",
       freeSessionsRemaining: 5,
       requiresSubscription: false,
@@ -518,7 +559,11 @@ describe("account and entitlement access", () => {
     });
     expect(applied.statusCode).toBe(200);
     const status = await signedIn.mutation(getStatus, {});
-    expect(status.body).toMatchObject({ subscriptionStatus: expected, access });
+    expect(status.body).toMatchObject({
+      subscriptionStatus: expected,
+      access,
+      hasFullAppAccess: expected === "active",
+    });
   });
 
   test("does not let an older valid transaction replay erase a newer revocation", async () => {

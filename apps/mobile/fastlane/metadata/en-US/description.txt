@@ -1,0 +1,17 @@
+Volt turns your iPhone into a fast companion scanner for resale and inventory workflows.
+
+Sign in with the same Volt account on iPhone and Chrome, then capture the product details that slow down listing work. Results save on your phone, sync to your private Volt workspace, and can be inserted into the computer you select.
+
+Use Volt Scanner to:
+- Scan product barcodes from your phone
+- Extract and review text with on-device OCR
+- Capture product photos or upload existing images
+- Continue an existing photo session later
+- Send text and barcodes to your selected computer
+- Extract useful identifiers like serial numbers, model numbers, IMEIs, UPCs, and others
+
+Built for resale and inventory workflows where speed, accuracy, and fewer manual steps matter.
+
+The installed app requires Volt Pro. Eligible new subscribers can try Volt Pro free for one week, then the subscription renews monthly unless canceled.
+
+Terms of Use: https://www.apple.com/legal/internet-services/itunes/dev/stdeula/

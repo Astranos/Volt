@@ -9,7 +9,7 @@ struct AccessSettingsSection: View {
         Section("Access") {
             LabeledContent("Account", value: accountLabel)
             LabeledContent("Workspace", value: workspaceLabel)
-            LabeledContent("Free Sessions", value: freeSessionsLabel)
+            LabeledContent("Full App Access", value: fullAppAccessLabel)
             LabeledContent("Subscription", value: subscriptionLabel)
 
             NavigationLink("Account & Subscription") {
@@ -29,13 +29,10 @@ struct AccessSettingsSection: View {
             ?? (clerk.user == nil ? "Chrome trial" : "Personal")
     }
 
-    private var freeSessionsLabel: String {
-        guard clerk.user != nil else { return "Up to 5 in Chrome" }
+    private var fullAppAccessLabel: String {
+        guard clerk.user != nil else { return "Sign in required" }
         guard let status = accessStore.status else { return accessStore.isRefreshing ? "Checking…" : "Unavailable" }
-        if status.access == .complimentary || status.access == .subscription {
-            return "Not used"
-        }
-        return "\(status.freeSessionsRemaining)"
+        return status.hasFullAppAccess ? "Unlocked" : "Subscription required"
     }
 
     private var subscriptionLabel: String {

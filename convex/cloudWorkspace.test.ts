@@ -2,7 +2,7 @@ import { convexTest } from "convex-test";
 import { makeFunctionReference } from "convex/server";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
-import { CURSOR_DELIVERY_TTL_MS, FREE_CLOUD_RESULT_LIMIT } from "./cloudWorkspace";
+import { CURSOR_DELIVERY_TTL_MS } from "./cloudWorkspace";
 import schema from "./schema";
 
 const modules = import.meta.glob("./**/*.ts");
@@ -187,12 +187,25 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
+async function grantFullAppAccess(t: ReturnType<typeof convexTest>, userId: string) {
+  await t.run((ctx) => ctx.db.insert("entitlements", {
+    clerkUserId: userId,
+    kind: "manual",
+    sourceIdentifier: `test-complimentary:${userId}`,
+    productId: "com.volt.mobile.pro.monthly",
+    status: "active",
+    validFrom: Date.now(),
+    updatedAt: Date.now(),
+  }));
+}
+
 async function enroll(
   t: ReturnType<typeof convexTest>,
   userId: string,
   kind: "ios" | "chrome" = "ios",
 ) {
   const signedIn = t.withIdentity({ subject: userId, name: userId });
+  await grantFullAppAccess(t, userId);
   const enrollment = await signedIn.mutation(createEnrollment, { kind, label: `${userId} device` });
   const exchanged = await t.mutation(exchangeEnrollment, {
     enrollmentCode: enrollment.enrollmentCode,
@@ -407,10 +420,20 @@ describe("cloud scanner workspace", () => {
     expect(stored.resultIds).toEqual(["photo-1", "photo-2"]);
   });
 
-  test("deduplicates batch retries without charging quota twice and enforces the free allowance", async () => {
+  test("requires a full-app entitlement before creating a durable workspace device", async () => {
     const t = convexTest(schema, modules);
-    const { credential } = await enroll(t, "free-user");
-    const results = Array.from({ length: FREE_CLOUD_RESULT_LIMIT }, (_, index) =>
+    const signedIn = t.withIdentity({ subject: "locked-user" });
+
+    await expect(signedIn.mutation(createEnrollment, {
+      kind: "ios",
+      label: "Locked iPhone",
+    })).rejects.toThrow(/subscription or complimentary access required/);
+  });
+
+  test("deduplicates entitled batch retries without a free result cap", async () => {
+    const t = convexTest(schema, modules);
+    const { credential } = await enroll(t, "subscribed-user");
+    const results = Array.from({ length: 101 }, (_, index) =>
       result(`result-${index}`),
     );
     const first = await t.mutation(putBatch, {
@@ -427,20 +450,10 @@ describe("cloud scanner workspace", () => {
       results,
     });
     expect(retry.idempotent).toBe(true);
-    await expect(
-      t.mutation(putBatch, {
-        ...credential,
-        batchId: "over-limit",
-        clientCreatedAt: 2,
-        results: [result("one-too-many")],
-      }),
-    ).rejects.toThrow(/allowance exceeded/);
-    expect(await t.run((ctx) => ctx.db.query("scanResults").collect())).toHaveLength(
-      FREE_CLOUD_RESULT_LIMIT,
-    );
+    expect(await t.run((ctx) => ctx.db.query("scanResults").collect())).toHaveLength(101);
   });
 
-  test("does not apply the free cloud quota to complimentary email accounts", async () => {
+  test("grants full cloud access to complimentary email accounts", async () => {
     const t = convexTest(schema, modules);
     const clerkUserId = "complimentary-paymore-user";
     const signedIn = t.withIdentity({
@@ -458,7 +471,7 @@ describe("cloud scanner workspace", () => {
     const credential = await t.mutation(exchangeEnrollment, {
       enrollmentCode: enrollment.enrollmentCode,
     });
-    const results = Array.from({ length: FREE_CLOUD_RESULT_LIMIT + 1 }, (_, index) =>
+    const results = Array.from({ length: 101 }, (_, index) =>
       result(`complimentary-result-${index}`),
     );
 
@@ -543,6 +556,8 @@ describe("cloud scanner workspace", () => {
 
   test("rebinds a signed-in Chrome installation across accounts without leaking pending deliveries", async () => {
     const t = convexTest(schema, modules);
+    await grantFullAppAccess(t, "computer-owner");
+    await grantFullAppAccess(t, "different-owner");
     const alice = t.withIdentity({ subject: "computer-owner" });
     const bob = t.withIdentity({ subject: "different-owner" });
     const phone = await alice.mutation(bootstrapMobileDevice, {
@@ -609,6 +624,8 @@ describe("cloud scanner workspace", () => {
 
   test("reports cursor delivery status only for the calling device's own workspace deliveries", async () => {
     const t = convexTest(schema, modules);
+    await grantFullAppAccess(t, "status-owner");
+    await grantFullAppAccess(t, "status-other-owner");
     const alice = t.withIdentity({ subject: "status-owner" });
     const bob = t.withIdentity({ subject: "status-other-owner" });
     const phone = await alice.mutation(bootstrapMobileDevice, {
@@ -729,6 +746,7 @@ describe("cloud scanner workspace", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-23T12:00:00Z"));
     const t = convexTest(schema, modules);
+    await grantFullAppAccess(t, "expiry-owner");
     const alice = t.withIdentity({ subject: "expiry-owner" });
     const phone = await alice.mutation(bootstrapMobileDevice, {
       installationId: "expiry-phone",
@@ -768,6 +786,7 @@ describe("cloud scanner workspace", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-23T12:00:00Z"));
     const t = convexTest(schema, modules);
+    await grantFullAppAccess(t, "ack-expiry-owner");
     const alice = t.withIdentity({ subject: "ack-expiry-owner" });
     const phone = await alice.mutation(bootstrapMobileDevice, {
       installationId: "ack-expiry-phone",
@@ -818,6 +837,8 @@ describe("cloud scanner workspace", () => {
 
   test("bootstraps only iOS credentials, rotates them, and rejects cross-workspace rotation", async () => {
     const t = convexTest(schema, modules);
+    await grantFullAppAccess(t, "bootstrap-alice");
+    await grantFullAppAccess(t, "bootstrap-bob");
     const alice = t.withIdentity({ subject: "bootstrap-alice", name: "Alice" });
     const bob = t.withIdentity({ subject: "bootstrap-bob", name: "Bob" });
     const issued = await alice.mutation(bootstrapMobileDevice, {
@@ -880,6 +901,7 @@ describe("cloud scanner workspace", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-23T12:00:00Z"));
     const t = convexTest(schema, modules);
+    await grantFullAppAccess(t, "computer-list-owner");
     const signedIn = t.withIdentity({ subject: "computer-list-owner" });
     const phone = await signedIn.mutation(bootstrapMobileDevice, {
       installationId: "phone-installation",
@@ -927,6 +949,8 @@ describe("cloud scanner workspace", () => {
 
   test("sets and clears only same-workspace cursor-capable Chrome targets", async () => {
     const t = convexTest(schema, modules);
+    await grantFullAppAccess(t, "cursor-target-alice");
+    await grantFullAppAccess(t, "cursor-target-bob");
     const alice = t.withIdentity({ subject: "cursor-target-alice" });
     const bob = t.withIdentity({ subject: "cursor-target-bob" });
     const phone = await alice.mutation(bootstrapMobileDevice, {
@@ -978,6 +1002,7 @@ describe("cloud scanner workspace", () => {
 
   test("queues cursor deliveries idempotently by workspace and client delivery id", async () => {
     const t = convexTest(schema, modules);
+    await grantFullAppAccess(t, "delivery-queue-owner");
     const signedIn = t.withIdentity({ subject: "delivery-queue-owner" });
     const phone = await signedIn.mutation(bootstrapMobileDevice, {
       installationId: "delivery-phone",
@@ -1028,6 +1053,7 @@ describe("cloud scanner workspace", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-23T12:00:00Z"));
     const t = convexTest(schema, modules);
+    await grantFullAppAccess(t, "future-delivery-owner");
     const signedIn = t.withIdentity({ subject: "future-delivery-owner" });
     const phone = await signedIn.mutation(bootstrapMobileDevice, {
       installationId: "future-delivery-phone",
@@ -1062,6 +1088,8 @@ describe("cloud scanner workspace", () => {
 
   test("scopes pending cursor deliveries to the authenticated registered computer", async () => {
     const t = convexTest(schema, modules);
+    await grantFullAppAccess(t, "pending-alice");
+    await grantFullAppAccess(t, "pending-bob");
     const alice = t.withIdentity({ subject: "pending-alice" });
     const bob = t.withIdentity({ subject: "pending-bob" });
     const alicePhone = await alice.mutation(bootstrapMobileDevice, {
@@ -1108,6 +1136,7 @@ describe("cloud scanner workspace", () => {
 
   test("guards cursor delivery acknowledgement transitions and keeps terminal states immutable", async () => {
     const t = convexTest(schema, modules);
+    await grantFullAppAccess(t, "cursor-ack-owner");
     const signedIn = t.withIdentity({ subject: "cursor-ack-owner" });
     const phone = await signedIn.mutation(bootstrapMobileDevice, {
       installationId: "cursor-ack-phone",
@@ -1178,6 +1207,7 @@ describe("cloud scanner workspace", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-23T12:00:00Z"));
     const t = convexTest(schema, modules);
+    await grantFullAppAccess(t, "cursor-expiry-owner");
     const signedIn = t.withIdentity({ subject: "cursor-expiry-owner" });
     const phone = await signedIn.mutation(bootstrapMobileDevice, {
       installationId: "cursor-expiry-phone",
@@ -1292,6 +1322,7 @@ describe("cloud scanner workspace", () => {
 
   test("reads an untouched account as an empty snapshot rather than an error", async () => {
     const t = convexTest(schema, modules);
+    await grantFullAppAccess(t, "never-captured-anything");
     // Only mutations create the workspace row, so signing in is not enough to
     // make one exist. Throwing here surfaced as "Cloud sync failed" on every
     // account's very first open.
@@ -1302,6 +1333,7 @@ describe("cloud scanner workspace", () => {
 
   test("sweeps an expired online presence lease to offline", async () => {
     const t = convexTest(schema, modules);
+    await grantFullAppAccess(t, "sweep-owner");
     const signedIn = t.withIdentity({ subject: "sweep-owner" });
     await signedIn.mutation(registerComputer, {
       installationId: "sweep-expired-chrome",
@@ -1330,6 +1362,7 @@ describe("cloud scanner workspace", () => {
 
   test("leaves a non-expired online presence lease untouched", async () => {
     const t = convexTest(schema, modules);
+    await grantFullAppAccess(t, "sweep-owner-2");
     const signedIn = t.withIdentity({ subject: "sweep-owner-2" });
     await signedIn.mutation(registerComputer, {
       installationId: "sweep-live-chrome",
@@ -1352,6 +1385,7 @@ describe("cloud scanner workspace", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-23T12:00:00Z"));
     const t = convexTest(schema, modules);
+    await grantFullAppAccess(t, "sweep-delivery-owner");
     const alice = t.withIdentity({ subject: "sweep-delivery-owner" });
     const phone = await alice.mutation(bootstrapMobileDevice, {
       installationId: "sweep-delivery-phone",
@@ -1405,6 +1439,7 @@ describe("cloud scanner workspace", () => {
 
   test("leaves a non-expired pending cursor delivery untouched by the sweep", async () => {
     const t = convexTest(schema, modules);
+    await grantFullAppAccess(t, "sweep-delivery-owner-2");
     const alice = t.withIdentity({ subject: "sweep-delivery-owner-2" });
     const phone = await alice.mutation(bootstrapMobileDevice, {
       installationId: "sweep-delivery-live-phone",
@@ -1445,6 +1480,7 @@ describe("cloud scanner workspace", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-23T12:00:00Z"));
     const t = convexTest(schema, modules);
+    await grantFullAppAccess(t, "sweep-ack-race-owner");
     const alice = t.withIdentity({ subject: "sweep-ack-race-owner" });
     const phone = await alice.mutation(bootstrapMobileDevice, {
       installationId: "sweep-ack-race-phone",

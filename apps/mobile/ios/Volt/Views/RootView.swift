@@ -76,6 +76,10 @@ struct RootView: View {
                 break
             }
         }
+        .onDisappear {
+            guard !ScreenshotScenario.isEnabled else { return }
+            store.cloudWorkspace.setSubscriptionsActive(false)
+        }
     }
 
     private func applySelectedTab(_ newTab: AppSection) {

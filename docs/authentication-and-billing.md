@@ -20,10 +20,22 @@ Volt uses Clerk for identity, Convex for authorization, usage, and cloud-workspa
    ```text
    CLERK_JWT_ISSUER_DOMAIN=https://<your-clerk-domain>
    CLERK_COMPLIMENTARY_ORGANIZATION_ID=org_<workplace-organization-id>
+   CLERK_COMPLIMENTARY_USER_IDS=user_abc,user_def
+   CLERK_COMPLIMENTARY_EMAILS=owner@example.com,reviewer@example.com
+   CLERK_COMPLIMENTARY_EMAIL_DOMAINS=company.example
    ```
 
    The issuer must exactly match the Clerk JWT `iss` claim. `convex/auth.config.ts` validates tokens against it. Do not put a Clerk secret key in the extension or app.
-4. Make the intended workplace Clerk Organization active for work users. Membership in the configured organization grants complimentary access and never creates a StoreKit requirement.
+4. Make the intended workplace Clerk Organization active for work users. Membership in the configured organization grants complimentary access and never creates a StoreKit requirement. Explicit Clerk user IDs are the most stable way to grant individual access. Email entries require Clerk's verified-email claim; domain entries apply only to the exact domain, not subdomains.
+
+   Update individual production grants without rebuilding the app. Values are comma-separated, and replacing a value replaces the whole allowlist:
+
+   ```sh
+   pnpm exec convex env set --prod CLERK_COMPLIMENTARY_USER_IDS 'user_abc,user_def'
+   pnpm exec convex env set --prod CLERK_COMPLIMENTARY_EMAILS 'owner@example.com,reviewer@example.com'
+   ```
+
+   The new entitlement is synchronized the next time that account refreshes access in Volt. Removing a user or email from the allowlist revokes the matching complimentary entitlement on its next authenticated refresh.
 
 Convex creates one `users` record per Clerk subject. The first authenticated request generates and stores a UUID as that user's StoreKit `appAccountToken`; subsequent requests return the same value. The full app must pass that UUID to StoreKit purchases. A verified transaction can only update the Clerk user whose stored token matches the signed transaction.
 
@@ -47,6 +59,8 @@ Create an auto-renewable monthly subscription priced at USD $9.00. The product i
 ```text
 com.volt.mobile.pro.monthly
 ```
+
+Configure a one-week free introductory offer for this subscription in App Store Connect. Eligible customers authorize the subscription before entering the full app, receive the first week free, and then renew at the displayed monthly price unless they cancel. StoreKit determines introductory-offer eligibility; Volt does not run a separate trial timer.
 
 Configure these Convex environment variables:
 
@@ -99,7 +113,8 @@ The secret is returned only when `POST /api/access/anonymous` creates a grant. C
 Status responses contain:
 
 - `access`: `trial`, `complimentary`, `subscription`, or `exhausted`
-- `isAuthorized`, `freeSessionsRemaining`, `requiresSignIn`, and `requiresSubscription`
+- `isAuthorized`, `freeSessionsRemaining`, `requiresSignIn`, and `requiresSubscription` for the legacy App Clip/Chrome session flow
+- `hasFullAppAccess`, which is true only for an active StoreKit or complimentary entitlement
 - `subscriptionStatus`: `none`, `active`, or `expired`
 - `productId` and, for signed-in users, `clerkUserId` and `appAccountToken`
 - optional `organizationId` and subscription `expiresAt`
@@ -129,7 +144,7 @@ Use the same authorization or anonymous headers. The response includes `startedA
 
 Report an involuntary connection loss with `POST /api/access/session/disconnect`. Report an explicit user disconnect with `POST /api/access/session/end`. Both accept `{"usageSessionId":"..."}` and the same access headers. A reconnect within, but not at, 30 minutes reuses the session. At 30 minutes disconnected, or at the 8-hour maximum, the server ends it. Reconnecting afterward requires a new `usageSessionId`.
 
-The App Clip may issue/use anonymous access but must not show StoreKit checkout. A signed-in Chrome session may include a short-lived, workspace-scoped guest cloud grant in its pairing QR so successful App Clip captures are mirrored to that account's workspace without adding Clerk or a durable account credential to the App Clip. When access is exhausted, it should hand off to the full app's App Store page. The full app performs Clerk sign-in and StoreKit purchase/restore; the Chrome extension reads the resulting entitlement through the same Clerk user and Convex status endpoint.
+The App Clip may issue/use anonymous access but must not show StoreKit checkout. A signed-in Chrome session may include a short-lived, workspace-scoped guest cloud grant in its pairing QR so successful App Clip captures are mirrored to that account's workspace without adding Clerk or a durable account credential to the App Clip. When access is exhausted, it should hand off to the full app's App Store page. The full app requires `hasFullAppAccess`, performs Clerk sign-in and StoreKit purchase/restore, and treats an active introductory trial like any other active StoreKit entitlement. The Chrome extension reads the resulting entitlement through the same Clerk user and Convex status endpoint.
 
 ## Local completion checklist
 
