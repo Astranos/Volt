@@ -200,10 +200,20 @@ def apply_project_build_number(build_number)
   )
 end
 
-# Volt gates everything behind a Clerk sign-in, and the production Clerk
-# instance offers only Google OAuth and email one-time codes as first factors —
-# neither of which App Review can complete unaided. Whichever account is handed
-# over has to be supplied here, or the reviewer stops at the sign-in screen.
+def project_build_number
+  project_path = File.expand_path("ios/Volt.xcodeproj/project.pbxproj", File.expand_path("..", __dir__))
+  project_source = File.read(project_path)
+  match = project_source.match(/CURRENT_PROJECT_VERSION = ([^;]+);/)
+  UI.user_error!("Could not read CURRENT_PROJECT_VERSION from #{project_path}") unless match
+
+  match[1]
+end
+
+# Volt gates everything behind a Clerk sign-in, so App Review cannot get past the
+# first screen without an account. Google OAuth and email one-time codes are both
+# unusable for a reviewer, so the production Clerk instance also accepts a
+# password as a first factor purely for this demo account. Supply it here or the
+# reviewer stops at the sign-in screen.
 def app_review_demo_account_from_env
   demo_user = ENV["APP_REVIEW_DEMO_USER"].to_s.strip
   demo_password = ENV["APP_REVIEW_DEMO_PASSWORD"].to_s.strip
@@ -468,6 +478,22 @@ platform :ios do
       release_notes: app_store_release_notes,
       review_notes: app_review_notes,
       submit_for_review: submit_for_review
+    )
+  end
+
+  desc "Attach an already-uploaded build to the App Store version and submit for review"
+  lane :submit do |options|
+    api_key = app_store_connect_api_key_from_env
+    # No binary work here: `beta` already built and uploaded. This lane only
+    # pushes metadata, the reviewer demo account, and the submission itself, so a
+    # rejected version can be resubmitted without burning another build number.
+    upload_app_store_release_notes(
+      api_key: api_key,
+      app_version: options[:app_version] || ENV["VOLT_IOS_APP_VERSION"] || project_marketing_version,
+      build_number: options[:build_number] || ENV["VOLT_IOS_BUILD_NUMBER"] || project_build_number,
+      release_notes: options[:release_notes] || ENV["APP_STORE_RELEASE_NOTES"],
+      review_notes: options[:review_notes] || ENV["APP_REVIEW_NOTES"],
+      submit_for_review: truthy_env?("SUBMIT_FOR_REVIEW", true)
     )
   end
 
