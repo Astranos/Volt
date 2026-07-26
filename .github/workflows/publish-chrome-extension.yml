@@ -87,7 +87,8 @@ jobs:
         with:
           name: volt-chrome-extension
           path: packages/extension/.output/volt-extension-*-chrome.zip
-          if-no-files-found: ignore
+          if-no-files-found: error
+          include-hidden-files: true
 
       - name: Persist accepted version
         if: always()
