@@ -6,9 +6,10 @@ Volt was made to speed up buying and listing electronic devices for resale. The 
 
 ## Current Version
 
-`1.0.41`
-
-The extension manifest version lives in [wxt.config.ts](wxt.config.ts), and the package version lives in [package.json](package.json). Keep them in sync for release builds.
+The checked-in version lives only in [package.json](package.json). WXT uses it
+for the generated manifest. Chrome Web Store releases automatically choose a
+version no lower than that checked-in floor and newer than every published or
+submitted version; do not edit a version for release by hand.
 
 ## What It Does
 
@@ -53,6 +54,17 @@ pnpm build
 pnpm zip
 pnpm test:scanner
 ```
+
+To inspect or publish the Chrome Web Store item from the repository root:
+
+```sh
+pnpm status:extension-store
+pnpm release:extension:dry-run
+pnpm release:extension
+```
+
+See [docs/RELEASE_PROCESS.md](docs/RELEASE_PROCESS.md) for one-time service
+account and GitHub Actions setup.
 
 The production extension build is written to `.output/volt/`.
 

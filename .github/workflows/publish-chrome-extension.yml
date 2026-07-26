@@ -1,0 +1,103 @@
+name: Publish Chrome Extension
+
+on:
+  workflow_dispatch:
+    inputs:
+      submit_for_review:
+        description: Submit the uploaded package for Chrome review
+        required: true
+        type: boolean
+        default: true
+      publish_type:
+        description: Publish immediately after approval or stage it
+        required: true
+        type: choice
+        default: DEFAULT_PUBLISH
+        options:
+          - DEFAULT_PUBLISH
+          - STAGED_PUBLISH
+
+concurrency:
+  group: chrome-web-store-release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  publish:
+    name: Bump, upload, and submit
+    runs-on: ubuntu-latest
+    environment: chrome-web-store
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify release tooling
+        run: pnpm --filter @volt/extension test:release
+
+      - name: Test extension
+        run: pnpm --filter @volt/extension test:scanner
+
+      - name: Typecheck extension
+        run: pnpm --filter @volt/extension compile
+
+      - name: Authenticate to Google Cloud
+        id: google_auth
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/chromewebstore
+
+      - name: Release Chrome extension
+        env:
+          CWS_ACCESS_TOKEN: ${{ steps.google_auth.outputs.access_token }}
+          CWS_EXTENSION_ID: ${{ vars.CWS_EXTENSION_ID }}
+          CWS_PUBLISHER_ID: ${{ vars.CWS_PUBLISHER_ID }}
+          SUBMIT_FOR_REVIEW: ${{ inputs.submit_for_review }}
+          PUBLISH_TYPE: ${{ inputs.publish_type }}
+        run: |
+          release_args=("--publish-type=${PUBLISH_TYPE}")
+          if [[ "${SUBMIT_FOR_REVIEW}" != "true" ]]; then
+            release_args+=("--upload-only")
+          fi
+          pnpm release:extension -- "${release_args[@]}"
+
+      - name: Retain release zip
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: volt-chrome-extension
+          path: packages/extension/.output/volt-extension-*-chrome.zip
+          if-no-files-found: ignore
+
+      - name: Persist accepted version
+        if: always()
+        run: |
+          if git diff --quiet -- packages/extension/package.json; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add packages/extension/package.json
+          git commit -m "Auto-bump Chrome extension version [skip ci]"
+          git pull --rebase origin main
+          git push origin HEAD:main

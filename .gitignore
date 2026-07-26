@@ -11,6 +11,7 @@ lerna-debug.log*
 .env.*
 !.env.example
 !**/.env.example
+!**/.env.cws.example
 
 node_modules
 .output

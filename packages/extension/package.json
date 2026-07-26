@@ -14,6 +14,10 @@
     "zip:firefox": "wxt zip -b firefox --mode production && mkdir -p releases && mv .output/*.zip releases/",
     "compile": "tsc --noEmit",
     "test:scanner": "node --experimental-strip-types --test src/access/*.test.mjs src/domain/*.test.mjs src/background/*.test.mjs",
+    "test:release": "node --test scripts/chrome-web-store.test.mjs",
+    "store:status": "node --env-file-if-exists=.env.cws scripts/chrome-web-store.mjs status",
+    "release:dry-run": "node --env-file-if-exists=.env.cws scripts/chrome-web-store.mjs release --dry-run",
+    "release": "node --env-file-if-exists=.env.cws scripts/chrome-web-store.mjs release",
     "postinstall": "wxt prepare"
   },
   "dependencies": {
