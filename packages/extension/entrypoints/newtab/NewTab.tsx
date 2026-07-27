@@ -6,10 +6,10 @@ import { HeroBlock } from "../../src/components/newtab/HeroBlock";
 import type { SearchMode } from "../../src/components/newtab/NewTabHelp";
 import { ExtensionAccountControl } from "../../src/components/access/ExtensionAccess";
 import { Settings, Smartphone } from "lucide-react";
-import { searchProviders } from "../../src/components/cmdk-palette/SearchProviders";
 import { TabManager } from "../../src/utils/tab-manager";
 import { extractShopifyStoreName } from "../../src/domain/search";
 import {
+  NEW_TAB_SEARCH_PROVIDERS,
   parseSearchPrefix,
   resolveNewTabSearchIntent,
 } from "../../src/domain/search-intent";
@@ -192,7 +192,7 @@ export default function NewTab() {
       effectiveMode === "shopify" ? await resolveShopifyStore() : shopifyStore;
     const intent = resolveNewTabSearchIntent(trimmed, {
       activeMode,
-      providers: searchProviders,
+      providers: NEW_TAB_SEARCH_PROVIDERS,
       shopifyStoreName: storeName,
     });
 

@@ -226,7 +226,13 @@ async function publish(name, token, options) {
   });
 }
 
-function parseOptions(args) {
+async function cancelSubmission(name, token) {
+  return apiRequest(`${API_ORIGIN}/v2/${name}:cancelSubmission`, token, {
+    method: "POST",
+  });
+}
+
+export function parseOptions(args) {
   const publishTypeArg = args.find((arg) => arg.startsWith("--publish-type="));
   const publishType = publishTypeArg?.split("=")[1] ?? "DEFAULT_PUBLISH";
   if (!["DEFAULT_PUBLISH", "STAGED_PUBLISH"].includes(publishType)) {
@@ -236,6 +242,7 @@ function parseOptions(args) {
   return {
     dryRun: args.includes("--dry-run"),
     uploadOnly: args.includes("--upload-only"),
+    replacePending: args.includes("--replace-pending"),
     skipReview: args.includes("--skip-review"),
     publishType,
   };
@@ -267,9 +274,12 @@ async function run() {
   if (options.dryRun) return;
 
   const submittedState = status.submittedItemRevisionStatus?.state;
-  if (["PENDING_REVIEW", "STAGED"].includes(submittedState)) {
+  if (submittedState === "PENDING_REVIEW" && options.replacePending) {
+    await cancelSubmission(name, token);
+    console.log("Canceled the pending Chrome Web Store submission");
+  } else if (["PENDING_REVIEW", "STAGED"].includes(submittedState)) {
     throw new Error(
-      `The store already has a ${submittedState} submission. Wait for it or cancel it before releasing.`,
+      `The store already has a ${submittedState} submission. Wait for it or use --replace-pending when appropriate.`,
     );
   }
 

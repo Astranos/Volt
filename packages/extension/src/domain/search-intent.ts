@@ -15,6 +15,32 @@ export interface SearchIntentProvider {
   searchUrl: string;
 }
 
+export const NEW_TAB_SEARCH_PROVIDERS = [
+  {
+    id: "pricecharting",
+    name: "Price Charting",
+    searchUrl:
+      "https://www.pricecharting.com/search-products?q={query}&type=videogames",
+  },
+  {
+    id: "barcodelookup",
+    name: "BarcodeLookup (UPC)",
+    searchUrl: "https://www.barcodelookup.com/{query}",
+  },
+  {
+    id: "ebay",
+    name: "eBay (Sold Prices)",
+    searchUrl:
+      "https://www.ebay.com/sch/i.html?_nkw={query}&LH_Sold=1&LH_Complete=1&_dmd=2&rt=nc",
+  },
+  {
+    id: "shopify",
+    name: "Shopify (Available Inventory)",
+    searchUrl:
+      "https://admin.shopify.com/store/{store}/products?query={query}",
+  },
+] as const satisfies readonly (SearchIntentProvider & { name: string })[];
+
 export type SearchIntent =
   | { kind: "navigate"; url: string }
   | { kind: "search-provider"; providerId: string; query: string; url: string }
@@ -60,7 +86,7 @@ export function resolveNewTabSearchIntent(
   input: string,
   options: {
     activeMode: NewTabSearchMode;
-    providers: SearchIntentProvider[];
+    providers: readonly SearchIntentProvider[];
     shopifyStoreName?: string | null;
   }
 ): SearchIntent | null {

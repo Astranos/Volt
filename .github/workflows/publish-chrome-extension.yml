@@ -16,6 +16,11 @@ on:
         options:
           - DEFAULT_PUBLISH
           - STAGED_PUBLISH
+      replace_pending_submission:
+        description: Cancel and replace the current pending review
+        required: true
+        type: boolean
+        default: false
 
 concurrency:
   group: chrome-web-store-release
@@ -74,10 +79,14 @@ jobs:
           CWS_PUBLISHER_ID: ${{ vars.CWS_PUBLISHER_ID }}
           SUBMIT_FOR_REVIEW: ${{ inputs.submit_for_review }}
           PUBLISH_TYPE: ${{ inputs.publish_type }}
+          REPLACE_PENDING_SUBMISSION: ${{ inputs.replace_pending_submission }}
         run: |
           release_args=("--publish-type=${PUBLISH_TYPE}")
           if [[ "${SUBMIT_FOR_REVIEW}" != "true" ]]; then
             release_args+=("--upload-only")
+          fi
+          if [[ "${REPLACE_PENDING_SUBMISSION}" == "true" ]]; then
+            release_args+=("--replace-pending")
           fi
           pnpm release:extension -- "${release_args[@]}"
 

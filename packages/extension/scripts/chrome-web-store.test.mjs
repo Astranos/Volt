@@ -6,6 +6,7 @@ import {
   nextPatchVersion,
   nextReleaseVersion,
   parseChromeVersion,
+  parseOptions,
   storeVersions,
 } from "./chrome-web-store.mjs";
 
@@ -48,4 +49,9 @@ test("extracts published and submitted store versions", () => {
     }),
     ["1.0.55", "1.0.56"],
   );
+});
+
+test("pending reviews are replaced only when explicitly requested", () => {
+  assert.equal(parseOptions([]).replacePending, false);
+  assert.equal(parseOptions(["--replace-pending"]).replacePending, true);
 });

@@ -3,9 +3,23 @@ import test from "node:test";
 
 import {
   getSearchPrefixMode,
+  NEW_TAB_SEARCH_PROVIDERS,
   parseSearchPrefix,
   resolveNewTabSearchIntent,
 } from "./search-intent.ts";
+
+test("new-tab search providers are limited to resale workflows", () => {
+  assert.deepEqual(
+    NEW_TAB_SEARCH_PROVIDERS.map((provider) => provider.id),
+    ["pricecharting", "barcodelookup", "ebay", "shopify"],
+  );
+  assert.equal(
+    NEW_TAB_SEARCH_PROVIDERS.some((provider) =>
+      provider.searchUrl?.includes("google"),
+    ),
+    false,
+  );
+});
 
 test("plain new-tab queries stay inside closed-tab search", () => {
   assert.equal(

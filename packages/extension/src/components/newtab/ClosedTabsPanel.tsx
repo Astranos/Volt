@@ -6,9 +6,12 @@ import { RecentTabTiles } from "./RecentTabTiles";
 import { ScrollArea } from "@/src/components/ui/scroll-area";
 import { ToggleGroup, ToggleGroupItem } from "@/src/components/ui/toggle-group";
 import { Search as SearchIcon, Clock } from "lucide-react";
-import { searchProviders } from "../cmdk-palette/SearchProviders";
 import { type SearchMode } from "./NewTabHelp";
-import { getSearchPrefixMode, parseSearchPrefix } from "@/src/domain/search-intent";
+import {
+  getSearchPrefixMode,
+  NEW_TAB_SEARCH_PROVIDERS,
+  parseSearchPrefix,
+} from "@/src/domain/search-intent";
 import "./closed-tabs-panel.css";
 
 interface ClosedTabsPanelProps {
@@ -103,7 +106,9 @@ export function ClosedTabsPanel({
       return "Shopify (Available Inventory)";
     }
 
-    const provider = searchProviders.find((p) => p.id === displayedMode);
+    const provider = NEW_TAB_SEARCH_PROVIDERS.find(
+      (candidate) => candidate.id === displayedMode
+    );
     return provider?.name || "Closed tabs";
   };
 
