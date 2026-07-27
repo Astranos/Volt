@@ -22,25 +22,19 @@ final class StoreKitSubscriptionStore {
         self.accessStore = accessStore
     }
 
-    var purchaseButtonTitle: String {
-        if accessStore.status?.hasFullAppAccess == true {
-            return "Volt Pro Active"
-        }
+    /// Subscription name, billing length, and price, sourced only from StoreKit so the
+    /// purchase screen never advertises a price the App Store cannot honor.
+    var planSummary: String? {
+        guard let product, let subscription = product.subscription else { return nil }
+        let period = Self.renewalPeriodDescription(subscription.subscriptionPeriod)
         if let introductoryTrialPeriod {
-            return "Start \(introductoryTrialPeriod) Free Trial"
+            return "\(product.displayName): \(introductoryTrialPeriod) free, then \(product.displayPrice) per \(period)."
         }
-        if let product {
-            return "Subscribe for \(product.displayPrice) per month"
-        }
-        return "Subscribe for $9 per month"
+        return "\(product.displayName): \(product.displayPrice) per \(period)."
     }
 
-    var purchaseDisclosure: String {
-        let renewalPrice = product?.displayPrice ?? "$9"
-        if let introductoryTrialPeriod {
-            return "\(introductoryTrialPeriod) free, then \(renewalPrice) per month. The subscription renews automatically unless canceled at least 24 hours before the current period ends."
-        }
-        return "\(renewalPrice) per month. The subscription renews automatically unless canceled at least 24 hours before the current period ends."
+    var renewalDisclosure: String {
+        "The subscription renews automatically at the price above unless it is canceled at least 24 hours before the current period ends. Manage or cancel in App Store account settings."
     }
 
     func prepare(using clerk: Clerk) async {
@@ -48,24 +42,37 @@ final class StoreKitSubscriptionStore {
         await loadProduct()
     }
 
-    func purchase(using clerk: Clerk) async {
+    /// Ties every App Store purchase to the signed-in Volt account.
+    func purchaseOptions(using clerk: Clerk) async -> Set<Product.PurchaseOption> {
+        do {
+            let appAccountToken = try await accessStore.appAccountToken(using: clerk)
+            errorMessage = nil
+            return [.appAccountToken(appAccountToken)]
+        } catch {
+            errorMessage = error.localizedDescription
+            return []
+        }
+    }
+
+    func completePurchase(
+        _ result: Result<Product.PurchaseResult, any Error>,
+        using clerk: Clerk
+    ) async {
         isPurchasing = true
         errorMessage = nil
         noticeMessage = nil
         defer { isPurchasing = false }
 
         do {
-            let product = try await availableProduct()
-            let appAccountToken = try await accessStore.appAccountToken(using: clerk)
-            let result = try await product.purchase(options: [.appAccountToken(appAccountToken)])
-
-            switch result {
+            switch try result.get() {
             case .success(let verification):
+                let appAccountToken = try await accessStore.appAccountToken(using: clerk)
                 let transaction = try verifiedTransaction(from: verification)
                 guard transaction.appAccountToken == appAccountToken else {
                     throw StoreKitSubscriptionError.mismatchedAppAccountToken
                 }
                 try await synchronize(verification, using: clerk, finishesTransaction: true)
+                await accessStore.refresh(using: clerk)
                 noticeMessage = "Your purchase was verified. Volt access is up to date."
             case .pending:
                 noticeMessage = "The purchase is pending App Store approval."
@@ -164,15 +171,22 @@ final class StoreKitSubscriptionStore {
         return "\(period.value) \(unit)\(period.value == 1 ? "" : "s")"
     }
 
-    private func availableProduct() async throws -> Product {
-        if let product {
-            return product
+    /// Lower-cased billing length that reads naturally after "per", e.g. "month" or "3 months".
+    private static func renewalPeriodDescription(_ period: Product.SubscriptionPeriod) -> String {
+        let unit: String
+        switch period.unit {
+        case .day:
+            unit = "day"
+        case .week:
+            unit = "week"
+        case .month:
+            unit = "month"
+        case .year:
+            unit = "year"
+        @unknown default:
+            unit = "period"
         }
-        await loadProduct()
-        guard let product else {
-            throw StoreKitSubscriptionError.productUnavailable
-        }
-        return product
+        return period.value == 1 ? unit : "\(period.value) \(unit)s"
     }
 
     private func verifiedTransaction(

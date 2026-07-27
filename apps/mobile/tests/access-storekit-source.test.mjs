@@ -72,7 +72,9 @@ test("StoreKit purchase associates the server UUID and synchronizes verified JWS
   assert.match(configurationSource, /defaultStoreKitProductID = "com\.volt\.mobile\.pro\.monthly"/);
   assert.match(storeKitSource, /Product\.products\(for: \[productID\]\)/);
   assert.match(storeKitSource, /accessStore\.appAccountToken\(using: clerk\)/);
-  assert.match(storeKitSource, /product\.purchase\(options: \[\.appAccountToken\(appAccountToken\)\]\)/);
+  assert.match(storeKitSource, /return \[\.appAccountToken\(appAccountToken\)\]/);
+  assert.match(subscriptionViewSource, /\.inAppPurchaseOptions \{ _ in\s+await subscriptionStore\.purchaseOptions\(using: clerk\)/);
+  assert.match(subscriptionViewSource, /\.onInAppPurchaseCompletion \{ _, result in\s+await subscriptionStore\.completePurchase\(result, using: clerk\)/);
   assert.match(storeKitSource, /case \.verified\(let transaction\)/);
   assert.match(storeKitSource, /transaction\.appAccountToken == appAccountToken/);
   assert.match(storeKitSource, /signedTransaction: verification\.jwsRepresentation/);
@@ -94,10 +96,31 @@ test("full app gates capture behind subscription or complimentary access", () =>
   assert.match(rootSceneSource, /SubscriptionPaywallView\(\)/);
   assert.match(rootSceneSource, /activateCloudWorkspaceIfAuthorized/);
   assert.match(subscriptionViewSource, /struct SubscriptionPaywallView: View/);
-  assert.match(subscriptionViewSource, /subscriptionStore\.purchaseButtonTitle/);
   assert.match(storeKitSource, /subscription\.isEligibleForIntroOffer/);
   assert.match(storeKitSource, /offer\.paymentMode == \.freeTrial/);
-  assert.ok(storeKitSource.includes('return "Start \\(introductoryTrialPeriod) Free Trial"'));
+});
+
+test("purchase screen states subscription title, length, price, and policy links (Guideline 3.1.2(c))", () => {
+  assert.match(
+    subscriptionViewSource,
+    /SubscriptionStoreView\(productIDs: \[AppConfiguration\.storeKitProductID\]\)/
+  );
+  assert.match(subscriptionViewSource, /\.storeButton\(\.visible, for: \.restorePurchases, \.policies\)/);
+  assert.match(
+    subscriptionViewSource,
+    /\.subscriptionStorePolicyDestination\(\s*url: AppConfiguration\.privacyPolicyURL,\s*for: \.privacyPolicy\s*\)/
+  );
+  assert.match(
+    subscriptionViewSource,
+    /\.subscriptionStorePolicyDestination\(\s*url: AppConfiguration\.termsOfUseURL,\s*for: \.termsOfService\s*\)/
+  );
+  assert.match(subscriptionViewSource, /subscriptionStore\.planSummary/);
+  assert.match(subscriptionViewSource, /subscriptionStore\.renewalDisclosure/);
+
+  // Length and price must come from StoreKit, never from a hardcoded fallback price.
+  assert.match(storeKitSource, /product\.displayPrice/);
+  assert.match(storeKitSource, /renewalPeriodDescription\(subscription\.subscriptionPeriod\)/);
+  assert.doesNotMatch(storeKitSource + subscriptionViewSource, /\$\d/);
 });
 
 test("account UI shows account, workspace, full-app access, and server subscription status", () => {
@@ -111,7 +134,7 @@ test("account UI shows account, workspace, full-app access, and server subscript
   assert.match(subscriptionViewSource, /Complimentary Volt Pro access/);
   assert.match(subscriptionViewSource, /accessStore\.isRefreshing \|\| !hasCurrentAccessContext/);
   assert.match(subscriptionViewSource, /status\.organizationId == clerk\.organization\?\.id/);
-  assert.match(subscriptionViewSource, /purchaseButtonTitle/);
+  assert.match(subscriptionViewSource, /SubscriptionPaywallView\(\)/);
   assert.doesNotMatch(accountViewSource + accessSettingsSource, /Free Sessions/);
   assert.doesNotMatch(subscriptionViewSource + accessSettingsSource, /Transaction\.currentEntitlements/);
 });
