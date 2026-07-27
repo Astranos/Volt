@@ -117,6 +117,12 @@ test("purchase screen states subscription title, length, price, and policy links
   assert.match(subscriptionViewSource, /subscriptionStore\.planSummary/);
   assert.match(subscriptionViewSource, /subscriptionStore\.renewalDisclosure/);
 
+  // A rejected or unavailable product must not strand the reviewer on the store view's
+  // bare "Subscription Unavailable" placeholder with no policy links and no sign-out.
+  assert.match(subscriptionViewSource, /if subscriptionStore\.isProductUnavailable \{\s*PaywallUnavailableView\(\)/);
+  assert.match(storeKitSource, /product == nil && !isLoadingProduct && hasAttemptedProductLoad/);
+  assert.match(subscriptionViewSource, /struct PaywallUnavailableView: View/);
+
   // Length and price must come from StoreKit, never from a hardcoded fallback price.
   assert.match(storeKitSource, /product\.displayPrice/);
   assert.match(storeKitSource, /renewalPeriodDescription\(subscription\.subscriptionPeriod\)/);

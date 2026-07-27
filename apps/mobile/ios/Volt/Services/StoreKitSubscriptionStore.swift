@@ -12,6 +12,7 @@ final class StoreKitSubscriptionStore {
     private(set) var introductoryTrialPeriod: String?
     private(set) var errorMessage: String?
     private(set) var noticeMessage: String?
+    private(set) var hasAttemptedProductLoad = false
 
     @ObservationIgnored private let productID: String
     @ObservationIgnored private let accessStore: AccessStore
@@ -37,8 +38,19 @@ final class StoreKitSubscriptionStore {
         "The subscription renews automatically at the price above unless it is canceled at least 24 hours before the current period ends. Manage or cancel in App Store account settings."
     }
 
+    /// False once StoreKit has been asked for the product and returned nothing, which
+    /// happens whenever the subscription is rejected, removed, or unavailable in the
+    /// current storefront. The paywall needs this to avoid rendering an empty screen.
+    var isProductUnavailable: Bool {
+        product == nil && !isLoadingProduct && hasAttemptedProductLoad
+    }
+
     func prepare(using clerk: Clerk) async {
         startObservingTransactions(using: clerk)
+        await loadProduct()
+    }
+
+    func reloadProduct() async {
         await loadProduct()
     }
 
@@ -129,13 +141,17 @@ final class StoreKitSubscriptionStore {
     private func loadProduct() async {
         guard product == nil else { return }
         isLoadingProduct = true
-        defer { isLoadingProduct = false }
+        defer {
+            isLoadingProduct = false
+            hasAttemptedProductLoad = true
+        }
 
         do {
             product = try await Product.products(for: [productID]).first
             if product == nil {
                 throw StoreKitSubscriptionError.productUnavailable
             }
+            errorMessage = nil
             await refreshIntroductoryOfferEligibility()
         } catch {
             errorMessage = error.localizedDescription

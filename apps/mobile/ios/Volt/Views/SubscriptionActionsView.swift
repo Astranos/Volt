@@ -12,7 +12,19 @@ struct SubscriptionPaywallView: View {
     @Environment(AccessStore.self) private var accessStore
     @Environment(StoreKitSubscriptionStore.self) private var subscriptionStore
 
+    @ViewBuilder
     var body: some View {
+        // `SubscriptionStoreView` replaces its whole body with "Subscription Unavailable"
+        // when StoreKit returns no product, which would strand the reviewer on a blank
+        // screen with no policy links and no way to sign out.
+        if subscriptionStore.isProductUnavailable {
+            PaywallUnavailableView()
+        } else {
+            storeView
+        }
+    }
+
+    private var storeView: some View {
         SubscriptionStoreView(productIDs: [AppConfiguration.storeKitProductID]) {
             PaywallMarketingContent()
         }
@@ -40,6 +52,84 @@ struct SubscriptionPaywallView: View {
                 isVerifying: subscriptionStore.isPurchasing
             )
         }
+        .tint(VoltBrand.green)
+    }
+}
+
+/// Shown when StoreKit cannot supply the product. Keeps the account controls, the
+/// policy links, and Restore Purchases reachable instead of the store view's bare
+/// "Subscription Unavailable" placeholder.
+private struct PaywallUnavailableView: View {
+    @Environment(Clerk.self) private var clerk
+    @Environment(StoreKitSubscriptionStore.self) private var subscriptionStore
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 24) {
+                PaywallMarketingContent()
+
+                VStack(spacing: 12) {
+                    Label("Volt Pro is not available from the App Store right now", systemImage: "exclamationmark.triangle.fill")
+                        .font(.headline)
+                        .foregroundStyle(.orange)
+                        .multilineTextAlignment(.center)
+
+                    Text("The App Store did not return the Volt Pro subscription for this account's storefront. Try again in a moment, or restore a purchase you already made.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Button {
+                        Task { await subscriptionStore.reloadProduct() }
+                    } label: {
+                        if subscriptionStore.isLoadingProduct {
+                            ProgressView()
+                                .frame(maxWidth: .infinity, minHeight: 48)
+                        } else {
+                            Label("Try Again", systemImage: "arrow.clockwise")
+                                .font(.headline)
+                                .frame(maxWidth: .infinity, minHeight: 48)
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .disabled(subscriptionStore.isLoadingProduct)
+
+                    Button {
+                        Task { await subscriptionStore.restore(using: clerk) }
+                    } label: {
+                        if subscriptionStore.isRestoring {
+                            ProgressView()
+                                .frame(maxWidth: .infinity, minHeight: 44)
+                        } else {
+                            Label("Restore Purchases", systemImage: "arrow.clockwise.circle")
+                                .frame(maxWidth: .infinity, minHeight: 44)
+                        }
+                    }
+                    .disabled(subscriptionStore.isRestoring)
+
+                    HStack(spacing: 20) {
+                        Link("Privacy Policy", destination: AppConfiguration.privacyPolicyURL)
+                        Link("Terms of Use", destination: AppConfiguration.termsOfUseURL)
+                    }
+                    .font(.footnote.weight(.semibold))
+                }
+
+                if let noticeMessage = subscriptionStore.noticeMessage {
+                    Label(noticeMessage, systemImage: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                        .font(.footnote)
+                }
+                if let errorMessage = subscriptionStore.errorMessage {
+                    Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.red)
+                        .font(.footnote)
+                }
+            }
+            .padding(.bottom, 32)
+        }
+        .background(Color(.secondarySystemBackground))
         .tint(VoltBrand.green)
     }
 }
