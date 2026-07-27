@@ -7,7 +7,6 @@ import {
   Link2,
   MousePointerClick,
   Images,
-  ScanLine,
   BadgeAlert,
 } from "lucide-react";
 import { BookmarkFoldersSettings } from "@/src/components/settings/BookmarkFoldersSettings";
@@ -17,7 +16,6 @@ import { TopOffersSettings } from "@/src/components/settings/TopOffersSettings";
 import { useExtensionSettings } from "@/src/hooks/useExtensionSettings";
 
 const NAV_ITEMS = [
-  { href: "#newtab", icon: ScanLine, label: "New Tab Override" },
   { href: "#bookmarks", icon: Bookmark, label: "Bookmarks" },
   { href: "#ebay", icon: BadgeAlert, label: "Sold Listing Warning" },
   { href: "#upc", icon: Barcode, label: "UPC Highlighter" },

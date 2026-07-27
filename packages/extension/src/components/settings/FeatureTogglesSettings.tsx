@@ -20,24 +20,6 @@ export function FeatureTogglesSettings({
   return (
     <>
       <ToggleSection
-        id="newtab"
-        title="New Tab Override"
-        description="Control whether Volt shows its custom new-tab experience."
-        itemTitle="Use Volt New Tab"
-        itemDescription="When enabled, new tabs open Volt's custom layout with closed tabs, quick links, and bookmarks. When disabled, Volt still owns the browser override, so new tabs redirect to Google instead of Chrome's built-in New Tab page."
-        enabled={settings.newTabOverride?.enabled ?? true}
-        onToggle={() =>
-          void saveSettings({
-            ...settings,
-            newTabOverride: {
-              ...settings.newTabOverride,
-              enabled: !settings.newTabOverride?.enabled,
-            },
-          })
-        }
-      />
-
-      <ToggleSection
         id="shopify-buttons"
         title="Shopify Buttons"
         description="Enable or disable the quick action buttons on Shopify product pages"

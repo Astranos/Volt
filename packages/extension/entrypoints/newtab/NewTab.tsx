@@ -8,12 +8,10 @@ import { ExtensionAccountControl } from "../../src/components/access/ExtensionAc
 import { Settings, Smartphone } from "lucide-react";
 import { searchProviders } from "../../src/components/cmdk-palette/SearchProviders";
 import { TabManager } from "../../src/utils/tab-manager";
-import type { SyncStorageResult } from "../../src/types/settings";
 import { extractShopifyStoreName } from "../../src/domain/search";
 import {
   parseSearchPrefix,
   resolveNewTabSearchIntent,
-  type NewTabSearchMode,
 } from "../../src/domain/search-intent";
 import "../../src/components/cmdk-palette/styles.css";
 import "../../src/components/newtab/column-styles.css";
@@ -21,10 +19,9 @@ import "../../src/components/newtab/closed-tabs-panel.css";
 import "../../src/components/newtab/newtab-layout.css";
 
 export default function NewTab() {
-  const [activeMode, setActiveMode] = useState<SearchMode>("google");
+  const [activeMode, setActiveMode] = useState<SearchMode>("closed-tabs");
   const [shopifyStore, setShopifyStore] = useState<string | null>(null);
   const [resolvingShopifyStore, setResolvingShopifyStore] = useState(false);
-  const [overrideEnabled, setOverrideEnabled] = useState<boolean | null>(null);
 
   // Randomize the aurora blobs' starting offset + animation phase on every
   // new-tab load so the bg looks fresh each time.
@@ -46,62 +43,14 @@ export default function NewTab() {
   }, []);
 
   useEffect(() => {
-    if (
-      typeof chrome === "undefined" ||
-      !chrome.storage?.sync ||
-      !chrome.tabs
-    ) {
-      // If we can't read settings or tabs, fall back to rendering Volt.
-      setOverrideEnabled(true);
-      return;
-    }
-
-    chrome.storage.sync.get(["cmdkSettings"], (result: SyncStorageResult) => {
-      const enabled = result?.cmdkSettings?.newTabOverride?.enabled ?? true;
-
-      if (!enabled) {
-        setOverrideEnabled(false);
-
-        try {
-          chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-            const currentTab = tabs[0];
-            if (!currentTab?.id) {
-              return;
-            }
-
-            // When the new tab override is disabled in settings, we can't
-            // restore Chrome's real `chrome://newtab` while this extension
-            // still owns the override. Redirect to Google instead and avoid
-            // an infinite loop caused by re-loading this override page.
-            chrome.tabs.update(currentTab.id, {
-              url: "https://www.google.com",
-            });
-          });
-        } catch (e) {
-          console.error(
-            "[NewTab] Failed to redirect after disabling override:",
-            e
-          );
-        }
-      } else {
-        setOverrideEnabled(true);
-      }
-    });
-  }, []);
-
-  useEffect(() => {
     if (typeof chrome === "undefined" || !chrome.storage?.local) return;
     chrome.storage.local.get(
-      ["scout_shopify_store", "scout_search_mode"],
+      ["scout_shopify_store"],
       (result: {
         scout_shopify_store?: string;
-        scout_search_mode?: SearchMode;
       }) => {
         if (result?.scout_shopify_store) {
           setShopifyStore(result.scout_shopify_store);
-        }
-        if (result?.scout_search_mode) {
-          setActiveMode(result.scout_search_mode as SearchMode);
         }
       }
     );
@@ -109,19 +58,12 @@ export default function NewTab() {
 
   const toggleSearchMode = (mode: SearchMode) => {
     setActiveMode((current) => {
-      const newMode = current === mode ? "google" : mode;
-      if (typeof chrome !== "undefined" && chrome.storage?.local) {
-        chrome.storage.local.set({ scout_search_mode: newMode });
-      }
-      return newMode;
+      return current === mode ? "closed-tabs" : mode;
     });
   };
 
   const setSearchMode = (mode: SearchMode) => {
     setActiveMode(mode);
-    if (typeof chrome !== "undefined" && chrome.storage?.local) {
-      chrome.storage.local.set({ scout_search_mode: mode });
-    }
   };
 
   const resolveShopifyStoreFromTabs = async (): Promise<string | null> => {
@@ -249,7 +191,7 @@ export default function NewTab() {
     const storeName =
       effectiveMode === "shopify" ? await resolveShopifyStore() : shopifyStore;
     const intent = resolveNewTabSearchIntent(trimmed, {
-      activeMode: activeMode as NewTabSearchMode,
+      activeMode,
       providers: searchProviders,
       shopifyStoreName: storeName,
     });
@@ -264,11 +206,6 @@ export default function NewTab() {
 
     await TabManager.updateCurrentTab(intent.url);
   };
-
-  if (overrideEnabled === false) {
-    // Let the redirect effect take over; render nothing to avoid flicker.
-    return null;
-  }
 
   return (
     <div className="newtab-root">

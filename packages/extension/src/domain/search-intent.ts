@@ -1,12 +1,10 @@
 import {
-  buildGoogleSearchUrl,
   buildSearchUrl,
   buildShopifyInventoryUrl,
-  getUrlFromInput,
 } from "./search.ts";
 
 export type NewTabSearchMode =
-  | "google"
+  | "closed-tabs"
   | "ebay"
   | "pricecharting"
   | "barcodelookup"
@@ -29,7 +27,6 @@ export interface ParsedSearchInput {
 }
 
 const SEARCH_PREFIXES: Record<string, NewTabSearchMode> = {
-  g: "google",
   p: "pricecharting",
   u: "barcodelookup",
   e: "ebay",
@@ -75,12 +72,7 @@ export function resolveNewTabSearchIntent(
   const query = prefixed.query.trim();
   if (!query) return null;
 
-  if (mode === "google") {
-    return {
-      kind: "navigate",
-      url: getUrlFromInput(query) || buildGoogleSearchUrl(query),
-    };
-  }
+  if (mode === "closed-tabs") return null;
 
   if (mode === "shopify") {
     const storeName = options.shopifyStoreName;

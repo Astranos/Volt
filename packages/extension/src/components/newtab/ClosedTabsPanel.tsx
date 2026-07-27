@@ -23,7 +23,7 @@ const SEARCH_MODE_OPTIONS: Array<{
   label: string;
   id: string;
 }> = [
-  { mode: "google", label: "Google", id: "tour-search-google" },
+  { mode: "closed-tabs", label: "Tabs", id: "tour-search-tabs" },
   {
     mode: "pricecharting",
     label: "PriceCharting",
@@ -36,7 +36,7 @@ const SEARCH_MODE_OPTIONS: Array<{
 
 export function ClosedTabsPanel({
   onSearchSubmit,
-  activeMode = "google",
+  activeMode = "closed-tabs",
   onToggleSearchMode,
   resolvingShopifyStore = false,
 }: ClosedTabsPanelProps) {
@@ -104,13 +104,13 @@ export function ClosedTabsPanel({
     }
 
     const provider = searchProviders.find((p) => p.id === displayedMode);
-    return provider?.name || "Google";
+    return provider?.name || "Closed tabs";
   };
 
   const getSearchPlaceholder = () => {
     switch (activeMode) {
-      case "google":
-        return "Search on Google";
+      case "closed-tabs":
+        return "Search closed tabs...";
       case "ebay":
         return "Search on eBay (sold prices)";
       case "pricecharting":
@@ -146,7 +146,11 @@ export function ClosedTabsPanel({
       }
     }
 
-    if (e.key === "Enter" && onSearchSubmit) {
+    if (
+      e.key === "Enter" &&
+      onSearchSubmit &&
+      (activeMode !== "closed-tabs" || prefixedSearch.mode)
+    ) {
       e.preventDefault();
       onSearchSubmit(search);
     }
@@ -198,14 +202,7 @@ export function ClosedTabsPanel({
           value={displayedMode}
           onValueChange={(value) => {
             if (value) {
-              onToggleSearchMode?.(
-                value as
-                  | "google"
-                  | "ebay"
-                  | "pricecharting"
-                  | "barcodelookup"
-                  | "shopify"
-              );
+              onToggleSearchMode?.(value as SearchMode);
             }
           }}
           className="closed-tabs-search-toggle"
@@ -258,7 +255,9 @@ export function ClosedTabsPanel({
               </div>
             ) : (
               <>
-                {trimmedSearch && onSearchSubmit && (
+                {trimmedSearch &&
+                  onSearchSubmit &&
+                  displayedMode !== "closed-tabs" && (
                   <Command.Item
                     key="search-action"
                     value="search-action"

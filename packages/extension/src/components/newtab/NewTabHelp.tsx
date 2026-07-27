@@ -14,13 +14,9 @@ import {
   Store,
 } from "lucide-react";
 import { cn } from "../../lib/utils";
+import type { NewTabSearchMode } from "../../domain/search-intent";
 
-export type SearchMode =
-  | "google"
-  | "ebay"
-  | "pricecharting"
-  | "barcodelookup"
-  | "shopify";
+export type SearchMode = NewTabSearchMode;
 
 interface TourStep {
   targetId: string;
@@ -36,18 +32,9 @@ const TOUR_STEPS: TourStep[] = [
     targetId: "tour-search-history",
     title: "Unified Search & History",
     description:
-      "Search with the selected provider, or use prefixes like e iphone 15, p pokemon blue, u 012345678905, g iphone 15, and s iphone 15. Recently closed tabs are also available here.",
+      "Type normally to filter recently closed tabs. Choose a resale provider, or use prefixes like e iphone 15, p pokemon blue, u 012345678905, and s iphone 15.",
     icon: <Search className="h-5 w-5 text-green-600" />,
     position: "right",
-  },
-  {
-    targetId: "tour-search-google",
-    title: "Google Search",
-    description:
-      "Use Google for general searches and direct URLs. You can also type g followed by your query.",
-    icon: <Search className="h-5 w-5 text-green-600" />,
-    position: "bottom",
-    mode: "google",
   },
   {
     targetId: "tour-search-pricecharting",
