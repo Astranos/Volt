@@ -109,11 +109,16 @@ private struct GlassSubscriptionControls: View {
             // the bottom bar covers it until the reviewer scrolls, so Volt draws the links
             // here instead — pinned beside the buttons and visible the moment the sheet
             // opens.
-            HStack(spacing: 20) {
+            // `.plain` is load-bearing: a Link inherits the prominent button style from
+            // the surrounding store controls and would otherwise render as a third and
+            // fourth full-width call to action.
+            HStack(spacing: 18) {
                 Link("Terms of Use", destination: AppConfiguration.termsOfUseURL)
                 Link("Privacy Policy", destination: AppConfiguration.privacyPolicyURL)
             }
-            .font(.footnote.weight(.semibold))
+            .buttonStyle(.plain)
+            .font(.footnote.weight(.medium))
+            .foregroundStyle(VoltBrand.green)
             .padding(.top, 2)
         }
         .padding(.horizontal, 20)
@@ -238,13 +243,6 @@ private struct PaywallMarketingContent: View {
                         .font(.subheadline.weight(.semibold))
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
-                        .frame(maxWidth: .infinity)
-                        .background(
-                            VoltBrand.green.opacity(0.12),
-                            in: RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        )
                 }
             }
 
