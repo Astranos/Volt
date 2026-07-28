@@ -88,7 +88,9 @@ Volt provides a resale workflow that combines price research, purchase-offer cal
 
 ## Detailed Description
 
-Volt is a comprehensive browser extension designed to improve productivity and browsing efficiency for resale workflows. It features a command palette for quick access to tabs, bookmarks, history, quick links, search providers, and Mobile Scanner. The sidepanel hosts Mobile Scanner results and an Offer Calculator, while content scripts add resale-oriented helpers on eBay, Shopify, and pages with UPC codes. The extension is built with performance in mind and respects user privacy by minimizing data collection and processing most functionality locally.
+Volt is a comprehensive browser extension designed to improve productivity and browsing efficiency for resale workflows. It features a command palette for quick access to tabs, bookmarks, history, quick links, search providers, and Mobile Scanner. The optional new-tab page shows recently closed tabs, quick links, and bookmarks, with a search box scoped to resale lookups (PriceCharting, BarcodeLookup, eBay sold prices, Shopify inventory) rather than the open web. The sidepanel hosts Mobile Scanner results and an Offer Calculator, while content scripts add resale-oriented helpers on eBay, Shopify, and pages with UPC codes. The extension is built with performance in mind and respects user privacy by minimizing data collection and processing most functionality locally.
+
+The store listing text lives in [CHROME_STORE_LISTING.md](CHROME_STORE_LISTING.md). Keep both in sync with the shipped build — a listing that names a capability the reviewer cannot reproduce is a policy violation.
 
 ## Data Usage Certification
 

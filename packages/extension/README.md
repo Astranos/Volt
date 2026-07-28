@@ -16,7 +16,7 @@ submitted version; do not edit a version for release by hand.
 - Speeds up buying decisions with market-search shortcuts, eBay sold-price helpers, PriceCharting search, and offer calculation.
 - Speeds up listing by reactively syncing barcodes, OCR text, and photos from the signed-in Volt mobile app's account cloud workspace.
 - Command palette popup with tabs, quick links, bookmarks, history, search providers, and Mobile Scanner launch.
-- Custom new-tab page with closed tabs, quick links, bookmarks, and search modes.
+- Custom new-tab page with closed tabs, quick links, bookmarks, and resale search modes (PriceCharting, BarcodeLookup, eBay sold prices, Shopify inventory).
 - Unified sidepanel with Mobile Scanner and Offer Calculator.
 - Registers as a Cloud Scanner Workspace computer and, when selected as the live cursor target, receives per-result cursor deliveries over a reactive Convex subscription.
 - eBay sold/completed-listing warning content script.
@@ -148,7 +148,9 @@ packages/extension/
 
 Default command-palette providers are configured in [src/components/cmdk-palette/SearchProviders.tsx](src/components/cmdk-palette/SearchProviders.tsx). URL templates live in [src/domain/search.ts](src/domain/search.ts).
 
-Current built-in providers include Google, Volt Search, Amazon, Best Buy, eBay sold prices, PriceCharting, BarcodeLookup, UPCItemDB, YouTube, GitHub, X/Twitter, Home Depot, Lowe's, Menards, and Micro Center.
+Current built-in providers include Google, Amazon, Best Buy, eBay sold prices, PriceCharting, BarcodeLookup, UPCItemDB, YouTube, GitHub, X/Twitter, Home Depot, Lowe's, Menards, and Micro Center.
+
+These are command-palette providers. The new-tab search box is separate and scoped to resale lookups only — see [src/domain/search-intent.ts](src/domain/search-intent.ts) — and deliberately has no general web search.
 
 ## Mobile Scanner
 

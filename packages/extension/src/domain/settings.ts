@@ -31,7 +31,6 @@ export const DEFAULT_SETTINGS: CmdkSettings = {
   ],
   enabledSearchProviders: {
     google: true,
-    volt: true,
     amazon: true,
     bestbuy: true,
     ebay: true,

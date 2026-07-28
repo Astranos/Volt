@@ -7,7 +7,6 @@ import {
   Tag,
   Barcode,
   DollarSign,
-  Store,
   TrendingUp,
   Home,
   Wrench,
@@ -45,14 +44,6 @@ export const searchProviders: SearchProvider[] = [
     searchUrl: SEARCH_URL_TEMPLATES.google,
     icon: Search,
     color: "bg-green-500",
-  },
-  {
-    id: "volt",
-    name: "Volt Search",
-    trigger: ["volt", "search"],
-    searchUrl: SEARCH_URL_TEMPLATES.volt,
-    icon: Store,
-    color: "bg-green-700",
   },
   {
     id: "amazon",

@@ -10,7 +10,7 @@ Arc-style command palette for quick navigation, tab switching, and site-specific
 ✅ **Sidepanel Tool Launch** - Quick access to Mobile Scanner from the command palette
 ✅ **Bookmarks** - Shows your 20 most recent bookmarks
 ✅ **Recent History** - Displays last 30 visited pages
-✅ **Search Providers** - Google, Volt Search, Amazon, Best Buy, eBay, PriceCharting, BarcodeLookup, UPCItemDB, YouTube, GitHub, Twitter/X, Home Depot, Lowe's, Menards, and Micro Center
+✅ **Search Providers** - Google, Amazon, Best Buy, eBay, PriceCharting, BarcodeLookup, UPCItemDB, YouTube, GitHub, Twitter/X, Home Depot, Lowe's, Menards, and Micro Center
 ✅ **Auto-complete** - Type "ama" + Tab → activates Amazon search
 ✅ **Provider Badges** - Visual indicator when provider is active
 ✅ **Keyboard Navigation** - Arrow keys, Enter, Escape, Tab
@@ -87,7 +87,6 @@ Type a trigger word and press **Tab** to activate:
 
 | Provider       | Triggers                       | URL                                           |
 | -------------- | ------------------------------ | --------------------------------------------- |
-| Volt Search   | `volt`, `search`              | https://google.com/search/                    |
 | Google         | `google`, `g`                  | https://www.google.com/search                 |
 | Amazon         | `amazon`, `ama`, `amz`         | https://www.amazon.com/s                      |
 | Best Buy       | `bestbuy`, `bb`, `best`        | https://www.bestbuy.com/site/searchpage.jsp   |
