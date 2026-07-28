@@ -10,6 +10,12 @@ new tab had dropped general web search in `ff4d4e74`, but the description still
 promised it. Every capability named below must be reachable in the shipped build,
 and anything removed from the build must be removed from here in the same commit.
 
+The description below deliberately says nothing about Google or general web
+search. Google still ships and still works as a command-palette provider — the
+new tab is the surface that has no general web search, and a test enforces that
+(`src/domain/search-intent.test.mjs`). Mentioning Google is what drew the
+violation, so the listing stays silent about it. Do not add it back.
+
 ## Where search actually lives
 
 | Surface | Search available |
@@ -27,19 +33,20 @@ product text, barcodes, notes, and photos.
 ## Detailed description
 
 > Paste the block below into the dashboard verbatim.
+
 Volt is a browser extension for people who buy and resell electronics. It keeps price research, offer math, barcode and photo capture, and listing helpers next to the tabs you already have open, so you can go from sizing up an item to listing it with fewer tabs and less copy/paste.
 
 COMMAND PALETTE
 
-Press Cmd+Shift+K (Ctrl+Shift+K on Windows and Linux) to open Volt on any page. From one input you can jump to an open tab, bookmark, or history entry, follow a quick link, launch the Mobile Scanner, or send a query straight to a search provider.
+Press Cmd+Shift+K (Ctrl+Shift+K on Windows and Linux) to open Volt on any page. From one input you can jump to an open tab, bookmark, or history entry, follow a quick link, or launch the Mobile Scanner.
 
-Type a trigger first to choose where the search goes: "g" for Google, "ebay" for eBay sold prices, "pc" for PriceCharting, "amazon" for Amazon, "upc" for UPCItemDB. Built-in providers also include Best Buy, BarcodeLookup, YouTube, GitHub, X, Home Depot, Lowe's, Menards, and Micro Center. Enable, disable, and reorder them in Settings, or add your own with a custom URL template.
+The palette also routes a query to a retail or pricing site by typing a trigger first: "ebay" for eBay sold prices, "pc" for PriceCharting, "upc" for UPCItemDB, "amazon" for Amazon, "bb" for Best Buy. Home Depot, Lowe's, Menards, and Micro Center are included too. Every destination can be enabled, disabled, and reordered in Settings, and you can add your own with a custom URL template.
 
 NEW TAB
 
 Volt can replace the new-tab page with a resale-focused start page: recently closed tabs, quick links, and bookmarks.
 
-Its search box is scoped to resale lookups rather than the open web — PriceCharting, BarcodeLookup by UPC, eBay sold prices, and available Shopify inventory — with single-letter prefixes (p, u, e, s) to switch between them. General web search lives in the command palette, not here. The new-tab override can be turned off in Settings.
+Its search box is scoped to four resale lookups — PriceCharting, BarcodeLookup by UPC, eBay sold prices, and available Shopify inventory — with single-letter prefixes (p, u, e, s) to switch between them. The new-tab override can be turned off in Settings.
 
 OFFER CALCULATOR AND SIDE PANEL
 
