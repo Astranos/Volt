@@ -170,6 +170,17 @@ final class StoreKitSubscriptionStore {
         introductoryTrialPeriod = Self.periodDescription(offer.period)
     }
 
+    /// Compact length-and-price line for the purchase button, reading as
+    /// "7 Days free, then <price>/month". Sourced only from StoreKit, like `planSummary`.
+    static func purchaseCaption(for product: Product, activeOffer: Product.SubscriptionOffer?) -> String {
+        guard let subscription = product.subscription else { return product.displayPrice }
+        let period = renewalPeriodDescription(subscription.subscriptionPeriod)
+        if let activeOffer, activeOffer.paymentMode == .freeTrial {
+            return "\(periodDescription(activeOffer.period)) free, then \(product.displayPrice)/\(period)"
+        }
+        return "\(product.displayPrice)/\(period)"
+    }
+
     private static func periodDescription(_ period: Product.SubscriptionPeriod) -> String {
         let unit: String
         switch period.unit {

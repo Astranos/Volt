@@ -105,7 +105,16 @@ test("purchase screen states subscription title, length, price, and policy links
     subscriptionViewSource,
     /SubscriptionStoreView\(productIDs: \[AppConfiguration\.storeKitProductID\]\)/
   );
-  assert.match(subscriptionViewSource, /\.storeButton\(\.visible, for: \.restorePurchases, \.policies\)/);
+  assert.match(subscriptionViewSource, /\.storeButton\(\.visible, for: \.policies\)/);
+
+  // The subscribe and restore controls are ordinary SwiftUI buttons so they pick up the
+  // Liquid Glass press animation, while `subscribe()` keeps the purchase inside
+  // SubscriptionStoreView.
+  assert.match(subscriptionViewSource, /struct GlassSubscriptionControlStyle: SubscriptionStoreControlStyle/);
+  assert.match(subscriptionViewSource, /option\.subscribe\(\)/);
+  assert.match(subscriptionViewSource, /\.buttonStyle\(\.glassProminent\)/);
+  assert.match(subscriptionViewSource, /\.storeButton\(\.hidden, for: \.restorePurchases\)/);
+  assert.match(subscriptionViewSource, /subscriptionStore\.restore\(using: clerk\)/);
   assert.match(
     subscriptionViewSource,
     /\.subscriptionStorePolicyDestination\(\s*url: AppConfiguration\.privacyPolicyURL,\s*for: \.privacyPolicy\s*\)/
@@ -116,6 +125,7 @@ test("purchase screen states subscription title, length, price, and policy links
   );
   assert.match(subscriptionViewSource, /subscriptionStore\.planSummary/);
   assert.match(subscriptionViewSource, /subscriptionStore\.renewalDisclosure/);
+  assert.match(storeKitSource, /static func purchaseCaption\(for product: Product, activeOffer: Product\.SubscriptionOffer\?\)/);
 
   // A rejected or unavailable product must not strand the reviewer on the store view's
   // bare "Subscription Unavailable" placeholder with no policy links and no sign-out.

@@ -28,9 +28,11 @@ struct SubscriptionPaywallView: View {
         SubscriptionStoreView(productIDs: [AppConfiguration.storeKitProductID]) {
             PaywallMarketingContent()
         }
-        .subscriptionStoreControlStyle(.prominentPicker)
-        .subscriptionStoreButtonLabel(.multiline)
-        .storeButton(.visible, for: .restorePurchases, .policies)
+        .subscriptionStoreControlStyle(GlassSubscriptionControlStyle())
+        // The glass control style supplies its own Restore Purchases button, so StoreKit's
+        // flat one would only duplicate it.
+        .storeButton(.hidden, for: .restorePurchases)
+        .storeButton(.visible, for: .policies)
         .subscriptionStorePolicyDestination(
             url: AppConfiguration.privacyPolicyURL,
             for: .privacyPolicy
@@ -53,6 +55,70 @@ struct SubscriptionPaywallView: View {
             )
         }
         .tint(VoltBrand.green)
+    }
+}
+
+/// StoreKit's built-in subscription controls render flat buttons that skip the Liquid
+/// Glass press animation used everywhere else in Volt. A custom control style lets the
+/// buttons be ordinary SwiftUI ones while `option.subscribe()` keeps the purchase running
+/// through `SubscriptionStoreView`, so `inAppPurchaseOptions` and
+/// `onInAppPurchaseCompletion` still apply.
+private struct GlassSubscriptionControlStyle: SubscriptionStoreControlStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        GlassSubscriptionControls(options: configuration.options)
+    }
+}
+
+private struct GlassSubscriptionControls: View {
+    let options: [SubscriptionStoreControlStyleConfiguration.Option]
+
+    @Environment(Clerk.self) private var clerk
+    @Environment(StoreKitSubscriptionStore.self) private var subscriptionStore
+
+    var body: some View {
+        VStack(spacing: 12) {
+            ForEach(options) { option in
+                Button {
+                    option.subscribe()
+                } label: {
+                    VStack(spacing: 2) {
+                        Text(actionTitle(for: option))
+                            .font(.headline)
+                        Text(StoreKitSubscriptionStore.purchaseCaption(
+                            for: option.subscription,
+                            activeOffer: option.activeOffer
+                        ))
+                        .font(.caption)
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.glassProminent)
+                .controlSize(.extraLarge)
+                .tint(VoltBrand.green)
+            }
+
+            Button {
+                Task { await subscriptionStore.restore(using: clerk) }
+            } label: {
+                if subscriptionStore.isRestoring {
+                    ProgressView()
+                        .frame(maxWidth: .infinity)
+                } else {
+                    Text("Restore Purchases")
+                        .font(.subheadline.weight(.medium))
+                        .frame(maxWidth: .infinity)
+                }
+            }
+            .buttonStyle(.glass)
+            .controlSize(.large)
+            .disabled(subscriptionStore.isRestoring)
+        }
+    }
+
+    private func actionTitle(
+        for option: SubscriptionStoreControlStyleConfiguration.Option
+    ) -> String {
+        option.activeOffer?.paymentMode == .freeTrial ? "Try It Free" : "Subscribe"
     }
 }
 
@@ -159,6 +225,23 @@ private struct PaywallMarketingContent: View {
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
+
+                // Guideline 3.1.2(c) wants the title, length, and price stated in the app.
+                // Keep them directly under the headline so they are on screen the moment
+                // the paywall lands, without scrolling past the feature list.
+                if let planSummary = subscriptionStore.planSummary {
+                    Text(planSummary)
+                        .font(.subheadline.weight(.semibold))
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .frame(maxWidth: .infinity)
+                        .background(
+                            VoltBrand.green.opacity(0.12),
+                            in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        )
+                }
             }
 
             VStack(alignment: .leading, spacing: 18) {
@@ -181,17 +264,11 @@ private struct PaywallMarketingContent: View {
             .padding(20)
             .background(.background, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
 
-            VStack(spacing: 6) {
-                if let planSummary = subscriptionStore.planSummary {
-                    Text(planSummary)
-                        .font(.footnote.weight(.semibold))
-                }
-                Text(subscriptionStore.renewalDisclosure)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-            .multilineTextAlignment(.center)
-            .fixedSize(horizontal: false, vertical: true)
+            Text(subscriptionStore.renewalDisclosure)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.horizontal, 24)
         .padding(.top, 12)
