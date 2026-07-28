@@ -29,18 +29,9 @@ struct SubscriptionPaywallView: View {
             PaywallMarketingContent()
         }
         .subscriptionStoreControlStyle(GlassSubscriptionControlStyle())
-        // The glass control style supplies its own Restore Purchases button, so StoreKit's
-        // flat one would only duplicate it.
-        .storeButton(.hidden, for: .restorePurchases)
-        .storeButton(.visible, for: .policies)
-        .subscriptionStorePolicyDestination(
-            url: AppConfiguration.privacyPolicyURL,
-            for: .privacyPolicy
-        )
-        .subscriptionStorePolicyDestination(
-            url: AppConfiguration.termsOfUseURL,
-            for: .termsOfService
-        )
+        // The glass control style supplies its own Restore Purchases button and policy
+        // links, so StoreKit's flat versions would only duplicate them.
+        .storeButton(.hidden, for: .restorePurchases, .policies)
         .inAppPurchaseOptions { _ in
             await subscriptionStore.purchaseOptions(using: clerk)
         }
@@ -93,7 +84,7 @@ private struct GlassSubscriptionControls: View {
                     .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.glassProminent)
-                .controlSize(.extraLarge)
+                .controlSize(.large)
                 .tint(VoltBrand.green)
             }
 
@@ -112,7 +103,20 @@ private struct GlassSubscriptionControls: View {
             .buttonStyle(.glass)
             .controlSize(.large)
             .disabled(subscriptionStore.isRestoring)
+
+            // Guideline 3.1.2(c) wants both policy links functional on the purchase
+            // screen. StoreKit's own `.policies` row sits in the scrolling content, where
+            // the bottom bar covers it until the reviewer scrolls, so Volt draws the links
+            // here instead — pinned beside the buttons and visible the moment the sheet
+            // opens.
+            HStack(spacing: 20) {
+                Link("Terms of Use", destination: AppConfiguration.termsOfUseURL)
+                Link("Privacy Policy", destination: AppConfiguration.privacyPolicyURL)
+            }
+            .font(.footnote.weight(.semibold))
+            .padding(.top, 2)
         }
+        .padding(.horizontal, 20)
     }
 
     private func actionTitle(
