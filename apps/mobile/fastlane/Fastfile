@@ -247,9 +247,25 @@ def testflight_demo_account_from_env
   }
 end
 
+# deliver's review_information always writes demo_account_required, and sets it to
+# false whenever the demo credentials are absent - even when it is only uploading
+# review notes. Volt gates every screen behind a Clerk sign-in, so that silently
+# tells App Review no account is needed and the reviewer stops at the first screen
+# with the stored credentials hidden from them. Fail loudly instead.
+def require_demo_account_for_review_information!
+  return unless app_review_demo_account_from_env.nil?
+
+  UI.user_error!(
+    "APP_REVIEW_DEMO_USER and APP_REVIEW_DEMO_PASSWORD must be set before uploading " \
+    "review information. Without them deliver clears demoAccountRequired and App " \
+    "Review is stranded at the Clerk sign-in screen."
+  )
+end
+
 def upload_app_store_release_notes(api_key:, app_version:, build_number:, release_notes:, review_notes:, submit_for_review:)
   return if release_notes.to_s.strip.empty? && review_notes.to_s.strip.empty? && !submit_for_review
 
+  require_demo_account_for_review_information!
   app_review_information = deliver_demo_account_from_env
   app_review_information[:notes] = review_notes if review_notes.to_s.strip.length.positive?
   localized_release_notes = {}
