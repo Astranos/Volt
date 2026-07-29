@@ -77,6 +77,8 @@ jobs:
           CWS_ACCESS_TOKEN: ${{ steps.google_auth.outputs.access_token }}
           CWS_EXTENSION_ID: ${{ vars.CWS_EXTENSION_ID }}
           CWS_PUBLISHER_ID: ${{ vars.CWS_PUBLISHER_ID }}
+          WXT_CLERK_PUBLISHABLE_KEY: ${{ vars.WXT_CLERK_PUBLISHABLE_KEY }}
+          WXT_EXTENSION_PUBLIC_KEY: ${{ vars.WXT_EXTENSION_PUBLIC_KEY }}
           SUBMIT_FOR_REVIEW: ${{ inputs.submit_for_review }}
           PUBLISH_TYPE: ${{ inputs.publish_type }}
           REPLACE_PENDING_SUBMISSION: ${{ inputs.replace_pending_submission }}

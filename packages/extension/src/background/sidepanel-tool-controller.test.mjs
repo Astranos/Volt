@@ -85,6 +85,9 @@ test("explicit open reopens stale same-tool state instead of toggling closed", a
   const firstOpen = await toggleForWindow(controller, 7, "mobile-scanner", "open");
   assert.equal(firstOpen.success, true);
   assert.equal(firstOpen.mode, "open");
+  assert.deepEqual(calls.setOptions, [
+    { enabled: true, path: "sidepanel.html" },
+  ]);
   assert.deepEqual(controller.getStateForWindow(7), {
     open: true,
     tool: "mobile-scanner",

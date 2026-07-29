@@ -28,9 +28,6 @@ export type SidePanelOperationCallback = (
 type SidePanelWithClose = typeof chrome.sidePanel & {
   close?: (options: { windowId: number }, callback?: () => void) => void;
 };
-type SidePanelSetOptions = Parameters<typeof chrome.sidePanel.setOptions>[0] & {
-  windowId?: number;
-};
 
 type SidepanelChromeApi = Pick<typeof chrome, "runtime" | "storage" | "tabs"> & {
   sidePanel: SidePanelWithClose;
@@ -105,16 +102,12 @@ export function createSidepanelToolController({
     }
   }
 
-  function configurePanelForWindow(windowId: number) {
+  function configurePanel() {
     try {
-      const options: SidePanelSetOptions = {
+      chromeApi.sidePanel.setOptions({
         enabled: true,
         path: panelPath,
-      };
-      if (typeof windowId === "number") {
-        options.windowId = windowId;
-      }
-      chromeApi.sidePanel.setOptions(options);
+      });
     } catch (setErr) {
       log("sidePanel setOptions error", errorMessage(setErr));
     }
@@ -146,7 +139,7 @@ export function createSidepanelToolController({
       return { mode: "switch", windowId, tool: desiredTool };
     }
 
-    configurePanelForWindow(windowId);
+    configurePanel();
     return { mode: "open", windowId, tool: desiredTool };
   }
 

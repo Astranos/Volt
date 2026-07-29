@@ -14,6 +14,19 @@ test("Clerk sync host is derived from the publishable key", () => {
   assert.equal(clerkFrontendApiFromPublishableKey("not-a-key"), "");
 });
 
+test("Clerk build variables use statically replaceable import.meta.env access", async () => {
+  const configSource = await readFile(
+    new URL("./config.ts", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(
+    configSource,
+    /import\.meta\.env\?\.WXT_CLERK_PUBLISHABLE_KEY/,
+  );
+  assert.doesNotMatch(configSource, /const extensionEnv/);
+});
+
 test("extension auth delegates web sign-in and syncs the Clerk session", async () => {
   const providerSource = await readFile(
     new URL("../components/access/ExtensionAccess.tsx", import.meta.url),

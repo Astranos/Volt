@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
 import { execFileSync } from "node:child_process";
-import { readFile, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -76,6 +77,43 @@ export function storeVersions(status) {
         ?.map((channel) => channel.crxVersion)
         .filter((version) => typeof version === "string") ?? [],
   );
+}
+
+export function chromeExtensionIdFromPublicKey(publicKey) {
+  const normalized = publicKey.replace(/\s/g, "");
+  const decoded = Buffer.from(normalized, "base64");
+  if (!normalized || decoded.length === 0) {
+    throw new Error("WXT_EXTENSION_PUBLIC_KEY must be a base64-encoded public key");
+  }
+
+  return [...createHash("sha256").update(decoded).digest().subarray(0, 16)]
+    .flatMap((byte) => [byte >> 4, byte & 0x0f])
+    .map((nibble) => String.fromCharCode("a".charCodeAt(0) + nibble))
+    .join("");
+}
+
+export function validateProductionBuildEnv(env) {
+  const clerkPublishableKey = env.WXT_CLERK_PUBLISHABLE_KEY?.trim();
+  if (!clerkPublishableKey?.startsWith("pk_live_")) {
+    throw new Error(
+      "WXT_CLERK_PUBLISHABLE_KEY must be a Clerk production publishable key",
+    );
+  }
+
+  const extensionPublicKey = env.WXT_EXTENSION_PUBLIC_KEY?.trim();
+  if (!extensionPublicKey) {
+    throw new Error("Missing WXT_EXTENSION_PUBLIC_KEY");
+  }
+
+  const extensionId = chromeExtensionIdFromPublicKey(extensionPublicKey);
+  const expectedExtensionId = env.CWS_EXTENSION_ID?.trim();
+  if (expectedExtensionId && extensionId !== expectedExtensionId) {
+    throw new Error(
+      `WXT_EXTENSION_PUBLIC_KEY resolves to ${extensionId}, expected ${expectedExtensionId}`,
+    );
+  }
+
+  return { clerkPublishableKey, extensionId, extensionPublicKey };
 }
 
 function requiredEnv(name) {
@@ -173,12 +211,35 @@ function createArtifact(version) {
   );
 }
 
-async function verifyArtifact(version, artifactPath) {
+async function filesBelow(directory) {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const nested = await Promise.all(
+    entries.map((entry) => {
+      const entryPath = path.join(directory, entry.name);
+      return entry.isDirectory() ? filesBelow(entryPath) : [entryPath];
+    }),
+  );
+  return nested.flat();
+}
+
+async function verifyArtifact(version, artifactPath, buildConfig) {
   const manifest = JSON.parse(
     await readFile(path.join(packageRoot, ".output", "volt", "manifest.json"), "utf8"),
   );
   if (manifest.version !== version) {
     throw new Error(`Built manifest version ${manifest.version} does not match ${version}`);
+  }
+  if (manifest.key !== buildConfig.extensionPublicKey) {
+    throw new Error("Built manifest omitted or changed WXT_EXTENSION_PUBLIC_KEY");
+  }
+
+  const outputFiles = await filesBelow(path.join(packageRoot, ".output", "volt"));
+  const scripts = outputFiles.filter((file) => file.endsWith(".js"));
+  const scriptContents = await Promise.all(
+    scripts.map((file) => readFile(file, "utf8")),
+  );
+  if (!scriptContents.some((contents) => contents.includes(buildConfig.clerkPublishableKey))) {
+    throw new Error("Built extension omitted WXT_CLERK_PUBLISHABLE_KEY");
   }
   await readFile(artifactPath);
 }
@@ -272,6 +333,7 @@ async function run() {
   console.log(`Next Chrome Web Store version: ${nextVersion}`);
 
   if (options.dryRun) return;
+  const buildConfig = validateProductionBuildEnv(process.env);
 
   const submittedState = status.submittedItemRevisionStatus?.state;
   if (submittedState === "PENDING_REVIEW" && options.replacePending) {
@@ -287,7 +349,7 @@ async function run() {
   try {
     await setPackageVersion(originalPackage, nextVersion);
     const artifactPath = createArtifact(nextVersion);
-    await verifyArtifact(nextVersion, artifactPath);
+    await verifyArtifact(nextVersion, artifactPath, buildConfig);
     const uploadResult = await upload(name, token, artifactPath);
     uploaded = true;
     console.log(`Uploaded ${uploadResult.crxVersion ?? nextVersion}: ${artifactPath}`);

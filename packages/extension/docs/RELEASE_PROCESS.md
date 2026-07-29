@@ -75,11 +75,16 @@ releases the current `main` branch. Configure these GitHub repository variables:
 - `CWS_PUBLISHER_ID`
 - `GCP_SERVICE_ACCOUNT`
 - `GCP_WORKLOAD_IDENTITY_PROVIDER`
+- `WXT_CLERK_PUBLISHABLE_KEY` (the production `pk_live_...` key)
+- `WXT_EXTENSION_PUBLIC_KEY` (the manifest public key that resolves to `CWS_EXTENSION_ID`)
 
 Configure Google Workload Identity Federation for the `JuanQuenga/Volt`
 repository and grant that identity `roles/iam.workloadIdentityUser` on the
 service account. The workflow uses GitHub OIDC to mint a short-lived Chrome Web
 Store access token; no Google credential is stored in GitHub.
+
+The release command rejects missing or test Clerk credentials, mismatched
+extension identities, and artifacts that omit either production value.
 
 After an accepted upload, the workflow commits the generated package version
 back to `main`. If that commit ever fails, the next run still queries the store

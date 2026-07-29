@@ -2,12 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  chromeExtensionIdFromPublicKey,
   compareChromeVersions,
   nextPatchVersion,
   nextReleaseVersion,
   parseChromeVersion,
   parseOptions,
   storeVersions,
+  validateProductionBuildEnv,
 } from "./chrome-web-store.mjs";
 
 test("parses and pads valid Chrome versions", () => {
@@ -54,4 +56,48 @@ test("extracts published and submitted store versions", () => {
 test("pending reviews are replaced only when explicitly requested", () => {
   assert.equal(parseOptions([]).replacePending, false);
   assert.equal(parseOptions(["--replace-pending"]).replacePending, true);
+});
+
+test("validates production Clerk config and stable extension identity", () => {
+  const extensionPublicKey = Buffer.from("volt-extension-public-key").toString("base64");
+  const extensionId = chromeExtensionIdFromPublicKey(extensionPublicKey);
+
+  assert.deepEqual(
+    validateProductionBuildEnv({
+      CWS_EXTENSION_ID: extensionId,
+      WXT_CLERK_PUBLISHABLE_KEY: "pk_live_example",
+      WXT_EXTENSION_PUBLIC_KEY: extensionPublicKey,
+    }),
+    {
+      clerkPublishableKey: "pk_live_example",
+      extensionId,
+      extensionPublicKey,
+    },
+  );
+});
+
+test("rejects missing, test, and mismatched production auth config", () => {
+  const extensionPublicKey = Buffer.from("volt-extension-public-key").toString("base64");
+
+  assert.throws(
+    () => validateProductionBuildEnv({}),
+    /Clerk production publishable key/,
+  );
+  assert.throws(
+    () =>
+      validateProductionBuildEnv({
+        WXT_CLERK_PUBLISHABLE_KEY: "pk_test_example",
+        WXT_EXTENSION_PUBLIC_KEY: extensionPublicKey,
+      }),
+    /Clerk production publishable key/,
+  );
+  assert.throws(
+    () =>
+      validateProductionBuildEnv({
+        CWS_EXTENSION_ID: "a".repeat(32),
+        WXT_CLERK_PUBLISHABLE_KEY: "pk_live_example",
+        WXT_EXTENSION_PUBLIC_KEY: extensionPublicKey,
+      }),
+    /expected a{32}/,
+  );
 });
