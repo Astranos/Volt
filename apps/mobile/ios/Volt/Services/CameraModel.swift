@@ -115,6 +115,7 @@ final class CameraModel: NSObject {
     private var liveTextReplacementObservationCounts: [String: Int] = [:]
     private var liveTextEmptyObservationCount = 0
     private var zoomGestureStartDisplayFactor: CGFloat?
+    private var isBarcodeScanningEnabled = false
 
     override init() {
         super.init()
@@ -213,6 +214,30 @@ final class CameraModel: NSObject {
         liveTextFrameProcessor.isEnabled = enabled
         if !enabled {
             clearLiveTextCandidates()
+        }
+    }
+
+    func setBarcodeScanningEnabled(_ enabled: Bool) {
+        isBarcodeScanningEnabled = enabled
+        guard let videoDevice else { return }
+
+        sessionQueue.async { [weak self] in
+            do {
+                try videoDevice.lockForConfiguration()
+                defer { videoDevice.unlockForConfiguration() }
+                if enabled {
+                    CameraDeviceSelector.applyBarcodeFocus(
+                        on: videoDevice,
+                        point: CameraDeviceSelector.centerFocusPoint
+                    )
+                } else {
+                    CameraDeviceSelector.applyDefaultContinuousFocus(on: videoDevice)
+                }
+            } catch {
+                Task { @MainActor in
+                    self?.errorMessage = error.localizedDescription
+                }
+            }
         }
     }
 
@@ -413,11 +438,16 @@ final class CameraModel: NSObject {
 
     func focus(at point: CGPoint) {
         guard let videoDevice else { return }
+        let isBarcodeScanningEnabled = isBarcodeScanningEnabled
         sessionQueue.async { [weak self] in
             do {
                 try videoDevice.lockForConfiguration()
                 defer { videoDevice.unlockForConfiguration() }
-                CameraDeviceSelector.applySmoothTapFocus(on: videoDevice, point: point)
+                if isBarcodeScanningEnabled {
+                    CameraDeviceSelector.applyBarcodeFocus(on: videoDevice, point: point)
+                } else {
+                    CameraDeviceSelector.applySmoothTapFocus(on: videoDevice, point: point)
+                }
             } catch {
                 Task { @MainActor in
                     self?.errorMessage = error.localizedDescription

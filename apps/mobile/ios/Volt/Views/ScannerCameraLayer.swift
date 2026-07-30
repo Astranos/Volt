@@ -72,6 +72,7 @@ struct ScannerCameraLayer: View {
 
     private func updateLiveTextScanning() {
         store.camera.setLiveTextScanningEnabled(store.activeMode == .ocr)
+        store.camera.setBarcodeScanningEnabled(store.activeMode == .barcode)
     }
 
     @ViewBuilder

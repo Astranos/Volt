@@ -862,12 +862,18 @@ test("native camera resets capture sessions to display 1x zoom", () => {
   assert.match(cameraModelSwiftSource, /applyZoomState\(state\)/);
 });
 
-test("native camera uses system virtual lens switching with single tap focus", () => {
+test("native camera uses fast continuous near focus for barcode scanning", () => {
   assert.match(cameraDeviceSelectorSwiftSource, /configureNativeVirtualDeviceSwitching\(on device: AVCaptureDevice\)/);
   assert.match(cameraDeviceSelectorSwiftSource, /applySmoothTapFocus\(on device: AVCaptureDevice, point: CGPoint\)/);
+  assert.match(cameraDeviceSelectorSwiftSource, /applyBarcodeFocus\(on device: AVCaptureDevice, point: CGPoint\)/);
   assert.match(cameraDeviceSelectorSwiftSource, /isSmoothAutoFocusEnabled = true/);
+  assert.match(cameraDeviceSelectorSwiftSource, /isSmoothAutoFocusEnabled = false/);
+  assert.match(cameraDeviceSelectorSwiftSource, /isAutoFocusRangeRestrictionSupported/);
+  assert.match(cameraDeviceSelectorSwiftSource, /autoFocusRangeRestriction = \.near/);
   assert.match(cameraDeviceSelectorSwiftSource, /focusMode = \.autoFocus/);
+  assert.match(cameraDeviceSelectorSwiftSource, /focusMode = \.continuousAutoFocus/);
   assert.match(cameraDeviceSelectorSwiftSource, /exposureMode = \.autoExpose/);
+  assert.match(cameraDeviceSelectorSwiftSource, /exposureMode = \.continuousAutoExposure/);
   assert.match(cameraDeviceSelectorSwiftSource, /isSubjectAreaChangeMonitoringEnabled = true/);
   assert.match(cameraDeviceSelectorSwiftSource, /primaryConstituentDeviceSwitchingBehavior != \.unsupported/);
   assert.doesNotMatch(cameraDeviceSelectorSwiftSource, /fallbackPrimaryConstituentDevices = \[\]/);
@@ -877,6 +883,12 @@ test("native camera uses system virtual lens switching with single tap focus", (
   );
   assert.match(cameraModelSwiftSource, /CameraDeviceSelector\.configureNativeVirtualDeviceSwitching\(on: camera\)/);
   assert.match(clipBarcodeScannerServiceSwiftSource, /CameraDeviceSelector\.configureNativeVirtualDeviceSwitching\(on: camera\)/);
+  assert.match(cameraModelSwiftSource, /func setBarcodeScanningEnabled\(_ enabled: Bool\)/);
+  assert.match(clipBarcodeScannerServiceSwiftSource, /func setBarcodeScanningEnabled\(_ enabled: Bool\)/);
+  assert.match(scannerCameraLayerSwiftSource, /store\.camera\.setBarcodeScanningEnabled\(store\.activeMode == \.barcode\)/);
+  assert.match(clipRootViewSwiftSource, /cameraService\.setBarcodeScanningEnabled\(activeMode == \.barcode\)/);
+  assert.match(cameraModelSwiftSource, /CameraDeviceSelector\.applyBarcodeFocus\(on: videoDevice, point: point\)/);
+  assert.match(clipBarcodeScannerServiceSwiftSource, /CameraDeviceSelector\.applyBarcodeFocus\(on: videoDevice, point: point\)/);
   assert.match(cameraModelSwiftSource, /CameraDeviceSelector\.applySmoothTapFocus\(on: videoDevice, point: point\)/);
   assert.match(clipBarcodeScannerServiceSwiftSource, /CameraDeviceSelector\.applySmoothTapFocus\(on: videoDevice, point: point\)/);
 });

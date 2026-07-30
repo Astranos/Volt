@@ -1866,6 +1866,7 @@ private struct ClipCaptureSessionView: View {
         } else {
             cameraService.start()
             cameraService.setLiveTextScanningEnabled(activeMode == .ocr)
+            cameraService.setBarcodeScanningEnabled(activeMode == .barcode)
         }
     }
 
