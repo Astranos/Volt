@@ -11,6 +11,8 @@ import {
   DEFAULT_CUSTOM_RATES,
   DEFAULT_ENABLED_OFFER_TYPES,
   DEFAULT_STARTING_RATES,
+  percentageFromInputValue,
+  percentageToInputValue,
   removeCustomTopOfferRule,
   removeCustomTopOfferStartingRule,
   removeTopOfferRateRule,
@@ -140,7 +142,7 @@ export function TopOffersSettings({
     const rates = getBuiltInStartRates(type);
     return (
       <RateRuleEditor
-        title="Start Rates"
+        title="Suggestion Rates"
         rules={rates.rules}
         defaultPercentage={rates.defaultPercentage}
         onRuleChange={(index, field, value) =>
@@ -180,10 +182,10 @@ export function TopOffersSettings({
 
   const renderStartToggle = (type: BuiltInStartingRateType) => (
     <div className="mb-4 flex items-center justify-between rounded-lg border border-border bg-muted/20 px-4 py-3">
-      <span className="text-sm font-medium">Customize Start</span>
+      <span className="text-sm font-medium">Customize Suggestion</span>
       <Switch
         checked={Boolean(startingRates[type])}
-        aria-label={`Customize ${type} start rates`}
+        aria-label={`Customize ${type} suggestion rates`}
         onCheckedChange={(enabled) =>
           handleToggleBuiltInStartRates(type, enabled)
         }
@@ -399,7 +401,7 @@ export function TopOffersSettings({
             </div>
             <p className="text-sm text-muted-foreground mb-4">
               Set the percentage used for the "Checkout Offer" max calculation.
-              By default, the starting value uses the standard top-offer guide.
+              By default, the suggestion value uses the standard top-offer guide.
             </p>
             {renderStartToggle("checkout")}
             {renderBuiltInStartEditor("checkout")}
@@ -411,16 +413,21 @@ export function TopOffersSettings({
               <div className="col-span-5">
                 <input
                   type="number"
-                  step="0.01"
+                  step="0.1"
+                  min="0"
+                  max="100"
+                  inputMode="decimal"
                   value={
-                    customRates.checkout?.percentage ??
-                    DEFAULT_CUSTOM_RATES.checkout!.percentage
+                    percentageToInputValue(
+                      customRates.checkout?.percentage ??
+                        DEFAULT_CUSTOM_RATES.checkout!.percentage
+                    )
                   }
                   onChange={(event) =>
                     saveTopOffers(
                       updateTopOfferCheckoutRate(
                         settings.topOffers,
-                        parseFloat(event.target.value)
+                        percentageFromInputValue(parseFloat(event.target.value))
                       )
                     )
                   }
@@ -545,11 +552,11 @@ export function TopOffersSettings({
 
                     <div className="mb-4 flex items-center justify-between rounded-lg border border-border bg-background px-4 py-3">
                       <span className="text-sm font-medium">
-                        Customize Start
+                        Customize Suggestion
                       </span>
                       <Switch
                         checked={Boolean(offer.startingRules)}
-                        aria-label={`${offer.name} start rates enabled`}
+                        aria-label={`${offer.name} suggestion rates enabled`}
                         onCheckedChange={(enabled) =>
                           saveTopOffers(
                             setCustomTopOfferStartingRatesEnabled(
@@ -565,7 +572,7 @@ export function TopOffersSettings({
                     {offer.startingRules ? (
                       <>
                         <RateRuleEditor
-                          title="Start Rates"
+                          title="Suggestion Rates"
                           rules={offer.startingRules}
                           defaultPercentage={
                             offer.startingDefaultPercentage ??

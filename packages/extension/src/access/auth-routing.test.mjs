@@ -48,6 +48,10 @@ test("extension auth delegates web sign-in and syncs the Clerk session", async (
     new URL("../../entrypoints/sidepanel/main.tsx", import.meta.url),
     "utf8",
   );
+  const accessStyles = await readFile(
+    new URL("../components/access/ExtensionAccess.css", import.meta.url),
+    "utf8",
+  );
   const unifiedSidepanelSource = await readFile(
     new URL("../components/sidepanel/UnifiedSidepanel.tsx", import.meta.url),
     "utf8",
@@ -95,6 +99,15 @@ test("extension auth delegates web sign-in and syncs the Clerk session", async (
   assert.doesNotMatch(popupSource, /ExtensionAccessPanel|ClerkProvider/);
   assert.doesNotMatch(unifiedSidepanelSource, /ExtensionAccessPanel|ClerkProvider/);
   assert.match(unifiedSidepanelSource, /ExtensionAccountControl/);
+  // Both extension surfaces use Clerk's session APIs with a plain image
+  // trigger/menu, avoiding Clerk's composited Avatar and white popup.
+  assert.match(providerSource, /function AccountMenu/);
+  assert.match(providerSource, /surface=\{surface\}/);
+  assert.match(providerSource, /clerk\.openUserProfile\(\)/);
+  assert.match(providerSource, /clerk\.signOut\(\)/);
+  assert.match(providerSource, /<img src=\{imageUrl\}/);
+  assert.match(accessStyles, /\.extension-account-avatar-frame::after/);
+  assert.match(accessStyles, /\.extension-account-popover/);
   assert.match(
     manifestSource,
     /permissions:\s*\[[\s\S]*["']cookies["'][\s\S]*\]/,

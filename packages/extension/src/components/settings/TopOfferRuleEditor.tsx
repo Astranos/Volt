@@ -1,5 +1,9 @@
 import { Plus, Trash2 } from "lucide-react";
 import type { ReactNode } from "react";
+import {
+  percentageFromInputValue,
+  percentageToInputValue,
+} from "@/src/domain/top-offers";
 import type { RateRule } from "@/src/types/settings";
 
 interface RateRuleEditorProps {
@@ -59,13 +63,16 @@ export function RateRuleEditor({
             <div className="col-span-5">
               <input
                 type="number"
-                step="0.01"
-                value={rule.percentage}
+                step="0.1"
+                min="0"
+                max="100"
+                inputMode="decimal"
+                value={percentageToInputValue(rule.percentage)}
                 onChange={(event) =>
                   onRuleChange(
                     index,
                     "percentage",
-                    parseFloat(event.target.value)
+                    percentageFromInputValue(parseFloat(event.target.value))
                   )
                 }
                 className="w-full px-3 py-2 border border-border rounded-lg bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
@@ -103,7 +110,7 @@ export function RateRuleHeader() {
   return (
     <div className="grid grid-cols-12 gap-4 text-sm font-medium text-muted-foreground px-2">
       <div className="col-span-5">Under Amount ($)</div>
-      <div className="col-span-5">Percentage (0.1 = 10%)</div>
+      <div className="col-span-5">Percentage (%)</div>
       <div className="col-span-2"></div>
     </div>
   );
@@ -124,9 +131,14 @@ export function DefaultPercentageRow({
       <div className="col-span-5">
         <input
           type="number"
-          step="0.01"
-          value={value}
-          onChange={(event) => onChange(parseFloat(event.target.value))}
+          step="0.1"
+          min="0"
+          max="100"
+          inputMode="decimal"
+          value={percentageToInputValue(value)}
+          onChange={(event) =>
+            onChange(percentageFromInputValue(parseFloat(event.target.value)))
+          }
           className="w-full px-3 py-2 border border-border rounded-lg bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
         />
       </div>

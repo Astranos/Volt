@@ -1,43 +1,30 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { AlertTriangle, Settings, X } from "lucide-react";
+import {
+  buildEbaySoldListingsUrl,
+  getEbayListingState,
+  type EbayListingState,
+} from "../../domain/ebay-sold-listings";
 import type { SyncStorageResult } from "../../types/settings";
-
-type ListingState = "sold" | "completed" | "active" | "unknown";
 
 interface SoldListingWarningProps {
   onDismiss: () => void;
 }
 
+interface SoldListingWarningSettingsMessage {
+  action?: unknown;
+  enabled?: unknown;
+}
+
 const SoldListingWarning: React.FC<SoldListingWarningProps> = ({ onDismiss }) => {
-  const [listingState, setListingState] = useState<ListingState>("active");
+  const [listingState, setListingState] = useState<EbayListingState>("active");
   const [isEnabled, setIsEnabled] = useState<boolean>(true);
   const [iconUrl, setIconUrl] = useState<string>("");
-
-  // Get listing state from URL
-  const getListingState = useCallback((): ListingState => {
-    try {
-      const url = new URL(window.location.href);
-      if (!/\.ebay\./i.test(url.hostname)) return "unknown";
-      if (!url.pathname.startsWith("/sch/")) return "unknown";
-
-      const soldParam = url.searchParams.get("LH_Sold");
-      const completeParam = url.searchParams.get("LH_Complete");
-
-      const isSold = soldParam === "1" || soldParam === "true";
-      const isComplete = completeParam === "1" || completeParam === "true";
-
-      if (isSold) return "sold";
-      if (isComplete) return "completed";
-      return "active";
-    } catch {
-      return "active";
-    }
-  }, []);
 
   // Update state from URL
   useEffect(() => {
     const updateState = () => {
-      const state = getListingState();
+      const state = getEbayListingState(window.location.href);
       setListingState((prev) => {
         if (prev !== state) return state;
         return prev;
@@ -57,7 +44,7 @@ const SoldListingWarning: React.FC<SoldListingWarningProps> = ({ onDismiss }) =>
       window.removeEventListener("popstate", handlePopState);
       clearInterval(interval);
     };
-  }, [getListingState]);
+  }, []);
 
   // Check if feature is enabled
   useEffect(() => {
@@ -77,9 +64,15 @@ const SoldListingWarning: React.FC<SoldListingWarningProps> = ({ onDismiss }) =>
     checkEnabled();
 
     // Listen for settings changes
-    const handleMessage = (message: any) => {
-      if (message.action === "sold-listing-warning-settings-changed") {
-        setIsEnabled(message.enabled ?? true);
+    const handleMessage = (message: unknown) => {
+      if (!message || typeof message !== "object") return;
+      const settingsMessage = message as SoldListingWarningSettingsMessage;
+      if (settingsMessage.action === "sold-listing-warning-settings-changed") {
+        setIsEnabled(
+          typeof settingsMessage.enabled === "boolean"
+            ? settingsMessage.enabled
+            : true
+        );
       }
     };
 
@@ -106,10 +99,7 @@ const SoldListingWarning: React.FC<SoldListingWarningProps> = ({ onDismiss }) =>
   }, []);
 
   const handleSwitchToSold = useCallback(() => {
-    const currentUrl = new URL(window.location.href);
-    currentUrl.searchParams.set("LH_Sold", "1");
-    currentUrl.searchParams.set("LH_Complete", "1");
-    window.location.href = currentUrl.toString();
+    window.location.href = buildEbaySoldListingsUrl(window.location.href);
   }, []);
 
   if (!isEnabled || listingState === "sold") {

@@ -10,6 +10,14 @@ import type {
 
 export const TOP_OFFER_FLOOR_MULTIPLE = 5;
 
+export function percentageToInputValue(value: number): number {
+  return Number((value * 100).toFixed(4));
+}
+
+export function percentageFromInputValue(value: number): number {
+  return Number((value / 100).toFixed(6));
+}
+
 export const DEFAULT_STANDARD_RULES: RateRule[] = [
   { threshold: 50, percentage: 0.2 },
   { threshold: 100, percentage: 0.25 },

@@ -513,7 +513,7 @@ button.sidepanel-account-control {
   width: 100%;
 }
 
-.sidepanel-results-files {
+.sidepanel-results-appclip {
   align-items: center;
   background: transparent;
   border: 0;
@@ -530,12 +530,12 @@ button.sidepanel-account-control {
     transform 160ms ease;
 }
 
-.sidepanel-results-files:hover {
+.sidepanel-results-appclip:hover {
   color: #f5f5f4;
   transform: translateY(-1px);
 }
 
-.sidepanel-results-files svg {
+.sidepanel-results-appclip svg {
   height: 15px;
   width: 15px;
 }
@@ -555,6 +555,10 @@ button.sidepanel-account-control {
     background-color 180ms ease,
     border-color 180ms ease,
     transform 180ms ease;
+}
+
+.mobile-scanner-result-section {
+  min-width: 0;
 }
 
 .mobile-scanner-action,
@@ -625,11 +629,11 @@ button.sidepanel-account-control {
     color: #57534e;
   }
 
-  .sidepanel-results-files {
+  .sidepanel-results-appclip {
     color: #57534e;
   }
 
-  .sidepanel-results-files:hover {
+  .sidepanel-results-appclip:hover {
     color: #1c1917;
   }
 

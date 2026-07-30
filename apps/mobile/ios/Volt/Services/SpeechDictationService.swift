@@ -246,11 +246,34 @@ final class SpeechDictationService {
         }
 
         inputNode.removeTap(onBus: 0)
+        let tapHandler = Self.makeAudioTapHandler(
+            converter: converter,
+            continuation: continuation,
+            service: self
+        )
         inputNode.installTap(
             onBus: 0,
             bufferSize: 2_048,
-            format: sourceFormat
-        ) { [weak self] buffer, _ in
+            format: sourceFormat,
+            block: tapHandler
+        )
+        isTapInstalled = true
+
+        audioEngine.prepare()
+        try audioEngine.start()
+        observeInterruptions()
+        startReadinessWatchdog()
+    }
+
+    /// AVAudioEngine invokes tap blocks on its real-time audio thread. Building the
+    /// block inside this nonisolated factory prevents Swift 6 from attaching the
+    /// service's MainActor executor precondition to that callback.
+    private nonisolated static func makeAudioTapHandler(
+        converter: SpeechAnalyzerInputConverter,
+        continuation: AsyncStream<AnalyzerInput>.Continuation,
+        service: SpeechDictationService
+    ) -> AVAudioNodeTapBlock {
+        { [weak service] buffer, _ in
             let level = SpeechDictationService.meterLevel(of: buffer)
             do {
                 for input in try converter.convert(buffer) {
@@ -259,16 +282,10 @@ final class SpeechDictationService {
             } catch {
                 continuation.finish()
             }
-            Task { @MainActor [weak self] in
-                self?.noteAudioArrived(level: level)
+            Task { @MainActor [weak service] in
+                service?.noteAudioArrived(level: level)
             }
         }
-        isTapInstalled = true
-
-        audioEngine.prepare()
-        try audioEngine.start()
-        observeInterruptions()
-        startReadinessWatchdog()
     }
 
     /// The first buffer off the tap is the honest "you can speak now" signal: it means

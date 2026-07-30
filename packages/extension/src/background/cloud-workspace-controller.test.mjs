@@ -83,6 +83,14 @@ test("the phone joins by account, not by an enrollment ceremony in the UI", () =
   assert.doesNotMatch(popup, /scannerStartForMode|ScannerConnectionStatus|joinWindowExpiresAt/);
 });
 
+test("scanner results are cloud-first and launch the App Clip QR", () => {
+  assert.match(mobileScanner, /action: "openMobileCapturePopup"/);
+  assert.match(mobileScanner, /aria-label="Open Volt App Clip QR code"/);
+  assert.doesNotMatch(mobileScanner, /openVoltDownloadsFolder|openBatchDownloadsFolder|FolderOpen/);
+  assert.doesNotMatch(mobileScannerCards, /onOpenBatchFolder|FolderOpen/);
+  assert.match(mobileScannerCards, /mobile-scanner-result-section/);
+});
+
 test("Chrome reactively inserts installed-app speech dictation at the tracked cursor", () => {
   assert.match(offscreen, /api\.cloudWorkspace\.liveDictationDraftsForComputer/);
   assert.match(offscreen, /action: "workspaceOffscreenDictationDraftsChanged"/);
@@ -147,6 +155,7 @@ test("the sidepanel owns a Convex subscription that cannot be stranded by the of
   // A failed sync says so instead of showing an empty timeline.
   assert.match(mobileScanner, /useCloudWorkspaceSnapshot\(\)/);
   assert.match(mobileScanner, /cloudWorkspace\.error/);
+  assert.doesNotMatch(mobileScanner, /Cloud sync failed:/);
 });
 
 test("panel-side cloud sync survives unmounts, sign-out and a refused handshake", () => {

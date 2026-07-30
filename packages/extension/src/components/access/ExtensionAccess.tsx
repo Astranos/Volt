@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
 } from "react";
 import {
@@ -14,10 +15,19 @@ import {
   OrganizationSwitcher,
   UserButton,
   useAuth,
+  useClerk,
   useOrganization,
   useUser,
 } from "@clerk/chrome-extension";
-import { Building2, ExternalLink, LogIn, RefreshCw, ShieldCheck } from "lucide-react";
+import {
+  Building2,
+  ExternalLink,
+  LogIn,
+  LogOut,
+  RefreshCw,
+  ShieldCheck,
+  UserRound,
+} from "lucide-react";
 import {
   parseExtensionAccessStatus,
   type ExtensionAccessStatus,
@@ -28,6 +38,7 @@ import {
   CLERK_SYNC_HOST,
 } from "../../access/config";
 import { cn } from "../../lib/utils";
+import "./ExtensionAccess.css";
 
 type AccessSurface = "popup" | "sidepanel";
 type AccountControlSurface = "newtab" | "sidepanel";
@@ -305,6 +316,7 @@ export function ExtensionAccountControl({
 
 function ClerkAccountControl({ surface }: { surface: AccountControlSurface }) {
   const { isLoaded, isSignedIn } = useAuth();
+  const clerk = useClerk();
   const { user } = useUser();
 
   useEffect(() => {
@@ -316,12 +328,14 @@ function ClerkAccountControl({ surface }: { surface: AccountControlSurface }) {
 
   if (isSignedIn) {
     return (
-      <span
-        className={accountControlClassName(surface, "is-signed-in")}
-        title={user?.fullName ? `Volt account: ${user.fullName}` : "Volt account"}
-      >
-        <UserButton />
-      </span>
+      <AccountMenu
+        surface={surface}
+        imageUrl={user?.imageUrl}
+        name={user?.fullName ?? "Volt account"}
+        email={user?.primaryEmailAddress?.emailAddress ?? ""}
+        onManageAccount={() => clerk.openUserProfile()}
+        onSignOut={() => void clerk.signOut()}
+      />
     );
   }
 
@@ -335,6 +349,117 @@ function ClerkAccountControl({ surface }: { surface: AccountControlSurface }) {
       <LogIn />
       <span>Sign in</span>
     </button>
+  );
+}
+
+function AccountMenu({
+  surface,
+  imageUrl,
+  name,
+  email,
+  onManageAccount,
+  onSignOut,
+}: {
+  surface: AccountControlSurface;
+  imageUrl: string | undefined;
+  name: string;
+  email: string;
+  onManageAccount: () => void;
+  onSignOut: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const closeOutside = (event: PointerEvent) => {
+      if (
+        event.target instanceof Node &&
+        !rootRef.current?.contains(event.target)
+      ) {
+        setOpen(false);
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+
+    document.addEventListener("pointerdown", closeOutside);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open]);
+
+  const runAndClose = (action: () => void) => {
+    setOpen(false);
+    action();
+  };
+
+  return (
+    <div
+      ref={rootRef}
+      className={`extension-account-menu extension-account-menu--${surface}`}
+      title={`Volt account: ${name}`}
+    >
+      <button
+        type="button"
+        className="extension-account-menu-trigger"
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        aria-label={open ? "Close user menu" : "Open user menu"}
+        onClick={() => setOpen((current) => !current)}
+      >
+        <span className="extension-account-avatar-frame">
+          {imageUrl ? (
+            <img src={imageUrl} alt="" className="extension-account-avatar" />
+          ) : (
+            <UserRound aria-hidden="true" />
+          )}
+        </span>
+      </button>
+
+      {open ? (
+        <div
+          className="extension-account-popover"
+          role="dialog"
+          aria-label="Volt account"
+        >
+          <div className="extension-account-preview">
+            {imageUrl ? (
+              <img src={imageUrl} alt="" className="extension-account-preview-avatar" />
+            ) : (
+              <span className="extension-account-preview-fallback">
+                <UserRound aria-hidden="true" />
+              </span>
+            )}
+            <span className="extension-account-preview-copy">
+              <strong>{name}</strong>
+              {email ? <span>{email}</span> : null}
+            </span>
+          </div>
+          <button
+            type="button"
+            className="extension-account-menu-item"
+            onClick={() => runAndClose(onManageAccount)}
+          >
+            <UserRound aria-hidden="true" />
+            <span>Manage account</span>
+          </button>
+          <button
+            type="button"
+            className="extension-account-menu-item"
+            onClick={() => runAndClose(onSignOut)}
+          >
+            <LogOut aria-hidden="true" />
+            <span>Sign out</span>
+          </button>
+          <div className="extension-account-popover-footer">Secured by Clerk</div>
+        </div>
+      ) : null}
+    </div>
   );
 }
 

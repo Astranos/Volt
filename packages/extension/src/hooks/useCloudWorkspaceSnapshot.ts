@@ -3,6 +3,7 @@ import { useConvex, useConvexAuth, useQuery_experimental, type ConvexReactClient
 import { api } from "../../../../convex/_generated/api";
 import { createWorkspaceSync } from "../cloud-scanner/workspace-sync";
 import { useSidepanelSignedIn } from "../components/access/ExtensionAccess";
+import { cloudWorkspaceErrorMessage } from "../domain/cloud-workspace-error";
 
 export type CloudWorkspaceSnapshotState = {
   status: "loading" | "ready" | "error";
@@ -152,12 +153,13 @@ export function useCloudWorkspaceSnapshot(): CloudWorkspaceSnapshotState {
     return () => clearTimeout(timer);
   }, [handshakeStalled]);
 
-  const error = snapshot.status === "error"
-    ? snapshot.error.message
+  const rawError = snapshot.status === "error"
+    ? snapshot.error
     : applied.error
       ?? (authRefused
         ? "you are signed in, but the cloud workspace refused this session. Sign out and back in."
         : null);
+  const error = rawError ? cloudWorkspaceErrorMessage(rawError) : null;
   return {
     status: error ? "error" : applied.version > 0 ? "ready" : "loading",
     error,

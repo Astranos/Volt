@@ -534,6 +534,11 @@ test("full app dictation uses Speech APIs and streams live drafts to the selecte
   // `.inputRanDry` is the normal terminal status for a one-buffer pull conversion;
   // rejecting it dropped every converted frame.
   assert.doesNotMatch(speechSource, /guard status == \.haveData/);
+  // AVAudioEngine runs its tap callback on a real-time audio thread. Creating that
+  // closure inside the MainActor service makes Swift 6 enforce the wrong executor
+  // at runtime and crash before the first buffer can be processed.
+  assert.match(speechSource, /private nonisolated static func makeAudioTapHandler\(/);
+  assert.match(speechSource, /block: tapHandler/);
 
   // Start and stop both need an unmistakable signal, because people speak the moment
   // they tap and stop on the tail of the last word.

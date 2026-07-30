@@ -15,8 +15,6 @@ import {
   type MobilePhoto,
 } from "../components/sidepanel/mobile-photo-helpers";
 import {
-  firstDownloadedPhoto,
-  photoFromResult,
   photoIdsFromBatchEntries,
   photosFromBatchEntries,
   resolvePhotoDragSelection,
@@ -40,13 +38,11 @@ function setPhotoDragImage(event: React.DragEvent, photo: MobilePhoto) {
 }
 
 export function useMobileScannerPhotoActions({
-  photos,
   selectedPhotoIds,
   selectedPhotos,
   setSelectedPhotoIds,
   flashFeedback,
 }: {
-  photos: MobilePhoto[];
   selectedPhotoIds: Set<string>;
   selectedPhotos: MobilePhoto[];
   setSelectedPhotoIds: Dispatch<SetStateAction<Set<string>>>;
@@ -102,35 +98,6 @@ export function useMobileScannerPhotoActions({
       link.click();
     },
     [flashFeedback],
-  );
-
-  const openDownloadedPhotoFolder = useCallback(
-    (photo: MobilePhoto | undefined, fallbackMessage: string) => {
-      if (typeof photo?.downloadId === "number") {
-        chrome.downloads.show(photo.downloadId);
-        return;
-      }
-      chrome.downloads.showDefaultFolder();
-      flashFeedback(fallbackMessage, "warning");
-    },
-    [flashFeedback],
-  );
-
-  const openVoltDownloadsFolder = useCallback(() => {
-    openDownloadedPhotoFolder(
-      firstDownloadedPhoto(photos),
-      "No downloaded Volt photos yet",
-    );
-  }, [openDownloadedPhotoFolder, photos]);
-
-  const openBatchDownloadsFolder = useCallback(
-    (entries: HydratedMobileScannerPhotoResult[]) => {
-      openDownloadedPhotoFolder(
-        firstDownloadedPhoto(entries.map(photoFromResult)),
-        "No downloaded photos in this batch",
-      );
-    },
-    [openDownloadedPhotoFolder],
   );
 
   const getTransferDataUrl = useCallback(async (photo: MobilePhoto) => {
@@ -255,8 +222,6 @@ export function useMobileScannerPhotoActions({
     prepareActiveTabForPhotoDrop,
     copyPhoto,
     downloadPhoto,
-    openVoltDownloadsFolder,
-    openBatchDownloadsFolder,
     sendPhotosToTab,
     dragPhotos,
     dragPhotoBatch,

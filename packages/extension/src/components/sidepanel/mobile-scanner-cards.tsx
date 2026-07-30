@@ -5,7 +5,6 @@ import {
   Copy,
   Download,
   Eye,
-  FolderOpen,
   ImagePlus,
   LogIn,
   Scan,
@@ -30,7 +29,7 @@ function Bone({ className }: { className?: string }) {
 
 function SkeletonScanCard({ valueWidth }: { valueWidth: string }) {
   return (
-    <div className="mobile-scanner-card min-w-0 overflow-hidden px-3 py-3">
+    <div className="mobile-scanner-result-section min-w-0 overflow-hidden">
       <div className="mb-2 flex min-w-0 items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
           <Bone className="h-7 w-7 shrink-0 rounded-full" />
@@ -52,7 +51,7 @@ function SkeletonScanCard({ valueWidth }: { valueWidth: string }) {
 
 function SkeletonPhotoCard() {
   return (
-    <div className="mobile-scanner-card min-w-0 overflow-hidden px-3 py-3">
+    <div className="mobile-scanner-result-section min-w-0 overflow-hidden">
       <div className="mb-2 flex min-w-0 items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
           <Bone className="h-7 w-7 shrink-0 rounded-full" />
@@ -133,7 +132,7 @@ export function ScanCard({
   const isText = group.kind === "text";
   const Icon = isText ? Type : ScanLine;
   return (
-    <div className={cn("mobile-scanner-card min-w-0 overflow-hidden px-3 py-3", removing && "volt-item-exit")}>
+    <div className={cn("mobile-scanner-result-section min-w-0 overflow-hidden", removing && "volt-item-exit")}>
       <div className="mb-2 flex min-w-0 items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
           <span className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-full", isText ? "bg-amber-100/80 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300" : "bg-green-100/80 text-green-700 dark:bg-green-500/15 dark:text-green-300")}>
@@ -172,7 +171,6 @@ export function PhotoBatchCard({
   removingIds,
   selectedPhotoIds,
   onToggleCollapse,
-  onOpenBatchFolder,
   onDeleteBatch,
   onDeletePhoto,
   onCopyPhoto,
@@ -190,7 +188,6 @@ export function PhotoBatchCard({
   removingIds: Set<string>;
   selectedPhotoIds: Set<string>;
   onToggleCollapse: () => void;
-  onOpenBatchFolder: () => void;
   onDeleteBatch: () => void;
   onDeletePhoto: (photoId: string) => void;
   onCopyPhoto: (photo: MobilePhoto) => void;
@@ -206,8 +203,8 @@ export function PhotoBatchCard({
   const visibleEntries = collapsed ? collapsedPreviewEntries : group.entries;
   const count = group.entries.length;
   return (
-    <div className="mobile-scanner-card min-w-0 overflow-hidden">
-      <div className="flex min-w-0 items-center justify-between gap-2 px-3 pt-3">
+    <div className="mobile-scanner-result-section min-w-0 overflow-hidden">
+      <div className="mb-2 flex min-w-0 items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-orange-100/80 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300">
             <ImagePlus className="h-3.5 w-3.5" />
@@ -226,9 +223,6 @@ export function PhotoBatchCard({
             <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", collapsed && "-rotate-90")} />
             {collapsed ? (count > 1 ? `+${count - 1}` : "Show") : "Hide"}
           </button>
-          <button type="button" onClick={onOpenBatchFolder} className="flex h-7 w-7 items-center justify-center rounded-full text-stone-500 transition hover:bg-stone-200 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-700 dark:hover:text-stone-50" aria-label="Open photo batch folder">
-            <FolderOpen className="h-3.5 w-3.5" />
-          </button>
           <button type="button" onClick={onDeleteBatch} className="flex h-7 w-7 items-center justify-center rounded-full text-stone-500 transition hover:bg-stone-200 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-700 dark:hover:text-stone-50" aria-label="Delete photo batch">
             <Trash2 className="h-3.5 w-3.5" />
           </button>
@@ -246,7 +240,7 @@ export function PhotoBatchCard({
           onToggleCollapse={onToggleCollapse}
         />
       ) : (
-        <div className="grid grid-cols-2 gap-2 px-3 pb-3 pt-2">
+        <div className="grid grid-cols-2 gap-2">
           {visibleEntries.map((entry) => {
             const photo = photoFromResult(entry);
             return (
@@ -295,7 +289,7 @@ function CollapsedPhotoBatchPreview({
       onDragStart={onDragStart}
       onMouseEnter={onHover}
       onPointerDown={onHover}
-      className="mobile-scanner-inset group mx-3 mb-3 mt-2 cursor-grab rounded-lg p-1 active:cursor-grabbing"
+      className="mobile-scanner-inset group cursor-grab rounded-lg p-1 active:cursor-grabbing"
       aria-label={`Drag ${totalCount} photo batch`}
     >
       <div className="grid grid-cols-4 gap-1">

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { FolderOpen } from "lucide-react";
+import { Smartphone } from "lucide-react";
 import {
   saveMobileScannerPhoto,
   saveMobileScannerScan,
@@ -82,13 +82,10 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
     prepareActiveTabForPhotoDrop,
     copyPhoto,
     downloadPhoto,
-    openVoltDownloadsFolder,
-    openBatchDownloadsFolder,
     sendPhotosToTab,
     dragPhotos,
     dragPhotoBatch,
   } = useMobileScannerPhotoActions({
-    photos,
     selectedPhotoIds,
     selectedPhotos,
     setSelectedPhotoIds,
@@ -244,12 +241,15 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
           </div>
           <button
             type="button"
-            onClick={openVoltDownloadsFolder}
-            className="sidepanel-results-files"
-            aria-label="Open Volt Photos folder"
+            onClick={() =>
+              void chrome.runtime.sendMessage({ action: "openMobileCapturePopup" })
+            }
+            className="sidepanel-results-appclip"
+            aria-label="Open Volt App Clip QR code"
+            title="Connect Volt App Clip"
           >
-            <FolderOpen className="h-4 w-4" />
-            <span>Files</span>
+            <Smartphone className="h-4 w-4" />
+            <span>App Clip</span>
           </button>
         </div>
       </div>
@@ -259,11 +259,11 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
           className="mx-3 mb-2 flex-none rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-800 dark:text-amber-200"
           aria-live="polite"
         >
-          Cloud sync failed: {cloudWorkspace.error}
+          {cloudWorkspace.error}
         </div>
       ) : null}
 
-      <ScrollArea className="min-h-0 min-w-0 flex-1 px-3 pb-3 [&>div]:!overflow-x-hidden">
+      <ScrollArea className="min-h-0 min-w-0 flex-1 px-4 pb-4 [&>div]:!overflow-x-hidden">
         <div className="min-w-0 space-y-3">
           {loadingResults || awaitingCloudResults ? (
             <LoadingHistory />
@@ -280,7 +280,6 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
                   removingIds={removingIds}
                   selectedPhotoIds={selectedPhotoIds}
                   onToggleCollapse={() => toggleBatchExpansion(group.key)}
-                  onOpenBatchFolder={() => openBatchDownloadsFolder(group.entries)}
                   onDeleteBatch={() => void deleteSyncedResults(group.entries.map((entry) => entry.id), "Photo batch deleted")}
                   onDeletePhoto={(photoId) => void deleteSyncedResults([photoId], "Photo deleted")}
                   onCopyPhoto={copyPhoto}

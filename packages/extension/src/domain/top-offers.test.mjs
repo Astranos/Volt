@@ -6,6 +6,8 @@ import {
   DEFAULT_CUSTOM_RATES,
   DEFAULT_ENABLED_OFFER_TYPES,
   migrateDefaultTopOfferRates,
+  percentageFromInputValue,
+  percentageToInputValue,
   setBuiltInTopOfferEnabled,
   setBuiltInTopOfferStartingRatesEnabled,
   setCustomTopOfferStartingRatesEnabled,
@@ -14,6 +16,13 @@ import {
   updateTopOfferStartingDefaultPercentage,
   updateTopOfferStartingRateRule,
 } from "./top-offers.ts";
+
+test("percentage settings use whole-number percentage input values", () => {
+  assert.equal(percentageToInputValue(0.1), 10);
+  assert.equal(percentageToInputValue(0.125), 12.5);
+  assert.equal(percentageFromInputValue(10), 0.1);
+  assert.equal(percentageFromInputValue(12.5), 0.125);
+});
 
 const LEGACY_CUSTOM_RATES = {
   standard: {
