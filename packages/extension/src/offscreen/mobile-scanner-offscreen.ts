@@ -25,6 +25,7 @@ import {
   COMPUTER_REGISTRATION_INTERVAL_MS,
   registerComputer,
 } from "../cloud-scanner/computer-registration";
+import { createComputerRegistrationHeartbeat } from "../cloud-scanner/computer-registration-heartbeat";
 
 function serializeLogArg(arg: unknown) {
   if (arg instanceof Error) {
@@ -218,7 +219,9 @@ class CloudWorkspaceSubscriptions {
   private workspaceSnapshotUnsubscribe: (() => void) | null = null;
   private cursorDeliveriesUnsubscribe: (() => void) | null = null;
   private dictationDraftsUnsubscribe: (() => void) | null = null;
-  private computerRegistrationInterval: number | null = null;
+  private computerRegistrationHeartbeat: ReturnType<
+    typeof createComputerRegistrationHeartbeat
+  > | null = null;
   private installationId: string | null = null;
   private clerkSubject: string | null = null;
   private hasReconciledSubject = false;
@@ -271,10 +274,8 @@ class CloudWorkspaceSubscriptions {
     this.workspaceSnapshotUnsubscribe = null;
     this.cursorDeliveriesUnsubscribe = null;
     this.dictationDraftsUnsubscribe = null;
-    if (this.computerRegistrationInterval !== null) {
-      window.clearInterval(this.computerRegistrationInterval);
-      this.computerRegistrationInterval = null;
-    }
+    this.computerRegistrationHeartbeat?.stop();
+    this.computerRegistrationHeartbeat = null;
     this.installationId = null;
   }
 
@@ -284,22 +285,22 @@ class CloudWorkspaceSubscriptions {
   }
 
   private startComputerRegistration() {
-    const register = () => {
-      if (!this.installationId) return;
-      void this.registerComputer()
-        .catch((error: unknown) => {
-          console.warn("[Volt Cloud Workspace] computer registration failed", error);
-          // The first attempt races the Convex client's auth handshake. Without
-          // a short retry the phone shows this computer offline for a full
-          // registration interval even though everything else recovered.
-          window.setTimeout(register, 5_000);
-        });
-    };
-    this.computerRegistrationInterval = window.setInterval(
-      register,
-      COMPUTER_REGISTRATION_INTERVAL_MS,
-    );
-    register();
+    this.computerRegistrationHeartbeat?.stop();
+    this.computerRegistrationHeartbeat = createComputerRegistrationHeartbeat({
+      attempt: () => this.registerComputer(),
+      intervalMs: COMPUTER_REGISTRATION_INTERVAL_MS,
+      retryDelayMs: 5_000,
+      timers: {
+        setInterval: (callback, delayMs) => window.setInterval(callback, delayMs),
+        clearInterval: (id) => window.clearInterval(id),
+        setTimeout: (callback, delayMs) => window.setTimeout(callback, delayMs),
+        clearTimeout: (id) => window.clearTimeout(id),
+      },
+      onError: (error) => {
+        console.warn("[Volt Cloud Workspace] computer registration failed", error);
+      },
+    });
+    this.computerRegistrationHeartbeat.start();
   }
 
   private async reconcileAuthenticationNow() {
