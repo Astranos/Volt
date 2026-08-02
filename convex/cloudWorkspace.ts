@@ -586,7 +586,17 @@ export const registerComputer = mutation({
     ttlMs: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const workspace = await requireOrCreateAuthenticatedWorkspace(ctx);
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new ConvexError("Authentication required");
+    // Registration is a presence heartbeat, not an authorization boundary.
+    // Returning success without writing for locked accounts lets old clients
+    // terminate their retry chain while every workspace read stays protected.
+    if (!(await hasFullAppEntitlement(ctx, identity.subject))) return null;
+    const workspace = await requireOrCreateWorkspaceForClerkUser(
+      ctx,
+      identity.subject,
+      identity.name,
+    );
     const now = Date.now();
     const existing = await ctx.db
       .query("workspaceDevices")

@@ -571,6 +571,20 @@ describe("cloud scanner workspace", () => {
     })).rejects.toThrow(/subscription or complimentary access required/);
   });
 
+  test("treats a non-entitled computer heartbeat as a successful no-op", async () => {
+    const t = convexTest(schema, modules);
+    const signedIn = t.withIdentity({ subject: "locked-computer-user" });
+
+    await expect(signedIn.mutation(registerComputer, {
+      installationId: "locked-computer",
+      label: "Locked Chrome",
+      capabilities: ["cursor-insertion"],
+    })).resolves.toBeNull();
+
+    expect(await t.run((ctx) => ctx.db.query("workspaceDevices").collect())).toEqual([]);
+    expect(await t.run((ctx) => ctx.db.query("workspacePresence").collect())).toEqual([]);
+  });
+
   test("deduplicates entitled batch retries without a free result cap", async () => {
     const t = convexTest(schema, modules);
     const { credential } = await enroll(t, "subscribed-user");
