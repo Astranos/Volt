@@ -291,7 +291,7 @@ export default defineBackground({
       }).register();
 
       chrome.action.onClicked.addListener((tab) => {
-        void sidepanelTools.toggleForTab(tab.id, "mobile-scanner", "open");
+        sidepanelTools.openForWindowPreservingTool(tab.windowId);
       });
 
       chrome.commands.onCommand.addListener((command) => {

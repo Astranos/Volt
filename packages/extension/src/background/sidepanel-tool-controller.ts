@@ -348,6 +348,42 @@ export function createSidepanelToolController({
     });
   }
 
+  function openForWindowPreservingTool(windowId: unknown) {
+    const resolvedWindowId = asValidId(windowId);
+    if (resolvedWindowId === null) {
+      log("openForWindowPreservingTool: missing window id");
+      return;
+    }
+
+    configurePanel();
+    try {
+      chromeApi.sidePanel.open?.({ windowId: resolvedWindowId }, () => {
+        const err = chromeApi.runtime.lastError;
+        if (err) {
+          log("sidePanel open lastError", err.message);
+          return;
+        }
+
+        lastOpenAt.set(resolvedWindowId, Date.now());
+        chromeApi.storage.local.get(
+          { sidePanelTool: "mobile-scanner" },
+          (res) => {
+            const storedTool =
+              typeof res.sidePanelTool === "string" && res.sidePanelTool
+                ? res.sidePanelTool
+                : "mobile-scanner";
+            setStateForWindow(resolvedWindowId, {
+              open: true,
+              tool: storedTool,
+            });
+          },
+        );
+      });
+    } catch (openErr) {
+      log("sidePanel open error", errorMessage(openErr));
+    }
+  }
+
   function toggleForTab(
     tabId?: unknown,
     tool?: string,
@@ -390,6 +426,7 @@ export function createSidepanelToolController({
 
   return {
     getStateForWindow,
+    openForWindowPreservingTool,
     setStateForWindow,
     toggleForTab,
     toggleForWindow,

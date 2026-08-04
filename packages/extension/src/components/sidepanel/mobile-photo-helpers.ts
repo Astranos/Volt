@@ -89,12 +89,14 @@ export function formatPhotoSize(bytes: number) {
  */
 export function installPhotoDropBridge(dropMime: string) {
   const root = window as typeof window & {
+    __voltPhotoDropBridgeCleanup?: () => void;
     __voltPhotoDropBridgeInstalled?: boolean;
     __voltPhotoDropBridgeVersion?: number;
   };
-  const bridgeVersion = 2;
+  const bridgeVersion = 9;
 
   if (root.__voltPhotoDropBridgeVersion === bridgeVersion) return;
+  root.__voltPhotoDropBridgeCleanup?.();
 
   const normalizeImageMimeTypeInPage = (mimeType: string) => {
     const normalized = mimeType.toLowerCase().trim();
@@ -225,6 +227,21 @@ export function installPhotoDropBridge(dropMime: string) {
     );
   };
 
+  const findFileInputsInOpenRoots = () => {
+    const roots: Array<Document | ShadowRoot> = [document];
+    const inputs: HTMLInputElement[] = [];
+    for (let index = 0; index < roots.length; index += 1) {
+      const root = roots[index];
+      inputs.push(
+        ...root.querySelectorAll<HTMLInputElement>("input[type='file']"),
+      );
+      for (const element of root.querySelectorAll<HTMLElement>("*")) {
+        if (element.shadowRoot) roots.push(element.shadowRoot);
+      }
+    }
+    return inputs;
+  };
+
   const findFileInput = (event: DragEvent) => {
     for (const node of event.composedPath()) {
       if (
@@ -241,6 +258,13 @@ export function installPhotoDropBridge(dropMime: string) {
         acceptsImages(nestedInput)
       ) {
         return nestedInput;
+      }
+      const shadowInput = node.shadowRoot?.querySelector("input[type='file']");
+      if (
+        shadowInput instanceof HTMLInputElement &&
+        acceptsImages(shadowInput)
+      ) {
+        return shadowInput;
       }
     }
 
@@ -264,9 +288,7 @@ export function installPhotoDropBridge(dropMime: string) {
       return localInput;
     }
 
-    const fileInputs = Array.from(
-      document.querySelectorAll<HTMLInputElement>("input[type='file']"),
-    );
+    const fileInputs = findFileInputsInOpenRoots();
     const shopifyMediaInput = fileInputs.find((input) => {
       const field = [
         input.accept,
@@ -319,22 +341,18 @@ export function installPhotoDropBridge(dropMime: string) {
     }
   };
 
-  document.addEventListener(
-    "dragover",
-    (event) => {
-      const hasVoltPhotos = Array.from(event.dataTransfer?.types ?? []).includes(
-        dropMime,
-      );
-      if (!hasVoltPhotos) return;
-      event.preventDefault();
-      if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
-    },
-    true,
-  );
+  const handleDragHover = (event: DragEvent) => {
+    const hasVoltPhotos = Array.from(event.dataTransfer?.types ?? []).includes(
+      dropMime,
+    );
+    if (!hasVoltPhotos) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+  };
 
-  document.addEventListener(
-    "drop",
-    async (event) => {
+  const handleDrop = async (event: DragEvent) => {
       const rawPayload = event.dataTransfer?.getData(dropMime);
       if (!rawPayload) return;
 
@@ -385,13 +403,6 @@ export function installPhotoDropBridge(dropMime: string) {
 
       const target = event.target instanceof Element ? event.target : document.body;
       const fileInput = findFileInput(event);
-      if (fileInput) {
-        fileInput.files = transfer.files;
-        fileInput.dispatchEvent(new Event("input", { bubbles: true }));
-        fileInput.dispatchEvent(new Event("change", { bubbles: true }));
-        dispatchFileDrop(fileInput, transfer);
-      }
-
       const dropTarget =
         fileInput?.closest(
           "[data-polaris-dropzone], [data-testid], label, form, [role='button'], div",
@@ -400,13 +411,20 @@ export function installPhotoDropBridge(dropMime: string) {
           "[data-polaris-dropzone], [data-testid], label, form, [role='button'], div",
         ) ??
         target;
-      if (dropTarget !== fileInput) dispatchFileDrop(dropTarget, transfer);
-    },
-    true,
-  );
+      dispatchFileDrop(dropTarget, transfer);
+  };
+
+  document.addEventListener("dragenter", handleDragHover, true);
+  document.addEventListener("dragover", handleDragHover, true);
+  document.addEventListener("drop", handleDrop, true);
 
   root.__voltPhotoDropBridgeInstalled = true;
   root.__voltPhotoDropBridgeVersion = bridgeVersion;
+  root.__voltPhotoDropBridgeCleanup = () => {
+    document.removeEventListener("dragenter", handleDragHover, true);
+    document.removeEventListener("dragover", handleDragHover, true);
+    document.removeEventListener("drop", handleDrop, true);
+  };
 }
 
 /**
@@ -543,9 +561,17 @@ export async function insertPhotosIntoPage(
     activeElement instanceof HTMLInputElement && activeElement.type === "file"
       ? activeElement
       : null;
-  const fileInputs = Array.from(
-    document.querySelectorAll<HTMLInputElement>("input[type='file']"),
-  );
+  const roots: Array<Document | ShadowRoot> = [document];
+  const fileInputs: HTMLInputElement[] = [];
+  for (let index = 0; index < roots.length; index += 1) {
+    const root = roots[index];
+    fileInputs.push(
+      ...root.querySelectorAll<HTMLInputElement>("input[type='file']"),
+    );
+    for (const element of root.querySelectorAll<HTMLElement>("*")) {
+      if (element.shadowRoot) roots.push(element.shadowRoot);
+    }
+  }
   const acceptsImages = (input: HTMLInputElement) => {
     const accept = input.accept.toLowerCase();
     return (
@@ -618,22 +644,17 @@ export async function insertPhotosIntoPage(
 
   const transfer = new DataTransfer();
   files.forEach((file) => transfer.items.add(file));
-  fileInput.files = transfer.files;
 
   const eventOptions = { bubbles: true, cancelable: true };
-  fileInput.dispatchEvent(new Event("input", eventOptions));
-  fileInput.dispatchEvent(new Event("change", eventOptions));
-
   const dropTarget =
-    fileInput.closest("label, form, [role='button'], [data-testid], div") ??
-    document.body;
-  dropTarget.dispatchEvent(
-    new DragEvent("drop", {
-      bubbles: true,
-      cancelable: true,
-      dataTransfer: transfer,
-    }),
-  );
+    fileInput.closest(
+      "[data-polaris-dropzone], [data-testid], label, form, [role='button'], div",
+    ) ?? document.body;
+  for (const type of ["dragenter", "dragover", "drop"]) {
+    dropTarget.dispatchEvent(
+      new DragEvent(type, { ...eventOptions, dataTransfer: transfer }),
+    );
+  }
 
   return { inserted: true, count: files.length };
 }

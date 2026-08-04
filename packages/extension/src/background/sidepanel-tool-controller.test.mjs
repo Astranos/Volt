@@ -11,6 +11,7 @@ function createChromeApi(options = {}) {
     storageSet: [],
   };
   const openErrors = [...(options.openErrors || [])];
+  const pendingStorageGets = [];
   const runtime = { lastError: null };
   const tabForGet = options.tabForGet || { id: 101, windowId: 7 };
 
@@ -19,7 +20,18 @@ function createChromeApi(options = {}) {
     storage: {
       local: {
         get(defaults, callback) {
-          callback(defaults);
+          const resolve = () =>
+            callback({
+              ...defaults,
+              ...(options.storedTool
+                ? { sidePanelTool: options.storedTool }
+                : {}),
+            });
+          if (options.deferStorageGet) {
+            pendingStorageGets.push(resolve);
+          } else {
+            resolve();
+          }
         },
         set(values) {
           calls.storageSet.push(values);
@@ -55,7 +67,13 @@ function createChromeApi(options = {}) {
     },
   };
 
-  return { calls, chromeApi };
+  return {
+    calls,
+    chromeApi,
+    flushStorageGets() {
+      pendingStorageGets.splice(0).forEach((resolve) => resolve());
+    },
+  };
 }
 
 function createController(chromeApi) {
@@ -99,6 +117,48 @@ test("explicit open reopens stale same-tool state instead of toggling closed", a
   assert.equal(reopen.mode, "open");
   assert.equal(calls.open.length, 2);
   assert.equal(calls.close.length, 0);
+});
+
+test("open without an explicit tool restores the last selected sidepanel tool", async () => {
+  const { calls, chromeApi } = createChromeApi({ storedTool: "top-offers" });
+  const controller = createController(chromeApi);
+
+  const result = await toggleForTab(controller, 101, undefined, "open");
+
+  assert.equal(result.success, true);
+  assert.equal(result.mode, "open");
+  assert.equal(result.tool, "top-offers");
+  assert.deepEqual(controller.getStateForWindow(7), {
+    open: true,
+    tool: "top-offers",
+  });
+  assert.deepEqual(calls.storageSet, [
+    { sidePanelTool: "top-offers", sidePanelUrl: null },
+  ]);
+});
+
+test("toolbar-style opens preserve the user gesture while restoring the saved tool", () => {
+  const { calls, chromeApi, flushStorageGets } = createChromeApi({
+    deferStorageGet: true,
+    storedTool: "top-offers",
+  });
+  const controller = createController(chromeApi);
+
+  controller.openForWindowPreservingTool(7);
+
+  assert.deepEqual(calls.open, [{ windowId: 7 }]);
+  assert.deepEqual(calls.storageSet, []);
+  assert.deepEqual(controller.getStateForWindow(7), {
+    open: false,
+    tool: null,
+  });
+
+  flushStorageGets();
+
+  assert.deepEqual(controller.getStateForWindow(7), {
+    open: true,
+    tool: "top-offers",
+  });
 });
 
 test("toggle still closes an open same-tool sidepanel", async () => {

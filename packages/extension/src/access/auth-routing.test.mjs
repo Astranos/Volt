@@ -156,7 +156,7 @@ test("toolbar opens the sidepanel while Pair Phone owns the QR popup", async () 
   assert.match(backgroundSource, /chrome\.action\.onClicked\.addListener/);
   assert.match(
     backgroundSource,
-    /sidepanelTools\.toggleForTab\(tab\.id, "mobile-scanner", "open"\)/,
+    /sidepanelTools\.openForWindowPreservingTool\(tab\.windowId\)/,
   );
   assert.match(backgroundSource, /chrome\.action\.openPopup\(\)/);
   assert.match(backgroundSource, /chrome\.action\.setPopup\(\{ popup: "" \}\)/);
