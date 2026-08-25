@@ -482,8 +482,7 @@ export default defineContentScript({
 
       // Position logic: Left of the card
       const tabWidth = 48; // base width
-      const gap = 8;
-      const left = Math.max(16, rect.left - tabWidth - gap);
+      const left = Math.max(16, rect.left - tabWidth);
       const top = Math.max(96, rect.top + 24); // Offset from top of card
 
       overlay.style.left = `${left}px`;

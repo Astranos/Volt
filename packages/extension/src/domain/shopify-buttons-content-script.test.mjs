@@ -33,5 +33,6 @@ test("Shopify quick actions anchor outside the product section shadow root", () 
       source.indexOf("titleRect.left - 64"),
     "the product card anchor must win before the title-input fallback",
   );
-  assert.match(source, /rect\.left - tabWidth - gap/);
+  assert.match(source, /rect\.left - tabWidth/);
+  assert.doesNotMatch(source, /rect\.left - tabWidth - gap/);
 });
