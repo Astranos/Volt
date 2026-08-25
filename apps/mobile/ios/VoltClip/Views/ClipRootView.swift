@@ -1542,7 +1542,9 @@ private struct ClipCaptureSessionView: View {
     @State private var detectedBarcodeFormat: String?
     @State private var selectedTextRegion: RecognizedTextRegion?
     @State private var selectedCleanedText: String?
+    @State private var isShowingRawText = false
     @State private var isCleaningSelectedText = false
+    @State private var cleanupRequestID = UUID()
     @State private var focusPoint: CGPoint?
     @State private var cameraStateRevision = 0
     @State private var isConnectionSheetPresented = false
@@ -1688,18 +1690,18 @@ private struct ClipCaptureSessionView: View {
             if let selectedTextRegion {
                 ExtractedTextActionCard(
                     text: selectedTextPreview,
+                    rawText: selectedTextRegion.text,
+                    isShowingRaw: isShowingRawText,
                     isCleaning: isCleaningSelectedText,
-                    onCleanup: {
-                        cleanupSelectedText(selectedTextRegion)
+                    onToggleRepresentation: {
+                        isShowingRawText.toggle()
                     },
                     onSend: {
-                        onSendRecognizedText(selectedCleanedText ?? selectedTextRegion.text)
-                        self.selectedTextRegion = nil
-                        selectedCleanedText = nil
+                        onSendRecognizedText(selectedTextValue)
+                        resetSelectedText()
                     },
                     onDismiss: {
-                        self.selectedTextRegion = nil
-                        selectedCleanedText = nil
+                        resetSelectedText()
                     }
                 )
                 .transition(.scale(scale: 0.96).combined(with: .opacity))
@@ -1711,14 +1713,12 @@ private struct ClipCaptureSessionView: View {
                 ClipOcrReviewControls(
                     regionCount: ocrTextRegions.count,
                     onRetake: {
-                        selectedTextRegion = nil
-                        selectedCleanedText = nil
+                        resetSelectedText()
                         cameraService.setTorchEnabled(false)
                         onClearOcrReview()
                     },
                     onFinish: {
-                        selectedTextRegion = nil
-                        selectedCleanedText = nil
+                        resetSelectedText()
                         onClearOcrReview()
                         dismiss()
                     }
@@ -1815,6 +1815,7 @@ private struct ClipCaptureSessionView: View {
             }
         }
         .onDisappear {
+            resetSelectedText()
             cameraService.stop()
             cameraService.onScan = nil
             cameraService.onDetectedBarcode = nil
@@ -1830,10 +1831,7 @@ private struct ClipCaptureSessionView: View {
         }
         .onChange(of: ocrReviewImage != nil) { _, isReviewing in
             syncCameraForOcrPostCapture()
-            if isReviewing {
-                selectedTextRegion = nil
-                selectedCleanedText = nil
-            }
+            resetSelectedText()
         }
         .onChange(of: isRecognizingText) { _, _ in
             syncCameraForOcrPostCapture()
@@ -1841,8 +1839,7 @@ private struct ClipCaptureSessionView: View {
         .onChange(of: store.isConnected) { _, isConnected in
             isConnectionSheetPresented = !isConnected
             if !isConnected {
-                selectedTextRegion = nil
-                selectedCleanedText = nil
+                resetSelectedText()
                 onClearOcrReview()
             }
         }
@@ -1871,21 +1868,62 @@ private struct ClipCaptureSessionView: View {
     }
 
     private func selectTextRegion(_ region: RecognizedTextRegion) {
-        selectedCleanedText = nil
+        resetSelectedText()
         selectedTextRegion = region
+        cleanupSelectedText(region)
     }
 
     private func cleanupSelectedText(_ region: RecognizedTextRegion) {
+        let requestID = UUID()
+        cleanupRequestID = requestID
         isCleaningSelectedText = true
+        isShowingRawText = false
         captureError = nil
         captureNotice = "Cleaning text"
-        Task {
-            let result = await OcrTextCleaner.clean(text: region.text)
+        let context = nearbyOcrContext(for: region)
+        Task { @MainActor in
+            let result = await OcrTextCleaner.clean(text: region.text, context: context)
+            guard cleanupRequestID == requestID,
+                  selectedTextRegion?.id == region.id
+            else { return }
             selectedCleanedText = result.text
-            selectedTextRegion = region
             isCleaningSelectedText = false
             captureNotice = result.usedFoundationModel ? "Text cleaned on device" : "Text cleaned"
         }
+    }
+
+    private func resetSelectedText() {
+        cleanupRequestID = UUID()
+        selectedCleanedText = nil
+        selectedTextRegion = nil
+        isShowingRawText = false
+        isCleaningSelectedText = false
+    }
+
+    private func nearbyOcrContext(for region: RecognizedTextRegion) -> String {
+        let nearbyRegions = ocrTextRegions
+            .filter { $0.id != region.id }
+            .sorted { lhs, rhs in
+                distance(from: region, to: lhs) < distance(from: region, to: rhs)
+            }
+            .prefix(4)
+        let identifierKind = LiveTextIdentifierMatcher.match(region.text)?.kind.rawValue ?? "Text"
+        return (["Selected identifier type: \(identifierKind)"] + nearbyRegions.map(\.text))
+            .joined(separator: "\n")
+    }
+
+    private func distance(from region: RecognizedTextRegion, to other: RecognizedTextRegion) -> CGFloat {
+        let dx = region.boundingBox.midX - other.boundingBox.midX
+        let dy = region.boundingBox.midY - other.boundingBox.midY
+        return (dx * dx) + (dy * dy)
+    }
+
+    private var selectedTextValue: String {
+        guard let selectedTextRegion else { return "" }
+        guard !isShowingRawText, let selectedCleanedText else {
+            return selectedTextRegion.text
+        }
+        return selectedCleanedText
     }
 
     private func captureCurrentFrame() {
@@ -1956,17 +1994,7 @@ private struct ClipCaptureSessionView: View {
     }
 
     private var selectedTextPreview: String {
-        guard let selectedTextRegion else { return "" }
-        guard let selectedCleanedText, selectedCleanedText != selectedTextRegion.text else {
-            return selectedTextRegion.text
-        }
-        return """
-        Cleaned
-        \(selectedCleanedText)
-
-        Original
-        \(selectedTextRegion.text)
-        """
+        selectedTextValue
     }
 }
 

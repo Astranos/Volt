@@ -618,13 +618,18 @@ test("native OCR review renders Vision quadrilaterals for angled text", () => {
   assert.match(ocrReviewLayerSwiftSource, /viewPoints\(for: region\.quadrilateral/);
 });
 
-test("native OCR review keeps raw Vision text until selected cleanup is requested", () => {
+test("native OCR review auto-cleans selected text while preserving a raw fallback", () => {
   assert.match(ocrTextCleanerSwiftSource, /import FoundationModels/);
   assert.match(ocrTextCleanerSwiftSource, /enum OcrTextCleaner/);
-  assert.match(ocrTextCleanerSwiftSource, /static func clean\(text: String\) async -> OcrTextCleanupResult/);
+  assert.match(ocrTextCleanerSwiftSource, /static func clean\(text: String, context: String = ""\) async -> OcrTextCleanupResult/);
   assert.match(ocrTextCleanerSwiftSource, /SystemLanguageModel\(/);
   assert.match(ocrTextCleanerSwiftSource, /LanguageModelSession\(/);
-  assert.match(ocrTextCleanerSwiftSource, /if let match = LiveTextIdentifierMatcher\.match\(normalized\) \{\s*return match\.value\s*\}/);
+  assert.match(ocrTextCleanerSwiftSource, /if let match = LiveTextIdentifierMatcher\.match\(normalized\) \{[\s\S]*isAppleSerialContext\(context\)/);
+  assert.match(ocrTextCleanerSwiftSource, /Nearby OCR context \(reference only; never return it\)/);
+  assert.match(ocrTextCleanerSwiftSource, /let sanitizedText = sanitizeModelOutput\(response\.content, fallback: fallbackText, context: context\)[\s\S]*authoritativeCleanup\(sanitizedText, context: context\)/);
+  assert.match(ocrTextCleanerSwiftSource, /private static func authoritativeCleanup\(_ text: String, context: String\)/);
+  assert.match(ocrTextCleanerSwiftSource, /private static func repairedIMEI\(in text: String\)/);
+  assert.match(ocrTextCleanerSwiftSource, /private static func isAppleSerialContext\(_ context: String\)/);
   assert.match(scannerStoreCaptureActionsSwiftSource, /let recognizedRegions = try await TextRecognizer\.recognizeTextRegions\(in: preparedImage\)/);
   assert.match(scannerStoreCaptureActionsSwiftSource, /ocrTextRegions = DeviceIdentifierRegionExtractor\.reviewRegions\(from: recognizedRegions\)/);
   assert.match(scannerStoreCaptureActionsSwiftSource, /ocrReviewText = ocrTextRegions\.map\(\\\.text\)\.joined\(separator: "\\n"\)/);
@@ -750,13 +755,17 @@ test("native post-capture OCR extracts device identifiers from recognized rows",
   assert.match(scannerStoreCaptureActionsSwiftSource, /DeviceIdentifierRegionExtractor\.reviewRegions\(from: recognizedRegions\)/);
 });
 
-test("native OCR target dialog can clean selected text before sending", () => {
+test("native OCR target dialog defaults to cleaned text and can reveal raw text", () => {
   assert.match(sharedCaptureSessionOverlaysSwiftSource, /Button\(action: onSend\) \{[\s\S]*Label\("Send", systemImage: "paperplane\.fill"\)/);
-  assert.match(sharedCaptureSessionOverlaysSwiftSource, /Button\(action: onCleanup\) \{[\s\S]*Label\(isCleaning \? "Cleaning\.\.\." : "Cleanup", systemImage: "wand\.and\.sparkles"\)/);
-  assert.match(captureSessionViewSwiftSource, /store\.sendRecognizedText\(selectedCleanedText \?\? selectedTextRegion\.text\)/);
-  assert.match(captureSessionViewSwiftSource, /onDismiss: \{\s*selectedTextRegion = nil\s*selectedCleanedText = nil\s*\}/);
+  assert.match(sharedCaptureSessionOverlaysSwiftSource, /let onToggleRepresentation: \(\) -> Void/);
+  assert.match(sharedCaptureSessionOverlaysSwiftSource, /Label\(isShowingRaw \? "Cleaned" : "Raw"/);
+  assert.match(sharedCaptureSessionOverlaysSwiftSource, /Label\("Cleaning…", systemImage: "wand\.and\.sparkles"\)/);
+  assert.match(captureSessionViewSwiftSource, /store\.sendRecognizedText\(selectedTextValue\)/);
+  assert.match(captureSessionViewSwiftSource, /selectTextRegion\(_ region: RecognizedTextRegion\) \{\s*resetSelectedText\(\)\s*selectedTextRegion = region\s*cleanupSelectedText\(region\)/);
+  assert.match(captureSessionViewSwiftSource, /OcrTextCleaner\.clean\(text: region\.text, context: context\)/);
+  assert.match(captureSessionViewSwiftSource, /guard cleanupRequestID == requestID,[\s\S]*selectedTextRegion\?\.id == region\.id/);
+  assert.match(captureSessionViewSwiftSource, /private func resetSelectedText\(\)/);
   assert.match(sharedCaptureSessionOverlaysSwiftSource, /Button\(action: onDismiss\) \{[\s\S]*Image\(systemName: "xmark"\)/);
-  assert.match(captureSessionViewSwiftSource, /let result = await OcrTextCleaner\.clean\(text: region\.text\)/);
   assert.match(captureSessionViewSwiftSource, /private var selectedTextPreview: String/);
 });
 
@@ -934,12 +943,12 @@ test("app clip capture controls are wired to camera hardware actions", () => {
   assert.match(clipRootViewSwiftSource, /torchEnabled: cameraService\.torchEnabled/);
   assert.match(clipRootViewSwiftSource, /zoomLabel: cameraService\.zoomDisplayLabel/);
   assert.match(clipRootViewSwiftSource, /cameraService\.setTorchEnabled\(!cameraService\.torchEnabled\)/);
-  assert.match(clipRootViewSwiftSource, /onRetake: \{\s*selectedTextRegion = nil\s*selectedCleanedText = nil\s*cameraService\.setTorchEnabled\(false\)\s*onClearOcrReview\(\)/);
+  assert.match(clipRootViewSwiftSource, /onRetake: \{\s*resetSelectedText\(\)\s*cameraService\.setTorchEnabled\(false\)\s*onClearOcrReview\(\)/);
   assert.match(
     clipRootViewSwiftSource,
     /private func syncCameraForOcrPostCapture\(\) \{[\s\S]*let shouldPauseCamera = activeMode == \.ocr\s*&& \(isRecognizingText \|\| ocrReviewImage != nil\)[\s\S]*cameraService\.stop\(\)[\s\S]*cameraService\.start\(\)/
   );
-  assert.match(clipRootViewSwiftSource, /\.onChange\(of: ocrReviewImage != nil\) \{ _, isReviewing in\s*syncCameraForOcrPostCapture\(\)[\s\S]*if isReviewing \{\s*selectedTextRegion = nil\s*selectedCleanedText = nil/);
+  assert.match(clipRootViewSwiftSource, /\.onChange\(of: ocrReviewImage != nil\) \{ _, isReviewing in\s*syncCameraForOcrPostCapture\(\)[\s\S]*resetSelectedText\(\)/);
   assert.match(clipRootViewSwiftSource, /cameraService\.adjustZoom\(by: -0\.25\)/);
   assert.match(clipRootViewSwiftSource, /cameraService\.adjustZoom\(by: 0\.25\)/);
   assert.doesNotMatch(clipRootViewSwiftSource, /onToggleTorch: \{\}/);
@@ -979,8 +988,10 @@ test("app clip OCR target dialog shares cleanup and styling with the main app", 
   assert.match(clipRootViewSwiftSource, /ExtractedTextActionCard\(/);
   assert.match(clipRootViewSwiftSource, /text: selectedTextPreview/);
   assert.match(clipRootViewSwiftSource, /isCleaning: isCleaningSelectedText/);
-  assert.match(clipRootViewSwiftSource, /let result = await OcrTextCleaner\.clean\(text: region\.text\)/);
-  assert.match(clipRootViewSwiftSource, /onSendRecognizedText\(selectedCleanedText \?\? selectedTextRegion\.text\)/);
+  assert.match(clipRootViewSwiftSource, /isShowingRaw: isShowingRawText/);
+  assert.match(clipRootViewSwiftSource, /let result = await OcrTextCleaner\.clean\(text: region\.text, context: context\)/);
+  assert.match(clipRootViewSwiftSource, /onSendRecognizedText\(selectedTextValue\)/);
+  assert.match(clipRootViewSwiftSource, /private func resetSelectedText\(\)/);
   assert.match(clipRootViewSwiftSource, /private var selectedTextPreview: String/);
   assert.match(sharedCaptureSessionOverlaysSwiftSource, /\.foregroundStyle\(\.black\)/);
   assert.match(sharedCaptureSessionOverlaysSwiftSource, /Color\.white\.opacity\(0\.9\)/);

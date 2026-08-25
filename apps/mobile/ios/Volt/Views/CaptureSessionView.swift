@@ -7,7 +7,9 @@ struct CaptureSessionView: View {
     @State private var gridVisible = true
     @State private var selectedTextRegion: RecognizedTextRegion?
     @State private var selectedCleanedText: String?
+    @State private var isShowingRawText = false
     @State private var isCleaningSelectedText = false
+    @State private var cleanupRequestID = UUID()
     @State private var isTargetPickerPresented = false
 
     var body: some View {
@@ -35,19 +37,19 @@ struct CaptureSessionView: View {
             if selectedTextRegion != nil {
                 ExtractedTextActionCard(
                     text: selectedTextPreview,
+                    rawText: selectedTextRegion?.text ?? "",
+                    isShowingRaw: isShowingRawText,
                     isCleaning: isCleaningSelectedText,
-                    onCleanup: {
-                        guard let selectedTextRegion else { return }
-                        cleanupSelectedText(selectedTextRegion)
+                    onToggleRepresentation: {
+                        isShowingRawText.toggle()
                     },
                     onSend: {
-                        guard let selectedTextRegion else { return }
-                        store.sendRecognizedText(selectedCleanedText ?? selectedTextRegion.text)
-                        self.selectedTextRegion = nil
+                        guard selectedTextRegion != nil else { return }
+                        store.sendRecognizedText(selectedTextValue)
+                        resetSelectedText()
                     },
                     onDismiss: {
-                        selectedTextRegion = nil
-                        selectedCleanedText = nil
+                        resetSelectedText()
                     }
                 )
                 .transition(.scale(scale: 0.96).combined(with: .opacity))
@@ -76,13 +78,11 @@ struct CaptureSessionView: View {
                 OcrReviewControls(
                     regionCount: store.ocrTextRegions.count,
                     onRetake: {
-                        selectedTextRegion = nil
-                        selectedCleanedText = nil
+                        resetSelectedText()
                         store.clearOcrReview()
                     },
                     onFinish: {
-                        selectedTextRegion = nil
-                        selectedCleanedText = nil
+                        resetSelectedText()
                         store.clearOcrReview()
                         isPresented = false
                     }
@@ -142,7 +142,7 @@ struct CaptureSessionView: View {
             store.startSessionPhotoStrip()
             if ScreenshotScenario.current == .captureReviewSend,
                let region = store.ocrTextRegions.first {
-                selectedTextRegion = region
+                selectTextRegion(region)
             }
         }
         .task {
@@ -151,6 +151,7 @@ struct CaptureSessionView: View {
         }
         .onChange(of: store.ocrReviewImage != nil) { _, isReviewingOcr in
             syncCameraForOcrReview(isReviewingOcr: isReviewingOcr)
+            resetSelectedText()
         }
         .task(id: store.captureDeliveryToast?.id) {
             guard let toast = store.captureDeliveryToast else { return }
@@ -160,6 +161,7 @@ struct CaptureSessionView: View {
             }
         }
         .onDisappear {
+            resetSelectedText()
             store.captureDeliveryToast = nil
             store.camera.stop()
         }
@@ -174,34 +176,65 @@ struct CaptureSessionView: View {
     }
 
     private func selectTextRegion(_ region: RecognizedTextRegion) {
-        selectedCleanedText = nil
+        resetSelectedText()
         selectedTextRegion = region
+        cleanupSelectedText(region)
     }
 
     private func cleanupSelectedText(_ region: RecognizedTextRegion) {
+        let requestID = UUID()
+        cleanupRequestID = requestID
         isCleaningSelectedText = true
+        isShowingRawText = false
         store.statusText = "Cleaning text"
-        Task {
-            let result = await OcrTextCleaner.clean(text: region.text)
+        let context = nearbyOcrContext(for: region)
+        Task { @MainActor in
+            let result = await OcrTextCleaner.clean(text: region.text, context: context)
+            guard cleanupRequestID == requestID,
+                  selectedTextRegion?.id == region.id
+            else { return }
             selectedCleanedText = result.text
-            selectedTextRegion = region
             isCleaningSelectedText = false
             store.statusText = result.usedFoundationModel ? "Text cleaned on device" : "Text cleaned"
         }
     }
 
-    private var selectedTextPreview: String {
+    private func resetSelectedText() {
+        cleanupRequestID = UUID()
+        selectedCleanedText = nil
+        selectedTextRegion = nil
+        isShowingRawText = false
+        isCleaningSelectedText = false
+    }
+
+    private func nearbyOcrContext(for region: RecognizedTextRegion) -> String {
+        let nearbyRegions = store.ocrTextRegions
+            .filter { $0.id != region.id }
+            .sorted { lhs, rhs in
+                distance(from: region, to: lhs) < distance(from: region, to: rhs)
+            }
+            .prefix(4)
+        let identifierKind = LiveTextIdentifierMatcher.match(region.text)?.kind.rawValue ?? "Text"
+        return (["Selected identifier type: \(identifierKind)"] + nearbyRegions.map(\.text))
+            .joined(separator: "\n")
+    }
+
+    private func distance(from region: RecognizedTextRegion, to other: RecognizedTextRegion) -> CGFloat {
+        let dx = region.boundingBox.midX - other.boundingBox.midX
+        let dy = region.boundingBox.midY - other.boundingBox.midY
+        return (dx * dx) + (dy * dy)
+    }
+
+    private var selectedTextValue: String {
         guard let selectedTextRegion else { return "" }
-        guard let selectedCleanedText, selectedCleanedText != selectedTextRegion.text else {
+        guard !isShowingRawText, let selectedCleanedText else {
             return selectedTextRegion.text
         }
-        return """
-        Cleaned
-        \(selectedCleanedText)
+        return selectedCleanedText
+    }
 
-        Original
-        \(selectedTextRegion.text)
-        """
+    private var selectedTextPreview: String {
+        selectedTextValue
     }
 }
 

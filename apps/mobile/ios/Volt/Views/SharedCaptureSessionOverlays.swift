@@ -2,8 +2,10 @@ import SwiftUI
 
 struct ExtractedTextActionCard: View {
     let text: String
+    let rawText: String
+    let isShowingRaw: Bool
     let isCleaning: Bool
-    let onCleanup: () -> Void
+    let onToggleRepresentation: () -> Void
     let onSend: () -> Void
     let onDismiss: () -> Void
 
@@ -20,6 +22,12 @@ struct ExtractedTextActionCard: View {
                         .foregroundStyle(.black.opacity(0.62))
                         .lineLimit(3)
                         .minimumScaleFactor(0.78)
+
+                    if isCleaning {
+                        Label("Cleaning…", systemImage: "wand.and.sparkles")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.black.opacity(0.56))
+                    }
                 }
 
                 Spacer(minLength: 0)
@@ -36,8 +44,8 @@ struct ExtractedTextActionCard: View {
             }
 
             VStack(spacing: 12) {
-                Button(action: onCleanup) {
-                    Label(isCleaning ? "Cleaning..." : "Cleanup", systemImage: "wand.and.sparkles")
+                Button(action: onToggleRepresentation) {
+                    Label(isShowingRaw ? "Cleaned" : "Raw", systemImage: isShowingRaw ? "wand.and.sparkles" : "doc.text")
                         .font(.title3.weight(.semibold))
                         .foregroundStyle(.black)
                         .frame(maxWidth: .infinity)
