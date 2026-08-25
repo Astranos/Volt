@@ -14,3 +14,24 @@ test("Shopify quick actions use the visible title input inside Shopify web compo
   );
   assert.match(source, /return shadowInput \|\| shopifyField;/);
 });
+
+test("Shopify quick actions anchor outside the product section shadow root", () => {
+  assert.match(
+    source,
+    /findShopifyTitleField\(\)\?\.closest\("s-internal-section"\)/,
+  );
+  assert.match(
+    source,
+    /shopifySection\?\.shadowRoot\?\.querySelector\("section"\)/,
+  );
+  assert.match(
+    source,
+    /if \(sectionCard && looksLikeProductCard\(sectionCard\)\)/,
+  );
+  assert.ok(
+    source.indexOf("return sectionCard;") <
+      source.indexOf("titleRect.left - 64"),
+    "the product card anchor must win before the title-input fallback",
+  );
+  assert.match(source, /rect\.left - tabWidth - gap/);
+});

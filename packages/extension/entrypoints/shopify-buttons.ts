@@ -163,15 +163,18 @@ export default defineContentScript({
     let lastUrl = location.href;
     let isInitialized = false;
 
+    const findShopifyTitleField = () =>
+      document.querySelector(
+        's-internal-text-field[name="title"], s-text-field[name="title"], [name="title"][label="Title"]'
+      ) as HTMLElement | null;
+
     const findTitleControl = () => {
       const direct = document.querySelector(
         'input[name="title"], input[id*="title" i], input[aria-label="Title"], input[placeholder="Title"]'
       ) as HTMLElement | null;
       if (direct) return direct;
 
-      const shopifyField = document.querySelector(
-        's-internal-text-field[name="title"], s-text-field[name="title"], [name="title"][label="Title"]'
-      ) as HTMLElement | null;
+      const shopifyField = findShopifyTitleField();
       if (shopifyField) {
         const shadowInput = shopifyField.shadowRoot?.querySelector("input");
         return shadowInput || shopifyField;
@@ -234,6 +237,14 @@ export default defineContentScript({
 
     // Find the main product card
     const findMainCard = () => {
+      const shopifySection =
+        findShopifyTitleField()?.closest("s-internal-section");
+      const sectionCard =
+        shopifySection?.shadowRoot?.querySelector("section");
+      if (sectionCard && looksLikeProductCard(sectionCard)) {
+        return sectionCard;
+      }
+
       // Strategy: Look for the title input and go up to the card
       const titleControl = findTitleControl();
       if (titleControl) {
