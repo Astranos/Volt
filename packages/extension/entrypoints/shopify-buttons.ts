@@ -172,7 +172,10 @@ export default defineContentScript({
       const shopifyField = document.querySelector(
         's-internal-text-field[name="title"], s-text-field[name="title"], [name="title"][label="Title"]'
       ) as HTMLElement | null;
-      if (shopifyField) return shopifyField;
+      if (shopifyField) {
+        const shadowInput = shopifyField.shadowRoot?.querySelector("input");
+        return shadowInput || shopifyField;
+      }
 
       const titleLabel = Array.from(document.querySelectorAll("label")).find(
         (label) => label.textContent?.trim().toLowerCase() === "title"
