@@ -8,7 +8,9 @@ import {
   nextReleaseVersion,
   parseChromeVersion,
   parseOptions,
+  parseSubmitExistingDraftOptions,
   storeVersions,
+  submitExistingDraft,
   validateProductionBuildEnv,
 } from "./chrome-web-store.mjs";
 
@@ -56,6 +58,57 @@ test("extracts published and submitted store versions", () => {
 test("pending reviews are replaced only when explicitly requested", () => {
   assert.equal(parseOptions([]).replacePending, false);
   assert.equal(parseOptions(["--replace-pending"]).replacePending, true);
+});
+
+test("submits an existing draft with default publishing behavior", async () => {
+  const calls = [];
+  const options = parseSubmitExistingDraftOptions([]);
+  const result = await submitExistingDraft(
+    "publishers/publisher/items/extension",
+    "token",
+    options,
+    async (...args) => {
+      calls.push(args);
+      return { state: "PENDING_REVIEW" };
+    },
+  );
+
+  assert.deepEqual(options, {
+    publishType: "DEFAULT_PUBLISH",
+    skipReview: false,
+  });
+  assert.deepEqual(calls, [
+    [
+      "publishers/publisher/items/extension",
+      "token",
+      {
+        publishType: "DEFAULT_PUBLISH",
+        skipReview: false,
+      },
+    ],
+  ]);
+  assert.deepEqual(result, { state: "PENDING_REVIEW" });
+});
+
+test("supports staged publishing and rejects release-only draft options", () => {
+  assert.deepEqual(
+    parseSubmitExistingDraftOptions([
+      "--publish-type=STAGED_PUBLISH",
+      "--skip-review",
+    ]),
+    {
+      publishType: "STAGED_PUBLISH",
+      skipReview: true,
+    },
+  );
+  assert.throws(
+    () => parseSubmitExistingDraftOptions(["--upload-only"]),
+    /Unsupported submit-existing-draft option: --upload-only/,
+  );
+  assert.throws(
+    () => parseSubmitExistingDraftOptions(["--replace-pending"]),
+    /Unsupported submit-existing-draft option: --replace-pending/,
+  );
 });
 
 test("validates production Clerk config and stable extension identity", () => {

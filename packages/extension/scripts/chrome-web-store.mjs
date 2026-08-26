@@ -287,6 +287,15 @@ async function publish(name, token, options) {
   });
 }
 
+export async function submitExistingDraft(
+  name,
+  token,
+  options,
+  publishRequest = publish,
+) {
+  return publishRequest(name, token, options);
+}
+
 async function cancelSubmission(name, token) {
   return apiRequest(`${API_ORIGIN}/v2/${name}:cancelSubmission`, token, {
     method: "POST",
@@ -309,14 +318,42 @@ export function parseOptions(args) {
   };
 }
 
-async function run() {
-  const [command = "release", ...args] = process.argv.slice(2);
-  if (!["release", "status"].includes(command)) {
-    throw new Error("Usage: chrome-web-store.mjs <status|release> [options]");
+export function parseSubmitExistingDraftOptions(args) {
+  const unsupportedArg = args.find(
+    (arg) =>
+      arg !== "--skip-review" && !arg.startsWith("--publish-type="),
+  );
+  if (unsupportedArg) {
+    throw new Error(
+      `Unsupported submit-existing-draft option: ${unsupportedArg}`,
+    );
   }
 
+  const { publishType, skipReview } = parseOptions(args);
+  return { publishType, skipReview };
+}
+
+async function run() {
+  const [command = "release", ...args] = process.argv.slice(2);
+  if (!["release", "status", "submit-existing-draft"].includes(command)) {
+    throw new Error(
+      "Usage: chrome-web-store.mjs <status|release|submit-existing-draft> [options]",
+    );
+  }
+
+  const submitOptions =
+    command === "submit-existing-draft"
+      ? parseSubmitExistingDraftOptions(args)
+      : undefined;
   const token = accessToken();
   const name = resourceName();
+
+  if (command === "submit-existing-draft") {
+    const publishResult = await submitExistingDraft(name, token, submitOptions);
+    console.log(`Submitted existing draft: ${publishResult.state}`);
+    return;
+  }
+
   const status = await fetchStatus(name, token);
 
   if (command === "status") {

@@ -3,6 +3,11 @@ name: Publish Chrome Extension
 on:
   workflow_dispatch:
     inputs:
+      submit_existing_draft:
+        description: Submit the package already uploaded to Chrome without building or uploading another version
+        required: true
+        type: boolean
+        default: false
       submit_for_review:
         description: Submit the uploaded package for Chrome review
         required: true
@@ -32,7 +37,7 @@ permissions:
 
 jobs:
   publish:
-    name: Bump, upload, and submit
+    name: Upload or submit
     runs-on: ubuntu-latest
     environment: chrome-web-store
 
@@ -79,11 +84,24 @@ jobs:
           CWS_PUBLISHER_ID: ${{ vars.CWS_PUBLISHER_ID }}
           WXT_CLERK_PUBLISHABLE_KEY: ${{ vars.WXT_CLERK_PUBLISHABLE_KEY }}
           WXT_EXTENSION_PUBLIC_KEY: ${{ vars.WXT_EXTENSION_PUBLIC_KEY }}
+          SUBMIT_EXISTING_DRAFT: ${{ inputs.submit_existing_draft }}
           SUBMIT_FOR_REVIEW: ${{ inputs.submit_for_review }}
           PUBLISH_TYPE: ${{ inputs.publish_type }}
           REPLACE_PENDING_SUBMISSION: ${{ inputs.replace_pending_submission }}
         run: |
           release_args=("--publish-type=${PUBLISH_TYPE}")
+          if [[ "${SUBMIT_EXISTING_DRAFT}" == "true" ]]; then
+            if [[ "${SUBMIT_FOR_REVIEW}" != "true" ]]; then
+              echo "submit_for_review must be true when submitting an existing draft" >&2
+              exit 1
+            fi
+            if [[ "${REPLACE_PENDING_SUBMISSION}" == "true" ]]; then
+              echo "replace_pending_submission cannot be used when submitting an existing draft" >&2
+              exit 1
+            fi
+            pnpm --filter @volt/extension exec node scripts/chrome-web-store.mjs submit-existing-draft "${release_args[@]}"
+            exit 0
+          fi
           if [[ "${SUBMIT_FOR_REVIEW}" != "true" ]]; then
             release_args+=("--upload-only")
           fi
@@ -93,7 +111,7 @@ jobs:
           pnpm release:extension -- "${release_args[@]}"
 
       - name: Retain release zip
-        if: always()
+        if: ${{ always() && inputs.submit_existing_draft == false }}
         uses: actions/upload-artifact@v4
         with:
           name: volt-chrome-extension
