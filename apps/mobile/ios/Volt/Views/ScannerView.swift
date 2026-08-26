@@ -16,20 +16,23 @@ struct CaptureModeTabView: View {
             case .barcode:
                 result.kind == .barcode && result.source == .capture
             case .photo:
-                result.kind == .photo && result.source == .capture
+                result.kind == .photo
             case .dictation:
                 result.kind == .dictation
             }
         }
     }
 
-    private var capturePhotoBatches: [CapturePhotoBatch] {
+    private var photoBatches: [PhotoBatch] {
         let grouped = Dictionary(grouping: matchingResults) { result in
-            result.batchId ?? result.id.uuidString
+            PhotoBatchIdentity(
+                batchId: result.batchId ?? result.id.uuidString,
+                source: result.source.rawValue
+            )
         }
-        return grouped.map { id, results in
-            CapturePhotoBatch(
-                id: id,
+        return grouped.map { identity, results in
+            PhotoBatch(
+                batchId: identity.batchId,
                 results: results.sorted { $0.capturedAt < $1.capturedAt }
             )
         }
@@ -53,20 +56,19 @@ struct CaptureModeTabView: View {
 
                     CaptureModeLaunchCard(mode: mode, action: startCapture)
 
-                    ComputerAvailabilityCard {
-                        isTargetPickerPresented = true
-                    }
-
                     if mode == .photo {
+                        PhotoLibraryUploadSection()
+
                         PhotoSessionHistorySection(
-                            batches: capturePhotoBatches,
+                            batches: photoBatches,
                             onContinue: continuePhotos,
-                            onResend: resend,
                             onDelete: delete
                         )
-
-                        PhotoLibraryUploadSection()
                     } else {
+                        ComputerAvailabilityCard {
+                            isTargetPickerPresented = true
+                        }
+
                         CaptureModeCapturesSection(
                             mode: mode,
                             results: matchingResults,
@@ -118,10 +120,10 @@ struct CaptureModeTabView: View {
         isCaptureSessionPresented = true
     }
 
-    private func continuePhotos(in batch: CapturePhotoBatch) {
+    private func continuePhotos(in batch: PhotoBatch) {
         store.clearOcrReview()
         store.activeMode = .photo
-        store.resumePhotoBatch(id: batch.id)
+        store.resumePhotoBatch(id: batch.batchId)
         isCaptureSessionPresented = true
     }
 

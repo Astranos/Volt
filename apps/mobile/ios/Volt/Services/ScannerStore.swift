@@ -62,7 +62,7 @@ final class ScannerStore {
 
     var lastBarcodeValue: String?
     var lastBarcodeSentAt: Date?
-    var photoBatch: (id: String, expiresAt: Date)?
+    var capturePhotoBatch: (id: String, expiresAt: Date)?
     var resumedPhotoBatchId: String?
     @ObservationIgnored let captureFailureFeedback = UINotificationFeedbackGenerator()
     @ObservationIgnored let captureFailureImpactFeedback = UIImpactFeedbackGenerator(style: .heavy)

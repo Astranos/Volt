@@ -11,7 +11,6 @@ final class ClipScannerStore {
         case text
         case barcode
         case photos
-        case upload
 
         var id: String { rawValue }
 
@@ -20,7 +19,6 @@ final class ClipScannerStore {
             case .text: "Text"
             case .barcode: "Barcode"
             case .photos: "Photos"
-            case .upload: "Upload"
             }
         }
 
@@ -29,7 +27,6 @@ final class ClipScannerStore {
             case .text: "doc.text.viewfinder"
             case .barcode: "barcode.viewfinder"
             case .photos: "camera.viewfinder"
-            case .upload: "square.and.arrow.up"
             }
         }
     }

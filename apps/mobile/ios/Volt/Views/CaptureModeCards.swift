@@ -276,23 +276,49 @@ extension CaptureMode {
     }
 }
 
-struct CapturePhotoBatch: Identifiable {
-    let id: String
+struct PhotoBatchIdentity: Hashable {
+    let batchId: String
+    let source: String
+}
+
+struct PhotoBatch: Identifiable {
+    let batchId: String
     let results: [ScanResult]
+
+    var id: PhotoBatchIdentity {
+        PhotoBatchIdentity(batchId: batchId, source: source.rawValue)
+    }
+
+    var source: ScanResult.Source {
+        results.first?.source ?? .capture
+    }
 
     var latestCapturedAt: Date {
         results.map(\.capturedAt).max() ?? .distantPast
     }
 
     var title: String {
-        "\(results.count) captured photo\(results.count == 1 ? "" : "s")"
+        let action = source == .upload ? "uploaded" : "captured"
+        return "\(results.count) \(action) photo\(results.count == 1 ? "" : "s")"
+    }
+
+    var deliveryState: ScanResult.DeliveryState {
+        if results.contains(where: { $0.deliveryState == .failed }) {
+            return .failed
+        }
+        if results.contains(where: { $0.deliveryState == .sending }) {
+            return .sending
+        }
+        if results.allSatisfy({ $0.deliveryState == .sent }) {
+            return .sent
+        }
+        return .saved
     }
 }
 
 struct PhotoSessionHistorySection: View {
-    let batches: [CapturePhotoBatch]
-    let onContinue: (CapturePhotoBatch) -> Void
-    let onResend: (ScanResult) -> Void
+    let batches: [PhotoBatch]
+    let onContinue: (PhotoBatch) -> Void
     let onDelete: (ScanResult) -> Void
 
     var body: some View {
@@ -312,11 +338,13 @@ struct PhotoSessionHistorySection: View {
             } else {
                 LazyVStack(spacing: 10) {
                     ForEach(batches) { batch in
-                        CapturePhotoBatchCard(
+                        PhotoBatchCard(
                             batch: batch,
                             onContinue: { onContinue(batch) },
-                            onResend: onResend,
-                            onDelete: onDelete
+                            onDelete: onDelete,
+                            onDeleteBatch: {
+                                batch.results.forEach(onDelete)
+                            }
                         )
                     }
                 }
@@ -325,11 +353,17 @@ struct PhotoSessionHistorySection: View {
     }
 }
 
-struct CapturePhotoBatchCard: View {
-    let batch: CapturePhotoBatch
+struct PhotoBatchCard: View {
+    let batch: PhotoBatch
     let onContinue: () -> Void
-    let onResend: (ScanResult) -> Void
     let onDelete: (ScanResult) -> Void
+    let onDeleteBatch: () -> Void
+
+    private let columns = [GridItem(.adaptive(minimum: 86), spacing: 8)]
+
+    private var visibleResults: [ScanResult] {
+        Array(batch.results.suffix(4))
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -345,24 +379,122 @@ struct CapturePhotoBatchCard: View {
 
                 Spacer(minLength: 8)
 
-                Button(action: onContinue) {
-                    Label("Continue", systemImage: "plus.viewfinder")
+                DeliveryBadge(state: batch.deliveryState)
+
+                Button(role: .destructive, action: onDeleteBatch) {
+                    Image(systemName: "trash")
+                        .font(.system(size: 16, weight: .semibold))
+                        .frame(width: 36, height: 36)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.borderless)
+                .accessibilityLabel("Delete \(batch.title)")
+            }
+
+            LazyVGrid(columns: columns, spacing: 8) {
+                ForEach(visibleResults) { result in
+                    PhotoResultThumbnail(
+                        result: result,
+                        onDelete: { onDelete(result) }
+                    )
+                }
+            }
+
+            if batch.source == .capture {
+                Button(action: onContinue) {
+                    Label("Continue Session", systemImage: "plus.viewfinder")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
                 .accessibilityLabel("Continue \(batch.title) from \(batch.latestCapturedAt.formatted(date: .abbreviated, time: .shortened))")
             }
 
-            ForEach(batch.results) { result in
-                CapturedResultRow(
-                    result: result,
-                    canResend: true,
-                    onResend: { onResend(result) },
-                    onDelete: { onDelete(result) }
-                )
-                .padding(.top, 2)
+            if batch.results.count > 4 {
+                NavigationLink {
+                    PhotoBatchGallery(batch: batch, onDelete: onDelete)
+                } label: {
+                    Label("View all \(batch.results.count) photos", systemImage: "photo.stack")
+                    .font(.subheadline.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
             }
         }
         .padding(14)
         .background(.background, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+}
+
+private struct PhotoResultThumbnail: View {
+    let result: ScanResult
+    let onDelete: () -> Void
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack {
+                if let imageData = result.imageData, let image = UIImage(data: imageData) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: proxy.size.width, height: proxy.size.height)
+                        .clipped()
+                } else {
+                    Image(systemName: "photo")
+                        .font(.title2.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: proxy.size.width, height: proxy.size.height)
+                        .background(.secondary.opacity(0.12))
+                }
+
+                VStack {
+                    HStack {
+                        Spacer()
+                        Button(role: .destructive, action: onDelete) {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.title3)
+                                .symbolRenderingMode(.palette)
+                                .foregroundStyle(.white, .black.opacity(0.5))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Delete photo")
+                    }
+
+                    Spacer()
+                }
+                .padding(5)
+            }
+        }
+        .aspectRatio(1, contentMode: .fit)
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(.quaternary, lineWidth: 1)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Photo from \(result.capturedAt.formatted(date: .abbreviated, time: .shortened))")
+    }
+}
+
+private struct PhotoBatchGallery: View {
+    let batch: PhotoBatch
+    let onDelete: (ScanResult) -> Void
+
+    private let columns = [GridItem(.adaptive(minimum: 104), spacing: 8)]
+
+    var body: some View {
+        ScrollView {
+            LazyVGrid(columns: columns, spacing: 8) {
+                ForEach(batch.results) { result in
+                    PhotoResultThumbnail(
+                        result: result,
+                        onDelete: { onDelete(result) }
+                    )
+                }
+            }
+            .padding()
+        }
+        .background(ScannerTabLayout.background)
+        .navigationTitle(batch.title.capitalized)
+        .navigationBarTitleDisplayMode(.inline)
     }
 }

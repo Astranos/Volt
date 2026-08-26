@@ -330,10 +330,13 @@ test("capture mode tabs start from the hero card and list their own captures", (
     /CaptureModeCapturesSection\(\s*mode: mode,\s*results: matchingResults,\s*onResend: resend,\s*onDelete: delete\s*\)/
   );
   assert.match(scannerViewSwiftSource, /PhotoSessionHistorySection/);
-  assert.match(scannerViewSwiftSource, /PhotoSessionHistorySection\([\s\S]*PhotoLibraryUploadSection\(\)/);
+  assert.match(scannerViewSwiftSource, /PhotoLibraryUploadSection\(\)[\s\S]*PhotoSessionHistorySection\(/);
+  assert.match(scannerViewSwiftSource, /if mode == \.photo \{\s*PhotoLibraryUploadSection\(\)/);
+  assert.match(scannerViewSwiftSource, /\} else \{\s*ComputerAvailabilityCard/);
   assert.match(uploadViewSwiftSource, /struct PhotoLibraryUploadSection: View/);
   assert.match(uploadViewSwiftSource, /Text\("From Photo Library"\)/);
   assert.match(uploadViewSwiftSource, /ScannerPhotoPickerAccessory\(/);
+  assert.doesNotMatch(uploadViewSwiftSource, /Recent Uploads/);
   assert.doesNotMatch(rootViewSwiftSource, /Label\("Upload", systemImage: "square\.and\.arrow\.up"\)|case upload/);
   assert.match(scannerViewSwiftSource, /private func resend\(_ result: ScanResult\)[\s\S]*insertResultIntoComputer\(id: result\.id\)/);
   assert.match(scannerViewSwiftSource, /private func delete\(_ result: ScanResult\) \{\s*store\.removeResult\(id: result\.id\)/);
@@ -372,15 +375,16 @@ test("app clip capture sessions keep one photo batch per presented camera sessio
 });
 
 test("native and app clip can reopen photo capture into a selected batch", () => {
+  assert.match(scannerStoreSwiftSource, /var capturePhotoBatch: \(id: String, expiresAt: Date\)\?/);
   assert.match(scannerStoreSwiftSource, /var resumedPhotoBatchId: String\?/);
   assert.match(scannerStoreCaptureActionsSwiftSource, /func resumePhotoBatch\(id: String\) \{\s*resumedPhotoBatchId = id\s*\}/);
   assert.match(scannerStoreCaptureActionsSwiftSource, /func endResumedPhotoBatch\(\) \{\s*resumedPhotoBatchId = nil\s*\}/);
   assert.match(scannerStoreCaptureActionsSwiftSource, /func currentPhotoBatch\(now: Date\) -> String \{\s*if let resumedPhotoBatchId \{\s*return resumedPhotoBatchId\s*\}/);
   assert.match(scannerStoreCaptureActionsSwiftSource, /func captureSquarePhoto\(\) async \{\s*let batchId = resumedPhotoBatchId[\s\S]*sendPhoto\(preparedImage, result: photoResult, batchId: batchId\)/);
-  assert.match(scannerViewSwiftSource, /private var capturePhotoBatches: \[CapturePhotoBatch\]/);
-  assert.match(captureModeCardsSwiftSource, /Label\("Continue", systemImage: "plus\.viewfinder"\)/);
+  assert.match(scannerViewSwiftSource, /private var photoBatches: \[PhotoBatch\]/);
+  assert.match(captureModeCardsSwiftSource, /Label\("Continue Session", systemImage: "plus\.viewfinder"\)/);
   assert.match(captureModeCardsSwiftSource, /accessibilityLabel\("Continue \\\(batch\.title\) from/);
-  assert.match(scannerViewSwiftSource, /store\.activeMode = \.photo[\s\S]*store\.resumePhotoBatch\(id: batch\.id\)\s*isCaptureSessionPresented = true/);
+  assert.match(scannerViewSwiftSource, /store\.activeMode = \.photo[\s\S]*store\.resumePhotoBatch\(id: batch\.batchId\)\s*isCaptureSessionPresented = true/);
   assert.match(scannerViewSwiftSource, /onDismiss: store\.endResumedPhotoBatch/);
   assert.match(scannerViewSwiftSource, /private func startCapture\(\) \{[\s\S]*store\.endResumedPhotoBatch\(\)/);
   assert.match(captureSessionViewSwiftSource, /\.onAppear \{\s*store\.activeMode = mode/);
@@ -392,6 +396,32 @@ test("native and app clip can reopen photo capture into a selected batch", () =>
   assert.match(clipRootViewSwiftSource, /let batchId = captureBatchId[\s\S]*onCaptureImage\(image, mode, batchId\)/);
   assert.match(clipRootViewSwiftSource, /store\.activeCaptureMode = mode\s*captureSessionBatchId = mode == \.photo \? store\.beginCaptureSession\(\) : nil/);
   assert.doesNotMatch(clipRootViewSwiftSource, /\.onAppear \{\s*activeMode = \.ocr/);
+});
+
+test("native library uploads cannot become the next camera capture batch", () => {
+  const uploadStart = scannerStoreCaptureActionsSwiftSource.indexOf(
+    "func uploadPhotos(_ images: [UIImage]) async"
+  );
+  const uploadEnd = scannerStoreCaptureActionsSwiftSource.indexOf(
+    "func capturePhoto() async",
+    uploadStart
+  );
+  const uploadSource = scannerStoreCaptureActionsSwiftSource.slice(uploadStart, uploadEnd);
+
+  assert.ok(uploadStart >= 0 && uploadEnd > uploadStart);
+  assert.doesNotMatch(uploadSource, /capturePhotoBatch\s*=/);
+  assert.match(
+    scannerStoreCaptureActionsSwiftSource,
+    /func currentPhotoBatch\(now: Date\) -> String \{[\s\S]*if let capturePhotoBatch,[\s\S]*capturePhotoBatch = \(batch, now\.addingTimeInterval\(5 \* 60\)\)/
+  );
+  assert.match(
+    scannerViewSwiftSource,
+    /PhotoBatchIdentity\(\s*batchId: result\.batchId \?\? result\.id\.uuidString,\s*source: result\.source\.rawValue\s*\)/
+  );
+  assert.match(
+    captureModeCardsSwiftSource,
+    /struct PhotoBatchIdentity: Hashable \{\s*let batchId: String\s*let source: String\s*\}/
+  );
 });
 
 test("native photo viewfinder sits below the status bar and the floating cloud target button", () => {
@@ -793,10 +823,16 @@ test("native upload batches expose clear progress while photos are preparing and
   assert.match(uploadViewSwiftSource, /"Reading \\\(selectedUploadReadCount\) of \\\(selectedUploadTotal\) selected photos"/);
   assert.match(sharedScannerTabComponentsSwiftSource, /struct PhotoPreparationProgressSummary: View/);
   assert.match(sharedScannerTabComponentsSwiftSource, /struct PhotoUploadProgressSummary: View/);
-  assert.match(uploadViewSwiftSource, /GeometryReader \{ proxy in/);
-  assert.match(uploadViewSwiftSource, /\.frame\(width: proxy\.size\.width, height: proxy\.size\.height\)/);
+  assert.match(captureModeCardsSwiftSource, /GeometryReader \{ proxy in/);
+  assert.match(captureModeCardsSwiftSource, /\.frame\(width: proxy\.size\.width, height: proxy\.size\.height\)/);
+  assert.match(captureModeCardsSwiftSource, /LazyVGrid\(columns: columns/);
+  assert.match(captureModeCardsSwiftSource, /private var visibleResults: \[ScanResult\] \{\s*Array\(batch\.results\.suffix\(4\)\)/);
+  assert.match(captureModeCardsSwiftSource, /NavigationLink \{\s*PhotoBatchGallery\(batch: batch, onDelete: onDelete\)/);
+  assert.match(captureModeCardsSwiftSource, /private struct PhotoBatchGallery: View \{\s*let batch: PhotoBatch[\s\S]*ForEach\(batch\.results\)/);
+  assert.doesNotMatch(captureModeCardsSwiftSource, /_results = State\(initialValue: batch\.results\)/);
+  assert.doesNotMatch(captureModeCardsSwiftSource, /paperplane\.circle\.fill/);
   assert.match(uploadViewSwiftSource, /"\\\(progress\.title\)\. \\\(progress\.detail\)\."/);
-  assert.match(uploadViewSwiftSource, /"Uploading \\\(results\.count\) of \\\(expectedTotal\) photo/);
+  assert.match(captureModeCardsSwiftSource, /let action = source == \.upload \? "uploaded" : "captured"/);
   assert.match(readFileSync(new URL("../ios/Volt/Views/SharedScannerTabComponents.swift", import.meta.url), "utf8"), /var isUploading = false/);
 });
 
@@ -997,28 +1033,32 @@ test("app clip OCR target dialog shares cleanup and styling with the main app", 
   assert.match(sharedCaptureSessionOverlaysSwiftSource, /Color\.white\.opacity\(0\.9\)/);
 });
 
-test("app clip capture modes have separate tabs and keep capture and upload photo lists separate", () => {
+test("app clip capture modes keep captured and uploaded batches in one Photos area", () => {
   assert.match(clipScannerStoreSwiftSource, /var activeCaptureMode: CaptureMode = \.ocr/);
   assert.match(clipRootViewSwiftSource, /ClipCaptureView\(store: store, mode: \.ocr\)/);
   assert.match(clipRootViewSwiftSource, /ClipCaptureView\(store: store, mode: \.barcode\)/);
   assert.match(clipRootViewSwiftSource, /ClipCaptureView\(store: store, mode: \.photo\)/);
   assert.match(clipRootViewSwiftSource, /showsModePicker: false/);
-  assert.match(clipRootViewSwiftSource, /let capturePhotos = store\.photos\.filter \{ \$0\.source == \.capture \}/);
-  assert.match(clipRootViewSwiftSource, /ClipCapturePhotoBatchesSection\(/);
-  assert.match(clipRootViewSwiftSource, /let uploadPhotos = store\.photos\.filter \{ \$0\.source == \.upload \}/);
-  assert.match(clipRootViewSwiftSource, /ClipUploadPhotoBatchesSection\(/);
+  assert.match(clipRootViewSwiftSource, /private var photoBatches: \[ClipPhotoBatch\]/);
+  assert.match(clipRootViewSwiftSource, /let grouped = Dictionary\(grouping: store\.photos\) \{ photo in/);
+  assert.match(clipRootViewSwiftSource, /ClipPhotoLibraryUploadSection\(store: store\)[\s\S]*ClipPhotoBatchesSection\(/);
+  assert.match(clipRootViewSwiftSource, /ClipPhotoBatchesSection\(/);
+  assert.doesNotMatch(clipRootViewSwiftSource, /Recent Uploads|ClipUploadPhotoBatchesSection/);
   assert.match(clipRootViewSwiftSource, /capturedSessionPhotos/);
 });
 
 test("app clip captured photos are grouped, previewable, and removable after leaving camera", () => {
-  assert.match(clipRootViewSwiftSource, /@State private var expandedBatchIds: Set<String> = \[\]/);
+  assert.doesNotMatch(clipRootViewSwiftSource, /expandedBatchIds/);
   assert.match(clipRootViewSwiftSource, /@State private var previewedPhoto: ClipScannerStore\.ClipPhoto\?/);
-  assert.match(clipRootViewSwiftSource, /let grouped = Dictionary\(grouping: capturePhotos\) \{ photo in\s*photo\.batchId \?\? photo\.id\.uuidString\s*\}/);
+  assert.match(clipRootViewSwiftSource, /let grouped = Dictionary\(grouping: store\.photos\) \{ photo in\s*photo\.batchId \?\? photo\.id\.uuidString\s*\}/);
   assert.match(clipRootViewSwiftSource, /\.sheet\(item: \$previewedPhoto\)/);
-  assert.match(clipRootViewSwiftSource, /private struct ClipCapturePhotoBatchCard: View/);
-  assert.match(clipRootViewSwiftSource, /isExpanded \? batch\.photos : Array\(batch\.photos\.suffix\(4\)\)/);
+  assert.match(clipRootViewSwiftSource, /private struct ClipPhotoBatchCard: View/);
+  assert.match(clipRootViewSwiftSource, /private var visiblePhotos: \[ClipScannerStore\.ClipPhoto\] \{\s*Array\(batch\.photos\.suffix\(4\)\)/);
+  assert.match(clipRootViewSwiftSource, /NavigationLink \{\s*ClipPhotoBatchGallery\(batch: batch, onDelete: onDeletePhoto\)/);
+  assert.match(clipRootViewSwiftSource, /private struct ClipPhotoBatchGallery: View \{\s*@State private var previewedPhoto:[\s\S]*let batch: ClipPhotoBatch[\s\S]*ForEach\(batch\.photos\)/);
+  assert.doesNotMatch(clipRootViewSwiftSource, /_photos = State\(initialValue: batch\.photos\)/);
   assert.match(clipRootViewSwiftSource, /accessibilityLabel\("Add photos to \\\(batch\.title\) from/);
-  assert.match(clipRootViewSwiftSource, /private struct ClipCapturePhotoThumbnail: View/);
+  assert.match(clipRootViewSwiftSource, /private struct ClipPhotoThumbnail: View/);
   assert.match(clipRootViewSwiftSource, /private struct ClipPhotoPreviewSheet: View/);
   assert.match(clipRootViewSwiftSource, /store\.removePhoto\(id: photo\.id\)/);
   assert.match(clipRootViewSwiftSource, /store\.removePhotos\(batchId: batch\.id\)/);
@@ -1091,7 +1131,7 @@ test("full app merges upload into Photos and puts Dictate in the fourth tab", ()
   );
 });
 
-test("app clip bottom tab bar orders capture modes then upload", () => {
+test("app clip bottom tab bar keeps uploads inside Photos", () => {
   const tabViewStart = clipRootViewSwiftSource.indexOf("TabView(selection: $store.selectedTab)");
   const tabViewEnd = clipRootViewSwiftSource.indexOf(".sheet(isPresented: $isConnectionSheetPresented)", tabViewStart);
   const tabViewSource = clipRootViewSwiftSource.slice(tabViewStart, tabViewEnd);
@@ -1109,12 +1149,10 @@ test("app clip bottom tab bar orders capture modes then upload", () => {
     tabViewSource.indexOf('Label("Barcode", systemImage: "barcode.viewfinder")') <
       tabViewSource.indexOf('Label("Photos", systemImage: "camera.viewfinder")')
   );
-  assert.ok(
-    tabViewSource.indexOf('Label("Photos", systemImage: "camera.viewfinder")') <
-      tabViewSource.indexOf('Label("Upload", systemImage: "square.and.arrow.up")')
-  );
+  assert.doesNotMatch(tabViewSource, /Label\("Upload", systemImage: "square\.and\.arrow\.up"\)/);
   assert.doesNotMatch(tabViewSource, /Label\(\s*"Dictate",\s*systemImage: "mic"\)/);
-  assert.match(enumSource, /case text\s*case barcode\s*case photos\s*case upload/);
+  assert.match(enumSource, /case text\s*case barcode\s*case photos/);
+  assert.doesNotMatch(enumSource, /case upload/);
   assert.doesNotMatch(enumSource, /case dictate/);
 });
 
@@ -1206,23 +1244,26 @@ test("app clip photo capture and library upload await Convex storage", () => {
   assert.match(clipScannerStoreSwiftSource, /try await guestCloudClient\.mirrorPhoto\(/);
 });
 
-test("app clip upload tab groups library photos and shows shared upload progress", () => {
+test("app clip Photos tab groups library photos with captures and shows shared upload progress", () => {
   assert.match(clipScannerStoreSwiftSource, /var photoUploadProgress: PhotoUploadProgress\?/);
   assert.match(clipScannerStoreSwiftSource, /photoUploadProgress = PhotoUploadProgress\(/);
   assert.match(clipScannerStoreSwiftSource, /updatePhotoUploadProgress\(batchId: batchId, prepared: index \+ 1, phase: \.uploading\)/);
   assert.match(clipScannerStoreSwiftSource, /finishPhotoUploadItem\(batchId: batchId, succeeded: didSend\)/);
   assert.match(clipScannerStoreSwiftSource, /finishPhotoUploadBatch\(batchId: batchId\)/);
-  assert.match(clipRootViewSwiftSource, /private var uploadPhotoBatches: \[ClipUploadPhotoBatch\]/);
-  assert.match(clipRootViewSwiftSource, /let grouped = Dictionary\(grouping: uploadPhotos\) \{ photo in\s*photo\.batchId \?\? photo\.id\.uuidString\s*\}/);
+  assert.match(clipRootViewSwiftSource, /private var photoBatches: \[ClipPhotoBatch\]/);
+  assert.match(clipRootViewSwiftSource, /let grouped = Dictionary\(grouping: store\.photos\) \{ photo in\s*photo\.batchId \?\? photo\.id\.uuidString\s*\}/);
   assert.match(clipRootViewSwiftSource, /PhotoPreparationProgressSummary\(\s*prepared: selectedUploadPrepared,\s*total: selectedUploadTotal\s*\)/);
   assert.match(clipRootViewSwiftSource, /PhotoUploadProgressSummary\(progress: progress\)/);
-  assert.match(clipRootViewSwiftSource, /ClipUploadPhotoBatchesSection\(/);
-  assert.match(clipRootViewSwiftSource, /private struct ClipUploadPhotoBatchCard: View/);
-  assert.match(clipRootViewSwiftSource, /private struct ClipUploadPhotoThumbnail: View/);
+  assert.match(clipRootViewSwiftSource, /ClipPhotoBatchesSection\(/);
+  assert.match(clipRootViewSwiftSource, /private struct ClipPhotoBatchCard: View/);
+  assert.match(clipRootViewSwiftSource, /private struct ClipPhotoThumbnail: View/);
+  assert.match(clipRootViewSwiftSource, /let action = source == \.upload \? "uploaded" : "captured"/);
+  assert.match(clipRootViewSwiftSource, /if batch\.source == \.capture/);
   assert.match(clipRootViewSwiftSource, /isUploading: activeUploadProgress != nil/);
   assert.match(clipRootViewSwiftSource, /"Reading \\\(selectedUploadReadCount\) of \\\(selectedUploadTotal\) selected photos"/);
   assert.match(clipRootViewSwiftSource, /"\\\(progress\.title\)\. \\\(progress\.detail\)\."/);
   assert.match(clipRootViewSwiftSource, /store\.removePhotos\(batchId: batch\.id\)/);
+  assert.doesNotMatch(clipRootViewSwiftSource, /Recent Uploads/);
 });
 
 test("app clip upload picker accepts and queues more photos while a batch is active", () => {

@@ -142,7 +142,6 @@ extension ScannerStore {
         guard !images.isEmpty else { return }
         let now = Date.now
         let batch = "upload-batch-\(UUID().uuidString.lowercased())"
-        photoBatch = (batch, now.addingTimeInterval(5 * 60))
         photoUploadProgress = PhotoUploadProgress(
             id: batch,
             total: images.count,
@@ -396,11 +395,11 @@ extension ScannerStore {
         if let resumedPhotoBatchId {
             return resumedPhotoBatchId
         }
-        if let photoBatch, photoBatch.expiresAt > now {
-            return photoBatch.id
+        if let capturePhotoBatch, capturePhotoBatch.expiresAt > now {
+            return capturePhotoBatch.id
         }
         let batch = "batch-\(UUID().uuidString.lowercased())"
-        photoBatch = (batch, now.addingTimeInterval(5 * 60))
+        capturePhotoBatch = (batch, now.addingTimeInterval(5 * 60))
         return batch
     }
 
