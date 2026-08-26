@@ -307,6 +307,7 @@ describe("scanner signal Convex lifecycle", () => {
     });
 
     expect(attempt.statusCode).toBe(200);
+    if ("error" in attempt.body) throw new Error(attempt.body.error);
     expect(attempt.body.attempt).toMatchObject({
       id: "join_attempt_12345",
       status: "waiting_for_offer",
