@@ -513,13 +513,13 @@ extension UIImage {
 
     let colorControls = CIFilter.colorControls()
     colorControls.inputImage = ciImage
-    colorControls.saturation = 0
-    colorControls.contrast = 1.22
-    colorControls.brightness = 0.03
+    colorControls.saturation = 0.92
+    colorControls.contrast = 1.18
+    colorControls.brightness = 0.02
 
     let sharpen = CIFilter.sharpenLuminance()
     sharpen.inputImage = colorControls.outputImage
-    sharpen.sharpness = 0.45
+    sharpen.sharpness = 0.42
 
     guard
         let output = sharpen.outputImage,

@@ -666,6 +666,17 @@ test("native OCR review auto-cleans selected text while preserving a raw fallbac
   assert.doesNotMatch(scannerStoreCaptureActionsSwiftSource, /OcrTextCleaner\.clean/);
 });
 
+test("native app and App Clip preserve color when preparing engraved serials for OCR", () => {
+  assert.match(scannerStoreCaptureActionsSwiftSource, /colorControls\.contrast = 1\.18/);
+  assert.match(scannerStoreCaptureActionsSwiftSource, /colorControls\.brightness = 0\.02/);
+  assert.match(scannerStoreCaptureActionsSwiftSource, /colorControls\.saturation = 0\.92/);
+  assert.match(scannerStoreCaptureActionsSwiftSource, /sharpen\.sharpness = 0\.42/);
+  assert.match(clipOCRServiceSwiftSource, /kCIInputContrastKey: 1\.18/);
+  assert.match(clipOCRServiceSwiftSource, /kCIInputBrightnessKey: 0\.02/);
+  assert.match(clipOCRServiceSwiftSource, /kCIInputSaturationKey: 0\.92/);
+  assert.match(clipOCRServiceSwiftSource, /kCIInputSharpnessKey: 0\.42/);
+});
+
 test("native camera can detect identifier candidates before OCR capture", () => {
   assert.match(cameraModelSwiftSource, /private let videoOutput = AVCaptureVideoDataOutput\(\)/);
   assert.match(cameraModelSwiftSource, /private let liveTextFrameProcessor = LiveTextFrameProcessor\(\)/);
