@@ -14,10 +14,9 @@ import { ScrollArea } from "../ui/scroll-area";
 import type { MobilePhoto } from "./mobile-photo-helpers";
 import {
   EmptyHistory,
+  CaptureBatchCard,
   LoadingHistory,
-  PhotoBatchCard,
   PhotoPreviewDialog,
-  ScanCard,
   UndoDeleteToast,
 } from "./mobile-scanner-cards";
 import { installEditableTracker } from "./mobile-scanner-page-bridge";
@@ -270,38 +269,32 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
           ) : groups.length === 0 ? (
             <EmptyHistory signedOut={isSignedIn === false} />
           ) : (
-            groups.map((group) =>
-              group.type === "photo" ? (
-                <PhotoBatchCard
+            groups.map((group) => {
+              const photoOnly = group.entries.every((entry) => entry.type === "photo");
+              return (
+                <CaptureBatchCard
                   key={group.key}
                   group={group}
                   now={now}
-                  collapsed={!expandedBatchIds.has(group.key)}
+                  collapsed={photoOnly && !expandedBatchIds.has(group.key)}
+                  removing={group.entries.some((entry) => removingIds.has(entry.id))}
                   removingIds={removingIds}
                   selectedPhotoIds={selectedPhotoIds}
                   onToggleCollapse={() => toggleBatchExpansion(group.key)}
-                  onDeleteBatch={() => void deleteSyncedResults(group.entries.map((entry) => entry.id), "Photo batch deleted")}
-                  onDeletePhoto={(photoId) => void deleteSyncedResults([photoId], "Photo deleted")}
+                  onDeleteBatch={() => void deleteSyncedResults(group.entries.map((entry) => entry.id), photoOnly ? "Photo batch deleted" : "Capture batch deleted")}
+                  onDeleteEntry={(entry) => void deleteSyncedResults([entry.id], entry.type === "photo" ? "Photo deleted" : "Result deleted")}
+                  onCopyScan={copyScan}
                   onCopyPhoto={copyPhoto}
                   onDownloadPhoto={downloadPhoto}
                   onPreviewPhoto={setPreviewPhoto}
                   onSendPhoto={(photo) => sendPhotosToTab(selectedPhotoIds.has(photo.id) ? selectedPhotos : [photo])}
                   onDragStart={dragPhotos}
-                  onBatchDragStart={(event) => dragPhotoBatch(event, group.entries)}
+                  onBatchDragStart={(event) => dragPhotoBatch(event, group.entries.filter((entry) => entry.type === "photo"))}
                   onHover={prepareActiveTabForPhotoDrop}
                   onToggleSelection={togglePhotoSelection}
                 />
-              ) : (
-                <ScanCard
-                  key={group.key}
-                  group={group}
-                  now={now}
-                  removing={removingIds.has(group.key)}
-                  onCopy={() => copyScan(group.entries[0])}
-                  onDelete={() => void deleteSyncedResults([group.key], "Result deleted")}
-                />
-              ),
-            )
+              );
+            })
           )}
         </div>
       </ScrollArea>

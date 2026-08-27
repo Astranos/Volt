@@ -6,6 +6,7 @@ import {
   MOBILE_SCANNER_DELETE_UNDO_WINDOW_MS,
   groupPhotoResultsByBatch,
   normalizeScannerScanResult,
+  persistAndBroadcastMobileScannerScan,
   persistAndBroadcastMobileScannerPhoto,
   resolvePhotoBatchId,
   runIndexedDbTransaction,
@@ -61,6 +62,40 @@ test("dictation scanner messages are not persisted", () => {
   );
 });
 
+test("live dictation remains out of local scanner history", async () => {
+  let saveCalled = false;
+  const receipt = await persistAndBroadcastMobileScannerScan(
+    { id: "draft-1", barcode: "still speaking", kind: "text", format: "dictation" },
+    {
+      broadcastScannerMessage: () => {},
+      saveScan: async () => {
+        saveCalled = true;
+        return null;
+      },
+    },
+  );
+
+  assert.deepEqual(receipt, { success: true, result: null });
+  assert.equal(saveCalled, false);
+});
+
+test("finalized dictation results can be hydrated with their cloud batch", () => {
+  const result = normalizeScannerScanResult(
+    {
+      id: "dictation-1",
+      barcode: "hello from audio",
+      kind: "text",
+      format: "dictation",
+      scannedAt: "2026-06-03T15:00:00.000Z",
+    },
+    { batchId: "cloud-batch-1", allowDictation: true },
+  );
+
+  assert.equal(result?.value, "hello from audio");
+  assert.equal(result?.format, "dictation");
+  assert.equal(result?.batchId, "cloud-batch-1");
+});
+
 test("text and barcode scanner messages normalize to timeline records", () => {
   const result = normalizeScannerScanResult({
     id: "scan-1",
@@ -73,6 +108,16 @@ test("text and barcode scanner messages normalize to timeline records", () => {
   assert.equal(result?.id, "scan-1");
   assert.equal(result?.value, "012345678905");
   assert.equal(result?.capturedAt, "2026-06-03T15:00:00.000Z");
+
+  const batched = normalizeScannerScanResult(
+    {
+      id: "scan-2",
+      barcode: "ABC",
+      kind: "barcode",
+    },
+    { batchId: "cloud-batch-1" },
+  );
+  assert.equal(batched?.batchId, "cloud-batch-1");
 });
 
 test("photo batch ids reuse the active rolling five minute batch", () => {

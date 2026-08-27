@@ -24,8 +24,12 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>Volt Clip uses the camera to scan pairing QR codes, scan barcodes, and capture text or photos.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Volt Clip uses the microphone to turn spoken notes into text in the active scan session.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Volt Clip can import photos you choose for upload to your workspace.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Volt Clip uses speech recognition to transcribe audio into the active scan session.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchScreen</key>

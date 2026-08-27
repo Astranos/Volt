@@ -161,16 +161,16 @@ export async function hydrateWorkspaceReplica(
           size: result.byteCount ?? blob.size,
           capturedAt: result.capturedAt,
           dataUrl: await blobToDataUrl(blob),
-        });
+        }, { batchId: result.batchId });
       } else {
-        if (!result.value || result.format === "dictation") continue;
+        if (!result.value) continue;
         await saveMobileScannerScan({
           id: result.id,
           barcode: result.value,
           format: result.format,
           kind: result.kind,
           scannedAt: result.capturedAt,
-        });
+        }, { batchId: result.batchId, allowDictation: result.format === "dictation" });
       }
     } catch (_error) {
       failedCount += 1;

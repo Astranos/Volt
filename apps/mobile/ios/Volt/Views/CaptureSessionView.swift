@@ -54,6 +54,25 @@ struct CaptureSessionView: View {
                 )
                 .transition(.scale(scale: 0.96).combined(with: .opacity))
             }
+
+            if store.activeMode == .dictation, store.ocrReviewImage == nil {
+                VStack(spacing: 10) {
+                    Image(systemName: "waveform")
+                        .font(.system(size: 42, weight: .semibold))
+                        .foregroundStyle(.white)
+                    Text(store.dictationTranscript.isEmpty ? "Speak now" : store.dictationTranscript)
+                        .font(.title3.weight(.medium))
+                        .foregroundStyle(.white)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(6)
+                    Text(store.dictationDraftStatus)
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.78))
+                }
+                .padding(24)
+                .background(.black.opacity(0.5), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .padding(.horizontal, 24)
+            }
         }
         .background(Color.black.ignoresSafeArea())
         .overlay(alignment: .top) {
@@ -104,12 +123,14 @@ struct CaptureSessionView: View {
                         zoomLabel: store.camera.zoomDisplayLabel,
                         gridVisible: gridVisible,
                         hasLiveTextCandidates: !store.camera.liveTextCandidates.isEmpty,
-                        isRecognizingText: store.isRecognizingText,
-                        isCaptureEnabled: true,
-                        showsModePicker: false,
+                        isRecognizingText: store.isRecognizingText || store.isDictationBusy,
+                        isCaptureEnabled: !store.isDictationBusy,
+                        isModeSelectionEnabled: !store.isDictating && !store.isDictationBusy,
+                        showsModePicker: true,
                         barcodeHint: ScreenshotScenario.current == .captureBarcode ? "Send '883929739929'" : "Point camera at barcode",
                         capturedThumbnails: store.activeMode == .photo ? store.sessionPhotoThumbnails : [],
                         capturedCount: store.sessionPhotoCount,
+                        sessionItemCount: store.activeSessionCaptureCount,
                         controlRotation: .degrees(store.camera.captureOrientation.controlRotationDegrees),
                         onToggleTorch: {
                             store.camera.setTorchEnabled(!store.camera.torchEnabled)
@@ -124,7 +145,17 @@ struct CaptureSessionView: View {
                             gridVisible.toggle()
                         },
                         onCapture: {
-                            Task { await store.capture() }
+                            Task {
+                                if store.activeMode == .dictation {
+                                    if store.isDictating {
+                                        await store.stopLiveDictation()
+                                    } else {
+                                        await store.startLiveDictation()
+                                    }
+                                } else {
+                                    await store.capture()
+                                }
+                            }
                         },
                         onFinish: {
                             store.clearOcrReview()
@@ -153,6 +184,12 @@ struct CaptureSessionView: View {
             syncCameraForOcrReview(isReviewingOcr: isReviewingOcr)
             resetSelectedText()
         }
+        .onChange(of: store.activeMode) { _, mode in
+            guard !store.isDictating else { return }
+            store.camera.start()
+            store.camera.setLiveTextScanningEnabled(mode == .ocr)
+            store.camera.setBarcodeScanningEnabled(mode == .barcode)
+        }
         .task(id: store.captureDeliveryToast?.id) {
             guard let toast = store.captureDeliveryToast else { return }
             try? await Task.sleep(for: .seconds(toast.tone == .failure ? 3 : 2))
@@ -164,6 +201,7 @@ struct CaptureSessionView: View {
             resetSelectedText()
             store.captureDeliveryToast = nil
             store.camera.stop()
+            Task { await store.cancelLiveDictation() }
         }
     }
 
@@ -172,6 +210,8 @@ struct CaptureSessionView: View {
             store.camera.stop()
         } else {
             store.camera.start()
+            store.camera.setLiveTextScanningEnabled(store.activeMode == .ocr)
+            store.camera.setBarcodeScanningEnabled(store.activeMode == .barcode)
         }
     }
 

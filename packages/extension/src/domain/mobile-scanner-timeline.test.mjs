@@ -58,16 +58,21 @@ test("timeline delete creates an undo snapshot and removes deleted selections", 
   assert.deepEqual([...deleted.selectedPhotoIds], ["photo-2"]);
 });
 
-test("timeline groups photos by batch while keeping upload order inside a batch", () => {
+test("timeline groups mixed cloud captures by batch and direct photos by photo batch", () => {
   const first = createPhotoResult("photo-1", "batch-1", "2026-06-03T15:00:00.000Z");
   const second = createPhotoResult("photo-2", "batch-1", "2026-06-03T15:01:00.000Z");
-  const laterScan = createScan("scan-1", "2026-06-03T15:02:00.000Z");
+  const cloudScan = createScan("scan-1", "2026-06-03T15:02:00.000Z", "cloud-1");
+  const cloudPhoto = createPhotoResult("photo-3", "photo-batch-3", "2026-06-03T15:03:00.000Z", "cloud-1");
+  const legacyScan = createScan("scan-2", "2026-06-03T15:04:00.000Z");
 
-  const groups = buildTimelineGroups([first, second, laterScan]);
+  const groups = buildTimelineGroups([first, second, cloudScan, cloudPhoto, legacyScan]);
 
-  assert.equal(groups[0].type, "scan");
-  assert.equal(groups[1].type, "photo");
-  assert.deepEqual(groups[1].entries.map((entry) => entry.id), ["photo-1", "photo-2"]);
+  assert.equal(groups[0].grouping, "legacy");
+  assert.deepEqual(groups[0].entries.map((entry) => entry.id), ["scan-2"]);
+  assert.equal(groups[1].grouping, "batch");
+  assert.deepEqual(groups[1].entries.map((entry) => entry.id), ["scan-1", "photo-3"]);
+  assert.equal(groups[2].grouping, "photoBatch");
+  assert.deepEqual(groups[2].entries.map((entry) => entry.id), ["photo-1", "photo-2"]);
 });
 
 test("timeline derives selected photo drag order from visible photo order", () => {
@@ -127,13 +132,14 @@ test("timeline resolves persisted messages and owns sidepanel fallback persisten
   assert.deepEqual(upsertTimelineEntry([scan], createScan("scan-1", "2026-06-03T15:02:00.000Z")).map((entry) => entry.id), ["scan-1"]);
 });
 
-function createScan(id, capturedAt) {
+function createScan(id, capturedAt, batchId) {
   return {
     type: "scan",
     id,
     kind: "barcode",
     value: "012345678905",
     capturedAt,
+    ...(batchId ? { batchId } : {}),
     scan: {
       id,
       kind: "barcode",
@@ -142,12 +148,13 @@ function createScan(id, capturedAt) {
   };
 }
 
-function createPhotoResult(id, photoBatchId, capturedAt) {
+function createPhotoResult(id, photoBatchId, capturedAt, batchId) {
   return {
     type: "photo",
     id,
     photoBatchId,
     capturedAt,
+    ...(batchId ? { batchId } : {}),
     photo: {
       id,
       kind: "photo",

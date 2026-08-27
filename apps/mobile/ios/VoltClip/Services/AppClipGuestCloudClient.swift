@@ -59,11 +59,12 @@ struct AppClipGuestCloudClient: Sendable {
         value: String,
         format: String,
         capturedAt: Date,
+        batchId: String? = nil,
         resultId: String? = nil,
         targetDeviceId: String? = nil
     ) async throws {
         try requireActive(session)
-        let batchId = "appclip-batch-\(UUID().uuidString.lowercased())"
+        let resolvedBatchId = batchId ?? "appclip-batch-\(UUID().uuidString.lowercased())"
         let resolvedResultId = resultId ?? "appclip-result-\(UUID().uuidString.lowercased())"
         let result = GuestCloudResult(
             resultId: resolvedResultId,
@@ -78,7 +79,7 @@ struct AppClipGuestCloudClient: Sendable {
         let _: GuestCloudBatchResponse = try await post(
             GuestCloudBatchRequest(
                 guestCloudGrant: session.grant,
-                batchId: batchId,
+                batchId: resolvedBatchId,
                 clientCreatedAt: capturedAt.millisecondsSince1970,
                 results: [result]
             ),
@@ -86,7 +87,7 @@ struct AppClipGuestCloudClient: Sendable {
             baseURL: session.baseURL
         )
         let _: EmptyGuestCloudResponse = try await post(
-            GuestCloudFinalizeRequest(guestCloudGrant: session.grant, batchId: batchId),
+            GuestCloudFinalizeRequest(guestCloudGrant: session.grant, batchId: resolvedBatchId),
             to: .finalizeBatch,
             baseURL: session.baseURL
         )
@@ -122,10 +123,11 @@ struct AppClipGuestCloudClient: Sendable {
         session: AppClipGuestCloudSession,
         data: Data,
         filename: String,
-        capturedAt: Date
+        capturedAt: Date,
+        batchId: String? = nil
     ) async throws {
         try requireActive(session)
-        let batchId = "appclip-batch-\(UUID().uuidString.lowercased())"
+        let resolvedBatchId = batchId ?? "appclip-batch-\(UUID().uuidString.lowercased())"
         let resultId = "appclip-photo-\(UUID().uuidString.lowercased())"
         let result = GuestCloudResult(
             resultId: resultId,
@@ -140,7 +142,7 @@ struct AppClipGuestCloudClient: Sendable {
         let _: GuestCloudBatchResponse = try await post(
             GuestCloudBatchRequest(
                 guestCloudGrant: session.grant,
-                batchId: batchId,
+                batchId: resolvedBatchId,
                 clientCreatedAt: capturedAt.millisecondsSince1970,
                 results: [result]
             ),
@@ -150,7 +152,7 @@ struct AppClipGuestCloudClient: Sendable {
         let upload: GuestCloudPhotoUpload = try await post(
             GuestCloudPhotoUploadRequest(
                 guestCloudGrant: session.grant,
-                batchId: batchId,
+                batchId: resolvedBatchId,
                 resultId: resultId
             ),
             to: .createPhotoUploadURL,
@@ -162,7 +164,7 @@ struct AppClipGuestCloudClient: Sendable {
         let (_, response) = try await urlSession.upload(for: request, from: data)
         try validate(response)
         let _: EmptyGuestCloudResponse = try await post(
-            GuestCloudFinalizeRequest(guestCloudGrant: session.grant, batchId: batchId),
+            GuestCloudFinalizeRequest(guestCloudGrant: session.grant, batchId: resolvedBatchId),
             to: .finalizeBatch,
             baseURL: session.baseURL
         )

@@ -48,6 +48,7 @@ final class ClipScannerStore {
     struct ClipCapture: Identifiable, Equatable {
         let id = UUID()
         let mode: CaptureMode
+        let batchId: String
         let value: String
         let format: String
         let capturedAt: Date
@@ -75,6 +76,7 @@ final class ClipScannerStore {
     var ocrTextRegions: [RecognizedTextRegion] = []
     var ocrReviewText = ""
     var errorMessage: String?
+    @ObservationIgnored let speechDictation = SpeechDictationService()
 
     @ObservationIgnored private let ocrService = ClipOCRService()
     @ObservationIgnored private let guestCloudClient = AppClipGuestCloudClient()
@@ -339,7 +341,8 @@ final class ClipScannerStore {
                 session: session,
                 data: data,
                 filename: filename ?? photoFilename(for: photo),
-                capturedAt: photo.capturedAt
+                capturedAt: photo.capturedAt,
+                batchId: photo.batchId
             )
             updatePhoto(photo.id, status: "Delivered")
             statusText = "Photo uploaded to workspace"
@@ -359,6 +362,25 @@ final class ClipScannerStore {
         guard activeCaptureMode == .barcode else { return }
         let normalized = normalizedBarcodeScan(value: scan.value, format: scan.format)
         sendCapture(mode: .barcode, value: normalized.value, format: normalized.format, capturedAt: scan.capturedAt)
+    }
+
+    var dictationTranscript: String { speechDictation.transcript }
+    var dictationPhase: SpeechDictationService.Phase { speechDictation.phase }
+    var isDictating: Bool { speechDictation.isListening }
+    var isDictationBusy: Bool { speechDictation.isPreparing || speechDictation.isFinishing }
+    var dictationInputLevel: Double { speechDictation.inputLevel }
+
+    func toggleDictation() async {
+        if speechDictation.isListening {
+            let text = await speechDictation.stop()
+            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty {
+                sendCapture(mode: .dictation, value: trimmed, format: "dictation", capturedAt: .now)
+            }
+            speechDictation.clearTranscript()
+        } else {
+            await speechDictation.start { _ in }
+        }
     }
 
     func recognizeText(in image: UIImage) async {
@@ -427,6 +449,11 @@ final class ClipScannerStore {
         photos.removeAll { ($0.batchId ?? $0.id.uuidString) == batchId }
     }
 
+    func removeSession(batchId: String) {
+        captures.removeAll { $0.batchId == batchId }
+        removePhotos(batchId: batchId)
+    }
+
     private func preparePairing(session: PairingSession, url: URL) {
         pairingSession = session
         pairingURLText = url.absoluteString
@@ -454,6 +481,7 @@ final class ClipScannerStore {
         guard !trimmed.isEmpty else { return }
         let capture = ClipCapture(
             mode: mode,
+            batchId: currentCaptureBatchId(),
             value: trimmed,
             format: format,
             capturedAt: capturedAt,
@@ -461,7 +489,12 @@ final class ClipScannerStore {
         )
         captures.insert(capture, at: 0)
         guard isConnected else {
-            statusText = mode == .barcode ? "Barcode saved" : "Text saved"
+            statusText = switch mode {
+            case .barcode: "Barcode saved"
+            case .dictation: "Audio text saved"
+            case .ocr: "Text saved"
+            default: "Capture saved"
+            }
             return
         }
         sendCaptureToWorkspace(capture)
@@ -485,10 +518,16 @@ final class ClipScannerStore {
             do {
                 try await guestCloudClient.mirrorCapture(
                     session: session,
-                    kind: capture.mode == .barcode ? "barcode" : "text",
+                    kind: switch capture.mode {
+                    case .ocr: "text"
+                    case .barcode: "barcode"
+                    case .photo: "photo"
+                    case .dictation: "text"
+                    },
                     value: capture.value,
                     format: capture.format,
                     capturedAt: capture.capturedAt,
+                    batchId: capture.batchId,
                     resultId: "appclip-result-\(capture.id.uuidString.lowercased())",
                     targetDeviceId: target?.deviceId
                 )

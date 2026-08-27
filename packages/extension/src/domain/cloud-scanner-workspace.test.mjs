@@ -131,6 +131,11 @@ test("Convex workspace snapshots normalize into the account-wide replica shape",
         contentType: "image/jpeg",
         byteCount: 120,
         createdAt: "2026-07-12T12:00:00.000Z",
+      }, {
+        id: "dictation-1",
+        type: "dictation",
+        value: "finalized audio result",
+        createdAt: "2026-07-12T12:00:01.000Z",
       }],
     }],
   });
@@ -139,6 +144,8 @@ test("Convex workspace snapshots normalize into the account-wide replica shape",
   assert.equal(snapshot.batches[0].workspaceId, "workspace-1");
   assert.equal(snapshot.batches[0].deliveryState, "available");
   assert.equal(snapshot.batches[0].results[0].objectKey, "private/workspace-1/photo-1");
+  assert.equal(snapshot.batches[0].results[1].format, "dictation");
+  assert.equal(snapshot.batches[0].results[1].value, "finalized audio result");
   assert.equal("selectedComputerId" in snapshot.batches[0], false);
 });
 

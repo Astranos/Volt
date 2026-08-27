@@ -26,9 +26,11 @@ const clipStoreSource = read("../ios/VoltClip/Services/ClipScannerStore.swift");
 const clipGuestCloudSource = read("../ios/VoltClip/Services/AppClipGuestCloudClient.swift");
 const captureModeCardsSource = read("../ios/Volt/Views/CaptureModeCards.swift");
 
-test("full app opens capture without pairing or a WebRTC target and keeps Speech dictation", () => {
+test("full app opens one unified capture session without pairing or WebRTC", () => {
   assert.doesNotMatch(appSource, /PairingURLParser/);
-  assert.match(rootSource, /DictationView\(\)|AppSection\.dictation/);
+  assert.match(rootSource, /UnifiedCaptureHomeView\(\)/);
+  assert.match(captureViewSource, /showsModePicker: true/);
+  assert.match(captureViewSource, /store\.activeMode == \.dictation/);
   assert.doesNotMatch(scannerSource, /ScannerWebRTCConnection|connectionStatus|peerTarget|DictationModel/);
   assert.doesNotMatch(captureSource, /guard connectionStatus\.isConnected|sendCaptureResultOverWebRTC|sendDictation/);
   assert.doesNotMatch(cloudAPISource, /dictation-drafts/);
@@ -207,9 +209,9 @@ test("convex-swift is pinned safely and the socket URL cannot diverge from the s
 });
 
 test("full-app capture and photo selection are not gated on WebRTC", () => {
-  assert.match(scannerViewSource, /CaptureModeLaunchCard\(mode: mode, action: startCapture\)/);
+  assert.match(scannerViewSource, /UnifiedCaptureLaunchCard\(action: startCapture\)/);
   assert.doesNotMatch(scannerViewSource, /guard store\.connectionStatus\.isConnected/);
-  assert.match(captureViewSource, /isCaptureEnabled: true/);
+  assert.match(captureViewSource, /isCaptureEnabled: !store\.isDictationBusy/);
   assert.doesNotMatch(captureViewSource, /\.onChange\(of: store\.connectionStatus\)/);
   assert.match(uploadViewSource, /isConnected: true/);
   assert.doesNotMatch(uploadViewSource, /guard store\.connectionStatus\.isConnected/);
@@ -225,7 +227,8 @@ test("App Clip sends captures through an ephemeral QR guest grant", () => {
   assert.match(clipGuestCloudSource, /api\/app-clip\/batches\/finalize/);
   assert.match(clipStoreSource, /guestCloudClient\.mirrorCapture\(/);
   assert.match(clipStoreSource, /guestCloudClient\.mirrorPhoto\(/);
-  assert.doesNotMatch(clipStoreSource, /kind: "dictation"|sendDictation|updateDictationDraft/);
+  assert.match(clipStoreSource, /sendCapture\(mode: \.dictation/);
+  assert.doesNotMatch(clipStoreSource, /sendDictation|updateDictationDraft/);
   assert.doesNotMatch(clipGuestCloudSource, /dictation-drafts|updateDictationDraft|clearDictationDraft/);
   assert.doesNotMatch(clipStoreSource, /WebRTC|transport\.|ScannerSignalingClient/);
   assert.doesNotMatch(clipGuestCloudSource, /Keychain|UserDefaults|Clerk|StoreKit/);

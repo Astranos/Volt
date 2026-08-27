@@ -17,6 +17,7 @@ export type MobileScannerScanResult = {
   value: string;
   format?: string;
   capturedAt: string;
+  batchId?: string;
   scan: BarcodeMessage & { id: string; kind: "text" | "barcode" };
 };
 
@@ -25,6 +26,7 @@ export type MobileScannerPhotoResult = {
   id: string;
   photoBatchId: string;
   capturedAt: string;
+  batchId?: string;
   photo: Omit<MobilePhoto, "dataUrl" | "blob"> & { photoBatchId: string };
 };
 
@@ -134,8 +136,9 @@ export function shouldPersistScannerScan(scan: BarcodeMessage) {
 
 export function normalizeScannerScanResult(
   scan: BarcodeMessage & { id?: string },
+  { batchId, allowDictation = false }: { batchId?: string; allowDictation?: boolean } = {},
 ): MobileScannerScanResult | null {
-  if (!shouldPersistScannerScan(scan)) return null;
+  if (!allowDictation && !shouldPersistScannerScan(scan)) return null;
   if (typeof scan.barcode !== "string" || !scan.barcode) return null;
   const kind = scan.kind === "text" ? "text" : "barcode";
   const id = scan.id || createId("scan");
@@ -153,6 +156,7 @@ export function normalizeScannerScanResult(
     value: scan.barcode,
     format: typeof scan.format === "string" ? scan.format : undefined,
     capturedAt,
+    batchId: typeof batchId === "string" && batchId ? batchId : undefined,
     scan: normalizedScan,
   };
 }
@@ -344,9 +348,12 @@ async function purgeExpiredDeletedResults(transaction: IDBTransaction, now = Dat
   }
 }
 
-export async function saveMobileScannerScan(scan: BarcodeMessage & { id?: string }) {
+export async function saveMobileScannerScan(
+  scan: BarcodeMessage & { id?: string },
+  options: { batchId?: string; allowDictation?: boolean } = {},
+) {
   await ensureMobileScannerBrowserSessionStore();
-  const result = normalizeScannerScanResult(scan);
+  const result = normalizeScannerScanResult(scan, options);
   if (!result) return null;
   await withStore(["results", "photoBlobs", "deletedResults"], "readwrite", async (transaction) => {
     await purgeExpiredDeletedResults(transaction);
@@ -399,7 +406,10 @@ async function blobToDataUrl(blob: Blob) {
   });
 }
 
-export async function saveMobileScannerPhoto(photoInput: unknown) {
+export async function saveMobileScannerPhoto(
+  photoInput: unknown,
+  { batchId }: { batchId?: string } = {},
+) {
   await ensureMobileScannerBrowserSessionStore();
   const normalized = normalizeMobilePhoto(photoInput);
   if (!normalized) return null;
@@ -434,6 +444,7 @@ export async function saveMobileScannerPhoto(photoInput: unknown) {
         id: normalized.id,
         photoBatchId,
         capturedAt,
+        ...(typeof batchId === "string" && batchId ? { batchId } : {}),
         photo,
       };
       transaction.objectStore("results").put(photoResult);

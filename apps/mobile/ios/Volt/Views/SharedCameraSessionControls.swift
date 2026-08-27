@@ -22,11 +22,13 @@ struct CameraSessionControls: View {
     let hasLiveTextCandidates: Bool
     let isRecognizingText: Bool
     var isCaptureEnabled = true
+    var isModeSelectionEnabled = true
     var showsModePicker = true
     var barcodeHint = "Point camera at barcode"
     var hasLatestCapture = false
     var capturedThumbnails: [SessionPhotoThumbnail] = []
     var capturedCount = 0
+    var sessionItemCount = 0
     var controlRotation: Angle = .zero
     let onToggleTorch: () -> Void
     let onZoomOut: () -> Void
@@ -60,23 +62,23 @@ struct CameraSessionControls: View {
             .frame(height: 96)
 
             if showsModePicker {
-                Picker("Capture mode", selection: $activeMode) {
-                    Text("Text").tag(CaptureMode.ocr)
-                    Text("Barcodes").tag(CaptureMode.barcode)
-                    Text("Photos").tag(CaptureMode.photo)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 22) {
+                        modeButton("Text", mode: .ocr)
+                        modeButton("Barcode", mode: .barcode)
+                        modeButton("Photo", mode: .photo)
+                        modeButton("Audio", mode: .dictation)
+                    }
+                    .padding(.horizontal, 18)
                 }
-                .pickerStyle(.segmented)
-                .controlSize(.large)
-                .tint(.green)
-                .colorScheme(.light)
-                .padding(4)
-                .frame(maxWidth: 360)
-                .background(.white.opacity(0.92), in: Capsule())
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+                .background(.black.opacity(0.54), in: Capsule())
                 .overlay {
-                    Capsule().stroke(.white.opacity(0.35), lineWidth: 1)
+                    Capsule().stroke(.white.opacity(0.18), lineWidth: 1)
                 }
-                .disabled(!isCaptureEnabled)
-                .opacity(isCaptureEnabled ? 1 : 0.55)
+                .disabled(!isModeSelectionEnabled)
+                .opacity(isModeSelectionEnabled ? 1 : 0.55)
             }
 
             Button("End session", systemImage: "xmark", action: onFinish)
@@ -210,6 +212,15 @@ struct CameraSessionControls: View {
                     rotation: controlRotation,
                     action: onSendLatest
                 )
+            } else if sessionItemCount > 0 {
+                Text("\(sessionItemCount)")
+                    .font(.headline.monospacedDigit().bold())
+                    .foregroundStyle(.white)
+                    .rotationEffect(controlRotation)
+                    .animation(.easeInOut(duration: 0.24), value: controlRotation)
+                    .frame(minWidth: 48, minHeight: 38)
+                    .background(.green, in: Capsule())
+                    .accessibilityLabel("\(sessionItemCount) capture\(sessionItemCount == 1 ? "" : "s") in this session")
             }
         }
         .frame(width: 88, height: 48)
@@ -224,8 +235,27 @@ struct CameraSessionControls: View {
         case .photo:
             "Frame photo"
         case .dictation:
-            "Capture"
+            "Tap to start or stop audio"
         }
+    }
+
+    private func modeButton(_ title: String, mode: CaptureMode) -> some View {
+        Button {
+            activeMode = mode
+        } label: {
+            VStack(spacing: 5) {
+                Text(title)
+                    .font(.subheadline.weight(activeMode == mode ? .bold : .medium))
+                Capsule()
+                    .fill(activeMode == mode ? .white : .clear)
+                    .frame(width: 22, height: 3)
+            }
+            .foregroundStyle(activeMode == mode ? .white : .white.opacity(0.68))
+            .frame(minWidth: 52, minHeight: 36)
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(activeMode == mode ? .isSelected : [])
+        .accessibilityLabel("Capture mode \(title)")
     }
 
     private var shutterSymbol: String {
@@ -240,7 +270,7 @@ struct CameraSessionControls: View {
         case .photo:
             return "camera.viewfinder"
         case .dictation:
-            return "doc.viewfinder"
+            return "mic.fill"
         }
     }
 
@@ -256,7 +286,7 @@ struct CameraSessionControls: View {
         case .photo:
             return "Capture photo"
         case .dictation:
-            return "Capture"
+            return "Start or stop audio"
         }
     }
 

@@ -1,5 +1,4 @@
 import {
-  groupPhotoResultsByBatch,
   type HydratedMobileScannerPhotoResult,
   type MobileScannerResultBroadcastMessage,
   type MobileScannerScanResult,
@@ -13,19 +12,13 @@ export type TimelineEntry =
 
 export type TimelineGroup =
   | {
-      type: "scan";
-      key: string;
-      kind: "text" | "barcode";
-      capturedAt: number;
-      entries: MobileScannerScanResult[];
-    }
-  | {
-      type: "photo";
+      type: "capture";
       key: string;
       capturedAt: number;
       startAt: number;
       endAt: number;
-      entries: HydratedMobileScannerPhotoResult[];
+      grouping: "batch" | "photoBatch" | "legacy";
+      entries: TimelineEntry[];
     };
 
 export function timestamp(value: string) {
@@ -198,28 +191,45 @@ export async function resolveTimelineMessage(
 }
 
 export function buildTimelineGroups(results: TimelineEntry[]): TimelineGroup[] {
-  const scans = results
-    .filter((result): result is MobileScannerScanResult => result.type === "scan")
-    .map((result): TimelineGroup => ({
-      type: "scan",
-      key: result.id,
-      kind: result.kind,
-      capturedAt: timestamp(result.capturedAt),
+  const groups = new Map<string, Extract<TimelineGroup, { type: "capture" }>>();
+  for (const result of results) {
+    const identity = timelineGroupIdentity(result);
+    const capturedAt = timestamp(result.capturedAt);
+    const existing = groups.get(identity.key);
+    if (existing) {
+      existing.entries.push(result);
+      existing.startAt = Math.min(existing.startAt, capturedAt);
+      existing.endAt = Math.max(existing.endAt, capturedAt);
+      existing.capturedAt = existing.endAt;
+      continue;
+    }
+    groups.set(identity.key, {
+      type: "capture",
+      key: identity.key,
+      capturedAt,
+      startAt: capturedAt,
+      endAt: capturedAt,
+      grouping: identity.grouping,
       entries: [result],
-    }));
-  const photoGroups = groupPhotoResultsByBatch(
-    results.filter(
-      (result): result is HydratedMobileScannerPhotoResult =>
-        result.type === "photo",
-    ),
-  ).map((group): TimelineGroup => ({
-    type: "photo",
-    key: group.photoBatchId,
-    capturedAt: group.endAt,
-    startAt: group.startAt,
-    endAt: group.endAt,
-    entries: group.entries as HydratedMobileScannerPhotoResult[],
-  }));
+    });
+  }
 
-  return [...scans, ...photoGroups].sort((a, b) => b.capturedAt - a.capturedAt);
+  return [...groups.values()]
+    .map((group) => ({
+      ...group,
+      entries: [...group.entries].sort(
+        (a, b) => timestamp(a.capturedAt) - timestamp(b.capturedAt),
+      ),
+    }))
+    .sort((a, b) => b.capturedAt - a.capturedAt);
+}
+
+function timelineGroupIdentity(result: TimelineEntry) {
+  if (result.batchId) {
+    return { key: `batch:${result.batchId}`, grouping: "batch" as const };
+  }
+  if (result.type === "photo" && result.photoBatchId) {
+    return { key: `photoBatch:${result.photoBatchId}`, grouping: "photoBatch" as const };
+  }
+  return { key: `legacy:${result.id}`, grouping: "legacy" as const };
 }

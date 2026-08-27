@@ -10,16 +10,19 @@ import {
   Scan,
   ScanLine,
   Trash2,
-  Type,
   Upload,
   X,
 } from "lucide-react";
-import type { HydratedMobileScannerPhotoResult } from "../../domain/mobile-scanner-results";
+import type {
+  HydratedMobileScannerPhotoResult,
+  MobileScannerScanResult,
+} from "../../domain/mobile-scanner-results";
 import { cn } from "../../lib/utils";
 import { formatPhotoSize, type MobilePhoto } from "./mobile-photo-helpers";
 import {
   formatRelativeTime,
   photoFromResult,
+  type TimelineEntry,
   type TimelineGroup,
 } from "../../domain/mobile-scanner-timeline";
 
@@ -115,64 +118,17 @@ export function EmptyHistory({ signedOut }: { signedOut?: boolean }) {
   );
 }
 
-export function ScanCard({
+export function CaptureBatchCard({
   group,
   now,
   removing,
-  onCopy,
-  onDelete,
-}: {
-  group: Extract<TimelineGroup, { type: "scan" }>;
-  now: number;
-  removing: boolean;
-  onCopy: () => void;
-  onDelete: () => void;
-}) {
-  const scan = group.entries[0];
-  const isText = group.kind === "text";
-  const Icon = isText ? Type : ScanLine;
-  return (
-    <div className={cn("mobile-scanner-result-section min-w-0 overflow-hidden", removing && "volt-item-exit")}>
-      <div className="mb-2 flex min-w-0 items-center justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-2">
-          <span className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-full", isText ? "bg-amber-100/80 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300" : "bg-green-100/80 text-green-700 dark:bg-green-500/15 dark:text-green-300")}>
-            <Icon className="h-3.5 w-3.5" />
-          </span>
-          <div className="min-w-0">
-            <div className="truncate text-xs font-bold text-stone-900 dark:text-stone-100">
-              {isText ? "Text capture" : "Barcode"}
-            </div>
-            <div className="truncate text-[10px] font-medium text-stone-500 dark:text-stone-400">
-              {formatRelativeTime(group.capturedAt, now)}
-            </div>
-          </div>
-        </div>
-        <button type="button" onClick={onDelete} className="flex h-7 w-7 items-center justify-center rounded-full text-stone-500 transition hover:bg-stone-200 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-700 dark:hover:text-stone-50" aria-label="Delete result">
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
-      </div>
-      <div className="mobile-scanner-inset rounded-lg px-3 py-2">
-        <div className={cn("text-[13px] font-semibold leading-snug text-stone-950 dark:text-stone-50", isText ? "line-clamp-4 break-words" : "break-all font-mono")}>
-          {scan.value}
-        </div>
-        <button type="button" onClick={onCopy} className="mobile-scanner-mini-action mt-2 inline-flex h-7 items-center gap-1 rounded-full px-2.5 text-[11px] font-bold transition">
-          <Copy className="h-3 w-3" />
-          Copy
-        </button>
-      </div>
-    </div>
-  );
-}
-
-export function PhotoBatchCard({
-  group,
-  now,
   collapsed,
   removingIds,
   selectedPhotoIds,
   onToggleCollapse,
   onDeleteBatch,
-  onDeletePhoto,
+  onDeleteEntry,
+  onCopyScan,
   onCopyPhoto,
   onDownloadPhoto,
   onPreviewPhoto,
@@ -182,14 +138,16 @@ export function PhotoBatchCard({
   onHover,
   onToggleSelection,
 }: {
-  group: Extract<TimelineGroup, { type: "photo" }>;
+  group: Extract<TimelineGroup, { type: "capture" }>;
   now: number;
+  removing: boolean;
   collapsed: boolean;
   removingIds: Set<string>;
   selectedPhotoIds: Set<string>;
   onToggleCollapse: () => void;
   onDeleteBatch: () => void;
-  onDeletePhoto: (photoId: string) => void;
+  onDeleteEntry: (entry: TimelineEntry) => void;
+  onCopyScan: (scan: MobileScannerScanResult) => void;
   onCopyPhoto: (photo: MobilePhoto) => void;
   onDownloadPhoto: (photo: MobilePhoto) => void;
   onPreviewPhoto: (photo: MobilePhoto) => void;
@@ -199,19 +157,26 @@ export function PhotoBatchCard({
   onHover: () => void;
   onToggleSelection: (photoId: string, shiftKey: boolean) => void;
 }) {
-  const collapsedPreviewEntries = group.entries.slice(0, 4);
-  const visibleEntries = collapsed ? collapsedPreviewEntries : group.entries;
+  const photos = group.entries.filter(isPhotoEntry);
+  const scans = group.entries.filter(isScanEntry);
+  const photoOnly = scans.length === 0;
+  const visibleEntries = collapsed && photoOnly ? photos.slice(0, 4) : group.entries;
   const count = group.entries.length;
+  const title = photoOnly
+    ? count === 1
+      ? "Photo batch"
+      : `${count} photo batch`
+    : `${count} capture${count === 1 ? "" : "s"}`;
   return (
-    <div className="mobile-scanner-result-section min-w-0 overflow-hidden">
+    <div className={cn("mobile-scanner-result-section min-w-0 overflow-hidden", removing && "volt-item-exit")}>
       <div className="mb-2 flex min-w-0 items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-orange-100/80 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300">
-            <ImagePlus className="h-3.5 w-3.5" />
+          <span className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-full", photoOnly ? "bg-orange-100/80 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300" : "bg-green-100/80 text-green-700 dark:bg-green-500/15 dark:text-green-300")}>
+            {photoOnly ? <ImagePlus className="h-3.5 w-3.5" /> : <ScanLine className="h-3.5 w-3.5" />}
           </span>
           <div className="min-w-0">
             <div className="truncate text-xs font-bold text-stone-900 dark:text-stone-100">
-              {count === 1 ? "Photo batch" : `${count} photo batch`}
+              {title}
             </div>
             <div className="truncate text-[10px] font-medium text-stone-500 dark:text-stone-400">
               {formatRelativeTime(group.endAt, now)}
@@ -219,19 +184,20 @@ export function PhotoBatchCard({
           </div>
         </div>
         <div className="flex items-center gap-1">
-          <button type="button" onClick={onToggleCollapse} className="mobile-scanner-mini-action inline-flex h-8 items-center gap-1.5 rounded-full px-2.5 text-[11px] font-bold transition" aria-label={collapsed ? "Expand photo batch" : "Collapse photo batch"}>
-            <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", collapsed && "-rotate-90")} />
-            {collapsed ? (count > 1 ? `+${count - 1}` : "Show") : "Hide"}
-          </button>
-          <button type="button" onClick={onDeleteBatch} className="flex h-7 w-7 items-center justify-center rounded-full text-stone-500 transition hover:bg-stone-200 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-700 dark:hover:text-stone-50" aria-label="Delete photo batch">
+          {photoOnly && count > 1 ? (
+            <button type="button" onClick={onToggleCollapse} className="mobile-scanner-mini-action inline-flex h-8 items-center gap-1.5 rounded-full px-2.5 text-[11px] font-bold transition" aria-label={collapsed ? "Expand photo batch" : "Collapse photo batch"}>
+              <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", collapsed && "-rotate-90")} />
+              {collapsed ? `+${count - 1}` : "Hide"}
+            </button>
+          ) : null}
+          <button type="button" onClick={onDeleteBatch} className="flex h-7 w-7 items-center justify-center rounded-full text-stone-500 transition hover:bg-stone-200 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-700 dark:hover:text-stone-50" aria-label={photoOnly ? "Delete photo batch" : "Delete capture batch"}>
             <Trash2 className="h-3.5 w-3.5" />
           </button>
         </div>
       </div>
-
-      {collapsed ? (
+      {collapsed && photoOnly ? (
         <CollapsedPhotoBatchPreview
-          entries={visibleEntries}
+          entries={visibleEntries as HydratedMobileScannerPhotoResult[]}
           totalCount={count}
           selectedPhotoIds={selectedPhotoIds}
           removingIds={removingIds}
@@ -240,28 +206,60 @@ export function PhotoBatchCard({
           onToggleCollapse={onToggleCollapse}
         />
       ) : (
-        <div className="grid grid-cols-2 gap-2">
+        <div className={cn(photoOnly ? "grid grid-cols-2 gap-2" : "space-y-2")}>
           {visibleEntries.map((entry) => {
-            const photo = photoFromResult(entry);
-            return (
-              <PhotoTile
-                key={entry.id}
-                photo={photo}
-                selected={selectedPhotoIds.has(entry.id)}
-                exiting={removingIds.has(entry.id)}
-                onDelete={() => onDeletePhoto(entry.id)}
-                onCopy={() => onCopyPhoto(photo)}
-                onDownload={() => onDownloadPhoto(photo)}
-                onPreview={() => onPreviewPhoto(photo)}
-                onSend={() => onSendPhoto(photo)}
-                onDragStart={(event) => onDragStart(event, photo)}
-                onHover={onHover}
-                onToggleSelection={(shiftKey) => onToggleSelection(entry.id, shiftKey)}
-              />
-            );
+            if (entry.type === "photo") {
+              const photo = photoFromResult(entry);
+              return <PhotoTile key={entry.id} photo={photo} selected={selectedPhotoIds.has(entry.id)} exiting={removingIds.has(entry.id)} onDelete={() => onDeleteEntry(entry)} onCopy={() => onCopyPhoto(photo)} onDownload={() => onDownloadPhoto(photo)} onPreview={() => onPreviewPhoto(photo)} onSend={() => onSendPhoto(photo)} onDragStart={(event) => onDragStart(event, photo)} onHover={onHover} onToggleSelection={(shiftKey) => onToggleSelection(entry.id, shiftKey)} />;
+            }
+            return <ScanResultTile key={entry.id} scan={entry} removing={removingIds.has(entry.id)} onDelete={() => onDeleteEntry(entry)} onCopy={() => onCopyScan(entry)} />;
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+function isPhotoEntry(entry: TimelineEntry): entry is HydratedMobileScannerPhotoResult {
+  return entry.type === "photo";
+}
+
+function isScanEntry(entry: TimelineEntry): entry is MobileScannerScanResult {
+  return entry.type === "scan";
+}
+
+function ScanResultTile({
+  scan,
+  removing,
+  onCopy,
+  onDelete,
+}: {
+  scan: MobileScannerScanResult;
+  removing: boolean;
+  onCopy: () => void;
+  onDelete: () => void;
+}) {
+  const isText = scan.kind === "text";
+  const kindLabel = scan.format === "dictation" ? "Audio" : isText ? "Text" : "Barcode";
+  return (
+    <div className={cn("mobile-scanner-inset min-w-0 overflow-hidden rounded-lg px-3 py-2", removing && "volt-item-exit")}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-stone-500 dark:text-stone-400">
+            {kindLabel}
+          </div>
+          <div className={cn("text-[13px] font-semibold leading-snug text-stone-950 dark:text-stone-50", isText ? "line-clamp-4 break-words" : "break-all font-mono")}>
+            {scan.value}
+          </div>
+        </div>
+        <button type="button" onClick={onDelete} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-stone-500 transition hover:bg-stone-200 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-700 dark:hover:text-stone-50" aria-label="Delete result">
+          <Trash2 className="h-3 w-3" />
+        </button>
+      </div>
+      <button type="button" onClick={onCopy} className="mobile-scanner-mini-action mt-2 inline-flex h-7 items-center gap-1 rounded-full px-2.5 text-[11px] font-bold transition">
+        <Copy className="h-3 w-3" />
+        Copy
+      </button>
     </div>
   );
 }

@@ -36,9 +36,11 @@ struct ScanResult: Identifiable, Equatable {
     let value: String
     let format: String
     let capturedAt: Date
+    /// User-facing session identity. This intentionally reuses the cloud batch ID
+    /// until the server grows a separate session field.
+    var batchId: String?
     var deliveryState: DeliveryState
     var imageData: Data?
-    var batchId: String?
 
     init(
         id: UUID = UUID(),

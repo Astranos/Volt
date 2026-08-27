@@ -192,20 +192,23 @@ test("both iOS targets exclude WebRTC while the App Clip retains cloud workspace
   assert.doesNotMatch(scannerStoreSwiftSource, /ScannerWebRTCConnection|ScannerSignalingClient|PairingURLParser|PairingSecretStore|connectionStatus|peerTarget|DictationModel/);
   assert.doesNotMatch(scannerStoreCaptureActionsSwiftSource, /sendCaptureResultOverWebRTC|photoRetryQueue|sendRetryablePhotos|sendQueuedPhoto|sendDictation/);
   assert.doesNotMatch(rootViewSwiftSource, /PairingSessionsView|PairingStatusSheet/);
-  assert.match(rootViewSwiftSource, /DictationView\(\)|case dictation/);
+  assert.match(rootViewSwiftSource, /CaptureHistoryView\(\)/);
+  assert.match(captureSessionViewSwiftSource, /store\.activeMode == \.dictation/);
   assert.match(infoPlistSource, /NSMicrophoneUsageDescription/);
   assert.match(infoPlistSource, /NSSpeechRecognitionUsageDescription/);
   assert.doesNotMatch(podfileSource, /JitsiWebRTC/);
   assert.doesNotMatch(scannerProtocolSwiftSource, /PhotoDeliveryReceipt|struct PhotoChunkAck|parsePhotoChunkAck|static func helloMessage|static func dictationMessage/);
   assert.match(capturedResultRowSwiftSource, /case \.dictation: "Dictation"/);
   assert.match(capturedResultRowSwiftSource, /case \.dictation: "mic"/);
-  assert.doesNotMatch(rootViewSwiftSource, /SessionsView|AppSection\.sessions|clock\.arrow\.circlepath/);
+  assert.match(rootViewSwiftSource, /CaptureHistoryView\(\)/);
+  assert.match(rootViewSwiftSource, /clock\.arrow\.circlepath/);
   assert.equal(existsSync(new URL("../ios/Volt/Views/SessionsView.swift", import.meta.url)), false);
   assert.match(xcodeProjectSource, /B3000000000000000000000C \/\* PairingURLParser\.swift in Sources \*\//);
   assert.match(xcodeProjectSource, /B30000000000000000000021 \/\* AppClipGuestCloudClient\.swift in Sources \*\//);
   assert.doesNotMatch(xcodeProjectSource, /WebKitWebRTCTransport\.swift|webrtc-bridge\.html/);
   assert.doesNotMatch(clipScannerStoreSwiftSource + clipRootViewSwiftSource, /WebKit|WebRTC|ScannerSignalingClient|ScannerProtocol/);
-  assert.doesNotMatch(clipInfoPlistSource, /NSMicrophoneUsageDescription|NSSpeechRecognitionUsageDescription/);
+  assert.match(clipInfoPlistSource, /NSMicrophoneUsageDescription/);
+  assert.match(clipInfoPlistSource, /NSSpeechRecognitionUsageDescription/);
   assert.equal(existsSync(new URL("../ios/VoltClip/Services/WebKitWebRTCTransport.swift", import.meta.url)), false);
   assert.equal(existsSync(new URL("../ios/VoltClip/Resources/webrtc-bridge.html", import.meta.url)), false);
 });
@@ -296,16 +299,16 @@ test("native pairing URLs can carry the signal deployment that minted the token"
 });
 
 test("native capture session remains available without a WebRTC connection", () => {
-  assert.match(scannerViewSwiftSource, /CaptureSessionView\(\s*isPresented: \$isCaptureSessionPresented,\s*mode: mode\s*\)/);
-  assert.match(scannerViewSwiftSource, /CaptureModeLaunchCard\(mode: mode, action: startCapture\)/);
+  assert.match(scannerViewSwiftSource, /CaptureSessionView\(isPresented: \$isCaptureSessionPresented, mode: \.ocr\)/);
+  assert.match(scannerViewSwiftSource, /UnifiedCaptureLaunchCard\(action: startCapture\)/);
   assert.doesNotMatch(scannerViewSwiftSource, /guard store\.connectionStatus\.isConnected/);
-  assert.match(captureSessionViewSwiftSource, /isCaptureEnabled: true/);
+  assert.match(captureSessionViewSwiftSource, /isCaptureEnabled: !store\.isDictationBusy/);
   assert.doesNotMatch(captureSessionViewSwiftSource, /\.onChange\(of: store\.connectionStatus\)/);
   assert.doesNotMatch(captureSessionViewSwiftSource, /isConnectionRecoveryPresented|handleConnectionStatusChange/);
   assert.doesNotMatch(scannerStoreSwiftSource, /func recoverMostRecentPairedSession\(\) -> Bool/);
 });
 
-test("capture mode tabs start from the hero card and list their own captures", () => {
+test("unified camera starts from the hero card and history groups mixed captures", () => {
   // The bottom accessory duplicated the hero launch card, so the tab keeps only the card.
   assert.doesNotMatch(scannerViewSwiftSource, /ScannerBottomActionAccessory/);
   assert.doesNotMatch(scannerViewSwiftSource, /safeAreaInset/);
@@ -325,21 +328,20 @@ test("capture mode tabs start from the hero card and list their own captures", (
   assert.match(captureModeCardsSwiftSource, /Text\("\\\(hiddenCount\) more saved"\)/);
   assert.doesNotMatch(captureModeCardsSwiftSource, /more in Sessions/);
 
-  assert.match(
-    scannerViewSwiftSource,
-    /CaptureModeCapturesSection\(\s*mode: mode,\s*results: matchingResults,\s*onResend: resend,\s*onDelete: delete\s*\)/
-  );
-  assert.match(scannerViewSwiftSource, /PhotoSessionHistorySection/);
-  assert.match(scannerViewSwiftSource, /PhotoLibraryUploadSection\(\)[\s\S]*PhotoSessionHistorySection\(/);
-  assert.match(scannerViewSwiftSource, /if mode == \.photo \{\s*PhotoLibraryUploadSection\(\)/);
-  assert.match(scannerViewSwiftSource, /\} else \{\s*ComputerAvailabilityCard/);
+  assert.match(scannerViewSwiftSource, /Dictionary\(grouping: store\.results\) \{ result in/);
+  assert.match(scannerViewSwiftSource, /result\.batchId \?\? result\.id\.uuidString\.lowercased\(\)/);
+  assert.match(scannerViewSwiftSource, /Continue session/);
+  assert.match(scannerViewSwiftSource, /CaptureHistorySessionCard\(/);
+  assert.match(scannerStoreSwiftSource, /var activeSessionCaptureCount: Int/);
+  assert.match(captureSessionViewSwiftSource, /sessionItemCount: store\.activeSessionCaptureCount/);
+  assert.match(captureSessionViewSwiftSource, /isModeSelectionEnabled: !store\.isDictating && !store\.isDictationBusy/);
   assert.match(uploadViewSwiftSource, /struct PhotoLibraryUploadSection: View/);
   assert.match(uploadViewSwiftSource, /Text\("From Photo Library"\)/);
   assert.match(uploadViewSwiftSource, /ScannerPhotoPickerAccessory\(/);
   assert.doesNotMatch(uploadViewSwiftSource, /Recent Uploads/);
   assert.doesNotMatch(rootViewSwiftSource, /Label\("Upload", systemImage: "square\.and\.arrow\.up"\)|case upload/);
-  assert.match(scannerViewSwiftSource, /private func resend\(_ result: ScanResult\)[\s\S]*insertResultIntoComputer\(id: result\.id\)/);
-  assert.match(scannerViewSwiftSource, /private func delete\(_ result: ScanResult\) \{\s*store\.removeResult\(id: result\.id\)/);
+  assert.match(scannerViewSwiftSource, /onResend: \{ result in[\s\S]*insertResultIntoComputer\(id: result\.id\)/);
+  assert.match(scannerViewSwiftSource, /onDelete: \{ result in[\s\S]*removeResult\(id: result\.id\)/);
 });
 
 test("native capture session exposes the optional cloud cursor target", () => {
@@ -362,8 +364,8 @@ test("App Clip uses a cloud-only workspace session without background peer state
 
 test("app clip capture sessions keep one photo batch per presented camera session", () => {
   assert.match(clipRootViewSwiftSource, /@State private var captureSessionBatchId: String\?/);
-  assert.match(clipRootViewSwiftSource, /captureSessionBatchId = mode == \.photo \? store\.beginCaptureSession\(\) : nil/);
-  assert.match(clipRootViewSwiftSource, /if mode == \.photo \{\s*store\.endCaptureSession\(id: captureSessionBatchId\)/);
+  assert.match(clipRootViewSwiftSource, /captureSessionBatchId = store\.beginCaptureSession\(\)/);
+  assert.match(clipRootViewSwiftSource, /store\.endCaptureSession\(id: captureSessionBatchId\)/);
   assert.match(clipRootViewSwiftSource, /captureBatchId: captureSessionBatchId/);
   assert.match(clipRootViewSwiftSource, /await store\.capturePhoto\(image, batchId: batchId\)/);
   assert.match(clipScannerStoreSwiftSource, /func beginCaptureSession\(\) -> String/);
@@ -377,16 +379,12 @@ test("app clip capture sessions keep one photo batch per presented camera sessio
 test("native and app clip can reopen photo capture into a selected batch", () => {
   assert.match(scannerStoreSwiftSource, /var capturePhotoBatch: \(id: String, expiresAt: Date\)\?/);
   assert.match(scannerStoreSwiftSource, /var resumedPhotoBatchId: String\?/);
-  assert.match(scannerStoreCaptureActionsSwiftSource, /func resumePhotoBatch\(id: String\) \{\s*resumedPhotoBatchId = id\s*\}/);
-  assert.match(scannerStoreCaptureActionsSwiftSource, /func endResumedPhotoBatch\(\) \{\s*resumedPhotoBatchId = nil\s*\}/);
-  assert.match(scannerStoreCaptureActionsSwiftSource, /func currentPhotoBatch\(now: Date\) -> String \{\s*if let resumedPhotoBatchId \{\s*return resumedPhotoBatchId\s*\}/);
-  assert.match(scannerStoreCaptureActionsSwiftSource, /func captureSquarePhoto\(\) async \{\s*let batchId = resumedPhotoBatchId[\s\S]*sendPhoto\(preparedImage, result: photoResult, batchId: batchId\)/);
-  assert.match(scannerViewSwiftSource, /private var photoBatches: \[PhotoBatch\]/);
-  assert.match(captureModeCardsSwiftSource, /Label\("Continue Session", systemImage: "plus\.viewfinder"\)/);
-  assert.match(captureModeCardsSwiftSource, /accessibilityLabel\("Continue \\\(batch\.title\) from/);
-  assert.match(scannerViewSwiftSource, /store\.activeMode = \.photo[\s\S]*store\.resumePhotoBatch\(id: batch\.batchId\)\s*isCaptureSessionPresented = true/);
-  assert.match(scannerViewSwiftSource, /onDismiss: store\.endResumedPhotoBatch/);
-  assert.match(scannerViewSwiftSource, /private func startCapture\(\) \{[\s\S]*store\.endResumedPhotoBatch\(\)/);
+  assert.match(scannerStoreCaptureActionsSwiftSource, /func resumePhotoBatch\(id: String\) \{[\s\S]*resumeCaptureSession\(batchId: id\)/);
+  assert.match(scannerStoreCaptureActionsSwiftSource, /func endResumedPhotoBatch\(\) \{[\s\S]*endCaptureSession\(\)/);
+  assert.match(scannerStoreCaptureActionsSwiftSource, /func currentPhotoBatch\(now: Date\) -> String \{[\s\S]*if let activeCaptureBatchId \{[\s\S]*return activeCaptureBatchId/);
+  assert.match(scannerStoreCaptureActionsSwiftSource, /func captureSquarePhoto\(\) async \{\s*let batchId = currentCaptureBatchId\(\)[\s\S]*sendPhoto\(preparedImage, result: photoResult, batchId: batchId\)/);
+  assert.match(scannerViewSwiftSource, /CaptureHistorySessionCard\(/);
+  assert.match(scannerViewSwiftSource, /Continue session/);
   assert.match(captureSessionViewSwiftSource, /\.onAppear \{\s*store\.activeMode = mode/);
   assert.doesNotMatch(captureSessionViewSwiftSource, /\.onAppear \{\s*store\.activeMode = \.ocr/);
 
@@ -394,7 +392,7 @@ test("native and app clip can reopen photo capture into a selected batch", () =>
   assert.match(clipRootViewSwiftSource, /Label\("Add Photos", systemImage: "plus\.viewfinder"\)/);
   assert.match(clipRootViewSwiftSource, /store\.activeCaptureMode = \.photo\s*captureSessionBatchId = store\.resumeCaptureSession\(batchId: batch\.id\)\s*isCaptureSessionPresented = true/);
   assert.match(clipRootViewSwiftSource, /let batchId = captureBatchId[\s\S]*onCaptureImage\(image, mode, batchId\)/);
-  assert.match(clipRootViewSwiftSource, /store\.activeCaptureMode = mode\s*captureSessionBatchId = mode == \.photo \? store\.beginCaptureSession\(\) : nil/);
+  assert.match(clipRootViewSwiftSource, /store\.activeCaptureMode = mode\s*captureSessionBatchId = store\.beginCaptureSession\(\)/);
   assert.doesNotMatch(clipRootViewSwiftSource, /\.onAppear \{\s*activeMode = \.ocr/);
 });
 
@@ -412,16 +410,9 @@ test("native library uploads cannot become the next camera capture batch", () =>
   assert.doesNotMatch(uploadSource, /capturePhotoBatch\s*=/);
   assert.match(
     scannerStoreCaptureActionsSwiftSource,
-    /func currentPhotoBatch\(now: Date\) -> String \{[\s\S]*if let capturePhotoBatch,[\s\S]*capturePhotoBatch = \(batch, now\.addingTimeInterval\(5 \* 60\)\)/
+    /func currentPhotoBatch\(now: Date\) -> String \{[\s\S]*if let activeCaptureBatchId[\s\S]*if let capturePhotoBatch,[\s\S]*capturePhotoBatch = \(batch, now\.addingTimeInterval\(5 \* 60\)\)/
   );
-  assert.match(
-    scannerViewSwiftSource,
-    /PhotoBatchIdentity\(\s*batchId: result\.batchId \?\? result\.id\.uuidString,\s*source: result\.source\.rawValue\s*\)/
-  );
-  assert.match(
-    captureModeCardsSwiftSource,
-    /struct PhotoBatchIdentity: Hashable \{\s*let batchId: String\s*let source: String\s*\}/
-  );
+  assert.match(scannerViewSwiftSource, /result\.batchId \?\? result\.id\.uuidString\.lowercased\(\)/);
 });
 
 test("native photo viewfinder sits below the status bar and the floating cloud target button", () => {
@@ -506,11 +497,14 @@ test("app clip photo mode viewfinder stays edge-to-edge while capture status cha
   assert.match(clipRootViewSwiftSource, /\.frame\(maxWidth: \.infinity, maxHeight: \.infinity, alignment: \.top\)/);
 });
 
-test("app clip has no dictation tab, live draft publishing, or keyboard dictate UI", () => {
-  assert.doesNotMatch(clipRootViewSwiftSource, /ClipDictationView|Start Dictation|Live Transcript/);
-  assert.doesNotMatch(clipRootViewSwiftSource, /Label\(\s*"Dictate",\s*systemImage: "mic"/);
-  assert.doesNotMatch(clipScannerStoreSwiftSource, /case dictate|func sendDictation|func dictationTextChanged|updateDictationDraft|clearDictationDraft/);
-  assert.doesNotMatch(clipGuestCloudClientSwiftSource, /dictation-drafts|updateDictationDraft|clearDictationDraft|kind == "dictation"/);
+test("app clip audio is an in-camera mode with final text in the active batch", () => {
+  assert.match(sharedCameraSessionControlsSwiftSource, /modeButton\("Audio", mode: \.dictation\)/);
+  assert.match(clipRootViewSwiftSource, /store\.toggleDictation\(\)/);
+  assert.match(clipRootViewSwiftSource, /store\.dictationTranscript/);
+  assert.match(clipScannerStoreSwiftSource, /SpeechDictationService\(\)/);
+  assert.match(clipScannerStoreSwiftSource, /sendCapture\(mode: \.dictation, value: trimmed/);
+  assert.match(clipGuestCloudClientSwiftSource, /batchId: String\? = nil/);
+  assert.match(clipScannerStoreSwiftSource, /case \.dictation: "text"/);
 });
 
 test("full app dictation uses Speech APIs and streams live drafts to the selected computer", () => {
@@ -578,7 +572,7 @@ test("full app dictation uses Speech APIs and streams live drafts to the selecte
   assert.match(dictationStoreSource, /noteDictationOutcome\(\.saved\)/);
   assert.match(dictationViewSource, /sensoryFeedback/);
   assert.match(dictationViewSource, /new == \.listening/);
-  assert.match(rootViewSwiftSource, /DictationView\(\)[\s\S]*Label\("Dictate", systemImage: "mic"\)/);
+  assert.match(captureSessionViewSwiftSource, /store\.activeMode == \.dictation/);
   assert.match(
     readFileSync(new URL("../ios/Volt/Services/CloudWorkspaceStore.swift", import.meta.url), "utf8"),
     /func updateDictationDraft\(draftId:/
@@ -630,7 +624,7 @@ test("native OCR review stops the live camera until retake", () => {
   assert.match(captureSessionViewSwiftSource, /\.onChange\(of: store\.ocrReviewImage != nil\)/);
   assert.match(captureSessionViewSwiftSource, /syncCameraForOcrReview\(isReviewingOcr: store\.ocrReviewImage != nil\)/);
   assert.match(captureSessionViewSwiftSource, /private func syncCameraForOcrReview\(isReviewingOcr: Bool\)/);
-  assert.match(captureSessionViewSwiftSource, /if isReviewingOcr \{\s*store\.camera\.stop\(\)\s*\} else \{\s*store\.camera\.start\(\)\s*\}/);
+  assert.match(captureSessionViewSwiftSource, /if isReviewingOcr \{\s*store\.camera\.stop\(\)\s*\} else \{[\s\S]*store\.camera\.start\(\)/);
 });
 
 test("native OCR review separates pan gestures from selectable text targets", () => {
@@ -1044,12 +1038,19 @@ test("app clip OCR target dialog shares cleanup and styling with the main app", 
   assert.match(sharedCaptureSessionOverlaysSwiftSource, /Color\.white\.opacity\(0\.9\)/);
 });
 
-test("app clip capture modes keep captured and uploaded batches in one Photos area", () => {
+test("app clip capture modes share one camera and unified History area", () => {
   assert.match(clipScannerStoreSwiftSource, /var activeCaptureMode: CaptureMode = \.ocr/);
-  assert.match(clipRootViewSwiftSource, /ClipCaptureView\(store: store, mode: \.ocr\)/);
-  assert.match(clipRootViewSwiftSource, /ClipCaptureView\(store: store, mode: \.barcode\)/);
-  assert.match(clipRootViewSwiftSource, /ClipCaptureView\(store: store, mode: \.photo\)/);
-  assert.match(clipRootViewSwiftSource, /showsModePicker: false/);
+  assert.match(clipRootViewSwiftSource, /ClipCaptureView\(store: store, mode: \.ocr/);
+  assert.match(clipRootViewSwiftSource, /ClipUnifiedHistoryView\(/);
+  assert.match(clipRootViewSwiftSource, /showsModePicker: true/);
+  assert.match(sharedCameraSessionControlsSwiftSource, /modeButton\("Text", mode: \.ocr\)/);
+  assert.match(sharedCameraSessionControlsSwiftSource, /modeButton\("Barcode", mode: \.barcode\)/);
+  assert.match(sharedCameraSessionControlsSwiftSource, /modeButton\("Photo", mode: \.photo\)/);
+  assert.match(sharedCameraSessionControlsSwiftSource, /modeButton\("Audio", mode: \.dictation\)/);
+  assert.match(clipRootViewSwiftSource, /Set\(store\.captures\.map/);
+  assert.match(clipRootViewSwiftSource, /sessionItemCount: capturedSessionItemCount/);
+  assert.match(clipRootViewSwiftSource, /Button\("Delete session", systemImage: "trash", role: \.destructive\)/);
+  assert.match(clipScannerStoreSwiftSource, /func removeSession\(batchId: String\)/);
   assert.match(clipRootViewSwiftSource, /private var photoBatches: \[ClipPhotoBatch\]/);
   assert.match(clipRootViewSwiftSource, /let grouped = Dictionary\(grouping: store\.photos\) \{ photo in/);
   assert.match(clipRootViewSwiftSource, /ClipPhotoLibraryUploadSection\(store: store\)[\s\S]*ClipPhotoBatchesSection\(/);
@@ -1108,7 +1109,7 @@ test("app clip bottom CTAs show connection progress while pairing", () => {
   assert.doesNotMatch(clipRootViewSwiftSource, /Button\(store\.isSendingDictation \? "Sending…" : "Send"\)/);
 });
 
-test("full app merges upload into Photos and puts Dictate in the fourth tab", () => {
+test("full app presents Scan, unified History, and Settings roots", () => {
   const tabViewStart = rootViewSwiftSource.indexOf("TabView(selection: $selectedTab)");
   const tabViewEnd = rootViewSwiftSource.indexOf(".sheet(isPresented: ownershipConflictIsPresented)", tabViewStart);
   const tabViewSource = rootViewSwiftSource.slice(tabViewStart, tabViewEnd);
@@ -1118,31 +1119,17 @@ test("full app merges upload into Photos and puts Dictate in the fourth tab", ()
 
   assert.ok(tabViewStart > -1);
   assert.ok(tabViewEnd > tabViewStart);
-  assert.ok(
-    tabViewSource.indexOf('Label("Text", systemImage: "doc.text.viewfinder")') <
-      tabViewSource.indexOf('Label("Barcode", systemImage: "barcode.viewfinder")')
-  );
-  assert.ok(
-    tabViewSource.indexOf('Label("Barcode", systemImage: "barcode.viewfinder")') <
-      tabViewSource.indexOf('Label("Photos", systemImage: "camera.viewfinder")')
-  );
-  assert.ok(
-    tabViewSource.indexOf('Label("Photos", systemImage: "camera.viewfinder")') <
-      tabViewSource.indexOf('Label("Dictate", systemImage: "mic")')
-  );
-  assert.ok(
-    tabViewSource.indexOf('Label("Dictate", systemImage: "mic")') <
-      tabViewSource.indexOf('Label("Settings", systemImage: "gearshape")')
-  );
+  assert.match(tabViewSource, /UnifiedCaptureHomeView\(\)/);
+  assert.match(tabViewSource, /CaptureHistoryView\(\)/);
+  assert.match(tabViewSource, /Label\("Settings", systemImage: "gearshape"\)/);
   assert.doesNotMatch(tabViewSource, /Label\("Upload"|UploadView\(\)/);
-  assert.match(scannerViewSwiftSource, /PhotoLibraryUploadSection\(\)/);
   assert.match(
     enumSource,
     /case text\s*case barcode\s*case photos\s*case dictation\s*case settings/
   );
 });
 
-test("app clip bottom tab bar keeps uploads inside Photos", () => {
+test("app clip has Scan and unified History roots", () => {
   const tabViewStart = clipRootViewSwiftSource.indexOf("TabView(selection: $store.selectedTab)");
   const tabViewEnd = clipRootViewSwiftSource.indexOf(".sheet(isPresented: $isConnectionSheetPresented)", tabViewStart);
   const tabViewSource = clipRootViewSwiftSource.slice(tabViewStart, tabViewEnd);
@@ -1152,19 +1139,11 @@ test("app clip bottom tab bar keeps uploads inside Photos", () => {
 
   assert.ok(tabViewStart > -1);
   assert.ok(tabViewEnd > tabViewStart);
-  assert.ok(
-    tabViewSource.indexOf('Label("Text", systemImage: "doc.text.viewfinder")') <
-      tabViewSource.indexOf('Label("Barcode", systemImage: "barcode.viewfinder")')
-  );
-  assert.ok(
-    tabViewSource.indexOf('Label("Barcode", systemImage: "barcode.viewfinder")') <
-      tabViewSource.indexOf('Label("Photos", systemImage: "camera.viewfinder")')
-  );
+  assert.match(tabViewSource, /ClipCaptureView\(store: store, mode: \.ocr/);
+  assert.match(tabViewSource, /ClipUnifiedHistoryView\(/);
   assert.doesNotMatch(tabViewSource, /Label\("Upload", systemImage: "square\.and\.arrow\.up"\)/);
-  assert.doesNotMatch(tabViewSource, /Label\(\s*"Dictate",\s*systemImage: "mic"\)/);
+  assert.match(tabViewSource, /Label\("History", systemImage: "clock\.arrow\.circlepath"\)/);
   assert.match(enumSource, /case text\s*case barcode\s*case photos/);
-  assert.doesNotMatch(enumSource, /case upload/);
-  assert.doesNotMatch(enumSource, /case dictate/);
 });
 
 test("app clip can select an online workspace computer for text and barcode insertion", () => {

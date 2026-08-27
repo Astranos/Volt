@@ -67,6 +67,7 @@
 		B3000000000000000000001E /* volt.icon in Resources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000001B /* volt.icon */; };
 		B3000000000000000000001F /* VoltClip.app in Embed App Clips */ = {isa = PBXBuildFile; fileRef = C30000000000000000000008 /* VoltClip.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		B30000000000000000000021 /* AppClipGuestCloudClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = C30000000000000000000010 /* AppClipGuestCloudClient.swift */; };
+		B30000000000000000000023 /* SpeechDictationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C70000000000000000000001 /* SpeechDictationService.swift */; };
 		B40000000000000000000001 /* AppConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = C40000000000000000000001 /* AppConfiguration.swift */; };
 		B40000000000000000000002 /* AccessKind.swift in Sources */ = {isa = PBXBuildFile; fileRef = C40000000000000000000002 /* AccessKind.swift */; };
 		B40000000000000000000003 /* AccessStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = C40000000000000000000003 /* AccessStatus.swift */; };
@@ -700,6 +701,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B30000000000000000000023 /* SpeechDictationService.swift in Sources */,
 				B30000000000000000000021 /* AppClipGuestCloudClient.swift in Sources */,
 				B30000000000000000000001 /* VoltClipApp.swift in Sources */,
 				B30000000000000000000002 /* ClipRootView.swift in Sources */,

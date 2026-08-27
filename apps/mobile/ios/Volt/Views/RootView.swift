@@ -16,26 +16,19 @@ struct RootView: View {
 
     init(showsAccountSettings: Bool = true) {
         self.showsAccountSettings = showsAccountSettings
-        _selectedTab = State(initialValue: ScreenshotScenario.current?.initialSection ?? .text)
+        let initialSection = ScreenshotScenario.current?.initialSection
+        _selectedTab = State(initialValue: initialSection == .photos ? .photos : .text)
     }
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            CaptureModeTabView(mode: .ocr)
-                .tabItem { Label("Text", systemImage: "doc.text.viewfinder") }
+            UnifiedCaptureHomeView()
+                .tabItem { Label("Scan", systemImage: "camera.viewfinder") }
                 .tag(AppSection.text)
 
-            CaptureModeTabView(mode: .barcode)
-                .tabItem { Label("Barcode", systemImage: "barcode.viewfinder") }
-                .tag(AppSection.barcode)
-
-            CaptureModeTabView(mode: .photo)
-                .tabItem { Label("Photos", systemImage: "camera.viewfinder") }
+            CaptureHistoryView()
+                .tabItem { Label("History", systemImage: "clock.arrow.circlepath") }
                 .tag(AppSection.photos)
-
-            DictationView()
-                .tabItem { Label("Dictate", systemImage: "mic") }
-                .tag(AppSection.dictation)
 
             SettingsView(showsAccountSettings: showsAccountSettings)
                 .tabItem { Label("Settings", systemImage: "gearshape") }
@@ -87,14 +80,9 @@ struct RootView: View {
     private func applySelectedTab(_ newTab: AppSection) {
         store.selectedSection = newTab
         switch newTab {
-        case .text:
-            store.activeMode = .ocr
-        case .barcode:
-            store.activeMode = .barcode
-        case .photos:
-            store.activeMode = .photo
-        case .dictation:
-            store.activeMode = .dictation
+        case .text: store.activeMode = .ocr
+        case .barcode, .dictation: store.activeMode = .ocr
+        case .photos: break
         case .settings:
             break
         }

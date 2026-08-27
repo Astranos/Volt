@@ -84,6 +84,7 @@ extension ScannerStore {
             source: .dictation,
             value: trimmed,
             format: "dictation",
+            batchId: currentCaptureBatchId(),
             deliveryState: initialDeliveryState
         )
         guard saveResultLocally(result) else {

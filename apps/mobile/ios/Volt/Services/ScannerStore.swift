@@ -62,6 +62,9 @@ final class ScannerStore {
 
     var lastBarcodeValue: String?
     var lastBarcodeSentAt: Date?
+    /// The presented camera's unified session identity. It is also the transport
+    /// batch ID for now, so every mode captured in one presentation groups together.
+    var activeCaptureBatchId: String?
     var capturePhotoBatch: (id: String, expiresAt: Date)?
     var resumedPhotoBatchId: String?
     @ObservationIgnored let captureFailureFeedback = UINotificationFeedbackGenerator()
@@ -88,5 +91,34 @@ final class ScannerStore {
     func playCaptureFailureFeedback() {
         captureFailureImpactFeedback.impactOccurred(intensity: 1)
         captureFailureFeedback.notificationOccurred(.error)
+    }
+
+    @discardableResult
+    func beginCaptureSession() -> String {
+        let id = "batch-\(UUID().uuidString.lowercased())"
+        activeCaptureBatchId = id
+        return id
+    }
+
+    func endCaptureSession(id: String? = nil) {
+        if let id, activeCaptureBatchId != id { return }
+        activeCaptureBatchId = nil
+        resumedPhotoBatchId = nil
+    }
+
+    @discardableResult
+    func resumeCaptureSession(batchId: String) -> String {
+        activeCaptureBatchId = batchId
+        resumedPhotoBatchId = batchId
+        return batchId
+    }
+
+    func currentCaptureBatchId() -> String {
+        activeCaptureBatchId ?? beginCaptureSession()
+    }
+
+    var activeSessionCaptureCount: Int {
+        guard let activeCaptureBatchId else { return 0 }
+        return results.count { $0.batchId == activeCaptureBatchId }
     }
 }

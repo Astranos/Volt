@@ -7,25 +7,26 @@ struct ClipRootView: View {
     @Bindable var store: ClipScannerStore
     @State private var isConnectionSheetPresented = false
     @State private var isPairingScannerPresented = false
+    @State private var requestedSessionBatchId: String?
 
     var body: some View {
         TabView(selection: $store.selectedTab) {
-                ClipCaptureView(store: store, mode: .ocr) {
+                ClipCaptureView(store: store, mode: .ocr, requestedSessionBatchId: $requestedSessionBatchId) {
                     handleConnectButtonTapped()
                 }
-                    .tabItem { Label("Text", systemImage: "doc.text.viewfinder") }
+                    .tabItem { Label("Scan", systemImage: "camera.viewfinder") }
                     .tag(ClipScannerStore.ClipTab.text)
 
-                ClipCaptureView(store: store, mode: .barcode) {
-                    handleConnectButtonTapped()
-                }
-                    .tabItem { Label("Barcode", systemImage: "barcode.viewfinder") }
-                    .tag(ClipScannerStore.ClipTab.barcode)
-
-                ClipCaptureView(store: store, mode: .photo) {
-                    handleConnectButtonTapped()
-                }
-                    .tabItem { Label("Photos", systemImage: "camera.viewfinder") }
+                ClipUnifiedHistoryView(
+                    store: store,
+                    onConnect: handleConnectButtonTapped,
+                    onContinue: { batchId in
+                        store.activeCaptureMode = .ocr
+                        store.selectedTab = .text
+                        requestedSessionBatchId = batchId
+                    }
+                )
+                    .tabItem { Label("History", systemImage: "clock.arrow.circlepath") }
                     .tag(ClipScannerStore.ClipTab.photos)
         }
         .sheet(isPresented: $isConnectionSheetPresented) {
@@ -92,9 +93,134 @@ struct ClipRootView: View {
     }
 }
 
+private struct ClipUnifiedHistoryView: View {
+    @Bindable var store: ClipScannerStore
+    let onConnect: () -> Void
+    let onContinue: (String) -> Void
+
+    private var sessionIDs: [String] {
+        let ids = Set(store.captures.map(\.batchId) + store.photos.map { $0.batchId ?? $0.id.uuidString.lowercased() })
+        return ids.sorted { lhs, rhs in
+            latestDate(for: lhs) > latestDate(for: rhs)
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: ScannerTabLayout.stackSpacing) {
+                    ClipChromeSectionHeader(
+                        title: "History",
+                        connection: connectionSummary,
+                        onConnectionTapped: onConnect
+                    )
+                    ClipPhotoLibraryUploadSection(store: store)
+                    if sessionIDs.isEmpty {
+                        ContentUnavailableView(
+                            "No Scans Yet",
+                            systemImage: "camera.viewfinder",
+                            description: Text("Text, barcodes, photos, and audio from each camera session appear here.")
+                        )
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 34)
+                        .background(.background, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    } else {
+                        ForEach(sessionIDs, id: \.self) { id in
+                            sessionCard(id: id)
+                        }
+                    }
+                }
+                .padding(ScannerTabLayout.contentPadding)
+                .padding(.top, ScannerTabLayout.topPadding)
+                .padding(.bottom, 32)
+            }
+            .background(ScannerTabLayout.background)
+            .navigationTitle("History")
+            .toolbar(.hidden, for: .navigationBar)
+        }
+    }
+
+    private func sessionCard(id: String) -> some View {
+        let captures = store.captures.filter { $0.batchId == id }.sorted { $0.capturedAt < $1.capturedAt }
+        let photos = store.photos.filter { ($0.batchId ?? $0.id.uuidString.lowercased()) == id }.sorted { $0.capturedAt < $1.capturedAt }
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("\(captures.count + photos.count) capture\(captures.count + photos.count == 1 ? "" : "s")")
+                        .font(.headline)
+                    Text("\(captures.map { $0.mode.title }.uniqued().joined(separator: " · "))\(captures.isEmpty || photos.isEmpty ? "" : " · ")\(photos.isEmpty ? "" : "Photos")")
+                        .font(.caption).foregroundStyle(.secondary)
+                    Text(latestDate(for: id), format: .dateTime.hour().minute())
+                        .font(.caption2).foregroundStyle(.secondary)
+                }
+                Spacer()
+            }
+            Button("Continue session", systemImage: "camera.fill") {
+                onContinue(id)
+            }
+            .font(.subheadline.weight(.semibold))
+            .buttonStyle(.borderedProminent)
+            .tint(.accentColor)
+            Button("Delete session", systemImage: "trash", role: .destructive) {
+                store.removeSession(batchId: id)
+            }
+            .font(.subheadline.weight(.semibold))
+            ForEach(captures) { capture in
+                HStack(alignment: .top, spacing: 12) {
+                    Image(systemName: capture.mode.symbolName)
+                        .foregroundStyle(.green)
+                        .frame(width: 32, height: 32)
+                        .background(.green.opacity(0.12), in: RoundedRectangle(cornerRadius: 9))
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(capture.value).lineLimit(4).textSelection(.enabled)
+                        Text(capture.status).font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                }
+                .padding(12)
+                .background(.background, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }
+            if !photos.isEmpty {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 82), spacing: 8)], spacing: 8) {
+                    ForEach(photos) { photo in
+                        Image(uiImage: photo.image)
+                            .resizable().scaledToFill().frame(height: 82).clipped()
+                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    }
+                }
+            }
+        }
+        .padding(14)
+        .background(.background, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+
+    private var connectionSummary: ScannerConnectionSummary {
+        ScannerConnectionSummary(
+            isConnected: store.isConnected,
+            isBusy: store.isPairing,
+            title: clipConnectionTitle(isConnected: store.isConnected, isPairing: store.isPairing, pairingLabel: store.pairingLabel, pairingFailureMessage: store.pairingFailureMessage),
+            statusText: store.statusText
+        )
+    }
+
+    private func latestDate(for id: String) -> Date {
+        let captureDate = store.captures.filter { $0.batchId == id }.map(\.capturedAt).max() ?? .distantPast
+        let photoDate = store.photos.filter { ($0.batchId ?? $0.id.uuidString.lowercased()) == id }.map(\.capturedAt).max() ?? .distantPast
+        return max(captureDate, photoDate)
+    }
+}
+
+private extension Array where Element == String {
+    func uniqued() -> [String] {
+        var seen = Set<String>()
+        return filter { seen.insert($0).inserted }
+    }
+}
+
 private struct ClipCaptureView: View {
     @Bindable var store: ClipScannerStore
     let mode: CaptureMode
+    @Binding var requestedSessionBatchId: String?
     let onScanQRCode: () -> Void
     @State private var isCaptureSessionPresented = false
     @State private var captureSessionBatchId: String?
@@ -118,18 +244,12 @@ private struct ClipCaptureView: View {
         .sorted { $0.latestCapturedAt > $1.latestCapturedAt }
     }
 
-    private var matchingCaptures: [ClipScannerStore.ClipCapture] {
-        store.captures
-            .filter { $0.mode == mode }
-            .sorted { $0.capturedAt > $1.capturedAt }
-    }
-
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: ScannerTabLayout.stackSpacing) {
                     ClipChromeSectionHeader(
-                        title: mode.clipTabTitle,
+                        title: "Scan",
                         connection: connectionSummary,
                         onConnectionTapped: onScanQRCode
                     )
@@ -163,8 +283,6 @@ private struct ClipCaptureView: View {
                                 store.removePhotos(batchId: batch.id)
                             }
                         )
-                    } else {
-                        ClipRecentCapturesSection(mode: mode, captures: matchingCaptures)
                     }
                 }
                 .padding(ScannerTabLayout.contentPadding)
@@ -172,14 +290,12 @@ private struct ClipCaptureView: View {
                 .padding(.bottom, ScannerTabLayout.bottomAccessoryContentPadding)
             }
             .background(ScannerTabLayout.background)
-            .navigationTitle(mode.clipTabTitle)
+            .navigationTitle("Scan")
             .toolbar(.hidden, for: .navigationBar)
             .fullScreenCover(
                 isPresented: $isCaptureSessionPresented,
                 onDismiss: {
-                    if mode == .photo {
-                        store.endCaptureSession(id: captureSessionBatchId)
-                    }
+                    store.endCaptureSession(id: captureSessionBatchId)
                     captureSessionBatchId = nil
                     if opensPairingScannerAfterCapture {
                         opensPairingScannerAfterCapture = false
@@ -191,7 +307,7 @@ private struct ClipCaptureView: View {
                     store: store,
                     activeMode: $store.activeCaptureMode,
                     isConnected: store.isConnected,
-                    isRecognizingText: store.isRecognizingText,
+                    isRecognizingText: store.isRecognizingText || store.isDictationBusy,
                     ocrReviewImage: store.ocrReviewImage,
                     ocrTextRegions: store.ocrTextRegions,
                     statusText: captureStatusText,
@@ -222,8 +338,8 @@ private struct ClipCaptureView: View {
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 ScannerBottomActionAccessory(
-                    title: mode.clipStartActionTitle,
-                    systemImage: mode.symbolName,
+                    title: "Start Scan",
+                    systemImage: "camera.viewfinder",
                     isEnabled: store.isConnected,
                     isConnecting: store.isPairing,
                     statusText: captureStatusText,
@@ -232,7 +348,7 @@ private struct ClipCaptureView: View {
                         guard store.isConnected else { return }
                         store.clearOcrReview()
                         store.activeCaptureMode = mode
-                        captureSessionBatchId = mode == .photo ? store.beginCaptureSession() : nil
+                        captureSessionBatchId = store.beginCaptureSession()
                         isCaptureSessionPresented = true
                     }
                 )
@@ -246,8 +362,16 @@ private struct ClipCaptureView: View {
             .sheet(isPresented: $isTargetPickerPresented) {
                 ClipWorkspaceTargetPickerSheet(store: store)
             }
-            .onAppear {
+        .onAppear {
                 store.activeCaptureMode = mode
+            }
+            .onChange(of: requestedSessionBatchId) { _, batchId in
+                guard let batchId else { return }
+                store.clearOcrReview()
+                store.activeCaptureMode = .ocr
+                captureSessionBatchId = store.resumeCaptureSession(batchId: batchId)
+                isCaptureSessionPresented = true
+                requestedSessionBatchId = nil
             }
         }
     }
@@ -1352,6 +1476,13 @@ private struct ClipCaptureSessionView: View {
             .map { SessionPhotoThumbnail(id: $0.id, image: $0.image) }
     }
 
+    private var capturedSessionItemCount: Int {
+        guard let captureBatchId else { return 0 }
+        let captureCount = store.captures.count { $0.batchId == captureBatchId }
+        let photoCount = store.photos.count { $0.batchId == captureBatchId }
+        return captureCount + photoCount
+    }
+
     var body: some View {
         let captureSurface = ZStack {
             if let ocrReviewImage {
@@ -1491,6 +1622,26 @@ private struct ClipCaptureSessionView: View {
                 )
                 .transition(.scale(scale: 0.96).combined(with: .opacity))
             }
+
+            if activeMode == .dictation, ocrReviewImage == nil {
+                VStack(spacing: 12) {
+                    Image(systemName: store.isDictating ? "waveform" : "mic.fill")
+                        .font(.system(size: 34, weight: .semibold))
+                        .symbolEffect(.variableColor.iterative, isActive: store.isDictating)
+                    Text(store.dictationTranscript.isEmpty ? "Tap the microphone to dictate" : store.dictationTranscript)
+                        .font(.body.weight(.medium))
+                        .multilineTextAlignment(.center)
+                        .lineLimit(5)
+                    Text(store.dictationPhase == .preparing ? "Preparing microphone…" : store.isDictating ? "Listening" : "Your final text will be sent with this session")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .foregroundStyle(.white)
+                .padding(18)
+                .frame(maxWidth: 340)
+                .background(.black.opacity(0.62), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .padding(.horizontal, 24)
+            }
         }
         .background(.black)
         .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -1525,13 +1676,15 @@ private struct ClipCaptureSessionView: View {
                         zoomLabel: cameraService.zoomDisplayLabel,
                         gridVisible: gridVisible,
                         hasLiveTextCandidates: !liveTextCandidates.isEmpty,
-                        isRecognizingText: isRecognizingText || isCapturingPhoto,
-                        isCaptureEnabled: isConnected && !isCapturingPhoto && !isRecognizingText,
-                        showsModePicker: false,
+                        isRecognizingText: isRecognizingText || isCapturingPhoto || store.isDictationBusy,
+                        isCaptureEnabled: isConnected && !isCapturingPhoto && !isRecognizingText && !store.isDictationBusy,
+                        isModeSelectionEnabled: isConnected && !store.isDictating && !store.isDictationBusy,
+                        showsModePicker: true,
                         barcodeHint: detectedBarcodeBounds == nil ? "Point camera at barcode" : "Barcode found",
                         hasLatestCapture: false,
                         capturedThumbnails: activeMode == .photo ? capturedThumbnails : [],
                         capturedCount: activeMode == .photo ? capturedSessionPhotos.count : 0,
+                        sessionItemCount: capturedSessionItemCount,
                         controlRotation: .degrees(cameraService.captureOrientation.controlRotationDegrees),
                         onToggleTorch: {
                             cameraService.setTorchEnabled(!cameraService.torchEnabled)
@@ -1546,7 +1699,11 @@ private struct ClipCaptureSessionView: View {
                             gridVisible.toggle()
                         },
                         onCapture: {
-                            captureCurrentFrame()
+                            if activeMode == .dictation {
+                                Task { await store.toggleDictation() }
+                            } else {
+                                captureCurrentFrame()
+                            }
                         },
                         onSendLatest: nil,
                         onFinish: {
@@ -1600,6 +1757,7 @@ private struct ClipCaptureSessionView: View {
             }
         }
         .onDisappear {
+            Task { await store.speechDictation.cancel() }
             resetSelectedText()
             cameraService.stop()
             cameraService.onScan = nil
@@ -1619,6 +1777,9 @@ private struct ClipCaptureSessionView: View {
             resetSelectedText()
         }
         .onChange(of: isRecognizingText) { _, _ in
+            syncCameraForOcrPostCapture()
+        }
+        .onChange(of: store.dictationPhase) { _, _ in
             syncCameraForOcrPostCapture()
         }
         .onChange(of: store.isConnected) { _, isConnected in
@@ -1641,6 +1802,12 @@ private struct ClipCaptureSessionView: View {
     }
 
     private func syncCameraForOcrPostCapture() {
+        if activeMode == .dictation, store.isDictating || store.isDictationBusy {
+            cameraService.start()
+            cameraService.setLiveTextScanningEnabled(false)
+            cameraService.setBarcodeScanningEnabled(false)
+            return
+        }
         let shouldPauseCamera = activeMode == .ocr
             && (isRecognizingText || ocrReviewImage != nil)
         if shouldPauseCamera {

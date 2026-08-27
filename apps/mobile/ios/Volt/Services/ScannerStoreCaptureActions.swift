@@ -22,6 +22,7 @@ extension ScannerStore {
             value: normalized.value,
             format: normalized.format,
             capturedAt: now,
+            batchId: currentCaptureBatchId(),
             deliveryState: initialDeliveryState
         )
         guard saveResultLocally(result) else { return }
@@ -85,14 +86,20 @@ extension ScannerStore {
     func sendRecognizedText(_ text: String, format: String = "ocr-region") {
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
-        let result = ScanResult(kind: .text, value: text, format: format, deliveryState: initialDeliveryState)
+        let result = ScanResult(
+            kind: .text,
+            value: text,
+            format: format,
+            batchId: currentCaptureBatchId(),
+            deliveryState: initialDeliveryState
+        )
         guard saveResultLocally(result) else { return }
         sendCaptureResult(result, insertIntoCursor: true)
         statusText = cloudWorkspace.selectedComputer == nil ? "Text saved" : "Text insertion queued"
     }
 
     func captureSquarePhoto() async {
-        let batchId = resumedPhotoBatchId
+        let batchId = currentCaptureBatchId()
         guard let image = await camera.capturePhoto(matchingDeviceOrientation: true) else { return }
         let preparedImage = image
             .normalizedForProcessing()
@@ -384,16 +391,16 @@ extension ScannerStore {
     }
 
     func resumePhotoBatch(id: String) {
-        resumedPhotoBatchId = id
+        resumeCaptureSession(batchId: id)
     }
 
     func endResumedPhotoBatch() {
-        resumedPhotoBatchId = nil
+        endCaptureSession()
     }
 
     func currentPhotoBatch(now: Date) -> String {
-        if let resumedPhotoBatchId {
-            return resumedPhotoBatchId
+        if let activeCaptureBatchId {
+            return activeCaptureBatchId
         }
         if let capturePhotoBatch, capturePhotoBatch.expiresAt > now {
             return capturePhotoBatch.id
