@@ -516,14 +516,15 @@ final class ClipScannerStore {
         updateCapture(capture.id, status: "Sending")
         Task {
             do {
+                let kind = switch capture.mode {
+                case .ocr: "text"
+                case .barcode: "barcode"
+                case .photo: "photo"
+                case .dictation: "text"
+                }
                 try await guestCloudClient.mirrorCapture(
                     session: session,
-                    kind: switch capture.mode {
-                    case .ocr: "text"
-                    case .barcode: "barcode"
-                    case .photo: "photo"
-                    case .dictation: "text"
-                    },
+                    kind: kind,
                     value: capture.value,
                     format: capture.format,
                     capturedAt: capture.capturedAt,

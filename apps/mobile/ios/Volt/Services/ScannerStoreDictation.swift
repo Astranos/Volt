@@ -84,8 +84,8 @@ extension ScannerStore {
             source: .dictation,
             value: trimmed,
             format: "dictation",
-            batchId: currentCaptureBatchId(),
-            deliveryState: initialDeliveryState
+            deliveryState: initialDeliveryState,
+            batchId: currentCaptureBatchId()
         )
         guard saveResultLocally(result) else {
             await cloudWorkspace.clearDictationDraft(draftId: sessionId.uuidString.lowercased())

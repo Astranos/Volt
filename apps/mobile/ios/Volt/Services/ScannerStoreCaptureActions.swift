@@ -22,8 +22,8 @@ extension ScannerStore {
             value: normalized.value,
             format: normalized.format,
             capturedAt: now,
-            batchId: currentCaptureBatchId(),
-            deliveryState: initialDeliveryState
+            deliveryState: initialDeliveryState,
+            batchId: currentCaptureBatchId()
         )
         guard saveResultLocally(result) else { return }
         sendCaptureResult(result, insertIntoCursor: true)
@@ -90,8 +90,8 @@ extension ScannerStore {
             kind: .text,
             value: text,
             format: format,
-            batchId: currentCaptureBatchId(),
-            deliveryState: initialDeliveryState
+            deliveryState: initialDeliveryState,
+            batchId: currentCaptureBatchId()
         )
         guard saveResultLocally(result) else { return }
         sendCaptureResult(result, insertIntoCursor: true)
