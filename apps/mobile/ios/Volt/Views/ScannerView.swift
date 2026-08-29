@@ -14,7 +14,7 @@ struct UnifiedCaptureHomeView: View {
                     HStack(spacing: 12) {
                         Text("Scan").font(.largeTitle.bold())
                         Spacer()
-                        CloudTargetButton { isTargetPickerPresented = true }
+                        CloudTargetLabel()
                     }
                     UnifiedCaptureLaunchCard(action: startCapture)
                     ComputerAvailabilityCard { isTargetPickerPresented = true }

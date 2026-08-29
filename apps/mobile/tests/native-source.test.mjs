@@ -1137,6 +1137,15 @@ test("full app presents Scan, unified History, and Settings roots", () => {
   assert.match(rootViewSwiftSource, /private var connectionsButton: some View[\s\S]*Image\(systemName: targetSymbol\)[\s\S]*\.frame\(width: 48, height: 48\)/);
   assert.match(rootViewSwiftSource, /private var targetSymbol: String[\s\S]*"cursorarrow\.motionlines"[\s\S]*"desktopcomputer\.trianglebadge\.exclamationmark"[\s\S]*"iphone"/);
   assert.match(cloudTargetPickerSwiftSource, /Label\(targetLabel, systemImage: "pencil\.and\.scribble"\)[\s\S]*\.lineLimit\(1\)[\s\S]*\.frame\(minHeight: 48\)[\s\S]*\.contentShape\(Rectangle\(\)\)/);
+  assert.match(cloudTargetPickerSwiftSource, /struct CloudTargetLabel: View[\s\S]*Label\(Self\.targetLabel\(for: store\), systemImage: "pencil\.and\.scribble"\)[\s\S]*\.accessibilityElement\(children: \.combine\)/);
+  assert.match(scannerViewSwiftSource, /Text\("Scan"\)\.font\(\.largeTitle\.bold\(\)\)[\s\S]*CloudTargetLabel\(\)/);
+  const scanHeaderStart = scannerViewSwiftSource.indexOf('Text("Scan").font(.largeTitle.bold())');
+  const scanHeaderEnd = scannerViewSwiftSource.indexOf("UnifiedCaptureLaunchCard", scanHeaderStart);
+  const scanHeaderSource = scannerViewSwiftSource.slice(scanHeaderStart, scanHeaderEnd);
+  assert.doesNotMatch(scanHeaderSource, /CloudTargetButton|Button\(|buttonStyle|glass/);
+  assert.match(scannerViewSwiftSource, /ComputerAvailabilityCard \{ isTargetPickerPresented = true \}/);
+  assert.match(scannerViewSwiftSource, /\.sheet\(isPresented: \$isTargetPickerPresented\)[\s\S]*CloudTargetPickerSheet\(\)/);
+  assert.match(scannerViewSwiftSource, /CaptureHistoryView[\s\S]*CloudTargetButton/);
   assert.match(cloudTargetPickerSwiftSource, /content\.buttonStyle\(\.glass\)[\s\S]*content\.buttonStyle\(\.bordered\)/);
   assert.ok(cloudTargetPickerSwiftSource.includes('.accessibilityLabel("Type destination: \\(targetLabel)")'));
   assert.match(rootViewSwiftSource, /\.accessibilityLabel\("Connections"\)[\s\S]*Choose the computer/);
@@ -1168,7 +1177,7 @@ test("full app side controls keep an explicit 48 point hit target with native gl
   assert.match(rootViewSwiftSource, /content\.buttonStyle\([\s\S]*\.glass\(\.regular\.tint\(/);
   assert.match(rootViewSwiftSource, /\.buttonStyle\(\.bordered\)/);
   assert.match(rootViewSwiftSource, /\.safeAreaInset\(edge: \.bottom, spacing: 0\)[\s\S]*RootTabBar\.reservedSpace/);
-  assert.match(rootViewSwiftSource, /\.overlay\(alignment: \.bottom\)[\s\S]*\.padding\(\.horizontal, 16\)[\s\S]*\.padding\(\.bottom, 16\)[\s\S]*\.ignoresSafeArea\(\.container, edges: \.bottom\)/);
+  assert.match(rootViewSwiftSource, /\.overlay\(alignment: \.bottom\)[\s\S]*GeometryReader \{ proxy in[\s\S]*\.padding\(\.horizontal, 16\)[\s\S]*\.padding\(\.bottom, 16\)[\s\S]*\.offset\(y: proxy\.safeAreaInsets\.bottom\)/);
   assert.match(settingsViewSwiftSource, /struct SettingsSheet: View[\s\S]*SettingsView\(showsAccountSettings: showsAccountSettings, showsDoneButton: true\)[\s\S]*\.presentationDetents\(\[\.medium, \.large\]\)[\s\S]*\.presentationDragIndicator\(\.visible\)/);
   assert.match(settingsViewSwiftSource, /if !showsDoneButton \{\s*store\.selectedSection = \.settings/);
 });

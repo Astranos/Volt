@@ -40,16 +40,19 @@ struct RootView: View {
                 .accessibilityHidden(true)
         }
         .overlay(alignment: .bottom) {
-            RootTabBar(
-                selection: $selectedTab,
-                onScan: startCapture,
-                onConnections: { presentedSheet = .connections },
-                onSettings: { presentedSheet = .settings },
-                targetSymbol: targetSymbol
-            )
-            .padding(.horizontal, 16)
-            .padding(.bottom, 16)
-            .ignoresSafeArea(.container, edges: .bottom)
+            GeometryReader { proxy in
+                RootTabBar(
+                    selection: $selectedTab,
+                    onScan: startCapture,
+                    onConnections: { presentedSheet = .connections },
+                    onSettings: { presentedSheet = .settings },
+                    targetSymbol: targetSymbol
+                )
+                .padding(.horizontal, 16)
+                .padding(.bottom, 16)
+                .offset(y: proxy.safeAreaInsets.bottom)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+            }
         }
         .fullScreenCover(isPresented: $isCaptureSessionPresented, onDismiss: {
             store.endCaptureSession()

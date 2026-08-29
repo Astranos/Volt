@@ -1,5 +1,21 @@
 import SwiftUI
 
+struct CloudTargetLabel: View {
+    @Environment(ScannerStore.self) private var store
+
+    var body: some View {
+        Label(Self.targetLabel(for: store), systemImage: "pencil.and.scribble")
+            .font(.headline.weight(.semibold))
+            .lineLimit(1)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Type destination: \(Self.targetLabel(for: store))")
+    }
+
+    static func targetLabel(for store: ScannerStore) -> String {
+        store.cloudWorkspace.selectedTargetComputer?.label ?? "This iPhone"
+    }
+}
+
 struct CloudTargetButton: View {
     @Environment(ScannerStore.self) private var store
     let action: () -> Void
@@ -18,7 +34,7 @@ struct CloudTargetButton: View {
     }
 
     private var targetLabel: String {
-        store.cloudWorkspace.selectedTargetComputer?.label ?? "This iPhone"
+        CloudTargetLabel.targetLabel(for: store)
     }
 }
 
