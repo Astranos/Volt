@@ -49,7 +49,7 @@ struct RootView: View {
                     targetSymbol: targetSymbol
                 )
                 .padding(.horizontal, 16)
-                .padding(.bottom, 16)
+                .padding(.bottom, 20)
                 .offset(y: proxy.safeAreaInsets.bottom)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             }

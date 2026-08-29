@@ -10,6 +10,7 @@
 
 import type * as access from "../access.js";
 import type * as admin from "../admin.js";
+import type * as aiScanner from "../aiScanner.js";
 import type * as cloudWorkspace from "../cloudWorkspace.js";
 import type * as crons from "../crons.js";
 import type * as http from "../http.js";
@@ -39,6 +40,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   access: typeof access;
   admin: typeof admin;
+  aiScanner: typeof aiScanner;
   cloudWorkspace: typeof cloudWorkspace;
   crons: typeof crons;
   http: typeof http;

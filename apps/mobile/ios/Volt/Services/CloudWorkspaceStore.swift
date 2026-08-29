@@ -313,6 +313,18 @@ final class CloudWorkspaceStore {
         return false
     }
 
+    func analyzeProductImage(_ data: Data, mode: ProductScanMode) async throws -> ProductScanResponse {
+        guard let credential = activeCredential else {
+            throw MobileCloudError.credentialRevoked
+        }
+        return try await api.analyzeProductImage(
+            data,
+            mode: mode,
+            deviceId: credential.deviceId,
+            deviceSecret: credential.value
+        )
+    }
+
     func updateDictationDraft(draftId: String, text: String) async -> String? {
         guard let credential = activeCredential,
               let target = selectedComputer

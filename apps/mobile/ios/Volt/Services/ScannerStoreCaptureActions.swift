@@ -2,6 +2,20 @@ import CoreImage
 import CoreImage.CIFilterBuiltins
 import UIKit
 
+private enum ProductScanCaptureError: LocalizedError {
+    case emptyResult
+    case invalidUPC
+
+    var errorDescription: String? {
+        switch self {
+        case .emptyResult:
+            "No product result was found. Try another photo."
+        case .invalidUPC:
+            "The returned UPC was not valid. Try another photo."
+        }
+    }
+}
+
 @MainActor
 extension ScannerStore {
     func saveBarcodeIfNeeded() {
@@ -31,6 +45,11 @@ extension ScannerStore {
 
 
     func capture() async {
+        if isProductScannerActive {
+            await captureProduct()
+            return
+        }
+
         switch activeMode {
         case .ocr:
             await captureTextForReview()
@@ -40,6 +59,101 @@ extension ScannerStore {
             await captureSquarePhoto()
         case .dictation:
             break
+        }
+    }
+
+    func activateProductScanner() {
+        activeMode = .photo
+        isProductScannerActive = true
+        productScanOutput = nil
+        productScanError = nil
+    }
+
+    func deactivateProductScanner() {
+        isProductScannerActive = false
+        isProductScanBusy = false
+        productScanOutput = nil
+        productScanError = nil
+    }
+
+    func toggleProductScanMode() {
+        productScanMode = productScanMode == .upc ? .name : .upc
+        productScanOutput = nil
+        productScanError = nil
+    }
+
+    func captureProduct() async {
+        guard !isProductScanBusy else { return }
+        let mode = productScanMode
+        isProductScanBusy = true
+        productScanOutput = nil
+        productScanError = nil
+        statusText = "Analyzing product…"
+        defer { isProductScanBusy = false }
+
+        guard let image = await camera.capturePhoto(matchingDeviceOrientation: true) else {
+            productScanError = "Could not capture a product photo."
+            statusText = productScanError ?? "Product scan failed"
+            return
+        }
+
+        let preparedImage = image
+            .normalizedForProcessing()
+            .croppedToVisiblePreview(previewSize: camera.previewLayer.bounds.size)
+        guard let imageData = preparedImage.boundedJPEGData(maxLongEdge: 1600, maxBytes: 1_500_000) else {
+            productScanError = "The product photo could not be prepared."
+            statusText = productScanError ?? "Product scan failed"
+            return
+        }
+
+        do {
+            let response = try await cloudWorkspace.analyzeProductImage(imageData, mode: mode)
+            guard let responseValue = response.value else {
+                throw ProductScanCaptureError.emptyResult
+            }
+            let value = responseValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !value.isEmpty else { throw ProductScanCaptureError.emptyResult }
+
+            let result: ScanResult
+            switch mode {
+            case .upc:
+                let normalized = normalizedBarcodeScan(value: value, format: "upc_a")
+                guard normalized.value.count == 12,
+                      normalized.value.allSatisfy(\.isNumber)
+                else { throw ProductScanCaptureError.invalidUPC }
+                result = ScanResult(
+                    kind: .barcode,
+                    value: normalized.value,
+                    format: "ai-upc/\(normalized.format)",
+                    deliveryState: initialDeliveryState,
+                    batchId: currentCaptureBatchId()
+                )
+            case .name:
+                result = ScanResult(
+                    kind: .text,
+                    value: value,
+                    format: "ai-item-name",
+                    deliveryState: initialDeliveryState,
+                    batchId: currentCaptureBatchId()
+                )
+            }
+
+            guard saveResultLocally(result) else {
+                productScanError = "The product result could not be saved on this iPhone."
+                return
+            }
+            sendCaptureResult(result, insertIntoCursor: true)
+            productScanOutput = ProductScanOutput(mode: mode, value: result.value)
+            statusText = mode == .upc ? "UPC found" : "Product name found"
+        } catch let error as MobileCloudError {
+            productScanError = error.localizedDescription
+            statusText = productScanError ?? "Product scan failed"
+        } catch let error as ProductScanCaptureError {
+            productScanError = error.localizedDescription
+            statusText = productScanError ?? "Product scan failed"
+        } catch {
+            productScanError = "Product analysis failed. Try another photo."
+            statusText = productScanError ?? "Product scan failed"
         }
     }
 
@@ -446,6 +560,15 @@ extension UIImage {
 
     func previewJPEGData() -> Data? {
     resized(maxLongEdge: 640).jpegData(compressionQuality: 0.72)
+    }
+
+    func boundedJPEGData(maxLongEdge: CGFloat, maxBytes: Int) -> Data? {
+        let preparedImage = resized(maxLongEdge: maxLongEdge)
+        for quality in stride(from: 0.82, through: 0.42, by: -0.08) {
+            guard let data = preparedImage.jpegData(compressionQuality: quality) else { continue }
+            if data.count <= maxBytes { return data }
+        }
+        return nil
     }
 
     func normalizedForProcessing() -> UIImage {

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct CaptureSessionView: View {
     @Environment(ScannerStore.self) private var store
+    @Environment(AccessStore.self) private var accessStore
     @Binding var isPresented: Bool
     let mode: CaptureMode
     @State private var gridVisible = true
@@ -11,6 +12,7 @@ struct CaptureSessionView: View {
     @State private var isCleaningSelectedText = false
     @State private var cleanupRequestID = UUID()
     @State private var isTargetPickerPresented = false
+    @State private var isSubscriptionPaywallPresented = false
 
     var body: some View {
         @Bindable var store = store
@@ -73,6 +75,17 @@ struct CaptureSessionView: View {
                 .background(.black.opacity(0.5), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
                 .padding(.horizontal, 24)
             }
+
+            if store.isProductScannerActive,
+               store.isProductScanBusy || store.productScanOutput != nil || store.productScanError != nil {
+                ProductScanStatusView(
+                    output: store.productScanOutput,
+                    isBusy: store.isProductScanBusy,
+                    errorMessage: store.productScanError
+                )
+                .padding(.horizontal, 24)
+                .transition(.scale(scale: 0.96).combined(with: .opacity))
+            }
         }
         .background(Color.black.ignoresSafeArea())
         .overlay(alignment: .top) {
@@ -123,15 +136,19 @@ struct CaptureSessionView: View {
                         zoomLabel: store.camera.zoomDisplayLabel,
                         gridVisible: gridVisible,
                         hasLiveTextCandidates: !store.camera.liveTextCandidates.isEmpty,
-                        isRecognizingText: store.isRecognizingText || store.isDictationBusy,
-                        isCaptureEnabled: !store.isDictationBusy,
-                        isModeSelectionEnabled: !store.isDictating && !store.isDictationBusy,
+                        isRecognizingText: store.isRecognizingText || store.isDictationBusy || store.isProductScanBusy,
+                        isCaptureEnabled: !store.isDictationBusy && !store.isProductScanBusy,
+                        isModeSelectionEnabled: !store.isDictating && !store.isDictationBusy && !store.isProductScanBusy,
                         showsModePicker: true,
                         barcodeHint: ScreenshotScenario.current == .captureBarcode ? "Send '883929739929'" : "Point camera at barcode",
-                        capturedThumbnails: store.activeMode == .photo ? store.sessionPhotoThumbnails : [],
+                        capturedThumbnails: store.activeMode == .photo && !store.isProductScannerActive ? store.sessionPhotoThumbnails : [],
                         capturedCount: store.sessionPhotoCount,
                         sessionItemCount: store.activeSessionCaptureCount,
                         controlRotation: .degrees(store.camera.captureOrientation.controlRotationDegrees),
+                        showsProductScanner: true,
+                        isProductScannerSelected: store.isProductScannerActive,
+                        productScannerAvailable: hasPaidProductScannerAccess,
+                        productScanMode: store.productScanMode,
                         onToggleTorch: {
                             store.camera.setTorchEnabled(!store.camera.torchEnabled)
                         },
@@ -146,7 +163,9 @@ struct CaptureSessionView: View {
                         },
                         onCapture: {
                             Task {
-                                if store.activeMode == .dictation {
+                                if store.isProductScannerActive {
+                                    await store.captureProduct()
+                                } else if store.activeMode == .dictation {
                                     if store.isDictating {
                                         await store.stopLiveDictation()
                                     } else {
@@ -156,6 +175,19 @@ struct CaptureSessionView: View {
                                     await store.capture()
                                 }
                             }
+                        },
+                        onSelectProductScanner: {
+                            if hasPaidProductScannerAccess {
+                                store.activateProductScanner()
+                            } else {
+                                isSubscriptionPaywallPresented = true
+                            }
+                        },
+                        onToggleProductScanMode: {
+                            store.toggleProductScanMode()
+                        },
+                        onDeactivateProductScanner: {
+                            store.deactivateProductScanner()
                         },
                         onFinish: {
                             store.clearOcrReview()
@@ -168,8 +200,19 @@ struct CaptureSessionView: View {
         .sheet(isPresented: $isTargetPickerPresented) {
             CloudTargetPickerSheet()
         }
+        .sheet(isPresented: $isSubscriptionPaywallPresented) {
+            NavigationStack {
+                SubscriptionPaywallView()
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Done") { isSubscriptionPaywallPresented = false }
+                        }
+                    }
+            }
+        }
         .onAppear {
             store.activeMode = mode
+            store.deactivateProductScanner()
             store.startSessionPhotoStrip()
             if ScreenshotScenario.current == .captureReviewSend,
                let region = store.ocrTextRegions.first {
@@ -185,6 +228,9 @@ struct CaptureSessionView: View {
             resetSelectedText()
         }
         .onChange(of: store.activeMode) { _, mode in
+            if mode != .photo {
+                store.deactivateProductScanner()
+            }
             guard !store.isDictating else { return }
             store.camera.start()
             store.camera.setLiveTextScanningEnabled(mode == .ocr)
@@ -275,6 +321,45 @@ struct CaptureSessionView: View {
 
     private var selectedTextPreview: String {
         selectedTextValue
+    }
+
+    private var hasPaidProductScannerAccess: Bool {
+        accessStore.status?.access == .subscription
+    }
+}
+
+private struct ProductScanStatusView: View {
+    let output: ProductScanOutput?
+    let isBusy: Bool
+    let errorMessage: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if isBusy {
+                Label("Analyzing product…", systemImage: "sparkles")
+            } else if let errorMessage {
+                Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+            } else if let output {
+                Label(output.mode.title, systemImage: output.mode.systemImage)
+                    .font(.subheadline.weight(.semibold))
+                Text(output.value)
+                    .font(output.mode == .upc ? .title3.monospaced() : .title3)
+                    .lineLimit(3)
+                    .textSelection(.enabled)
+            }
+        }
+        .font(.headline)
+        .foregroundStyle(.white)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 13)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.black.opacity(0.62), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(.white.opacity(0.16), lineWidth: 1)
+        }
+        .accessibilityElement(children: .combine)
     }
 }
 

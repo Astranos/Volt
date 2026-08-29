@@ -26,3 +26,36 @@ enum CaptureMode: String, CaseIterable, Identifiable, Codable {
         }
     }
 }
+
+enum ProductScanMode: String, CaseIterable, Identifiable, Codable, Sendable {
+    case upc
+    case name
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .upc: "UPC"
+        case .name: "Name"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .upc: "barcode"
+        case .name: "textformat.characters"
+        }
+    }
+
+    var hint: String {
+        switch self {
+        case .upc: "Frame the product barcode"
+        case .name: "Frame the product name"
+        }
+    }
+}
+
+struct ProductScanOutput: Equatable, Sendable {
+    let mode: ProductScanMode
+    let value: String
+}

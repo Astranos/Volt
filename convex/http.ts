@@ -8,6 +8,12 @@ import {
 
 import { httpAction, type ActionCtx } from "./_generated/server";
 import {
+  AI_SCANNER_MAX_IMAGE_BYTES,
+  AIScannerError,
+  requestOpenRouterAnalysis,
+  type AIScannerMode,
+} from "./aiScanner";
+import {
   clerkAuthContextFromIdentity,
   type ClerkAuthContext,
 } from "./access";
@@ -39,7 +45,7 @@ const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Access-Control-Allow-Headers":
-    "Authorization, Content-Type, X-Volt-Anonymous-Id, X-Volt-Anonymous-Secret, X-Volt-Browser-Claim, X-Volt-Pairing-Secret",
+    "Authorization, Content-Type, X-Volt-Anonymous-Id, X-Volt-Anonymous-Secret, X-Volt-Browser-Claim, X-Volt-Pairing-Secret, X-Volt-Device-Id, X-Volt-Device-Secret",
   "Cache-Control": "no-store",
 };
 
@@ -631,6 +637,51 @@ const mobileDeviceBootstrapHandler = httpAction(async (ctx, request) => {
   }));
 });
 
+const authorizePaidAIScannerDeviceRef = makeFunctionReference<
+  "query",
+  { deviceId: string; deviceSecret: string },
+  { authorized: boolean; errorCode?: "invalid-device" | "subscription-required" }
+>("cloudWorkspace:authorizePaidAIScannerDevice");
+
+const mobileAIScannerHandler = httpAction(async (ctx, request) => {
+  if (request.method === "OPTIONS") return emptyResponse();
+  const modeValue = new URL(request.url).searchParams.get("mode");
+  if (modeValue !== "upc" && modeValue !== "name") return jsonResponse({ error: "Invalid mode" }, 400);
+  const mode = modeValue as AIScannerMode;
+  const deviceId = request.headers.get("X-Volt-Device-Id")?.trim();
+  const deviceSecret = request.headers.get("X-Volt-Device-Secret")?.trim();
+  if (!deviceId || !deviceSecret) return jsonResponse({ error: "Missing device credentials" }, 401);
+  const contentType = request.headers.get("Content-Type")?.split(";", 1)[0].trim().toLowerCase();
+  if (contentType !== "image/jpeg") return jsonResponse({ error: "JPEG image required" }, 415);
+  const contentLength = request.headers.get("Content-Length");
+  if (contentLength !== null && Number.isFinite(Number(contentLength)) && Number(contentLength) > AI_SCANNER_MAX_IMAGE_BYTES) {
+    return jsonResponse({ error: "Image is too large" }, 413);
+  }
+  const authorization = await ctx.runQuery(authorizePaidAIScannerDeviceRef, { deviceId, deviceSecret });
+  if (!authorization.authorized) {
+    return authorization.errorCode === "subscription-required"
+      ? jsonResponse({ error: "Paid StoreKit subscription required" }, 402)
+      : jsonResponse({ error: "Invalid or revoked device credential" }, 401);
+  }
+  const imageBytes = await request.arrayBuffer();
+  if (imageBytes.byteLength === 0) return jsonResponse({ error: "Image body required" }, 400);
+  if (imageBytes.byteLength > AI_SCANNER_MAX_IMAGE_BYTES) return jsonResponse({ error: "Image is too large" }, 413);
+  const jpegHeader = new Uint8Array(imageBytes, 0, Math.min(imageBytes.byteLength, 3));
+  if (jpegHeader.length < 3 || jpegHeader[0] !== 0xff || jpegHeader[1] !== 0xd8 || jpegHeader[2] !== 0xff) {
+    return jsonResponse({ error: "Valid JPEG image required" }, 415);
+  }
+  try {
+    return jsonResponse(await requestOpenRouterAnalysis(mode, imageBytes));
+  } catch (error) {
+    if (error instanceof AIScannerError) {
+      const message = error.code === "not-configured" ? "AI scanner is not configured"
+        : error.code === "upstream-timeout" ? "AI scanner timed out" : "AI scanner unavailable";
+      return jsonResponse({ error: message }, error.status);
+    }
+    return jsonResponse({ error: "AI scanner unavailable" }, 502);
+  }
+});
+
 const mobileComputerListHandler = httpAction(async (ctx, request) => {
   if (request.method === "OPTIONS") return emptyResponse();
   const body = await signalBodyFromRequest(request);
@@ -948,6 +999,8 @@ http.route({ path: "/api/mobile/enrollment/exchange", method: "POST", handler: m
 http.route({ path: "/api/mobile/enrollment/exchange", method: "OPTIONS", handler: mobileEnrollmentExchangeHandler });
 http.route({ path: "/api/mobile/devices/bootstrap", method: "POST", handler: mobileDeviceBootstrapHandler });
 http.route({ path: "/api/mobile/devices/bootstrap", method: "OPTIONS", handler: mobileDeviceBootstrapHandler });
+http.route({ path: "/api/mobile/ai/analyze", method: "POST", handler: mobileAIScannerHandler });
+http.route({ path: "/api/mobile/ai/analyze", method: "OPTIONS", handler: mobileAIScannerHandler });
 http.route({ path: "/api/mobile/computers/list", method: "POST", handler: mobileComputerListHandler });
 http.route({ path: "/api/mobile/computers/list", method: "OPTIONS", handler: mobileComputerListHandler });
 http.route({ path: "/api/mobile/cursor-target", method: "POST", handler: mobileCursorTargetHandler });

@@ -10,6 +10,12 @@ protocol MobileCloudAPI: Sendable {
     func setCursorTarget(_ request: SetCursorTargetRequest) async throws -> SetCursorTargetResponse
     func queueCursorDelivery(_ request: QueueCursorDeliveryRequest) async throws -> QueueCursorDeliveryResponse
     func cursorDeliveryStatus(_ request: CursorDeliveryStatusRequest) async throws -> CursorDeliveryStatusResponse
+    func analyzeProductImage(
+        _ data: Data,
+        mode: ProductScanMode,
+        deviceId: String,
+        deviceSecret: String
+    ) async throws -> ProductScanResponse
 }
 
 struct MobileCloudAPIClient: MobileCloudAPI {
@@ -91,6 +97,34 @@ struct MobileCloudAPIClient: MobileCloudAPI {
         try await post(request, to: .cursorDeliveryStatus)
     }
 
+    func analyzeProductImage(
+        _ data: Data,
+        mode: ProductScanMode,
+        deviceId: String,
+        deviceSecret: String
+    ) async throws -> ProductScanResponse {
+        var components = URLComponents(
+            url: baseURL.appending(path: "api/mobile/ai/analyze"),
+            resolvingAgainstBaseURL: false
+        )
+        components?.queryItems = [URLQueryItem(name: "mode", value: mode.rawValue)]
+        guard let url = components?.url else { throw MobileCloudError.invalidResponse }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("image/jpeg", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue(deviceId, forHTTPHeaderField: "X-Volt-Device-Id")
+        request.setValue(deviceSecret, forHTTPHeaderField: "X-Volt-Device-Secret")
+        let (responseData, response) = try await session.upload(for: request, from: data)
+        try validate(response)
+        do {
+            return try Self.decoder.decode(ProductScanResponse.self, from: responseData)
+        } catch {
+            throw MobileCloudError.invalidResponse
+        }
+    }
+
     private func post<Request: Encodable & Sendable, Response: Decodable & Sendable>(
         _ body: Request,
         to endpoint: Endpoint,
@@ -118,6 +152,9 @@ struct MobileCloudAPIClient: MobileCloudAPI {
 
     private func validate(_ response: URLResponse) throws {
         guard let response = response as? HTTPURLResponse else { throw MobileCloudError.invalidResponse }
+        if response.statusCode == 402 {
+            throw MobileCloudError.paidSubscriptionRequired
+        }
         if response.statusCode == 401 || response.statusCode == 403 {
             throw MobileCloudError.credentialRevoked
         }
@@ -143,12 +180,14 @@ private struct EmptyCloudResponse: Codable, Sendable {}
 
 enum MobileCloudError: LocalizedError, Equatable {
     case credentialRevoked
+    case paidSubscriptionRequired
     case httpStatus(Int)
     case invalidResponse
 
     var errorDescription: String? {
         switch self {
         case .credentialRevoked: "This device credential is no longer valid. Sign in again to reconnect it."
+        case .paidSubscriptionRequired: "A paid Volt subscription is required for AI product scanning."
         case .httpStatus(let status): "Cloud sync failed with status \(status)."
         case .invalidResponse: "Cloud sync returned an invalid response."
         }

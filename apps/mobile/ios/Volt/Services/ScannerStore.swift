@@ -33,6 +33,11 @@ final class ScannerStore {
     var ocrTextRegions: [RecognizedTextRegion] = []
     var isRecognizingText = false
     var captureDeliveryToast: CaptureDeliveryToast?
+    var isProductScannerActive = false
+    var productScanMode: ProductScanMode = .upc
+    var isProductScanBusy = false
+    var productScanOutput: ProductScanOutput?
+    var productScanError: String?
     var photoUploadProgress: PhotoUploadProgress?
     var sessionPhotoThumbnails: [SessionPhotoThumbnail] = []
     var sessionPhotoCount = 0

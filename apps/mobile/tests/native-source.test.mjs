@@ -24,6 +24,22 @@ const scannerStoreSwiftSource = readFileSync(
   new URL("../ios/Volt/Services/ScannerStore.swift", import.meta.url),
   "utf8"
 );
+const captureModeSwiftSource = readFileSync(
+  new URL("../ios/Volt/Models/CaptureMode.swift", import.meta.url),
+  "utf8"
+);
+const cloudAPIContractsSwiftSource = readFileSync(
+  new URL("../ios/Volt/Models/CloudAPIContracts.swift", import.meta.url),
+  "utf8"
+);
+const cloudWorkspaceStoreSwiftSource = readFileSync(
+  new URL("../ios/Volt/Services/CloudWorkspaceStore.swift", import.meta.url),
+  "utf8"
+);
+const mobileCloudAPIClientSwiftSource = readFileSync(
+  new URL("../ios/Volt/Services/MobileCloudAPIClient.swift", import.meta.url),
+  "utf8"
+);
 const scannerStoreCaptureActionsSwiftSource = readFileSync(
   new URL("../ios/Volt/Services/ScannerStoreCaptureActions.swift", import.meta.url),
   "utf8"
@@ -315,6 +331,31 @@ test("native capture session remains available without a WebRTC connection", () 
   assert.doesNotMatch(scannerStoreSwiftSource, /func recoverMostRecentPairedSession\(\) -> Bool/);
 });
 
+test("full app paid AI product scanning uses bounded photos and existing result delivery", () => {
+  assert.match(captureModeSwiftSource, /enum ProductScanMode: String, CaseIterable, Identifiable, Codable, Sendable/);
+  assert.match(captureModeSwiftSource, /case upc\s*case name/);
+  assert.match(captureModeSwiftSource, /case \.upc:[\s\S]*"barcode"[\s\S]*case \.name:[\s\S]*"textformat\.characters"/);
+  assert.match(scannerStoreSwiftSource, /var isProductScannerActive = false[\s\S]*var productScanMode: ProductScanMode = \.upc[\s\S]*var isProductScanBusy = false/);
+  assert.match(scannerStoreCaptureActionsSwiftSource, /func captureProduct\(\) async[\s\S]*capturePhoto\(matchingDeviceOrientation: true\)[\s\S]*boundedJPEGData\(maxLongEdge: 1600, maxBytes: 1_500_000\)[\s\S]*analyzeProductImage\(imageData, mode: mode\)/);
+  assert.match(scannerStoreCaptureActionsSwiftSource, /case \.upc:[\s\S]*kind: \.barcode,[\s\S]*format: "ai-upc\/\\\(normalized\.format\)"/);
+  assert.match(scannerStoreCaptureActionsSwiftSource, /case \.name:[\s\S]*kind: \.text,[\s\S]*format: "ai-item-name"/);
+  assert.match(cloudWorkspaceStoreSwiftSource, /func analyzeProductImage\(_ data: Data, mode: ProductScanMode\) async throws -> ProductScanResponse/);
+  assert.match(cloudAPIContractsSwiftSource, /struct ProductScanResponse: Decodable, Sendable[\s\S]*let value: String\?/);
+  assert.match(mobileCloudAPIClientSwiftSource, /api\/mobile\/ai\/analyze[\s\S]*URLQueryItem\(name: "mode", value: mode\.rawValue\)/);
+  assert.match(mobileCloudAPIClientSwiftSource, /setValue\("image\/jpeg", forHTTPHeaderField: "Content-Type"\)/);
+  assert.match(mobileCloudAPIClientSwiftSource, /X-Volt-Device-Id[\s\S]*X-Volt-Device-Secret/);
+  assert.match(mobileCloudAPIClientSwiftSource, /statusCode == 402[\s\S]*paidSubscriptionRequired/);
+  assert.match(sharedCameraSessionControlsSwiftSource, /var showsProductScanner = false[\s\S]*var productScanMode: ProductScanMode = \.upc/);
+  assert.match(sharedCameraSessionControlsSwiftSource, /if isProductScannerSelected, let onToggleProductScanMode[\s\S]*productScanToolSlot/);
+  assert.match(sharedCameraSessionControlsSwiftSource, /systemImage: productScanMode\.systemImage[\s\S]*SessionIconButton/);
+  assert.match(sharedCameraSessionControlsSwiftSource, /modeButton\("Audio", mode: \.dictation\)[\s\S]*productModeButton/);
+  assert.match(captureSessionViewSwiftSource, /showsProductScanner: true[\s\S]*isProductScannerSelected: store\.isProductScannerActive[\s\S]*productScannerAvailable: hasPaidProductScannerAccess/);
+  assert.match(captureSessionViewSwiftSource, /isRecognizingText: store\.isRecognizingText \|\| store\.isDictationBusy \|\| store\.isProductScanBusy/);
+  assert.match(captureSessionViewSwiftSource, /capturedThumbnails: store\.activeMode == \.photo && !store\.isProductScannerActive/);
+  assert.match(captureSessionViewSwiftSource, /if store\.isProductScannerActive \{\s*await store\.captureProduct\(\)/);
+  assert.match(captureSessionViewSwiftSource, /private var hasPaidProductScannerAccess: Bool \{\s*accessStore\.status\?\.access == \.subscription/);
+});
+
 test("unified camera starts from the hero card and history groups mixed captures", () => {
   // The bottom accessory duplicated the hero launch card, so the tab keeps only the card.
   assert.doesNotMatch(scannerViewSwiftSource, /ScannerBottomActionAccessory/);
@@ -452,10 +493,10 @@ test("native photo sessions stack captured shots in the bottom-left of the contr
     scannerStoreCaptureActionsSwiftSource,
     /func appendSessionPhotoThumbnail\(_ image: UIImage\) \{\s*sessionPhotoCount \+= 1/
   );
-  assert.match(captureSessionViewSwiftSource, /store\.activeMode = mode\s*store\.startSessionPhotoStrip\(\)/);
+  assert.match(captureSessionViewSwiftSource, /store\.activeMode = mode[\s\S]*store\.startSessionPhotoStrip\(\)/);
   assert.match(
     captureSessionViewSwiftSource,
-    /capturedThumbnails: store\.activeMode == \.photo \? store\.sessionPhotoThumbnails : \[\],\s*capturedCount: store\.sessionPhotoCount/
+    /capturedThumbnails: store\.activeMode == \.photo && !store\.isProductScannerActive \? store\.sessionPhotoThumbnails : \[\],\s*capturedCount: store\.sessionPhotoCount/
   );
   assert.match(sharedCameraSessionControlsSwiftSource, /struct CapturedPhotoStrip: View/);
   assert.match(sharedCameraSessionControlsSwiftSource, /private var leadingSlot: some View \{[\s\S]*CapturedPhotoStrip\(/);
@@ -1136,8 +1177,9 @@ test("full app presents Scan, unified History, and Settings roots", () => {
   assert.doesNotMatch(rootViewSwiftSource, /\.background\(\.bar\)|Divider\(\)/);
   assert.match(rootViewSwiftSource, /private var connectionsButton: some View[\s\S]*Image\(systemName: targetSymbol\)[\s\S]*\.frame\(width: 48, height: 48\)/);
   assert.match(rootViewSwiftSource, /private var targetSymbol: String[\s\S]*"cursorarrow\.motionlines"[\s\S]*"desktopcomputer\.trianglebadge\.exclamationmark"[\s\S]*"iphone"/);
-  assert.match(cloudTargetPickerSwiftSource, /Label\(targetLabel, systemImage: "pencil\.and\.scribble"\)[\s\S]*\.lineLimit\(1\)[\s\S]*\.frame\(minHeight: 48\)[\s\S]*\.contentShape\(Rectangle\(\)\)/);
-  assert.match(cloudTargetPickerSwiftSource, /struct CloudTargetLabel: View[\s\S]*Label\(Self\.targetLabel\(for: store\), systemImage: "pencil\.and\.scribble"\)[\s\S]*\.accessibilityElement\(children: \.combine\)/);
+  assert.match(cloudTargetPickerSwiftSource, /Label\(targetLabel, systemImage: "character\.cursor\.ibeam"\)[\s\S]*\.lineLimit\(1\)[\s\S]*\.frame\(minHeight: 48\)[\s\S]*\.contentShape\(Rectangle\(\)\)/);
+  assert.match(cloudTargetPickerSwiftSource, /struct CloudTargetLabel: View[\s\S]*Label\(Self\.targetLabel\(for: store\), systemImage: "character\.cursor\.ibeam"\)[\s\S]*\.accessibilityElement\(children: \.combine\)/);
+  assert.doesNotMatch(cloudTargetPickerSwiftSource, /pencil\.and\.scribble/);
   assert.match(scannerViewSwiftSource, /Text\("Scan"\)\.font\(\.largeTitle\.bold\(\)\)[\s\S]*CloudTargetLabel\(\)/);
   const scanHeaderStart = scannerViewSwiftSource.indexOf('Text("Scan").font(.largeTitle.bold())');
   const scanHeaderEnd = scannerViewSwiftSource.indexOf("UnifiedCaptureLaunchCard", scanHeaderStart);
@@ -1177,7 +1219,7 @@ test("full app side controls keep an explicit 48 point hit target with native gl
   assert.match(rootViewSwiftSource, /content\.buttonStyle\([\s\S]*\.glass\(\.regular\.tint\(/);
   assert.match(rootViewSwiftSource, /\.buttonStyle\(\.bordered\)/);
   assert.match(rootViewSwiftSource, /\.safeAreaInset\(edge: \.bottom, spacing: 0\)[\s\S]*RootTabBar\.reservedSpace/);
-  assert.match(rootViewSwiftSource, /\.overlay\(alignment: \.bottom\)[\s\S]*GeometryReader \{ proxy in[\s\S]*\.padding\(\.horizontal, 16\)[\s\S]*\.padding\(\.bottom, 16\)[\s\S]*\.offset\(y: proxy\.safeAreaInsets\.bottom\)/);
+  assert.match(rootViewSwiftSource, /\.overlay\(alignment: \.bottom\)[\s\S]*GeometryReader \{ proxy in[\s\S]*\.padding\(\.horizontal, 16\)[\s\S]*\.padding\(\.bottom, 20\)[\s\S]*\.offset\(y: proxy\.safeAreaInsets\.bottom\)/);
   assert.match(settingsViewSwiftSource, /struct SettingsSheet: View[\s\S]*SettingsView\(showsAccountSettings: showsAccountSettings, showsDoneButton: true\)[\s\S]*\.presentationDetents\(\[\.medium, \.large\]\)[\s\S]*\.presentationDragIndicator\(\.visible\)/);
   assert.match(settingsViewSwiftSource, /if !showsDoneButton \{\s*store\.selectedSection = \.settings/);
 });

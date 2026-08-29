@@ -30,12 +30,19 @@ struct CameraSessionControls: View {
     var capturedCount = 0
     var sessionItemCount = 0
     var controlRotation: Angle = .zero
+    var showsProductScanner = false
+    var isProductScannerSelected = false
+    var productScannerAvailable = true
+    var productScanMode: ProductScanMode = .upc
     let onToggleTorch: () -> Void
     let onZoomOut: () -> Void
     let onZoomIn: () -> Void
     let onToggleGrid: () -> Void
     let onCapture: () -> Void
     var onSendLatest: (() -> Void)?
+    var onSelectProductScanner: (() -> Void)?
+    var onToggleProductScanMode: (() -> Void)?
+    var onDeactivateProductScanner: (() -> Void)?
     let onFinish: () -> Void
 
     var body: some View {
@@ -68,6 +75,9 @@ struct CameraSessionControls: View {
                         modeButton("Barcode", mode: .barcode)
                         modeButton("Photo", mode: .photo)
                         modeButton("Audio", mode: .dictation)
+                        if showsProductScanner, let onSelectProductScanner {
+                            productModeButton(action: onSelectProductScanner)
+                        }
                     }
                     .padding(.horizontal, 18)
                 }
@@ -107,7 +117,11 @@ struct CameraSessionControls: View {
 
     private var cameraToolsRow: some View {
         HStack {
-            gridToolSlot
+            if isProductScannerSelected, let onToggleProductScanMode {
+                productScanToolSlot(action: onToggleProductScanMode)
+            } else {
+                gridToolSlot
+            }
 
             Spacer()
 
@@ -227,7 +241,11 @@ struct CameraSessionControls: View {
     }
 
     private var captureHint: String {
-        switch activeMode {
+        if isProductScannerSelected {
+            return productScanMode.hint
+        }
+
+        return switch activeMode {
         case .ocr:
             hasLiveTextCandidates ? "Tap a recognized chip to send" : "Frame device identifiers"
         case .barcode:
@@ -241,6 +259,7 @@ struct CameraSessionControls: View {
 
     private func modeButton(_ title: String, mode: CaptureMode) -> some View {
         Button {
+            onDeactivateProductScanner?()
             activeMode = mode
         } label: {
             VStack(spacing: 5) {
@@ -256,6 +275,37 @@ struct CameraSessionControls: View {
         .buttonStyle(.plain)
         .accessibilityAddTraits(activeMode == mode ? .isSelected : [])
         .accessibilityLabel("Capture mode \(title)")
+    }
+
+    private func productModeButton(action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 5) {
+                Text("AI")
+                    .font(.subheadline.weight(isProductScannerSelected ? .bold : .medium))
+                Capsule()
+                    .fill(isProductScannerSelected ? .white : .clear)
+                    .frame(width: 22, height: 3)
+            }
+            .foregroundStyle(.white.opacity(productScannerAvailable ? 0.92 : 0.56))
+            .frame(minWidth: 52, minHeight: 36)
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isProductScannerSelected ? .isSelected : [])
+        .accessibilityLabel("AI product scan")
+        .accessibilityValue(productScannerAvailable ? "Available" : "Requires a paid Volt subscription")
+        .accessibilityHint("Returns the selected product UPC or name")
+    }
+
+    private func productScanToolSlot(action: @escaping () -> Void) -> some View {
+        toolSlot {
+            SessionIconButton(
+                systemImage: productScanMode.systemImage,
+                isEnabled: isCaptureEnabled && productScannerAvailable,
+                label: productScanMode == .upc ? "Product scan UPC; switch to name" : "Product scan name; switch to UPC",
+                rotation: controlRotation,
+                action: action
+            )
+        }
     }
 
     private var shutterSymbol: String {

@@ -4,7 +4,7 @@ struct CloudTargetLabel: View {
     @Environment(ScannerStore.self) private var store
 
     var body: some View {
-        Label(Self.targetLabel(for: store), systemImage: "pencil.and.scribble")
+        Label(Self.targetLabel(for: store), systemImage: "character.cursor.ibeam")
             .font(.headline.weight(.semibold))
             .lineLimit(1)
             .accessibilityElement(children: .combine)
@@ -22,7 +22,7 @@ struct CloudTargetButton: View {
 
     var body: some View {
         Button(action: action) {
-            Label(targetLabel, systemImage: "pencil.and.scribble")
+            Label(targetLabel, systemImage: "character.cursor.ibeam")
                 .font(.headline.weight(.semibold))
                 .lineLimit(1)
                 .frame(minHeight: 48)
