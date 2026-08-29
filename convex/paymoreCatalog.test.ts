@@ -52,8 +52,28 @@ const getByUpc = makeFunctionReference<
     sourceUrls: string[];
     createdAt: number;
     updatedAt: number;
-  } | null
+} | null
 >("paymoreCatalog:getByUpc");
+const searchCatalog = makeFunctionReference<
+  "query",
+  { searchQuery?: string; paginationOpts: { numItems: number; cursor: string | null } },
+  {
+    page: Array<{
+      upc: string;
+      title: string;
+      platform: string | null;
+      edition: string | null;
+      brand: string | null;
+      model: string | null;
+      color: string | null;
+      storage: string | null;
+      carrier: string | null;
+      updatedAt: number;
+    }>;
+    isDone: boolean;
+    continueCursor: string | null;
+  }
+>("paymoreCatalog:searchCatalog");
 
 const ROCKVILLE_CLAIR =
   "https://rockvillemd.paymore.com/products/new-clair-obscur-expedition-33-lumiere-edition-sony-playstation-5-ps5-2025";
@@ -358,5 +378,60 @@ describe("PayMore catalog Convex storage", () => {
       upc: "077000052063",
       sourceUrls: [ROCKVILLE_GALAXIAN],
     });
+  });
+});
+
+describe("PayMore catalog search", () => {
+  async function ingestTwoProducts(t: ReturnType<typeof convexTest>) {
+    await t.mutation(ingestPages, {
+      pages: [
+        { sourceUrl: ROCKVILLE_GALAXIAN, body: GALAXIAN_HTML },
+        { sourceUrl: ROCKVILLE_MARIO, body: MARIO_HTML },
+      ],
+    });
+  }
+
+  test("requires authentication", async () => {
+    const t = convexTest(schema, modules);
+    await expect(
+      t.query(searchCatalog, { paginationOpts: { numItems: 25, cursor: null } }),
+    ).rejects.toThrow(/Not authenticated/);
+  });
+
+  test("returns every product for an empty query in title order", async () => {
+    const t = convexTest(schema, modules);
+    await ingestTwoProducts(t);
+    const authed = t.withIdentity({ subject: "catalog-user", tokenIdentifier: "clerk|catalog-user" });
+    const result = await authed.query(searchCatalog, {
+      searchQuery: "",
+      paginationOpts: { numItems: 25, cursor: null },
+    });
+    expect(result.page.map((product) => product.title)).toEqual(["Galaxian", "Super Mario Bros"]);
+    expect(result.isDone).toBe(true);
+  });
+
+  test("matches a single product by title search", async () => {
+    const t = convexTest(schema, modules);
+    await ingestTwoProducts(t);
+    const authed = t.withIdentity({ subject: "catalog-user", tokenIdentifier: "clerk|catalog-user" });
+    const result = await authed.query(searchCatalog, {
+      searchQuery: "Mario",
+      paginationOpts: { numItems: 25, cursor: null },
+    });
+    expect(result.page).toHaveLength(1);
+    expect(result.page[0]).toMatchObject({ upc: "074299009129", title: "Super Mario Bros" });
+  });
+
+  test("matches an exact UPC for an all-digit query", async () => {
+    const t = convexTest(schema, modules);
+    await ingestTwoProducts(t);
+    const authed = t.withIdentity({ subject: "catalog-user", tokenIdentifier: "clerk|catalog-user" });
+    const result = await authed.query(searchCatalog, {
+      searchQuery: "077000052063",
+      paginationOpts: { numItems: 25, cursor: null },
+    });
+    expect(result.page).toHaveLength(1);
+    expect(result.page[0]).toMatchObject({ upc: "077000052063", title: "Galaxian" });
+    expect(result.isDone).toBe(true);
   });
 });

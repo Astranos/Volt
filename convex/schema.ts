@@ -369,7 +369,10 @@ export default defineSchema({
     attributes: v.record(v.string(), v.string()),
     createdAt: v.number(),
     updatedAt: v.number(),
-  }).index("by_upc", ["upc"]),
+  })
+    .index("by_upc", ["upc"])
+    .index("by_title", ["title"])
+    .searchIndex("search_title", { searchField: "title" }),
 
   paymoreCatalogSources: defineTable({
     productId: v.id("paymoreCatalogProducts"),

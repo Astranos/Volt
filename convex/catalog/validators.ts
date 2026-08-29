@@ -77,3 +77,16 @@ export const storedCatalogProductValidator = v.object({
   createdAt: v.number(),
   updatedAt: v.number(),
 });
+
+export const catalogSummaryValidator = v.object({
+  upc: v.string(),
+  title: v.string(),
+  platform: nullableString,
+  edition: nullableString,
+  brand: nullableString,
+  model: nullableString,
+  color: nullableString,
+  storage: nullableString,
+  carrier: nullableString,
+  updatedAt: v.number(),
+});

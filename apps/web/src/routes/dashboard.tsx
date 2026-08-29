@@ -57,6 +57,9 @@ function DashboardHeader({ ready }: { ready: boolean }) {
           <h1 className="truncate text-sm font-semibold text-zinc-950">
             Workspace
           </h1>
+          <a href="/catalog" className="text-xs font-semibold text-zinc-600 hover:text-zinc-950">
+            Catalog
+          </a>
         </div>
 
         <div className="flex items-center gap-3">
