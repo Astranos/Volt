@@ -6,6 +6,7 @@ import { api } from "../../../../convex/_generated/api";
 
 import { authConfigured } from "../components/app-providers";
 import { AuthUnavailable } from "../components/auth-page";
+import { WorkspaceProvider } from "../components/workspace-provider";
 
 export const Route = createFileRoute("/catalog")({
   component: CatalogPage,
@@ -30,7 +31,12 @@ function CatalogPage() {
         ) : (
           <>
             <SignedIn>
-              <CatalogBrowser />
+              {/* Same rule as the workspace route: the Convex client only
+                  exists under this provider, so pagination hooks must stay
+                  inside it. */}
+              <WorkspaceProvider>
+                <CatalogBrowser />
+              </WorkspaceProvider>
             </SignedIn>
             <SignedOut>
               <RedirectToSignIn />
