@@ -4,6 +4,8 @@ export type AIAnalysisResult = {
   mode: AIScannerMode;
   value: string | null;
   format: "upc_a" | "item-name";
+  identifiedName?: string | null;
+  platform?: string | null;
 };
 
 export class AIScannerError extends Error {
@@ -18,10 +20,10 @@ export class AIScannerError extends Error {
 
 export const AI_SCANNER_MODEL = "z-ai/glm-5.3-flash";
 export const AI_SCANNER_MAX_IMAGE_BYTES = 1_500_000;
-export const AI_SCANNER_TIMEOUT_MS = 20_000;
+export const AI_SCANNER_TIMEOUT_MS = 45_000;
 
 const UPC_PROMPT =
-  'Identify a single consumer retail UPC-A from the pictured item, game case, or disc. Return only JSON in the form {"upc":"12 digits or null"}. Never invent a code; return null when it is unreadable or uncertain. If an EAN-13 starts with 0, return its equivalent 12-digit UPC-A.';
+  'Identify the exact retail game release shown by this item, game case, or disc, including platform and edition when visible. The barcode does not need to be visible. Use web search to find a supported UPC candidate for that exact release. Return only JSON in the form {"name":"exact title or null","platform":"platform or null","upc":"12 digits or null"}. Never invent a code. Return a UPC only when search evidence supports the same title and platform. If an EAN-13 starts with 0, return its equivalent 12-digit UPC-A.';
 const NAME_PROMPT =
   'Identify the exact product title or name shown by this item, game disc, or game case. Return only JSON in the form {"name":"title or null"}. Do not describe condition or add explanation. Return null when the item cannot be identified confidently.';
 
@@ -80,6 +82,12 @@ export function normalizeItemName(value: string): string | null {
   return normalized;
 }
 
+function normalizePlatform(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().replace(/\s+/g, " ");
+  return normalized && normalized.length <= 80 ? normalized : null;
+}
+
 function promptForMode(mode: AIScannerMode): string {
   return mode === "upc" ? UPC_PROMPT : NAME_PROMPT;
 }
@@ -95,7 +103,13 @@ export function parseAIResponse(mode: AIScannerMode, content: string): AIAnalysi
   const payload = objectFrom(parsed);
   if (mode === "upc") {
     const raw = payload.upc;
-    return { mode, value: typeof raw === "string" ? normalizeUPCA(raw) : null, format: "upc_a" };
+    return {
+      mode,
+      value: typeof raw === "string" ? normalizeUPCA(raw) : null,
+      format: "upc_a",
+      identifiedName: typeof payload.name === "string" ? normalizeItemName(payload.name) : null,
+      platform: normalizePlatform(payload.platform),
+    };
   }
   const raw = payload.name;
   return { mode, value: typeof raw === "string" ? normalizeItemName(raw) : null, format: "item-name" };
@@ -112,7 +126,7 @@ function base64FromBytes(bytes: ArrayBuffer): string {
 }
 
 export function buildOpenRouterRequest(mode: AIScannerMode, imageBytes: ArrayBuffer): string {
-  return JSON.stringify({
+  const request: Record<string, unknown> = {
     model: AI_SCANNER_MODEL,
     messages: [{
       role: "user",
@@ -123,11 +137,119 @@ export function buildOpenRouterRequest(mode: AIScannerMode, imageBytes: ArrayBuf
     }],
     response_format: { type: "json_object" },
     temperature: 0,
-    max_tokens: 128,
+    // GLM uses this same budget for hidden reasoning and the JSON answer. A
+    // small cap can finish with `content: null` after spending every token on
+    // reasoning, especially when UPC mode invokes web search.
+    max_tokens: mode === "upc" ? 1_200 : 512,
     reasoning_effort: "low",
     include_reasoning: false,
     provider: { require_parameters: true },
-  });
+  };
+  if (mode === "upc") {
+    request.tools = [{
+      type: "openrouter:web_search",
+      parameters: {
+        engine: "exa",
+        mode: "fast",
+        max_results: 5,
+        max_uses: 2,
+        max_total_results: 8,
+        max_characters: 2_000,
+      },
+    }];
+    request.max_tool_calls = 2;
+  }
+  return JSON.stringify(request);
+}
+
+const PLATFORM_ALIASES: ReadonlyArray<readonly [string, readonly string[]]> = [
+  ["ps5", ["playstation5", "ps5"]],
+  ["ps4", ["playstation4", "ps4"]],
+  ["ps3", ["playstation3", "ps3"]],
+  ["ps2", ["playstation2", "ps2"]],
+  ["ps1", ["playstation1", "playstation", "ps1", "psx"]],
+  ["xboxseries", ["xboxseriesx", "xboxseriess", "xboxseries"]],
+  ["xboxone", ["xboxone"]],
+  ["xbox360", ["xbox360"]],
+  ["switch2", ["nintendoswitch2", "switch2"]],
+  ["switch", ["nintendoswitch", "switch"]],
+  ["wiiu", ["nintendowiiu", "wiiu"]],
+  ["wii", ["nintendowii", "wii"]],
+  ["gamecube", ["nintendogamecube", "gamecube"]],
+  ["n64", ["nintendo64", "n64"]],
+  ["snes", ["supernintendo", "snes"]],
+  ["nes", ["nintendoentertainmentsystem", "nes"]],
+  ["3ds", ["nintendo3ds", "3ds"]],
+  ["ds", ["nintendods", "ds"]],
+  ["dreamcast", ["segadreamcast", "dreamcast"]],
+  ["saturn", ["segasaturn", "saturn"]],
+  ["genesis", ["segagenesis", "megadrive", "genesis"]],
+];
+
+function compactCatalogText(value: string): string {
+  return value
+    .normalize("NFKD")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+function canonicalPlatform(value: string): string | null {
+  const compact = compactCatalogText(value);
+  return PLATFORM_ALIASES.find(([, aliases]) => aliases.some((alias) => compact.includes(alias)))?.[0] ?? null;
+}
+
+const TITLE_NOISE_TOKENS = new Set(["a", "an", "the", "edition", "game", "video"]);
+
+function catalogTitleTokens(value: string): string[] {
+  return value
+    .normalize("NFKD")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .filter((token) => token && !TITLE_NOISE_TOKENS.has(token));
+}
+
+function titleMatchesProductSlug(name: string, productSlug: string): boolean {
+  const expected = catalogTitleTokens(name);
+  const actual = new Set(catalogTitleTokens(productSlug));
+  if (expected.length === 0) return false;
+  const numericTokens = expected.filter((token) => /^\d+$/.test(token));
+  if (numericTokens.some((token) => !actual.has(token))) return false;
+  const matching = expected.filter((token) => actual.has(token)).length;
+  return matching >= Math.min(2, expected.length) && matching / expected.length >= 0.65;
+}
+
+export async function verifyPriceChartingUPC(
+  upc: string,
+  identifiedName: string | null | undefined,
+  platform: string | null | undefined,
+  fetchImpl: typeof fetch = fetch,
+  signal?: AbortSignal,
+): Promise<string | null> {
+  const normalizedUPC = normalizeUPCA(upc);
+  if (!normalizedUPC || !identifiedName) return null;
+  const searchURL = new URL("https://www.pricecharting.com/search-products");
+  searchURL.searchParams.set("q", normalizedUPC);
+  searchURL.searchParams.set("type", "prices");
+  const response = await fetchImpl(searchURL, { method: "GET", redirect: "manual", signal });
+  if (![301, 302, 303, 307, 308].includes(response.status)) {
+    if (response.ok) return null;
+    throw new AIScannerError(response.status === 429 ? 429 : 502, response.status === 429 ? "upstream-rate-limited" : "upstream-failed");
+  }
+  const location = response.headers.get("location");
+  if (!location) throw new AIScannerError(502, "upstream-failed");
+  const destination = new URL(location, searchURL);
+  if (destination.origin !== "https://www.pricecharting.com") return null;
+  const parts = destination.pathname.split("/").filter(Boolean);
+  if (parts.length !== 3 || parts[0] !== "game") return null;
+  if (destination.searchParams.get("q")?.trim() !== normalizedUPC) return null;
+  const [, consoleSlug, productSlug] = parts;
+  if (!titleMatchesProductSlug(identifiedName, productSlug)) return null;
+  const expectedPlatform = platform ? canonicalPlatform(platform) : null;
+  const resolvedPlatform = canonicalPlatform(consoleSlug);
+  if (expectedPlatform && resolvedPlatform && expectedPlatform !== resolvedPlatform) return null;
+  return normalizedUPC;
 }
 
 function contentFromResponse(value: unknown): string | null {
@@ -170,7 +292,18 @@ export async function requestOpenRouterAnalysis(
     const responseBody: unknown = await response.json();
     const content = contentFromResponse(responseBody);
     if (!content) throw new AIScannerError(502, "upstream-failed");
-    return parseAIResponse(mode, content);
+    const analysis = parseAIResponse(mode, content);
+    if (mode !== "upc" || !analysis.value) return analysis;
+    return {
+      ...analysis,
+      value: await verifyPriceChartingUPC(
+        analysis.value,
+        analysis.identifiedName,
+        analysis.platform,
+        options.fetchImpl ?? fetch,
+        controller.signal,
+      ),
+    };
   } catch (error) {
     if (error instanceof AIScannerError) throw error;
     if (controller.signal.aborted) throw new AIScannerError(504, "upstream-timeout");

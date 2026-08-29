@@ -101,11 +101,11 @@ test("full app launches signed-in users immediately and refreshes access in the 
   assert.match(rootSceneSource, /else \{\s*RootView\(\)/);
   assert.doesNotMatch(rootSceneSource, /FullAppAccessLoadingView|SubscriptionPaywallView/);
   assert.match(rootSceneSource, /\.task\(id: authenticationContext\) \{\s*await refreshAuthenticatedAccess\(\)/);
-  assert.match(rootSceneSource, /\.task\(id: cloudWorkspaceContext\) \{\s*await configureCloudWorkspace\(\)/);
+  assert.match(rootSceneSource, /\.task\(id: credentialContext\) \{\s*await configureDeviceCredential\(\)/);
+  assert.match(rootSceneSource, /\.task\(id: cloudWorkspaceCapabilityContext\) \{\s*configureCloudWorkspaceCapability\(\)/);
   assert.match(rootSceneSource, /await accessStore\.refresh\(using: clerk\)/);
-  assert.match(rootSceneSource, /setCloudWorkspaceEnabled\(false\)[\s\S]*await scannerStore\.cloudWorkspace\.bootstrapIfNeeded\(using: clerk\)/);
   assert.match(rootSceneSource, /await scannerStore\.cloudWorkspace\.bootstrapIfNeeded\(using: clerk\)/);
-  assert.match(rootSceneSource, /setCloudWorkspaceEnabled\([\s\n]*accessStore\.status\?\.capabilities\.cloudWorkspace == true/);
+  assert.match(rootSceneSource, /setCloudWorkspaceEnabled\([\s\n]*clerk\.user != nil && accessStore\.status\?\.capabilities\.cloudWorkspace == true/);
   assert.match(subscriptionViewSource, /struct SubscriptionPaywallView: View/);
   assert.match(storeKitSource, /subscription\.isEligibleForIntroOffer/);
   assert.match(storeKitSource, /offer\.paymentMode == \.freeTrial/);

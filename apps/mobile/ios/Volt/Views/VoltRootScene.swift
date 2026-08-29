@@ -32,8 +32,11 @@ struct VoltRootScene: View {
             .task(id: authenticationContext) {
                 await refreshAuthenticatedAccess()
             }
-            .task(id: cloudWorkspaceContext) {
-                await configureCloudWorkspace()
+            .task(id: credentialContext) {
+                await configureDeviceCredential()
+            }
+            .task(id: cloudWorkspaceCapabilityContext) {
+                configureCloudWorkspaceCapability()
             }
     }
 
@@ -43,7 +46,11 @@ struct VoltRootScene: View {
             .joined(separator: ":")
     }
 
-    private var cloudWorkspaceContext: String {
+    private var credentialContext: String {
+        clerk.user?.id ?? "signed-out"
+    }
+
+    private var cloudWorkspaceCapabilityContext: String {
         "\(clerk.user?.id ?? "signed-out"):\(accessStore.status?.capabilities.cloudWorkspace == true)"
     }
 
@@ -54,16 +61,13 @@ struct VoltRootScene: View {
         await subscriptionStore.refreshCurrentEntitlements(using: clerk)
     }
 
-    private func configureCloudWorkspace() async {
-        guard clerk.user != nil else {
-            scannerStore.cloudWorkspace.setCloudWorkspaceEnabled(false)
-            scannerStore.cloudWorkspace.setSubscriptionsActive(false)
-            return
-        }
-        scannerStore.cloudWorkspace.setCloudWorkspaceEnabled(false)
+    private func configureDeviceCredential() async {
         await scannerStore.cloudWorkspace.bootstrapIfNeeded(using: clerk)
+    }
+
+    private func configureCloudWorkspaceCapability() {
         scannerStore.cloudWorkspace.setCloudWorkspaceEnabled(
-            accessStore.status?.capabilities.cloudWorkspace == true
+            clerk.user != nil && accessStore.status?.capabilities.cloudWorkspace == true
         )
     }
 }

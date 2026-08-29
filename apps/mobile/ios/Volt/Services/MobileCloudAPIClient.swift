@@ -215,7 +215,7 @@ enum MobileCloudError: LocalizedError, Equatable {
 
     var errorDescription: String? {
         switch self {
-        case .credentialRevoked: "This device credential is no longer valid. Sign in again to reconnect it."
+        case .credentialRevoked: "Volt couldn't reconnect this iPhone. Try again."
         case .cloudWorkspaceRequired: "Volt Pro cloud workspace access is required for cloud sync."
         case .aiQuotaExhausted: "Your AI scan limit is used up for this period. Upgrade to Volt Pro or try again after it resets."
         case .aiRateLimited: "AI scanning is busy right now. Try again in a moment."

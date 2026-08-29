@@ -7,6 +7,7 @@ import {
   normalizeUPCA,
   parseAIResponse,
   requestOpenRouterAnalysis,
+  verifyPriceChartingUPC,
 } from "./aiScanner";
 describe("AI scanner parsing", () => {
   test("validates UPC-A and normalizes a valid leading-zero EAN-13", () => {
@@ -28,6 +29,8 @@ describe("AI scanner parsing", () => {
       mode: "upc",
       value: "036000291452",
       format: "upc_a",
+      identifiedName: null,
+      platform: null,
     });
     expect(parseAIResponse("name", '```json\n{"name":"Unknown"}\n```')).toEqual({
       mode: "name",
@@ -57,5 +60,47 @@ describe("AI scanner parsing", () => {
     expect(body.response_format.type).toBe("json_object");
     expect(body.messages[0].content[1].image_url?.url).toBe("data:image/jpeg;base64,AQID");
     expect(buildOpenRouterRequest("name", new ArrayBuffer(0))).toContain("image/jpeg");
+  });
+
+  test("gives UPC mode bounded web search and verifies the candidate with PriceCharting", async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async (input) => {
+      const url = String(input);
+      if (url === "https://openrouter.ai/api/v1/chat/completions") {
+        return new Response(JSON.stringify({
+          choices: [{ message: { content: '{"name":"Grand Theft Auto: San Andreas","platform":"PS2","upc":"710425274107"}' } }],
+        }), { status: 200 });
+      }
+      return new Response(null, {
+        status: 307,
+        headers: { location: "https://www.pricecharting.com/game/playstation-2/grand-theft-auto-san-andreas?q=710425274107" },
+      });
+    });
+    const result = await requestOpenRouterAnalysis("upc", Uint8Array.from([1, 2, 3]).buffer, {
+      apiKey: "server-only-key",
+      fetchImpl,
+    });
+    expect(result.value).toBe("710425274107");
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    const body = JSON.parse(String(fetchImpl.mock.calls[0][1]?.body)) as {
+      tools: Array<{ type: string; parameters: { max_uses: number } }>;
+      max_tool_calls: number;
+    };
+    expect(body.tools[0]).toMatchObject({ type: "openrouter:web_search", parameters: { max_uses: 2 } });
+    expect(body.max_tool_calls).toBe(2);
+    expect(fetchImpl.mock.calls[1][1]).toMatchObject({ method: "GET", redirect: "manual" });
+  });
+
+  test("rejects PriceCharting no-results and conflicting product redirects", async () => {
+    const noResultFetch = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, {
+      status: 307,
+      headers: { location: "https://www.pricecharting.com/search-products?category=no-results&q=710425274107&type=prices" },
+    }));
+    await expect(verifyPriceChartingUPC("710425274107", "Grand Theft Auto: San Andreas", "PS2", noResultFetch)).resolves.toBeNull();
+
+    const wrongProductFetch = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, {
+      status: 307,
+      headers: { location: "https://www.pricecharting.com/game/playstation-2/bully?q=710425274107" },
+    }));
+    await expect(verifyPriceChartingUPC("710425274107", "Grand Theft Auto: San Andreas", "PS2", wrongProductFetch)).resolves.toBeNull();
   });
 });

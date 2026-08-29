@@ -1,3 +1,4 @@
+import ClerkKit
 import CoreImage
 import CoreImage.CIFilterBuiltins
 import UIKit
@@ -46,7 +47,8 @@ extension ScannerStore {
 
     func capture() async {
         if isProductScannerActive {
-            await captureProduct()
+            productScanError = "AI scanning is still preparing. Try again."
+            statusText = productScanError ?? "AI scanner unavailable"
             return
         }
 
@@ -82,7 +84,7 @@ extension ScannerStore {
         productScanError = nil
     }
 
-    func captureProduct() async {
+    func captureProduct(using clerk: Clerk) async {
         guard !isProductScanBusy else { return }
         guard !isProductScanQuotaExhausted else {
             productScanError = MobileCloudError.aiQuotaExhausted(productScanQuota).localizedDescription
@@ -113,7 +115,12 @@ extension ScannerStore {
         }
 
         do {
-            let response = try await cloudWorkspace.analyzeProductImage(imageData, mode: mode, requestId: requestId)
+            let response = try await cloudWorkspace.analyzeProductImage(
+                imageData,
+                mode: mode,
+                requestId: requestId,
+                using: clerk
+            )
             updateProductScanQuota(response.quota)
             guard let responseValue = response.value else {
                 throw ProductScanCaptureError.emptyResult

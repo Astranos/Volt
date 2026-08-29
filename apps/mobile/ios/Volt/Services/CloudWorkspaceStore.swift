@@ -30,6 +30,12 @@ private struct InFlightDelivery: Equatable, Sendable {
     let giveUpAt: Date
 }
 
+private struct CredentialBootstrapAttempt {
+    let id: UUID
+    let clerkUserId: String
+    let task: Task<Void, Never>
+}
+
 @MainActor
 @Observable
 final class CloudWorkspaceStore {
@@ -47,6 +53,7 @@ final class CloudWorkspaceStore {
     @ObservationIgnored private let outbox: DurableCaptureOutbox
     @ObservationIgnored private var authenticatedClerkUserId: String?
     @ObservationIgnored private var lastBootstrappedClerkUserId: String?
+    @ObservationIgnored private var credentialBootstrapAttempt: CredentialBootstrapAttempt?
     @ObservationIgnored private var syncTask: Task<Void, Never>?
     @ObservationIgnored private var retryTask: Task<Void, Never>?
     @ObservationIgnored private var computersSubscriptionTask: Task<Void, Never>?
@@ -132,17 +139,41 @@ final class CloudWorkspaceStore {
             return
         }
 
-        guard !isBootstrapping else { return }
-        cancelUploadTasks()
-        isBootstrapping = true
-        defer { isBootstrapping = false }
+        if let attempt = credentialBootstrapAttempt {
+            await attempt.task.value
+            finishCredentialBootstrapAttempt(id: attempt.id)
+            if attempt.clerkUserId != clerkUserId {
+                await bootstrapIfNeeded(using: clerk)
+            }
+            return
+        }
 
+        cancelUploadTasks()
+        let attemptID = UUID()
+        isBootstrapping = true
+        let task: Task<Void, Never> = Task { @MainActor [weak self] in
+            guard let self else { return }
+            await self.performCredentialBootstrap(using: clerk, clerkUserId: clerkUserId)
+        }
+        credentialBootstrapAttempt = CredentialBootstrapAttempt(
+            id: attemptID,
+            clerkUserId: clerkUserId,
+            task: task
+        )
+        await task.value
+        finishCredentialBootstrapAttempt(id: attemptID)
+    }
+
+    private func performCredentialBootstrap(using clerk: Clerk, clerkUserId: String) async {
         do {
             let bearerToken = try await freshBearerToken(using: clerk)
             let response = try await bootstrapResponse(
                 bearerToken: bearerToken,
                 clerkUserId: clerkUserId
             )
+            guard authenticatedClerkUserId == clerkUserId,
+                  response.clerkUserId == clerkUserId
+            else { return }
             let nextCredential = CloudDeviceCredential(
                 value: response.deviceSecret,
                 deviceId: response.deviceId,
@@ -167,6 +198,12 @@ final class CloudWorkspaceStore {
             lastError = error.localizedDescription
             requestSync()
         }
+    }
+
+    private func finishCredentialBootstrapAttempt(id: UUID) {
+        guard credentialBootstrapAttempt?.id == id else { return }
+        credentialBootstrapAttempt = nil
+        isBootstrapping = false
     }
 
     func setSubscriptionsActive(_ isActive: Bool) {
@@ -336,11 +373,40 @@ final class CloudWorkspaceStore {
         return false
     }
 
-    func analyzeProductImage(_ data: Data, mode: ProductScanMode, requestId: UUID) async throws -> ProductScanResponse {
+    func analyzeProductImage(
+        _ data: Data,
+        mode: ProductScanMode,
+        requestId: UUID,
+        using clerk: Clerk
+    ) async throws -> ProductScanResponse {
+        await bootstrapIfNeeded(using: clerk)
         guard let credential = activeCredential else {
             throw MobileCloudError.credentialRevoked
         }
-        return try await api.analyzeProductImage(
+        do {
+            return try await requestProductAnalysis(data, mode: mode, requestId: requestId, credential: credential)
+        } catch MobileCloudError.credentialRevoked {
+            revokeLocalCredential()
+            await bootstrapIfNeeded(using: clerk)
+            guard let recoveredCredential = activeCredential else {
+                throw MobileCloudError.credentialRevoked
+            }
+            return try await requestProductAnalysis(
+                data,
+                mode: mode,
+                requestId: requestId,
+                credential: recoveredCredential
+            )
+        }
+    }
+
+    private func requestProductAnalysis(
+        _ data: Data,
+        mode: ProductScanMode,
+        requestId: UUID,
+        credential: CloudDeviceCredential
+    ) async throws -> ProductScanResponse {
+        try await api.analyzeProductImage(
             data,
             mode: mode,
             deviceId: credential.deviceId,
@@ -635,6 +701,9 @@ final class CloudWorkspaceStore {
     }
 
     private func pauseForSignOut() {
+        credentialBootstrapAttempt?.task.cancel()
+        credentialBootstrapAttempt = nil
+        isBootstrapping = false
         authenticatedClerkUserId = nil
         lastBootstrappedClerkUserId = nil
         cloudWorkspaceEnabled = false

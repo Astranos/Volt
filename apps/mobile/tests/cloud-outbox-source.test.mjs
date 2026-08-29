@@ -85,6 +85,10 @@ test("signed-in installed app bootstraps a Clerk-owned stable installation crede
   assert.match(workspaceSource, /existingDeviceId: existingDeviceId/);
   assert.match(workspaceSource, /ownerClerkUserId: response\.clerkUserId/);
   assert.match(rootSceneSource, /cloudWorkspace\.bootstrapIfNeeded\(using: clerk\)/);
+  assert.match(rootSceneSource, /private var credentialContext: String \{\s*clerk\.user\?\.id \?\? "signed-out"/);
+  assert.match(workspaceSource, /private var credentialBootstrapAttempt: CredentialBootstrapAttempt\?/);
+  assert.match(workspaceSource, /if let attempt = credentialBootstrapAttempt \{\s*await attempt\.task\.value/);
+  assert.match(workspaceSource, /Task \{ @MainActor \[weak self\] in\s*guard let self else \{ return \}\s*await self\.performCredentialBootstrap/);
   assert.match(workspaceSource, /template: AppConfiguration\.clerkJWTTemplate/);
   assert.match(workspaceSource, /skipCache: true/);
 });

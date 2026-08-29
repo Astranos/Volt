@@ -1,8 +1,10 @@
+import ClerkKit
 import SwiftUI
 
 struct CaptureSessionView: View {
     @Environment(ScannerStore.self) private var store
     @Environment(AccessStore.self) private var accessStore
+    @Environment(Clerk.self) private var clerk
     @Binding var isPresented: Bool
     let mode: CaptureMode
     @State private var gridVisible = true
@@ -168,7 +170,7 @@ struct CaptureSessionView: View {
                                     if store.isProductScanQuotaExhausted {
                                         isSubscriptionPaywallPresented = true
                                     } else {
-                                        await store.captureProduct()
+                                        await store.captureProduct(using: clerk)
                                     }
                                 } else if store.activeMode == .dictation {
                                     if store.isDictating {

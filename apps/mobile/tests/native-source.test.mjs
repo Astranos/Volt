@@ -336,12 +336,13 @@ test("signed-in AI product scanning is metered, request-id scoped, and uses exis
   assert.match(captureModeSwiftSource, /case upc\s*case name/);
   assert.match(captureModeSwiftSource, /case \.upc:[\s\S]*"barcode"[\s\S]*case \.name:[\s\S]*"textformat\.characters"/);
   assert.match(scannerStoreSwiftSource, /var isProductScannerActive = false[\s\S]*var productScanMode: ProductScanMode = \.upc[\s\S]*var isProductScanBusy = false/);
-  assert.match(scannerStoreCaptureActionsSwiftSource, /func captureProduct\(\) async[\s\S]*guard !isProductScanQuotaExhausted[\s\S]*let requestId = UUID\(\)[\s\S]*capturePhoto\(matchingDeviceOrientation: true\)[\s\S]*boundedJPEGData\(maxLongEdge: 1600, maxBytes: 1_500_000\)[\s\S]*analyzeProductImage\(imageData, mode: mode, requestId: requestId\)/);
+  assert.match(scannerStoreCaptureActionsSwiftSource, /func captureProduct\(using clerk: Clerk\) async[\s\S]*guard !isProductScanQuotaExhausted[\s\S]*let requestId = UUID\(\)[\s\S]*capturePhoto\(matchingDeviceOrientation: true\)[\s\S]*boundedJPEGData\(maxLongEdge: 1600, maxBytes: 1_500_000\)[\s\S]*analyzeProductImage\([\s\S]*requestId: requestId,[\s\S]*using: clerk/);
   assert.match(scannerStoreCaptureActionsSwiftSource, /updateProductScanQuota\(response\.quota\)/);
   assert.match(scannerStoreCaptureActionsSwiftSource, /updateProductScanQuota\(error\.aiQuota\)/);
   assert.match(scannerStoreCaptureActionsSwiftSource, /case \.upc:[\s\S]*kind: \.barcode,[\s\S]*format: "ai-upc\/\\\(normalized\.format\)"/);
   assert.match(scannerStoreCaptureActionsSwiftSource, /case \.name:[\s\S]*kind: \.text,[\s\S]*format: "ai-item-name"/);
-  assert.match(cloudWorkspaceStoreSwiftSource, /func analyzeProductImage\(_ data: Data, mode: ProductScanMode, requestId: UUID\) async throws -> ProductScanResponse/);
+  assert.match(cloudWorkspaceStoreSwiftSource, /func analyzeProductImage\([\s\S]*requestId: UUID,[\s\S]*using clerk: Clerk[\s\S]*async throws -> ProductScanResponse/);
+  assert.match(cloudWorkspaceStoreSwiftSource, /catch MobileCloudError\.credentialRevoked[\s\S]*revokeLocalCredential\(\)[\s\S]*await bootstrapIfNeeded\(using: clerk\)[\s\S]*requestId: requestId/);
   assert.match(cloudAPIContractsSwiftSource, /struct ProductScanResponse: Decodable, Sendable[\s\S]*let value: String\?[\s\S]*let quota: AIScannerQuota\?/);
   assert.match(mobileCloudAPIClientSwiftSource, /api\/mobile\/ai\/analyze[\s\S]*URLQueryItem\(name: "mode", value: mode\.rawValue\)/);
   assert.match(mobileCloudAPIClientSwiftSource, /setValue\("image\/jpeg", forHTTPHeaderField: "Content-Type"\)/);
@@ -360,7 +361,7 @@ test("signed-in AI product scanning is metered, request-id scoped, and uses exis
   assert.match(captureSessionViewSwiftSource, /productScanQuotaText: store\.productScanQuotaText/);
   assert.match(captureSessionViewSwiftSource, /isRecognizingText: store\.isRecognizingText \|\| store\.isDictationBusy \|\| store\.isProductScanBusy/);
   assert.match(captureSessionViewSwiftSource, /capturedThumbnails: store\.activeMode == \.photo && !store\.isProductScannerActive/);
-  assert.match(captureSessionViewSwiftSource, /if store\.isProductScannerActive \{[\s\S]*if store\.isProductScanQuotaExhausted \{\s*isSubscriptionPaywallPresented = true[\s\S]*await store\.captureProduct\(\)/);
+  assert.match(captureSessionViewSwiftSource, /if store\.isProductScannerActive \{[\s\S]*if store\.isProductScanQuotaExhausted \{\s*isSubscriptionPaywallPresented = true[\s\S]*await store\.captureProduct\(using: clerk\)/);
   assert.doesNotMatch(captureSessionViewSwiftSource, /hasPaidProductScannerAccess|accessStore\.status\?\.access == \.subscription/);
   assert.match(sharedCameraSessionControlsSwiftSource, /if isProductScannerSelected, let productScanQuotaText[\s\S]*Text\(productScanQuotaText\)/);
   assert.match(scannerStoreSwiftSource, /var isProductScanQuotaExhausted: Bool \{\s*productScanQuota\?\.remaining == 0/);
