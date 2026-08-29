@@ -34,6 +34,10 @@ struct RootView: View {
                 .tabItem { Label("Settings", systemImage: "gearshape") }
                 .tag(AppSection.settings)
         }
+        .toolbar(.hidden, for: .tabBar)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            RootTabBar(selection: $selectedTab)
+        }
         .sheet(isPresented: ownershipConflictIsPresented) {
             if let conflict = store.cloudWorkspace.accountSwitchConflict {
                 AccountSwitchCaptureDecisionView(
@@ -86,6 +90,78 @@ struct RootView: View {
         case .settings:
             break
         }
+    }
+}
+
+private struct RootTabBar: View {
+    @Binding var selection: AppSection
+
+    var body: some View {
+        HStack(spacing: 12) {
+            historyButton
+            scanButton
+            settingsButton
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 10)
+        .padding(.bottom, 8)
+        .background(.bar)
+        .overlay(alignment: .top) {
+            Divider()
+        }
+    }
+
+    private var historyButton: some View {
+        Button {
+            selection = .photos
+        } label: {
+            Label("History", systemImage: "list.bullet")
+                .labelStyle(.iconOnly)
+                .frame(width: 48, height: 48)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(selection == .photos ? .primary : .secondary)
+        .background(
+            selection == .photos ? Color.accentColor.opacity(0.14) : .clear,
+            in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+        )
+        .accessibilityLabel("History")
+        .accessibilityHint("Shows capture history")
+        .accessibilityAddTraits(selection == .photos ? .isSelected : [])
+    }
+
+    private var scanButton: some View {
+        Button {
+            selection = .text
+        } label: {
+            Label("Scan", systemImage: "camera.viewfinder")
+                .font(.headline.weight(.semibold))
+                .frame(maxWidth: .infinity, minHeight: 48)
+        }
+        .buttonStyle(.borderedProminent)
+        .tint(.green)
+        .accessibilityLabel("Scan")
+        .accessibilityHint("Shows the scanner")
+        .accessibilityAddTraits(selection == .text ? .isSelected : [])
+    }
+
+    private var settingsButton: some View {
+        Button {
+            selection = .settings
+        } label: {
+            Label("Settings", systemImage: "gearshape")
+                .labelStyle(.iconOnly)
+                .frame(width: 48, height: 48)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(selection == .settings ? .primary : .secondary)
+        .background(
+            selection == .settings ? Color.accentColor.opacity(0.14) : .clear,
+            in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+        )
+        .accessibilityLabel("Settings")
+        .accessibilityHint("Shows app settings")
+        .accessibilityAddTraits(selection == .settings ? .isSelected : [])
     }
 }
 

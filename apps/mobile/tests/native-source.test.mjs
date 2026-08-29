@@ -201,7 +201,7 @@ test("both iOS targets exclude WebRTC while the App Clip retains cloud workspace
   assert.match(capturedResultRowSwiftSource, /case \.dictation: "Dictation"/);
   assert.match(capturedResultRowSwiftSource, /case \.dictation: "mic"/);
   assert.match(rootViewSwiftSource, /CaptureHistoryView\(\)/);
-  assert.match(rootViewSwiftSource, /clock\.arrow\.circlepath/);
+  assert.match(rootViewSwiftSource, /Label\("History", systemImage: "list\.bullet"\)/);
   assert.equal(existsSync(new URL("../ios/Volt/Views/SessionsView.swift", import.meta.url)), false);
   assert.match(xcodeProjectSource, /B3000000000000000000000C \/\* PairingURLParser\.swift in Sources \*\//);
   assert.match(xcodeProjectSource, /B30000000000000000000021 \/\* AppClipGuestCloudClient\.swift in Sources \*\//);
@@ -1122,6 +1122,12 @@ test("full app presents Scan, unified History, and Settings roots", () => {
   assert.match(tabViewSource, /UnifiedCaptureHomeView\(\)/);
   assert.match(tabViewSource, /CaptureHistoryView\(\)/);
   assert.match(tabViewSource, /Label\("Settings", systemImage: "gearshape"\)/);
+  assert.match(tabViewSource, /\.toolbar\(\.hidden, for: \.tabBar\)/);
+  assert.match(tabViewSource, /RootTabBar\(selection: \$selectedTab\)/);
+  assert.match(rootViewSwiftSource, /private struct RootTabBar: View/);
+  assert.match(rootViewSwiftSource, /Label\("History", systemImage: "list\.bullet"\)[\s\S]*\.labelStyle\(\.iconOnly\)/);
+  assert.match(rootViewSwiftSource, /Label\("Scan", systemImage: "camera\.viewfinder"\)[\s\S]*\.frame\(maxWidth: \.infinity, minHeight: 48\)/);
+  assert.match(rootViewSwiftSource, /Label\("Settings", systemImage: "gearshape"\)[\s\S]*\.labelStyle\(\.iconOnly\)/);
   assert.doesNotMatch(tabViewSource, /Label\("Upload"|UploadView\(\)/);
   assert.match(
     enumSource,
