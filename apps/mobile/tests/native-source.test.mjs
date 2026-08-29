@@ -64,6 +64,10 @@ const rootViewSwiftSource = readFileSync(
   new URL("../ios/Volt/Views/RootView.swift", import.meta.url),
   "utf8"
 );
+const cloudTargetPickerSwiftSource = readFileSync(
+  new URL("../ios/Volt/Views/CloudTargetPickerSheet.swift", import.meta.url),
+  "utf8"
+);
 const settingsViewSwiftSource = readFileSync(
   new URL("../ios/Volt/Views/SettingsView.swift", import.meta.url),
   "utf8"
@@ -74,10 +78,6 @@ const scannerViewSwiftSource = readFileSync(
 );
 const captureModeCardsSwiftSource = readFileSync(
   new URL("../ios/Volt/Views/CaptureModeCards.swift", import.meta.url),
-  "utf8"
-);
-const cloudTargetPickerSwiftSource = readFileSync(
-  new URL("../ios/Volt/Views/CloudTargetPickerSheet.swift", import.meta.url),
   "utf8"
 );
 const capturedResultRowSwiftSource = readFileSync(
@@ -201,7 +201,6 @@ test("both iOS targets exclude WebRTC while the App Clip retains cloud workspace
   assert.match(capturedResultRowSwiftSource, /case \.dictation: "Dictation"/);
   assert.match(capturedResultRowSwiftSource, /case \.dictation: "mic"/);
   assert.match(rootViewSwiftSource, /CaptureHistoryView\(\)/);
-  assert.match(rootViewSwiftSource, /Label\("History", systemImage: "list\.bullet"\)/);
   assert.equal(existsSync(new URL("../ios/Volt/Views/SessionsView.swift", import.meta.url)), false);
   assert.match(xcodeProjectSource, /B3000000000000000000000C \/\* PairingURLParser\.swift in Sources \*\//);
   assert.match(xcodeProjectSource, /B30000000000000000000021 \/\* AppClipGuestCloudClient\.swift in Sources \*\//);
@@ -875,7 +874,7 @@ test("native barcode recognition defaults to UPC with settings override", () => 
   assert.match(scannerStoreSwiftSource, /var barcodeRecognitionMode: BarcodeRecognitionMode = \.upc/);
   assert.match(scannerStoreSwiftSource, /UserDefaults\.standard\.set\(barcodeRecognitionMode\.rawValue, forKey: Self\.barcodeRecognitionModeStorageKey\)/);
   assert.match(scannerStoreSwiftSource, /camera\.updateBarcodeRecognitionMode\(barcodeRecognitionMode\)/);
-  assert.match(rootViewSwiftSource, /SettingsView\(showsAccountSettings: showsAccountSettings\)\s*\.tabItem \{ Label\("Settings", systemImage: "gearshape"\) \}/);
+  assert.match(rootViewSwiftSource, /SettingsView\(showsAccountSettings: showsAccountSettings\)/);
   assert.match(settingsViewSwiftSource, /Picker\("Recognized Codes", selection: \$store\.barcodeRecognitionMode\)/);
   assert.match(settingsViewSwiftSource, /ForEach\(BarcodeRecognitionMode\.allCases\)/);
 });
@@ -1110,29 +1109,30 @@ test("app clip bottom CTAs show connection progress while pairing", () => {
 });
 
 test("full app presents Scan, unified History, and Settings roots", () => {
-  const tabViewStart = rootViewSwiftSource.indexOf("TabView(selection: $selectedTab)");
-  const tabViewEnd = rootViewSwiftSource.indexOf(".sheet(isPresented: ownershipConflictIsPresented)", tabViewStart);
-  const tabViewSource = rootViewSwiftSource.slice(tabViewStart, tabViewEnd);
   const enumStart = rootViewSwiftSource.indexOf("enum AppSection");
   const enumEnd = rootViewSwiftSource.indexOf("}", enumStart);
   const enumSource = rootViewSwiftSource.slice(enumStart, enumEnd);
 
-  assert.ok(tabViewStart > -1);
-  assert.ok(tabViewEnd > tabViewStart);
-  assert.match(tabViewSource, /UnifiedCaptureHomeView\(\)/);
-  assert.match(tabViewSource, /CaptureHistoryView\(\)/);
-  assert.match(tabViewSource, /Label\("Settings", systemImage: "gearshape"\)/);
-  assert.match(tabViewSource, /\.toolbar\(\.hidden, for: \.tabBar\)/);
-  assert.match(tabViewSource, /RootTabBar\(selection: \$selectedTab, onScan:/);
+  assert.doesNotMatch(rootViewSwiftSource, /TabView\(|\.tabItem/);
+  assert.match(rootViewSwiftSource, /@State private var isTargetPickerPresented = false/);
+  assert.match(rootViewSwiftSource, /@ViewBuilder\s*private var selectedContent: some View/);
+  assert.match(rootViewSwiftSource, /case \.text, \.barcode, \.dictation:[\s\S]*UnifiedCaptureHomeView\(\)/);
+  assert.match(rootViewSwiftSource, /case \.photos:[\s\S]*CaptureHistoryView\(\)/);
+  assert.match(rootViewSwiftSource, /case \.settings:[\s\S]*SettingsView\(showsAccountSettings: showsAccountSettings\)/);
+  assert.match(rootViewSwiftSource, /RootTabBar\([\s\S]*selection: \$selectedTab,[\s\S]*onScan: startCapture,[\s\S]*onConnections: \{ isTargetPickerPresented = true \}/);
+  assert.match(rootViewSwiftSource, /\.sheet\(isPresented: \$isTargetPickerPresented\)[\s\S]*CloudTargetPickerSheet\(\)/);
   assert.match(rootViewSwiftSource, /private struct RootTabBar: View/);
   assert.match(rootViewSwiftSource, /GlassEffectContainer\(spacing: 12\)/);
   assert.match(rootViewSwiftSource, /\.glassEffect\([\s\S]*\.interactive\(\)/);
   assert.match(rootViewSwiftSource, /content\.buttonStyle\(\.glassProminent\)/);
   assert.doesNotMatch(rootViewSwiftSource, /\.background\(\.bar\)|Divider\(\)/);
-  assert.match(rootViewSwiftSource, /Label\("History", systemImage: "list\.bullet"\)[\s\S]*\.labelStyle\(\.iconOnly\)/);
+  assert.match(rootViewSwiftSource, /private var connectionsButton: some View[\s\S]*Image\(systemName: targetSymbol\)[\s\S]*\.frame\(width: 48, height: 48\)/);
+  assert.match(rootViewSwiftSource, /private var targetSymbol: String[\s\S]*"cursorarrow\.motionlines"[\s\S]*"desktopcomputer\.trianglebadge\.exclamationmark"[\s\S]*"iphone"/);
+  assert.match(cloudTargetPickerSwiftSource, /private var targetSymbol: String[\s\S]*"cursorarrow\.motionlines"[\s\S]*"desktopcomputer\.trianglebadge\.exclamationmark"[\s\S]*"iphone"/);
+  assert.match(rootViewSwiftSource, /\.accessibilityLabel\("Connections"\)[\s\S]*Choose the computer/);
   assert.match(rootViewSwiftSource, /Label\("Scan", systemImage: "camera\.viewfinder"\)[\s\S]*\.frame\(maxWidth: \.infinity, minHeight: 48\)/);
   assert.match(rootViewSwiftSource, /Label\("Settings", systemImage: "gearshape"\)[\s\S]*\.labelStyle\(\.iconOnly\)/);
-  assert.doesNotMatch(tabViewSource, /Label\("Upload"|UploadView\(\)/);
+  assert.doesNotMatch(rootViewSwiftSource, /Label\("Upload"|UploadView\(\)/);
   assert.match(
     enumSource,
     /case text\s*case barcode\s*case photos\s*case dictation\s*case settings/
@@ -1141,7 +1141,7 @@ test("full app presents Scan, unified History, and Settings roots", () => {
 
 test("full app Scan control requests a new capture even when Scan is selected", () => {
   assert.match(rootViewSwiftSource, /@State private var isCaptureSessionPresented = false/);
-  assert.match(rootViewSwiftSource, /RootTabBar\(selection: \$selectedTab, onScan: startCapture\)/);
+  assert.match(rootViewSwiftSource, /RootTabBar\([\s\S]*selection: \$selectedTab,[\s\S]*onScan: startCapture/);
   assert.match(rootViewSwiftSource, /let onScan: \(\) -> Void/);
   assert.match(rootViewSwiftSource, /Button\(action: onScan\)/);
   assert.match(rootViewSwiftSource, /private func startCapture\(\) \{\s*selectedTab = \.text\s*store\.clearOcrReview\(\)\s*store\.beginCaptureSession\(\)\s*isCaptureSessionPresented = true/);

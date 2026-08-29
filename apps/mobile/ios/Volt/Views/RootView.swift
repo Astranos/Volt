@@ -6,6 +6,7 @@ struct RootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var selectedTab = AppSection.text
     @State private var isCaptureSessionPresented = false
+    @State private var isTargetPickerPresented = false
     private let showsAccountSettings: Bool
 
     private var ownershipConflictIsPresented: Binding<Bool> {
@@ -15,6 +16,16 @@ struct RootView: View {
         )
     }
 
+    private var targetSymbol: String {
+        if store.cloudWorkspace.selectedComputer != nil {
+            return "cursorarrow.motionlines"
+        }
+        if store.cloudWorkspace.selectedTargetComputer != nil {
+            return "desktopcomputer.trianglebadge.exclamationmark"
+        }
+        return "iphone"
+    }
+
     init(showsAccountSettings: Bool = true) {
         self.showsAccountSettings = showsAccountSettings
         let initialSection = ScreenshotScenario.current?.initialSection
@@ -22,27 +33,22 @@ struct RootView: View {
     }
 
     var body: some View {
-        TabView(selection: $selectedTab) {
-            UnifiedCaptureHomeView()
-                .tabItem { Label("Scan", systemImage: "camera.viewfinder") }
-                .tag(AppSection.text)
-
-            CaptureHistoryView()
-                .tabItem { Label("History", systemImage: "clock.arrow.circlepath") }
-                .tag(AppSection.photos)
-
-            SettingsView(showsAccountSettings: showsAccountSettings)
-                .tabItem { Label("Settings", systemImage: "gearshape") }
-                .tag(AppSection.settings)
-        }
-        .toolbar(.hidden, for: .tabBar)
+        selectedContent
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            RootTabBar(selection: $selectedTab, onScan: startCapture)
+            RootTabBar(
+                selection: $selectedTab,
+                onScan: startCapture,
+                onConnections: { isTargetPickerPresented = true },
+                targetSymbol: targetSymbol
+            )
         }
         .fullScreenCover(isPresented: $isCaptureSessionPresented, onDismiss: {
             store.endCaptureSession()
         }) {
             CaptureSessionView(isPresented: $isCaptureSessionPresented, mode: .ocr)
+        }
+        .sheet(isPresented: $isTargetPickerPresented) {
+            CloudTargetPickerSheet()
         }
         .sheet(isPresented: ownershipConflictIsPresented) {
             if let conflict = store.cloudWorkspace.accountSwitchConflict {
@@ -87,6 +93,18 @@ struct RootView: View {
         }
     }
 
+    @ViewBuilder
+    private var selectedContent: some View {
+        switch selectedTab {
+        case .text, .barcode, .dictation:
+            UnifiedCaptureHomeView()
+        case .photos:
+            CaptureHistoryView()
+        case .settings:
+            SettingsView(showsAccountSettings: showsAccountSettings)
+        }
+    }
+
     private func applySelectedTab(_ newTab: AppSection) {
         store.selectedSection = newTab
         switch newTab {
@@ -109,6 +127,8 @@ struct RootView: View {
 private struct RootTabBar: View {
     @Binding var selection: AppSection
     let onScan: () -> Void
+    let onConnections: () -> Void
+    let targetSymbol: String
 
     var body: some View {
         if #available(iOS 26.0, *) {
@@ -129,26 +149,22 @@ private struct RootTabBar: View {
 
     private var controls: some View {
         HStack(spacing: 12) {
-            historyButton
+            connectionsButton
             scanButton
             settingsButton
         }
     }
 
-    private var historyButton: some View {
-        Button {
-            selection = .photos
-        } label: {
-            Label("History", systemImage: "list.bullet")
-                .labelStyle(.iconOnly)
+    private var connectionsButton: some View {
+        Button(action: onConnections) {
+            Image(systemName: targetSymbol)
+                .font(.subheadline.weight(.semibold))
                 .frame(width: 48, height: 48)
         }
         .buttonStyle(.plain)
-        .foregroundStyle(selection == .photos ? .primary : .secondary)
-        .rootTabBarGlass(isSelected: selection == .photos)
-        .accessibilityLabel("History")
-        .accessibilityHint("Shows capture history")
-        .accessibilityAddTraits(selection == .photos ? .isSelected : [])
+        .rootTabBarGlass(isSelected: false)
+        .accessibilityLabel("Connections")
+        .accessibilityHint("Choose the computer that receives text and barcode captures")
     }
 
     private var scanButton: some View {
