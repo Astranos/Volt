@@ -398,6 +398,11 @@ test("native capture session exposes the optional cloud cursor target", () => {
   assert.match(cloudTargetPickerSwiftSource, /"This iPhone"/);
   assert.match(cloudTargetPickerSwiftSource, /availableComputers/);
   assert.match(captureSessionViewSwiftSource, /CloudTargetButton/);
+  assert.match(captureSessionViewSwiftSource, /CloudTargetButton\(isCompact: true\)/);
+  assert.match(captureSessionViewSwiftSource, /\.sheet\(isPresented: \$isSubscriptionPaywallPresented\)[\s\S]*SubscriptionPaywallView\(showsDismissAction: true\)/);
+  assert.doesNotMatch(captureSessionViewSwiftSource, /\.sheet\(isPresented: \$isSubscriptionPaywallPresented\)[\s\S]*NavigationStack/);
+  assert.match(cloudTargetPickerSwiftSource, /var isCompact = false[\s\S]*frame\(minHeight: isCompact \? 36 : 48\)[\s\S]*controlSize\(isCompact \? \.small : \.regular\)/);
+  assert.match(cloudTargetPickerSwiftSource, /frame\(minHeight: isCompact \? 36 : 48\)/);
   // Computer availability now streams continuously over a live Convex subscription
   // (CloudWorkspaceStore.startComputersSubscriptionIfNeeded), so the view no longer
   // needs to trigger a manual refresh on appear.
@@ -1177,7 +1182,7 @@ test("full app presents Scan, unified History, and Settings roots", () => {
   assert.doesNotMatch(rootViewSwiftSource, /\.background\(\.bar\)|Divider\(\)/);
   assert.match(rootViewSwiftSource, /private var connectionsButton: some View[\s\S]*Image\(systemName: targetSymbol\)[\s\S]*\.frame\(width: 48, height: 48\)/);
   assert.match(rootViewSwiftSource, /private var targetSymbol: String[\s\S]*"cursorarrow\.motionlines"[\s\S]*"desktopcomputer\.trianglebadge\.exclamationmark"[\s\S]*"iphone"/);
-  assert.match(cloudTargetPickerSwiftSource, /Label\(targetLabel, systemImage: "character\.cursor\.ibeam"\)[\s\S]*\.lineLimit\(1\)[\s\S]*\.frame\(minHeight: 48\)[\s\S]*\.contentShape\(Rectangle\(\)\)/);
+  assert.match(cloudTargetPickerSwiftSource, /Label\(targetLabel, systemImage: "character\.cursor\.ibeam"\)[\s\S]*\.lineLimit\(1\)[\s\S]*\.frame\(minHeight: isCompact \? 36 : 48\)[\s\S]*\.contentShape\(Rectangle\(\)\)/);
   assert.match(cloudTargetPickerSwiftSource, /struct CloudTargetLabel: View[\s\S]*Label\(Self\.targetLabel\(for: store\), systemImage: "character\.cursor\.ibeam"\)[\s\S]*\.accessibilityElement\(children: \.combine\)/);
   assert.doesNotMatch(cloudTargetPickerSwiftSource, /pencil\.and\.scribble/);
   assert.match(scannerViewSwiftSource, /Text\("Scan"\)\.font\(\.largeTitle\.bold\(\)\)[\s\S]*CloudTargetLabel\(\)/);

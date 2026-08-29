@@ -18,17 +18,19 @@ struct CloudTargetLabel: View {
 
 struct CloudTargetButton: View {
     @Environment(ScannerStore.self) private var store
+    var isCompact = false
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             Label(targetLabel, systemImage: "character.cursor.ibeam")
-                .font(.headline.weight(.semibold))
+                .font((isCompact ? Font.subheadline : Font.headline).weight(.semibold))
                 .lineLimit(1)
-                .frame(minHeight: 48)
+                .frame(minHeight: isCompact ? 36 : 48)
                 .contentShape(Rectangle())
         }
         .cloudTargetButtonStyle()
+        .controlSize(isCompact ? .small : .regular)
         .accessibilityLabel("Type destination: \(targetLabel)")
         .accessibilityHint("Choose the computer that receives text and barcode captures.")
     }

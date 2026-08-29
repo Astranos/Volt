@@ -111,8 +111,16 @@ test("purchase screen states subscription title, length, price, and policy links
   assert.match(subscriptionViewSource, /struct GlassSubscriptionControlStyle: SubscriptionStoreControlStyle/);
   assert.match(subscriptionViewSource, /option\.subscribe\(\)/);
   assert.match(subscriptionViewSource, /\.buttonStyle\(\.glassProminent\)/);
-  assert.match(subscriptionViewSource, /\.storeButton\(\.hidden, for: \.restorePurchases, \.policies\)/);
+  assert.match(subscriptionViewSource, /\.storeButton\(\.hidden, for: \.cancellation, \.restorePurchases, \.policies\)/);
   assert.match(subscriptionViewSource, /subscriptionStore\.restore\(using: clerk\)/);
+  assert.match(subscriptionViewSource, /@Environment\(\\\.dismiss\) private var dismiss/);
+  assert.match(subscriptionViewSource, /let showsDismissAction: Bool/);
+  assert.match(subscriptionViewSource, /Button\("Done"\) \{ dismiss\(\) \}/);
+  assert.match(subscriptionViewSource, /PaywallMarketingContent\(showsAccountButton: !showsDismissAction\)/);
+  assert.doesNotMatch(subscriptionViewSource, /\.safeAreaInset\(edge: \.top/);
+  assert.doesNotMatch(subscriptionViewSource, /SubscriptionPaywallView\(\)\s*\.toolbar/);
+  assert.match(subscriptionViewSource, /\.sheet\(isPresented: \$isPresentingPaywall\)[\s\S]*SubscriptionPaywallView\(showsDismissAction: true\)/);
+  assert.doesNotMatch(subscriptionViewSource, /\.sheet\(isPresented: \$isPresentingPaywall\)[\s\S]*NavigationStack/);
 
   // Both policy links belong in the pinned control area, not the scrolling content the
   // bottom bar covers, so the reviewer sees them without scrolling.
@@ -130,7 +138,7 @@ test("purchase screen states subscription title, length, price, and policy links
 
   // A rejected or unavailable product must not strand the reviewer on the store view's
   // bare "Subscription Unavailable" placeholder with no policy links and no sign-out.
-  assert.match(subscriptionViewSource, /if subscriptionStore\.isProductUnavailable \{\s*PaywallUnavailableView\(\)/);
+  assert.match(subscriptionViewSource, /if subscriptionStore\.isProductUnavailable \{\s*PaywallUnavailableView\(showsAccountButton: !showsDismissAction\)/);
   assert.match(storeKitSource, /product == nil && !isLoadingProduct && hasAttemptedProductLoad/);
   assert.match(subscriptionViewSource, /struct PaywallUnavailableView: View/);
 
@@ -138,6 +146,10 @@ test("purchase screen states subscription title, length, price, and policy links
   assert.match(storeKitSource, /product\.displayPrice/);
   assert.match(storeKitSource, /renewalPeriodDescription\(subscription\.subscriptionPeriod\)/);
   assert.doesNotMatch(storeKitSource + subscriptionViewSource, /\$\d/);
+});
+
+test("canceled StoreKit purchases do not become visible errors", () => {
+  assert.match(storeKitSource, /catch let error as StoreKitError[\s\S]*if case \.userCancelled = error[\s\S]*return/);
 });
 
 test("account UI shows account, workspace, full-app access, and server subscription status", () => {
@@ -151,7 +163,7 @@ test("account UI shows account, workspace, full-app access, and server subscript
   assert.match(subscriptionViewSource, /Complimentary Volt Pro access/);
   assert.match(subscriptionViewSource, /accessStore\.isRefreshing \|\| !hasCurrentAccessContext/);
   assert.match(subscriptionViewSource, /status\.organizationId == clerk\.organization\?\.id/);
-  assert.match(subscriptionViewSource, /SubscriptionPaywallView\(\)/);
+  assert.match(subscriptionViewSource, /SubscriptionPaywallView\(showsDismissAction: true\)/);
   assert.doesNotMatch(accountViewSource + accessSettingsSource, /Free Sessions/);
   assert.doesNotMatch(subscriptionViewSource + accessSettingsSource, /Transaction\.currentEntitlements/);
 });

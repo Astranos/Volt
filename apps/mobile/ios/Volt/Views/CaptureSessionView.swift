@@ -92,7 +92,7 @@ struct CaptureSessionView: View {
             VStack(spacing: 8) {
                 HStack {
                     Spacer()
-                    CloudTargetButton {
+                    CloudTargetButton(isCompact: true) {
                         isTargetPickerPresented = true
                     }
                 }
@@ -201,14 +201,7 @@ struct CaptureSessionView: View {
             CloudTargetPickerSheet()
         }
         .sheet(isPresented: $isSubscriptionPaywallPresented) {
-            NavigationStack {
-                SubscriptionPaywallView()
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("Done") { isSubscriptionPaywallPresented = false }
-                        }
-                    }
-            }
+            SubscriptionPaywallView(showsDismissAction: true)
         }
         .onAppear {
             store.activeMode = mode

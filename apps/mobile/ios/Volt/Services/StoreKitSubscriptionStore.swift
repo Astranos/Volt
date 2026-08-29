@@ -93,6 +93,11 @@ final class StoreKitSubscriptionStore {
             @unknown default:
                 break
             }
+        } catch let error as StoreKitError {
+            if case .userCancelled = error {
+                return
+            }
+            errorMessage = error.localizedDescription
         } catch {
             errorMessage = error.localizedDescription
         }

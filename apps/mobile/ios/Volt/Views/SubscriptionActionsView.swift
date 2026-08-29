@@ -8,42 +8,52 @@ import SwiftUI
 /// `SubscriptionStoreView` renders the title, length, and price straight from StoreKit,
 /// and the policy destinations below supply the two required links.
 struct SubscriptionPaywallView: View {
+    @Environment(\.dismiss) private var dismiss
     @Environment(Clerk.self) private var clerk
     @Environment(AccessStore.self) private var accessStore
     @Environment(StoreKitSubscriptionStore.self) private var subscriptionStore
+    let showsDismissAction: Bool
+
+    init(showsDismissAction: Bool = false) {
+        self.showsDismissAction = showsDismissAction
+    }
 
     @ViewBuilder
     var body: some View {
-        // `SubscriptionStoreView` replaces its whole body with "Subscription Unavailable"
-        // when StoreKit returns no product, which would strand the reviewer on a blank
-        // screen with no policy links and no way to sign out.
-        if subscriptionStore.isProductUnavailable {
-            PaywallUnavailableView()
-        } else {
-            storeView
+        NavigationStack {
+            // `SubscriptionStoreView` replaces its whole body with "Subscription Unavailable"
+            // when StoreKit returns no product, which would strand the reviewer on a blank
+            // screen with no policy links and no way to sign out.
+            Group {
+                if subscriptionStore.isProductUnavailable {
+                    PaywallUnavailableView(showsAccountButton: !showsDismissAction)
+                } else {
+                    storeView
+                }
+            }
+            .toolbar {
+                if showsDismissAction {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") { dismiss() }
+                    }
+                }
+            }
         }
     }
 
     private var storeView: some View {
         SubscriptionStoreView(productIDs: [AppConfiguration.storeKitProductID]) {
-            PaywallMarketingContent()
+            PaywallMarketingContent(showsAccountButton: !showsDismissAction)
         }
         .subscriptionStoreControlStyle(GlassSubscriptionControlStyle())
         // The glass control style supplies its own Restore Purchases button and policy
         // links, so StoreKit's flat versions would only duplicate them.
-        .storeButton(.hidden, for: .restorePurchases, .policies)
+        .storeButton(.hidden, for: .cancellation, .restorePurchases, .policies)
         .inAppPurchaseOptions { _ in
             await subscriptionStore.purchaseOptions(using: clerk)
         }
         .onInAppPurchaseCompletion { _, result in
             await subscriptionStore.completePurchase(result, using: clerk)
-        }
-        .safeAreaInset(edge: .top, spacing: 0) {
-            PaywallStatusBanner(
-                noticeMessage: subscriptionStore.noticeMessage,
-                errorMessage: subscriptionStore.errorMessage ?? accessStore.errorMessage,
-                isVerifying: subscriptionStore.isPurchasing
-            )
         }
         .tint(VoltBrand.green)
     }
@@ -137,11 +147,12 @@ private struct GlassSubscriptionControls: View {
 private struct PaywallUnavailableView: View {
     @Environment(Clerk.self) private var clerk
     @Environment(StoreKitSubscriptionStore.self) private var subscriptionStore
+    let showsAccountButton: Bool
 
     var body: some View {
         ScrollView {
             VStack(spacing: 24) {
-                PaywallMarketingContent()
+                PaywallMarketingContent(showsAccountButton: showsAccountButton)
 
                 VStack(spacing: 12) {
                     Label("Volt Pro is not available from the App Store right now", systemImage: "exclamationmark.triangle.fill")
@@ -191,16 +202,6 @@ private struct PaywallUnavailableView: View {
                     .font(.footnote.weight(.semibold))
                 }
 
-                if let noticeMessage = subscriptionStore.noticeMessage {
-                    Label(noticeMessage, systemImage: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
-                        .font(.footnote)
-                }
-                if let errorMessage = subscriptionStore.errorMessage {
-                    Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.red)
-                        .font(.footnote)
-                }
             }
             .padding(.bottom, 32)
         }
@@ -211,13 +212,23 @@ private struct PaywallUnavailableView: View {
 
 private struct PaywallMarketingContent: View {
     @Environment(StoreKitSubscriptionStore.self) private var subscriptionStore
+    @Environment(AccessStore.self) private var accessStore
+    let showsAccountButton: Bool
 
     var body: some View {
         VStack(spacing: 24) {
-            HStack {
-                Spacer()
-                UserButton()
+            if showsAccountButton {
+                HStack {
+                    Spacer()
+                    UserButton()
+                }
             }
+
+            PaywallStatusBanner(
+                noticeMessage: subscriptionStore.noticeMessage,
+                errorMessage: subscriptionStore.errorMessage ?? accessStore.errorMessage,
+                isVerifying: subscriptionStore.isPurchasing
+            )
 
             VStack(spacing: 14) {
                 Image("VoltLogo")
@@ -377,14 +388,7 @@ struct SubscriptionActionsView: View {
             }
         }
         .sheet(isPresented: $isPresentingPaywall) {
-            NavigationStack {
-                SubscriptionPaywallView()
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("Done") { isPresentingPaywall = false }
-                        }
-                    }
-            }
+            SubscriptionPaywallView(showsDismissAction: true)
         }
     }
 
