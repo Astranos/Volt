@@ -5,6 +5,7 @@ struct RootView: View {
     @Environment(ScannerStore.self) private var store
     @Environment(\.scenePhase) private var scenePhase
     @State private var selectedTab = AppSection.text
+    @State private var isCaptureSessionPresented = false
     private let showsAccountSettings: Bool
 
     private var ownershipConflictIsPresented: Binding<Bool> {
@@ -36,7 +37,12 @@ struct RootView: View {
         }
         .toolbar(.hidden, for: .tabBar)
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            RootTabBar(selection: $selectedTab)
+            RootTabBar(selection: $selectedTab, onScan: startCapture)
+        }
+        .fullScreenCover(isPresented: $isCaptureSessionPresented, onDismiss: {
+            store.endCaptureSession()
+        }) {
+            CaptureSessionView(isPresented: $isCaptureSessionPresented, mode: .ocr)
         }
         .sheet(isPresented: ownershipConflictIsPresented) {
             if let conflict = store.cloudWorkspace.accountSwitchConflict {
@@ -91,23 +97,41 @@ struct RootView: View {
             break
         }
     }
+
+    private func startCapture() {
+        selectedTab = .text
+        store.clearOcrReview()
+        store.beginCaptureSession()
+        isCaptureSessionPresented = true
+    }
 }
 
 private struct RootTabBar: View {
     @Binding var selection: AppSection
+    let onScan: () -> Void
 
     var body: some View {
+        if #available(iOS 26.0, *) {
+            GlassEffectContainer(spacing: 12) {
+                controls
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 10)
+            .padding(.bottom, 8)
+        } else {
+            controls
+                .padding(.horizontal, 16)
+                .padding(.top, 10)
+                .padding(.bottom, 8)
+                .background(.ultraThinMaterial)
+        }
+    }
+
+    private var controls: some View {
         HStack(spacing: 12) {
             historyButton
             scanButton
             settingsButton
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 10)
-        .padding(.bottom, 8)
-        .background(.bar)
-        .overlay(alignment: .top) {
-            Divider()
         }
     }
 
@@ -121,24 +145,19 @@ private struct RootTabBar: View {
         }
         .buttonStyle(.plain)
         .foregroundStyle(selection == .photos ? .primary : .secondary)
-        .background(
-            selection == .photos ? Color.accentColor.opacity(0.14) : .clear,
-            in: RoundedRectangle(cornerRadius: 16, style: .continuous)
-        )
+        .rootTabBarGlass(isSelected: selection == .photos)
         .accessibilityLabel("History")
         .accessibilityHint("Shows capture history")
         .accessibilityAddTraits(selection == .photos ? .isSelected : [])
     }
 
     private var scanButton: some View {
-        Button {
-            selection = .text
-        } label: {
+        Button(action: onScan) {
             Label("Scan", systemImage: "camera.viewfinder")
                 .font(.headline.weight(.semibold))
                 .frame(maxWidth: .infinity, minHeight: 48)
         }
-        .buttonStyle(.borderedProminent)
+        .rootTabBarScanStyle()
         .tint(.green)
         .accessibilityLabel("Scan")
         .accessibilityHint("Shows the scanner")
@@ -155,13 +174,52 @@ private struct RootTabBar: View {
         }
         .buttonStyle(.plain)
         .foregroundStyle(selection == .settings ? .primary : .secondary)
-        .background(
-            selection == .settings ? Color.accentColor.opacity(0.14) : .clear,
-            in: RoundedRectangle(cornerRadius: 16, style: .continuous)
-        )
+        .rootTabBarGlass(isSelected: selection == .settings)
         .accessibilityLabel("Settings")
         .accessibilityHint("Shows app settings")
         .accessibilityAddTraits(selection == .settings ? .isSelected : [])
+    }
+}
+
+private struct RootTabBarGlassModifier: ViewModifier {
+    let isSelected: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.glassEffect(
+                .regular
+                    .tint(isSelected ? .accentColor.opacity(0.16) : .clear)
+                    .interactive(),
+                in: .rect(cornerRadius: 16)
+            )
+        } else {
+            content.background(
+                isSelected ? Color.accentColor.opacity(0.14) : .clear,
+                in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+            )
+        }
+    }
+}
+
+private struct RootTabBarScanStyleModifier: ViewModifier {
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.buttonStyle(.glassProminent)
+        } else {
+            content.buttonStyle(.borderedProminent)
+        }
+    }
+}
+
+private extension View {
+    func rootTabBarGlass(isSelected: Bool) -> some View {
+        modifier(RootTabBarGlassModifier(isSelected: isSelected))
+    }
+
+    func rootTabBarScanStyle() -> some View {
+        modifier(RootTabBarScanStyleModifier())
     }
 }
 

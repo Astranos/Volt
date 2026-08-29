@@ -1123,8 +1123,12 @@ test("full app presents Scan, unified History, and Settings roots", () => {
   assert.match(tabViewSource, /CaptureHistoryView\(\)/);
   assert.match(tabViewSource, /Label\("Settings", systemImage: "gearshape"\)/);
   assert.match(tabViewSource, /\.toolbar\(\.hidden, for: \.tabBar\)/);
-  assert.match(tabViewSource, /RootTabBar\(selection: \$selectedTab\)/);
+  assert.match(tabViewSource, /RootTabBar\(selection: \$selectedTab, onScan:/);
   assert.match(rootViewSwiftSource, /private struct RootTabBar: View/);
+  assert.match(rootViewSwiftSource, /GlassEffectContainer\(spacing: 12\)/);
+  assert.match(rootViewSwiftSource, /\.glassEffect\([\s\S]*\.interactive\(\)/);
+  assert.match(rootViewSwiftSource, /content\.buttonStyle\(\.glassProminent\)/);
+  assert.doesNotMatch(rootViewSwiftSource, /\.background\(\.bar\)|Divider\(\)/);
   assert.match(rootViewSwiftSource, /Label\("History", systemImage: "list\.bullet"\)[\s\S]*\.labelStyle\(\.iconOnly\)/);
   assert.match(rootViewSwiftSource, /Label\("Scan", systemImage: "camera\.viewfinder"\)[\s\S]*\.frame\(maxWidth: \.infinity, minHeight: 48\)/);
   assert.match(rootViewSwiftSource, /Label\("Settings", systemImage: "gearshape"\)[\s\S]*\.labelStyle\(\.iconOnly\)/);
@@ -1133,6 +1137,15 @@ test("full app presents Scan, unified History, and Settings roots", () => {
     enumSource,
     /case text\s*case barcode\s*case photos\s*case dictation\s*case settings/
   );
+});
+
+test("full app Scan control requests a new capture even when Scan is selected", () => {
+  assert.match(rootViewSwiftSource, /@State private var isCaptureSessionPresented = false/);
+  assert.match(rootViewSwiftSource, /RootTabBar\(selection: \$selectedTab, onScan: startCapture\)/);
+  assert.match(rootViewSwiftSource, /let onScan: \(\) -> Void/);
+  assert.match(rootViewSwiftSource, /Button\(action: onScan\)/);
+  assert.match(rootViewSwiftSource, /private func startCapture\(\) \{\s*selectedTab = \.text\s*store\.clearOcrReview\(\)\s*store\.beginCaptureSession\(\)\s*isCaptureSessionPresented = true/);
+  assert.match(rootViewSwiftSource, /\.fullScreenCover\(isPresented: \$isCaptureSessionPresented/);
 });
 
 test("app clip has Scan and unified History roots", () => {
