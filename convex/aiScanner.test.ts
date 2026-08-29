@@ -1,6 +1,7 @@
 import { describe, expect, test, vi } from "vitest";
 
 import {
+  buildOpenRouterCatalogRequest,
   buildOpenRouterRequest,
   isValidUPCA,
   normalizeItemName,
@@ -37,6 +38,11 @@ describe("AI scanner parsing", () => {
       value: null,
       format: "item-name",
     });
+    expect(parseAIResponse("name", '{"name":"Back 4 Blood"}\n\nReasoning omitted')).toEqual({
+      mode: "name",
+      value: "Back 4 Blood",
+      format: "item-name",
+    });
   });
 
   test("sends the configured model, JSON mode, and a JPEG data URL once", async () => {
@@ -62,12 +68,16 @@ describe("AI scanner parsing", () => {
     expect(buildOpenRouterRequest("name", new ArrayBuffer(0))).toContain("image/jpeg");
   });
 
-  test("gives UPC mode bounded web search and verifies the candidate with PriceCharting", async () => {
+  test("identifies from the image before a bounded catalog search and PriceCharting verification", async () => {
+    let openRouterCallCount = 0;
     const fetchImpl = vi.fn<typeof fetch>(async (input) => {
       const url = String(input);
       if (url === "https://openrouter.ai/api/v1/chat/completions") {
+        openRouterCallCount += 1;
         return new Response(JSON.stringify({
-          choices: [{ message: { content: '{"name":"Grand Theft Auto: San Andreas","platform":"PS2","upc":"710425274107"}' } }],
+          choices: [{ message: { content: openRouterCallCount === 1
+            ? '{"name":"Grand Theft Auto: San Andreas","platform":"PS2","edition":null,"region":"US"}'
+            : '{"upc":"710425274107"}' } }],
         }), { status: 200 });
       }
       return new Response(null, {
@@ -80,14 +90,43 @@ describe("AI scanner parsing", () => {
       fetchImpl,
     });
     expect(result.value).toBe("710425274107");
-    expect(fetchImpl).toHaveBeenCalledTimes(2);
-    const body = JSON.parse(String(fetchImpl.mock.calls[0][1]?.body)) as {
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    const visionBody = JSON.parse(String(fetchImpl.mock.calls[0][1]?.body)) as {
+      tools?: unknown;
+      messages: Array<{ content: Array<{ type: string }> }>;
+    };
+    expect(visionBody.tools).toBeUndefined();
+    expect(visionBody.messages[0].content.map((part) => part.type)).toEqual(["text", "image_url"]);
+    const catalogBody = JSON.parse(String(fetchImpl.mock.calls[1][1]?.body)) as {
       tools: Array<{ type: string; parameters: { max_uses: number } }>;
       max_tool_calls: number;
+      messages: Array<{ content: string }>;
     };
-    expect(body.tools[0]).toMatchObject({ type: "openrouter:web_search", parameters: { max_uses: 2 } });
-    expect(body.max_tool_calls).toBe(2);
-    expect(fetchImpl.mock.calls[1][1]).toMatchObject({ method: "GET", redirect: "manual" });
+    expect(catalogBody.tools[0]).toMatchObject({ type: "openrouter:web_search", parameters: { max_uses: 2 } });
+    expect(catalogBody.max_tool_calls).toBe(2);
+    expect(catalogBody.messages[0].content).toContain("Grand Theft Auto: San Andreas");
+    expect(fetchImpl.mock.calls[2][1]).toMatchObject({ method: "GET", redirect: "manual" });
+    expect(buildOpenRouterCatalogRequest({
+      name: "Grand Theft Auto: San Andreas",
+      platform: "PS2",
+      edition: null,
+      region: "US",
+    })).not.toContain("image_url");
+  });
+
+  test("stops after image identification when no game can be identified", async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ choices: [{ message: { content: '{"name":null,"platform":null,"edition":null,"region":null}' } }] }), { status: 200 }),
+    );
+    const trace: unknown[] = [];
+    const result = await requestOpenRouterAnalysis("upc", Uint8Array.from([1, 2, 3]).buffer, {
+      apiKey: "server-only-key",
+      fetchImpl,
+      onTrace: (event) => trace.push(event),
+    });
+    expect(result.value).toBeNull();
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(trace).toEqual([expect.objectContaining({ stage: "identity", outcome: "unresolved" })]);
   });
 
   test("rejects PriceCharting no-results and conflicting product redirects", async () => {

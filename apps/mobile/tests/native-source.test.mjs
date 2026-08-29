@@ -364,6 +364,8 @@ test("signed-in AI product scanning is metered, request-id scoped, and uses exis
   assert.match(captureSessionViewSwiftSource, /if store\.isProductScannerActive \{[\s\S]*if store\.isProductScanQuotaExhausted \{\s*isSubscriptionPaywallPresented = true[\s\S]*await store\.captureProduct\(using: clerk\)/);
   assert.doesNotMatch(captureSessionViewSwiftSource, /hasPaidProductScannerAccess|accessStore\.status\?\.access == \.subscription/);
   assert.match(sharedCameraSessionControlsSwiftSource, /if isProductScannerSelected, let productScanQuotaText[\s\S]*Text\(productScanQuotaText\)/);
+  assert.match(sharedCameraSessionControlsSwiftSource, /ProductScanProgressText\(mode: productScanMode, isBusy: isProductScanBusy\)/);
+  assert.match(sharedCameraSessionControlsSwiftSource, /"Identifying game", "Searching game catalog", "Verifying UPC"/);
   assert.match(scannerStoreSwiftSource, /var isProductScanQuotaExhausted: Bool \{\s*productScanQuota\?\.remaining == 0/);
   assert.match(scannerStoreSwiftSource, /Free AI scans remaining:/);
   assert.match(scannerStoreSwiftSource, /resetsAt\.formatted\(date: \.abbreviated, time: \.shortened\)/);
@@ -391,7 +393,9 @@ test("unified camera starts from the hero card and history groups mixed captures
   assert.match(captureModeCardsSwiftSource, /Text\("\\\(hiddenCount\) more saved"\)/);
   assert.doesNotMatch(captureModeCardsSwiftSource, /more in Sessions/);
 
-  assert.match(scannerViewSwiftSource, /Dictionary\(grouping: store\.results\) \{ result in/);
+  assert.match(scannerViewSwiftSource, /ComputerAvailabilityCard[\s\S]*captureHistory/);
+  assert.match(scannerViewSwiftSource, /captureHistorySessions\(from: store\.results\)/);
+  assert.match(scannerViewSwiftSource, /Dictionary\(grouping: results\) \{ result in/);
   assert.match(scannerViewSwiftSource, /result\.batchId \?\? result\.id\.uuidString\.lowercased\(\)/);
   assert.match(scannerViewSwiftSource, /Continue session/);
   assert.match(scannerViewSwiftSource, /CaptureHistorySessionCard\(/);

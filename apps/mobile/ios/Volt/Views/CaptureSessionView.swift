@@ -79,10 +79,9 @@ struct CaptureSessionView: View {
             }
 
             if store.isProductScannerActive,
-               store.isProductScanBusy || store.productScanOutput != nil || store.productScanError != nil {
+               store.productScanOutput != nil || store.productScanError != nil {
                 ProductScanStatusView(
                     output: store.productScanOutput,
-                    isBusy: store.isProductScanBusy,
                     errorMessage: store.productScanError
                 )
                 .padding(.horizontal, 24)
@@ -139,6 +138,7 @@ struct CaptureSessionView: View {
                         gridVisible: gridVisible,
                         hasLiveTextCandidates: !store.camera.liveTextCandidates.isEmpty,
                         isRecognizingText: store.isRecognizingText || store.isDictationBusy || store.isProductScanBusy,
+                        isProductScanBusy: store.isProductScanBusy,
                         isCaptureEnabled: !store.isDictationBusy && !store.isProductScanBusy,
                         isModeSelectionEnabled: !store.isDictating && !store.isDictationBusy && !store.isProductScanBusy,
                         showsModePicker: true,
@@ -334,14 +334,11 @@ struct CaptureSessionView: View {
 
 private struct ProductScanStatusView: View {
     let output: ProductScanOutput?
-    let isBusy: Bool
     let errorMessage: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if isBusy {
-                Label("Analyzing product…", systemImage: "sparkles")
-            } else if let errorMessage {
+            if let errorMessage {
                 Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
                     .foregroundStyle(.orange)
             } else if let output {

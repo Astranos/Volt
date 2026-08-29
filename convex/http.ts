@@ -12,6 +12,7 @@ import {
   AIScannerError,
   requestOpenRouterAnalysis,
   type AIScannerMode,
+  type AIScannerTraceEvent,
 } from "./aiScanner";
 import {
   type AIScannerQuotaError,
@@ -657,6 +658,14 @@ const refundAIScannerRequestRef = makeFunctionReference<
   { status: "refunded" | "succeeded"; quota: AIScannerReservation["quota"]; value?: string | null; format?: string }
 >("aiScannerQuota:refundAIScannerRequest");
 
+function logAIScannerEvent(
+  requestId: string,
+  mode: AIScannerMode,
+  event: AIScannerTraceEvent | { stage: "request"; outcome: "started" | "completed" | "failed"; imageBytes?: number; valueFound?: boolean; errorCode?: string },
+): void {
+  console.info(`[AI_SCAN] ${JSON.stringify({ requestId, mode, ...event })}`);
+}
+
 const mobileAIScannerHandler = httpAction(async (ctx, request) => {
   if (request.method === "OPTIONS") return emptyResponse();
   const modeValue = new URL(request.url).searchParams.get("mode");
@@ -696,12 +705,17 @@ const mobileAIScannerHandler = httpAction(async (ctx, request) => {
     return jsonResponse({ error: reservation.errorCode ?? "AI request rejected", errorCode: reservation.errorCode, quota: reservation.quota }, status);
   }
   try {
-    const analysis = await requestOpenRouterAnalysis(mode, imageBytes);
+    logAIScannerEvent(requestId, mode, { stage: "request", outcome: "started", imageBytes: imageBytes.byteLength });
+    const analysis = await requestOpenRouterAnalysis(mode, imageBytes, {
+      onTrace: (event) => logAIScannerEvent(requestId, mode, event),
+    });
     const completed = await ctx.runMutation(completeAIScannerRequestRef, { deviceId, deviceSecret, requestId, mode, value: analysis.value, format: analysis.format });
+    logAIScannerEvent(requestId, mode, { stage: "request", outcome: "completed", valueFound: completed.value !== null });
     return jsonResponse({ mode, value: completed.value, format: completed.format, quota: completed.quota });
   } catch (error) {
     const errorCode: "upstream-failed" | "upstream-timeout" | "upstream-rate-limited" = error instanceof AIScannerError && error.code === "upstream-timeout"
       ? "upstream-timeout" : error instanceof AIScannerError && error.code === "upstream-rate-limited" ? "upstream-rate-limited" : "upstream-failed";
+    logAIScannerEvent(requestId, mode, { stage: "request", outcome: "failed", errorCode });
     try {
       const refunded = await ctx.runMutation(refundAIScannerRequestRef, { deviceId, deviceSecret, requestId, errorCode });
       if (refunded.status === "succeeded") {

@@ -6,6 +6,11 @@ struct UnifiedCaptureHomeView: View {
     @Environment(ScannerStore.self) private var store
     @State private var isCaptureSessionPresented = false
     @State private var isTargetPickerPresented = false
+    @State private var resumedBatchId: String?
+
+    private var sessions: [CaptureHistorySession] {
+        captureHistorySessions(from: store.results)
+    }
 
     var body: some View {
         NavigationStack {
@@ -18,6 +23,7 @@ struct UnifiedCaptureHomeView: View {
                     }
                     UnifiedCaptureLaunchCard(action: startCapture)
                     ComputerAvailabilityCard { isTargetPickerPresented = true }
+                    captureHistory
                     Text("One camera for text, barcodes, photos, and audio. Switch modes without leaving the session.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
@@ -31,7 +37,8 @@ struct UnifiedCaptureHomeView: View {
             .navigationTitle("Scan")
             .toolbar(.hidden, for: .navigationBar)
             .fullScreenCover(isPresented: $isCaptureSessionPresented, onDismiss: {
-                store.endCaptureSession()
+                store.endCaptureSession(id: resumedBatchId)
+                resumedBatchId = nil
             }) {
                 CaptureSessionView(isPresented: $isCaptureSessionPresented, mode: .ocr)
             }
@@ -40,9 +47,44 @@ struct UnifiedCaptureHomeView: View {
     }
 
     private func startCapture() {
+        resumedBatchId = nil
         store.clearOcrReview()
         store.beginCaptureSession()
         isCaptureSessionPresented = true
+    }
+
+    private func continueSession(_ session: CaptureHistorySession) {
+        store.clearOcrReview()
+        resumedBatchId = store.resumeCaptureSession(batchId: session.id)
+        isCaptureSessionPresented = true
+    }
+
+    @ViewBuilder
+    private var captureHistory: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("History")
+                .font(.title2.bold())
+
+            if sessions.isEmpty {
+                ContentUnavailableView(
+                    "No Scans Yet",
+                    systemImage: "camera.viewfinder",
+                    description: Text("Your saved scan sessions will appear here.")
+                )
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 24)
+                .background(.background, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            } else {
+                ForEach(sessions) { session in
+                    CaptureHistorySessionCard(
+                        session: session,
+                        onResend: { result in Task { await store.insertResultIntoComputer(id: result.id) } },
+                        onDelete: { result in store.removeResult(id: result.id) },
+                        onContinue: { continueSession(session) }
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -97,11 +139,7 @@ struct CaptureHistoryView: View {
     @State private var resumedBatchId: String?
 
     private var sessions: [CaptureHistorySession] {
-        Dictionary(grouping: store.results) { result in
-            result.batchId ?? result.id.uuidString.lowercased()
-        }
-        .map { CaptureHistorySession(id: $0.key, results: $0.value.sorted { $0.capturedAt < $1.capturedAt }) }
-        .sorted { $0.latestCapturedAt > $1.latestCapturedAt }
+        captureHistorySessions(from: store.results)
     }
 
     var body: some View {
@@ -155,6 +193,14 @@ struct CaptureHistoryView: View {
             .onAppear { store.selectedSection = .photos }
         }
     }
+}
+
+private func captureHistorySessions(from results: [ScanResult]) -> [CaptureHistorySession] {
+    Dictionary(grouping: results) { result in
+        result.batchId ?? result.id.uuidString.lowercased()
+    }
+    .map { CaptureHistorySession(id: $0.key, results: $0.value.sorted { $0.capturedAt < $1.capturedAt }) }
+    .sorted { $0.latestCapturedAt > $1.latestCapturedAt }
 }
 
 struct CaptureHistorySession: Identifiable {

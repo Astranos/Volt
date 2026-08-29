@@ -21,6 +21,7 @@ struct CameraSessionControls: View {
     let gridVisible: Bool
     let hasLiveTextCandidates: Bool
     let isRecognizingText: Bool
+    var isProductScanBusy = false
     var isCaptureEnabled = true
     var isModeSelectionEnabled = true
     var showsModePicker = true
@@ -51,10 +52,14 @@ struct CameraSessionControls: View {
             cameraToolsRow
                 .opacity(isCaptureEnabled ? 1 : 0.45)
 
-            Text(captureHint)
-                .font(.subheadline.bold())
-                .foregroundStyle(isCaptureEnabled ? .white : .white.opacity(0.55))
-                .frame(maxWidth: .infinity)
+            if isProductScannerSelected {
+                ProductScanProgressText(mode: productScanMode, isBusy: isProductScanBusy)
+            } else {
+                Text(captureHint)
+                    .font(.subheadline.bold())
+                    .foregroundStyle(isCaptureEnabled ? .white : .white.opacity(0.55))
+                    .frame(maxWidth: .infinity)
+            }
 
             if isProductScannerSelected, let productScanQuotaText {
                 Text(productScanQuotaText)
@@ -250,10 +255,6 @@ struct CameraSessionControls: View {
     }
 
     private var captureHint: String {
-        if isProductScannerSelected {
-            return productScanMode.hint
-        }
-
         return switch activeMode {
         case .ocr:
             hasLiveTextCandidates ? "Tap a recognized chip to send" : "Frame device identifiers"
@@ -368,6 +369,51 @@ struct CameraSessionControls: View {
         .disabled(isRecognizingText || !isCaptureEnabled)
         .opacity(isCaptureEnabled ? 1 : 0.55)
         .accessibilityLabel(shutterAccessibilityLabel)
+    }
+}
+
+private struct ProductScanProgressText: View {
+    let mode: ProductScanMode
+    let isBusy: Bool
+    @State private var step = 0
+
+    private var messages: [String] {
+        switch mode {
+        case .upc:
+            ["Identifying game", "Searching game catalog", "Verifying UPC"]
+        case .name:
+            ["Identifying product", "Reading the title", "Finishing result"]
+        }
+    }
+
+    private var message: String {
+        isBusy ? messages[step % messages.count] + "…" : "Frame the game case or disc"
+    }
+
+    var body: some View {
+        ZStack {
+            Text(message)
+                .id(message)
+                .transition(.asymmetric(
+                    insertion: .move(edge: .bottom).combined(with: .opacity),
+                    removal: .move(edge: .top).combined(with: .opacity)
+                ))
+        }
+        .font(.subheadline.bold())
+        .foregroundStyle(.white)
+        .frame(maxWidth: .infinity, minHeight: 20)
+        .clipped()
+        .animation(.easeInOut(duration: 0.32), value: message)
+        .task(id: isBusy) {
+            step = 0
+            guard isBusy else { return }
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(2.2))
+                guard !Task.isCancelled else { return }
+                step = (step + 1) % messages.count
+            }
+        }
+        .accessibilityLabel(message)
     }
 }
 

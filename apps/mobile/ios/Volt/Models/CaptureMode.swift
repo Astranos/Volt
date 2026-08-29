@@ -46,13 +46,6 @@ enum ProductScanMode: String, CaseIterable, Identifiable, Codable, Sendable {
         case .name: "textformat.characters"
         }
     }
-
-    var hint: String {
-        switch self {
-        case .upc: "Frame the product barcode"
-        case .name: "Frame the product name"
-        }
-    }
 }
 
 struct ProductScanOutput: Equatable, Sendable {

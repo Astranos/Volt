@@ -8,6 +8,30 @@ export type AIAnalysisResult = {
   platform?: string | null;
 };
 
+export type GameIdentity = {
+  name: string;
+  platform: string | null;
+  edition: string | null;
+  region: string | null;
+};
+
+export type PriceChartingVerificationOutcome =
+  | "verified"
+  | "invalid-candidate"
+  | "identity-missing"
+  | "no-product-redirect"
+  | "foreign-redirect"
+  | "query-mismatch"
+  | "title-mismatch"
+  | "platform-mismatch";
+
+export type AIScannerTraceEvent =
+  | { stage: "identity"; outcome: "resolved"; name: string; platform: string | null; edition: string | null; region: string | null; elapsedMs: number }
+  | { stage: "identity"; outcome: "unresolved"; elapsedMs: number }
+  | { stage: "catalog"; outcome: "candidate"; upc: string; elapsedMs: number }
+  | { stage: "catalog"; outcome: "no-candidate"; elapsedMs: number }
+  | { stage: "verification"; outcome: PriceChartingVerificationOutcome; upc: string | null; destination: string | null; elapsedMs: number };
+
 export class AIScannerError extends Error {
   constructor(
     readonly status: 429 | 502 | 503 | 504,
@@ -22,8 +46,8 @@ export const AI_SCANNER_MODEL = "z-ai/glm-5.3-flash";
 export const AI_SCANNER_MAX_IMAGE_BYTES = 1_500_000;
 export const AI_SCANNER_TIMEOUT_MS = 45_000;
 
-const UPC_PROMPT =
-  'Identify the exact retail game release shown by this item, game case, or disc, including platform and edition when visible. The barcode does not need to be visible. Use web search to find a supported UPC candidate for that exact release. Return only JSON in the form {"name":"exact title or null","platform":"platform or null","upc":"12 digits or null"}. Never invent a code. Return a UPC only when search evidence supports the same title and platform. If an EAN-13 starts with 0, return its equivalent 12-digit UPC-A.';
+const UPC_IDENTITY_PROMPT =
+  'Identify the exact retail video game release shown by this game case or disc. The barcode does not need to be visible. Read the title, platform, edition, and region from the artwork when possible. Return only JSON in the form {"name":"exact title or null","platform":"platform or null","edition":"edition or null","region":"region or null"}. Do not search for or guess a barcode. Return a null name when the game cannot be identified confidently.';
 const NAME_PROMPT =
   'Identify the exact product title or name shown by this item, game disc, or game case. Return only JSON in the form {"name":"title or null"}. Do not describe condition or add explanation. Return null when the item cannot be identified confidently.';
 
@@ -85,22 +109,75 @@ export function normalizeItemName(value: string): string | null {
 function normalizePlatform(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const normalized = value.trim().replace(/\s+/g, " ");
-  return normalized && normalized.length <= 80 ? normalized : null;
+  if (!normalized || normalized.length > 80 || GENERIC_NAME_VALUES.has(normalized.toLowerCase())) return null;
+  return normalized;
+}
+
+function normalizeIdentityDetail(value: unknown, maxLength = 100): string | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().replace(/\s+/g, " ");
+  if (!normalized || normalized.length > maxLength || GENERIC_NAME_VALUES.has(normalized.toLowerCase())) return null;
+  return normalized;
 }
 
 function promptForMode(mode: AIScannerMode): string {
-  return mode === "upc" ? UPC_PROMPT : NAME_PROMPT;
+  return mode === "upc" ? UPC_IDENTITY_PROMPT : NAME_PROMPT;
 }
 
-export function parseAIResponse(mode: AIScannerMode, content: string): AIAnalysisResult {
+function parseGameIdentity(content: string): GameIdentity | null {
+  const parsed = parseJSONResponse(content);
+  const name = typeof parsed.name === "string" ? normalizeItemName(parsed.name) : null;
+  if (!name) return null;
+  return {
+    name,
+    platform: normalizePlatform(parsed.platform),
+    edition: normalizeIdentityDetail(parsed.edition),
+    region: normalizeIdentityDetail(parsed.region),
+  };
+}
+
+function parseJSONResponse(content: string): Record<string, unknown> {
   const withoutFence = content.trim().replace(/^```(?:json)?\s*|\s*```$/gi, "");
-  let parsed: unknown;
+  const jsonObject = firstJSONObject(withoutFence);
   try {
-    parsed = JSON.parse(withoutFence);
+    return objectFrom(JSON.parse(jsonObject ?? withoutFence) as unknown);
   } catch {
     throw new AIScannerError(502, "upstream-failed");
   }
-  const payload = objectFrom(parsed);
+}
+
+function firstJSONObject(content: string): string | null {
+  const start = content.indexOf("{");
+  if (start < 0) return null;
+  let depth = 0;
+  let isInString = false;
+  let isEscaped = false;
+  for (let index = start; index < content.length; index += 1) {
+    const character = content[index];
+    if (isInString) {
+      if (isEscaped) {
+        isEscaped = false;
+      } else if (character === "\\") {
+        isEscaped = true;
+      } else if (character === '"') {
+        isInString = false;
+      }
+      continue;
+    }
+    if (character === '"') {
+      isInString = true;
+    } else if (character === "{") {
+      depth += 1;
+    } else if (character === "}") {
+      depth -= 1;
+      if (depth === 0) return content.slice(start, index + 1);
+    }
+  }
+  return null;
+}
+
+export function parseAIResponse(mode: AIScannerMode, content: string): AIAnalysisResult {
+  const payload = parseJSONResponse(content);
   if (mode === "upc") {
     const raw = payload.upc;
     return {
@@ -137,16 +214,34 @@ export function buildOpenRouterRequest(mode: AIScannerMode, imageBytes: ArrayBuf
     }],
     response_format: { type: "json_object" },
     temperature: 0,
-    // GLM uses this same budget for hidden reasoning and the JSON answer. A
-    // small cap can finish with `content: null` after spending every token on
-    // reasoning, especially when UPC mode invokes web search.
-    max_tokens: mode === "upc" ? 1_200 : 512,
+    max_tokens: 512,
     reasoning_effort: "low",
     include_reasoning: false,
     provider: { require_parameters: true },
   };
-  if (mode === "upc") {
-    request.tools = [{
+  return JSON.stringify(request);
+}
+
+export function buildOpenRouterCatalogRequest(identity: GameIdentity): string {
+  const knownDetails = [
+    `Title: ${identity.name}`,
+    identity.platform ? `Platform: ${identity.platform}` : null,
+    identity.edition ? `Edition: ${identity.edition}` : null,
+    identity.region ? `Region: ${identity.region}` : null,
+  ].filter((value): value is string => value !== null).join("\n");
+  return JSON.stringify({
+    model: AI_SCANNER_MODEL,
+    messages: [{
+      role: "user",
+      content: `Find the supported retail UPC-A for this exact video game release using web search.\n${knownDetails}\nReturn only JSON in the form {"upc":"12 digits or null"}. Never invent a code. Match the title and platform exactly. If an EAN-13 starts with 0, return its equivalent 12-digit UPC-A. Return null when search evidence is missing or conflicting.`,
+    }],
+    response_format: { type: "json_object" },
+    temperature: 0,
+    max_tokens: 800,
+    reasoning_effort: "low",
+    include_reasoning: false,
+    provider: { require_parameters: true },
+    tools: [{
       type: "openrouter:web_search",
       parameters: {
         engine: "exa",
@@ -156,10 +251,9 @@ export function buildOpenRouterRequest(mode: AIScannerMode, imageBytes: ArrayBuf
         max_total_results: 8,
         max_characters: 2_000,
       },
-    }];
-    request.max_tool_calls = 2;
-  }
-  return JSON.stringify(request);
+    }],
+    max_tool_calls: 2,
+  });
 }
 
 const PLATFORM_ALIASES: ReadonlyArray<readonly [string, readonly string[]]> = [
@@ -227,29 +321,52 @@ export async function verifyPriceChartingUPC(
   fetchImpl: typeof fetch = fetch,
   signal?: AbortSignal,
 ): Promise<string | null> {
+  const result = await verifyPriceChartingUPCDetails(upc, identifiedName, platform, fetchImpl, signal);
+  return result.outcome === "verified" ? result.upc : null;
+}
+
+export async function verifyPriceChartingUPCDetails(
+  upc: string,
+  identifiedName: string | null | undefined,
+  platform: string | null | undefined,
+  fetchImpl: typeof fetch = fetch,
+  signal?: AbortSignal,
+): Promise<{ outcome: PriceChartingVerificationOutcome; upc: string | null; destination: string | null }> {
   const normalizedUPC = normalizeUPCA(upc);
-  if (!normalizedUPC || !identifiedName) return null;
+  if (!normalizedUPC) return { outcome: "invalid-candidate", upc: null, destination: null };
+  if (!identifiedName) return { outcome: "identity-missing", upc: normalizedUPC, destination: null };
   const searchURL = new URL("https://www.pricecharting.com/search-products");
   searchURL.searchParams.set("q", normalizedUPC);
   searchURL.searchParams.set("type", "prices");
   const response = await fetchImpl(searchURL, { method: "GET", redirect: "manual", signal });
   if (![301, 302, 303, 307, 308].includes(response.status)) {
-    if (response.ok) return null;
+    if (response.ok) return { outcome: "no-product-redirect", upc: normalizedUPC, destination: response.url || null };
     throw new AIScannerError(response.status === 429 ? 429 : 502, response.status === 429 ? "upstream-rate-limited" : "upstream-failed");
   }
   const location = response.headers.get("location");
   if (!location) throw new AIScannerError(502, "upstream-failed");
   const destination = new URL(location, searchURL);
-  if (destination.origin !== "https://www.pricecharting.com") return null;
+  const destinationURL = destination.toString();
+  if (destination.origin !== "https://www.pricecharting.com") {
+    return { outcome: "foreign-redirect", upc: normalizedUPC, destination: destinationURL };
+  }
   const parts = destination.pathname.split("/").filter(Boolean);
-  if (parts.length !== 3 || parts[0] !== "game") return null;
-  if (destination.searchParams.get("q")?.trim() !== normalizedUPC) return null;
+  if (parts.length !== 3 || parts[0] !== "game") {
+    return { outcome: "no-product-redirect", upc: normalizedUPC, destination: destinationURL };
+  }
+  if (destination.searchParams.get("q")?.trim() !== normalizedUPC) {
+    return { outcome: "query-mismatch", upc: normalizedUPC, destination: destinationURL };
+  }
   const [, consoleSlug, productSlug] = parts;
-  if (!titleMatchesProductSlug(identifiedName, productSlug)) return null;
+  if (!titleMatchesProductSlug(identifiedName, productSlug)) {
+    return { outcome: "title-mismatch", upc: normalizedUPC, destination: destinationURL };
+  }
   const expectedPlatform = platform ? canonicalPlatform(platform) : null;
   const resolvedPlatform = canonicalPlatform(consoleSlug);
-  if (expectedPlatform && resolvedPlatform && expectedPlatform !== resolvedPlatform) return null;
-  return normalizedUPC;
+  if (expectedPlatform && resolvedPlatform && expectedPlatform !== resolvedPlatform) {
+    return { outcome: "platform-mismatch", upc: normalizedUPC, destination: destinationURL };
+  }
+  return { outcome: "verified", upc: normalizedUPC, destination: destinationURL };
 }
 
 function contentFromResponse(value: unknown): string | null {
@@ -269,7 +386,7 @@ function contentFromResponse(value: unknown): string | null {
 export async function requestOpenRouterAnalysis(
   mode: AIScannerMode,
   imageBytes: ArrayBuffer,
-  options: { apiKey?: string; fetchImpl?: typeof fetch; timeoutMs?: number } = {},
+  options: { apiKey?: string; fetchImpl?: typeof fetch; timeoutMs?: number; onTrace?: (event: AIScannerTraceEvent) => void } = {},
 ): Promise<AIAnalysisResult> {
   if (imageBytes.byteLength === 0 || imageBytes.byteLength > AI_SCANNER_MAX_IMAGE_BYTES) {
     throw new AIScannerError(502, "upstream-failed");
@@ -278,31 +395,47 @@ export async function requestOpenRouterAnalysis(
   if (!apiKey) throw new AIScannerError(503, "not-configured");
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? AI_SCANNER_TIMEOUT_MS);
+  const fetchImpl = options.fetchImpl ?? fetch;
   try {
-    const response = await (options.fetchImpl ?? fetch)("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: buildOpenRouterRequest(mode, imageBytes),
-      signal: controller.signal,
-    });
-    if (!response.ok) {
-      if (response.status === 429) throw new AIScannerError(429, "upstream-rate-limited");
-      throw new AIScannerError(502, "upstream-failed");
+    const identityStartedAt = Date.now();
+    const identityContent = await requestOpenRouterContent(
+      buildOpenRouterRequest(mode, imageBytes), apiKey, fetchImpl, controller.signal,
+    );
+    if (mode === "name") return parseAIResponse(mode, identityContent);
+    const identity = parseGameIdentity(identityContent);
+    if (!identity) {
+      options.onTrace?.({ stage: "identity", outcome: "unresolved", elapsedMs: Date.now() - identityStartedAt });
+      return { mode, value: null, format: "upc_a", identifiedName: null, platform: null };
     }
-    const responseBody: unknown = await response.json();
-    const content = contentFromResponse(responseBody);
-    if (!content) throw new AIScannerError(502, "upstream-failed");
-    const analysis = parseAIResponse(mode, content);
-    if (mode !== "upc" || !analysis.value) return analysis;
+    options.onTrace?.({ stage: "identity", outcome: "resolved", ...identity, elapsedMs: Date.now() - identityStartedAt });
+
+    const catalogStartedAt = Date.now();
+    const catalogContent = await requestOpenRouterContent(
+      buildOpenRouterCatalogRequest(identity), apiKey, fetchImpl, controller.signal,
+    );
+    const catalogPayload = parseJSONResponse(catalogContent);
+    const candidate = typeof catalogPayload.upc === "string" ? normalizeUPCA(catalogPayload.upc) : null;
+    if (!candidate) {
+      options.onTrace?.({ stage: "catalog", outcome: "no-candidate", elapsedMs: Date.now() - catalogStartedAt });
+      return { mode, value: null, format: "upc_a", identifiedName: identity.name, platform: identity.platform };
+    }
+    options.onTrace?.({ stage: "catalog", outcome: "candidate", upc: candidate, elapsedMs: Date.now() - catalogStartedAt });
+
+    const verificationStartedAt = Date.now();
+    const verification = await verifyPriceChartingUPCDetails(
+      candidate,
+      identity.name,
+      identity.platform,
+      fetchImpl,
+      controller.signal,
+    );
+    options.onTrace?.({ stage: "verification", ...verification, elapsedMs: Date.now() - verificationStartedAt });
     return {
-      ...analysis,
-      value: await verifyPriceChartingUPC(
-        analysis.value,
-        analysis.identifiedName,
-        analysis.platform,
-        options.fetchImpl ?? fetch,
-        controller.signal,
-      ),
+      mode,
+      value: verification.outcome === "verified" ? verification.upc : null,
+      format: "upc_a",
+      identifiedName: identity.name,
+      platform: identity.platform,
     };
   } catch (error) {
     if (error instanceof AIScannerError) throw error;
@@ -311,4 +444,26 @@ export async function requestOpenRouterAnalysis(
   } finally {
     clearTimeout(timeout);
   }
+}
+
+async function requestOpenRouterContent(
+  body: string,
+  apiKey: string,
+  fetchImpl: typeof fetch,
+  signal: AbortSignal,
+): Promise<string> {
+  const response = await fetchImpl("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body,
+    signal,
+  });
+  if (!response.ok) {
+    if (response.status === 429) throw new AIScannerError(429, "upstream-rate-limited");
+    throw new AIScannerError(502, "upstream-failed");
+  }
+  const responseBody: unknown = await response.json();
+  const content = contentFromResponse(responseBody);
+  if (!content) throw new AIScannerError(502, "upstream-failed");
+  return content;
 }
