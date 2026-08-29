@@ -350,6 +350,39 @@ export default defineSchema({
     .index("by_browserSessionId_and_status", ["browserSessionId", "status"])
     .index("by_expiresAt", ["expiresAt"]),
 
+  paymoreCatalogProducts: defineTable({
+    upc: v.string(),
+    title: v.string(),
+    platform: v.union(v.string(), v.null()),
+    edition: v.union(v.string(), v.null()),
+    collection: v.union(v.string(), v.null()),
+    brand: v.union(v.string(), v.null()),
+    model: v.union(v.string(), v.null()),
+    mpn: v.union(v.string(), v.null()),
+    color: v.union(v.string(), v.null()),
+    storage: v.union(v.string(), v.null()),
+    carrier: v.union(v.string(), v.null()),
+    publisher: v.union(v.string(), v.null()),
+    genre: v.union(v.string(), v.null()),
+    rating: v.union(v.string(), v.null()),
+    releaseYear: v.union(v.string(), v.null()),
+    attributes: v.record(v.string(), v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_upc", ["upc"]),
+
+  paymoreCatalogSources: defineTable({
+    productId: v.id("paymoreCatalogProducts"),
+    upc: v.string(),
+    sourceUrl: v.string(),
+    condition: v.union(v.string(), v.null()),
+    listingAttributes: v.record(v.string(), v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_sourceUrl", ["sourceUrl"])
+    .index("by_productId", ["productId"])
+    .index("by_upc", ["upc"]),
+
   scannerReconnectRequests: defineTable({
     pairingId: v.string(),
     requestId: v.string(),
