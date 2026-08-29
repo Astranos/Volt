@@ -6,7 +6,7 @@ struct RootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var selectedTab = AppSection.text
     @State private var isCaptureSessionPresented = false
-    @State private var isTargetPickerPresented = false
+    @State private var presentedSheet: RootPresentedSheet?
     private let showsAccountSettings: Bool
 
     private var ownershipConflictIsPresented: Binding<Bool> {
@@ -35,20 +35,34 @@ struct RootView: View {
     var body: some View {
         selectedContent
         .safeAreaInset(edge: .bottom, spacing: 0) {
+            Color.clear
+                .frame(height: RootTabBar.reservedSpace)
+                .accessibilityHidden(true)
+        }
+        .overlay(alignment: .bottom) {
             RootTabBar(
                 selection: $selectedTab,
                 onScan: startCapture,
-                onConnections: { isTargetPickerPresented = true },
+                onConnections: { presentedSheet = .connections },
+                onSettings: { presentedSheet = .settings },
                 targetSymbol: targetSymbol
             )
+            .padding(.horizontal, 16)
+            .padding(.bottom, 16)
+            .ignoresSafeArea(.container, edges: .bottom)
         }
         .fullScreenCover(isPresented: $isCaptureSessionPresented, onDismiss: {
             store.endCaptureSession()
         }) {
             CaptureSessionView(isPresented: $isCaptureSessionPresented, mode: .ocr)
         }
-        .sheet(isPresented: $isTargetPickerPresented) {
-            CloudTargetPickerSheet()
+        .sheet(item: $presentedSheet) { sheet in
+            switch sheet {
+            case .connections:
+                CloudTargetPickerSheet()
+            case .settings:
+                SettingsSheet(showsAccountSettings: showsAccountSettings)
+            }
         }
         .sheet(isPresented: ownershipConflictIsPresented) {
             if let conflict = store.cloudWorkspace.accountSwitchConflict {
@@ -124,10 +138,20 @@ struct RootView: View {
     }
 }
 
+private enum RootPresentedSheet: String, Identifiable {
+    case connections
+    case settings
+
+    var id: String { rawValue }
+}
+
 private struct RootTabBar: View {
+    static let reservedSpace: CGFloat = 74
+
     @Binding var selection: AppSection
     let onScan: () -> Void
     let onConnections: () -> Void
+    let onSettings: () -> Void
     let targetSymbol: String
 
     var body: some View {
@@ -135,14 +159,12 @@ private struct RootTabBar: View {
             GlassEffectContainer(spacing: 12) {
                 controls
             }
-            .padding(.horizontal, 16)
             .padding(.top, 10)
-            .padding(.bottom, 8)
+            .frame(maxWidth: .infinity)
         } else {
             controls
-                .padding(.horizontal, 16)
                 .padding(.top, 10)
-                .padding(.bottom, 8)
+                .frame(maxWidth: .infinity)
                 .background(.ultraThinMaterial)
         }
     }
@@ -182,7 +204,7 @@ private struct RootTabBar: View {
 
     private var settingsButton: some View {
         Button {
-            selection = .settings
+            onSettings()
         } label: {
             Label("Settings", systemImage: "gearshape")
                 .labelStyle(.iconOnly)
@@ -206,9 +228,11 @@ private struct RootTabBarGlassModifier: ViewModifier {
             content.buttonStyle(
                 .glass(.regular.tint(isSelected ? .accentColor.opacity(0.16) : .clear))
             )
+            .buttonBorderShape(.circle)
         } else {
             content
                 .buttonStyle(.bordered)
+                .buttonBorderShape(.circle)
                 .tint(isSelected ? .accentColor : .secondary)
         }
     }

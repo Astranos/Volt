@@ -1122,13 +1122,13 @@ test("full app presents Scan, unified History, and Settings roots", () => {
   const enumSource = rootViewSwiftSource.slice(enumStart, enumEnd);
 
   assert.doesNotMatch(rootViewSwiftSource, /TabView\(|\.tabItem/);
-  assert.match(rootViewSwiftSource, /@State private var isTargetPickerPresented = false/);
+  assert.match(rootViewSwiftSource, /@State private var presentedSheet: RootPresentedSheet\?/);
   assert.match(rootViewSwiftSource, /@ViewBuilder\s*private var selectedContent: some View/);
   assert.match(rootViewSwiftSource, /case \.text, \.barcode, \.dictation:[\s\S]*UnifiedCaptureHomeView\(\)/);
   assert.match(rootViewSwiftSource, /case \.photos:[\s\S]*CaptureHistoryView\(\)/);
   assert.match(rootViewSwiftSource, /case \.settings:[\s\S]*SettingsView\(showsAccountSettings: showsAccountSettings\)/);
-  assert.match(rootViewSwiftSource, /RootTabBar\([\s\S]*selection: \$selectedTab,[\s\S]*onScan: startCapture,[\s\S]*onConnections: \{ isTargetPickerPresented = true \}/);
-  assert.match(rootViewSwiftSource, /\.sheet\(isPresented: \$isTargetPickerPresented\)[\s\S]*CloudTargetPickerSheet\(\)/);
+  assert.match(rootViewSwiftSource, /RootTabBar\([\s\S]*selection: \$selectedTab,[\s\S]*onScan: startCapture,[\s\S]*onConnections: \{ presentedSheet = \.connections \},[\s\S]*onSettings: \{ presentedSheet = \.settings \}/);
+  assert.match(rootViewSwiftSource, /\.sheet\(item: \$presentedSheet\)[\s\S]*case \.connections:[\s\S]*CloudTargetPickerSheet\(\)[\s\S]*case \.settings:[\s\S]*SettingsSheet\(showsAccountSettings: showsAccountSettings\)/);
   assert.match(rootViewSwiftSource, /private struct RootTabBar: View/);
   assert.match(rootViewSwiftSource, /GlassEffectContainer\(spacing: 12\)/);
   assert.match(rootViewSwiftSource, /\.buttonStyle\([\s\S]*\.glass\(\.regular\.tint\(/);
@@ -1136,7 +1136,7 @@ test("full app presents Scan, unified History, and Settings roots", () => {
   assert.doesNotMatch(rootViewSwiftSource, /\.background\(\.bar\)|Divider\(\)/);
   assert.match(rootViewSwiftSource, /private var connectionsButton: some View[\s\S]*Image\(systemName: targetSymbol\)[\s\S]*\.frame\(width: 48, height: 48\)/);
   assert.match(rootViewSwiftSource, /private var targetSymbol: String[\s\S]*"cursorarrow\.motionlines"[\s\S]*"desktopcomputer\.trianglebadge\.exclamationmark"[\s\S]*"iphone"/);
-  assert.match(cloudTargetPickerSwiftSource, /Label\(targetLabel, systemImage: "pencil\.and\.scribble"\)[\s\S]*\.labelStyle\(\.iconOnly\)[\s\S]*\.frame\(width: 44, height: 44\)[\s\S]*\.contentShape\(Rectangle\(\)\)/);
+  assert.match(cloudTargetPickerSwiftSource, /Label\(targetLabel, systemImage: "pencil\.and\.scribble"\)[\s\S]*\.lineLimit\(1\)[\s\S]*\.frame\(minHeight: 48\)[\s\S]*\.contentShape\(Rectangle\(\)\)/);
   assert.match(cloudTargetPickerSwiftSource, /content\.buttonStyle\(\.glass\)[\s\S]*content\.buttonStyle\(\.bordered\)/);
   assert.ok(cloudTargetPickerSwiftSource.includes('.accessibilityLabel("Type destination: \\(targetLabel)")'));
   assert.match(rootViewSwiftSource, /\.accessibilityLabel\("Connections"\)[\s\S]*Choose the computer/);
@@ -1163,8 +1163,14 @@ test("full app side controls keep an explicit 48 point hit target with native gl
   assert.match(settingsSource, /\.frame\(width: 48, height: 48\)[\s\S]*\.contentShape\(Rectangle\(\)\)/);
   assert.match(connectionsSource, /\.rootTabBarGlass\(isSelected: false\)/);
   assert.match(settingsSource, /\.rootTabBarGlass\(isSelected: selection == \.settings\)/);
+  assert.match(settingsSource, /Button \{\s*onSettings\(\)/);
+  assert.doesNotMatch(settingsSource, /selection = \.settings/);
   assert.match(rootViewSwiftSource, /content\.buttonStyle\([\s\S]*\.glass\(\.regular\.tint\(/);
   assert.match(rootViewSwiftSource, /\.buttonStyle\(\.bordered\)/);
+  assert.match(rootViewSwiftSource, /\.safeAreaInset\(edge: \.bottom, spacing: 0\)[\s\S]*RootTabBar\.reservedSpace/);
+  assert.match(rootViewSwiftSource, /\.overlay\(alignment: \.bottom\)[\s\S]*\.padding\(\.horizontal, 16\)[\s\S]*\.padding\(\.bottom, 16\)[\s\S]*\.ignoresSafeArea\(\.container, edges: \.bottom\)/);
+  assert.match(settingsViewSwiftSource, /struct SettingsSheet: View[\s\S]*SettingsView\(showsAccountSettings: showsAccountSettings, showsDoneButton: true\)[\s\S]*\.presentationDetents\(\[\.medium, \.large\]\)[\s\S]*\.presentationDragIndicator\(\.visible\)/);
+  assert.match(settingsViewSwiftSource, /if !showsDoneButton \{\s*store\.selectedSection = \.settings/);
 });
 
 test("full app uses Liquid Glass for floating status chrome without glassing content", () => {

@@ -2,10 +2,13 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(ScannerStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
     let showsAccountSettings: Bool
+    let showsDoneButton: Bool
 
-    init(showsAccountSettings: Bool = true) {
+    init(showsAccountSettings: Bool = true, showsDoneButton: Bool = false) {
         self.showsAccountSettings = showsAccountSettings
+        self.showsDoneButton = showsDoneButton
     }
 
     var body: some View {
@@ -33,9 +36,28 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
+            .toolbar {
+                if showsDoneButton {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") { dismiss() }
+                    }
+                }
+            }
             .task {
-                store.selectedSection = .settings
+                if !showsDoneButton {
+                    store.selectedSection = .settings
+                }
             }
         }
+    }
+}
+
+struct SettingsSheet: View {
+    let showsAccountSettings: Bool
+
+    var body: some View {
+        SettingsView(showsAccountSettings: showsAccountSettings, showsDoneButton: true)
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
     }
 }

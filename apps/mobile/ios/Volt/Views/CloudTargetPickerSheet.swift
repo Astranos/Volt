@@ -7,9 +7,9 @@ struct CloudTargetButton: View {
     var body: some View {
         Button(action: action) {
             Label(targetLabel, systemImage: "pencil.and.scribble")
-                .labelStyle(.iconOnly)
                 .font(.headline.weight(.semibold))
-                .frame(width: 44, height: 44)
+                .lineLimit(1)
+                .frame(minHeight: 48)
                 .contentShape(Rectangle())
         }
         .cloudTargetButtonStyle()
