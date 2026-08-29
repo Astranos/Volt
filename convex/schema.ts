@@ -191,6 +191,30 @@ export default defineSchema({
     .index("by_clerkUserId", ["clerkUserId"])
     .index("by_clerkUserId_and_sourceIdentifier", ["clerkUserId", "sourceIdentifier"]),
 
+  aiScannerRequests: defineTable({
+    deviceId: v.string(),
+    clerkUserId: v.string(),
+    requestId: v.string(),
+    mode: v.union(v.literal("upc"), v.literal("name")),
+    periodKey: v.string(),
+    plan: v.union(v.literal("free"), v.literal("pro")),
+    status: v.union(v.literal("reserved"), v.literal("succeeded"), v.literal("refunded")),
+    countsTowardQuota: v.boolean(),
+    value: v.optional(v.union(v.string(), v.null())),
+    format: v.optional(v.string()),
+    errorCode: v.optional(v.union(
+      v.literal("upstream-failed"),
+      v.literal("upstream-timeout"),
+      v.literal("invalid-input"),
+      v.literal("upstream-rate-limited"),
+    )),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_clerkUserId_and_createdAt", ["clerkUserId", "createdAt"])
+    .index("by_clerkUserId_and_periodKey_and_plan_and_countsTowardQuota", ["clerkUserId", "periodKey", "plan", "countsTowardQuota"])
+    .index("by_requestId", ["requestId"]),
+
   // Pro handed out by an admin from the web dashboard. Kept separate from
   // `entitlements` so the grant survives independently of the derived
   // entitlement row that `access.ts` syncs on every status check.

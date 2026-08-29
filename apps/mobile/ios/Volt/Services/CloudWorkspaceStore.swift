@@ -52,7 +52,9 @@ final class CloudWorkspaceStore {
     @ObservationIgnored private var computersSubscriptionTask: Task<Void, Never>?
     @ObservationIgnored private var deliveryStatusSubscriptionTask: Task<Void, Never>?
     @ObservationIgnored private var deliveryExpiryTask: Task<Void, Never>?
+    @ObservationIgnored private var subscriptionsRequested = false
     @ObservationIgnored private var subscriptionsAreActive = false
+    @ObservationIgnored private var cloudWorkspaceEnabled = false
     @ObservationIgnored private var syncRequestedWhileDraining = false
     @ObservationIgnored private var inFlightDeliveries: [String: InFlightDelivery] = [:]
     @ObservationIgnored private var bufferedDeliveryResolutions: [CursorDeliveryResolution] = []
@@ -168,12 +170,32 @@ final class CloudWorkspaceStore {
     }
 
     func setSubscriptionsActive(_ isActive: Bool) {
-        guard subscriptionsAreActive != isActive else { return }
-        subscriptionsAreActive = isActive
-        if isActive {
+        subscriptionsRequested = isActive
+        let shouldActivate = isActive && cloudWorkspaceEnabled
+        guard subscriptionsAreActive != shouldActivate else { return }
+        subscriptionsAreActive = shouldActivate
+        if shouldActivate {
             startSubscriptionsIfNeeded()
         } else {
             cancelSubscriptionTasks()
+        }
+    }
+
+    func setCloudWorkspaceEnabled(_ isEnabled: Bool) {
+        guard cloudWorkspaceEnabled != isEnabled else { return }
+        cloudWorkspaceEnabled = isEnabled
+        if isEnabled {
+            requestSync()
+            if subscriptionsRequested {
+                subscriptionsAreActive = true
+                startSubscriptionsIfNeeded()
+            }
+        } else {
+            subscriptionsAreActive = false
+            cancelUploadTasks()
+            cancelSubscriptionTasks()
+            computers = []
+            selectedTargetDeviceId = nil
         }
     }
 
@@ -254,7 +276,7 @@ final class CloudWorkspaceStore {
     }
 
     func selectTarget(deviceId: String?) async {
-        guard let credential = activeCredential else { return }
+        guard cloudWorkspaceEnabled, let credential = activeCredential else { return }
         do {
             let response = try await api.setCursorTarget(SetCursorTargetRequest(
                 deviceId: credential.deviceId,
@@ -269,7 +291,8 @@ final class CloudWorkspaceStore {
     }
 
     func queueCursorDelivery(result: ScanResult, deliveryId: String) async -> Bool? {
-        guard result.kind == .barcode || result.kind == .text || result.kind == .dictation,
+        guard cloudWorkspaceEnabled,
+              result.kind == .barcode || result.kind == .text || result.kind == .dictation,
               let credential = activeCredential,
               let target = selectedComputer
         else { return nil }
@@ -313,7 +336,7 @@ final class CloudWorkspaceStore {
         return false
     }
 
-    func analyzeProductImage(_ data: Data, mode: ProductScanMode) async throws -> ProductScanResponse {
+    func analyzeProductImage(_ data: Data, mode: ProductScanMode, requestId: UUID) async throws -> ProductScanResponse {
         guard let credential = activeCredential else {
             throw MobileCloudError.credentialRevoked
         }
@@ -321,12 +344,14 @@ final class CloudWorkspaceStore {
             data,
             mode: mode,
             deviceId: credential.deviceId,
-            deviceSecret: credential.value
+            deviceSecret: credential.value,
+            requestId: requestId
         )
     }
 
     func updateDictationDraft(draftId: String, text: String) async -> String? {
-        guard let credential = activeCredential,
+        guard cloudWorkspaceEnabled,
+              let credential = activeCredential,
               let target = selectedComputer
         else {
             return "Choose an online computer before dictating."
@@ -351,7 +376,7 @@ final class CloudWorkspaceStore {
     }
 
     func clearDictationDraft(draftId: String) async {
-        guard let credential = activeCredential else { return }
+        guard cloudWorkspaceEnabled, let credential = activeCredential else { return }
         do {
             try await client.mutation(
                 "cloudWorkspace:clearDictationDraft",
@@ -588,7 +613,7 @@ final class CloudWorkspaceStore {
     }
 
     func requestSync() {
-        guard activeCredential != nil else { return }
+        guard cloudWorkspaceEnabled, activeCredential != nil else { return }
         if syncTask != nil {
             syncRequestedWhileDraining = true
             return
@@ -612,6 +637,9 @@ final class CloudWorkspaceStore {
     private func pauseForSignOut() {
         authenticatedClerkUserId = nil
         lastBootstrappedClerkUserId = nil
+        cloudWorkspaceEnabled = false
+        subscriptionsRequested = false
+        subscriptionsAreActive = false
         cancelSubscriptionTasks()
         cancelUploadTasks()
         computers = []
@@ -707,7 +735,8 @@ final class CloudWorkspaceStore {
     }
 
     private func scheduleRetryIfNeeded() {
-        guard let credential = activeCredential,
+        guard cloudWorkspaceEnabled,
+              let credential = activeCredential,
               let ownerClerkUserId = credential.clerkUserId,
               let retryAt = outbox.records
                 .filter({ $0.ownerClerkUserId == ownerClerkUserId && $0.state == .failed })

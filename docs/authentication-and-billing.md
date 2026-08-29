@@ -1,6 +1,6 @@
 # Authentication and billing setup
 
-Volt uses Clerk for identity, Convex for authorization, usage, cloud-workspace metadata, cursor delivery, and live dictation drafts; Cloudflare R2 stores private photo bytes; StoreKit manages the iOS subscription. There is no Stripe integration. The installed app uses an enrolled device credential, while the App Clip uses a short-lived workspace guest grant created by signed-in Chrome.
+Volt uses Clerk for identity, Convex for authorization, usage, cloud-workspace metadata, cursor delivery, and live dictation drafts; Cloudflare R2 stores private photo bytes; StoreKit manages the iOS subscription. There is no Stripe integration. Any signed-in account can use local iPhone scanning and history without Pro. Pro is a capability plan for cloud workspace and mobile capture sync. Pro can come from StoreKit or complimentary workplace or admin access. The App Clip uses a short-lived workspace guest grant created by signed-in Chrome.
 
 ## Clerk and Convex
 
@@ -50,17 +50,17 @@ VOLT_STOREKIT_PRODUCT_ID=com.volt.mobile.pro.monthly
 VOLT_APP_STORE_ID=<numeric App Store app ID>
 ```
 
-`VOLT_CLERK_FRONTEND_API_DOMAIN` feeds the full app's `webcredentials:` associated-domain entitlement. The App Clip does not link ClerkKit or ClerkKitUI and must remain checkout-free.
+`VOLT_CLERK_FRONTEND_API_DOMAIN` feeds the iPhone app's `webcredentials:` associated-domain entitlement. The App Clip does not link ClerkKit or ClerkKitUI and must remain checkout-free.
 
 ## StoreKit and App Store Connect
 
-Create an auto-renewable monthly subscription priced at USD $9.00. The product identifier is configurable and defaults to:
+Create an auto-renewable monthly subscription priced at USD $9.00. The subscription grants the Pro capability when the server verifies it. The product identifier is configurable and defaults to:
 
 ```text
 com.volt.mobile.pro.monthly
 ```
 
-Configure a one-week free introductory offer for this subscription in App Store Connect. Eligible customers authorize the subscription before entering the full app, receive the first week free, and then renew at the displayed monthly price unless they cancel. StoreKit determines introductory-offer eligibility; Volt does not run a separate trial timer.
+Configure a one-week free introductory offer for this subscription in App Store Connect. Eligible customers receive the first week free and then renew at the displayed monthly price unless they cancel. StoreKit determines introductory-offer eligibility; Volt does not run a separate trial timer. Subscription refresh runs in the background and never blocks local iPhone capture at launch.
 
 Configure these Convex environment variables:
 
@@ -112,10 +112,13 @@ The secret is returned only when `POST /api/access/anonymous` creates a grant. C
 
 Status responses contain:
 
-- `access`: `trial`, `complimentary`, `subscription`, or `exhausted`
-- `isAuthorized`, `freeSessionsRemaining`, `requiresSignIn`, and `requiresSubscription` for the legacy App Clip/Chrome session flow
-- `hasFullAppAccess`, which is true only for an active StoreKit or complimentary entitlement
-- `subscriptionStatus`: `none`, `active`, or `expired`
+- `access`: `trial`, `complimentary`, `subscription`, or `exhausted` for the legacy App Clip and Chrome session flow
+- `isAuthorized`, `freeSessionsRemaining`, `requiresSignIn`, and `requiresSubscription` for that session flow
+- `hasFullAppAccess`, a legacy field that must not gate iPhone launch. Feature checks use the capability they need.
+- `plan`: `free` or `pro`
+- `capabilities`: local capture, cloud workspace, and AI product scanner permissions
+- `aiScannerQuota`: `unlimited` for Pro or a metered monthly limit for free accounts
+- `subscriptionStatus`: `none`, `active`, or `expired` for StoreKit billing only. Complimentary access is not a StoreKit subscription.
 - `productId` and, for signed-in users, `clerkUserId` and `appAccountToken`
 - optional `organizationId` and subscription `expiresAt`
 
@@ -144,7 +147,13 @@ Use the same authorization or anonymous headers. The response includes `startedA
 
 Report an involuntary connection loss with `POST /api/access/session/disconnect`. Report an explicit user disconnect with `POST /api/access/session/end`. Both accept `{"usageSessionId":"..."}` and the same access headers. A reconnect within, but not at, 30 minutes reuses the session. At 30 minutes disconnected, or at the 8-hour maximum, the server ends it. Reconnecting afterward requires a new `usageSessionId`.
 
-The current App Clip is free and uses a short-lived, workspace-scoped cloud grant created by signed-in Chrome. It does not use the legacy join-token/WebRTC session, does not hold Clerk or a durable account credential, and does not show StoreKit checkout or a Pro blocker. The full app separately requires `hasFullAppAccess`, performs Clerk sign-in and StoreKit purchase/restore, and treats an active introductory trial like any other active StoreKit entitlement. The Chrome extension reads the resulting entitlement through the same Clerk user and Convex status endpoint.
+The App Clip is free and uses a short-lived, workspace-scoped cloud grant created by signed-in Chrome. It does not use the legacy join-token/WebRTC session, does not hold Clerk or a durable account credential, and does not show StoreKit checkout or a Pro blocker. The App Clip has no AI account capability. A signed-in iPhone account can open local capture and history without Pro. Cloud workspace and mobile capture sync check the Pro capability when the user uses those features. The Chrome extension reads account status through the same Clerk user and Convex status endpoint, but its browser features remain free.
+
+## AI product scanner
+
+Every signed-in account can use the AI product scanner. Free accounts receive 10 analyses per UTC calendar month by default. Set `AI_SCANNER_FREE_MONTHLY_LIMIT` on the server to adjust that quota. Pro accounts, including StoreKit and complimentary workplace or admin Pro, have no monthly AI quota. Metered deployments still apply a safety rate limit. A development or preview deployment can set `AI_SCANNER_QUOTA_MODE=unlimited`; that setting is server-side only.
+
+An analysis counts after OpenRouter processes the image, including a response with no confident product match. Image validation failures and upstream or server failures do not consume the monthly quota. The app checks this capability when the user starts an AI analysis. Account and StoreKit refresh can update the display in the background, but they never block app launch.
 
 ## Local completion checklist
 

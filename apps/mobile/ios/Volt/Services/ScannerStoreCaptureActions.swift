@@ -84,7 +84,13 @@ extension ScannerStore {
 
     func captureProduct() async {
         guard !isProductScanBusy else { return }
+        guard !isProductScanQuotaExhausted else {
+            productScanError = MobileCloudError.aiQuotaExhausted(productScanQuota).localizedDescription
+            statusText = productScanError ?? "AI scan limit reached"
+            return
+        }
         let mode = productScanMode
+        let requestId = UUID()
         isProductScanBusy = true
         productScanOutput = nil
         productScanError = nil
@@ -107,7 +113,8 @@ extension ScannerStore {
         }
 
         do {
-            let response = try await cloudWorkspace.analyzeProductImage(imageData, mode: mode)
+            let response = try await cloudWorkspace.analyzeProductImage(imageData, mode: mode, requestId: requestId)
+            updateProductScanQuota(response.quota)
             guard let responseValue = response.value else {
                 throw ProductScanCaptureError.emptyResult
             }
@@ -146,6 +153,7 @@ extension ScannerStore {
             productScanOutput = ProductScanOutput(mode: mode, value: result.value)
             statusText = mode == .upc ? "UPC found" : "Product name found"
         } catch let error as MobileCloudError {
+            updateProductScanQuota(error.aiQuota)
             productScanError = error.localizedDescription
             statusText = productScanError ?? "Product scan failed"
         } catch let error as ProductScanCaptureError {

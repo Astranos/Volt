@@ -14,12 +14,8 @@ struct VoltRootScene: View {
                 RootView()
             } else if clerk.user == nil {
                 AuthenticationLandingView()
-            } else if accessStore.isRefreshing || !hasCurrentAccessContext {
-                FullAppAccessLoadingView()
-            } else if accessStore.status?.hasFullAppAccess == true {
-                RootView()
             } else {
-                SubscriptionPaywallView()
+                RootView()
             }
         }
             .environment(\.clerkTheme, VoltBrand.clerkTheme)
@@ -36,8 +32,8 @@ struct VoltRootScene: View {
             .task(id: authenticationContext) {
                 await refreshAuthenticatedAccess()
             }
-            .task(id: fullAppAccessContext) {
-                await activateCloudWorkspaceIfAuthorized()
+            .task(id: cloudWorkspaceContext) {
+                await configureCloudWorkspace()
             }
     }
 
@@ -47,14 +43,8 @@ struct VoltRootScene: View {
             .joined(separator: ":")
     }
 
-    private var fullAppAccessContext: String {
-        "\(clerk.user?.id ?? "signed-out"):\(accessStore.status?.hasFullAppAccess == true)"
-    }
-
-    private var hasCurrentAccessContext: Bool {
-        guard let status = accessStore.status else { return false }
-        return status.clerkUserId == clerk.user?.id
-            && status.organizationId == clerk.organization?.id
+    private var cloudWorkspaceContext: String {
+        "\(clerk.user?.id ?? "signed-out"):\(accessStore.status?.capabilities.cloudWorkspace == true)"
     }
 
     private func refreshAuthenticatedAccess() async {
@@ -64,27 +54,16 @@ struct VoltRootScene: View {
         await subscriptionStore.refreshCurrentEntitlements(using: clerk)
     }
 
-    private func activateCloudWorkspaceIfAuthorized() async {
-        guard accessStore.status?.hasFullAppAccess == true else {
+    private func configureCloudWorkspace() async {
+        guard clerk.user != nil else {
+            scannerStore.cloudWorkspace.setCloudWorkspaceEnabled(false)
             scannerStore.cloudWorkspace.setSubscriptionsActive(false)
             return
         }
+        scannerStore.cloudWorkspace.setCloudWorkspaceEnabled(false)
         await scannerStore.cloudWorkspace.bootstrapIfNeeded(using: clerk)
-    }
-}
-
-private struct FullAppAccessLoadingView: View {
-    var body: some View {
-        VStack(spacing: 14) {
-            ProgressView()
-                .controlSize(.large)
-            Text("Checking Volt Pro access…")
-                .font(.headline)
-            Text("Your App Store subscription and complimentary access are verified securely.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-        }
-        .padding(32)
+        scannerStore.cloudWorkspace.setCloudWorkspaceEnabled(
+            accessStore.status?.capabilities.cloudWorkspace == true
+        )
     }
 }

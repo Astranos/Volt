@@ -8,6 +8,7 @@ import {
   type MutationCtx,
   type QueryCtx,
 } from "./_generated/server";
+import { aiScannerQuotaForAccess, type AIScannerQuota } from "./aiScannerQuota";
 
 export const FREE_SESSION_LIMIT = 5;
 export const RECONNECT_WINDOW_MS = 30 * 60 * 1000;
@@ -47,6 +48,9 @@ export type AccessStatus = {
   organizationId?: string;
   appAccountToken?: string;
   expiresAt?: number;
+  plan: "free" | "pro";
+  capabilities: { localCapture: true; cloudWorkspace: boolean; aiProductScanner: true };
+  aiScannerQuota: AIScannerQuota;
 };
 
 const optionalString = v.optional(v.string());
@@ -394,27 +398,25 @@ async function subscriptionForUser(ctx: MutationCtx, clerkUserId: string, now: n
   const activeComplimentary = entitlements.find(
     (entitlement) => entitlement.kind === "manual"
       && entitlement.status === "active"
+      && entitlement.validFrom <= now
       && (entitlement.expiresAt === undefined || entitlement.expiresAt > now),
   );
-  if (activeComplimentary) {
-    return {
-      status: "active" as const,
-      entitlement: activeComplimentary,
-      source: "complimentary" as const,
-    };
-  }
   const storeKitEntitlements = entitlements.filter((entitlement) => entitlement.kind === "storekit");
   const active = storeKitEntitlements
     .filter(
       (entitlement) =>
-        entitlement.status === "active" &&
+        entitlement.status === "active" && entitlement.validFrom <= now &&
         (entitlement.expiresAt === undefined || entitlement.expiresAt > now),
     )
     .sort((left, right) => (right.expiresAt ?? Number.MAX_SAFE_INTEGER) - (left.expiresAt ?? Number.MAX_SAFE_INTEGER))[0];
+  const storeKitStatus = active ? "active" as const : storeKitEntitlements.length ? "expired" as const : "none" as const;
+  if (activeComplimentary) {
+    return { status: storeKitStatus, entitlement: activeComplimentary, source: "complimentary" as const };
+  }
   if (active) {
     return { status: "active" as const, entitlement: active, source: "subscription" as const };
   }
-  return { status: storeKitEntitlements.length ? ("expired" as const) : ("none" as const) };
+  return { status: storeKitStatus };
 }
 
 export async function hasFullAppEntitlement(
@@ -428,6 +430,7 @@ export async function hasFullAppEntitlement(
     .take(100);
   return entitlements.some(
     (entitlement) => entitlement.status === "active"
+      && entitlement.validFrom <= now
       && (entitlement.expiresAt === undefined || entitlement.expiresAt > now),
   );
 }
@@ -502,9 +505,16 @@ async function buildAccessStatus(
     ...(auth.organizationId ? { organizationId: auth.organizationId } : {}),
   };
 
-  if (organization || (subscription.status === "active" && subscription.source === "complimentary")) {
+  const plan = organization || subscription.source === "complimentary" || subscription.source === "subscription"
+    ? "pro" as const
+    : "free" as const;
+  const aiScannerQuota = await aiScannerQuotaForAccess(ctx, principal.user?.clerkUserId, plan, now);
+  const capabilities = { localCapture: true as const, cloudWorkspace: plan === "pro", aiProductScanner: true as const };
+  const withCapabilities = { ...shared, plan, capabilities, aiScannerQuota };
+
+  if (organization || subscription.source === "complimentary") {
     return {
-      ...shared,
+      ...withCapabilities,
       access: "complimentary",
       isAuthorized: true,
       hasFullAppAccess: true,
@@ -512,9 +522,9 @@ async function buildAccessStatus(
       requiresSubscription: false,
     };
   }
-  if (subscription.status === "active") {
+  if (subscription.status === "active" && subscription.source === "subscription") {
     return {
-      ...shared,
+      ...withCapabilities,
       access: "subscription",
       isAuthorized: true,
       hasFullAppAccess: true,
@@ -527,7 +537,7 @@ async function buildAccessStatus(
   }
   if (freeSessionsRemaining > 0) {
     return {
-      ...shared,
+      ...withCapabilities,
       access: "trial",
       isAuthorized: true,
       hasFullAppAccess: false,
@@ -536,7 +546,7 @@ async function buildAccessStatus(
     };
   }
   return {
-    ...shared,
+    ...withCapabilities,
     access: "exhausted",
     isAuthorized: false,
     hasFullAppAccess: false,

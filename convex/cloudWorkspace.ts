@@ -52,38 +52,6 @@ type Principal = {
 type DeviceCredential = { deviceId: string; deviceSecret: string };
 type GuestCredential = { guestCloudGrant: string };
 
-export const authorizePaidAIScannerDevice = internalQuery({
-  args: credentialArgs,
-  returns: v.object({
-    authorized: v.boolean(),
-    errorCode: v.optional(v.union(v.literal("invalid-device"), v.literal("subscription-required"))),
-  }),
-  handler: async (ctx, args) => {
-    const device = await ctx.db
-      .query("workspaceDevices")
-      .withIndex("by_deviceId", (q) => q.eq("deviceId", args.deviceId))
-      .unique();
-    if (!device || device.revokedAt || device.credentialHash !== (await sha256Hex(args.deviceSecret))) {
-      return { authorized: false, errorCode: "invalid-device" as const };
-    }
-    const workspace = await ctx.db.get(device.workspaceId);
-    if (!workspace) return { authorized: false, errorCode: "invalid-device" as const };
-    const now = Date.now();
-    const entitlements = await ctx.db
-      .query("entitlements")
-      .withIndex("by_clerkUserId", (q) => q.eq("clerkUserId", workspace.ownerClerkUserId))
-      .take(100);
-    const hasActiveStoreKit = entitlements.some((entitlement) =>
-      entitlement.kind === "storekit"
-      && entitlement.status === "active"
-      && entitlement.validFrom <= now
-      && (entitlement.expiresAt === undefined || entitlement.expiresAt > now)
-    );
-    if (!hasActiveStoreKit) return { authorized: false, errorCode: "subscription-required" as const };
-    return { authorized: true };
-  },
-});
-
 type CloudResultInput = {
   resultId: string;
   kind: "text" | "barcode" | "photo" | "dictation";
@@ -180,6 +148,12 @@ async function requireOrCreateAuthenticatedWorkspace(ctx: MutationCtx) {
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) throw new ConvexError("Authentication required");
   await requireFullAppEntitlement(ctx, identity.subject);
+  return requireOrCreateWorkspaceForClerkUser(ctx, identity.subject, identity.name);
+}
+
+async function requireOrCreateAuthenticatedWorkspaceForDeviceBootstrap(ctx: MutationCtx) {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) throw new ConvexError("Authentication required");
   return requireOrCreateWorkspaceForClerkUser(ctx, identity.subject, identity.name);
 }
 
@@ -564,7 +538,7 @@ export const bootstrapMobileDevice = mutation({
     if (!args.installationId.trim() || !args.label.trim()) {
       throw new ConvexError("Installation id and label are required");
     }
-    const workspace = await requireOrCreateAuthenticatedWorkspace(ctx);
+    const workspace = await requireOrCreateAuthenticatedWorkspaceForDeviceBootstrap(ctx);
     const now = Date.now();
     const existingDeviceId = args.existingDeviceId;
     if (existingDeviceId) {

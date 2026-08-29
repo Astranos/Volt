@@ -1,4 +1,4 @@
-# Cloud-Backed Full-App Scanner Workspace
+# Cloud-backed scanner workspace
 
 ## Status
 
@@ -6,7 +6,7 @@ Accepted for the cloud-workspace model. Its WebRTC migration notes are historica
 
 ## Context
 
-WebRTC-only delivery makes capture success depend on a selected Chrome computer being online, reachable, and able to accept the result. That conflicts with the full app's job: a reseller must be able to open directly into capture, keep working offline, and trust that accepted results will not disappear. It also prevents the same account's other Chrome installations from seeing the work.
+WebRTC-only delivery makes capture success depend on a selected Chrome computer being online, reachable, and able to accept the result. That conflicts with the iPhone app's local capture job: a reseller must be able to open directly into capture, keep working offline, and trust that accepted results will not disappear. It also prevents the same account's other Chrome installations from seeing the work.
 
 Volt already has Convex identity, signaling, access, and verified StoreKit work. The cloud design deepens that module into an account workspace control plane while keeping large private photo bytes out of Convex.
 
@@ -14,16 +14,16 @@ The App Clip has different constraints and remains intentionally temporary. It i
 
 ## Decision
 
-The full app uses a capture-first, durable, cloud-backed workflow:
+The iPhone app uses a capture-first local workflow. Pro accounts add a durable, cloud-backed workspace workflow:
 
-1. It opens directly into capture, regardless of sign-in refresh, network state, WebRTC state, or computer presence.
+1. A signed-in account opens directly into local capture. Account and StoreKit refresh run in the background and never gate launch.
 2. It commits each accepted result and any photo rendition to a durable Local Capture Outbox before showing success.
 3. A background synchronization worker uploads result metadata to Convex and photo bytes directly to private Cloudflare R2 using short-lived presigned URLs.
-4. Every Chrome installation signed into the same Volt account subscribes to the account's Cloud Scanner Workspace and sees the same Result Batches.
+4. Every Chrome installation signed into the same Pro Volt account subscribes to the account's Cloud Scanner Workspace and sees the same Result Batches.
 5. Selecting a computer affects cursor insertion and installed-app live dictation. It never changes ownership or visibility of ordinary batches.
 6. The App Clip uses a QR-scoped guest cloud grant for capture and computer targeting without Clerk, dictation, WebRTC, or durable enrollment.
 
-Convex owns the control plane: account/workspace identity, enrolled devices and computers, presence, batches and result metadata, delivery state, entitlement and quota decisions, device revocation, and realtime subscriptions. Convex does not proxy photo uploads or downloads.
+Convex owns the control plane: account/workspace identity, enrolled devices and computers, presence, batches and result metadata, delivery state, Pro capability and quota decisions, device revocation, and realtime subscriptions. Convex does not proxy photo uploads or downloads.
 
 Cloudflare R2 owns the data plane for private photo bytes. Clients transfer bytes directly with presigned PUT and GET URLs. Object keys are server-selected, workspace-scoped, and opaque to other tenants.
 
@@ -31,17 +31,17 @@ Cloudflare R2 owns the data plane for private photo bytes. Clients transfer byte
 
 A signed-in Chrome installation requests an Enrollment Grant from Convex. The displayed QR contains only a high-entropy, single-use grant and routing/version information. It never contains a Clerk JWT, session cookie, R2 credential, or durable device secret.
 
-The full app redeems the grant once over TLS. Convex binds a newly generated Enrolled Mobile Device to the grant's workspace and returns an opaque Device Credential. The phone stores this credential in the iOS Keychain with device-only accessibility. Convex stores only a cryptographic hash. Normal app launches reuse the credential and do not require repeated sign-in.
+The signed-in iPhone app bootstraps an Enrolled Mobile Device for its Clerk account and receives an opaque Device Credential. Every signed-in plan can hold this credential because the AI scanner uses it; cloud workspace operations still require Pro. The phone stores the credential in the iOS Keychain with device-only accessibility. Convex stores only a cryptographic hash. Normal app launches reuse the credential while Clerk remains the account identity.
 
 Enrollment Grants expire after five minutes, become invalid immediately after redemption or cancellation, and are rate-limited by account and installation. Device Credentials are independently revocable. Revocation blocks metadata operations and new presigned URLs without signing the user's Chrome installations out.
 
-An App Clip Guest Cloud Grant is distinct from full-app enrollment. It is minted only by authenticated Chrome for the workspace represented by the pairing QR, expires with the temporary session, cannot enroll a durable device, and authorizes only the App Clip capture and photo operations required for that session. The raw grant is never stored in workspace records or logs.
+An App Clip Guest Cloud Grant is distinct from iPhone workspace enrollment. It is minted only by authenticated Chrome for the workspace represented by the pairing QR, expires with the temporary session, cannot enroll a durable device, and authorizes only the App Clip capture and photo operations required for that session. The raw grant is never stored in workspace records or logs.
 
 Chrome installations use their normal signed-in account identity and register a stable Enrolled Computer id. Computer presence is a renewable lease, not proof of batch ownership or authorization.
 
 ## Capture and Offline Behavior
 
-The Local Capture Outbox is the full app's acceptance seam. Its interface guarantees that a successful enqueue has durably written:
+The Local Capture Outbox is the iPhone app's acceptance seam. Its interface guarantees that a successful enqueue has durably written:
 
 - a client-generated batch id and result id
 - an idempotency key
@@ -70,11 +70,13 @@ A result becomes `available` only after required metadata is committed and any r
 
 ## Entitlement and Quota
 
-The full app receives a limited free Cloud Allowance. Subscription entitlement unlocks the robust cloud workflow and higher limits. Convex makes the authoritative decision before reserving cloud storage or publishing new results.
+Any signed-in account can use local scanning and history. Pro is a capability plan for cloud workspace and mobile capture sync. Pro comes from a verified StoreKit entitlement or a complimentary workplace or admin entitlement. Convex makes the authoritative Pro decision before cloud storage, synchronization, computer targeting, or result publication. Extension browser features remain free.
 
 StoreKit transactions remain verified server-side and tied to the account's stable `appAccountToken`. A client-supplied product id, receipt claim, or local StoreKit state cannot grant access by itself. Idempotent quota reservations prevent retries from consuming allowance more than once.
 
-The App Clip remains free and checkout-free. Guest-mirrored results are authorized and quota-checked against the workspace that minted the QR grant; the App Clip does not receive subscription management or a durable account credential.
+The App Clip remains free and checkout-free. Guest-mirrored results are authorized against the workspace that minted the QR grant; the App Clip does not receive subscription management, a durable account credential, or an AI account capability.
+
+AI product scanning is available to every signed-in account. Free accounts receive 10 analyses per UTC calendar month by default. Set `AI_SCANNER_FREE_MONTHLY_LIMIT` on the server to adjust that quota. Pro and complimentary workplace or admin Pro have no monthly AI quota. Metered deployments still apply a safety rate limit. Development and preview deployments can set `AI_SCANNER_QUOTA_MODE=unlimited` on the server. An analysis counts only after OpenRouter processes the image, including a no-confident-match result. Pre-model validation and upstream or server failures do not consume quota. The app checks AI capability when the feature is used, not at launch.
 
 ## Privacy and Tenant Isolation
 
@@ -114,16 +116,16 @@ The phone keeps uncopied captures in its Local Capture Outbox after revocation. 
 This completed migration did not discard local captures:
 
 1. Add the Convex workspace schema, enrollment, quotas, delivery state, and private R2 presign module behind configuration flags.
-2. Add full-app Device Credential enrollment and the Local Capture Outbox. During this phase, existing WebRTC delivery may run as acceleration, but outbox persistence happens first.
+2. Add Pro workspace Device Credential enrollment and the Local Capture Outbox. During this phase, existing WebRTC delivery may run as acceleration, but outbox persistence happens first.
 3. Add Chrome account-workspace subscription and merge cloud results into the sidepanel using stable result ids. Keep existing live peer handling for cursor insertion/dictation and mint an optional short-lived guest cloud grant for App Clip pairing.
-4. Enable cloud synchronization for enrolled full-app devices. Treat WebRTC receipts as live-delivery telemetry, not durable completion.
-5. Stop creating new WebRTC-only full-app retry records after cloud delivery is verified. Existing 24-hour retry records remain readable until they expire; do not bulk-upload them without user consent.
-6. Remove obsolete WebRTC requirements from both iOS targets and use the App Clip's QR-scoped guest workspace grant as its only capture transport.
+4. Enable cloud synchronization for enrolled Pro devices. Treat WebRTC receipts as live-delivery telemetry, not durable completion.
+5. Stop creating new WebRTC-only workspace retry records after cloud delivery is verified. Existing 24-hour retry records remain readable until they expire; do not bulk-upload them without user consent.
+6. Remove obsolete WebRTC requirements from both iOS targets and use the App Clip's QR-scoped guest workspace grant as its capture transport.
 
 No migration step may discard a local pending capture. Schema changes are additive until all supported clients understand the new delivery states.
 
 ## Consequences
 
-The full app works offline and no longer depends on a selected computer. Account results converge across Chrome installations, and capture acceptance has one durable local seam. Photo bytes avoid Convex bandwidth and size limits.
+The iPhone app works offline and no longer depends on a selected computer. Account results converge across Chrome installations, and capture acceptance has one durable local seam. Photo bytes avoid Convex bandwidth and size limits.
 
-The system now operates two intentionally different products: a temporary App Clip cloud path authorized by a QR-scoped guest grant, and a durable full-app cloud path. It also assumes responsibility for private object storage, retention jobs, quota reservations, device credentials, guest grants, tombstones, and migration compatibility. These costs are accepted because they are required for reliable capture and account-wide synchronization.
+The system now operates two intentionally different products: a temporary App Clip cloud path authorized by a QR-scoped guest grant, and a durable Pro workspace path for the iPhone app and Chrome. Local iPhone capture remains available to every signed-in account. The system also assumes responsibility for private object storage, retention jobs, quota reservations, device credentials, guest grants, tombstones, and migration compatibility. These costs are accepted because they are required for reliable capture and account-wide synchronization.

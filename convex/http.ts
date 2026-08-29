@@ -14,6 +14,10 @@ import {
   type AIScannerMode,
 } from "./aiScanner";
 import {
+  type AIScannerQuotaError,
+  type AIScannerReservation,
+} from "./aiScannerQuota";
+import {
   clerkAuthContextFromIdentity,
   type ClerkAuthContext,
 } from "./access";
@@ -637,11 +641,21 @@ const mobileDeviceBootstrapHandler = httpAction(async (ctx, request) => {
   }));
 });
 
-const authorizePaidAIScannerDeviceRef = makeFunctionReference<
-  "query",
-  { deviceId: string; deviceSecret: string },
-  { authorized: boolean; errorCode?: "invalid-device" | "subscription-required" }
->("cloudWorkspace:authorizePaidAIScannerDevice");
+const reserveAIScannerRequestRef = makeFunctionReference<
+  "mutation",
+  { deviceId: string; deviceSecret: string; requestId: string; mode: AIScannerMode },
+  AIScannerReservation
+>("aiScannerQuota:reserveAIScannerRequest");
+const completeAIScannerRequestRef = makeFunctionReference<
+  "mutation",
+  { deviceId: string; deviceSecret: string; requestId: string; mode: AIScannerMode; value: string | null; format: string },
+  { status: "succeeded"; quota: AIScannerReservation["quota"]; value: string | null; format: string }
+>("aiScannerQuota:completeAIScannerRequest");
+const refundAIScannerRequestRef = makeFunctionReference<
+  "mutation",
+  { deviceId: string; deviceSecret: string; requestId: string; errorCode: "upstream-failed" | "upstream-timeout" | "invalid-input" | "upstream-rate-limited" },
+  { status: "refunded" | "succeeded"; quota: AIScannerReservation["quota"]; value?: string | null; format?: string }
+>("aiScannerQuota:refundAIScannerRequest");
 
 const mobileAIScannerHandler = httpAction(async (ctx, request) => {
   if (request.method === "OPTIONS") return emptyResponse();
@@ -650,18 +664,16 @@ const mobileAIScannerHandler = httpAction(async (ctx, request) => {
   const mode = modeValue as AIScannerMode;
   const deviceId = request.headers.get("X-Volt-Device-Id")?.trim();
   const deviceSecret = request.headers.get("X-Volt-Device-Secret")?.trim();
+  const requestId = request.headers.get("X-Volt-AI-Request-Id")?.trim();
   if (!deviceId || !deviceSecret) return jsonResponse({ error: "Missing device credentials" }, 401);
+  if (!requestId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestId)) {
+    return jsonResponse({ error: "AI request id must be a UUID", errorCode: "invalid-input" }, 400);
+  }
   const contentType = request.headers.get("Content-Type")?.split(";", 1)[0].trim().toLowerCase();
   if (contentType !== "image/jpeg") return jsonResponse({ error: "JPEG image required" }, 415);
   const contentLength = request.headers.get("Content-Length");
   if (contentLength !== null && Number.isFinite(Number(contentLength)) && Number(contentLength) > AI_SCANNER_MAX_IMAGE_BYTES) {
     return jsonResponse({ error: "Image is too large" }, 413);
-  }
-  const authorization = await ctx.runQuery(authorizePaidAIScannerDeviceRef, { deviceId, deviceSecret });
-  if (!authorization.authorized) {
-    return authorization.errorCode === "subscription-required"
-      ? jsonResponse({ error: "Paid StoreKit subscription required" }, 402)
-      : jsonResponse({ error: "Invalid or revoked device credential" }, 401);
   }
   const imageBytes = await request.arrayBuffer();
   if (imageBytes.byteLength === 0) return jsonResponse({ error: "Image body required" }, 400);
@@ -670,15 +682,39 @@ const mobileAIScannerHandler = httpAction(async (ctx, request) => {
   if (jpegHeader.length < 3 || jpegHeader[0] !== 0xff || jpegHeader[1] !== 0xd8 || jpegHeader[2] !== 0xff) {
     return jsonResponse({ error: "Valid JPEG image required" }, 415);
   }
+  const reservation = await ctx.runMutation(reserveAIScannerRequestRef, { deviceId, deviceSecret, requestId, mode });
+  if (reservation.status === "succeeded") {
+    return jsonResponse({ mode, value: reservation.value ?? null, format: reservation.format ?? (mode === "upc" ? "upc_a" : "item-name"), quota: reservation.quota });
+  }
+  if (reservation.status === "refunded") {
+    return jsonResponse({ error: "AI request was already refunded", errorCode: reservation.errorCode ?? "upstream-failed", quota: reservation.quota }, 502);
+  }
+  if (reservation.status === "rejected") {
+    if (reservation.errorCode === "invalid-device") return jsonResponse({ error: "Invalid or revoked device credential", errorCode: "invalid-device" }, 401);
+    if (reservation.errorCode === "request-in-progress") return jsonResponse({ error: "AI request is already in progress", errorCode: "request-in-progress", quota: reservation.quota }, 409);
+    const status = reservation.errorCode === "quota-exhausted" || reservation.errorCode === "rate-limited" ? 429 : 400;
+    return jsonResponse({ error: reservation.errorCode ?? "AI request rejected", errorCode: reservation.errorCode, quota: reservation.quota }, status);
+  }
   try {
-    return jsonResponse(await requestOpenRouterAnalysis(mode, imageBytes));
+    const analysis = await requestOpenRouterAnalysis(mode, imageBytes);
+    const completed = await ctx.runMutation(completeAIScannerRequestRef, { deviceId, deviceSecret, requestId, mode, value: analysis.value, format: analysis.format });
+    return jsonResponse({ mode, value: completed.value, format: completed.format, quota: completed.quota });
   } catch (error) {
-    if (error instanceof AIScannerError) {
-      const message = error.code === "not-configured" ? "AI scanner is not configured"
-        : error.code === "upstream-timeout" ? "AI scanner timed out" : "AI scanner unavailable";
-      return jsonResponse({ error: message }, error.status);
+    const errorCode: "upstream-failed" | "upstream-timeout" | "upstream-rate-limited" = error instanceof AIScannerError && error.code === "upstream-timeout"
+      ? "upstream-timeout" : error instanceof AIScannerError && error.code === "upstream-rate-limited" ? "upstream-rate-limited" : "upstream-failed";
+    try {
+      const refunded = await ctx.runMutation(refundAIScannerRequestRef, { deviceId, deviceSecret, requestId, errorCode });
+      if (refunded.status === "succeeded") {
+        return jsonResponse({ mode, value: refunded.value ?? null, format: refunded.format ?? (mode === "upc" ? "upc_a" : "item-name"), quota: refunded.quota });
+      }
+      if (error instanceof AIScannerError) {
+        const message = error.code === "not-configured" ? "AI scanner is not configured" : error.code === "upstream-timeout" ? "AI scanner timed out" : "AI scanner unavailable";
+        return jsonResponse({ error: message, errorCode, quota: refunded.quota }, error.status);
+      }
+      return jsonResponse({ error: "AI scanner unavailable", errorCode, quota: refunded.quota }, 502);
+    } catch {
+      return jsonResponse({ error: "AI scanner unavailable", errorCode }, 502);
     }
-    return jsonResponse({ error: "AI scanner unavailable" }, 502);
   }
 });
 

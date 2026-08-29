@@ -259,9 +259,9 @@ private struct PaywallMarketingContent: View {
 
             VStack(alignment: .leading, spacing: 18) {
                 PaywallFeature(
-                    title: "Capture without limits",
-                    detail: "Scan text and barcodes, capture product photos, and upload from Photos.",
-                    systemImage: "viewfinder"
+                    title: "Unlimited AI scans",
+                    detail: "Identify products by UPC or name without the Volt Free monthly limit.",
+                    systemImage: "sparkles"
                 )
                 PaywallFeature(
                     title: "Sync across Volt",
@@ -364,7 +364,7 @@ struct SubscriptionActionsView: View {
             } else if accessStore.status?.access == .complimentary {
                 Label("Complimentary Volt Pro access", systemImage: "checkmark.seal.fill")
                     .foregroundStyle(.green)
-                Text("This account has unlimited access. No App Store purchase is needed.")
+                Text("This account includes the cloud workspace and unlimited monthly AI scans. No App Store purchase is needed.")
                     .foregroundStyle(.secondary)
             } else if clerk.user == nil {
                 Text("Sign in before subscribing so the App Store purchase unlocks the same Clerk account in Volt and Chrome.")

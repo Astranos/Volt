@@ -12,6 +12,6 @@ Use Volt Scanner to:
 
 Built for resale and inventory workflows where speed, accuracy, and fewer manual steps matter.
 
-The installed app requires Volt Pro. Eligible new subscribers can try Volt Pro free for one week, then the subscription renews monthly unless canceled.
+Sign in to use local scanning and history at no charge. Volt Pro adds private workspace sync, computer connections, and mobile capture sync. Pro is available through an App Store subscription or complimentary workplace access. Eligible new subscribers can try Volt Pro free for one week, then the subscription renews monthly unless canceled.
 
 Terms of Use: https://www.apple.com/legal/internet-services/itunes/dev/stdeula/

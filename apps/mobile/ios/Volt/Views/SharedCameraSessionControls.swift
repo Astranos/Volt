@@ -34,6 +34,7 @@ struct CameraSessionControls: View {
     var isProductScannerSelected = false
     var productScannerAvailable = true
     var productScanMode: ProductScanMode = .upc
+    var productScanQuotaText: String?
     let onToggleTorch: () -> Void
     let onZoomOut: () -> Void
     let onZoomIn: () -> Void
@@ -54,6 +55,14 @@ struct CameraSessionControls: View {
                 .font(.subheadline.bold())
                 .foregroundStyle(isCaptureEnabled ? .white : .white.opacity(0.55))
                 .frame(maxWidth: .infinity)
+
+            if isProductScannerSelected, let productScanQuotaText {
+                Text(productScanQuotaText)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.white.opacity(0.76))
+                    .frame(maxWidth: .infinity)
+                    .accessibilityLabel(productScanQuotaText)
+            }
 
             ZStack {
                 HStack {
@@ -292,7 +301,7 @@ struct CameraSessionControls: View {
         .buttonStyle(.plain)
         .accessibilityAddTraits(isProductScannerSelected ? .isSelected : [])
         .accessibilityLabel("AI product scan")
-        .accessibilityValue(productScannerAvailable ? "Available" : "Requires a paid Volt subscription")
+        .accessibilityValue(productScannerAvailable ? "Available" : "AI scan limit reached for this period")
         .accessibilityHint("Returns the selected product UPC or name")
     }
 

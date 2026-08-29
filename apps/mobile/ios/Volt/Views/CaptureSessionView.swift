@@ -147,8 +147,9 @@ struct CaptureSessionView: View {
                         controlRotation: .degrees(store.camera.captureOrientation.controlRotationDegrees),
                         showsProductScanner: true,
                         isProductScannerSelected: store.isProductScannerActive,
-                        productScannerAvailable: hasPaidProductScannerAccess,
+                        productScannerAvailable: !store.isProductScanQuotaExhausted,
                         productScanMode: store.productScanMode,
+                        productScanQuotaText: store.productScanQuotaText,
                         onToggleTorch: {
                             store.camera.setTorchEnabled(!store.camera.torchEnabled)
                         },
@@ -164,7 +165,11 @@ struct CaptureSessionView: View {
                         onCapture: {
                             Task {
                                 if store.isProductScannerActive {
-                                    await store.captureProduct()
+                                    if store.isProductScanQuotaExhausted {
+                                        isSubscriptionPaywallPresented = true
+                                    } else {
+                                        await store.captureProduct()
+                                    }
                                 } else if store.activeMode == .dictation {
                                     if store.isDictating {
                                         await store.stopLiveDictation()
@@ -177,7 +182,7 @@ struct CaptureSessionView: View {
                             }
                         },
                         onSelectProductScanner: {
-                            if hasPaidProductScannerAccess {
+                            if !store.isProductScanQuotaExhausted {
                                 store.activateProductScanner()
                             } else {
                                 isSubscriptionPaywallPresented = true
@@ -206,6 +211,10 @@ struct CaptureSessionView: View {
         .onAppear {
             store.activeMode = mode
             store.deactivateProductScanner()
+            store.updateProductScanQuota(
+                accessStore.status?.aiScannerQuota,
+                plan: accessStore.status?.plan
+            )
             store.startSessionPhotoStrip()
             if ScreenshotScenario.current == .captureReviewSend,
                let region = store.ocrTextRegions.first {
@@ -228,6 +237,9 @@ struct CaptureSessionView: View {
             store.camera.start()
             store.camera.setLiveTextScanningEnabled(mode == .ocr)
             store.camera.setBarcodeScanningEnabled(mode == .barcode)
+        }
+        .onChange(of: accessStore.status?.aiScannerQuota) { _, quota in
+            store.updateProductScanQuota(quota, plan: accessStore.status?.plan)
         }
         .task(id: store.captureDeliveryToast?.id) {
             guard let toast = store.captureDeliveryToast else { return }
@@ -316,9 +328,6 @@ struct CaptureSessionView: View {
         selectedTextValue
     }
 
-    private var hasPaidProductScannerAccess: Bool {
-        accessStore.status?.access == .subscription
-    }
 }
 
 private struct ProductScanStatusView: View {

@@ -9,7 +9,9 @@ struct AccessSettingsSection: View {
         Section("Access") {
             LabeledContent("Account", value: accountLabel)
             LabeledContent("Workspace", value: workspaceLabel)
-            LabeledContent("Full App Access", value: fullAppAccessLabel)
+            LabeledContent("Plan", value: planLabel)
+            LabeledContent("Cloud Workspace", value: cloudWorkspaceLabel)
+            LabeledContent("AI Scans", value: aiScannerLabel)
             LabeledContent("Subscription", value: subscriptionLabel)
 
             NavigationLink("Account & Subscription") {
@@ -29,10 +31,28 @@ struct AccessSettingsSection: View {
             ?? (clerk.user == nil ? "Chrome trial" : "Personal")
     }
 
-    private var fullAppAccessLabel: String {
+    private var planLabel: String {
         guard clerk.user != nil else { return "Sign in required" }
         guard let status = accessStore.status else { return accessStore.isRefreshing ? "Checking…" : "Unavailable" }
-        return status.hasFullAppAccess ? "Unlocked" : "Subscription required"
+        return status.plan == .pro ? "Volt Pro" : "Volt Free"
+    }
+
+    private var cloudWorkspaceLabel: String {
+        guard clerk.user != nil else { return "Sign in required" }
+        guard let status = accessStore.status else { return accessStore.isRefreshing ? "Checking…" : "Unavailable" }
+        return status.capabilities.cloudWorkspace ? "Included" : "Volt Pro"
+    }
+
+    private var aiScannerLabel: String {
+        guard clerk.user != nil else { return "Sign in required" }
+        guard let status = accessStore.status else { return accessStore.isRefreshing ? "Checking…" : "Unavailable" }
+        guard let quota = status.aiScannerQuota else { return status.plan == .pro ? "Unlimited" : "Checking…" }
+        switch quota {
+        case .unlimited:
+            return "Unlimited"
+        case .metered(_, _, let remaining, _):
+            return "\(remaining) remaining this month"
+        }
     }
 
     private var subscriptionLabel: String {

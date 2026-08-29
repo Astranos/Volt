@@ -424,7 +424,7 @@ describe("account and entitlement access", () => {
             isAuthorized: true,
             hasFullAppAccess: true,
             requiresSubscription: false,
-            subscriptionStatus: "active",
+            subscriptionStatus: "none",
           }
         : { access: "trial", hasFullAppAccess: false, subscriptionStatus: "none" },
     );
@@ -458,7 +458,7 @@ describe("account and entitlement access", () => {
     expect((await signedIn.mutation(getStatus, {})).body).toMatchObject({
       access: "complimentary",
       hasFullAppAccess: true,
-      subscriptionStatus: "active",
+      subscriptionStatus: "none",
     });
 
     vi.stubEnv(env, "");
@@ -744,7 +744,7 @@ describe("admin comped Pro access", () => {
     expect((await friend.mutation(getStatus, {})).body).toMatchObject({
       access: "complimentary",
       hasFullAppAccess: true,
-      subscriptionStatus: "active",
+      subscriptionStatus: "none",
     });
 
     const overview = await adminSession.query(adminOverview, {});

@@ -14,7 +14,8 @@ protocol MobileCloudAPI: Sendable {
         _ data: Data,
         mode: ProductScanMode,
         deviceId: String,
-        deviceSecret: String
+        deviceSecret: String,
+        requestId: UUID
     ) async throws -> ProductScanResponse
 }
 
@@ -101,7 +102,8 @@ struct MobileCloudAPIClient: MobileCloudAPI {
         _ data: Data,
         mode: ProductScanMode,
         deviceId: String,
-        deviceSecret: String
+        deviceSecret: String,
+        requestId: UUID
     ) async throws -> ProductScanResponse {
         var components = URLComponents(
             url: baseURL.appending(path: "api/mobile/ai/analyze"),
@@ -116,8 +118,9 @@ struct MobileCloudAPIClient: MobileCloudAPI {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue(deviceId, forHTTPHeaderField: "X-Volt-Device-Id")
         request.setValue(deviceSecret, forHTTPHeaderField: "X-Volt-Device-Secret")
+        request.setValue(requestId.uuidString.lowercased(), forHTTPHeaderField: "X-Volt-AI-Request-Id")
         let (responseData, response) = try await session.upload(for: request, from: data)
-        try validate(response)
+        try validateProductScan(response, data: responseData)
         do {
             return try Self.decoder.decode(ProductScanResponse.self, from: responseData)
         } catch {
@@ -153,12 +156,29 @@ struct MobileCloudAPIClient: MobileCloudAPI {
     private func validate(_ response: URLResponse) throws {
         guard let response = response as? HTTPURLResponse else { throw MobileCloudError.invalidResponse }
         if response.statusCode == 402 {
-            throw MobileCloudError.paidSubscriptionRequired
+            throw MobileCloudError.cloudWorkspaceRequired
         }
         if response.statusCode == 401 || response.statusCode == 403 {
             throw MobileCloudError.credentialRevoked
         }
         guard (200..<300).contains(response.statusCode) else {
+            throw MobileCloudError.httpStatus(response.statusCode)
+        }
+    }
+
+    private func validateProductScan(_ response: URLResponse, data: Data) throws {
+        guard let response = response as? HTTPURLResponse else { throw MobileCloudError.invalidResponse }
+        guard response.statusCode == 429 else {
+            try validate(response)
+            return
+        }
+        let payload = try? Self.decoder.decode(ProductScanErrorResponse.self, from: data)
+        switch payload?.errorCode {
+        case "quota-exhausted":
+            throw MobileCloudError.aiQuotaExhausted(payload?.quota)
+        case "rate-limited":
+            throw MobileCloudError.aiRateLimited(payload?.quota)
+        default:
             throw MobileCloudError.httpStatus(response.statusCode)
         }
     }
@@ -180,14 +200,25 @@ private struct EmptyCloudResponse: Codable, Sendable {}
 
 enum MobileCloudError: LocalizedError, Equatable {
     case credentialRevoked
-    case paidSubscriptionRequired
+    case cloudWorkspaceRequired
+    case aiQuotaExhausted(AIScannerQuota?)
+    case aiRateLimited(AIScannerQuota?)
     case httpStatus(Int)
     case invalidResponse
+
+    var aiQuota: AIScannerQuota? {
+        switch self {
+        case .aiQuotaExhausted(let quota), .aiRateLimited(let quota): quota
+        default: nil
+        }
+    }
 
     var errorDescription: String? {
         switch self {
         case .credentialRevoked: "This device credential is no longer valid. Sign in again to reconnect it."
-        case .paidSubscriptionRequired: "A paid Volt subscription is required for AI product scanning."
+        case .cloudWorkspaceRequired: "Volt Pro cloud workspace access is required for cloud sync."
+        case .aiQuotaExhausted: "Your AI scan limit is used up for this period. Upgrade to Volt Pro or try again after it resets."
+        case .aiRateLimited: "AI scanning is busy right now. Try again in a moment."
         case .httpStatus(let status): "Cloud sync failed with status \(status)."
         case .invalidResponse: "Cloud sync returned an invalid response."
         }

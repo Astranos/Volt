@@ -331,29 +331,43 @@ test("native capture session remains available without a WebRTC connection", () 
   assert.doesNotMatch(scannerStoreSwiftSource, /func recoverMostRecentPairedSession\(\) -> Bool/);
 });
 
-test("full app paid AI product scanning uses bounded photos and existing result delivery", () => {
+test("signed-in AI product scanning is metered, request-id scoped, and uses existing result delivery", () => {
   assert.match(captureModeSwiftSource, /enum ProductScanMode: String, CaseIterable, Identifiable, Codable, Sendable/);
   assert.match(captureModeSwiftSource, /case upc\s*case name/);
   assert.match(captureModeSwiftSource, /case \.upc:[\s\S]*"barcode"[\s\S]*case \.name:[\s\S]*"textformat\.characters"/);
   assert.match(scannerStoreSwiftSource, /var isProductScannerActive = false[\s\S]*var productScanMode: ProductScanMode = \.upc[\s\S]*var isProductScanBusy = false/);
-  assert.match(scannerStoreCaptureActionsSwiftSource, /func captureProduct\(\) async[\s\S]*capturePhoto\(matchingDeviceOrientation: true\)[\s\S]*boundedJPEGData\(maxLongEdge: 1600, maxBytes: 1_500_000\)[\s\S]*analyzeProductImage\(imageData, mode: mode\)/);
+  assert.match(scannerStoreCaptureActionsSwiftSource, /func captureProduct\(\) async[\s\S]*guard !isProductScanQuotaExhausted[\s\S]*let requestId = UUID\(\)[\s\S]*capturePhoto\(matchingDeviceOrientation: true\)[\s\S]*boundedJPEGData\(maxLongEdge: 1600, maxBytes: 1_500_000\)[\s\S]*analyzeProductImage\(imageData, mode: mode, requestId: requestId\)/);
+  assert.match(scannerStoreCaptureActionsSwiftSource, /updateProductScanQuota\(response\.quota\)/);
+  assert.match(scannerStoreCaptureActionsSwiftSource, /updateProductScanQuota\(error\.aiQuota\)/);
   assert.match(scannerStoreCaptureActionsSwiftSource, /case \.upc:[\s\S]*kind: \.barcode,[\s\S]*format: "ai-upc\/\\\(normalized\.format\)"/);
   assert.match(scannerStoreCaptureActionsSwiftSource, /case \.name:[\s\S]*kind: \.text,[\s\S]*format: "ai-item-name"/);
-  assert.match(cloudWorkspaceStoreSwiftSource, /func analyzeProductImage\(_ data: Data, mode: ProductScanMode\) async throws -> ProductScanResponse/);
-  assert.match(cloudAPIContractsSwiftSource, /struct ProductScanResponse: Decodable, Sendable[\s\S]*let value: String\?/);
+  assert.match(cloudWorkspaceStoreSwiftSource, /func analyzeProductImage\(_ data: Data, mode: ProductScanMode, requestId: UUID\) async throws -> ProductScanResponse/);
+  assert.match(cloudAPIContractsSwiftSource, /struct ProductScanResponse: Decodable, Sendable[\s\S]*let value: String\?[\s\S]*let quota: AIScannerQuota\?/);
   assert.match(mobileCloudAPIClientSwiftSource, /api\/mobile\/ai\/analyze[\s\S]*URLQueryItem\(name: "mode", value: mode\.rawValue\)/);
   assert.match(mobileCloudAPIClientSwiftSource, /setValue\("image\/jpeg", forHTTPHeaderField: "Content-Type"\)/);
   assert.match(mobileCloudAPIClientSwiftSource, /X-Volt-Device-Id[\s\S]*X-Volt-Device-Secret/);
-  assert.match(mobileCloudAPIClientSwiftSource, /statusCode == 402[\s\S]*paidSubscriptionRequired/);
+  assert.match(mobileCloudAPIClientSwiftSource, /X-Volt-AI-Request-Id/);
+  assert.match(mobileCloudAPIClientSwiftSource, /statusCode == 429[\s\S]*quota-exhausted[\s\S]*aiQuotaExhausted[\s\S]*rate-limited[\s\S]*aiRateLimited/);
+  assert.match(mobileCloudAPIClientSwiftSource, /case \.aiQuotaExhausted[\s\S]*Your AI scan limit is used up/);
+  assert.match(mobileCloudAPIClientSwiftSource, /case \.aiRateLimited[\s\S]*AI scanning is busy right now/);
+  assert.match(mobileCloudAPIClientSwiftSource, /case \.cloudWorkspaceRequired[\s\S]*Volt Pro cloud workspace access/);
+  assert.doesNotMatch(mobileCloudAPIClientSwiftSource, /paidSubscriptionRequired|paid Volt subscription/);
   assert.match(sharedCameraSessionControlsSwiftSource, /var showsProductScanner = false[\s\S]*var productScanMode: ProductScanMode = \.upc/);
   assert.match(sharedCameraSessionControlsSwiftSource, /if isProductScannerSelected, let onToggleProductScanMode[\s\S]*productScanToolSlot/);
   assert.match(sharedCameraSessionControlsSwiftSource, /systemImage: productScanMode\.systemImage[\s\S]*SessionIconButton/);
   assert.match(sharedCameraSessionControlsSwiftSource, /modeButton\("Audio", mode: \.dictation\)[\s\S]*productModeButton/);
-  assert.match(captureSessionViewSwiftSource, /showsProductScanner: true[\s\S]*isProductScannerSelected: store\.isProductScannerActive[\s\S]*productScannerAvailable: hasPaidProductScannerAccess/);
+  assert.match(captureSessionViewSwiftSource, /showsProductScanner: true[\s\S]*isProductScannerSelected: store\.isProductScannerActive[\s\S]*productScannerAvailable: !store\.isProductScanQuotaExhausted/);
+  assert.match(captureSessionViewSwiftSource, /productScanQuotaText: store\.productScanQuotaText/);
   assert.match(captureSessionViewSwiftSource, /isRecognizingText: store\.isRecognizingText \|\| store\.isDictationBusy \|\| store\.isProductScanBusy/);
   assert.match(captureSessionViewSwiftSource, /capturedThumbnails: store\.activeMode == \.photo && !store\.isProductScannerActive/);
-  assert.match(captureSessionViewSwiftSource, /if store\.isProductScannerActive \{\s*await store\.captureProduct\(\)/);
-  assert.match(captureSessionViewSwiftSource, /private var hasPaidProductScannerAccess: Bool \{\s*accessStore\.status\?\.access == \.subscription/);
+  assert.match(captureSessionViewSwiftSource, /if store\.isProductScannerActive \{[\s\S]*if store\.isProductScanQuotaExhausted \{\s*isSubscriptionPaywallPresented = true[\s\S]*await store\.captureProduct\(\)/);
+  assert.doesNotMatch(captureSessionViewSwiftSource, /hasPaidProductScannerAccess|accessStore\.status\?\.access == \.subscription/);
+  assert.match(sharedCameraSessionControlsSwiftSource, /if isProductScannerSelected, let productScanQuotaText[\s\S]*Text\(productScanQuotaText\)/);
+  assert.match(scannerStoreSwiftSource, /var isProductScanQuotaExhausted: Bool \{\s*productScanQuota\?\.remaining == 0/);
+  assert.match(scannerStoreSwiftSource, /Free AI scans remaining:/);
+  assert.match(scannerStoreSwiftSource, /resetsAt\.formatted\(date: \.abbreviated, time: \.shortened\)/);
+  assert.match(cloudWorkspaceStoreSwiftSource, /func setCloudWorkspaceEnabled\(_ isEnabled: Bool\)/);
+  assert.match(cloudWorkspaceStoreSwiftSource, /func requestSync\(\) \{\s*guard cloudWorkspaceEnabled, activeCredential != nil/);
 });
 
 test("unified camera starts from the hero card and history groups mixed captures", () => {

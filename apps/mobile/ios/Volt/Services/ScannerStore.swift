@@ -38,6 +38,7 @@ final class ScannerStore {
     var isProductScanBusy = false
     var productScanOutput: ProductScanOutput?
     var productScanError: String?
+    var productScanQuota: AIScannerQuota?
     var photoUploadProgress: PhotoUploadProgress?
     var sessionPhotoThumbnails: [SessionPhotoThumbnail] = []
     var sessionPhotoCount = 0
@@ -125,5 +126,27 @@ final class ScannerStore {
     var activeSessionCaptureCount: Int {
         guard let activeCaptureBatchId else { return 0 }
         return results.count { $0.batchId == activeCaptureBatchId }
+    }
+
+    var isProductScanQuotaExhausted: Bool {
+        productScanQuota?.remaining == 0
+    }
+
+    var productScanQuotaText: String? {
+        guard let productScanQuota else { return nil }
+        switch productScanQuota {
+        case .unlimited:
+            return "Unlimited AI scans"
+        case .metered(_, _, let remaining, let resetsAt):
+            return "Free AI scans remaining: \(remaining) · Resets \(resetsAt.formatted(date: .abbreviated, time: .shortened))"
+        }
+    }
+
+    func updateProductScanQuota(_ quota: AIScannerQuota?, plan: AccessPlan? = nil) {
+        if let quota {
+            productScanQuota = quota
+        } else if plan == .pro {
+            productScanQuota = .unlimited
+        }
     }
 }

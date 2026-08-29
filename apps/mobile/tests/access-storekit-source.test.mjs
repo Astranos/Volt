@@ -60,6 +60,12 @@ test("authenticated access calls use fresh Clerk Convex tokens and authoritative
     )
   );
   assert.match(accessStatusSource, /let access: AccessKind/);
+  assert.match(accessStatusSource, /enum AccessPlan: String, Decodable, Sendable/);
+  assert.match(accessStatusSource, /struct AccessCapabilities: Decodable, Sendable/);
+  assert.match(accessStatusSource, /enum AIScannerQuota: Decodable, Equatable, Sendable/);
+  assert.match(accessStatusSource, /timeIntervalSince1970: try container\.decode\(Double\.self, forKey: \.resetsAt\) \/ 1_000/);
+  assert.match(accessStatusSource, /let aiScannerQuota: AIScannerQuota\?/);
+  assert.match(accessStatusSource, /let legacyProAccess = access == \.complimentary \|\| access == \.subscription/);
   assert.match(accessStatusSource, /let hasFullAppAccess: Bool/);
   assert.match(accessStatusSource, /let freeSessionsRemaining: Int/);
   assert.match(accessStatusSource, /let subscriptionStatus: VoltSubscriptionStatus/);
@@ -91,10 +97,15 @@ test("StoreKit observes, restores, and replays current verified transactions", (
   assert.match(storeKitSource, /await accessStore\.refresh\(using: clerk\)/);
 });
 
-test("full app gates capture behind subscription or complimentary access", () => {
-  assert.match(rootSceneSource, /accessStore\.status\?\.hasFullAppAccess == true/);
-  assert.match(rootSceneSource, /SubscriptionPaywallView\(\)/);
-  assert.match(rootSceneSource, /activateCloudWorkspaceIfAuthorized/);
+test("full app launches signed-in users immediately and refreshes access in the background", () => {
+  assert.match(rootSceneSource, /else \{\s*RootView\(\)/);
+  assert.doesNotMatch(rootSceneSource, /FullAppAccessLoadingView|SubscriptionPaywallView/);
+  assert.match(rootSceneSource, /\.task\(id: authenticationContext\) \{\s*await refreshAuthenticatedAccess\(\)/);
+  assert.match(rootSceneSource, /\.task\(id: cloudWorkspaceContext\) \{\s*await configureCloudWorkspace\(\)/);
+  assert.match(rootSceneSource, /await accessStore\.refresh\(using: clerk\)/);
+  assert.match(rootSceneSource, /setCloudWorkspaceEnabled\(false\)[\s\S]*await scannerStore\.cloudWorkspace\.bootstrapIfNeeded\(using: clerk\)/);
+  assert.match(rootSceneSource, /await scannerStore\.cloudWorkspace\.bootstrapIfNeeded\(using: clerk\)/);
+  assert.match(rootSceneSource, /setCloudWorkspaceEnabled\([\s\n]*accessStore\.status\?\.capabilities\.cloudWorkspace == true/);
   assert.match(subscriptionViewSource, /struct SubscriptionPaywallView: View/);
   assert.match(storeKitSource, /subscription\.isEligibleForIntroOffer/);
   assert.match(storeKitSource, /offer\.paymentMode == \.freeTrial/);
@@ -152,13 +163,19 @@ test("canceled StoreKit purchases do not become visible errors", () => {
   assert.match(storeKitSource, /catch let error as StoreKitError[\s\S]*if case \.userCancelled = error[\s\S]*return/);
 });
 
-test("account UI shows account, workspace, full-app access, and server subscription status", () => {
+test("account UI distinguishes the plan, local capture, cloud workspace, AI quota, and StoreKit status", () => {
   assert.match(accountViewSource, /UserButton\(\)/);
   assert.match(accountViewSource, /OrganizationSwitcher\(\)/);
   assert.match(accountViewSource, /Section\("Account"\)/);
   assert.match(accountViewSource, /Section\("Workspace"\)/);
-  assert.match(accountViewSource, /LabeledContent\("Full App Access"/);
+  assert.match(accountViewSource, /Section\("Plan & Capabilities"\)/);
+  assert.match(accountViewSource, /LabeledContent\("Plan"/);
+  assert.match(accountViewSource, /LabeledContent\("Local Capture", value: "Included"\)/);
+  assert.match(accountViewSource, /"Cloud Workspace"/);
+  assert.match(accountViewSource, /LabeledContent\("AI Scans"/);
+  assert.match(accountViewSource, /remaining this month/);
   assert.match(accountViewSource, /LabeledContent\("Subscription"/);
+  assert.doesNotMatch(accountViewSource + accessSettingsSource, /Full App Access|Subscription required/);
   assert.match(subscriptionViewSource, /accessStore\.status\?\.access == \.complimentary/);
   assert.match(subscriptionViewSource, /Complimentary Volt Pro access/);
   assert.match(subscriptionViewSource, /accessStore\.isRefreshing \|\| !hasCurrentAccessContext/);

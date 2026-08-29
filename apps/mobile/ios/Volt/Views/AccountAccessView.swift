@@ -22,7 +22,7 @@ struct AccountAccessView: View {
                 }
             }
         }
-        .navigationTitle("Volt Access")
+        .navigationTitle("Volt Plan")
         .refreshable {
             await accessStore.refresh(using: clerk)
         }
@@ -59,10 +59,15 @@ struct AccountAccessView: View {
     }
 
     private var accessSection: some View {
-        Section("Server Access") {
+        Section("Plan & Capabilities") {
             if let status = accessStore.status {
-                LabeledContent("Access", value: accessLabel(for: status))
-                LabeledContent("Full App Access", value: status.hasFullAppAccess ? "Unlocked" : "Locked")
+                LabeledContent("Plan", value: planLabel(for: status))
+                LabeledContent("Local Capture", value: "Included")
+                LabeledContent(
+                    "Cloud Workspace",
+                    value: status.capabilities.cloudWorkspace ? "Included" : "Volt Pro"
+                )
+                LabeledContent("AI Scans", value: aiScannerLabel(for: status))
                 LabeledContent("Subscription", value: subscriptionLabel(for: status))
                 if let expiresAt = status.expiresAt {
                     LabeledContent("Renews or Expires") {
@@ -81,16 +86,22 @@ struct AccountAccessView: View {
         }
     }
 
-    private func accessLabel(for status: AccessStatus) -> String {
-        switch status.access {
-        case .trial:
-            "Subscription required"
-        case .complimentary:
-            "Complimentary workplace"
-        case .subscription:
-            "Volt Pro"
-        case .exhausted:
-            "Subscription required"
+    private func planLabel(for status: AccessStatus) -> String {
+        if status.access == .complimentary {
+            return "Volt Pro · Complimentary"
+        }
+        return status.plan == .pro ? "Volt Pro" : "Volt Free"
+    }
+
+    private func aiScannerLabel(for status: AccessStatus) -> String {
+        guard let quota = status.aiScannerQuota else {
+            return status.plan == .pro ? "Unlimited" : "Checking…"
+        }
+        switch quota {
+        case .unlimited:
+            return "Unlimited"
+        case .metered(_, _, let remaining, _):
+            return "\(remaining) remaining this month"
         }
     }
 
