@@ -302,8 +302,7 @@ private struct CaptureDeliveryToastView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .shadow(color: .black.opacity(0.2), radius: 18, y: 8)
+        .voltGlassSurface(cornerRadius: 16)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(toast.title). \(toast.message)")
     }

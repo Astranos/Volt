@@ -64,6 +64,10 @@ const rootViewSwiftSource = readFileSync(
   new URL("../ios/Volt/Views/RootView.swift", import.meta.url),
   "utf8"
 );
+const voltBrandSwiftSource = readFileSync(
+  new URL("../ios/Volt/Views/VoltBrand.swift", import.meta.url),
+  "utf8"
+);
 const cloudTargetPickerSwiftSource = readFileSync(
   new URL("../ios/Volt/Views/CloudTargetPickerSheet.swift", import.meta.url),
   "utf8"
@@ -90,6 +94,10 @@ const scannerCameraLayerSwiftSource = readFileSync(
 );
 const captureSessionViewSwiftSource = readFileSync(
   new URL("../ios/Volt/Views/CaptureSessionView.swift", import.meta.url),
+  "utf8"
+);
+const subscriptionActionsSwiftSource = readFileSync(
+  new URL("../ios/Volt/Views/SubscriptionActionsView.swift", import.meta.url),
   "utf8"
 );
 const cameraSessionControlsSwiftSource = readFileSync(
@@ -1123,12 +1131,14 @@ test("full app presents Scan, unified History, and Settings roots", () => {
   assert.match(rootViewSwiftSource, /\.sheet\(isPresented: \$isTargetPickerPresented\)[\s\S]*CloudTargetPickerSheet\(\)/);
   assert.match(rootViewSwiftSource, /private struct RootTabBar: View/);
   assert.match(rootViewSwiftSource, /GlassEffectContainer\(spacing: 12\)/);
-  assert.match(rootViewSwiftSource, /\.glassEffect\([\s\S]*\.interactive\(\)/);
+  assert.match(rootViewSwiftSource, /\.buttonStyle\([\s\S]*\.glass\(\.regular\.tint\(/);
   assert.match(rootViewSwiftSource, /content\.buttonStyle\(\.glassProminent\)/);
   assert.doesNotMatch(rootViewSwiftSource, /\.background\(\.bar\)|Divider\(\)/);
   assert.match(rootViewSwiftSource, /private var connectionsButton: some View[\s\S]*Image\(systemName: targetSymbol\)[\s\S]*\.frame\(width: 48, height: 48\)/);
   assert.match(rootViewSwiftSource, /private var targetSymbol: String[\s\S]*"cursorarrow\.motionlines"[\s\S]*"desktopcomputer\.trianglebadge\.exclamationmark"[\s\S]*"iphone"/);
-  assert.match(cloudTargetPickerSwiftSource, /private var targetSymbol: String[\s\S]*"cursorarrow\.motionlines"[\s\S]*"desktopcomputer\.trianglebadge\.exclamationmark"[\s\S]*"iphone"/);
+  assert.match(cloudTargetPickerSwiftSource, /Label\(targetLabel, systemImage: "pencil\.and\.scribble"\)[\s\S]*\.labelStyle\(\.iconOnly\)[\s\S]*\.frame\(width: 44, height: 44\)[\s\S]*\.contentShape\(Rectangle\(\)\)/);
+  assert.match(cloudTargetPickerSwiftSource, /content\.buttonStyle\(\.glass\)[\s\S]*content\.buttonStyle\(\.bordered\)/);
+  assert.ok(cloudTargetPickerSwiftSource.includes('.accessibilityLabel("Type destination: \\(targetLabel)")'));
   assert.match(rootViewSwiftSource, /\.accessibilityLabel\("Connections"\)[\s\S]*Choose the computer/);
   assert.match(rootViewSwiftSource, /Label\("Scan", systemImage: "camera\.viewfinder"\)[\s\S]*\.frame\(maxWidth: \.infinity, minHeight: 48\)/);
   assert.match(rootViewSwiftSource, /Label\("Settings", systemImage: "gearshape"\)[\s\S]*\.labelStyle\(\.iconOnly\)/);
@@ -1137,6 +1147,34 @@ test("full app presents Scan, unified History, and Settings roots", () => {
     enumSource,
     /case text\s*case barcode\s*case photos\s*case dictation\s*case settings/
   );
+});
+
+test("full app side controls keep an explicit 48 point hit target with native glass buttons", () => {
+  const connectionsStart = rootViewSwiftSource.indexOf("private var connectionsButton: some View");
+  const scanStart = rootViewSwiftSource.indexOf("private var scanButton: some View", connectionsStart);
+  const settingsStart = rootViewSwiftSource.indexOf("private var settingsButton: some View", scanStart);
+  const connectionsSource = rootViewSwiftSource.slice(connectionsStart, scanStart);
+  const settingsSource = rootViewSwiftSource.slice(settingsStart, rootViewSwiftSource.indexOf("}\n\nprivate struct RootTabBarGlassModifier", settingsStart));
+
+  assert.ok(connectionsStart > -1);
+  assert.ok(scanStart > connectionsStart);
+  assert.ok(settingsStart > scanStart);
+  assert.match(connectionsSource, /\.frame\(width: 48, height: 48\)[\s\S]*\.contentShape\(Rectangle\(\)\)/);
+  assert.match(settingsSource, /\.frame\(width: 48, height: 48\)[\s\S]*\.contentShape\(Rectangle\(\)\)/);
+  assert.match(connectionsSource, /\.rootTabBarGlass\(isSelected: false\)/);
+  assert.match(settingsSource, /\.rootTabBarGlass\(isSelected: selection == \.settings\)/);
+  assert.match(rootViewSwiftSource, /content\.buttonStyle\([\s\S]*\.glass\(\.regular\.tint\(/);
+  assert.match(rootViewSwiftSource, /\.buttonStyle\(\.bordered\)/);
+});
+
+test("full app uses Liquid Glass for floating status chrome without glassing content", () => {
+  assert.match(voltBrandSwiftSource, /func voltGlassSurface\(cornerRadius: CGFloat\)/);
+  assert.match(voltBrandSwiftSource, /content\.glassEffect\(\.regular, in: \.rect\(cornerRadius: cornerRadius\)\)/);
+  assert.match(voltBrandSwiftSource, /content\.background\([\s\S]*\.regularMaterial/);
+  assert.match(captureSessionViewSwiftSource, /CaptureDeliveryToastView[\s\S]*\.voltGlassSurface\(cornerRadius: 16\)/);
+  assert.match(subscriptionActionsSwiftSource, /PaywallStatusBanner[\s\S]*\.voltGlassSurface\(cornerRadius: 14\)/);
+  assert.doesNotMatch(scannerViewSwiftSource, /glassEffect|voltGlassSurface/);
+  assert.doesNotMatch(settingsViewSwiftSource, /glassEffect|voltGlassSurface/);
 });
 
 test("full app Scan control requests a new capture even when Scan is selected", () => {

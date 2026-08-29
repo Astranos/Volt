@@ -160,8 +160,8 @@ private struct RootTabBar: View {
             Image(systemName: targetSymbol)
                 .font(.subheadline.weight(.semibold))
                 .frame(width: 48, height: 48)
+                .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
         .rootTabBarGlass(isSelected: false)
         .accessibilityLabel("Connections")
         .accessibilityHint("Choose the computer that receives text and barcode captures")
@@ -187,8 +187,8 @@ private struct RootTabBar: View {
             Label("Settings", systemImage: "gearshape")
                 .labelStyle(.iconOnly)
                 .frame(width: 48, height: 48)
+                .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
         .foregroundStyle(selection == .settings ? .primary : .secondary)
         .rootTabBarGlass(isSelected: selection == .settings)
         .accessibilityLabel("Settings")
@@ -203,17 +203,13 @@ private struct RootTabBarGlassModifier: ViewModifier {
     @ViewBuilder
     func body(content: Content) -> some View {
         if #available(iOS 26.0, *) {
-            content.glassEffect(
-                .regular
-                    .tint(isSelected ? .accentColor.opacity(0.16) : .clear)
-                    .interactive(),
-                in: .rect(cornerRadius: 16)
+            content.buttonStyle(
+                .glass(.regular.tint(isSelected ? .accentColor.opacity(0.16) : .clear))
             )
         } else {
-            content.background(
-                isSelected ? Color.accentColor.opacity(0.14) : .clear,
-                in: RoundedRectangle(cornerRadius: 16, style: .continuous)
-            )
+            content
+                .buttonStyle(.bordered)
+                .tint(isSelected ? .accentColor : .secondary)
         }
     }
 }

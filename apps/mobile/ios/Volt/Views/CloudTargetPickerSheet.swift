@@ -6,26 +6,36 @@ struct CloudTargetButton: View {
 
     var body: some View {
         Button(action: action) {
-            Label(targetLabel, systemImage: targetSymbol)
-                .font(.subheadline.weight(.semibold))
-                .lineLimit(1)
+            Label(targetLabel, systemImage: "pencil.and.scribble")
+                .labelStyle(.iconOnly)
+                .font(.headline.weight(.semibold))
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
         }
-        .buttonStyle(.bordered)
+        .cloudTargetButtonStyle()
+        .accessibilityLabel("Type destination: \(targetLabel)")
         .accessibilityHint("Choose the computer that receives text and barcode captures.")
     }
 
     private var targetLabel: String {
         store.cloudWorkspace.selectedTargetComputer?.label ?? "This iPhone"
     }
+}
 
-    private var targetSymbol: String {
-        if store.cloudWorkspace.selectedComputer != nil {
-            return "cursorarrow.motionlines"
+private struct CloudTargetButtonStyleModifier: ViewModifier {
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.buttonStyle(.glass)
+        } else {
+            content.buttonStyle(.bordered)
         }
-        if store.cloudWorkspace.selectedTargetComputer != nil {
-            return "desktopcomputer.trianglebadge.exclamationmark"
-        }
-        return "iphone"
+    }
+}
+
+private extension View {
+    func cloudTargetButtonStyle() -> some View {
+        modifier(CloudTargetButtonStyleModifier())
     }
 }
 

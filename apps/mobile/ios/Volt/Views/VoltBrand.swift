@@ -16,3 +16,25 @@ enum VoltBrand {
         design: .init(borderRadius: 14)
     )
 }
+
+private struct VoltGlassSurfaceModifier: ViewModifier {
+    let cornerRadius: CGFloat
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
+        } else {
+            content.background(
+                .regularMaterial,
+                in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            )
+        }
+    }
+}
+
+extension View {
+    func voltGlassSurface(cornerRadius: CGFloat) -> some View {
+        modifier(VoltGlassSurfaceModifier(cornerRadius: cornerRadius))
+    }
+}

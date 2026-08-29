@@ -310,7 +310,7 @@ private struct PaywallStatusBanner: View {
             .multilineTextAlignment(.leading)
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .voltGlassSurface(cornerRadius: 14)
             .padding(.horizontal, 20)
         }
     }
