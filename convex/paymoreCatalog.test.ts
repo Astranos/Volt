@@ -28,6 +28,19 @@ const ingestPages = makeFunctionReference<
     rejected: Array<{ sourceUrl: string; reason: string }>;
   }
 >("paymoreCatalog:ingestPages");
+const ingestInventoryPage = makeFunctionReference<
+  "mutation",
+  { secret: string; collectionSlug: string; items: Array<unknown> },
+  {
+    itemsSeen: number;
+    productsIngested: number;
+    skippedNoUpc: number;
+    skippedNoTitle: number;
+    inserted: number;
+    updated: number;
+    sourcesAdded: number;
+  }
+>("paymoreCrawl:ingestInventoryPage");
 const getByUpcInternal = makeFunctionReference<
   "query",
   { upc: string },
@@ -38,6 +51,16 @@ const getByUpcInternal = makeFunctionReference<
     edition: string | null;
     sourceUrls: string[];
     upcs: string[];
+    listings: Array<{
+      sourceUrl: string;
+      condition: string | null;
+      attributes: Record<string, string>;
+      price?: number;
+      quantity?: number;
+      storeName?: string;
+      imageUrl?: string;
+      updatedAt?: number;
+    }>;
     createdAt: number;
     updatedAt: number;
   } | null
@@ -380,6 +403,72 @@ describe("PayMore catalog Convex storage", () => {
       upc: "077000052063",
       sourceUrls: [ROCKVILLE_GALAXIAN],
     });
+  });
+
+  test("captures per-listing price and freshness across API pages of one title", async () => {
+    vi.stubEnv("INVENTORY_CRAWL_SECRET", "test-crawl-secret");
+    const t = convexTest(schema, modules);
+    const page = { secret: "test-crawl-secret", collectionSlug: "used-video-games-us" };
+
+    const first = await t.mutation(ingestInventoryPage, {
+      ...page,
+      items: [
+        {
+          p_id: "15872618299690",
+          filter_attributes: {
+            Platform: "Nintendo NES",
+            "Game Name": "Galaxian",
+            UPC: "012345678905",
+          },
+          v_price: 59.99,
+          v_qty: 1,
+          shop_name: "paymore-rockville",
+          p_image: "https://paymore.com/cdn/shop/files/galaxian-nes-rockville.jpg",
+        },
+      ],
+    });
+    const second = await t.mutation(ingestInventoryPage, {
+      ...page,
+      items: [
+        {
+          p_id: "15872618299691",
+          filter_attributes: {
+            Platform: "Nintendo NES",
+            "Game Name": "Galaxian",
+            UPC: "098765432105",
+          },
+          v_price: 49.99,
+          v_qty: 2,
+          shop_name: "paymore-anaheim",
+          p_image: "https://paymore.com/cdn/shop/files/galaxian-nes-anaheim.jpg",
+        },
+      ],
+    });
+    expect(first).toMatchObject({ inserted: 1, updated: 0, sourcesAdded: 1 });
+    expect(second).toMatchObject({ inserted: 0, updated: 1, sourcesAdded: 1 });
+
+    const product = await t.query(getByUpcInternal, { upc: "012345678905" });
+    expect(product?.upcs).toEqual(["012345678905", "098765432105"]);
+    const listings = product?.listings ?? [];
+    expect(listings).toHaveLength(2);
+
+    const rockville = listings.find((listing) => listing.storeName === "paymore-rockville");
+    const anaheim = listings.find((listing) => listing.storeName === "paymore-anaheim");
+    expect(rockville).toMatchObject({
+      price: 59.99,
+      quantity: 1,
+      storeName: "paymore-rockville",
+      imageUrl: "https://paymore.com/cdn/shop/files/galaxian-nes-rockville.jpg",
+    });
+    expect(anaheim).toMatchObject({
+      price: 49.99,
+      quantity: 2,
+      storeName: "paymore-anaheim",
+      imageUrl: "https://paymore.com/cdn/shop/files/galaxian-nes-anaheim.jpg",
+    });
+    expect(rockville?.updatedAt).toBeGreaterThan(0);
+    expect(anaheim?.updatedAt).toBeGreaterThan(0);
+    vi.unstubAllEnvs();
   });
 });
 

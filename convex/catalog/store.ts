@@ -12,6 +12,18 @@ export type UpsertStats = {
 };
 
 type CatalogProductFields = Omit<CatalogProduct, "sourceUrls" | "listings">;
+type CatalogListingFacts = Pick<CatalogListing, "price" | "quantity" | "storeName" | "imageUrl">;
+
+// Per-listing facts captured from the listing API. Written only when present
+// on the incoming listing so a patch keeps the row's old values otherwise.
+function sourceListingFields(listing: CatalogListingFacts): CatalogListingFacts {
+  const fields: CatalogListingFacts = {};
+  if (listing.price !== undefined) fields.price = listing.price;
+  if (listing.quantity !== undefined) fields.quantity = listing.quantity;
+  if (listing.storeName !== undefined) fields.storeName = listing.storeName;
+  if (listing.imageUrl !== undefined) fields.imageUrl = listing.imageUrl;
+  return fields;
+}
 
 function productFields(product: CatalogProduct, upc: string, title: string): CatalogProductFields {
   return {
@@ -221,6 +233,8 @@ export async function upsertCatalogProducts(
           upc,
           condition: listing.condition,
           listingAttributes: listing.attributes,
+          updatedAt: now,
+          ...sourceListingFields(listing),
         });
         continue;
       }
@@ -231,6 +245,8 @@ export async function upsertCatalogProducts(
         condition: listing.condition,
         listingAttributes: listing.attributes,
         createdAt: now,
+        updatedAt: now,
+        ...sourceListingFields(listing),
       });
       sourcesAdded += 1;
     }
@@ -283,12 +299,21 @@ export async function loadCatalogProductByUpc(ctx: QueryCtx, upc: string) {
     collections: canonical.collections,
     upcs: rankUpcs(sources, canonical.upc),
     sourceUrls: sources.map((source) => source.sourceUrl),
-    listings: sources.map((source) => ({
-      sourceUrl: source.sourceUrl,
-      condition: source.condition,
-      attributes: source.listingAttributes,
-    })),
+    listings: sources.map(sourceToListing),
     createdAt: canonical.createdAt,
     updatedAt: canonical.updatedAt,
   };
+}
+
+// Source rows carry the per-listing facts; only attach fields that are
+// present so legacy rows come back without undefined-valued keys.
+function sourceToListing(source: Doc<"paymoreCatalogSources">): CatalogListing {
+  const listing: CatalogListing = {
+    sourceUrl: source.sourceUrl,
+    condition: source.condition,
+    attributes: source.listingAttributes,
+    ...sourceListingFields(source),
+  };
+  if (source.updatedAt !== undefined) listing.updatedAt = source.updatedAt;
+  return listing;
 }

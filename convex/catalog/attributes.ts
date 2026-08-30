@@ -69,6 +69,8 @@ const UNIT_ONLY_KEYS = new Set([
   "esn",
   "meid",
   "passcode",
+  "password",
+  "operatingSystem",
   "batteryHealth",
   "cycleCount",
   "lockStatus",
@@ -77,7 +79,7 @@ const UNIT_ONLY_KEYS = new Set([
 ]);
 
 const UNIT_ONLY_LABEL =
-  /serial|imei|\besn\b|\bmeid\b|passcode|battery|cycle|lock|warrant|firmware|icloud|find my|os version|ios version/i;
+  /serial|imei|\besn\b|\bmeid\b|passcode|password|battery|cycle|lock|warrant|applecare|firmware|icloud|find my|os version|ios version|operating system/i;
 
 export const PRODUCT_ATTRIBUTE_KEYS = [
   "collection",
@@ -102,7 +104,11 @@ export type SplitAttributes = {
 
 export function canonicalSpecLabel(label: string): string | null {
   // Spec tables end labels with :, ?, or * and quotes values inconsistently.
-  const normalized = label.replace(/[:?*]+$/, "").trim().toLowerCase();
+  const normalized = label
+    .replace(/[:?*]+$/, "")
+    .replace(/[^a-z0-9]+$/i, "")
+    .trim()
+    .toLowerCase();
   if (!normalized || SKIP_LABELS.has(normalized)) return null;
   return LABEL_ALIASES[normalized] ?? normalized.replace(/[^a-z0-9]+([a-z0-9])/g, (_match, char: string) => char.toUpperCase());
 }

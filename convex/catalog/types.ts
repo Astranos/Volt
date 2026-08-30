@@ -10,6 +10,15 @@ export type CatalogListing = {
   sourceUrl: string;
   condition: string | null;
   attributes: Record<string, string>;
+  // Per-listing facts captured from the PayMore listing API; the HTML crawl
+  // path leaves them undefined.
+  price?: number;
+  quantity?: number;
+  storeName?: string;
+  imageUrl?: string;
+  // Freshness of the stored source row; set when a listing is loaded back
+  // from the database.
+  updatedAt?: number;
 };
 
 export type CatalogProduct = {

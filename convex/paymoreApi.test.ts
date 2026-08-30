@@ -47,11 +47,18 @@ const IPHONE_OTHER_ATTRIBUTES = {
   "Lock Status": "Unlocked",
   IMEI: "356728110123456",
   "MFG Warranty?": "No",
+  Password: "1234",
+  "AppleCare Status": "Expired",
+  "Operating System": "iOS 26",
 };
 
 type FixtureOverrides = {
   p_id?: string;
   p_title?: string;
+  v_price?: number;
+  v_qty?: number;
+  shop_name?: string;
+  p_image?: string;
   filter_attributes?: Record<string, unknown>;
   other_attributes?: Record<string, unknown>;
   shopify_collection?: Array<{ id: number; name: string }>;
@@ -65,9 +72,12 @@ function gameItem(overrides: FixtureOverrides = {}) {
       "Factory Unlocked Nintendo The Legend of Zelda: A Link to the Past Super Nintendo SNES Game 045496733971",
     filter_attributes: overrides.filter_attributes ?? GAME_FILTER_ATTRIBUTES,
     other_attributes: overrides.other_attributes ?? GAME_OTHER_ATTRIBUTES,
-    v_price: 449.99,
-    v_qty: 1,
-    shop_name: "paymore-hermitage",
+    v_price: overrides.v_price ?? 449.99,
+    v_qty: overrides.v_qty ?? 1,
+    shop_name: overrides.shop_name ?? "paymore-hermitage",
+    p_image:
+      overrides.p_image ??
+      "https://paymore.com/cdn/shop/files/zelda-a-link-to-the-past-snes.jpg",
     p_tags: ["Games"],
     shopify_collection: overrides.shopify_collection ?? [{ id: 123456, name: "Video Games" }],
   };
@@ -143,11 +153,67 @@ describe("mapPayMoreApiItems", () => {
           hasInserts: "No",
           hasDlc: "No",
         },
+        price: 449.99,
+        quantity: 1,
+        storeName: "paymore-hermitage",
+        imageUrl: "https://paymore.com/cdn/shop/files/zelda-a-link-to-the-past-snes.jpg",
       },
     ]);
 
     const noisy = allAttributeKeys(product).join(" ").toLowerCase();
-    expect(noisy).not.toMatch(/serial|imei|battery|lock|ios version|os version|warrant/);
+    expect(noisy).not.toMatch(
+      /serial|imei|battery|lock|ios version|os version|operating system|warrant|applecare|password/,
+    );
+  });
+
+  test("carries per-listing price, quantity, store, and image onto the listing", () => {
+    const product = firstProduct(mapPayMoreApiItems([gameItem()], COLLECTION).products);
+    expect(product.listings[0]).toMatchObject({
+      sourceUrl: "https://paymore.com/shop/product/15872618299678",
+      price: 449.99,
+      quantity: 1,
+      storeName: "paymore-hermitage",
+      imageUrl: "https://paymore.com/cdn/shop/files/zelda-a-link-to-the-past-snes.jpg",
+    });
+  });
+
+  test("leaves per-listing facts undefined when the API item omits them", () => {
+    const item = gameItem();
+    const bare: Record<string, unknown> = { ...item };
+    delete bare.v_price;
+    delete bare.v_qty;
+    delete bare.shop_name;
+    delete bare.p_image;
+
+    const product = firstProduct(mapPayMoreApiItems([bare], COLLECTION).products);
+    expect(product.listings[0]).toMatchObject({
+      sourceUrl: "https://paymore.com/shop/product/15872618299678",
+      condition: "CIB",
+    });
+    expect(product.listings[0]?.price).toBeUndefined();
+    expect(product.listings[0]?.quantity).toBeUndefined();
+    expect(product.listings[0]?.storeName).toBeUndefined();
+    expect(product.listings[0]?.imageUrl).toBeUndefined();
+  });
+
+  test("ignores non-finite numbers and blank strings for per-listing facts", () => {
+    const product = firstProduct(
+      mapPayMoreApiItems(
+        [
+          gameItem({
+            v_price: Number.NaN,
+            v_qty: Number.POSITIVE_INFINITY,
+            shop_name: "   ",
+            p_image: "  ",
+          }),
+        ],
+        COLLECTION,
+      ).products,
+    );
+    expect(product.listings[0]?.price).toBeUndefined();
+    expect(product.listings[0]?.quantity).toBeUndefined();
+    expect(product.listings[0]?.storeName).toBeUndefined();
+    expect(product.listings[0]?.imageUrl).toBeUndefined();
   });
 
   test("skips phone items without a UPC", () => {
@@ -249,7 +315,9 @@ describe("mapPayMoreApiItems", () => {
     expect(product.listings[0]?.condition).toBe("Good");
 
     const noisy = allAttributeKeys(product).join(" ").toLowerCase();
-    expect(noisy).not.toMatch(/serial|imei|battery|lock|ios version|os version|warrant/);
+    expect(noisy).not.toMatch(
+      /serial|imei|battery|lock|ios version|os version|operating system|warrant|applecare|password/,
+    );
   });
 
   test("carries collections extracted from shopify_collection names", () => {
