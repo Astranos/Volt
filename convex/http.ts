@@ -15,7 +15,7 @@ import {
   type AIScannerCatalogMatch,
   type AIScannerMode,
   type AIScannerTraceEvent,
-  type GameIdentity,
+  type ProductIdentity,
 } from "./aiScanner";
 import {
   type AIScannerQuotaError,
@@ -709,7 +709,7 @@ const refundAIScannerRequestRef = makeFunctionReference<
 >("aiScannerQuota:refundAIScannerRequest");
 const findProductForAIScannerRef = makeFunctionReference<
   "query",
-  GameIdentity,
+  ProductIdentity,
   AIScannerCatalogMatch | null
 >("productData:findProductForAIScanner");
 

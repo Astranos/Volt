@@ -39,7 +39,18 @@ const getProductByUpc = makeFunctionReference<
 >("productData:getProductByUpc");
 const findProductForAIScanner = makeFunctionReference<
   "query",
-  { name: string; platform: string | null; edition: string | null; region: string | null },
+  {
+    name: string;
+    platform: string | null;
+    edition: string | null;
+    region: string | null;
+    brand: string | null;
+    model: string | null;
+    mpn: string | null;
+    color: string | null;
+    storage: string | null;
+    carrier: string | null;
+  },
   { upc: string; title: string; platform: string | null; edition: string | null } | null
 >("productData:findProductForAIScanner");
 const createKey = makeFunctionReference<
@@ -111,6 +122,12 @@ describe("product data reads", () => {
       platform: null,
       edition: null,
       region: null,
+      brand: "Volt",
+      model: "Widget",
+      mpn: "WIDGET-128",
+      color: "Black",
+      storage: "128GB",
+      carrier: null,
     });
 
     expect(product).toEqual({
@@ -118,7 +135,104 @@ describe("product data reads", () => {
       title: "Widget Phone 128GB",
       platform: null,
       edition: null,
+      brand: "Volt",
+      model: "Widget",
+      mpn: "WIDGET-128",
+      color: "Black",
+      storage: "128GB",
+      carrier: null,
     });
+  });
+
+  test("resolves concise AI details against a production-shaped product title", async () => {
+    const t = convexTest(schema, modules);
+    await t.run(async (ctx) => {
+      await ctx.db.insert("paymoreCatalogProducts", {
+        upc: "195950642834",
+        title: "New T-Mobile Apple iPhone 17 256GB Lavender MG494LL/A",
+        platform: null,
+        edition: null,
+        collection: "apple-iphones",
+        brand: "Apple",
+        model: "iPhone 17",
+        mpn: "MG494LL/A",
+        color: "Lavender",
+        storage: "256GB",
+        carrier: "T-Mobile",
+        publisher: null,
+        genre: null,
+        rating: null,
+        releaseYear: null,
+        attributes: {},
+        createdAt: 1_700_000_000_000,
+        updatedAt: 1_700_000_000_000,
+      });
+    });
+
+    const product = await t.query(findProductForAIScanner, {
+      name: "Apple iPhone 17",
+      platform: null,
+      edition: null,
+      region: null,
+      brand: "Apple",
+      model: "iPhone 17",
+      mpn: "MG494LL/A",
+      color: "Lavender",
+      storage: "256GB",
+      carrier: "T-Mobile",
+    });
+
+    expect(product).toMatchObject({
+      upc: "195950642834",
+      title: "New T-Mobile Apple iPhone 17 256GB Lavender MG494LL/A",
+      mpn: "MG494LL/A",
+    });
+  });
+
+  test("rejects an ambiguous visual identity across distinct catalog variants", async () => {
+    const t = convexTest(schema, modules);
+    await t.run(async (ctx) => {
+      for (const product of [
+        { upc: "012345678905", storage: "256GB", mpn: "PHONE-256" },
+        { upc: "098765432105", storage: "512GB", mpn: "PHONE-512" },
+      ]) {
+        await ctx.db.insert("paymoreCatalogProducts", {
+          upc: product.upc,
+          title: `Apple iPhone 17 ${product.storage}`,
+          platform: null,
+          edition: null,
+          collection: "apple-iphones",
+          brand: "Apple",
+          model: "iPhone 17",
+          mpn: product.mpn,
+          color: null,
+          storage: product.storage,
+          carrier: null,
+          publisher: null,
+          genre: null,
+          rating: null,
+          releaseYear: null,
+          attributes: {},
+          createdAt: 1_700_000_000_000,
+          updatedAt: 1_700_000_000_000,
+        });
+      }
+    });
+
+    const product = await t.query(findProductForAIScanner, {
+      name: "Apple iPhone 17",
+      platform: null,
+      edition: null,
+      region: null,
+      brand: "Apple",
+      model: "iPhone 17",
+      mpn: null,
+      color: null,
+      storage: null,
+      carrier: null,
+    });
+
+    expect(product).toBeNull();
   });
 
   test("serves the external search route with Bearer auth and rate headers", async () => {

@@ -76,6 +76,7 @@ struct CaptureSessionView: View {
                 .padding(24)
                 .background(.black.opacity(0.5), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
                 .padding(.horizontal, 24)
+                .allowsHitTesting(false)
             }
 
         }

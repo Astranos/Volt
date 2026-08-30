@@ -8,11 +8,17 @@ export type AIAnalysisResult = {
   platform?: string | null;
 };
 
-export type GameIdentity = {
+export type ProductIdentity = {
   name: string;
   platform: string | null;
   edition: string | null;
   region: string | null;
+  brand: string | null;
+  model: string | null;
+  mpn: string | null;
+  color: string | null;
+  storage: string | null;
+  carrier: string | null;
 };
 
 export type AIScannerCatalogMatch = {
@@ -20,6 +26,12 @@ export type AIScannerCatalogMatch = {
   title: string;
   platform: string | null;
   edition: string | null;
+  brand: string | null;
+  model: string | null;
+  mpn: string | null;
+  color: string | null;
+  storage: string | null;
+  carrier: string | null;
 };
 
 export type PriceChartingVerificationOutcome =
@@ -33,7 +45,7 @@ export type PriceChartingVerificationOutcome =
   | "platform-mismatch";
 
 export type AIScannerTraceEvent =
-  | { stage: "identity"; outcome: "resolved"; name: string; platform: string | null; edition: string | null; region: string | null; elapsedMs: number }
+  | ({ stage: "identity"; outcome: "resolved"; elapsedMs: number } & ProductIdentity)
   | { stage: "identity"; outcome: "unresolved"; elapsedMs: number }
   | { stage: "catalog"; outcome: "candidate"; source: "product-catalog" | "web-search"; upc: string; elapsedMs: number }
   | { stage: "catalog"; outcome: "no-candidate"; source: "product-catalog" | "web-search"; elapsedMs: number }
@@ -54,7 +66,7 @@ export const AI_SCANNER_MAX_IMAGE_BYTES = 1_500_000;
 export const AI_SCANNER_TIMEOUT_MS = 45_000;
 
 const UPC_IDENTITY_PROMPT =
-  'Identify the exact retail product shown by this item, game case, or disc. The barcode does not need to be visible. Read the full marketed product name. For a video game, also read the platform, edition, and region from the artwork when possible. Return only JSON in the form {"name":"exact product title or null","platform":"platform or null","edition":"edition or null","region":"region or null"}. Do not search for or guess a barcode. Return a null name when the product cannot be identified confidently.';
+  'Identify the exact retail product shown by this item, packaging, game case, or disc. The barcode does not need to be visible. Read the marketed product name and every visible distinguishing detail that can identify its catalog variant. Return only JSON in the form {"name":"product title or null","brand":"brand or null","model":"model or null","mpn":"manufacturer part number or null","color":"color or null","storage":"storage capacity or null","carrier":"carrier or null","platform":"game platform or null","edition":"edition or null","region":"region or null"}. Do not search for or guess a barcode or any detail that is not visible. Return a null name when the product cannot be identified confidently.';
 const NAME_PROMPT =
   'Identify the exact product title or name shown by this item, game disc, or game case. Return only JSON in the form {"name":"title or null"}. Do not describe condition or add explanation. Return null when the item cannot be identified confidently.';
 
@@ -131,7 +143,7 @@ function promptForMode(mode: AIScannerMode): string {
   return mode === "upc" ? UPC_IDENTITY_PROMPT : NAME_PROMPT;
 }
 
-function parseGameIdentity(content: string): GameIdentity | null {
+function parseProductIdentity(content: string): ProductIdentity | null {
   const parsed = parseJSONResponse(content);
   const name = typeof parsed.name === "string" ? normalizeItemName(parsed.name) : null;
   if (!name) return null;
@@ -140,6 +152,12 @@ function parseGameIdentity(content: string): GameIdentity | null {
     platform: normalizePlatform(parsed.platform),
     edition: normalizeIdentityDetail(parsed.edition),
     region: normalizeIdentityDetail(parsed.region),
+    brand: normalizeIdentityDetail(parsed.brand, 80),
+    model: normalizeIdentityDetail(parsed.model, 120),
+    mpn: normalizeIdentityDetail(parsed.mpn, 80),
+    color: normalizeIdentityDetail(parsed.color, 80),
+    storage: normalizeIdentityDetail(parsed.storage, 40),
+    carrier: normalizeIdentityDetail(parsed.carrier, 80),
   };
 }
 
@@ -151,6 +169,22 @@ function parseJSONResponse(content: string): Record<string, unknown> {
   } catch {
     throw new AIScannerError(502, "upstream-failed");
   }
+}
+
+export function parseCatalogUPCResponse(content: string): string | null {
+  try {
+    const payload = parseJSONResponse(content);
+    if (typeof payload.upc === "string") {
+      const upc = normalizeUPCA(payload.upc);
+      if (upc) return upc;
+    }
+  } catch {
+    // Web-search providers occasionally wrap an otherwise valid code in malformed prose.
+  }
+  const candidates = Array.from(content.matchAll(/(?<!\d)\d{12,13}(?!\d)/g), (match) => normalizeUPCA(match[0]))
+    .filter((upc): upc is string => upc !== null);
+  const uniqueCandidates = [...new Set(candidates)];
+  return uniqueCandidates.length === 1 ? uniqueCandidates[0] : null;
 }
 
 function firstJSONObject(content: string): string | null {
@@ -229,18 +263,24 @@ export function buildOpenRouterRequest(mode: AIScannerMode, imageBytes: ArrayBuf
   return JSON.stringify(request);
 }
 
-export function buildOpenRouterCatalogRequest(identity: GameIdentity): string {
+export function buildOpenRouterCatalogRequest(identity: ProductIdentity): string {
   const knownDetails = [
     `Title: ${identity.name}`,
     identity.platform ? `Platform: ${identity.platform}` : null,
     identity.edition ? `Edition: ${identity.edition}` : null,
     identity.region ? `Region: ${identity.region}` : null,
+    identity.brand ? `Brand: ${identity.brand}` : null,
+    identity.model ? `Model: ${identity.model}` : null,
+    identity.mpn ? `MPN: ${identity.mpn}` : null,
+    identity.color ? `Color: ${identity.color}` : null,
+    identity.storage ? `Storage: ${identity.storage}` : null,
+    identity.carrier ? `Carrier: ${identity.carrier}` : null,
   ].filter((value): value is string => value !== null).join("\n");
   return JSON.stringify({
     model: AI_SCANNER_MODEL,
     messages: [{
       role: "user",
-      content: `Find the supported retail UPC-A for this exact video game release using web search.\n${knownDetails}\nReturn only JSON in the form {"upc":"12 digits or null"}. Never invent a code. Match the title and platform exactly. If an EAN-13 starts with 0, return its equivalent 12-digit UPC-A. Return null when search evidence is missing or conflicting.`,
+      content: `Find the supported retail UPC-A for this exact product variant using web search.\n${knownDetails}\nReturn only JSON in the form {"upc":"12 digits or null"}. Never invent a code. Match every supplied distinguishing detail exactly. If an EAN-13 starts with 0, return its equivalent 12-digit UPC-A. Return null when search evidence is missing or conflicting.`,
     }],
     response_format: { type: "json_object" },
     temperature: 0,
@@ -304,6 +344,7 @@ const TITLE_NOISE_TOKENS = new Set(["a", "an", "the", "edition", "game", "video"
 function catalogTitleTokens(value: string): string[] {
   return value
     .normalize("NFKD")
+    .replace(/\p{M}+/gu, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, " ")
     .trim()
@@ -312,20 +353,19 @@ function catalogTitleTokens(value: string): string[] {
 }
 
 export function catalogIdentityMatchScore(
-  identity: GameIdentity,
-  candidate: Pick<AIScannerCatalogMatch, "title" | "platform" | "edition">,
+  identity: ProductIdentity,
+  candidate: Omit<AIScannerCatalogMatch, "upc">,
 ): number | null {
   const expectedTitle = catalogTitleTokens(identity.name);
   const candidateTitle = catalogTitleTokens(candidate.title);
   if (expectedTitle.length === 0 || candidateTitle.length === 0) return null;
 
   if (identity.platform) {
-    if (!candidate.platform) return null;
     const expectedPlatform = canonicalPlatform(identity.platform);
-    const candidatePlatform = canonicalPlatform(candidate.platform);
+    const candidatePlatform = canonicalPlatform([candidate.platform, candidate.title].filter(Boolean).join(" "));
     if (expectedPlatform && candidatePlatform) {
       if (expectedPlatform !== candidatePlatform) return null;
-    } else {
+    } else if (candidate.platform) {
       const expectedPlatformText = compactCatalogText(identity.platform);
       const candidatePlatformText = compactCatalogText(candidate.platform);
       if (
@@ -336,30 +376,38 @@ export function catalogIdentityMatchScore(
     }
   }
 
-  if (identity.edition && candidate.edition) {
-    const expectedEdition = compactCatalogText(identity.edition);
-    const candidateEdition = compactCatalogText(candidate.edition);
-    if (
-      expectedEdition
-      && candidateEdition
-      && !expectedEdition.includes(candidateEdition)
-      && !candidateEdition.includes(expectedEdition)
-    ) return null;
-  }
-
   const expectedSet = new Set(expectedTitle);
   const candidateSet = new Set(candidateTitle);
-  const matchingTokens = expectedTitle.filter((token) => candidateSet.has(token)).length;
+  const matchingTokens = [...expectedSet].filter((token) => candidateSet.has(token)).length;
   const expectedCoverage = matchingTokens / expectedSet.size;
   const candidateCoverage = matchingTokens / candidateSet.size;
   const exactTitle = compactCatalogText(identity.name) === compactCatalogText(candidate.title);
-  if (!exactTitle && (expectedCoverage < 0.8 || candidateCoverage < 0.65)) return null;
+  if (!exactTitle && expectedCoverage < 0.8) return null;
+
+  const details: ReadonlyArray<readonly [string | null, string | null, number]> = [
+    [identity.edition, candidate.edition, 8],
+    [identity.brand, candidate.brand, 10],
+    [identity.model, candidate.model, 18],
+    [identity.mpn, candidate.mpn, 40],
+    [identity.color, candidate.color, 8],
+    [identity.storage, candidate.storage, 12],
+    [identity.carrier, candidate.carrier, 10],
+  ];
+  let detailScore = 0;
+  for (const [expected, actual, weight] of details) {
+    if (!expected) continue;
+    const expectedText = compactCatalogText(expected);
+    const actualText = compactCatalogText(actual ?? candidate.title);
+    if (!expectedText || !actualText) continue;
+    if (!actualText.includes(expectedText) && !expectedText.includes(actualText)) return null;
+    detailScore += weight;
+  }
 
   return (exactTitle ? 100 : 0)
     + expectedCoverage * 20
-    + candidateCoverage * 10
+    + candidateCoverage * 5
     + (identity.platform && candidate.platform ? 8 : 0)
-    + (identity.edition && candidate.edition ? 4 : 0);
+    + detailScore;
 }
 
 function titleMatchesProductSlug(name: string, productSlug: string): boolean {
@@ -448,7 +496,7 @@ export async function requestOpenRouterAnalysis(
     apiKey?: string;
     fetchImpl?: typeof fetch;
     timeoutMs?: number;
-    catalogLookup?: (identity: GameIdentity) => Promise<AIScannerCatalogMatch | null>;
+    catalogLookup?: (identity: ProductIdentity) => Promise<AIScannerCatalogMatch | null>;
     onTrace?: (event: AIScannerTraceEvent) => void;
   } = {},
 ): Promise<AIAnalysisResult> {
@@ -466,7 +514,7 @@ export async function requestOpenRouterAnalysis(
       buildOpenRouterRequest(mode, imageBytes), apiKey, fetchImpl, controller.signal,
     );
     if (mode === "name") return parseAIResponse(mode, identityContent);
-    const identity = parseGameIdentity(identityContent);
+    const identity = parseProductIdentity(identityContent);
     if (!identity) {
       options.onTrace?.({ stage: "identity", outcome: "unresolved", elapsedMs: Date.now() - identityStartedAt });
       return { mode, value: null, format: "upc_a", identifiedName: null, platform: null };
@@ -516,8 +564,7 @@ export async function requestOpenRouterAnalysis(
     const catalogContent = await requestOpenRouterContent(
       buildOpenRouterCatalogRequest(identity), apiKey, fetchImpl, controller.signal,
     );
-    const catalogPayload = parseJSONResponse(catalogContent);
-    const candidate = typeof catalogPayload.upc === "string" ? normalizeUPCA(catalogPayload.upc) : null;
+    const candidate = parseCatalogUPCResponse(catalogContent);
     if (!candidate) {
       options.onTrace?.({ stage: "catalog", outcome: "no-candidate", source: "web-search", elapsedMs: Date.now() - catalogStartedAt });
       return { mode, value: null, format: "upc_a", identifiedName: identity.name, platform: identity.platform };

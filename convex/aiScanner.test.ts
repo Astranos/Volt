@@ -8,6 +8,7 @@ import {
   normalizeItemName,
   normalizeUPCA,
   parseAIResponse,
+  parseCatalogUPCResponse,
   requestOpenRouterAnalysis,
   verifyPriceChartingUPC,
 } from "./aiScanner";
@@ -32,16 +33,71 @@ describe("AI scanner parsing", () => {
       platform: "PS2",
       edition: null,
       region: "US",
+      brand: null,
+      model: null,
+      mpn: null,
+      color: null,
+      storage: null,
+      carrier: null,
     };
     expect(catalogIdentityMatchScore(identity, {
       title: "Grand Theft Auto San Andreas",
       platform: "Sony PlayStation 2",
       edition: null,
+      brand: null,
+      model: null,
+      mpn: null,
+      color: null,
+      storage: null,
+      carrier: null,
     })).toBeGreaterThan(0);
     expect(catalogIdentityMatchScore(identity, {
       title: "Grand Theft Auto San Andreas",
       platform: "Xbox One",
       edition: null,
+      brand: null,
+      model: null,
+      mpn: null,
+      color: null,
+      storage: null,
+      carrier: null,
+    })).toBeNull();
+  });
+
+  test("matches a concise visual identity to a production-shaped catalog listing", () => {
+    const identity = {
+      name: "Apple iPhone 17",
+      platform: null,
+      edition: null,
+      region: null,
+      brand: "Apple",
+      model: "iPhone 17",
+      mpn: "MG494LL/A",
+      color: "Lavender",
+      storage: "256GB",
+      carrier: "T-Mobile",
+    };
+    expect(catalogIdentityMatchScore(identity, {
+      title: "New T-Mobile Apple iPhone 17 256GB Lavender MG494LL/A",
+      platform: null,
+      edition: null,
+      brand: "Apple",
+      model: "iPhone 17",
+      mpn: "MG494LL/A",
+      color: "Lavender",
+      storage: "256GB",
+      carrier: "T-Mobile",
+    })).toBeGreaterThan(0);
+    expect(catalogIdentityMatchScore(identity, {
+      title: "New T-Mobile Apple iPhone 17 512GB Lavender MG495LL/A",
+      platform: null,
+      edition: null,
+      brand: "Apple",
+      model: "iPhone 17",
+      mpn: "MG495LL/A",
+      color: "Lavender",
+      storage: "512GB",
+      carrier: "T-Mobile",
     })).toBeNull();
   });
 
@@ -63,6 +119,13 @@ describe("AI scanner parsing", () => {
       value: "Back 4 Blood",
       format: "item-name",
     });
+  });
+
+  test("recovers one verified-format UPC from malformed web-search prose", () => {
+    expect(parseCatalogUPCResponse("The supported UPC is 045496596583. {not valid JSON"))
+      .toBe("045496596583");
+    expect(parseCatalogUPCResponse("Candidates: 045496596583 and 036000291452"))
+      .toBeNull();
   });
 
   test("sends the configured model, JSON mode, and a JPEG data URL once", async () => {
@@ -131,6 +194,12 @@ describe("AI scanner parsing", () => {
       platform: "PS2",
       edition: null,
       region: "US",
+      brand: null,
+      model: null,
+      mpn: null,
+      color: null,
+      storage: null,
+      carrier: null,
     })).not.toContain("image_url");
   });
 
@@ -149,6 +218,12 @@ describe("AI scanner parsing", () => {
         title: "Galaxian",
         platform: "Atari 5200",
         edition: null,
+        brand: null,
+        model: null,
+        mpn: null,
+        color: null,
+        storage: null,
+        carrier: null,
       }),
       onTrace: (event) => trace.push(event),
     });
@@ -190,5 +265,18 @@ describe("AI scanner parsing", () => {
       headers: { location: "https://www.pricecharting.com/game/playstation-2/bully?q=710425274107" },
     }));
     await expect(verifyPriceChartingUPC("710425274107", "Grand Theft Auto: San Andreas", "PS2", wrongProductFetch)).resolves.toBeNull();
+  });
+
+  test("verifies an accented product title against an ASCII catalog slug", async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, {
+      status: 307,
+      headers: { location: "https://www.pricecharting.com/game/nintendo-switch/pokemon-sword?q=045496596583" },
+    }));
+    await expect(verifyPriceChartingUPC(
+      "045496596583",
+      "Pokémon Sword",
+      "Nintendo Switch",
+      fetchImpl,
+    )).resolves.toBe("045496596583");
   });
 });

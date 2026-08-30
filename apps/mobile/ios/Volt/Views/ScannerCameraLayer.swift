@@ -3,6 +3,7 @@ import SwiftUI
 struct ScannerCameraLayer: View {
     @Environment(ScannerStore.self) private var store
     @State private var focusPoint: CGPoint?
+    @State private var focusRequestID = UUID()
     var gridVisible = false
     var guideVisible = true
     /// Room for the fixed status surface that floats over the top of the session.
@@ -154,14 +155,15 @@ struct ScannerCameraLayer: View {
         CameraPreview(
             previewLayer: store.camera.previewLayer,
             onTap: { devicePoint, layerPoint in
-                focusPoint = layerPoint
-                store.camera.focus(at: devicePoint)
-                Task {
+                let requestID = UUID()
+                focusRequestID = requestID
+                Task { @MainActor in
+                    let focusApplied = await store.camera.focus(at: devicePoint)
+                    guard focusApplied, focusRequestID == requestID else { return }
+                    focusPoint = layerPoint
                     try? await Task.sleep(for: .milliseconds(750))
-                    await MainActor.run {
-                        if focusPoint == layerPoint {
-                            focusPoint = nil
-                        }
+                    if focusRequestID == requestID {
+                        focusPoint = nil
                     }
                 }
             },

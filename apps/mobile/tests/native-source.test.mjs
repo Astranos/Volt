@@ -399,6 +399,7 @@ test("unified camera starts from the hero card and history groups mixed captures
   assert.match(scannerViewSwiftSource, /Dictionary\(grouping: results\) \{ result in/);
   assert.match(scannerViewSwiftSource, /result\.batchId \?\? result\.id\.uuidString\.lowercased\(\)/);
   assert.match(scannerViewSwiftSource, /Continue session/);
+  assert.match(scannerViewSwiftSource, /Button\("Continue session"[\s\S]*\.tint\(VoltBrand\.green\)/);
   assert.match(scannerViewSwiftSource, /CaptureHistorySessionCard\(/);
   assert.match(sharedCameraSessionControlsSwiftSource, /if showsModePicker \{\s*modePicker\s*\}[\s\S]*connectionSlot[\s\S]*finishSlot[\s\S]*shutterButton/);
   assert.match(sharedCameraSessionControlsSwiftSource, /proxy\.scrollTo\(modeID, anchor: \.center\)/);
@@ -1005,6 +1006,23 @@ test("native camera uses fast continuous near focus for barcode scanning", () =>
   assert.match(clipBarcodeScannerServiceSwiftSource, /CameraDeviceSelector\.applySmoothTapFocus\(on: videoDevice, point: point\)/);
 });
 
+test("native tap focus confirms camera configuration before showing feedback in every mode", () => {
+  assert.match(cameraModelSwiftSource, /func focus\(at point: CGPoint\) async -> Bool/);
+  assert.match(clipBarcodeScannerServiceSwiftSource, /func focus\(at point: CGPoint\) async -> Bool/);
+  assert.match(cameraModelSwiftSource, /withCheckedContinuation/);
+  assert.match(clipBarcodeScannerServiceSwiftSource, /withCheckedContinuation/);
+  assert.match(
+    scannerCameraLayerSwiftSource,
+    /let requestID = UUID\(\)[\s\S]*let focusApplied = await store\.camera\.focus\(at: devicePoint\)[\s\S]*guard focusApplied, focusRequestID == requestID else \{ return \}[\s\S]*focusPoint = layerPoint/
+  );
+  assert.match(
+    clipRootViewSwiftSource,
+    /let requestID = UUID\(\)[\s\S]*let focusApplied = await cameraService\.focus\(at: devicePoint\)[\s\S]*guard focusApplied, focusRequestID == requestID else \{ return \}[\s\S]*focusPoint = layerPoint/
+  );
+  assert.match(captureSessionViewSwiftSource, /if store\.activeMode == \.dictation[\s\S]*\.allowsHitTesting\(false\)/);
+  assert.match(clipRootViewSwiftSource, /if activeMode == \.dictation[\s\S]*\.allowsHitTesting\(false\)/);
+});
+
 test("native camera shares smooth display zoom for pinch and controls", () => {
   assert.match(cameraZoomControllerSwiftSource, /enum CameraZoomGesturePhase/);
   assert.match(cameraZoomControllerSwiftSource, /private static let zoomRampRate: Float = 4/);
@@ -1171,7 +1189,7 @@ test("app clip bottom CTAs show connection progress while pairing", () => {
   assert.doesNotMatch(clipRootViewSwiftSource, /Button\(store\.isSendingDictation \? "Sending…" : "Send"\)/);
 });
 
-test("full app presents Scan, unified History, and Settings roots", () => {
+test("full app presents Volt, unified History, and Settings roots", () => {
   const enumStart = rootViewSwiftSource.indexOf("enum AppSection");
   const enumEnd = rootViewSwiftSource.indexOf("}", enumStart);
   const enumSource = rootViewSwiftSource.slice(enumStart, enumEnd);
@@ -1194,8 +1212,8 @@ test("full app presents Scan, unified History, and Settings roots", () => {
   assert.match(cloudTargetPickerSwiftSource, /Label\(targetLabel, systemImage: "character\.cursor\.ibeam"\)[\s\S]*\.lineLimit\(1\)[\s\S]*\.frame\(minHeight: isCompact \? 36 : 48\)[\s\S]*\.contentShape\(Rectangle\(\)\)/);
   assert.match(cloudTargetPickerSwiftSource, /struct CloudTargetLabel: View[\s\S]*Label\(Self\.targetLabel\(for: store\), systemImage: "character\.cursor\.ibeam"\)[\s\S]*\.accessibilityElement\(children: \.combine\)/);
   assert.doesNotMatch(cloudTargetPickerSwiftSource, /pencil\.and\.scribble/);
-  assert.match(scannerViewSwiftSource, /Text\("Scan"\)\.font\(\.largeTitle\.bold\(\)\)[\s\S]*CloudTargetLabel\(\)/);
-  const scanHeaderStart = scannerViewSwiftSource.indexOf('Text("Scan").font(.largeTitle.bold())');
+  assert.match(scannerViewSwiftSource, /Text\("Volt"\)\.font\(\.largeTitle\.bold\(\)\)[\s\S]*CloudTargetLabel\(\)/);
+  const scanHeaderStart = scannerViewSwiftSource.indexOf('Text("Volt").font(.largeTitle.bold())');
   const scanHeaderEnd = scannerViewSwiftSource.indexOf("UnifiedCaptureLaunchCard", scanHeaderStart);
   const scanHeaderSource = scannerViewSwiftSource.slice(scanHeaderStart, scanHeaderEnd);
   assert.doesNotMatch(scanHeaderSource, /CloudTargetButton|Button\(|buttonStyle|glass/);
@@ -1205,7 +1223,8 @@ test("full app presents Scan, unified History, and Settings roots", () => {
   assert.match(cloudTargetPickerSwiftSource, /content\.buttonStyle\(\.glass\)[\s\S]*content\.buttonStyle\(\.bordered\)/);
   assert.ok(cloudTargetPickerSwiftSource.includes('.accessibilityLabel("Type destination: \\(targetLabel)")'));
   assert.match(rootViewSwiftSource, /\.accessibilityLabel\("Connections"\)[\s\S]*Choose the computer/);
-  assert.match(rootViewSwiftSource, /Label\("Scan", systemImage: "camera\.viewfinder"\)[\s\S]*\.frame\(maxWidth: \.infinity, minHeight: 48\)/);
+  assert.match(rootViewSwiftSource, /Label\("Start", systemImage: "camera\.viewfinder"\)[\s\S]*\.accessibilityLabel\("Start"\)[\s\S]*\.accessibilityHint\("Starts the scanner"\)/);
+  assert.match(rootViewSwiftSource, /Label\("Start", systemImage: "camera\.viewfinder"\)[\s\S]*\.frame\(maxWidth: \.infinity, minHeight: 48\)/);
   assert.match(rootViewSwiftSource, /Label\("Settings", systemImage: "gearshape"\)[\s\S]*\.labelStyle\(\.iconOnly\)/);
   assert.doesNotMatch(rootViewSwiftSource, /Label\("Upload"|UploadView\(\)/);
   assert.match(

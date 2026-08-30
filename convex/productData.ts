@@ -5,7 +5,7 @@ import {
   catalogIdentityMatchScore,
   normalizeUPCA,
   type AIScannerCatalogMatch,
-  type GameIdentity,
+  type ProductIdentity,
 } from "./aiScanner";
 import { loadCatalogProductByUpc } from "./catalog/store";
 import {
@@ -30,6 +30,12 @@ const aiScannerCatalogMatchValidator = v.object({
   title: v.string(),
   platform: v.union(v.string(), v.null()),
   edition: v.union(v.string(), v.null()),
+  brand: v.union(v.string(), v.null()),
+  model: v.union(v.string(), v.null()),
+  mpn: v.union(v.string(), v.null()),
+  color: v.union(v.string(), v.null()),
+  storage: v.union(v.string(), v.null()),
+  carrier: v.union(v.string(), v.null()),
 });
 
 type SearchProductsArgs = {
@@ -146,10 +152,16 @@ function aiScannerCatalogMatch(product: Doc<"paymoreCatalogProducts">): AIScanne
     title: product.title,
     platform: product.platform,
     edition: product.edition,
+    brand: product.brand,
+    model: product.model,
+    mpn: product.mpn,
+    color: product.color,
+    storage: product.storage,
+    carrier: product.carrier,
   };
 }
 
-async function findProductForAIIdentity(ctx: QueryCtx, identity: GameIdentity) {
+async function findProductForAIIdentity(ctx: QueryCtx, identity: ProductIdentity) {
   const exactTitleCandidates = await ctx.db
     .query("paymoreCatalogProducts")
     .withIndex("by_title", (q) => q.eq("title", identity.name))
@@ -162,6 +174,26 @@ async function findProductForAIIdentity(ctx: QueryCtx, identity: GameIdentity) {
   for (const product of [...exactTitleCandidates, ...searchCandidates]) {
     candidatesById.set(product._id, product);
   }
+  const supplementalSearches = Array.from(new Set([
+    identity.model,
+    [identity.brand, identity.model].filter(Boolean).join(" ") || null,
+  ].filter((value): value is string => Boolean(value) && value !== identity.name)));
+  for (const searchText of supplementalSearches) {
+    const matches = await ctx.db
+      .query("paymoreCatalogProducts")
+      .withSearchIndex("search_title", (q) => q.search("title", searchText))
+      .take(25);
+    for (const product of matches) candidatesById.set(product._id, product);
+  }
+  if (identity.mpn) {
+    for (const mpn of new Set([identity.mpn, identity.mpn.toUpperCase()])) {
+      const matches = await ctx.db
+        .query("paymoreCatalogProducts")
+        .withIndex("by_mpn", (q) => q.eq("mpn", mpn))
+        .take(25);
+      for (const product of matches) candidatesById.set(product._id, product);
+    }
+  }
   const candidates = [...candidatesById.values()];
   const scored = candidates.flatMap((product) => {
     const score = catalogIdentityMatchScore(identity, product);
@@ -170,7 +202,7 @@ async function findProductForAIIdentity(ctx: QueryCtx, identity: GameIdentity) {
   const best = scored[0];
   if (!best) return null;
   const runnerUp = scored[1];
-  if (runnerUp && runnerUp.score === best.score && runnerUp.product.upc !== best.product.upc) return null;
+  if (runnerUp && best.score - runnerUp.score < 8 && runnerUp.product.upc !== best.product.upc) return null;
   return aiScannerCatalogMatch(best.product);
 }
 
@@ -222,6 +254,12 @@ export const findProductForAIScanner = internalQuery({
     platform: v.union(v.string(), v.null()),
     edition: v.union(v.string(), v.null()),
     region: v.union(v.string(), v.null()),
+    brand: v.union(v.string(), v.null()),
+    model: v.union(v.string(), v.null()),
+    mpn: v.union(v.string(), v.null()),
+    color: v.union(v.string(), v.null()),
+    storage: v.union(v.string(), v.null()),
+    carrier: v.union(v.string(), v.null()),
   },
   returns: v.union(aiScannerCatalogMatchValidator, v.null()),
   handler: async (ctx, args) => {

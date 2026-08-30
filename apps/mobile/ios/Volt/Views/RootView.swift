@@ -196,14 +196,14 @@ private struct RootTabBar: View {
 
     private var scanButton: some View {
         Button(action: onScan) {
-            Label("Scan", systemImage: "camera.viewfinder")
+            Label("Start", systemImage: "camera.viewfinder")
                 .font(.headline.weight(.semibold))
                 .frame(maxWidth: .infinity, minHeight: 48)
         }
         .rootTabBarScanStyle()
         .tint(.green)
-        .accessibilityLabel("Scan")
-        .accessibilityHint("Shows the scanner")
+        .accessibilityLabel("Start")
+        .accessibilityHint("Starts the scanner")
         .accessibilityAddTraits(selection == .text ? .isSelected : [])
     }
 

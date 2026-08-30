@@ -35,7 +35,9 @@ enum CameraDeviceSelector {
         }
     }
 
-    static func applySmoothTapFocus(on device: AVCaptureDevice, point: CGPoint) {
+    @discardableResult
+    static func applySmoothTapFocus(on device: AVCaptureDevice, point: CGPoint) -> Bool {
+        var didApplyFocus = false
         if device.isSmoothAutoFocusSupported {
             device.isSmoothAutoFocusEnabled = true
         }
@@ -46,8 +48,10 @@ enum CameraDeviceSelector {
             device.focusPointOfInterest = point
             if device.isFocusModeSupported(.autoFocus) {
                 device.focusMode = .autoFocus
+                didApplyFocus = true
             } else if device.isFocusModeSupported(.continuousAutoFocus) {
                 device.focusMode = .continuousAutoFocus
+                didApplyFocus = true
             }
         }
         if device.isExposurePointOfInterestSupported {
@@ -59,9 +63,12 @@ enum CameraDeviceSelector {
             }
         }
         device.isSubjectAreaChangeMonitoringEnabled = true
+        return didApplyFocus
     }
 
-    static func applyBarcodeFocus(on device: AVCaptureDevice, point: CGPoint) {
+    @discardableResult
+    static func applyBarcodeFocus(on device: AVCaptureDevice, point: CGPoint) -> Bool {
+        var didApplyFocus = false
         if device.isSmoothAutoFocusSupported {
             device.isSmoothAutoFocusEnabled = false
         }
@@ -73,8 +80,10 @@ enum CameraDeviceSelector {
         }
         if device.isFocusModeSupported(.continuousAutoFocus) {
             device.focusMode = .continuousAutoFocus
+            didApplyFocus = device.isFocusPointOfInterestSupported
         } else if device.isFocusModeSupported(.autoFocus) {
             device.focusMode = .autoFocus
+            didApplyFocus = device.isFocusPointOfInterestSupported
         }
         if device.isExposurePointOfInterestSupported {
             device.exposurePointOfInterest = point
@@ -85,6 +94,7 @@ enum CameraDeviceSelector {
             device.exposureMode = .autoExpose
         }
         device.isSubjectAreaChangeMonitoringEnabled = false
+        return didApplyFocus
     }
 
     static func applyDefaultContinuousFocus(on device: AVCaptureDevice) {

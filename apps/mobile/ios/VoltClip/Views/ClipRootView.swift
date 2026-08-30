@@ -1455,6 +1455,7 @@ private struct ClipCaptureSessionView: View {
     @State private var isCleaningSelectedText = false
     @State private var cleanupRequestID = UUID()
     @State private var focusPoint: CGPoint?
+    @State private var focusRequestID = UUID()
     @State private var cameraStateRevision = 0
     @State private var isConnectionSheetPresented = false
     private let topToolbarTopPadding: CGFloat = 12
@@ -1481,16 +1482,7 @@ private struct ClipCaptureSessionView: View {
                     detectedBarcodeFormat: detectedBarcodeFormat,
                     focusPoint: focusPoint,
                     onTap: { devicePoint, layerPoint in
-                        focusPoint = layerPoint
-                        cameraService.focus(at: devicePoint)
-                        Task {
-                            try? await Task.sleep(for: .milliseconds(750))
-                            await MainActor.run {
-                                if focusPoint == layerPoint {
-                                    focusPoint = nil
-                                }
-                            }
-                        }
+                        requestFocus(at: devicePoint, showingAt: layerPoint)
                     },
                     onPinch: { scale, phase in
                         cameraService.handleZoomGesture(scale: scale, phase: phase)
@@ -1542,16 +1534,7 @@ private struct ClipCaptureSessionView: View {
                             gridVisible: gridVisible,
                             focusPoint: focusPoint,
                             onTap: { devicePoint, layerPoint in
-                                focusPoint = layerPoint
-                                cameraService.focus(at: devicePoint)
-                                Task {
-                                    try? await Task.sleep(for: .milliseconds(750))
-                                    await MainActor.run {
-                                        if focusPoint == layerPoint {
-                                            focusPoint = nil
-                                        }
-                                    }
-                                }
+                                requestFocus(at: devicePoint, showingAt: layerPoint)
                             },
                             onPinch: { scale, phase in
                                 cameraService.handleZoomGesture(scale: scale, phase: phase)
@@ -1604,6 +1587,7 @@ private struct ClipCaptureSessionView: View {
                 .frame(maxWidth: 340)
                 .background(.black.opacity(0.62), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
                 .padding(.horizontal, 24)
+                .allowsHitTesting(false)
             }
         }
         .background(.black)
@@ -1748,6 +1732,20 @@ private struct ClipCaptureSessionView: View {
         .onChange(of: store.pairingFailureMessage) { _, message in
             if message != nil && !store.isConnected {
                 isConnectionSheetPresented = true
+            }
+        }
+    }
+
+    private func requestFocus(at devicePoint: CGPoint, showingAt layerPoint: CGPoint) {
+        let requestID = UUID()
+        focusRequestID = requestID
+        Task { @MainActor in
+            let focusApplied = await cameraService.focus(at: devicePoint)
+            guard focusApplied, focusRequestID == requestID else { return }
+            focusPoint = layerPoint
+            try? await Task.sleep(for: .milliseconds(750))
+            if focusRequestID == requestID {
+                focusPoint = nil
             }
         }
     }

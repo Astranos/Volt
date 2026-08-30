@@ -436,21 +436,25 @@ final class CameraModel: NSObject {
         }
     }
 
-    func focus(at point: CGPoint) {
-        guard let videoDevice else { return }
+    func focus(at point: CGPoint) async -> Bool {
+        guard let videoDevice else { return false }
         let isBarcodeScanningEnabled = isBarcodeScanningEnabled
-        sessionQueue.async { [weak self] in
-            do {
-                try videoDevice.lockForConfiguration()
-                defer { videoDevice.unlockForConfiguration() }
-                if isBarcodeScanningEnabled {
-                    CameraDeviceSelector.applyBarcodeFocus(on: videoDevice, point: point)
-                } else {
-                    CameraDeviceSelector.applySmoothTapFocus(on: videoDevice, point: point)
-                }
-            } catch {
-                Task { @MainActor in
-                    self?.errorMessage = error.localizedDescription
+        return await withCheckedContinuation { continuation in
+            sessionQueue.async { [weak self] in
+                do {
+                    try videoDevice.lockForConfiguration()
+                    defer { videoDevice.unlockForConfiguration() }
+                    let focusApplied = if isBarcodeScanningEnabled {
+                        CameraDeviceSelector.applyBarcodeFocus(on: videoDevice, point: point)
+                    } else {
+                        CameraDeviceSelector.applySmoothTapFocus(on: videoDevice, point: point)
+                    }
+                    continuation.resume(returning: focusApplied)
+                } catch {
+                    Task { @MainActor in
+                        self?.errorMessage = error.localizedDescription
+                    }
+                    continuation.resume(returning: false)
                 }
             }
         }

@@ -17,7 +17,7 @@ struct UnifiedCaptureHomeView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: ScannerTabLayout.stackSpacing) {
                     HStack(spacing: 12) {
-                        Text("Scan").font(.largeTitle.bold())
+                        Text("Volt").font(.largeTitle.bold())
                         Spacer()
                         CloudTargetLabel()
                     }
@@ -34,7 +34,7 @@ struct UnifiedCaptureHomeView: View {
                 .padding(.bottom, 32)
             }
             .background(ScannerTabLayout.background)
-            .navigationTitle("Scan")
+            .navigationTitle("Volt")
             .toolbar(.hidden, for: .navigationBar)
             .fullScreenCover(isPresented: $isCaptureSessionPresented, onDismiss: {
                 store.endCaptureSession(id: resumedBatchId)
@@ -246,7 +246,7 @@ private struct CaptureHistorySessionCard: View {
             Button("Continue session", systemImage: "camera.fill", action: onContinue)
                 .font(.subheadline.weight(.semibold))
                 .buttonStyle(.borderedProminent)
-                .tint(.accentColor)
+                .tint(VoltBrand.green)
             ForEach(session.results) { result in
                 CapturedResultRow(result: result, canResend: true, onResend: { onResend(result) }, onDelete: { onDelete(result) })
                     .padding(12)
