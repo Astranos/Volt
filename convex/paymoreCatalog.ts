@@ -10,7 +10,6 @@ import {
   upsertStatsValidator,
 } from "./catalog/validators";
 import { internal } from "./_generated/api";
-import type { Doc } from "./_generated/dataModel";
 import { internalMutation, internalQuery } from "./_generated/server";
 
 const ingestResultValidator = v.object({
@@ -62,8 +61,9 @@ export const getByUpcInternal = internalQuery({
 // One-time migration: strips legacy per-listing facts (price, quantity,
 // store name, condition, listingAttributes) from every paymoreCatalogSources
 // row so a source row is pure provenance (product, UPC, source URL, photo,
-// timestamps). The schema still lists those fields until phase 2 removes all
-// five from the schema once this migration has run.
+// timestamps). Kept deployed so any environment that still holds rows from
+// before the schema tightening can strip them first; on a clean table it is
+// a no-op.
 export const stripSourceListingFacts = internalMutation({
   args: { cursor: v.optional(v.string()) },
   returns: v.object({
@@ -87,20 +87,14 @@ export const stripSourceListingFacts = internalMutation({
       ) {
         continue;
       }
-      // The schema still marks condition/listingAttributes as required until
-      // phase 2, so the stripped payload does not typecheck as a full row;
-      // the assertion bridges that gap and goes away with the schema change.
-      await ctx.db.replace(
-        source._id,
-        ({
-          productId: source.productId,
-          upc: source.upc,
-          sourceUrl: source.sourceUrl,
-          createdAt: source.createdAt,
-          ...(source.imageUrl !== undefined ? { imageUrl: source.imageUrl } : {}),
-          ...(source.updatedAt !== undefined ? { updatedAt: source.updatedAt } : {}),
-        }) as Doc<"paymoreCatalogSources">,
-      );
+      await ctx.db.replace(source._id, {
+        productId: source.productId,
+        upc: source.upc,
+        sourceUrl: source.sourceUrl,
+        createdAt: source.createdAt,
+        ...(source.imageUrl !== undefined ? { imageUrl: source.imageUrl } : {}),
+        ...(source.updatedAt !== undefined ? { updatedAt: source.updatedAt } : {}),
+      });
       stripped += 1;
     }
 

@@ -472,8 +472,7 @@ describe("PayMore catalog Convex storage", () => {
     vi.unstubAllEnvs();
   });
 
-  test("stripSourceListingFacts removes all legacy listing facts from source rows", async () => {
-    vi.useFakeTimers();
+  test("stripSourceListingFacts leaves clean provenance rows untouched", async () => {
     const t = convexTest(schema, modules);
     const now = 1_700_000_000_000;
     await t.mutation(ingestPages, {
@@ -481,50 +480,17 @@ describe("PayMore catalog Convex storage", () => {
       pages: [{ sourceUrl: ROCKVILLE_GALAXIAN, body: GALAXIAN_HTML }],
     });
 
-    // Seed every legacy per-listing fact directly, mimicking rows created
-    // before the catalog went spec-only.
-    const seeded = await t.run(async (ctx) => {
-      const sources = await ctx.db.query("paymoreCatalogSources").collect();
-      for (const source of sources) {
-        await ctx.db.patch(source._id, {
-          price: 49.99,
-          quantity: 2,
-          storeName: "paymore-rockville",
-          condition: "Acceptable",
-          listingAttributes: { condition: "Acceptable", sku: "GA-1" },
-        });
-      }
-      return sources.length;
-    });
-    expect(seeded).toBeGreaterThan(0);
-
-    const first = await t.mutation(stripSourceListingFacts, {});
-    await t.finishAllScheduledFunctions(vi.runAllTimers);
-    expect(first.processed).toBe(seeded);
-    expect(first.stripped).toBe(seeded);
-    expect(first.isDone).toBe(true);
-
-    const rows = await t.run(async (ctx) =>
-      ctx.db.query("paymoreCatalogSources").collect(),
+    // The schema no longer accepts legacy per-listing facts, so the
+    // migration walks the table and changes nothing.
+    const sourceCount = await t.run(async (ctx) =>
+      (await ctx.db.query("paymoreCatalogSources").collect()).length,
     );
-    for (const row of rows) {
-      expect(row).not.toHaveProperty("price");
-      expect(row).not.toHaveProperty("quantity");
-      expect(row).not.toHaveProperty("storeName");
-      expect(row).not.toHaveProperty("condition");
-      expect(row).not.toHaveProperty("listingAttributes");
-      expect(row.sourceUrl).toBe(ROCKVILLE_GALAXIAN);
-      expect(row.upc).toBe("077000052063");
-      expect(row.createdAt).toBe(now);
-      expect(row.updatedAt).toBe(now);
-      // Fields absent on the legacy row stay absent after replace.
-      expect(row).not.toHaveProperty("imageUrl");
-    }
-
-    const second = await t.mutation(stripSourceListingFacts, {});
-    expect(second).toEqual({ processed: rows.length, stripped: 0, isDone: true });
-
-    vi.useRealTimers();
+    expect(sourceCount).toBeGreaterThan(0);
+    expect(await t.mutation(stripSourceListingFacts, {})).toEqual({
+      processed: sourceCount,
+      stripped: 0,
+      isDone: true,
+    });
   });
 });
 
