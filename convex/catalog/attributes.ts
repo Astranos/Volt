@@ -49,6 +49,9 @@ const SKIP_LABELS = new Set([
   "this will go at the end of the title",
 ]);
 
+// Per-unit listing facts (condition, sku, graded, case/manual/inserts/DLC)
+// describe the individual bought item, not the product. They are never
+// persisted: splitSpecAttributes discards them outright.
 const LISTING_KEYS = new Set([
   "condition",
   "sku",
@@ -99,7 +102,6 @@ export type ProductAttributeKey = (typeof PRODUCT_ATTRIBUTE_KEYS)[number];
 
 export type SplitAttributes = {
   product: Record<string, string>;
-  listing: Record<string, string>;
 };
 
 export function canonicalSpecLabel(label: string): string | null {
@@ -115,7 +117,6 @@ export function canonicalSpecLabel(label: string): string | null {
 
 export function splitSpecAttributes(specs: Iterable<[string, string]>): SplitAttributes {
   const product: Record<string, string> = {};
-  const listing: Record<string, string> = {};
   for (const [label, rawValue] of specs) {
     const normalizedLabel = label.replace(/[:?*]+$/, "").trim().toLowerCase();
     if (UNIT_ONLY_LABEL.test(normalizedLabel)) continue;
@@ -123,10 +124,10 @@ export function splitSpecAttributes(specs: Iterable<[string, string]>): SplitAtt
     const value = rawValue.trim();
     if (!key || !value) continue;
     if (UNIT_ONLY_KEYS.has(key)) continue;
-    if (LISTING_KEYS.has(key)) listing[key] = value;
-    else product[key] = value;
+    if (LISTING_KEYS.has(key)) continue;
+    product[key] = value;
   }
-  return { product, listing };
+  return { product };
 }
 
 export function pickProductAttribute(

@@ -8,10 +8,9 @@ export type RejectReason =
 
 export type CatalogListing = {
   sourceUrl: string;
-  condition: string | null;
-  attributes: Record<string, string>;
-  // The catalog is spec-only: per-listing marketplace metrics (price,
-  // quantity, store name) are no longer captured. Photos are kept.
+  // The catalog is spec-only: per-unit listing facts (condition, sku,
+  // graded, case/manual/inserts/DLC) and marketplace metrics are never
+  // captured. Photos are kept.
   imageUrl?: string;
   // Freshness of the stored source row; set when a listing is loaded back
   // from the database.

@@ -46,12 +46,10 @@ function mergeListings(current: CatalogListing[], incoming: CatalogListing[]): C
   const listings = [...current];
   for (const listing of incoming) {
     const existing = listings.find((item) => item.sourceUrl === listing.sourceUrl);
-    if (existing) {
-      existing.condition = preferText(existing.condition, listing.condition);
-      existing.attributes = mergeAttributeRecords(existing.attributes, listing.attributes);
-      continue;
-    }
-    listings.push({ ...listing, attributes: { ...listing.attributes } });
+    // Listings are pure provenance now, so a repeated sourceUrl contributes
+    // nothing new; the first copy wins.
+    if (existing) continue;
+    listings.push({ ...listing });
   }
   return listings;
 }
@@ -77,7 +75,7 @@ export function dedupeProducts(products: CatalogProduct[]): CatalogProduct[] {
             ...product,
             attributes: { ...product.attributes },
             sourceUrls: [...product.sourceUrls],
-            listings: product.listings.map((listing) => ({ ...listing, attributes: { ...listing.attributes } })),
+            listings: product.listings.map((listing) => ({ ...listing })),
           },
     );
   }

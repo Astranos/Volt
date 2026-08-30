@@ -113,8 +113,6 @@ function mapPayMoreApiItem(item: unknown, collectionSlug: string): MappedItem {
   const listing: CatalogListing | null = sourceUrl
     ? {
         sourceUrl,
-        condition: split.listing.condition ?? null,
-        attributes: split.listing,
         imageUrl: readTrimmedString(record.p_image),
       }
     : null;

@@ -103,13 +103,6 @@ function firstProduct(products: CatalogProduct[]): CatalogProduct {
   return product;
 }
 
-function allAttributeKeys(product: CatalogProduct): string[] {
-  return [
-    ...Object.keys(product.attributes),
-    ...product.listings.flatMap((listing) => Object.keys(listing.attributes)),
-  ];
-}
-
 describe("mapPayMoreApiItems", () => {
   test("maps a game item with a valid UPC into a catalog product", () => {
     const result = mapPayMoreApiItems([gameItem()], COLLECTION);
@@ -132,7 +125,7 @@ describe("mapPayMoreApiItems", () => {
     expect(product.releaseYear).toBe("1992");
   });
 
-  test("keeps typed fields out of product.attributes and condition on the listing", () => {
+  test("keeps typed fields out of product.attributes and condition off the listing", () => {
     const product = firstProduct(mapPayMoreApiItems([gameItem()], COLLECTION).products);
     expect(product.attributes).not.toHaveProperty("publisher");
     expect(product.attributes).not.toHaveProperty("platform");
@@ -142,20 +135,12 @@ describe("mapPayMoreApiItems", () => {
     expect(product.listings).toEqual([
       {
         sourceUrl: "https://paymore.com/shop/product/15872618299678",
-        condition: "CIB",
-        attributes: {
-          condition: "CIB",
-          graded: "No",
-          hasCase: "Yes",
-          hasManual: "Yes",
-          hasInserts: "No",
-          hasDlc: "No",
-        },
         imageUrl: "https://paymore.com/cdn/shop/files/zelda-a-link-to-the-past-snes.jpg",
       },
     ]);
+    expect(product.listings[0]).not.toHaveProperty("condition");
 
-    const noisy = allAttributeKeys(product).join(" ").toLowerCase();
+    const noisy = Object.keys(product.attributes).join(" ").toLowerCase();
     expect(noisy).not.toMatch(
       /serial|imei|battery|lock|ios version|os version|operating system|warrant|applecare|password/,
     );
@@ -307,9 +292,9 @@ describe("mapPayMoreApiItems", () => {
     expect(product.storage).toBe("128GB");
     expect(product.carrier).toBe("Unlocked");
     expect(product.attributes).toEqual({ screenSize: "6.7\"", simSlot: "Dual SIM" });
-    expect(product.listings[0]?.condition).toBe("Good");
+    expect(product.listings[0]).not.toHaveProperty("condition");
 
-    const noisy = allAttributeKeys(product).join(" ").toLowerCase();
+    const noisy = Object.keys(product.attributes).join(" ").toLowerCase();
     expect(noisy).not.toMatch(
       /serial|imei|battery|lock|ios version|os version|operating system|warrant|applecare|password/,
     );

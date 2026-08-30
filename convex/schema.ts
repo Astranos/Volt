@@ -380,8 +380,11 @@ export default defineSchema({
     productId: v.id("paymoreCatalogProducts"),
     upc: v.string(),
     sourceUrl: v.string(),
-    condition: v.union(v.string(), v.null()),
-    listingAttributes: v.record(v.string(), v.string()),
+    // Legacy per-listing facts. Optional so spec-only source rows can be
+    // written before paymoreCatalog:stripSourceListingFacts strips them; a
+    // later commit removes these fields from the schema entirely.
+    condition: v.optional(v.union(v.string(), v.null())),
+    listingAttributes: v.optional(v.record(v.string(), v.string())),
     createdAt: v.number(),
     // Per-listing facts captured from the listing API. Optional because the
     // table already holds many legacy rows and the HTML crawl path never

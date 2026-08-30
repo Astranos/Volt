@@ -64,6 +64,13 @@ async function searchProductsFromCatalog(ctx: QueryCtx, args: SearchProductsArgs
   const raw = args.searchQuery?.trim() ?? "";
   const digits = raw.replace(/\D/g, "");
   const codeLike = /^[A-Za-z0-9][A-Za-z0-9/.-]{2,}$/.test(raw) && /\d/.test(raw);
+  // Server-owned page bound: paginationOptsValidator only checks the type, so
+  // a caller could otherwise request unbounded pages of the catalog.
+  const requested = args.paginationOpts.numItems;
+  const numItems = Number.isFinite(requested)
+    ? Math.min(Math.max(Math.trunc(requested), 1), 100)
+    : 25;
+  const paginationOpts = { ...args.paginationOpts, numItems };
 
   if (digits.length >= 6) {
     const upc = normalizeUPCA(digits);
@@ -102,11 +109,11 @@ async function searchProductsFromCatalog(ctx: QueryCtx, args: SearchProductsArgs
         .query("paymoreCatalogProducts")
         .withIndex("by_title")
         .order("asc")
-        .paginate(args.paginationOpts)
+        .paginate(paginationOpts)
     : await ctx.db
         .query("paymoreCatalogProducts")
         .withSearchIndex("search_title", (q) => q.search("title", tokens.join(" ")))
-        .paginate(args.paginationOpts);
+        .paginate(paginationOpts);
 
   return {
     page: results.page.map(productSummary),

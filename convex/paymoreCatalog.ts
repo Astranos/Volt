@@ -10,6 +10,7 @@ import {
   upsertStatsValidator,
 } from "./catalog/validators";
 import { internal } from "./_generated/api";
+import type { Doc } from "./_generated/dataModel";
 import { internalMutation, internalQuery } from "./_generated/server";
 
 const ingestResultValidator = v.object({
@@ -58,10 +59,11 @@ export const getByUpcInternal = internalQuery({
   },
 });
 
-// One-time migration: strips legacy per-listing marketplace metrics (price,
-// quantity, store name) from every paymoreCatalogSources row so the source
-// table matches the spec-only catalog. The schema still accepts those fields
-// until a later commit removes them once this migration has run.
+// One-time migration: strips legacy per-listing facts (price, quantity,
+// store name, condition, listingAttributes) from every paymoreCatalogSources
+// row so a source row is pure provenance (product, UPC, source URL, photo,
+// timestamps). The schema still lists those fields until phase 2 removes all
+// five from the schema once this migration has run.
 export const stripSourceListingFacts = internalMutation({
   args: { cursor: v.optional(v.string()) },
   returns: v.object({
@@ -77,22 +79,28 @@ export const stripSourceListingFacts = internalMutation({
     let stripped = 0;
     for (const source of page.page) {
       if (
-        source.price === undefined &&
-        source.quantity === undefined &&
-        source.storeName === undefined
+        !("price" in source) &&
+        !("quantity" in source) &&
+        !("storeName" in source) &&
+        !("condition" in source) &&
+        !("listingAttributes" in source)
       ) {
         continue;
       }
-      await ctx.db.replace(source._id, {
-        productId: source.productId,
-        upc: source.upc,
-        sourceUrl: source.sourceUrl,
-        condition: source.condition,
-        listingAttributes: source.listingAttributes,
-        createdAt: source.createdAt,
-        ...(source.imageUrl !== undefined ? { imageUrl: source.imageUrl } : {}),
-        ...(source.updatedAt !== undefined ? { updatedAt: source.updatedAt } : {}),
-      });
+      // The schema still marks condition/listingAttributes as required until
+      // phase 2, so the stripped payload does not typecheck as a full row;
+      // the assertion bridges that gap and goes away with the schema change.
+      await ctx.db.replace(
+        source._id,
+        ({
+          productId: source.productId,
+          upc: source.upc,
+          sourceUrl: source.sourceUrl,
+          createdAt: source.createdAt,
+          ...(source.imageUrl !== undefined ? { imageUrl: source.imageUrl } : {}),
+          ...(source.updatedAt !== undefined ? { updatedAt: source.updatedAt } : {}),
+        }) as Doc<"paymoreCatalogSources">,
+      );
       stripped += 1;
     }
 

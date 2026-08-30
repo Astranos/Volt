@@ -12,16 +12,6 @@ export type UpsertStats = {
 };
 
 type CatalogProductFields = Omit<CatalogProduct, "sourceUrls" | "listings">;
-type CatalogListingFacts = Pick<CatalogListing, "imageUrl">;
-
-// The only listing-level extra source rows still capture is the photo.
-// Written only when present on the incoming listing so a patch keeps the
-// row's old value otherwise.
-function sourceListingFields(listing: CatalogListingFacts): CatalogListingFacts {
-  const fields: CatalogListingFacts = {};
-  if (listing.imageUrl !== undefined) fields.imageUrl = listing.imageUrl;
-  return fields;
-}
 
 function productFields(product: CatalogProduct, upc: string, title: string): CatalogProductFields {
   return {
@@ -229,10 +219,8 @@ export async function upsertCatalogProducts(
         await ctx.db.patch(existingSource._id, {
           productId: productId!,
           upc,
-          condition: listing.condition,
-          listingAttributes: listing.attributes,
           updatedAt: now,
-          ...sourceListingFields(listing),
+          ...(listing.imageUrl !== undefined ? { imageUrl: listing.imageUrl } : {}),
         });
         continue;
       }
@@ -240,11 +228,9 @@ export async function upsertCatalogProducts(
         productId: productId!,
         upc,
         sourceUrl: listing.sourceUrl,
-        condition: listing.condition,
-        listingAttributes: listing.attributes,
         createdAt: now,
         updatedAt: now,
-        ...sourceListingFields(listing),
+        ...(listing.imageUrl !== undefined ? { imageUrl: listing.imageUrl } : {}),
       });
       sourcesAdded += 1;
     }
@@ -303,15 +289,12 @@ export async function loadCatalogProductByUpc(ctx: QueryCtx, upc: string) {
   };
 }
 
-// Source rows carry the photo; only attach fields that are present so legacy
-// rows come back without undefined-valued keys.
+// A catalog source row is pure provenance: product, UPC, source URL, photo,
+// and timestamps. Only attach fields that are present so rows without them
+// come back without undefined-valued keys.
 function sourceToListing(source: Doc<"paymoreCatalogSources">): CatalogListing {
-  const listing: CatalogListing = {
-    sourceUrl: source.sourceUrl,
-    condition: source.condition,
-    attributes: source.listingAttributes,
-    ...sourceListingFields(source),
-  };
+  const listing: CatalogListing = { sourceUrl: source.sourceUrl };
+  if (source.imageUrl !== undefined) listing.imageUrl = source.imageUrl;
   if (source.updatedAt !== undefined) listing.updatedAt = source.updatedAt;
   return listing;
 }

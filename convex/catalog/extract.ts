@@ -156,11 +156,7 @@ function listingFromFields(
   const edition = parsedGame?.edition || parsedTitle?.edition || null;
   const { upc, sawCandidate } = firstUpc(fields.upcValues);
   const split = splitSpecAttributes(fields.specs ?? []);
-  const listing: CatalogListing = {
-    sourceUrl,
-    condition: split.listing.condition ?? null,
-    attributes: split.listing,
-  };
+  const listing: CatalogListing = { sourceUrl };
 
   if (!title) return { sourceUrl, reason: "missing-title" };
   if (!upc) return { sourceUrl, reason: sawCandidate ? "invalid-upc" : "missing-upc" };
@@ -244,7 +240,6 @@ function enrichWithSpecs(product: CatalogProduct, extraSpecs: Array<[string, str
   if (extraSpecs.length === 0) return product;
   const split = splitSpecAttributes(extraSpecs);
   const extraFields = productFieldsFromAttributes(split.product);
-  const listing = product.listings[0];
   return {
     ...product,
     collection: product.collection ?? extraFields.collection,
@@ -259,13 +254,6 @@ function enrichWithSpecs(product: CatalogProduct, extraSpecs: Array<[string, str
     rating: product.rating ?? extraFields.rating,
     releaseYear: product.releaseYear ?? extraFields.releaseYear,
     attributes: { ...extraFields.attributes, ...product.attributes },
-    listings: listing
-      ? [{
-          ...listing,
-          condition: listing.condition ?? split.listing.condition ?? null,
-          attributes: { ...split.listing, ...listing.attributes },
-        }]
-      : product.listings,
   };
 }
 function extractShopifyProduct(product: ShopifyProduct, sourceUrl: string): ExtractResult {

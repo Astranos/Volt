@@ -53,8 +53,6 @@ const getByUpcInternal = makeFunctionReference<
     upcs: string[];
     listings: Array<{
       sourceUrl: string;
-      condition: string | null;
-      attributes: Record<string, string>;
       imageUrl?: string;
       updatedAt?: number;
     }>;
@@ -150,7 +148,7 @@ describe("PayMore catalog crawler", () => {
       rating: "M - Mature 17+",
       releaseYear: "2025",
       sourceUrls: [ROCKVILLE_CLAIR],
-      listings: [{ sourceUrl: ROCKVILLE_CLAIR, condition: "New" }],
+      listings: [{ sourceUrl: ROCKVILLE_CLAIR }],
     });
   });
 
@@ -254,19 +252,10 @@ describe("PayMore catalog crawler", () => {
         simSlot: "eSIM",
         screenSize: "6.3\"",
       },
-      listings: [{
-        sourceUrl: POOLER_IPHONE,
-        condition: "Good",
-        attributes: {
-          condition: "Good",
-          sku: "GA02-6162A-C2R1",
-        },
-      }],
+      listings: [{ sourceUrl: POOLER_IPHONE }],
     });
-    expect(result.products[0]?.listings[0]?.attributes).toEqual({
-      condition: "Good",
-      sku: "GA02-6162A-C2R1",
-    });
+    // Condition and SKU are per-unit listing facts: discarded, not stored.
+    expect(result.products[0]?.listings[0]).toEqual({ sourceUrl: POOLER_IPHONE });
   });
 
   test("drops unit-only spec rows even with unfamiliar labels", () => {
@@ -278,7 +267,9 @@ describe("PayMore catalog crawler", () => {
       ["Condition", "Good"],
     ]);
     expect(split.product).toEqual({ screenSize: "6.3\"" });
-    expect(split.listing).toEqual({ condition: "Good" });
+    // Condition is a per-unit listing fact: discarded, and no listing
+    // record comes back from the split at all.
+    expect(split).not.toHaveProperty("listing");
   });
 
   test("reports invalid-json instead of missing-title for malformed JSON bodies", () => {
@@ -347,8 +338,8 @@ describe("PayMore catalog Convex storage", () => {
       genre: "Arcade",
       sourceUrls: [ROCKVILLE_GALAXIAN, ANAHEIM_GALAXIAN],
       listings: [
-        { sourceUrl: ROCKVILLE_GALAXIAN, condition: "Acceptable" },
-        { sourceUrl: ANAHEIM_GALAXIAN, condition: null },
+        { sourceUrl: ROCKVILLE_GALAXIAN },
+        { sourceUrl: ANAHEIM_GALAXIAN },
       ],
       createdAt: now,
       updatedAt: now,
@@ -469,15 +460,19 @@ describe("PayMore catalog Convex storage", () => {
     expect(rockville).not.toHaveProperty("price");
     expect(rockville).not.toHaveProperty("quantity");
     expect(rockville).not.toHaveProperty("storeName");
+    expect(rockville).not.toHaveProperty("condition");
+    expect(rockville).not.toHaveProperty("attributes");
     expect(anaheim).not.toHaveProperty("price");
     expect(anaheim).not.toHaveProperty("storeName");
+    expect(anaheim).not.toHaveProperty("condition");
+    expect(anaheim).not.toHaveProperty("attributes");
     expect(rockville?.updatedAt).toBeGreaterThan(0);
     expect(anaheim?.updatedAt).toBeGreaterThan(0);
     expect(anaheim?.updatedAt ?? 0).toBeGreaterThanOrEqual(rockville?.updatedAt ?? 0);
     vi.unstubAllEnvs();
   });
 
-  test("stripSourceListingFacts removes legacy price, quantity, and storeName from source rows", async () => {
+  test("stripSourceListingFacts removes all legacy listing facts from source rows", async () => {
     vi.useFakeTimers();
     const t = convexTest(schema, modules);
     const now = 1_700_000_000_000;
@@ -486,7 +481,7 @@ describe("PayMore catalog Convex storage", () => {
       pages: [{ sourceUrl: ROCKVILLE_GALAXIAN, body: GALAXIAN_HTML }],
     });
 
-    // Seed the legacy per-listing metrics directly, mimicking rows created
+    // Seed every legacy per-listing fact directly, mimicking rows created
     // before the catalog went spec-only.
     const seeded = await t.run(async (ctx) => {
       const sources = await ctx.db.query("paymoreCatalogSources").collect();
@@ -495,6 +490,8 @@ describe("PayMore catalog Convex storage", () => {
           price: 49.99,
           quantity: 2,
           storeName: "paymore-rockville",
+          condition: "Acceptable",
+          listingAttributes: { condition: "Acceptable", sku: "GA-1" },
         });
       }
       return sources.length;
@@ -514,9 +511,10 @@ describe("PayMore catalog Convex storage", () => {
       expect(row).not.toHaveProperty("price");
       expect(row).not.toHaveProperty("quantity");
       expect(row).not.toHaveProperty("storeName");
+      expect(row).not.toHaveProperty("condition");
+      expect(row).not.toHaveProperty("listingAttributes");
       expect(row.sourceUrl).toBe(ROCKVILLE_GALAXIAN);
       expect(row.upc).toBe("077000052063");
-      expect(row.condition).toBe("Acceptable");
       expect(row.createdAt).toBe(now);
       expect(row.updatedAt).toBe(now);
       // Fields absent on the legacy row stay absent after replace.

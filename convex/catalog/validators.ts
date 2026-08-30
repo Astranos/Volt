@@ -5,8 +5,6 @@ const stringRecord = v.record(v.string(), v.string());
 
 export const catalogListingValidator = v.object({
   sourceUrl: v.string(),
-  condition: nullableString,
-  attributes: stringRecord,
   imageUrl: v.optional(v.string()),
   updatedAt: v.optional(v.number()),
 });
