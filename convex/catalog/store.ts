@@ -2,7 +2,7 @@ import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { normalizeUPCA } from "../aiScanner";
 import { mergeProductFields } from "./dedupe";
-import { isAuthorizedPayMoreProductUrl } from "./hosts";
+import { isAuthorizedCatalogProductUrl } from "./hosts";
 import type { CatalogListing, CatalogProduct } from "./types";
 
 export type UpsertStats = {
@@ -160,7 +160,7 @@ export async function upsertCatalogProducts(
   for (const product of products) {
     const upc = normalizeUPCA(product.upc);
     const title = product.title.trim();
-    const listings = product.listings.filter((listing) => isAuthorizedPayMoreProductUrl(listing.sourceUrl));
+    const listings = product.listings.filter((listing) => isAuthorizedCatalogProductUrl(listing.sourceUrl));
     if (!upc || !title || listings.length === 0) continue;
 
     const fields = productFields(product, upc, title);
@@ -176,6 +176,10 @@ export async function upsertCatalogProducts(
     const correctingSource = existing ? null : await findSourceWithDifferentUpc(ctx, listings, upc);
 
     let productId = existing?._id ?? null;
+    // Preserve the stored canonical UPC when a new source merges into an
+    // existing product. The incoming UPC is an alias until its source usage
+    // strictly exceeds the current canonical UPC's usage.
+    let canonicalUpc = existing?.upc ?? upc;
     if (existing) {
       const merged = mergeProductFields(existing, fields);
       await patchProductFields(ctx, existing._id, merged, now);
@@ -189,6 +193,7 @@ export async function upsertCatalogProducts(
         await patchProductFields(ctx, matched._id, merged, now);
         updated += 1;
         productId = matched._id;
+        canonicalUpc = matched.upc;
       }
     }
 
@@ -208,11 +213,12 @@ export async function upsertCatalogProducts(
         .unique();
       if (existingSource) {
         // A corrected UPC on re-crawl must move the source row to the new
-        // product; otherwise it stays linked to a stale product/upc pair.
+        // product; only delete its old product when this is that product's
+        // last source row, so differently-UPC'd sources are not orphaned.
         if (existingSource.upc !== upc) {
           const remaining = await ctx.db
             .query("paymoreCatalogSources")
-            .withIndex("by_upc", (q) => q.eq("upc", existingSource.upc))
+            .withIndex("by_productId", (q) => q.eq("productId", existingSource.productId))
             .collect();
           if (remaining.length === 1) await ctx.db.delete(existingSource.productId);
         }
@@ -235,7 +241,7 @@ export async function upsertCatalogProducts(
       sourcesAdded += 1;
     }
 
-    await reconcileCanonicalUpc(ctx, productId!, upc);
+    await reconcileCanonicalUpc(ctx, productId!, canonicalUpc);
   }
 
   return { inserted, updated, sourcesAdded };

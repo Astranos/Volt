@@ -136,4 +136,64 @@ export const IPHONE_HTML = `<!doctype html>
     </table>
   </body>
 </html>`;
-
+export const SUPER_MARIO_64_HTML = `<!DOCTYPE html>
+<html>
+  <body>
+    <h1 id="product_name" class="chart_title" title="3924">
+        Super Mario 64
+        <a href="/console/nintendo-64">Nintendo 64</a>
+    </h1>
+    <div id="product_details">
+      <div class="cover">
+        <a href='#'>
+          <img src='https://storage.googleapis.com/images.pricecharting.com/ae4kxgfleqkdugjq/240.jpg' />
+        </a>
+      </div>
+      <table class="hoverable-rows sortable"></table>
+    </div>
+    <a name="itemdetails"></a>
+    <div id="full_details">
+      <h2>Super Mario 64 (Nintendo 64) Details</h2>
+      <table id="attribute">
+        <tr>
+          <td class="title">Genre:</td>
+          <td class="details">Platformer</td>
+        </tr>
+        <tr>
+          <td class="title">Release Date:</td>
+          <td class="details">September 29, 1996</td>
+        </tr>
+        <tr>
+          <td class="title">ESRB Rating:</td>
+          <td class="details">E - Everyone</td>
+        </tr>
+        <tr>
+          <td class="title">Publisher:</td>
+          <td class="details">Nintendo</td>
+        </tr>
+        <tr>
+          <td class="title">Developer:</td>
+          <td class="details">Nintendo EAD</td>
+        </tr>
+        <tr>
+          <td class="title">UPC:</td>
+          <td class="details" itemprop="value">
+            045496870010
+          </td>
+        </tr>
+        <tr>
+          <td class="title">ASIN (Amazon):</td>
+          <td class="details">B00000F1GM</td>
+        </tr>
+        <tr>
+          <td class="title">ePID (eBay):</td>
+          <td class="details">1103</td>
+        </tr>
+        <tr>
+          <td class="title">PriceCharting ID:</td>
+          <td class="details">3924</td>
+        </tr>
+      </table>
+    </div>
+  </body>
+</html>`;
