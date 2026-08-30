@@ -67,7 +67,7 @@ const stripSourceListingFacts = makeFunctionReference<
   { cursor?: string },
   { processed: number; stripped: number; isDone: boolean }
 >("paymoreCatalog:stripSourceListingFacts");
-const getByUpc = makeFunctionReference<
+const getProductByUpc = makeFunctionReference<
   "query",
   { upc: string },
   {
@@ -80,8 +80,8 @@ const getByUpc = makeFunctionReference<
     createdAt: number;
     updatedAt: number;
 } | null
->("paymoreCatalog:getByUpc");
-const searchCatalog = makeFunctionReference<
+>("productData:getProductByUpc");
+const searchProducts = makeFunctionReference<
   "query",
   { searchQuery?: string; paginationOpts: { numItems: number; cursor: string | null } },
   {
@@ -100,7 +100,7 @@ const searchCatalog = makeFunctionReference<
     isDone: boolean;
     continueCursor: string | null;
   }
->("paymoreCatalog:searchCatalog");
+>("productData:searchProducts");
 
 const ROCKVILLE_CLAIR =
   "https://rockvillemd.paymore.com/products/new-clair-obscur-expedition-33-lumiere-edition-sony-playstation-5-ps5-2025";
@@ -363,13 +363,13 @@ describe("PayMore catalog Convex storage", () => {
 
   test("requires authentication for public catalog lookup", async () => {
     const t = convexTest(schema, modules);
-    await expect(t.query(getByUpc, { upc: "077000052063" })).rejects.toThrow(/Not authenticated/);
+    await expect(t.query(getProductByUpc, { upc: "077000052063" })).rejects.toThrow(/Not authenticated/);
 
     const authed = t.withIdentity({ subject: "catalog-user", tokenIdentifier: "clerk|catalog-user" });
     await authed.mutation(ingestPages, {
       pages: [{ sourceUrl: ROCKVILLE_MARIO, body: MARIO_HTML }],
     });
-    const product = await authed.query(getByUpc, { upc: "074299009129" });
+    const product = await authed.query(getProductByUpc, { upc: "074299009129" });
     expect(product).toMatchObject({
       upc: "074299009129",
       title: "Super Mario Bros",
@@ -530,7 +530,7 @@ describe("PayMore catalog Convex storage", () => {
   });
 });
 
-describe("PayMore catalog search", () => {
+describe("Product data search", () => {
   async function ingestTwoProducts(t: ReturnType<typeof convexTest>) {
     await t.mutation(ingestPages, {
       pages: [
@@ -543,7 +543,7 @@ describe("PayMore catalog search", () => {
   test("requires authentication", async () => {
     const t = convexTest(schema, modules);
     await expect(
-      t.query(searchCatalog, { paginationOpts: { numItems: 25, cursor: null } }),
+      t.query(searchProducts, { paginationOpts: { numItems: 25, cursor: null } }),
     ).rejects.toThrow(/Not authenticated/);
   });
 
@@ -551,7 +551,7 @@ describe("PayMore catalog search", () => {
     const t = convexTest(schema, modules);
     await ingestTwoProducts(t);
     const authed = t.withIdentity({ subject: "catalog-user", tokenIdentifier: "clerk|catalog-user" });
-    const result = await authed.query(searchCatalog, {
+    const result = await authed.query(searchProducts, {
       searchQuery: "",
       paginationOpts: { numItems: 25, cursor: null },
     });
@@ -563,7 +563,7 @@ describe("PayMore catalog search", () => {
     const t = convexTest(schema, modules);
     await ingestTwoProducts(t);
     const authed = t.withIdentity({ subject: "catalog-user", tokenIdentifier: "clerk|catalog-user" });
-    const result = await authed.query(searchCatalog, {
+    const result = await authed.query(searchProducts, {
       searchQuery: "Mario",
       paginationOpts: { numItems: 25, cursor: null },
     });
@@ -575,7 +575,7 @@ describe("PayMore catalog search", () => {
     const t = convexTest(schema, modules);
     await ingestTwoProducts(t);
     const authed = t.withIdentity({ subject: "catalog-user", tokenIdentifier: "clerk|catalog-user" });
-    const result = await authed.query(searchCatalog, {
+    const result = await authed.query(searchProducts, {
       searchQuery: "077000052063",
       paginationOpts: { numItems: 25, cursor: null },
     });
@@ -591,7 +591,7 @@ describe("PayMore catalog search", () => {
     });
     const authed = t.withIdentity({ subject: "catalog-user", tokenIdentifier: "clerk|catalog-user" });
     for (const query of ["MG494LL/A", "mg494ll/a", "MG494"]) {
-      const result = await authed.query(searchCatalog, {
+      const result = await authed.query(searchProducts, {
         searchQuery: query,
         paginationOpts: { numItems: 25, cursor: null },
       });
@@ -604,7 +604,7 @@ describe("PayMore catalog search", () => {
     const t = convexTest(schema, modules);
     await ingestTwoProducts(t);
     const authed = t.withIdentity({ subject: "catalog-user", tokenIdentifier: "clerk|catalog-user" });
-    const result = await authed.query(searchCatalog, {
+    const result = await authed.query(searchProducts, {
       searchQuery: "iphone15x",
       paginationOpts: { numItems: 25, cursor: null },
     });
@@ -667,7 +667,7 @@ describe("PayMore catalog multi-UPC products", () => {
     const t = convexTest(schema, modules);
     await ingestGalaxianPair(t);
     const authed = t.withIdentity({ subject: "catalog-user", tokenIdentifier: "clerk|catalog-user" });
-    const result = await authed.query(searchCatalog, {
+    const result = await authed.query(searchProducts, {
       searchQuery: GALAXIAN_UPC_B,
       paginationOpts: { numItems: 25, cursor: null },
     });

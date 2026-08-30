@@ -24,6 +24,9 @@ export const CONVEX_URL: string =
     import.meta.env.PROD ? SCANNER_SIGNAL_URL_PROD : SCANNER_SIGNAL_URL_DEV,
   );
 
+/** Public HTTP origin for the Product Data API exposed by this deployment. */
+export const PRODUCT_DATA_API_ORIGIN: string = convexHttpActionsUrl(CONVEX_URL);
+
 /** The websocket client wants `*.convex.cloud`, not the HTTP-actions host. */
 function convexDeploymentUrl(httpActionsUrl: string) {
   const url = new URL(httpActionsUrl);
@@ -32,5 +35,16 @@ function convexDeploymentUrl(httpActionsUrl: string) {
     throw new Error("Convex HTTP Actions URL must use a .convex.site host.");
   }
   url.hostname = `${url.hostname.slice(0, -suffix.length)}.convex.cloud`;
+  return url.origin;
+}
+
+/** HTTP actions use `*.convex.site` while the browser client uses `*.convex.cloud`. */
+function convexHttpActionsUrl(deploymentUrl: string) {
+  const url = new URL(deploymentUrl);
+  const suffix = ".convex.cloud";
+  if (!url.hostname.endsWith(suffix)) {
+    throw new Error("Convex deployment URL must use a .convex.cloud host.");
+  }
+  url.hostname = `${url.hostname.slice(0, -suffix.length)}.convex.site`;
   return url.origin;
 }

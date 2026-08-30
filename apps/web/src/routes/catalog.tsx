@@ -4,6 +4,7 @@ import { RedirectToSignIn, SignedIn, SignedOut, UserButton } from "@clerk/clerk-
 
 import { authConfigured } from "../components/app-providers";
 import { AuthUnavailable } from "../components/auth-page";
+import { AuthenticatedNav } from "../components/authenticated-nav";
 import { CatalogBrowser } from "../components/catalog/catalog-browser";
 import { WorkspaceProvider } from "../components/workspace-provider";
 
@@ -57,7 +58,8 @@ function CatalogHeader({ ready }: { ready: boolean }) {
             <span className="hidden text-sm font-semibold sm:inline">Volt</span>
           </a>
           <span className="hidden h-5 w-px bg-zinc-300 sm:block" />
-          <h1 className="truncate text-sm font-semibold text-zinc-950">Catalog</h1>
+          <h1 className="truncate text-sm font-semibold text-zinc-950">Product data</h1>
+          <AuthenticatedNav current="product-data" />
         </div>
 
         <div className="flex items-center gap-3">

@@ -6,6 +6,11 @@ const crons = cronJobs();
 const cleanupUsageSessions = makeFunctionReference<"mutation", Record<string, never>, { ended: number }>(
   "access:cleanupUsageSessions",
 );
+const cleanupProductApiRateLimitWindows = makeFunctionReference<
+  "mutation",
+  Record<string, never>,
+  { deleted: number }
+>("productApiKeys:cleanupRateLimitWindows");
 
 crons.interval(
   "cleanup expired scanner signaling state",
@@ -32,6 +37,13 @@ crons.interval(
   "sweep expired cursor deliveries",
   { seconds: 60 },
   internal.cloudWorkspace.sweepExpiredCursorDeliveries,
+  {},
+);
+
+crons.interval(
+  "cleanup product API rate limit windows",
+  { minutes: 5 },
+  cleanupProductApiRateLimitWindows,
   {},
 );
 

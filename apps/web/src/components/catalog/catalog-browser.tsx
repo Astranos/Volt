@@ -15,12 +15,12 @@ import {
 
 import { api } from "../../../../../convex/_generated/api";
 
-type CatalogSearchResult =
-  FunctionReturnType<typeof api.paymoreCatalog.searchCatalog>["page"][number];
-type CatalogProduct = NonNullable<
-  FunctionReturnType<typeof api.paymoreCatalog.getByUpc>
+type ProductDataSearchResult =
+  FunctionReturnType<typeof api.productData.searchProducts>["page"][number];
+type ProductDataProduct = NonNullable<
+  FunctionReturnType<typeof api.productData.getProductByUpc>
 >;
-type CatalogListing = CatalogProduct["listings"][number];
+type ProductDataListing = ProductDataProduct["listings"][number];
 
 const dateFormatter = new Intl.DateTimeFormat("en-US", {
   month: "short",
@@ -39,19 +39,19 @@ export function CatalogBrowser() {
     return () => window.clearTimeout(timer);
   }, [input]);
 
-  const catalog = usePaginatedQuery(
-    api.paymoreCatalog.searchCatalog,
-    { searchQuery },
+  const products = usePaginatedQuery(
+    api.productData.searchProducts,
+    { ...(searchQuery ? { searchQuery } : {}) },
     { initialNumItems: 25 },
   );
-  const selectedIsVisible = catalog.results.some(
+  const selectedIsVisible = products.results.some(
     (product) => product.upc === selectedUpc,
   );
   const activeUpc = selectedIsVisible
     ? selectedUpc
-    : (catalog.results[0]?.upc ?? null);
+    : (products.results[0]?.upc ?? null);
   const activeProduct = useQuery(
-    api.paymoreCatalog.getByUpc,
+    api.productData.getProductByUpc,
     activeUpc ? { upc: activeUpc } : "skip",
   );
 
@@ -65,7 +65,7 @@ export function CatalogBrowser() {
   }
 
   const canLoadMore =
-    catalog.status === "CanLoadMore" || catalog.status === "LoadingMore";
+    products.status === "CanLoadMore" || products.status === "LoadingMore";
 
   return (
     <div className="space-y-6">
@@ -75,7 +75,7 @@ export function CatalogBrowser() {
           <div className="pointer-events-none absolute -right-4 -top-5 size-32 rounded-full border border-white/10" />
           <div className="relative max-w-3xl">
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-400">
-              PayMore product catalog
+              Product data
             </p>
             <h2 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
               Find the exact product, then inspect every listing.
@@ -126,9 +126,9 @@ export function CatalogBrowser() {
             {searchQuery ? `Results for \"${searchQuery}\"` : "All products"}
           </h3>
           <p className="mt-0.5 text-xs text-zinc-500">
-            {catalog.status === "LoadingFirstPage"
-              ? "Searching the catalog"
-              : `${catalog.results.length}${canLoadMore ? "+" : ""} ${catalog.results.length === 1 ? "product" : "products"}`}
+            {products.status === "LoadingFirstPage"
+              ? "Searching product data"
+              : `${products.results.length}${canLoadMore ? "+" : ""} ${products.results.length === 1 ? "product" : "products"}`}
           </p>
         </div>
         <span className="hidden items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-600 sm:inline-flex">
@@ -137,9 +137,9 @@ export function CatalogBrowser() {
         </span>
       </div>
 
-      {catalog.status === "LoadingFirstPage" ? (
+      {products.status === "LoadingFirstPage" ? (
         <CatalogLoading />
-      ) : catalog.results.length === 0 ? (
+      ) : products.results.length === 0 ? (
         <CatalogEmpty hasSearch={Boolean(searchQuery)} />
       ) : (
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(22rem,0.6fr)]">
@@ -151,8 +151,8 @@ export function CatalogBrowser() {
             <ProductDetail product={activeProduct} />
           </section>
 
-          <section aria-label="Catalog results" className="space-y-3 lg:order-1">
-            {catalog.results.map((product) => (
+          <section aria-label="Product data results" className="space-y-3 lg:order-1">
+            {products.results.map((product) => (
               <ProductResultCard
                 key={product.upc}
                 product={product}
@@ -164,14 +164,14 @@ export function CatalogBrowser() {
             {canLoadMore ? (
               <button
                 type="button"
-                onClick={() => catalog.loadMore(25)}
-                disabled={catalog.status === "LoadingMore"}
+                onClick={() => products.loadMore(25)}
+                disabled={products.status === "LoadingMore"}
                 className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-zinc-300 bg-white text-sm font-semibold text-zinc-700 shadow-sm hover:border-zinc-400 hover:text-zinc-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:cursor-wait disabled:opacity-60"
               >
-                {catalog.status === "LoadingMore" ? (
+                {products.status === "LoadingMore" ? (
                   <LoaderCircle aria-hidden="true" className="size-4 animate-spin" />
                 ) : null}
-                {catalog.status === "LoadingMore" ? "Loading products" : "Load more products"}
+                {products.status === "LoadingMore" ? "Loading products" : "Load more products"}
               </button>
             ) : null}
           </section>
@@ -186,7 +186,7 @@ function ProductResultCard({
   selected,
   onSelect,
 }: {
-  product: CatalogSearchResult;
+  product: ProductDataSearchResult;
   selected: boolean;
   onSelect: (upc: string) => void;
 }) {
@@ -270,7 +270,7 @@ function ProductResultCard({
 function ProductDetail({
   product,
 }: {
-  product: CatalogProduct | null | undefined;
+  product: ProductDataProduct | null | undefined;
 }) {
   if (product === undefined) return <ProductDetailLoading />;
   if (product === null) {
@@ -281,7 +281,7 @@ function ProductDetail({
           Product details unavailable
         </p>
         <p className="mt-1 text-xs leading-5 text-zinc-500">
-          The catalog changed while this result was open. Select another product.
+          The product data changed while this result was open. Select another product.
         </p>
       </div>
     );
@@ -338,7 +338,7 @@ function ProductDetail({
   );
 }
 
-function ProductSpecs({ product }: { product: CatalogProduct }) {
+function ProductSpecs({ product }: { product: ProductDataProduct }) {
   const specs = [
     ["Brand", product.brand],
     ["Model", product.model],
@@ -409,7 +409,7 @@ function CatalogEmpty({ hasSearch }: { hasSearch: boolean }) {
     <div className="rounded-2xl border border-dashed border-zinc-300 bg-white px-6 py-16 text-center">
       <PackageSearch aria-hidden="true" className="mx-auto size-9 text-zinc-300" />
       <p className="mt-4 text-sm font-semibold text-zinc-950">
-        {hasSearch ? "No matching products" : "The catalog is empty"}
+        {hasSearch ? "No matching products" : "No product data yet"}
       </p>
       <p className="mx-auto mt-1 max-w-sm text-sm leading-6 text-zinc-500">
         {hasSearch
@@ -420,7 +420,9 @@ function CatalogEmpty({ hasSearch }: { hasSearch: boolean }) {
   );
 }
 
-function pickFeaturedListing(listings: CatalogListing[]): CatalogListing | null {
+function pickFeaturedListing(
+  listings: ProductDataListing[],
+): ProductDataListing | null {
   return listings.find((listing) => listing.imageUrl) ?? listings[0] ?? null;
 }
 

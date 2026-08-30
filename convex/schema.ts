@@ -396,6 +396,40 @@ export default defineSchema({
     .index("by_productId", ["productId"])
     .index("by_upc", ["upc"]),
 
+  productApiKeys: defineTable(v.union(
+    v.object({
+      ownerTokenIdentifier: v.string(),
+      name: v.string(),
+      keyHash: v.string(),
+      prefix: v.string(),
+      status: v.literal("active"),
+      createdAt: v.number(),
+      lastUsedAt: v.optional(v.number()),
+    }),
+    v.object({
+      ownerTokenIdentifier: v.string(),
+      name: v.string(),
+      keyHash: v.string(),
+      prefix: v.string(),
+      status: v.literal("revoked"),
+      createdAt: v.number(),
+      lastUsedAt: v.optional(v.number()),
+      revokedAt: v.number(),
+    }),
+  ))
+    .index("by_keyHash", ["keyHash"])
+    .index("by_ownerTokenIdentifier", ["ownerTokenIdentifier"])
+    .index("by_ownerTokenIdentifier_and_status", ["ownerTokenIdentifier", "status"]),
+
+  productApiRateLimits: defineTable({
+    apiKeyId: v.id("productApiKeys"),
+    windowStartedAt: v.number(),
+    requestCount: v.number(),
+    expiresAt: v.number(),
+  })
+    .index("by_apiKeyId_and_windowStartedAt", ["apiKeyId", "windowStartedAt"])
+    .index("by_expiresAt", ["expiresAt"]),
+
   scannerReconnectRequests: defineTable({
     pairingId: v.string(),
     requestId: v.string(),
