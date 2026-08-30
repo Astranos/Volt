@@ -104,7 +104,11 @@ export function CatalogBrowser() {
             />
             <input
               id="catalog-search"
-              type="search"
+              type="text"
+              role="searchbox"
+              enterKeyHint="search"
+              autoComplete="off"
+              spellCheck={false}
               value={input}
               onChange={(event) => setInput(event.target.value)}
               placeholder="Search iPhone 256GB, MG494LL/A, or a UPC"
