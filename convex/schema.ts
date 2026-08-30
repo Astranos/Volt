@@ -372,6 +372,7 @@ export default defineSchema({
   })
     .index("by_upc", ["upc"])
     .index("by_title", ["title"])
+    .index("by_mpn", ["mpn"])
     .searchIndex("search_title", { searchField: "title" }),
 
   paymoreCatalogSources: defineTable({

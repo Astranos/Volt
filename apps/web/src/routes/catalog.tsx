@@ -122,6 +122,7 @@ function CatalogBrowser() {
                 <tr className="border-b border-zinc-200 text-xs uppercase tracking-wide text-zinc-500">
                   <th className="px-4 py-2.5 font-semibold">UPC</th>
                   <th className="px-4 py-2.5 font-semibold">Title</th>
+                  <th className="px-4 py-2.5 font-semibold">MPN</th>
                   <th className="px-4 py-2.5 font-semibold">Platform</th>
                   <th className="px-4 py-2.5 font-semibold">Brand</th>
                   <th className="px-4 py-2.5 font-semibold">Model</th>
@@ -135,6 +136,7 @@ function CatalogBrowser() {
                   <tr key={product.upc} className="border-b border-zinc-100 last:border-b-0">
                     <td className="whitespace-nowrap px-4 py-2.5 font-mono text-xs text-zinc-600">{product.upc}</td>
                     <td className="px-4 py-2.5 font-medium text-zinc-950">{product.title}</td>
+                    <td className="whitespace-nowrap px-4 py-2.5 font-mono text-xs text-zinc-600">{product.mpn ?? "\u2014"}</td>
                     <td className="whitespace-nowrap px-4 py-2.5 text-zinc-600">{product.platform ?? "\u2014"}</td>
                     <td className="whitespace-nowrap px-4 py-2.5 text-zinc-600">{product.brand ?? "\u2014"}</td>
                     <td className="whitespace-nowrap px-4 py-2.5 text-zinc-600">{product.model ?? "\u2014"}</td>

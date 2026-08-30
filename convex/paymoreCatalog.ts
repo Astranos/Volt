@@ -12,6 +12,7 @@ import {
   upsertStatsValidator,
 } from "./catalog/validators";
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
+import type { QueryCtx } from "./_generated/server";
 
 const ingestResultValidator = v.object({
   products: v.array(catalogProductValidator),
@@ -87,6 +88,9 @@ export const searchCatalog = query({
 
     const raw = args.searchQuery?.trim() ?? "";
     const digits = raw.replace(/\D/g, "");
+    // MPNs are single code-like tokens that usually contain a digit
+    // (e.g. MG494LL/A). Word searches go straight to title search.
+    const codeLike = /^[A-Za-z0-9][A-Za-z0-9/.-]{2,}$/.test(raw) && /\d/.test(raw);
 
     if (digits.length >= 6) {
       const upc = normalizeUPCA(digits);
@@ -106,7 +110,14 @@ export const searchCatalog = query({
           };
         }
       }
+    } else if (codeLike) {
+      const matches = await loadCatalogProductsByMpnPrefix(ctx, raw);
+      if (matches.length > 0) {
+        return { page: matches, isDone: true, continueCursor: "" };
+      }
     }
+    // Fall through: a code-like query can still match a title
+    // (e.g. "iPhone 15"), so only the lookups above short-circuit.
 
     const tokens = raw.split(/\s+/).filter((token) => token.length > 0);
     const results =
@@ -129,11 +140,30 @@ export const searchCatalog = query({
   },
 });
 
+async function loadCatalogProductsByMpnPrefix(ctx: QueryCtx, raw: string) {
+  // Case-insensitive prefix match: try the query as typed plus uppercase,
+  // since stored MPNs are usually uppercase (MG494LL/A).
+  const variants = Array.from(new Set([raw, raw.toUpperCase()]));
+  const byUpc = new Map<string, ReturnType<typeof catalogSummary>>();
+  for (const prefix of variants) {
+    const rows = await ctx.db
+      .query("paymoreCatalogProducts")
+      .withIndex("by_mpn", (q) => q.gte("mpn", prefix).lt("mpn", prefix + "\uffff"))
+      .take(25);
+    for (const row of rows) {
+      if (!byUpc.has(row.upc)) byUpc.set(row.upc, catalogSummary(row));
+    }
+    if (byUpc.size >= 25) break;
+  }
+  return Array.from(byUpc.values());
+}
+
 function catalogSummary(product: {
   upc: string;
   title: string;
   platform: string | null;
   edition: string | null;
+  mpn: string | null;
   brand: string | null;
   model: string | null;
   color: string | null;
@@ -146,6 +176,7 @@ function catalogSummary(product: {
     title: product.title,
     platform: product.platform,
     edition: product.edition,
+    mpn: product.mpn,
     brand: product.brand,
     model: product.model,
     color: product.color,

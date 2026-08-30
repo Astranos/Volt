@@ -434,4 +434,31 @@ describe("PayMore catalog search", () => {
     expect(result.page[0]).toMatchObject({ upc: "077000052063", title: "Galaxian" });
     expect(result.isDone).toBe(true);
   });
+
+  test("matches a full or partial MPN case-insensitively", async () => {
+    const t = convexTest(schema, modules);
+    await t.mutation(ingestPages, {
+      pages: [{ sourceUrl: POOLER_IPHONE, body: IPHONE_HTML }],
+    });
+    const authed = t.withIdentity({ subject: "catalog-user", tokenIdentifier: "clerk|catalog-user" });
+    for (const query of ["MG494LL/A", "mg494ll/a", "MG494"]) {
+      const result = await authed.query(searchCatalog, {
+        searchQuery: query,
+        paginationOpts: { numItems: 25, cursor: null },
+      });
+      expect(result.page).toHaveLength(1);
+      expect(result.page[0]).toMatchObject({ mpn: "MG494LL/A", title: "T-Mobile Apple iPhone 17 256GB Lavender MG494LL/A" });
+    }
+  });
+
+  test("falls back to title search when a code-like query matches no MPN", async () => {
+    const t = convexTest(schema, modules);
+    await ingestTwoProducts(t);
+    const authed = t.withIdentity({ subject: "catalog-user", tokenIdentifier: "clerk|catalog-user" });
+    const result = await authed.query(searchCatalog, {
+      searchQuery: "iphone15x",
+      paginationOpts: { numItems: 25, cursor: null },
+    });
+    expect(result.page).toEqual([]);
+  });
 });

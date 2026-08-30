@@ -83,6 +83,7 @@ export const catalogSummaryValidator = v.object({
   title: v.string(),
   platform: nullableString,
   edition: nullableString,
+  mpn: nullableString,
   brand: nullableString,
   model: nullableString,
   color: nullableString,
