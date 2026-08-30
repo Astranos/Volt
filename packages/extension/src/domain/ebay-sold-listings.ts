@@ -27,3 +27,12 @@ export function buildEbaySoldListingsUrl(value: string): string {
   url.searchParams.set("LH_Complete", "1");
   return url.toString();
 }
+
+export function getPrimaryEbayPriceElements(
+  prices: readonly HTMLElement[]
+): HTMLElement[] {
+  const primaryRow = prices[0]?.parentElement;
+  if (!primaryRow) return [];
+
+  return prices.filter((price) => price.parentElement === primaryRow);
+}

@@ -5,6 +5,7 @@ import test from "node:test";
 import {
   buildEbaySoldListingsUrl,
   getEbayListingState,
+  getPrimaryEbayPriceElements,
   isEbaySearchUrl,
 } from "./ebay-sold-listings.ts";
 
@@ -48,6 +49,20 @@ test("sold listings URL preserves the search and enables sold results", () => {
   assert.equal(result.searchParams.get("_sacat"), "0");
   assert.equal(result.searchParams.get("LH_Complete"), "1");
   assert.equal(result.searchParams.get("LH_Sold"), "1");
+});
+
+test("one eBay price group includes every fragment in the primary price row", () => {
+  const primaryRow = {};
+  const secondaryRow = {};
+  const prices = [
+    { parentElement: primaryRow, textContent: "$239.99" },
+    { parentElement: primaryRow, textContent: " to " },
+    { parentElement: primaryRow, textContent: "$299.99" },
+    { parentElement: secondaryRow, textContent: "$189.99" },
+  ];
+
+  assert.deepEqual(getPrimaryEbayPriceElements(prices), prices.slice(0, 3));
+  assert.deepEqual(getPrimaryEbayPriceElements([]), []);
 });
 
 test("only active eBay result cards receive the sold-prices overlay", () => {

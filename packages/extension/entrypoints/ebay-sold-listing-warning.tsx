@@ -8,6 +8,7 @@ import SoldListingWarning from "../src/components/content/SoldListingWarning";
 import {
   buildEbaySoldListingsUrl,
   getEbayListingState,
+  getPrimaryEbayPriceElements,
   isEbaySearchUrl,
 } from "../src/domain/ebay-sold-listings";
 import type { SyncStorageResult } from "../src/types/settings";
@@ -40,6 +41,7 @@ export default defineContentScript({
     const STYLE_ID = "volt-sold-listing-warning-style";
     const CONTAINER_ID = "volt-sold-listing-warning-container";
     const PRICE_WRAPPER_SELECTOR = "[data-volt-active-price-wrapper]";
+    const RESULT_CARD_SELECTOR = ".s-item, .s-card";
     const ACTIVE_PRICE_SELECTOR = [
       ".srp-results .s-item__price",
       ".srp-results .s-card__price",
@@ -70,161 +72,106 @@ export default defineContentScript({
       style.textContent = `
         #${WARNING_ID} {
           position: fixed;
-          top: 96px;
-          right: 18px;
+          top: 84px;
+          right: 16px;
           z-index: 2147483647;
-          width: min(360px, calc(100vw - 32px));
-          min-height: 112px;
-          padding: 16px 48px 16px 16px;
-          border-radius: 16px;
+          width: min(336px, calc(100vw - 32px));
+          padding: 14px;
+          border: 1px solid #d7d9dc;
+          border-radius: 10px;
+          background: #ffffff;
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
-          color: #0f172a;
-          box-shadow: 0 18px 48px rgba(15, 23, 42, 0.18), 0 4px 14px rgba(15, 23, 42, 0.12);
+          color: #111820;
+          box-shadow: 0 6px 18px rgba(17, 24, 32, 0.14);
           box-sizing: border-box;
-          display: grid;
-          grid-template-columns: 36px minmax(0, 1fr);
-          gap: 12px;
-          overflow: hidden;
-          isolation: isolate;
-          backdrop-filter: blur(18px);
-          -webkit-backdrop-filter: blur(18px);
-        }
-
-        #${WARNING_ID}::before {
-          content: "";
-          position: absolute;
-          inset: 0;
-          z-index: -1;
-          background: linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.9));
-        }
-
-        #${WARNING_ID}::after {
-          content: "";
-          position: absolute;
-          left: 0;
-          top: 0;
-          bottom: 0;
-          width: 5px;
         }
 
         #${WARNING_ID}.volt-state-active {
-          border: 1px solid rgba(234, 88, 12, 0.38);
+          border-color: #e3c19e;
         }
 
-        #${WARNING_ID}.volt-state-active::after {
-          background: #ea580c;
+        #${WARNING_ID} .volt-sold-listing-warning__header {
+          display: flex;
+          align-items: center;
+          min-height: 24px;
+          gap: 8px;
         }
 
         #${WARNING_ID} .volt-sold-listing-warning__status-icon {
-          width: 36px;
-          height: 36px;
-          border-radius: 12px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          margin-top: 2px;
-        }
-
-        #${WARNING_ID}.volt-state-active .volt-sold-listing-warning__status-icon {
-          color: #c2410c;
-          background: rgba(249, 115, 22, 0.14);
-        }
-
-        #${WARNING_ID} .volt-sold-listing-warning__body {
-          min-width: 0;
+          flex: none;
+          color: #a5480b;
         }
 
         #${WARNING_ID} .volt-sold-listing-warning__title {
           font-size: 14px;
           margin: 0;
-          font-weight: 800;
-          color: #0f172a;
-          display: flex;
-          align-items: center;
-          gap: 7px;
+          font-weight: 650;
+          color: #111820;
           letter-spacing: 0;
-          line-height: 1.2;
-        }
-        #${WARNING_ID} .volt-sold-listing-warning__title img {
-          width: 18px;
-          height: 18px;
-          border-radius: 4px;
-        }
-        #${WARNING_ID} .volt-sold-listing-warning__content {
-          margin: 6px 0 0;
-          font-size: 13px;
-          color: #475569;
-          line-height: 1.4;
-        }
-        #${WARNING_ID} .volt-sold-listing-warning__primary {
-          margin-top: 12px;
-          height: 34px;
-          border: 0;
-          border-radius: 9px;
-          padding: 0 12px;
-          background: #0f172a;
-          color: #ffffff;
-          font-size: 12px;
-          font-weight: 800;
-          line-height: 1;
-          cursor: pointer;
-          box-shadow: 0 8px 18px rgba(15, 23, 42, 0.18);
-          transition: transform 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
-        }
-        #${WARNING_ID} .volt-sold-listing-warning__primary:hover {
-          background: #1e293b;
-          box-shadow: 0 10px 22px rgba(15, 23, 42, 0.22);
-        }
-        #${WARNING_ID} .volt-sold-listing-warning__primary:active {
-          transform: translateY(1px);
+          line-height: 1.3;
         }
 
-        #${WARNING_ID} .volt-sold-listing-warning__dismiss {
-          position: absolute;
-          top: 10px;
-          right: 10px;
-          background: rgba(15, 23, 42, 0.06);
-          border: none;
-          border-radius: 8px;
-          width: 28px;
-          height: 28px;
+        #${WARNING_ID} .volt-sold-listing-warning__content {
+          margin: 7px 0 12px 25px;
+          font-size: 13px;
+          color: #52606d;
+          line-height: 1.42;
+        }
+
+        #${WARNING_ID} .volt-sold-listing-warning__primary {
+          height: 32px;
+          margin-left: 25px;
+          border: 0;
+          border-radius: 7px;
+          padding: 0 12px;
+          background: #19783d;
+          color: #ffffff;
+          font-size: 12px;
+          font-weight: 650;
+          line-height: 1;
           cursor: pointer;
+          transition: background 0.15s ease;
+        }
+
+        #${WARNING_ID} .volt-sold-listing-warning__primary:hover {
+          background: #125f30;
+        }
+
+        #${WARNING_ID} .volt-sold-listing-warning__primary:active {
+          background: #0f5128;
+        }
+
+        #${WARNING_ID} .volt-sold-listing-warning__actions {
           display: flex;
           align-items: center;
-          justify-content: center;
-          font-size: 18px;
-          line-height: 1;
-          color: #64748b;
-          transition: all 0.2s ease;
-          z-index: 10;
+          gap: 2px;
+          margin-left: auto;
         }
-        #${WARNING_ID} .volt-sold-listing-warning__dismiss:hover {
-          background: rgba(239, 68, 68, 0.1);
-          color: #dc2626;
-        }
-        
+
+        #${WARNING_ID} .volt-sold-listing-warning__dismiss,
         #${WARNING_ID} .volt-sold-listing-warning__settings {
-          position: absolute;
-          top: 44px;
-          right: 10px;
-          background: rgba(15, 23, 42, 0.06);
+          background: transparent;
           border: none;
-          border-radius: 8px;
-          width: 28px;
-          height: 28px;
+          border-radius: 5px;
+          width: 26px;
+          height: 26px;
           cursor: pointer;
           display: flex;
           align-items: center;
           justify-content: center;
-          font-size: 16px;
           line-height: 1;
-          color: #64748b;
-          transition: all 0.2s ease;
-          z-index: 10;
+          color: #667481;
+          transition: background 0.15s ease, color 0.15s ease;
         }
+
+        #${WARNING_ID} .volt-sold-listing-warning__dismiss:hover {
+          background: #f1f2f3;
+          color: #111820;
+        }
+
         #${WARNING_ID} .volt-sold-listing-warning__settings:hover {
-          background: rgba(59, 130, 246, 0.1);
-          color: #2563eb;
+          background: #f1f2f3;
+          color: #111820;
         }
 
         .volt-active-listing-price-wrapper {
@@ -239,7 +186,14 @@ export default defineContentScript({
         }
 
         .volt-active-listing-price {
+          pointer-events: none !important;
+          user-select: none !important;
+        }
+
+        .volt-active-listing-price-values {
           grid-area: price !important;
+          display: inline-flex !important;
+          align-items: baseline !important;
           filter: blur(7px) !important;
           opacity: 0.72 !important;
           pointer-events: none !important;
@@ -302,29 +256,36 @@ export default defineContentScript({
       document
         .querySelectorAll<HTMLElement>(PRICE_WRAPPER_SELECTOR)
         .forEach((wrapper) => {
-          const price = wrapper.querySelector<HTMLElement>(
-            ":scope > .volt-active-listing-price"
+          const prices = wrapper.querySelectorAll<HTMLElement>(
+            ":scope > .volt-active-listing-price-values > .volt-active-listing-price"
           );
-          if (price && wrapper.parentNode) {
+          prices.forEach((price) => {
             price.classList.remove("volt-active-listing-price");
-            wrapper.parentNode.insertBefore(price, wrapper);
-          }
+            wrapper.parentNode?.insertBefore(price, wrapper);
+          });
           wrapper.remove();
         });
     };
 
     const addPriceProtection = () => {
       document
-        .querySelectorAll<HTMLElement>(ACTIVE_PRICE_SELECTOR)
-        .forEach((price) => {
-          if (price.closest(PRICE_WRAPPER_SELECTOR)) return;
+        .querySelectorAll<HTMLElement>(RESULT_CARD_SELECTOR)
+        .forEach((card) => {
+          if (card.querySelector(PRICE_WRAPPER_SELECTOR)) return;
 
-          const parent = price.parentNode;
+          const cardPrices = Array.from(
+            card.querySelectorAll<HTMLElement>(ACTIVE_PRICE_SELECTOR)
+          ).filter((price) => price.closest(RESULT_CARD_SELECTOR) === card);
+          const prices = getPrimaryEbayPriceElements(cardPrices);
+          const parent = prices[0]?.parentNode;
           if (!parent) return;
 
           const wrapper = document.createElement("span");
           wrapper.className = "volt-active-listing-price-wrapper";
           wrapper.dataset.voltActivePriceWrapper = "true";
+
+          const values = document.createElement("span");
+          values.className = "volt-active-listing-price-values";
 
           const switchButton = document.createElement("button");
           switchButton.type = "button";
@@ -342,9 +303,12 @@ export default defineContentScript({
             );
           });
 
-          parent.insertBefore(wrapper, price);
-          wrapper.append(price, switchButton);
-          price.classList.add("volt-active-listing-price");
+          parent.insertBefore(wrapper, prices[0]);
+          prices.forEach((price) => {
+            price.classList.add("volt-active-listing-price");
+            values.appendChild(price);
+          });
+          wrapper.append(values, switchButton);
         });
     };
 

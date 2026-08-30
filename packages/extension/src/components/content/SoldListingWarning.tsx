@@ -19,7 +19,6 @@ interface SoldListingWarningSettingsMessage {
 const SoldListingWarning: React.FC<SoldListingWarningProps> = ({ onDismiss }) => {
   const [listingState, setListingState] = useState<EbayListingState>("active");
   const [isEnabled, setIsEnabled] = useState<boolean>(true);
-  const [iconUrl, setIconUrl] = useState<string>("");
 
   // Update state from URL
   useEffect(() => {
@@ -82,15 +81,6 @@ const SoldListingWarning: React.FC<SoldListingWarningProps> = ({ onDismiss }) =>
     };
   }, []);
 
-  // Get icon URL
-  useEffect(() => {
-    try {
-      setIconUrl(chrome.runtime.getURL("/assets/icons/logo-32.png"));
-    } catch (err) {
-      console.error("[Volt Sold Listing Warning] Failed to get icon URL", err);
-    }
-  }, []);
-
   const handleSettings = useCallback(() => {
     chrome.runtime.sendMessage({
       action: "open-settings",
@@ -109,45 +99,51 @@ const SoldListingWarning: React.FC<SoldListingWarningProps> = ({ onDismiss }) =>
   const message = listingState === "completed"
     ? "Completed results can include unsold items. Use sold listings for real pricing."
     : "Active listings are asking prices, not market comps. Switch to sold listings before pricing.";
+  const title = listingState === "completed"
+    ? "Completed listings"
+    : "Active listings";
 
   return (
     <section
       id="volt-sold-listing-warning"
-      className="volt-sold-listing-warning volt-state-active"
+      className={`volt-sold-listing-warning volt-state-${listingState}`}
       aria-live="polite"
     >
-      <div className="volt-sold-listing-warning__status-icon" aria-hidden="true">
-        <AlertTriangle size={20} />
+      <div className="volt-sold-listing-warning__header">
+        <AlertTriangle
+          className="volt-sold-listing-warning__status-icon"
+          size={17}
+          aria-hidden="true"
+        />
+        <h2 className="volt-sold-listing-warning__title">{title}</h2>
+        <div className="volt-sold-listing-warning__actions">
+          <button
+            className="volt-sold-listing-warning__settings"
+            onClick={handleSettings}
+            type="button"
+            title="Warning settings"
+            aria-label="Open warning settings"
+          >
+            <Settings size={15} />
+          </button>
+          <button
+            className="volt-sold-listing-warning__dismiss"
+            onClick={onDismiss}
+            type="button"
+            title="Dismiss"
+            aria-label="Dismiss warning"
+          >
+            <X size={16} />
+          </button>
+        </div>
       </div>
-      <div className="volt-sold-listing-warning__body">
-        <h2 className="volt-sold-listing-warning__title">
-          {iconUrl && <img src={iconUrl} alt="" />}
-          Active listing warning
-        </h2>
-        <p className="volt-sold-listing-warning__content">{message}</p>
-        <button
-          className="volt-sold-listing-warning__primary"
-          type="button"
-          onClick={handleSwitchToSold}
-        >
-          View sold listings
-        </button>
-      </div>
+      <p className="volt-sold-listing-warning__content">{message}</p>
       <button
-        className="volt-sold-listing-warning__settings"
-        onClick={handleSettings}
+        className="volt-sold-listing-warning__primary"
         type="button"
-        title="Settings"
+        onClick={handleSwitchToSold}
       >
-        <Settings size={14} />
-      </button>
-      <button
-        className="volt-sold-listing-warning__dismiss"
-        onClick={onDismiss}
-        type="button"
-        title="Dismiss"
-      >
-        <X size={16} />
+        View sold listings
       </button>
     </section>
   );
