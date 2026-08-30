@@ -45,6 +45,8 @@ const SKIP_LABELS = new Set([
   "title",
   "product title",
   "platform",
+  // PayMore API rows carry a literal filler label instead of an attribute.
+  "this will go at the end of the title",
 ]);
 
 const LISTING_KEYS = new Set([

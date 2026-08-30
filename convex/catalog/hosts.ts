@@ -1,6 +1,9 @@
 const PAYMORE_HOST = /^(?:[a-z0-9-]+\.)?paymore\.com$/i;
 const PRODUCT_PATH = /^\/products\/[a-z0-9][a-z0-9_-]*(?:\.json)?$/i;
+const SHOP_PRODUCT_PATH = /^\/shop\/product\/[A-Za-z0-9._~-]+$/;
 const COLLECTION_PRODUCTS_JSON = /^\/collections\/[a-z0-9][a-z0-9_-]*\/products\.json$/i;
+const API_HOST = "pm.paymore.tech";
+const API_PATH_PREFIX = "/api/user/shop/";
 
 function parseHttpsPayMoreUrl(value: string): URL | null {
   try {
@@ -14,7 +17,22 @@ function parseHttpsPayMoreUrl(value: string): URL | null {
 
 export function isAuthorizedPayMoreProductUrl(value: string): boolean {
   const url = parseHttpsPayMoreUrl(value);
-  return url ? PRODUCT_PATH.test(url.pathname) : false;
+  if (!url) return false;
+  return PRODUCT_PATH.test(url.pathname) || SHOP_PRODUCT_PATH.test(url.pathname);
+}
+
+// Listing API responses are only trusted from the exact PayMore API host.
+export function isAuthorizedPayMoreApiUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === "https:" &&
+      url.hostname === API_HOST &&
+      url.pathname.startsWith(API_PATH_PREFIX)
+    );
+  } catch {
+    return false;
+  }
 }
 
 export function isAuthorizedPayMoreCatalogUrl(value: string): boolean {
