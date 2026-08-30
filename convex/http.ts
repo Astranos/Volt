@@ -12,8 +12,10 @@ import {
   AI_SCANNER_MAX_IMAGE_BYTES,
   AIScannerError,
   requestOpenRouterAnalysis,
+  type AIScannerCatalogMatch,
   type AIScannerMode,
   type AIScannerTraceEvent,
+  type GameIdentity,
 } from "./aiScanner";
 import {
   type AIScannerQuotaError,
@@ -705,6 +707,11 @@ const refundAIScannerRequestRef = makeFunctionReference<
   { deviceId: string; deviceSecret: string; requestId: string; errorCode: "upstream-failed" | "upstream-timeout" | "invalid-input" | "upstream-rate-limited" },
   { status: "refunded" | "succeeded"; quota: AIScannerReservation["quota"]; value?: string | null; format?: string }
 >("aiScannerQuota:refundAIScannerRequest");
+const findProductForAIScannerRef = makeFunctionReference<
+  "query",
+  GameIdentity,
+  AIScannerCatalogMatch | null
+>("productData:findProductForAIScanner");
 
 function logAIScannerEvent(
   requestId: string,
@@ -755,6 +762,7 @@ const mobileAIScannerHandler = httpAction(async (ctx, request) => {
   try {
     logAIScannerEvent(requestId, mode, { stage: "request", outcome: "started", imageBytes: imageBytes.byteLength });
     const analysis = await requestOpenRouterAnalysis(mode, imageBytes, {
+      catalogLookup: async (identity) => await ctx.runQuery(findProductForAIScannerRef, identity),
       onTrace: (event) => logAIScannerEvent(requestId, mode, event),
     });
     const completed = await ctx.runMutation(completeAIScannerRequestRef, { deviceId, deviceSecret, requestId, mode, value: analysis.value, format: analysis.format });

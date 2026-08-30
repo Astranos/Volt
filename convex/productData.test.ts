@@ -37,6 +37,11 @@ const getProductByUpc = makeFunctionReference<
   { upc: string },
   { upc: string; title: string } | null
 >("productData:getProductByUpc");
+const findProductForAIScanner = makeFunctionReference<
+  "query",
+  { name: string; platform: string | null; edition: string | null; region: string | null },
+  { upc: string; title: string; platform: string | null; edition: string | null } | null
+>("productData:findProductForAIScanner");
 const createKey = makeFunctionReference<
   "mutation",
   { name: string },
@@ -95,6 +100,25 @@ describe("product data reads", () => {
 
     const product = await user.query(getProductByUpc, { upc: "012345678905" });
     expect(product).toMatchObject({ upc: "012345678905", title: "Widget Phone 128GB" });
+  });
+
+  test("resolves a visually identified product for the mobile AI scanner", async () => {
+    const t = convexTest(schema, modules);
+    await seedProduct(t);
+
+    const product = await t.query(findProductForAIScanner, {
+      name: "Widget Phone 128GB",
+      platform: null,
+      edition: null,
+      region: null,
+    });
+
+    expect(product).toEqual({
+      upc: "012345678905",
+      title: "Widget Phone 128GB",
+      platform: null,
+      edition: null,
+    });
   });
 
   test("serves the external search route with Bearer auth and rate headers", async () => {

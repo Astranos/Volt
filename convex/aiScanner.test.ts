@@ -3,6 +3,7 @@ import { describe, expect, test, vi } from "vitest";
 import {
   buildOpenRouterCatalogRequest,
   buildOpenRouterRequest,
+  catalogIdentityMatchScore,
   isValidUPCA,
   normalizeItemName,
   normalizeUPCA,
@@ -23,6 +24,25 @@ describe("AI scanner parsing", () => {
     expect(normalizeItemName("  Super   Mario\n64  ")).toBe("Super Mario 64");
     expect(normalizeItemName("unknown")).toBeNull();
     expect(normalizeItemName("x".repeat(201))).toBeNull();
+  });
+
+  test("matches catalog identities by title and rejects a conflicting platform", () => {
+    const identity = {
+      name: "Grand Theft Auto: San Andreas",
+      platform: "PS2",
+      edition: null,
+      region: "US",
+    };
+    expect(catalogIdentityMatchScore(identity, {
+      title: "Grand Theft Auto San Andreas",
+      platform: "Sony PlayStation 2",
+      edition: null,
+    })).toBeGreaterThan(0);
+    expect(catalogIdentityMatchScore(identity, {
+      title: "Grand Theft Auto San Andreas",
+      platform: "Xbox One",
+      edition: null,
+    })).toBeNull();
   });
 
   test("parses strict mode-specific JSON and returns null for invalid values", () => {
@@ -112,6 +132,35 @@ describe("AI scanner parsing", () => {
       edition: null,
       region: "US",
     })).not.toContain("image_url");
+  });
+
+  test("returns a production catalog UPC without running the web-search fallback", async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({
+        choices: [{ message: { content: '{"name":"Galaxian","platform":"Atari 5200","edition":null,"region":"US"}' } }],
+      }), { status: 200 }),
+    );
+    const trace: unknown[] = [];
+    const result = await requestOpenRouterAnalysis("upc", Uint8Array.from([1, 2, 3]).buffer, {
+      apiKey: "server-only-key",
+      fetchImpl,
+      catalogLookup: async () => ({
+        upc: "077000052063",
+        title: "Galaxian",
+        platform: "Atari 5200",
+        edition: null,
+      }),
+      onTrace: (event) => trace.push(event),
+    });
+
+    expect(result).toMatchObject({ value: "077000052063", identifiedName: "Galaxian" });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(trace).toContainEqual(expect.objectContaining({
+      stage: "catalog",
+      outcome: "candidate",
+      source: "product-catalog",
+      upc: "077000052063",
+    }));
   });
 
   test("stops after image identification when no game can be identified", async () => {

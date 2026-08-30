@@ -1458,30 +1458,7 @@ private struct ClipCaptureSessionView: View {
     @State private var cameraStateRevision = 0
     @State private var isConnectionSheetPresented = false
     private let topToolbarTopPadding: CGFloat = 12
-    private let topToolbarHeight: CGFloat = 42
     private let photoPreviewToolbarGap: CGFloat = 0
-
-    private var capturedSessionPhotos: [ClipScannerStore.ClipPhoto] {
-        store.photos
-            .filter { photo in
-                photo.source == .capture
-                    && (captureBatchId == nil || photo.batchId == captureBatchId)
-            }
-            .sorted { $0.capturedAt > $1.capturedAt }
-    }
-
-    private var capturedThumbnails: [SessionPhotoThumbnail] {
-        capturedSessionPhotos
-            .prefix(ClipScannerStore.sessionPhotoStripLimit)
-            .map { SessionPhotoThumbnail(id: $0.id, image: $0.image) }
-    }
-
-    private var capturedSessionItemCount: Int {
-        guard let captureBatchId else { return 0 }
-        let captureCount = store.captures.count { $0.batchId == captureBatchId }
-        let photoCount = store.photos.count { $0.batchId == captureBatchId }
-        return captureCount + photoCount
-    }
 
     var body: some View {
         let captureSurface = ZStack {
@@ -1523,28 +1500,14 @@ private struct ClipCaptureSessionView: View {
             }
 
             VStack {
-                HStack {
-                    Label(activeModeTitle, systemImage: activeMode.symbolName)
-                        .font(.headline)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 14)
-                        .frame(minHeight: topToolbarHeight)
-                        .background(.black.opacity(0.48), in: Capsule())
-
-                    Spacer()
-
-                    Button {
-                        onClearOcrReview()
-                        dismiss()
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 15, weight: .bold))
-                            .foregroundStyle(.white)
-                            .frame(width: topToolbarHeight, height: topToolbarHeight)
-                            .background(.black.opacity(0.48), in: Circle())
+                CameraSessionTopStatus(
+                    activeMode: activeMode,
+                    liveTextCandidates: liveTextCandidates,
+                    barcodeHint: detectedBarcodeBounds == nil ? "Point camera at barcode" : "Barcode found",
+                    onSendLiveText: { candidate in
+                        onSendRecognizedText(candidate.value)
                     }
-                    .accessibilityLabel("End session")
-                }
+                )
                 .padding(.horizontal, 18)
                 .padding(.top, topToolbarTopPadding)
 
@@ -1660,57 +1623,45 @@ private struct ClipCaptureSessionView: View {
                     }
                 )
             } else {
-                VStack(spacing: 6) {
-                    if activeMode == .ocr {
-                        LiveIdentifierStrip(
-                            candidates: liveTextCandidates,
-                            onSend: { candidate in
-                                onSendRecognizedText(candidate.value)
-                            }
-                        )
-                    }
-
-                    CameraSessionControls(
-                        activeMode: $activeMode,
-                        torchEnabled: cameraService.torchEnabled,
-                        zoomLabel: cameraService.zoomDisplayLabel,
-                        gridVisible: gridVisible,
-                        hasLiveTextCandidates: !liveTextCandidates.isEmpty,
-                        isRecognizingText: isRecognizingText || isCapturingPhoto || store.isDictationBusy,
-                        isCaptureEnabled: isConnected && !isCapturingPhoto && !isRecognizingText && !store.isDictationBusy,
-                        isModeSelectionEnabled: isConnected && !store.isDictating && !store.isDictationBusy,
-                        showsModePicker: true,
-                        barcodeHint: detectedBarcodeBounds == nil ? "Point camera at barcode" : "Barcode found",
-                        hasLatestCapture: false,
-                        capturedThumbnails: activeMode == .photo ? capturedThumbnails : [],
-                        capturedCount: activeMode == .photo ? capturedSessionPhotos.count : 0,
-                        sessionItemCount: capturedSessionItemCount,
-                        controlRotation: .degrees(cameraService.captureOrientation.controlRotationDegrees),
-                        onToggleTorch: {
-                            cameraService.setTorchEnabled(!cameraService.torchEnabled)
-                        },
-                        onZoomOut: {
-                            cameraService.adjustZoom(by: -0.25)
-                        },
-                        onZoomIn: {
-                            cameraService.adjustZoom(by: 0.25)
-                        },
-                        onToggleGrid: {
-                            gridVisible.toggle()
-                        },
-                        onCapture: {
-                            if activeMode == .dictation {
-                                Task { await store.toggleDictation() }
-                            } else {
-                                captureCurrentFrame()
-                            }
-                        },
-                        onSendLatest: nil,
-                        onFinish: {
-                            dismiss()
+                CameraSessionControls(
+                    activeMode: $activeMode,
+                    torchEnabled: cameraService.torchEnabled,
+                    zoomLabel: cameraService.zoomDisplayLabel,
+                    gridVisible: gridVisible,
+                    isRecognizingText: isRecognizingText || isCapturingPhoto || store.isDictationBusy,
+                    isCaptureEnabled: isConnected && !isCapturingPhoto && !isRecognizingText && !store.isDictationBusy,
+                    isModeSelectionEnabled: isConnected && !store.isDictating && !store.isDictationBusy,
+                    showsModePicker: true,
+                    controlRotation: .degrees(cameraService.captureOrientation.controlRotationDegrees),
+                    connectionSystemImage: isConnected ? "character.cursor.ibeam" : "desktopcomputer",
+                    connectionLabel: isConnected ? "Write" : "Connect",
+                    connectionAccessibilityLabel: "Open connection options",
+                    onToggleTorch: {
+                        cameraService.setTorchEnabled(!cameraService.torchEnabled)
+                    },
+                    onZoomOut: {
+                        cameraService.adjustZoom(by: -0.25)
+                    },
+                    onZoomIn: {
+                        cameraService.adjustZoom(by: 0.25)
+                    },
+                    onToggleGrid: {
+                        gridVisible.toggle()
+                    },
+                    onCapture: {
+                        if activeMode == .dictation {
+                            Task { await store.toggleDictation() }
+                        } else {
+                            captureCurrentFrame()
                         }
-                    )
-                }
+                    },
+                    onConnection: {
+                        isConnectionSheetPresented = true
+                    },
+                    onFinish: {
+                        dismiss()
+                    }
+                )
             }
         }
         return captureSurface
@@ -1929,19 +1880,6 @@ private struct ClipCaptureSessionView: View {
             "Photo captured; live barcode scans send automatically"
         case .photo, .dictation:
             nil
-        }
-    }
-
-    private var activeModeTitle: String {
-        switch activeMode {
-        case .ocr:
-            "OCR"
-        case .barcode:
-            "Barcode"
-        case .photo:
-            "Photo"
-        case .dictation:
-            "Capture"
         }
     }
 

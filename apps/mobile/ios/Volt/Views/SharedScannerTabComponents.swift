@@ -258,6 +258,7 @@ struct ScannerBottomActionAccessory: View {
                         in: RoundedRectangle(cornerRadius: ScannerTabLayout.primaryActionCornerRadius, style: .continuous)
                     )
                     .opacity(isEnabled ? 1 : ScannerTabLayout.disabledPrimaryActionOpacity)
+                    .shadow(color: .black.opacity(0.16), radius: 10, y: 5)
             }
             .buttonStyle(.plain)
             .disabled(!isEnabled)
@@ -267,6 +268,7 @@ struct ScannerBottomActionAccessory: View {
         .padding(.top, 12)
         .padding(.bottom, 10)
         .background(.bar)
+        .shadow(color: .black.opacity(0.12), radius: 10, y: -3)
     }
 
     private var actionTitle: String {
@@ -314,6 +316,7 @@ struct ScannerPhotoPickerAccessory: View {
                         in: RoundedRectangle(cornerRadius: ScannerTabLayout.primaryActionCornerRadius, style: .continuous)
                     )
                     .opacity(isPickerEnabled ? 1 : ScannerTabLayout.disabledPrimaryActionOpacity)
+                    .shadow(color: .black.opacity(0.16), radius: 10, y: 5)
             }
             .buttonStyle(.plain)
             .disabled(!isPickerEnabled)
@@ -323,6 +326,7 @@ struct ScannerPhotoPickerAccessory: View {
         .padding(.top, 12)
         .padding(.bottom, 10)
         .background(.bar)
+        .shadow(color: .black.opacity(0.12), radius: 10, y: -3)
     }
 
     private var actionTitle: String {

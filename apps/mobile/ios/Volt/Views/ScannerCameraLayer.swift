@@ -5,8 +5,8 @@ struct ScannerCameraLayer: View {
     @State private var focusPoint: CGPoint?
     var gridVisible = false
     var guideVisible = true
-    /// Room for the cloud-target button that floats over the top of the session.
-    private let photoTopClearance: CGFloat = 62
+    /// Room for the fixed status surface that floats over the top of the session.
+    private let photoTopStatusClearance: CGFloat = 86
 
     var body: some View {
         Group {
@@ -193,11 +193,11 @@ struct ScannerCameraLayer: View {
 
     /// The photo layer is laid out inside the safe area, so `proxy` already excludes the status bar
     /// and the control deck that `safeAreaInset` reserves at the bottom. Only the floating top
-    /// button still needs manual clearance.
+    /// status surface still needs manual clearance.
     private func photoPreviewLayout(in proxy: GeometryProxy) -> (side: CGFloat, topOffset: CGFloat) {
-        let availableHeight = max(0, proxy.size.height - photoTopClearance)
+        let availableHeight = max(0, proxy.size.height - photoTopStatusClearance)
         let side = max(0, min(proxy.size.width, availableHeight))
-        return (side, photoTopClearance + max(0, (availableHeight - side) / 2))
+        return (side, photoTopStatusClearance + max(0, (availableHeight - side) / 2))
     }
 
     private func photoPreview(in proxy: GeometryProxy) -> some View {

@@ -15,6 +15,13 @@ export type GameIdentity = {
   region: string | null;
 };
 
+export type AIScannerCatalogMatch = {
+  upc: string;
+  title: string;
+  platform: string | null;
+  edition: string | null;
+};
+
 export type PriceChartingVerificationOutcome =
   | "verified"
   | "invalid-candidate"
@@ -28,8 +35,8 @@ export type PriceChartingVerificationOutcome =
 export type AIScannerTraceEvent =
   | { stage: "identity"; outcome: "resolved"; name: string; platform: string | null; edition: string | null; region: string | null; elapsedMs: number }
   | { stage: "identity"; outcome: "unresolved"; elapsedMs: number }
-  | { stage: "catalog"; outcome: "candidate"; upc: string; elapsedMs: number }
-  | { stage: "catalog"; outcome: "no-candidate"; elapsedMs: number }
+  | { stage: "catalog"; outcome: "candidate"; source: "product-catalog" | "web-search"; upc: string; elapsedMs: number }
+  | { stage: "catalog"; outcome: "no-candidate"; source: "product-catalog" | "web-search"; elapsedMs: number }
   | { stage: "verification"; outcome: PriceChartingVerificationOutcome; upc: string | null; destination: string | null; elapsedMs: number };
 
 export class AIScannerError extends Error {
@@ -47,7 +54,7 @@ export const AI_SCANNER_MAX_IMAGE_BYTES = 1_500_000;
 export const AI_SCANNER_TIMEOUT_MS = 45_000;
 
 const UPC_IDENTITY_PROMPT =
-  'Identify the exact retail video game release shown by this game case or disc. The barcode does not need to be visible. Read the title, platform, edition, and region from the artwork when possible. Return only JSON in the form {"name":"exact title or null","platform":"platform or null","edition":"edition or null","region":"region or null"}. Do not search for or guess a barcode. Return a null name when the game cannot be identified confidently.';
+  'Identify the exact retail product shown by this item, game case, or disc. The barcode does not need to be visible. Read the full marketed product name. For a video game, also read the platform, edition, and region from the artwork when possible. Return only JSON in the form {"name":"exact product title or null","platform":"platform or null","edition":"edition or null","region":"region or null"}. Do not search for or guess a barcode. Return a null name when the product cannot be identified confidently.';
 const NAME_PROMPT =
   'Identify the exact product title or name shown by this item, game disc, or game case. Return only JSON in the form {"name":"title or null"}. Do not describe condition or add explanation. Return null when the item cannot be identified confidently.';
 
@@ -304,6 +311,57 @@ function catalogTitleTokens(value: string): string[] {
     .filter((token) => token && !TITLE_NOISE_TOKENS.has(token));
 }
 
+export function catalogIdentityMatchScore(
+  identity: GameIdentity,
+  candidate: Pick<AIScannerCatalogMatch, "title" | "platform" | "edition">,
+): number | null {
+  const expectedTitle = catalogTitleTokens(identity.name);
+  const candidateTitle = catalogTitleTokens(candidate.title);
+  if (expectedTitle.length === 0 || candidateTitle.length === 0) return null;
+
+  if (identity.platform) {
+    if (!candidate.platform) return null;
+    const expectedPlatform = canonicalPlatform(identity.platform);
+    const candidatePlatform = canonicalPlatform(candidate.platform);
+    if (expectedPlatform && candidatePlatform) {
+      if (expectedPlatform !== candidatePlatform) return null;
+    } else {
+      const expectedPlatformText = compactCatalogText(identity.platform);
+      const candidatePlatformText = compactCatalogText(candidate.platform);
+      if (
+        expectedPlatformText !== candidatePlatformText
+        && !expectedPlatformText.includes(candidatePlatformText)
+        && !candidatePlatformText.includes(expectedPlatformText)
+      ) return null;
+    }
+  }
+
+  if (identity.edition && candidate.edition) {
+    const expectedEdition = compactCatalogText(identity.edition);
+    const candidateEdition = compactCatalogText(candidate.edition);
+    if (
+      expectedEdition
+      && candidateEdition
+      && !expectedEdition.includes(candidateEdition)
+      && !candidateEdition.includes(expectedEdition)
+    ) return null;
+  }
+
+  const expectedSet = new Set(expectedTitle);
+  const candidateSet = new Set(candidateTitle);
+  const matchingTokens = expectedTitle.filter((token) => candidateSet.has(token)).length;
+  const expectedCoverage = matchingTokens / expectedSet.size;
+  const candidateCoverage = matchingTokens / candidateSet.size;
+  const exactTitle = compactCatalogText(identity.name) === compactCatalogText(candidate.title);
+  if (!exactTitle && (expectedCoverage < 0.8 || candidateCoverage < 0.65)) return null;
+
+  return (exactTitle ? 100 : 0)
+    + expectedCoverage * 20
+    + candidateCoverage * 10
+    + (identity.platform && candidate.platform ? 8 : 0)
+    + (identity.edition && candidate.edition ? 4 : 0);
+}
+
 function titleMatchesProductSlug(name: string, productSlug: string): boolean {
   const expected = catalogTitleTokens(name);
   const actual = new Set(catalogTitleTokens(productSlug));
@@ -386,7 +444,13 @@ function contentFromResponse(value: unknown): string | null {
 export async function requestOpenRouterAnalysis(
   mode: AIScannerMode,
   imageBytes: ArrayBuffer,
-  options: { apiKey?: string; fetchImpl?: typeof fetch; timeoutMs?: number; onTrace?: (event: AIScannerTraceEvent) => void } = {},
+  options: {
+    apiKey?: string;
+    fetchImpl?: typeof fetch;
+    timeoutMs?: number;
+    catalogLookup?: (identity: GameIdentity) => Promise<AIScannerCatalogMatch | null>;
+    onTrace?: (event: AIScannerTraceEvent) => void;
+  } = {},
 ): Promise<AIAnalysisResult> {
   if (imageBytes.byteLength === 0 || imageBytes.byteLength > AI_SCANNER_MAX_IMAGE_BYTES) {
     throw new AIScannerError(502, "upstream-failed");
@@ -409,6 +473,45 @@ export async function requestOpenRouterAnalysis(
     }
     options.onTrace?.({ stage: "identity", outcome: "resolved", ...identity, elapsedMs: Date.now() - identityStartedAt });
 
+    if (options.catalogLookup) {
+      const productCatalogStartedAt = Date.now();
+      try {
+        const match = await options.catalogLookup(identity);
+        const catalogUPC = match && catalogIdentityMatchScore(identity, match) !== null
+          ? normalizeUPCA(match.upc)
+          : null;
+        if (match && catalogUPC) {
+          options.onTrace?.({
+            stage: "catalog",
+            outcome: "candidate",
+            source: "product-catalog",
+            upc: catalogUPC,
+            elapsedMs: Date.now() - productCatalogStartedAt,
+          });
+          return {
+            mode,
+            value: catalogUPC,
+            format: "upc_a",
+            identifiedName: match.title,
+            platform: match.platform,
+          };
+        }
+        options.onTrace?.({
+          stage: "catalog",
+          outcome: "no-candidate",
+          source: "product-catalog",
+          elapsedMs: Date.now() - productCatalogStartedAt,
+        });
+      } catch {
+        options.onTrace?.({
+          stage: "catalog",
+          outcome: "no-candidate",
+          source: "product-catalog",
+          elapsedMs: Date.now() - productCatalogStartedAt,
+        });
+      }
+    }
+
     const catalogStartedAt = Date.now();
     const catalogContent = await requestOpenRouterContent(
       buildOpenRouterCatalogRequest(identity), apiKey, fetchImpl, controller.signal,
@@ -416,10 +519,10 @@ export async function requestOpenRouterAnalysis(
     const catalogPayload = parseJSONResponse(catalogContent);
     const candidate = typeof catalogPayload.upc === "string" ? normalizeUPCA(catalogPayload.upc) : null;
     if (!candidate) {
-      options.onTrace?.({ stage: "catalog", outcome: "no-candidate", elapsedMs: Date.now() - catalogStartedAt });
+      options.onTrace?.({ stage: "catalog", outcome: "no-candidate", source: "web-search", elapsedMs: Date.now() - catalogStartedAt });
       return { mode, value: null, format: "upc_a", identifiedName: identity.name, platform: identity.platform };
     }
-    options.onTrace?.({ stage: "catalog", outcome: "candidate", upc: candidate, elapsedMs: Date.now() - catalogStartedAt });
+    options.onTrace?.({ stage: "catalog", outcome: "candidate", source: "web-search", upc: candidate, elapsedMs: Date.now() - catalogStartedAt });
 
     const verificationStartedAt = Date.now();
     const verification = await verifyPriceChartingUPCDetails(

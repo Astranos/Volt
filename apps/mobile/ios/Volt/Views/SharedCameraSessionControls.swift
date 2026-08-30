@@ -1,120 +1,149 @@
 import SwiftUI
 
-/// One frame in the bottom-left capture strip shown while a photo session is running.
-struct SessionPhotoThumbnail: Identifiable, Equatable {
-    let id: UUID
-    let image: UIImage
+struct CameraSessionTopStatus: View {
+    let activeMode: CaptureMode
+    var liveTextCandidates: [LiveTextCandidate] = []
+    var barcodeHint = "Point camera at barcode"
+    var isProductScannerSelected = false
+    var productScanMode: ProductScanMode = .upc
+    var isProductScanBusy = false
+    var productScanQuotaText: String?
+    var productScanOutput: ProductScanOutput?
+    var productScanError: String?
+    let onSendLiveText: (LiveTextCandidate) -> Void
 
-    init(id: UUID = UUID(), image: UIImage) {
-        self.id = id
-        self.image = image
+    var body: some View {
+        Group {
+            if isProductScannerSelected {
+                productStatus
+            } else if activeMode == .ocr, !liveTextCandidates.isEmpty {
+                LiveIdentifierStrip(
+                    candidates: liveTextCandidates,
+                    onSend: onSendLiveText
+                )
+            } else {
+                Label(captureHint, systemImage: activeMode.symbolName)
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.white)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
+            }
+        }
+        .frame(maxWidth: .infinity, minHeight: 58)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(.black.opacity(0.48), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(.white.opacity(0.14), lineWidth: 1)
+        }
+        .shadow(color: .black.opacity(0.28), radius: 9, y: 4)
+        .accessibilityElement(children: .contain)
+    }
+
+    @ViewBuilder
+    private var productStatus: some View {
+        if let productScanError {
+            Label(productScanError, systemImage: "exclamationmark.triangle.fill")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.orange)
+                .lineLimit(2)
+                .multilineTextAlignment(.center)
+        } else if let productScanOutput {
+            VStack(spacing: 3) {
+                Label(
+                    productScanOutput.mode == .upc ? "UPC found" : "Product found",
+                    systemImage: productScanOutput.mode.systemImage
+                )
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.76))
+
+                Text(productScanOutput.value)
+                    .font(productScanOutput.mode == .upc ? .headline.monospaced() : .headline)
+                    .foregroundStyle(.white)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.82)
+            }
+        } else {
+            VStack(spacing: 4) {
+                ProductScanProgressText(mode: productScanMode, isBusy: isProductScanBusy)
+                if let productScanQuotaText {
+                    Text(productScanQuotaText)
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(.white.opacity(0.72))
+                        .lineLimit(1)
+                }
+            }
+        }
+    }
+
+    private var captureHint: String {
+        switch activeMode {
+        case .ocr:
+            "Frame device identifiers"
+        case .barcode:
+            barcodeHint
+        case .photo:
+            "Frame photo"
+        case .dictation:
+            "Tap to start or stop audio"
+        }
     }
 }
 
 struct CameraSessionControls: View {
     private let sideToolSlotWidth: CGFloat = 64
     private let toolRowMaxWidth: CGFloat = 380
+    private let modeButtonWidth: CGFloat = 64
 
     @Binding var activeMode: CaptureMode
     let torchEnabled: Bool
     let zoomLabel: String
     let gridVisible: Bool
-    let hasLiveTextCandidates: Bool
     let isRecognizingText: Bool
-    var isProductScanBusy = false
     var isCaptureEnabled = true
     var isModeSelectionEnabled = true
     var showsModePicker = true
-    var barcodeHint = "Point camera at barcode"
-    var hasLatestCapture = false
-    var capturedThumbnails: [SessionPhotoThumbnail] = []
-    var capturedCount = 0
-    var sessionItemCount = 0
     var controlRotation: Angle = .zero
     var showsProductScanner = false
     var isProductScannerSelected = false
     var productScannerAvailable = true
     var productScanMode: ProductScanMode = .upc
-    var productScanQuotaText: String?
+    var connectionSystemImage = "character.cursor.ibeam"
+    var connectionLabel = "Write"
+    var connectionAccessibilityLabel = "Choose write destination"
     let onToggleTorch: () -> Void
     let onZoomOut: () -> Void
     let onZoomIn: () -> Void
     let onToggleGrid: () -> Void
     let onCapture: () -> Void
-    var onSendLatest: (() -> Void)?
+    var onConnection: (() -> Void)?
     var onSelectProductScanner: (() -> Void)?
     var onToggleProductScanMode: (() -> Void)?
     var onDeactivateProductScanner: (() -> Void)?
     let onFinish: () -> Void
 
     var body: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 8) {
             cameraToolsRow
                 .opacity(isCaptureEnabled ? 1 : 0.45)
 
-            if isProductScannerSelected {
-                ProductScanProgressText(mode: productScanMode, isBusy: isProductScanBusy)
-            } else {
-                Text(captureHint)
-                    .font(.subheadline.bold())
-                    .foregroundStyle(isCaptureEnabled ? .white : .white.opacity(0.55))
-                    .frame(maxWidth: .infinity)
-            }
-
-            if isProductScannerSelected, let productScanQuotaText {
-                Text(productScanQuotaText)
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.white.opacity(0.76))
-                    .frame(maxWidth: .infinity)
-                    .accessibilityLabel(productScanQuotaText)
+            if showsModePicker {
+                modePicker
             }
 
             ZStack {
                 HStack {
-                    leadingSlot
+                    connectionSlot
 
                     Spacer()
 
-                    trailingSlot
+                    finishSlot
                 }
 
                 shutterButton
             }
             .frame(height: 96)
-
-            if showsModePicker {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 22) {
-                        modeButton("Text", mode: .ocr)
-                        modeButton("Barcode", mode: .barcode)
-                        modeButton("Photo", mode: .photo)
-                        modeButton("Audio", mode: .dictation)
-                        if showsProductScanner, let onSelectProductScanner {
-                            productModeButton(action: onSelectProductScanner)
-                        }
-                    }
-                    .padding(.horizontal, 18)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
-                .background(.black.opacity(0.54), in: Capsule())
-                .overlay {
-                    Capsule().stroke(.white.opacity(0.18), lineWidth: 1)
-                }
-                .disabled(!isModeSelectionEnabled)
-                .opacity(isModeSelectionEnabled ? 1 : 0.55)
-            }
-
-            Button("End session", systemImage: "xmark", action: onFinish)
-                .font(.subheadline.bold())
-                .foregroundStyle(.white)
-                .padding(.horizontal, 14)
-                .frame(minHeight: 40)
-                .background(.black.opacity(0.58), in: Capsule())
-                .overlay {
-                    Capsule().stroke(.white.opacity(0.14), lineWidth: 1)
-                }
-                .padding(.top, 14)
         }
         .padding(.horizontal, 18)
         .padding(.top, 12)
@@ -127,6 +156,40 @@ struct CameraSessionControls: View {
             )
             .ignoresSafeArea(edges: .bottom)
         }
+    }
+
+    private var selectedModeID: String {
+        isProductScannerSelected ? "ai" : activeMode.rawValue
+    }
+
+    private var modePicker: some View {
+        GeometryReader { geometry in
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 18) {
+                        modeButton("Text", mode: .ocr)
+                        modeButton("Barcode", mode: .barcode)
+                        modeButton("Photo", mode: .photo)
+                        modeButton("Audio", mode: .dictation)
+                        if showsProductScanner, let onSelectProductScanner {
+                            productModeButton(action: onSelectProductScanner)
+                        }
+                    }
+                    .padding(.horizontal, max(0, (geometry.size.width - modeButtonWidth) / 2))
+                }
+                .onAppear {
+                    proxy.scrollTo(selectedModeID, anchor: .center)
+                }
+                .onChange(of: selectedModeID) { _, modeID in
+                    withAnimation(.easeInOut(duration: 0.24)) {
+                        proxy.scrollTo(modeID, anchor: .center)
+                    }
+                }
+            }
+        }
+        .frame(height: 42)
+        .disabled(!isModeSelectionEnabled)
+        .opacity(isModeSelectionEnabled ? 1 : 0.55)
     }
 
     private var cameraToolsRow: some View {
@@ -215,56 +278,31 @@ struct CameraSessionControls: View {
         .frame(width: sideToolSlotWidth, height: sideToolSlotWidth)
     }
 
-    private var leadingSlot: some View {
+    private var connectionSlot: some View {
         ZStack {
             Color.clear
-            if !capturedThumbnails.isEmpty {
-                CapturedPhotoStrip(
-                    thumbnails: capturedThumbnails,
-                    count: capturedCount,
-                    badgeRotation: controlRotation
-                )
-            }
-        }
-        .frame(width: 88, height: 96)
-        .animation(.spring(response: 0.3, dampingFraction: 0.78), value: capturedThumbnails.first?.id)
-    }
-
-    private var trailingSlot: some View {
-        ZStack {
-            Color.clear
-            if hasLatestCapture, let onSendLatest {
-                SessionIconButton(
-                    systemImage: "paperplane.fill",
-                    label: "Send latest capture",
+            if let onConnection {
+                SessionSideActionButton(
+                    systemImage: connectionSystemImage,
+                    title: connectionLabel,
+                    accessibilityLabel: connectionAccessibilityLabel,
                     rotation: controlRotation,
-                    action: onSendLatest
+                    action: onConnection
                 )
-            } else if sessionItemCount > 0 {
-                Text("\(sessionItemCount)")
-                    .font(.headline.monospacedDigit().bold())
-                    .foregroundStyle(.white)
-                    .rotationEffect(controlRotation)
-                    .animation(.easeInOut(duration: 0.24), value: controlRotation)
-                    .frame(minWidth: 48, minHeight: 38)
-                    .background(.green, in: Capsule())
-                    .accessibilityLabel("\(sessionItemCount) capture\(sessionItemCount == 1 ? "" : "s") in this session")
             }
         }
-        .frame(width: 88, height: 48)
+        .frame(width: 88, height: 82)
     }
 
-    private var captureHint: String {
-        return switch activeMode {
-        case .ocr:
-            hasLiveTextCandidates ? "Tap a recognized chip to send" : "Frame device identifiers"
-        case .barcode:
-            barcodeHint
-        case .photo:
-            "Frame photo"
-        case .dictation:
-            "Tap to start or stop audio"
-        }
+    private var finishSlot: some View {
+        SessionSideActionButton(
+            systemImage: "xmark",
+            title: "End",
+            accessibilityLabel: "End session",
+            rotation: controlRotation,
+            action: onFinish
+        )
+        .frame(width: 88, height: 82)
     }
 
     private func modeButton(_ title: String, mode: CaptureMode) -> some View {
@@ -280,9 +318,10 @@ struct CameraSessionControls: View {
                     .frame(width: 22, height: 3)
             }
             .foregroundStyle(activeMode == mode ? .white : .white.opacity(0.68))
-            .frame(minWidth: 52, minHeight: 36)
+            .frame(width: modeButtonWidth, height: 36)
         }
         .buttonStyle(.plain)
+        .id(mode.rawValue)
         .accessibilityAddTraits(activeMode == mode ? .isSelected : [])
         .accessibilityLabel("Capture mode \(title)")
     }
@@ -297,9 +336,10 @@ struct CameraSessionControls: View {
                     .frame(width: 22, height: 3)
             }
             .foregroundStyle(.white.opacity(productScannerAvailable ? 0.92 : 0.56))
-            .frame(minWidth: 52, minHeight: 36)
+            .frame(width: modeButtonWidth, height: 36)
         }
         .buttonStyle(.plain)
+        .id("ai")
         .accessibilityAddTraits(isProductScannerSelected ? .isSelected : [])
         .accessibilityLabel("AI product scan")
         .accessibilityValue(productScannerAvailable ? "Available" : "AI scan limit reached for this period")
@@ -417,62 +457,6 @@ private struct ProductScanProgressText: View {
     }
 }
 
-/// Newest-first stack of shots taken in this session, mirroring the Camera app's bottom-left corner.
-struct CapturedPhotoStrip: View {
-    private let side: CGFloat = 58
-    private let cornerRadius: CGFloat = 13
-
-    let thumbnails: [SessionPhotoThumbnail]
-    let count: Int
-    var badgeRotation: Angle = .zero
-
-    var body: some View {
-        ZStack {
-            ForEach(Array(thumbnails.enumerated()).reversed(), id: \.element.id) { index, thumbnail in
-                thumbnailCard(thumbnail, depth: index)
-            }
-        }
-        .shadow(color: .black.opacity(0.4), radius: 6, y: 3)
-        .overlay(alignment: .bottomTrailing) {
-            countBadge
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(count) photo\(count == 1 ? "" : "s") captured this session")
-    }
-
-    private func thumbnailCard(_ thumbnail: SessionPhotoThumbnail, depth: Int) -> some View {
-        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-        let isTop = depth == 0
-
-        return Image(uiImage: thumbnail.image)
-            .resizable()
-            .scaledToFill()
-            .frame(width: side, height: side)
-            .clipShape(shape)
-            .overlay {
-                shape.stroke(.white.opacity(isTop ? 0.85 : 0.4), lineWidth: 1.5)
-            }
-            .offset(x: CGFloat(depth) * -3, y: CGFloat(depth) * -4)
-            .opacity(isTop ? 1 : 0.68)
-            .zIndex(Double(thumbnails.count - depth))
-            .transition(.scale(scale: 0.55).combined(with: .opacity))
-    }
-
-    @ViewBuilder
-    private var countBadge: some View {
-        if count > 1 {
-            Text("\(count)")
-                .font(.caption2.monospacedDigit().bold())
-                .foregroundStyle(.black)
-                .rotationEffect(badgeRotation)
-                .animation(.easeInOut(duration: 0.24), value: badgeRotation)
-                .frame(minWidth: 22, minHeight: 22)
-                .background(.white, in: Capsule())
-                .offset(x: 8, y: 6)
-        }
-    }
-}
-
 struct SessionIconButton: View {
     let systemImage: String
     var isActive = false
@@ -497,5 +481,38 @@ struct SessionIconButton: View {
         .disabled(!isEnabled)
         .opacity(isEnabled ? 1 : 0.55)
         .accessibilityLabel(label)
+    }
+}
+
+private struct SessionSideActionButton: View {
+    let systemImage: String
+    let title: String
+    let accessibilityLabel: String
+    var rotation: Angle = .zero
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 18, weight: .semibold))
+                    .frame(width: 46, height: 46)
+                    .background(.black.opacity(0.56), in: Circle())
+                    .overlay {
+                        Circle().stroke(.white.opacity(0.14), lineWidth: 1)
+                    }
+
+                Text(title)
+                    .font(.caption2.weight(.semibold))
+                    .lineLimit(1)
+            }
+            .foregroundStyle(.white)
+            .rotationEffect(rotation)
+            .animation(.easeInOut(duration: 0.24), value: rotation)
+            .frame(width: 72, height: 76)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityLabel)
     }
 }

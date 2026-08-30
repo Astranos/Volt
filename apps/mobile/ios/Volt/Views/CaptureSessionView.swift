@@ -34,7 +34,7 @@ struct CaptureSessionView: View {
                 // Photo mode stays inside the safe area so the square viewfinder can centre itself in
                 // whatever the status bar and the control deck leave behind. Text and barcode keep
                 // their full-bleed preview.
-                ScannerCameraLayer(gridVisible: gridVisible)
+                ScannerCameraLayer(gridVisible: gridVisible && !store.isProductScannerActive)
                     .ignoresSafeArea(edges: store.activeMode == .photo ? [] : .all)
             }
 
@@ -78,25 +78,25 @@ struct CaptureSessionView: View {
                 .padding(.horizontal, 24)
             }
 
-            if store.isProductScannerActive,
-               store.productScanOutput != nil || store.productScanError != nil {
-                ProductScanStatusView(
-                    output: store.productScanOutput,
-                    errorMessage: store.productScanError
-                )
-                .padding(.horizontal, 24)
-                .transition(.scale(scale: 0.96).combined(with: .opacity))
-            }
         }
         .background(Color.black.ignoresSafeArea())
         .overlay(alignment: .top) {
             VStack(spacing: 8) {
-                HStack {
-                    Spacer()
-                    CloudTargetButton(isCompact: true) {
-                        isTargetPickerPresented = true
+                CameraSessionTopStatus(
+                    activeMode: store.activeMode,
+                    liveTextCandidates: store.camera.liveTextCandidates,
+                    barcodeHint: ScreenshotScenario.current == .captureBarcode ? "Send '883929739929'" : "Point camera at barcode",
+                    isProductScannerSelected: store.isProductScannerActive,
+                    productScanMode: store.productScanMode,
+                    isProductScanBusy: store.isProductScanBusy,
+                    productScanQuotaText: store.productScanQuotaText,
+                    productScanOutput: store.productScanOutput,
+                    productScanError: store.productScanError,
+                    onSendLiveText: { candidate in
+                        store.sendRecognizedText(candidate.value)
                     }
-                }
+                )
+
                 if let toast = store.captureDeliveryToast {
                     CaptureDeliveryToastView(toast: toast)
                         .transition(.move(edge: .top).combined(with: .opacity))
@@ -121,87 +121,75 @@ struct CaptureSessionView: View {
                     }
                 )
             } else {
-                VStack(spacing: 6) {
-                    if store.activeMode == .ocr {
-                        LiveIdentifierStrip(
-                            candidates: store.camera.liveTextCandidates,
-                            onSend: { candidate in
-                                store.sendRecognizedText(candidate.value)
-                            }
-                        )
-                    }
-
-                    CameraSessionControls(
-                        activeMode: $store.activeMode,
-                        torchEnabled: store.camera.torchEnabled,
-                        zoomLabel: store.camera.zoomDisplayLabel,
-                        gridVisible: gridVisible,
-                        hasLiveTextCandidates: !store.camera.liveTextCandidates.isEmpty,
-                        isRecognizingText: store.isRecognizingText || store.isDictationBusy || store.isProductScanBusy,
-                        isProductScanBusy: store.isProductScanBusy,
-                        isCaptureEnabled: !store.isDictationBusy && !store.isProductScanBusy,
-                        isModeSelectionEnabled: !store.isDictating && !store.isDictationBusy && !store.isProductScanBusy,
-                        showsModePicker: true,
-                        barcodeHint: ScreenshotScenario.current == .captureBarcode ? "Send '883929739929'" : "Point camera at barcode",
-                        capturedThumbnails: store.activeMode == .photo && !store.isProductScannerActive ? store.sessionPhotoThumbnails : [],
-                        capturedCount: store.sessionPhotoCount,
-                        sessionItemCount: store.activeSessionCaptureCount,
-                        controlRotation: .degrees(store.camera.captureOrientation.controlRotationDegrees),
-                        showsProductScanner: true,
-                        isProductScannerSelected: store.isProductScannerActive,
-                        productScannerAvailable: !store.isProductScanQuotaExhausted,
-                        productScanMode: store.productScanMode,
-                        productScanQuotaText: store.productScanQuotaText,
-                        onToggleTorch: {
-                            store.camera.setTorchEnabled(!store.camera.torchEnabled)
-                        },
-                        onZoomOut: {
-                            store.camera.adjustZoom(by: -0.25)
-                        },
-                        onZoomIn: {
-                            store.camera.adjustZoom(by: 0.25)
-                        },
-                        onToggleGrid: {
-                            gridVisible.toggle()
-                        },
-                        onCapture: {
-                            Task {
-                                if store.isProductScannerActive {
-                                    if store.isProductScanQuotaExhausted {
-                                        isSubscriptionPaywallPresented = true
-                                    } else {
-                                        await store.captureProduct(using: clerk)
-                                    }
-                                } else if store.activeMode == .dictation {
-                                    if store.isDictating {
-                                        await store.stopLiveDictation()
-                                    } else {
-                                        await store.startLiveDictation()
-                                    }
+                CameraSessionControls(
+                    activeMode: $store.activeMode,
+                    torchEnabled: store.camera.torchEnabled,
+                    zoomLabel: store.camera.zoomDisplayLabel,
+                    gridVisible: gridVisible,
+                    isRecognizingText: store.isRecognizingText || store.isDictationBusy || store.isProductScanBusy,
+                    isCaptureEnabled: !store.isDictationBusy && !store.isProductScanBusy,
+                    isModeSelectionEnabled: !store.isDictating && !store.isDictationBusy && !store.isProductScanBusy,
+                    showsModePicker: true,
+                    controlRotation: .degrees(store.camera.captureOrientation.controlRotationDegrees),
+                    showsProductScanner: true,
+                    isProductScannerSelected: store.isProductScannerActive,
+                    productScannerAvailable: !store.isProductScanQuotaExhausted,
+                    productScanMode: store.productScanMode,
+                    connectionSystemImage: "character.cursor.ibeam",
+                    connectionLabel: "Write",
+                    connectionAccessibilityLabel: "Choose write destination",
+                    onToggleTorch: {
+                        store.camera.setTorchEnabled(!store.camera.torchEnabled)
+                    },
+                    onZoomOut: {
+                        store.camera.adjustZoom(by: -0.25)
+                    },
+                    onZoomIn: {
+                        store.camera.adjustZoom(by: 0.25)
+                    },
+                    onToggleGrid: {
+                        gridVisible.toggle()
+                    },
+                    onCapture: {
+                        Task {
+                            if store.isProductScannerActive {
+                                if store.isProductScanQuotaExhausted {
+                                    isSubscriptionPaywallPresented = true
                                 } else {
-                                    await store.capture()
+                                    await store.captureProduct(using: clerk)
                                 }
-                            }
-                        },
-                        onSelectProductScanner: {
-                            if !store.isProductScanQuotaExhausted {
-                                store.activateProductScanner()
+                            } else if store.activeMode == .dictation {
+                                if store.isDictating {
+                                    await store.stopLiveDictation()
+                                } else {
+                                    await store.startLiveDictation()
+                                }
                             } else {
-                                isSubscriptionPaywallPresented = true
+                                await store.capture()
                             }
-                        },
-                        onToggleProductScanMode: {
-                            store.toggleProductScanMode()
-                        },
-                        onDeactivateProductScanner: {
-                            store.deactivateProductScanner()
-                        },
-                        onFinish: {
-                            store.clearOcrReview()
-                            isPresented = false
                         }
-                    )
-                }
+                    },
+                    onConnection: {
+                        isTargetPickerPresented = true
+                    },
+                    onSelectProductScanner: {
+                        if !store.isProductScanQuotaExhausted {
+                            store.activateProductScanner()
+                        } else {
+                            isSubscriptionPaywallPresented = true
+                        }
+                    },
+                    onToggleProductScanMode: {
+                        store.toggleProductScanMode()
+                    },
+                    onDeactivateProductScanner: {
+                        store.deactivateProductScanner()
+                    },
+                    onFinish: {
+                        store.clearOcrReview()
+                        isPresented = false
+                    }
+                )
             }
         }
         .sheet(isPresented: $isTargetPickerPresented) {
@@ -217,7 +205,6 @@ struct CaptureSessionView: View {
                 accessStore.status?.aiScannerQuota,
                 plan: accessStore.status?.plan
             )
-            store.startSessionPhotoStrip()
             if ScreenshotScenario.current == .captureReviewSend,
                let region = store.ocrTextRegions.first {
                 selectTextRegion(region)
@@ -330,38 +317,6 @@ struct CaptureSessionView: View {
         selectedTextValue
     }
 
-}
-
-private struct ProductScanStatusView: View {
-    let output: ProductScanOutput?
-    let errorMessage: String?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if let errorMessage {
-                Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange)
-            } else if let output {
-                Label(output.mode.title, systemImage: output.mode.systemImage)
-                    .font(.subheadline.weight(.semibold))
-                Text(output.value)
-                    .font(output.mode == .upc ? .title3.monospaced() : .title3)
-                    .lineLimit(3)
-                    .textSelection(.enabled)
-            }
-        }
-        .font(.headline)
-        .foregroundStyle(.white)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 13)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.black.opacity(0.62), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(.white.opacity(0.16), lineWidth: 1)
-        }
-        .accessibilityElement(children: .combine)
-    }
 }
 
 private struct CaptureDeliveryToastView: View {

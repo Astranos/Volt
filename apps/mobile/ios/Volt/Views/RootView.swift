@@ -164,11 +164,13 @@ private struct RootTabBar: View {
             }
             .padding(.top, 10)
             .frame(maxWidth: .infinity)
+            .shadow(color: .black.opacity(0.24), radius: 12, y: 6)
         } else {
             controls
                 .padding(.top, 10)
                 .frame(maxWidth: .infinity)
                 .background(.ultraThinMaterial)
+                .shadow(color: .black.opacity(0.18), radius: 10, y: 5)
         }
     }
 

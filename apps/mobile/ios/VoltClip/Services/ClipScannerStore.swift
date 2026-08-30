@@ -5,8 +5,6 @@ import UIKit
 @MainActor
 @Observable
 final class ClipScannerStore {
-    static let sessionPhotoStripLimit = 3
-
     enum ClipTab: String, CaseIterable, Identifiable {
         case text
         case barcode

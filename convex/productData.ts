@@ -1,7 +1,12 @@
 import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 
-import { normalizeUPCA } from "./aiScanner";
+import {
+  catalogIdentityMatchScore,
+  normalizeUPCA,
+  type AIScannerCatalogMatch,
+  type GameIdentity,
+} from "./aiScanner";
 import { loadCatalogProductByUpc } from "./catalog/store";
 import {
   catalogSummaryValidator,
@@ -18,6 +23,13 @@ const searchProductsResultValidator = v.object({
   page: v.array(catalogSummaryValidator),
   isDone: v.boolean(),
   continueCursor: v.string(),
+});
+
+const aiScannerCatalogMatchValidator = v.object({
+  upc: v.string(),
+  title: v.string(),
+  platform: v.union(v.string(), v.null()),
+  edition: v.union(v.string(), v.null()),
 });
 
 type SearchProductsArgs = {
@@ -128,6 +140,40 @@ async function getProductFromCatalog(ctx: QueryCtx, upcInput: string) {
   return await loadCatalogProductByUpc(ctx, upc);
 }
 
+function aiScannerCatalogMatch(product: Doc<"paymoreCatalogProducts">): AIScannerCatalogMatch {
+  return {
+    upc: product.upc,
+    title: product.title,
+    platform: product.platform,
+    edition: product.edition,
+  };
+}
+
+async function findProductForAIIdentity(ctx: QueryCtx, identity: GameIdentity) {
+  const exactTitleCandidates = await ctx.db
+    .query("paymoreCatalogProducts")
+    .withIndex("by_title", (q) => q.eq("title", identity.name))
+    .take(25);
+  const searchCandidates = await ctx.db
+    .query("paymoreCatalogProducts")
+    .withSearchIndex("search_title", (q) => q.search("title", identity.name))
+    .take(25);
+  const candidatesById = new Map<Doc<"paymoreCatalogProducts">["_id"], Doc<"paymoreCatalogProducts">>();
+  for (const product of [...exactTitleCandidates, ...searchCandidates]) {
+    candidatesById.set(product._id, product);
+  }
+  const candidates = [...candidatesById.values()];
+  const scored = candidates.flatMap((product) => {
+    const score = catalogIdentityMatchScore(identity, product);
+    return score === null ? [] : [{ product, score }];
+  }).sort((left, right) => right.score - left.score || right.product.updatedAt - left.product.updatedAt);
+  const best = scored[0];
+  if (!best) return null;
+  const runnerUp = scored[1];
+  if (runnerUp && runnerUp.score === best.score && runnerUp.product.upc !== best.product.upc) return null;
+  return aiScannerCatalogMatch(best.product);
+}
+
 export const searchProducts = query({
   args: {
     searchQuery: v.optional(v.string()),
@@ -167,5 +213,18 @@ export const getProductByUpcForApi = internalQuery({
   returns: v.union(storedCatalogProductValidator, v.null()),
   handler: async (ctx, args) => {
     return await getProductFromCatalog(ctx, args.upc);
+  },
+});
+
+export const findProductForAIScanner = internalQuery({
+  args: {
+    name: v.string(),
+    platform: v.union(v.string(), v.null()),
+    edition: v.union(v.string(), v.null()),
+    region: v.union(v.string(), v.null()),
+  },
+  returns: v.union(aiScannerCatalogMatchValidator, v.null()),
+  handler: async (ctx, args) => {
+    return await findProductForAIIdentity(ctx, args);
   },
 });
