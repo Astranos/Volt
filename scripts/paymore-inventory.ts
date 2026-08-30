@@ -399,22 +399,30 @@ function isIngestResult(value: unknown): value is IngestResult {
 }
 
 /**
- * "convex run" prints function logs before the return value, so scan stdout
- * bottom-up for the last line that parses as a complete IngestResult.
- */
+ * "convex run" prints function logs before the return value, which may be
+ * pretty-printed across multiple lines. Try each line-starting "{" from the
+ * bottom up, parsing from that brace to the end of stdout.
+*/
 function parseConvexReturnValue(stdout: string): IngestResult | null {
-  const lines = stdout.split("\n").map((line) => line.trim());
-  for (let i = lines.length - 1; i >= 0; i -= 1) {
-    const line = lines[i];
-    if (line.length === 0 || !line.startsWith("{")) continue;
+  let searchFrom = stdout.length;
+  // The value may be the entire stdout starting at byte 0 (no logs before it).
+  try {
+    const whole: unknown = JSON.parse(stdout);
+    if (isIngestResult(whole)) return whole;
+  } catch {
+    // Mixed output; fall through to brace scanning.
+  }
+  for (;;) {
+    const braceIndex = stdout.lastIndexOf("\n{", searchFrom - 1);
+    if (braceIndex < 0) return null;
+    searchFrom = braceIndex;
     try {
-      const parsed: unknown = JSON.parse(line);
+      const parsed: unknown = JSON.parse(stdout.slice(braceIndex + 1));
       if (isIngestResult(parsed)) return parsed;
     } catch {
-      // Not JSON; keep scanning upward.
+      // Not a complete JSON object from this brace; try an earlier one.
     }
   }
-  return null;
 }
 
 function tail(value: string, maxChars = 2_000): string {
@@ -823,4 +831,3 @@ main()
     );
     process.exit(1);
   });
-
