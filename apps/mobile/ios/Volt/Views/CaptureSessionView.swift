@@ -36,6 +36,8 @@ struct CaptureSessionView: View {
                 // their full-bleed preview.
                 ScannerCameraLayer(gridVisible: gridVisible && !store.isProductScannerActive)
                     .ignoresSafeArea(edges: store.activeMode == .photo ? [] : .all)
+                    .opacity(store.activeMode == .dictation ? 0 : 1)
+                    .allowsHitTesting(store.activeMode != .dictation)
             }
 
             if selectedTextRegion != nil {
@@ -213,10 +215,10 @@ struct CaptureSessionView: View {
         }
         .task {
             await store.camera.requestAccess()
-            syncCameraForOcrReview(isReviewingOcr: store.ocrReviewImage != nil)
+            syncCameraForCaptureState(isReviewingOcr: store.ocrReviewImage != nil)
         }
         .onChange(of: store.ocrReviewImage != nil) { _, isReviewingOcr in
-            syncCameraForOcrReview(isReviewingOcr: isReviewingOcr)
+            syncCameraForCaptureState(isReviewingOcr: isReviewingOcr)
             resetSelectedText()
         }
         .onChange(of: store.activeMode) { _, mode in
@@ -224,9 +226,7 @@ struct CaptureSessionView: View {
                 store.deactivateProductScanner()
             }
             guard !store.isDictating else { return }
-            store.camera.start()
-            store.camera.setLiveTextScanningEnabled(mode == .ocr)
-            store.camera.setBarcodeScanningEnabled(mode == .barcode)
+            syncCameraForCaptureState(isReviewingOcr: store.ocrReviewImage != nil)
         }
         .onChange(of: accessStore.status?.aiScannerQuota) { _, quota in
             store.updateProductScanQuota(quota, plan: accessStore.status?.plan)
@@ -246,9 +246,10 @@ struct CaptureSessionView: View {
         }
     }
 
-    private func syncCameraForOcrReview(isReviewingOcr: Bool) {
-        if isReviewingOcr {
+    private func syncCameraForCaptureState(isReviewingOcr: Bool) {
+        if isReviewingOcr || store.activeMode == .dictation {
             store.camera.stop()
+            return
         } else {
             store.camera.start()
             store.camera.setLiveTextScanningEnabled(store.activeMode == .ocr)

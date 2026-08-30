@@ -1489,6 +1489,8 @@ private struct ClipCaptureSessionView: View {
                     }
                 )
                 .ignoresSafeArea()
+                .opacity(activeMode == .dictation ? 0 : 1)
+                .allowsHitTesting(activeMode != .dictation)
             }
 
             VStack {
@@ -1751,10 +1753,8 @@ private struct ClipCaptureSessionView: View {
     }
 
     private func syncCameraForOcrPostCapture() {
-        if activeMode == .dictation, store.isDictating || store.isDictationBusy {
-            cameraService.start()
-            cameraService.setLiveTextScanningEnabled(false)
-            cameraService.setBarcodeScanningEnabled(false)
+        if activeMode == .dictation {
+            cameraService.stop()
             return
         }
         let shouldPauseCamera = activeMode == .ocr

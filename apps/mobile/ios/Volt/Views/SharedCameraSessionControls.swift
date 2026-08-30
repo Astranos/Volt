@@ -92,11 +92,17 @@ struct CameraSessionTopStatus: View {
 }
 
 struct CameraSessionControls: View {
+    private enum ModeID: Hashable {
+        case capture(CaptureMode)
+        case productScanner
+    }
+
     private let sideToolSlotWidth: CGFloat = 64
     private let toolRowMaxWidth: CGFloat = 380
     private let modeButtonWidth: CGFloat = 64
 
     @Binding var activeMode: CaptureMode
+    @State private var centeredModeID: ModeID?
     let torchEnabled: Bool
     let zoomLabel: String
     let gridVisible: Bool
@@ -126,7 +132,9 @@ struct CameraSessionControls: View {
     var body: some View {
         VStack(spacing: 8) {
             cameraToolsRow
-                .opacity(isCaptureEnabled ? 1 : 0.45)
+                .opacity(activeMode == .dictation ? 0 : isCaptureEnabled ? 1 : 0.45)
+                .allowsHitTesting(activeMode != .dictation)
+                .accessibilityHidden(activeMode == .dictation)
 
             if showsModePicker {
                 modePicker
@@ -158,33 +166,38 @@ struct CameraSessionControls: View {
         }
     }
 
-    private var selectedModeID: String {
-        isProductScannerSelected ? "ai" : activeMode.rawValue
+    private var selectedModeID: ModeID {
+        isProductScannerSelected ? .productScanner : .capture(activeMode)
     }
 
     private var modePicker: some View {
         GeometryReader { geometry in
-            ScrollViewReader { proxy in
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 18) {
-                        modeButton("Text", mode: .ocr)
-                        modeButton("Barcode", mode: .barcode)
-                        modeButton("Photo", mode: .photo)
-                        modeButton("Audio", mode: .dictation)
-                        if showsProductScanner, let onSelectProductScanner {
-                            productModeButton(action: onSelectProductScanner)
-                        }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 18) {
+                    modeButton("Text", mode: .ocr)
+                    modeButton("Barcode", mode: .barcode)
+                    modeButton("Photo", mode: .photo)
+                    if showsProductScanner, let onSelectProductScanner {
+                        productModeButton(action: onSelectProductScanner)
                     }
-                    .padding(.horizontal, max(0, (geometry.size.width - modeButtonWidth) / 2))
+                    modeButton("Audio", mode: .dictation)
                 }
-                .onAppear {
-                    proxy.scrollTo(selectedModeID, anchor: .center)
+                .scrollTargetLayout()
+                .padding(.horizontal, max(0, (geometry.size.width - modeButtonWidth) / 2))
+            }
+            .scrollTargetBehavior(.viewAligned(limitBehavior: .alwaysByOne))
+            .scrollPosition(id: $centeredModeID, anchor: .center)
+            .onAppear {
+                centeredModeID = selectedModeID
+            }
+            .onChange(of: selectedModeID) { _, modeID in
+                withAnimation(.easeInOut(duration: 0.24)) {
+                    centeredModeID = modeID
                 }
-                .onChange(of: selectedModeID) { _, modeID in
-                    withAnimation(.easeInOut(duration: 0.24)) {
-                        proxy.scrollTo(modeID, anchor: .center)
-                    }
-                }
+            }
+            .onChange(of: centeredModeID) { _, modeID in
+                guard let modeID, modeID != selectedModeID else { return }
+                selectCenteredMode(modeID)
             }
         }
         .frame(height: 42)
@@ -306,23 +319,25 @@ struct CameraSessionControls: View {
     }
 
     private func modeButton(_ title: String, mode: CaptureMode) -> some View {
-        Button {
+        let isSelected = !isProductScannerSelected && activeMode == mode
+
+        return Button {
             onDeactivateProductScanner?()
             activeMode = mode
         } label: {
             VStack(spacing: 5) {
                 Text(title)
-                    .font(.subheadline.weight(activeMode == mode ? .bold : .medium))
+                    .font(.subheadline.weight(isSelected ? .bold : .medium))
                 Capsule()
-                    .fill(activeMode == mode ? .white : .clear)
+                    .fill(isSelected ? .white : .clear)
                     .frame(width: 22, height: 3)
             }
-            .foregroundStyle(activeMode == mode ? .white : .white.opacity(0.68))
+            .foregroundStyle(isSelected ? .white : .white.opacity(0.68))
             .frame(width: modeButtonWidth, height: 36)
         }
         .buttonStyle(.plain)
-        .id(mode.rawValue)
-        .accessibilityAddTraits(activeMode == mode ? .isSelected : [])
+        .id(ModeID.capture(mode))
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
         .accessibilityLabel("Capture mode \(title)")
     }
 
@@ -339,11 +354,21 @@ struct CameraSessionControls: View {
             .frame(width: modeButtonWidth, height: 36)
         }
         .buttonStyle(.plain)
-        .id("ai")
+        .id(ModeID.productScanner)
         .accessibilityAddTraits(isProductScannerSelected ? .isSelected : [])
         .accessibilityLabel("AI product scan")
         .accessibilityValue(productScannerAvailable ? "Available" : "AI scan limit reached for this period")
         .accessibilityHint("Returns the selected product UPC or name")
+    }
+
+    private func selectCenteredMode(_ modeID: ModeID) {
+        switch modeID {
+        case .capture(let mode):
+            onDeactivateProductScanner?()
+            activeMode = mode
+        case .productScanner:
+            onSelectProductScanner?()
+        }
     }
 
     private func productScanToolSlot(action: @escaping () -> Void) -> some View {

@@ -402,7 +402,9 @@ test("unified camera starts from the hero card and history groups mixed captures
   assert.match(scannerViewSwiftSource, /Button\("Continue session"[\s\S]*\.tint\(VoltBrand\.green\)/);
   assert.match(scannerViewSwiftSource, /CaptureHistorySessionCard\(/);
   assert.match(sharedCameraSessionControlsSwiftSource, /if showsModePicker \{\s*modePicker\s*\}[\s\S]*connectionSlot[\s\S]*finishSlot[\s\S]*shutterButton/);
-  assert.match(sharedCameraSessionControlsSwiftSource, /proxy\.scrollTo\(modeID, anchor: \.center\)/);
+  assert.match(sharedCameraSessionControlsSwiftSource, /\.scrollTargetLayout\(\)/);
+  assert.match(sharedCameraSessionControlsSwiftSource, /\.scrollTargetBehavior\(\.viewAligned\(limitBehavior: \.alwaysByOne\)\)/);
+  assert.match(sharedCameraSessionControlsSwiftSource, /\.scrollPosition\(id: \$centeredModeID, anchor: \.center\)/);
   const modePickerStart = sharedCameraSessionControlsSwiftSource.indexOf("private var modePicker: some View");
   const modePickerEnd = sharedCameraSessionControlsSwiftSource.indexOf("private var cameraToolsRow", modePickerStart);
   const modePickerSource = sharedCameraSessionControlsSwiftSource.slice(modePickerStart, modePickerEnd);
@@ -667,7 +669,7 @@ test("native first launch opens capture without pairing or requesting camera ear
   assert.doesNotMatch(rootViewSwiftSource, /Pairing|Reconnect|connectionStatus|updateAppIsInBackground/);
   assert.match(rootViewSwiftSource, /store\.cloudWorkspace\.requestSync\(\)/);
   assert.doesNotMatch(rootViewSwiftSource, /store\.camera\.requestAccess\(\)/);
-  assert.match(captureSessionViewSwiftSource, /\.task \{\s*await store\.camera\.requestAccess\(\)\s*syncCameraForOcrReview/);
+  assert.match(captureSessionViewSwiftSource, /\.task \{\s*await store\.camera\.requestAccess\(\)\s*syncCameraForCaptureState/);
   assert.match(sharedPairingSessionComponentsSwiftSource, /private let webScannerURLText = "volt\.juanquenga\.com\/clip"/);
   assert.match(sharedPairingSessionComponentsSwiftSource, /Text\("Scan the QR code from the Chrome extension, or open the App Clip page on your computer\. This iPhone will connect to that browser session\."\)/);
 });
@@ -686,9 +688,9 @@ test("app clip uses the same app icon resource as the main app", () => {
 test("native OCR review stops the live camera until retake", () => {
   assert.match(captureSessionViewSwiftSource, /struct CaptureSessionView/);
   assert.match(captureSessionViewSwiftSource, /\.onChange\(of: store\.ocrReviewImage != nil\)/);
-  assert.match(captureSessionViewSwiftSource, /syncCameraForOcrReview\(isReviewingOcr: store\.ocrReviewImage != nil\)/);
-  assert.match(captureSessionViewSwiftSource, /private func syncCameraForOcrReview\(isReviewingOcr: Bool\)/);
-  assert.match(captureSessionViewSwiftSource, /if isReviewingOcr \{\s*store\.camera\.stop\(\)\s*\} else \{[\s\S]*store\.camera\.start\(\)/);
+  assert.match(captureSessionViewSwiftSource, /syncCameraForCaptureState\(isReviewingOcr: store\.ocrReviewImage != nil\)/);
+  assert.match(captureSessionViewSwiftSource, /private func syncCameraForCaptureState\(isReviewingOcr: Bool\)/);
+  assert.match(captureSessionViewSwiftSource, /if isReviewingOcr \|\| store\.activeMode == \.dictation \{\s*store\.camera\.stop\(\)\s*return\s*\} else \{[\s\S]*store\.camera\.start\(\)/);
 });
 
 test("native OCR review separates pan gestures from selectable text targets", () => {
@@ -1138,6 +1140,32 @@ test("app clip capture modes share one camera and unified History area", () => {
   assert.match(clipRootViewSwiftSource, /ClipPhotoBatchesSection\(/);
   assert.doesNotMatch(clipRootViewSwiftSource, /Recent Uploads|ClipUploadPhotoBatchesSection/);
   assert.doesNotMatch(clipRootViewSwiftSource, /capturedSessionPhotos|capturedThumbnails|capturedSessionItemCount/);
+});
+
+test("camera mode scrolling selects the centered mode, keeps Audio last, and gives AI one selection", () => {
+  assert.match(
+    sharedCameraSessionControlsSwiftSource,
+    /modeButton\("Text", mode: \.ocr\)[\s\S]*modeButton\("Barcode", mode: \.barcode\)[\s\S]*modeButton\("Photo", mode: \.photo\)[\s\S]*if showsProductScanner[\s\S]*productModeButton[\s\S]*modeButton\("Audio", mode: \.dictation\)/
+  );
+  assert.match(
+    sharedCameraSessionControlsSwiftSource,
+    /\.onChange\(of: centeredModeID\)[\s\S]*selectCenteredMode\(modeID\)/
+  );
+  assert.match(
+    sharedCameraSessionControlsSwiftSource,
+    /case \.capture\(let mode\):[\s\S]*onDeactivateProductScanner\?\(\)[\s\S]*activeMode = mode[\s\S]*case \.productScanner:[\s\S]*onSelectProductScanner\?\(\)/
+  );
+  assert.match(
+    sharedCameraSessionControlsSwiftSource,
+    /let isSelected = !isProductScannerSelected && activeMode == mode/
+  );
+});
+
+test("Audio mode stops and hides the camera feed in both iOS targets", () => {
+  assert.match(captureSessionViewSwiftSource, /ScannerCameraLayer[\s\S]*\.opacity\(store\.activeMode == \.dictation \? 0 : 1\)/);
+  assert.match(captureSessionViewSwiftSource, /if isReviewingOcr \|\| store\.activeMode == \.dictation \{\s*store\.camera\.stop\(\)\s*return\s*\}/);
+  assert.match(clipRootViewSwiftSource, /ClipCaptureSessionBackdrop[\s\S]*\.opacity\(activeMode == \.dictation \? 0 : 1\)/);
+  assert.match(clipRootViewSwiftSource, /if activeMode == \.dictation \{\s*cameraService\.stop\(\)\s*return\s*\}/);
 });
 
 test("app clip captured photos are grouped, previewable, and removable after leaving camera", () => {
