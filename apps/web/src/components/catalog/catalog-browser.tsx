@@ -2,17 +2,14 @@ import { useEffect, useRef, useState } from "react";
 import type { FunctionReturnType } from "convex/server";
 import { usePaginatedQuery, useQuery } from "convex/react";
 import {
-  ArrowUpRight,
   Barcode,
   Boxes,
   ChevronRight,
-  CircleDollarSign,
   Clock3,
   ImageOff,
   LoaderCircle,
   PackageSearch,
   Search,
-  Store,
   X,
 } from "lucide-react";
 
@@ -24,11 +21,6 @@ type CatalogProduct = NonNullable<
   FunctionReturnType<typeof api.paymoreCatalog.getByUpc>
 >;
 type CatalogListing = CatalogProduct["listings"][number];
-
-const currencyFormatter = new Intl.NumberFormat("en-US", {
-  style: "currency",
-  currency: "USD",
-});
 
 const dateFormatter = new Intl.DateTimeFormat("en-US", {
   month: "short",
@@ -90,7 +82,7 @@ export function CatalogBrowser() {
             </h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
               Search every imported collection by title, UPC, or MPN. Select a
-              result to compare stores, condition, price, images, and stock.
+              result to inspect its product specs, collections, and photos.
             </p>
           </div>
 
@@ -296,22 +288,6 @@ function ProductDetail({
   }
 
   const featuredListing = pickFeaturedListing(product.listings);
-  const prices = product.listings.flatMap((listing) =>
-    listing.price === undefined ? [] : [listing.price],
-  );
-  const lowestPrice = prices.length > 0 ? Math.min(...prices) : null;
-  const totalQuantity = product.listings.reduce(
-    (total, listing) => total + (listing.quantity ?? 0),
-    0,
-  );
-  const hasQuantity = product.listings.some(
-    (listing) => listing.quantity !== undefined,
-  );
-  const stores = new Set(
-    product.listings.flatMap((listing) =>
-      listing.storeName ? [listing.storeName] : [],
-    ),
-  );
 
   return (
     <article className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
@@ -331,9 +307,6 @@ function ProductDetail({
             </span>
           </div>
         )}
-        <span className="absolute left-3 top-3 rounded-full border border-white/70 bg-white/90 px-2.5 py-1 text-[0.68rem] font-semibold text-zinc-700 shadow-sm backdrop-blur">
-          {product.listings.length} {product.listings.length === 1 ? "listing" : "listings"}
-        </span>
       </div>
 
       <div className="space-y-5 p-5 sm:p-6">
@@ -354,49 +327,12 @@ function ProductDetail({
           <p className="mt-1 text-xs font-mono text-zinc-500">
             UPC {product.upc}{product.mpn ? `  ·  MPN ${product.mpn}` : ""}
           </p>
-        </div>
-
-        <div className="grid grid-cols-3 gap-2">
-          <DetailMetric
-            icon={CircleDollarSign}
-            label="From"
-            value={lowestPrice === null ? "No price" : currencyFormatter.format(lowestPrice)}
-          />
-          <DetailMetric
-            icon={Boxes}
-            label="In stock"
-            value={hasQuantity ? String(totalQuantity) : "Unknown"}
-          />
-          <DetailMetric
-            icon={Store}
-            label="Stores"
-            value={stores.size > 0 ? String(stores.size) : "Unknown"}
-          />
+          <p className="mt-1 text-[0.68rem] text-zinc-400">
+            Updated {dateFormatter.format(new Date(product.updatedAt))}
+          </p>
         </div>
 
         <ProductSpecs product={product} />
-
-        <div>
-          <div className="mb-2 flex items-center justify-between gap-3">
-            <h4 className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">
-              Available listings
-            </h4>
-            <span className="text-[0.68rem] text-zinc-400">
-              Updated {dateFormatter.format(new Date(product.updatedAt))}
-            </span>
-          </div>
-          <div className="space-y-2">
-            {product.listings.length > 0 ? (
-              product.listings.map((listing) => (
-                <ListingCard key={listing.sourceUrl} listing={listing} />
-              ))
-            ) : (
-              <div className="rounded-xl border border-dashed border-zinc-200 p-4 text-xs text-zinc-500">
-                No source listings are attached to this product yet.
-              </div>
-            )}
-          </div>
-        </div>
       </div>
     </article>
   );
@@ -431,63 +367,6 @@ function ProductSpecs({ product }: { product: CatalogProduct }) {
   );
 }
 
-function DetailMetric({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon: typeof Boxes;
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="min-w-0 rounded-xl border border-zinc-200 p-3">
-      <Icon aria-hidden="true" className="size-4 text-zinc-400" />
-      <p className="mt-2 truncate text-xs font-semibold text-zinc-950">{value}</p>
-      <p className="mt-0.5 text-[0.65rem] font-medium text-zinc-400">{label}</p>
-    </div>
-  );
-}
-
-function ListingCard({ listing }: { listing: CatalogListing }) {
-  return (
-    <a
-      href={listing.sourceUrl}
-      target="_blank"
-      rel="noreferrer"
-      className="group flex items-center gap-3 rounded-xl border border-zinc-200 p-3 transition hover:border-zinc-300 hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
-    >
-      <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-zinc-100 text-zinc-500 group-hover:bg-zinc-950 group-hover:text-white">
-        <Store aria-hidden="true" className="size-4" />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-xs font-semibold text-zinc-800">
-          {formatStoreName(listing.storeName)}
-        </span>
-        <span className="mt-0.5 block truncate text-[0.68rem] text-zinc-500">
-          {compactValues([
-            listing.condition,
-            listing.quantity === undefined
-              ? null
-              : `${listing.quantity} in stock`,
-          ]).join(" · ") || "Listing details pending"}
-        </span>
-      </span>
-      <span className="shrink-0 text-right">
-        <span className="block text-xs font-semibold text-zinc-950">
-          {listing.price === undefined
-            ? "Price pending"
-            : currencyFormatter.format(listing.price)}
-        </span>
-        <span className="mt-0.5 inline-flex items-center gap-1 text-[0.65rem] font-semibold text-zinc-400 group-hover:text-zinc-700">
-          Open
-          <ArrowUpRight aria-hidden="true" className="size-3" />
-        </span>
-      </span>
-    </a>
-  );
-}
-
 function CatalogLoading() {
   return (
     <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(22rem,0.6fr)]">
@@ -509,11 +388,15 @@ function ProductDetailLoading() {
     <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
       <div className="aspect-[16/9] animate-pulse bg-zinc-100" />
       <div className="space-y-4 p-6">
+        <div className="h-3 w-24 animate-pulse rounded bg-zinc-100" />
         <div className="h-5 w-4/5 animate-pulse rounded bg-zinc-100" />
         <div className="h-3 w-2/5 animate-pulse rounded bg-zinc-100" />
-        <div className="grid grid-cols-3 gap-2">
-          {[0, 1, 2].map((index) => (
-            <div key={index} className="h-20 animate-pulse rounded-xl bg-zinc-100" />
+        <div className="grid grid-cols-2 gap-x-4 gap-y-3 rounded-xl bg-zinc-50 p-4">
+          {[0, 1, 2, 3].map((index) => (
+            <div key={index} className="min-w-0">
+              <div className="h-2.5 w-10 animate-pulse rounded bg-zinc-200/70" />
+              <div className="mt-1 h-3 w-2/3 animate-pulse rounded bg-zinc-100" />
+            </div>
           ))}
         </div>
       </div>
@@ -538,28 +421,11 @@ function CatalogEmpty({ hasSearch }: { hasSearch: boolean }) {
 }
 
 function pickFeaturedListing(listings: CatalogListing[]): CatalogListing | null {
-  return (
-    listings.find(
-      (listing) => listing.imageUrl && listing.price !== undefined,
-    ) ??
-    listings.find((listing) => listing.imageUrl) ??
-    listings[0] ??
-    null
-  );
+  return listings.find((listing) => listing.imageUrl) ?? listings[0] ?? null;
 }
 
 function compactValues(values: Array<string | null>): string[] {
   return values.filter(
     (value): value is string => typeof value === "string" && value.length > 0,
   );
-}
-
-function formatStoreName(storeName: string | undefined): string {
-  if (!storeName) return "PayMore listing";
-  return storeName
-    .replace(/^paymore-/i, "")
-    .split("-")
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
 }

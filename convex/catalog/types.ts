@@ -10,11 +10,8 @@ export type CatalogListing = {
   sourceUrl: string;
   condition: string | null;
   attributes: Record<string, string>;
-  // Per-listing facts captured from the PayMore listing API; the HTML crawl
-  // path leaves them undefined.
-  price?: number;
-  quantity?: number;
-  storeName?: string;
+  // The catalog is spec-only: per-listing marketplace metrics (price,
+  // quantity, store name) are no longer captured. Photos are kept.
   imageUrl?: string;
   // Freshness of the stored source row; set when a listing is loaded back
   // from the database.

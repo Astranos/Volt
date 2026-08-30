@@ -12,15 +12,13 @@ export type UpsertStats = {
 };
 
 type CatalogProductFields = Omit<CatalogProduct, "sourceUrls" | "listings">;
-type CatalogListingFacts = Pick<CatalogListing, "price" | "quantity" | "storeName" | "imageUrl">;
+type CatalogListingFacts = Pick<CatalogListing, "imageUrl">;
 
-// Per-listing facts captured from the listing API. Written only when present
-// on the incoming listing so a patch keeps the row's old values otherwise.
+// The only listing-level extra source rows still capture is the photo.
+// Written only when present on the incoming listing so a patch keeps the
+// row's old value otherwise.
 function sourceListingFields(listing: CatalogListingFacts): CatalogListingFacts {
   const fields: CatalogListingFacts = {};
-  if (listing.price !== undefined) fields.price = listing.price;
-  if (listing.quantity !== undefined) fields.quantity = listing.quantity;
-  if (listing.storeName !== undefined) fields.storeName = listing.storeName;
   if (listing.imageUrl !== undefined) fields.imageUrl = listing.imageUrl;
   return fields;
 }
@@ -305,8 +303,8 @@ export async function loadCatalogProductByUpc(ctx: QueryCtx, upc: string) {
   };
 }
 
-// Source rows carry the per-listing facts; only attach fields that are
-// present so legacy rows come back without undefined-valued keys.
+// Source rows carry the photo; only attach fields that are present so legacy
+// rows come back without undefined-valued keys.
 function sourceToListing(source: Doc<"paymoreCatalogSources">): CatalogListing {
   const listing: CatalogListing = {
     sourceUrl: source.sourceUrl,

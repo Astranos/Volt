@@ -7,9 +7,6 @@ export const catalogListingValidator = v.object({
   sourceUrl: v.string(),
   condition: nullableString,
   attributes: stringRecord,
-  price: v.optional(v.number()),
-  quantity: v.optional(v.number()),
-  storeName: v.optional(v.string()),
   imageUrl: v.optional(v.string()),
   updatedAt: v.optional(v.number()),
 });

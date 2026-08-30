@@ -55,9 +55,6 @@ const getByUpcInternal = makeFunctionReference<
       sourceUrl: string;
       condition: string | null;
       attributes: Record<string, string>;
-      price?: number;
-      quantity?: number;
-      storeName?: string;
       imageUrl?: string;
       updatedAt?: number;
     }>;
@@ -65,6 +62,11 @@ const getByUpcInternal = makeFunctionReference<
     updatedAt: number;
   } | null
 >("paymoreCatalog:getByUpcInternal");
+const stripSourceListingFacts = makeFunctionReference<
+  "mutation",
+  { cursor?: string },
+  { processed: number; stripped: number; isDone: boolean }
+>("paymoreCatalog:stripSourceListingFacts");
 const getByUpc = makeFunctionReference<
   "query",
   { upc: string },
@@ -405,7 +407,7 @@ describe("PayMore catalog Convex storage", () => {
     });
   });
 
-  test("captures per-listing price and freshness across API pages of one title", async () => {
+  test("merges API page sources with freshness and no legacy metric fields", async () => {
     vi.stubEnv("INVENTORY_CRAWL_SECRET", "test-crawl-secret");
     const t = convexTest(schema, modules);
     const page = { secret: "test-crawl-secret", collectionSlug: "used-video-games-us" };
@@ -452,23 +454,79 @@ describe("PayMore catalog Convex storage", () => {
     const listings = product?.listings ?? [];
     expect(listings).toHaveLength(2);
 
-    const rockville = listings.find((listing) => listing.storeName === "paymore-rockville");
-    const anaheim = listings.find((listing) => listing.storeName === "paymore-anaheim");
+    const rockville = listings.find(
+      (listing) => listing.sourceUrl === "https://paymore.com/shop/product/15872618299690",
+    );
+    const anaheim = listings.find(
+      (listing) => listing.sourceUrl === "https://paymore.com/shop/product/15872618299691",
+    );
     expect(rockville).toMatchObject({
-      price: 59.99,
-      quantity: 1,
-      storeName: "paymore-rockville",
       imageUrl: "https://paymore.com/cdn/shop/files/galaxian-nes-rockville.jpg",
     });
     expect(anaheim).toMatchObject({
-      price: 49.99,
-      quantity: 2,
-      storeName: "paymore-anaheim",
       imageUrl: "https://paymore.com/cdn/shop/files/galaxian-nes-anaheim.jpg",
     });
+    expect(rockville).not.toHaveProperty("price");
+    expect(rockville).not.toHaveProperty("quantity");
+    expect(rockville).not.toHaveProperty("storeName");
+    expect(anaheim).not.toHaveProperty("price");
+    expect(anaheim).not.toHaveProperty("storeName");
     expect(rockville?.updatedAt).toBeGreaterThan(0);
     expect(anaheim?.updatedAt).toBeGreaterThan(0);
+    expect(anaheim?.updatedAt ?? 0).toBeGreaterThanOrEqual(rockville?.updatedAt ?? 0);
     vi.unstubAllEnvs();
+  });
+
+  test("stripSourceListingFacts removes legacy price, quantity, and storeName from source rows", async () => {
+    vi.useFakeTimers();
+    const t = convexTest(schema, modules);
+    const now = 1_700_000_000_000;
+    await t.mutation(ingestPages, {
+      now,
+      pages: [{ sourceUrl: ROCKVILLE_GALAXIAN, body: GALAXIAN_HTML }],
+    });
+
+    // Seed the legacy per-listing metrics directly, mimicking rows created
+    // before the catalog went spec-only.
+    const seeded = await t.run(async (ctx) => {
+      const sources = await ctx.db.query("paymoreCatalogSources").collect();
+      for (const source of sources) {
+        await ctx.db.patch(source._id, {
+          price: 49.99,
+          quantity: 2,
+          storeName: "paymore-rockville",
+        });
+      }
+      return sources.length;
+    });
+    expect(seeded).toBeGreaterThan(0);
+
+    const first = await t.mutation(stripSourceListingFacts, {});
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+    expect(first.processed).toBe(seeded);
+    expect(first.stripped).toBe(seeded);
+    expect(first.isDone).toBe(true);
+
+    const rows = await t.run(async (ctx) =>
+      ctx.db.query("paymoreCatalogSources").collect(),
+    );
+    for (const row of rows) {
+      expect(row).not.toHaveProperty("price");
+      expect(row).not.toHaveProperty("quantity");
+      expect(row).not.toHaveProperty("storeName");
+      expect(row.sourceUrl).toBe(ROCKVILLE_GALAXIAN);
+      expect(row.upc).toBe("077000052063");
+      expect(row.condition).toBe("Acceptable");
+      expect(row.createdAt).toBe(now);
+      expect(row.updatedAt).toBe(now);
+      // Fields absent on the legacy row stay absent after replace.
+      expect(row).not.toHaveProperty("imageUrl");
+    }
+
+    const second = await t.mutation(stripSourceListingFacts, {});
+    expect(second).toEqual({ processed: rows.length, stripped: 0, isDone: true });
+
+    vi.useRealTimers();
   });
 });
 

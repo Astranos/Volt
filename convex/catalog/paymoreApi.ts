@@ -34,10 +34,6 @@ function readString(value: unknown): string | null {
   return cleaned ? cleaned : null;
 }
 
-function readFiniteNumber(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
-}
-
 function readTrimmedString(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
@@ -119,9 +115,6 @@ function mapPayMoreApiItem(item: unknown, collectionSlug: string): MappedItem {
         sourceUrl,
         condition: split.listing.condition ?? null,
         attributes: split.listing,
-        price: readFiniteNumber(record.v_price),
-        quantity: readFiniteNumber(record.v_qty),
-        storeName: readTrimmedString(record.shop_name),
         imageUrl: readTrimmedString(record.p_image),
       }
     : null;
