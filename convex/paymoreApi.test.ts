@@ -223,6 +223,27 @@ describe("mapPayMoreApiItems", () => {
     expect(result.skippedNoTitle).toBe(0);
   });
 
+  test("reads the UPC from other attributes for device categories", () => {
+    const result = mapPayMoreApiItems(
+      [
+        iphoneItem({
+          other_attributes: {
+            ...IPHONE_OTHER_ATTRIBUTES,
+            UPC: "195950642834",
+          },
+        }),
+      ],
+      "apple-iphones",
+    );
+    expect(result.skippedNoUpc).toBe(0);
+    expect(firstProduct(result.products)).toMatchObject({
+      upc: "195950642834",
+      brand: "Apple",
+      model: "iPhone 14 Pro Max",
+    });
+    expect(firstProduct(result.products).attributes).not.toHaveProperty("upc");
+  });
+
   test("skips items with a failed UPC check digit", () => {
     const result = mapPayMoreApiItems(
       [

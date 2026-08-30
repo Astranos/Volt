@@ -109,6 +109,30 @@ function itemTitle(item: ApiItem): string | null {
   return typeof title === "string" && title.trim().length > 0 ? title : null;
 }
 
+// Convex object keys must be printable ASCII. PayMore occasionally emits
+// labels with tabs or other control characters, so normalize those keys at
+// the network boundary before the raw API page crosses into Convex.
+export function sanitizeConvexValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(sanitizeConvexValue);
+  const record = asRecord(value);
+  if (record === null) return value;
+
+  const sanitized: Record<string, unknown> = {};
+  for (const [rawKey, entry] of Object.entries(record)) {
+    const key = rawKey
+      .replace(/[^\x20-\x7e]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!key || key.startsWith("$")) continue;
+    sanitized[key] = sanitizeConvexValue(entry);
+  }
+  return sanitized;
+}
+
+export function redactSecret(value: string, secret: string): string {
+  return secret ? value.split(secret).join("[REDACTED]") : value;
+}
+
 // ---------------------------------------------------------------------------
 // CLI
 // ---------------------------------------------------------------------------
@@ -455,7 +479,7 @@ async function ingestInventoryPage(input: IngestInput): Promise<IngestResult> {
   const argsJson = JSON.stringify({
     secret: input.secret,
     collectionSlug: input.collectionSlug,
-    items: input.items,
+    items: input.items.map(sanitizeConvexValue),
   });
 
   let stdout = "";
@@ -476,15 +500,16 @@ async function ingestInventoryPage(input: IngestInput): Promise<IngestResult> {
     };
     stdout = typeof shaped.stdout === "string" ? shaped.stdout : stdout;
     stderr = typeof shaped.stderr === "string" ? shaped.stderr : stderr;
-    const message =
+    const rawMessage =
       typeof shaped.message === "string" ? shaped.message : String(error);
+    const message = redactSecret(rawMessage, input.secret);
     throw new Error(
       "convex run failed: " +
         message +
         "\n--- stdout (tail) ---\n" +
-        tail(stdout) +
+        tail(redactSecret(stdout, input.secret)) +
         "\n--- stderr (tail) ---\n" +
-        tail(stderr),
+        tail(redactSecret(stderr, input.secret)),
     );
   }
 
@@ -821,13 +846,19 @@ async function main(): Promise<number> {
   return 0;
 }
 
-main()
-  .then((code) => {
-    process.exit(code);
-  })
-  .catch((error: unknown) => {
-    console.error(
-      "fatal: " + (error instanceof Error ? error.message : String(error)),
-    );
-    process.exit(1);
-  });
+const invokedPath = process.argv[1];
+if (
+  invokedPath !== undefined &&
+  fileURLToPath(import.meta.url) === resolvePath(invokedPath)
+) {
+  main()
+    .then((code) => {
+      process.exit(code);
+    })
+    .catch((error: unknown) => {
+      console.error(
+        "fatal: " + (error instanceof Error ? error.message : String(error)),
+      );
+      process.exit(1);
+    });
+}

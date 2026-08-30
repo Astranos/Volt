@@ -91,7 +91,9 @@ function mapPayMoreApiItem(item: unknown, collectionSlug: string): MappedItem {
   const filterAttributes = objectFrom(record.filter_attributes);
   const otherAttributes = objectFrom(record.other_attributes);
 
-  const upc = normalizeUPCA(readString(filterAttributes.UPC) ?? "");
+  const upc = normalizeUPCA(
+    readString(filterAttributes.UPC) ?? readString(otherAttributes.UPC) ?? "",
+  );
   if (!upc) return { skipped: "no-upc" };
 
   const gameName = readString(filterAttributes["Game Name"]);
