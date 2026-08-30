@@ -367,6 +367,7 @@ export default defineSchema({
     rating: v.union(v.string(), v.null()),
     releaseYear: v.union(v.string(), v.null()),
     attributes: v.record(v.string(), v.string()),
+    collections: v.optional(v.array(v.string())),
     createdAt: v.number(),
     updatedAt: v.number(),
   })

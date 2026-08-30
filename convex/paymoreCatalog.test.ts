@@ -37,6 +37,7 @@ const getByUpcInternal = makeFunctionReference<
     platform: string | null;
     edition: string | null;
     sourceUrls: string[];
+    upcs: string[];
     createdAt: number;
     updatedAt: number;
   } | null
@@ -50,6 +51,7 @@ const getByUpc = makeFunctionReference<
     platform: string | null;
     edition: string | null;
     sourceUrls: string[];
+    upcs: string[];
     createdAt: number;
     updatedAt: number;
 } | null
@@ -460,5 +462,122 @@ describe("PayMore catalog search", () => {
       paginationOpts: { numItems: 25, cursor: null },
     });
     expect(result.page).toEqual([]);
+  });
+});
+
+describe("PayMore catalog multi-UPC products", () => {
+  const GALAXIAN_ALIAS =
+    "https://rockvillemd.paymore.com/products/galaxian-atari-5200-1981-alias";
+  const GALAXIAN_UPC_A = "077000052063";
+  const GALAXIAN_UPC_B = "088888888880";
+  const NES_GALAXIAN =
+    "https://rockvillemd.paymore.com/products/galaxian-nintendo-nes-1984";
+  const NES_GALAXIAN_UPC = "022222222220";
+  const MPN_UPC_ONE = "012345678905";
+  const MPN_UPC_TWO = "098765432105";
+  const MPN_SOURCE_ONE =
+    "https://rockvillemd.paymore.com/products/apple-iphone-14-pro-max-128gb-mq8r3ll-a";
+  const MPN_SOURCE_TWO =
+    "https://anaheimca.paymore.com/products/apple-iphone-14-pro-max-mq8r3ll-a-unlocked";
+
+  async function ingestGalaxianPair(t: ReturnType<typeof convexTest>) {
+    const aliasHtml = paymoreProductHtml({
+      title: "Galaxian (Atari 5200, 1981)",
+      gameName: "Galaxian",
+      platform: "Atari 5200",
+      upc: GALAXIAN_UPC_B,
+      extraRows: [["Publisher", "Atari"]],
+    });
+    await t.mutation(ingestPages, {
+      pages: [
+        { sourceUrl: ROCKVILLE_GALAXIAN, body: GALAXIAN_HTML },
+        { sourceUrl: ANAHEIM_GALAXIAN, body: GALAXIAN_JSON_LD_HTML },
+      ],
+    });
+    await t.mutation(ingestPages, {
+      pages: [{ sourceUrl: GALAXIAN_ALIAS, body: aliasHtml }],
+    });
+  }
+
+  test("merges same title + platform listings across UPCs and resolves both UPCs", async () => {
+    const t = convexTest(schema, modules);
+    await ingestGalaxianPair(t);
+
+    const byCanonical = await t.query(getByUpcInternal, { upc: GALAXIAN_UPC_A });
+    const byAlias = await t.query(getByUpcInternal, { upc: GALAXIAN_UPC_B });
+    expect(byCanonical?.upc).toBe(GALAXIAN_UPC_A);
+    expect(byAlias).toMatchObject({ upc: GALAXIAN_UPC_A, title: "Galaxian" });
+
+    // Canonical UPC A has two sources, alias UPC B has one, so A ranks first.
+    expect(byCanonical?.upcs).toEqual([GALAXIAN_UPC_A, GALAXIAN_UPC_B]);
+    expect(byAlias?.upcs).toEqual([GALAXIAN_UPC_A, GALAXIAN_UPC_B]);
+    expect([...(byAlias?.sourceUrls ?? [])].sort()).toEqual(
+      [ROCKVILLE_GALAXIAN, ANAHEIM_GALAXIAN, GALAXIAN_ALIAS].sort(),
+    );
+  });
+
+  test("search resolves an alias UPC for an all-digit query", async () => {
+    const t = convexTest(schema, modules);
+    await ingestGalaxianPair(t);
+    const authed = t.withIdentity({ subject: "catalog-user", tokenIdentifier: "clerk|catalog-user" });
+    const result = await authed.query(searchCatalog, {
+      searchQuery: GALAXIAN_UPC_B,
+      paginationOpts: { numItems: 25, cursor: null },
+    });
+    expect(result.page).toHaveLength(1);
+    expect(result.page[0]).toMatchObject({ upc: GALAXIAN_UPC_A, title: "Galaxian" });
+    expect(result.isDone).toBe(true);
+  });
+
+  test("merges listings that share an MPN and platform across UPCs", async () => {
+    const t = convexTest(schema, modules);
+    const first = paymoreProductHtml({
+      title: "Apple iPhone 14 Pro Max (Apple iPhone) 128GB Unlocked MQ8R3LL/A",
+      platform: "Apple iPhone",
+      upc: MPN_UPC_ONE,
+      extraRows: [["MPN", "MQ8R3LL/A"], ["Brand", "Apple"]],
+    });
+    const second = paymoreProductHtml({
+      title: "Unlocked Apple iPhone 14 Pro Max 128GB Deep Purple",
+      platform: "Apple iPhone",
+      upc: MPN_UPC_TWO,
+      extraRows: [["MPN", "MQ8R3LL/A"], ["Brand", "Apple"]],
+    });
+    await t.mutation(ingestPages, {
+      pages: [
+        { sourceUrl: MPN_SOURCE_ONE, body: first },
+        { sourceUrl: MPN_SOURCE_TWO, body: second },
+      ],
+    });
+
+    const byFirst = await t.query(getByUpcInternal, { upc: MPN_UPC_ONE });
+    const bySecond = await t.query(getByUpcInternal, { upc: MPN_UPC_TWO });
+    expect(byFirst).toMatchObject({ upc: MPN_UPC_ONE, mpn: "MQ8R3LL/A" });
+    expect(bySecond).toMatchObject({ upc: MPN_UPC_ONE, mpn: "MQ8R3LL/A" });
+    expect(bySecond?.sourceUrls).toHaveLength(2);
+  });
+
+  test("keeps same-title products on different platforms separate", async () => {
+    const t = convexTest(schema, modules);
+    const nesHtml = paymoreProductHtml({
+      title: "Galaxian (Nintendo NES, 1984)",
+      gameName: "Galaxian",
+      platform: "Nintendo NES",
+      upc: NES_GALAXIAN_UPC,
+      extraRows: [["Publisher", "Atari"]],
+    });
+    await t.mutation(ingestPages, {
+      pages: [
+        { sourceUrl: ROCKVILLE_GALAXIAN, body: GALAXIAN_HTML },
+        { sourceUrl: NES_GALAXIAN, body: nesHtml },
+      ],
+    });
+
+    const atari = await t.query(getByUpcInternal, { upc: GALAXIAN_UPC_A });
+    const nes = await t.query(getByUpcInternal, { upc: NES_GALAXIAN_UPC });
+    expect(atari).toMatchObject({ upc: GALAXIAN_UPC_A, platform: "Atari 5200" });
+    expect(nes).toMatchObject({ upc: NES_GALAXIAN_UPC, platform: "Nintendo NES" });
+    expect(atari?.upcs).toEqual([GALAXIAN_UPC_A]);
+    expect(nes?.upcs).toEqual([NES_GALAXIAN_UPC]);
   });
 });

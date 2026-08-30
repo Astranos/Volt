@@ -7,6 +7,16 @@ function preferText(current: string | null, incoming: string | null): string | n
   return incoming.length > current.length ? incoming : current;
 }
 
+// Collection tags union across merges so a product accumulates every
+// collection it has appeared in instead of flipping to the latest one.
+function unionCollections(
+  current: string[] | undefined,
+  incoming: string[] | undefined,
+): string[] | undefined {
+  if (!current && !incoming) return undefined;
+  return [...new Set([...(current ?? []), ...(incoming ?? [])])].sort();
+}
+
 export function mergeProductFields(
   current: Omit<CatalogProduct, "sourceUrls" | "listings">,
   incoming: Omit<CatalogProduct, "sourceUrls" | "listings">,
@@ -28,6 +38,7 @@ export function mergeProductFields(
     rating: preferText(current.rating, incoming.rating),
     releaseYear: preferText(current.releaseYear, incoming.releaseYear),
     attributes: mergeAttributeRecords(current.attributes, incoming.attributes),
+    collections: unionCollections(current.collections, incoming.collections),
   };
 }
 

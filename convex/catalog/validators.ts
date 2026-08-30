@@ -26,6 +26,7 @@ export const catalogProductValidator = v.object({
   rating: nullableString,
   releaseYear: nullableString,
   attributes: stringRecord,
+  collections: v.optional(v.array(v.string())),
   sourceUrls: v.array(v.string()),
   listings: v.array(catalogListingValidator),
 });
@@ -72,6 +73,8 @@ export const storedCatalogProductValidator = v.object({
   rating: nullableString,
   releaseYear: nullableString,
   attributes: stringRecord,
+  collections: v.optional(v.array(v.string())),
+  upcs: v.array(v.string()),
   sourceUrls: v.array(v.string()),
   listings: v.array(catalogListingValidator),
   createdAt: v.number(),

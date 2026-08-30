@@ -54,6 +54,7 @@ type FixtureOverrides = {
   p_title?: string;
   filter_attributes?: Record<string, unknown>;
   other_attributes?: Record<string, unknown>;
+  shopify_collection?: Array<{ id: number; name: string }>;
 };
 
 function gameItem(overrides: FixtureOverrides = {}) {
@@ -68,7 +69,7 @@ function gameItem(overrides: FixtureOverrides = {}) {
     v_qty: 1,
     shop_name: "paymore-hermitage",
     p_tags: ["Games"],
-    shopify_collection: [{ id: 123456, name: "Video Games" }],
+    shopify_collection: overrides.shopify_collection ?? [{ id: 123456, name: "Video Games" }],
   };
 }
 
@@ -84,7 +85,7 @@ function iphoneItem(overrides: FixtureOverrides = {}) {
     v_qty: 1,
     shop_name: "paymore-hermitage",
     p_tags: ["Phones"],
-    shopify_collection: [{ id: 456789, name: "Apple iPhone" }],
+    shopify_collection: overrides.shopify_collection ?? [{ id: 456789, name: "Apple iPhone" }],
   };
 }
 
@@ -249,5 +250,40 @@ describe("mapPayMoreApiItems", () => {
 
     const noisy = allAttributeKeys(product).join(" ").toLowerCase();
     expect(noisy).not.toMatch(/serial|imei|battery|lock|ios version|os version|warrant/);
+  });
+
+  test("carries collections extracted from shopify_collection names", () => {
+    const product = firstProduct(mapPayMoreApiItems([gameItem()], COLLECTION).products);
+    expect(product.collections).toEqual(["Video Games"]);
+
+    const dedupedTrimmed = firstProduct(
+      mapPayMoreApiItems(
+        [
+          gameItem({
+            shopify_collection: [
+              { id: 1, name: " Video Games " },
+              { id: 2, name: "Video Games" },
+              { id: 3, name: "Phones" },
+            ],
+          }),
+        ],
+        COLLECTION,
+      ).products,
+    );
+    expect(dedupedTrimmed.collections).toEqual(["Video Games", "Phones"]);
+  });
+
+  test("falls back to the collection slug when shopify_collection is absent", () => {
+    const { shopify_collection: _absent, ...withoutCollections } = gameItem();
+    const product = firstProduct(mapPayMoreApiItems([withoutCollections], COLLECTION).products);
+    expect(product.collections).toEqual([COLLECTION]);
+
+    const emptyNames = firstProduct(
+      mapPayMoreApiItems(
+        [gameItem({ shopify_collection: [{ id: 1, name: "   " }] })],
+        COLLECTION,
+      ).products,
+    );
+    expect(emptyNames.collections).toEqual([COLLECTION]);
   });
 });

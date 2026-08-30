@@ -49,6 +49,22 @@ function specEntries(attributes: Record<string, unknown>): Array<[string, string
   return entries;
 }
 
+// Extracts trimmed, deduped collection names from item.shopify_collection
+// (an array of {id, name}). Falls back to the crawl collection slug when the
+// item does not carry any usable collection names.
+function extractCollections(item: Record<string, unknown>, collectionSlug: string): string[] {
+  const names: string[] = [];
+  const raw = item.shopify_collection;
+  if (Array.isArray(raw)) {
+    for (const entry of raw) {
+      const name = readString(objectFrom(entry).name);
+      if (name) names.push(name);
+    }
+  }
+  const unique = [...new Set(names)];
+  return unique.length > 0 ? unique : collectionSlug ? [collectionSlug] : [];
+}
+
 // These keys are consumed as typed fields or the catalog identity, so they
 // must not leak into the spec split. splitSpecAttributes also drops them via
 // SKIP_LABELS; this keeps the intent explicit at the source.
@@ -111,6 +127,7 @@ function mapPayMoreApiItem(item: unknown, collectionSlug: string): MappedItem {
     rating: pick("rating"),
     releaseYear: pick("releaseYear"),
     attributes: omitProductAttributeKeys(split.product),
+    collections: extractCollections(record, collectionSlug),
     sourceUrls: listing ? [listing.sourceUrl] : [],
     listings: listing ? [listing] : [],
   };

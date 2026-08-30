@@ -29,6 +29,9 @@ export type CatalogProduct = {
   rating: string | null;
   releaseYear: string | null;
   attributes: Record<string, string>;
+  // PayMore collection names carried by the listing; the canonical
+  // collection field above keeps the crawl-time collection slug.
+  collections?: string[];
   sourceUrls: string[];
   listings: CatalogListing[];
 };

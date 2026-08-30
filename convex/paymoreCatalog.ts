@@ -95,10 +95,9 @@ export const searchCatalog = query({
     if (digits.length >= 6) {
       const upc = normalizeUPCA(digits);
       if (upc) {
-        const product = await ctx.db
-          .query("paymoreCatalogProducts")
-          .withIndex("by_upc", (q) => q.eq("upc", upc))
-          .unique();
+        // Alias-aware: resolves the canonical product even when the query
+        // names a non-canonical UPC carried by one of its source rows.
+        const product = await loadCatalogProductByUpc(ctx, upc);
         if (product) {
           return {
             page: [catalogSummary(product)],
