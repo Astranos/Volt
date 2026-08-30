@@ -100,6 +100,10 @@ struct CameraSessionControls: View {
     private let sideToolSlotWidth: CGFloat = 64
     private let toolRowMaxWidth: CGFloat = 380
     private let modeButtonWidth: CGFloat = 64
+    private let controlDeckHeight: CGFloat = 236
+    private let cameraToolsRowHeight: CGFloat = 64
+    private let modePickerHeight: CGFloat = 42
+    private let captureActionsRowHeight: CGFloat = 96
 
     @Binding var activeMode: CaptureMode
     @State private var centeredModeID: ModeID?
@@ -130,32 +134,29 @@ struct CameraSessionControls: View {
     let onFinish: () -> Void
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 0) {
             cameraToolsRow
                 .opacity(activeMode == .dictation ? 0 : isCaptureEnabled ? 1 : 0.45)
                 .allowsHitTesting(activeMode != .dictation)
                 .accessibilityHidden(activeMode == .dictation)
+                .frame(height: cameraToolsRowHeight)
+
+            Spacer(minLength: 0)
 
             if showsModePicker {
                 modePicker
+            } else {
+                Color.clear
+                    .frame(height: modePickerHeight)
             }
 
-            ZStack {
-                HStack {
-                    connectionSlot
+            Spacer(minLength: 0)
 
-                    Spacer()
-
-                    finishSlot
-                }
-
-                shutterButton
-            }
-            .frame(height: 96)
+            captureActionsRow
         }
+        .frame(height: controlDeckHeight)
         .padding(.horizontal, 18)
-        .padding(.top, 12)
-        .padding(.bottom, 12)
+        .padding(.vertical, 10)
         .background {
             LinearGradient(
                 colors: [.black.opacity(0), .black.opacity(0.78), .black.opacity(0.94)],
@@ -164,6 +165,7 @@ struct CameraSessionControls: View {
             )
             .ignoresSafeArea(edges: .bottom)
         }
+        .sensoryFeedback(.selection, trigger: selectedModeID)
     }
 
     private var selectedModeID: ModeID {
@@ -177,8 +179,10 @@ struct CameraSessionControls: View {
                     modeButton("Text", mode: .ocr)
                     modeButton("Barcode", mode: .barcode)
                     modeButton("Photo", mode: .photo)
-                    if showsProductScanner, let onSelectProductScanner {
-                        productModeButton(action: onSelectProductScanner)
+                    if showsProductScanner, onSelectProductScanner != nil {
+                        productModeButton {
+                            selectCenteredMode(.productScanner)
+                        }
                     }
                     modeButton("Audio", mode: .dictation)
                 }
@@ -195,14 +199,33 @@ struct CameraSessionControls: View {
                     centeredModeID = modeID
                 }
             }
-            .onChange(of: centeredModeID) { _, modeID in
-                guard let modeID, modeID != selectedModeID else { return }
+            .onScrollPhaseChange { _, newPhase in
+                guard isModeSelectionEnabled,
+                      newPhase == .idle,
+                      let modeID = centeredModeID,
+                      modeID != selectedModeID
+                else { return }
                 selectCenteredMode(modeID)
             }
         }
-        .frame(height: 42)
+        .frame(height: modePickerHeight)
         .disabled(!isModeSelectionEnabled)
         .opacity(isModeSelectionEnabled ? 1 : 0.55)
+    }
+
+    private var captureActionsRow: some View {
+        ZStack {
+            HStack {
+                connectionSlot
+
+                Spacer()
+
+                finishSlot
+            }
+
+            shutterButton
+        }
+        .frame(height: captureActionsRowHeight)
     }
 
     private var cameraToolsRow: some View {
@@ -322,8 +345,7 @@ struct CameraSessionControls: View {
         let isSelected = !isProductScannerSelected && activeMode == mode
 
         return Button {
-            onDeactivateProductScanner?()
-            activeMode = mode
+            selectCenteredMode(.capture(mode))
         } label: {
             VStack(spacing: 5) {
                 Text(title)

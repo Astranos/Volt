@@ -1142,15 +1142,22 @@ test("app clip capture modes share one camera and unified History area", () => {
   assert.doesNotMatch(clipRootViewSwiftSource, /capturedSessionPhotos|capturedThumbnails|capturedSessionItemCount/);
 });
 
-test("camera mode scrolling selects the centered mode, keeps Audio last, and gives AI one selection", () => {
+test("camera mode scrolling commits after settling, keeps Audio last, and gives AI one selection", () => {
   assert.match(
     sharedCameraSessionControlsSwiftSource,
     /modeButton\("Text", mode: \.ocr\)[\s\S]*modeButton\("Barcode", mode: \.barcode\)[\s\S]*modeButton\("Photo", mode: \.photo\)[\s\S]*if showsProductScanner[\s\S]*productModeButton[\s\S]*modeButton\("Audio", mode: \.dictation\)/
   );
   assert.match(
     sharedCameraSessionControlsSwiftSource,
+    /\.onScrollPhaseChange[\s\S]*newPhase == \.idle[\s\S]*selectCenteredMode\(modeID\)/
+  );
+  assert.doesNotMatch(
+    sharedCameraSessionControlsSwiftSource,
     /\.onChange\(of: centeredModeID\)[\s\S]*selectCenteredMode\(modeID\)/
   );
+  assert.match(sharedCameraSessionControlsSwiftSource, /\.sensoryFeedback\(\.selection, trigger: selectedModeID\)/);
+  assert.match(sharedCameraSessionControlsSwiftSource, /private let controlDeckHeight: CGFloat = \d+/);
+  assert.match(sharedCameraSessionControlsSwiftSource, /\.frame\(height: controlDeckHeight\)/);
   assert.match(
     sharedCameraSessionControlsSwiftSource,
     /case \.capture\(let mode\):[\s\S]*onDeactivateProductScanner\?\(\)[\s\S]*activeMode = mode[\s\S]*case \.productScanner:[\s\S]*onSelectProductScanner\?\(\)/
