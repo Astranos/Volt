@@ -262,7 +262,7 @@ def require_demo_account_for_review_information!
   )
 end
 
-def upload_app_store_release_notes(api_key:, app_version:, build_number:, release_notes:, review_notes:, submit_for_review:)
+def upload_app_store_release_notes(api_key:, app_version:, build_number:, release_notes:, review_notes:, submit_for_review:, automatic_release: false)
   return if release_notes.to_s.strip.empty? && review_notes.to_s.strip.empty? && !submit_for_review
 
   require_demo_account_for_review_information!
@@ -284,7 +284,7 @@ def upload_app_store_release_notes(api_key:, app_version:, build_number:, releas
     release_notes: localized_release_notes,
     app_review_information: app_review_information,
     submit_for_review: submit_for_review,
-    automatic_release: false,
+    automatic_release: automatic_release,
     submission_information: {
       export_compliance_uses_encryption: false
     },
@@ -510,7 +510,8 @@ platform :ios do
       build_number: build_number,
       release_notes: app_store_release_notes,
       review_notes: app_review_notes,
-      submit_for_review: submit_for_review
+      submit_for_review: submit_for_review,
+      automatic_release: truthy_env?("APP_STORE_AUTOMATIC_RELEASE")
     )
   end
 
@@ -526,7 +527,8 @@ platform :ios do
       build_number: options[:build_number] || ENV["VOLT_IOS_BUILD_NUMBER"] || project_build_number,
       release_notes: options[:release_notes] || ENV["APP_STORE_RELEASE_NOTES"],
       review_notes: options[:review_notes] || ENV["APP_REVIEW_NOTES"],
-      submit_for_review: truthy_env?("SUBMIT_FOR_REVIEW", true)
+      submit_for_review: truthy_env?("SUBMIT_FOR_REVIEW", true),
+      automatic_release: truthy_env?("APP_STORE_AUTOMATIC_RELEASE")
     )
   end
 
