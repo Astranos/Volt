@@ -102,11 +102,13 @@ struct CameraSessionControls: View {
     private let modeButtonWidth: CGFloat = 64
     private let controlDeckHeight: CGFloat = 236
     private let cameraToolsRowHeight: CGFloat = 64
+    private let cameraToolsVerticalOffset: CGFloat = -32
     private let modePickerHeight: CGFloat = 42
     private let captureActionsRowHeight: CGFloat = 96
 
     @Binding var activeMode: CaptureMode
     @State private var centeredModeID: ModeID?
+    @State private var isModePickerScrolling = false
     let torchEnabled: Bool
     let zoomLabel: String
     let gridVisible: Bool
@@ -140,6 +142,7 @@ struct CameraSessionControls: View {
                 .allowsHitTesting(activeMode != .dictation)
                 .accessibilityHidden(activeMode == .dictation)
                 .frame(height: cameraToolsRowHeight)
+                .offset(y: cameraToolsVerticalOffset)
 
             Spacer(minLength: 0)
 
@@ -189,23 +192,30 @@ struct CameraSessionControls: View {
                 .scrollTargetLayout()
                 .padding(.horizontal, max(0, (geometry.size.width - modeButtonWidth) / 2))
             }
-            .scrollTargetBehavior(.viewAligned(limitBehavior: .alwaysByOne))
+            .scrollTargetBehavior(.viewAligned(limitBehavior: .never, anchor: .center))
             .scrollPosition(id: $centeredModeID, anchor: .center)
             .onAppear {
                 centeredModeID = selectedModeID
             }
             .onChange(of: selectedModeID) { _, modeID in
+                guard centeredModeID != modeID else { return }
                 withAnimation(.easeInOut(duration: 0.24)) {
                     centeredModeID = modeID
                 }
             }
             .onScrollPhaseChange { _, newPhase in
-                guard isModeSelectionEnabled,
-                      newPhase == .idle,
-                      let modeID = centeredModeID,
-                      modeID != selectedModeID
-                else { return }
-                selectCenteredMode(modeID)
+                isModePickerScrolling = newPhase != .idle
+                guard newPhase == .idle else { return }
+
+                Task { @MainActor in
+                    await Task.yield()
+                    guard !isModePickerScrolling,
+                          isModeSelectionEnabled,
+                          let modeID = centeredModeID,
+                          modeID != selectedModeID
+                    else { return }
+                    selectCenteredMode(modeID)
+                }
             }
         }
         .frame(height: modePickerHeight)

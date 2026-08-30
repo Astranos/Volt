@@ -403,7 +403,7 @@ test("unified camera starts from the hero card and history groups mixed captures
   assert.match(scannerViewSwiftSource, /CaptureHistorySessionCard\(/);
   assert.match(sharedCameraSessionControlsSwiftSource, /if showsModePicker \{\s*modePicker\s*\}[\s\S]*connectionSlot[\s\S]*finishSlot[\s\S]*shutterButton/);
   assert.match(sharedCameraSessionControlsSwiftSource, /\.scrollTargetLayout\(\)/);
-  assert.match(sharedCameraSessionControlsSwiftSource, /\.scrollTargetBehavior\(\.viewAligned\(limitBehavior: \.alwaysByOne\)\)/);
+  assert.match(sharedCameraSessionControlsSwiftSource, /\.scrollTargetBehavior\(\.viewAligned\(limitBehavior: \.never, anchor: \.center\)\)/);
   assert.match(sharedCameraSessionControlsSwiftSource, /\.scrollPosition\(id: \$centeredModeID, anchor: \.center\)/);
   const modePickerStart = sharedCameraSessionControlsSwiftSource.indexOf("private var modePicker: some View");
   const modePickerEnd = sharedCameraSessionControlsSwiftSource.indexOf("private var cameraToolsRow", modePickerStart);
@@ -1151,12 +1151,27 @@ test("camera mode scrolling commits after settling, keeps Audio last, and gives 
     sharedCameraSessionControlsSwiftSource,
     /\.onScrollPhaseChange[\s\S]*newPhase == \.idle[\s\S]*selectCenteredMode\(modeID\)/
   );
+  assert.match(
+    sharedCameraSessionControlsSwiftSource,
+    /\.scrollTargetBehavior\(\.viewAligned\(limitBehavior: \.never, anchor: \.center\)\)/
+  );
+  assert.doesNotMatch(sharedCameraSessionControlsSwiftSource, /alwaysByOne/);
+  assert.match(
+    sharedCameraSessionControlsSwiftSource,
+    /\.onChange\(of: selectedModeID\)[\s\S]*guard centeredModeID != modeID else \{ return \}[\s\S]*centeredModeID = modeID/
+  );
+  assert.match(
+    sharedCameraSessionControlsSwiftSource,
+    /newPhase == \.idle[\s\S]*Task \{ @MainActor in[\s\S]*await Task\.yield\(\)[\s\S]*guard !isModePickerScrolling/
+  );
   assert.doesNotMatch(
     sharedCameraSessionControlsSwiftSource,
     /\.onChange\(of: centeredModeID\)[\s\S]*selectCenteredMode\(modeID\)/
   );
   assert.match(sharedCameraSessionControlsSwiftSource, /\.sensoryFeedback\(\.selection, trigger: selectedModeID\)/);
   assert.match(sharedCameraSessionControlsSwiftSource, /private let controlDeckHeight: CGFloat = \d+/);
+  assert.match(sharedCameraSessionControlsSwiftSource, /private let cameraToolsVerticalOffset: CGFloat = -\d+/);
+  assert.match(sharedCameraSessionControlsSwiftSource, /cameraToolsRow[\s\S]*\.offset\(y: cameraToolsVerticalOffset\)/);
   assert.match(sharedCameraSessionControlsSwiftSource, /\.frame\(height: controlDeckHeight\)/);
   assert.match(
     sharedCameraSessionControlsSwiftSource,
