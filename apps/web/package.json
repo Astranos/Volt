@@ -14,6 +14,7 @@
     "@tailwindcss/vite": "^4.1.18",
     "@tanstack/react-router": "^1.170.16",
     "@tanstack/react-start": "^1.168.26",
+    "@vercel/analytics": "^2.0.1",
     "@volt/scanner-protocol": "workspace:*",
     "convex": "^1.41.0",
     "html5-qrcode": "^2.3.8",

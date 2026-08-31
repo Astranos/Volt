@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { HeadContent, Outlet, Scripts, createRootRoute } from "@tanstack/react-router";
+import { Analytics } from "@vercel/analytics/react";
 import { AppProviders } from "../components/app-providers";
 import "../styles.css";
 
@@ -27,9 +28,12 @@ export const Route = createRootRoute({
 
 function RootComponent() {
   const content = (
-    <AppProviders>
-      <Outlet />
-    </AppProviders>
+    <>
+      <AppProviders>
+        <Outlet />
+      </AppProviders>
+      <Analytics />
+    </>
   );
   if (typeof document !== "undefined") return content;
   return (
