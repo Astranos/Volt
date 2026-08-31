@@ -269,10 +269,10 @@ final class ClipScannerStore {
     }
 
     private func prepareCapturedPhoto(_ image: UIImage) -> UIImage {
-        image
+        let croppedImage = image
             .normalizedForProcessing()
             .centerSquareCropped()
-            .resized(maxLongEdge: 2200)
+        return CloudPhotoRendition.preparedImage(from: croppedImage)
     }
 
     func capturePhoto(_ image: UIImage, batchId: String? = nil) async {
@@ -305,7 +305,9 @@ final class ClipScannerStore {
         statusText = "Preparing \(images.count) upload\(images.count == 1 ? "" : "s")"
         for (index, image) in images.enumerated() {
             let capturedAt = now.addingTimeInterval(Double(index) / 1000)
-            let preparedImage = image.normalizedForProcessing().resized(maxLongEdge: 2200)
+            let preparedImage = CloudPhotoRendition.preparedImage(
+                from: image.normalizedForProcessing()
+            )
             updatePhotoUploadProgress(batchId: batchId, prepared: index + 1, phase: .uploading)
             let photo = addCapturedImage(preparedImage, source: .upload, batchId: batchId, capturedAt: capturedAt)
             statusText = "Uploading \(index + 1) of \(images.count)"
@@ -327,7 +329,7 @@ final class ClipScannerStore {
     @discardableResult
     func sendPhoto(_ photo: ClipPhoto, filename: String? = nil) async -> Bool {
         guard let session = guestCloudSession,
-              let data = photo.image.jpegData(compressionQuality: 0.82)
+              let data = CloudPhotoRendition.jpegData(for: photo.image)
         else {
             errorMessage = "Connect to a workspace first."
             updatePhoto(photo.id, status: "Saved until connected")

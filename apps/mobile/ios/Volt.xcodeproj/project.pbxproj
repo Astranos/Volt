@@ -40,6 +40,7 @@
 		B1000000000000000000000E /* SharedScannerTabComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1000000000000000000000E /* SharedScannerTabComponents.swift */; };
 		B10000000000000000000010 /* BarcodeDetectionReticle.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000010 /* BarcodeDetectionReticle.swift */; };
 		B10000000000000000000011 /* SharedCaptureSessionOverlays.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000011 /* SharedCaptureSessionOverlays.swift */; };
+		B10000000000000000000012 /* CloudPhotoRendition.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000012 /* CloudPhotoRendition.swift */; };
 		B20000000000000000000001 /* SnapshotHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000001 /* SnapshotHelper.swift */; };
 		B20000000000000000000002 /* VoltScreenshots.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000002 /* VoltScreenshots.swift */; };
 		B30000000000000000000001 /* VoltClipApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = C30000000000000000000001 /* VoltClipApp.swift */; };
@@ -68,6 +69,7 @@
 		B3000000000000000000001F /* VoltClip.app in Embed App Clips */ = {isa = PBXBuildFile; fileRef = C30000000000000000000008 /* VoltClip.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		B30000000000000000000021 /* AppClipGuestCloudClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = C30000000000000000000010 /* AppClipGuestCloudClient.swift */; };
 		B30000000000000000000023 /* SpeechDictationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C70000000000000000000001 /* SpeechDictationService.swift */; };
+		B30000000000000000000024 /* CloudPhotoRendition.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000012 /* CloudPhotoRendition.swift */; };
 		B40000000000000000000001 /* AppConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = C40000000000000000000001 /* AppConfiguration.swift */; };
 		B40000000000000000000002 /* AccessKind.swift in Sources */ = {isa = PBXBuildFile; fileRef = C40000000000000000000002 /* AccessKind.swift */; };
 		B40000000000000000000003 /* AccessStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = C40000000000000000000003 /* AccessStatus.swift */; };
@@ -178,6 +180,7 @@
 		C1000000000000000000000F /* SharedPairingSessionComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedPairingSessionComponents.swift; sourceTree = "<group>"; };
 		C10000000000000000000010 /* BarcodeDetectionReticle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarcodeDetectionReticle.swift; sourceTree = "<group>"; };
 		C10000000000000000000011 /* SharedCaptureSessionOverlays.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCaptureSessionOverlays.swift; sourceTree = "<group>"; };
+		C10000000000000000000012 /* CloudPhotoRendition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudPhotoRendition.swift; sourceTree = "<group>"; };
 		C20000000000000000000001 /* SnapshotHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapshotHelper.swift; sourceTree = "<group>"; };
 		C20000000000000000000002 /* VoltScreenshots.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoltScreenshots.swift; sourceTree = "<group>"; };
 		C20000000000000000000003 /* VoltScreenshots.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = VoltScreenshots.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -341,6 +344,7 @@
 		E00000000000000000000006 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				C10000000000000000000012 /* CloudPhotoRendition.swift */,
 				C50000000000000000000008 /* CloudWorkspaceStore.swift */,
 				C50000000000000000000005 /* DeviceCredentialStore.swift */,
 				C50000000000000000000006 /* DurableCaptureOutbox.swift */,
@@ -627,6 +631,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B10000000000000000000012 /* CloudPhotoRendition.swift in Sources */,
 				B50000000000000000000003 /* CloudAPIContracts.swift in Sources */,
 				B50000000000000000000002 /* CloudCaptureRecord.swift in Sources */,
 				B50000000000000000000001 /* CloudDeviceCredential.swift in Sources */,
@@ -701,6 +706,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B30000000000000000000024 /* CloudPhotoRendition.swift in Sources */,
 				B30000000000000000000023 /* SpeechDictationService.swift in Sources */,
 				B30000000000000000000021 /* AppClipGuestCloudClient.swift in Sources */,
 				B30000000000000000000001 /* VoltClipApp.swift in Sources */,

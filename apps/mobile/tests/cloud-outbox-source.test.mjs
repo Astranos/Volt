@@ -7,6 +7,7 @@ const appSource = read("../ios/Volt/App/VoltApp.swift");
 const rootSource = read("../ios/Volt/Views/RootView.swift");
 const scannerSource = read("../ios/Volt/Services/ScannerStore.swift");
 const captureSource = read("../ios/Volt/Services/ScannerStoreCaptureActions.swift");
+const cloudPhotoRenditionSource = read("../ios/Volt/Services/CloudPhotoRendition.swift");
 const outboxSource = read("../ios/Volt/Services/DurableCaptureOutbox.swift");
 const workspaceSource = read("../ios/Volt/Services/CloudWorkspaceStore.swift");
 const credentialSource = read("../ios/Volt/Services/DeviceCredentialStore.swift");
@@ -68,6 +69,45 @@ test("cloud photos use presigned direct PUT and batch idempotency contracts", ()
   assert.match(workspaceSource, /api\.uploadPhoto\(photoData, using: upload\)/);
   assert.match(workspaceSource, /api\.markBatchReady\(/);
   assert.match(workspaceSource, /clientCreatedAt: createdAt\.timeIntervalSince1970 \* 1_000/);
+});
+
+test("full app and App Clip compress every cloud photo through one bounded rendition", () => {
+  assert.match(cloudPhotoRenditionSource, /static let maxLongEdge: CGFloat = 1800/);
+  assert.match(cloudPhotoRenditionSource, /static let maxByteCount = 1_000_000/);
+  assert.match(
+    cloudPhotoRenditionSource,
+    /compressionQualities: \[CGFloat\] = \[0\.78, 0\.72, 0\.66, 0\.60\]/
+  );
+  assert.match(
+    cloudPhotoRenditionSource,
+    /dimensionScales: \[CGFloat\] = \[1, 0\.85, 0\.70, 0\.55, 0\.40, 0\.25\]/
+  );
+  assert.match(cloudPhotoRenditionSource, /if let cgImage = image\.cgImage/);
+  assert.match(cloudPhotoRenditionSource, /format\.scale = 1/);
+  assert.match(
+    cloudPhotoRenditionSource,
+    /for dimensionScale in dimensionScales[\s\S]*for quality in compressionQualities[\s\S]*data\.count <= maxByteCount/
+  );
+  assert.match(cloudPhotoRenditionSource, /return smallestCandidate/);
+
+  assert.equal(
+    captureSource.match(/CloudPhotoRendition\.preparedImage\(/g)?.length,
+    2
+  );
+  assert.match(captureSource, /CloudPhotoRendition\.jpegData\(for: image\)/);
+  assert.doesNotMatch(captureSource, /photoLongEdge|jpegData\(compressionQuality: 0\.76\)/);
+
+  assert.equal(
+    clipStoreSource.match(/CloudPhotoRendition\.preparedImage\(/g)?.length,
+    2
+  );
+  assert.match(clipStoreSource, /CloudPhotoRendition\.jpegData\(for: photo\.image\)/);
+  assert.doesNotMatch(clipStoreSource, /maxLongEdge: 2200|jpegData\(compressionQuality: 0\.82\)/);
+
+  assert.equal(
+    xcodeProjectSource.match(/CloudPhotoRendition\.swift in Sources/g)?.length,
+    4
+  );
 });
 
 test("device credentials are stored in the keychain and revoked deterministically", () => {

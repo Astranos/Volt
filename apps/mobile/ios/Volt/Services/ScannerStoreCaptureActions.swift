@@ -230,10 +230,10 @@ extension ScannerStore {
     func captureSquarePhoto() async {
         let batchId = currentCaptureBatchId()
         guard let image = await camera.capturePhoto(matchingDeviceOrientation: true) else { return }
-        let preparedImage = image
+        let croppedImage = image
             .normalizedForProcessing()
             .croppedToVisiblePreview(previewSize: camera.previewLayer.bounds.size)
-            .resized(maxLongEdge: photoLongEdge)
+        let preparedImage = CloudPhotoRendition.preparedImage(from: croppedImage)
         let photoResult = ScanResult(
             kind: .photo,
             value: "Photo",
@@ -259,9 +259,9 @@ extension ScannerStore {
         statusText = "Preparing \(images.count) upload\(images.count == 1 ? "" : "s")"
 
         for (index, image) in images.enumerated() {
-            let preparedImage = image
-                .normalizedForProcessing()
-                .resized(maxLongEdge: photoLongEdge)
+            let preparedImage = CloudPhotoRendition.preparedImage(
+                from: image.normalizedForProcessing()
+            )
             updatePhotoUploadProgress(batchId: batch, prepared: index + 1, phase: .uploading)
             let capturedAt = now.addingTimeInterval(Double(index) / 1000)
             let photoResult = ScanResult(
@@ -359,7 +359,7 @@ extension ScannerStore {
         result: ScanResult,
         batchId: String? = nil
     ) async {
-        guard let data = image.jpegData(compressionQuality: 0.76) else {
+        guard let data = CloudPhotoRendition.jpegData(for: image) else {
             statusText = "Could not prepare photo"
             updateResultDeliveryState(id: result.id, state: .failed)
             return

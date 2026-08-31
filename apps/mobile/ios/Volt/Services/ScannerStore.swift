@@ -20,8 +20,6 @@ final class ScannerStore {
     static let barcodeRecognitionModeStorageKey = "volt.barcodeRecognitionMode.v1"
 
     let ocrCaptureMaxDimension: CGFloat = 1800
-    let photoLongEdge: CGFloat = 2200
-
     var activeMode: CaptureMode = .ocr
     var selectedSection: AppSection = .text
     var results: [ScanResult] = []
