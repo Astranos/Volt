@@ -14,7 +14,7 @@
  * like a real browser.
  */
 
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, resolve as resolvePath } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -292,6 +292,78 @@ function chromeBinaryPath(): string | null {
 
 // Headless Chrome executes the page's JavaScript, which is what Cloudflare's
 // non-interactive challenges need; --dump-dom then prints the settled DOM.
+function dumpDomWithChrome(chrome: string, url: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(
+      chrome,
+      [
+        "--headless=new",
+        "--disable-gpu",
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--disable-background-networking",
+        "--disable-component-update",
+        "--disable-default-apps",
+        "--disable-extensions",
+        "--disable-sync",
+        "--metrics-recording-only",
+        "--user-data-dir=" + resolvePath("/tmp", "pricecharting-chrome-profile"),
+        "--virtual-time-budget=20000",
+        "--dump-dom",
+        url,
+      ],
+      { stdio: ["ignore", "pipe", "pipe"] },
+    );
+    let stdout = "";
+    let stderr = "";
+    let stdoutBytes = 0;
+    let settled = false;
+
+    const settle = (result: { dom: string } | { error: Error }): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      if (!child.killed) child.kill("SIGKILL");
+      if ("dom" in result) resolve(result.dom);
+      else reject(result.error);
+    };
+
+    const timeout = setTimeout(() => {
+      settle({ error: new Error("chrome timed out while waiting for the DOM") });
+    }, REQUEST_TIMEOUT_MS + 15_000);
+
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk: string) => {
+      stdout += chunk;
+      stdoutBytes += Buffer.byteLength(chunk);
+      if (stdoutBytes > 64 * 1024 * 1024) {
+        settle({ error: new Error("chrome DOM exceeded 64 MiB") });
+      } else if (stdout.trimEnd().endsWith("</html>")) {
+        settle({ dom: stdout });
+      }
+    });
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (chunk: string) => {
+      stderr = tail(stderr + chunk, 4_000);
+    });
+    child.on("error", (error) => {
+      settle({ error });
+    });
+    child.on("close", (code) => {
+      if (settled) return;
+      if (stdout.length > 0) {
+        settle({ dom: stdout });
+      } else {
+        settle({
+          error: new Error(
+            "chrome exited " + String(code) + " without a DOM\n" + stderr,
+          ),
+        });
+      }
+    });
+  });
+}
+
 async function fetchViaChrome(url: string): Promise<string> {
   const chrome = chromeBinaryPath();
   if (chrome === null) {
@@ -299,21 +371,7 @@ async function fetchViaChrome(url: string): Promise<string> {
       "no Chrome binary found (set CHROME_BIN); cannot run --browser chrome",
     );
   }
-  const result = await execFileAsync(
-    chrome,
-    [
-      "--headless=new",
-      "--disable-gpu",
-      "--no-first-run",
-      "--user-data-dir=" + resolvePath("/tmp", "pricecharting-chrome-profile"),
-      "--virtual-time-budget=20000",
-      "--timeout=" + REQUEST_TIMEOUT_MS,
-      "--dump-dom",
-      url,
-    ],
-    { maxBuffer: 64 * 1024 * 1024, timeout: REQUEST_TIMEOUT_MS + 15_000 },
-  );
-  const dom = result.stdout;
+  const dom = await dumpDomWithChrome(chrome, url);
   if (dom.length === 0) throw new Error("chrome returned an empty DOM");
   if (looksLikeChallenge(200, dom)) throw new ChallengeError(200);
   const requestedUrl = new URL(url);
