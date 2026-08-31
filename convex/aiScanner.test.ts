@@ -142,10 +142,12 @@ describe("AI scanner parsing", () => {
     expect(init?.headers).toMatchObject({ Authorization: "Bearer server-only-key" });
     const body = JSON.parse(String(init?.body)) as {
       model: string;
+      provider: { only: string[]; require_parameters: boolean };
       response_format: { type: string };
       messages: Array<{ content: Array<{ type: string; image_url?: { url: string } }> }>;
     };
     expect(body.model).toBe("z-ai/glm-5.3-flash");
+    expect(body.provider).toEqual({ only: ["z-ai/fp8"], require_parameters: true });
     expect(body.response_format.type).toBe("json_object");
     expect(body.messages[0].content[1].image_url?.url).toBe("data:image/jpeg;base64,AQID");
     expect(buildOpenRouterRequest("name", new ArrayBuffer(0))).toContain("image/jpeg");
@@ -181,11 +183,13 @@ describe("AI scanner parsing", () => {
     expect(visionBody.tools).toBeUndefined();
     expect(visionBody.messages[0].content.map((part) => part.type)).toEqual(["text", "image_url"]);
     const catalogBody = JSON.parse(String(fetchImpl.mock.calls[1][1]?.body)) as {
+      provider: { only: string[]; require_parameters: boolean };
       tools: Array<{ type: string; parameters: { max_uses: number } }>;
       max_tool_calls: number;
       messages: Array<{ content: string }>;
     };
     expect(catalogBody.tools[0]).toMatchObject({ type: "openrouter:web_search", parameters: { max_uses: 2 } });
+    expect(catalogBody.provider).toEqual({ only: ["z-ai/fp8"], require_parameters: true });
     expect(catalogBody.max_tool_calls).toBe(2);
     expect(catalogBody.messages[0].content).toContain("Grand Theft Auto: San Andreas");
     expect(fetchImpl.mock.calls[2][1]).toMatchObject({ method: "GET", redirect: "manual" });

@@ -62,6 +62,7 @@ export class AIScannerError extends Error {
 }
 
 export const AI_SCANNER_MODEL = "z-ai/glm-5.3-flash";
+export const AI_SCANNER_PROVIDER = "z-ai/fp8";
 export const AI_SCANNER_MAX_IMAGE_BYTES = 1_500_000;
 export const AI_SCANNER_TIMEOUT_MS = 45_000;
 
@@ -258,7 +259,7 @@ export function buildOpenRouterRequest(mode: AIScannerMode, imageBytes: ArrayBuf
     max_tokens: 512,
     reasoning_effort: "low",
     include_reasoning: false,
-    provider: { require_parameters: true },
+    provider: { only: [AI_SCANNER_PROVIDER], require_parameters: true },
   };
   return JSON.stringify(request);
 }
@@ -287,7 +288,7 @@ export function buildOpenRouterCatalogRequest(identity: ProductIdentity): string
     max_tokens: 800,
     reasoning_effort: "low",
     include_reasoning: false,
-    provider: { require_parameters: true },
+    provider: { only: [AI_SCANNER_PROVIDER], require_parameters: true },
     tools: [{
       type: "openrouter:web_search",
       parameters: {
