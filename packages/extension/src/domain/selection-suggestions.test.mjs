@@ -59,7 +59,7 @@ test("selection suggestions stay inside the viewport above or below text", () =>
     {
       left: 217,
       placement: "above",
-      top: 160,
+      top: 126,
       width: 386,
     },
   );

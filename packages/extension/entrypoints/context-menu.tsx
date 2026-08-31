@@ -52,9 +52,11 @@ const selectionSearchActions: Array<{
 ];
 
 function SelectionSuggestionPill({
+  onCopy,
   onSearch,
   position,
 }: {
+  onCopy: () => void;
   onSearch: (actionId: SelectionSearchActionId) => void;
   position: SelectionSuggestionPosition;
 }) {
@@ -76,7 +78,7 @@ function SelectionSuggestionPill({
           <button
             key={action.id}
             aria-label={action.label}
-            className="selection-action"
+            className="selection-action selection-search-action"
             onClick={() => onSearch(action.id)}
             onPointerDown={(event) => event.preventDefault()}
             title={action.label}
@@ -87,6 +89,17 @@ function SelectionSuggestionPill({
           </button>
         );
       })}
+      <button
+        aria-label="Copy selected text"
+        className="selection-copy"
+        onClick={onCopy}
+        onPointerDown={(event) => event.preventDefault()}
+        title="Copy selected text"
+        type="button"
+      >
+        <Copy size={15} />
+        <span>Copy selected text</span>
+      </button>
     </div>
   );
 }
@@ -614,7 +627,7 @@ export default defineContentScript({
     let selectionHost: HTMLDivElement | null = null;
     let selectionRootEl: HTMLDivElement | null = null;
     let selectionReactRoot: Root | null = null;
-    let selectionTimer: number | null = null;
+    let selectionFrame: number | null = null;
     let selectionPointerIsDown = false;
     let activeSuggestionSelection = "";
     let suppressedSuggestionSelection = "";
@@ -663,7 +676,7 @@ export default defineContentScript({
 
     const selectionStyles = () => `
       :host{all:initial}
-      .selection-pill{box-sizing:border-box;position:fixed;display:flex;align-items:center;height:46px;padding:4px;background:rgba(255,255,255,.98);color:#1f2937;border:1px solid rgba(148,163,184,.32);border-radius:13px;box-shadow:0 12px 30px rgba(15,23,42,.18),0 2px 8px rgba(15,23,42,.1);font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;pointer-events:auto;isolation:isolate;animation:volt-selection-enter 120ms ease-out}
+      .selection-pill{box-sizing:border-box;position:fixed;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));padding:4px;background:rgba(255,255,255,.98);color:#1f2937;border:1px solid rgba(148,163,184,.32);border-radius:13px;box-shadow:0 12px 30px rgba(15,23,42,.18),0 2px 8px rgba(15,23,42,.1);font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;pointer-events:auto;isolation:isolate;animation:volt-selection-enter 90ms ease-out}
       .selection-pill::after{content:'';position:absolute;left:50%;width:10px;height:10px;background:#fff;border-right:1px solid rgba(148,163,184,.32);border-bottom:1px solid rgba(148,163,184,.32);transform:translateX(-50%) rotate(45deg);z-index:-1}
       .selection-pill[data-placement='above']::after{bottom:-6px}
       .selection-pill[data-placement='below']::after{top:-6px;transform:translateX(-50%) rotate(225deg)}
@@ -672,9 +685,13 @@ export default defineContentScript({
       .selection-action:active{background:#e2e8f0;transform:scale(.98)}
       .selection-action:focus-visible{outline:2px solid #22c55e;outline-offset:1px}
       .selection-action svg{flex:none}
+      .selection-copy{box-sizing:border-box;display:flex;grid-column:1/-1;align-items:center;justify-content:center;gap:7px;height:32px;margin-top:2px;border:0;border-top:1px solid #eef2f7;border-radius:0 0 9px 9px;background:transparent;color:#64748b;cursor:pointer;font:600 12px/1 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;transition:background 100ms ease,color 100ms ease}
+      .selection-copy:hover{background:#f1f5f9;color:#0f172a}
+      .selection-copy:active{background:#e2e8f0}
+      .selection-copy:focus-visible{outline:2px solid #22c55e;outline-offset:1px}
       @keyframes volt-selection-enter{from{opacity:0;transform:translateY(3px) scale(.985)}to{opacity:1;transform:translateY(0) scale(1)}}
-      @media (max-width:420px){.selection-action span{display:none}.selection-action{padding:0 8px}}
-      @media (prefers-reduced-motion:reduce){.selection-pill{animation:none}.selection-action{transition:none}}
+      @media (max-width:420px){.selection-search-action span{display:none}.selection-action{padding:0 8px}}
+      @media (prefers-reduced-motion:reduce){.selection-pill{animation:none}.selection-action,.selection-copy{transition:none}}
     `;
 
     const ensureHost = () => {
@@ -729,9 +746,9 @@ export default defineContentScript({
     }: {
       suppressCurrent?: boolean;
     } = {}) => {
-      if (selectionTimer) {
-        window.clearTimeout(selectionTimer);
-        selectionTimer = null;
+      if (selectionFrame !== null) {
+        window.cancelAnimationFrame(selectionFrame);
+        selectionFrame = null;
       }
       if (suppressCurrent && activeSuggestionSelection) {
         suppressedSuggestionSelection = activeSuggestionSelection;
@@ -816,6 +833,14 @@ export default defineContentScript({
       );
     };
 
+    const copySelection = async (selection: string) => {
+      const copied = await copyToClipboard(selection);
+      if (!copied) return;
+
+      suppressedSuggestionSelection = selection;
+      closeSelectionSuggestions();
+    };
+
     const renderSelectionSuggestions = ({
       rect,
       selection,
@@ -839,6 +864,9 @@ export default defineContentScript({
       });
       selectionReactRoot.render(
         <SelectionSuggestionPill
+          onCopy={() => {
+            void copySelection(selection);
+          }}
           onSearch={(actionId) =>
             openSelectionSearch(actionId, selection)
           }
@@ -848,9 +876,11 @@ export default defineContentScript({
     };
 
     const scheduleSelectionSuggestions = () => {
-      if (selectionTimer) window.clearTimeout(selectionTimer);
-      selectionTimer = window.setTimeout(() => {
-        selectionTimer = null;
+      if (selectionFrame !== null) {
+        window.cancelAnimationFrame(selectionFrame);
+      }
+      selectionFrame = window.requestAnimationFrame(() => {
+        selectionFrame = null;
         if (isOpen || selectionPointerIsDown || !selectionSuggestionsEnabled) {
           closeSelectionSuggestions();
           return;
@@ -866,7 +896,7 @@ export default defineContentScript({
           return;
         }
         renderSelectionSuggestions(snapshot);
-      }, 240);
+      });
     };
 
     // Menu React component

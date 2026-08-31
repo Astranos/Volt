@@ -7,7 +7,7 @@ const source = await readFile(
   "utf8",
 );
 
-test("selected-text toolbar exposes the three intended search actions", () => {
+test("selected-text toolbar exposes three search actions and one copy row", () => {
   const ebayIndex = source.indexOf('label: "eBay Prices"');
   const googleIndex = source.indexOf('label: "Search for UPC"');
   const priceChartingIndex = source.indexOf('label: "PriceCharting"');
@@ -15,13 +15,17 @@ test("selected-text toolbar exposes the three intended search actions", () => {
   assert.ok(ebayIndex >= 0);
   assert.ok(googleIndex > ebayIndex);
   assert.ok(priceChartingIndex > googleIndex);
-  assert.doesNotMatch(source, /Copy selected text/);
+  assert.match(source, /Copy selected text/);
+  assert.match(source, /className="selection-copy"/);
+  assert.match(source, /copyToClipboard\(selection\)/);
   assert.match(source, /buildGoogleUpcUrl\(selection\)/);
 });
 
-test("selected-text toolbar waits for selection and supports dismissal", () => {
+test("selected-text toolbar renders on the next frame and supports dismissal", () => {
   assert.match(source, /selectionPointerIsDown/);
   assert.match(source, /addEventListener\("selectionchange"/);
+  assert.match(source, /requestAnimationFrame/);
+  assert.doesNotMatch(source, /\}, 240\)/);
   assert.match(source, /event\.key === "Escape"/);
   assert.match(source, /closeSelectionSuggestions\(\{ suppressCurrent: true \}\)/);
   assert.match(source, /selection-suggestions-settings-changed/);
