@@ -328,14 +328,14 @@ enum LiveTextIdentifierMatcher {
         if let imei = imei(in: text) {
             return imei
         }
-        if let serial = labeledValue(in: text, labels: serialLabels) {
-            return Match(kind: .serial, value: serial.value, range: serial.range)
+        if let serial = labeledValue(in: text, labels: serialLabels, kind: .serial) {
+            return match(kind: .serial, value: serial.value, range: serial.range)
         }
         if let model = labeledModelValue(in: text) {
-            return Match(kind: .model, value: model.value, range: model.range)
+            return match(kind: .model, value: model.value, range: model.range)
         }
-        if let sku = labeledValue(in: text, labels: skuLabels) {
-            return Match(kind: .sku, value: sku.value, range: sku.range)
+        if let sku = labeledValue(in: text, labels: skuLabels, kind: .sku) {
+            return match(kind: .sku, value: sku.value, range: sku.range)
         }
         guard allowingStandalone else { return nil }
         if let standalone = standaloneIdentifier(in: text) {
@@ -367,15 +367,24 @@ enum LiveTextIdentifierMatcher {
             return validLuhnCandidate(in: rawText)
         case .model:
             if let model = modelTokenCandidate(in: rawText) {
-                return model.value
+                return normalizedIdentifierValue(model.value, kind: .model)
             }
             let cleaned = firstIdentifierToken(in: rawText)
             guard cleaned.count >= 4,
                   cleaned.rangeOfCharacter(from: .decimalDigits) != nil,
                   cleaned.rangeOfCharacter(from: .letters) != nil
             else { return nil }
-            return isKnownModelToken(cleaned) ? normalizedModelToken(cleaned) : cleaned
-        case .serial, .sku:
+            let model = isKnownModelToken(cleaned) ? normalizedModelToken(cleaned) : cleaned
+            return normalizedIdentifierValue(model, kind: .model)
+        case .serial:
+            let cleaned = firstIdentifierToken(in: rawText)
+            guard cleaned.count >= 4,
+                  cleaned.rangeOfCharacter(from: .decimalDigits) != nil,
+                  cleaned.rangeOfCharacter(from: .letters) != nil
+                    || (cleaned.count >= 6 && cleaned.allSatisfy(\.isNumber))
+            else { return nil }
+            return normalizedIdentifierValue(cleaned, kind: .serial)
+        case .sku:
             let cleaned = firstIdentifierToken(in: rawText)
             guard cleaned.count >= 4,
                   cleaned.rangeOfCharacter(from: .decimalDigits) != nil,
@@ -446,7 +455,11 @@ enum LiveTextIdentifierMatcher {
         "ict"
     ]
 
-    private static func labeledValue(in text: String, labels: [String]) -> (value: String, range: Range<String.Index>)? {
+    private static func labeledValue(
+        in text: String,
+        labels: [String],
+        kind: LiveTextCandidateKind
+    ) -> (value: String, range: Range<String.Index>)? {
         let lowercased = text.lowercased()
         guard let labelRange = labels
             .compactMap({ labelRange(in: lowercased, label: $0) })
@@ -456,7 +469,7 @@ enum LiveTextIdentifierMatcher {
         let valueStart = text.index(text.startIndex, offsetBy: lowercased.distance(from: lowercased.startIndex, to: labelRange.upperBound))
         let suffix = String(text[valueStart...])
         let cleaned = firstIdentifierToken(in: suffix)
-        guard cleaned.count >= 4, cleaned.rangeOfCharacter(from: .alphanumerics) != nil else { return nil }
+        guard isPlausibleLabeledValue(cleaned, kind: kind) else { return nil }
         guard let valueRange = text[valueStart...].range(of: cleaned) else { return nil }
         return (cleaned, valueRange)
     }
@@ -478,20 +491,20 @@ enum LiveTextIdentifierMatcher {
             return (model.value, lower..<upper)
         }
 
-        return labeledValue(in: text, labels: modelLabels)
+        return labeledValue(in: text, labels: modelLabels, kind: .model)
     }
 
     private static func standaloneIdentifier(in text: String) -> Match? {
         guard !isRegulatoryIdentifierContext(text) else { return nil }
         if let model = modelTokenCandidate(in: text) {
-            return Match(kind: .model, value: model.value, range: model.range)
+            return match(kind: .model, value: model.value, range: model.range)
         }
         let candidates = identifierTokenCandidates(in: text)
         if let candidate = candidates.first(where: { isKnownModelToken($0.value) }) {
-            return Match(kind: .model, value: normalizedModelToken(candidate.value), range: candidate.range)
+            return match(kind: .model, value: normalizedModelToken(candidate.value), range: candidate.range)
         }
         if let candidate = candidates.first(where: { isLikelySerialToken($0.value) }) {
-            return Match(kind: .serial, value: candidate.value, range: candidate.range)
+            return match(kind: .serial, value: candidate.value, range: candidate.range)
         }
         return nil
     }
@@ -549,6 +562,9 @@ enum LiveTextIdentifierMatcher {
     private static func modelTokenCandidate(in text: String) -> (value: String, range: Range<String.Index>)? {
         let candidates = identifierTokenCandidates(in: text)
         for (index, candidate) in candidates.enumerated() {
+            if let appleRetailPart = normalizedAppleRetailPartToken(candidate.value) {
+                return (appleRetailPart, candidate.range)
+            }
             let normalized = normalizedModelToken(candidate.value)
             if isKnownModelToken(normalized) {
                 return (normalized, candidate.range)
@@ -586,6 +602,25 @@ enum LiveTextIdentifierMatcher {
         }
     }
 
+    private static func normalizedAppleRetailPartToken(_ value: String) -> String? {
+        let uppercased = value.uppercased()
+        let parts = uppercased.split(separator: "/", omittingEmptySubsequences: false)
+        guard parts.count == 2 else { return nil }
+
+        let prefix = parts[0]
+        let suffix = parts[1]
+        guard (5...12).contains(prefix.count),
+              (1...3).contains(suffix.count),
+              let first = prefix.first,
+              "MNFP".contains(first),
+              prefix.allSatisfy({ $0.isLetter || $0.isNumber }),
+              prefix.contains(where: \.isLetter),
+              prefix.contains(where: \.isNumber),
+              suffix.allSatisfy(\.isLetter)
+        else { return nil }
+        return uppercased
+    }
+
     private static func normalizedModelToken(_ value: String) -> String {
         let uppercased = value.uppercased()
         if uppercased.hasPrefix("CF1-") || uppercased.hasPrefix("CFL-") {
@@ -613,12 +648,57 @@ enum LiveTextIdentifierMatcher {
 
     private static func isLikelySerialToken(_ value: String) -> Bool {
         guard value.count >= 10, value.count <= 24 else { return false }
-        let digitCount = value.filter(\.isNumber).count
+        let digitCount = value.filter { $0.isNumber || $0 == "O" || $0 == "o" }.count
         let letterCount = value.filter(\.isLetter).count
         guard digitCount >= 6, letterCount >= 1 else { return false }
         return value.allSatisfy { character in
             character.isLetter || character.isNumber || character == "-"
         }
+    }
+
+    private static func isPlausibleLabeledValue(_ value: String, kind: LiveTextCandidateKind) -> Bool {
+        guard value.count >= 4,
+              value.rangeOfCharacter(from: .alphanumerics) != nil
+        else { return false }
+        switch kind {
+        case .serial:
+            guard value.contains(where: \.isNumber) else { return false }
+            return value.contains(where: \.isLetter)
+                || (value.count >= 6 && value.allSatisfy(\.isNumber))
+        case .model:
+            return value.contains(where: \.isNumber)
+        case .imei, .sku:
+            return true
+        }
+    }
+
+    private static func match(
+        kind: LiveTextCandidateKind,
+        value: String,
+        range: Range<String.Index>
+    ) -> Match {
+        Match(kind: kind, value: normalizedIdentifierValue(value, kind: kind), range: range)
+    }
+
+    private static func normalizedIdentifierValue(_ value: String, kind: LiveTextCandidateKind) -> String {
+        switch kind {
+        case .serial:
+            return replacingAmbiguousZeros(in: value)
+        case .model:
+            let uppercased = value.uppercased()
+            guard uppercased.hasSuffix("OC") || uppercased.hasSuffix("OG") else {
+                return replacingAmbiguousZeros(in: value)
+            }
+            return replacingAmbiguousZeros(in: String(value.dropLast(2))) + String(value.suffix(2))
+        case .imei, .sku:
+            return value
+        }
+    }
+
+    private static func replacingAmbiguousZeros(in value: String) -> String {
+        String(value.map { character in
+            character == "O" || character == "o" ? "0" : character
+        })
     }
 
     private static func isValidLuhn(_ value: String) -> Bool {

@@ -779,6 +779,11 @@ test("native pre-capture identifier matching is deterministic", () => {
   assert.match(scannerRecognitionModelsSwiftSource, /isLabelBoundary\(in: text, before: range\.lowerBound\)/);
   assert.match(scannerRecognitionModelsSwiftSource, /isLabelBoundary\(in: text, after: range\.upperBound\)/);
   assert.match(scannerRecognitionModelsSwiftSource, /text\[valueStart\.\.\.\]\.range\(of: cleaned\)/);
+  assert.match(scannerRecognitionModelsSwiftSource, /normalizedAppleRetailPartToken\(candidate\.value\)/);
+  assert.match(scannerRecognitionModelsSwiftSource, /return match\(kind: \.serial, value: serial\.value, range: serial\.range\)/);
+  assert.match(scannerRecognitionModelsSwiftSource, /Match\(kind: kind, value: normalizedIdentifierValue\(value, kind: kind\), range: range\)/);
+  assert.match(scannerRecognitionModelsSwiftSource, /case \.serial:\s*return replacingAmbiguousZeros\(in: value\)/);
+  assert.match(scannerRecognitionModelsSwiftSource, /uppercased\.hasSuffix\("OC"\) \|\| uppercased\.hasSuffix\("OG"\)/);
 });
 
 test("native pre-capture identifiers render in the fixed top status area", () => {
