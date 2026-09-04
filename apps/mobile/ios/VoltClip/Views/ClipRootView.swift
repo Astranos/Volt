@@ -260,9 +260,9 @@ private struct ClipCaptureView: View {
                         }
                     }
 
-                    if mode == .photo {
-                        ClipPhotoLibraryUploadSection(store: store)
+                    ClipPhotoLibraryUploadSection(store: store)
 
+                    if mode == .photo {
                         ClipPhotoBatchesSection(
                             batches: photoBatches,
                             canAddPhotos: store.isConnected,

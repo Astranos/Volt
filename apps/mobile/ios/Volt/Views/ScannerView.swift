@@ -23,6 +23,7 @@ struct UnifiedCaptureHomeView: View {
                     }
                     UnifiedCaptureLaunchCard(action: startCapture)
                     ComputerAvailabilityCard { isTargetPickerPresented = true }
+                    PhotoLibraryUploadSection()
                     captureHistory
                     Text("One camera for text, barcodes, photos, and audio. Switch modes without leaving the session.")
                         .font(.subheadline)

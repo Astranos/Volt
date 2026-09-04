@@ -1142,6 +1142,29 @@ test("app clip capture modes share one camera and unified History area", () => {
   assert.doesNotMatch(clipRootViewSwiftSource, /capturedSessionPhotos|capturedThumbnails|capturedSessionItemCount/);
 });
 
+test("full app main Scan surface exposes the photo-library upload control", () => {
+  const scanStart = scannerViewSwiftSource.indexOf("struct UnifiedCaptureHomeView: View");
+  const scanEnd = scannerViewSwiftSource.indexOf("private struct UnifiedCaptureLaunchCard", scanStart);
+  const scanSource = scannerViewSwiftSource.slice(scanStart, scanEnd);
+
+  assert.ok(scanStart > -1);
+  assert.ok(scanEnd > scanStart);
+  assert.match(scanSource, /PhotoLibraryUploadSection\(\)/);
+});
+
+test("app clip main Scan surface exposes the photo-library upload control without a mode gate", () => {
+  const scanStart = clipRootViewSwiftSource.indexOf("private struct ClipCaptureView: View");
+  const scanEnd = clipRootViewSwiftSource.indexOf("private struct ClipWorkspaceTargetCard", scanStart);
+  const scanSource = clipRootViewSwiftSource.slice(scanStart, scanEnd);
+  const uploadControl = scanSource.indexOf("ClipPhotoLibraryUploadSection(store: store)");
+  const photoModeGate = scanSource.indexOf("if mode == .photo");
+
+  assert.ok(scanStart > -1);
+  assert.ok(scanEnd > scanStart);
+  assert.ok(uploadControl > -1);
+  assert.ok(photoModeGate === -1 || uploadControl < photoModeGate);
+});
+
 test("camera mode scrolling commits after settling, keeps Audio last, and gives AI one selection", () => {
   assert.match(
     sharedCameraSessionControlsSwiftSource,
