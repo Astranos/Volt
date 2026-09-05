@@ -3,6 +3,7 @@ import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { normalizeUPCA } from "../aiScanner";
 import { mergeProductFields } from "./dedupe";
 import { isAuthorizedCatalogProductUrl } from "./hosts";
+import { recordCatalogActivity } from "./activity";
 import type { CatalogListing, CatalogProduct } from "./types";
 
 export type UpsertStats = {
@@ -244,7 +245,9 @@ export async function upsertCatalogProducts(
     await reconcileCanonicalUpc(ctx, productId!, canonicalUpc);
   }
 
-  return { inserted, updated, sourcesAdded };
+  const stats = { inserted, updated, sourcesAdded };
+  await recordCatalogActivity(ctx, stats, now);
+  return stats;
 }
 
 export async function loadCatalogProductByUpc(ctx: QueryCtx, upc: string) {

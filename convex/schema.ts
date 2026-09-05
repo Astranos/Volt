@@ -350,6 +350,16 @@ export default defineSchema({
     .index("by_browserSessionId_and_status", ["browserSessionId", "status"])
     .index("by_expiresAt", ["expiresAt"]),
 
+  catalogActivityDays: defineTable({
+    dayStart: v.number(),
+    inserted: v.number(),
+    refreshed: v.number(),
+    sourcesAdded: v.number(),
+    batches: v.number(),
+    firstIngestAt: v.number(),
+    lastIngestAt: v.number(),
+  }).index("by_dayStart", ["dayStart"]),
+
   paymoreCatalogProducts: defineTable({
     upc: v.string(),
     title: v.string(),
