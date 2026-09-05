@@ -1,6 +1,10 @@
 .git
 .pnpm-store
 node_modules
+.env
+.env.*
+**/.env
+**/.env.*
 
 apps/mobile
 apps/scanner-signal
