@@ -18,53 +18,79 @@ import {
   useWorkspace,
 } from "../../lib/use-workspace";
 import {
-  batchResults,
   captureTypeLabels,
-  dayLabel,
   formatBytes,
   formatClockTime,
   formatRelativeTime,
-  matchesFilter,
-  matchesQuery,
   workspaceUsage,
-  type CaptureBatch,
   type CaptureFilter,
   type TimelineResult,
 } from "../../lib/workspace";
 import { mobileAppDownloadUrl } from "../../site-chrome";
 import { CaptureTile, type TileActions } from "./capture-tiles";
 import { PhotoLightbox } from "./photo-lightbox";
-
-type VisibleBatch = {
-  batch: CaptureBatch;
-  results: TimelineResult[];
-};
-
-type DaySection = {
-  key: string;
-  label: string;
-  batches: VisibleBatch[];
-};
+import {
+  captureCounts,
+  capturesCsv,
+  visibleSections,
+  type VisibleBatch,
+  type CaptureCounts,
+} from "../../lib/dashboard";
+import { DashboardHeading, DashboardOverview } from "./dashboard-overview";
 
 export function WorkspaceView() {
-  const { snapshot, isLoading, isEmpty } = useWorkspace();
+  const workspace = useWorkspace();
   const resolvePhoto = usePhotoUrls();
-  const { remove, restore } = useResultActions();
-  const { copiedKey, copy } = useCopy();
+  const resultActions = useResultActions();
+  const clipboard = useCopy();
+  return (
+    <WorkspaceContent
+      {...workspace}
+      resolvePhoto={resolvePhoto}
+      {...resultActions}
+      {...clipboard}
+    />
+  );
+}
 
+type WorkspaceContentProps = ReturnType<typeof useWorkspace> &
+  ReturnType<typeof useCopy> & {
+    resolvePhoto: ReturnType<typeof usePhotoUrls>;
+    remove: (results: Pick<TimelineResult, "id">[]) => Promise<unknown>;
+    restore: (results: Pick<TimelineResult, "id">[]) => Promise<unknown>;
+  };
+
+export function WorkspaceContent({
+  snapshot,
+  isLoading,
+  isEmpty,
+  resolvePhoto,
+  remove,
+  restore,
+  copiedKey,
+  copy,
+}: WorkspaceContentProps) {
   const [filter, setFilter] = useState<CaptureFilter>("all");
   const [query, setQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
   const usage = useMemo(() => workspaceUsage(snapshot), [snapshot]);
-  const counts = useMemo(() => captureCounts(snapshot?.batches ?? []), [
-    snapshot,
-  ]);
+  const counts = useMemo(
+    () => captureCounts(snapshot?.batches ?? []),
+    [snapshot],
+  );
 
   const sections = useMemo(
     () => visibleSections(snapshot?.batches ?? [], filter, query),
     [filter, query, snapshot],
+  );
+  const visibleResults = useMemo(
+    () =>
+      sections.flatMap((section) =>
+        section.batches.flatMap((entry) => entry.results),
+      ),
+    [sections],
   );
 
   const photos = useMemo(
@@ -138,7 +164,44 @@ export function WorkspaceView() {
         <ErrorBanner message={error} onDismiss={() => setError(null)} />
       ) : null}
 
+      <DashboardHeading
+        exportCount={visibleResults.length}
+        onExport={() => {
+          const url = URL.createObjectURL(
+            new Blob(["\uFEFF", capturesCsv(visibleResults)], {
+              type: "text/csv;charset=utf-8;",
+            }),
+          );
+          const anchor = document.createElement("a");
+          anchor.href = url;
+          anchor.download = `volt-captures-${new Date().toISOString().slice(0, 10)}.csv`;
+          anchor.click();
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+        }}
+      />
       <StatStrip usage={usage} />
+      {usage.batches >= 100 ? (
+        <p className="mt-3 text-xs text-zinc-500">
+          Showing your 100 most recent batches. Totals and search cover these
+          batches.
+        </p>
+      ) : null}
+      <DashboardOverview batches={snapshot?.batches ?? []} />
+
+      <div className="mt-8 flex items-end justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-semibold tracking-tight text-zinc-950">
+            Your captures
+          </h2>
+          <p className="mt-1 text-xs leading-5 text-zinc-500">
+            Search a batch to find its text and related photos.
+          </p>
+        </div>
+        <p role="status" className="shrink-0 text-xs text-zinc-500">
+          {visibleResults.length}{" "}
+          {visibleResults.length === 1 ? "capture" : "captures"}
+        </p>
+      </div>
 
       <Toolbar
         counts={counts}
@@ -147,7 +210,10 @@ export function WorkspaceView() {
           setFilter(next);
           clearSelection();
         }}
-        onQueryChange={setQuery}
+        onQueryChange={(next) => {
+          setQuery(next);
+          clearSelection();
+        }}
         query={query}
       />
 
@@ -155,9 +221,16 @@ export function WorkspaceView() {
         <FirstCaptureCard />
       ) : sections.length === 0 ? (
         <NoMatchesCard
+          isTrash={filter === "trash"}
+          hasQuery={query.trim().length > 0}
+          onlyTrash={counts.all === 0 && counts.trash > 0 && filter !== "trash"}
           onReset={() => {
             setQuery("");
-            setFilter("all");
+            setFilter(
+              counts.all === 0 && counts.trash > 0 && filter !== "trash"
+                ? "trash"
+                : "all",
+            );
           }}
         />
       ) : (
@@ -293,11 +366,7 @@ function BatchCard({
   );
 }
 
-function StatStrip({
-  usage,
-}: {
-  usage: ReturnType<typeof workspaceUsage>;
-}) {
+function StatStrip({ usage }: { usage: ReturnType<typeof workspaceUsage> }) {
   const stats = [
     { icon: ScanBarcode, label: "Captures", value: String(usage.results) },
     { icon: Images, label: "Photos", value: String(usage.photos) },
@@ -327,8 +396,6 @@ function StatStrip({
   );
 }
 
-type CaptureCounts = Record<CaptureFilter, number>;
-
 function Toolbar({
   counts,
   filter,
@@ -343,11 +410,11 @@ function Toolbar({
   query: string;
 }) {
   const chips: CaptureFilter[] = ["all", "barcode", "text", "photo"];
-  if (counts.dictation > 0) chips.push("dictation");
-  if (counts.trash > 0) chips.push("trash");
+  if (counts.dictation > 0 || filter === "dictation") chips.push("dictation");
+  chips.push("trash");
 
   return (
-    <div className="sticky top-16 z-30 -mx-4 mt-6 border-y border-zinc-200 bg-zinc-50/85 px-4 py-3 backdrop-blur-xl sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+    <div className="sticky top-16 z-30 -mx-4 mt-4 border-y border-zinc-200 bg-zinc-50/85 px-4 py-3 backdrop-blur-xl sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <label className="flex h-10 min-w-0 flex-1 items-center gap-2.5 rounded-[0.85rem] border border-zinc-300 bg-white px-3 lg:max-w-sm">
           <Search size={16} className="shrink-0 text-zinc-400" />
@@ -390,9 +457,7 @@ function Toolbar({
             >
               {filterLabel(chip)}
               <span
-                className={
-                  filter === chip ? "text-white/60" : "text-zinc-400"
-                }
+                className={filter === chip ? "text-white/60" : "text-zinc-400"}
               >
                 {counts[chip]}
               </span>
@@ -536,22 +601,43 @@ function FirstCaptureCard() {
   );
 }
 
-function NoMatchesCard({ onReset }: { onReset: () => void }) {
+function NoMatchesCard({
+  onReset,
+  isTrash,
+  hasQuery,
+  onlyTrash,
+}: {
+  onReset: () => void;
+  isTrash: boolean;
+  hasQuery: boolean;
+  onlyTrash: boolean;
+}) {
   return (
     <div className="mt-6 rounded-[1.35rem] border border-dashed border-zinc-300 bg-white/60 p-10 text-center">
       <h2 className="text-base font-semibold text-zinc-950">
-        No captures match those filters.
+        {onlyTrash
+          ? "Your captures are in Trash."
+          : isTrash && !hasQuery
+            ? "Trash is empty."
+            : "No captures match those filters."}
       </h2>
       <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-zinc-600">
-        Try a different search term, or clear the filters to see everything in
-        the workspace.
+        {onlyTrash
+          ? "Deleted captures can be restored. Open Trash to bring them back to your workspace."
+          : isTrash && !hasQuery
+            ? "Captures you delete will appear here, ready to restore if you need them."
+            : "Try a different search term, or clear the filters to see everything in the workspace."}
       </p>
       <button
         type="button"
         onClick={onReset}
         className="mt-5 inline-flex h-10 items-center justify-center rounded-[0.85rem] border border-zinc-300 bg-white px-4 text-sm font-semibold text-zinc-800 hover:border-zinc-950"
       >
-        Clear filters
+        {onlyTrash
+          ? "Open Trash"
+          : isTrash && !hasQuery
+            ? "View captures"
+            : "Clear filters"}
       </button>
     </div>
   );
@@ -559,7 +645,16 @@ function NoMatchesCard({ onReset }: { onReset: () => void }) {
 
 function WorkspaceSkeleton() {
   return (
-    <div className="grid gap-4" aria-hidden>
+    <div
+      role="status"
+      aria-label="Loading your dashboard"
+      className="grid gap-4"
+    >
+      <span className="sr-only">Loading your dashboard…</span>
+      <div
+        aria-hidden
+        className="mb-3 h-20 w-64 animate-pulse rounded-xl bg-zinc-200/70"
+      />
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {[0, 1, 2, 3].map((index) => (
           <div
@@ -583,58 +678,4 @@ function filterLabel(filter: CaptureFilter): string {
   if (filter === "all") return "All";
   if (filter === "trash") return "Trash";
   return `${captureTypeLabels[filter]}s`;
-}
-
-function captureCounts(batches: CaptureBatch[]): CaptureCounts {
-  const counts: CaptureCounts = {
-    all: 0,
-    text: 0,
-    barcode: 0,
-    photo: 0,
-    dictation: 0,
-    trash: 0,
-  };
-  for (const batch of batches) {
-    for (const result of batch.results) {
-      if (result.deliveryState === "deleted") counts.trash += 1;
-      else {
-        counts.all += 1;
-        counts[result.type] += 1;
-      }
-    }
-  }
-  return counts;
-}
-
-/**
- * Search matches on recognized text, but photos carry none. Keeping a matching
- * batch whole means searching a model number still surfaces the listing photos
- * that were shot alongside it.
- */
-function visibleSections(
-  batches: CaptureBatch[],
-  filter: CaptureFilter,
-  query: string,
-): DaySection[] {
-  const needle = query.trim();
-  const visible: VisibleBatch[] = [];
-
-  for (const batch of batches) {
-    const results = batchResults(batch);
-    if (needle && !results.some((result) => matchesQuery(result, needle))) {
-      continue;
-    }
-    const kept = results.filter((result) => matchesFilter(result, filter));
-    if (kept.length > 0) visible.push({ batch, results: kept });
-  }
-
-  const sections = new Map<string, DaySection>();
-  for (const entry of visible) {
-    const date = new Date(entry.batch.createdAt);
-    const key = date.toDateString();
-    const section = sections.get(key);
-    if (section) section.batches.push(entry);
-    else sections.set(key, { key, label: dayLabel(date), batches: [entry] });
-  }
-  return [...sections.values()];
 }

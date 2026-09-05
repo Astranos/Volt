@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { HeadContent, Outlet, Scripts, createRootRoute } from "@tanstack/react-router";
 import { Analytics } from "@vercel/analytics/react";
 import { AppProviders } from "../components/app-providers";
+import { PwaRegistration } from "../components/pwa-registration";
 import "../styles.css";
 
 export const Route = createRootRoute({
@@ -9,6 +10,7 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
+      { name: "theme-color", content: "#09090b" },
       {
         name: "description",
         content:
@@ -17,6 +19,8 @@ export const Route = createRootRoute({
       { title: "Volt - Chrome resale workflow with iPhone scanning" },
     ],
     links: [
+      { rel: "manifest", href: "/manifest.webmanifest" },
+      { rel: "apple-touch-icon", href: "/app-icon-192.png" },
       {
         rel: "icon",
         href: "/favicon.svg",
@@ -33,6 +37,7 @@ function RootComponent() {
         <Outlet />
       </AppProviders>
       <Analytics />
+      <PwaRegistration />
     </>
   );
   if (typeof document !== "undefined") return content;

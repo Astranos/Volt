@@ -1,0 +1,16 @@
+{
+  "id": "/dashboard",
+  "name": "Volt Workspace",
+  "short_name": "Volt",
+  "description": "Your Volt captures, product research, and connected tools.",
+  "start_url": "/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#fafafa",
+  "theme_color": "#09090b",
+  "icons": [
+    { "src": "/app-icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/app-icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/app-icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}
