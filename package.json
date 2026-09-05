@@ -11,7 +11,7 @@
     "dev:web": "pnpm --filter @volt/web dev",
     "deploy:preview": "vercel deploy --target preview",
     "test:convex": "vitest run convex",
-    "test:web": "vitest run apps/web/src/lib/dashboard.test.ts apps/web/src/components/dashboard/workspace-view.test.tsx && node --test scripts/pwa.test.mjs",
+    "test:web": "vitest run apps/web/src/lib/dashboard.test.ts apps/web/src/components/dashboard/workspace-view.test.tsx apps/web/src/components/workspace-access.test.tsx && node --test scripts/pwa.test.mjs",
     "test": "pnpm --filter @volt/scanner-protocol test && pnpm exec vitest run scripts/paymore-inventory.test.ts scripts/pricecharting-games.test.ts && pnpm test:convex && pnpm --filter @volt/extension test:scanner && pnpm --filter @volt/mobile test && pnpm test:web",
     "check:repo-health": "node scripts/check-repo-health.mjs",
     "build:extension": "pnpm --filter @volt/extension build",
