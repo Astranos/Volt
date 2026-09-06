@@ -36,7 +36,7 @@ import {
   type VisibleBatch,
   type CaptureCounts,
 } from "../../lib/dashboard";
-import { DashboardHeading, DashboardOverview } from "./dashboard-overview";
+import { ScannerResultsHeading, ScannerOverview } from "./dashboard-overview";
 
 export function WorkspaceView() {
   const workspace = useWorkspace();
@@ -164,7 +164,7 @@ export function WorkspaceContent({
         <ErrorBanner message={error} onDismiss={() => setError(null)} />
       ) : null}
 
-      <DashboardHeading
+      <ScannerResultsHeading
         exportCount={visibleResults.length}
         onExport={() => {
           const url = URL.createObjectURL(
@@ -186,7 +186,7 @@ export function WorkspaceContent({
           batches.
         </p>
       ) : null}
-      <DashboardOverview batches={snapshot?.batches ?? []} />
+      <ScannerOverview batches={snapshot?.batches ?? []} />
 
       <div className="mt-8 flex items-end justify-between gap-4">
         <div>
@@ -647,10 +647,10 @@ function WorkspaceSkeleton() {
   return (
     <div
       role="status"
-      aria-label="Loading your dashboard"
+      aria-label="Loading scanner results"
       className="grid gap-4"
     >
-      <span className="sr-only">Loading your dashboard…</span>
+      <span className="sr-only">Loading scanner results…</span>
       <div
         aria-hidden
         className="mb-3 h-20 w-64 animate-pulse rounded-xl bg-zinc-200/70"

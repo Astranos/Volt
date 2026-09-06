@@ -64,7 +64,7 @@ describe("catalog activity", () => {
     expect(CatalogActivityBoundary.getDerivedStateFromError()).toEqual({ failed: true });
     const html = renderToStaticMarkup(<CatalogActivityError retry={() => {}} />);
     expect(html).toContain("Activity is temporarily unavailable");
-    expect(html).toContain("You can still search and compare products below");
+    expect(html).toContain("You can still search and compare products in the catalog");
     expect(html).toContain("Retry activity");
     expect(html).not.toContain("ConvexError");
   });

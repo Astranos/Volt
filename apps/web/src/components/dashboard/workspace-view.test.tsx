@@ -2,7 +2,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "vitest";
 import { WorkspaceContent } from "./workspace-view";
-import { DashboardOverview } from "./dashboard-overview";
+import { ScannerOverview } from "./dashboard-overview";
 import type { CaptureBatch } from "../../lib/workspace";
 
 const actions = {
@@ -18,7 +18,7 @@ describe("dashboard presentation", () => {
     const html = renderToStaticMarkup(
       <WorkspaceContent {...actions} snapshot={null} isLoading isEmpty />,
     );
-    expect(html).toContain("Loading your dashboard");
+    expect(html).toContain("Loading scanner results");
     expect(html).not.toContain("Nothing captured yet");
   });
 
@@ -31,7 +31,8 @@ describe("dashboard presentation", () => {
         isEmpty
       />,
     );
-    expect(html).toContain("Dashboard");
+    expect(html).toContain("Scanner results");
+    expect(html).not.toContain(">Dashboard<");
     expect(html).toContain("Nothing captured yet");
     expect(html).toContain("0 captures over the last 7 days");
     expect(html).toContain("disabled");
@@ -60,7 +61,7 @@ describe("dashboard presentation", () => {
         ],
       },
     ];
-    const html = renderToStaticMarkup(<DashboardOverview batches={batches} />);
+    const html = renderToStaticMarkup(<ScannerOverview batches={batches} />);
     expect(html).toContain("1 capture over the last 7 days");
     expect(html).toContain("Get the iPhone app");
   });

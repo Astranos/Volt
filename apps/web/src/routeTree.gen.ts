@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as ThankyouRouteImport } from './routes/thankyou'
 import { Route as SignUpRouteImport } from './routes/sign-up'
 import { Route as SignInRouteImport } from './routes/sign-in'
+import { Route as ScannerResultsRouteImport } from './routes/scanner-results'
 import { Route as ScannerDemoRouteImport } from './routes/scanner-demo'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as DashboardRouteImport } from './routes/dashboard'
@@ -34,6 +35,11 @@ const SignUpRoute = SignUpRouteImport.update({
 const SignInRoute = SignInRouteImport.update({
   id: '/sign-in',
   path: '/sign-in',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ScannerResultsRoute = ScannerResultsRouteImport.update({
+  id: '/scanner-results',
+  path: '/scanner-results',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ScannerDemoRoute = ScannerDemoRouteImport.update({
@@ -86,6 +92,7 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof DashboardRoute
   '/privacy': typeof PrivacyRoute
   '/scanner-demo': typeof ScannerDemoRoute
+  '/scanner-results': typeof ScannerResultsRoute
   '/sign-in': typeof SignInRoute
   '/sign-up': typeof SignUpRoute
   '/thankyou': typeof ThankyouRoute
@@ -99,6 +106,7 @@ export interface FileRoutesByTo {
   '/dashboard': typeof DashboardRoute
   '/privacy': typeof PrivacyRoute
   '/scanner-demo': typeof ScannerDemoRoute
+  '/scanner-results': typeof ScannerResultsRoute
   '/sign-in': typeof SignInRoute
   '/sign-up': typeof SignUpRoute
   '/thankyou': typeof ThankyouRoute
@@ -113,6 +121,7 @@ export interface FileRoutesById {
   '/dashboard': typeof DashboardRoute
   '/privacy': typeof PrivacyRoute
   '/scanner-demo': typeof ScannerDemoRoute
+  '/scanner-results': typeof ScannerResultsRoute
   '/sign-in': typeof SignInRoute
   '/sign-up': typeof SignUpRoute
   '/thankyou': typeof ThankyouRoute
@@ -128,6 +137,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/privacy'
     | '/scanner-demo'
+    | '/scanner-results'
     | '/sign-in'
     | '/sign-up'
     | '/thankyou'
@@ -141,6 +151,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/privacy'
     | '/scanner-demo'
+    | '/scanner-results'
     | '/sign-in'
     | '/sign-up'
     | '/thankyou'
@@ -154,6 +165,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/privacy'
     | '/scanner-demo'
+    | '/scanner-results'
     | '/sign-in'
     | '/sign-up'
     | '/thankyou'
@@ -168,6 +180,7 @@ export interface RootRouteChildren {
   DashboardRoute: typeof DashboardRoute
   PrivacyRoute: typeof PrivacyRoute
   ScannerDemoRoute: typeof ScannerDemoRoute
+  ScannerResultsRoute: typeof ScannerResultsRoute
   SignInRoute: typeof SignInRoute
   SignUpRoute: typeof SignUpRoute
   ThankyouRoute: typeof ThankyouRoute
@@ -194,6 +207,13 @@ declare module '@tanstack/react-router' {
       path: '/sign-in'
       fullPath: '/sign-in'
       preLoaderRoute: typeof SignInRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/scanner-results': {
+      id: '/scanner-results'
+      path: '/scanner-results'
+      fullPath: '/scanner-results'
+      preLoaderRoute: typeof ScannerResultsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/scanner-demo': {
@@ -264,6 +284,7 @@ const rootRouteChildren: RootRouteChildren = {
   DashboardRoute: DashboardRoute,
   PrivacyRoute: PrivacyRoute,
   ScannerDemoRoute: ScannerDemoRoute,
+  ScannerResultsRoute: ScannerResultsRoute,
   SignInRoute: SignInRoute,
   SignUpRoute: SignUpRoute,
   ThankyouRoute: ThankyouRoute,

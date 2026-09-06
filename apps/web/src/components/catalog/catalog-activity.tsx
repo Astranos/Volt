@@ -78,7 +78,7 @@ export function CatalogActivityContent({ data, days, onDaysChange }: {
       ) : !hasTracking ? (
         <div className="py-7 text-center">
           <p className="text-sm font-semibold text-zinc-800">Activity tracking starts with the next import</p>
-          <p className="mt-1 text-xs leading-5 text-zinc-500">Earlier import history is unavailable. Existing products are still searchable below.</p>
+          <p className="mt-1 text-xs leading-5 text-zinc-500">Earlier import history is unavailable. Existing products are still available in the catalog.</p>
         </div>
       ) : (
         <>
@@ -186,7 +186,7 @@ export function CatalogActivityError({ retry }: { retry: () => void }) {
   return (
     <section aria-label="Catalog activity" className="rounded-2xl border border-zinc-200 bg-white p-5">
       <p className="text-sm font-semibold text-zinc-800">Activity is temporarily unavailable</p>
-      <p className="mt-1 text-xs text-zinc-500">You can still search and compare products below.</p>
+      <p className="mt-1 text-xs text-zinc-500">You can still search and compare products in the catalog.</p>
       <button
         type="button"
         onClick={retry}

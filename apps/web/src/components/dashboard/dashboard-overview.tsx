@@ -8,7 +8,7 @@ import { mobileAppDownloadUrl } from "../../site-chrome";
 import { captureActivity } from "../../lib/dashboard";
 import type { CaptureBatch } from "../../lib/workspace";
 
-export function DashboardHeading({
+export function ScannerResultsHeading({
   onExport,
   exportCount,
 }: {
@@ -22,10 +22,10 @@ export function DashboardHeading({
           Your workspace
         </p>
         <h1 className="mt-2 text-3xl font-semibold tracking-tight text-zinc-950 sm:text-4xl">
-          Dashboard
+          Scanner results
         </h1>
         <p className="mt-2 text-sm leading-6 text-zinc-500">
-          Everything you capture, together in one place.
+          Search, copy, and manage captures from your connected devices.
         </p>
       </div>
       <button
@@ -42,7 +42,7 @@ export function DashboardHeading({
   );
 }
 
-export function DashboardOverview({ batches }: { batches: CaptureBatch[] }) {
+export function ScannerOverview({ batches }: { batches: CaptureBatch[] }) {
   const days = captureActivity(batches);
   const weekCount = days.reduce((total, day) => total + day.count, 0);
   const maxCount = Math.max(1, ...days.map((day) => day.count));

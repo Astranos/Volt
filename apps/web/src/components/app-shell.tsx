@@ -13,6 +13,7 @@ import {
   KeyRound,
   LayoutDashboard,
   Menu,
+  ScanLine,
   Smartphone,
   X,
 } from "lucide-react";
@@ -25,7 +26,8 @@ import { authConfigured } from "./app-providers";
 import { AuthUnavailable } from "./auth-page";
 import { WorkspaceProvider } from "./workspace-provider";
 
-type AuthenticatedDestination = "workspace" | "product-data" | "api-keys";
+type AuthenticatedDestination =
+  "workspace" | "scanner-results" | "product-data" | "api-keys";
 type AppLayoutProps = {
   current: AuthenticatedDestination;
   children: ReactNode;
@@ -33,7 +35,16 @@ type AppLayoutProps = {
 };
 
 const destinations = {
-  workspace: { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  workspace: {
+    href: "/dashboard",
+    label: "Dashboard / Activity",
+    icon: LayoutDashboard,
+  },
+  "scanner-results": {
+    href: "/scanner-results",
+    label: "Scanner results",
+    icon: ScanLine,
+  },
   "product-data": { href: "/catalog", label: "Product data", icon: Database },
   "api-keys": { href: "/api-keys", label: "API keys", icon: KeyRound },
 } satisfies Record<
@@ -42,6 +53,7 @@ const destinations = {
 >;
 const destinationOrder: readonly AuthenticatedDestination[] = [
   "workspace",
+  "scanner-results",
   "product-data",
   "api-keys",
 ];
