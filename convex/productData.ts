@@ -78,6 +78,21 @@ async function loadProductsByMpnPrefix(ctx: QueryCtx, raw: string) {
   return Array.from(byUpc.values()).slice(0, 25);
 }
 
+async function loadProductSummaryByUpc(ctx: QueryCtx, upc: string) {
+  const canonical = await ctx.db
+    .query("paymoreCatalogProducts")
+    .withIndex("by_upc", (q) => q.eq("upc", upc))
+    .unique();
+  if (canonical) return productSummary(canonical);
+
+  const source = await ctx.db
+    .query("paymoreCatalogSources")
+    .withIndex("by_upc", (q) => q.eq("upc", upc))
+    .first();
+  const product = source ? await ctx.db.get(source.productId) : null;
+  return product ? productSummary(product) : null;
+}
+
 async function searchProductsFromCatalog(ctx: QueryCtx, args: SearchProductsArgs) {
   const raw = args.searchQuery?.trim() ?? "";
   const digits = raw.replace(/\D/g, "");
@@ -93,28 +108,17 @@ async function searchProductsFromCatalog(ctx: QueryCtx, args: SearchProductsArgs
   if (digits.length >= 6) {
     const upc = normalizeUPCA(digits);
     if (upc) {
-      const product = await loadCatalogProductByUpc(ctx, upc);
+      const product = await loadProductSummaryByUpc(ctx, upc);
       if (product) {
         return {
-          page: [{
-            upc: product.upc,
-            title: product.title,
-            platform: product.platform,
-            edition: product.edition,
-            mpn: product.mpn,
-            brand: product.brand,
-            model: product.model,
-            color: product.color,
-            storage: product.storage,
-            carrier: product.carrier,
-            updatedAt: product.updatedAt,
-          }],
+          page: [product],
           isDone: true,
           continueCursor: "",
         };
       }
     }
-  } else if (codeLike) {
+  }
+  if (codeLike) {
     const matches = await loadProductsByMpnPrefix(ctx, raw);
     if (matches.length > 0) {
       return { page: matches, isDone: true, continueCursor: "" };
@@ -205,6 +209,31 @@ async function findProductForAIIdentity(ctx: QueryCtx, identity: ProductIdentity
   if (runnerUp && best.score - runnerUp.score < 8 && runnerUp.product.upc !== best.product.upc) return null;
   return aiScannerCatalogMatch(best.product);
 }
+
+const PUBLIC_SEARCH_LIMIT = 20;
+
+// Public discovery exposes summaries only, without catalog browsing or cursors.
+export const searchPublicProducts = query({
+  args: { searchQuery: v.string() },
+  returns: v.object({
+    products: v.array(catalogSummaryValidator),
+    hasMore: v.boolean(),
+  }),
+  handler: async (ctx, args) => {
+    const searchQuery = args.searchQuery.trim();
+    if (searchQuery.length < 2 || searchQuery.length > 120) {
+      throw new Error("Search must be between 2 and 120 characters");
+    }
+    const result = await searchProductsFromCatalog(ctx, {
+      searchQuery,
+      paginationOpts: { numItems: PUBLIC_SEARCH_LIMIT + 1, cursor: null },
+    });
+    return {
+      products: result.page.slice(0, PUBLIC_SEARCH_LIMIT),
+      hasMore: result.page.length > PUBLIC_SEARCH_LIMIT || !result.isDone,
+    };
+  },
+});
 
 export const searchProducts = query({
   args: {

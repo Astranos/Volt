@@ -1,7 +1,12 @@
 {
-  "buildCommand": "pnpm build",
+  "buildCommand": "pnpm build:static",
   "outputDirectory": "dist",
   "headers": [
+    {
+      "source": "/upc-search/:path*",
+      "has": [{ "type": "query", "key": "q" }],
+      "headers": [{ "key": "X-Robots-Tag", "value": "noindex, follow" }]
+    },
     {
       "source": "/.well-known/apple-app-site-association",
       "headers": [
@@ -22,6 +27,10 @@
     }
   ],
   "rewrites": [
+    { "source": "/upc-search", "destination": "/upc-search.html" },
+    { "source": "/upc-search/", "destination": "/upc-search.html" },
+    { "source": "/robots.txt", "destination": "/robots.txt" },
+    { "source": "/sitemap.xml", "destination": "/sitemap.xml" },
     {
       "source": "/.well-known/apple-app-site-association",
       "destination": "/.well-known/apple-app-site-association"
@@ -38,6 +47,6 @@
       "source": "/clip/",
       "destination": "/clip.html"
     },
-    { "source": "/((?!api/).*)", "destination": "/" }
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }

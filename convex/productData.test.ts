@@ -32,6 +32,11 @@ const searchProducts = makeFunctionReference<
   { searchQuery?: string; paginationOpts: { numItems: number; cursor: string | null } },
   SearchResult
 >("productData:searchProducts");
+const searchPublicProducts = makeFunctionReference<
+  "query",
+  { searchQuery: string },
+  { products: ProductSummary[]; hasMore: boolean }
+>("productData:searchPublicProducts");
 const getProductByUpc = makeFunctionReference<
   "query",
   { upc: string },
@@ -59,7 +64,10 @@ const createKey = makeFunctionReference<
   { id: Id<"productApiKeys">; token: string }
 >("productApiKeys:create");
 
-async function seedProduct(t: ReturnType<typeof convexTest>) {
+async function seedProduct(
+  t: ReturnType<typeof convexTest>,
+  overrides: { upc?: string; title?: string; mpn?: string } = {},
+) {
   await t.run(async (ctx) => {
     await ctx.db.insert("paymoreCatalogProducts", {
       upc: "012345678905",
@@ -80,11 +88,110 @@ async function seedProduct(t: ReturnType<typeof convexTest>) {
       attributes: {},
       createdAt: 1_700_000_000_000,
       updatedAt: 1_700_000_000_000,
+      ...overrides,
     });
   });
 }
 
 describe("product data reads", () => {
+  test.each(["  Widget Phone  ", "012345678905", "WIDGET-12"])(
+    "allows anonymous public summary search for %s",
+    async (searchQuery) => {
+      const t = convexTest(schema, modules);
+      await seedProduct(t);
+      const result = await t.query(searchPublicProducts, { searchQuery });
+      expect(result.hasMore).toBe(false);
+      expect(result.products).toEqual([{
+        upc: "012345678905",
+        title: "Widget Phone 128GB",
+        platform: null,
+        edition: null,
+        mpn: "WIDGET-128",
+        brand: "Volt",
+        model: "Widget",
+        color: "Black",
+        storage: "128GB",
+        carrier: null,
+        updatedAt: 1_700_000_000_000,
+      }]);
+      expect(Object.keys(result).sort()).toEqual(["hasMore", "products"]);
+    },
+  );
+
+  test.each(["", "   ", "x", " x ", "x".repeat(121)])(
+    "rejects invalid public search length for %j",
+    async (searchQuery) => {
+      const t = convexTest(schema, modules);
+      await expect(t.query(searchPublicProducts, { searchQuery }))
+        .rejects.toThrow("Search must be between 2 and 120 characters");
+    },
+  );
+
+  test("finds MPNs with six digits after UPC lookup does not match", async () => {
+    const t = convexTest(schema, modules);
+    await seedProduct(t, { mpn: "ABC123456" });
+    const result = await t.query(searchPublicProducts, { searchQuery: "ABC123456" });
+    expect(result.products).toMatchObject([{ upc: "012345678905", mpn: "ABC123456" }]);
+    expect(result.hasMore).toBe(false);
+  });
+
+  test("resolves aliases to canonical summaries and prefers a direct canonical match", async () => {
+    const t = convexTest(schema, modules);
+    await seedProduct(t);
+    await t.run(async (ctx) => {
+      const product = await ctx.db.query("paymoreCatalogProducts")
+        .withIndex("by_upc", (q) => q.eq("upc", "012345678905"))
+        .unique();
+      if (!product) throw new Error("Missing seeded product");
+      await ctx.db.insert("paymoreCatalogSources", {
+        productId: product._id,
+        upc: "036000291452",
+        sourceUrl: "https://example.com/private-listing",
+        imageUrl: "https://example.com/private-image.jpg",
+        createdAt: 1_700_000_000_000,
+      });
+    });
+    const alias = await t.query(searchPublicProducts, { searchQuery: "036000291452" });
+    expect(alias.products).toMatchObject([{ upc: "012345678905", title: "Widget Phone 128GB" }]);
+    expect(alias.products[0]).not.toHaveProperty("sourceUrls");
+    expect(alias.products[0]).not.toHaveProperty("listings");
+    expect(alias.products[0]).not.toHaveProperty("upcs");
+
+    await seedProduct(t, { upc: "036000291452", title: "Direct Canonical Product" });
+    const canonical = await t.query(searchPublicProducts, { searchQuery: "036000291452" });
+    expect(canonical.products).toMatchObject([{ upc: "036000291452", title: "Direct Canonical Product" }]);
+    expect(canonical.hasMore).toBe(false);
+  });
+
+  test.each(["xx", "x".repeat(120)])("accepts public search boundary length %s", async (searchQuery) => {
+    const t = convexTest(schema, modules);
+    expect(await t.query(searchPublicProducts, { searchQuery }))
+      .toEqual({ products: [], hasMore: false });
+  });
+
+  test.each(["Widget Phone", "WIDGET-12"])(
+    "caps anonymous results at twenty for %s",
+    async (searchQuery) => {
+      const t = convexTest(schema, modules);
+      for (let index = 0; index < 25; index += 1) {
+        await seedProduct(t, { upc: String(index).padStart(12, "0"), mpn: `WIDGET-12${index}` });
+      }
+      const result = await t.query(searchPublicProducts, { searchQuery });
+      expect(result.products).toHaveLength(20);
+      expect(result.hasMore).toBe(true);
+    },
+  );
+
+  test("does not claim more results when exactly twenty match", async () => {
+    const t = convexTest(schema, modules);
+    for (let index = 0; index < 20; index += 1) {
+      await seedProduct(t, { upc: String(index).padStart(12, "0") });
+    }
+    const result = await t.query(searchPublicProducts, { searchQuery: "Widget Phone" });
+    expect(result.products).toHaveLength(20);
+    expect(result.hasMore).toBe(false);
+  });
+
   test("gates dashboard reads on Clerk authentication", async () => {
     const t = convexTest(schema, modules);
     await expect(t.query(searchProducts, {
@@ -268,6 +375,19 @@ describe("product data reads", () => {
       },
     });
   });
+
+  test.each(["/v1/products?q=Widget", "/v1/products/012345678905"])(
+    "keeps API authentication required for %s",
+    async (path) => {
+      const t = convexTest(schema, modules);
+      await seedProduct(t);
+      const response = await t.fetch(path);
+      expect(response.status).toBe(401);
+      expect(await response.json()).toMatchObject({
+        error: { code: "missing_authorization" },
+      });
+    },
+  );
 
   test("returns the stable error envelope for an invalid API key", async () => {
     const t = convexTest(schema, modules);

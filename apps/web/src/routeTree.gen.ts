@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as UpcSearchRouteImport } from './routes/upc-search'
 import { Route as ThankyouRouteImport } from './routes/thankyou'
 import { Route as SignUpRouteImport } from './routes/sign-up'
 import { Route as SignInRouteImport } from './routes/sign-in'
@@ -22,6 +23,11 @@ import { Route as ApiKeysRouteImport } from './routes/api-keys'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 
+const UpcSearchRoute = UpcSearchRouteImport.update({
+  id: '/upc-search',
+  path: '/upc-search',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ThankyouRoute = ThankyouRouteImport.update({
   id: '/thankyou',
   path: '/thankyou',
@@ -96,6 +102,7 @@ export interface FileRoutesByFullPath {
   '/sign-in': typeof SignInRoute
   '/sign-up': typeof SignUpRoute
   '/thankyou': typeof ThankyouRoute
+  '/upc-search': typeof UpcSearchRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -110,6 +117,7 @@ export interface FileRoutesByTo {
   '/sign-in': typeof SignInRoute
   '/sign-up': typeof SignUpRoute
   '/thankyou': typeof ThankyouRoute
+  '/upc-search': typeof UpcSearchRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -125,6 +133,7 @@ export interface FileRoutesById {
   '/sign-in': typeof SignInRoute
   '/sign-up': typeof SignUpRoute
   '/thankyou': typeof ThankyouRoute
+  '/upc-search': typeof UpcSearchRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -141,6 +150,7 @@ export interface FileRouteTypes {
     | '/sign-in'
     | '/sign-up'
     | '/thankyou'
+    | '/upc-search'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -155,6 +165,7 @@ export interface FileRouteTypes {
     | '/sign-in'
     | '/sign-up'
     | '/thankyou'
+    | '/upc-search'
   id:
     | '__root__'
     | '/'
@@ -169,6 +180,7 @@ export interface FileRouteTypes {
     | '/sign-in'
     | '/sign-up'
     | '/thankyou'
+    | '/upc-search'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -184,10 +196,18 @@ export interface RootRouteChildren {
   SignInRoute: typeof SignInRoute
   SignUpRoute: typeof SignUpRoute
   ThankyouRoute: typeof ThankyouRoute
+  UpcSearchRoute: typeof UpcSearchRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/upc-search': {
+      id: '/upc-search'
+      path: '/upc-search'
+      fullPath: '/upc-search'
+      preLoaderRoute: typeof UpcSearchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/thankyou': {
       id: '/thankyou'
       path: '/thankyou'
@@ -288,6 +308,7 @@ const rootRouteChildren: RootRouteChildren = {
   SignInRoute: SignInRoute,
   SignUpRoute: SignUpRoute,
   ThankyouRoute: ThankyouRoute,
+  UpcSearchRoute: UpcSearchRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
