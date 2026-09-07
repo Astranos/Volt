@@ -1,5 +1,6 @@
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import path from "node:path";
+import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
 import { createServer } from "vite";
 
@@ -7,10 +8,12 @@ const webRoot = path.resolve(import.meta.dirname);
 
 describe("public UPC search SEO", () => {
   it("renders shared landing content into HTML before JavaScript runs", async () => {
+    const cacheDir = await mkdtemp(path.join(tmpdir(), "volt-upc-seo-test-"));
     const server = await createServer({
+      cacheDir,
       root: webRoot,
       configFile: path.join(webRoot, "vite.static.config.ts"),
-      server: { middlewareMode: true },
+      server: { middlewareMode: true, hmr: false },
       appType: "custom",
       optimizeDeps: { noDiscovery: true, include: [] },
     });
@@ -25,6 +28,12 @@ describe("public UPC search SEO", () => {
       );
       expect(html).not.toContain("<!--upc-search-landing-->");
       expect(html).toContain("<h1");
+      expect(html).toContain('aria-label="Volt home"');
+      expect(html).toContain('src="/favicon.svg"');
+      expect(html).toContain('aria-label="Primary"');
+      expect(html).toContain('href="/sign-in"');
+      expect(html).toContain('href="/upc-search"');
+      expect(html).not.toContain("Free UPC lookup</span>");
       expect(html).toContain("What is a UPC code?");
       expect(html).toContain("No account needed.");
       expect(html).toContain('href="https://volt.juanquenga.com/upc-search"');
@@ -41,6 +50,7 @@ describe("public UPC search SEO", () => {
       expect(home).not.toContain("What is a UPC code?");
     } finally {
       await server.close();
+      await rm(cacheDir, { recursive: true, force: true });
     }
   }, 30_000);
 

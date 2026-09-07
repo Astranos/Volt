@@ -3,6 +3,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { createServer, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "node:path";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import {
   UPC_SEARCH_CANONICAL,
   UPC_SEARCH_DESCRIPTION,
@@ -23,11 +25,16 @@ export function upcSearchPrerender(): Plugin {
     name: "upc-search-prerender",
     async transformIndexHtml(html, context) {
       if (!context.filename.endsWith("/upc-search.html")) return html;
+      // Never invalidate the running client's optimized dependencies.
+      const cacheDir = await mkdtemp(
+        path.join(tmpdir(), "volt-upc-prerender-"),
+      );
       const server = await createServer({
         configFile: false,
+        cacheDir,
         root: path.dirname(context.filename),
         plugins: [react()],
-        server: { middlewareMode: true },
+        server: { middlewareMode: true, hmr: false },
         appType: "custom",
         optimizeDeps: { noDiscovery: true, include: [] },
       });
@@ -35,18 +42,12 @@ export function upcSearchPrerender(): Plugin {
         const content = await server.ssrLoadModule(
           "/src/components/upc-search/public-upc-search.tsx",
         );
+        const chrome = await server.ssrLoadModule("/src/site-chrome.tsx");
         const markup = renderToStaticMarkup(
           createElement(
             Fragment,
             null,
-            createElement(
-              "nav",
-              {
-                "aria-label": "Main navigation",
-                className: "border-b border-zinc-200 px-8 py-5 font-semibold",
-              },
-              createElement("a", { href: "/" }, "Volt"),
-            ),
+            createElement(chrome.SiteHeaderFrame),
             createElement(
               "main",
               { className: "bg-zinc-50 px-5 pb-20 pt-14 sm:px-8 sm:pt-20" },
@@ -105,6 +106,7 @@ export function upcSearchPrerender(): Plugin {
           .replace("<!--upc-search-landing-->", markup);
       } finally {
         await server.close();
+        await rm(cacheDir, { recursive: true, force: true });
       }
     },
   };

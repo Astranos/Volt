@@ -1,5 +1,6 @@
 import { motion, type Variants } from "motion/react";
-import { useAuth } from "@clerk/clerk-react";
+import { useAuth, UserButton } from "@clerk/clerk-react";
+import type { ReactNode } from "react";
 import { ArrowRight, Chrome, Github, Smartphone } from "lucide-react";
 
 import { authConfigured } from "./components/app-providers";
@@ -51,10 +52,15 @@ type SiteHeaderProps = {
   variant?: "marketing" | "scanner";
 };
 
-export function SiteHeader({
+export function SiteHeader(props: SiteHeaderProps) {
+  return <SiteHeaderFrame {...props} accountControls={<AccountLink />} />;
+}
+
+export function SiteHeaderFrame({
   anchorPrefix = "/",
   variant = "marketing",
-}: SiteHeaderProps) {
+  accountControls = <NavCta href="/sign-in" label="Sign in" />,
+}: SiteHeaderProps & { accountControls?: ReactNode }) {
   const isScanner = variant === "scanner";
 
   return (
@@ -92,7 +98,7 @@ export function SiteHeader({
             <a className="hover:text-zinc-950" href={supportUrl}>
               Support
             </a>
-            <AccountLink />
+            {accountControls}
           </nav>
         )}
       </div>
@@ -108,14 +114,17 @@ function AccountLink() {
   return authConfigured ? (
     <ClerkAccountLink />
   ) : (
-    <NavCta href="/dashboard" label="Dashboard" />
+    <NavCta href="/sign-in" label="Sign in" />
   );
 }
 
 function ClerkAccountLink() {
-  const { isSignedIn } = useAuth();
-  return isSignedIn ? (
-    <NavCta href="/dashboard" label="Dashboard" />
+  const { isLoaded, isSignedIn } = useAuth();
+  return isLoaded && isSignedIn ? (
+    <div className="flex items-center gap-3">
+      <NavCta href="/dashboard" label="Dashboard" />
+      <UserButton />
+    </div>
   ) : (
     <NavCta href="/sign-in" label="Sign in" />
   );

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowRight, Barcode, Check, Copy, Search } from "lucide-react";
+import { ArrowRight, Check, Copy, Search } from "lucide-react";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../../../convex/_generated/api";
 import { CONVEX_URL } from "../../lib/env";
@@ -19,11 +19,7 @@ const buttonClass =
 export function UpcSearchIntro() {
   return (
     <div className="mx-auto max-w-3xl text-center">
-      <span className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800">
-        <Barcode className="size-4" aria-hidden="true" />
-        Free UPC lookup
-      </span>
-      <h1 className="mt-6 text-4xl font-semibold tracking-tight text-zinc-950 sm:text-6xl">
+      <h1 className="text-4xl font-semibold tracking-tight text-zinc-950 sm:text-6xl">
         Find the UPC for
         <br className="hidden sm:block" /> your next listing.
       </h1>
