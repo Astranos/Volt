@@ -50,10 +50,16 @@ describe("catalog activity", () => {
   test("uses actual server totals and exposes exact daily data and tracking caveat", () => {
     const html = renderToStaticMarkup(<CatalogActivityContent data={data} days={7} onDaysChange={() => {}} />);
     expect(html).toContain("Sep 4 UTC: history unavailable");
-    expect(html).toContain("Sep 5 UTC: 12 new products, 25 refreshes, 8 source links added, 2 import batches");
+    expect(html).toContain("Sep 5 UTC: 12 new products, 25 re-imports, 8 source links added, 2 import batches");
     expect(html).toContain("Counts begin Sep 5, 1:00 AM UTC");
     expect(html).toContain("Earlier dates are unavailable, not zero");
-    expect(html).toContain("Repeat imports count as refreshes");
+    expect(html).toContain("Existing products re-imported");
+    expect(html).toContain("Re-imports count existing products seen again, even when their attributes are unchanged");
+    expect(html).toContain("Source links record where product attributes came from");
+    expect(html).toContain("No live prices or availability");
+    expect(html).toContain("Growing UPC and product-attribute coverage");
+    expect(html).not.toContain("Refreshes");
+    expect(html).not.toContain("refreshes");
     expect(html).toContain("View daily counts");
     expect(html).toContain('colSpan="4"');
     expect(html).toContain("Unavailable");

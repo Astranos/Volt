@@ -55,7 +55,7 @@ export function CatalogActivityContent({ data, days, onDaysChange }: {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 id="catalog-activity-heading" className="text-sm font-semibold text-zinc-950">Catalog activity</h2>
-          <p className="mt-1 text-xs text-zinc-500">Daily imports across the catalog, in UTC.</p>
+          <p className="mt-1 text-xs text-zinc-500">Growing UPC and product-attribute coverage. Daily imports in UTC. No live prices or availability.</p>
         </div>
         <div role="group" aria-label="Activity period" className="flex gap-1 rounded-lg bg-zinc-100 p-1">
           {([7, 30] as const).map((period) => (
@@ -83,7 +83,7 @@ export function CatalogActivityContent({ data, days, onDaysChange }: {
       ) : (
         <>
           <dl className="mt-5 grid grid-cols-3 gap-3">
-            {[{ label: "New products", value: data.totals.inserted }, { label: "Refreshes", value: data.totals.refreshed }, { label: "Source links added", value: data.totals.sourcesAdded }].map(({ label, value }) => (
+            {[{ label: "New products", value: data.totals.inserted }, { label: "Source links added", value: data.totals.sourcesAdded }, { label: "Existing products re-imported", value: data.totals.refreshed }].map(({ label, value }) => (
               <div key={label}>
                 <dt className="text-[0.68rem] text-zinc-500">{label}</dt>
                 <dd className="mt-1 text-xl font-semibold tabular-nums text-zinc-950">{value.toLocaleString("en-US")}</dd>
@@ -92,14 +92,14 @@ export function CatalogActivityContent({ data, days, onDaysChange }: {
           </dl>
           <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-[0.68rem] text-zinc-500">
             <span className="inline-flex items-center gap-1.5"><span className="size-2 rounded-sm bg-emerald-500" />New products</span>
-            <span className="inline-flex items-center gap-1.5"><span className="size-2 rounded-sm bg-zinc-400" />Refreshes</span>
-            <span>Repeat imports count as refreshes.</span>
+            <span className="inline-flex items-center gap-1.5"><span className="size-2 rounded-sm bg-zinc-300" />Re-imports</span>
           </div>
+          <p className="mt-2 text-[0.68rem] leading-5 text-zinc-500">Source links record where product attributes came from. Re-imports count existing products seen again, even when their attributes are unchanged.</p>
           <div className="mt-4 flex h-28 items-stretch gap-1 border-b border-zinc-200" role="group" aria-label="Daily catalog activity. Select a day for details.">
             {data.points.map((point) => {
               const tracked = isTrackedDay(point.dayStart, data.trackingStartedAt);
               const description = tracked
-                ? `${dayFormatter.format(point.dayStart)} UTC: ${point.inserted} new products, ${point.refreshed} refreshes, ${point.sourcesAdded} source links added, ${point.batches} import batches`
+                ? `${dayFormatter.format(point.dayStart)} UTC: ${point.inserted} new products, ${point.refreshed} re-imports, ${point.sourcesAdded} source links added, ${point.batches} import batches`
                 : `${dayFormatter.format(point.dayStart)} UTC: history unavailable`;
               return (
                 <button
@@ -115,7 +115,7 @@ export function CatalogActivityContent({ data, days, onDaysChange }: {
                 >
                   {tracked ? (
                     <>
-                      <span aria-hidden="true" className="block w-full bg-zinc-400" style={{ height: `${point.refreshed / maximum * 100}%` }} />
+                      <span aria-hidden="true" className="block w-full bg-zinc-300" style={{ height: `${point.refreshed / maximum * 100}%` }} />
                       <span aria-hidden="true" className="block w-full bg-emerald-500" style={{ height: `${point.inserted / maximum * 100}%` }} />
                       {point.inserted + point.refreshed === 0 ? <span aria-hidden="true" className="h-0.5 w-full bg-zinc-200" /> : null}
                     </>
@@ -132,7 +132,7 @@ export function CatalogActivityContent({ data, days, onDaysChange }: {
             {active ? (
               <>
                 {dayFormatter.format(active.dayStart)} UTC: {isTrackedDay(active.dayStart, data.trackingStartedAt)
-                  ? `${active.inserted} new products · ${active.refreshed} refreshes · ${active.sourcesAdded} source links · ${active.batches} batches`
+                  ? `${active.inserted} new products · ${active.refreshed} re-imports · ${active.sourcesAdded} source links · ${active.batches} batches`
                   : "History unavailable before tracking began."}
               </>
             ) : "No daily activity available."}
@@ -148,7 +148,7 @@ export function CatalogActivityContent({ data, days, onDaysChange }: {
                 <caption className="sr-only">Daily catalog imports in UTC. Unavailable means tracking had not started.</caption>
                 <thead>
                   <tr>
-                    {["Day UTC", "New", "Refreshes", "Sources", "Batches"].map((label) => (
+                    {["Day UTC", "New", "Re-imports", "Sources", "Batches"].map((label) => (
                       <th key={label} scope="col" className="p-2 font-semibold text-zinc-600">{label}</th>
                     ))}
                   </tr>
