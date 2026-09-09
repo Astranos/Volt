@@ -36,17 +36,18 @@ struct RootView: View {
         selectedContent
         .safeAreaInset(edge: .bottom, spacing: 0) {
             Color.clear
-                .frame(height: RootTabBar.reservedSpace)
+                .frame(height: ScannerHomeControls.reservedSpace)
                 .accessibilityHidden(true)
         }
         .overlay(alignment: .bottom) {
             GeometryReader { proxy in
-                RootTabBar(
-                    selection: $selectedTab,
+                ScannerHomeControls(
                     onScan: startCapture,
                     onConnections: { presentedSheet = .connections },
                     onSettings: { presentedSheet = .settings },
-                    targetSymbol: targetSymbol
+                    targetSymbol: targetSymbol,
+                    isScanSelected: selectedTab == .text,
+                    isSettingsSelected: selectedTab == .settings
                 )
                 .padding(.horizontal, 16)
                 .padding(.bottom, 20)
@@ -146,122 +147,6 @@ private enum RootPresentedSheet: String, Identifiable {
     case settings
 
     var id: String { rawValue }
-}
-
-private struct RootTabBar: View {
-    static let reservedSpace: CGFloat = 74
-
-    @Binding var selection: AppSection
-    let onScan: () -> Void
-    let onConnections: () -> Void
-    let onSettings: () -> Void
-    let targetSymbol: String
-
-    var body: some View {
-        if #available(iOS 26.0, *) {
-            GlassEffectContainer(spacing: 12) {
-                controls
-            }
-            .padding(.top, 10)
-            .frame(maxWidth: .infinity)
-            .shadow(color: .black.opacity(0.24), radius: 12, y: 6)
-        } else {
-            controls
-                .padding(.top, 10)
-                .frame(maxWidth: .infinity)
-                .background(.ultraThinMaterial)
-                .shadow(color: .black.opacity(0.18), radius: 10, y: 5)
-        }
-    }
-
-    private var controls: some View {
-        HStack(spacing: 12) {
-            connectionsButton
-            scanButton
-            settingsButton
-        }
-    }
-
-    private var connectionsButton: some View {
-        Button(action: onConnections) {
-            Image(systemName: targetSymbol)
-                .font(.subheadline.weight(.semibold))
-                .frame(width: 48, height: 48)
-                .contentShape(Rectangle())
-        }
-        .rootTabBarGlass(isSelected: false)
-        .accessibilityLabel("Connections")
-        .accessibilityHint("Choose the computer that receives text and barcode captures")
-    }
-
-    private var scanButton: some View {
-        Button(action: onScan) {
-            Label("Start", systemImage: "camera.viewfinder")
-                .font(.headline.weight(.semibold))
-                .frame(maxWidth: .infinity, minHeight: 48)
-        }
-        .rootTabBarScanStyle()
-        .tint(.green)
-        .accessibilityLabel("Start")
-        .accessibilityHint("Starts the scanner")
-        .accessibilityAddTraits(selection == .text ? .isSelected : [])
-    }
-
-    private var settingsButton: some View {
-        Button {
-            onSettings()
-        } label: {
-            Label("Settings", systemImage: "gearshape")
-                .labelStyle(.iconOnly)
-                .frame(width: 48, height: 48)
-                .contentShape(Rectangle())
-        }
-        .foregroundStyle(selection == .settings ? .primary : .secondary)
-        .rootTabBarGlass(isSelected: selection == .settings)
-        .accessibilityLabel("Settings")
-        .accessibilityHint("Shows app settings")
-        .accessibilityAddTraits(selection == .settings ? .isSelected : [])
-    }
-}
-
-private struct RootTabBarGlassModifier: ViewModifier {
-    let isSelected: Bool
-
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        if #available(iOS 26.0, *) {
-            content.buttonStyle(
-                .glass(.regular.tint(isSelected ? .accentColor.opacity(0.16) : .clear))
-            )
-            .buttonBorderShape(.circle)
-        } else {
-            content
-                .buttonStyle(.bordered)
-                .buttonBorderShape(.circle)
-                .tint(isSelected ? .accentColor : .secondary)
-        }
-    }
-}
-
-private struct RootTabBarScanStyleModifier: ViewModifier {
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        if #available(iOS 26.0, *) {
-            content.buttonStyle(.glassProminent)
-        } else {
-            content.buttonStyle(.borderedProminent)
-        }
-    }
-}
-
-private extension View {
-    func rootTabBarGlass(isSelected: Bool) -> some View {
-        modifier(RootTabBarGlassModifier(isSelected: isSelected))
-    }
-
-    func rootTabBarScanStyle() -> some View {
-        modifier(RootTabBarScanStyleModifier())
-    }
 }
 
 private struct AccountSwitchCaptureDecisionView: View {

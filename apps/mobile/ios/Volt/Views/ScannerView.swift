@@ -208,6 +208,27 @@ struct CaptureHistorySession: Identifiable {
     let id: String
     let results: [ScanResult]
 
+    // Only adjacent photos collapse: text, barcode, audio and source changes
+    // remain chronological boundaries inside a mixed capture session.
+    var entries: [CaptureHistoryEntry] {
+        var entries: [CaptureHistoryEntry] = []
+        for result in results {
+            if result.kind == .photo {
+                if case .photos(let batch) = entries.last,
+                   batch.source == result.source {
+                    entries[entries.count - 1] = .photos(
+                        PhotoBatch(batchId: id, results: batch.results + [result])
+                    )
+                } else {
+                    entries.append(.photos(PhotoBatch(batchId: id, results: [result])))
+                }
+            } else {
+                entries.append(.result(result))
+            }
+        }
+        return entries
+    }
+
     var latestCapturedAt: Date { results.map(\.capturedAt).max() ?? .distantPast }
     var title: String { "\(results.count) capture\(results.count == 1 ? "" : "s")" }
 
@@ -223,6 +244,18 @@ struct CaptureHistorySession: Identifiable {
             if !modes.contains(mode) { modes.append(mode) }
         }
         return modes.map(\.title).joined(separator: " · ")
+    }
+}
+
+enum CaptureHistoryEntry: Identifiable {
+    case result(ScanResult)
+    case photos(PhotoBatch)
+
+    var id: UUID {
+        switch self {
+        case .result(let result): result.id
+        case .photos(let batch): batch.results[0].id
+        }
     }
 }
 
@@ -248,10 +281,15 @@ private struct CaptureHistorySessionCard: View {
                 .font(.subheadline.weight(.semibold))
                 .buttonStyle(.borderedProminent)
                 .tint(VoltBrand.green)
-            ForEach(session.results) { result in
-                CapturedResultRow(result: result, canResend: true, onResend: { onResend(result) }, onDelete: { onDelete(result) })
-                    .padding(12)
-                    .background(.background, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            ForEach(session.entries) { entry in
+                switch entry {
+                case .photos(let batch):
+                    CaptureHistoryPhotoBatch(batch: batch, onResend: onResend, onDelete: onDelete)
+                case .result(let result):
+                    CapturedResultRow(result: result, canResend: true, onResend: { onResend(result) }, onDelete: { onDelete(result) })
+                        .padding(12)
+                        .background(.background, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                }
             }
         }
         .padding(14)

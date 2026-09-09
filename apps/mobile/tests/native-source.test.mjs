@@ -379,8 +379,8 @@ test("unified camera starts from the hero card and history groups mixed captures
   assert.doesNotMatch(scannerViewSwiftSource, /ScannerBottomActionAccessory/);
   assert.doesNotMatch(scannerViewSwiftSource, /safeAreaInset/);
   assert.doesNotMatch(scannerViewSwiftSource, /bottomAccessoryContentPadding/);
-  // The App Clip still needs its accessory, so the shared component stays.
-  assert.match(clipRootViewSwiftSource, /ScannerBottomActionAccessory/);
+  // Both roots use the same floating controls.
+  assert.match(clipRootViewSwiftSource, /ScannerHomeControls/);
 
   // A saved-item count is replaced by the captures themselves.
   assert.doesNotMatch(captureModeCardsSwiftSource, /CaptureModeActivityCard/);
@@ -471,9 +471,9 @@ test("native and app clip can reopen photo capture into a selected batch", () =>
 
   assert.match(clipScannerStoreSwiftSource, /func resumeCaptureSession\(batchId: String\) -> String \{\s*activeCaptureBatchId = batchId\s*return batchId\s*\}/);
   assert.match(clipRootViewSwiftSource, /Label\("Add Photos", systemImage: "plus\.viewfinder"\)/);
-  assert.match(clipRootViewSwiftSource, /store\.activeCaptureMode = \.photo\s*captureSessionBatchId = store\.resumeCaptureSession\(batchId: batch\.id\)\s*isCaptureSessionPresented = true/);
+  assert.match(clipRootViewSwiftSource, /store\.activeCaptureMode = \.ocr\s*captureSessionBatchId = store\.resumeCaptureSession\(batchId: batchId\)\s*isCaptureSessionPresented = true/);
   assert.match(clipRootViewSwiftSource, /let batchId = captureBatchId[\s\S]*onCaptureImage\(image, mode, batchId\)/);
-  assert.match(clipRootViewSwiftSource, /store\.activeCaptureMode = mode\s*captureSessionBatchId = store\.beginCaptureSession\(\)/);
+  assert.match(clipRootViewSwiftSource, /store\.activeCaptureMode = \.ocr\s*captureSessionBatchId = store\.beginCaptureSession\(\)/);
   assert.doesNotMatch(clipRootViewSwiftSource, /\.onAppear \{\s*activeMode = \.ocr/);
 });
 
@@ -1139,10 +1139,10 @@ test("app clip capture modes share one camera and unified History area", () => {
   assert.match(clipRootViewSwiftSource, /connectionLabel: isConnected \? "Write" : "Connect"[\s\S]*onConnection: \{\s*isConnectionSheetPresented = true/);
   assert.match(clipRootViewSwiftSource, /Button\("Delete session", systemImage: "trash", role: \.destructive\)/);
   assert.match(clipScannerStoreSwiftSource, /func removeSession\(batchId: String\)/);
-  assert.match(clipRootViewSwiftSource, /private var photoBatches: \[ClipPhotoBatch\]/);
-  assert.match(clipRootViewSwiftSource, /let grouped = Dictionary\(grouping: store\.photos\) \{ photo in/);
-  assert.match(clipRootViewSwiftSource, /ClipPhotoLibraryUploadSection\(store: store\)[\s\S]*ClipPhotoBatchesSection\(/);
-  assert.match(clipRootViewSwiftSource, /ClipPhotoBatchesSection\(/);
+  assert.match(clipRootViewSwiftSource, /private var sessionIDs: \[String\]/);
+  assert.match(clipRootViewSwiftSource, /let photos = store\.photos\.filter/);
+  assert.match(clipRootViewSwiftSource, /ClipPhotoLibraryUploadSection\(store: store\)[\s\S]*ClipUnifiedHistoryView\(store: store\)/);
+  assert.match(clipRootViewSwiftSource, /ClipPhotoBatchCard\(/);
   assert.doesNotMatch(clipRootViewSwiftSource, /Recent Uploads|ClipUploadPhotoBatchesSection/);
   assert.doesNotMatch(clipRootViewSwiftSource, /capturedSessionPhotos|capturedThumbnails|capturedSessionItemCount/);
 });
@@ -1221,7 +1221,7 @@ test("Audio mode stops and hides the camera feed in both iOS targets", () => {
 test("app clip captured photos are grouped, previewable, and removable after leaving camera", () => {
   assert.doesNotMatch(clipRootViewSwiftSource, /expandedBatchIds/);
   assert.match(clipRootViewSwiftSource, /@State private var previewedPhoto: ClipScannerStore\.ClipPhoto\?/);
-  assert.match(clipRootViewSwiftSource, /let grouped = Dictionary\(grouping: store\.photos\) \{ photo in\s*photo\.batchId \?\? photo\.id\.uuidString\s*\}/);
+  assert.match(clipRootViewSwiftSource, /let photos = store\.photos\.filter \{ \(\$0\.batchId \?\? \$0\.id\.uuidString\.lowercased\(\)\) == id \}/);
   assert.match(clipRootViewSwiftSource, /\.sheet\(item: \$previewedPhoto\)/);
   assert.match(clipRootViewSwiftSource, /private struct ClipPhotoBatchCard: View/);
   assert.match(clipRootViewSwiftSource, /private var visiblePhotos: \[ClipScannerStore\.ClipPhoto\] \{\s*Array\(batch\.photos\.suffix\(4\)\)/);
@@ -1232,7 +1232,7 @@ test("app clip captured photos are grouped, previewable, and removable after lea
   assert.match(clipRootViewSwiftSource, /private struct ClipPhotoThumbnail: View/);
   assert.match(clipRootViewSwiftSource, /private struct ClipPhotoPreviewSheet: View/);
   assert.match(clipRootViewSwiftSource, /store\.removePhoto\(id: photo\.id\)/);
-  assert.match(clipRootViewSwiftSource, /store\.removePhotos\(batchId: batch\.id\)/);
+  assert.match(clipRootViewSwiftSource, /store\.removePhotos\(batchId: id\)/);
   assert.match(clipScannerStoreSwiftSource, /func removePhoto\(id: UUID\)/);
   assert.match(clipScannerStoreSwiftSource, /func removePhotos\(batchId: String\)/);
 });
@@ -1259,7 +1259,8 @@ test("app clip bottom CTAs show connection progress while pairing", () => {
   assert.match(sharedScannerTabComponentsSwiftSource, /isConnecting \? "hourglass" : systemImage/);
   assert.match(sharedScannerTabComponentsSwiftSource, /if isConnecting \{\s*return "Connecting\.\.\."\s*\}/);
   assert.match(sharedScannerTabComponentsSwiftSource, /\.background\(\.bar\)\s*\.shadow\(color: \.black\.opacity\(0\.12\), radius: 10, y: -3\)/);
-  assert.match(clipRootViewSwiftSource, /ScannerBottomActionAccessory\([\s\S]*isConnecting: store\.isPairing[\s\S]*statusText: captureStatusText/);
+  assert.match(clipRootViewSwiftSource, /ScannerHomeControls\([\s\S]*onScan: startCapture/);
+  assert.match(clipRootViewSwiftSource, /ClipChromeSectionHeader\([\s\S]*connection: connectionSummary/);
   assert.match(clipRootViewSwiftSource, /ScannerPhotoPickerAccessory\([\s\S]*isConnecting: store\.isPairing[\s\S]*statusText: uploadStatusText/);
   assert.match(clipRootViewSwiftSource, /private var captureStatusText: String \{\s*if store\.isPairing \{\s*store\.statusText/);
   assert.match(clipRootViewSwiftSource, /private var uploadStatusText: String \{[\s\S]*else if store\.isPairing \{\s*status = store\.statusText/);
@@ -1278,14 +1279,14 @@ test("full app presents Volt, unified History, and Settings roots", () => {
   assert.match(rootViewSwiftSource, /case \.text, \.barcode, \.dictation:[\s\S]*UnifiedCaptureHomeView\(\)/);
   assert.match(rootViewSwiftSource, /case \.photos:[\s\S]*CaptureHistoryView\(\)/);
   assert.match(rootViewSwiftSource, /case \.settings:[\s\S]*SettingsView\(showsAccountSettings: showsAccountSettings\)/);
-  assert.match(rootViewSwiftSource, /RootTabBar\([\s\S]*selection: \$selectedTab,[\s\S]*onScan: startCapture,[\s\S]*onConnections: \{ presentedSheet = \.connections \},[\s\S]*onSettings: \{ presentedSheet = \.settings \}/);
+  assert.match(rootViewSwiftSource, /ScannerHomeControls\([\s\S]*onScan: startCapture,[\s\S]*onConnections: \{ presentedSheet = \.connections \},[\s\S]*onSettings: \{ presentedSheet = \.settings \}/);
   assert.match(rootViewSwiftSource, /\.sheet\(item: \$presentedSheet\)[\s\S]*case \.connections:[\s\S]*CloudTargetPickerSheet\(\)[\s\S]*case \.settings:[\s\S]*SettingsSheet\(showsAccountSettings: showsAccountSettings\)/);
-  assert.match(rootViewSwiftSource, /private struct RootTabBar: View/);
-  assert.match(rootViewSwiftSource, /GlassEffectContainer\(spacing: 12\)/);
-  assert.match(rootViewSwiftSource, /\.buttonStyle\([\s\S]*\.glass\(\.regular\.tint\(/);
-  assert.match(rootViewSwiftSource, /content\.buttonStyle\(\.glassProminent\)/);
+  assert.match(sharedScannerTabComponentsSwiftSource, /struct ScannerHomeControls: View/);
+  assert.match(sharedScannerTabComponentsSwiftSource, /GlassEffectContainer\(spacing: 12\)/);
+  assert.match(sharedScannerTabComponentsSwiftSource, /\.buttonStyle\([\s\S]*\.glass\(\.regular\.tint\(/);
+  assert.match(sharedScannerTabComponentsSwiftSource, /content\.buttonStyle\(\.glassProminent\)/);
   assert.doesNotMatch(rootViewSwiftSource, /\.background\(\.bar\)|Divider\(\)/);
-  assert.match(rootViewSwiftSource, /private var connectionsButton: some View[\s\S]*Image\(systemName: targetSymbol\)[\s\S]*\.frame\(width: 48, height: 48\)/);
+  assert.match(sharedScannerTabComponentsSwiftSource, /private var connectionsButton: some View[\s\S]*Image\(systemName: targetSymbol\)[\s\S]*\.frame\(width: 48, height: 48\)/);
   assert.match(rootViewSwiftSource, /private var targetSymbol: String[\s\S]*"cursorarrow\.motionlines"[\s\S]*"desktopcomputer\.trianglebadge\.exclamationmark"[\s\S]*"iphone"/);
   assert.match(cloudTargetPickerSwiftSource, /Label\(targetLabel, systemImage: "character\.cursor\.ibeam"\)[\s\S]*\.lineLimit\(1\)[\s\S]*\.frame\(minHeight: isCompact \? 36 : 48\)[\s\S]*\.contentShape\(Rectangle\(\)\)/);
   assert.match(cloudTargetPickerSwiftSource, /struct CloudTargetLabel: View[\s\S]*Label\(Self\.targetLabel\(for: store\), systemImage: "character\.cursor\.ibeam"\)[\s\S]*\.accessibilityElement\(children: \.combine\)/);
@@ -1300,10 +1301,10 @@ test("full app presents Volt, unified History, and Settings roots", () => {
   assert.match(scannerViewSwiftSource, /CaptureHistoryView[\s\S]*CloudTargetButton/);
   assert.match(cloudTargetPickerSwiftSource, /content\.buttonStyle\(\.glass\)[\s\S]*content\.buttonStyle\(\.bordered\)/);
   assert.ok(cloudTargetPickerSwiftSource.includes('.accessibilityLabel("Type destination: \\(targetLabel)")'));
-  assert.match(rootViewSwiftSource, /\.accessibilityLabel\("Connections"\)[\s\S]*Choose the computer/);
-  assert.match(rootViewSwiftSource, /Label\("Start", systemImage: "camera\.viewfinder"\)[\s\S]*\.accessibilityLabel\("Start"\)[\s\S]*\.accessibilityHint\("Starts the scanner"\)/);
-  assert.match(rootViewSwiftSource, /Label\("Start", systemImage: "camera\.viewfinder"\)[\s\S]*\.frame\(maxWidth: \.infinity, minHeight: 48\)/);
-  assert.match(rootViewSwiftSource, /Label\("Settings", systemImage: "gearshape"\)[\s\S]*\.labelStyle\(\.iconOnly\)/);
+  assert.match(sharedScannerTabComponentsSwiftSource, /\.accessibilityLabel\("Connections"\)[\s\S]*Choose the computer/);
+  assert.match(sharedScannerTabComponentsSwiftSource, /Label\("Start", systemImage: "camera\.viewfinder"\)[\s\S]*\.accessibilityLabel\("Start"\)[\s\S]*\.accessibilityHint\("Starts the scanner"\)/);
+  assert.match(sharedScannerTabComponentsSwiftSource, /Label\("Start", systemImage: "camera\.viewfinder"\)[\s\S]*\.frame\(maxWidth: \.infinity, minHeight: 48\)/);
+  assert.match(sharedScannerTabComponentsSwiftSource, /Label\("Settings", systemImage: "gearshape"\)[\s\S]*\.labelStyle\(\.iconOnly\)/);
   assert.doesNotMatch(rootViewSwiftSource, /Label\("Upload"|UploadView\(\)/);
   assert.match(
     enumSource,
@@ -1312,11 +1313,11 @@ test("full app presents Volt, unified History, and Settings roots", () => {
 });
 
 test("full app side controls keep an explicit 48 point hit target with native glass buttons", () => {
-  const connectionsStart = rootViewSwiftSource.indexOf("private var connectionsButton: some View");
-  const scanStart = rootViewSwiftSource.indexOf("private var scanButton: some View", connectionsStart);
-  const settingsStart = rootViewSwiftSource.indexOf("private var settingsButton: some View", scanStart);
-  const connectionsSource = rootViewSwiftSource.slice(connectionsStart, scanStart);
-  const settingsSource = rootViewSwiftSource.slice(settingsStart, rootViewSwiftSource.indexOf("}\n\nprivate struct RootTabBarGlassModifier", settingsStart));
+  const connectionsStart = sharedScannerTabComponentsSwiftSource.indexOf("private var connectionsButton: some View");
+  const scanStart = sharedScannerTabComponentsSwiftSource.indexOf("private var scanButton: some View", connectionsStart);
+  const settingsStart = sharedScannerTabComponentsSwiftSource.indexOf("private var settingsButton: some View", scanStart);
+  const connectionsSource = sharedScannerTabComponentsSwiftSource.slice(connectionsStart, scanStart);
+  const settingsSource = sharedScannerTabComponentsSwiftSource.slice(settingsStart, sharedScannerTabComponentsSwiftSource.indexOf("}\n\nprivate struct RootTabBarGlassModifier", settingsStart));
 
   assert.ok(connectionsStart > -1);
   assert.ok(scanStart > connectionsStart);
@@ -1324,13 +1325,13 @@ test("full app side controls keep an explicit 48 point hit target with native gl
   assert.match(connectionsSource, /\.frame\(width: 48, height: 48\)[\s\S]*\.contentShape\(Rectangle\(\)\)/);
   assert.match(settingsSource, /\.frame\(width: 48, height: 48\)[\s\S]*\.contentShape\(Rectangle\(\)\)/);
   assert.match(connectionsSource, /\.rootTabBarGlass\(isSelected: false\)/);
-  assert.match(settingsSource, /\.rootTabBarGlass\(isSelected: selection == \.settings\)/);
+  assert.match(settingsSource, /\.rootTabBarGlass\(isSelected: isSettingsSelected\)/);
   assert.match(settingsSource, /Button \{\s*onSettings\(\)/);
   assert.doesNotMatch(settingsSource, /selection = \.settings/);
-  assert.match(rootViewSwiftSource, /content\.buttonStyle\([\s\S]*\.glass\(\.regular\.tint\(/);
-  assert.match(rootViewSwiftSource, /\.buttonStyle\(\.bordered\)/);
-  assert.match(rootViewSwiftSource, /GlassEffectContainer\(spacing: 12\)[\s\S]*\.shadow\(color: \.black\.opacity\(0\.24\), radius: 12, y: 6\)/);
-  assert.match(rootViewSwiftSource, /\.safeAreaInset\(edge: \.bottom, spacing: 0\)[\s\S]*RootTabBar\.reservedSpace/);
+  assert.match(sharedScannerTabComponentsSwiftSource, /content\.buttonStyle\([\s\S]*\.glass\(\.regular\.tint\(/);
+  assert.match(sharedScannerTabComponentsSwiftSource, /\.buttonStyle\(\.bordered\)/);
+  assert.match(sharedScannerTabComponentsSwiftSource, /GlassEffectContainer\(spacing: 12\)[\s\S]*\.shadow\(color: \.black\.opacity\(0\.24\), radius: 12, y: 6\)/);
+  assert.match(rootViewSwiftSource, /\.safeAreaInset\(edge: \.bottom, spacing: 0\)[\s\S]*ScannerHomeControls\.reservedSpace/);
   assert.match(rootViewSwiftSource, /\.overlay\(alignment: \.bottom\)[\s\S]*GeometryReader \{ proxy in[\s\S]*\.padding\(\.horizontal, 16\)[\s\S]*\.padding\(\.bottom, 20\)[\s\S]*\.offset\(y: proxy\.safeAreaInsets\.bottom\)/);
   assert.match(settingsViewSwiftSource, /struct SettingsSheet: View[\s\S]*SettingsView\(showsAccountSettings: showsAccountSettings, showsDoneButton: true\)[\s\S]*\.presentationDetents\(\[\.medium, \.large\]\)[\s\S]*\.presentationDragIndicator\(\.visible\)/);
   assert.match(settingsViewSwiftSource, /if !showsDoneButton \{\s*store\.selectedSection = \.settings/);
@@ -1348,28 +1349,19 @@ test("full app uses Liquid Glass for floating status chrome without glassing con
 
 test("full app Scan control requests a new capture even when Scan is selected", () => {
   assert.match(rootViewSwiftSource, /@State private var isCaptureSessionPresented = false/);
-  assert.match(rootViewSwiftSource, /RootTabBar\([\s\S]*selection: \$selectedTab,[\s\S]*onScan: startCapture/);
-  assert.match(rootViewSwiftSource, /let onScan: \(\) -> Void/);
-  assert.match(rootViewSwiftSource, /Button\(action: onScan\)/);
+  assert.match(rootViewSwiftSource, /ScannerHomeControls\([\s\S]*onScan: startCapture/);
+  assert.match(sharedScannerTabComponentsSwiftSource, /let onScan: \(\) -> Void/);
+  assert.match(sharedScannerTabComponentsSwiftSource, /Button\(action: onScan\)/);
   assert.match(rootViewSwiftSource, /private func startCapture\(\) \{\s*selectedTab = \.text\s*store\.clearOcrReview\(\)\s*store\.beginCaptureSession\(\)\s*isCaptureSessionPresented = true/);
   assert.match(rootViewSwiftSource, /\.fullScreenCover\(isPresented: \$isCaptureSessionPresented/);
 });
 
-test("app clip has Scan and unified History roots", () => {
-  const tabViewStart = clipRootViewSwiftSource.indexOf("TabView(selection: $store.selectedTab)");
-  const tabViewEnd = clipRootViewSwiftSource.indexOf(".sheet(isPresented: $isConnectionSheetPresented)", tabViewStart);
-  const tabViewSource = clipRootViewSwiftSource.slice(tabViewStart, tabViewEnd);
-  const enumStart = clipScannerStoreSwiftSource.indexOf("enum ClipTab");
-  const enumEnd = clipScannerStoreSwiftSource.indexOf("var id: String", enumStart);
-  const enumSource = clipScannerStoreSwiftSource.slice(enumStart, enumEnd);
-
-  assert.ok(tabViewStart > -1);
-  assert.ok(tabViewEnd > tabViewStart);
-  assert.match(tabViewSource, /ClipCaptureView\(store: store, mode: \.ocr/);
-  assert.match(tabViewSource, /ClipUnifiedHistoryView\(/);
-  assert.doesNotMatch(tabViewSource, /Label\("Upload", systemImage: "square\.and\.arrow\.up"\)/);
-  assert.match(tabViewSource, /Label\("History", systemImage: "clock\.arrow\.circlepath"\)/);
-  assert.match(enumSource, /case text\s*case barcode\s*case photos/);
+test("app clip combines capture and history in one home with shared controls", () => {
+  assert.doesNotMatch(clipRootViewSwiftSource, /TabView\(|\.tabItem/);
+  assert.match(clipRootViewSwiftSource, /ClipCaptureView\(store: store, mode: \.ocr/);
+  assert.match(clipRootViewSwiftSource, /ClipCaptureLaunchCard\(action: startCapture\)/);
+  assert.match(clipRootViewSwiftSource, /ClipUnifiedHistoryView\(store: store\)/);
+  assert.match(clipRootViewSwiftSource, /ScannerHomeControls\(/);
 });
 
 test("app clip can select an online workspace computer for text and barcode insertion", () => {
@@ -1394,7 +1386,7 @@ test("app clip connection is an ephemeral cloud grant with no saved peer credent
 });
 
 test("app clip connected session button opens session actions instead of disconnecting", () => {
-  assert.match(clipRootViewSwiftSource, /private func handleConnectButtonTapped\(\) \{\s*if store\.isConnected \{\s*isConnectionSheetPresented = true\s*return\s*\}/);
+  assert.match(clipRootViewSwiftSource, /private func handleConnectButtonTapped\(\) \{\s*isConnectionSheetPresented = true\s*\}/);
   assert.doesNotMatch(clipRootViewSwiftSource, /if store\.isConnected \{\s*store\.disconnect\(\)\s*return\s*\}/);
   assert.match(clipRootViewSwiftSource, /let onDisconnect: \(\) -> Void/);
   assert.match(clipRootViewSwiftSource, /if store\.isConnected \{[\s\S]*Text\("Choose which workspace computer receives captures, or scan a QR code for a different workspace\."\)/);
@@ -1460,17 +1452,17 @@ test("app clip photo capture and library upload await Convex storage", () => {
   assert.match(clipScannerStoreSwiftSource, /try await guestCloudClient\.mirrorPhoto\(/);
 });
 
-test("app clip Photos tab groups library photos with captures and shows shared upload progress", () => {
+test("app clip unified history groups library photos with captures and shows shared upload progress", () => {
   assert.match(clipScannerStoreSwiftSource, /var photoUploadProgress: PhotoUploadProgress\?/);
   assert.match(clipScannerStoreSwiftSource, /photoUploadProgress = PhotoUploadProgress\(/);
   assert.match(clipScannerStoreSwiftSource, /updatePhotoUploadProgress\(batchId: batchId, prepared: index \+ 1, phase: \.uploading\)/);
   assert.match(clipScannerStoreSwiftSource, /finishPhotoUploadItem\(batchId: batchId, succeeded: didSend\)/);
   assert.match(clipScannerStoreSwiftSource, /finishPhotoUploadBatch\(batchId: batchId\)/);
-  assert.match(clipRootViewSwiftSource, /private var photoBatches: \[ClipPhotoBatch\]/);
-  assert.match(clipRootViewSwiftSource, /let grouped = Dictionary\(grouping: store\.photos\) \{ photo in\s*photo\.batchId \?\? photo\.id\.uuidString\s*\}/);
+  assert.match(clipRootViewSwiftSource, /private var sessionIDs: \[String\]/);
+  assert.match(clipRootViewSwiftSource, /let photos = store\.photos\.filter \{ \(\$0\.batchId \?\? \$0\.id\.uuidString\.lowercased\(\)\) == id \}/);
   assert.match(clipRootViewSwiftSource, /PhotoPreparationProgressSummary\(\s*prepared: selectedUploadPrepared,\s*total: selectedUploadTotal\s*\)/);
   assert.match(clipRootViewSwiftSource, /PhotoUploadProgressSummary\(progress: progress\)/);
-  assert.match(clipRootViewSwiftSource, /ClipPhotoBatchesSection\(/);
+  assert.match(clipRootViewSwiftSource, /ClipPhotoBatchCard\(/);
   assert.match(clipRootViewSwiftSource, /private struct ClipPhotoBatchCard: View/);
   assert.match(clipRootViewSwiftSource, /private struct ClipPhotoThumbnail: View/);
   assert.match(clipRootViewSwiftSource, /let action = source == \.upload \? "uploaded" : "captured"/);
@@ -1478,7 +1470,7 @@ test("app clip Photos tab groups library photos with captures and shows shared u
   assert.match(clipRootViewSwiftSource, /isUploading: activeUploadProgress != nil/);
   assert.match(clipRootViewSwiftSource, /"Reading \\\(selectedUploadReadCount\) of \\\(selectedUploadTotal\) selected photos"/);
   assert.match(clipRootViewSwiftSource, /"\\\(progress\.title\)\. \\\(progress\.detail\)\."/);
-  assert.match(clipRootViewSwiftSource, /store\.removePhotos\(batchId: batch\.id\)/);
+  assert.match(clipRootViewSwiftSource, /store\.removePhotos\(batchId: id\)/);
   assert.doesNotMatch(clipRootViewSwiftSource, /Recent Uploads/);
 });
 

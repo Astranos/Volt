@@ -349,3 +349,120 @@ struct ScannerPhotoPickerAccessory: View {
         return "photo.on.rectangle.angled"
     }
 }
+
+struct ScannerHomeControls: View {
+    static let reservedSpace: CGFloat = 74
+
+    let onScan: () -> Void
+    let onConnections: () -> Void
+    let onSettings: () -> Void
+    let targetSymbol: String
+    var isScanSelected = true
+    var isSettingsSelected = false
+
+    var body: some View {
+        if #available(iOS 26.0, *) {
+            GlassEffectContainer(spacing: 12) {
+                controls
+            }
+            .padding(.top, 10)
+            .frame(maxWidth: .infinity)
+            .shadow(color: .black.opacity(0.24), radius: 12, y: 6)
+        } else {
+            controls
+                .padding(.top, 10)
+                .frame(maxWidth: .infinity)
+                .background(.ultraThinMaterial)
+                .shadow(color: .black.opacity(0.18), radius: 10, y: 5)
+        }
+    }
+
+    private var controls: some View {
+        HStack(spacing: 12) {
+            connectionsButton
+            scanButton
+            settingsButton
+        }
+    }
+
+    private var connectionsButton: some View {
+        Button(action: onConnections) {
+            Image(systemName: targetSymbol)
+                .font(.subheadline.weight(.semibold))
+                .frame(width: 48, height: 48)
+                .contentShape(Rectangle())
+        }
+        .rootTabBarGlass(isSelected: false)
+        .accessibilityLabel("Connections")
+        .accessibilityHint("Choose the computer that receives text and barcode captures")
+    }
+
+    private var scanButton: some View {
+        Button(action: onScan) {
+            Label("Start", systemImage: "camera.viewfinder")
+                .font(.headline.weight(.semibold))
+                .frame(maxWidth: .infinity, minHeight: 48)
+        }
+        .rootTabBarScanStyle()
+        .tint(.green)
+        .accessibilityLabel("Start")
+        .accessibilityHint("Starts the scanner")
+        .accessibilityAddTraits(isScanSelected ? .isSelected : [])
+    }
+
+    private var settingsButton: some View {
+        Button {
+            onSettings()
+        } label: {
+            Label("Settings", systemImage: "gearshape")
+                .labelStyle(.iconOnly)
+                .frame(width: 48, height: 48)
+                .contentShape(Rectangle())
+        }
+        .foregroundStyle(isSettingsSelected ? .primary : .secondary)
+        .rootTabBarGlass(isSelected: isSettingsSelected)
+        .accessibilityLabel("Settings")
+        .accessibilityHint("Shows app settings")
+        .accessibilityAddTraits(isSettingsSelected ? .isSelected : [])
+    }
+}
+
+private struct RootTabBarGlassModifier: ViewModifier {
+    let isSelected: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.buttonStyle(
+                .glass(.regular.tint(isSelected ? .accentColor.opacity(0.16) : .clear))
+            )
+            .buttonBorderShape(.circle)
+        } else {
+            content
+                .buttonStyle(.bordered)
+                .buttonBorderShape(.circle)
+                .tint(isSelected ? .accentColor : .secondary)
+        }
+    }
+}
+
+private struct RootTabBarScanStyleModifier: ViewModifier {
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.buttonStyle(.glassProminent)
+        } else {
+            content.buttonStyle(.borderedProminent)
+        }
+    }
+}
+
+private extension View {
+    func rootTabBarGlass(isSelected: Bool) -> some View {
+        modifier(RootTabBarGlassModifier(isSelected: isSelected))
+    }
+
+    func rootTabBarScanStyle() -> some View {
+        modifier(RootTabBarScanStyleModifier())
+    }
+}

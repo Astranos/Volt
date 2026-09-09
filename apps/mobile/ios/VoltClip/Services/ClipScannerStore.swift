@@ -66,7 +66,18 @@ final class ClipScannerStore {
     var photos: [ClipPhoto] = []
     var captures: [ClipCapture] = []
     var workspaceComputers: [AppClipWorkspaceComputer] = []
-    var selectedWorkspaceComputerId: String?
+    private enum WorkspaceTarget {
+        case automatic
+        case local
+        case computer(String)
+    }
+
+    private var workspaceTarget: WorkspaceTarget = .automatic
+
+    var selectedWorkspaceComputerId: String? {
+        if case .computer(let deviceId) = workspaceTarget { return deviceId }
+        return nil
+    }
     var isLoadingWorkspaceComputers = false
     var workspaceComputerError: String?
     var photoUploadProgress: PhotoUploadProgress?
@@ -115,7 +126,9 @@ final class ClipScannerStore {
     }
 
     var typingTargetLabel: String {
-        selectedWorkspaceComputer?.label ?? "Choose a computer"
+        guard let selectedWorkspaceComputerId else { return "This iPhone" }
+        return workspaceComputers.first { $0.deviceId == selectedWorkspaceComputerId }?.label
+            ?? "Unavailable computer"
     }
 
     var canChooseWorkspaceComputer: Bool { isConnected }
@@ -199,7 +212,7 @@ final class ClipScannerStore {
     func refreshWorkspaceComputers() async {
         guard let guestCloudSession, !guestCloudSession.isExpired else {
             workspaceComputers = []
-            selectedWorkspaceComputerId = nil
+            workspaceTarget = .automatic
             workspaceComputerError = nil
             return
         }
@@ -207,7 +220,7 @@ final class ClipScannerStore {
         defer { isLoadingWorkspaceComputers = false }
         do {
             workspaceComputers = try await guestCloudClient.listComputers(session: guestCloudSession)
-            if selectedWorkspaceComputer == nil { selectInitialComputer() }
+            selectInitialComputer()
             workspaceComputerError = nil
         } catch {
             workspaceComputerError = "Could not refresh workspace computers."
@@ -219,7 +232,7 @@ final class ClipScannerStore {
            !availableWorkspaceComputers.contains(where: { $0.deviceId == deviceId }) {
             return
         }
-        selectedWorkspaceComputerId = deviceId
+        workspaceTarget = deviceId.map(WorkspaceTarget.computer) ?? .local
         targetHint = typingTargetLabel
     }
 
@@ -434,7 +447,7 @@ final class ClipScannerStore {
         guestCloudSession = nil
         pairingSession = nil
         workspaceComputers = []
-        selectedWorkspaceComputerId = nil
+        workspaceTarget = .automatic
         isConnected = false
         isPairing = false
         statusText = "Disconnected"
@@ -455,6 +468,7 @@ final class ClipScannerStore {
     }
 
     private func preparePairing(session: PairingSession, url: URL) {
+        workspaceTarget = .automatic
         pairingSession = session
         pairingURLText = url.absoluteString
         pairingLabel = session.label
@@ -463,12 +477,13 @@ final class ClipScannerStore {
     }
 
     private func selectInitialComputer() {
-        if selectedWorkspaceComputer != nil { return }
+        guard case .automatic = workspaceTarget else { return }
         let preferredLabel = pairingLabel?.trimmingCharacters(in: .whitespacesAndNewlines)
-        selectedWorkspaceComputerId = availableWorkspaceComputers.first(where: {
+        let deviceId = availableWorkspaceComputers.first(where: {
             guard let preferredLabel, !preferredLabel.isEmpty else { return false }
             return $0.label.compare(preferredLabel, options: .caseInsensitive) == .orderedSame
         })?.deviceId ?? availableWorkspaceComputers.first?.deviceId
+        if let deviceId { workspaceTarget = .computer(deviceId) }
     }
 
     private func sendCapture(
