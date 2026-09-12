@@ -114,7 +114,7 @@ test("extension auth delegates web sign-in and syncs the Clerk session", async (
   );
 });
 
-test("new tab has compact calculator, App Clip, settings, and account controls", async () => {
+test("new tab has compact calculator, Scanner, App Clip, settings, and account controls", async () => {
   const newTabSource = await readFile(
     new URL("../../entrypoints/newtab/NewTab.tsx", import.meta.url),
     "utf8",
@@ -130,7 +130,10 @@ test("new tab has compact calculator, App Clip, settings, and account controls",
   assert.doesNotMatch(newTabSource, /Smartphone/);
   assert.match(newTabSource, /className="newtab-settings-button"[\s\S]*action: "openInSidebar", tool: "top-offers", mode: "open"/);
   assert.match(newTabSource, /aria-label="Open Offer Calculator in sidepanel"/);
-  assert.ok(newTabSource.indexOf("<Calculator />") < newTabSource.indexOf("<AppClipQrIcon />"));
+  assert.match(newTabSource, /className="newtab-settings-button"[\s\S]*action: "openInSidebar", tool: "mobile-scanner", mode: "open"/);
+  assert.match(newTabSource, /aria-label="Open Scanner in sidepanel"/);
+  assert.ok(newTabSource.indexOf("<Calculator />") < newTabSource.indexOf("<ScanLine />"));
+  assert.ok(newTabSource.indexOf("<ScanLine />") < newTabSource.indexOf("<AppClipQrIcon />"));
   assert.match(newTabSource, /action: "openMobileCapturePopup"/);
   assert.match(newTabSource, /aria-label="Open Volt App Clip QR code"/);
   assert.match(

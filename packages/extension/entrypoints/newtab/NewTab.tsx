@@ -5,7 +5,7 @@ import { BookmarksColumn } from "../../src/components/newtab/BookmarksColumn";
 import { HeroBlock } from "../../src/components/newtab/HeroBlock";
 import type { SearchMode } from "../../src/components/newtab/NewTabHelp";
 import { ExtensionAccountControl } from "../../src/components/access/ExtensionAccess";
-import { Calculator, Settings } from "lucide-react";
+import { Calculator, ScanLine, Settings } from "lucide-react";
 import { AppClipQrIcon } from "../../src/components/icons/AppClipQrIcon";
 import { TabManager } from "../../src/utils/tab-manager";
 import { extractShopifyStoreName } from "../../src/domain/search";
@@ -242,6 +242,17 @@ export default function NewTab() {
               title="Open Offer Calculator"
             >
               <Calculator />
+            </button>
+            <button
+              type="button"
+              className="newtab-settings-button"
+              onClick={() =>
+                void chrome.runtime.sendMessage({ action: "openInSidebar", tool: "mobile-scanner", mode: "open" })
+              }
+              aria-label="Open Scanner in sidepanel"
+              title="Open Scanner"
+            >
+              <ScanLine />
             </button>
             <button
               type="button"
