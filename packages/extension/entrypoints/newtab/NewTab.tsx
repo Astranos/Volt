@@ -5,7 +5,8 @@ import { BookmarksColumn } from "../../src/components/newtab/BookmarksColumn";
 import { HeroBlock } from "../../src/components/newtab/HeroBlock";
 import type { SearchMode } from "../../src/components/newtab/NewTabHelp";
 import { ExtensionAccountControl } from "../../src/components/access/ExtensionAccess";
-import { Settings, Smartphone } from "lucide-react";
+import { Calculator, Settings } from "lucide-react";
+import { AppClipQrIcon } from "../../src/components/icons/AppClipQrIcon";
 import { TabManager } from "../../src/utils/tab-manager";
 import { extractShopifyStoreName } from "../../src/domain/search";
 import {
@@ -235,12 +236,23 @@ export default function NewTab() {
               type="button"
               className="newtab-settings-button"
               onClick={() =>
+                void chrome.runtime.sendMessage({ action: "openInSidebar", tool: "top-offers", mode: "open" })
+              }
+              aria-label="Open Offer Calculator in sidepanel"
+              title="Open Offer Calculator"
+            >
+              <Calculator />
+            </button>
+            <button
+              type="button"
+              className="newtab-settings-button"
+              onClick={() =>
                 void chrome.runtime.sendMessage({ action: "openMobileCapturePopup" })
               }
               aria-label="Open Volt App Clip QR code"
               title="Connect Volt App Clip"
             >
-              <Smartphone />
+              <AppClipQrIcon />
             </button>
             <button
               type="button"

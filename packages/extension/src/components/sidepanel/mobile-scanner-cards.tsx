@@ -160,7 +160,6 @@ export function CaptureBatchCard({
   const photos = group.entries.filter(isPhotoEntry);
   const scans = group.entries.filter(isScanEntry);
   const photoOnly = scans.length === 0;
-  const visibleEntries = collapsed && photoOnly ? photos.slice(0, 4) : group.entries;
   const count = group.entries.length;
   const title = photoOnly
     ? count === 1
@@ -184,10 +183,10 @@ export function CaptureBatchCard({
           </div>
         </div>
         <div className="flex items-center gap-1">
-          {photoOnly && count > 1 ? (
+          {photos.length > 0 ? (
             <button type="button" onClick={onToggleCollapse} className="mobile-scanner-mini-action inline-flex h-8 items-center gap-1.5 rounded-full px-2.5 text-[11px] font-bold transition" aria-label={collapsed ? "Expand photo batch" : "Collapse photo batch"}>
               <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", collapsed && "-rotate-90")} />
-              {collapsed ? `+${count - 1}` : "Hide"}
+              {collapsed ? (photos.length > 1 ? `+${photos.length - 1}` : "Show") : "Hide"}
             </button>
           ) : null}
           <button type="button" onClick={onDeleteBatch} className="flex h-7 w-7 items-center justify-center rounded-full text-stone-500 transition hover:bg-stone-200 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-700 dark:hover:text-stone-50" aria-label={photoOnly ? "Delete photo batch" : "Delete capture batch"}>
@@ -195,27 +194,29 @@ export function CaptureBatchCard({
           </button>
         </div>
       </div>
-      {collapsed && photoOnly ? (
-        <CollapsedPhotoBatchPreview
-          entries={visibleEntries as HydratedMobileScannerPhotoResult[]}
-          totalCount={count}
-          selectedPhotoIds={selectedPhotoIds}
-          removingIds={removingIds}
-          onDragStart={onBatchDragStart}
-          onHover={onHover}
-          onToggleCollapse={onToggleCollapse}
-        />
-      ) : (
-        <div className={cn(photoOnly ? "grid grid-cols-2 gap-2" : "space-y-2")}>
-          {visibleEntries.map((entry) => {
-            if (entry.type === "photo") {
+      <div className="space-y-2">
+        {photos.length > 0 && collapsed ? (
+          <CollapsedPhotoBatchPreview
+            entries={photos.slice(0, 4)}
+            totalCount={photos.length}
+            selectedPhotoIds={selectedPhotoIds}
+            removingIds={removingIds}
+            onDragStart={onBatchDragStart}
+            onHover={onHover}
+            onToggleCollapse={onToggleCollapse}
+          />
+        ) : photos.length > 0 ? (
+          <div className="grid grid-cols-2 gap-2">
+            {photos.map((entry) => {
               const photo = photoFromResult(entry);
               return <PhotoTile key={entry.id} photo={photo} selected={selectedPhotoIds.has(entry.id)} exiting={removingIds.has(entry.id)} onDelete={() => onDeleteEntry(entry)} onCopy={() => onCopyPhoto(photo)} onDownload={() => onDownloadPhoto(photo)} onPreview={() => onPreviewPhoto(photo)} onSend={() => onSendPhoto(photo)} onDragStart={(event) => onDragStart(event, photo)} onHover={onHover} onToggleSelection={(shiftKey) => onToggleSelection(entry.id, shiftKey)} />;
-            }
-            return <ScanResultTile key={entry.id} scan={entry} removing={removingIds.has(entry.id)} onDelete={() => onDeleteEntry(entry)} onCopy={() => onCopyScan(entry)} />;
-          })}
-        </div>
-      )}
+            })}
+          </div>
+        ) : null}
+        {scans.map((entry) => (
+          <ScanResultTile key={entry.id} scan={entry} removing={removingIds.has(entry.id)} onDelete={() => onDeleteEntry(entry)} onCopy={() => onCopyScan(entry)} />
+        ))}
+      </div>
     </div>
   );
 }

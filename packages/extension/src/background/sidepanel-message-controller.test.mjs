@@ -71,6 +71,30 @@ test("openInSidebar replies with the controller result and preserves explicit op
   ]);
 });
 
+test("new tab calculator opens the sender tab's sidepanel with the offer tool", () => {
+  const registry = createRuntimeActionRegistry();
+  const calls = [];
+  registerSidepanelMessageActions({
+    chromeApi: createChromeApi(),
+    getCurrentTabId: () => 42,
+    getLastTabId: () => null,
+    getSidePanelState: () => ({ open: true, tool: "mobile-scanner" }),
+    log: () => {},
+    registry,
+    setSidePanelState: () => {},
+    toggleSidePanelForTab: (tabId, tool, mode, callback) => {
+      calls.push({ tabId, tool, mode });
+      callback({ success: true, mode: "open", tool, windowId: 9 });
+    },
+  });
+  registry.handle(
+    { action: "openInSidebar", tool: "top-offers", mode: "open" },
+    { tab: { id: 73, windowId: 9 } },
+    () => {},
+  );
+  assert.deepEqual(calls, [{ tabId: 73, tool: "top-offers", mode: "open" }]);
+});
+
 test("openInSidebar defaults to toggle mode when no mode is provided", () => {
   const registry = createRuntimeActionRegistry();
   let capturedMode = null;

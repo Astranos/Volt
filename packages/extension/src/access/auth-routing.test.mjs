@@ -114,7 +114,7 @@ test("extension auth delegates web sign-in and syncs the Clerk session", async (
   );
 });
 
-test("new tab has compact account, App Clip, and settings controls", async () => {
+test("new tab has compact calculator, App Clip, settings, and account controls", async () => {
   const newTabSource = await readFile(
     new URL("../../entrypoints/newtab/NewTab.tsx", import.meta.url),
     "utf8",
@@ -126,7 +126,11 @@ test("new tab has compact account, App Clip, and settings controls", async () =>
 
   assert.match(newTabSource, /ExtensionAccountControl/);
   assert.match(newTabSource, /surface="newtab"/);
-  assert.match(newTabSource, /<Smartphone \/>/);
+  assert.match(newTabSource, /<AppClipQrIcon \/>/);
+  assert.doesNotMatch(newTabSource, /Smartphone/);
+  assert.match(newTabSource, /className="newtab-settings-button"[\s\S]*action: "openInSidebar", tool: "top-offers", mode: "open"/);
+  assert.match(newTabSource, /aria-label="Open Offer Calculator in sidepanel"/);
+  assert.ok(newTabSource.indexOf("<Calculator />") < newTabSource.indexOf("<AppClipQrIcon />"));
   assert.match(newTabSource, /action: "openMobileCapturePopup"/);
   assert.match(newTabSource, /aria-label="Open Volt App Clip QR code"/);
   assert.match(
@@ -139,7 +143,12 @@ test("new tab has compact account, App Clip, and settings controls", async () =>
   );
   assert.match(newTabSource, /action: "open-settings"/);
   assert.doesNotMatch(newTabSource, /SIDEPANEL_TOOLS\.map/);
-  assert.doesNotMatch(newTabSource, /Pair Phone|action: "openInSidebar"/);
+  assert.doesNotMatch(newTabSource, /Pair Phone/);
+  const scannerSource = await readFile(
+    new URL("../components/sidepanel/MobileScanner.tsx", import.meta.url), "utf8",
+  );
+  assert.match(scannerSource, /<AppClipQrIcon className="h-4 w-4" \/>/);
+  assert.doesNotMatch(scannerSource, /Smartphone/);
 });
 
 test("toolbar opens the sidepanel while Pair Phone owns the QR popup", async () => {

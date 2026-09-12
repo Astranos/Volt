@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Smartphone } from "lucide-react";
+import { AppClipQrIcon } from "../icons/AppClipQrIcon";
 import {
   saveMobileScannerPhoto,
   saveMobileScannerScan,
@@ -247,7 +247,7 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
             aria-label="Open Volt App Clip QR code"
             title="Connect Volt App Clip"
           >
-            <Smartphone className="h-4 w-4" />
+            <AppClipQrIcon className="h-4 w-4" />
             <span>App Clip</span>
           </button>
         </div>
@@ -276,7 +276,7 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
                   key={group.key}
                   group={group}
                   now={now}
-                  collapsed={photoOnly && !expandedBatchIds.has(group.key)}
+                  collapsed={!expandedBatchIds.has(group.key)}
                   removing={group.entries.some((entry) => removingIds.has(entry.id))}
                   removingIds={removingIds}
                   selectedPhotoIds={selectedPhotoIds}
