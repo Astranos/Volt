@@ -152,6 +152,11 @@ test("new tab has compact calculator, Scanner, App Clip, settings, and account c
   );
   assert.match(scannerSource, /<AppClipQrIcon className="h-4 w-4" \/>/);
   assert.doesNotMatch(scannerSource, /Smartphone/);
+  const sidepanelToolsSource = await readFile(
+    new URL("../lib/sidepanel-tools.ts", import.meta.url), "utf8",
+  );
+  assert.match(sidepanelToolsSource, /id: "mobile-scanner",[\s\S]*?icon: ScanLine/);
+  assert.doesNotMatch(sidepanelToolsSource, /Smartphone/);
 });
 
 test("toolbar opens the sidepanel while Pair Phone owns the QR popup", async () => {

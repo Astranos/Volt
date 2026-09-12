@@ -1,4 +1,4 @@
-import { Calculator, LucideIcon, Smartphone } from "lucide-react";
+import { Calculator, type LucideIcon, ScanLine } from "lucide-react";
 
 export type SidepanelToolId = "top-offers" | "mobile-scanner" | "mobile-photos";
 
@@ -21,7 +21,7 @@ export const SIDEPANEL_TOOLS: SidepanelToolMetadata[] = [
     id: "mobile-scanner",
     label: "Scanner",
     description: "Scan barcodes with your phone",
-    icon: Smartphone,
+    icon: ScanLine,
   },
 ];
 
