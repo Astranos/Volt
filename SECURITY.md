@@ -4,7 +4,7 @@
 
 Please do not report suspected vulnerabilities in public issues.
 
-Use GitHub private vulnerability reporting if it is enabled for this repository. If it is not enabled, contact a maintainer privately before publishing details.
+Use [GitHub private vulnerability reporting](https://github.com/JuanQuenga/Volt/security/advisories/new) to send a report to the maintainer without opening a public issue.
 
 Include:
 

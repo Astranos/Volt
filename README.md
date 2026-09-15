@@ -1,104 +1,60 @@
 # Volt
 
-Volt is a monorepo for a Chrome extension, a companion mobile scanner app, a Convex-backed scanner signaling backend, and a Vercel-hosted web/app-store support surface.
+Tools for buying and listing electronics, built around the reseller's browser workflow.
 
-I built Volt to make buying and listing electronic devices for resale faster and easier. The app is shaped around the day-to-day resale workflow: quickly checking market prices while buying, calculating offers, capturing barcodes/text/photos from a phone, and moving clean listing information back into the browser with less manual typing.
+Volt combines market search, offer calculation, and listing helpers in a Chrome extension. Its companion iPhone app captures barcodes, text, and photos, with account-based sync to the browser.
 
-## Packages
+[Website](https://volt.juanquenga.com) · [Chrome Web Store](https://chromewebstore.google.com/detail/volt/bmgghhmlflbhlnomgnoodpidekpaaifk) · [iPhone app](https://apps.apple.com/us/app/volt-scanner/id6771770148) · [Contribute](CONTRIBUTING.md)
 
-| Workspace | Purpose |
-| --- | --- |
-| `packages/extension` | Chrome extension built with WXT, React, and TypeScript. |
-| `packages/scanner-protocol` | Shared scanner protocol constants, message types, and validation helpers. |
-| `apps/mobile` | Native SwiftUI iOS scanner app. |
-| `apps/web` | TanStack Start, Base UI, and Tailwind CSS v4 app for the Vercel landing/app-store support deployment. |
-| `convex` | Convex schema, HTTP actions, Web Push action, and cleanup cron for scanner signaling state. |
+![Volt's quick-action menu for resale price research](apps/web/public/assets/product/chrome-quick-actions.png)
 
-## Requirements
+## What you can do
 
-- Node.js 22 or newer
-- pnpm 10.x via Corepack
-- Chrome for extension development
-- Xcode for iOS builds
-- Convex CLI access for signaling backend development
+- Research resale prices with eBay sold-price helpers and market-search shortcuts.
+- Calculate offers and use Shopify listing helpers without leaving Chrome.
+- Capture barcodes, OCR text, and listing photos on an iPhone.
+- Sync captures to your account workspace and insert text into a selected Chrome computer.
+- Open tabs, bookmarks, history, and tools from a keyboard-driven command menu.
 
-## Getting Started
+Volt is actively developed. Chrome's browser tools are free. Signed-in iPhone users can scan and keep local history without Pro; cloud workspace and mobile capture sync require Pro. The App Clip offers temporary, checkout-free capture through a workspace guest grant. See [authentication and billing](docs/authentication-and-billing.md) for the access model.
+
+## Start contributing
+
+Use Node.js 22 or newer and pnpm 10 through Corepack. Chrome is needed for extension work; macOS and Xcode are needed only for native iOS work.
 
 ```sh
 corepack enable
 pnpm install
+pnpm --filter @volt/scanner-protocol test
 ```
 
-Run the extension:
+That test suite needs no service credentials. See the [contributor guide](CONTRIBUTING.md) to choose a workspace, configure your own development services, and run the relevant checks. Do not use the maintainer's deployment for development.
 
-```sh
-pnpm dev:extension
-```
+Start with an [open issue](https://github.com/juanquenga/Volt/issues), or report a reproducible bug. Documentation corrections and regression tests are welcome. Discuss larger changes in an issue before implementing them.
 
-Run the web app:
+## Repository map
 
-```sh
-pnpm dev:web
-```
+| Workspace | Purpose |
+| --- | --- |
+| [packages/extension](packages/extension/README.md) | Chrome extension using WXT, React, and TypeScript. |
+| `packages/scanner-protocol` | Shared scanner constants, message types, and validation. |
+| `apps/mobile` | Native SwiftUI iPhone app and App Clip. |
+| `apps/web` | TanStack Start web app, product pages, and account tools. |
+| [convex](convex/README.md) | Account authorization, scanner workspace, cursor delivery, catalog data, and legacy signaling. |
 
-Run the mobile app on a simulator:
-
-```sh
-pnpm dev:mobile
-```
-
-Build, install, and launch the mobile app on a paired iPhone:
-
-```sh
-pnpm --filter @volt/mobile ios:device -- --id=<device-id>
-```
-
-Find the device id with:
-
-```sh
-xcrun devicectl list devices
-```
-
-For a native iOS compile check, use:
-
-```sh
-pnpm --filter @volt/mobile build:ios
-```
-
-## Environment
-
-Local secrets must stay out of git. Convex development is configured by `npx convex dev`, which writes `.env.local` with `CONVEX_DEPLOYMENT`, `CONVEX_URL`, and `CONVEX_SITE_URL`.
-
-Scanner signaling uses Convex environment variables for optional Web Push wakeups: `SCANNER_PUSH_VAPID_PUBLIC_KEY`, `SCANNER_PUSH_VAPID_PRIVATE_KEY`, and `SCANNER_PUSH_VAPID_SUBJECT`.
-
-## Development Commands
-
-```sh
-pnpm test
-pnpm test:convex
-pnpm build:web
-pnpm build:extension
-pnpm zip:extension
-```
-
-The root `pnpm build` command includes the native mobile build and requires Xcode. Mobile build and release archives are produced locally with Xcode or fastlane.
-
-For App Store Connect releases, use fastlane to build a signed IPA and upload it to TestFlight:
-
-```sh
-pnpm --filter @volt/mobile ios:beta
-```
+Convex stores capture metadata; private photo bytes go directly to Cloudflare R2 through short-lived signed URLs. The installed app keeps a durable local outbox, so capture does not depend on an online computer.
 
 ## Documentation
 
-- [Project context](CONTEXT.md)
-- [Maintainability notes](docs/maintainability.md)
-- [Deferred App Clip photo capture](docs/deferred-app-clip.md)
+- [Contributor setup and checks](CONTRIBUTING.md)
+- [Current product and domain context](CONTEXT.md)
+- [Authentication and billing](docs/authentication-and-billing.md)
 - [Architecture decisions](docs/adr)
-- [Chrome extension README](packages/extension/README.md)
-- [Contributor guide](CONTRIBUTING.md)
+- [Maintainability notes](docs/maintainability.md)
+- [Chrome extension releases](packages/extension/docs/RELEASE_PROCESS.md)
+- [iOS releases](apps/mobile/fastlane/README.md)
 - [Security policy](SECURITY.md)
 
 ## License
 
-Volt is licensed under the AGPL-3.0-or-later. See [LICENSE](LICENSE).
+AGPL-3.0-or-later. See [LICENSE](LICENSE).

@@ -32,6 +32,9 @@ jobs:
       - name: Run tests
         run: pnpm test
 
+      - name: Test extension release helpers
+        run: pnpm --filter @volt/extension test:release
+
       - name: Build extension
         run: pnpm build:extension
 

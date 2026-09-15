@@ -1,90 +1,30 @@
-# Welcome to your Convex functions directory!
+# Volt backend
 
-Write your Convex functions here.
-See https://docs.convex.dev/functions for more.
+Convex owns account authorization, scanner workspace metadata, device enrollment, cursor delivery, product catalog data, and legacy signaling. Clients upload photo bytes directly to private Cloudflare R2 storage through short-lived signed URLs; Convex stores metadata and checks access.
 
-A query function that takes two arguments looks like:
+## Entry points
 
-```ts
-// convex/myFunctions.ts
-import { query } from "./_generated/server";
-import { v } from "convex/values";
+| File | Responsibility |
+| --- | --- |
+| [schema.ts](schema.ts) | Tables and indexes for workspace, access, catalog, and signaling data. |
+| [http.ts](http.ts) | HTTP route registration. |
+| [auth.config.ts](auth.config.ts) | Clerk JWT issuer and `convex` audience. |
+| [cloudWorkspace.ts](cloudWorkspace.ts) | Workspace devices, capture results, and delivery operations. |
+| [access.ts](access.ts) | Account access and entitlement handling. |
+| [crons.ts](crons.ts) | Scheduled cleanup. |
 
-export const myQueryFunction = query({
-  // Validators for arguments.
-  args: {
-    first: v.number(),
-    second: v.string(),
-  },
+The current installed app and App Clip use cloud delivery. Legacy signaling tables and routes remain for older clients; their presence does not make WebRTC the current scanner architecture. See [project context](../CONTEXT.md) for domain terms.
 
-  // Function implementation.
-  handler: async (ctx, args) => {
-    // Read the database as many times as you need here.
-    // See https://docs.convex.dev/database/reading-data.
-    const documents = await ctx.db.query("tablename").collect();
+## Development
 
-    // Arguments passed from the client are properties of the args object.
-    console.log(args.first, args.second);
+Follow the [contributor backend setup](../CONTRIBUTING.md#backend) to use your own development deployment and Clerk instance. Configuration for R2 and StoreKit is in [authentication and billing](../docs/authentication-and-billing.md). Never copy production credentials into a contributor environment.
 
-    // Write arbitrary JavaScript here: filter, aggregate, build derived data,
-    // remove non-public properties, or create new objects.
-    return documents;
-  },
-});
+From the repository root, run the isolated backend tests:
+
+```sh
+pnpm test:convex
 ```
 
-Using this query function in a React component looks like:
+These tests use `convex-test`; no live deployment is needed. When changing a backend contract, add coverage for authorization, cross-workspace access, and retries where relevant. Test real network integrations separately against your own development services.
 
-```ts
-const data = useQuery(api.myFunctions.myQueryFunction, {
-  first: 10,
-  second: "hello",
-});
-```
-
-A mutation function looks like:
-
-```ts
-// convex/myFunctions.ts
-import { mutation } from "./_generated/server";
-import { v } from "convex/values";
-
-export const myMutationFunction = mutation({
-  // Validators for arguments.
-  args: {
-    first: v.string(),
-    second: v.string(),
-  },
-
-  // Function implementation.
-  handler: async (ctx, args) => {
-    // Insert or modify documents in the database here.
-    // Mutations can also read from the database like queries.
-    // See https://docs.convex.dev/database/writing-data.
-    const message = { body: args.first, author: args.second };
-    const id = await ctx.db.insert("messages", message);
-
-    // Optionally, return a value from your mutation.
-    return await ctx.db.get("messages", id);
-  },
-});
-```
-
-Using this mutation function in a React component looks like:
-
-```ts
-const mutation = useMutation(api.myFunctions.myMutationFunction);
-function handleButtonPress() {
-  // fire and forget, the most common way to use mutations
-  mutation({ first: "Hello!", second: "me" });
-  // OR
-  // use the result once the mutation has completed
-  mutation({ first: "Hello!", second: "me" }).then((result) =>
-    console.log(result),
-  );
-}
-```
-
-Use the Convex CLI to push your functions to a deployment. See everything
-the Convex CLI can do by running `npx convex -h` in your project root
-directory. To learn more, launch the docs with `npx convex docs`.
+`_generated` contains Convex-generated bindings. Change the source functions or schema and use the Convex CLI to regenerate bindings rather than editing them by hand.

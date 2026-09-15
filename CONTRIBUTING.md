@@ -1,54 +1,112 @@
-# Contributing
+# Contributing to Volt
 
-Thanks for taking the time to contribute.
+## Choose a change
 
-## Before You Start
+Search [issues](https://github.com/juanquenga/Volt/issues) and pull requests before opening something new. Starter tasks include a [local Markdown link checker](https://github.com/juanquenga/Volt/issues/21) and an [extension environment example](https://github.com/juanquenga/Volt/issues/22). Check that an issue is still open, then comment to coordinate work. Discuss new product behavior or architecture changes before implementing them.
 
-1. Search existing issues and pull requests before opening something new.
-2. Keep changes scoped to one feature, fix, or cleanup.
-3. Do not commit secrets, credentials, signing keys, generated build output, or local machine configuration.
+Keep each pull request focused on one change. Do not commit credentials, signing keys, generated builds, captured customer data, or local machine configuration. Report vulnerabilities through the [security policy](SECURITY.md), not a public issue.
 
-## Setup
+## Install dependencies
+
+Install Node.js 22 or newer, then run these commands from the repository root:
 
 ```sh
 corepack enable
 pnpm install
 ```
 
-If you need the scanner signaling backend locally, start Convex from the repository root:
+Use pnpm for this workspace. You do not need Xcode, Apple signing credentials, or a paid service account to work on documentation or run the JavaScript test suites.
+
+## Work without service credentials
+
+Start with a focused test suite:
 
 ```sh
-npx convex dev
-```
-
-The command writes `.env.local` with the development deployment URLs. Optional Web Push wakeups require Convex environment variables for the VAPID public key, private key, and subject.
-
-## Useful Commands
-
-```sh
-pnpm dev:extension
-pnpm dev:web
-pnpm dev:mobile
-pnpm test
+pnpm --filter @volt/scanner-protocol test
 pnpm test:convex
-pnpm build:extension
-pnpm build:web
-pnpm --filter @volt/mobile build:ios
+pnpm --filter @volt/extension test:scanner
+pnpm --filter @volt/mobile test
+pnpm test:web
 ```
 
-The iOS compile check should use the repository script above. It targets the generic iOS Simulator destination and does not require forcing a concrete simulator ID.
+The Convex suite uses a test backend rather than a live deployment. The mobile command runs Node-based tests, not an iOS Simulator test suite. These checks do not prove camera, sign-in, purchase, or cross-device delivery behavior; describe any untested flows in your pull request.
 
-Mobile build artifacts should be produced locally with Xcode or fastlane. Do not add third-party hosted mobile builder configuration, dependencies, or scripts.
+## Configure interactive development
 
-## Pull Requests
+Use your own development Clerk instance and Convex deployment. Checked-in URL defaults and example URLs refer to the maintainer's deployments; replace them before testing signed-in or write flows. Root `.env.local` does not configure the web or extension workspace automatically.
 
-- Explain the user-facing change and the reason for it.
-- Include tests when changing shared protocol behavior, scanner session handling, or signaling API behavior.
-- Include manual verification steps for extension, mobile, or browser flows that are not covered by automated tests.
-- Update documentation when setup, commands, permissions, or architecture decisions change.
+### Backend
 
-CodeRabbit reviews are configured in `.coderabbit.yaml` and run automatically on non-draft pull requests once the CodeRabbit GitHub App is installed for this repository. Maintainers can request another pass with `@coderabbitai review`, request a fresh full review with `@coderabbitai full review`, or skip a pull request with the `do-not-review` label or `[skip review]` in the title.
+1. Follow [Clerk and Convex setup](docs/authentication-and-billing.md#clerk-and-convex) for the Clerk `convex` JWT template.
+2. From the repository root, run `pnpm exec convex dev` and select your own development project. The CLI records its deployment configuration in root `.env.local`.
+3. Set `CLERK_JWT_ISSUER_DOMAIN` on that development deployment to match your Clerk instance. If the first deployment stops because this value is missing, set it in the Convex dashboard and let the development command retry.
+4. Use the deployment's `.convex.cloud` URL for the web client and `.convex.site` URL for HTTP actions.
 
-## Code Style
+For photo transfer, configure your own private R2 bucket and the four `R2_*` variables listed in [authentication and billing](docs/authentication-and-billing.md). For Pro-only cloud tests, grant your test account complimentary access on your own development deployment. StoreKit configuration is needed for purchase verification, not ordinary contribution checks. Never use `--prod` for contributor setup.
 
-Follow the existing TypeScript, React, and Swift patterns in the touched package. Prefer small, reviewable changes over broad rewrites.
+### Web app
+
+Copy [apps/web/.env.example](apps/web/.env.example) to `apps/web/.env.local`. Replace both example values:
+
+```dotenv
+VITE_CLERK_PUBLISHABLE_KEY=pk_test_REPLACE_ME
+VITE_CONVEX_URL=https://YOUR_DEPLOYMENT.convex.cloud
+```
+
+Run `pnpm dev:web` and open the local URL printed by Vite. Client variables are public build-time values. Do not add Clerk secret keys or R2 secrets to this file.
+
+### Chrome extension
+
+Create `packages/extension/.env.local` with your development values:
+
+```dotenv
+WXT_CLERK_PUBLISHABLE_KEY=pk_test_REPLACE_ME
+WXT_CLERK_SIGN_IN_URL=https://YOUR_CLERK_ACCOUNT_PORTAL/sign-in
+WXT_SCANNER_SIGNAL_URL=https://YOUR_DEPLOYMENT.convex.site/api/signal
+WXT_EXTENSION_PUBLIC_KEY=YOUR_CHROME_MANIFEST_PUBLIC_KEY
+```
+
+Follow the [extension authentication configuration](packages/extension/README.md#authentication-and-access-configuration) for the stable extension ID, allowed origins, Native API, and optional sync host. Use a development Clerk key that matches the backend issuer.
+
+Run `pnpm dev:extension`. To load it manually, open `chrome://extensions`, enable Developer mode, choose **Load unpacked**, and select `packages/extension/.output/volt`.
+
+### iPhone app
+
+Use macOS and Xcode. Open `apps/mobile/ios/Volt.xcworkspace` and configure your own development signing team and the `VOLT_*` build settings described in [authentication and billing](docs/authentication-and-billing.md#clerk-and-convex). Do not commit personal signing changes.
+
+Run `pnpm dev:mobile` for the simulator. Camera and real cross-device behavior need a physical iPhone. Find its ID with `xcrun devicectl list devices`, then run:
+
+```sh
+pnpm dev:mobile:device -- --id=YOUR_DEVICE_ID
+```
+
+For the App Clip, use `pnpm dev:mobile:appclip` or `pnpm dev:mobile:appclip:device -- --id=YOUR_DEVICE_ID`. App Clip invocation and associated domains need separate Apple configuration; a simulator launch alone does not verify QR invocation.
+
+## Check your change
+
+Run the checks relevant to the files you changed. These commands run from the repository root:
+
+| Change | Checks |
+| --- | --- |
+| Documentation or repository tooling | `git diff --check` and verify edited links |
+| Shared scanner protocol | `pnpm --filter @volt/scanner-protocol test` and `pnpm --filter @volt/scanner-protocol typecheck` |
+| Convex functions | `pnpm test:convex` |
+| Extension | `pnpm --filter @volt/extension test:scanner` and `pnpm --filter @volt/extension compile` |
+| Web | `pnpm test:web` |
+| Mobile helpers | `pnpm --filter @volt/mobile test` |
+
+`pnpm test` runs all root test suites. `pnpm check:repo-health` is an advisory maintainability check with existing failures; report new problems separately from the baseline. For native compilation, use `pnpm --filter @volt/mobile build:ios`, which targets a generic iOS Simulator and needs no personal device ID. When build verification is relevant, use `pnpm build:extension` or `pnpm build:web`. Root `pnpm build` includes iOS and requires Xcode.
+
+For UI or cross-device changes, include the tested browser/device, steps, expected result, and actual result. Add screenshots for visual changes. Test scanner retries and account boundaries when those behaviors change.
+
+## Submit a pull request
+
+- Explain the user-facing change and why it is needed.
+- Link the issue, if there is one.
+- Add regression tests for protocol, scanner session, or authorization changes.
+- List the checks you ran and any checks you could not run.
+- Update setup or architecture documentation when behavior changes.
+
+Follow the existing TypeScript, React, and Swift patterns in the package you touch. Prefer small, reviewable changes over broad rewrites. Keep releases separate from contribution work; publishing instructions live in the [extension release guide](packages/extension/docs/RELEASE_PROCESS.md) and [iOS release guide](apps/mobile/fastlane/README.md).
+
+CodeRabbit reviews run on non-draft pull requests when its GitHub App is installed. Maintainers can request another pass with `@coderabbitai review` or a fresh full review with `@coderabbitai full review`.
