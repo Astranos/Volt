@@ -31,6 +31,7 @@ apps/mobile/fastlane/screenshots/
 apps/mobile/fastlane/test_output/
 apps/mobile/fastlane/*.p8
 apps/web/dist/
+apps/kiosk/dist/
 graphify-out/
 packages/extension/docs/examples/
 packages/extension/releases/*.zip
