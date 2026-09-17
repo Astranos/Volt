@@ -1,6 +1,6 @@
 import { load } from 'cheerio';
 import { isTag, type AnyNode } from 'domhandler';
-import type { DetailBlock } from '../src/catalog';
+import type { DetailBlock } from '../src/catalog.js';
 
 const MAX_BLOCKS = 200;
 const MAX_TEXT = 2000;

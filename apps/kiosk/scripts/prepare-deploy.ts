@@ -19,7 +19,7 @@ export function standaloneLockfile(source: string): string {
 export async function prepareDeploy() {
   const app = new URL('../', import.meta.url);
   const destination = await mkdtemp(join(tmpdir(), 'paymore-kiosk-'));
-  for (const path of ['src', 'server', 'api', 'public', 'index.html', 'package.json', 'tsconfig.json', 'vite.config.ts', 'vercel.json']) {
+  for (const path of ['src', 'server', 'api', 'public', 'index.html', 'package.json', 'tsconfig.json', 'tsconfig.server.json', 'vite.config.ts', 'vercel.json']) {
     await cp(new URL(path, app), join(destination, path), { recursive: true });
   }
   const lockfile = await readFile(new URL('../../pnpm-lock.yaml', app), 'utf8');

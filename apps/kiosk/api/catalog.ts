@@ -1,4 +1,4 @@
-import { createCatalogService } from '../server/catalog';
+import { createCatalogService } from '../server/catalog.js';
 
 const service = createCatalogService();
 const headers = { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' };

@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { getStore } from './stores';
-import type { CatalogResponse, Product, Category } from '../src/catalog';
-import { parseListingContent } from './listing-content';
+import { getStore } from './stores.js';
+import type { CatalogResponse, Product, Category } from '../src/catalog.js';
+import { parseListingContent } from './listing-content.js';
 
 const PAGE_SIZE = 250;
 const MAX_PAGES = 20;
