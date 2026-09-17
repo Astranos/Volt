@@ -104,9 +104,6 @@ function Browse({ slug }: { slug: string }) {
           <div>
             <h1>Browse products</h1>
           </div>
-          <span className="in-store-label">
-            <span /> Browse this store
-          </span>
         </div>
         <div className="search-box">
           <Search size={24} />

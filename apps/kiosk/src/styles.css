@@ -127,19 +127,6 @@ h1 {
   letter-spacing: -1.2px;
   line-height: 1.2;
 }
-.in-store-label {
-  font-size: 12px;
-  color: #62705c;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
-.in-store-label > span {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #4e9546;
-}
 .search-box {
   display: flex;
   align-items: center;
@@ -603,9 +590,6 @@ select {
   .store-location {
     padding-left: 18px;
     font-size: 12px;
-  }
-  .in-store-label {
-    display: none;
   }
   .results-toolbar > div:first-child {
     flex-direction: column;
