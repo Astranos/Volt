@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { getStore } from './stores.js';
+import { getStore, readStoreMetadata } from './stores.js';
 import type { CatalogResponse, Product, Category } from '../src/catalog.js';
 import { parseListingContent } from './listing-content.js';
 
@@ -8,6 +8,12 @@ const MAX_PAGES = 20;
 const MAX_BYTES = 8 * 1024 * 1024;
 const FRESH_MS = 60_000;
 const STALE_MS = 300_000;
+const MAX_CACHED_STORES = 64;
+const MAX_CONCURRENT_STORES = 16;
+
+function storeNotFound() {
+  return Object.assign(new Error('Store not found.'), { statusCode: 404 });
+}
 
 function unavailable() {
   return Object.assign(new Error('Inventory is temporarily unavailable. Please ask an associate.'), { statusCode: 503 });
@@ -88,7 +94,7 @@ function parseProduct(raw: z.infer<typeof productSchema>, store: CatalogResponse
   };
 }
 
-async function readPage(response: Response) {
+async function readBody(response: Response, maxBytes = MAX_BYTES) {
   if (!response.ok || response.redirected || !response.body) throw unavailable();
   const reader = response.body.getReader();
   const chunks: Uint8Array[] = [];
@@ -98,14 +104,13 @@ async function readPage(response: Response) {
       const { done, value } = await reader.read();
       if (done) break;
       length += value.length;
-      requireValue(length <= MAX_BYTES);
+      requireValue(length <= maxBytes);
       chunks.push(value);
     }
   } finally {
     await reader.cancel();
   }
-  const data: unknown = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-  return pageSchema.parse(data).products;
+  return Buffer.concat(chunks).toString('utf8');
 }
 
 export function createCatalogService({ fetchImpl = fetch, now = Date.now }: { fetchImpl?: typeof fetch; now?: () => number } = {}) {
@@ -121,7 +126,9 @@ export function createCatalogService({ fetchImpl = fetch, now = Date.now }: { fe
         const response = await fetchImpl(`${store.storefrontUrl}/products.json?limit=${PAGE_SIZE}&page=${page}`, {
           signal: controller.signal, redirect: 'error', headers: { Accept: 'application/json' },
         });
-        const records = await readPage(response);
+        if (page === 1 && response.status === 404) throw storeNotFound();
+        const data: unknown = JSON.parse(await readBody(response));
+        const records = pageSchema.parse(data).products;
         for (const record of records) {
           const product = parseProduct(record, store);
           requireValue(!ids.has(String(record.id)));
@@ -129,7 +136,22 @@ export function createCatalogService({ fetchImpl = fetch, now = Date.now }: { fe
           if (product) products.push(product);
         }
         if (records.length < PAGE_SIZE) {
-          const result: CatalogResponse = { store, products, checkedAt: new Date(now()).toISOString(), status: 'fresh' };
+          // Product-feed success is sufficient. Missing marketing-page metadata
+          // must not make a working franchise catalog unavailable.
+          let displayStore = store;
+          try {
+            const metadata = await fetchImpl(store.storefrontUrl + '/', {
+              signal: AbortSignal.any([controller.signal, AbortSignal.timeout(2500)]),
+              redirect: 'error', headers: { Accept: 'text/html' },
+            });
+            displayStore = readStoreMetadata(await readBody(metadata, 1024 * 1024), store);
+          } catch { /* Keep the source hostname when its metadata is unavailable. */ }
+          const result: CatalogResponse = { store: displayStore, products, checkedAt: new Date(now()).toISOString(), status: 'fresh' };
+          cache.delete(store.slug);
+          if (cache.size >= MAX_CACHED_STORES) {
+            const oldest = cache.keys().next().value;
+            if (oldest !== undefined) cache.delete(oldest);
+          }
           cache.set(store.slug, result);
           return result;
         }
@@ -142,12 +164,15 @@ export function createCatalogService({ fetchImpl = fetch, now = Date.now }: { fe
   return {
     async getCatalog(slug: string): Promise<CatalogResponse> {
       const store = getStore(slug);
-      if (!store) throw Object.assign(new Error('Store not found.'), { statusCode: 404 });
+      if (!store) throw storeNotFound();
       const cached = cache.get(slug);
       if (cached && now() - Date.parse(cached.checkedAt) < FRESH_MS) return cached;
       const inFlight = pending.get(slug);
       if (inFlight) return inFlight;
-      const request = load(store).catch((): CatalogResponse => {
+      if (pending.size >= MAX_CONCURRENT_STORES) throw unavailable();
+      const request = load(store).catch((error: unknown): CatalogResponse => {
+          if (error instanceof Error && 'statusCode' in error && error.statusCode === 404) throw error;
+          if (error instanceof Error && typeof error.cause === 'object' && error.cause !== null && 'code' in error.cause && error.cause.code === 'ENOTFOUND') throw storeNotFound();
           if (cached && now() - Date.parse(cached.checkedAt) < STALE_MS) return { ...cached, status: 'stale' };
           throw unavailable();
         }).finally(() => { pending.delete(slug); });

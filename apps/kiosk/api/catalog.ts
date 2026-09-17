@@ -7,7 +7,7 @@ export async function GET(request: Request): Promise<Response> {
   if (request.method !== 'GET') return Response.json({ error: 'Method not allowed.' }, { status: 405, headers: { ...headers, Allow: 'GET' } });
   const params = new URL(request.url).searchParams;
   const slug = params.get('store');
-  if (!slug || !/^[a-z0-9-]{1,60}$/.test(slug) || params.getAll('store').length !== 1) {
+  if (!slug || !/^[a-z0-9][a-z0-9-]{0,62}$/.test(slug) || params.getAll('store').length !== 1) {
     return Response.json({ error: 'A valid store is required.' }, { status: 400, headers });
   }
   try {

@@ -1,6 +1,6 @@
 # PayMore in-store browsing
 
-A customer-facing catalog for mounted tablets and smaller screens. Taylor's public path is `/taylormi`. The proposed production address is `https://pm.juanquenga.com/taylormi`; this repository does not configure that domain.
+A customer-facing catalog for mounted tablets and smaller screens. A store's public path matches its PayMore subdomain: `/taylormi` or `/southfieldmi`. The proposed production host is `https://pm.juanquenga.com`; this repository does not configure that domain.
 
 The app uses React 19, TypeScript, Vite, Tailwind 4, and Base UI. It is a separate workspace package so kiosk customers do not load Volt's account, scanner, or billing screens. Volt's existing application and deployment stay unchanged.
 
@@ -13,7 +13,7 @@ pnpm install --ignore-scripts
 pnpm dev:kiosk
 ```
 
-Open `http://127.0.0.1:4175/taylormi`. The local API fetches Taylor's public Shopify listings. No Shopify admin credentials or Convex configuration are required. The catalog requires network access; it never substitutes sample products.
+Open `http://127.0.0.1:4175/taylormi` or `http://127.0.0.1:4175/southfieldmi`. The local API fetches that store's public Shopify listings. The home page also accepts a PayMore store URL or subdomain. No Shopify admin credentials or Convex configuration are required. The catalog requires network access; it never substitutes sample products.
 
 ## Verify a change
 
@@ -23,15 +23,17 @@ pnpm test:kiosk
 pnpm --filter @volt/kiosk check:live
 ```
 
-The live check requires the local server. It checks current Taylor products, prices, SKUs, structured specifications, timestamps, approved-store isolation, and API errors. Unit tests cover malformed Shopify responses, pagination, available variants, cache expiry, listing markup, browsing rules, and gallery gestures.
+The live check requires the local server. It checks Taylor and Southfield products, prices, SKUs, structured specifications, timestamps, store isolation, and API errors. Unit tests cover malformed Shopify responses, pagination, available variants, cache expiry, store resolution, listing markup, browsing rules, and gallery gestures.
 
 Check the UI at 1024 × 768 and 768 × 1024, plus a narrow phone viewport. Search for a product, choose a category and budget, change sorting, open product details, then start over. Test on the actual mounted iPad before rollout; viewport testing does not establish support for an unknown Safari version.
 
-## Add a franchise
+## Open another franchise
 
-Add an approved store in `server/stores.ts`. Keep the internal store code separate from its public slug. Only allowlisted stores can supply catalog data. The API never accepts an arbitrary Shopify hostname from the browser.
+Visit `/<subdomain>` for any franchise with an accessible public Shopify feed at `https://<subdomain>.paymore.com/products.json`. No registry entry or redeployment is required. For example, `/southfieldmi` reads only `southfieldmi.paymore.com`.
 
-Use the public slug for the kiosk address. Taylor uses `taylormi`. The registry's `internalCode` field stays server-side. Item SKUs are different: their exact public Shopify values, such as `MI01-8773A-E9`, appear on cards and in product details so staff can locate the item. Search accepts those SKUs.
+The server validates a single DNS label and constructs the PayMore hostname itself. It rejects arbitrary URLs, ports, credentials, reserved hosts, internal store codes, and nested subdomains. Redirects are not followed. A missing or inaccessible store never falls back to Taylor. Store names and addresses come from optional storefront metadata, not a hardcoded list.
+
+Taylor uses `taylormi`, not its internal code `MI01`. Item SKUs are different: their exact public Shopify values, such as `MI01-8773A-E9`, appear on cards and in product details so staff can locate the item. Search accepts those SKUs.
 
 Confirm the franchise permits using its listings and branding before rollout. The public Shopify feed is an initial read-only integration, not a guarantee that Shopify will keep that endpoint available. A store with unpublished stock or multiple inventory locations needs an authorized location-aware integration before claiming that all physical stock is represented.
 
@@ -53,6 +55,6 @@ Successful snapshots are fresh for 60 seconds. If Shopify fails, the API can ret
 
 The cache is in-memory and per server instance. It reduces repeat requests but is not durable or shared across Vercel instances. A cold instance refetches rather than inventing a cached state. For larger franchise rollouts, measure upstream traffic and add a shared cache or an authorized Shopify webhook integration if needed.
 
-Product details preserve specification rows, headings, included-item lists, accessory exclusions, and condition notes as structured text. Upstream HTML never runs in the browser. Product photos use square frames without cropping, with thumbnail selection and horizontal swipe navigation.
+Product details preserve specification rows, headings, included-item lists, accessory exclusions, and condition notes as structured text. Cosmetic and functionality notes sit below the photo carousel. Price, SKU, included items, and specifications sit on the right; narrow screens put the price and SKU before the gallery and condition notes. Upstream HTML never runs in the browser. Product photos use square frames without cropping, with thumbnail selection and horizontal swipe navigation. Tap the main photo to enlarge it in a full-screen viewer; Back to item or Escape returns to the same item and photo.
 
 This is browse-only. It does not reserve stock, place orders, collect customer details, or prove physical availability. Staff should confirm price, condition, and stock before a sale.

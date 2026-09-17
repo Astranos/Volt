@@ -3,6 +3,7 @@ import { X } from "lucide-react";
 import type { DetailBlock, Product } from "../catalog";
 import { money, productPrice } from "../browse";
 import { ProductGallery } from "./ProductGallery";
+import { partitionListing } from "./listing-layout";
 import "./product-detail.css";
 
 function ListingBlock({ block }: { block: DetailBlock }) {
@@ -54,6 +55,7 @@ export function ProductDetail({
 }) {
   const singleVariant =
     product.variants.length === 1 ? product.variants[0] : null;
+  const { conditionNotes, mainDetails } = partitionListing(product.details);
   return (
     <Dialog.Root
       open
@@ -70,8 +72,18 @@ export function ProductDetail({
             </Dialog.Close>
           </div>
           <div className="detail-layout">
-            <ProductGallery images={product.images} title={product.title} />
+            <div className="detail-media">
+              <ProductGallery images={product.images} title={product.title} />
+              {conditionNotes.length > 0 && (
+                <section className="listing-content condition-notes" aria-label="Item condition">
+                  {conditionNotes.map((block, index) => (
+                    <ListingBlock key={index} block={block} />
+                  ))}
+                </section>
+              )}
+            </div>
             <div className="detail-copy">
+              <div className="detail-summary">
               <Dialog.Title>{product.title}</Dialog.Title>
               <p className="detail-price">{productPrice(product)}</p>
               {product.condition !== "See item details" && (
@@ -103,9 +115,10 @@ export function ProductDetail({
                   ))}
                 </section>
               )}
+              </div>
               <section className="listing-content" aria-label="Listing details">
                 {product.details.length ? (
-                  product.details.map((block, index) => (
+                  mainDetails.map((block, index) => (
                     <ListingBlock key={index} block={block} />
                   ))
                 ) : product.description ? (

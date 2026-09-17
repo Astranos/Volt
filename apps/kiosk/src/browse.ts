@@ -48,6 +48,18 @@ export function productPrice(product: Product): string {
     : money(product.priceCents);
 }
 export function routeSlug(path: string): string | null {
-  const match = /^\/([a-z0-9-]+)\/?$/.exec(path);
+  const match = /^\/([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)\/?$/.exec(path);
   return match?.[1] ?? null;
+}
+
+export function storeSlugFromInput(value: string): string | null {
+  const input = value.trim().toLowerCase();
+  const slug = routeSlug(`/${input}`);
+  if (slug) return slug;
+  try {
+    const url = new URL(input.includes('://') ? input : `https://${input}`);
+    if (url.protocol !== 'https:' || url.username || url.password || url.port || url.pathname !== '/' || url.search || url.hash) return null;
+    const match = /^([a-z0-9-]+)\.paymore\.com$/.exec(url.hostname);
+    return match ? routeSlug(`/${match[1]}`) : null;
+  } catch { return null; }
 }

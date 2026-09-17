@@ -81,7 +81,7 @@ describe('approved Shopify catalog', () => {
     const first = await service.getCatalog('taylormi');
     time += 59999;
     expect(await service.getCatalog('taylormi')).toEqual(first);
-    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
     time += 1;
     expect(await service.getCatalog('taylormi')).toEqual({ ...first, status: 'stale' });
     time += 240000;
@@ -92,19 +92,52 @@ describe('approved Shopify catalog', () => {
     const fetchImpl = vi.fn<typeof fetch>().mockImplementation(async () => response([product()]));
     const service = createCatalogService({ fetchImpl });
     const results = await Promise.all([service.getCatalog('taylormi'), service.getCatalog('taylormi')]);
-    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
     expect(results[0]).toEqual(results[1]);
   });
 
-  it('isolates approved configuration from arbitrary stores and returns copies', async () => {
+  it('rejects unsafe hosts and internal codes before fetching', async () => {
     const fetchImpl = vi.fn<typeof fetch>();
     const service = createCatalogService({ fetchImpl });
     await expect(service.getCatalog('mi01')).rejects.toMatchObject({ statusCode: 404 });
-    await expect(service.getCatalog('other-franchise')).rejects.toMatchObject({ statusCode: 404 });
+    await expect(service.getCatalog('evil.example')).rejects.toMatchObject({ statusCode: 404 });
     expect(fetchImpl).not.toHaveBeenCalled();
     const store = getStore('taylormi');
     if (store) store.name = 'Changed';
-    expect(getStore('taylormi')?.name).toBe('Taylor');
+    expect(getStore('taylormi')?.name).toBe('taylormi');
+  });
+
+  it('loads an unregistered franchise and keeps concurrent store caches isolated', async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockImplementation(async input => {
+      const url = new URL(String(input));
+      const southfield = url.hostname === 'southfieldmi.paymore.com';
+      if (url.pathname === '/') return new Response(`<script type="application/ld+json">${JSON.stringify({ '@type': 'ElectronicsStore', url: url.origin, address: { addressLocality: southfield ? 'Southfield' : 'Taylor', addressRegion: 'MI', streetAddress: southfield ? '29139 Southfield Rd' : '9058 Telegraph Road' } })}</script>`);
+      return response([product(southfield ? 200 : 100)]);
+    });
+    const service = createCatalogService({ fetchImpl });
+    const [taylor, southfield] = await Promise.all([service.getCatalog('taylormi'), service.getCatalog('southfieldmi')]);
+    expect(taylor.store.name).toBe('Taylor');
+    expect(southfield.store).toMatchObject({ slug: 'southfieldmi', name: 'Southfield', address: '29139 Southfield Rd', storefrontUrl: 'https://southfieldmi.paymore.com' });
+    expect(taylor.products[0]?.id).toBe('100');
+    expect(southfield.products[0]?.id).toBe('200');
+    expect(southfield.products[0]?.url).toMatch(/^https:\/\/southfieldmi\.paymore\.com\//);
+    expect((await service.getCatalog('taylormi')).products[0]?.id).toBe('100');
+    expect(fetchImpl).toHaveBeenCalledTimes(4);
+  });
+
+  it('does not replace a missing franchise with another store or an empty catalog', async () => {
+    const missing = vi.fn<typeof fetch>().mockResolvedValue(new Response('', { status: 404 }));
+    await expect(createCatalogService({ fetchImpl: missing }).getCatalog('missingstore')).rejects.toMatchObject({ statusCode: 404 });
+    expect(missing).toHaveBeenCalledTimes(1);
+    const dns = vi.fn<typeof fetch>().mockRejectedValue(new TypeError('fetch failed', { cause: { code: 'ENOTFOUND' } }));
+    await expect(createCatalogService({ fetchImpl: dns }).getCatalog('missingstore')).rejects.toMatchObject({ statusCode: 404 });
+  });
+
+  it('keeps working products when optional store metadata cannot be fetched', async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValueOnce(response([product()])).mockRejectedValue(new Error('Homepage unavailable'));
+    const catalog = await createCatalogService({ fetchImpl }).getCatalog('southfieldmi');
+    expect(catalog.store).toMatchObject({ name: 'southfieldmi', region: '', address: '' });
+    expect(catalog.products).toHaveLength(1);
   });
 
   it('rejects incomplete pages and duplicate identities', async () => {

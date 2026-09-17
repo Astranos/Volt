@@ -4,10 +4,10 @@ export const categorySchema = z.enum(['Phones', 'Computers', 'Tablets', 'Gaming'
 export type Category = z.infer<typeof categorySchema>;
 
 export const storeSchema = z.object({
-  slug: z.string().regex(/^[a-z][a-z0-9-]*$/),
+  slug: z.string().regex(/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/),
   name: z.string().min(1),
-  region: z.string().min(1),
-  address: z.string().min(1),
+  region: z.string(),
+  address: z.string(),
   storefrontUrl: z.url({ protocol: /^https$/ }),
 });
 export type Store = z.infer<typeof storeSchema>;

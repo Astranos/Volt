@@ -9,6 +9,10 @@
 .product-gallery {
   min-width: 0;
 }
+.detail-media,
+.detail-copy {
+  min-width: 0;
+}
 .gallery-square {
   position: relative;
   width: 100%;
@@ -182,6 +186,23 @@
 @media (max-width: 620px) {
   .product-dialog .detail-layout {
     grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+  .detail-media,
+  .detail-copy {
+    display: contents;
+  }
+  .detail-summary {
+    order: 0;
+  }
+  .product-gallery {
+    order: 1;
+  }
+  .condition-notes {
+    order: 2;
+  }
+  .detail-copy > .listing-content {
+    order: 3;
   }
   .gallery-thumbnail {
     width: 60px;

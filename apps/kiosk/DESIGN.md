@@ -19,7 +19,9 @@ The selected layout keeps products visible without requiring customers to know a
 
 Embedding the kiosk inside Volt's existing account-oriented web app would reuse its app shell, but also couple public store browsing to authentication and scanner navigation. A separate workspace app reuses the modern frontend stack without those dependencies. This is a deployment boundary, not a legacy-technology fork.
 
-The browser calls `/api/catalog?store=taylormi`. The server resolves that slug from an approved registry, fetches Shopify pages, validates their fields, and returns the shared `CatalogResponse` schema. The browser owns search, filter, sort, detail, and inactivity state. The server owns store selection, upstream validation, price ranges, and snapshot freshness.
+The browser calls `/api/catalog?store=taylormi`. The server validates the slug, constructs its exact `*.paymore.com` host, fetches Shopify pages, validates their fields, and returns the shared `CatalogResponse` schema. Store metadata is optional enrichment from the same host. The browser owns search, filter, sort, detail, photo enlargement, and inactivity state. The server owns store selection, upstream validation, price ranges, and snapshot freshness.
+
+A manual franchise registry was the initial design. Direct host resolution replaces it so new franchise URLs work without a code change. Arbitrary Shopify domains remain unsupported; requests stay within the PayMore namespace and never follow redirects. Each store has separate cached data, with a 64-store cache cap and 16 concurrent loads per process.
 
 The existing Convex PayMore catalog remains a specification lookup. Its UPC-based merging and lack of store stock make it unsuitable as the kiosk's inventory source.
 

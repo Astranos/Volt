@@ -5,6 +5,7 @@ import {
   money,
   productPrice,
   routeSlug,
+  storeSlugFromInput,
 } from "./browse";
 import type { Product } from "./catalog";
 
@@ -33,6 +34,14 @@ const tablet: Product = {
   publishedAt: "2026-09-02T00:00:00Z",
 };
 describe("kiosk browsing", () => {
+  it('turns a PayMore address into a local store route only', () => {
+    expect(storeSlugFromInput('https://southfieldmi.paymore.com/')).toBe('southfieldmi');
+    expect(storeSlugFromInput('SOUTHFIELDMI.paymore.com')).toBe('southfieldmi');
+    expect(storeSlugFromInput('taylormi')).toBe('taylormi');
+    for (const input of ['https://evil.example/', 'https://a.b.paymore.com/', 'https://user@taylormi.paymore.com/', 'https://taylormi.paymore.com:8443/', 'https://taylormi.paymore.com/products/item', 'javascript:alert(1)', 'https://taylormi.paymore.com/?next=evil']) {
+      expect(storeSlugFromInput(input)).toBeNull();
+    }
+  });
   it('finds the exact inventory SKU', () => {
     expect(browseProducts([phone], { ...initialFilters, query: 'mi01-8773a-e9' })).toEqual([phone]);
   });

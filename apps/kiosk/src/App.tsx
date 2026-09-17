@@ -26,6 +26,7 @@ import {
 } from "./browse";
 import { ProductCard } from "./components/ProductCard";
 import { ProductDetail } from "./components/ProductDetail";
+import { StoreChooser } from './components/StoreChooser';
 import { useCatalog } from "./hooks/useCatalog";
 import { useIdleReset } from "./hooks/useIdleReset";
 
@@ -88,7 +89,7 @@ function Browse({ slug }: { slug: string }) {
             <MapPin size={17} />
             <span>
               {catalog
-                ? `${catalog.store.name}, ${catalog.store.region}`
+                ? [catalog.store.name, catalog.store.region].filter(Boolean).join(', ')
                 : "In-store browsing"}
             </span>
           </div>
@@ -311,16 +312,7 @@ export default function App() {
           ? "Browse products at your local PayMore."
           : "Please ask an associate to check this tablet’s address."}
       </p>
-      {path === "/" && (
-        <a className="store-link" href="/taylormi">
-          <MapPin size={24} />
-          <span>
-            <strong>Taylor</strong>
-            <small>Michigan</small>
-          </span>
-          <ArrowRight />
-        </a>
-      )}
+      {path === "/" && <StoreChooser />}
     </main>
   );
 }

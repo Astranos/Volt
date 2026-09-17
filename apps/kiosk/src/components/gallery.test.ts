@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { nextPhoto, swipeDirection } from "./gallery";
+import { isPhotoDrag, nextPhoto, swipeDirection } from "./gallery";
 describe("gallery gestures", () => {
   const start = { x: 100, y: 100 };
+  it("allows taps but suppresses clicks after horizontal or vertical drags", () => {
+    expect(isPhotoDrag(start, start)).toBe(false);
+    expect(isPhotoDrag(start, { x: 105, y: 105 })).toBe(false);
+    expect(isPhotoDrag(start, { x: 120, y: 100 })).toBe(true);
+    expect(isPhotoDrag(start, { x: 40, y: 100 })).toBe(true);
+    expect(isPhotoDrag(start, { x: 100, y: 140 })).toBe(true);
+  });
   it("advances left and returns right", () => {
     expect(swipeDirection(start, { x: 40, y: 110 })).toBe(1);
     expect(swipeDirection(start, { x: 160, y: 95 })).toBe(-1);
