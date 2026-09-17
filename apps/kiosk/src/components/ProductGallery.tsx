@@ -1,9 +1,11 @@
 import { Button } from "@base-ui/react/button";
 import { Dialog } from "@base-ui/react/dialog";
+import { ScrollArea } from "@base-ui/react/scroll-area";
 import { ChevronLeft, ChevronRight, ImageOff, Maximize2, X } from "lucide-react";
 import { useEffect, useRef, useState, type PointerEvent } from "react";
 import { isPhotoDrag, nextPhoto, swipeDirection, type Point } from "./gallery";
 import "./photo-viewer.css";
+import "./thumbnail-scroll.css";
 
 export function ProductGallery({
   images,
@@ -163,7 +165,8 @@ export function ProductGallery({
               <ChevronRight size={22} />
             </Button>
           </div>
-          <div
+          <ScrollArea.Root className="thumbnail-scroll-area">
+          <ScrollArea.Viewport
             className="gallery-thumbnails"
             ref={strip}
             aria-label="Choose a photo"
@@ -198,6 +201,7 @@ export function ProductGallery({
               }
             }}
           >
+            <ScrollArea.Content className="thumbnail-scroll-content">
             {images.map((url, photo) => (
               <Button
                 key={`${url}-${photo}`}
@@ -209,7 +213,12 @@ export function ProductGallery({
                 <img src={url} alt="" draggable={false} loading="lazy" />
               </Button>
             ))}
-          </div>
+            </ScrollArea.Content>
+          </ScrollArea.Viewport>
+          <ScrollArea.Scrollbar className="thumbnail-scrollbar" orientation="horizontal">
+            <ScrollArea.Thumb className="thumbnail-scroll-thumb" />
+          </ScrollArea.Scrollbar>
+          </ScrollArea.Root>
         </>
       )}
     </section>

@@ -1,10 +1,12 @@
 import { Dialog } from "@base-ui/react/dialog";
+import { ScrollArea } from '@base-ui/react/scroll-area';
 import { X } from "lucide-react";
 import type { DetailBlock, Product } from "../catalog";
 import { money, productPrice } from "../browse";
 import { ProductGallery } from "./ProductGallery";
 import { partitionListing } from "./listing-layout";
 import "./product-detail.css";
+import './popup-scroll.css';
 
 function ListingBlock({ block }: { block: DetailBlock }) {
   switch (block.kind) {
@@ -65,7 +67,10 @@ export function ProductDetail({
     >
       <Dialog.Portal>
         <Dialog.Backdrop className="dialog-backdrop" />
-        <Dialog.Popup className="product-dialog">
+        <Dialog.Popup className="product-dialog scrollable-product-dialog">
+          <ScrollArea.Root className="product-scroll-area">
+            <ScrollArea.Viewport className="product-scroll-viewport" aria-label="Product information" role="region">
+              <ScrollArea.Content className="product-scroll-content">
           <div className="dialog-top">
             <Dialog.Close className="button secondary">
               <X size={20} /> Close
@@ -129,6 +134,12 @@ export function ProductDetail({
               </section>
             </div>
           </div>
+              </ScrollArea.Content>
+            </ScrollArea.Viewport>
+            <ScrollArea.Scrollbar className="product-scrollbar" orientation="vertical">
+              <ScrollArea.Thumb className="product-scroll-thumb" />
+            </ScrollArea.Scrollbar>
+          </ScrollArea.Root>
         </Dialog.Popup>
       </Dialog.Portal>
     </Dialog.Root>

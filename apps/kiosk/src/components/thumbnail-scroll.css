@@ -1,0 +1,52 @@
+.thumbnail-scroll-area {
+  position: relative;
+  min-width: 0;
+  width: 100%;
+  padding-bottom: 14px;
+}
+
+.thumbnail-scroll-area .gallery-thumbnails {
+  display: block;
+  width: 100%;
+  padding: 0;
+  gap: 0;
+  scrollbar-width: none;
+}
+
+.thumbnail-scroll-area .gallery-thumbnails::-webkit-scrollbar {
+  display: none;
+}
+
+.thumbnail-scroll-content {
+  position: relative;
+  display: flex;
+  width: max-content;
+  min-width: 100%;
+  gap: 8px;
+  padding: 4px 3px;
+}
+
+.thumbnail-scrollbar {
+  position: absolute;
+  right: 3px;
+  bottom: 0;
+  left: 3px;
+  height: 12px;
+  padding: 2px 0;
+  display: flex;
+  border-radius: 999px;
+  background: #edf0e8;
+  touch-action: none;
+  user-select: none;
+}
+
+.thumbnail-scroll-thumb {
+  height: 100%;
+  border-radius: inherit;
+  background: #a8b49f;
+}
+
+.thumbnail-scroll-thumb:hover,
+.thumbnail-scroll-thumb[data-scrolling] {
+  background: #65775b;
+}

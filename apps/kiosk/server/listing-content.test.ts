@@ -2,6 +2,17 @@ import { describe, expect, it } from 'vitest';
 import { parseListingContent } from './listing-content';
 
 describe('parseListingContent', () => {
+  it('groups included-item paragraphs into bullets and keeps exclusions separate', () => {
+    const html = '<h2>Items included in this sale:</h2><div><div>Camera</div><div>Tripod</div><div>Battery</div></div><p>Sorry, no box included</p><p>*Please note, unlisted accessories are not included.</p><h2>Specifications:</h2><p>Camera details</p>';
+    expect(parseListingContent(html, 'Camera')).toEqual([
+      { kind: 'heading', text: 'Items included in this sale:' },
+      { kind: 'list', items: ['Camera', 'Tripod', 'Battery'] },
+      { kind: 'paragraph', text: 'Sorry, no box included' },
+      { kind: 'paragraph', text: '*Please note, unlisted accessories are not included.' },
+      { kind: 'heading', text: 'Specifications:' },
+      { kind: 'paragraph', text: 'Camera details' },
+    ]);
+  });
   it('keeps included-item exclusions inside span-wrapped divs as separate paragraphs', () => {
     expect(parseListingContent('<div><span><div>Game</div></span><span><div><b>Sorry, no box</b></div></span></div>', 'Game')).toEqual([
       { kind: 'paragraph', text: 'Game' }, { kind: 'paragraph', text: 'Sorry, no box' },

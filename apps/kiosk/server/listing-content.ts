@@ -7,6 +7,31 @@ const MAX_TEXT = 2000;
 const MAX_ITEMS = 80;
 const structuralTags = new Set(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'ul', 'ol', 'table', 'div', 'section', 'article']);
 
+function includedItemLists(blocks: DetailBlock[]): DetailBlock[] {
+  const output: DetailBlock[] = [];
+  let items: string[] | null = null;
+  const flush = () => {
+    if (items?.length) output.push({ kind: 'list', items });
+    items = null;
+  };
+  for (const block of blocks) {
+    if (block.kind === 'heading') {
+      flush();
+      output.push(block);
+      if (/^items included(?: in this sale)?\s*:?$/i.test(block.text.trim())) items = [];
+    } else if (items !== null && block.kind === 'paragraph' && !/^\*?\s*(?:please note\b|sorry\b|important\b|not included\b)/i.test(block.text)) {
+      items.push(block.text);
+    } else if (items !== null && block.kind === 'list') {
+      items.push(...block.items);
+    } else {
+      flush();
+      output.push(block);
+    }
+  }
+  flush();
+  return output;
+}
+
 export function parseListingContent(html: string, productTitle: string): DetailBlock[] {
   const $ = load(html);
   $('script,style,noscript,form,img,svg,iframe,object,embed,video,audio,template').remove();
@@ -55,5 +80,5 @@ export function parseListingContent(html: string, productTitle: string): DetailB
   }
 
   walk($('body').contents().toArray());
-  return result;
+  return includedItemLists(result);
 }

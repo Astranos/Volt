@@ -16,7 +16,7 @@ export function useIdleReset(reset: () => void) {
     };
     const events = ["pointerdown", "keydown", "scroll"];
     events.forEach((event) =>
-      window.addEventListener(event, activity, { passive: true }),
+      window.addEventListener(event, activity, { passive: true, capture: true }),
     );
     const timer = window.setInterval(() => {
       const seconds = Math.ceil(
@@ -29,7 +29,7 @@ export function useIdleReset(reset: () => void) {
     }, 1000);
     return () => {
       window.clearInterval(timer);
-      events.forEach((event) => window.removeEventListener(event, activity));
+      events.forEach((event) => window.removeEventListener(event, activity, true));
     };
   }, []);
   return { remaining, keepBrowsing };
