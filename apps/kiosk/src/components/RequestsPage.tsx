@@ -3,20 +3,20 @@ import { Package } from 'lucide-react';
 import { useEffect } from 'react';
 import { money } from '../browse';
 import { useRequests } from '../hooks/useRequests';
+import { useStore } from '../hooks/useStore';
+import { StoreHeader } from './StoreHeader';
 import './requests.css';
 
 export function RequestsPage({ slug }: { slug: string }) {
+  const store = useStore(slug);
   useEffect(() => {
     const previous = document.title;
-    document.title = `PayMore | ${slug} requests`;
+    document.title = `PayMore | ${store?.name ?? slug} requests`;
     return () => { document.title = previous; };
-  }, [slug]);
+  }, [slug, store?.name]);
   const { requests, connection, error, pending, rowError, now, update } = useRequests(slug);
-  return <main className="requests-page">
-    <header className="requests-header">
-      <div><img className="wordmark" src="/paymore-logo.png" alt="PayMore" width="156" height="50" /><h1>Item requests</h1><p>{slug}</p></div>
-      <a className="button secondary" href={`/${slug}`}>View products</a>
-    </header>
+  return <><StoreHeader slug={slug} store={store} page="requests" /><main className="requests-page">
+    <h1>Item requests</h1>
     <p>Requests clear automatically after 1 hour. Requests do not reserve items.</p>
     {connection === 'disconnected' && <p className="notice" role="alert">{error} Updates are paused until reconnected.</p>}
     {connection === 'loading' ? <p role="status">Loading requests…</p> : requests.length === 0 ? <section className="empty-state"><Package size={32}/><h2>{connection === 'connected' ? 'No pending requests' : 'Requests unavailable'}</h2></section> : <div className="request-list">
@@ -38,5 +38,5 @@ export function RequestsPage({ slug }: { slug: string }) {
         </div>
       </article>)}
     </div>}
-  </main>;
+  </main></>;
 }

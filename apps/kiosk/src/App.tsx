@@ -8,9 +8,7 @@ import {
   Headphones,
   LayoutGrid,
   Laptop,
-  MapPin,
   Package,
-  RotateCcw,
   Search,
   Smartphone,
   Tablet,
@@ -28,6 +26,7 @@ import { ProductCard } from "./components/ProductCard";
 import { ProductDetail } from "./components/ProductDetail";
 import { StoreChooser } from './components/StoreChooser';
 import { RequestsPage } from './components/RequestsPage';
+import { PayMoreLogo, StoreHeader } from './components/StoreHeader';
 import { useCatalog } from "./hooks/useCatalog";
 import { useIdleReset } from "./hooks/useIdleReset";
 
@@ -41,11 +40,6 @@ const categories: { name: Category | "All"; icon: typeof Search }[] = [
   { name: "Cameras", icon: Camera },
   { name: "Other", icon: Package },
 ];
-function Wordmark() {
-  return (
-    <img className="wordmark" src="/paymore-logo.png" alt="PayMore" width="156" height="50" />
-  );
-}
 function Browse({ slug }: { slug: string }) {
   const { state, refresh } = useCatalog(slug);
   const [filters, setFilters] = useState<BrowseFilters>(initialFilters);
@@ -85,23 +79,7 @@ function Browse({ slug }: { slug: string }) {
     selected && catalog?.products.find((product) => product.id === selected.id);
   return (
     <>
-      <header className="site-header">
-        <div className="header-inner">
-          <Wordmark />
-          <div className="store-location">
-            <MapPin size={17} />
-            <span>
-              {catalog
-                ? [catalog.store.name, catalog.store.region].filter(Boolean).join(', ')
-                : "In-store browsing"}
-            </span>
-          </div>
-          <Button className="button reset-button" aria-label="Start over" onClick={reset}>
-            <RotateCcw size={18} />
-            <span>Start over</span>
-          </Button>
-        </div>
-      </header>
+      <StoreHeader slug={slug} store={catalog?.store ?? null} page="catalog" onReset={reset} />
       <main className="catalog-main">
         <div className="page-heading">
           <div>
@@ -310,7 +288,7 @@ export default function App() {
   if (slug) return <Browse slug={slug} />;
   return (
     <main className="store-chooser">
-      <Wordmark />
+      <PayMoreLogo />
       <h1>{path === "/" ? "Choose your store" : "Store not found."}</h1>
       <p>
         {path === "/"

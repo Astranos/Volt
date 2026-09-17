@@ -2,9 +2,7 @@
 .request-button-box p { font-size: 14px; margin: 8px 0 0; font-weight: 400; }
 .request-error { color: #a22b20; }
 .requests-page { max-width: 1200px; margin: auto; padding: 24px; }
-.requests-header { display: flex; justify-content: space-between; align-items: center; gap: 20px; }
-.requests-header h1 { margin: 16px 0 2px; font-size: 30px; }
-.requests-header p { margin: 0; }
+.requests-page > h1 { margin: 0 0 10px; font-size: 30px; }
 .request-list { display: grid; gap: 18px; margin-top: 24px; }
 .request-card { display: flex; gap: 24px; background: white; border: 1px solid #dbe2d5; border-radius: 16px; padding: 20px; }
 .request-photo { width: 160px; height: 160px; object-fit: contain; flex-shrink: 0; border-radius: 10px; }
@@ -22,5 +20,4 @@
   .requests-page { padding: 16px; }
   .request-card { display: grid; grid-template-columns: 1fr; gap: 12px; padding: 16px; }
   .request-photo { width: 100px; height: 100px; }
-  .requests-header { align-items: flex-start; }
 }
