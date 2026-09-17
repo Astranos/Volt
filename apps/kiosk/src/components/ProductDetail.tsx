@@ -5,6 +5,7 @@ import type { DetailBlock, Product } from "../catalog";
 import { money, productPrice } from "../browse";
 import { ProductGallery } from "./ProductGallery";
 import { partitionListing } from "./listing-layout";
+import { RequestButton } from './RequestButton';
 import "./product-detail.css";
 import './popup-scroll.css';
 
@@ -37,22 +38,27 @@ function ListingBlock({ block }: { block: DetailBlock }) {
       );
   }
 }
-function ItemSku({ sku }: { sku: string | null }) {
+function ItemSku({ sku, storeSlug, visitorId, productId, variantId, enabled }: { sku: string | null; storeSlug: string; visitorId: string; productId: string; variantId: string; enabled: boolean }) {
   return (
     <div className="item-sku">
       <span>SKU</span>
       <strong>{sku || "Not provided"}</strong>
       {sku && <small>Give this SKU to an associate.</small>}
+      <RequestButton key={`${visitorId}:${variantId}`} storeSlug={storeSlug} visitorId={visitorId} productId={productId} variantId={variantId} enabled={enabled} />
     </div>
   );
 }
 export function ProductDetail({
   product,
   available,
+  storeSlug,
+  visitorId,
   onClose,
 }: {
   product: Product;
   available: boolean;
+  storeSlug: string;
+  visitorId: string;
   onClose: () => void;
 }) {
   const singleVariant =
@@ -103,7 +109,7 @@ export function ProductDetail({
                 </p>
               )}
               {singleVariant ? (
-                <ItemSku sku={singleVariant.sku} />
+                <ItemSku sku={singleVariant.sku} storeSlug={storeSlug} visitorId={visitorId} productId={product.id} variantId={singleVariant.id} enabled={available} />
               ) : (
                 <section
                   className="variant-options"
@@ -115,7 +121,7 @@ export function ProductDetail({
                         {variant.title}
                         <span>{money(variant.priceCents)}</span>
                       </h3>
-                      <ItemSku sku={variant.sku} />
+                      <ItemSku sku={variant.sku} storeSlug={storeSlug} visitorId={visitorId} productId={product.id} variantId={variant.id} enabled={available} />
                     </div>
                   ))}
                 </section>

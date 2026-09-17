@@ -10,9 +10,11 @@
     "preview": "vite preview --host 127.0.0.1 --port 4175 --strictPort",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.server.json",
     "test": "vitest run",
-    "check:live": "node scripts/check-live.js"
+    "check:live": "node scripts/check-live.js",
+    "check:requests": "node scripts/check-requests.js"
   },
   "dependencies": {
+    "convex": "^1.41.0",
     "cheerio": "1.1.2",
     "domhandler": "5.0.3",
     "@base-ui/react": "^1.6.0",

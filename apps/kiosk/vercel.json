@@ -4,7 +4,7 @@
   "buildCommand": "pnpm build",
   "installCommand": "pnpm install --frozen-lockfile --ignore-scripts",
   "outputDirectory": "dist",
-  "functions": { "api/catalog.ts": { "maxDuration": 30 } },
+  "functions": { "api/catalog.ts": { "maxDuration": 30 }, "api/requests.ts": { "maxDuration": 30 } },
   "headers": [
     {
       "source": "/(.*)",
@@ -18,5 +18,8 @@
     },
     { "source": "/(.*)\\.(js|css|html)", "headers": [{ "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }] }
   ],
-  "rewrites": [{ "source": "/:store([a-z0-9][a-z0-9-]*)", "destination": "/index.html" }]
+  "rewrites": [
+    { "source": "/:store([a-z0-9][a-z0-9-]*)/requests", "destination": "/index.html" },
+    { "source": "/:store([a-z0-9][a-z0-9-]*)", "destination": "/index.html" }
+  ]
 }

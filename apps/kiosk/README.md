@@ -21,9 +21,28 @@ Open `http://127.0.0.1:4175/taylormi` or `http://127.0.0.1:4175/southfieldmi`. T
 pnpm --filter @volt/kiosk typecheck
 pnpm test:kiosk
 pnpm --filter @volt/kiosk check:live
+pnpm --filter @volt/kiosk check:requests
 ```
 
 The live check requires the local server. It checks Taylor and Southfield products, prices, SKUs, structured specifications, timestamps, store isolation, and API errors. Unit tests cover malformed Shopify responses, pagination, available variants, cache expiry, store resolution, listing markup, browsing rules, and gallery gestures.
+
+The requests check is development-only. It creates a temporary request, verifies duplicate protection and store isolation, marks it found and shown, and leaves no active test request.
+
+## Use the staff request queue
+
+Open `/<store>/requests`, for example `/taylormi/requests`. Customers use **Ask to see item** beside the SKU. The staff page updates every three seconds and shows the requested product, variant, photo, exact SKU, and waiting time.
+
+**Found** keeps a request active. **Shown**, **Given to customer**, and **Clear** remove it from the active queue. Every request expires one hour after creation; changing its status does not extend that deadline. Convex also deletes expired records with a scheduled function.
+
+The queue and its controls are intentionally public, as requested. Anyone who knows the URL can view or change requests. It collects no customer names, contact information, or IP addresses. A temporary anonymous browsing-session identifier supplies duplicate protection and request limits.
+
+## Configure request storage
+
+The kiosk uses the existing Volt Convex project for durable request storage. Add `KIOSK_CONVEX_URL` and `KIOSK_REQUEST_SECRET` to the kiosk server environment. The same `KIOSK_REQUEST_SECRET` must exist in that Convex deployment. This is an internal service credential, not a staff access code. Never prefix it with `VITE_` or expose it in browser configuration.
+
+For development, run `node apps/kiosk/scripts/configure-requests.ts DEPLOYMENT https://DEPLOYMENT.convex.cloud` from the repo root after confirming the intended deployment. The script creates a credential only when absent and writes an ignored, mode-600 `apps/kiosk/.env.local`. It does not print the credential. Restart the kiosk dev server after changing its environment.
+
+Deploy the additive `kioskRequests` schema and functions before deploying the frontend. Use separate development and production credentials. The production backend changes and Vercel environment configuration need explicit approval before publishing.
 
 Check the UI at 1024 × 768 and 768 × 1024, plus a narrow phone viewport. Search for a product, choose a category and budget, change sorting, open product details, then start over. Test on the actual mounted iPad before rollout; viewport testing does not establish support for an unknown Safari version.
 
@@ -57,4 +76,4 @@ The cache is in-memory and per server instance. It reduces repeat requests but i
 
 Product details preserve specification rows, headings, included-item lists, accessory exclusions, and condition notes as structured text. Cosmetic and functionality notes sit below the photo carousel. Price, SKU, included items, and specifications sit on the right; narrow screens put the price and SKU before the gallery and condition notes. Upstream HTML never runs in the browser. Product photos use square frames without cropping, with thumbnail selection and horizontal swipe navigation. Tap the main photo to enlarge it in a full-screen viewer; Back to item or Escape returns to the same item and photo.
 
-This is browse-only. It does not reserve stock, place orders, collect customer details, or prove physical availability. Staff should confirm price, condition, and stock before a sale.
+Requests ask staff for assistance. They do not reserve stock, place orders, collect customer details, or prove physical availability. Staff should confirm price, condition, and stock before a sale.

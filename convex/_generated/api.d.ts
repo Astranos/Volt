@@ -29,6 +29,8 @@ import type * as catalogActivity from "../catalogActivity.js";
 import type * as cloudWorkspace from "../cloudWorkspace.js";
 import type * as crons from "../crons.js";
 import type * as http from "../http.js";
+import type * as kioskRequestValidators from "../kioskRequestValidators.js";
+import type * as kioskRequests from "../kioskRequests.js";
 import type * as paymoreCatalog from "../paymoreCatalog.js";
 import type * as paymoreCrawl from "../paymoreCrawl.js";
 import type * as pricechartingCrawl from "../pricechartingCrawl.js";
@@ -80,6 +82,8 @@ declare const fullApi: ApiFromModules<{
   cloudWorkspace: typeof cloudWorkspace;
   crons: typeof crons;
   http: typeof http;
+  kioskRequestValidators: typeof kioskRequestValidators;
+  kioskRequests: typeof kioskRequests;
   paymoreCatalog: typeof paymoreCatalog;
   paymoreCrawl: typeof paymoreCrawl;
   pricechartingCrawl: typeof pricechartingCrawl;

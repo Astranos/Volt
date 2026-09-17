@@ -27,6 +27,7 @@ import {
 import { ProductCard } from "./components/ProductCard";
 import { ProductDetail } from "./components/ProductDetail";
 import { StoreChooser } from './components/StoreChooser';
+import { RequestsPage } from './components/RequestsPage';
 import { useCatalog } from "./hooks/useCatalog";
 import { useIdleReset } from "./hooks/useIdleReset";
 
@@ -50,11 +51,13 @@ function Browse({ slug }: { slug: string }) {
   const [filters, setFilters] = useState<BrowseFilters>(initialFilters);
   const [limit, setLimit] = useState(24);
   const [selected, setSelected] = useState<Product | null>(null);
+  const [visitorId, setVisitorId] = useState(() => crypto.randomUUID());
   const [clock, setClock] = useState(Date.now());
   const reset = () => {
     setFilters(initialFilters);
     setLimit(24);
     setSelected(null);
+    setVisitorId(crypto.randomUUID());
     refresh();
     window.scrollTo({ top: 0 });
   };
@@ -275,6 +278,8 @@ function Browse({ slug }: { slug: string }) {
         <ProductDetail
           key={selected.id}
           product={selectedLatest || selected}
+          storeSlug={slug}
+          visitorId={visitorId}
           available={!!selectedLatest && !expired && !stale}
           onClose={() => setSelected(null)}
         />
@@ -298,6 +303,9 @@ function Browse({ slug }: { slug: string }) {
 }
 export default function App() {
   const path = window.location.pathname;
+  const requestPath = /^(\/[^/]+)\/requests\/?$/.exec(path);
+  const requestSlug = requestPath?.[1] ? routeSlug(requestPath[1]) : null;
+  if (requestSlug) return <RequestsPage key={requestSlug} slug={requestSlug} />;
   const slug = routeSlug(path);
   if (slug) return <Browse slug={slug} />;
   return (

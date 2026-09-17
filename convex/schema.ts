@@ -1,5 +1,6 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import { requestFields } from "./kioskRequestValidators";
 
 const pushSubscription = v.object({
   endpoint: v.string(),
@@ -11,6 +12,11 @@ const pushSubscription = v.object({
 });
 
 export default defineSchema({
+  kioskRequests: defineTable({ ...requestFields, requestKey: v.string(), clientHash: v.string() })
+    .index("by_storeSlug_and_requestKey", ["storeSlug", "requestKey"])
+    .index("by_storeSlug_and_status_and_expiresAt", ["storeSlug", "status", "expiresAt"])
+    .index("by_storeSlug_and_clientHash_and_createdAt", ["storeSlug", "clientHash", "createdAt"])
+    .index("by_storeSlug_and_createdAt", ["storeSlug", "createdAt"]),
   workspaces: defineTable({
     ownerClerkUserId: v.string(),
     name: v.string(),
