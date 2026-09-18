@@ -1,6 +1,6 @@
 # PayMore in-store browsing
 
-A customer-facing catalog for mounted tablets and smaller screens. A store's public path matches its PayMore subdomain: `/taylormi` or `/southfieldmi`. The proposed production host is `https://pm.juanquenga.com`; this repository does not configure that domain.
+A customer-facing catalog for mounted tablets and smaller screens. A store's public path matches its PayMore subdomain: `/taylormi` or `/southfieldmi`. The production host is `https://pm.voltresale.app`; this repository does not configure that domain.
 
 The app uses React 19, TypeScript, Vite, Tailwind 4, and Base UI. It is a separate workspace package so kiosk customers do not load Volt's account, scanner, or billing screens. Volt's existing application and deployment stay unchanged.
 
@@ -64,7 +64,7 @@ For a CLI deployment, run `node apps/kiosk/scripts/prepare-deploy.ts` from the r
 
 For a Git-connected project instead, set its root directory to `apps/kiosk`. Keep Node 24 and pnpm 10.14.0. Vercel must detect the pnpm 9-format lockfile or use `ENABLE_EXPERIMENTAL_COREPACK=1`; an older default pnpm fails under Node 24.
 
-After approving a preview and testing the physical tablet, attach `pm.juanquenga.com` to that project and apply the DNS record Vercel supplies. Domain changes and publishing are separate rollout steps, not performed by local development.
+After approving a preview and testing the physical tablet, attach `pm.voltresale.app` to that project and apply the DNS record Vercel supplies. Domain changes and publishing are separate rollout steps, not performed by local development.
 
 ## Inventory behavior
 

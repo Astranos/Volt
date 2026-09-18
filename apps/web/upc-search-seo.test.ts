@@ -7,6 +7,20 @@ import { createServer } from "vite";
 const webRoot = path.resolve(import.meta.dirname);
 
 describe("public UPC search SEO", () => {
+  it("keeps the PayMore favicon exclusive to the kiosk", async () => {
+    for (const filename of ["index.html", "upc-search.html"]) {
+      const html = await readFile(path.join(webRoot, filename), "utf8");
+      expect(html).toContain('<link rel="icon" href="/favicon.svg"');
+      expect(html).not.toContain("/paymore-favicon.jpg");
+    }
+    const kioskHtml = await readFile(
+      path.resolve(webRoot, "../kiosk/index.html"),
+      "utf8",
+    );
+    expect(kioskHtml).toContain('href="/paymore-favicon.jpg"');
+    expect(kioskHtml).not.toContain('href="/favicon.svg"');
+  });
+
   it("renders shared landing content into HTML before JavaScript runs", async () => {
     const cacheDir = await mkdtemp(path.join(tmpdir(), "volt-upc-seo-test-"));
     const server = await createServer({
@@ -36,7 +50,7 @@ describe("public UPC search SEO", () => {
       expect(html).not.toContain("Free UPC lookup</span>");
       expect(html).toContain("What is a UPC code?");
       expect(html).toContain("No account needed.");
-      expect(html).toContain('href="https://volt.juanquenga.com/upc-search"');
+      expect(html).toContain('href="https://voltresale.app/upc-search"');
       expect(html).toContain('name="description"');
       expect(html).toContain('name="robots" content="index, follow"');
       expect(html).toContain('action="/upc-search"');
@@ -83,7 +97,7 @@ describe("public UPC search SEO", () => {
       "utf8",
     );
     expect(sitemap).toContain(
-      "<loc>https://volt.juanquenga.com/upc-search</loc>",
+      "<loc>https://voltresale.app/upc-search</loc>",
     );
     expect(sitemap).not.toContain("?q=");
     const robots = await readFile(
@@ -91,7 +105,7 @@ describe("public UPC search SEO", () => {
       "utf8",
     );
     expect(robots).toContain(
-      "Sitemap: https://volt.juanquenga.com/sitemap.xml",
+      "Sitemap: https://voltresale.app/sitemap.xml",
     );
     expect(robots).not.toContain("Disallow: /upc-search");
   });
