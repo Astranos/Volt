@@ -21,9 +21,10 @@ describe("StoreHeader", () => {
     expect($(".store-location").text()).toBe("Taylor, Michigan");
     expect($("header").text()).not.toContain("taylormi");
     expect($("img").attr("src")).toBe("/paymore-logo.png");
-    expect($("nav a").map((_, link) => $(link).attr("href")).get()).toEqual(["/taylormi", "/taylormi/requests"]);
-    expect($("nav [aria-current=page]").text()).toBe(page === "catalog" ? "Products" : "Requests");
-    expect($("nav [aria-current]")).toHaveLength(1);
+    expect($("nav a").map((_, link) => $(link).attr("href")).get()).toEqual(["/taylormi"]);
+    expect($("nav").text()).not.toContain("Requests");
+    expect($("nav [aria-current=page]").text()).toBe(page === "catalog" ? "Products" : "");
+    expect($("nav [aria-current]")).toHaveLength(page === "catalog" ? 1 : 0);
     expect($("button[aria-label='Start over']")).toHaveLength(page === "catalog" ? 1 : 0);
   });
 

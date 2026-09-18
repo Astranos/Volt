@@ -27,7 +27,6 @@ export function StoreHeader(props: StoreHeaderProps) {
         </div>
         <nav className="store-navigation" aria-label="Store navigation">
           <a href={storePath} aria-current={page === "catalog" ? "page" : undefined}>Products</a>
-          <a href={`${storePath}/requests`} aria-current={page === "requests" ? "page" : undefined}>Requests</a>
         </nav>
         {props.page === "catalog" ? (
           <Button className="button reset-button" aria-label="Start over" onClick={props.onReset}>
