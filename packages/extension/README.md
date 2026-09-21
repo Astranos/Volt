@@ -20,6 +20,7 @@ submitted version; do not edit a version for release by hand.
 - Unified sidepanel with Mobile Scanner and Offer Calculator.
 - Registers as a Cloud Scanner Workspace computer and, when selected as the live cursor target, receives per-result cursor deliveries over a reactive Convex subscription.
 - eBay sold/completed-listing warning content script.
+- [Jev-powered Shopify Price Audit](src/price-audit/README.md) with sold-listing evidence, conservative price bands, and JSON export.
 - Shopify admin quick-action buttons and product search helpers.
 - UPC highlighter with click-to-copy behavior.
 - Context-menu searches for selected text, UPCs, MPNs, eBay sold listings, and PriceCharting.

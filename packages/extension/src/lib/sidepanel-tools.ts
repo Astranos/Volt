@@ -1,6 +1,6 @@
-import { Calculator, type LucideIcon, ScanLine } from "lucide-react";
+import { Calculator, type LucideIcon, ScanLine, ChartNoAxesCombined } from "lucide-react";
 
-export type SidepanelToolId = "top-offers" | "mobile-scanner" | "mobile-photos";
+export type SidepanelToolId = "top-offers" | "mobile-scanner" | "mobile-photos" | "price-audit";
 
 export interface SidepanelToolMetadata {
   id: SidepanelToolId;
@@ -22,6 +22,12 @@ export const SIDEPANEL_TOOLS: SidepanelToolMetadata[] = [
     label: "Scanner",
     description: "Scan barcodes with your phone",
     icon: ScanLine,
+  },
+  {
+    id: "price-audit",
+    label: "Price Audit",
+    description: "Compare public Shopify inventory with eBay sold listings using Jev",
+    icon: ChartNoAxesCombined,
   },
 ];
 

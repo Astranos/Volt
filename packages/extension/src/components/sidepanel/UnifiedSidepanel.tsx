@@ -21,6 +21,8 @@ import {
 import { ExtensionAccountControl } from "../access/ExtensionAccess";
 import { useComputerRegistration } from "../../hooks/useComputerRegistration";
 
+const PriceAudit = React.lazy(() => import("./PriceAudit"));
+
 type ActiveToast = {
   message: string;
   tone: SidepanelToastTone;
@@ -172,6 +174,7 @@ export default function UnifiedSidepanel() {
     "top-offers": TopOffersPage,
     "mobile-scanner": MobileScanner,
     "mobile-photos": MobileScanner,
+    "price-audit": PriceAudit,
   };
 
   const tools = SIDEPANEL_TOOLS.map((tool) => ({
@@ -199,6 +202,7 @@ export default function UnifiedSidepanel() {
                     key={tool.id}
                     type="button"
                     role="tab"
+                    title={tool.label}
                     aria-selected={selected}
                     className={cn("sidepanel-tool-tab", selected && "is-active")}
                     onClick={() => handleToolChange(tool.id)}
@@ -224,9 +228,11 @@ export default function UnifiedSidepanel() {
           ) : null}
         </div>
         <div className="min-h-0 flex-1 overflow-hidden">
-          <ActiveComponent
-            onClose={() => handleToolChange("mobile-scanner")}
-          />
+          <React.Suspense fallback={<p className="p-4 text-sm" role="status">Loading tool…</p>}>
+            <ActiveComponent
+              onClose={() => handleToolChange("mobile-scanner")}
+            />
+          </React.Suspense>
         </div>
       </div>
     </div>
