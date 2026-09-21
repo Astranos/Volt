@@ -256,11 +256,26 @@ body {
   border: 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 0;
-  display: grid;
+  display: flex;
   flex: 1;
-  gap: 12px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  min-width: 0;
   padding: 0;
+  position: relative;
+}
+
+.sidepanel-tool-tab-indicator {
+  background: hsl(var(--accent));
+  border: 1px solid hsl(var(--primary) / 0.24);
+  border-radius: 999px;
+  box-shadow: 0 3px 10px hsl(var(--primary) / 0.16), inset 0 1px 0 hsl(var(--foreground) / 0.08);
+  height: 38px;
+  left: 0;
+  pointer-events: none;
+  position: absolute;
+  top: 2px;
+  transition: transform 260ms cubic-bezier(0.16, 1, 0.3, 1), width 260ms cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 0;
 }
 
 .sidepanel-account-control {
@@ -329,28 +344,76 @@ button.sidepanel-account-control {
   display: flex;
   font-size: 12px;
   font-weight: 750;
-  gap: 7px;
+  gap: 0;
   height: 42px;
+  flex: none;
   justify-content: center;
   min-width: 0;
-  padding: 0 10px;
+  padding: 0 8px;
   transition:
-    background-color 150ms ease,
-    color 150ms ease,
-    box-shadow 150ms ease;
+    background-color 200ms ease,
+    color 200ms ease,
+    border-color 200ms ease;
+  position: relative;
+  z-index: 1;
 }
 
 .sidepanel-tool-tab svg {
   flex: none;
   height: 15px;
+  transition: color 200ms ease;
   width: 15px;
 }
 
-.sidepanel-tool-tab span {
+.sidepanel-tool-tab-icon {
+  display: flex;
+  flex: none;
+  transition: color 200ms ease, transform 200ms ease;
+}
+
+.sidepanel-tool-tab-label {
+  display: grid;
+  grid-template-columns: 0fr;
+  max-width: 0;
+  opacity: 0;
+  transition: grid-template-columns 200ms ease, max-width 200ms ease, opacity 200ms ease;
+}
+
+.sidepanel-tool-tab-label > span {
   min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.sidepanel-tool-tab-label > span::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+}
+
+.sidepanel-tool-tab.is-active .sidepanel-tool-tab-label {
+  grid-template-columns: 1fr;
+  max-width: 160px;
+  opacity: 1;
+}
+
+.sidepanel-tool-tab.is-active .sidepanel-tool-tab-icon {
+  transform: scale(1.08);
+}
+
+.sidepanel-tool-tab:focus-visible {
+  outline: 2px solid #4ade80;
+  outline-offset: -2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidepanel-tool-tab-indicator,
+  .sidepanel-tool-tab,
+  .sidepanel-tool-tab svg,
+  .sidepanel-tool-tab-icon,
+  .sidepanel-tool-tab-label {
+    transition: none;
+  }
 }
 
 .sidepanel-tool-tab:hover {
