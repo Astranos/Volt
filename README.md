@@ -6,7 +6,7 @@ Volt combines market search, offer calculation, and listing helpers in a Chrome 
 
 [Website](https://volt.juanquenga.com) · [Chrome Web Store](https://chromewebstore.google.com/detail/volt/bmgghhmlflbhlnomgnoodpidekpaaifk) · [iPhone app](https://apps.apple.com/us/app/volt-scanner/id6771770148) · [Contribute](CONTRIBUTING.md)
 
-![Volt's quick-action menu for resale price research](apps/web/public/assets/product/chrome-quick-actions.png)
+![Volt website and Chrome extension preview](docs/images/volt-portfolio.png)
 
 ## What you can do
 
