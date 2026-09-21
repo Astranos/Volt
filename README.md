@@ -20,7 +20,7 @@ Volt is actively developed. Chrome's browser tools are free. Signed-in iPhone us
 
 ## Start contributing
 
-Use Node.js 22 or newer and pnpm 10 through Corepack. Chrome is needed for extension work; macOS and Xcode are needed only for native iOS work.
+Use Node.js 24 and pnpm 10 through Corepack. Chrome is needed for extension work. Native iOS work and executable Swift helper tests require macOS and Xcode.
 
 ```sh
 corepack enable
@@ -52,7 +52,7 @@ Convex stores capture metadata; private photo bytes go directly to Cloudflare R2
 - [Architecture decisions](docs/adr)
 - [Maintainability notes](docs/maintainability.md)
 - [Chrome extension releases](packages/extension/docs/RELEASE_PROCESS.md)
-- [iOS releases](apps/mobile/fastlane/README.md)
+- [iOS releases](apps/mobile/RELEASING.md)
 - [Security policy](SECURITY.md)
 
 ## License

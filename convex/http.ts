@@ -1,167 +1,30 @@
 import { httpRouter, makeFunctionReference } from "convex/server";
-import type { Infer } from "convex/values";
 import {
-  SCANNER_STUN_ONLY_ICE_SERVERS,
-  buildScannerIceServersResponse,
-  normalizeScannerIceServers,
-  scannerStunOnlyIceServersResponse,
-} from "@volt/scanner-protocol";
-
-import { httpAction, type ActionCtx } from "./_generated/server";
+  type AccessHttpArgs,
+  emptyResponse,
+  accessArgsFromRequest,
+  jsonResponse,
+  objectFrom,
+  stringField,
+} from "./http/shared";
+import { type ClerkAuthContext } from "./access";
+import { httpAction } from "./_generated/server";
+import { runAndRespond } from "./http/signalLogging";
+import { signalBodyFromRequest, stringFrom } from "./scannerSignal/httpAdapter";
 import {
-  AI_SCANNER_MAX_IMAGE_BYTES,
-  AIScannerError,
-  requestOpenRouterAnalysis,
-  type AIScannerCatalogMatch,
   type AIScannerMode,
-  type AIScannerTraceEvent,
   type ProductIdentity,
+  type AIScannerCatalogMatch,
+  type AIScannerTraceEvent,
+  AI_SCANNER_MAX_IMAGE_BYTES,
+  requestOpenRouterAnalysis,
+  AIScannerError,
 } from "./aiScanner";
-import {
-  type AIScannerQuotaError,
-  type AIScannerReservation,
-} from "./aiScannerQuota";
-import {
-  clerkAuthContextFromIdentity,
-  type ClerkAuthContext,
-} from "./access";
-import {
-  browserClaimFrom,
-  pairingSecretFrom,
-  type SignalRequestBody,
-  signalBodyFromRequest,
-  signalPartsFromRequest,
-  stringFrom,
-} from "./scannerSignal/httpAdapter";
-import {
-  logScannerSignalEvent,
-  scannerSignalEventForCommand,
-  scannerSignalIdTail,
-  scannerSignalRouteTemplate,
-  type ScannerSignalLogFields,
-} from "./scannerSignal/logging";
-import { executeScannerSignalRendezvous } from "./scannerSignal/rendezvous";
-import { signalRouteCommand } from "./scannerSignal/routeCommands";
-import type { SignalRouteCommand } from "./scannerSignal/routeCommands";
-import { hasProductApiKeyFormat, sha256Hex } from "./productApiKeyCrypto";
-import {
-  catalogSummaryValidator,
-  storedCatalogProductValidator,
-} from "./catalog/validators";
+import { type AIScannerReservation } from "./aiScannerQuota";
+import { productApiCollectionHandler, productApiItemHandler } from "./http/products";
+import { signalHandler } from "./http/signal";
 
 const http = httpRouter();
-const CLOUDFLARE_TURN_GENERATE_ICE_SERVERS_BASE_URL = "https://rtc.live.cloudflare.com/v1/turn/keys";
-const DEFAULT_CLOUDFLARE_TURN_TTL_SECONDS = 86_400;
-const STUN_FALLBACK_TTL_SECONDS = 300;
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers":
-    "Authorization, Content-Type, X-Volt-Anonymous-Id, X-Volt-Anonymous-Secret, X-Volt-Browser-Claim, X-Volt-Pairing-Secret, X-Volt-Device-Id, X-Volt-Device-Secret",
-  "Access-Control-Expose-Headers":
-    "X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset, Retry-After",
-  "Cache-Control": "no-store",
-};
-
-function jsonResponse(body: unknown, status = 200, additionalHeaders: Record<string, string> = {}) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, ...additionalHeaders, "Content-Type": "application/json" },
-  });
-}
-
-function emptyResponse(status = 204) {
-  return new Response(null, { status, headers: corsHeaders });
-}
-
-function objectFrom(value: unknown) {
-  return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
-}
-
-function stringField(value: unknown, key: string) {
-  const field = objectFrom(value)[key];
-  return typeof field === "string" ? field : undefined;
-}
-
-function scannerSignalLogFields(
-  command: SignalRouteCommand,
-  parts: string[],
-  body: SignalRequestBody,
-  responseBody: unknown,
-  statusCode: number,
-  startedAt: number,
-): ScannerSignalLogFields {
-  const response = objectFrom(responseBody);
-  const attempt = objectFrom(response.attempt);
-  const request = objectFrom(response.request);
-  const requests = Array.isArray(response.requests) ? response.requests : undefined;
-  const isPairingIdRoute = parts[0] === "pairings" && parts[1] !== "reconnect-requests";
-
-  return {
-    route: scannerSignalRouteTemplate(command),
-    command,
-    statusCode,
-    elapsedMs: Date.now() - startedAt,
-    tokenTail: scannerSignalIdTail(parts[0] === "join-token" ? parts[1] : response.token ?? response.joinToken),
-    attemptIdTail: scannerSignalIdTail(parts[3] ?? attempt.id),
-    pairingIdTail: scannerSignalIdTail((isPairingIdRoute ? parts[1] : undefined) ?? response.pairingId ?? body.pairingId),
-    requestIdTail: scannerSignalIdTail(parts[3] ?? request.id ?? response.requestId),
-    browserSessionIdTail: scannerSignalIdTail(response.browserSessionId ?? body.browserSessionId ?? body.sessionId),
-    requestCount: requests?.length,
-  };
-}
-
-function rejectionReason(responseBody: unknown) {
-  const reason = stringField(responseBody, "error");
-  return reason ? reason.slice(0, 120) : undefined;
-}
-
-function logScannerSignalResponse(
-  command: SignalRouteCommand,
-  parts: string[],
-  body: SignalRequestBody,
-  responseBody: unknown,
-  statusCode: number,
-  startedAt: number,
-) {
-  const fields = scannerSignalLogFields(command, parts, body, responseBody, statusCode, startedAt);
-  if (statusCode >= 400) {
-    logScannerSignalEvent("signal_rejected", { ...fields, reason: rejectionReason(responseBody) }, "warn");
-    return;
-  }
-
-  const event = scannerSignalEventForCommand(command);
-  if (event) logScannerSignalEvent(event, fields);
-}
-
-async function runAndRespond<T extends { statusCode: number; body: unknown }>(
-  result: Promise<T>,
-  logContext?: {
-    command: SignalRouteCommand;
-    parts: string[];
-    requestBody: SignalRequestBody;
-    startedAt: number;
-  },
-) {
-  const response = await result;
-  if (logContext) {
-    logScannerSignalResponse(
-      logContext.command,
-      logContext.parts,
-      logContext.requestBody,
-      response.body,
-      response.statusCode,
-      logContext.startedAt,
-    );
-  }
-  return jsonResponse(response.body, response.statusCode);
-}
-
-type AccessHttpArgs = ClerkAuthContext & {
-  anonymousId?: string;
-  anonymousSecret?: string;
-};
 
 type AccessHttpResult = { statusCode: number; body: unknown };
 
@@ -170,71 +33,37 @@ const anonymousTrialForHttp = makeFunctionReference<
   AccessHttpArgs,
   AccessHttpResult
 >("access:anonymousTrialForHttp");
+
 const getStatusForHttp = makeFunctionReference<
   "mutation",
   AccessHttpArgs,
   AccessHttpResult
 >("access:getStatusForHttp");
+
 const disconnectSessionForHttp = makeFunctionReference<
   "mutation",
   AccessHttpArgs & { usageSessionId: string },
   AccessHttpResult
 >("access:disconnectSessionForHttp");
+
 const endSessionForHttp = makeFunctionReference<
   "mutation",
   AccessHttpArgs & { usageSessionId: string },
   AccessHttpResult
 >("access:endSessionForHttp");
+
 const syncStoreKitForHttp = makeFunctionReference<
   "action",
   ClerkAuthContext & { signedTransaction: string },
   AccessHttpResult
 >("storeKit:syncForHttp");
+
 const acceptStoreKitNotification = makeFunctionReference<
   "action",
   { signedPayload: string },
   AccessHttpResult
 >("storeKit:acceptNotification");
-type ProductSummary = Infer<typeof catalogSummaryValidator>;
-type StoredCatalogProduct = Infer<typeof storedCatalogProductValidator>;
-type ProductSearchResult = {
-  page: ProductSummary[];
-  isDone: boolean;
-  continueCursor: string;
-};
-type ProductApiAuthorizationResult =
-  | {
-      kind: "authorized";
-      limit: number;
-      remaining: number;
-      resetAt: number;
-    }
-  | { kind: "invalid_key" }
-  | {
-      kind: "rate_limited";
-      limit: number;
-      remaining: number;
-      resetAt: number;
-      retryAfterSeconds: number;
-    };
-const authenticateProductApiKey = makeFunctionReference<
-  "mutation",
-  { keyHash: string; now: number },
-  ProductApiAuthorizationResult
->("productApiKeys:authenticateAndConsume");
-const searchProductsForApi = makeFunctionReference<
-  "query",
-  {
-    searchQuery?: string;
-    paginationOpts: { numItems: number; cursor: string | null };
-  },
-  ProductSearchResult
->("productData:searchProductsForApi");
-const getProductByUpcForApi = makeFunctionReference<
-  "query",
-  { upc: string },
-  StoredCatalogProduct | null
->("productData:getProductByUpcForApi");
+
 type CloudResultInput = {
   resultId: string;
   kind: "text" | "barcode" | "photo" | "dictation";
@@ -245,35 +74,42 @@ type CloudResultInput = {
   checksum?: string;
   clientCreatedAt: number;
 };
+
 const exchangeWorkspaceEnrollment = makeFunctionReference<
   "mutation",
   { enrollmentCode: string; label?: string },
   { deviceId: string; deviceSecret: string; workspaceId: string }
 >("cloudWorkspace:exchangeEnrollment");
+
 const bootstrapMobileDevice = makeFunctionReference<
   "mutation",
   { installationId: string; label: string; existingDeviceId?: string },
   { deviceId: string; deviceSecret: string; workspaceId: string; clerkUserId: string }
 >("cloudWorkspace:bootstrapMobileDevice");
+
 type MobileComputer = {
   deviceId: string;
   label: string;
   capabilities: string[];
   online: boolean;
 };
+
 const listMobileComputers = makeFunctionReference<
   "query",
   { deviceId: string; deviceSecret: string },
   { cursorTargetDeviceId: string | null; computers: MobileComputer[] }
 >("cloudWorkspace:listComputersForDevice");
+
 const listAppClipComputers = makeFunctionReference<
   "query", { guestCloudGrant: string }, { computers: MobileComputer[] }
 >("cloudWorkspace:listComputersForGuest");
+
 const setMobileCursorTarget = makeFunctionReference<
   "mutation",
   { deviceId: string; deviceSecret: string; cursorTargetDeviceId: string | null },
   { cursorTargetDeviceId: string | null }
 >("cloudWorkspace:setCursorTarget");
+
 const queueMobileCursorDelivery = makeFunctionReference<
   "mutation",
   {
@@ -289,6 +125,7 @@ const queueMobileCursorDelivery = makeFunctionReference<
   },
   { deliveryId: string; idempotent: boolean; state: "pending" | "delivered" | "failed" }
 >("cloudWorkspace:queueCursorDelivery");
+
 const queueAppClipCursorDelivery = makeFunctionReference<
   "mutation",
   {
@@ -298,6 +135,7 @@ const queueAppClipCursorDelivery = makeFunctionReference<
   },
   { deliveryId: string; idempotent: boolean; state: "pending" | "delivered" | "failed" }
 >("cloudWorkspace:queueGuestCursorDelivery");
+
 const cursorDeliveryStatus = makeFunctionReference<
   "query",
   { deviceId: string; deviceSecret: string; deliveryIds: string[] },
@@ -310,6 +148,7 @@ const cursorDeliveryStatus = makeFunctionReference<
     }>;
   }
 >("cloudWorkspace:cursorDeliveryStatus");
+
 const putCloudBatch = makeFunctionReference<
   "mutation",
   {
@@ -321,16 +160,19 @@ const putCloudBatch = makeFunctionReference<
   },
   { batchId: string; idempotent: boolean; status: string }
 >("cloudWorkspace:putBatch");
+
 const createPhotoUploadUrl = makeFunctionReference<
   "action",
   { deviceId: string; deviceSecret: string; batchId: string; resultId: string },
   { url: string; method: string; expiresAt: number; headers: Record<string, string> }
 >("cloudWorkspace:createPhotoUploadUrl");
+
 const finalizeBatchUploads = makeFunctionReference<
   "action",
   { deviceId: string; deviceSecret: string; batchId: string },
   { idempotent: boolean }
 >("cloudWorkspace:finalizeBatchUploads");
+
 const putGuestCloudBatch = makeFunctionReference<
   "mutation",
   {
@@ -341,25 +183,30 @@ const putGuestCloudBatch = makeFunctionReference<
   },
   { batchId: string; idempotent: boolean; status: string }
 >("cloudWorkspace:putGuestBatch");
+
 const createAppClipWorkspaceGrant = makeFunctionReference<
   "mutation", { clerkUserId: string; ownerName?: string },
   { guestCloudGrant: string; expiresAt: number }
 >("cloudWorkspace:createAppClipWorkspaceGrantForHttp");
+
 const createGuestPhotoUploadUrl = makeFunctionReference<
   "action",
   { guestCloudGrant: string; batchId: string; resultId: string },
   { url: string; method: string; expiresAt: number; headers: Record<string, string> }
 >("cloudWorkspace:createGuestPhotoUploadUrl");
+
 const finalizeGuestBatchUploads = makeFunctionReference<
   "action",
   { guestCloudGrant: string; batchId: string },
   { idempotent: boolean }
 >("cloudWorkspace:finalizeGuestBatchUploads");
+
 const createWorkspaceEnrollment = makeFunctionReference<
   "mutation",
   { kind: "ios" | "chrome"; label: string },
   { enrollmentCode: string; expiresAt: number }
 >("cloudWorkspace:createEnrollment");
+
 type WorkspaceSnapshot = {
   workspaceId: string;
   revision: number;
@@ -382,19 +229,23 @@ type WorkspaceSnapshot = {
     }>;
   }>;
 };
+
 const getWorkspaceSnapshot = makeFunctionReference<"query", Record<string, never>, WorkspaceSnapshot>(
   "cloudWorkspace:workspaceSnapshot",
 );
+
 const createAuthenticatedPhotoDownloadUrl = makeFunctionReference<
   "action",
   { batchId: string; resultId: string },
   { url: string; method: string; expiresAt: number; headers: Record<string, string> }
 >("cloudWorkspace:createPhotoDownloadUrl");
+
 const registerWorkspaceComputer = makeFunctionReference<
   "mutation",
   { installationId: string; label: string; capabilities?: string[]; ttlMs?: number },
   { deviceId: string; workspaceId: string; registrationId: string; expiresAt: number }
 >("cloudWorkspace:registerComputer");
+
 const acknowledgeWorkspaceDelivery = makeFunctionReference<
   "mutation",
   {
@@ -405,6 +256,7 @@ const acknowledgeWorkspaceDelivery = makeFunctionReference<
   },
   { state: "delivered" | "failed" }
 >("cloudWorkspace:acknowledgeDeliveryAsComputer");
+
 const deleteWorkspaceResults = makeFunctionReference<
   "mutation",
   { resultIds: string[] },
@@ -417,6 +269,7 @@ const deleteWorkspaceResults = makeFunctionReference<
     revision: number;
   }
 >("cloudWorkspace:deleteWorkspaceResults");
+
 const restoreWorkspaceResults = makeFunctionReference<
   "mutation",
   { resultIds: string[] },
@@ -429,35 +282,6 @@ const restoreWorkspaceResults = makeFunctionReference<
     revision: number;
   }
 >("cloudWorkspace:restoreWorkspaceResults");
-
-function anonymousCredentialsFromRequest(request: Request): Pick<AccessHttpArgs, "anonymousId" | "anonymousSecret"> {
-  const anonymousId = request.headers.get("X-Volt-Anonymous-Id") ?? undefined;
-  const anonymousSecret = request.headers.get("X-Volt-Anonymous-Secret") ?? undefined;
-  return {
-    ...(anonymousId ? { anonymousId } : {}),
-    ...(anonymousSecret ? { anonymousSecret } : {}),
-  };
-}
-
-async function accessArgsFromRequest(
-  ctx: Pick<ActionCtx, "auth">,
-  request: Request,
-): Promise<{ ok: true; args: AccessHttpArgs } | { ok: false }> {
-  const anonymousCredentials = anonymousCredentialsFromRequest(request);
-  if (!request.headers.get("Authorization")) {
-    return { ok: true, args: anonymousCredentials };
-  }
-  try {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return { ok: false };
-    return {
-      ok: true,
-      args: { ...clerkAuthContextFromIdentity(identity), ...anonymousCredentials },
-    };
-  } catch (_error) {
-    return { ok: false };
-  }
-}
 
 const anonymousTrialHandler = httpAction(async (ctx, request) => {
   if (request.method === "OPTIONS") return emptyResponse();
@@ -494,102 +318,6 @@ function sessionStateHandler(end: boolean) {
     );
   });
 }
-
-function cloudflareTurnTtlSecondsFromEnv() {
-  const raw = process.env.CLOUDFLARE_TURN_TTL_SECONDS;
-  if (!raw) return DEFAULT_CLOUDFLARE_TURN_TTL_SECONDS;
-
-  const parsed = Number.parseInt(raw, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_CLOUDFLARE_TURN_TTL_SECONDS;
-}
-
-function scannerIceFallbackResponse(nowMs = Date.now()) {
-  return scannerStunOnlyIceServersResponse({
-    iceServers: SCANNER_STUN_ONLY_ICE_SERVERS,
-    nowMs,
-    ttlSeconds: STUN_FALLBACK_TTL_SECONDS,
-  });
-}
-
-async function scannerIceServersResponse() {
-  const keyId = process.env.CLOUDFLARE_TURN_KEY_ID;
-  const apiToken = process.env.CLOUDFLARE_TURN_API_TOKEN;
-  if (!keyId || !apiToken) return scannerIceFallbackResponse();
-
-  const ttlSeconds = cloudflareTurnTtlSecondsFromEnv();
-  try {
-    const response = await fetch(
-      `${CLOUDFLARE_TURN_GENERATE_ICE_SERVERS_BASE_URL}/${encodeURIComponent(keyId)}/credentials/generate-ice-servers`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ ttl: ttlSeconds }),
-      },
-    );
-    if (!response.ok) return scannerIceFallbackResponse();
-
-    const body = (await response.json()) as { iceServers?: unknown };
-    const iceServers = normalizeScannerIceServers(body.iceServers);
-    if (!iceServers || iceServers.length === 0) return scannerIceFallbackResponse();
-
-    return buildScannerIceServersResponse({
-      iceServers,
-      source: "cloudflare",
-      ttlSeconds,
-    });
-  } catch (_error) {
-    return scannerIceFallbackResponse();
-  }
-}
-
-const signalHandler = httpAction(async (ctx, request) => {
-  if (request.method === "OPTIONS") return emptyResponse();
-
-  const url = new URL(request.url);
-  const parts = signalPartsFromRequest(request);
-  const body = await signalBodyFromRequest(request);
-
-  const command = signalRouteCommand(request.method, parts);
-  const startedAt = Date.now();
-  const logContext = { command, parts, requestBody: body, startedAt };
-
-  if (command === "getIceServers") {
-    return jsonResponse(await scannerIceServersResponse());
-  }
-
-  if (command === "getPushPublicKey") {
-    const publicKey = process.env.SCANNER_PUSH_VAPID_PUBLIC_KEY;
-    if (!publicKey) return jsonResponse({ error: "Web Push is not configured" }, 404);
-    return jsonResponse({ publicKey });
-  }
-
-  const reconnectBrowserSessionId = stringFrom(url.searchParams.get("sessionId"), 120);
-  const rendezvousBody =
-    command === "getPendingReconnectRequests"
-      ? { browserSessionId: reconnectBrowserSessionId ?? "" }
-      : body;
-  const access = await accessArgsFromRequest(ctx, request);
-  if (!access.ok) return jsonResponse({ error: "Invalid Clerk authorization" }, 401);
-  return runAndRespond(
-    executeScannerSignalRendezvous(ctx, {
-      command,
-      parts,
-      body,
-      origin: url.origin,
-      startedAt,
-      browserClaim: browserClaimFrom(request, body),
-      pairingSecret: pairingSecretFrom(request, body),
-      pendingReconnectBrowserSessionId: reconnectBrowserSessionId,
-      auth: access.args,
-      anonymousId: access.args.anonymousId,
-      anonymousSecret: access.args.anonymousSecret,
-    }),
-    { ...logContext, requestBody: rendezvousBody },
-  );
-});
 
 const storeKitTransactionHandler = httpAction(async (ctx, request) => {
   if (request.method === "OPTIONS") return emptyResponse();
@@ -697,16 +425,19 @@ const reserveAIScannerRequestRef = makeFunctionReference<
   { deviceId: string; deviceSecret: string; requestId: string; mode: AIScannerMode },
   AIScannerReservation
 >("aiScannerQuota:reserveAIScannerRequest");
+
 const completeAIScannerRequestRef = makeFunctionReference<
   "mutation",
   { deviceId: string; deviceSecret: string; requestId: string; mode: AIScannerMode; value: string | null; format: string },
   { status: "succeeded"; quota: AIScannerReservation["quota"]; value: string | null; format: string }
 >("aiScannerQuota:completeAIScannerRequest");
+
 const refundAIScannerRequestRef = makeFunctionReference<
   "mutation",
   { deviceId: string; deviceSecret: string; requestId: string; errorCode: "upstream-failed" | "upstream-timeout" | "invalid-input" | "upstream-rate-limited" },
   { status: "refunded" | "succeeded"; quota: AIScannerReservation["quota"]; value?: string | null; format?: string }
 >("aiScannerQuota:refundAIScannerRequest");
+
 const findProductForAIScannerRef = makeFunctionReference<
   "query",
   ProductIdentity,
@@ -1083,241 +814,152 @@ function mobileBatchActionHandler(kind: "upload" | "finalize") {
   });
 }
 
-function productApiError(
-  code: string,
-  message: string,
-  status: number,
-  headers: Record<string, string> = {},
-) {
-  return jsonResponse({ error: { code, message } }, status, headers);
-}
-
-function productApiRateLimitHeaders(result: {
-  limit: number;
-  remaining: number;
-  resetAt: number;
-}): Record<string, string> {
-  return {
-    "X-RateLimit-Limit": String(result.limit),
-    "X-RateLimit-Remaining": String(result.remaining),
-    "X-RateLimit-Reset": String(Math.ceil(result.resetAt / 1000)),
-  };
-}
-
-type ProductApiRequestAuthorization =
-  | { kind: "authorized"; headers: Record<string, string> }
-  | { kind: "rejected"; response: Response };
-
-async function authorizeProductApiRequest(
-  ctx: ActionCtx,
-  request: Request,
-): Promise<ProductApiRequestAuthorization> {
-  const authorization = request.headers.get("Authorization");
-  const match = authorization?.match(/^Bearer ([^\s]+)$/);
-  const token = match?.[1];
-  if (!token) {
-    return {
-      kind: "rejected",
-      response: productApiError(
-        "missing_authorization",
-        "Use an Authorization header with a Bearer API key",
-        401,
-      ),
-    };
-  }
-  if (!hasProductApiKeyFormat(token)) {
-    return {
-      kind: "rejected",
-      response: productApiError("invalid_api_key", "The API key is invalid or revoked", 401),
-    };
-  }
-
-  const result = await ctx.runMutation(authenticateProductApiKey, {
-    keyHash: await sha256Hex(token),
-    now: Date.now(),
-  });
-  switch (result.kind) {
-    case "authorized":
-      return { kind: "authorized", headers: productApiRateLimitHeaders(result) };
-    case "invalid_key":
-      return {
-        kind: "rejected",
-        response: productApiError("invalid_api_key", "The API key is invalid or revoked", 401),
-      };
-    case "rate_limited": {
-      const headers = {
-        ...productApiRateLimitHeaders(result),
-        "Retry-After": String(result.retryAfterSeconds),
-      };
-      return {
-        kind: "rejected",
-        response: productApiError(
-          "rate_limit_exceeded",
-          "This API key has reached its 120 requests per minute limit",
-          429,
-          headers,
-        ),
-      };
-    }
-    default: {
-      const exhaustive: never = result;
-      throw new Error(`Unhandled product API authorization result: ${exhaustive}`);
-    }
-  }
-}
-
-function productApiLimitFrom(url: URL): number | null {
-  const raw = url.searchParams.get("limit");
-  if (raw === null) return 25;
-  if (!/^\d+$/.test(raw)) return null;
-  const limit = Number(raw);
-  return limit >= 1 && limit <= 100 ? limit : null;
-}
-
-const productApiCollectionHandler = httpAction(async (ctx, request) => {
-  if (request.method === "OPTIONS") return emptyResponse();
-  const authorization = await authorizeProductApiRequest(ctx, request);
-  if (authorization.kind === "rejected") return authorization.response;
-
-  const url = new URL(request.url);
-  const limit = productApiLimitFrom(url);
-  const searchQuery = url.searchParams.get("q");
-  const cursorParameter = url.searchParams.get("cursor");
-  if (
-    limit === null
-    || (searchQuery !== null && searchQuery.length > 200)
-    || cursorParameter === ""
-    || (cursorParameter !== null && cursorParameter.length > 1_024)
-  ) {
-    return productApiError(
-      "invalid_request",
-      "limit must be an integer from 1 to 100, q must be at most 200 characters, and cursor must be 1 to 1024 characters",
-      400,
-      authorization.headers,
-    );
-  }
-
-  let result: ProductSearchResult;
-  try {
-    result = await ctx.runQuery(searchProductsForApi, {
-      ...(searchQuery !== null ? { searchQuery } : {}),
-      paginationOpts: { numItems: limit, cursor: cursorParameter },
-    });
-  } catch (error) {
-    if (cursorParameter === null) throw error;
-    return productApiError(
-      "invalid_cursor",
-      "The pagination cursor is invalid or expired",
-      400,
-      authorization.headers,
-    );
-  }
-  return jsonResponse({
-    data: result.page,
-    pagination: {
-      nextCursor: result.isDone ? null : result.continueCursor,
-    },
-  }, 200, authorization.headers);
-});
-
-const productApiItemHandler = httpAction(async (ctx, request) => {
-  if (request.method === "OPTIONS") return emptyResponse();
-  const authorization = await authorizeProductApiRequest(ctx, request);
-  if (authorization.kind === "rejected") return authorization.response;
-
-  const encodedUpc = new URL(request.url).pathname.slice("/v1/products/".length);
-  let upc: string;
-  try {
-    upc = decodeURIComponent(encodedUpc);
-  } catch {
-    return productApiError("invalid_request", "The UPC path segment is invalid", 400, authorization.headers);
-  }
-  if (!upc || upc.includes("/") || upc.length > 32) {
-    return productApiError("invalid_request", "Provide one UPC path segment", 400, authorization.headers);
-  }
-
-  const product = await ctx.runQuery(getProductByUpcForApi, { upc });
-  if (!product) {
-    return productApiError("product_not_found", "No product was found for this UPC", 404, authorization.headers);
-  }
-  return jsonResponse({ data: product }, 200, authorization.headers);
-});
-
 http.route({ path: "/api/access/anonymous", method: "POST", handler: anonymousTrialHandler });
+
 http.route({ path: "/api/access/anonymous", method: "OPTIONS", handler: anonymousTrialHandler });
+
 http.route({ path: "/api/access/status", method: "GET", handler: accessStatusHandler });
+
 http.route({ path: "/api/access/status", method: "OPTIONS", handler: accessStatusHandler });
+
 const disconnectSessionHandler = sessionStateHandler(false);
+
 const endSessionHandler = sessionStateHandler(true);
+
 http.route({ path: "/api/access/session/disconnect", method: "POST", handler: disconnectSessionHandler });
+
 http.route({ path: "/api/access/session/disconnect", method: "OPTIONS", handler: disconnectSessionHandler });
+
 http.route({ path: "/api/access/session/end", method: "POST", handler: endSessionHandler });
+
 http.route({ path: "/api/access/session/end", method: "OPTIONS", handler: endSessionHandler });
+
 http.route({ path: "/api/storekit/transactions", method: "POST", handler: storeKitTransactionHandler });
+
 http.route({ path: "/api/storekit/transactions", method: "OPTIONS", handler: storeKitTransactionHandler });
+
 http.route({ path: "/api/storekit/notifications", method: "POST", handler: storeKitNotificationHandler });
+
 http.route({ path: "/api/storekit/notifications", method: "OPTIONS", handler: storeKitNotificationHandler });
+
 const mobilePhotoUploadHandler = mobileBatchActionHandler("upload");
+
 const mobileBatchFinalizeHandler = mobileBatchActionHandler("finalize");
+
 const appClipGuestPhotoUploadHandler = appClipGuestBatchActionHandler("upload");
+
 const appClipGuestBatchFinalizeHandler = appClipGuestBatchActionHandler("finalize");
+
 http.route({ path: "/api/mobile/enrollment/exchange", method: "POST", handler: mobileEnrollmentExchangeHandler });
+
 http.route({ path: "/api/mobile/enrollment/exchange", method: "OPTIONS", handler: mobileEnrollmentExchangeHandler });
+
 http.route({ path: "/api/mobile/devices/bootstrap", method: "POST", handler: mobileDeviceBootstrapHandler });
+
 http.route({ path: "/api/mobile/devices/bootstrap", method: "OPTIONS", handler: mobileDeviceBootstrapHandler });
+
 http.route({ path: "/api/mobile/ai/analyze", method: "POST", handler: mobileAIScannerHandler });
+
 http.route({ path: "/api/mobile/ai/analyze", method: "OPTIONS", handler: mobileAIScannerHandler });
+
 http.route({ path: "/api/mobile/computers/list", method: "POST", handler: mobileComputerListHandler });
+
 http.route({ path: "/api/mobile/computers/list", method: "OPTIONS", handler: mobileComputerListHandler });
+
 http.route({ path: "/api/mobile/cursor-target", method: "POST", handler: mobileCursorTargetHandler });
+
 http.route({ path: "/api/mobile/cursor-target", method: "OPTIONS", handler: mobileCursorTargetHandler });
+
 http.route({ path: "/api/mobile/deliveries/queue", method: "POST", handler: mobileCursorDeliveryQueueHandler });
+
 http.route({ path: "/api/mobile/deliveries/queue", method: "OPTIONS", handler: mobileCursorDeliveryQueueHandler });
+
 http.route({ path: "/api/mobile/deliveries/status", method: "POST", handler: mobileCursorDeliveryStatusHandler });
+
 http.route({ path: "/api/mobile/deliveries/status", method: "OPTIONS", handler: mobileCursorDeliveryStatusHandler });
+
 http.route({ path: "/api/mobile/outbox/sync", method: "POST", handler: mobileOutboxSyncHandler });
+
 http.route({ path: "/api/mobile/outbox/sync", method: "OPTIONS", handler: mobileOutboxSyncHandler });
+
 http.route({ path: "/api/mobile/photos/upload-url", method: "POST", handler: mobilePhotoUploadHandler });
+
 http.route({ path: "/api/mobile/photos/upload-url", method: "OPTIONS", handler: mobilePhotoUploadHandler });
+
 http.route({ path: "/api/mobile/batches/finalize", method: "POST", handler: mobileBatchFinalizeHandler });
+
 http.route({ path: "/api/mobile/batches/finalize", method: "OPTIONS", handler: mobileBatchFinalizeHandler });
+
 http.route({ path: "/api/app-clip/outbox/sync", method: "POST", handler: appClipGuestOutboxSyncHandler });
+
 http.route({ path: "/api/app-clip/outbox/sync", method: "OPTIONS", handler: appClipGuestOutboxSyncHandler });
+
 http.route({ path: "/api/app-clip/grants/create", method: "POST", handler: appClipGrantCreateHandler });
+
 http.route({ path: "/api/app-clip/grants/create", method: "OPTIONS", handler: appClipGrantCreateHandler });
+
 http.route({ path: "/api/app-clip/computers/list", method: "POST", handler: appClipComputerListHandler });
+
 http.route({ path: "/api/app-clip/computers/list", method: "OPTIONS", handler: appClipComputerListHandler });
+
 http.route({ path: "/api/app-clip/deliveries/queue", method: "POST", handler: appClipCursorDeliveryQueueHandler });
+
 http.route({ path: "/api/app-clip/deliveries/queue", method: "OPTIONS", handler: appClipCursorDeliveryQueueHandler });
+
 http.route({ path: "/api/app-clip/photos/upload-url", method: "POST", handler: appClipGuestPhotoUploadHandler });
+
 http.route({ path: "/api/app-clip/photos/upload-url", method: "OPTIONS", handler: appClipGuestPhotoUploadHandler });
+
 http.route({ path: "/api/app-clip/batches/finalize", method: "POST", handler: appClipGuestBatchFinalizeHandler });
+
 http.route({ path: "/api/app-clip/batches/finalize", method: "OPTIONS", handler: appClipGuestBatchFinalizeHandler });
+
 http.route({ path: "/api/workspace/enrollment", method: "POST", handler: workspaceEnrollmentHandler });
+
 http.route({ path: "/api/workspace/enrollment", method: "OPTIONS", handler: workspaceEnrollmentHandler });
+
 http.route({ path: "/api/workspace/snapshot", method: "GET", handler: workspaceSnapshotHandler });
+
 http.route({ path: "/api/workspace/snapshot", method: "OPTIONS", handler: workspaceSnapshotHandler });
+
 http.route({ path: "/api/workspace/photos/download-url", method: "POST", handler: workspacePhotoDownloadHandler });
+
 http.route({ path: "/api/workspace/photos/download-url", method: "OPTIONS", handler: workspacePhotoDownloadHandler });
+
 http.route({ path: "/api/workspace/computers/register", method: "POST", handler: workspaceComputerRegistrationHandler });
+
 http.route({ path: "/api/workspace/computers/register", method: "OPTIONS", handler: workspaceComputerRegistrationHandler });
+
 http.route({ path: "/api/workspace/deliveries/ack", method: "POST", handler: workspaceDeliveryAcknowledgementHandler });
+
 http.route({ path: "/api/workspace/deliveries/ack", method: "OPTIONS", handler: workspaceDeliveryAcknowledgementHandler });
+
 http.route({ path: "/api/workspace/results/delete", method: "POST", handler: workspaceResultDeletionHandler });
+
 http.route({ path: "/api/workspace/results/delete", method: "OPTIONS", handler: workspaceResultDeletionHandler });
+
 http.route({ path: "/api/workspace/results/restore", method: "POST", handler: workspaceResultRestoreHandler });
+
 http.route({ path: "/api/workspace/results/restore", method: "OPTIONS", handler: workspaceResultRestoreHandler });
 
 http.route({ path: "/v1/products", method: "GET", handler: productApiCollectionHandler });
+
 http.route({ path: "/v1/products", method: "OPTIONS", handler: productApiCollectionHandler });
+
 http.route({ pathPrefix: "/v1/products/", method: "GET", handler: productApiItemHandler });
+
 http.route({ pathPrefix: "/v1/products/", method: "OPTIONS", handler: productApiItemHandler });
 
 http.route({ path: "/api/signal", method: "GET", handler: signalHandler });
+
 http.route({ path: "/api/signal", method: "POST", handler: signalHandler });
+
 http.route({ path: "/api/signal", method: "OPTIONS", handler: signalHandler });
+
 http.route({ pathPrefix: "/api/signal/", method: "GET", handler: signalHandler });
+
 http.route({ pathPrefix: "/api/signal/", method: "POST", handler: signalHandler });
+
 http.route({ pathPrefix: "/api/signal/", method: "OPTIONS", handler: signalHandler });
 
 export default http;

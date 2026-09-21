@@ -38,6 +38,7 @@ permissions:
 jobs:
   publish:
     name: Upload or submit
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: chrome-web-store
 
@@ -45,13 +46,18 @@ jobs:
       - name: Checkout release ref
         uses: actions/checkout@v4
 
-      - name: Enable Corepack
-        run: corepack enable
-
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .node-version
+
+      - name: Enable pinned pnpm
+        run: corepack enable && corepack install
+
+      - name: Cache pnpm
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
           cache: pnpm
 
       - name: Install dependencies

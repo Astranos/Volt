@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { readClipViewSources } from "./clip-view-sources.mjs";
 
 const readIOSSource = (relativePath) =>
   readFileSync(new URL(`../ios/${relativePath}`, import.meta.url), "utf8");
@@ -16,7 +17,7 @@ const accessSettingsSource = readIOSSource("Volt/Views/AccessSettingsSection.swi
 const accountViewSource = readIOSSource("Volt/Views/AccountAccessView.swift");
 const subscriptionViewSource = readIOSSource("Volt/Views/SubscriptionActionsView.swift");
 const rootSceneSource = readIOSSource("Volt/Views/VoltRootScene.swift");
-const clipRootSource = readIOSSource("VoltClip/Views/ClipRootView.swift");
+const clipRootSource = readClipViewSources();
 const clipStoreSource = readIOSSource("VoltClip/Services/ClipScannerStore.swift");
 const clipInfoSource = readIOSSource("VoltClip/Info.plist");
 const entitlementSource = readIOSSource("Volt/Volt.entitlements");
