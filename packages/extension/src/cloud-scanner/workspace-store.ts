@@ -36,11 +36,12 @@ export function createWorkspaceStore(storage: KeyValueStorage) {
       return storedReplica(await storage.get(replicaKey(workspaceId)), workspaceId);
     },
 
-    async mergePage(page: WorkspaceResultPage) {
+    async mergePage(page: WorkspaceResultPage, isCurrent: () => boolean = () => true) {
       const current = await this.getReplica(page.workspaceId);
       const merged = mergeWorkspaceReplica(current, page);
+      if (!isCurrent()) return null;
       await storage.set(replicaKey(page.workspaceId), merged);
-      return merged;
+      return isCurrent() ? merged : null;
     },
 
     async getLiveTarget(workspaceId: WorkspaceId): Promise<LiveTargetSelection> {

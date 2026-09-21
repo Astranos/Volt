@@ -1,8 +1,9 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { useConvex, useConvexAuth, useQuery_experimental, type ConvexReactClient } from "convex/react";
+import { useConvex, useConvexAuth, type ConvexReactClient } from "convex/react";
+import { subscribeWorkspaceSnapshot } from "@volt/scanner-protocol";
 import { api } from "../../../../convex/_generated/api";
 import { createWorkspaceSync } from "../cloud-scanner/workspace-sync";
-import { useSidepanelSignedIn } from "../components/access/ExtensionAccess";
+import { useSidepanelSignedIn, useSidepanelUserId } from "../components/access/ExtensionAccess";
 import { cloudWorkspaceErrorMessage } from "../domain/cloud-workspace-error";
 
 export type CloudWorkspaceSnapshotState = {
@@ -29,6 +30,8 @@ let activeClient: ConvexReactClient | null = null;
 const NOTHING_APPLIED = Symbol("volt.cloudWorkspace.nothingApplied");
 let appliedSnapshot: unknown = NOTHING_APPLIED;
 let hydratedFromCloud = false;
+let accountId: string | null = null;
+let applyGeneration = 0;
 let applyState: { version: number; error: string | null } = { version: 0, error: null };
 const applyListeners = new Set<() => void>();
 
@@ -81,9 +84,11 @@ function applySnapshotOnce(value: unknown) {
   if (value === appliedSnapshot) return;
   appliedSnapshot = value;
   hydratedFromCloud = true;
-  void sharedWorkspaceSync().applySnapshot(value).then(
-    () => publishApplyState({ version: applyState.version + 1, error: null }),
+  const generation = applyGeneration;
+  void sharedWorkspaceSync().applySnapshot(value, { isCurrent: () => generation === applyGeneration }).then(
+    () => { if (generation === applyGeneration) publishApplyState({ version: applyState.version + 1, error: null }); },
     (error: unknown) => {
+      if (generation !== applyGeneration) return;
       // Forget the snapshot so an unchanged one still gets another attempt.
       appliedSnapshot = NOTHING_APPLIED;
       publishApplyState({ version: applyState.version, error: errorMessage(error) });
@@ -94,6 +99,7 @@ function applySnapshotOnce(value: unknown) {
 // Signing out has to drop the previous account's cloud results even when the
 // offscreen document — which owns the other reset path — never started.
 function clearAppliedWorkspace() {
+  applyGeneration += 1;
   if (!hydratedFromCloud) return;
   hydratedFromCloud = false;
   appliedSnapshot = NOTHING_APPLIED;
@@ -115,14 +121,11 @@ function clearAppliedWorkspace() {
 export function useCloudWorkspaceSnapshot(): CloudWorkspaceSnapshotState {
   const convex = useConvex();
   const { isAuthenticated, isLoading } = useConvexAuth();
+  const userId = useSidepanelUserId();
   const clerkSignedIn = useSidepanelSignedIn();
-  // The positional useQuery rethrows query errors during render, which would
-  // take the panel down every time Convex rejects the read. The object form
-  // hands the error back so the panel can name it instead.
-  const snapshot = useQuery_experimental({
-    query: api.cloudWorkspace.workspaceSnapshot,
-    args: isAuthenticated ? {} : "skip",
-  });
+  // Subscription errors are state so the panel can explain a refused read
+  // without unmounting the timeline.
+  const [snapshotError, setSnapshotError] = useState<unknown>(null);
   const applied = useSyncExternalStore(subscribeToApplyState, readApplyState);
   const [authRefused, setAuthRefused] = useState(false);
 
@@ -130,11 +133,31 @@ export function useCloudWorkspaceSnapshot(): CloudWorkspaceSnapshotState {
     activeClient = convex;
   }, [convex]);
 
-  const value = snapshot.status === "success" ? snapshot.data : undefined;
   useEffect(() => {
-    if (value === undefined) return;
-    applySnapshotOnce(value);
-  }, [value]);
+    setSnapshotError(null);
+    if (accountId !== userId) {
+      clearAppliedWorkspace();
+      accountId = userId;
+    }
+    if (!isAuthenticated || !userId) return;
+    return subscribeWorkspaceSnapshot({
+      subscribe: (args, onValue, onError) => {
+        const query = convex.watchQuery(api.cloudWorkspace.workspaceSnapshotPage, args);
+        const update = () => {
+          try { const page = query.localQueryResult(); if (page !== undefined) onValue(page); }
+          catch (error) { onError(error); }
+        };
+        const stop = query.onUpdate(update);
+        update();
+        return stop;
+      },
+      onSnapshot: (value) => {
+        setSnapshotError(null);
+        applySnapshotOnce(value);
+      },
+      onError: setSnapshotError,
+    });
+  }, [convex, isAuthenticated, userId]);
 
   useEffect(() => {
     if (clerkSignedIn === false) clearAppliedWorkspace();
@@ -153,15 +176,15 @@ export function useCloudWorkspaceSnapshot(): CloudWorkspaceSnapshotState {
     return () => clearTimeout(timer);
   }, [handshakeStalled]);
 
-  const rawError = snapshot.status === "error"
-    ? snapshot.error
+  const rawError = snapshotError
+    ? snapshotError
     : applied.error
       ?? (authRefused
         ? "you are signed in, but the cloud workspace refused this session. Sign out and back in."
         : null);
   const error = rawError ? cloudWorkspaceErrorMessage(rawError) : null;
   return {
-    status: error ? "error" : applied.version > 0 ? "ready" : "loading",
+    status: error ? "error" : hydratedFromCloud && applied.version > 0 ? "ready" : "loading",
     error,
     version: applied.version,
   };

@@ -66,6 +66,7 @@ type PhotoDownload = {
 
 type WorkspaceHydrationOptions = {
   getPhotoDownload?: (batchId: string, resultId: string) => Promise<PhotoDownload>;
+  isCurrent?: () => boolean;
 };
 
 async function defaultPhotoDownload(batchId: string, resultId: string) {
@@ -90,8 +91,9 @@ async function photoBlob(result: CloudScannerResult, options: WorkspaceHydration
   const source = options.getPhotoDownload
     ? await options.getPhotoDownload(result.batchId, result.id)
     : await defaultPhotoDownload(result.batchId, result.id);
-  if (!source) return null;
+  if (!source || options.isCurrent?.() === false) return null;
   const download = await fetch(source.url, { headers: source.headers });
+  if (options.isCurrent?.() === false) return null;
   return download.ok ? download.blob() : null;
 }
 
@@ -112,8 +114,10 @@ async function blobToDataUrl(blob: Blob) {
   return `data:${blob.type || "application/octet-stream"};base64,${btoa(binary)}`;
 }
 
-export async function resetWorkspaceHydration() {
+export async function resetWorkspaceHydration(isCurrent: () => boolean = () => true) {
+  if (!isCurrent()) return;
   await clearMobileScannerResultsStore();
+  if (!isCurrent()) return;
   await chrome.storage.local.remove(CLOUD_ORIGINS_KEY);
 }
 
@@ -121,8 +125,12 @@ export async function hydrateWorkspaceReplica(
   replica: WorkspaceReplica,
   options: WorkspaceHydrationOptions = {},
 ) {
+  const isCurrent = options.isCurrent ?? (() => true);
+  if (!isCurrent()) return null;
   const existing = await listMobileScannerResults();
+  if (!isCurrent()) return null;
   let origins = await loadOrigins();
+  if (!isCurrent()) return null;
   for (const batch of replica.batches) {
     for (const result of batch.results) {
       origins[result.id] = { workspaceId: replica.workspaceId, batchId: batch.id };
@@ -139,19 +147,24 @@ export async function hydrateWorkspaceReplica(
     workspaceOriginIds,
   );
   if (plan.deletedIds.length > 0) await deleteMobileScannerResults(plan.deletedIds);
+  if (!isCurrent()) return null;
   origins = removeAppliedTombstoneOrigins(origins, plan.deletedIds);
   // One unreachable photo must not strand the results behind it, and it must
   // not pass for success either: the failures are counted and reported once
   // everything reachable has landed.
   let failedCount = 0;
   for (const result of plan.available) {
+    if (!isCurrent()) return null;
     try {
       if (result.kind === "photo") {
         const blob = await photoBlob(result, options);
+        if (!isCurrent()) return null;
         if (!blob) {
           failedCount += 1;
           continue;
         }
+        const dataUrl = await blobToDataUrl(blob);
+        if (!isCurrent()) return null;
         await saveMobileScannerPhoto({
           id: result.id,
           kind: "photo",
@@ -160,7 +173,7 @@ export async function hydrateWorkspaceReplica(
           mimeType: result.contentType ?? blob.type ?? "image/jpeg",
           size: result.byteCount ?? blob.size,
           capturedAt: result.capturedAt,
-          dataUrl: await blobToDataUrl(blob),
+          dataUrl,
         }, { batchId: result.batchId });
       } else {
         if (!result.value) continue;
@@ -173,11 +186,13 @@ export async function hydrateWorkspaceReplica(
         }, { batchId: result.batchId, allowDictation: result.format === "dictation" });
       }
     } catch (_error) {
+      if (!isCurrent()) return null;
       failedCount += 1;
       continue;
     }
     origins[result.id] = { workspaceId: replica.workspaceId, batchId: result.batchId };
   }
+  if (!isCurrent()) return null;
   await chrome.storage.local.set({ [CLOUD_ORIGINS_KEY]: origins });
   if (failedCount > 0) {
     throw new Error(

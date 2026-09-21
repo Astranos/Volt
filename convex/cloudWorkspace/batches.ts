@@ -9,7 +9,6 @@ import {
   requireGuestPrincipal,
   requireAuthenticatedWorkspace,
   requireOrCreateAuthenticatedWorkspace,
-  authenticatedWorkspaceOrNull,
 } from "./identity";
 
 const resultInput = v.object({
@@ -350,62 +349,5 @@ export const restoreWorkspaceResultsHandler = async (ctx: MutationCtx, args: Obj
       idempotent: restoredIds.length - newlyRestoredIds.length,
       requested: requestedIds.length,
       revision: now,
-    };
-  };
-
-export const workspaceSnapshotArgs = {};
-export const workspaceSnapshotHandler = async (ctx: QueryCtx) => {
-    const workspace = await authenticatedWorkspaceOrNull(ctx);
-    if (!workspace) return null;
-    const batches = await ctx.db
-      .query("resultBatches")
-      .withIndex("by_workspaceId", (q) => q.eq("workspaceId", workspace._id))
-      .order("desc")
-      .take(100);
-    const deliveries = await Promise.all(batches.map((batch) =>
-      ctx.db
-        .query("resultDeliveries")
-        .withIndex("by_workspaceId_and_batchId", (q) =>
-          q.eq("workspaceId", workspace._id).eq("batchId", batch.batchId),
-        )
-        .collect(),
-    ));
-    const results = await Promise.all(batches.map((batch) =>
-      ctx.db
-        .query("scanResults")
-        .withIndex("by_workspaceId_and_batchId", (q) =>
-          q.eq("workspaceId", workspace._id).eq("batchId", batch.batchId),
-        )
-        .collect(),
-    ));
-    const revision = batches.reduce(
-      (latest, batch) => Math.max(latest, batch.updatedAt),
-      workspace.updatedAt,
-    );
-    return {
-      workspaceId: workspace._id,
-      revision,
-      batches: batches.map((batch, index) => ({
-        id: batch.batchId,
-        createdAt: new Date(batch.clientCreatedAt).toISOString(),
-        updatedAt: new Date(batch.updatedAt).toISOString(),
-        deliveryState: batch.status === "ready" ? "available" as const : batch.status,
-        deliveries: deliveries[index].map((delivery) => ({
-          targetDeviceId: delivery.targetDeviceId,
-          state: delivery.state,
-          attempts: delivery.attempts,
-        })),
-        results: results[index].map((result) => ({
-          id: result.resultId,
-          type: result.kind,
-          deliveryState: result.deletedAt === undefined ? "available" as const : "deleted" as const,
-          ...(result.text !== undefined ? { value: result.text } : {}),
-          ...(result.format !== undefined ? { format: result.format } : {}),
-          ...(result.objectKey !== undefined ? { photoObjectKey: result.objectKey } : {}),
-          ...(result.contentType !== undefined ? { contentType: result.contentType } : {}),
-          byteCount: result.byteCount,
-          createdAt: new Date(result.clientCreatedAt).toISOString(),
-        })),
-      })),
     };
   };

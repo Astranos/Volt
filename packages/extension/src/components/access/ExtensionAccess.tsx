@@ -45,6 +45,7 @@ type AccountControlSurface = "newtab" | "sidepanel";
 // null while Clerk is still loading — the panel must not claim a signed-out
 // account before it knows one way or the other.
 const SidepanelAuthContext = createContext<boolean | null>(null);
+const SidepanelUserContext = createContext<string | null>(null);
 
 function accountControlClassName(
   surface: AccountControlSurface,
@@ -56,7 +57,7 @@ function accountControlClassName(
 function isClerkReturnUrl(value: string | undefined) {
   if (!value) return false;
   try {
-    return new URL(value).origin === "https://volt.juanquenga.com";
+    return new URL(value).origin === "https://voltresale.app";
   } catch {
     return false;
   }
@@ -80,10 +81,12 @@ function useClerkReturnReload() {
 }
 
 function SidepanelAuthBridge({ children }: { children: ReactNode }) {
-  const { isLoaded, isSignedIn } = useAuth();
+  const { isLoaded, isSignedIn, userId } = useAuth();
   return (
     <SidepanelAuthContext.Provider value={isLoaded ? isSignedIn : null}>
-      {children}
+      <SidepanelUserContext.Provider value={isLoaded ? userId ?? null : null}>
+        {children}
+      </SidepanelUserContext.Provider>
     </SidepanelAuthContext.Provider>
   );
 }
@@ -115,6 +118,10 @@ export function SidepanelClerkProvider({ children }: { children: ReactNode }) {
 
 export function useSidepanelSignedIn() {
   return useContext(SidepanelAuthContext);
+}
+
+export function useSidepanelUserId() {
+  return useContext(SidepanelUserContext);
 }
 
 function objectFrom(value: unknown): Record<string, unknown> | null {

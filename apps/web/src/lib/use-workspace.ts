@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useAction, useConvexAuth, useMutation, useQuery } from "convex/react";
+import { useAction, useConvex, useConvexAuth, useMutation } from "convex/react";
+import { useAuth } from "@clerk/clerk-react";
+import { subscribeWorkspaceSnapshot } from "@volt/scanner-protocol";
 
 import { api } from "../../../../convex/_generated/api";
 import type { TimelineResult, WorkspaceSnapshot } from "./workspace";
@@ -13,28 +15,47 @@ export type WorkspaceState = {
 };
 
 /**
- * `workspaceSnapshot` is the one workspace read that tolerates an account with
- * no workspace yet, so the dashboard subscribes to it and creates the
- * workspace lazily in the background.
+ * All snapshot pages stay subscribed. Only a complete account snapshot reaches
+ * the dashboard; an account without a workspace is created lazily.
  */
 export function useWorkspace(): WorkspaceState {
+  const convex = useConvex();
+  const { userId } = useAuth();
   const { isAuthenticated } = useConvexAuth();
-  const snapshot = useQuery(
-    api.cloudWorkspace.workspaceSnapshot,
-    isAuthenticated ? {} : "skip",
-  );
+  const [loaded, setLoaded] = useState<{ account: string; snapshot?: WorkspaceSnapshot | null; error?: unknown } | null>(null);
+  const snapshot = isAuthenticated && loaded && loaded.account === userId ? loaded.snapshot : undefined;
+  useEffect(() => {
+    if (!isAuthenticated || !userId) { setLoaded(null); return; }
+    setLoaded({ account: userId });
+    return subscribeWorkspaceSnapshot({
+      subscribe: (args, onValue, onError) => {
+        const query = convex.watchQuery(api.cloudWorkspace.workspaceSnapshotPage, args);
+        const update = () => {
+          try { const page = query.localQueryResult(); if (page !== undefined) onValue(page); }
+          catch (error) { onError(error); }
+        };
+        const stop = query.onUpdate(update);
+        update();
+        return stop;
+      },
+      onSnapshot: (value) => setLoaded({ account: userId, snapshot: value }),
+      onError: (error) => setLoaded({ account: userId, error }),
+    });
+  }, [convex, isAuthenticated, userId]);
   const ensureWorkspace = useMutation(api.cloudWorkspace.ensureWorkspace);
-  const ensured = useRef(false);
+  const ensured = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!isAuthenticated || snapshot !== null || ensured.current) return;
-    ensured.current = true;
+    if (!isAuthenticated || !userId || snapshot !== null || ensured.current === userId) return;
+    ensured.current = userId;
     void ensureWorkspace({}).catch(() => {
       // A failed create just means the empty state stays up; the next render
       // of the dashboard retries on a fresh mount.
-      ensured.current = false;
+      ensured.current = null;
     });
-  }, [ensureWorkspace, isAuthenticated, snapshot]);
+  }, [ensureWorkspace, isAuthenticated, snapshot, userId]);
+
+  if (loaded && loaded.account === userId && loaded.error) throw loaded.error;
 
   return {
     snapshot: snapshot ?? null,

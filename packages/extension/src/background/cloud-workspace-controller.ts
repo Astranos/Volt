@@ -50,6 +50,8 @@ function parseMessage(value: unknown): WorkspaceMessage | null {
 }
 
 export function createCloudWorkspaceController(options: ControllerOptions) {
+  let snapshotGeneration = 0;
+  let accountSubject: string | null | undefined;
   const log = options.log ?? ((...args: unknown[]) => console.warn("[Volt Cloud Workspace]", ...args));
   // Shared with the sidepanel, which subscribes to Convex itself; the sync
   // module serializes both writers so either context can apply a snapshot.
@@ -57,6 +59,11 @@ export function createCloudWorkspaceController(options: ControllerOptions) {
     chromeApi: options.chromeApi,
     getPhotoDownload: (batchId, resultId) => getPhotoDownload(batchId, resultId),
   });
+
+  function applySnapshot(payload: unknown) {
+    const generation = snapshotGeneration;
+    return sync.applySnapshot(payload, { isCurrent: () => generation === snapshotGeneration });
+  }
 
   async function relayOffscreenOperation(message: unknown) {
     const response = await options.sendOffscreenMessage(message);
@@ -88,6 +95,7 @@ export function createCloudWorkspaceController(options: ControllerOptions) {
   }
 
   async function reconcileWorkspace() {
+    const generation = snapshotGeneration;
     const response = await options.sendOffscreenMessage({
       action: "workspaceOffscreenReconcile",
     });
@@ -100,10 +108,13 @@ export function createCloudWorkspaceController(options: ControllerOptions) {
       );
     }
     if (record.snapshot === undefined || record.snapshot === null) return null;
-    return sync.applySnapshot(record.snapshot);
+    if (generation !== snapshotGeneration) return null;
+    return applySnapshot(record.snapshot);
   }
 
   function handleAccountChanged(subject: string | null) {
+    if (accountSubject !== subject) snapshotGeneration += 1;
+    accountSubject = subject;
     return sync.runExclusive(async ({ resetActiveHistory }) => {
       const stored = await options.chromeApi.storage.local.get(ACTIVE_CLERK_SUBJECT_KEY);
       const previousSubject = stored[ACTIVE_CLERK_SUBJECT_KEY];
@@ -202,7 +213,8 @@ export function createCloudWorkspaceController(options: ControllerOptions) {
       const operation = (() => {
         switch (rawRecord.action) {
           case "workspaceOffscreenSnapshotChanged":
-            return sync.applySnapshot(rawRecord.snapshot);
+            if (rawRecord.subject !== accountSubject) return Promise.resolve(null);
+            return applySnapshot(rawRecord.snapshot);
           case "workspaceOffscreenCursorDeliveriesChanged":
             return options.handleCursorDeliveries(rawRecord.deliveries);
           case "workspaceOffscreenDictationDraftsChanged":
@@ -285,6 +297,7 @@ export function createCloudWorkspaceController(options: ControllerOptions) {
     // The offscreen document cannot watch chrome.storage for the mirrored
     // client JWT, so the account change has to be pushed to it from here.
     handleAccountSessionChanged: async () => {
+      snapshotGeneration += 1;
       const ready = await options.ensureOffscreenDocument();
       if (ready) await startSubscriptions(true);
       return ready;

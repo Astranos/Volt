@@ -4,6 +4,7 @@ import * as identity from "./cloudWorkspace/identity";
 import * as devices from "./cloudWorkspace/devices";
 import * as dictation from "./cloudWorkspace/dictation";
 import * as batches from "./cloudWorkspace/batches";
+import * as snapshot from "./cloudWorkspace/snapshot";
 import * as photos from "./cloudWorkspace/photos";
 import * as deliveries from "./cloudWorkspace/deliveries";
 
@@ -140,8 +141,15 @@ export const restoreWorkspaceResults = mutation({
 });
 
 export const workspaceSnapshot = query({
-  args: batches.workspaceSnapshotArgs,
-  handler: batches.workspaceSnapshotHandler,
+  args: snapshot.workspaceSnapshotArgs,
+  returns: snapshot.workspaceSnapshotReturns,
+  handler: snapshot.workspaceSnapshotHandler,
+});
+
+export const workspaceSnapshotPage = query({
+  args: snapshot.workspaceSnapshotPageArgs,
+  returns: snapshot.workspaceSnapshotPageReturns,
+  handler: snapshot.workspaceSnapshotPageHandler,
 });
 
 export { PRESIGN_TTL_SECONDS } from "./cloudWorkspace/photos";

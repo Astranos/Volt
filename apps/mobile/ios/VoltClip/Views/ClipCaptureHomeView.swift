@@ -316,3 +316,21 @@ struct ClipChromeSectionHeader: View {
         return .secondary
     }
 }
+
+private func clipConnectionTitle(
+    isConnected: Bool,
+    isPairing: Bool,
+    pairingLabel: String?,
+    pairingFailureMessage: String?
+) -> String {
+    if isConnected {
+        return pairingLabel ?? "Chrome"
+    }
+    if isPairing {
+        return "Connecting"
+    }
+    if pairingFailureMessage != nil {
+        return "Failed"
+    }
+    return "Connect"
+}

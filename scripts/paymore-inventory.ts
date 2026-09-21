@@ -25,7 +25,7 @@ const execFileAsync = promisify(execFile);
 const API_URL = "https://pm.paymore.tech/api/user/shop/products";
 const SITEMAP_URL = "https://paymore.com/sitemap/shop-categories.xml";
 const USER_AGENT =
-  "VoltCatalogBot/1.0 (+https://volt.juanquenga.com; contact: juan@juanquenga.com)";
+  "VoltCatalogBot/1.0 (+https://voltresale.app; contact: juan@juanquenga.com)";
 const PAGE_LIMIT = 20;
 const POLITE_DELAY_MS = 400;
 const MAX_RETRIES = 3;

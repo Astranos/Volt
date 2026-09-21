@@ -808,7 +808,7 @@
 				TARGETED_DEVICE_FAMILY = 1;
 				VERSIONING_SYSTEM = "apple-generic";
 				VOLT_APP_STORE_ID = 6771770148;
-				VOLT_CLERK_FRONTEND_API_DOMAIN = clerk.volt.juanquenga.com;
+				VOLT_CLERK_FRONTEND_API_DOMAIN = clerk.voltresale.app;
 				VOLT_CLERK_JWT_TEMPLATE = convex;
 				VOLT_CONVEX_SITE_URL = "https://adorable-hornet-19.convex.site";
 				VOLT_STOREKIT_PRODUCT_ID = com.volt.mobile.pro.monthly;
@@ -842,7 +842,7 @@
 				VALIDATE_PRODUCT = YES;
 				VERSIONING_SYSTEM = "apple-generic";
 				VOLT_APP_STORE_ID = 6771770148;
-				VOLT_CLERK_FRONTEND_API_DOMAIN = clerk.volt.juanquenga.com;
+				VOLT_CLERK_FRONTEND_API_DOMAIN = clerk.voltresale.app;
 				VOLT_CLERK_JWT_TEMPLATE = convex;
 				VOLT_CONVEX_SITE_URL = "https://sincere-trout-414.convex.site";
 				VOLT_STOREKIT_PRODUCT_ID = com.volt.mobile.pro.monthly;

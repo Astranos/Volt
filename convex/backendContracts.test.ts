@@ -69,7 +69,8 @@ describe("backend compatibility contracts", () => {
       "sweepExpiredPresence:internalMutation",
       "updateDictationDraft:mutation",
       "updatePresence:mutation",
-      "workspaceSnapshot:query"
+      "workspaceSnapshot:query",
+      "workspaceSnapshotPage:query"
 ]);
   });
 

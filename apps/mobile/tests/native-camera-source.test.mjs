@@ -181,7 +181,7 @@ test("native first launch opens capture without pairing or requesting camera ear
   assert.match(rootViewSwiftSource, /store\.cloudWorkspace\.requestSync\(\)/);
   assert.doesNotMatch(rootViewSwiftSource, /store\.camera\.requestAccess\(\)/);
   assert.match(captureSessionViewSwiftSource, /\.task \{\s*await store\.camera\.requestAccess\(\)\s*syncCameraForCaptureState/);
-  assert.match(sharedPairingSessionComponentsSwiftSource, /private let webScannerURLText = "volt\.juanquenga\.com\/clip"/);
+  assert.match(sharedPairingSessionComponentsSwiftSource, /private let webScannerURLText = "voltresale\.app\/clip"/);
   assert.match(sharedPairingSessionComponentsSwiftSource, /Text\("Scan the QR code from the Chrome extension, or open the App Clip page on your computer\. This iPhone will connect to that browser session\."\)/);
 });
 

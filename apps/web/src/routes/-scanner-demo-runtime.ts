@@ -1,5 +1,7 @@
 import { useScannerReviewInput } from "./-scanner-demo-review-input";
 import { usePhotoReceiver } from "./-scanner-demo-photos";
+import type { PhotoCollection } from "./-scanner-demo-photo-collection";
+import { scheduleRecognitionRestart } from "./-scanner-demo-restart";
 import {
   SIGNAL_URL,
   DEFAULT_SESSION_LABEL,
@@ -11,7 +13,6 @@ import {
   type JoinAttempt,
   type PeerSession,
   type CaptureItem,
-  type PhotoItem,
   MAX_CAPTURE_ITEMS,
   type PendingPhoto,
   createId,
@@ -60,7 +61,8 @@ export function useScannerDemoRuntime() {
   const [error, setError] = useState<string | null>(null);
   const [iceLabel, setIceLabel] = useState("Not fetched");
   const [joinWindow, setJoinWindow] = useState<JoinWindow | null>(null);
-  const [photos, setPhotos] = useState<PhotoItem[]>([]);
+  const [photoCollection, setPhotoCollection] = useState<PhotoCollection>({ items: [], retiredUrls: [] });
+  const photos = photoCollection.items;
   const [pairingDialogOpen, setPairingDialogOpen] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [sessionLabel, setSessionLabel] = useState(DEFAULT_SESSION_LABEL);
@@ -488,9 +490,16 @@ export function useScannerDemoRuntime() {
         },
         onEnd: () => {
           remoteSpeechRecognizersRef.current.delete(peer.id);
-          if (remoteDictationSessionIdsRef.current.has(peer.id)) {
-            window.setTimeout(() => startRemoteSpeechRecognition(peer), 250);
-          }
+          const sessionId = remoteDictationSessionIdsRef.current.get(peer.id);
+          scheduleRecognitionRestart({
+            timers: remoteSpeechStartRetryTimersRef.current,
+            peerId: peer.id,
+            isActive: () => sessionId !== undefined
+              && remoteDictationSessionIdsRef.current.get(peer.id) === sessionId
+              && peersRef.current.get(peer.id) === peer,
+            restart: () => startRemoteSpeechRecognition(peer),
+            delay: REMOTE_SPEECH_START_RETRY_DELAY_MS,
+          });
         },
       });
       if (recognizer.start(recognitionTrack)) {
@@ -554,7 +563,7 @@ export function useScannerDemoRuntime() {
     ],
   );
 
-  const configurePhotoChannel = usePhotoReceiver({ pendingPhotosRef, objectUrlsRef, setPhotos, sendControl });
+  const configurePhotoChannel = usePhotoReceiver({ pendingPhotosRef, objectUrlsRef, collection: photoCollection, setCollection: setPhotoCollection, sendControl });
 
   const configureControlChannel = useCallback(
     (peer: PeerSession, channel: RTCDataChannel) => {
@@ -794,7 +803,7 @@ export function useScannerDemoRuntime() {
     setConnectedPeerCount(0);
     setError(null);
     setJoinWindow(null);
-    setPhotos([]);
+    setPhotoCollection({ items: [], retiredUrls: [] });
     setPairingDialogOpen(false);
     setQrDataUrl(null);
     handleReviewInputChange("");

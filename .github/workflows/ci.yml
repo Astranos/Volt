@@ -50,7 +50,7 @@ jobs:
         run: pnpm build:web
 
   mobile:
-    name: Executable Swift helper tests
+    name: Native App Clip and Swift helper tests
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -63,6 +63,26 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Verify Swift toolchain
         run: xcrun swift --version
+      - name: Setup Ruby for CocoaPods
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+      - name: Generate native workspace dependencies
+        working-directory: apps/mobile/ios
+        run: |
+          gem install cocoapods --version 1.16.2 --no-document
+          pod _1.16.2_ install --deployment
+      - name: Compile App Clip for iOS Simulator
+        # Compile every real source together, including cross-file Swift access.
+        # A direct target build does not depend on a locally generated scheme.
+        run: >-
+          xcodebuild
+          -project apps/mobile/ios/Volt.xcodeproj
+          -target VoltClip
+          -configuration Debug
+          -sdk iphonesimulator
+          CODE_SIGNING_ALLOWED=NO
+          build
       - name: Test mobile helpers
         run: pnpm --filter @volt/mobile test
 

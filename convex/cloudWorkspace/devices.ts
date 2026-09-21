@@ -17,6 +17,7 @@ import {
 import { hasFullAppEntitlement } from "../access";
 import { type Id } from "../_generated/dataModel";
 import { type MutationCtx, type QueryCtx } from "../_generated/server";
+import { purgeReboundDictationDraftsBatch } from "../workspaceMaintenance";
 
 const CANONICAL_CAPABILITIES = new Set([
   "workspace-results",
@@ -171,6 +172,11 @@ export const registerComputerHandler = async (ctx: MutationCtx, args: ObjectType
     }
     let deviceId: Id<"workspaceDevices">;
     if (existing && existing.workspaceId !== workspace._id) {
+      await purgeReboundDictationDraftsBatch(ctx, {
+        workspaceId: existing.workspaceId,
+        targetDeviceId: args.installationId,
+        targetRegistrationId: existing._id,
+      });
       const staleDeliveries = await ctx.db
         .query("cursorDeliveries")
         .withIndex("by_targetDeviceId_and_state", (q) =>
@@ -197,6 +203,7 @@ export const registerComputerHandler = async (ctx: MutationCtx, args: ObjectType
         deviceId: args.installationId,
         credentialHash: await sha256Hex(randomOpaqueSecret()),
         kind: "chrome",
+        dictationBindingRequired: true,
         label: args.label,
         createdAt: now,
         lastSeenAt: now,
@@ -291,11 +298,12 @@ export const updatePresenceHandler = async (ctx: MutationCtx, args: ObjectType<t
 export const sweepExpiredPresenceArgs = {};
 export const sweepExpiredPresenceHandler = async (ctx: MutationCtx) => {
     const now = Date.now();
-    const presence = await ctx.db.query("workspacePresence").collect();
-    for (const item of presence) {
-      if (item.state === "online" && item.expiresAt <= now) {
-        await ctx.db.patch(item._id, { state: "offline" });
-      }
+    const presence = await ctx.db
+      .query("workspacePresence")
+      .withIndex("by_state_and_expiresAt", q => q.eq("state", "online").lte("expiresAt", now))
+      .paginate({ numItems: 500, cursor: null, maximumBytesRead: 2_000_000 });
+    for (const item of presence.page) {
+      await ctx.db.patch(item._id, { state: "offline" });
     }
   };
 
@@ -303,27 +311,9 @@ export const listComputersForDeviceArgs = credentialArgs;
 export const listComputersForDeviceHandler = async (ctx: QueryCtx, args: ObjectType<typeof listComputersForDeviceArgs>) => {
     const { workspace, device } = await requireDevicePrincipal(ctx, args);
     if (!device) throw new ConvexError("Device required");
-    const devices = await ctx.db
-      .query("workspaceDevices")
-      .withIndex("by_workspaceId", (q) => q.eq("workspaceId", workspace._id))
-      .collect();
-    const presence = await ctx.db
-      .query("workspacePresence")
-      .withIndex("by_workspaceId", (q) => q.eq("workspaceId", workspace._id))
-      .collect();
-    const byDevice = new Map(presence.map((item) => [item.deviceId, item]));
-    const now = Date.now();
     return {
       cursorTargetDeviceId: device.cursorTargetDeviceId ?? null,
-      computers: devices.filter((item) => item.kind === "chrome" && !item.revokedAt).map((item) => {
-        const current = byDevice.get(item.deviceId);
-        return {
-          deviceId: item.deviceId,
-          label: item.label,
-          capabilities: normalizeCapabilities(current?.capabilities ?? []),
-          online: Boolean(current && current.state === "online" && current.expiresAt > now),
-        };
-      }),
+      computers: (await listWorkspaceComputers(ctx, workspace._id)).map(scannerComputer),
     };
   };
 
@@ -343,16 +333,21 @@ async function listWorkspaceComputers(ctx: DatabaseReaderCtx, workspaceId: Id<"w
     return {
       deviceId: item.deviceId,
       label: item.label,
-      capabilities: normalizeCapabilities(current?.capabilities ?? []),
+      capabilities: current?.capabilities ?? [],
       online: Boolean(current && current.state === "online" && current.expiresAt > now),
+      lastSeenAt: current?.lastSeenAt ?? item.lastSeenAt,
     };
   });
+}
+
+function scannerComputer({ lastSeenAt: _lastSeenAt, ...computer }: Awaited<ReturnType<typeof listWorkspaceComputers>>[number]) {
+  return { ...computer, capabilities: normalizeCapabilities(computer.capabilities) };
 }
 
 export const listComputersForGuestArgs = guestCredentialArgs;
 export const listComputersForGuestHandler = async (ctx: QueryCtx, args: ObjectType<typeof listComputersForGuestArgs>) => {
     const { workspace } = await requireGuestPrincipal(ctx, args);
-    return { computers: await listWorkspaceComputers(ctx, workspace._id) };
+    return { computers: (await listWorkspaceComputers(ctx, workspace._id)).map(scannerComputer) };
   };
 
 export const setCursorTargetArgs = { ...credentialArgs, cursorTargetDeviceId: v.union(v.string(), v.null()) };
@@ -386,24 +381,5 @@ export const setCursorTargetHandler = async (ctx: MutationCtx, args: ObjectType<
 export const listComputersArgs = {};
 export const listComputersHandler = async (ctx: QueryCtx) => {
     const workspace = await requireAuthenticatedWorkspace(ctx);
-    const devices = await ctx.db
-      .query("workspaceDevices")
-      .withIndex("by_workspaceId", (q) => q.eq("workspaceId", workspace._id))
-      .collect();
-    const presence = await ctx.db
-      .query("workspacePresence")
-      .withIndex("by_workspaceId", (q) => q.eq("workspaceId", workspace._id))
-      .collect();
-    const byDevice = new Map(presence.map((item) => [item.deviceId, item]));
-    const now = Date.now();
-    return devices.filter((item) => item.kind === "chrome" && !item.revokedAt).map((item) => {
-      const current = byDevice.get(item.deviceId);
-      return {
-        deviceId: item.deviceId,
-        label: item.label,
-        online: Boolean(current && current.state === "online" && current.expiresAt > now),
-        capabilities: current?.capabilities ?? [],
-        lastSeenAt: current?.lastSeenAt ?? item.lastSeenAt,
-      };
-    });
+    return listWorkspaceComputers(ctx, workspace._id);
   };

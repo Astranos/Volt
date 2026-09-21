@@ -35,39 +35,47 @@ async function withWorkspaceSyncLock<T>(operation: () => Promise<T>): Promise<T>
 export function createWorkspaceSync(options: WorkspaceSyncOptions) {
   const store = createWorkspaceStore(chromeLocalKeyValueStorage(options.chromeApi));
 
-  async function resetActiveHistoryNow() {
-    await resetWorkspaceHydration();
+  async function resetActiveHistoryNow(isCurrent: () => boolean = () => true) {
+    if (!isCurrent()) return;
+    await resetWorkspaceHydration(isCurrent);
+    if (!isCurrent()) return;
     await options.chromeApi.storage.local.remove(ACTIVE_WORKSPACE_KEY);
+    if (!isCurrent()) return;
     void options.chromeApi.runtime.sendMessage({ action: "workspaceReplicaChanged" }).catch(() => undefined);
   }
 
-  async function activateWorkspace(workspaceId: string) {
+  async function activateWorkspace(workspaceId: string, isCurrent: () => boolean) {
     const stored = await options.chromeApi.storage.local.get(ACTIVE_WORKSPACE_KEY);
+    if (!isCurrent()) return;
     const activeWorkspaceId = stored[ACTIVE_WORKSPACE_KEY];
     if (typeof activeWorkspaceId === "string" && activeWorkspaceId !== workspaceId) {
-      await resetActiveHistoryNow();
+      await resetActiveHistoryNow(isCurrent);
     }
+    if (!isCurrent()) return;
     await options.chromeApi.storage.local.set({ [ACTIVE_WORKSPACE_KEY]: workspaceId });
   }
 
-  async function applySnapshotNow(payload: unknown) {
+  async function applySnapshotNow(payload: unknown, isCurrent: () => boolean) {
     // An account with no workspace yet reads as null rather than as a failure.
     // There is nothing to merge, and nothing to clear either: the account has
     // never held cloud results for this replica to have gone stale against.
-    if (payload === null) return null;
+    if (payload === null || !isCurrent()) return null;
     const page = normalizeWorkspaceSnapshot(payload);
     if (!page) throw new Error("Workspace snapshot was invalid.");
-    await activateWorkspace(page.workspaceId);
-    const replica = await store.mergePage(page);
+    await activateWorkspace(page.workspaceId, isCurrent);
+    if (!isCurrent()) return null;
+    const replica = await store.mergePage(page, isCurrent);
+    if (!replica || !isCurrent()) return null;
     // A hydration failure must not be silent — the panel names it — but the rows
     // that did land still belong in the timeline, so the broadcast happens
     // either way and the error is raised after it.
     let hydrationError: Error | null = null;
     try {
-      await hydrateWorkspaceReplica(replica, { getPhotoDownload: options.getPhotoDownload });
+      await hydrateWorkspaceReplica(replica, { getPhotoDownload: options.getPhotoDownload, isCurrent });
     } catch (error) {
       hydrationError = error instanceof Error ? error : new Error(String(error));
     }
+    if (!isCurrent()) return null;
     void options.chromeApi.runtime.sendMessage({
       action: "workspaceReplicaChanged",
       workspaceId: replica.workspaceId,
@@ -77,7 +85,8 @@ export function createWorkspaceSync(options: WorkspaceSyncOptions) {
   }
 
   return {
-    applySnapshot: (payload: unknown) => withWorkspaceSyncLock(() => applySnapshotNow(payload)),
+    applySnapshot: (payload: unknown, { isCurrent = () => true }: { isCurrent?: () => boolean } = {}) =>
+      withWorkspaceSyncLock(() => applySnapshotNow(payload, isCurrent)),
     // Account switches must not interleave with an in-flight apply either, so
     // they run under the same lock and are handed the reset from inside it —
     // the lock is not reentrant, so they cannot take it a second time.

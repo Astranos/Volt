@@ -724,7 +724,6 @@ button.sidepanel-account-control {
 
   .sidepanel-tool-tab.is-active {
     background: transparent;
-    border-bottom-color: #16a34a;
     box-shadow: none;
     color: #1c1917;
   }

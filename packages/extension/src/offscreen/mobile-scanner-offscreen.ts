@@ -2,7 +2,7 @@ import type {
   CaptureMode,
   ScannerConnectionStatus,
 } from "@volt/scanner-protocol";
-import { buildScannerAppClipJoinUrl } from "@volt/scanner-protocol";
+import { buildScannerAppClipJoinUrl, subscribeWorkspaceSnapshot, fetchWorkspaceSnapshot } from "@volt/scanner-protocol";
 import type { createClerkClient } from "@clerk/chrome-extension/client";
 import { ConvexClient } from "convex/browser";
 import { api } from "../../../../convex/_generated/api";
@@ -353,20 +353,21 @@ class CloudWorkspaceSubscriptions {
 
     const identity = await getMobileScannerExtensionIdentity();
     this.installationId = identity.installId;
-    this.workspaceSnapshotUnsubscribe = this.client.onUpdate(
-      api.cloudWorkspace.workspaceSnapshot,
-      {},
-      (snapshot) => {
+    const snapshotSubject = this.clerkSubject;
+    this.workspaceSnapshotUnsubscribe = subscribeWorkspaceSnapshot({
+      subscribe: (args, onValue, onError) => this.client.onUpdate(api.cloudWorkspace.workspaceSnapshotPage, args, onValue, onError),
+      onSnapshot: (snapshot) => {
         this.lastSnapshot = snapshot;
         void chrome.runtime.sendMessage({
           action: "workspaceOffscreenSnapshotChanged",
+          subject: snapshotSubject,
           snapshot,
         }).catch(() => undefined);
       },
-      (error) => {
+      onError: (error) => {
         console.warn("[Volt Cloud Workspace] snapshot subscription failed", error);
       },
-    );
+    });
     this.cursorDeliveriesUnsubscribe = this.client.onUpdate(
       api.cloudWorkspace.pendingCursorDeliveries,
       { installationId: identity.installId },
@@ -419,11 +420,14 @@ class CloudWorkspaceSubscriptions {
   async reconcileSnapshot() {
     await this.reconcileAuthentication();
     if (!this.clerkSubject) return null;
+    const subject = this.clerkSubject;
     try {
-      const snapshot = await this.client.query(api.cloudWorkspace.workspaceSnapshot, {});
+      const snapshot = await fetchWorkspaceSnapshot((args) => this.client.query(api.cloudWorkspace.workspaceSnapshotPage, args));
+      if (this.clerkSubject !== subject) return null;
       this.lastSnapshot = snapshot;
       return snapshot;
     } catch (error) {
+      if (this.clerkSubject !== subject) return null;
       if (this.lastSnapshot !== null) return this.lastSnapshot;
       throw error;
     }

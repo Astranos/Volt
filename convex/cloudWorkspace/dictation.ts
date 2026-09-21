@@ -54,6 +54,7 @@ async function upsertDictationDraft(
   const now = Date.now();
   const value = {
     targetDeviceId: target.deviceId,
+    targetRegistrationId: target._id,
     text: args.text,
     updatedAt: now,
     expiresAt: now + DICTATION_DRAFT_TTL_MS,
@@ -114,13 +115,19 @@ export const liveDictationDraftsForComputerHandler = async (ctx: QueryCtx, args:
       return [];
     }
     const now = Date.now();
-    const drafts = await ctx.db
+    const draftsForRegistration = (registrationId: typeof computer._id | undefined) => ctx.db
       .query("dictationDrafts")
-      .withIndex("by_targetDeviceId_and_expiresAt", (q) =>
-        q.eq("targetDeviceId", computer.deviceId).gt("expiresAt", now),
-      )
-      .order("desc")
-      .take(20);
+      .withIndex("by_workspaceId_and_targetDeviceId_and_targetRegistrationId_and_expiresAt", q =>
+        q.eq("workspaceId", workspace._id).eq("targetDeviceId", computer.deviceId)
+          .eq("targetRegistrationId", registrationId).gt("expiresAt", now),
+      ).order("desc").take(20);
+    const bound = await draftsForRegistration(computer._id);
+    // Pre-migration drafts remain visible on their original registration.
+    // Rebound registrations accept only explicitly bound drafts.
+    const legacy = computer.dictationBindingRequired ? [] : await draftsForRegistration(undefined);
+    const drafts = [...bound, ...legacy]
+      .sort((a, b) => b.expiresAt - a.expiresAt || b._creationTime - a._creationTime)
+      .slice(0, 20);
     return drafts.map((draft) => ({
         draftId: draft.draftId,
         text: draft.text,

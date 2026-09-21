@@ -1,4 +1,5 @@
 import { httpRouter, makeFunctionReference } from "convex/server";
+import type { SnapshotPageArgs, WorkspaceSnapshotPage } from "@volt/scanner-protocol";
 import {
   type AccessHttpArgs,
   emptyResponse,
@@ -230,9 +231,11 @@ type WorkspaceSnapshot = {
   }>;
 };
 
-const getWorkspaceSnapshot = makeFunctionReference<"query", Record<string, never>, WorkspaceSnapshot>(
+const getWorkspaceSnapshot = makeFunctionReference<"query", Record<string, never>, WorkspaceSnapshot | null>(
   "cloudWorkspace:workspaceSnapshot",
 );
+
+const getWorkspaceSnapshotPage = makeFunctionReference<"query", SnapshotPageArgs, WorkspaceSnapshotPage | null>("cloudWorkspace:workspaceSnapshotPage");
 
 const createAuthenticatedPhotoDownloadUrl = makeFunctionReference<
   "action",
@@ -345,7 +348,7 @@ const appClipGrantCreateHandler = httpAction(async (ctx, request) => {
     clerkUserId: access.args.clerkUserId,
     ...(access.args.name ? { ownerName: access.args.name } : {}),
   });
-  const url = new URL("https://volt.juanquenga.com/clip");
+  const url = new URL("https://voltresale.app/clip");
   url.searchParams.set("guestCloudGrant", grant.guestCloudGrant);
   url.searchParams.set("guestCloudExpiresAt", String(grant.expiresAt));
   url.searchParams.set("cloudUrl", new URL(request.url).origin);
@@ -619,7 +622,14 @@ const workspaceEnrollmentHandler = httpAction(async (ctx, request) => {
 const workspaceSnapshotHandler = httpAction(async (ctx, request) => {
   if (request.method === "OPTIONS") return emptyResponse();
   if (!(await ctx.auth.getUserIdentity())) return jsonResponse({ error: "Clerk authentication required" }, 401);
-  return jsonResponse(await ctx.runQuery(getWorkspaceSnapshot, {}));
+  const params = new URL(request.url).searchParams;
+  const kind = params.get("kind");
+  if (kind === null) {
+    if (params.has("cursor")) return jsonResponse({ error: "A snapshot cursor requires kind" }, 400);
+    return jsonResponse(await ctx.runQuery(getWorkspaceSnapshot, {}));
+  }
+  if (kind !== "batches" && kind !== "results" && kind !== "deliveries") return jsonResponse({ error: "Invalid snapshot kind" }, 400);
+  return jsonResponse(await ctx.runQuery(getWorkspaceSnapshotPage, { kind, cursor: params.get("cursor") }));
 });
 
 const workspacePhotoDownloadHandler = httpAction(async (ctx, request) => {

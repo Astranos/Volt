@@ -77,14 +77,51 @@ const markGuestBatchReadyRef = makeFunctionReference<
   { idempotent: boolean }
 >("cloudWorkspace:markGuestBatchReady");
 
-async function verifyUploadedPhotos(photos: Array<{ objectKey: string; byteCount: number }>) {
-  for (const photo of photos) {
-    const presigned = await presignR2("HEAD", photo.objectKey);
-    const response = await fetch(presigned.url, { method: "HEAD" });
-    const length = Number(response.headers.get("content-length"));
-    if (!response.ok || !Number.isFinite(length) || length !== photo.byteCount) {
-      throw new ConvexError("R2 photo verification failed");
+const PHOTO_VERIFICATION_CONCURRENCY = 4;
+const PHOTO_VERIFICATION_REQUEST_TIMEOUT_MS = 10_000;
+const PHOTO_VERIFICATION_DEADLINE_MS = 60_000;
+
+export async function verifyUploadedPhotos(photos: Array<{ objectKey: string; byteCount: number }>) {
+  const operation = new AbortController();
+  const deadline = setTimeout(() => operation.abort(), PHOTO_VERIFICATION_DEADLINE_MS);
+  let nextPhoto = 0;
+
+  async function worker() {
+    while (nextPhoto < photos.length) {
+      if (operation.signal.aborted) throw new ConvexError("R2 photo verification timed out");
+      const photo = photos[nextPhoto++];
+      const request = new AbortController();
+      const cancel = () => request.abort();
+      operation.signal.addEventListener("abort", cancel, { once: true });
+      const timeout = setTimeout(cancel, PHOTO_VERIFICATION_REQUEST_TIMEOUT_MS);
+      try {
+        const presigned = await presignR2("HEAD", photo.objectKey);
+        if (request.signal.aborted) throw new ConvexError("R2 photo verification timed out");
+        const response = await fetch(presigned.url, { method: "HEAD", signal: request.signal });
+        if (request.signal.aborted) throw new ConvexError("R2 photo verification timed out");
+        const length = Number(response.headers.get("content-length"));
+        if (!response.ok || !Number.isFinite(length) || length !== photo.byteCount) {
+          throw new ConvexError("R2 photo verification failed");
+        }
+      } catch (error) {
+        if (request.signal.aborted) throw new ConvexError("R2 photo verification timed out");
+        throw error;
+      } finally {
+        clearTimeout(timeout);
+        operation.signal.removeEventListener("abort", cancel);
+      }
     }
+  }
+
+  const workers = Array.from({ length: Math.min(PHOTO_VERIFICATION_CONCURRENCY, photos.length) }, worker);
+  try {
+    await Promise.all(workers);
+  } catch (error) {
+    operation.abort();
+    await Promise.allSettled(workers);
+    throw error;
+  } finally {
+    clearTimeout(deadline);
   }
 }
 

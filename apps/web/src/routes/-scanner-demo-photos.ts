@@ -1,42 +1,44 @@
-import { useCallback, type RefObject, type Dispatch, type SetStateAction } from "react";
+import { useCallback, useEffect, type RefObject, type Dispatch, type SetStateAction } from "react";
+import { appendPhoto, releasePhotoUrls, type PhotoCollection } from "./-scanner-demo-photo-collection";
 import { decodePhotoTransferChunkFrame, decodePhotoTransferMessage, type PhotoTransferMessage, type PhotoTransferBinaryChunkMessage, type ScannerControlMessage } from "@volt/scanner-protocol";
-import { type PeerSession, type PendingPhoto, type PhotoItem, MAX_PHOTO_ITEMS, createMessageId, bytesFromBase64 } from "./-scanner-demo-model";
+import { type PeerSession, type PendingPhoto, createMessageId, bytesFromBase64 } from "./-scanner-demo-model";
 
 export function usePhotoReceiver({
- pendingPhotosRef, objectUrlsRef, setPhotos, sendControl,
+  pendingPhotosRef, objectUrlsRef, collection, setCollection, sendControl,
 }: {
- pendingPhotosRef: RefObject<Map<string, PendingPhoto>>;
- objectUrlsRef: RefObject<Set<string>>;
- setPhotos: Dispatch<SetStateAction<PhotoItem[]>>;
- sendControl: (peer: PeerSession, message: ScannerControlMessage) => void;
+  pendingPhotosRef: RefObject<Map<string, PendingPhoto>>;
+  objectUrlsRef: RefObject<Set<string>>;
+  collection: PhotoCollection;
+  setCollection: Dispatch<SetStateAction<PhotoCollection>>;
+  sendControl: (peer: PeerSession, message: ScannerControlMessage) => void;
 }) {
+  useEffect(() => {
+    if (collection.retiredUrls.length === 0) return;
+    const released = new Set(collection.retiredUrls);
+    releasePhotoUrls(collection.retiredUrls, objectUrlsRef.current, (url) => URL.revokeObjectURL(url));
+    setCollection((current) => ({
+      ...current,
+      retiredUrls: current.retiredUrls.filter((url) => !released.has(url)),
+    }));
+  }, [collection.retiredUrls, objectUrlsRef, setCollection]);
+
   const assemblePhoto = useCallback(
     (peer: PeerSession, pending: PendingPhoto) => {
       pendingPhotosRef.current.delete(pending.photoId);
       const blob = new Blob(pending.chunks.map((chunk) => new Uint8Array(chunk)), { type: pending.mimeType });
       const objectUrl = URL.createObjectURL(blob);
       objectUrlsRef.current.add(objectUrl);
-      setPhotos((current) => {
-        const next = [
-          {
-            capturedAt: pending.capturedAt,
-            filename: pending.filename,
-            height: pending.height,
-            id: pending.photoId,
-            mimeType: pending.mimeType,
-            objectUrl,
-            photoBatchId: pending.photoBatchId,
-            size: blob.size || pending.size,
-            width: pending.width,
-          },
-          ...current,
-        ];
-        for (const removed of next.slice(MAX_PHOTO_ITEMS)) {
-          URL.revokeObjectURL(removed.objectUrl);
-          objectUrlsRef.current.delete(removed.objectUrl);
-        }
-        return next.slice(0, MAX_PHOTO_ITEMS);
-      });
+      setCollection((current) => appendPhoto(current, {
+        capturedAt: pending.capturedAt,
+        filename: pending.filename,
+        height: pending.height,
+        id: pending.photoId,
+        mimeType: pending.mimeType,
+        objectUrl,
+        photoBatchId: pending.photoBatchId,
+        size: blob.size || pending.size,
+        width: pending.width,
+      }));
       sendControl(peer, {
         type: "photo_received",
         messageId: createMessageId("photo"),
@@ -47,7 +49,7 @@ export function usePhotoReceiver({
         size: Math.max(1, blob.size || pending.size),
       });
     },
-    [sendControl],
+    [objectUrlsRef, pendingPhotosRef, sendControl, setCollection],
   );
 
   const handlePhotoMessage = useCallback(
