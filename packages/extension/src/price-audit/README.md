@@ -4,9 +4,13 @@ The **Price Audit** sidepanel tool compares available public Shopify variants wi
 
 ## Inputs and privacy
 
-The form accepts a public HTTPS storefront URL, a price tolerance, and a search-page limit. The default tolerance is 15%. The default search limit is two pages per variant, configurable from one to five. A signed-in Volt account is required.
+The extension's **Settings → Price Audit** section stores the public storefront, consent confirmations, comparison tolerance, and search-page limit in `chrome.storage.sync.cmdkSettings.priceAudit`. Bare domains normalize to HTTPS. Editing the store clears its confirmations; they can be reconfirmed and saved in the same form. The default tolerance is 15%, with two search pages per variant, configurable from one to five.
+
+The sidepanel contains the saved store, a Settings shortcut, Start/Stop controls, progress, and results. It subscribes to saved settings changes and cancels a running audit if its configuration or consent changes. A signed-in account must also have a server-authenticated Convex session. The UI distinguishes a signed-out account from a signed-in account whose server connection failed.
 
 Users confirm USD prices and consent to sending public catalog descriptions and listing evidence to TypeSafe through Volt. `JEV_API_KEY` is a Convex environment variable. The key never reaches the extension, page scripts, logs, or exports. There is no client-key fallback.
+
+`convex/auth.config.ts` always trusts `CLERK_JWT_ISSUER_DOMAIN` and can additionally trust an explicitly configured `CLERK_ADDITIONAL_JWT_ISSUER_DOMAIN`. Both require the `convex` audience. The development deployment uses the additional issuer for the extension's existing production Clerk sign-in, while retaining development sign-ins. Production's environment was not changed.
 
 ## Workflow
 

@@ -5,10 +5,12 @@ import type { AuditAssessment, AuditSnapshot, ItemResult } from "../../price-aud
 
 vi.mock("../../price-audit/runner", () => ({ runPriceAudit: vi.fn() }));
 const auth = vi.hoisted(() => ({ isAuthenticated: false, isLoading: false }));
+const clerk = vi.hoisted(() => ({ signedIn: false }));
+vi.mock("../access/ExtensionAccess", () => ({ useSidepanelSignedIn: () => clerk.signedIn }));
 vi.mock("convex/react", () => ({ useConvex: () => ({}), useConvexAuth: () => auth }));
 vi.mock("../../price-audit/remote-decisions", () => ({ createRemoteAuditDecisions: vi.fn() }));
 vi.mock("./SidepanelLayout", () => ({ default: ({ children }: { children: React.ReactNode }) => <main>{children}</main> }));
-import PriceAudit, { PriceAuditResult, serializePriceAudit } from "./PriceAudit";
+import PriceAudit, { configuredAudit, PriceAuditResult, PriceAuditStore, serializePriceAudit } from "./PriceAudit";
 
 function result(assessment: AuditAssessment): ItemResult {
   return {
@@ -19,22 +21,19 @@ function result(assessment: AuditAssessment): ItemResult {
 }
 
 describe("price audit UI", () => {
-  it("starts disabled with explicit consent, USD, privacy and coverage notices", () => {
+  it("keeps setup in Settings and starts disabled without saved configuration", () => {
     const markup = renderToStaticMarkup(<PriceAudit />);
     expect(markup).not.toContain('type="password"');
     expect(markup).not.toContain("API key");
-    expect(markup).toContain('type="submit" disabled=""');
-    expect(markup).toContain("TypeSafe via Volt");
+    expect(markup).toContain('type="button" disabled=""');
+    expect(markup).not.toContain("<input");
+    expect(markup).toContain("No store configured");
+    expect(markup).toContain('aria-label="Open price audit settings"');
     expect(markup).not.toContain("API charges");
     expect(markup).toContain("Sign in using the account control");
     expect(markup).toContain("price-audit-content");
-    expect(markup).toContain("price-audit-field");
-    expect(markup).toContain('<details class="price-audit-options">');
-    expect(markup).toContain("use USD prices");
-    expect(markup).toContain("switching tools ends the scan");
-    expect(markup).toContain("at least 3 confident unique sold matches");
-    expect(markup).toContain("exclude shipping and tax");
-    expect(markup).toContain("not all historical eBay sales");
+    expect(markup).not.toContain("Comparison settings");
+    expect(markup).not.toContain("Coverage &amp; session limits");
   });
 
   it("keeps start disabled while checking account and until consent is given", () => {
@@ -44,8 +43,31 @@ describe("price audit UI", () => {
     auth.isAuthenticated = true;
     const markup = renderToStaticMarkup(<PriceAudit />);
     expect(markup).not.toContain("Sign in using the account control");
-    expect(markup).toContain('type="submit" disabled=""');
+    expect(markup).toContain('type="button" disabled=""');
+    expect(markup).toContain("Finish price audit setup in Settings");
     auth.isAuthenticated = false;
+  });
+
+  it("distinguishes signed-in server auth failure without allowing the audit", () => {
+    clerk.signedIn = true;
+    const markup = renderToStaticMarkup(<PriceAudit />);
+    expect(markup).toContain("signed in");
+    expect(markup).toContain("server connection");
+    expect(markup).toContain("Refresh");
+    expect(markup).not.toContain("Sign in using the account control");
+    expect(markup).toContain('type="button" disabled=""');
+    clerk.signedIn = false;
+  });
+
+  it("shows the configured store and validates saved consent, URL and bounds", () => {
+    const settings = { storeUrl: "taylormi.paymore.com", tolerancePercent: 15, maxSearchPages: 2, consentToProvider: true, usdConfirmed: true };
+    const markup = renderToStaticMarkup(<PriceAuditStore settings={settings} />);
+    expect(markup).toContain("taylormi.paymore.com");
+    expect(markup).not.toContain("<input");
+    expect(configuredAudit(settings)).toEqual({ storeUrl: "https://taylormi.paymore.com", tolerancePercent: 15, maxSearchPages: 2 });
+    for (const invalid of [{ consentToProvider: false }, { usdConfirmed: false }, { storeUrl: "" }, { storeUrl: "taylormi.paymore.com/admin/products" }, { tolerancePercent: NaN }, { maxSearchPages: 6 }]) {
+      expect(configuredAudit({ ...settings, ...invalid })).toBeNull();
+    }
   });
 
   it.each([

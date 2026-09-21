@@ -14,6 +14,14 @@ test("public storefront URL excludes credentials, admin and local networks", () 
   }
 });
 
+test("bare storefront domains normalize to HTTPS without bypassing URL restrictions", () => {
+  assert.equal(storeOrigin("taylormi.paymore.com"), "https://taylormi.paymore.com");
+  assert.equal(storeOrigin("  taylormi.paymore.com/products/camera?variant=123  "), "https://taylormi.paymore.com");
+  for (const url of ["http://taylormi.paymore.com", "admin.shopify.com/store/a", "taylormi.paymore.com/admin/products", "user:pass@shop.com", "localhost", "127.0.0.1", "shop.local", "shop.com:8000", "ftp://shop.com", "//shop.com"]) {
+    assert.throws(() => storeOrigin(url), undefined, url);
+  }
+});
+
 test("catalog keeps each available variant and its exact price", () => {
   const page = parseCatalogPage(JSON.stringify({ products: [product()] }), "https://store.com");
   assert.deepEqual(page.productIds, ["1"]);

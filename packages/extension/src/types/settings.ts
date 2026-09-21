@@ -56,7 +56,16 @@ export interface CustomSearchProviderSettings {
   color: string;
 }
 
+export interface PriceAuditSettings {
+  storeUrl: string;
+  tolerancePercent: number;
+  maxSearchPages: number;
+  consentToProvider: boolean;
+  usdConfirmed: boolean;
+}
+
 export interface CmdkSettings {
+  priceAudit?: PriceAuditSettings;
   enabledSources: {
     tabs: boolean;
     bookmarks: boolean;

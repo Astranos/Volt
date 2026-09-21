@@ -203,12 +203,17 @@ export default function UnifiedSidepanel() {
                     type="button"
                     role="tab"
                     title={tool.label}
+                    aria-label={tool.label}
                     aria-selected={selected}
                     className={cn("sidepanel-tool-tab", selected && "is-active")}
                     onClick={() => handleToolChange(tool.id)}
                   >
-                    <ToolIcon />
-                    <span>{tool.label}</span>
+                    <span className="sidepanel-tool-tab-icon" aria-hidden="true">
+                      <ToolIcon />
+                    </span>
+                    <span className="sidepanel-tool-tab-label" aria-hidden="true">
+                      <span>{tool.label}</span>
+                    </span>
                   </button>
                 );
               })}

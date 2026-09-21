@@ -1,4 +1,4 @@
-import type { CmdkSettings } from "../types/settings";
+import type { CmdkSettings, PriceAuditSettings } from "../types/settings";
 import {
   DEFAULT_ENABLED_OFFER_TYPES,
   DEFAULT_TOP_OFFERS_SETTINGS,
@@ -12,7 +12,23 @@ function cloneRateTable<T extends { rules: Array<unknown> }>(table: T): T {
   };
 }
 
+export const DEFAULT_PRICE_AUDIT_SETTINGS: PriceAuditSettings = {
+  storeUrl: "", tolerancePercent: 15, maxSearchPages: 2,
+  consentToProvider: false, usdConfirmed: false,
+};
+
+export function mergePriceAuditSettings(stored?: Partial<PriceAuditSettings>): PriceAuditSettings {
+  return {
+    storeUrl: typeof stored?.storeUrl === "string" ? stored.storeUrl : "",
+    tolerancePercent: typeof stored?.tolerancePercent === "number" && Number.isFinite(stored.tolerancePercent) && stored.tolerancePercent >= 0 && stored.tolerancePercent <= 50 ? stored.tolerancePercent : 15,
+    maxSearchPages: typeof stored?.maxSearchPages === "number" && Number.isInteger(stored.maxSearchPages) && stored.maxSearchPages >= 1 && stored.maxSearchPages <= 5 ? stored.maxSearchPages : 2,
+    consentToProvider: stored?.consentToProvider === true,
+    usdConfirmed: stored?.usdConfirmed === true,
+  };
+}
+
 export const DEFAULT_SETTINGS: CmdkSettings = {
+  priceAudit: { ...DEFAULT_PRICE_AUDIT_SETTINGS },
   enabledSources: {
     tabs: true,
     bookmarks: true,
@@ -100,6 +116,7 @@ export function mergeSettings(stored?: Partial<CmdkSettings>): CmdkSettings {
   return {
     ...DEFAULT_SETTINGS,
     ...stored,
+    priceAudit: mergePriceAuditSettings(stored.priceAudit),
     enabledSources: {
       ...DEFAULT_SETTINGS.enabledSources,
       ...(stored.enabledSources || {}),
@@ -215,6 +232,7 @@ export function mergeSettings(stored?: Partial<CmdkSettings>): CmdkSettings {
 export function structuredCloneSettings(settings: CmdkSettings): CmdkSettings {
   return {
     ...settings,
+    priceAudit: mergePriceAuditSettings(settings.priceAudit),
     enabledSources: { ...settings.enabledSources },
     sourceOrder: [...settings.sourceOrder],
     enabledSearchProviders: { ...settings.enabledSearchProviders },

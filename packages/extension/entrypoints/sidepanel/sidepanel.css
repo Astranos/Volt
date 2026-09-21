@@ -256,11 +256,10 @@ body {
   border: 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 0;
-  display: grid;
+  display: flex;
   flex: 1;
   gap: 4px;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(0, 1fr);
+  min-width: 0;
   padding: 0;
 }
 
@@ -330,28 +329,73 @@ button.sidepanel-account-control {
   display: flex;
   font-size: 12px;
   font-weight: 750;
-  gap: 7px;
+  gap: 0;
   height: 42px;
+  flex: none;
   justify-content: center;
   min-width: 0;
-  padding: 0 10px;
+  padding: 0 8px;
   transition:
-    background-color 150ms ease,
-    color 150ms ease,
-    box-shadow 150ms ease;
+    background-color 200ms ease,
+    color 200ms ease,
+    border-color 200ms ease;
 }
 
 .sidepanel-tool-tab svg {
   flex: none;
   height: 15px;
+  transition: color 200ms ease;
   width: 15px;
 }
 
-.sidepanel-tool-tab span {
+.sidepanel-tool-tab-icon {
+  display: flex;
+  flex: none;
+  transition: color 200ms ease, transform 200ms ease;
+}
+
+.sidepanel-tool-tab-label {
+  display: grid;
+  grid-template-columns: 0fr;
+  max-width: 0;
+  opacity: 0;
+  transition: grid-template-columns 200ms ease, max-width 200ms ease, opacity 200ms ease;
+}
+
+.sidepanel-tool-tab-label > span {
   min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.sidepanel-tool-tab-label > span::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+}
+
+.sidepanel-tool-tab.is-active .sidepanel-tool-tab-label {
+  grid-template-columns: 1fr;
+  max-width: 160px;
+  opacity: 1;
+}
+
+.sidepanel-tool-tab.is-active .sidepanel-tool-tab-icon {
+  transform: scale(1.08);
+}
+
+.sidepanel-tool-tab:focus-visible {
+  outline: 2px solid #4ade80;
+  outline-offset: -2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidepanel-tool-tab,
+  .sidepanel-tool-tab svg,
+  .sidepanel-tool-tab-icon,
+  .sidepanel-tool-tab-label {
+    transition: none;
+  }
 }
 
 .sidepanel-tool-tab:hover {

@@ -14,8 +14,13 @@ function identifier(value: unknown): string {
 }
 
 export function storeOrigin(value: string): string {
+  const input = value.trim();
+  const address = /^[a-z][a-z0-9+.-]*:/i.test(input) ? input : `https://${input}`;
   let url: URL;
-  try { url = new URL(value); } catch { throw new Error("Enter the storefront's full https:// address."); }
+  try {
+    if (input.startsWith("/") || input.includes("\\")) throw new Error();
+    url = new URL(address);
+  } catch { throw new Error("Enter a public storefront domain or HTTPS address."); }
   // This is a public-storefront reader, never an admin or local-network reader.
   if (url.protocol !== "https:" || url.username || url.password || url.port ||
       !/^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/i.test(url.hostname) ||

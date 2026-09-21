@@ -13,9 +13,11 @@ import { BookmarkFoldersSettings } from "@/src/components/settings/BookmarkFolde
 import { CsvCacheSettings } from "@/src/components/settings/CsvCacheSettings";
 import { FeatureTogglesSettings } from "@/src/components/settings/FeatureTogglesSettings";
 import { TopOffersSettings } from "@/src/components/settings/TopOffersSettings";
+import { PriceAuditSettings } from "@/src/components/settings/PriceAuditSettings";
 import { useExtensionSettings } from "@/src/hooks/useExtensionSettings";
 
 const NAV_ITEMS = [
+  { href: "#priceaudit", icon: BadgeAlert, label: "Price Audit" },
   { href: "#bookmarks", icon: Bookmark, label: "Bookmarks" },
   { href: "#ebay", icon: BadgeAlert, label: "Sold Listing Warning" },
   { href: "#upc", icon: Barcode, label: "UPC Highlighter" },
@@ -106,6 +108,7 @@ export default function SettingsPage() {
         </aside>
 
         <main className="flex-1 p-8 space-y-12 max-w-5xl">
+          <PriceAuditSettings settings={settings} saveSettings={saveSettings} />
           <FeatureTogglesSettings
             settings={settings}
             saveSettings={saveSettings}
