@@ -33,6 +33,10 @@ import type * as kioskRequestValidators from "../kioskRequestValidators.js";
 import type * as kioskRequests from "../kioskRequests.js";
 import type * as paymoreCatalog from "../paymoreCatalog.js";
 import type * as paymoreCrawl from "../paymoreCrawl.js";
+import type * as priceAudit from "../priceAudit.js";
+import type * as priceAudit_contracts from "../priceAudit/contracts.js";
+import type * as priceAudit_decisions from "../priceAudit/decisions.js";
+import type * as priceAudit_jevClient from "../priceAudit/jevClient.js";
 import type * as pricechartingCrawl from "../pricechartingCrawl.js";
 import type * as productApiKeyCrypto from "../productApiKeyCrypto.js";
 import type * as productApiKeys from "../productApiKeys.js";
@@ -86,6 +90,10 @@ declare const fullApi: ApiFromModules<{
   kioskRequests: typeof kioskRequests;
   paymoreCatalog: typeof paymoreCatalog;
   paymoreCrawl: typeof paymoreCrawl;
+  priceAudit: typeof priceAudit;
+  "priceAudit/contracts": typeof priceAudit_contracts;
+  "priceAudit/decisions": typeof priceAudit_decisions;
+  "priceAudit/jevClient": typeof priceAudit_jevClient;
   pricechartingCrawl: typeof pricechartingCrawl;
   productApiKeyCrypto: typeof productApiKeyCrypto;
   productApiKeys: typeof productApiKeys;
@@ -134,4 +142,6 @@ export declare const internal: FilterApi<
   FunctionReference<any, "internal">
 >;
 
-export declare const components: {};
+export declare const components: {
+  rateLimiter: import("@convex-dev/rate-limiter/_generated/component.js").ComponentApi<"rateLimiter">;
+};

@@ -26,6 +26,10 @@ export function observeCatalog(expected: string): { url: string; text: string } 
 
 export function observeSearch(expected: string) {
   const expectedUrl = new URL(expected), actualUrl = new URL(location.href);
+  // Never inspect the contents of a challenge page or interact with its controls.
+  if (actualUrl.origin === "https://www.ebay.com" && /^\/splashui\/challenge\/?$/.test(actualUrl.pathname)) {
+    return { kind: "challenge" as const, url: location.href };
+  }
   for (const url of [expectedUrl, actualUrl]) {
     if (!url.searchParams.has("_pgn")) url.searchParams.set("_pgn", "1");
     url.searchParams.sort();
@@ -37,7 +41,7 @@ export function observeSearch(expected: string) {
   }
   const bodyText = document.body?.innerText ?? "";
   if (/pardon our interruption|verify (?:that )?you(?:'re| are) (?:a )?human|security measure|access denied|captcha/i.test(document.title + "\n" + bodyText.slice(0, 3000))) {
-    throw new Error("eBay requires human verification. Stop the scan and resolve it in Chrome before restarting.");
+    return { kind: "challenge" as const, url: location.href };
   }
   const elements = Array.from(document.querySelectorAll<HTMLElement>(".s-item, .s-card"));
   const cards = elements.slice(0, 120).flatMap((element) => {
@@ -65,13 +69,14 @@ export function observeSearch(expected: string) {
     .slice(0, 100)
     .map((a, index) => ({ id: `link_${index}`, url: a.href, text: `${a.getAttribute("aria-label") ?? ""} ${a.getAttribute("title") ?? ""} ${a.innerText}`.trim().slice(0, 200) }));
   return {
+    kind: "results" as const,
     url: location.href, cards, links,
     noResults: /\b0 results\b|no (?:exact )?matches found|no results found/i.test(bodyText),
     truncated: elements.length > 120,
   };
 }
 
-export function normalizeSearchPage(raw: ReturnType<typeof observeSearch>): SearchPage {
+export function normalizeSearchPage(raw: Extract<ReturnType<typeof observeSearch>, { kind: "results" }>): SearchPage {
   if (!isSoldSearch(raw.url)) throw new Error("Only sold and completed eBay searches can be compared.");
   const seen = new Set<string>();
   const candidates: ListingCandidate[] = [];
@@ -98,9 +103,11 @@ export function normalizeSearchPage(raw: ReturnType<typeof observeSearch>): Sear
 
 export function createAuditBrowser(): AuditBrowser {
   const tabs = new Map<"catalog" | "search", { id: number; expected: string }>();
+  const verificationTabs = new Set<number>();
   let closed = false;
+  const verificationError = () => new Error("eBay browser verification did not finish within 30 seconds. The research tab was left open for you; resolve it manually before starting another audit.");
 
-  async function navigate(kind: "catalog" | "search", url: string, signal: AbortSignal): Promise<number> {
+  async function navigate(kind: "catalog" | "search", url: string, signal: AbortSignal, deadline = Date.now() + 30_000): Promise<number> {
     signal.throwIfAborted();
     if (closed) throw new Error("This audit session has ended.");
     let owned = tabs.get(kind);
@@ -121,7 +128,6 @@ export function createAuditBrowser(): AuditBrowser {
       await chrome.tabs.update(owned.id, { url });
       signal.throwIfAborted();
     }
-    const deadline = Date.now() + 30_000;
     while (Date.now() < deadline) {
       signal.throwIfAborted();
       const tab = await chrome.tabs.get(owned.id);
@@ -129,13 +135,14 @@ export function createAuditBrowser(): AuditBrowser {
       if (tab.status === "complete") {
         const matches = kind === "search" ? sameSearch(url, tab.url ?? "") : tab.url === url;
         if (matches) return owned.id;
-        if (kind === "search" && tab.url?.startsWith("https://www.ebay.com/splashui/challenge")) {
-          throw new Error("eBay requires browser verification. The research tab was left open for you; resolve it manually before starting another audit.");
-        }
-        if (!tab.pendingUrl) throw new Error("The site redirected the research tab. The audit has stopped.");
+        const actual = tab.url ? new URL(tab.url) : null;
+        const challenge = kind === "search" && actual?.origin === "https://www.ebay.com" && /^\/splashui\/challenge\/?$/.test(actual.pathname);
+        if (challenge) verificationTabs.add(owned.id);
+        else if (!tab.pendingUrl) throw new Error("The site redirected the research tab. The audit has stopped.");
       }
-      await delay(signal, 300);
+      await delay(signal, Math.min(300, Math.max(0, deadline - Date.now())));
     }
+    if (verificationTabs.has(owned.id)) throw verificationError();
     throw new Error("The research tab timed out. Retry after the site finishes loading.");
   }
 
@@ -153,22 +160,30 @@ export function createAuditBrowser(): AuditBrowser {
     },
     async readSearch(url, signal) {
       if (!isSoldSearch(url)) throw new Error("Refusing a search without both sold/completed filters.");
-      const id = await navigate("search", url, signal);
-      for (let attempt = 0; attempt < 8; attempt++) {
+      const deadline = Date.now() + 30_000;
+      const id = await navigate("search", url, signal, deadline);
+      while (Date.now() < deadline) {
         signal.throwIfAborted();
         const results = await chrome.scripting.executeScript({ target: { tabId: id }, func: observeSearch, args: [url] });
         signal.throwIfAborted();
         const result = results[0]?.result;
-        if (!result || !sameSearch(url, result.url)) throw new Error("Could not verify the eBay research page.");
-        if (result.cards.length || result.noResults) return normalizeSearchPage(result);
-        await delay(signal, 500);
+        if (!result) throw new Error("Could not verify the eBay research page.");
+        if (result.kind === "challenge") verificationTabs.add(id);
+        else {
+          if (!sameSearch(url, result.url)) throw new Error("Could not verify the eBay research page.");
+          verificationTabs.delete(id);
+          if (result.cards.length || result.noResults) return normalizeSearchPage(result);
+        }
+        await delay(signal, Math.min(500, Math.max(0, deadline - Date.now())));
       }
+      if (verificationTabs.has(id)) throw verificationError();
       throw new Error("No recognizable eBay results were found. The page may have changed or blocked the scan.");
     },
     async close() {
       closed = true;
       for (const [kind, owned] of tabs) {
         try {
+          if (verificationTabs.has(owned.id)) continue;
           const tab = await chrome.tabs.get(owned.id);
           const matches = kind === "search" ? sameSearch(owned.expected, tab.url ?? "") : owned.expected === tab.url;
           // Leave tabs the user navigated away from; only remove our untouched research tabs.
@@ -176,6 +191,7 @@ export function createAuditBrowser(): AuditBrowser {
         } catch { /* A user may already have closed a research tab. */ }
       }
       tabs.clear();
+      verificationTabs.clear();
     },
   };
 }

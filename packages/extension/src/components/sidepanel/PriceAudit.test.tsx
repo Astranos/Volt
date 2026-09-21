@@ -4,6 +4,9 @@ import { describe, expect, it, vi } from "vitest";
 import type { AuditAssessment, AuditSnapshot, ItemResult } from "../../price-audit/types";
 
 vi.mock("../../price-audit/runner", () => ({ runPriceAudit: vi.fn() }));
+const auth = vi.hoisted(() => ({ isAuthenticated: false, isLoading: false }));
+vi.mock("convex/react", () => ({ useConvex: () => ({}), useConvexAuth: () => auth }));
+vi.mock("../../price-audit/remote-decisions", () => ({ createRemoteAuditDecisions: vi.fn() }));
 vi.mock("./SidepanelLayout", () => ({ default: ({ children }: { children: React.ReactNode }) => <main>{children}</main> }));
 import PriceAudit, { PriceAuditResult, serializePriceAudit } from "./PriceAudit";
 
@@ -18,11 +21,15 @@ function result(assessment: AuditAssessment): ItemResult {
 describe("price audit UI", () => {
   it("starts disabled with explicit consent, USD, privacy and coverage notices", () => {
     const markup = renderToStaticMarkup(<PriceAudit />);
-    expect(markup).toContain('type="password"');
-    expect(markup).toContain('autoComplete="off"');
+    expect(markup).not.toContain('type="password"');
+    expect(markup).not.toContain("API key");
     expect(markup).toContain('type="submit" disabled=""');
-    expect(markup).toContain("TypeSafe AI/Jev");
-    expect(markup).toContain("API charges may apply");
+    expect(markup).toContain("TypeSafe via Volt");
+    expect(markup).not.toContain("API charges");
+    expect(markup).toContain("Sign in using the account control");
+    expect(markup).toContain("price-audit-content");
+    expect(markup).toContain("price-audit-field");
+    expect(markup).toContain('<details class="price-audit-options">');
     expect(markup).toContain("use USD prices");
     expect(markup).toContain("switching tools ends the scan");
     expect(markup).toContain("at least 3 confident unique sold matches");
@@ -30,15 +37,26 @@ describe("price audit UI", () => {
     expect(markup).toContain("not all historical eBay sales");
   });
 
+  it("keeps start disabled while checking account and until consent is given", () => {
+    auth.isLoading = true;
+    expect(renderToStaticMarkup(<PriceAudit />)).toContain("Checking your account");
+    auth.isLoading = false;
+    auth.isAuthenticated = true;
+    const markup = renderToStaticMarkup(<PriceAudit />);
+    expect(markup).not.toContain("Sign in using the account control");
+    expect(markup).toContain('type="submit" disabled=""');
+    auth.isAuthenticated = false;
+  });
+
   it.each([
     ["high", "Too high"], ["low", "Too low"], ["fair", "Just right"],
   ] as const)("shows %s price findings, exact dollars, and expandable source evidence", (kind, label) => {
     const markup = renderToStaticMarkup(<PriceAuditResult result={result({ kind, medianCents: 10000, lowCents: 8500, highCents: 11500, differencePercent: 20 })} />);
     expect(markup).toContain(label);
-    expect(markup).toContain("$120.00 USD");
+    expect(markup).toContain("$120.00 <small>USD</small>");
     expect(markup).toContain("$100.00 USD");
     expect(markup).toContain("+20.0% vs. sold median");
-    expect(markup).toContain("<details>");
+    expect(markup).toContain('<details class="price-audit-evidence">');
     expect(markup).toContain("https://www.ebay.com/itm/123");
     expect(markup).toContain("Search reached page cap.");
     expect(markup).toContain("Camera &lt;script&gt;");

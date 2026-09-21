@@ -24,7 +24,7 @@ function setup(overrides = {}) {
     chooseNextPage: async (links) => links[0]?.url ?? null,
     ...overrides.decisions,
   };
-  const run = () => runPriceAudit({ settings: { storeUrl: "https://store.com", tolerancePercent: 15, maxSearchPages: 2 }, apiKey: "test-key", signal: controller.signal, onUpdate: (state) => updates.push(state) }, { browser, decisions });
+  const run = () => runPriceAudit({ settings: { storeUrl: "https://store.com", tolerancePercent: 15, maxSearchPages: 2 }, decisions, signal: controller.signal, onUpdate: (state) => updates.push(state) }, { browser });
   return { updates, controller, run, get closed() { return closed; }, get reads() { return reads; } };
 }
 

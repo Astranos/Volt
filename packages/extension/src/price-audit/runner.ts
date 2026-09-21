@@ -1,9 +1,7 @@
 import { assessPrice } from "./assessment.ts";
 import { createAuditBrowser, type AuditBrowser } from "./browser.ts";
 import { collectCatalog, storeOrigin } from "./catalog.ts";
-import { createAuditDecisions } from "./decisions.ts";
 import { soldSearchUrl, validNextPage } from "./ebay.ts";
-import { createJevClient } from "./jev-client.ts";
 import type { AuditDecisions, AuditItem, AuditSettings, AuditSnapshot, ItemResult, SoldComparable } from "./types.ts";
 
 export const idleAudit = (): AuditSnapshot => ({
@@ -13,12 +11,12 @@ export const idleAudit = (): AuditSnapshot => ({
 
 type RunOptions = {
   settings: AuditSettings;
-  apiKey: string;
+  decisions: AuditDecisions;
   signal: AbortSignal;
   onUpdate: (snapshot: AuditSnapshot) => void;
 };
 
-type Dependencies = { browser: AuditBrowser; decisions: AuditDecisions };
+type Dependencies = { browser: AuditBrowser };
 
 export async function runPriceAudit(options: RunOptions, dependencies?: Dependencies): Promise<void> {
   const { settings, signal, onUpdate } = options;
@@ -44,15 +42,9 @@ export async function runPriceAudit(options: RunOptions, dependencies?: Dependen
         !Number.isInteger(settings.maxSearchPages) || settings.maxSearchPages < 1 || settings.maxSearchPages > 5) {
       throw new Error("Choose a tolerance from 0–50% and 1–5 eBay pages per item.");
     }
-    if (!options.apiKey.trim() || options.apiKey.length > 4096 || /[\r\n]/.test(options.apiKey)) {
-      throw new Error("Enter your TypeSafe API key for this scan.");
-    }
     const auditBrowser = dependencies?.browser ?? createAuditBrowser();
     browser = auditBrowser;
-    const decisions = dependencies?.decisions ?? createAuditDecisions(createJevClient({
-      apiKey: options.apiKey.trim(),
-      onRequest: () => publish({ requests: snapshot.requests + 1 }),
-    }));
+    const decisions = options.decisions;
     publish({ phase: "Reading the public Shopify catalog…" });
     const items = await collectCatalog(origin,
       async (url) => { signal.throwIfAborted(); return auditBrowser.readCatalog(url, signal); },

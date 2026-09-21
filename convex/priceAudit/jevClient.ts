@@ -1,4 +1,4 @@
-import type { ChoiceAnswer, ChoiceQuestion, JevClient } from "./types.ts";
+import type { ChoiceAnswer, ChoiceQuestion, JevClient } from "../../packages/extension/src/price-audit/types.ts";
 
 const ENDPOINT = "https://api.typesafe.ai/v1/systemone";
 const REQUEST_TIMEOUT_MS = 30_000;
@@ -39,9 +39,10 @@ function pause(ms: number, signal: AbortSignal): Promise<void> {
   });
 }
 
-export function createJevClient({ apiKey, onRequest, fetchImpl = fetch }: {
+export function createJevClient({ apiKey, onRequest, beforeRequest, fetchImpl = fetch }: {
   apiKey: string;
   onRequest?: () => void;
+  beforeRequest?: () => Promise<void>;
   fetchImpl?: typeof fetch;
 }): JevClient {
   return {
@@ -56,6 +57,8 @@ export function createJevClient({ apiKey, onRequest, fetchImpl = fetch }: {
       catch { throw failure(); }
       if (body.length > 90_000) throw new Error("Jev request exceeds the audit context limit.");
       for (let attempt = 0; attempt < 3; attempt++) {
+        signal.throwIfAborted();
+        await beforeRequest?.();
         signal.throwIfAborted();
         const controller = new AbortController();
         const abort = () => controller.abort();

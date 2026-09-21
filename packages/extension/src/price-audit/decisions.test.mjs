@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createAuditDecisions } from './decisions.ts';
+import { createAuditDecisions } from '../../../../convex/priceAudit/decisions.ts';
 
 const item = { id: '1', title: 'Phone X', variant: '128GB Used', sku: 'sku', description: 'Used phone', url: 'https://store.test/products/phone', priceCents: 10000, currency: 'USD' };
 const signal = new AbortController().signal;

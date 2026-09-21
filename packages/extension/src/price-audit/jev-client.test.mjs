@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createJevClient } from './jev-client.ts';
+import { createJevClient } from '../../../../convex/priceAudit/jevClient.ts';
 
 const questions = { check: { type: 'choice', instructions: 'Check', criteria: { yes: 'Yes', no: 'No' } } };
 const valid = () => ({ answers: { check: { type: 'choice', choice: 'yes', confidence: .95, probabilities: { yes: .95, no: .05 } } } });
@@ -53,9 +53,15 @@ test('does not make a request when already cancelled', async () => {
 });
 test('retries only bounded transient failures', async () => {
   let calls = 0;
-  const client = createJevClient({ apiKey: 'secret', fetchImpl: async () => { calls++; return new Response('', { status: calls === 1 ? 429 : 529 }); } });
+  let reservations = 0;
+  const client = createJevClient({ apiKey: 'secret', beforeRequest: async () => { reservations++; }, fetchImpl: async () => { calls++; return new Response('', { status: calls === 1 ? 429 : 529 }); } });
   await assert.rejects(client.choose({}, questions, signal()), /rate limited/);
   assert.equal(calls, 3);
+  assert.equal(reservations, 3);
+});
+test('denied quota reservation prevents an upstream call', async () => {
+  const client = createJevClient({ apiKey: 'secret', beforeRequest: async () => { throw new Error('safety limit'); }, fetchImpl: async () => assert.fail('must not request') });
+  await assert.rejects(client.choose({}, questions, signal()), /safety limit/);
 });
 test('reports authentication errors without response contents', async () => {
   const client = createJevClient({ apiKey: 'secret', fetchImpl: async () => new Response('secret', { status: 401 }) });
