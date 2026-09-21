@@ -14,7 +14,7 @@ test('posts verified wire format and parses decisions', async () => {
     assert.deepEqual(JSON.parse(init.body), { model: 'jev-latest', state: { listing: 'test' }, questions });
     return Response.json(valid());
   } });
-  assert.deepEqual(await client.choose({ listing: 'test' }, questions, signal()), { check: { choice: 'yes', confidence: .95 } });
+  assert.deepEqual(await client.choose({ listing: 'test' }, questions, signal()), { check: { choice: 'yes', probability: .95, confidence: .95 } });
   assert.equal(requests, 1);
 });
 test('rejects missing/extra answers, foreign choices and malformed probabilities', async () => {

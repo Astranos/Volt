@@ -1,6 +1,6 @@
-import { Calculator, type LucideIcon, ScanLine, ChartNoAxesCombined } from "lucide-react";
+import { Bot, Calculator, type LucideIcon, ScanLine, ChartNoAxesCombined } from "lucide-react";
 
-export type SidepanelToolId = "top-offers" | "mobile-scanner" | "mobile-photos" | "price-audit";
+export type SidepanelToolId = "top-offers" | "mobile-scanner" | "mobile-photos" | "price-audit" | "agent";
 
 export interface SidepanelToolMetadata {
   id: SidepanelToolId;
@@ -11,6 +11,7 @@ export interface SidepanelToolMetadata {
 }
 
 export const SIDEPANEL_TOOLS: SidepanelToolMetadata[] = [
+  { id: "agent", label: "Agent", description: "Explore the active tab with Jev", icon: Bot },
   {
     id: "top-offers",
     label: "Offer Calculator",

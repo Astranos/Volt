@@ -22,7 +22,8 @@ export type SoldComparable = {
   url: string;
   text: string;
   priceCents: number;
-  confidence: number;
+  matchProbability: number;
+  decisionConfidence: number;
 };
 
 export type AuditAssessment =
@@ -67,7 +68,7 @@ export type ChoiceQuestion = {
   instructions: string;
   criteria: Record<string, string>;
 };
-export type ChoiceAnswer = { choice: string; confidence: number };
+export type ChoiceAnswer = { choice: string; probability: number; confidence: number };
 export type JevClient = {
   choose: (
     state: unknown,
@@ -80,6 +81,6 @@ export type AuditDecisions = {
   reviewItem: (item: AuditItem, signal: AbortSignal) => Promise<boolean>;
   chooseQuery: (item: AuditItem, signal: AbortSignal) => Promise<string | null>;
   selectComparables: (item: AuditItem, candidates: ListingCandidate[], signal: AbortSignal) => Promise<SoldComparable[]>;
-  verifyResult: (item: AuditItem, comparables: SoldComparable[], signal: AbortSignal) => Promise<boolean>;
+  verifyResult: (item: AuditItem, comparables: SoldComparable[], signal: AbortSignal) => Promise<SoldComparable[]>;
   chooseNextPage: (links: { id: string; text: string; url: string }[], signal: AbortSignal) => Promise<string | null>;
 };

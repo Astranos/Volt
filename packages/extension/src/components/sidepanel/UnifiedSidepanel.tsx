@@ -22,6 +22,7 @@ import { ExtensionAccountControl } from "../access/ExtensionAccess";
 import { useComputerRegistration } from "../../hooks/useComputerRegistration";
 
 const PriceAudit = React.lazy(() => import("./PriceAudit"));
+const Agent = React.lazy(() => import("./Agent"));
 
 type ActiveToast = {
   message: string;
@@ -175,6 +176,7 @@ export default function UnifiedSidepanel() {
     "mobile-scanner": MobileScanner,
     "mobile-photos": MobileScanner,
     "price-audit": PriceAudit,
+    agent: Agent,
   };
 
   const tools = SIDEPANEL_TOOLS.map((tool) => ({

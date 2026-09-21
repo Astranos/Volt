@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { collectCatalog, decimalCents, parseCatalogPage, storeOrigin } from "./catalog.ts";
+import { collectCatalog, decimalCents, descriptionText, parseCatalogPage, storeOrigin } from "./catalog.ts";
 
 const product = (id = 1) => ({ id, title: "Canon EOS camera", handle: "canon-camera", body_html: "<p>Used, good condition</p>", variants: [
   { id: id * 10, title: "Black", available: true, price: "199.99", sku: "CAM" },
@@ -29,10 +29,21 @@ test("catalog keeps each available variant and its exact price", () => {
   assert.equal(page.items[0].priceCents, 19999);
   assert.equal(page.items[0].id, "1:10");
   assert.equal(page.items[0].url, "https://store.com/products/canon-camera?variant=10");
-  assert.equal(page.items[0].description, "<p>Used, good condition</p>");
+  assert.equal(page.items[0].description, "Used, good condition");
   assert.equal(decimalCents("0.29"), 29);
   assert.equal(decimalCents("1.2"), 120);
   for (const invalid of ["-1", "1e3", "1,000", "NaN", "0.001", "", " 1"]) assert.equal(decimalCents(invalid), null);
+});
+
+test("catalog keeps semantic condition evidence that appears after presentation-heavy HTML", () => {
+  const body_html = `<style>${".shopify-auto { color: black; }".repeat(400)}</style><div><h2>Specifications</h2><p>Model: Ideapad S145 81MU</p><p>Condition: Fair</p><p>Fully tested and functional.</p></div>`;
+  assert.ok(body_html.indexOf("Condition") > 8000);
+  const page = parseCatalogPage(JSON.stringify({ products: [{ ...product(), body_html }] }), "https://store.com");
+  assert.match(page.items[0].description, /Model: Ideapad S145 81MU/);
+  assert.match(page.items[0].description, /Condition: Fair/);
+  assert.match(page.items[0].description, /Fully tested and functional/);
+  assert.ok(page.items[0].description.length <= 8000);
+  assert.equal(descriptionText("<script>ignore()</script><p>A &amp; B</p>"), "A & B");
 });
 
 test("catalog cannot silently drop malformed or duplicate variants", () => {

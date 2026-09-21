@@ -59,7 +59,7 @@ export function PriceAuditResult({ result }: { result: ItemResult }) {
         {comparables.map((comparable) => <div key={comparable.id} className="space-y-1 border-t border-border pt-2">
           <a href={comparable.url} target="_blank" rel="noreferrer" className="underline">{money.format(comparable.priceCents / 100)} USD sold listing</a>
           <p className="break-words whitespace-pre-wrap">{comparable.text}</p>
-          <p className="text-muted-foreground">Match confidence: {Math.round(comparable.confidence * 100)}%</p>
+          <p className="text-muted-foreground">Jev match probability: {Math.round(comparable.matchProbability * 100)}%</p>
         </div>)}
       </div>
     </details>

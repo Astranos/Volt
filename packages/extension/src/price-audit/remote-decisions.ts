@@ -49,12 +49,12 @@ export function createRemoteAuditDecisions(client: AuditActionClient, onRequest?
       return matches;
     },
     async verifyResult(item, comparables, signal) {
-      if (!comparables.length) return false;
+      const verified: SoldComparable[] = [];
       for (let start = 0; start < comparables.length; start += 6) {
         const result = await call({ kind: "verifyResult", item, comparables: comparables.slice(start, start + 6) }, signal);
-        if (result.kind !== "verifyResult" || !result.verified) return false;
+        if (result.kind === "verifyResult") verified.push(...result.comparables);
       }
-      return true;
+      return verified;
     },
     async chooseNextPage(links, signal) {
       if (!links.length) return null;

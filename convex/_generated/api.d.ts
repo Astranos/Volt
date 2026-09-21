@@ -12,6 +12,9 @@ import type * as access from "../access.js";
 import type * as admin from "../admin.js";
 import type * as aiScanner from "../aiScanner.js";
 import type * as aiScannerQuota from "../aiScannerQuota.js";
+import type * as browserAgent from "../browserAgent.js";
+import type * as browserAgent_contracts from "../browserAgent/contracts.js";
+import type * as browserAgent_decision from "../browserAgent/decision.js";
 import type * as catalog_activity from "../catalog/activity.js";
 import type * as catalog_attributes from "../catalog/attributes.js";
 import type * as catalog_crawl from "../catalog/crawl.js";
@@ -69,6 +72,9 @@ declare const fullApi: ApiFromModules<{
   admin: typeof admin;
   aiScanner: typeof aiScanner;
   aiScannerQuota: typeof aiScannerQuota;
+  browserAgent: typeof browserAgent;
+  "browserAgent/contracts": typeof browserAgent_contracts;
+  "browserAgent/decision": typeof browserAgent_decision;
   "catalog/activity": typeof catalog_activity;
   "catalog/attributes": typeof catalog_attributes;
   "catalog/crawl": typeof catalog_crawl;
@@ -142,6 +148,4 @@ export declare const internal: FilterApi<
   FunctionReference<any, "internal">
 >;
 
-export declare const components: {
-  rateLimiter: import("@convex-dev/rate-limiter/_generated/component.js").ComponentApi<"rateLimiter">;
-};
+export declare const components: {};

@@ -3,7 +3,7 @@ import test from "node:test";
 import { assessPrice } from "./assessment.ts";
 
 const item = { id: "store:1", title: "Camera", variant: "Black", sku: "CAM", description: "Used", url: "https://shop.example/products/camera", priceCents: 10000, currency: "USD" };
-const comps = (prices = [9000, 10000, 11000]) => prices.map((priceCents, index) => ({ id: `${index}`, url: `https://www.ebay.com/itm/${index}`, text: "Sold used camera", priceCents, confidence: 0.9 }));
+const comps = (prices = [9000, 10000, 11000]) => prices.map((priceCents, index) => ({ id: `${index}`, url: `https://www.ebay.com/itm/${index}`, text: "Sold used camera", priceCents, matchProbability: 0.9, decisionConfidence: 0.8 }));
 
 test("inclusive fair band and one-cent boundaries", () => {
   for (const [priceCents, expected] of [[8499, "low"], [8500, "fair"], [10000, "fair"], [11500, "fair"], [11501, "high"]]) {
@@ -40,16 +40,16 @@ test("duplicates do not count toward minimum or weight the median", () => {
   assert.equal(assessPrice(item, [...input, { ...input[0], priceCents: 9999 }], 15).kind, "insufficient");
 });
 
-test("rejects absent, invalid, and low-confidence evidence even with three valid comps", () => {
+test("rejects absent, invalid, and low-probability evidence even with three valid comps", () => {
   for (const input of [[], comps([1]), comps([1, 2])]) assert.equal(assessPrice(item, input, 15).kind, "insufficient");
   for (const priceCents of [0, -1, 1.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1]) {
     assert.equal(assessPrice(item, [...comps(), { ...comps()[0], id: "extra", priceCents }], 15).kind, "insufficient");
     assert.equal(assessPrice({ ...item, priceCents }, comps(), 15).kind, "insufficient");
   }
-  for (const confidence of [0, 0.8499, -1, 1.01, NaN, Infinity]) {
-    assert.equal(assessPrice(item, [...comps(), { ...comps()[0], id: "extra", confidence }], 15).kind, "insufficient");
+  for (const matchProbability of [0, 0.6999, -1, 1.01, NaN, Infinity]) {
+    assert.equal(assessPrice(item, [...comps(), { ...comps()[0], id: "extra", matchProbability }], 15).kind, "insufficient");
   }
-  assert.equal(assessPrice(item, comps().map((entry) => ({ ...entry, confidence: 0.85 })), 15).kind, "fair");
+  assert.equal(assessPrice(item, comps().map((entry) => ({ ...entry, matchProbability: 0.7 })), 15).kind, "fair");
   assert.equal(assessPrice(item, [...comps(), { ...comps()[0], id: " " }], 15).kind, "insufficient");
 });
 

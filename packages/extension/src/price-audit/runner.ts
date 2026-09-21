@@ -99,14 +99,14 @@ export async function runPriceAudit(options: RunOptions, dependencies?: Dependen
       }
       signal.throwIfAborted();
       publish({ phase: `Jev is verifying the evidence for ${item.title}` });
-      const verified = currentComparables.length >= 3 && await decisions.verifyResult(item, currentComparables, signal);
+      currentComparables = currentComparables.length >= 3
+        ? await decisions.verifyResult(item, currentComparables, signal)
+        : currentComparables;
       signal.throwIfAborted();
       append({
         item, comparables: currentComparables, searchUrl: currentSearch, checkedAt: new Date().toISOString(),
-        assessment: verified ? assessPrice(item, currentComparables, settings.tolerancePercent) : {
-          kind: "insufficient", reason: currentComparables.length < 3
-            ? "Fewer than three confident sold matches were found in the searched pages."
-            : "Jev's final verification did not confirm all comparison evidence.",
+        assessment: currentComparables.length >= 3 ? assessPrice(item, currentComparables, settings.tolerancePercent) : {
+          kind: "insufficient", reason: "Fewer than three confident sold matches remained after Jev's final verification.",
         },
         note: `${pages} search page${pages === 1 ? "" : "s"} inspected. ${atLimit ? "Configured page limit reached. " : "No further next-page link selected. "}${truncated ? "Some oversized page content was excluded. " : ""}Sample of visible sold listings, not all eBay sales. Item prices only, excluding shipping and tax.`,
       });

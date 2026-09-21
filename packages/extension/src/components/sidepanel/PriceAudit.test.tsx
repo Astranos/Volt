@@ -15,7 +15,7 @@ import PriceAudit, { configuredAudit, PriceAuditResult, PriceAuditStore, seriali
 function result(assessment: AuditAssessment): ItemResult {
   return {
     item: { id: "item", title: "Camera <script>", variant: "Black", sku: "CAM", description: "Used", url: "https://shop.example/products/camera", priceCents: 12000, currency: "USD" },
-    comparables: [{ id: "123", url: "https://www.ebay.com/itm/123", text: "Sold used camera", priceCents: 10000, confidence: 0.9 }],
+    comparables: [{ id: "123", url: "https://www.ebay.com/itm/123", text: "Sold used camera", priceCents: 10000, matchProbability: 0.9, decisionConfidence: 0.8 }],
     assessment, searchUrl: "https://www.ebay.com/sch/i.html?LH_Sold=1&LH_Complete=1", checkedAt: "2026-09-21T00:00:00Z", note: "Search reached page cap.",
   };
 }

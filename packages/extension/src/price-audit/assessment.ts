@@ -1,6 +1,6 @@
 import type { AuditAssessment, AuditItem, SoldComparable } from "./types";
 
-const MINIMUM_CONFIDENCE = 0.85;
+const MINIMUM_MATCH_PROBABILITY = 0.7;
 
 function isPositiveCents(value: number): boolean {
   return Number.isSafeInteger(value) && value > 0;
@@ -24,9 +24,12 @@ export function assessPrice(
     if (
       !comparable.id.trim() ||
       !isPositiveCents(comparable.priceCents) ||
-      !Number.isFinite(comparable.confidence) ||
-      comparable.confidence < MINIMUM_CONFIDENCE ||
-      comparable.confidence > 1
+      !Number.isFinite(comparable.matchProbability) ||
+      comparable.matchProbability < MINIMUM_MATCH_PROBABILITY ||
+      comparable.matchProbability > 1 ||
+      !Number.isFinite(comparable.decisionConfidence) ||
+      comparable.decisionConfidence < 0 ||
+      comparable.decisionConfidence > 1
     ) {
       return { kind: "insufficient", reason: "The sold evidence contains an invalid price or an uncertain match." };
     }

@@ -25,7 +25,7 @@ function parseAnswers(value: unknown, questions: Record<string, ChoiceQuestion>)
     const selected = probabilities[answer.choice];
     if (!isProbability(selected) || Math.abs(values.reduce((sum, probability) => sum + probability, 0) - 1) > 0.02
       || values.some((probability) => probability > selected)) throw failure();
-    answers[id] = { choice: answer.choice, confidence: answer.confidence };
+    answers[id] = { choice: answer.choice, probability: selected, confidence: answer.confidence };
   }
   return answers;
 }

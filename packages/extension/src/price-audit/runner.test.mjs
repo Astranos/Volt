@@ -19,8 +19,8 @@ function setup(overrides = {}) {
   const decisions = {
     reviewItem: async () => true,
     chooseQuery: async () => "Canon camera Black",
-    selectComparables: async (_item, values) => values.map((value) => ({ id: value.id, url: value.url, text: value.text, priceCents: value.prices[0].cents, confidence: .95 })),
-    verifyResult: async () => true,
+    selectComparables: async (_item, values) => values.map((value) => ({ id: value.id, url: value.url, text: value.text, priceCents: value.prices[0].cents, matchProbability: .95, decisionConfidence: .9 })),
+    verifyResult: async (_item, values) => values,
     chooseNextPage: async (links) => links[0]?.url ?? null,
     ...overrides.decisions,
   };
@@ -43,8 +43,8 @@ test("catalog → Jev review → sold search → matching → verification → e
   assert.ok(!JSON.stringify(result).includes("test-key"));
 });
 
-test("Jev's final refusal blocks a price classification", async () => {
-  const flow = setup({ decisions: { verifyResult: async () => false } });
+test("Jev's final pass must retain three comparisons for a price classification", async () => {
+  const flow = setup({ decisions: { verifyResult: async (_item, values) => values.slice(0, 2) } });
   await flow.run();
   assert.equal(flow.updates.at(-1).results[0].assessment.kind, "insufficient");
 });
@@ -79,7 +79,7 @@ test("navigation or API failure retains partial evidence and closes owned tabs",
 });
 
 test("cancellation never produces a complete audit or verified current result", async () => {
-  const flow = setup({ decisions: { verifyResult: async () => { flow.controller.abort(); return true; } } });
+  const flow = setup({ decisions: { verifyResult: async (_item, values) => { flow.controller.abort(); return values; } } });
   await flow.run();
   const result = flow.updates.at(-1);
   assert.equal(result.status, "stopped");

@@ -5,7 +5,8 @@ export const itemValidator = v.object({
   description: v.string(), url: v.string(), priceCents: v.number(), currency: v.literal("USD"),
 });
 const comparableValidator = v.object({
-  id: v.string(), url: v.string(), text: v.string(), priceCents: v.number(), confidence: v.number(),
+  id: v.string(), url: v.string(), text: v.string(), priceCents: v.number(),
+  matchProbability: v.number(), decisionConfidence: v.number(),
 });
 const candidateValidator = v.object({
   id: v.string(), url: v.string(), text: v.string(),
@@ -22,7 +23,7 @@ export const resultValidator = v.union(
   v.object({ kind: v.literal("reviewItem"), accepted: v.boolean() }),
   v.object({ kind: v.literal("chooseQuery"), query: v.union(v.string(), v.null()) }),
   v.object({ kind: v.literal("selectComparables"), comparables: v.array(comparableValidator) }),
-  v.object({ kind: v.literal("verifyResult"), verified: v.boolean() }),
+  v.object({ kind: v.literal("verifyResult"), comparables: v.array(comparableValidator) }),
   v.object({ kind: v.literal("chooseNextPage"), url: v.union(v.string(), v.null()) }),
 );
 export type AuditRequest = Infer<typeof requestValidator>;
@@ -53,7 +54,8 @@ export function validAuditRequest(request: AuditRequest): boolean {
   }
   if (request.kind === "verifyResult") {
     return request.comparables.every((item) => Number.isSafeInteger(item.priceCents) && item.priceCents > 0 &&
-      Number.isFinite(item.confidence) && item.confidence >= 0.85 && item.confidence <= 1);
+      Number.isFinite(item.matchProbability) && item.matchProbability >= 0.7 && item.matchProbability <= 1 &&
+      Number.isFinite(item.decisionConfidence) && item.decisionConfidence >= 0 && item.decisionConfidence <= 1);
   }
   if (request.kind === "chooseNextPage") {
     return request.links.length > 0 && request.links.length <= 20 && request.links.every((link) => {

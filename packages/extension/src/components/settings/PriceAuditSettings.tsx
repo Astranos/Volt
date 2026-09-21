@@ -66,7 +66,7 @@ function PriceAuditSettingsForm({ settings, saveSettings, saved }: Props & { sav
         <p>This is a read-only audit. It does not edit prices or inventory. Only publicly available Shopify variants and eBay sold/completed listings are considered.</p>
         <p>Results are a sample of visible sold listings, not all historical eBay sales. A price label requires at least 3 confident unique sold matches. Prices exclude shipping and tax.</p>
         <p>Closing the panel or switching tools ends the scan and loses this session. Export results before leaving. Stop ends local work immediately, but an in-flight server call may still finish.</p>
-        <p>Server safety limits: 120 upstream requests per minute and 4,000 per day per account, plus a shared daily cap of 20,000. Retries count toward these limits.</p>
+        <p>Volt does not add a per-minute or daily Jev quota. TypeSafe provider availability and upstream limits still apply, and transient retries count as requests.</p>
       </div>
       {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
       <button type="submit" disabled={saving} className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50">{saving ? "Saving…" : "Save Price Audit settings"}</button>

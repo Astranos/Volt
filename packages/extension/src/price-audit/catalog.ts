@@ -38,6 +38,28 @@ export function decimalCents(value: string): number | null {
   return Number.isSafeInteger(cents) && cents >= 0 ? cents : null;
 }
 
+const DESCRIPTION_LIMIT = 8000;
+
+/** Convert Shopify's presentation-heavy body HTML into bounded semantic evidence for Jev. */
+export function descriptionText(html: string): string {
+  const decoded = html
+    .replace(/<(?:script|style)[^>]*>[\s\S]*?<\/(?:script|style)>/gi, " ")
+    .replace(/<br\s*\/?>|<\/?(?:p|div|li|tr|h[1-6]|table|section|article)[^>]*>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;|&#160;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;|&#34;/gi, '"')
+    .replace(/&apos;|&#39;/gi, "'")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">");
+  return decoded
+    .split("\n")
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .filter(Boolean)
+    .join("\n")
+    .slice(0, DESCRIPTION_LIMIT);
+}
+
 export function parseCatalogPage(text: string, origin: string): { productIds: string[]; items: AuditItem[] } {
   if (text.length > 8 * 1024 * 1024) throw new Error("The Shopify catalog page is too large.");
   let data: unknown;
@@ -74,8 +96,8 @@ export function parseCatalogPage(text: string, origin: string): { productIds: st
         title: product.title.trim().slice(0, 500),
         variant: variant.title === "Default Title" ? "" : variant.title.slice(0, 300),
         sku: typeof variant.sku === "string" ? variant.sku.slice(0, 200) : "",
-        // Kept as inert source text, never inserted into the DOM as HTML.
-        description: typeof product.body_html === "string" ? product.body_html.slice(0, 8000) : "",
+        // Kept as inert plain text, never inserted into the DOM as HTML.
+        description: typeof product.body_html === "string" ? descriptionText(product.body_html) : "",
         url: `${origin}/products/${encodeURIComponent(product.handle)}?variant=${id}`,
         priceCents,
         currency: "USD",

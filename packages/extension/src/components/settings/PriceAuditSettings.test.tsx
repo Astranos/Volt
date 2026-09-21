@@ -7,7 +7,7 @@ import { PriceAuditSettings, changePriceAuditStore, preparePriceAuditSettings } 
 describe("Price Audit settings", () => {
   it("keeps all configuration and consent disclosures in the Settings section", () => {
     const markup = renderToStaticMarkup(<PriceAuditSettings settings={mergeSettings()} saveSettings={vi.fn()} />);
-    for (const copy of ["priceaudit", "Shopify store URL", "Fair-price tolerance", "eBay pages per item", "TypeSafe via Volt", "USD prices", "read-only", "at least 3 confident unique sold matches", "exclude shipping and tax", "Closing the panel", "in-flight server call", "120 upstream requests", "4,000", "20,000"]) expect(markup).toContain(copy);
+    for (const copy of ["priceaudit", "Shopify store URL", "Fair-price tolerance", "eBay pages per item", "TypeSafe via Volt", "USD prices", "read-only", "at least 3 confident unique sold matches", "exclude shipping and tax", "Closing the panel", "in-flight server call", "does not add a per-minute or daily Jev quota", "provider availability"]) expect(markup).toContain(copy);
     expect(markup.match(/type="checkbox"/g)).toHaveLength(2);
     expect(markup).not.toContain("API key");
   });
