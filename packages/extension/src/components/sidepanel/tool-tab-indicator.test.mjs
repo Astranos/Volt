@@ -1,6 +1,19 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
 import { computeToolTabIndicator } from "./tool-tab-indicator.ts";
+
+test("renders one sliding underline without a pill or duplicate active border", () => {
+  const css = readFileSync(new URL("../../../entrypoints/sidepanel/sidepanel.css", import.meta.url), "utf8");
+  const indicator = css.match(/\.sidepanel-tool-tab-indicator\s*\{([^}]+)\}/)?.[1];
+  assert.ok(indicator);
+  assert.match(indicator, /height:\s*2px/);
+  assert.match(indicator, /bottom:\s*0/);
+  assert.doesNotMatch(indicator, /border-radius|box-shadow|\btop:/);
+  const activeTab = css.match(/\.sidepanel-tool-tab\.is-active\s*\{([^}]+)\}/)?.[1];
+  assert.ok(activeTab);
+  assert.doesNotMatch(activeTab, /border-bottom-color/);
+});
 
 test("computes the active tab geometry", () => {
   assert.deepEqual(computeToolTabIndicator([{ offsetLeft: 8, offsetWidth: 72 }], 0), {
