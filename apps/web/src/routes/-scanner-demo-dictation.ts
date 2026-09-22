@@ -24,7 +24,8 @@ type SpeechRecognitionLike = {
 
 type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
 
-type SpeechRecognitionGlobal = typeof globalThis & {
+type SpeechRecognitionGlobal = {
+  navigator?: Pick<Navigator, "userAgent">;
   AudioContext?: typeof AudioContext;
   MediaStream?: typeof MediaStream;
   SpeechRecognition?: SpeechRecognitionConstructor;

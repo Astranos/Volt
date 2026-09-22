@@ -1,0 +1,6 @@
+# Add another maintainer here when they take ownership of these areas.
+/convex/ @JuanQuenga
+/.github/ @JuanQuenga
+/scripts/ @JuanQuenga
+/packages/extension/scripts/ @JuanQuenga
+/apps/mobile/fastlane/ @JuanQuenga

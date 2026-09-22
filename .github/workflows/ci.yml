@@ -10,20 +10,25 @@ permissions:
 
 jobs:
   javascript:
-    name: JavaScript and TypeScript
+    name: Tests and typechecks
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Enable Corepack
-        run: corepack enable
-
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .node-version
+
+      - name: Enable pinned pnpm
+        run: corepack enable && corepack install
+
+      - name: Cache pnpm
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
           cache: pnpm
 
       - name: Install dependencies
@@ -32,11 +37,79 @@ jobs:
       - name: Run tests
         run: pnpm test
 
-      - name: Test extension release helpers
-        run: pnpm --filter @volt/extension test:release
+      - name: Typecheck workspaces and backend
+        run: pnpm typecheck
+
+      - name: Check repository health
+        run: pnpm check:repo-health
 
       - name: Build extension
         run: pnpm build:extension
 
       - name: Build web app
         run: pnpm build:web
+
+  mobile:
+    name: Native apps and Swift helper tests
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - name: Enable pinned pnpm
+        run: corepack enable && corepack install
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Verify Swift toolchain
+        run: xcrun swift --version
+      - name: Setup Ruby for CocoaPods
+        uses: ruby/setup-ruby@a0102e0972be65f351c307e2d64b9314a57c8073 # v1.324.0
+        with:
+          ruby-version: "3.3"
+      - name: Generate native workspace dependencies
+        working-directory: apps/mobile/ios
+        run: |
+          gem install cocoapods --version 1.16.2 --no-document
+          pod _1.16.2_ install --deployment
+      - name: Compile App Clip for iOS Simulator
+        # Compile every real source together, including cross-file Swift access.
+        # A direct target build does not depend on a locally generated scheme.
+        run: >-
+          xcodebuild
+          -project apps/mobile/ios/Volt.xcodeproj
+          -target VoltClip
+          -configuration Debug
+          -sdk iphonesimulator
+          CODE_SIGNING_ALLOWED=NO
+          build
+      - name: Test mobile helpers
+        run: pnpm --filter @volt/mobile test
+
+      - name: Compile full iPhone app for iOS Simulator
+        # The workspace plan resolves transitive Swift Package modules
+        # (ClerkKitUI needs Nuke and PhoneNumberKit) that a direct target
+        # build misses, and ConvexMobile ships an arm64-only simulator
+        # slice, so a universal build cannot link.
+        run: >-
+          xcodebuild
+          -workspace apps/mobile/ios/Volt.xcworkspace
+          -scheme Volt
+          -configuration Debug
+          -destination 'generic/platform=iOS Simulator'
+          ARCHS=arm64
+          CODE_SIGNING_ALLOWED=NO
+          build
+
+  required:
+    # Keep the existing protected-branch check name, covering both jobs.
+    name: JavaScript and TypeScript
+    if: always()
+    needs: [javascript, mobile]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every verification job to pass
+        env:
+          JAVASCRIPT_RESULT: ${{ needs.javascript.result }}
+          MOBILE_RESULT: ${{ needs.mobile.result }}
+        run: test "$JAVASCRIPT_RESULT" = success && test "$MOBILE_RESULT" = success

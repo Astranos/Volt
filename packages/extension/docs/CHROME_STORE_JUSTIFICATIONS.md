@@ -105,4 +105,4 @@ Disclosed handled-data categories:
 - Web history processed locally for the user-facing command palette and new-tab experience.
 - Website content processed locally or explicitly captured and synchronized by the user.
 
-Privacy policy: <https://volt.juanquenga.com/privacy>
+Privacy policy: <https://voltresale.app/privacy>

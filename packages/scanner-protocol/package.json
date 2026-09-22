@@ -12,5 +12,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./protocol-fixtures": "./src/protocol-fixtures.mjs"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3"
   }
 }

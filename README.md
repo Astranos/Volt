@@ -4,9 +4,9 @@ Tools for buying and listing electronics, built around the reseller's browser wo
 
 Volt combines market search, offer calculation, and listing helpers in a Chrome extension. Its companion iPhone app captures barcodes, text, and photos, with account-based sync to the browser.
 
-[Website](https://volt.juanquenga.com) · [Chrome Web Store](https://chromewebstore.google.com/detail/volt/bmgghhmlflbhlnomgnoodpidekpaaifk) · [iPhone app](https://apps.apple.com/us/app/volt-scanner/id6771770148) · [Contribute](CONTRIBUTING.md)
+[Website](https://voltresale.app) · [Chrome Web Store](https://chromewebstore.google.com/detail/volt/bmgghhmlflbhlnomgnoodpidekpaaifk) · [iPhone app](https://apps.apple.com/us/app/volt-scanner/id6771770148) · [Contribute](CONTRIBUTING.md)
 
-![Volt's quick-action menu for resale price research](apps/web/public/assets/product/chrome-quick-actions.png)
+![Volt website and Chrome extension preview](docs/images/volt-portfolio.png)
 
 ## What you can do
 
@@ -20,7 +20,7 @@ Volt is actively developed. Chrome's browser tools are free. Signed-in iPhone us
 
 ## Start contributing
 
-Use Node.js 22 or newer and pnpm 10 through Corepack. Chrome is needed for extension work; macOS and Xcode are needed only for native iOS work.
+Use Node.js 24 and pnpm 10 through Corepack. Chrome is needed for extension work. Native iOS work and executable Swift helper tests require macOS and Xcode.
 
 ```sh
 corepack enable
@@ -52,7 +52,7 @@ Convex stores capture metadata; private photo bytes go directly to Cloudflare R2
 - [Architecture decisions](docs/adr)
 - [Maintainability notes](docs/maintainability.md)
 - [Chrome extension releases](packages/extension/docs/RELEASE_PROCESS.md)
-- [iOS releases](apps/mobile/fastlane/README.md)
+- [iOS releases](apps/mobile/RELEASING.md)
 - [Security policy](SECURITY.md)
 
 ## License

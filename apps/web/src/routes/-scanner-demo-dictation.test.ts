@@ -57,7 +57,7 @@ describe("nextReviewInputAfterLiveDictation", () => {
   test("web remote speech recognizer emits cumulative text from indexed speech results", () => {
     const starts: unknown[] = [];
     const transcripts: unknown[] = [];
-    let recognition: {
+    const captured: { recognition: {
       continuous: boolean;
       interimResults: boolean;
       lang: string;
@@ -73,7 +73,7 @@ describe("nextReviewInputAfterLiveDictation", () => {
         | null;
       start: (track?: unknown) => void;
       stop: () => void;
-    } | null = null;
+    } | null } = { recognition: null };
 
     class FakeSpeechRecognition {
       continuous = false;
@@ -84,7 +84,7 @@ describe("nextReviewInputAfterLiveDictation", () => {
       onresult = null;
 
       constructor() {
-        recognition = this;
+        captured.recognition = this;
       }
 
       start(track?: unknown) {
@@ -99,47 +99,47 @@ describe("nextReviewInputAfterLiveDictation", () => {
       {
         onTranscript: (transcript) => transcripts.push(transcript),
       },
-      { webkitSpeechRecognition: FakeSpeechRecognition } as typeof globalThis,
+      { webkitSpeechRecognition: FakeSpeechRecognition },
     );
 
     expect(recognizer.start(track)).toBe(true);
     expect(starts[0]).toBe(track);
-    expect(recognition?.continuous).toBe(true);
-    expect(recognition?.interimResults).toBe(true);
+    expect(captured.recognition?.continuous).toBe(true);
+    expect(captured.recognition?.interimResults).toBe(true);
 
-    recognition?.onresult?.({
+    captured.recognition?.onresult?.({
       resultIndex: 0,
       results: [
         { 0: { transcript: "test" }, length: 1, isFinal: false },
       ],
     });
-    recognition?.onresult?.({
+    captured.recognition?.onresult?.({
       resultIndex: 0,
       results: [
         { 0: { transcript: "testing" }, length: 1, isFinal: false },
       ],
     });
-    recognition?.onresult?.({
+    captured.recognition?.onresult?.({
       resultIndex: 0,
       results: [
         { 0: { transcript: "testing" }, length: 1, isFinal: true },
       ],
     });
-    recognition?.onresult?.({
+    captured.recognition?.onresult?.({
       resultIndex: 1,
       results: [
         { 0: { transcript: "testing" }, length: 1, isFinal: true },
         { 0: { transcript: "it's" }, length: 1, isFinal: false },
       ],
     });
-    recognition?.onresult?.({
+    captured.recognition?.onresult?.({
       resultIndex: 1,
       results: [
         { 0: { transcript: "testing" }, length: 1, isFinal: true },
         { 0: { transcript: "it's just" }, length: 1, isFinal: false },
       ],
     });
-    recognition?.onresult?.({
+    captured.recognition?.onresult?.({
       resultIndex: 1,
       results: [
         { 0: { transcript: "testing" }, length: 1, isFinal: true },
@@ -209,7 +209,7 @@ describe("nextReviewInputAfterLiveDictation", () => {
       {
         navigator: { userAgent: "Mozilla/5.0 Chrome/134.0.0.0 Safari/537.36" },
         webkitSpeechRecognition: FakeSpeechRecognition,
-      } as typeof globalThis,
+      },
     );
 
     expect(

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import TopOffersPage from "./TopOffers";
 import MobileScanner from "./MobileScanner";
 import {
@@ -20,6 +20,7 @@ import {
 } from "../../lib/sidepanel-toast";
 import { ExtensionAccountControl } from "../access/ExtensionAccess";
 import { useComputerRegistration } from "../../hooks/useComputerRegistration";
+import { computeToolTabIndicator } from "./tool-tab-indicator";
 
 type ActiveToast = {
   message: string;
@@ -59,6 +60,9 @@ export default function UnifiedSidepanel() {
   const toastCounter = useRef(0);
   const windowIdRef = useRef<number | null>(null);
   const closeReportedRef = useRef(false);
+  const toolTabsRef = useRef<HTMLDivElement | null>(null);
+  const toolTabRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const [tabIndicator, setTabIndicator] = useState({ x: 0, width: 0, visible: false });
 
   // Registered from the panel root rather than from MobileScanner, which
   // unmounts on every tool switch and would let presence lapse while the user
@@ -179,6 +183,40 @@ export default function UnifiedSidepanel() {
     component: componentMap[tool.id],
   }));
 
+  useLayoutEffect(() => {
+    const tablist = toolTabsRef.current;
+    if (!tablist || typeof window === "undefined") return;
+
+    const updateIndicator = () => {
+      const activeIndex = SIDEPANEL_TOOLS.findIndex((tool) => tool.id === activeTool);
+      setTabIndicator(computeToolTabIndicator(
+        SIDEPANEL_TOOLS.map((_, index) => {
+          const tab = toolTabRefs.current[index];
+          return tab
+            ? { offsetLeft: tab.offsetLeft, offsetWidth: tab.offsetWidth }
+            : { offsetLeft: Number.NaN, offsetWidth: Number.NaN };
+        }),
+        activeIndex,
+      ));
+    };
+
+    updateIndicator();
+    const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(updateIndicator) : null;
+    observer?.observe(tablist);
+    toolTabRefs.current.forEach((tab) => {
+      if (tab) observer?.observe(tab);
+    });
+    window.addEventListener("resize", updateIndicator);
+    return () => {
+      toolTabRefs.current.forEach((tab) => {
+        if (tab) observer?.unobserve(tab);
+      });
+      observer?.unobserve(tablist);
+      observer?.disconnect();
+      window.removeEventListener("resize", updateIndicator);
+    };
+  }, [activeTool, tools.length]);
+
   const ActiveComponent =
     tools.find((t) => t.id === activeTool)?.component || MobileScanner;
 
@@ -190,21 +228,37 @@ export default function UnifiedSidepanel() {
       <div className="sidepanel-content-frame flex flex-1 flex-col overflow-hidden">
         <div className="sidepanel-tool-header">
           <div className="sidepanel-tool-row">
-            <div className="sidepanel-tool-tabs" role="tablist" aria-label="Volt tools">
+            <div ref={toolTabsRef} className="sidepanel-tool-tabs" role="tablist" aria-label="Volt tools">
+              <span
+                aria-hidden="true"
+                className="sidepanel-tool-tab-indicator"
+                style={{
+                  transform: `translateX(${tabIndicator.x}px)`,
+                  width: `${tabIndicator.width}px`,
+                  visibility: tabIndicator.visible ? "visible" : "hidden",
+                }}
+              />
               {SIDEPANEL_TOOLS.map((tool) => {
                 const ToolIcon = tool.icon;
                 const selected = activeTool === tool.id;
                 return (
                   <button
+                    ref={(element) => { toolTabRefs.current[SIDEPANEL_TOOLS.indexOf(tool)] = element; }}
                     key={tool.id}
                     type="button"
                     role="tab"
+                    title={tool.label}
+                    aria-label={tool.label}
                     aria-selected={selected}
                     className={cn("sidepanel-tool-tab", selected && "is-active")}
                     onClick={() => handleToolChange(tool.id)}
                   >
-                    <ToolIcon />
-                    <span>{tool.label}</span>
+                    <span className="sidepanel-tool-tab-icon" aria-hidden="true">
+                      <ToolIcon />
+                    </span>
+                    <span className="sidepanel-tool-tab-label" aria-hidden="true">
+                      <span>{tool.label}</span>
+                    </span>
                   </button>
                 );
               })}

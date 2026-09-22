@@ -1,7 +1,6 @@
 import { isTrustedExtensionPageSender, type ExtensionMessageSender } from "../access/sender-policy";
 import { createWorkspaceSync } from "../cloud-scanner/workspace-sync.ts";
 
-const ACTIVE_CLERK_SUBJECT_KEY = "volt.cloudScanner.activeClerkSubject.v1";
 const WORKSPACE_OFFSCREEN_LIVENESS_ALARM = "volt.cloudScanner.offscreenLiveness";
 
 type WorkspaceMessage =
@@ -50,6 +49,8 @@ function parseMessage(value: unknown): WorkspaceMessage | null {
 }
 
 export function createCloudWorkspaceController(options: ControllerOptions) {
+  let snapshotGeneration = 0;
+  let account: { kind: "unconfirmed"; epoch: string } | { kind: "confirmed"; epoch: string; subject: string | null } = { kind: "unconfirmed", epoch: crypto.randomUUID() };
   const log = options.log ?? ((...args: unknown[]) => console.warn("[Volt Cloud Workspace]", ...args));
   // Shared with the sidepanel, which subscribes to Convex itself; the sync
   // module serializes both writers so either context can apply a snapshot.
@@ -57,6 +58,12 @@ export function createCloudWorkspaceController(options: ControllerOptions) {
     chromeApi: options.chromeApi,
     getPhotoDownload: (batchId, resultId) => getPhotoDownload(batchId, resultId),
   });
+
+  function applySnapshot(payload: unknown) {
+    if (account.kind !== "confirmed" || account.subject === null) return Promise.resolve(null);
+    const generation = snapshotGeneration;
+    return sync.applySnapshot(payload, { subject: account.subject, isCurrent: () => generation === snapshotGeneration });
+  }
 
   async function relayOffscreenOperation(message: unknown) {
     const response = await options.sendOffscreenMessage(message);
@@ -88,6 +95,7 @@ export function createCloudWorkspaceController(options: ControllerOptions) {
   }
 
   async function reconcileWorkspace() {
+    const generation = snapshotGeneration;
     const response = await options.sendOffscreenMessage({
       action: "workspaceOffscreenReconcile",
     });
@@ -99,23 +107,26 @@ export function createCloudWorkspaceController(options: ControllerOptions) {
           : "Cloud workspace reconciliation failed.",
       );
     }
+    if (!acceptsAccountPayload(record)) return null;
     if (record.snapshot === undefined || record.snapshot === null) return null;
-    return sync.applySnapshot(record.snapshot);
+    if (generation !== snapshotGeneration) return null;
+    return applySnapshot(record.snapshot);
   }
 
-  function handleAccountChanged(subject: string | null) {
-    return sync.runExclusive(async ({ resetActiveHistory }) => {
-      const stored = await options.chromeApi.storage.local.get(ACTIVE_CLERK_SUBJECT_KEY);
-      const previousSubject = stored[ACTIVE_CLERK_SUBJECT_KEY];
-      const didChange = typeof previousSubject === "string" && previousSubject !== subject;
-      const didSignOut = subject === null && typeof previousSubject === "string";
-      if (didChange || didSignOut) await resetActiveHistory();
-      if (subject === null) {
-        await options.chromeApi.storage.local.remove(ACTIVE_CLERK_SUBJECT_KEY);
-        return;
-      }
-      await options.chromeApi.storage.local.set({ [ACTIVE_CLERK_SUBJECT_KEY]: subject });
-    });
+  async function handleAccountChanged(subject: string | null, epoch: unknown) {
+    if (epoch !== account.epoch) throw new Error("stale_workspace_account_confirmation");
+    snapshotGeneration += 1;
+    const generation = snapshotGeneration;
+    const currentEpoch = account.epoch;
+    account = { kind: "unconfirmed", epoch: currentEpoch };
+    await sync.bindAccount(subject, { isCurrent: () => generation === snapshotGeneration });
+    if (generation !== snapshotGeneration) throw new Error("stale_workspace_account_confirmation");
+    account = { kind: "confirmed", epoch: currentEpoch, subject };
+  }
+
+  function acceptsAccountPayload(record: Record<string, unknown>) {
+    return account.kind === "confirmed" && account.subject !== null
+      && record.subject === account.subject && record.accountEpoch === account.epoch;
   }
 
   async function getPhotoDownload(batchId: string, resultId: string) {
@@ -202,16 +213,20 @@ export function createCloudWorkspaceController(options: ControllerOptions) {
       const operation = (() => {
         switch (rawRecord.action) {
           case "workspaceOffscreenSnapshotChanged":
-            return sync.applySnapshot(rawRecord.snapshot);
+            if (!acceptsAccountPayload(rawRecord)) return Promise.resolve(null);
+            return applySnapshot(rawRecord.snapshot);
           case "workspaceOffscreenCursorDeliveriesChanged":
+            if (!acceptsAccountPayload(rawRecord)) return Promise.resolve(null);
             return options.handleCursorDeliveries(rawRecord.deliveries);
           case "workspaceOffscreenDictationDraftsChanged":
+            if (!acceptsAccountPayload(rawRecord)) return Promise.resolve(null);
             return options.handleLiveDictationDrafts(rawRecord.drafts);
           case "workspaceOffscreenStorage":
             return offscreenStorage(rawRecord);
           default:
             return handleAccountChanged(
               typeof rawRecord.subject === "string" ? rawRecord.subject : null,
+              rawRecord.accountEpoch,
             );
         }
       })();
@@ -262,6 +277,7 @@ export function createCloudWorkspaceController(options: ControllerOptions) {
       const response = await options.sendOffscreenMessage({
         action: "workspaceOffscreenStartSubscriptions",
         accountChanged,
+        accountEpoch: account.epoch,
       });
       const record = recordFrom(response);
       if (record?.success !== true) {
@@ -285,6 +301,8 @@ export function createCloudWorkspaceController(options: ControllerOptions) {
     // The offscreen document cannot watch chrome.storage for the mirrored
     // client JWT, so the account change has to be pushed to it from here.
     handleAccountSessionChanged: async () => {
+      snapshotGeneration += 1;
+      account = { kind: "unconfirmed", epoch: crypto.randomUUID() };
       const ready = await options.ensureOffscreenDocument();
       if (ready) await startSubscriptions(true);
       return ready;

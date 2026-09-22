@@ -8,14 +8,14 @@ Keep each pull request focused on one change. Do not commit credentials, signing
 
 ## Install dependencies
 
-Install Node.js 22 or newer, then run these commands from the repository root:
+Install Node.js 24, matching `.node-version`, then run these commands from the repository root:
 
 ```sh
 corepack enable
 pnpm install
 ```
 
-Use pnpm for this workspace. You do not need Xcode, Apple signing credentials, or a paid service account to work on documentation or run the JavaScript test suites.
+Use pnpm for this workspace. Documentation and JavaScript-only tests need no Xcode, Apple signing credentials, or paid service account. On macOS, the mobile suite also executes Swift helper tests and requires an installed Xcode toolchain with its license accepted. On other platforms, those Swift tests are skipped.
 
 ## Work without service credentials
 
@@ -29,7 +29,7 @@ pnpm --filter @volt/mobile test
 pnpm test:web
 ```
 
-The Convex suite uses a test backend rather than a live deployment. The mobile command runs Node-based tests, not an iOS Simulator test suite. These checks do not prove camera, sign-in, purchase, or cross-device delivery behavior; describe any untested flows in your pull request.
+The Convex suite uses a test backend rather than a live deployment. The mobile command runs static source contracts and, on macOS, executable Swift helper tests. It does not launch an iOS Simulator. These checks do not prove camera, sign-in, purchase, or cross-device delivery behavior. Describe any untested flows in your pull request.
 
 ## Configure interactive development
 
@@ -72,9 +72,24 @@ Run `pnpm dev:extension`. To load it manually, open `chrome://extensions`, enabl
 
 ### iPhone app
 
-Use macOS and Xcode. Open `apps/mobile/ios/Volt.xcworkspace` and configure your own development signing team and the `VOLT_*` build settings described in [authentication and billing](docs/authentication-and-billing.md#clerk-and-convex). Do not commit personal signing changes.
+Use macOS and Xcode. Open Xcode once to install its components and review and accept its license yourself.
 
-Run `pnpm dev:mobile` for the simulator. Camera and real cross-device behavior need a physical iPhone. Find its ID with `xcrun devicectl list devices`, then run:
+The workspace still includes CocoaPods-generated configuration, even though its Podfile currently declares no third-party pods. Install the version recorded in `apps/mobile/ios/Podfile.lock`, then generate those files before opening the workspace:
+
+```sh
+gem install cocoapods -v 1.16.2
+cd apps/mobile/ios
+pod _1.16.2_ install
+cd ../../..
+```
+
+Use a writable Ruby installation if the system Ruby requires administrator privileges. Do not commit the generated `Pods` directory.
+
+Open `apps/mobile/ios/Volt.xcworkspace` and configure your own development signing team and the `VOLT_*` build settings described in [authentication and billing](docs/authentication-and-billing.md#clerk-and-convex). Do not commit personal signing changes.
+
+Run `pnpm dev:mobile` for the default iPhone 17 Pro Max simulator. To use another installed simulator, list them with `xcrun simctl list devices available` and run `pnpm dev:mobile -- --id=YOUR_SIMULATOR_ID`.
+
+Camera and real cross-device behavior need a physical iPhone. Find its ID with `xcrun devicectl list devices`, then run:
 
 ```sh
 pnpm dev:mobile:device -- --id=YOUR_DEVICE_ID
@@ -95,7 +110,7 @@ Run the checks relevant to the files you changed. These commands run from the re
 | Web | `pnpm test:web` |
 | Mobile helpers | `pnpm --filter @volt/mobile test` |
 
-`pnpm test` runs all root test suites. `pnpm check:repo-health` is an advisory maintainability check with existing failures; report new problems separately from the baseline. For native compilation, use `pnpm --filter @volt/mobile build:ios`, which targets a generic iOS Simulator and needs no personal device ID. When build verification is relevant, use `pnpm build:extension` or `pnpm build:web`. Root `pnpm build` includes iOS and requires Xcode.
+`pnpm test` runs the repository test suites. Run `pnpm check:repo-health` to check maintainability limits. For native compilation, use `pnpm --filter @volt/mobile build:ios`, which targets a generic iOS Simulator and needs no personal device ID. When build verification is relevant, use `pnpm build:extension` or `pnpm build:web`. Root `pnpm build` includes iOS and requires Xcode.
 
 For UI or cross-device changes, include the tested browser/device, steps, expected result, and actual result. Add screenshots for visual changes. Test scanner retries and account boundaries when those behaviors change.
 
@@ -107,6 +122,6 @@ For UI or cross-device changes, include the tested browser/device, steps, expect
 - List the checks you ran and any checks you could not run.
 - Update setup or architecture documentation when behavior changes.
 
-Follow the existing TypeScript, React, and Swift patterns in the package you touch. Prefer small, reviewable changes over broad rewrites. Keep releases separate from contribution work; publishing instructions live in the [extension release guide](packages/extension/docs/RELEASE_PROCESS.md) and [iOS release guide](apps/mobile/fastlane/README.md).
+Follow the existing TypeScript, React, and Swift patterns in the package you touch. Prefer small, reviewable changes over broad rewrites. Keep releases separate from contribution work. Publishing instructions live in the [extension release guide](packages/extension/docs/RELEASE_PROCESS.md) and [iOS release guide](apps/mobile/RELEASING.md).
 
 CodeRabbit reviews run on non-draft pull requests when its GitHub App is installed. Maintainers can request another pass with `@coderabbitai review` or a fresh full review with `@coderabbitai full review`.

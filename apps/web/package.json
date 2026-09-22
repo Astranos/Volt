@@ -6,7 +6,8 @@
     "dev": "vite",
     "build": "vite build",
     "build:static": "vite build --config vite.static.config.ts",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

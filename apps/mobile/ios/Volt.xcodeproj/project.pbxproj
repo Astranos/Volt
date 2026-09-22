@@ -103,6 +103,16 @@
 		B70000000000000000000001 /* SpeechDictationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C70000000000000000000001 /* SpeechDictationService.swift */; };
 		B70000000000000000000002 /* ScannerStoreDictation.swift in Sources */ = {isa = PBXBuildFile; fileRef = C70000000000000000000002 /* ScannerStoreDictation.swift */; };
 		B70000000000000000000003 /* DictationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C70000000000000000000003 /* DictationView.swift */; };
+		CB0F85194A68BB4736C9C1B9 /* ClipCaptureHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A9C883B0839866C28922BF2 /* ClipCaptureHomeView.swift */; };
+		2051B55CB680441B6C713695 /* ClipHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B73317ABE2FE4BAD9AF23D4B /* ClipHistoryView.swift */; };
+		7630DE11C6C33C84FCFDBE33 /* ClipWorkspaceTargetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2323E0F3B5ABEF096BF0044 /* ClipWorkspaceTargetView.swift */; };
+		6067E81E459E6CD6D4921CC6 /* ClipPhotoLibraryUploadView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AEADB5488DA1E1DB0E460A8 /* ClipPhotoLibraryUploadView.swift */; };
+		74E0487E157924E7D8DC2533 /* ClipConnectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 101197839C307A14E0CB2C3F /* ClipConnectionView.swift */; };
+		2F7FFBDAC817614C017440E7 /* ClipCaptureSessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66F53F8EF098E7AD0C1363BD /* ClipCaptureSessionView.swift */; };
+		A65043AECFD96D30E7BC2EC2 /* ClipCameraView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BEE29BC2C5EA0D06414E55C /* ClipCameraView.swift */; };
+		4FE7C1B775254B342AFA247F /* ClipPairingScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73230DB4EF324D9BF73229AF /* ClipPairingScannerView.swift */; };
+		C214CA7B979DBF36E69A4C4B /* CloudComputerPageChain.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7ACB9D50F4A1C3E8464D329 /* CloudComputerPageChain.swift */; };
+		1CD72A9136FB17BC4048723E /* CloudComputerSubscriptions.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8EDDF2FBE9A7668EBE3ED70 /* CloudComputerSubscriptions.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -225,6 +235,16 @@
 		C70000000000000000000001 /* SpeechDictationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechDictationService.swift; sourceTree = "<group>"; };
 		C70000000000000000000002 /* ScannerStoreDictation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannerStoreDictation.swift; sourceTree = "<group>"; };
 		C70000000000000000000003 /* DictationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationView.swift; sourceTree = "<group>"; };
+		3A9C883B0839866C28922BF2 /* ClipCaptureHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipCaptureHomeView.swift; sourceTree = "<group>"; };
+		B73317ABE2FE4BAD9AF23D4B /* ClipHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipHistoryView.swift; sourceTree = "<group>"; };
+		E2323E0F3B5ABEF096BF0044 /* ClipWorkspaceTargetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipWorkspaceTargetView.swift; sourceTree = "<group>"; };
+		8AEADB5488DA1E1DB0E460A8 /* ClipPhotoLibraryUploadView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipPhotoLibraryUploadView.swift; sourceTree = "<group>"; };
+		101197839C307A14E0CB2C3F /* ClipConnectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipConnectionView.swift; sourceTree = "<group>"; };
+		66F53F8EF098E7AD0C1363BD /* ClipCaptureSessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipCaptureSessionView.swift; sourceTree = "<group>"; };
+		7BEE29BC2C5EA0D06414E55C /* ClipCameraView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipCameraView.swift; sourceTree = "<group>"; };
+		73230DB4EF324D9BF73229AF /* ClipPairingScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipPairingScannerView.swift; sourceTree = "<group>"; };
+		F7ACB9D50F4A1C3E8464D329 /* CloudComputerPageChain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudComputerPageChain.swift; sourceTree = "<group>"; };
+		A8EDDF2FBE9A7668EBE3ED70 /* CloudComputerSubscriptions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudComputerSubscriptions.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -326,6 +346,7 @@
 			isa = PBXGroup;
 			children = (
 				C50000000000000000000003 /* CloudAPIContracts.swift */,
+				F7ACB9D50F4A1C3E8464D329 /* CloudComputerPageChain.swift */,
 				C50000000000000000000002 /* CloudCaptureRecord.swift */,
 				C50000000000000000000001 /* CloudDeviceCredential.swift */,
 				C40000000000000000000002 /* AccessKind.swift */,
@@ -346,6 +367,7 @@
 			children = (
 				C10000000000000000000012 /* CloudPhotoRendition.swift */,
 				C50000000000000000000008 /* CloudWorkspaceStore.swift */,
+				A8EDDF2FBE9A7668EBE3ED70 /* CloudComputerSubscriptions.swift */,
 				C50000000000000000000005 /* DeviceCredentialStore.swift */,
 				C50000000000000000000006 /* DurableCaptureOutbox.swift */,
 				C50000000000000000000007 /* MobileCloudAPIClient.swift */,
@@ -441,6 +463,14 @@
 			isa = PBXGroup;
 			children = (
 				C30000000000000000000002 /* ClipRootView.swift */,
+				3A9C883B0839866C28922BF2 /* ClipCaptureHomeView.swift */,
+				B73317ABE2FE4BAD9AF23D4B /* ClipHistoryView.swift */,
+				E2323E0F3B5ABEF096BF0044 /* ClipWorkspaceTargetView.swift */,
+				8AEADB5488DA1E1DB0E460A8 /* ClipPhotoLibraryUploadView.swift */,
+				101197839C307A14E0CB2C3F /* ClipConnectionView.swift */,
+				66F53F8EF098E7AD0C1363BD /* ClipCaptureSessionView.swift */,
+				7BEE29BC2C5EA0D06414E55C /* ClipCameraView.swift */,
+				73230DB4EF324D9BF73229AF /* ClipPairingScannerView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -636,6 +666,8 @@
 				B50000000000000000000002 /* CloudCaptureRecord.swift in Sources */,
 				B50000000000000000000001 /* CloudDeviceCredential.swift in Sources */,
 				B50000000000000000000008 /* CloudWorkspaceStore.swift in Sources */,
+				C214CA7B979DBF36E69A4C4B /* CloudComputerPageChain.swift in Sources */,
+				1CD72A9136FB17BC4048723E /* CloudComputerSubscriptions.swift in Sources */,
 				B70000000000000000000001 /* SpeechDictationService.swift in Sources */,
 				B70000000000000000000002 /* ScannerStoreDictation.swift in Sources */,
 				B50000000000000000000005 /* DeviceCredentialStore.swift in Sources */,
@@ -711,6 +743,14 @@
 				B30000000000000000000021 /* AppClipGuestCloudClient.swift in Sources */,
 				B30000000000000000000001 /* VoltClipApp.swift in Sources */,
 				B30000000000000000000002 /* ClipRootView.swift in Sources */,
+				CB0F85194A68BB4736C9C1B9 /* ClipCaptureHomeView.swift in Sources */,
+				2051B55CB680441B6C713695 /* ClipHistoryView.swift in Sources */,
+				7630DE11C6C33C84FCFDBE33 /* ClipWorkspaceTargetView.swift in Sources */,
+				6067E81E459E6CD6D4921CC6 /* ClipPhotoLibraryUploadView.swift in Sources */,
+				74E0487E157924E7D8DC2533 /* ClipConnectionView.swift in Sources */,
+				2F7FFBDAC817614C017440E7 /* ClipCaptureSessionView.swift in Sources */,
+				A65043AECFD96D30E7BC2EC2 /* ClipCameraView.swift in Sources */,
+				4FE7C1B775254B342AFA247F /* ClipPairingScannerView.swift in Sources */,
 				B30000000000000000000006 /* ClipScannerStore.swift in Sources */,
 				B3000000000000000000000F /* ClipBarcodeScannerService.swift in Sources */,
 				B30000000000000000000010 /* ClipOCRService.swift in Sources */,
@@ -776,7 +816,7 @@
 				TARGETED_DEVICE_FAMILY = 1;
 				VERSIONING_SYSTEM = "apple-generic";
 				VOLT_APP_STORE_ID = 6771770148;
-				VOLT_CLERK_FRONTEND_API_DOMAIN = clerk.volt.juanquenga.com;
+				VOLT_CLERK_FRONTEND_API_DOMAIN = clerk.voltresale.app;
 				VOLT_CLERK_JWT_TEMPLATE = convex;
 				VOLT_CONVEX_SITE_URL = "https://adorable-hornet-19.convex.site";
 				VOLT_STOREKIT_PRODUCT_ID = com.volt.mobile.pro.monthly;
@@ -810,7 +850,7 @@
 				VALIDATE_PRODUCT = YES;
 				VERSIONING_SYSTEM = "apple-generic";
 				VOLT_APP_STORE_ID = 6771770148;
-				VOLT_CLERK_FRONTEND_API_DOMAIN = clerk.volt.juanquenga.com;
+				VOLT_CLERK_FRONTEND_API_DOMAIN = clerk.voltresale.app;
 				VOLT_CLERK_JWT_TEMPLATE = convex;
 				VOLT_CONVEX_SITE_URL = "https://sincere-trout-414.convex.site";
 				VOLT_STOREKIT_PRODUCT_ID = com.volt.mobile.pro.monthly;

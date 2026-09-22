@@ -26,7 +26,7 @@ const execFileAsync = promisify(execFile);
 
 const CATEGORY_URL = "https://www.pricecharting.com/category/video-games";
 const USER_AGENT =
-  "VoltCatalogBot/1.0 (+https://volt.juanquenga.com; contact: juan@juanquenga.com)";
+  "VoltCatalogBot/1.0 (+https://voltresale.app; contact: juan@juanquenga.com)";
 const DEFAULT_DELAY_MS = 500;
 const MAX_RETRIES = 3;
 const RETRY_BACKOFF_MS = 1_000;

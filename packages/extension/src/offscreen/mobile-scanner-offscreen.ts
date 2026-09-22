@@ -2,7 +2,7 @@ import type {
   CaptureMode,
   ScannerConnectionStatus,
 } from "@volt/scanner-protocol";
-import { buildScannerAppClipJoinUrl } from "@volt/scanner-protocol";
+import { buildScannerAppClipJoinUrl, subscribeWorkspaceSnapshot, fetchWorkspaceSnapshot } from "@volt/scanner-protocol";
 import type { createClerkClient } from "@clerk/chrome-extension/client";
 import { ConvexClient } from "convex/browser";
 import { api } from "../../../../convex/_generated/api";
@@ -229,6 +229,8 @@ class CloudWorkspaceSubscriptions {
   private started = false;
   private reconciling: Promise<void> | null = null;
   private reconcileAgain = false;
+  private accountEpoch: string | null = null;
+  private acceptedClientSubject: string | null = null;
 
   constructor() {
     this.armClientAuth();
@@ -238,14 +240,16 @@ class CloudWorkspaceSubscriptions {
   // setAuth time (plus one forced refetch), the client settles into noAuth
   // and never calls the fetcher again. Re-arming is the only way back.
   private armClientAuth() {
-    this.client.setAuth(getClerkToken, () => {
+    this.acceptedClientSubject = null;
+    this.client.setAuth(getClerkToken, (authenticated) => {
+      const claims = this.client.getAuth()?.decoded;
+      this.acceptedClientSubject = authenticated && typeof claims?.sub === "string" ? claims.sub : null;
       void this.reconcileAuthentication();
     });
   }
 
   private clientAuthSubject() {
-    const claims = this.client.getAuth()?.decoded;
-    return typeof claims?.sub === "string" && claims.sub ? claims.sub : null;
+    return this.acceptedClientSubject;
   }
 
   start() {
@@ -261,7 +265,14 @@ class CloudWorkspaceSubscriptions {
   // when it changes; watching chrome.storage from here is not an option since
   // the API is absent. The cached Clerk client holds the old session, so it has
   // to be dropped before the account change can take effect.
-  accountChanged() {
+  accountChanged(epoch: string, force = true) {
+    if (this.accountEpoch === epoch && !force) return this.reconcileAuthentication();
+    if (this.accountEpoch !== epoch) {
+      this.accountEpoch = epoch;
+      this.stopSubscriptions();
+      this.hasReconciledSubject = false;
+      this.lastSnapshot = null;
+    }
     backgroundClerkPromise = null;
     lastSignedOutAt = 0;
     return this.reconcileAuthentication();
@@ -304,7 +315,10 @@ class CloudWorkspaceSubscriptions {
   }
 
   private async reconcileAuthenticationNow() {
+    const epoch = this.accountEpoch;
+    if (epoch === null) return;
     const auth = await resolveClerkAuth();
+    if (epoch !== this.accountEpoch) return;
     // A transient Clerk failure must not tear down subscriptions or report a
     // sign-out to the background — the next pass retries with state intact.
     if (auth.status === "unknown") return;
@@ -322,12 +336,17 @@ class CloudWorkspaceSubscriptions {
     ) return;
 
     this.stopSubscriptions();
-    if (subject !== null && !clientAuthenticated) this.armClientAuth();
+    if (subject !== null && !clientAuthenticated) {
+      this.armClientAuth();
+      return;
+    }
     const accountResponse = await chrome.runtime.sendMessage({
       action: "workspaceOffscreenAccountChanged",
       subject,
+      accountEpoch: epoch,
     });
     const accountRecord = objectFrom(accountResponse);
+    if (epoch !== this.accountEpoch) return;
     if (accountRecord?.success !== true) {
       console.warn(
         "[Volt Cloud Workspace] account sync rejected",
@@ -352,27 +371,32 @@ class CloudWorkspaceSubscriptions {
     }
 
     const identity = await getMobileScannerExtensionIdentity();
+    if (epoch !== this.accountEpoch) return;
     this.installationId = identity.installId;
-    this.workspaceSnapshotUnsubscribe = this.client.onUpdate(
-      api.cloudWorkspace.workspaceSnapshot,
-      {},
-      (snapshot) => {
+    const snapshotSubject = this.clerkSubject;
+    this.workspaceSnapshotUnsubscribe = subscribeWorkspaceSnapshot({
+      subscribe: (args, onValue, onError) => this.client.onUpdate(api.cloudWorkspace.workspaceSnapshotPage, args, onValue, onError),
+      onSnapshot: (snapshot) => {
         this.lastSnapshot = snapshot;
         void chrome.runtime.sendMessage({
           action: "workspaceOffscreenSnapshotChanged",
+          subject: snapshotSubject,
+          accountEpoch: epoch,
           snapshot,
         }).catch(() => undefined);
       },
-      (error) => {
+      onError: (error) => {
         console.warn("[Volt Cloud Workspace] snapshot subscription failed", error);
       },
-    );
+    });
     this.cursorDeliveriesUnsubscribe = this.client.onUpdate(
       api.cloudWorkspace.pendingCursorDeliveries,
       { installationId: identity.installId },
       (deliveries) => {
         void chrome.runtime.sendMessage({
           action: "workspaceOffscreenCursorDeliveriesChanged",
+          subject: snapshotSubject,
+          accountEpoch: epoch,
           deliveries,
         }).catch(() => undefined);
       },
@@ -384,6 +408,8 @@ class CloudWorkspaceSubscriptions {
       (drafts) => {
         void chrome.runtime.sendMessage({
           action: "workspaceOffscreenDictationDraftsChanged",
+          subject: snapshotSubject,
+          accountEpoch: epoch,
           drafts,
         }).catch(() => undefined);
       },
@@ -418,13 +444,18 @@ class CloudWorkspaceSubscriptions {
 
   async reconcileSnapshot() {
     await this.reconcileAuthentication();
-    if (!this.clerkSubject) return null;
+    const accountEpoch = this.accountEpoch;
+    const subject = this.clerkSubject;
+    const envelope = (snapshot: unknown) => ({ snapshot, subject, accountEpoch });
+    if (!subject) return envelope(null);
     try {
-      const snapshot = await this.client.query(api.cloudWorkspace.workspaceSnapshot, {});
+      const snapshot = await fetchWorkspaceSnapshot((args) => this.client.query(api.cloudWorkspace.workspaceSnapshotPage, args));
+      if (this.clerkSubject !== subject || this.accountEpoch !== accountEpoch) return envelope(null);
       this.lastSnapshot = snapshot;
-      return snapshot;
+      return envelope(snapshot);
     } catch (error) {
-      if (this.lastSnapshot !== null) return this.lastSnapshot;
+      if (this.clerkSubject !== subject || this.accountEpoch !== accountEpoch) return envelope(null);
+      if (this.lastSnapshot !== null) return envelope(this.lastSnapshot);
       throw error;
     }
   }
@@ -715,17 +746,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return false;
     }
     if (message.action === "workspaceOffscreenStartSubscriptions") {
+      if (typeof message.accountEpoch !== "string" || !message.accountEpoch) {
+        sendResponse({ success: false, error: "missing_workspace_account_epoch" });
+        return false;
+      }
       cloudWorkspaceSubscriptions.start();
       return sendWorkspaceOperation(
         sendResponse,
-        message.accountChanged === true
-          ? cloudWorkspaceSubscriptions.accountChanged()
-          : cloudWorkspaceSubscriptions.reconcileAuthentication(),
+        cloudWorkspaceSubscriptions.accountChanged(message.accountEpoch, message.accountChanged === true),
       );
     }
     if (message.action === "workspaceOffscreenReconcile") {
       void cloudWorkspaceSubscriptions.reconcileSnapshot()
-        .then((snapshot) => sendResponse({ success: true, snapshot }))
+        .then((envelope) => sendResponse({ success: true, ...envelope }))
         .catch((error: unknown) => sendResponse({
           success: false,
           error: error instanceof Error ? error.message : String(error),

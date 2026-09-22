@@ -1,16 +1,16 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import test from "node:test";
+import { readClipView, readClipViewSources } from "./clip-view-sources.mjs";
 
-const source = readFileSync(new URL("../ios/VoltClip/Views/ClipRootView.swift", import.meta.url), "utf8");
+const source = readClipViewSources();
 const section = (start, end) => {
   const from = source.indexOf(start);
   const to = source.indexOf(end, from + start.length);
   assert.ok(from >= 0 && to > from, "Missing source boundary: " + start);
   return source.slice(from, to);
 };
-const home = section("private struct ClipCaptureView:", "private struct ClipCaptureLaunchCard:");
-const history = section("private struct ClipUnifiedHistoryView:", "private extension Array");
+const home = section("struct ClipCaptureView:", "struct ClipCaptureLaunchCard:");
+const history = section("struct ClipUnifiedHistoryView:", "private extension Array");
 
 test("Clip home orders hero, typing target, library upload, and session history", () => {
   const landmarks = ["ClipChromeSectionHeader(", "ClipCaptureLaunchCard(", "ClipWorkspaceTargetCard(", "ClipPhotoLibraryUploadSection(", "ClipUnifiedHistoryView("];
@@ -42,7 +42,7 @@ test("Clip history reuses bounded square previews, gallery, and delete actions",
   assert.match(history, /\.sheet\(item: \$previewedPhoto\)/);
   assert.match(source, /Array\(batch\.photos\.suffix\(4\)\)/);
   assert.match(source, /ClipPhotoBatchGallery\(batch: batch, onDelete: onDeletePhoto\)/);
-  assert.match(section("private struct ClipPhotoThumbnail:", "private struct ClipPhotoBatchGallery:"), /\.aspectRatio\(1, contentMode: \.fit\)/);
+  assert.match(section("struct ClipPhotoThumbnail:", "struct ClipPhotoBatchGallery:"), /\.aspectRatio\(1, contentMode: \.fit\)/);
 });
 
 test("Clip connection choices retain guest QR pairing and expose save-only destination", () => {
@@ -55,14 +55,14 @@ test("Clip connection choices retain guest QR pairing and expose save-only desti
   assert.match(source, /Label\("Workspace connection", systemImage: "qrcode.viewfinder"\)/);
   assert.match(source, /Label\("Scan QR", systemImage: "qrcode.viewfinder"\)/);
   assert.match(home, /onDismiss: \{[\s\S]*if opensConnectionAfterTargetPicker[\s\S]*onScanQRCode\(\)/);
-  const settings = section("private struct ClipSettingsSheet:", "private struct ClipWorkspaceTargetCard:");
+  const settings = readClipView("ClipCaptureHomeView.swift").split("struct ClipSettingsSheet:")[1].split("struct ClipChromeSectionHeader:")[0];
   assert.match(settings, /Guest workspace session/);
   assert.match(settings, /UIApplication\.openSettingsURLString/);
   assert.doesNotMatch(settings, /Clerk|SignIn|SettingsView\(/);
 });
 
 test("Clip pairing choices offer QR and validated manual links with retry and progress retained", () => {
-  const choices = section("private struct ClipConnectChoicesView:", "private struct ClipConnectionProgressView:");
+  const choices = section("struct ClipConnectChoicesView:", "struct ClipConnectionProgressView:");
   assert.match(choices, /List \{[\s\S]*Section\("Guest workspace"\)/);
   assert.match(choices, /TextField\("Paste workspace pairing URL", text: \$pairingURL\)/);
   assert.match(choices, /store\.pairFromScannedValue\(value\)/);

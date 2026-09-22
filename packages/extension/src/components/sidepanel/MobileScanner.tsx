@@ -25,7 +25,7 @@ import {
   upsertTimelineEntry,
 } from "../../domain/mobile-scanner-timeline";
 import { cloudResultIds } from "../../cloud-scanner/workspace-hydration";
-import { useSidepanelSignedIn } from "../access/ExtensionAccess";
+import { useSidepanelSignedIn, useSidepanelUserId } from "../access/ExtensionAccess";
 
 /*
  * Source-contract breadcrumbs for scanner domain tests. Implementations live in:
@@ -46,9 +46,19 @@ interface MobileScannerProps {
 }
 
 export default function MobileScanner({ onClose: _onClose }: MobileScannerProps) {
+  const cloudWorkspace = useCloudWorkspaceSnapshot();
+  const userId = useSidepanelUserId();
+  const signedIn = useSidepanelSignedIn();
+  if (!cloudWorkspace.historyReady) {
+    return signedIn === false ? <EmptyHistory signedOut /> : <LoadingHistory />;
+  }
+  // Remounting also discards old previews, selections and undo state.
+  return <OwnedMobileScanner key={userId} cloudWorkspace={cloudWorkspace} />;
+}
+
+function OwnedMobileScanner({ cloudWorkspace }: { cloudWorkspace: ReturnType<typeof useCloudWorkspaceSnapshot> }) {
   const [previewPhoto, setPreviewPhoto] = useState<MobilePhoto | null>(null);
   const isSignedIn = useSidepanelSignedIn();
-  const cloudWorkspace = useCloudWorkspaceSnapshot();
   const [now, setNow] = useState(Date.now());
   const lastCloudDeletedIds = useRef<string[]>([]);
 

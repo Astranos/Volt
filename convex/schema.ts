@@ -61,11 +61,13 @@ export default defineSchema({
     kind: v.union(v.literal("ios"), v.literal("chrome")),
     label: v.string(),
     cursorTargetDeviceId: v.optional(v.string()),
+    dictationBindingRequired: v.optional(v.boolean()),
     createdAt: v.number(),
     lastSeenAt: v.number(),
     revokedAt: v.optional(v.number()),
   })
     .index("by_deviceId", ["deviceId"])
+    .index("by_workspaceId_and_kind_and_revokedAt", ["workspaceId", "kind", "revokedAt"])
     .index("by_workspaceId", ["workspaceId"]),
 
   workspacePresence: defineTable({
@@ -77,18 +79,21 @@ export default defineSchema({
     expiresAt: v.number(),
   })
     .index("by_deviceId", ["deviceId"])
-    .index("by_workspaceId", ["workspaceId"]),
+    .index("by_workspaceId", ["workspaceId"])
+    .index("by_state_and_expiresAt", ["state", "expiresAt"]),
 
   dictationDrafts: defineTable({
     workspaceId: v.id("workspaces"),
     draftId: v.string(),
     sourceDeviceId: v.string(),
     targetDeviceId: v.string(),
+    targetRegistrationId: v.optional(v.id("workspaceDevices")),
     text: v.string(),
     updatedAt: v.number(),
     expiresAt: v.number(),
   })
     .index("by_workspaceId_and_draftId", ["workspaceId", "draftId"])
+    .index("by_workspaceId_and_targetDeviceId_and_targetRegistrationId_and_expiresAt", ["workspaceId", "targetDeviceId", "targetRegistrationId", "expiresAt"])
     .index("by_targetDeviceId_and_expiresAt", ["targetDeviceId", "expiresAt"]),
 
   resultBatches: defineTable({
@@ -121,6 +126,7 @@ export default defineSchema({
     clientCreatedAt: v.number(),
     createdAt: v.number(),
   })
+    .index("by_workspaceId", ["workspaceId"])
     .index("by_workspaceId_and_batchId", ["workspaceId", "batchId"])
     .index("by_workspaceId_and_resultId", ["workspaceId", "resultId"]),
 
@@ -135,6 +141,7 @@ export default defineSchema({
     errorCode: v.optional(v.string()),
     updatedAt: v.number(),
   })
+    .index("by_workspaceId", ["workspaceId"])
     .index("by_workspaceId_and_batchId", ["workspaceId", "batchId"])
     .index("by_targetDeviceId", ["targetDeviceId"]),
 

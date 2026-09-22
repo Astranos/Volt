@@ -74,8 +74,8 @@ Set these public build-time values before packaging the extension:
 
 ```sh
 WXT_CLERK_PUBLISHABLE_KEY=pk_...
-WXT_CLERK_SYNC_HOST=https://clerk.volt.juanquenga.com # optional override
-WXT_CLERK_SIGN_IN_URL=https://accounts.volt.juanquenga.com/sign-in
+WXT_CLERK_SYNC_HOST=https://clerk.voltresale.app # optional override
+WXT_CLERK_SIGN_IN_URL=https://accounts.voltresale.app/sign-in
 WXT_EXTENSION_PUBLIC_KEY=<Chrome manifest public key>
 WXT_VOLT_FULL_APP_URL=https://apps.apple.com/us/app/volt-scanner/id6771770148
 ```

@@ -178,8 +178,8 @@ test("panel-side cloud sync survives unmounts, sign-out and a refused handshake"
   assert.match(snapshotHook, /useSyncExternalStore\(subscribeToApplyState, readApplyState\)/);
   // Signing out drops the previous account's cloud rows even with no offscreen
   // document to send workspaceOffscreenAccountChanged.
-  assert.match(snapshotHook, /clerkSignedIn === false\) clearAppliedWorkspace\(\)/);
-  assert.match(snapshotHook, /resetActiveHistory\(\)/);
+  // Account ownership, cold startup and stale IPC are exercised by the
+  // executable workspace-account and cloud-workspace-account suites.
   // A Clerk session Convex refuses is named instead of leaving a silent empty
   // timeline behind a skipped query.
   assert.match(snapshotHook, /handshakeStalled/);
@@ -282,7 +282,7 @@ test("the service worker mirrors the Clerk session the offscreen document reads"
   // account change is pushed to it and drops its cached Clerk client.
   assert.match(background, /cloudWorkspace\.handleAccountSessionChanged\(\)/);
   assert.match(controller, /startSubscriptions\(true\)/);
-  assert.match(offscreen, /accountChanged\(\)/);
+  assert.match(offscreen, /accountChanged\(message\.accountEpoch/);
   assert.doesNotMatch(offscreen, /chrome\.storage\.onChanged|chrome\.storage\.local\./);
   // The empty panel states the one thing that can actually be missing.
   assert.match(mobileScanner, /signedOut=\{isSignedIn === false\}/);

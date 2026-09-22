@@ -27,7 +27,7 @@ export const Route = createFileRoute("/")({
     meta: [
       {
         name: "apple-itunes-app",
-        content: "app-id=6771770148, app-argument=https://volt.juanquenga.com/",
+        content: "app-id=6771770148, app-argument=https://voltresale.app/",
       },
     ],
   }),
@@ -637,7 +637,7 @@ function BrowserWorkspaceMock() {
                 <div className="space-y-1">
                   <RecentRow
                     title="Volt - Chrome scanner session"
-                    url="volt.juanquenga.com/clip"
+                    url="voltresale.app/clip"
                     active
                   />
                   <RecentRow

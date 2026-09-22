@@ -9,7 +9,7 @@ import {
   Type,
 } from "lucide-react";
 
-import type { CaptureItem, DemoStatus, PhotoItem } from "./scanner-demo";
+import type { CaptureItem, DemoStatus, PhotoItem } from "./-scanner-demo-model";
 
 type PairingDialogProps = {
   copyPairingUrl: () => Promise<void>;

@@ -36,7 +36,7 @@ describe("public UPC search SEO", () => {
       expect(html).not.toContain("Free UPC lookup</span>");
       expect(html).toContain("What is a UPC code?");
       expect(html).toContain("No account needed.");
-      expect(html).toContain('href="https://volt.juanquenga.com/upc-search"');
+      expect(html).toContain('href="https://voltresale.app/upc-search"');
       expect(html).toContain('name="description"');
       expect(html).toContain('name="robots" content="index, follow"');
       expect(html).toContain('action="/upc-search"');
@@ -83,7 +83,7 @@ describe("public UPC search SEO", () => {
       "utf8",
     );
     expect(sitemap).toContain(
-      "<loc>https://volt.juanquenga.com/upc-search</loc>",
+      "<loc>https://voltresale.app/upc-search</loc>",
     );
     expect(sitemap).not.toContain("?q=");
     const robots = await readFile(
@@ -91,7 +91,7 @@ describe("public UPC search SEO", () => {
       "utf8",
     );
     expect(robots).toContain(
-      "Sitemap: https://volt.juanquenga.com/sitemap.xml",
+      "Sitemap: https://voltresale.app/sitemap.xml",
     );
     expect(robots).not.toContain("Disallow: /upc-search");
   });
