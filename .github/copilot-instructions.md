@@ -17,7 +17,7 @@ You are reviewing changes to Volt, a monorepo for a scanning browser extension w
 - `pnpm test` — all workspaces (node:test for `.mjs`, vitest for the rest, driven by `scripts/run-tests.mjs`)
 - `pnpm typecheck` — every workspace plus `tsc -p convex/tsconfig.json`
 - `pnpm check:repo-health` — repository invariants enforced by CI
-- `pnpm --filter @volt/mobile test` — Swift helper tests (macOS only)
+- `pnpm --filter @volt/mobile test` — Swift helper tests
 
 ## Conventions to enforce
 
