@@ -3,6 +3,7 @@ import { hydrateWorkspaceReplica, resetWorkspaceHydration } from "./workspace-hy
 import { normalizeWorkspaceSnapshot } from "./workspace-snapshot.ts";
 
 export const ACTIVE_WORKSPACE_KEY = "volt.cloudScanner.activeWorkspace.v1";
+const ACTIVE_CLERK_SUBJECT_KEY = "volt.cloudScanner.activeClerkSubject.v1";
 
 const WORKSPACE_SYNC_LOCK = "volt.cloudScanner.workspaceSync";
 
@@ -85,8 +86,34 @@ export function createWorkspaceSync(options: WorkspaceSyncOptions) {
   }
 
   return {
-    applySnapshot: (payload: unknown, { isCurrent = () => true }: { isCurrent?: () => boolean } = {}) =>
-      withWorkspaceSyncLock(() => applySnapshotNow(payload, isCurrent)),
+    checkAccountOwnership: (subject: string, { isCurrent = () => true }: { isCurrent?: () => boolean } = {}) =>
+      withWorkspaceSyncLock(async () => {
+        if (!isCurrent()) return false;
+        const stored = await options.chromeApi.storage.local.get(ACTIVE_CLERK_SUBJECT_KEY);
+        if (!isCurrent()) return false;
+        if (stored[ACTIVE_CLERK_SUBJECT_KEY] === subject) return true;
+        await resetActiveHistoryNow(isCurrent);
+        return false;
+      }),
+    bindAccount: (subject: string | null, { isCurrent = () => true }: { isCurrent?: () => boolean } = {}) =>
+      withWorkspaceSyncLock(async () => {
+        if (!isCurrent()) return;
+        const stored = await options.chromeApi.storage.local.get(ACTIVE_CLERK_SUBJECT_KEY);
+        if (!isCurrent()) return;
+        if (typeof stored[ACTIVE_CLERK_SUBJECT_KEY] !== "string" || stored[ACTIVE_CLERK_SUBJECT_KEY] !== subject) {
+          await resetActiveHistoryNow(isCurrent);
+        }
+        if (!isCurrent()) return;
+        if (subject === null) await options.chromeApi.storage.local.remove(ACTIVE_CLERK_SUBJECT_KEY);
+        else await options.chromeApi.storage.local.set({ [ACTIVE_CLERK_SUBJECT_KEY]: subject });
+      }),
+    applySnapshot: (payload: unknown, { subject, isCurrent = () => true }: { subject: string | null; isCurrent?: () => boolean }) =>
+      withWorkspaceSyncLock(async () => {
+        if (!subject || !isCurrent()) return null;
+        const stored = await options.chromeApi.storage.local.get(ACTIVE_CLERK_SUBJECT_KEY);
+        if (!isCurrent() || stored[ACTIVE_CLERK_SUBJECT_KEY] !== subject) return null;
+        return applySnapshotNow(payload, isCurrent);
+      }),
     // Account switches must not interleave with an in-flight apply either, so
     // they run under the same lock and are handed the reset from inside it —
     // the lock is not reentrant, so they cannot take it a second time.

@@ -1,4 +1,4 @@
-import { v, ConvexError, type ObjectType } from "convex/values";
+import { v, ConvexError, type ObjectType, type Infer } from "convex/values";
 import {
   requireOrCreateAuthenticatedWorkspace,
   randomOpaqueSecret,
@@ -15,8 +15,9 @@ import {
   requireAuthenticatedWorkspace,
 } from "./identity";
 import { hasFullAppEntitlement } from "../access";
-import { type Id } from "../_generated/dataModel";
+import { type Id, type Doc } from "../_generated/dataModel";
 import { type MutationCtx, type QueryCtx } from "../_generated/server";
+import { makeFunctionReference } from "convex/server";
 import { purgeReboundDictationDraftsBatch } from "../workspaceMaintenance";
 
 const CANONICAL_CAPABILITIES = new Set([
@@ -305,6 +306,11 @@ export const sweepExpiredPresenceHandler = async (ctx: MutationCtx) => {
     for (const item of presence.page) {
       await ctx.db.patch(item._id, { state: "offline" });
     }
+    if (!presence.isDone) {
+      await ctx.scheduler.runAfter(0, makeFunctionReference<"mutation", Record<string, never>, null>(
+        "cloudWorkspace:sweepExpiredPresence",
+      ), {});
+    }
   };
 
 export const listComputersForDeviceArgs = credentialArgs;
@@ -313,42 +319,137 @@ export const listComputersForDeviceHandler = async (ctx: QueryCtx, args: ObjectT
     if (!device) throw new ConvexError("Device required");
     return {
       cursorTargetDeviceId: device.cursorTargetDeviceId ?? null,
-      computers: (await listWorkspaceComputers(ctx, workspace._id)).map(scannerComputer),
+      computers: (await legacyWorkspaceComputers(ctx, workspace._id)).map(scannerComputer),
     };
   };
 
-async function listWorkspaceComputers(ctx: DatabaseReaderCtx, workspaceId: Id<"workspaces">) {
-  const devices = await ctx.db
-    .query("workspaceDevices")
-    .withIndex("by_workspaceId", (q) => q.eq("workspaceId", workspaceId))
-    .collect();
-  const presence = await ctx.db
-    .query("workspacePresence")
-    .withIndex("by_workspaceId", (q) => q.eq("workspaceId", workspaceId))
-    .collect();
-  const byDevice = new Map(presence.map((item) => [item.deviceId, item]));
-  const now = Date.now();
-  return devices.filter((item) => item.kind === "chrome" && !item.revokedAt).map((item) => {
-    const current = byDevice.get(item.deviceId);
-    return {
-      deviceId: item.deviceId,
-      label: item.label,
-      capabilities: current?.capabilities ?? [],
-      online: Boolean(current && current.state === "online" && current.expiresAt > now),
-      lastSeenAt: current?.lastSeenAt ?? item.lastSeenAt,
-    };
-  });
+export const COMPUTER_PAGE_SIZE = 8;
+export const LEGACY_COMPUTER_DOCUMENT_LIMIT = 100;
+const LEGACY_COMPUTER_READ_BYTES = 2 * 1024 * 1024;
+const computer = {
+  deviceId: v.string(), label: v.string(), capabilities: v.array(v.string()), online: v.boolean(),
+};
+const computerPageBoundary = {
+  workspaceId: v.string(), continueCursor: v.string(), isDone: v.boolean(),
+};
+export const listComputersPageArgs = { cursor: v.union(v.string(), v.null()) };
+export const listComputersPageReturns = v.object({
+  ...computerPageBoundary, computers: v.array(v.object({ ...computer, lastSeenAt: v.number() })),
+});
+export const listComputersForDevicePageArgs = { ...credentialArgs, ...listComputersPageArgs };
+export const listComputersForDevicePageReturns = v.object({
+  ...computerPageBoundary, cursorTargetDeviceId: v.union(v.string(), v.null()), computers: v.array(v.object(computer)),
+});
+export const listComputersForGuestPageArgs = { ...guestCredentialArgs, ...listComputersPageArgs };
+export const listComputersForGuestPageReturns = v.object({
+  ...computerPageBoundary, computers: v.array(v.object(computer)),
+});
+export type ComputerPage = Infer<typeof listComputersPageReturns>;
+export type DeviceComputerPage = Infer<typeof listComputersForDevicePageReturns>;
+export type GuestComputerPage = Infer<typeof listComputersForGuestPageReturns>;
+
+function decodeComputerCursor(cursor: string | null, workspaceId: string, principal: string): string | null {
+  if (cursor === null) return null;
+  let parsed: unknown;
+  try { parsed = JSON.parse(cursor); } catch { throw new ConvexError("Invalid computer cursor"); }
+  if (!parsed || typeof parsed !== "object" || !("workspaceId" in parsed) || !("principal" in parsed) || !("cursor" in parsed)
+    || parsed.workspaceId !== workspaceId || parsed.principal !== principal || typeof parsed.cursor !== "string") {
+    throw new ConvexError("Computer cursor belongs to another workspace or principal");
+  }
+  return parsed.cursor;
 }
 
-function scannerComputer({ lastSeenAt: _lastSeenAt, ...computer }: Awaited<ReturnType<typeof listWorkspaceComputers>>[number]) {
+async function listWorkspaceComputers(
+  ctx: DatabaseReaderCtx, workspaceId: Id<"workspaces">, principal: string, cursor: string | null,
+): Promise<ComputerPage> {
+  const devices = await ctx.db
+    .query("workspaceDevices")
+    .withIndex("by_workspaceId_and_kind_and_revokedAt", q =>
+      q.eq("workspaceId", workspaceId).eq("kind", "chrome").eq("revokedAt", undefined),
+    )
+    .paginate({ cursor: decodeComputerCursor(cursor, workspaceId, principal), numItems: COMPUTER_PAGE_SIZE,
+      maximumRowsRead: COMPUTER_PAGE_SIZE, maximumBytesRead: 128 * 1024 });
+  const now = Date.now();
+  const computers = await Promise.all(devices.page.map(async item => {
+    const found = await ctx.db.query("workspacePresence")
+      .withIndex("by_deviceId", q => q.eq("deviceId", item.deviceId)).unique();
+    const current = found?.workspaceId === workspaceId ? found : null;
+    return computerWithPresence(item, current, now);
+  }));
+  const response = {
+    workspaceId, computers, isDone: devices.isDone,
+    continueCursor: JSON.stringify({ workspaceId, principal, cursor: devices.continueCursor }),
+  };
+  if (new TextEncoder().encode(JSON.stringify(response)).byteLength > 7 * 1024 * 1024) {
+    throw new ConvexError("Computer metadata exceeds the page response limit");
+  }
+  return response;
+}
+
+function computerWithPresence(item: Doc<"workspaceDevices">, current: Doc<"workspacePresence"> | null, now: number) {
+  return {
+    deviceId: item.deviceId,
+    label: item.label,
+    capabilities: current?.capabilities ?? [],
+    online: Boolean(current && current.state === "online" && current.expiresAt > now),
+    lastSeenAt: current?.lastSeenAt ?? item.lastSeenAt,
+  };
+}
+
+async function legacyWorkspaceComputers(ctx: DatabaseReaderCtx, workspaceId: Id<"workspaces">) {
+  const devices = await ctx.db.query("workspaceDevices")
+    .withIndex("by_workspaceId_and_kind_and_revokedAt", q =>
+      q.eq("workspaceId", workspaceId).eq("kind", "chrome").eq("revokedAt", undefined),
+    )
+    .paginate({ cursor: null, numItems: LEGACY_COMPUTER_DOCUMENT_LIMIT,
+      maximumRowsRead: LEGACY_COMPUTER_DOCUMENT_LIMIT, maximumBytesRead: LEGACY_COMPUTER_READ_BYTES });
+  const requiresPagination = () => new ConvexError("Computer listing requires pagination");
+  if (!devices.isDone) throw requiresPagination();
+  const bytes = (value: unknown) => new TextEncoder().encode(JSON.stringify(value)).byteLength;
+  let readBytes = bytes(devices.page);
+  const computers: ComputerPage["computers"] = [];
+  const now = Date.now();
+  for (const device of devices.page) {
+    if (readBytes > LEGACY_COMPUTER_READ_BYTES) throw requiresPagination();
+    // Sequential lookups bound aggregate reads before another potentially
+    // large presence row is loaded. No unrelated workspace leases are read.
+    const found = await ctx.db.query("workspacePresence")
+      .withIndex("by_deviceId", q => q.eq("deviceId", device.deviceId)).unique();
+    readBytes += bytes(found);
+    if (readBytes > LEGACY_COMPUTER_READ_BYTES) throw requiresPagination();
+    computers.push(computerWithPresence(device, found?.workspaceId === workspaceId ? found : null, now));
+  }
+  if (bytes(computers) > 7 * 1024 * 1024) throw requiresPagination();
+  return computers;
+}
+
+function scannerComputer({ lastSeenAt: _lastSeenAt, ...computer }: ComputerPage["computers"][number]) {
   return { ...computer, capabilities: normalizeCapabilities(computer.capabilities) };
 }
 
 export const listComputersForGuestArgs = guestCredentialArgs;
 export const listComputersForGuestHandler = async (ctx: QueryCtx, args: ObjectType<typeof listComputersForGuestArgs>) => {
     const { workspace } = await requireGuestPrincipal(ctx, args);
-    return { computers: (await listWorkspaceComputers(ctx, workspace._id)).map(scannerComputer) };
+    return { computers: (await legacyWorkspaceComputers(ctx, workspace._id)).map(scannerComputer) };
   };
+
+export const listComputersPageHandler = async (ctx: QueryCtx, args: ObjectType<typeof listComputersPageArgs>) => {
+  const workspace = await requireAuthenticatedWorkspace(ctx);
+  return listWorkspaceComputers(ctx, workspace._id, "account", args.cursor);
+};
+
+export const listComputersForDevicePageHandler = async (ctx: QueryCtx, args: ObjectType<typeof listComputersForDevicePageArgs>): Promise<DeviceComputerPage> => {
+  const { workspace, device } = await requireDevicePrincipal(ctx, args);
+  if (!device) throw new ConvexError("Device required");
+  const page = await listWorkspaceComputers(ctx, workspace._id, "device:" + device.deviceId, args.cursor);
+  return { ...page, cursorTargetDeviceId: device.cursorTargetDeviceId ?? null, computers: page.computers.map(scannerComputer) };
+};
+
+export const listComputersForGuestPageHandler = async (ctx: QueryCtx, args: ObjectType<typeof listComputersForGuestPageArgs>): Promise<GuestComputerPage> => {
+  const principal = await requireGuestPrincipal(ctx, args);
+  const page = await listWorkspaceComputers(ctx, principal.workspace._id, "guest:" + principal.sourceDeviceId, args.cursor);
+  return { ...page, computers: page.computers.map(scannerComputer) };
+};
 
 export const setCursorTargetArgs = { ...credentialArgs, cursorTargetDeviceId: v.union(v.string(), v.null()) };
 export const setCursorTargetHandler = async (ctx: MutationCtx, args: ObjectType<typeof setCursorTargetArgs>) => {
@@ -381,5 +482,5 @@ export const setCursorTargetHandler = async (ctx: MutationCtx, args: ObjectType<
 export const listComputersArgs = {};
 export const listComputersHandler = async (ctx: QueryCtx) => {
     const workspace = await requireAuthenticatedWorkspace(ctx);
-    return listWorkspaceComputers(ctx, workspace._id);
+    return legacyWorkspaceComputers(ctx, workspace._id);
   };

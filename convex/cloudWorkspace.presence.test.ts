@@ -6,7 +6,7 @@ import { enroll, listComputersForDevice, modules, registerComputer, restoreWorks
 
 afterEach(restoreWorkspaceTestEnvironment);
 
-test("presence sweeping processes at most 500 expired online leases per run and makes progress", async () => {
+test("presence sweeping chains bounded pages until all expired online leases are processed", async () => {
   vi.useFakeTimers();
   const t = convexTest(schema, modules);
   await enroll(t, "presence-owner");
@@ -27,7 +27,7 @@ test("presence sweeping processes at most 500 expired online leases per run and 
     .withIndex("by_state_and_expiresAt", q => q.eq("state", "online")).collect()).map(row => row.deviceId));
   await t.mutation(sweepExpiredPresence, {});
   expect(await onlineIds()).toEqual(["expired-500", "fresh"]);
-  await t.mutation(sweepExpiredPresence, {});
+  await t.finishAllScheduledFunctions(vi.runAllTimers);
   expect(await onlineIds()).toEqual(["fresh"]);
   await t.mutation(sweepExpiredPresence, {});
   expect(await onlineIds()).toEqual(["fresh"]);

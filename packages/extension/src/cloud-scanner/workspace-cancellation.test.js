@@ -25,7 +25,7 @@ test.each(["download URL", "photo blob"])("account switch during deferred %s sup
   const writes = [];
   const chromeApi = {
     storage: { local: {
-      get: vi.fn(async () => ({})),
+      get: vi.fn(async () => ({ "volt.cloudScanner.activeClerkSubject.v1": "account-a" })),
       set: vi.fn(async (value) => { writes.push(value); }),
       remove: vi.fn(async () => {}),
     } },
@@ -55,7 +55,7 @@ test.each(["download URL", "photo blob"])("account switch during deferred %s sup
       createdAt: "2026-07-12T12:00:00.000Z", updatedAt: "2026-07-12T12:00:00.000Z",
       results: [{ id: "photo-a", type: "photo", createdAt: "2026-07-12T12:00:00.000Z" }],
     }],
-  }, { isCurrent: () => current });
+  }, { subject: "account-a", isCurrent: () => current });
   await started.promise;
   current = false;
   const writesAtSwitch = writes.length;

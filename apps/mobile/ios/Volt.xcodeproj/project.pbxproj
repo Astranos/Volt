@@ -111,6 +111,8 @@
 		2F7FFBDAC817614C017440E7 /* ClipCaptureSessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66F53F8EF098E7AD0C1363BD /* ClipCaptureSessionView.swift */; };
 		A65043AECFD96D30E7BC2EC2 /* ClipCameraView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BEE29BC2C5EA0D06414E55C /* ClipCameraView.swift */; };
 		4FE7C1B775254B342AFA247F /* ClipPairingScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73230DB4EF324D9BF73229AF /* ClipPairingScannerView.swift */; };
+		C214CA7B979DBF36E69A4C4B /* CloudComputerPageChain.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7ACB9D50F4A1C3E8464D329 /* CloudComputerPageChain.swift */; };
+		1CD72A9136FB17BC4048723E /* CloudComputerSubscriptions.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8EDDF2FBE9A7668EBE3ED70 /* CloudComputerSubscriptions.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -241,6 +243,8 @@
 		66F53F8EF098E7AD0C1363BD /* ClipCaptureSessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipCaptureSessionView.swift; sourceTree = "<group>"; };
 		7BEE29BC2C5EA0D06414E55C /* ClipCameraView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipCameraView.swift; sourceTree = "<group>"; };
 		73230DB4EF324D9BF73229AF /* ClipPairingScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipPairingScannerView.swift; sourceTree = "<group>"; };
+		F7ACB9D50F4A1C3E8464D329 /* CloudComputerPageChain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudComputerPageChain.swift; sourceTree = "<group>"; };
+		A8EDDF2FBE9A7668EBE3ED70 /* CloudComputerSubscriptions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudComputerSubscriptions.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -342,6 +346,7 @@
 			isa = PBXGroup;
 			children = (
 				C50000000000000000000003 /* CloudAPIContracts.swift */,
+				F7ACB9D50F4A1C3E8464D329 /* CloudComputerPageChain.swift */,
 				C50000000000000000000002 /* CloudCaptureRecord.swift */,
 				C50000000000000000000001 /* CloudDeviceCredential.swift */,
 				C40000000000000000000002 /* AccessKind.swift */,
@@ -362,6 +367,7 @@
 			children = (
 				C10000000000000000000012 /* CloudPhotoRendition.swift */,
 				C50000000000000000000008 /* CloudWorkspaceStore.swift */,
+				A8EDDF2FBE9A7668EBE3ED70 /* CloudComputerSubscriptions.swift */,
 				C50000000000000000000005 /* DeviceCredentialStore.swift */,
 				C50000000000000000000006 /* DurableCaptureOutbox.swift */,
 				C50000000000000000000007 /* MobileCloudAPIClient.swift */,
@@ -660,6 +666,8 @@
 				B50000000000000000000002 /* CloudCaptureRecord.swift in Sources */,
 				B50000000000000000000001 /* CloudDeviceCredential.swift in Sources */,
 				B50000000000000000000008 /* CloudWorkspaceStore.swift in Sources */,
+				C214CA7B979DBF36E69A4C4B /* CloudComputerPageChain.swift in Sources */,
+				1CD72A9136FB17BC4048723E /* CloudComputerSubscriptions.swift in Sources */,
 				B70000000000000000000001 /* SpeechDictationService.swift in Sources */,
 				B70000000000000000000002 /* ScannerStoreDictation.swift in Sources */,
 				B50000000000000000000005 /* DeviceCredentialStore.swift in Sources */,

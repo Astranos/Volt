@@ -40,3 +40,15 @@ The web app and extension use the shared `subscribeWorkspaceSnapshot` controller
 HTTP clients use `/api/workspace/snapshot?kind=results` and add a URL-encoded `cursor` on continuation requests. Fetch the batch and delivery streams the same way before joining results by batch ID.
 
 Roll out the backend indexes and page endpoint before the updated web and extension clients. The legacy `workspaceSnapshot({})` query and HTTP request without `kind` still return complete small snapshots. They throw an explicit pagination-required error when the combined read exceeds 100 documents or 128 KiB. They never label truncated history as complete. Older installed extensions need an update to read larger workspaces. These changes do not deploy either service or publish an extension release.
+
+## Computer list pagination
+
+`cloudWorkspace.listComputersPage`, `listComputersForDevicePage`, and `listComputersForGuestPage` return active Chrome registrations in pages. Each request includes `cursor`, starting with `null`, plus the existing device or guest credentials when applicable. Responses contain `workspaceId`, `computers`, `continueCursor`, and `isDone`. Device responses also contain `cursorTargetDeviceId`. Account computer records retain `lastSeenAt`; scanner records omit it and normalize capabilities.
+
+Each query reads at most eight active Chrome registrations with a 128 KiB device-read threshold, then looks up presence only for those registrations. The small page bounds the additional presence reads even when presence documents are large. A page rejects serialized output above 7 MiB. Every continuation authenticates again and checks that the cursor belongs to the same workspace and principal.
+
+All loaded pages need subscriptions for live presence updates. A subscription to only the first page does not observe later computers. HTTP device and App Clip list routes drain pages through separate Convex queries and preserve their complete array responses.
+
+Legacy list queries preserve complete lists beyond the new transport page size. They read up to 100 active Chrome registrations, then look up presence sequentially within a combined 2 MiB read budget. Over-budget requests throw `Computer listing requires pagination`; they never return a partial list as complete. Deploy the new index and page endpoints before releasing the updated native subscription. Existing installed native clients require an update for over-budget computer lists; no workspace device-count limit is imposed.
+
+The presence sweep marks a bounded page of expired leases offline and schedules another transaction when more leases remain. It does not wait for the next cron interval to drain a backlog.

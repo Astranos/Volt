@@ -24,6 +24,7 @@ import {
 import { type AIScannerReservation } from "./aiScannerQuota";
 import { productApiCollectionHandler, productApiItemHandler } from "./http/products";
 import { signalHandler } from "./http/signal";
+import { mobileComputerListHandler, appClipComputerListHandler } from "./http/computers";
 
 const http = httpRouter();
 
@@ -87,23 +88,6 @@ const bootstrapMobileDevice = makeFunctionReference<
   { installationId: string; label: string; existingDeviceId?: string },
   { deviceId: string; deviceSecret: string; workspaceId: string; clerkUserId: string }
 >("cloudWorkspace:bootstrapMobileDevice");
-
-type MobileComputer = {
-  deviceId: string;
-  label: string;
-  capabilities: string[];
-  online: boolean;
-};
-
-const listMobileComputers = makeFunctionReference<
-  "query",
-  { deviceId: string; deviceSecret: string },
-  { cursorTargetDeviceId: string | null; computers: MobileComputer[] }
->("cloudWorkspace:listComputersForDevice");
-
-const listAppClipComputers = makeFunctionReference<
-  "query", { guestCloudGrant: string }, { computers: MobileComputer[] }
->("cloudWorkspace:listComputersForGuest");
 
 const setMobileCursorTarget = makeFunctionReference<
   "mutation",
@@ -522,15 +506,6 @@ const mobileAIScannerHandler = httpAction(async (ctx, request) => {
   }
 });
 
-const mobileComputerListHandler = httpAction(async (ctx, request) => {
-  if (request.method === "OPTIONS") return emptyResponse();
-  const body = await signalBodyFromRequest(request);
-  const deviceId = stringFrom(body.deviceId, 120);
-  const deviceSecret = stringFrom(body.deviceSecret, 240);
-  if (!deviceId || !deviceSecret) return jsonResponse({ error: "Missing device credentials" }, 400);
-  return jsonResponse(await ctx.runQuery(listMobileComputers, { deviceId, deviceSecret }));
-});
-
 const mobileCursorTargetHandler = httpAction(async (ctx, request) => {
   if (request.method === "OPTIONS") return emptyResponse();
   const body = await signalBodyFromRequest(request);
@@ -745,14 +720,6 @@ const appClipGuestOutboxSyncHandler = httpAction(async (ctx, request) => {
     clientCreatedAt,
     results: results.filter((item): item is CloudResultInput => item !== null),
   }));
-});
-
-const appClipComputerListHandler = httpAction(async (ctx, request) => {
-  if (request.method === "OPTIONS") return emptyResponse();
-  const body = await signalBodyFromRequest(request);
-  const guestCloudGrant = stringFrom(body.guestCloudGrant, 240);
-  if (!guestCloudGrant) return jsonResponse({ error: "Missing guest cloud grant" }, 400);
-  return jsonResponse(await ctx.runQuery(listAppClipComputers, { guestCloudGrant }));
 });
 
 const appClipCursorDeliveryQueueHandler = httpAction(async (ctx, request) => {

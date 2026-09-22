@@ -81,6 +81,24 @@ export const listComputers = query({
   handler: devices.listComputersHandler,
 });
 
+export const listComputersPage = query({
+  args: devices.listComputersPageArgs,
+  returns: devices.listComputersPageReturns,
+  handler: devices.listComputersPageHandler,
+});
+
+export const listComputersForDevicePage = query({
+  args: devices.listComputersForDevicePageArgs,
+  returns: devices.listComputersForDevicePageReturns,
+  handler: devices.listComputersForDevicePageHandler,
+});
+
+export const listComputersForGuestPage = query({
+  args: devices.listComputersForGuestPageArgs,
+  returns: devices.listComputersForGuestPageReturns,
+  handler: devices.listComputersForGuestPageHandler,
+});
+
 export { DICTATION_DRAFT_TTL_MS } from "./cloudWorkspace/dictation";
 export const updateDictationDraft = mutation({
   args: dictation.updateDictationDraftArgs,

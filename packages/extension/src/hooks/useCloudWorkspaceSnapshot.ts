@@ -10,6 +10,7 @@ export type CloudWorkspaceSnapshotState = {
   status: "loading" | "ready" | "error";
   error: string | null;
   version: number;
+  historyReady: boolean;
 };
 
 // Convex can hand the panel a token-refusal that never resolves into anything
@@ -30,7 +31,7 @@ let activeClient: ConvexReactClient | null = null;
 const NOTHING_APPLIED = Symbol("volt.cloudWorkspace.nothingApplied");
 let appliedSnapshot: unknown = NOTHING_APPLIED;
 let hydratedFromCloud = false;
-let accountId: string | null = null;
+let accountId: string | null | undefined;
 let applyGeneration = 0;
 let applyState: { version: number; error: string | null } = { version: 0, error: null };
 const applyListeners = new Set<() => void>();
@@ -85,7 +86,8 @@ function applySnapshotOnce(value: unknown) {
   appliedSnapshot = value;
   hydratedFromCloud = true;
   const generation = applyGeneration;
-  void sharedWorkspaceSync().applySnapshot(value, { isCurrent: () => generation === applyGeneration }).then(
+  if (!accountId) return;
+  void sharedWorkspaceSync().applySnapshot(value, { subject: accountId, isCurrent: () => generation === applyGeneration }).then(
     () => { if (generation === applyGeneration) publishApplyState({ version: applyState.version + 1, error: null }); },
     (error: unknown) => {
       if (generation !== applyGeneration) return;
@@ -98,18 +100,16 @@ function applySnapshotOnce(value: unknown) {
 
 // Signing out has to drop the previous account's cloud results even when the
 // offscreen document — which owns the other reset path — never started.
-function clearAppliedWorkspace() {
+async function bindAppliedWorkspace(subject: string | null) {
   applyGeneration += 1;
-  if (!hydratedFromCloud) return;
+  const generation = applyGeneration;
   hydratedFromCloud = false;
   appliedSnapshot = NOTHING_APPLIED;
-  void sharedWorkspaceSync()
-    .runExclusive(({ resetActiveHistory }) => resetActiveHistory())
-    .then(
-      () => publishApplyState({ version: applyState.version + 1, error: null }),
-      (error: unknown) =>
-        publishApplyState({ version: applyState.version, error: errorMessage(error) }),
-    );
+  await sharedWorkspaceSync().bindAccount(subject, { isCurrent: () => generation === applyGeneration });
+  if (generation === applyGeneration) {
+    accountId = subject;
+    publishApplyState({ version: applyState.version + 1, error: null });
+  }
 }
 
 /**
@@ -128,6 +128,17 @@ export function useCloudWorkspaceSnapshot(): CloudWorkspaceSnapshotState {
   const [snapshotError, setSnapshotError] = useState<unknown>(null);
   const applied = useSyncExternalStore(subscribeToApplyState, readApplyState);
   const [authRefused, setAuthRefused] = useState(false);
+  const [verifiedSubject, setVerifiedSubject] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    setVerifiedSubject(null);
+    if (clerkSignedIn !== true || !userId) return;
+    void sharedWorkspaceSync().checkAccountOwnership(userId, { isCurrent: () => active }).then((owned) => {
+      if (active && owned) setVerifiedSubject(userId);
+    }).catch((error: unknown) => { if (active) setSnapshotError(error); });
+    return () => { active = false; };
+  }, [clerkSignedIn, userId]);
 
   useEffect(() => {
     activeClient = convex;
@@ -135,12 +146,21 @@ export function useCloudWorkspaceSnapshot(): CloudWorkspaceSnapshotState {
 
   useEffect(() => {
     setSnapshotError(null);
-    if (accountId !== userId) {
-      clearAppliedWorkspace();
-      accountId = userId;
+    let active = true;
+    let stop: (() => void) | undefined;
+    const subject = clerkSignedIn === false ? null : isAuthenticated && userId ? userId : undefined;
+    if (subject === undefined) {
+      // Pending authentication cannot claim persisted ownership or hydrate data.
+      applyGeneration += 1;
+      hydratedFromCloud = false;
+      accountId = undefined;
+      return;
     }
-    if (!isAuthenticated || !userId) return;
-    return subscribeWorkspaceSnapshot({
+    const binding = accountId === subject ? Promise.resolve() : bindAppliedWorkspace(subject);
+    void binding.then(() => {
+      if (!active || subject === null) return;
+      setVerifiedSubject(subject);
+      stop = subscribeWorkspaceSnapshot({
       subscribe: (args, onValue, onError) => {
         const query = convex.watchQuery(api.cloudWorkspace.workspaceSnapshotPage, args);
         const update = () => {
@@ -152,16 +172,15 @@ export function useCloudWorkspaceSnapshot(): CloudWorkspaceSnapshotState {
         return stop;
       },
       onSnapshot: (value) => {
+        if (!active) return;
         setSnapshotError(null);
         applySnapshotOnce(value);
       },
-      onError: setSnapshotError,
-    });
-  }, [convex, isAuthenticated, userId]);
-
-  useEffect(() => {
-    if (clerkSignedIn === false) clearAppliedWorkspace();
-  }, [clerkSignedIn]);
+      onError: (error) => { if (active) setSnapshotError(error); },
+      });
+    }).catch((error: unknown) => { if (active) setSnapshotError(error); });
+    return () => { active = false; stop?.(); applyGeneration += 1; };
+  }, [convex, isAuthenticated, userId, clerkSignedIn]);
 
   // Clerk says signed in but Convex never accepted the token: the query stays
   // skipped and the timeline stays empty with nothing to explain it. That
@@ -187,5 +206,6 @@ export function useCloudWorkspaceSnapshot(): CloudWorkspaceSnapshotState {
     status: error ? "error" : hydratedFromCloud && applied.version > 0 ? "ready" : "loading",
     error,
     version: applied.version,
+    historyReady: clerkSignedIn === true && userId !== null && verifiedSubject === userId,
   };
 }

@@ -57,6 +57,7 @@ final class CloudWorkspaceStore {
     @ObservationIgnored private var syncTask: Task<Void, Never>?
     @ObservationIgnored private var retryTask: Task<Void, Never>?
     @ObservationIgnored private var computersSubscriptionTask: Task<Void, Never>?
+    @ObservationIgnored private var computerPages: CloudComputerSubscriptions?
     @ObservationIgnored private var deliveryStatusSubscriptionTask: Task<Void, Never>?
     @ObservationIgnored private var deliveryExpiryTask: Task<Void, Never>?
     @ObservationIgnored private var subscriptionsRequested = false
@@ -119,6 +120,11 @@ final class CloudWorkspaceStore {
         guard let clerkUserId = clerk.user?.id else {
             pauseForSignOut()
             return
+        }
+        if authenticatedClerkUserId != clerkUserId {
+            cancelSubscriptionTasks()
+            computers = []
+            selectedTargetDeviceId = nil
         }
         authenticatedClerkUserId = clerkUserId
 
@@ -254,6 +260,8 @@ final class CloudWorkspaceStore {
     }
 
     private func cancelSubscriptionTasks() {
+        computerPages?.stop()
+        computerPages = nil
         computersSubscriptionTask?.cancel()
         computersSubscriptionTask = nil
         deliveryStatusSubscriptionTask?.cancel()
@@ -264,36 +272,29 @@ final class CloudWorkspaceStore {
 
     private func startComputersSubscriptionIfNeeded() {
         guard computersSubscriptionTask == nil,
+              computerPages == nil,
               subscriptionsAreActive,
               let credential = activeCredential
         else { return }
         let deviceId = credential.deviceId
-        let publisher = client.subscribe(
-            to: "cloudWorkspace:listComputersForDevice",
-            with: [
-                "deviceId": credential.deviceId,
-                "deviceSecret": credential.value,
-            ],
-            yielding: ListCloudComputersResponse.self
-        )
-        computersSubscriptionTask = Task { [weak self] in
-            do {
-                for try await response in publisher.values {
-                    guard let self,
-                          self.subscriptionsAreActive,
-                          self.activeCredential?.deviceId == deviceId
-                    else { return }
-                    self.computers = response.computers
-                    self.selectedTargetDeviceId = response.cursorTargetDeviceId
-                    self.lastError = nil
-                }
-            } catch {
-                guard !Task.isCancelled, let self else { return }
+        let subscription = CloudComputerSubscriptions(
+            client: client,
+            credential: credential,
+            onResponse: { [weak self] response in
+                guard let self, self.subscriptionsAreActive, self.activeCredential == credential else { return }
+                self.computers = response.computers
+                self.selectedTargetDeviceId = response.cursorTargetDeviceId
+                self.lastError = nil
+            },
+            onError: { [weak self] error in
+                guard let self, self.activeCredential == credential else { return }
+                self.computerPages = nil
                 if self.handleSubscriptionError(error, deviceId: deviceId) { return }
+                self.scheduleComputersSubscriptionRetry(deviceId: deviceId)
             }
-            guard !Task.isCancelled, let self else { return }
-            self.scheduleComputersSubscriptionRetry(deviceId: deviceId)
-        }
+        )
+        computerPages = subscription
+        subscription.start()
     }
 
     private func scheduleComputersSubscriptionRetry(deviceId: String) {

@@ -67,6 +67,7 @@ export default defineSchema({
     revokedAt: v.optional(v.number()),
   })
     .index("by_deviceId", ["deviceId"])
+    .index("by_workspaceId_and_kind_and_revokedAt", ["workspaceId", "kind", "revokedAt"])
     .index("by_workspaceId", ["workspaceId"]),
 
   workspacePresence: defineTable({

@@ -58,24 +58,9 @@ struct MarkCloudBatchReadyRequest: Codable, Sendable {
     let batchId: String
 }
 
-struct CloudComputer: Codable, Equatable, Identifiable, Sendable {
-    let deviceId: String
-    let label: String
-    let capabilities: [String]
-    let online: Bool
-
-    var id: String { deviceId }
-    var supportsCursorInsertion: Bool { capabilities.contains("cursor-insertion") }
-}
-
 struct ListCloudComputersRequest: Codable, Sendable {
     let deviceId: String
     let deviceSecret: String
-}
-
-struct ListCloudComputersResponse: Codable, Sendable {
-    let cursorTargetDeviceId: String?
-    let computers: [CloudComputer]
 }
 
 struct SetCursorTargetRequest: Encodable, Sendable {
