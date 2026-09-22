@@ -87,12 +87,17 @@ jobs:
         run: pnpm --filter @volt/mobile test
 
       - name: Compile full iPhone app for iOS Simulator
+        # The workspace plan resolves transitive Swift Package modules
+        # (ClerkKitUI needs Nuke and PhoneNumberKit) that a direct target
+        # build misses, and ConvexMobile ships an arm64-only simulator
+        # slice, so a universal build cannot link.
         run: >-
           xcodebuild
-          -project apps/mobile/ios/Volt.xcodeproj
-          -target Volt
+          -workspace apps/mobile/ios/Volt.xcworkspace
+          -scheme Volt
           -configuration Debug
-          -sdk iphonesimulator
+          -destination 'generic/platform=iOS Simulator'
+          ARCHS=arm64
           CODE_SIGNING_ALLOWED=NO
           build
 
