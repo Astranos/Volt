@@ -57,3 +57,6 @@ web/node_modules/
 web/.env*.local
 web/next-env.d.ts
 .vercel
+
+# Swift explicit-modules record cache written inside the project bundle during CLI builds
+apps/mobile/ios/Volt.xcodeproj/-Xcc/
