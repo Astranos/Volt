@@ -1,5 +1,7 @@
 # Contributing to Volt
 
+Use the [environment glossary](docs/environment-glossary.md) when describing local builds, previews, Clerk and Convex deployments, and account workspaces.
+
 ## Choose a change
 
 Search [issues](https://github.com/juanquenga/Volt/issues) and pull requests before opening something new. Starter tasks include a [local Markdown link checker](https://github.com/juanquenga/Volt/issues/21) and an [extension environment example](https://github.com/juanquenga/Volt/issues/22). Check that an issue is still open, then comment to coordinate work. Discuss new product behavior or architecture changes before implementing them.

@@ -12,6 +12,8 @@ The App Clip is a separate free, temporary cloud client. A QR from signed-in Chr
 
 ## Domain Terms
 
+For development, preview, staging, production, and service names, use the [environment glossary](docs/environment-glossary.md).
+
 - Command Menu: the CMDK-powered palette for tabs, quick links, bookmarks, tools, search providers, and history.
 - New Tab: the custom browser new-tab experience with search modes, recently closed tabs, quick links, bookmarks, and sidepanel tool launchers.
 - Search Provider: a configured destination that turns a query into a navigable URL.
