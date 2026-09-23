@@ -100,20 +100,38 @@ export function LoadingHistory() {
 
 // Captures follow the account, not a pairing, so the only thing an empty
 // timeline can be missing is a signed-in account on this browser.
-export function EmptyHistory({ signedOut }: { signedOut?: boolean }) {
+export function EmptyHistory({
+  signedOut,
+  onSignIn,
+}: {
+  signedOut?: boolean;
+  onSignIn?: () => void;
+}) {
   return (
-    <div className="mobile-scanner-card sidepanel-empty-history flex flex-col items-center border-dashed px-4 py-9 text-center">
-      <div className="mobile-scanner-icon mb-3 flex h-12 w-12 items-center justify-center rounded-full text-stone-400 dark:text-stone-500">
-        {signedOut ? <LogIn className="h-5 w-5" /> : <Scan className="h-5 w-5" />}
+    <div className="space-y-3">
+      <div className="mobile-scanner-card sidepanel-empty-history flex flex-col items-center border-dashed px-4 py-9 text-center">
+        <div className="mobile-scanner-icon mb-3 flex h-12 w-12 items-center justify-center rounded-full text-stone-400 dark:text-stone-500">
+          {signedOut ? <LogIn className="h-5 w-5" /> : <Scan className="h-5 w-5" />}
+        </div>
+        <p className="text-sm font-semibold text-stone-700 dark:text-stone-200">
+          {signedOut ? "Sign in to see your captures" : "No results yet"}
+        </p>
+        <p className="mt-1 max-w-[260px] text-xs text-stone-500 dark:text-stone-400">
+          {signedOut
+            ? "Sign in to Volt here and captures from your phone on the same account appear automatically."
+            : "Text captures, barcodes, and fully received photos appear in this timeline."}
+        </p>
       </div>
-      <p className="text-sm font-semibold text-stone-700 dark:text-stone-200">
-        {signedOut ? "Sign in to see your captures" : "No results yet"}
-      </p>
-      <p className="mt-1 max-w-[260px] text-xs text-stone-500 dark:text-stone-400">
-        {signedOut
-          ? "Sign in to Volt here and captures from your phone on the same account appear automatically."
-          : "Text captures, barcodes, and fully received photos appear in this timeline."}
-      </p>
+      {signedOut && onSignIn ? (
+        <button
+          type="button"
+          onClick={onSignIn}
+          className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-500 active:bg-emerald-700"
+        >
+          <LogIn className="h-4 w-4" />
+          Sign in to Volt
+        </button>
+      ) : null}
     </div>
   );
 }

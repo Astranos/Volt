@@ -28,7 +28,7 @@ pnpm install
 pnpm --filter @volt/scanner-protocol test
 ```
 
-That test suite needs no service credentials. See the [contributor guide](CONTRIBUTING.md) to choose a workspace, configure your own development services, and run the relevant checks. Do not use the maintainer's deployment for development.
+That test suite needs no service credentials. See the [contributor guide](CONTRIBUTING.md) to choose a package, configure your own development services, and run the relevant checks. Do not use the maintainer's deployment for development.
 
 Start with an [open issue](https://github.com/juanquenga/Volt/issues), or report a reproducible bug. Documentation corrections and regression tests are welcome. Discuss larger changes in an issue before implementing them.
 
@@ -47,6 +47,7 @@ Convex stores capture metadata; private photo bytes go directly to Cloudflare R2
 ## Documentation
 
 - [Contributor setup and checks](CONTRIBUTING.md)
+- [Environment glossary](docs/environment-glossary.md)
 - [Current product and domain context](CONTEXT.md)
 - [Authentication and billing](docs/authentication-and-billing.md)
 - [Architecture decisions](docs/adr)

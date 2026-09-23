@@ -1,5 +1,6 @@
 import {
   CLERK_PUBLISHABLE_KEY,
+  clerkClientJwtCookieName,
   clerkFrontendApiHostFromPublishableKey,
 } from "./config";
 
@@ -10,7 +11,9 @@ import {
 const STORAGE_KEY_CLIENT_JWT = "__clerk_client_jwt";
 const STORAGE_KEY_VERSION = "v2";
 
-export const CLERK_CLIENT_JWT_COOKIE = "__client";
+export const CLERK_CLIENT_JWT_COOKIE = clerkClientJwtCookieName(
+  CLERK_PUBLISHABLE_KEY,
+);
 
 export function clerkClientJwtCacheKey(frontendApiHost: string) {
   return [frontendApiHost, STORAGE_KEY_CLIENT_JWT, STORAGE_KEY_VERSION].join("|");

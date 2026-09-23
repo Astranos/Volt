@@ -25,7 +25,11 @@ import {
   upsertTimelineEntry,
 } from "../../domain/mobile-scanner-timeline";
 import { cloudResultIds } from "../../cloud-scanner/workspace-hydration";
-import { useSidepanelSignedIn, useSidepanelUserId } from "../access/ExtensionAccess";
+import {
+  SidepanelSignInCard,
+  useSidepanelSignedIn,
+  useSidepanelUserId,
+} from "../access/ExtensionAccess";
 
 /*
  * Source-contract breadcrumbs for scanner domain tests. Implementations live in:
@@ -49,8 +53,22 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
   const cloudWorkspace = useCloudWorkspaceSnapshot();
   const userId = useSidepanelUserId();
   const signedIn = useSidepanelSignedIn();
+  const [signInOpen, setSignInOpen] = useState(false);
+  const openSignIn = useCallback(() => setSignInOpen(true), []);
   if (!cloudWorkspace.historyReady) {
-    return signedIn === false ? <EmptyHistory signedOut /> : <LoadingHistory />;
+    // Mirrors the ScrollArea's px-4 pb-4 gutters so the signed-out state lines
+    // up with the rest of the timeline instead of hugging the panel edges.
+    return signedIn === false ? (
+      <div className="min-h-0 flex-1 px-4 pb-4">
+        {signInOpen ? (
+          <SidepanelSignInCard />
+        ) : (
+          <EmptyHistory signedOut onSignIn={openSignIn} />
+        )}
+      </div>
+    ) : (
+      <LoadingHistory />
+    );
   }
   // Remounting also discards old previews, selections and undo state.
   return <OwnedMobileScanner key={userId} cloudWorkspace={cloudWorkspace} />;
@@ -59,6 +77,8 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
 function OwnedMobileScanner({ cloudWorkspace }: { cloudWorkspace: ReturnType<typeof useCloudWorkspaceSnapshot> }) {
   const [previewPhoto, setPreviewPhoto] = useState<MobilePhoto | null>(null);
   const isSignedIn = useSidepanelSignedIn();
+  const [signInOpen, setSignInOpen] = useState(false);
+  const openSignIn = useCallback(() => setSignInOpen(true), []);
   const [now, setNow] = useState(Date.now());
   const lastCloudDeletedIds = useRef<string[]>([]);
 
@@ -276,8 +296,13 @@ function OwnedMobileScanner({ cloudWorkspace }: { cloudWorkspace: ReturnType<typ
         <div className="min-w-0 space-y-3">
           {loadingResults || awaitingCloudResults ? (
             <LoadingHistory />
+          ) : signInOpen && isSignedIn === false ? (
+            <SidepanelSignInCard />
           ) : groups.length === 0 ? (
-            <EmptyHistory signedOut={isSignedIn === false} />
+            <EmptyHistory
+              signedOut={isSignedIn === false}
+              onSignIn={isSignedIn === false ? openSignIn : undefined}
+            />
           ) : (
             groups.map((group) => {
               const photoOnly = group.entries.every((entry) => entry.type === "photo");
