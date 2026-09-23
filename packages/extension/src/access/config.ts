@@ -27,17 +27,34 @@ export function clerkFrontendApiHostFromPublishableKey(
   return origin ? new URL(origin).host : "";
 }
 
-// Production Clerk sets the __client session cookie on the Frontend API
-// domain (Domain=clerk.voltresale.app), not the web app origin — the
-// SDK's chrome.cookies.get(syncHost) can only see it there.
-export const CLERK_SYNC_HOST =
-  import.meta.env?.WXT_CLERK_SYNC_HOST?.trim() ||
-  clerkFrontendApiFromPublishableKey(CLERK_PUBLISHABLE_KEY) ||
-  "https://clerk.voltresale.app";
-
 export const CLERK_SIGN_IN_URL =
   import.meta.env?.WXT_CLERK_SIGN_IN_URL?.trim() ||
   "https://accounts.voltresale.app/sign-in";
+
+// Test instances store the dev-browser JWT on the web app host. Production
+// instances store __client on the Frontend API host.
+export function clerkSyncHost(
+  publishableKey: string,
+  signInUrl: string,
+  override = "",
+): string {
+  if (override.trim()) return override.trim();
+  if (publishableKey.startsWith("pk_test_")) return new URL(signInUrl).origin;
+  return (
+    clerkFrontendApiFromPublishableKey(publishableKey) ||
+    "https://clerk.voltresale.app"
+  );
+}
+
+export function clerkClientJwtCookieName(publishableKey: string): string {
+  return publishableKey.startsWith("pk_test_") ? "__clerk_db_jwt" : "__client";
+}
+
+export const CLERK_SYNC_HOST = clerkSyncHost(
+  CLERK_PUBLISHABLE_KEY,
+  CLERK_SIGN_IN_URL,
+  import.meta.env?.WXT_CLERK_SYNC_HOST ?? "",
+);
 
 export const VOLT_FULL_APP_URL =
   import.meta.env?.WXT_VOLT_FULL_APP_URL?.trim() ||

@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { clerkFrontendApiFromPublishableKey } from "./config.ts";
+import {
+  clerkClientJwtCookieName,
+  clerkFrontendApiFromPublishableKey,
+  clerkSyncHost,
+} from "./config.ts";
 
 test("Clerk sync host is derived from the publishable key", () => {
   const frontendApi = "clerk.example.com";
@@ -12,6 +16,30 @@ test("Clerk sync host is derived from the publishable key", () => {
     `https://${frontendApi}`,
   );
   assert.equal(clerkFrontendApiFromPublishableKey("not-a-key"), "");
+});
+
+test("dev sync reads the web app cookie while production reads the Frontend API cookie", () => {
+  const devKey = `pk_test_${Buffer.from("large-serval-91.clerk.accounts.dev$").toString("base64")}`;
+  const liveKey = `pk_live_${Buffer.from("clerk.voltresale.app$").toString("base64")}`;
+
+  assert.equal(
+    clerkSyncHost(devKey, "http://localhost:5173/sign-in"),
+    "http://localhost:5173",
+  );
+  assert.equal(clerkClientJwtCookieName(devKey), "__clerk_db_jwt");
+  assert.equal(
+    clerkSyncHost(liveKey, "https://accounts.voltresale.app/sign-in"),
+    "https://clerk.voltresale.app",
+  );
+  assert.equal(clerkClientJwtCookieName(liveKey), "__client");
+  assert.equal(
+    clerkSyncHost(
+      devKey,
+      "http://localhost:5173/sign-in",
+      "http://127.0.0.1:5173",
+    ),
+    "http://127.0.0.1:5173",
+  );
 });
 
 test("Clerk build variables use statically replaceable import.meta.env access", async () => {
