@@ -17,7 +17,9 @@ type MirrorOptions = {
  * sidepanel was open to hand it a token.
  *
  * The service worker does have chrome.cookies, so it mirrors the account's
- * client JWT into the storage cache Clerk reads when it cannot sync itself.
+ * client JWT from the configured sync host into the storage cache Clerk reads
+ * when it cannot sync itself. Dev uses __clerk_db_jwt on the web app host;
+ * production uses __client on the Frontend API host.
  * With that in place the phone and Chrome are simply on the same Clerk session,
  * and nothing has to be connected or kept open for captures to arrive.
  */
@@ -54,8 +56,8 @@ export function createClerkSessionMirror({ chromeApi, log, onChanged }: MirrorOp
     sync,
     initialize: () => {
       if (!enabled) return;
-      // Signing in or out on the web app rewrites this cookie, which is the only
-      // signal the service worker gets that the account changed.
+      // Signing in or out rewrites this cookie, which is the only signal the
+      // service worker gets that the account changed.
       chromeApi.cookies?.onChanged.addListener((change) => {
         if (change.cookie.name !== CLERK_CLIENT_JWT_COOKIE) return;
         void sync();

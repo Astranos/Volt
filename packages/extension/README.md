@@ -89,8 +89,9 @@ the complimentary workplace in the extension can be authorized by Convex.
 Google OAuth runs on `WXT_CLERK_SIGN_IN_URL`, then `WXT_CLERK_SYNC_HOST`
 shares the resulting Clerk session with the popup and background worker. OAuth
 must not redirect directly back into an extension popup or side panel. When the
-sync host is omitted, the extension derives it from the publishable key so the
-cookie host and Clerk Frontend API cannot drift apart.
+sync host is omitted, test keys use the sign-in app's origin (for example,
+`http://localhost:5173`) to read `__clerk_db_jwt`. Live keys use the Frontend
+API host to read `__client`.
 
 Only the background service worker asks Clerk for the `convex` token. It asks
 freshly for every Convex access request, never sends a JWT to content scripts or
