@@ -117,7 +117,7 @@ export const liveDictationDraftsForComputerHandler = async (ctx: QueryCtx, args:
     const now = Date.now();
     const draftsForRegistration = (registrationId: typeof computer._id | undefined) => ctx.db
       .query("dictationDrafts")
-      .withIndex("by_workspaceId_and_targetDeviceId_and_targetRegistrationId_and_expiresAt", q =>
+      .withIndex("by_workspaceId_targetDeviceId_targetRegistration_expires", q =>
         q.eq("workspaceId", workspace._id).eq("targetDeviceId", computer.deviceId)
           .eq("targetRegistrationId", registrationId).gt("expiresAt", now),
       ).order("desc").take(20);
