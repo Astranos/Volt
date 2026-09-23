@@ -11,7 +11,7 @@ permissions:
 jobs:
   javascript:
     name: Tests and typechecks
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
 
     steps:
       - name: Checkout
@@ -51,7 +51,7 @@ jobs:
 
   mobile:
     name: Native apps and Swift helper tests
-    runs-on: macos-latest
+    runs-on: blacksmith-6vcpu-macos-15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -106,7 +106,7 @@ jobs:
     name: JavaScript and TypeScript
     if: always()
     needs: [javascript, mobile]
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     steps:
       - name: Require every verification job to pass
         env:
