@@ -114,7 +114,7 @@ export default defineSchema({
     expiresAt: v.number(),
   })
     .index("by_workspaceId_and_draftId", ["workspaceId", "draftId"])
-    .index("by_workspaceId_and_targetDeviceId_and_targetRegistrationId_and_expiresAt", ["workspaceId", "targetDeviceId", "targetRegistrationId", "expiresAt"])
+    .index("by_workspaceId_targetDeviceId_targetRegistration_expires", ["workspaceId", "targetDeviceId", "targetRegistrationId", "expiresAt"])
     .index("by_targetDeviceId_and_expiresAt", ["targetDeviceId", "expiresAt"]),
 
   resultBatches: defineTable({

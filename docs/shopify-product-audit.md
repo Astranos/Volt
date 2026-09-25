@@ -9,7 +9,7 @@ Use a standalone app in the Shopify Dev Dashboard. Set its app URL to `https://v
 - Development: `https://adorable-hornet-19.convex.site/api/shopify/callback`
 - Production: `https://sincere-trout-414.convex.site/api/shopify/callback`
 
-Register the required [privacy webhooks](https://shopify.dev/docs/apps/build/compliance/privacy-law-compliance) for both deployments as appropriate:
+The checked-in `shopify.app.toml` registers the required [privacy webhooks](https://shopify.dev/docs/apps/build/compliance/privacy-law-compliance) on production. Both deployments implement the endpoints; use the development URLs with a separate test app if needed:
 
 | Shopify topic | Development URL | Production URL |
 | --- | --- | --- |
@@ -18,6 +18,8 @@ Register the required [privacy webhooks](https://shopify.dev/docs/apps/build/com
 | `shop/redact` | `https://adorable-hornet-19.convex.site/api/shopify/webhooks/shop/redact` | `https://sincere-trout-414.convex.site/api/shopify/webhooks/shop/redact` |
 
 The webhook handlers verify Shopify's signature over the raw request body. Shop redaction removes all saved connections and pending authorizations for that store. Customer callbacks acknowledge the request because Volt stores no Shopify customer data.
+
+Shopify CLI is linked to the existing **Volt Resale** app. Validate changes with `pnpm dlx @shopify/cli app config validate` and release an app version with `pnpm dlx @shopify/cli app deploy`.
 
 The app uses Shopify's [authorization code grant](https://shopify.dev/docs/apps/build/authentication-authorization/authenticate-standalone-apps) and expiring offline tokens. Volt stores encrypted access and refresh tokens in Convex, scoped to the signed-in Clerk account. The extension never receives a Shopify token.
 

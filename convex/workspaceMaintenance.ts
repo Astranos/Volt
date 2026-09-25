@@ -14,7 +14,7 @@ const DRAFT_CLEANUP_BATCH_SIZE = 100;
 
 export async function purgeReboundDictationDraftsBatch(ctx: MutationCtx, args: ObjectType<typeof reboundDraftArgs>) {
   const drafts = await ctx.db.query("dictationDrafts")
-    .withIndex("by_workspaceId_and_targetDeviceId_and_targetRegistrationId_and_expiresAt", q =>
+    .withIndex("by_workspaceId_targetDeviceId_targetRegistration_expires", q =>
       q.eq("workspaceId", args.workspaceId).eq("targetDeviceId", args.targetDeviceId)
         .eq("targetRegistrationId", args.targetRegistrationId),
     )
