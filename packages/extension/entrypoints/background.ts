@@ -37,6 +37,7 @@ import { handleTabMessage } from "../src/background/tab-message-handler";
 import {
   getMessageAction,
   isScannerOffscreenRuntimeMessage,
+  isShopifyAuditOffscreenRuntimeMessage,
   parseMessageRecord,
   parseRuntimeMessage,
   type RuntimeMessageSender,
@@ -299,8 +300,6 @@ export default defineBackground({
     function registerListeners() {
       chrome.runtime.onMessage.addListener((message, sender, sendResponse) =>
         cloudSettings.handleMessage(message, sender, sendResponse));
-      chrome.runtime.onMessage.addListener((message, sender, sendResponse) =>
-        shopifyAudit.handleMessage(message, sender, sendResponse));
       createContextMenuController({
         chromeApi: chrome,
         getFallbackTabId: () =>
@@ -428,6 +427,8 @@ export default defineBackground({
     ) {
       if (access.handleMessage(rawMessage, sender, sendResponse)) return true;
       if (cloudWorkspace.handleMessage(rawMessage, sender, sendResponse)) return true;
+      if (shopifyAudit.handleMessage(rawMessage, sender, sendResponse)) return true;
+      if (isShopifyAuditOffscreenRuntimeMessage(rawMessage)) return false;
       const message = parseRuntimeMessage(rawMessage);
 
       if (message && isScannerOffscreenRuntimeMessage(message)) {

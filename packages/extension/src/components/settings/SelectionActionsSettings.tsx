@@ -49,13 +49,26 @@ function CustomActionEditor({ initial, onSave, onCancel }: { initial?: CustomSel
 
 export function SelectionActionsSettings({ settings, saveSettings }: { settings: CmdkSettings; saveSettings: SaveExtensionSettings }) {
   const [dragged, setDragged] = useState<{ key: ActionListKey; id: string } | null>(null);
-  const [editing, setEditing] = useState<{ key: ActionListKey; id?: string } | null>(null);
+  const [editing, setEditing] = useState<{ key: ActionListKey; id?: string; replaceId?: string } | null>(null);
   const update = (key: ActionListKey, actions: SelectionAction[]) => {
     void saveSettings({ ...settings, contextMenu: { ...settings.contextMenu, [key]: normalizeSelectionActions(actions, []) } });
   };
+  const saveCustom = (key: ActionListKey, actions: SelectionAction[], custom: CustomSelectionAction) => {
+    if (!editing || editing.key !== key) return;
+    let nextActions: SelectionAction[];
+    if (editing.id) {
+      nextActions = actions.map((action) => typeof action !== "string" && action.id === editing.id ? custom : action);
+    } else if (editing.replaceId) {
+      nextActions = actions.map((action) => selectionActionKey(action) === editing.replaceId ? custom : action);
+    } else {
+      nextActions = [...actions, custom];
+    }
+    update(key, nextActions);
+    setEditing(null);
+  };
   return (
     <section id="selection-actions" className="scroll-mt-20 space-y-5">
-      <div><h2 className="text-2xl font-bold">Selected text actions</h2><p className="text-muted-foreground">Choose up to three actions for each menu. Drag to reorder them.</p></div>
+      <div><h2 className="text-2xl font-bold">Selected text actions</h2><p className="text-muted-foreground">Choose up to three actions for each menu. Use each dropdown to change an action, or drag to reorder them.</p></div>
       {LISTS.map((list) => {
         const actions = normalizeSelectionActions(settings.contextMenu?.[list.key], list.fallback);
         const available = SELECTION_ACTIONS.filter((candidate) => !actions.some((action) => action === candidate.id));
@@ -70,10 +83,27 @@ export function SelectionActionsSettings({ settings, saveSettings }: { settings:
               onDrop={(event) => { event.preventDefault(); if (!dragged || dragged.key !== list.key || dragged.id === id) return; const moved = actions.find((candidate) => selectionActionKey(candidate) === dragged.id); const reordered = actions.filter((candidate) => selectionActionKey(candidate) !== dragged.id); if (moved) { reordered.splice(index, 0, moved); update(list.key, reordered); } setDragged(null); }}>
               <GripVertical aria-hidden="true" className="text-muted-foreground" size={17} />
               {typeof action !== "string" && <span aria-hidden="true" className="volt-hugeicon text-lg">{String.fromCodePoint(action.iconCodepoint)}</span>}
-              <span className="flex-1 truncate text-sm">{label}</span>
+              <select
+                aria-label={`Action ${index + 1} in ${list.title}`}
+                className="h-9 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-sm"
+                onChange={(event) => {
+                  if (event.target.value === "create-custom") {
+                    setEditing({ key: list.key, replaceId: id });
+                    return;
+                  }
+                  const replacement = SELECTION_ACTIONS.find((candidate) => candidate.id === event.target.value);
+                  if (replacement) {
+                    update(list.key, actions.map((current, currentIndex) => currentIndex === index ? replacement.id : current));
+                    setEditing(null);
+                  }
+                }}
+                value={id}
+              >
+                <option value={id}>{label}</option>
+                {available.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.label}</option>)}
+                <option value="create-custom">Create custom action...</option>
+              </select>
               {typeof action !== "string" && <button aria-label={`Edit ${label}`} className="rounded p-1 hover:bg-muted" onClick={() => setEditing({ key: list.key, id: action.id })} type="button"><Pencil size={15} /></button>}
-              <button aria-label={`Move ${label} up`} className="rounded px-2 py-1 text-xs hover:bg-muted disabled:opacity-40" disabled={index === 0} onClick={() => { const reordered = [...actions]; [reordered[index - 1], reordered[index]] = [reordered[index], reordered[index - 1]]; update(list.key, reordered); }} type="button">Up</button>
-              <button aria-label={`Move ${label} down`} className="rounded px-2 py-1 text-xs hover:bg-muted disabled:opacity-40" disabled={index === actions.length - 1} onClick={() => { const reordered = [...actions]; [reordered[index], reordered[index + 1]] = [reordered[index + 1], reordered[index]]; update(list.key, reordered); }} type="button">Down</button>
               <button aria-label={`Remove ${label}`} className="rounded p-1 hover:bg-muted" onClick={() => update(list.key, actions.filter((candidate) => selectionActionKey(candidate) !== id))} type="button"><X size={16} /></button>
             </li>;
           })}</ol>
@@ -81,7 +111,7 @@ export function SelectionActionsSettings({ settings, saveSettings }: { settings:
             {available.length > 0 && <select aria-label={`Add action to ${list.title}`} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm sm:w-64" onChange={(event) => { const found = SELECTION_ACTIONS.find((candidate) => candidate.id === event.target.value); if (found) update(list.key, [...actions, found.id]); }} value=""><option value="">Add built-in action...</option>{available.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.label}</option>)}</select>}
             <button className="h-10 rounded-md border border-border px-3 text-sm hover:bg-muted" onClick={() => setEditing({ key: list.key })} type="button">Create custom action</button>
           </div>}
-          {editing?.key === list.key && (actions.length < 3 || edited) && <CustomActionEditor initial={typeof edited === "string" ? undefined : edited} key={`${list.key}:${editing.id ?? "new"}`} onCancel={() => setEditing(null)} onSave={(custom) => { update(list.key, editing.id ? actions.map((action) => typeof action !== "string" && action.id === editing.id ? custom : action) : [...actions, custom]); setEditing(null); }} />}
+          {editing?.key === list.key && (actions.length < 3 || edited || editing.replaceId) && <CustomActionEditor initial={typeof edited === "string" ? undefined : edited} key={`${list.key}:${editing.id ?? editing.replaceId ?? "new"}`} onCancel={() => setEditing(null)} onSave={(custom) => saveCustom(list.key, actions, custom)} />}
           <p className="mt-3 text-xs text-muted-foreground">{actions.length} of 3 selected</p>
         </div>;
       })}

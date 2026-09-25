@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   isScannerOffscreenRuntimeMessage,
+  isShopifyAuditOffscreenRuntimeMessage,
   parseRuntimeMessage,
 } from "./messages.ts";
 
@@ -29,6 +30,18 @@ test("offscreen delivery messages are handled by background scanner delivery", (
 
   assert.equal(isScannerOffscreenRuntimeMessage(scanMessage), false);
   assert.equal(isScannerOffscreenRuntimeMessage(photoMessage), false);
+});
+
+test("Shopify audit commands addressed to the offscreen document bypass background's unknown-action reply", () => {
+  for (const action of [
+    "shopifyAuditOffscreenStatus",
+    "shopifyAuditOffscreenConnect",
+    "shopifyAuditOffscreenDisconnect",
+    "shopifyAuditOffscreenListYesterday",
+  ]) {
+    assert.equal(isShopifyAuditOffscreenRuntimeMessage({ action }), true);
+  }
+  assert.equal(isShopifyAuditOffscreenRuntimeMessage({ action: "shopifyAuditOpenYesterday" }), false);
 });
 
 test("background-to-offscreen commands are still ignored by the background listener", () => {
