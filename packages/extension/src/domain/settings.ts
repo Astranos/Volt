@@ -1,5 +1,10 @@
 import type { CmdkSettings } from "../types/settings";
 import {
+  DEFAULT_CONTEXT_ACTIONS,
+  DEFAULT_POPUP_ACTIONS,
+  normalizeSelectionActions,
+} from "./selection-actions";
+import {
   DEFAULT_ENABLED_OFFER_TYPES,
   DEFAULT_TOP_OFFERS_SETTINGS,
   migrateDefaultTopOfferRates,
@@ -65,6 +70,8 @@ export const DEFAULT_SETTINGS: CmdkSettings = {
   contextMenu: {
     enabled: true,
     selectionSuggestionsEnabled: true,
+    selectionPopupActions: [...DEFAULT_POPUP_ACTIONS],
+    contextMenuSelectionActions: [...DEFAULT_CONTEXT_ACTIONS],
   },
   mobilePhotoDownloads: {
     autoDeleteEnabled: true,
@@ -135,6 +142,14 @@ export function mergeSettings(stored?: Partial<CmdkSettings>): CmdkSettings {
     contextMenu: {
       ...(DEFAULT_SETTINGS.contextMenu || {}),
       ...(stored.contextMenu || {}),
+      selectionPopupActions: normalizeSelectionActions(
+        stored.contextMenu?.selectionPopupActions,
+        DEFAULT_POPUP_ACTIONS,
+      ),
+      contextMenuSelectionActions: normalizeSelectionActions(
+        stored.contextMenu?.contextMenuSelectionActions,
+        DEFAULT_CONTEXT_ACTIONS,
+      ),
     },
     mobilePhotoDownloads: {
       ...(DEFAULT_SETTINGS.mobilePhotoDownloads || {}),
@@ -225,7 +240,11 @@ export function structuredCloneSettings(settings: CmdkSettings): CmdkSettings {
     soldListingWarning: { ...(settings.soldListingWarning || {}) },
     upcHighlighter: { ...(settings.upcHighlighter || {}) },
     csvLinks: { ...(settings.csvLinks || {}) },
-    contextMenu: { ...(settings.contextMenu || {}) },
+    contextMenu: {
+      ...(settings.contextMenu || {}),
+      selectionPopupActions: normalizeSelectionActions(settings.contextMenu?.selectionPopupActions, DEFAULT_POPUP_ACTIONS),
+      contextMenuSelectionActions: normalizeSelectionActions(settings.contextMenu?.contextMenuSelectionActions, DEFAULT_CONTEXT_ACTIONS),
+    },
     mobilePhotoDownloads: { ...(settings.mobilePhotoDownloads || {}) },
     topOffers: {
       ...(settings.topOffers || {}),

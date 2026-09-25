@@ -1,29 +1,38 @@
 import React from "react";
-import { PackageSearch, Search, TrendingUp, Copy } from "lucide-react";
+import { PackageSearch, Search, TrendingUp, Copy, Link2, BookOpen, Sparkles } from "lucide-react";
 import { positionSelectionSuggestions } from "../domain/selection-suggestions";
+import {
+  selectionActionKey,
+  selectionActionLabel,
+  type SelectionAction,
+  type SelectionActionId,
+} from "../domain/selection-actions";
 
-export type SelectionSearchActionId = "ebay" | "google" | "pricecharting";
 export type SelectionSuggestionPosition = ReturnType<
   typeof positionSelectionSuggestions
 >;
 
-const selectionSearchActions: Array<{
-  id: SelectionSearchActionId;
-  label: string;
-  icon: React.ComponentType<{ size?: number }>;
-}> = [
-  { id: "ebay", label: "eBay Prices", icon: PackageSearch },
-  { id: "google", label: "Search for UPC", icon: Search },
-  { id: "pricecharting", label: "PriceCharting", icon: TrendingUp },
-];
+const icons: Record<SelectionActionId, React.ComponentType<{ size?: number }>> = {
+  ebay: PackageSearch,
+  "google-upc": Search,
+  pricecharting: TrendingUp,
+  "google-search": Search,
+  "copy-highlight-link": Link2,
+  "look-up": BookOpen,
+  "ask-gemini": Sparkles,
+};
 
 export function SelectionSuggestionPill({
+  actions,
+  actionWidths,
   onCopy,
-  onSearch,
+  onAction,
   position,
 }: {
+  actions: readonly SelectionAction[];
+  actionWidths: readonly number[];
   onCopy: () => void;
-  onSearch: (actionId: SelectionSearchActionId) => void;
+  onAction: (action: SelectionAction) => void;
   position: SelectionSuggestionPosition;
 }) {
   return (
@@ -33,25 +42,29 @@ export function SelectionSuggestionPill({
       data-placement={position.placement}
       role="toolbar"
       style={{
+        gridTemplateColumns: actionWidths.length
+          ? actionWidths.map((width) => `minmax(0, ${width}fr)`).join(" ")
+          : "minmax(0, 1fr)",
         left: `${position.left}px`,
         top: `${position.top}px`,
         width: `${position.width}px`,
       }}
     >
-      {selectionSearchActions.map((action) => {
-        const Icon = action.icon;
+      {actions.map((id) => {
+        const Icon = typeof id === "string" ? icons[id] : null;
+        const label = selectionActionLabel(id);
         return (
           <button
-            key={action.id}
-            aria-label={action.label}
+            key={selectionActionKey(id)}
+            aria-label={label}
             className="selection-action selection-search-action"
-            onClick={() => onSearch(action.id)}
+            onClick={() => onAction(id)}
             onPointerDown={(event) => event.preventDefault()}
-            title={action.label}
+            title={label}
             type="button"
           >
-            <Icon size={16} />
-            <span>{action.label}</span>
+            {Icon ? <Icon size={16} /> : typeof id !== "string" ? <span aria-hidden="true" className="volt-hugeicon" style={{ fontSize: 16 }}>{String.fromCodePoint(id.iconCodepoint)}</span> : null}
+            <span>{label}</span>
           </button>
         );
       })}

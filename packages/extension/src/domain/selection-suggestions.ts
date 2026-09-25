@@ -1,5 +1,7 @@
 export const SELECTION_SUGGESTION_MIN_LENGTH = 2;
 export const SELECTION_SUGGESTION_MAX_LENGTH = 300;
+const SELECTION_SUGGESTION_PILL_PADDING = 10;
+const SELECTION_SUGGESTION_ACTION_CHROME = 45;
 export const SELECTION_SUGGESTION_PILL_WIDTH = 386;
 export const SELECTION_SUGGESTION_PILL_HEIGHT = 80;
 export const SELECTION_SUGGESTION_VIEWPORT_MARGIN = 8;
@@ -12,6 +14,14 @@ export type SelectionRect = {
   top: number;
   width: number;
 };
+
+export function selectionSuggestionActionWidth(textWidth: number) {
+  return Math.ceil(textWidth) + SELECTION_SUGGESTION_ACTION_CHROME;
+}
+
+export function selectionSuggestionPillWidth(actionWidths: readonly number[]) {
+  return Math.max(170, actionWidths.reduce((total, width) => total + width, SELECTION_SUGGESTION_PILL_PADDING));
+}
 
 export function normalizeSelectionSuggestionText(value: string) {
   return value.replace(/\s+/g, " ").trim();
@@ -61,8 +71,12 @@ export function positionSelectionSuggestions({
     Math.max(centeredLeft, margin),
     Math.max(margin, viewportWidth - renderedWidth - margin),
   );
-  const fitsAbove = rect.top >= pillHeight + gap + margin;
-  const preferredTop = fitsAbove
+  const availableAbove = rect.top - margin - gap;
+  const availableBelow = viewportHeight - rect.bottom - margin - gap;
+  const fitsAbove = availableAbove >= pillHeight;
+  const fitsBelow = availableBelow >= pillHeight;
+  const placeAbove = fitsAbove || (!fitsBelow && availableAbove >= availableBelow);
+  const preferredTop = placeAbove
     ? rect.top - pillHeight - gap
     : rect.bottom + gap;
   const top = Math.min(
@@ -72,7 +86,7 @@ export function positionSelectionSuggestions({
 
   return {
     left,
-    placement: fitsAbove ? ("above" as const) : ("below" as const),
+    placement: placeAbove ? ("above" as const) : ("below" as const),
     top,
     width: renderedWidth,
   };

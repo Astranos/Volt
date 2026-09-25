@@ -88,6 +88,7 @@ describe("backend compatibility contracts", () => {
     const routes = http.getRoutes().map(([path, method]) => method + " " + path).sort();
     expect(routes).toEqual([
       "GET /api/access/status",
+      "GET /api/shopify/callback",
       "GET /api/signal",
       "GET /api/signal/*",
       "GET /api/workspace/snapshot",
@@ -145,6 +146,9 @@ describe("backend compatibility contracts", () => {
       "POST /api/mobile/enrollment/exchange",
       "POST /api/mobile/outbox/sync",
       "POST /api/mobile/photos/upload-url",
+      "POST /api/shopify/webhooks/customers/data_request",
+      "POST /api/shopify/webhooks/customers/redact",
+      "POST /api/shopify/webhooks/shop/redact",
       "POST /api/signal",
       "POST /api/signal/*",
       "POST /api/storekit/notifications",

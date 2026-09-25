@@ -4,6 +4,8 @@ import test from "node:test";
 import {
   normalizeSelectionSuggestionText,
   positionSelectionSuggestions,
+  selectionSuggestionActionWidth,
+  selectionSuggestionPillWidth,
   shouldShowSelectionSuggestions,
 } from "./selection-suggestions.ts";
 
@@ -50,6 +52,9 @@ test("selection suggestions normalize whitespace and reject noisy selections", (
 });
 
 test("selection suggestions stay inside the viewport above or below text", () => {
+  assert.deepEqual([69, 90, 86].map(selectionSuggestionActionWidth), [114, 135, 131]);
+  assert.equal(selectionSuggestionPillWidth([114, 135, 131]), 390);
+  assert.equal(selectionSuggestionPillWidth([114]), 170);
   assert.deepEqual(
     positionSelectionSuggestions({
       rect: visibleRect,
@@ -77,4 +82,44 @@ test("selection suggestions stay inside the viewport above or below text", () =>
       width: 304,
     },
   );
+});
+
+test("selection suggestions use the full multiline selection bounds", () => {
+  const multilineRect = {
+    bottom: 360,
+    height: 240,
+    left: 180,
+    top: 120,
+    width: 420,
+  };
+
+  assert.deepEqual(
+    positionSelectionSuggestions({
+      rect: multilineRect,
+      viewportHeight: 700,
+      viewportWidth: 900,
+    }),
+    {
+      left: 197,
+      placement: "above",
+      top: 30,
+      width: 386,
+    },
+  );
+  assert.ok(30 + 80 + 10 <= multilineRect.top);
+
+  assert.deepEqual(
+    positionSelectionSuggestions({
+      rect: { ...multilineRect, bottom: 180, height: 160, top: 20 },
+      viewportHeight: 400,
+      viewportWidth: 900,
+    }),
+    {
+      left: 197,
+      placement: "below",
+      top: 190,
+      width: 386,
+    },
+  );
+  assert.ok(180 + 10 <= 190);
 });

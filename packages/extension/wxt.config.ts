@@ -65,6 +65,7 @@ export default defineConfig({
       "storage",
       "cookies",
       "tabs",
+      "tabGroups",
       "activeTab",
       "scripting",
       "sidePanel",
@@ -107,6 +108,10 @@ export default defineConfig({
     },
     options_page: "options.html",
     web_accessible_resources: [
+      {
+        resources: ["assets/fonts/*"],
+        matches: ["<all_urls>"],
+      },
       {
         resources: ["assets/images/*"],
         matches: ["<all_urls>"],

@@ -15,6 +15,7 @@ export type MenuAction = {
 
 type ContextMenuProps = {
   actions: MenuAction[];
+  selectionActionCount: number;
   quickActions: MenuAction[];
   lastSelection: string;
   clickedUrl: string | null;
@@ -25,7 +26,7 @@ type ContextMenuProps = {
   dismiss: () => void;
 };
 
-export function ContextMenu({ actions, quickActions, lastSelection, clickedUrl, x, y, closeMenu, openUrl, dismiss }: ContextMenuProps) {
+export function ContextMenu({ actions, selectionActionCount, quickActions, lastSelection, clickedUrl, x, y, closeMenu, openUrl, dismiss }: ContextMenuProps) {
   const items = actions;
   const hasSelection = !!lastSelection;
   const menuRef = useRef<HTMLDivElement>(null);
@@ -199,12 +200,12 @@ export function ContextMenu({ actions, quickActions, lastSelection, clickedUrl, 
             const enabledIndex = enabledItems.indexOf(item);
             return (
               <React.Fragment key={item.id}>
-                {i === 0 && (
+                {i === 0 && selectionActionCount > 0 && (
                   <div className="section-label">Search selected text</div>
                 )}
-                {i === 3 && (
+                {i === selectionActionCount && (
                   <>
-                    <div className="sep" />
+                    {selectionActionCount > 0 && <div className="sep" />}
                     <div className="section-label">Tools</div>
                   </>
                 )}

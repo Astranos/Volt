@@ -67,6 +67,9 @@ test("extension auth delegates web sign-in and syncs the Clerk session", async (
   const offscreenSource = await readFile(
     new URL("../offscreen/mobile-scanner-offscreen.ts", import.meta.url),
     "utf8",
+  ) + await readFile(
+    new URL("../offscreen/cloud-workspace-subscriptions.ts", import.meta.url),
+    "utf8",
   );
   const popupSource = await readFile(
     new URL("../../entrypoints/mobile-scanner-popup/main.tsx", import.meta.url),

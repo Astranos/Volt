@@ -68,6 +68,9 @@ test("the DOM-capable offscreen document owns the Clerk background client", asyn
   const offscreenSource = await readFile(
     new URL("../offscreen/mobile-scanner-offscreen.ts", import.meta.url),
     "utf8",
+  ) + await readFile(
+    new URL("../offscreen/cloud-workspace-subscriptions.ts", import.meta.url),
+    "utf8",
   );
   const backgroundSource = await readFile(
     new URL("../../entrypoints/background.ts", import.meta.url),

@@ -7,6 +7,8 @@ import { ScrollArea } from "@/src/components/ui/scroll-area";
 import { ToggleGroup, ToggleGroupItem } from "@/src/components/ui/toggle-group";
 import { Search as SearchIcon, Clock } from "lucide-react";
 import { type SearchMode } from "./NewTabHelp";
+import { ShopifyProductResults, type ShopifyProductSearchState } from "./ShopifyProductResults";
+import { searchShopifyProducts } from "../../shopify-audit/client";
 import {
   getSearchPrefixMode,
   NEW_TAB_SEARCH_PROVIDERS,
@@ -18,7 +20,6 @@ interface ClosedTabsPanelProps {
   onSearchSubmit?: (query: string) => void;
   activeMode?: SearchMode;
   onToggleSearchMode?: (mode: SearchMode) => void;
-  resolvingShopifyStore?: boolean;
 }
 
 const SEARCH_MODE_OPTIONS: Array<{
@@ -41,18 +42,42 @@ export function ClosedTabsPanel({
   onSearchSubmit,
   activeMode = "closed-tabs",
   onToggleSearchMode,
-  resolvingShopifyStore = false,
 }: ClosedTabsPanelProps) {
   const [search, setSearch] = useState("");
   const [closedTabs, setClosedTabs] = useState<TabInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedValue, setSelectedValue] = useState<string>("");
+  const [shopifySearch, setShopifySearch] = useState<ShopifyProductSearchState>({ kind: "idle" });
+  const [shopifyRetry, setShopifyRetry] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const trimmedSearch = search.trim();
   const prefixedSearch = parseSearchPrefix(trimmedSearch);
   const displayedMode = prefixedSearch.mode ?? activeMode;
   const displayedQuery = prefixedSearch.mode ? prefixedSearch.query : trimmedSearch;
+
+  useEffect(() => {
+    const query = displayedQuery.trim();
+    if (displayedMode !== "shopify" || query.length < 2) {
+      setShopifySearch({ kind: "idle" });
+      return;
+    }
+    let canceled = false;
+    setShopifySearch({ kind: "loading", query });
+    const timer = window.setTimeout(() => {
+      void searchShopifyProducts(query)
+        .then((result) => {
+          if (canceled) return;
+          setShopifySearch({ kind: "ready", query, result });
+          setSelectedValue(result.products[0] ? `shopify-product-${result.products[0].id}` : "");
+        })
+        .catch((cause: unknown) => {
+          if (canceled) return;
+          setShopifySearch({ kind: "error", query, message: cause instanceof Error ? cause.message : "Could not search Shopify." });
+        });
+    }, 280);
+    return () => { canceled = true; window.clearTimeout(timer); };
+  }, [displayedMode, displayedQuery, shopifyRetry]);
 
   // Treat clicks anywhere on the search row's padding/icon area as a
   // request to focus the input, except when they land on a real control.
@@ -86,7 +111,7 @@ export function ClosedTabsPanel({
 
   const filteredTabs = TabManager.filterTabs(closedTabs, search);
   // Top tiles show the 4 most-recently-closed tabs, only when no search active.
-  const showTiles = !trimmedSearch && closedTabs.length > 0;
+  const showTiles = displayedMode !== "shopify" && !trimmedSearch && closedTabs.length > 0;
   const topTiles = showTiles ? closedTabs.slice(0, 4) : [];
   const listTabs = showTiles ? closedTabs.slice(4) : filteredTabs;
 
@@ -102,10 +127,6 @@ export function ClosedTabsPanel({
   ];
 
   const getSearchProviderTitle = () => {
-    if (displayedMode === "shopify") {
-      return "Shopify (Available Inventory)";
-    }
-
     const provider = NEW_TAB_SEARCH_PROVIDERS.find(
       (candidate) => candidate.id === displayedMode
     );
@@ -123,7 +144,7 @@ export function ClosedTabsPanel({
       case "barcodelookup":
         return "Search on BarcodeLookup (UPC)";
       case "shopify":
-        return "Search on Shopify (inventory search)";
+        return "Search your Shopify products...";
       default:
         return "Search closed tabs...";
     }
@@ -154,6 +175,7 @@ export function ClosedTabsPanel({
     if (
       e.key === "Enter" &&
       onSearchSubmit &&
+      displayedMode !== "shopify" &&
       (activeMode !== "closed-tabs" || prefixedSearch.mode)
     ) {
       e.preventDefault();
@@ -219,13 +241,8 @@ export function ClosedTabsPanel({
               value={option.mode}
               size="sm"
               className="text-xs px-2"
-              disabled={option.mode === "shopify" && resolvingShopifyStore}
             >
-              <span>
-                {option.mode === "shopify" && resolvingShopifyStore
-                  ? "..."
-                  : option.label}
-              </span>
+              <span>{option.label}</span>
             </ToggleGroupItem>
           ))}
         </ToggleGroup>
@@ -253,8 +270,16 @@ export function ClosedTabsPanel({
             </div>
           )}
 
-          <Command.List className="closed-tabs-list" ref={listRef}>
-            {loading ? (
+          <Command.List className={displayedMode === "shopify" ? "closed-tabs-list shopify-results-list" : "closed-tabs-list"} ref={listRef}>
+            {displayedMode === "shopify" ? (
+              <ShopifyProductResults
+                query={displayedQuery.trim()}
+                state={shopifySearch}
+                onOpenProduct={(url) => { void chrome.tabs.create({ url, active: true }); }}
+                onRetry={() => setShopifyRetry((current) => current + 1)}
+                onOpenSettings={() => { void chrome.tabs.create({ url: chrome.runtime.getURL("/options.html#shopify-audit"), active: true }); }}
+              />
+            ) : loading ? (
               <div className="closed-tabs-loading">
                 <p>Loading...</p>
               </div>

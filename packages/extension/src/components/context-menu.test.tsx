@@ -9,8 +9,8 @@ const actions: MenuAction[] = [
   { id: "settings", label: "Settings", onInvoke: vi.fn() },
 ];
 
-function render(selection: string, clickedUrl: string | null) {
-  return renderToStaticMarkup(<ContextMenu actions={actions} quickActions={[]} lastSelection={selection} clickedUrl={clickedUrl} x={0} y={0} closeMenu={vi.fn()} openUrl={vi.fn()} dismiss={vi.fn()} />);
+function render(selection: string, clickedUrl: string | null, selectionActionCount = 1) {
+  return renderToStaticMarkup(<ContextMenu actions={actions} selectionActionCount={selectionActionCount} quickActions={[]} lastSelection={selection} clickedUrl={clickedUrl} x={0} y={0} closeMenu={vi.fn()} openUrl={vi.fn()} dismiss={vi.fn()} />);
 }
 
 test("without a selection, disables search while retaining general actions", () => {
@@ -27,4 +27,11 @@ test("selection and clicked link enable their corresponding actions", () => {
   expect(html).toContain("Open link");
   expect(html).toContain("hello");
   expect(html).not.toContain('aria-disabled="true"');
+});
+
+test("tools heading follows the configured selection actions", () => {
+  const html = render("hello", null);
+  expect(html.indexOf("Search selected text")).toBeLessThan(html.indexOf("Search text"));
+  expect(html.indexOf("Tools")).toBeGreaterThan(html.indexOf("Search text"));
+  expect(html.indexOf("Tools")).toBeLessThan(html.indexOf("Settings"));
 });

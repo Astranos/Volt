@@ -9,6 +9,7 @@ import { createAccessController } from "../src/background/access-controller";
 import { createCloudCursorDeliveryController } from "../src/background/cloud-cursor-delivery-controller";
 import { createCloudLiveDictationController } from "../src/background/cloud-live-dictation-controller";
 import { createCloudWorkspaceController } from "../src/background/cloud-workspace-controller";
+import { createCloudSettingsController } from "../src/background/cloud-settings-controller";
 import { createClerkSessionMirror } from "../src/background/clerk-session-mirror";
 import { createClipboardController } from "../src/background/clipboard-controller";
 import { createContextMenuController } from "../src/background/context-menu-controller";
@@ -26,6 +27,7 @@ import {
 import { createScannerMessageHandler } from "../src/background/scanner-message-handler";
 import { createScannerOffscreenController } from "../src/background/scanner-offscreen";
 import { createScannerTextInserter } from "../src/background/scanner-text-insertion";
+import { createShopifyAuditController } from "../src/background/shopify-audit-controller";
 import { registerSidepanelMessageActions } from "../src/background/sidepanel-message-controller";
 import { createSidepanelToolController } from "../src/background/sidepanel-tool-controller";
 import { createTabDeliveryController } from "../src/background/tab-delivery";
@@ -35,6 +37,7 @@ import { handleTabMessage } from "../src/background/tab-message-handler";
 import {
   getMessageAction,
   isScannerOffscreenRuntimeMessage,
+  isShopifyAuditOffscreenRuntimeMessage,
   parseMessageRecord,
   parseRuntimeMessage,
   type RuntimeMessageSender,
@@ -168,11 +171,25 @@ export default defineBackground({
       sendOffscreenMessage: scannerOffscreen.sendScannerOffscreenMessage,
       log,
     });
+    const cloudSettings = createCloudSettingsController({
+      chromeApi: chrome,
+      extensionId: chrome.runtime.id,
+      sendOffscreenMessage: scannerOffscreen.sendScannerOffscreenMessage,
+    });
+    cloudSettings.start();
+    const shopifyAudit = createShopifyAuditController({
+      chromeApi: chrome,
+      extensionId: chrome.runtime.id,
+      sendOffscreenMessage: scannerOffscreen.sendScannerOffscreenMessage,
+    });
     const clerkSessionMirror = createClerkSessionMirror({
       chromeApi: chrome,
       log,
       onChanged: () => {
-        void cloudWorkspace.handleAccountSessionChanged();
+        void cloudWorkspace.handleAccountSessionChanged()
+          .catch(() => undefined)
+          .then(() => cloudSettings.pull())
+          .catch(() => undefined);
       },
     });
     const tabDelivery = createTabDeliveryController({ chromeApi: chrome, log });
@@ -363,8 +380,10 @@ export default defineBackground({
 
       void scannerOffscreen.pollScannerReconnectRequests("background-main");
       void access.initialize();
-      clerkSessionMirror.initialize();
-      void cloudWorkspace.initialize();
+      void clerkSessionMirror.initialize()
+        .then(() => cloudWorkspace.initialize())
+        .then(() => cloudSettings.pull())
+        .catch(() => undefined);
       scannerOffscreen.ensureScannerReconnectAlarm();
       photoDownloadCleanup.ensureCleanupAlarm();
 
@@ -372,7 +391,7 @@ export default defineBackground({
         if (alarm?.name === cloudWorkspace.alarmName) {
           // cookies.onChanged does not fire while the worker is asleep, so the
           // workspace alarm is also when a missed sign-in gets picked up.
-          void clerkSessionMirror.sync();
+          void clerkSessionMirror.sync().then(() => cloudSettings.pull()).catch(() => undefined);
           void cloudWorkspace.handleAlarm();
           return;
         }
@@ -408,7 +427,10 @@ export default defineBackground({
       sendResponse: RuntimeSendResponse
     ) {
       if (access.handleMessage(rawMessage, sender, sendResponse)) return true;
+      if (cloudSettings.handleMessage(rawMessage, sender, sendResponse)) return true;
       if (cloudWorkspace.handleMessage(rawMessage, sender, sendResponse)) return true;
+      if (shopifyAudit.handleMessage(rawMessage, sender, sendResponse)) return true;
+      if (isShopifyAuditOffscreenRuntimeMessage(rawMessage)) return false;
       const message = parseRuntimeMessage(rawMessage);
 
       if (message && isScannerOffscreenRuntimeMessage(message)) {

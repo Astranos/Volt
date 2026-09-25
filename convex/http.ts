@@ -1,3 +1,5 @@
+import { shopifyCallback } from "./http/shopify";
+import { customerDataRequest, customerRedact, shopRedact } from "./http/shopifyCompliance";
 import { httpRouter, makeFunctionReference } from "convex/server";
 import type { SnapshotPageArgs, WorkspaceSnapshotPage } from "@volt/scanner-protocol";
 import {
@@ -938,5 +940,11 @@ http.route({ pathPrefix: "/api/signal/", method: "GET", handler: signalHandler }
 http.route({ pathPrefix: "/api/signal/", method: "POST", handler: signalHandler });
 
 http.route({ pathPrefix: "/api/signal/", method: "OPTIONS", handler: signalHandler });
+
+http.route({ path: "/api/shopify/callback", method: "GET", handler: shopifyCallback });
+
+http.route({ path: "/api/shopify/webhooks/customers/data_request", method: "POST", handler: customerDataRequest });
+http.route({ path: "/api/shopify/webhooks/customers/redact", method: "POST", handler: customerRedact });
+http.route({ path: "/api/shopify/webhooks/shop/redact", method: "POST", handler: shopRedact });
 
 export default http;

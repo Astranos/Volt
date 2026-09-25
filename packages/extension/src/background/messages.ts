@@ -169,6 +169,19 @@ export function getMessageAction(value: unknown): string | null {
   return typeof value.action === "string" ? value.action : null;
 }
 
+const SHOPIFY_AUDIT_OFFSCREEN_ACTIONS = new Set([
+  "shopifyAuditOffscreenStatus",
+  "shopifyAuditOffscreenConnect",
+  "shopifyAuditOffscreenDisconnect",
+  "shopifyAuditOffscreenListYesterday",
+  "shopifyAuditOffscreenSearchProducts",
+]);
+
+export function isShopifyAuditOffscreenRuntimeMessage(value: unknown): boolean {
+  const action = getMessageAction(value);
+  return action !== null && SHOPIFY_AUDIT_OFFSCREEN_ACTIONS.has(action);
+}
+
 export function parseMessageRecord(value: unknown): MessageRecord | null {
   return isMessageRecord(value) ? value : null;
 }

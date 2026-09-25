@@ -1,3 +1,5 @@
+import type { SelectionAction } from "../domain/selection-actions";
+
 export interface RateRule {
   threshold: number;
   percentage: number;
@@ -86,6 +88,8 @@ export interface CmdkSettings {
   contextMenu?: {
     enabled?: boolean;
     selectionSuggestionsEnabled?: boolean;
+    selectionPopupActions?: SelectionAction[];
+    contextMenuSelectionActions?: SelectionAction[];
   };
   mobilePhotoDownloads?: {
     autoDeleteEnabled?: boolean;
