@@ -10,7 +10,7 @@ export const connectionValidator = v.object({
   ...tokenFields, refreshLease: v.optional(v.object({ nonce: v.string(), expiresAt: v.number() })),
 });
 export const begin = internalMutation({
-  args: { ownerTokenIdentifier: v.string(), shop: v.string(), state: v.string() }, returns: v.null(),
+  args: { ownerTokenIdentifier: v.string(), shop: v.string(), state: v.string(), browserNonceHash: v.string() }, returns: v.null(),
   handler: async (ctx, args) => {
     const old = await ctx.db.query("shopifyOAuthStates").withIndex("by_ownerTokenIdentifier", q => q.eq("ownerTokenIdentifier", args.ownerTokenIdentifier)).unique();
     if (old) await ctx.db.delete(old._id);
@@ -19,11 +19,12 @@ export const begin = internalMutation({
   },
 });
 export const consume = internalMutation({
-  args: { state: v.string(), shop: v.string() },
+  args: { state: v.string(), shop: v.string(), browserNonceHash: v.string() },
   returns: v.object({ id: v.id("shopifyOAuthStates"), ownerTokenIdentifier: v.string() }),
   handler: async (ctx, args) => {
     const row = await ctx.db.query("shopifyOAuthStates").withIndex("by_state", q => q.eq("state", args.state)).unique();
-    if (!row || row.shop !== args.shop || row.expiresAt <= Date.now() || row.consumedAt !== undefined) throw new ConvexError("Shopify connection request expired. Start again.");
+    if (!row || row.shop !== args.shop || row.browserNonceHash !== args.browserNonceHash
+      || row.expiresAt <= Date.now() || row.consumedAt !== undefined) throw new ConvexError("Shopify connection request expired. Start again.");
     await ctx.db.patch(row._id, { consumedAt: Date.now() });
     return { id: row._id, ownerTokenIdentifier: row.ownerTokenIdentifier };
   },

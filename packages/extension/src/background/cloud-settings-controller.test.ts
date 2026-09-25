@@ -97,6 +97,67 @@ describe("cloud settings transport", () => {
     expect(syncState.cmdkSettings).toEqual(edited);
   });
 
+  test("does not overwrite newer cloud settings with a stale offline edit", async () => {
+    const initial = { contextMenu: { enabled: true } };
+    const offlineEdit = { contextMenu: { enabled: false } };
+    const newerCloud = { contextMenu: { enabled: true, selectionSuggestionsEnabled: false } };
+    const { chromeApi, syncState, localState } = chromeStub(initial);
+    let online = true;
+    let cloud = { payload: JSON.stringify(initial), revision: 1, updatedAt: 1, subject: "alice" };
+    const saveRevisions: Array<number | null> = [];
+    const controller = createCloudSettingsController({
+      chromeApi,
+      extensionId,
+      sendOffscreenMessage: async (message) => {
+        if (!online) throw new Error("offline");
+        const request = message as { action: string; expectedRevision?: number | null };
+        if (request.action === "extensionSettingsOffscreenGet") return { success: true, value: cloud };
+        saveRevisions.push(request.expectedRevision ?? null);
+        return { success: false, error: "SETTINGS_CONFLICT" };
+      },
+    });
+    controller.start();
+    await controller.pull();
+    online = false;
+    await chromeApi.storage.sync.set({ cmdkSettings: offlineEdit });
+    await vi.waitFor(() => expect(localState["volt.extensionSettings.pending.v1"]).toBeDefined());
+    cloud = { payload: JSON.stringify(newerCloud), revision: 2, updatedAt: 2, subject: "alice" };
+    online = true;
+    await controller.pull();
+    expect(saveRevisions).toContain(1);
+    expect(syncState.cmdkSettings).toEqual(newerCloud);
+  });
+
+  test("does not apply a stale pull after a newer push succeeds", async () => {
+    const initial = { contextMenu: { enabled: true } };
+    const edited = { contextMenu: { enabled: false } };
+    const { chromeApi, syncState, localState } = chromeStub(initial);
+    let releasePull: (() => void) | undefined;
+    let getCount = 0;
+    const controller = createCloudSettingsController({
+      chromeApi,
+      extensionId,
+      sendOffscreenMessage: async (message) => {
+        const action = (message as { action: string }).action;
+        if (action === "extensionSettingsOffscreenGet") {
+          getCount += 1;
+          if (getCount === 2) await new Promise<void>((resolve) => { releasePull = resolve; });
+          return { success: true, value: { payload: JSON.stringify(initial), revision: 1, updatedAt: 1, subject: "alice" } };
+        }
+        return { success: true, value: { payload: JSON.stringify(edited), revision: 2, updatedAt: 2, subject: "alice" } };
+      },
+    });
+    controller.start();
+    await controller.pull();
+    const stalePull = controller.pull();
+    await vi.waitFor(() => expect(releasePull).toBeTypeOf("function"));
+    await chromeApi.storage.sync.set({ cmdkSettings: edited });
+    await vi.waitFor(() => expect((localState["volt.extensionSettings.cloud.v1"] as { revision?: number } | undefined)?.revision).toBe(2));
+    releasePull?.();
+    await stalePull;
+    expect(syncState.cmdkSettings).toEqual(edited);
+  });
+
   test("does not migrate account A cache into account B after a worker restart", async () => {
     const aSettings = { contextMenu: { enabled: false } };
     const { chromeApi, syncState } = chromeStub(aSettings);

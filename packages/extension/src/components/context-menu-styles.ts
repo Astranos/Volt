@@ -1,5 +1,4 @@
-export const styles = (fontUrl: string) => `
-      @font-face{font-family:VoltHugeicons;src:url("${fontUrl}") format("woff2");font-display:block}
+export const styles = () => `
       .volt-hugeicon{font-family:VoltHugeicons!important;font-weight:normal;font-style:normal;line-height:1}
       :host{all:initial}
       .volt-cm-root{position:fixed;inset:0;z-index:2147483647}
@@ -42,8 +41,7 @@ export const styles = (fontUrl: string) => `
       .empty-hint{padding:10px 14px;border-bottom:1px solid #eef2f7;background:#fff;font-size:12px;color:#94a3b8;text-align:left}
     `;
 
-export const selectionStyles = (fontUrl: string) => `
-      @font-face{font-family:VoltHugeicons;src:url("${fontUrl}") format("woff2");font-display:block}
+export const selectionStyles = () => `
       .volt-hugeicon{font-family:VoltHugeicons!important;font-weight:normal;font-style:normal;line-height:1}
       :host{all:initial}
       .selection-pill{box-sizing:border-box;position:fixed;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));padding:4px;background:rgba(255,255,255,.98);color:#1f2937;border:1px solid rgba(148,163,184,.32);border-radius:13px;box-shadow:0 12px 30px rgba(15,23,42,.18),0 2px 8px rgba(15,23,42,.1);font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;pointer-events:auto;isolation:isolate;animation:volt-selection-enter 90ms ease-out}

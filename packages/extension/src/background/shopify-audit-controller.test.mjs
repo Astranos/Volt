@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createShopifyAuditController } from "./shopify-audit-controller.ts";
 import { yesterdayInComputerTimezone } from "../domain/shopify-audit.ts";
+import { EXTENSION_SCANNER_SIGNAL_URL } from "../domain/mobile-scanner-signal-url.ts";
 
 function setup(products) {
   const calls = { created: [], grouped: [], updatedGroups: [], activated: [] };
@@ -52,6 +53,18 @@ test("does not open an unexpected product URL", async () => {
   assert.deepEqual(calls.created, []);
 });
 
+test("refuses an audit day too large to open safely", async () => {
+  const products = Array.from({ length: 101 }, (_, index) => ({
+    id: String(index + 1), title: `Product ${index + 1}`, status: "DRAFT",
+    url: `https://admin.shopify.com/store/sample/products/${index + 1}`,
+  }));
+  const { calls, request } = setup(products);
+  const response = await request();
+  assert.equal(response.success, false);
+  assert.match(response.error, /up to 100 audit tabs/);
+  assert.deepEqual(calls.created, []);
+});
+
 test("forwards live searches only from trusted extension pages", async () => {
   const messages = [];
   const controller = createShopifyAuditController({
@@ -71,4 +84,33 @@ test("forwards live searches only from trusted extension pages", async () => {
   assert.equal((await request("x", trusted)).success, false);
   assert.equal((await request("camera", { id: "other", url: "chrome-extension://other/newtab.html" })).success, false);
   assert.equal(messages.length, 1);
+});
+
+test("binds Shopify authorization to this browser before opening the approval tab", async () => {
+  const callback = `${new URL(EXTENSION_SCANNER_SIGNAL_URL).origin}/api/shopify/callback`;
+  const cookies = [];
+  const tabs = [];
+  const url = new URL("https://sample.myshopify.com/admin/oauth/authorize");
+  url.searchParams.set("redirect_uri", callback);
+  const controller = createShopifyAuditController({
+    chromeApi: {
+      cookies: { set: async (details) => { cookies.push(details); return details; } },
+      tabs: { create: async (details) => { tabs.push(details); return { id: 1 }; } },
+    },
+    extensionId: "ext",
+    sendOffscreenMessage: async () => ({ success: true, value: {
+      url: url.href,
+      browserCookie: { url: callback, name: "volt_shopify_oauth", value: "b".repeat(64) },
+    } }),
+  });
+  const response = await new Promise((resolve) => controller.handleMessage(
+    { action: "shopifyAuditConnect", shop: "sample.myshopify.com" },
+    { id: "ext", url: "chrome-extension://ext/options.html", tab: { windowId: 5 } },
+    resolve,
+  ));
+  assert.equal(response.success, true);
+  assert.equal(cookies[0].url, callback);
+  assert.equal(cookies[0].httpOnly, true);
+  assert.equal(cookies[0].sameSite, "lax");
+  assert.deepEqual(tabs, [{ url: url.href, active: true, windowId: 5 }]);
 });

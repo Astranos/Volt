@@ -532,8 +532,25 @@ export default defineContentScript({
     let activeSuggestionSelection = "";
     let suppressedSuggestionSelection = "";
 
+    let hugeiconsFont: FontFace | null = null;
+    const ensureHugeiconsFont = () => {
+      if (hugeiconsFont) return;
+      const font = new FontFace(
+        "VoltHugeicons",
+        `url("${chrome.runtime.getURL("assets/fonts/hugeicons-stroke-rounded.woff2")}") format("woff2")`,
+        { display: "block" },
+      );
+      hugeiconsFont = font;
+      document.fonts.add(font);
+      void font.load().catch(() => {
+        document.fonts.delete(font);
+        if (hugeiconsFont === font) hugeiconsFont = null;
+      });
+    };
+
     const ensureHost = () => {
       if (host && shadow && rootEl) return;
+      ensureHugeiconsFont();
       host = document.createElement("div");
       host.style.all = "initial";
       host.style.position = "fixed";
@@ -542,7 +559,7 @@ export default defineContentScript({
       host.style.pointerEvents = "none"; // Initially hidden
       shadow = host.attachShadow({ mode: "open" });
       const style = document.createElement("style");
-      style.textContent = styles(chrome.runtime.getURL("assets/fonts/hugeicons-stroke-rounded.woff2"));
+      style.textContent = styles();
       rootEl = document.createElement("div");
       rootEl.className = "volt-cm-root";
       shadow.appendChild(style);
@@ -563,6 +580,7 @@ export default defineContentScript({
 
     const ensureSelectionHost = () => {
       if (selectionHost && selectionRootEl && selectionReactRoot) return;
+      ensureHugeiconsFont();
       selectionHost = document.createElement("div");
       selectionHost.style.all = "initial";
       selectionHost.style.position = "fixed";
@@ -571,7 +589,7 @@ export default defineContentScript({
       selectionHost.style.pointerEvents = "none";
       const selectionShadow = selectionHost.attachShadow({ mode: "open" });
       const style = document.createElement("style");
-      style.textContent = selectionStyles(chrome.runtime.getURL("assets/fonts/hugeicons-stroke-rounded.woff2"));
+      style.textContent = selectionStyles();
       selectionRootEl = document.createElement("div");
       selectionShadow.appendChild(style);
       selectionShadow.appendChild(selectionRootEl);

@@ -7,7 +7,7 @@ import schema from "./schema";
 const modules = import.meta.glob("./**/*.ts");
 
 type Settings = { payload: string; revision: number; updatedAt: number };
-const getSettings = makeFunctionReference<"query", Record<string, never>, Settings | null>(
+const getSettings = makeFunctionReference<"query", Record<string, never>, { subject: string; value: Settings | null }>(
   "extensionSettings:get",
 );
 const saveSettings = makeFunctionReference<
@@ -36,12 +36,12 @@ describe("extension settings sync", () => {
       expectedSubject: "alice",
     });
     expect(saved.revision).toBe(1);
-    expect(await alice.query(getSettings, {})).toEqual(saved);
-    expect(await bob.query(getSettings, {})).toBeNull();
+    expect(await alice.query(getSettings, {})).toEqual({ subject: "alice", value: saved });
+    expect(await bob.query(getSettings, {})).toEqual({ subject: "bob", value: null });
 
     const bobSaved = await bob.mutation(saveSettings, { payload: "{}", expectedRevision: null, expectedSubject: "bob" });
     expect(bobSaved.revision).toBe(1);
-    expect(await alice.query(getSettings, {})).toEqual(saved);
+    expect(await alice.query(getSettings, {})).toEqual({ subject: "alice", value: saved });
     await expect(bob.mutation(saveSettings, {
       payload: '{"from":"alice"}',
       expectedRevision: bobSaved.revision,
@@ -62,7 +62,7 @@ describe("extension settings sync", () => {
       .rejects.toThrow("SETTINGS_CONFLICT");
     await expect(alice.mutation(saveSettings, { payload: '{"value":3}', expectedRevision: null, expectedSubject: "alice" }))
       .rejects.toThrow("SETTINGS_CONFLICT");
-    expect(await alice.query(getSettings, {})).toEqual(second);
+    expect(await alice.query(getSettings, {})).toEqual({ subject: "alice", value: second });
   });
 
   test("validates JSON object payload and UTF-8 size", async () => {
@@ -77,7 +77,7 @@ describe("extension settings sync", () => {
       expectedRevision: null,
       expectedSubject: "alice",
     })).rejects.toThrow("SETTINGS_TOO_LARGE");
-    expect(await alice.query(getSettings, {})).toBeNull();
+    expect(await alice.query(getSettings, {})).toEqual({ subject: "alice", value: null });
   });
 
   test("rejects invalid or oversized action lists", async () => {
@@ -154,6 +154,6 @@ describe("extension settings sync", () => {
         expectedSubject: "alice",
       })).rejects.toThrow("INVALID_SETTINGS_PAYLOAD");
     }
-    expect(await alice.query(getSettings, {})).toBeNull();
+    expect(await alice.query(getSettings, {})).toEqual({ subject: "alice", value: null });
   });
 });

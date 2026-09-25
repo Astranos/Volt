@@ -27,6 +27,7 @@ export default defineSchema({
     ownerTokenIdentifier: v.string(),
     shop: v.string(),
     state: v.string(),
+    browserNonceHash: v.optional(v.string()),
     expiresAt: v.number(),
     consumedAt: v.optional(v.number()),
   })

@@ -1,4 +1,5 @@
 import { isTrustedExtensionPageSender, type ExtensionMessageSender } from "../access/sender-policy.ts";
+import { EXTENSION_SCANNER_SIGNAL_URL } from "../domain/mobile-scanner-signal-url.ts";
 import {
   normalizeShopifyShopInput,
   validShopifyAdminProductUrl,
@@ -46,6 +47,7 @@ export function createShopifyAuditController({
   sendOffscreenMessage: (message: unknown) => Promise<unknown>;
 }) {
   let opening = false;
+  const MAX_AUDIT_TABS = 100;
 
   async function forward(action: string, extra: Record<string, unknown> = {}) {
     return offscreenValue(await sendOffscreenMessage({ action, ...extra }));
@@ -58,6 +60,9 @@ export function createShopifyAuditController({
       const range = yesterdayInComputerTimezone();
       const result = auditResultFrom(await forward("shopifyAuditOffscreenListYesterday", range));
       if (result.date !== range.date) throw new Error("Shopify returned the wrong audit date.");
+      if (result.products.length > MAX_AUDIT_TABS) {
+        throw new Error(`Yesterday has ${result.products.length} products. Volt can open up to ${MAX_AUDIT_TABS} audit tabs at once.`);
+      }
       const tabIds: number[] = [];
       let creationError: unknown = null;
       for (const product of result.products) {
@@ -105,8 +110,28 @@ export function createShopifyAuditController({
           if (!shop) throw new Error("Enter a valid store.myshopify.com domain.");
           const value = await forward("shopifyAuditOffscreenConnect", { shop });
           if (!value || typeof value !== "object" || typeof (value as { url?: unknown }).url !== "string") throw new Error("Shopify did not return a connection link.");
-          const url = new URL((value as { url: string }).url);
+          const connection = value as { url: string; browserCookie?: { url?: unknown; name?: unknown; value?: unknown } };
+          const url = new URL(connection.url);
           if (url.protocol !== "https:" || url.hostname !== shop || url.pathname !== "/admin/oauth/authorize") throw new Error("Shopify returned an invalid connection link.");
+          const cookie = connection.browserCookie;
+          const callback = url.searchParams.get("redirect_uri");
+          if (!callback || cookie?.url !== callback || cookie.name !== "volt_shopify_oauth"
+            || typeof cookie.value !== "string" || !/^[a-f0-9]{64}$/.test(cookie.value)
+            || new URL(callback).origin !== new URL(EXTENSION_SCANNER_SIGNAL_URL).origin
+            || new URL(callback).pathname !== "/api/shopify/callback") {
+            throw new Error("Shopify browser authorization was invalid.");
+          }
+          const savedCookie = await chromeApi.cookies.set({
+            url: callback,
+            name: cookie.name,
+            value: cookie.value,
+            path: "/api/shopify/callback",
+            secure: true,
+            httpOnly: true,
+            sameSite: "lax",
+            expirationDate: Date.now() / 1000 + 600,
+          });
+          if (!savedCookie) throw new Error("Could not prepare the Shopify browser authorization.");
           await chromeApi.tabs.create({ url: url.href, active: true, ...(sender.tab?.windowId === undefined ? {} : { windowId: sender.tab.windowId }) });
           return { shop };
         }

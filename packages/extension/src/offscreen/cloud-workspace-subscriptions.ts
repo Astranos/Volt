@@ -19,7 +19,7 @@ type ExtensionSettingsRecord = {
 const getExtensionSettingsReference = makeFunctionReference<
   "query",
   Record<string, never>,
-  ExtensionSettingsRecord | null
+  { subject: string; value: ExtensionSettingsRecord | null }
 >("extensionSettings:get");
 const saveExtensionSettingsReference = makeFunctionReference<
   "mutation",
@@ -27,7 +27,7 @@ const saveExtensionSettingsReference = makeFunctionReference<
   ExtensionSettingsRecord
 >("extensionSettings:save");
 const shopifyStartConnectReference = makeFunctionReference<
-  "action", { shop: string }, { url: string }
+  "action", { shop: string }, { url: string; browserCookie: { url: string; name: string; value: string } }
 >("shopifyAudit:startConnect");
 const shopifyGetConnectionReference = makeFunctionReference<
   "query", Record<string, never>, { shop: string } | null
@@ -234,6 +234,7 @@ export class CloudWorkspaceSubscriptions {
     if (this.accountEpoch !== epoch) {
       this.accountEpoch = epoch;
       this.stopSubscriptions();
+      this.clerkSubject = null;
       this.hasReconciledSubject = false;
       this.lastSnapshot = null;
     }
@@ -457,9 +458,11 @@ export class CloudWorkspaceSubscriptions {
   async getExtensionSettings() {
     await this.reconcileAuthentication();
     const subject = this.clerkSubject;
+    if (!this.hasReconciledSubject) throw new Error("Cloud settings account is still being verified.");
     if (!subject) return { value: null, subject: null };
-    const value = await this.client.query(getExtensionSettingsReference, {});
-    return value ? { ...value, subject } : { value: null, subject };
+    const result = await this.client.query(getExtensionSettingsReference, {});
+    if (result.subject !== subject) throw new Error("Cloud settings account changed. Try again.");
+    return result.value ? { ...result.value, subject } : { value: null, subject };
   }
 
   async saveExtensionSettings(payload: string, expectedRevision: number | null, expectedSubject: string) {

@@ -15,10 +15,18 @@ async function validHmac(body: ArrayBuffer, signature: string | null): Promise<b
   return crypto.subtle.verify("HMAC", key, decoded, body);
 }
 
-function payloadShop(body: ArrayBuffer): string {
+function payloadShop(body: ArrayBuffer, topic: Topic): string {
   const value: unknown = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(body));
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Invalid payload");
-  const shop = (value as Record<string, unknown>).shop_domain;
+  const payload = value as Record<string, unknown>;
+  // Shopify's shop/redact body contains exactly these two fields. Its topic
+  // header is not covered by the body HMAC, so reject customer webhook bodies.
+  if (topic === "shop/redact" && (Object.keys(payload).length !== 2
+    || !Number.isSafeInteger(payload.shop_id) || Number(payload.shop_id) <= 0
+    || !Object.hasOwn(payload, "shop_domain"))) {
+    throw new Error("Invalid shop redaction payload");
+  }
+  const shop = payload.shop_domain;
   if (typeof shop !== "string") throw new Error("Invalid shop");
   return shopDomain(shop);
 }
@@ -36,7 +44,7 @@ export function complianceHandler(topic: Topic) {
     }
     let shop: string;
     try {
-      shop = payloadShop(body);
+      shop = payloadShop(body, topic);
     } catch {
       return new Response(null, { status: 400, headers: responseHeaders });
     }

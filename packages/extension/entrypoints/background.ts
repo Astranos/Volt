@@ -187,6 +187,7 @@ export default defineBackground({
       log,
       onChanged: () => {
         void cloudWorkspace.handleAccountSessionChanged()
+          .catch(() => undefined)
           .then(() => cloudSettings.pull())
           .catch(() => undefined);
       },

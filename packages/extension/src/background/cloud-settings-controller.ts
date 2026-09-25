@@ -11,7 +11,7 @@ type CloudSettingsRecord = {
   revision: number;
   updatedAt: number;
 };
-type PendingSettingsRecord = { subject: string; payload: string };
+type PendingSettingsRecord = { subject: string; payload: string; baseRevision: number | null };
 
 type SettingsEnvelope = {
   payload: string;
@@ -66,9 +66,11 @@ export function createCloudSettingsController({
   let applyingCloud = false;
   let initialized = false;
   let syncQueue = Promise.resolve();
+  let cloudWriteQueue = Promise.resolve();
   let operationGeneration = 0;
   let pendingSettings: unknown = undefined;
   let pendingSubject: string | null = null;
+  let pendingRevision: number | null = null;
   let pendingLoad: Promise<void> | null = null;
   async function localSettings() {
     const [settings, metadata] = await Promise.all([
@@ -90,47 +92,59 @@ export function createCloudSettingsController({
       if (typeof value?.subject === "string" && typeof value.payload === "string") {
         pendingSubject = value.subject;
         pendingSettings = JSON.parse(value.payload);
+        pendingRevision = typeof value.baseRevision === "number" ? value.baseRevision : null;
       }
     }).catch(() => undefined);
     return pendingLoad;
   }
 
   async function persistPending(subject: string, settings: unknown) {
+    const baseRevision = pendingSubject === subject ? pendingRevision : activeRevision;
     pendingSubject = subject;
     pendingSettings = settings;
+    pendingRevision = baseRevision;
     await chromeApi.storage.local.set({
-      [PENDING_SETTINGS_LOCAL_KEY]: { subject, payload: JSON.stringify(settings) } satisfies PendingSettingsRecord,
+      [PENDING_SETTINGS_LOCAL_KEY]: { subject, payload: JSON.stringify(settings), baseRevision } satisfies PendingSettingsRecord,
     });
   }
 
   async function clearPending() {
     pendingSubject = null;
     pendingSettings = undefined;
+    pendingRevision = null;
     await chromeApi.storage.local.remove(PENDING_SETTINGS_LOCAL_KEY);
   }
 
-  async function rememberCloud(subject: string, envelope: SettingsEnvelope) {
+  function rememberCloud(subject: string, envelope: SettingsEnvelope) {
     const parsed = validSettingsPayload(envelope.payload);
     if (!parsed) throw new Error("Cloud settings payload was invalid.");
     if (new TextEncoder().encode(envelope.payload).byteLength > MAX_SETTINGS_PAYLOAD_BYTES) {
       throw new Error("Cloud settings exceed Chrome sync storage quota.");
     }
-    applyingCloud = true;
-    try {
-      await chromeApi.storage.sync.set({ cmdkSettings: parsed });
-    } finally {
-      applyingCloud = false;
-    }
-    await chromeApi.storage.local.set({
-      [CLOUD_SETTINGS_LOCAL_KEY]: {
-        subject,
-        revision: envelope.revision,
-        updatedAt: envelope.updatedAt,
-      } satisfies CloudSettingsRecord,
+    const write = cloudWriteQueue.then(async () => {
+      if (activeSubject === subject && activeRevision !== null && activeRevision > envelope.revision) {
+        const current = await chromeApi.storage.sync.get("cmdkSettings");
+        return { settings: current.cmdkSettings, revision: activeRevision };
+      }
+      applyingCloud = true;
+      try {
+        await chromeApi.storage.sync.set({ cmdkSettings: parsed });
+      } finally {
+        applyingCloud = false;
+      }
+      await chromeApi.storage.local.set({
+        [CLOUD_SETTINGS_LOCAL_KEY]: {
+          subject,
+          revision: envelope.revision,
+          updatedAt: envelope.updatedAt,
+        } satisfies CloudSettingsRecord,
+      });
+      activeSubject = subject;
+      activeRevision = envelope.revision;
+      return { settings: parsed, revision: envelope.revision };
     });
-    activeSubject = subject;
-    activeRevision = envelope.revision;
-    return parsed;
+    cloudWriteQueue = write.then(() => undefined, () => undefined);
+    return write;
   }
 
   async function pull() {
@@ -213,7 +227,7 @@ export function createCloudSettingsController({
           : local.settings;
         if (settingsToMigrate !== undefined) {
           try {
-            await push(settingsToMigrate, subject);
+            await push(settingsToMigrate, subject, pendingSubject === subject ? pendingRevision : null);
             return { settings: settingsToMigrate, revision: activeRevision, source: "local" as const };
           } catch {
             // The local value remains usable when the first cloud migration is offline.
@@ -230,7 +244,7 @@ export function createCloudSettingsController({
       activeSubject = subject;
       activeRevision = envelope.revision;
       try {
-        await push(pendingSettings);
+        await push(pendingSettings, subject, pendingRevision);
         return { settings: pendingSettings, revision: activeRevision, source: "local" as const };
       } catch (error) {
         if (error instanceof Error && error.message.includes("SETTINGS_CONFLICT")) {
@@ -240,16 +254,16 @@ export function createCloudSettingsController({
         }
       }
     }
-    const settings = await rememberCloud(subject, envelope);
+    const applied = await rememberCloud(subject, envelope);
     initialized = true;
     return {
-      settings,
-      revision: envelope.revision,
+      settings: applied.settings,
+      revision: applied.revision,
       source: "cloud" as const,
     };
   }
 
-  async function push(settings: unknown, expectedSubject = activeSubject) {
+  async function push(settings: unknown, expectedSubject = activeSubject, expectedRevision = activeRevision) {
     if (!expectedSubject || expectedSubject !== activeSubject) {
       throw new Error("stale_extension_settings_subject");
     }
@@ -263,7 +277,7 @@ export function createCloudSettingsController({
       action: "extensionSettingsOffscreenSave",
       payload,
       expectedRevision: activeSubject === expectedSubject
-        ? activeRevision ?? (local.metadata?.subject === expectedSubject ? local.metadata.revision : null)
+        ? expectedRevision ?? (local.metadata?.subject === expectedSubject && pendingSubject !== expectedSubject ? local.metadata.revision : null)
         : null,
       expectedSubject,
     });
@@ -296,7 +310,7 @@ export function createCloudSettingsController({
           await persistPending(owner, next);
           try {
             if (owner !== activeSubject) return;
-            await push(next, owner);
+            await push(next, owner, pendingRevision);
           } catch (error) {
             // A stale revision means another computer won. Pulling here makes
             // the cloud value authoritative and prevents an overwrite loop.

@@ -4,20 +4,22 @@ import { makeFunctionReference } from "convex/server";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import type { Doc, Id } from "./_generated/dataModel";
 import schema from "./schema";
-import { auditRange, decryptToken, encryptToken, fetchSearchProducts, fetchYesterday, productSearchQuery, shopDomain, verifyCallback } from "./shopifyHelpers";
+import { auditRange, decryptToken, encryptToken, fetchSearchProducts, fetchYesterday, nonceHash, productSearchQuery, shopDomain, verifyCallback } from "./shopifyHelpers";
 
 const modules = import.meta.glob("./**/*.ts");
 const get = makeFunctionReference<"query", Record<string, never>, { shop: string } | null>("shopifyAudit:getConnection");
 const disconnect = makeFunctionReference<"mutation", Record<string, never>, null>("shopifyAudit:disconnect");
-const start = makeFunctionReference<"action", { shop: string }, { url: string }>("shopifyAudit:startConnect");
-const begin = makeFunctionReference<"mutation", { ownerTokenIdentifier: string; shop: string; state: string }, null>("shopifyStore:begin");
-const consume = makeFunctionReference<"mutation", { shop: string; state: string }, { id: Id<"shopifyOAuthStates">; ownerTokenIdentifier: string }>("shopifyStore:consume");
+const start = makeFunctionReference<"action", { shop: string }, { url: string; browserCookie: { url: string; name: string; value: string } }>("shopifyAudit:startConnect");
+const begin = makeFunctionReference<"mutation", { ownerTokenIdentifier: string; shop: string; state: string; browserNonceHash: string }, null>("shopifyStore:begin");
+const consume = makeFunctionReference<"mutation", { shop: string; state: string; browserNonceHash: string }, { id: Id<"shopifyOAuthStates">; ownerTokenIdentifier: string }>("shopifyStore:consume");
 type Tokens = Pick<Doc<"shopifyConnections">, "encryptedAccessToken" | "encryptedRefreshToken" | "expiresAt" | "refreshExpiresAt">;
 const finish = makeFunctionReference<"mutation", { stateId: Id<"shopifyOAuthStates"> } & Tokens, null>("shopifyStore:finish");
 const list = makeFunctionReference<"action", { startUtc: string; endUtc: string; date: string }, { shop: string; date: string; products: { id: string; title: string; status: string; url: string }[] }>("shopifyAudit:listYesterday");
 const search = makeFunctionReference<"action", { query: string }, { shop: string; products: { id: string; title: string; status: string; totalInventory: number; url: string; imageUrl: string | null; price: string | null; currencyCode: string | null; sku: string | null; condition: string | null }[] }>("shopifyAudit:searchProducts");
 const shop = "example-store.myshopify.com";
 const state = "a".repeat(64);
+const browserNonce = "b".repeat(64);
+const browserNonceHash = await nonceHash(browserNonce);
 const owner = "clerk|alice";
 const tokens: Tokens = { encryptedAccessToken: "ciphertext", encryptedRefreshToken: "ciphertext", expiresAt: Date.now() + 3600000, refreshExpiresAt: Date.now() + 86400000 };
 function yesterday() {
@@ -46,11 +48,13 @@ describe("Shopify authorization and account isolation", () => {
     await expect(t.mutation(disconnect, {})).rejects.toThrow("Sign in");
     await expect(t.action(list, yesterday())).rejects.toThrow("Sign in");
     const alice = t.withIdentity({ subject: "alice", tokenIdentifier: owner });
-    const result = new URL((await alice.action(start, { shop })).url);
+    const started = await alice.action(start, { shop });
+    const result = new URL(started.url);
     expect(result.hostname).toBe(shop);
     expect(result.searchParams.get("redirect_uri")).toBe("https://example.convex.site/api/shopify/callback");
     expect(result.searchParams.get("scope")).toBe("read_products");
     expect(result.searchParams.get("state")).toMatch(/^[a-f0-9]{64}$/);
+    expect(started.browserCookie).toEqual({ url: "https://example.convex.site/api/shopify/callback", name: "volt_shopify_oauth", value: expect.stringMatching(/^[a-f0-9]{64}$/) });
   });
   test("validates HMAC and rejects tampering and duplicate parameters", async () => {
     const params = new URLSearchParams({ shop, state, code: "valid-code", timestamp: "123" });
@@ -64,48 +68,50 @@ describe("Shopify authorization and account isolation", () => {
   });
   test("callback exchanges an offline code once and stores only encrypted secrets", async () => {
     const t = convexTest(schema, modules);
-    await t.mutation(begin, { ownerTokenIdentifier: owner, shop, state });
+    await t.mutation(begin, { ownerTokenIdentifier: owner, shop, state, browserNonceHash });
     const params = new URLSearchParams({ shop, state, code: "code", timestamp: "123" });
     const message = [...params.entries()].sort(([a], [b]) => a < b ? -1 : 1).map(([k, v]) => `${k}=${v}`).join("&");
     params.set("hmac", createHmac("sha256", "secret").update(message).digest("hex"));
     const mock = vi.fn<typeof fetch>().mockResolvedValueOnce(new Response(JSON.stringify({ access_token: "private-access", refresh_token: "private-refresh", scope: "read_products", expires_in: 3600, refresh_token_expires_in: 86400 })));
     vi.stubGlobal("fetch", mock);
-    const response = await t.fetch(`/api/shopify/callback?${params}`);
+    expect((await t.fetch(`/api/shopify/callback?${params}`)).status).toBe(400);
+    const response = await t.fetch(`/api/shopify/callback?${params}`, { headers: { Cookie: `volt_shopify_oauth=${browserNonce}` } });
     expect(response.status).toBe(200);
     expect(await response.text()).toContain("Shopify connected");
     expect(String(mock.mock.calls[0][1]?.body)).toContain("expiring=1");
     const row = await t.run(ctx => ctx.db.query("shopifyConnections").first());
     expect(JSON.stringify(row)).not.toContain("private-");
     expect(await decryptToken(row?.encryptedAccessToken ?? "", `${owner}|${shop}`)).toBe("private-access");
-    expect((await t.fetch(`/api/shopify/callback?${params}`)).status).toBe(400);
+    expect((await t.fetch(`/api/shopify/callback?${params}`, { headers: { Cookie: `volt_shopify_oauth=${browserNonce}` } })).status).toBe(400);
     expect(mock).toHaveBeenCalledTimes(1);
   });
   test("state is bound to exact shop, single-use, and expiry", async () => {
     const t = convexTest(schema, modules);
-    await t.mutation(begin, { ownerTokenIdentifier: owner, shop, state });
-    await expect(t.mutation(consume, { shop: "other.myshopify.com", state })).rejects.toThrow("expired");
-    await t.mutation(consume, { shop, state });
-    await expect(t.mutation(consume, { shop, state })).rejects.toThrow("expired");
-    await t.mutation(begin, { ownerTokenIdentifier: owner, shop, state });
+    await t.mutation(begin, { ownerTokenIdentifier: owner, shop, state, browserNonceHash });
+    await expect(t.mutation(consume, { shop: "other.myshopify.com", state, browserNonceHash })).rejects.toThrow("expired");
+    await expect(t.mutation(consume, { shop, state, browserNonceHash: await nonceHash("c".repeat(64)) })).rejects.toThrow("expired");
+    await t.mutation(consume, { shop, state, browserNonceHash });
+    await expect(t.mutation(consume, { shop, state, browserNonceHash })).rejects.toThrow("expired");
+    await t.mutation(begin, { ownerTokenIdentifier: owner, shop, state, browserNonceHash });
     await t.run(async ctx => {
       const row = await ctx.db.query("shopifyOAuthStates").first();
       if (row) await ctx.db.patch(row._id, { expiresAt: Date.now() - 1 });
     });
-    await expect(t.mutation(consume, { shop, state })).rejects.toThrow("expired");
+    await expect(t.mutation(consume, { shop, state, browserNonceHash })).rejects.toThrow("expired");
   });
   test("isolates accounts and disconnect cancels an in-flight OAuth callback", async () => {
     const t = convexTest(schema, modules);
     const alice = t.withIdentity({ subject: "alice", tokenIdentifier: owner });
     const bob = t.withIdentity({ subject: "bob", tokenIdentifier: "clerk|bob" });
-    await t.mutation(begin, { ownerTokenIdentifier: owner, shop, state });
-    const consumed = await t.mutation(consume, { shop, state });
+    await t.mutation(begin, { ownerTokenIdentifier: owner, shop, state, browserNonceHash });
+    const consumed = await t.mutation(consume, { shop, state, browserNonceHash });
     await t.mutation(finish, { stateId: consumed.id, ...tokens });
     expect(await alice.query(get, {})).toEqual({ shop });
     expect(await bob.query(get, {})).toBeNull();
     await bob.mutation(disconnect, {});
     expect(await alice.query(get, {})).toEqual({ shop });
-    await t.mutation(begin, { ownerTokenIdentifier: owner, shop, state });
-    const pending = await t.mutation(consume, { shop, state });
+    await t.mutation(begin, { ownerTokenIdentifier: owner, shop, state, browserNonceHash });
+    const pending = await t.mutation(consume, { shop, state, browserNonceHash });
     await alice.mutation(disconnect, {});
     await expect(t.mutation(finish, { stateId: pending.id, ...tokens })).rejects.toThrow("canceled");
     expect(await alice.query(get, {})).toBeNull();
@@ -118,6 +124,26 @@ describe("Shopify authorization and account isolation", () => {
     expect(await decryptToken(encrypted, aad)).toBe("private-token");
     await expect(decryptToken(encrypted, `clerk|bob|${shop}`)).rejects.toThrow();
   });
+});
+
+test("customer compliance payload cannot be replayed as shop redaction", async () => {
+  const t = convexTest(schema, modules);
+  const customerBody = JSON.stringify({ shop_id: 954889, shop_domain: shop, customer: { id: 191167 }, orders_requested: [] });
+  const customerSignature = createHmac("sha256", "secret").update(customerBody).digest("base64");
+  const replay = await t.fetch("/api/shopify/webhooks/shop/redact", {
+    method: "POST",
+    headers: { "X-Shopify-Hmac-Sha256": customerSignature, "X-Shopify-Topic": "shop/redact" },
+    body: customerBody,
+  });
+  expect(replay.status).toBe(400);
+  const shopBody = JSON.stringify({ shop_id: 954889, shop_domain: shop });
+  const shopSignature = createHmac("sha256", "secret").update(shopBody).digest("base64");
+  const valid = await t.fetch("/api/shopify/webhooks/shop/redact", {
+    method: "POST",
+    headers: { "X-Shopify-Hmac-Sha256": shopSignature, "X-Shopify-Topic": "shop/redact" },
+    body: shopBody,
+  });
+  expect(valid.status).toBe(200);
 });
 
 describe("Shopify previous calendar day", () => {

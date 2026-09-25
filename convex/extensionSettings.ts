@@ -12,7 +12,7 @@ const ACTION_IDS = new Set([
   "look-up",
   "ask-gemini",
 ]);
-const CUSTOM_ACTION_ICON_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const CUSTOM_ACTION_ICON_NAME = /^[a-z0-9-]{1,80}$/;
 
 function isCustomSelectionAction(value: unknown): value is {
   kind: "custom";
@@ -30,9 +30,9 @@ function isCustomSelectionAction(value: unknown): value is {
   const iconCodepoint = Reflect.get(value, "iconCodepoint");
   const url = Reflect.get(value, "url");
   if (kind !== "custom"
-    || typeof id !== "string" || id.trim().length === 0 || id.length > 64
-    || typeof label !== "string" || label.length > 48
-    || typeof iconName !== "string" || iconName.length > 80 || !CUSTOM_ACTION_ICON_NAME.test(iconName)
+    || typeof id !== "string" || !/^[a-zA-Z0-9_-]{1,64}$/.test(id)
+    || typeof label !== "string" || label.trim().length === 0 || label.length > 48
+    || typeof iconName !== "string" || !CUSTOM_ACTION_ICON_NAME.test(iconName)
     || typeof iconCodepoint !== "number" || !Number.isInteger(iconCodepoint)
     || iconCodepoint < 0xf0000 || iconCodepoint > 0xfffff
     || typeof url !== "string" || url.length === 0 || url.length > 2048) {
@@ -95,7 +95,7 @@ function validatePayload(payload: string) {
 
 export const get = query({
   args: {},
-  returns: v.union(settingsValidator, v.null()),
+  returns: v.object({ subject: v.string(), value: v.union(settingsValidator, v.null()) }),
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new ConvexError("AUTHENTICATION_REQUIRED");
@@ -106,11 +106,14 @@ export const get = query({
         q.eq("ownerTokenIdentifier", identity.tokenIdentifier),
       )
       .unique();
-    if (!settings) return null;
+    if (!settings) return { subject: identity.subject, value: null };
     return {
-      payload: settings.payload,
-      revision: settings.revision,
-      updatedAt: settings.updatedAt,
+      subject: identity.subject,
+      value: {
+        payload: settings.payload,
+        revision: settings.revision,
+        updatedAt: settings.updatedAt,
+      },
     };
   },
 });

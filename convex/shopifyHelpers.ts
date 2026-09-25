@@ -24,6 +24,10 @@ function unhex(value: string): Uint8Array<ArrayBuffer> {
 export function nonce(): string {
   return hex(crypto.getRandomValues(new Uint8Array(32)));
 }
+export async function nonceHash(value: string): Promise<string> {
+  if (!/^[a-f0-9]{64}$/.test(value)) throw new ConvexError("Invalid Shopify browser nonce.");
+  return hex(new Uint8Array(await crypto.subtle.digest("SHA-256", encoder.encode(value))));
+}
 async function tokenKey() {
   const key = requiredEnv("SHOPIFY_TOKEN_ENCRYPTION_KEY");
   if (!/^[a-f0-9]{64}$/i.test(key)) throw new ConvexError("Shopify encryption key must be 32 bytes encoded as hex.");

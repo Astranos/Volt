@@ -41,8 +41,8 @@ Use `pnpm exec convex env set NAME` to enter secrets interactively. Add `--prod`
 
 1. Sign in to Volt with Clerk.
 2. Open extension settings and find **Shopify product audit**.
-3. Enter the store's permanent `.myshopify.com` domain and select **Connect Shopify**.
-4. Approve read-only product access in Shopify. Return to settings to see the connected store.
+3. Select **Connect Shopify**. Choose a store detected from an open Shopify admin tab, or sign in to Shopify and open your store's admin in the new tab.
+4. Approve read-only product access in Shopify. The settings page shows the connected store.
 5. On the new tab page, select **Audit**. Volt opens yesterday's products in one Chrome tab group.
 
 If you disconnect the store in Volt, the saved token is deleted. You can also uninstall the app from Shopify. If Shopify rejects an expired or revoked token, reconnect the store.

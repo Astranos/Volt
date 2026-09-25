@@ -2,17 +2,17 @@ import { ConvexError, v } from "convex/values";
 import { makeFunctionReference } from "convex/server";
 import { action, mutation, query, type ActionCtx } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
-import { auditRange, decryptToken, encryptToken, exchangeToken, fetchSearchProducts, fetchYesterday, nonce, productSearchQuery, requiredEnv, shopDomain, type Product, type SearchProduct } from "./shopifyHelpers";
+import { auditRange, decryptToken, encryptToken, exchangeToken, fetchSearchProducts, fetchYesterday, nonce, nonceHash, productSearchQuery, requiredEnv, shopDomain, type Product, type SearchProduct } from "./shopifyHelpers";
 
-const begin = makeFunctionReference<"mutation", { ownerTokenIdentifier: string; shop: string; state: string }, null>("shopifyStore:begin");
+const begin = makeFunctionReference<"mutation", { ownerTokenIdentifier: string; shop: string; state: string; browserNonceHash: string }, null>("shopifyStore:begin");
 const read = makeFunctionReference<"query", { ownerTokenIdentifier: string }, Doc<"shopifyConnections"> | null>("shopifyStore:read");
 const lease = makeFunctionReference<"mutation", { connectionId: Doc<"shopifyConnections">["_id"]; nonce: string }, boolean>("shopifyStore:leaseRefresh");
 type Tokens = Pick<Doc<"shopifyConnections">, "encryptedAccessToken" | "encryptedRefreshToken" | "expiresAt" | "refreshExpiresAt">;
 const finishRefresh = makeFunctionReference<"mutation", { connectionId: Doc<"shopifyConnections">["_id"]; nonce: string; tokens: Tokens | null }, null>("shopifyStore:finishRefresh");
 
 export const startConnect = action({
-  args: { shop: v.string() }, returns: v.object({ url: v.string() }),
-  handler: async (ctx, args): Promise<{ url: string }> => {
+  args: { shop: v.string() }, returns: v.object({ url: v.string(), browserCookie: v.object({ url: v.string(), name: v.string(), value: v.string() }) }),
+  handler: async (ctx, args): Promise<{ url: string; browserCookie: { url: string; name: string; value: string } }> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new ConvexError("Sign in to connect Shopify.");
     const shop = shopDomain(args.shop);
@@ -22,10 +22,11 @@ export const startConnect = action({
     await encryptToken("configuration-check", "configuration-check");
     const callback = new URL("/api/shopify/callback", requiredEnv("CONVEX_SITE_URL")).href;
     const state = nonce();
-    await ctx.runMutation(begin, { ownerTokenIdentifier: identity.tokenIdentifier, shop, state });
+    const browserNonce = nonce();
+    await ctx.runMutation(begin, { ownerTokenIdentifier: identity.tokenIdentifier, shop, state, browserNonceHash: await nonceHash(browserNonce) });
     const url = new URL(`https://${shop}/admin/oauth/authorize`);
     url.search = new URLSearchParams({ client_id: clientId, scope: "read_products", redirect_uri: callback, state }).toString();
-    return { url: url.href };
+    return { url: url.href, browserCookie: { url: callback, name: "volt_shopify_oauth", value: browserNonce } };
   },
 });
 export const getConnection = query({
