@@ -64,17 +64,29 @@
 .newtab-whats-new-done { width: 100%; margin-top: 22px; padding: 10px 14px; border: 0; border-radius: 10px; background: var(--nt-accent-strong); color: white; cursor: pointer; font-size: 12px; font-weight: 700; }
 .newtab-whats-new-done:hover { filter: brightness(1.1); }
 
-.newtab-whats-new-trigger {
-  gap: 6px;
-  width: auto;
-  padding: 0 11px;
-  color: var(--nt-text);
-  font-size: 12px;
-  font-weight: 650;
+.newtab-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: -10px;
+}
+
+.newtab-whats-new-link {
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: var(--nt-text-faint);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.newtab-whats-new-link:hover,
+.newtab-whats-new-link:focus-visible {
+  color: var(--nt-text-muted);
+  text-decoration: underline;
 }
 
 @media (max-width: 700px) {
-  .newtab-whats-new-trigger span { display: none; }
-  .newtab-whats-new-trigger { width: 34px; padding: 0; }
   .newtab-whats-new-dialog { padding: 20px; }
 }

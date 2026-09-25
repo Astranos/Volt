@@ -5,7 +5,7 @@ import { BookmarksColumn } from "../../src/components/newtab/BookmarksColumn";
 import { HeroBlock } from "../../src/components/newtab/HeroBlock";
 import type { SearchMode } from "../../src/components/newtab/NewTabHelp";
 import { ExtensionAccountControl } from "../../src/components/access/ExtensionAccess";
-import { Calculator, ClipboardCheck, ScanLine, Settings, Sparkles } from "lucide-react";
+import { Calculator, ClipboardCheck, ScanLine, Settings } from "lucide-react";
 import { AppClipQrIcon } from "../../src/components/icons/AppClipQrIcon";
 import { TabManager } from "../../src/utils/tab-manager";
 import { getShopifyAuditConnection, openShopifyAudit } from "../../src/shopify-audit/client";
@@ -126,16 +126,6 @@ export default function NewTab() {
           <div className="newtab-header-actions">
             <button
               type="button"
-              className="newtab-settings-button newtab-whats-new-trigger"
-              onClick={() => setWhatsNewRequest((value) => value + 1)}
-              aria-label="What’s new in Volt"
-              title="What’s new in Volt"
-            >
-              <Sparkles aria-hidden="true" />
-              <span>What’s new</span>
-            </button>
-            <button
-              type="button"
               className="newtab-settings-button newtab-audit-button"
               onClick={() => void handleShopifyAudit()}
               disabled={auditBusy}
@@ -216,6 +206,9 @@ export default function NewTab() {
           <QuickLinksColumn id="tour-quick-links" />
           <BookmarksColumn id="tour-bookmarks" />
         </section>
+        <footer className="newtab-footer">
+          <button className="newtab-whats-new-link" onClick={() => setWhatsNewRequest((value) => value + 1)} type="button">What’s new in Volt</button>
+        </footer>
       </div>
       <WhatsNewDialog openRequest={whatsNewRequest} />
     </div>
