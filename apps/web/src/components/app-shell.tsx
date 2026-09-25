@@ -165,7 +165,7 @@ export function AppLayout({ current, children, account }: AppLayoutProps) {
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-3">
-              <ConnectionStatus />
+              <OfflineNotice />
               {account}
             </div>
           </div>
@@ -278,7 +278,7 @@ function Sidebar({
   );
 }
 
-function ConnectionStatus() {
+function OfflineNotice() {
   const [online, setOnline] = useState<boolean | null>(null);
   useEffect(() => {
     const update = () => setOnline(navigator.onLine);
@@ -290,21 +290,15 @@ function ConnectionStatus() {
       window.removeEventListener("offline", update);
     };
   }, []);
-  if (online === null) return null;
+  if (online !== false) return null;
   return (
     <span
       role="status"
-      title={
-        online
-          ? "Your browser has a network connection"
-          : "Reconnect to load and update your workspace"
-      }
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium ${online ? "border-zinc-200 bg-zinc-50 text-zinc-600" : "border-amber-200 bg-amber-50 text-amber-800"}`}
+      title="Reconnect to load and update your workspace"
+      className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-medium text-amber-800"
     >
-      <span
-        className={`size-1.5 rounded-full ${online ? "bg-emerald-500" : "bg-amber-500"}`}
-      />
-      {online ? "Online" : "Offline"}
+      <span className="size-1.5 rounded-full bg-amber-500" />
+      Offline
     </span>
   );
 }
