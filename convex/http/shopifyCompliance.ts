@@ -31,7 +31,7 @@ export function complianceHandler(topic: Topic) {
       return new Response(null, { status: 401, headers: responseHeaders });
     }
     const headerTopic = request.headers.get("X-Shopify-Topic");
-    if (headerTopic !== null && headerTopic !== topic) {
+    if (headerTopic !== topic) {
       return new Response(null, { status: 400, headers: responseHeaders });
     }
     let shop: string;

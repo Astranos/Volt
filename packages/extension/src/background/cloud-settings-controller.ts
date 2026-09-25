@@ -3,7 +3,8 @@ import { DEFAULT_SETTINGS, structuredCloneSettings } from "../domain/settings";
 
 export const CLOUD_SETTINGS_LOCAL_KEY = "volt.extensionSettings.cloud.v1";
 const PENDING_SETTINGS_LOCAL_KEY = "volt.extensionSettings.pending.v1";
-const MAX_SETTINGS_PAYLOAD_BYTES = 64 * 1024;
+// Chrome counts the key and serialized value toward its 8 KiB per-item sync quota.
+const MAX_SETTINGS_PAYLOAD_BYTES = 8192 - "cmdkSettings".length;
 
 type CloudSettingsRecord = {
   subject: string;
@@ -111,6 +112,9 @@ export function createCloudSettingsController({
   async function rememberCloud(subject: string, envelope: SettingsEnvelope) {
     const parsed = validSettingsPayload(envelope.payload);
     if (!parsed) throw new Error("Cloud settings payload was invalid.");
+    if (new TextEncoder().encode(envelope.payload).byteLength > MAX_SETTINGS_PAYLOAD_BYTES) {
+      throw new Error("Cloud settings exceed Chrome sync storage quota.");
+    }
     applyingCloud = true;
     try {
       await chromeApi.storage.sync.set({ cmdkSettings: parsed });

@@ -52,6 +52,21 @@ describe("cloud settings transport", () => {
     expect(syncState.cmdkSettings).toEqual(localSettings);
   });
 
+  test("rejects cloud payloads that exceed Chrome's per-item sync quota", async () => {
+    const localSettings = { contextMenu: { enabled: true } };
+    const { chromeApi, syncState } = chromeStub(localSettings);
+    const controller = createCloudSettingsController({
+      chromeApi,
+      extensionId,
+      sendOffscreenMessage: async () => ({
+        success: true,
+        value: { payload: JSON.stringify({ oversized: "x".repeat(8192) }), revision: 1, updatedAt: 1, subject: "alice" },
+      }),
+    });
+    await expect(controller.pull()).rejects.toThrow("quota");
+    expect(syncState.cmdkSettings).toEqual(localSettings);
+  });
+
   test("retries an offline local edit before a periodic cloud pull can replace it", async () => {
     const initial = { contextMenu: { enabled: true } };
     const edited = { contextMenu: { enabled: false } };

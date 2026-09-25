@@ -1,4 +1,4 @@
-export const RELEASE_NOTES_VERSION = "1.0.68";
+export const RELEASE_NOTES_VERSION = "1.0.69";
 
 export const RELEASE_NOTES = [
   {

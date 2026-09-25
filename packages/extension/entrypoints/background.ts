@@ -177,7 +177,6 @@ export default defineBackground({
       sendOffscreenMessage: scannerOffscreen.sendScannerOffscreenMessage,
     });
     cloudSettings.start();
-    void cloudSettings.pull().catch(() => undefined);
     const shopifyAudit = createShopifyAuditController({
       chromeApi: chrome,
       extensionId: chrome.runtime.id,
@@ -187,8 +186,9 @@ export default defineBackground({
       chromeApi: chrome,
       log,
       onChanged: () => {
-        void cloudWorkspace.handleAccountSessionChanged();
-        void cloudSettings.pull().catch(() => undefined);
+        void cloudWorkspace.handleAccountSessionChanged()
+          .then(() => cloudSettings.pull())
+          .catch(() => undefined);
       },
     });
     const tabDelivery = createTabDeliveryController({ chromeApi: chrome, log });
@@ -379,8 +379,10 @@ export default defineBackground({
 
       void scannerOffscreen.pollScannerReconnectRequests("background-main");
       void access.initialize();
-      clerkSessionMirror.initialize();
-      void cloudWorkspace.initialize();
+      void clerkSessionMirror.initialize()
+        .then(() => cloudWorkspace.initialize())
+        .then(() => cloudSettings.pull())
+        .catch(() => undefined);
       scannerOffscreen.ensureScannerReconnectAlarm();
       photoDownloadCleanup.ensureCleanupAlarm();
 

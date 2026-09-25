@@ -35,6 +35,7 @@ test("customer compliance events accept verified requests and reject tampering o
   const signature = createHmac("sha256", "test-secret").update(original).digest("base64");
   expect((await t.fetch(dataPath, signedRequest(dataPath, payload, { signature, raw: `${original} ` }))).status).toBe(401);
   expect((await t.fetch(dataPath, signedRequest(dataPath, payload, { topic: "shop/redact" }))).status).toBe(400);
+  expect((await t.fetch(dataPath, signedRequest(dataPath, payload))).status).toBe(400);
   expect((await t.fetch(dataPath, { method: "POST", body: original })).status).toBe(401);
 });
 
@@ -61,6 +62,8 @@ test("shop redaction deletes every matching connection and pending OAuth state i
   });
   const path = "/api/shopify/webhooks/shop/redact";
   expect((await t.fetch(path, signedRequest(path, { shop_domain: shop }, { signature: "A".repeat(43) + "=" }))).status).toBe(401);
+  expect((await t.fetch(path, signedRequest(path, { shop_domain: shop }))).status).toBe(400);
+  expect((await t.fetch(path, signedRequest(path, { shop_domain: shop }, { topic: "customers/redact" }))).status).toBe(400);
   expect(await t.run((ctx) => ctx.db.query("shopifyConnections").withIndex("by_shop", (q) => q.eq("shop", shop)).take(1))).toHaveLength(1);
   expect((await t.fetch(path, signedRequest(path, { shop_domain: shop }, { topic: "shop/redact" }))).status).toBe(200);
   await t.finishAllScheduledFunctions(vi.runAllTimers);

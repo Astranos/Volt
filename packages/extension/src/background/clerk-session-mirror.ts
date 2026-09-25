@@ -55,14 +55,14 @@ export function createClerkSessionMirror({ chromeApi, log, onChanged }: MirrorOp
   return {
     sync,
     initialize: () => {
-      if (!enabled) return;
+      if (!enabled) return Promise.resolve();
       // Signing in or out rewrites this cookie, which is the only signal the
       // service worker gets that the account changed.
       chromeApi.cookies?.onChanged.addListener((change) => {
         if (change.cookie.name !== CLERK_CLIENT_JWT_COOKIE) return;
         void sync();
       });
-      void sync();
+      return sync();
     },
   };
 }
