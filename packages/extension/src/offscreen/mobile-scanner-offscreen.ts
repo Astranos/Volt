@@ -5,6 +5,7 @@ import type {
 import { buildScannerAppClipJoinUrl, subscribeWorkspaceSnapshot, fetchWorkspaceSnapshot } from "@volt/scanner-protocol";
 import type { createClerkClient } from "@clerk/chrome-extension/client";
 import { ConvexClient } from "convex/browser";
+import { makeFunctionReference } from "convex/server";
 import { api } from "../../../../convex/_generated/api";
 import {
   CLERK_PUBLISHABLE_KEY,
@@ -26,6 +27,23 @@ import {
   registerComputer,
 } from "../cloud-scanner/computer-registration";
 import { createComputerRegistrationHeartbeat } from "../cloud-scanner/computer-registration-heartbeat";
+
+type ExtensionSettingsRecord = {
+  payload: string;
+  revision: number;
+  updatedAt: number;
+};
+
+const getExtensionSettingsReference = makeFunctionReference<
+  "query",
+  Record<string, never>,
+  ExtensionSettingsRecord | null
+>("extensionSettings:get");
+const saveExtensionSettingsReference = makeFunctionReference<
+  "mutation",
+  { payload: string; expectedRevision: number | null; expectedSubject: string },
+  ExtensionSettingsRecord
+>("extensionSettings:save");
 
 function serializeLogArg(arg: unknown) {
   if (arg instanceof Error) {
@@ -490,6 +508,29 @@ class CloudWorkspaceSubscriptions {
     return this.client.mutation(api.cloudWorkspace.restoreWorkspaceResults, { resultIds });
   }
 
+  async getExtensionSettings() {
+    await this.reconcileAuthentication();
+    const subject = this.clerkSubject;
+    if (!subject) return { value: null, subject: null };
+    const value = await this.client.query(getExtensionSettingsReference, {});
+    return value ? { ...value, subject } : { value: null, subject };
+  }
+
+  async saveExtensionSettings(payload: string, expectedRevision: number | null, expectedSubject: string) {
+    await this.reconcileAuthentication();
+    const subject = this.clerkSubject;
+    if (!subject) throw new Error("Cloud settings require a signed-in account.");
+    if (expectedSubject !== subject) {
+      throw new Error("stale_extension_settings_subject");
+    }
+    const value = await this.client.mutation(saveExtensionSettingsReference, {
+      payload,
+      expectedRevision,
+      expectedSubject: subject,
+    });
+    return { ...value, subject };
+  }
+
   async acknowledgeCursorDelivery(
     deliveryId: string,
     state: "delivered" | "failed",
@@ -740,6 +781,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     || message.action === "workspaceOffscreenDeleteResults"
     || message.action === "workspaceOffscreenRestoreResults"
     || message.action === "workspaceOffscreenAcknowledgeCursorDelivery"
+    || message.action === "extensionSettingsOffscreenGet"
+    || message.action === "extensionSettingsOffscreenSave"
   ) {
     if (sender.id !== chrome.runtime.id || sender.tab) {
       sendResponse({ success: false, error: "unauthorized_extension_sender" });
@@ -754,6 +797,28 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return sendWorkspaceOperation(
         sendResponse,
         cloudWorkspaceSubscriptions.accountChanged(message.accountEpoch, message.accountChanged === true),
+      );
+    }
+    if (message.action === "extensionSettingsOffscreenGet") {
+      return sendWorkspaceOperation(
+        sendResponse,
+        cloudWorkspaceSubscriptions.getExtensionSettings(),
+      );
+    }
+    if (message.action === "extensionSettingsOffscreenSave") {
+      if (typeof message.payload !== "string" || typeof message.expectedSubject !== "string"
+        || (message.expectedRevision !== null
+          && (typeof message.expectedRevision !== "number" || !Number.isInteger(message.expectedRevision)))) {
+        sendResponse({ success: false, error: "invalid_extension_settings_payload" });
+        return false;
+      }
+      return sendWorkspaceOperation(
+        sendResponse,
+        cloudWorkspaceSubscriptions.saveExtensionSettings(
+          message.payload,
+          message.expectedRevision,
+          message.expectedSubject,
+        ),
       );
     }
     if (message.action === "workspaceOffscreenReconcile") {

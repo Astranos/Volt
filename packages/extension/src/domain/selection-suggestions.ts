@@ -61,8 +61,12 @@ export function positionSelectionSuggestions({
     Math.max(centeredLeft, margin),
     Math.max(margin, viewportWidth - renderedWidth - margin),
   );
-  const fitsAbove = rect.top >= pillHeight + gap + margin;
-  const preferredTop = fitsAbove
+  const availableAbove = rect.top - margin - gap;
+  const availableBelow = viewportHeight - rect.bottom - margin - gap;
+  const fitsAbove = availableAbove >= pillHeight;
+  const fitsBelow = availableBelow >= pillHeight;
+  const placeAbove = fitsAbove || (!fitsBelow && availableAbove >= availableBelow);
+  const preferredTop = placeAbove
     ? rect.top - pillHeight - gap
     : rect.bottom + gap;
   const top = Math.min(
@@ -72,7 +76,7 @@ export function positionSelectionSuggestions({
 
   return {
     left,
-    placement: fitsAbove ? ("above" as const) : ("below" as const),
+    placement: placeAbove ? ("above" as const) : ("below" as const),
     top,
     width: renderedWidth,
   };

@@ -12,6 +12,7 @@ import {
 import { BookmarkFoldersSettings } from "@/src/components/settings/BookmarkFoldersSettings";
 import { CsvCacheSettings } from "@/src/components/settings/CsvCacheSettings";
 import { FeatureTogglesSettings } from "@/src/components/settings/FeatureTogglesSettings";
+import { SelectionActionsSettings } from "@/src/components/settings/SelectionActionsSettings";
 import { TopOffersSettings } from "@/src/components/settings/TopOffersSettings";
 import { useExtensionSettings } from "@/src/hooks/useExtensionSettings";
 
@@ -20,6 +21,7 @@ const NAV_ITEMS = [
   { href: "#ebay", icon: BadgeAlert, label: "Sold Listing Warning" },
   { href: "#upc", icon: Barcode, label: "UPC Highlighter" },
   { href: "#contextmenu", icon: MousePointerClick, label: "Context Menu" },
+  { href: "#selection-actions", icon: MousePointerClick, label: "Selected text actions" },
   { href: "#mobilephotos", icon: Images, label: "Mobile Photos" },
   { href: "#csvlinks", icon: Link2, label: "Quick Links" },
   { href: "#topoffers", icon: Calculator, label: "Offer Calculator" },
@@ -70,13 +72,16 @@ export default function SettingsPage() {
                   Version {version}
                 </p>
               )}
+              <p className="text-xs text-muted-foreground">
+                Sign in from the Volt side panel to sync settings across computers.
+              </p>
             </div>
           </div>
           <div className="ml-auto flex items-center gap-3">
             {isSaved && (
               <div className="flex items-center gap-2 px-3 py-1.5 text-green-700 bg-green-50 rounded-lg">
                 <Check className="w-4 h-4" />
-                <span className="text-sm font-medium">Saved!</span>
+                <span className="text-sm font-medium">Saved on this device</span>
               </div>
             )}
             <button
@@ -110,6 +115,7 @@ export default function SettingsPage() {
             settings={settings}
             saveSettings={saveSettings}
           />
+          <SelectionActionsSettings settings={settings} saveSettings={saveSettings} />
           <BookmarkFoldersSettings
             settings={settings}
             saveSettings={saveSettings}

@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { ContextMenu, type MenuAction } from "../src/components/context-menu";
 import { styles, selectionStyles } from "../src/components/context-menu-styles";
-import { SelectionSuggestionPill, type SelectionSearchActionId } from "../src/components/selection-suggestion-pill";
+import { SelectionSuggestionPill } from "../src/components/selection-suggestion-pill";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* global chrome */
 
@@ -10,9 +10,9 @@ import React from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { createMobileCaptureController } from "./context-menu-mobile-capture";
 import { initializeSidePanelContext } from "../src/lib/sidepanel-gesture";
-import { buildSearchUrl, SEARCH_URL_TEMPLATES } from "../src/domain/search";
 import { normalizeSelectionSuggestionText, positionSelectionSuggestions, shouldShowSelectionSuggestions } from "../src/domain/selection-suggestions";
-import { Search, PackageSearch, TrendingUp, Copy, Clipboard, ExternalLink, Download, Settings, ChevronLeft, ChevronRight, Smartphone, Calculator } from "lucide-react";
+import { DEFAULT_CONTEXT_ACTIONS, DEFAULT_POPUP_ACTIONS, linkToTextHighlight, normalizeSelectionActions, selectionActionLabel, selectionActionUrl, type SelectionActionId } from "../src/domain/selection-actions";
+import { Search, PackageSearch, TrendingUp, Copy, Clipboard, ExternalLink, Download, Settings, ChevronLeft, ChevronRight, Smartphone, Calculator, Link2, BookOpen, Sparkles } from "lucide-react";
 
 export default defineContentScript({
   matches: ["<all_urls>"],
@@ -34,6 +34,8 @@ export default defineContentScript({
     // Feature flag from settings
     let enabled = true;
     let selectionSuggestionsEnabled = true;
+    let selectionPopupActions = [...DEFAULT_POPUP_ACTIONS];
+    let contextMenuSelectionActions = [...DEFAULT_CONTEXT_ACTIONS];
     let dismissedUntilRefresh = false;
     let activePopup: Window | null = null;
     let activePopupOpenedAt = 0;
@@ -44,6 +46,14 @@ export default defineContentScript({
         enabled = s?.contextMenu?.enabled ?? true;
         selectionSuggestionsEnabled =
           s?.contextMenu?.selectionSuggestionsEnabled ?? true;
+        selectionPopupActions = normalizeSelectionActions(
+          s?.contextMenu?.selectionPopupActions,
+          DEFAULT_POPUP_ACTIONS,
+        );
+        contextMenuSelectionActions = normalizeSelectionActions(
+          s?.contextMenu?.contextMenuSelectionActions,
+          DEFAULT_CONTEXT_ACTIONS,
+        );
       });
     } catch (_) {}
 
@@ -84,16 +94,6 @@ export default defineContentScript({
         );
         activePopupOpenedAt = Date.now();
       }
-    };
-
-    const buildEbaySoldUrl = (q: string) => {
-      return buildSearchUrl(SEARCH_URL_TEMPLATES.ebay, q);
-    };
-
-    const buildGoogleUpcUrl = (q: string) => {
-      return `https://www.google.com/search?q=${encodeURIComponent(
-        `UPC for ${q}`,
-      )}`;
     };
 
     const copyToClipboard = async (text: string) => {
@@ -445,41 +445,50 @@ export default defineContentScript({
       },
     ];
 
-    const actions: MenuAction[] = [
-      {
-        id: "ebay-sold",
-        label: "eBay Prices",
-        shortcut: "E",
-        description: "Search completed sold listings for pricing",
-        icon: PackageSearch,
+    const selectionActionIcons = {
+      ebay: PackageSearch,
+      "google-upc": Search,
+      pricecharting: TrendingUp,
+      "google-search": Search,
+      "copy-highlight-link": Link2,
+      "look-up": BookOpen,
+      "ask-gemini": Sparkles,
+    };
+
+    const invokeSelectionAction = async (actionId: SelectionActionId, selection: string) => {
+      if (!selection) return;
+      if (actionId === "copy-highlight-link") {
+        const link = linkToTextHighlight(window.location.href, selection);
+        if (link) await copyToClipboard(link);
+        return;
+      }
+      if (actionId === "ask-gemini") {
+        await copyToClipboard(selection);
+        openUrl("https://gemini.google.com/app");
+        return;
+      }
+      const url = selectionActionUrl(actionId, selection);
+      if (url) openSearchPopup(url);
+    };
+
+    const selectionMenuActions = (): MenuAction[] => contextMenuSelectionActions.map((id) => {
+      const getUrl = selectionActionUrl(id, "example");
+      return {
+        id,
+        label: selectionActionLabel(id),
+        icon: selectionActionIcons[id],
         requiresSelection: true,
-        getUrl: (s) => buildEbaySoldUrl(s),
-        onInvoke: ({ selection }) =>
-          selection && openSearchPopup(buildEbaySoldUrl(selection)),
-      },
-      {
-        id: "google-upc",
-        label: "Search for UPC",
-        shortcut: "G",
-        description: "Find products by UPC code",
-        icon: Search,
-        requiresSelection: true,
-        getUrl: (s) => buildGoogleUpcUrl(s),
-        onInvoke: ({ selection }) =>
-          selection && openSearchPopup(buildGoogleUpcUrl(selection)),
-      },
-      {
-        id: "pricecharting",
-        label: "Search PriceCharting",
-        shortcut: "P",
-        description: "Check prices for collectibles and games",
-        icon: TrendingUp,
-        requiresSelection: true,
-        getUrl: (s) => buildSearchUrl(SEARCH_URL_TEMPLATES.pricecharting, s),
-        onInvoke: ({ selection }) =>
-          selection &&
-          openSearchPopup(buildSearchUrl(SEARCH_URL_TEMPLATES.pricecharting, selection)),
-      },
+        description: id === "ask-gemini"
+          ? "Copies selected text and opens Gemini for pasting"
+          : id === "look-up"
+            ? "Opens a Google definition search"
+            : undefined,
+        ...(getUrl ? { getUrl: (selection: string) => selectionActionUrl(id, selection) || "" } : {}),
+        onInvoke: ({ selection }) => { void invokeSelectionAction(id, selection); },
+      };
+    });
+
+    const toolActions: MenuAction[] = [
       {
         id: "mobile-scanner",
         label: "Mobile Scanner",
@@ -619,14 +628,29 @@ export default defineContentScript({
       const visibleRects = Array.from(range.getClientRects()).filter(
         (rect) => rect.width > 0 && rect.height > 0,
       );
-      const sourceRect =
-        visibleRects[visibleRects.length - 1] ?? range.getBoundingClientRect();
+      const sourceRect = range.getBoundingClientRect();
+      const selectionTop = visibleRects.reduce(
+        (top, rect) => Math.min(top, rect.top),
+        sourceRect.top,
+      );
+      const selectionBottom = visibleRects.reduce(
+        (bottom, rect) => Math.max(bottom, rect.bottom),
+        sourceRect.bottom,
+      );
+      const selectionLeft = visibleRects.reduce(
+        (left, rect) => Math.min(left, rect.left),
+        sourceRect.left,
+      );
+      const selectionRight = visibleRects.reduce(
+        (right, rect) => Math.max(right, rect.right),
+        sourceRect.right,
+      );
       const rect = {
-        bottom: sourceRect.bottom,
-        height: sourceRect.height,
-        left: sourceRect.left,
-        top: sourceRect.top,
-        width: sourceRect.width,
+        bottom: selectionBottom,
+        height: selectionBottom - selectionTop,
+        left: selectionLeft,
+        top: selectionTop,
+        width: selectionRight - selectionLeft,
       };
 
       if (
@@ -643,23 +667,13 @@ export default defineContentScript({
       return { rect, selection };
     };
 
-    const openSelectionSearch = (
-      actionId: SelectionSearchActionId,
+    const openSelectionAction = (
+      actionId: SelectionActionId,
       selection: string,
     ) => {
       suppressedSuggestionSelection = selection;
       closeSelectionSuggestions();
-      if (actionId === "ebay") {
-        openSearchPopup(buildEbaySoldUrl(selection));
-        return;
-      }
-      if (actionId === "google") {
-        openSearchPopup(buildGoogleUpcUrl(selection));
-        return;
-      }
-      openSearchPopup(
-        buildSearchUrl(SEARCH_URL_TEMPLATES.pricecharting, selection),
-      );
+      void invokeSelectionAction(actionId, selection);
     };
 
     const copySelection = async (selection: string) => {
@@ -693,11 +707,12 @@ export default defineContentScript({
       });
       selectionReactRoot.render(
         <SelectionSuggestionPill
+          actions={selectionPopupActions}
           onCopy={() => {
             void copySelection(selection);
           }}
-          onSearch={(actionId) =>
-            openSelectionSearch(actionId, selection)
+          onAction={(actionId) =>
+            openSelectionAction(actionId, selection)
           }
           position={position}
         />,
@@ -738,7 +753,7 @@ export default defineContentScript({
       host.style.pointerEvents = "auto";
       isOpen = true;
       if (!reactRoot) reactRoot = createRoot(rootEl);
-      reactRoot.render(<ContextMenu actions={actions} quickActions={quickActions} lastSelection={lastSelection} clickedUrl={clickedUrl} x={x} y={y} closeMenu={closeMenu} openUrl={openUrl} dismiss={() => { dismissedUntilRefresh = true; }} />);
+      reactRoot.render(<ContextMenu actions={[...selectionMenuActions(), ...toolActions]} selectionActionCount={contextMenuSelectionActions.length} quickActions={quickActions} lastSelection={lastSelection} clickedUrl={clickedUrl} x={x} y={y} closeMenu={closeMenu} openUrl={openUrl} dismiss={() => { dismissedUntilRefresh = true; }} />);
     };
 
     const closeMenu = (options: CloseMenuOptions = {}) => {
@@ -862,6 +877,24 @@ export default defineContentScript({
           closeSelectionSuggestions();
         }
       }
+    });
+
+    chrome.storage.onChanged.addListener((changes, areaName) => {
+      if (areaName !== "sync" || !changes.cmdkSettings) return;
+      const contextSettings = changes.cmdkSettings.newValue?.contextMenu;
+      enabled = contextSettings?.enabled ?? true;
+      selectionSuggestionsEnabled = contextSettings?.selectionSuggestionsEnabled ?? true;
+      selectionPopupActions = normalizeSelectionActions(
+        contextSettings?.selectionPopupActions,
+        DEFAULT_POPUP_ACTIONS,
+      );
+      contextMenuSelectionActions = normalizeSelectionActions(
+        contextSettings?.contextMenuSelectionActions,
+        DEFAULT_CONTEXT_ACTIONS,
+      );
+      if (!enabled) closeMenu();
+      closeSelectionSuggestions();
+      if (selectionSuggestionsEnabled) scheduleSelectionSuggestions();
     });
 
     // Close popup when main window is focused

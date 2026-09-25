@@ -181,6 +181,14 @@ export default defineSchema({
     .index("by_clerkUserId", ["clerkUserId"])
     .index("by_appAccountToken", ["appAccountToken"]),
 
+  extensionSettings: defineTable({
+    ownerClerkUserId: v.string(),
+    ownerTokenIdentifier: v.string(),
+    payload: v.string(),
+    revision: v.number(),
+    updatedAt: v.number(),
+  }).index("by_ownerTokenIdentifier", ["ownerTokenIdentifier"]),
+
   anonymousTrialGrants: defineTable({
     anonymousId: v.string(),
     credentialHash: v.string(),

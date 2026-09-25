@@ -51,6 +51,7 @@ export const selectionStyles = () => `
       .selection-action:active{background:#e2e8f0;transform:scale(.98)}
       .selection-action:focus-visible{outline:2px solid #22c55e;outline-offset:1px}
       .selection-action svg{flex:none}
+      .selection-action span{min-width:0;overflow:hidden;text-overflow:ellipsis}
       .selection-copy{box-sizing:border-box;display:flex;grid-column:1/-1;align-items:center;justify-content:center;gap:7px;height:32px;margin-top:2px;border:0;border-top:1px solid #eef2f7;border-radius:0 0 9px 9px;background:transparent;color:#64748b;cursor:pointer;font:600 12px/1 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;transition:background 100ms ease,color 100ms ease}
       .selection-copy:hover{background:#f1f5f9;color:#0f172a}
       .selection-copy:active{background:#e2e8f0}

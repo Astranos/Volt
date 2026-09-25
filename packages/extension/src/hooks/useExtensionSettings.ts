@@ -29,7 +29,20 @@ export function useExtensionSettings() {
       setSettings(mergeSettings(result.cmdkSettings));
     });
 
+    const handleStorageChange: Parameters<typeof chrome.storage.onChanged.addListener>[0] = (
+      changes,
+      areaName,
+    ) => {
+      if (areaName === "sync" && changes.cmdkSettings) {
+        chrome.storage.sync.get(["cmdkSettings"], (result: SyncStorageResult) => {
+          setSettings(mergeSettings(result.cmdkSettings));
+        });
+      }
+    };
+    chrome.storage.onChanged.addListener(handleStorageChange);
+
     return () => {
+      chrome.storage.onChanged.removeListener(handleStorageChange);
       if (savedTimerRef.current) {
         clearTimeout(savedTimerRef.current);
       }

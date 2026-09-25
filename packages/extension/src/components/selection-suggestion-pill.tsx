@@ -1,29 +1,34 @@
 import React from "react";
-import { PackageSearch, Search, TrendingUp, Copy } from "lucide-react";
+import { PackageSearch, Search, TrendingUp, Copy, Link2, BookOpen, Sparkles } from "lucide-react";
 import { positionSelectionSuggestions } from "../domain/selection-suggestions";
+import {
+  SELECTION_ACTIONS,
+  type SelectionActionId,
+} from "../domain/selection-actions";
 
-export type SelectionSearchActionId = "ebay" | "google" | "pricecharting";
 export type SelectionSuggestionPosition = ReturnType<
   typeof positionSelectionSuggestions
 >;
 
-const selectionSearchActions: Array<{
-  id: SelectionSearchActionId;
-  label: string;
-  icon: React.ComponentType<{ size?: number }>;
-}> = [
-  { id: "ebay", label: "eBay Prices", icon: PackageSearch },
-  { id: "google", label: "Search for UPC", icon: Search },
-  { id: "pricecharting", label: "PriceCharting", icon: TrendingUp },
-];
+const icons: Record<SelectionActionId, React.ComponentType<{ size?: number }>> = {
+  ebay: PackageSearch,
+  "google-upc": Search,
+  pricecharting: TrendingUp,
+  "google-search": Search,
+  "copy-highlight-link": Link2,
+  "look-up": BookOpen,
+  "ask-gemini": Sparkles,
+};
 
 export function SelectionSuggestionPill({
+  actions,
   onCopy,
-  onSearch,
+  onAction,
   position,
 }: {
+  actions: readonly SelectionActionId[];
   onCopy: () => void;
-  onSearch: (actionId: SelectionSearchActionId) => void;
+  onAction: (actionId: SelectionActionId) => void;
   position: SelectionSuggestionPosition;
 }) {
   return (
@@ -33,19 +38,22 @@ export function SelectionSuggestionPill({
       data-placement={position.placement}
       role="toolbar"
       style={{
+        gridTemplateColumns: `repeat(${Math.max(actions.length, 1)}, minmax(0, 1fr))`,
         left: `${position.left}px`,
         top: `${position.top}px`,
         width: `${position.width}px`,
       }}
     >
-      {selectionSearchActions.map((action) => {
-        const Icon = action.icon;
+      {actions.map((id) => {
+        const Icon = icons[id];
+        const action = SELECTION_ACTIONS.find((candidate) => candidate.id === id);
+        if (!action) return null;
         return (
           <button
-            key={action.id}
+            key={id}
             aria-label={action.label}
             className="selection-action selection-search-action"
-            onClick={() => onSearch(action.id)}
+            onClick={() => onAction(id)}
             onPointerDown={(event) => event.preventDefault()}
             title={action.label}
             type="button"

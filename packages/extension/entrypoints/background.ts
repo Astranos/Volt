@@ -9,6 +9,7 @@ import { createAccessController } from "../src/background/access-controller";
 import { createCloudCursorDeliveryController } from "../src/background/cloud-cursor-delivery-controller";
 import { createCloudLiveDictationController } from "../src/background/cloud-live-dictation-controller";
 import { createCloudWorkspaceController } from "../src/background/cloud-workspace-controller";
+import { createCloudSettingsController } from "../src/background/cloud-settings-controller";
 import { createClerkSessionMirror } from "../src/background/clerk-session-mirror";
 import { createClipboardController } from "../src/background/clipboard-controller";
 import { createContextMenuController } from "../src/background/context-menu-controller";
@@ -168,11 +169,19 @@ export default defineBackground({
       sendOffscreenMessage: scannerOffscreen.sendScannerOffscreenMessage,
       log,
     });
+    const cloudSettings = createCloudSettingsController({
+      chromeApi: chrome,
+      extensionId: chrome.runtime.id,
+      sendOffscreenMessage: scannerOffscreen.sendScannerOffscreenMessage,
+    });
+    cloudSettings.start();
+    void cloudSettings.pull().catch(() => undefined);
     const clerkSessionMirror = createClerkSessionMirror({
       chromeApi: chrome,
       log,
       onChanged: () => {
         void cloudWorkspace.handleAccountSessionChanged();
+        void cloudSettings.pull().catch(() => undefined);
       },
     });
     const tabDelivery = createTabDeliveryController({ chromeApi: chrome, log });
@@ -282,6 +291,8 @@ export default defineBackground({
     }
 
     function registerListeners() {
+      chrome.runtime.onMessage.addListener((message, sender, sendResponse) =>
+        cloudSettings.handleMessage(message, sender, sendResponse));
       createContextMenuController({
         chromeApi: chrome,
         getFallbackTabId: () =>
@@ -372,7 +383,7 @@ export default defineBackground({
         if (alarm?.name === cloudWorkspace.alarmName) {
           // cookies.onChanged does not fire while the worker is asleep, so the
           // workspace alarm is also when a missed sign-in gets picked up.
-          void clerkSessionMirror.sync();
+          void clerkSessionMirror.sync().then(() => cloudSettings.pull()).catch(() => undefined);
           void cloudWorkspace.handleAlarm();
           return;
         }

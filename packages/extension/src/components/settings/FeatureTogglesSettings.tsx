@@ -116,7 +116,7 @@ export function FeatureTogglesSettings({
         enabled={settings.contextMenu?.enabled ?? true}
         details={[
           "Quick actions: Copy, Paste, Open in New Tab, Save As",
-          "Search tools: eBay Prices, Search for UPC, PriceCharting",
+          "Choose up to three selected text actions below",
           "Ctrl+Right-click to show native menu instead",
           "Click dismiss button to disable until page refresh",
         ]}
@@ -143,7 +143,7 @@ export function FeatureTogglesSettings({
         title="Selection Suggestions"
         description="Choose whether Volt offers actions beside selected page text."
         itemTitle="Show Selection Suggestions"
-        itemDescription="Shows a compact eBay Prices, Search for UPC, and PriceCharting toolbar after selecting non-editable text on a page."
+        itemDescription="Shows your selected actions after highlighting non-editable text on a page."
         enabled={settings.contextMenu?.selectionSuggestionsEnabled ?? true}
         details={[
           "Appears after selection settles",
