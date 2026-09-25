@@ -10,7 +10,7 @@ import React from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { createMobileCaptureController } from "./context-menu-mobile-capture";
 import { initializeSidePanelContext } from "../src/lib/sidepanel-gesture";
-import { normalizeSelectionSuggestionText, positionSelectionSuggestions, selectionSuggestionPillWidth, shouldShowSelectionSuggestions } from "../src/domain/selection-suggestions";
+import { normalizeSelectionSuggestionText, positionSelectionSuggestions, selectionSuggestionActionWidth, selectionSuggestionPillWidth, shouldShowSelectionSuggestions } from "../src/domain/selection-suggestions";
 import { DEFAULT_CONTEXT_ACTIONS, DEFAULT_POPUP_ACTIONS, linkToTextHighlight, normalizeSelectionActions, selectionActionKey, selectionActionLabel, selectionActionUrl, type SelectionAction } from "../src/domain/selection-actions";
 import { Search, PackageSearch, TrendingUp, Copy, Clipboard, ExternalLink, Download, Settings, ChevronLeft, ChevronRight, Smartphone, Calculator, Link2, BookOpen, Sparkles } from "lucide-react";
 
@@ -700,8 +700,14 @@ export default defineContentScript({
       ensureSelectionHost();
       if (!selectionReactRoot) return;
       activeSuggestionSelection = selection;
+      const textMeasure = document.createElement("canvas").getContext("2d");
+      if (textMeasure) textMeasure.font = "600 12px system-ui";
+      const actionWidths = selectionPopupActions.map((action) => {
+        const label = selectionActionLabel(action);
+        return selectionSuggestionActionWidth(textMeasure?.measureText(label).width ?? label.length * 7);
+      });
       const position = positionSelectionSuggestions({
-        pillWidth: selectionSuggestionPillWidth(selectionPopupActions.length),
+        pillWidth: selectionSuggestionPillWidth(actionWidths),
         rect,
         viewportHeight: window.innerHeight,
         viewportWidth: window.innerWidth,
@@ -709,6 +715,7 @@ export default defineContentScript({
       selectionReactRoot.render(
         <SelectionSuggestionPill
           actions={selectionPopupActions}
+          actionWidths={actionWidths}
           onCopy={() => {
             void copySelection(selection);
           }}

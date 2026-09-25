@@ -1,8 +1,8 @@
 export const SELECTION_SUGGESTION_MIN_LENGTH = 2;
 export const SELECTION_SUGGESTION_MAX_LENGTH = 300;
-const SELECTION_SUGGESTION_ACTION_WIDTH = 176;
 const SELECTION_SUGGESTION_PILL_PADDING = 10;
-export const SELECTION_SUGGESTION_PILL_WIDTH = 3 * SELECTION_SUGGESTION_ACTION_WIDTH + SELECTION_SUGGESTION_PILL_PADDING;
+const SELECTION_SUGGESTION_ACTION_CHROME = 45;
+export const SELECTION_SUGGESTION_PILL_WIDTH = 386;
 export const SELECTION_SUGGESTION_PILL_HEIGHT = 80;
 export const SELECTION_SUGGESTION_VIEWPORT_MARGIN = 8;
 export const SELECTION_SUGGESTION_GAP = 10;
@@ -15,8 +15,12 @@ export type SelectionRect = {
   width: number;
 };
 
-export function selectionSuggestionPillWidth(actionCount: number) {
-  return Math.max(186, actionCount * SELECTION_SUGGESTION_ACTION_WIDTH + SELECTION_SUGGESTION_PILL_PADDING);
+export function selectionSuggestionActionWidth(textWidth: number) {
+  return Math.ceil(textWidth) + SELECTION_SUGGESTION_ACTION_CHROME;
+}
+
+export function selectionSuggestionPillWidth(actionWidths: readonly number[]) {
+  return Math.max(170, actionWidths.reduce((total, width) => total + width, SELECTION_SUGGESTION_PILL_PADDING));
 }
 
 export function normalizeSelectionSuggestionText(value: string) {

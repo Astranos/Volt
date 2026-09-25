@@ -24,11 +24,13 @@ const icons: Record<SelectionActionId, React.ComponentType<{ size?: number }>> =
 
 export function SelectionSuggestionPill({
   actions,
+  actionWidths,
   onCopy,
   onAction,
   position,
 }: {
   actions: readonly SelectionAction[];
+  actionWidths: readonly number[];
   onCopy: () => void;
   onAction: (action: SelectionAction) => void;
   position: SelectionSuggestionPosition;
@@ -40,7 +42,9 @@ export function SelectionSuggestionPill({
       data-placement={position.placement}
       role="toolbar"
       style={{
-        gridTemplateColumns: `repeat(${Math.max(actions.length, 1)}, minmax(0, 1fr))`,
+        gridTemplateColumns: actionWidths.length
+          ? actionWidths.map((width) => `minmax(0, ${width}fr)`).join(" ")
+          : "minmax(0, 1fr)",
         left: `${position.left}px`,
         top: `${position.top}px`,
         width: `${position.width}px`,
