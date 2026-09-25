@@ -57,6 +57,10 @@ const shopifyListYesterdayReference = makeFunctionReference<
   "action", { startUtc: string; endUtc: string; date: string },
   { shop: string; date: string; products: Array<{ id: string; title: string; status: string; url: string }> }
 >("shopifyAudit:listYesterday");
+const shopifySearchProductsReference = makeFunctionReference<
+  "action", { query: string },
+  { shop: string; products: Array<{ id: string; title: string; status: string; totalInventory: number; url: string; imageUrl: string | null; price: string | null; currencyCode: string | null; condition: string | null; sku: string | null }> }
+>("shopifyAudit:searchProducts");
 
 function serializeLogArg(arg: unknown) {
   if (arg instanceof Error) {
@@ -568,6 +572,12 @@ class CloudWorkspaceSubscriptions {
     return this.client.action(shopifyListYesterdayReference, { startUtc, endUtc, date });
   }
 
+  async searchShopifyProducts(query: string) {
+    await this.reconcileAuthentication();
+    if (!this.clerkSubject) throw new Error("Sign in to Volt before searching Shopify.");
+    return this.client.action(shopifySearchProductsReference, { query });
+  }
+
   async acknowledgeCursorDelivery(
     deliveryId: string,
     state: "delivered" | "failed",
@@ -824,6 +834,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     || message.action === "shopifyAuditOffscreenConnect"
     || message.action === "shopifyAuditOffscreenDisconnect"
     || message.action === "shopifyAuditOffscreenListYesterday"
+    || message.action === "shopifyAuditOffscreenSearchProducts"
   ) {
     if (sender.id !== chrome.runtime.id || sender.tab) {
       sendResponse({ success: false, error: "unauthorized_extension_sender" });
@@ -881,6 +892,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return false;
       }
       return sendWorkspaceOperation(sendResponse, cloudWorkspaceSubscriptions.listShopifyYesterday(message.startUtc, message.endUtc, message.date));
+    }
+    if (message.action === "shopifyAuditOffscreenSearchProducts") {
+      if (typeof message.query !== "string") {
+        sendResponse({ success: false, error: "invalid_shopify_search_query" });
+        return false;
+      }
+      return sendWorkspaceOperation(sendResponse, cloudWorkspaceSubscriptions.searchShopifyProducts(message.query));
     }
     if (message.action === "workspaceOffscreenReconcile") {
       void cloudWorkspaceSubscriptions.reconcileSnapshot()

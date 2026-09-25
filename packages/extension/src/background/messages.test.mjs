@@ -38,6 +38,7 @@ test("Shopify audit commands addressed to the offscreen document bypass backgrou
     "shopifyAuditOffscreenConnect",
     "shopifyAuditOffscreenDisconnect",
     "shopifyAuditOffscreenListYesterday",
+    "shopifyAuditOffscreenSearchProducts",
   ]) {
     assert.equal(isShopifyAuditOffscreenRuntimeMessage({ action }), true);
   }

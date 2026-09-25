@@ -9,6 +9,7 @@ import {
 type ShopifyMessage = {
   action?: unknown;
   shop?: unknown;
+  query?: unknown;
 };
 
 type ShopifyResponse = { success: true; value: unknown } | { success: false; error: string };
@@ -88,7 +89,7 @@ export function createShopifyAuditController({
     if (!rawMessage || typeof rawMessage !== "object") return false;
     const message = rawMessage as ShopifyMessage;
     if (![
-      "shopifyAuditStatus", "shopifyAuditConnect", "shopifyAuditDisconnect", "shopifyAuditOpenYesterday",
+      "shopifyAuditStatus", "shopifyAuditConnect", "shopifyAuditDisconnect", "shopifyAuditOpenYesterday", "shopifyAuditSearchProducts",
     ].includes(String(message.action))) return false;
     if (!isTrustedExtensionPageSender(sender, extensionId, ["/options.html", "/newtab.html"])) {
       sendResponse({ success: false, error: "unauthorized_extension_sender" });
@@ -113,6 +114,12 @@ export function createShopifyAuditController({
           return forward("shopifyAuditOffscreenDisconnect");
         case "shopifyAuditOpenYesterday":
           return openYesterday(sender.tab?.windowId);
+        case "shopifyAuditSearchProducts": {
+          if (typeof message.query !== "string") throw new Error("Enter a product search.");
+          const query = message.query.trim();
+          if (query.length < 2 || query.length > 120) throw new Error("Search must be 2 to 120 characters.");
+          return forward("shopifyAuditOffscreenSearchProducts", { query });
+        }
         default:
           return null;
       }

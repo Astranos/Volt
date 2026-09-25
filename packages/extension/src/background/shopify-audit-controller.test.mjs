@@ -51,3 +51,24 @@ test("does not open an unexpected product URL", async () => {
   assert.equal(response.success, false);
   assert.deepEqual(calls.created, []);
 });
+
+test("forwards live searches only from trusted extension pages", async () => {
+  const messages = [];
+  const controller = createShopifyAuditController({
+    chromeApi: {},
+    extensionId: "ext",
+    sendOffscreenMessage: async (message) => {
+      messages.push(message);
+      return { success: true, value: { shop: "sample.myshopify.com", products: [] } };
+    },
+  });
+  const request = (query, sender) => new Promise((resolve) => {
+    assert.equal(controller.handleMessage({ action: "shopifyAuditSearchProducts", query }, sender, resolve), true);
+  });
+  const trusted = { id: "ext", url: "chrome-extension://ext/newtab.html" };
+  assert.deepEqual(await request("  camera  ", trusted), { success: true, value: { shop: "sample.myshopify.com", products: [] } });
+  assert.deepEqual(messages, [{ action: "shopifyAuditOffscreenSearchProducts", query: "camera" }]);
+  assert.equal((await request("x", trusted)).success, false);
+  assert.equal((await request("camera", { id: "other", url: "chrome-extension://other/newtab.html" })).success, false);
+  assert.equal(messages.length, 1);
+});

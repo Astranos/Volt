@@ -4,7 +4,7 @@ import { makeFunctionReference } from "convex/server";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import type { Doc, Id } from "./_generated/dataModel";
 import schema from "./schema";
-import { auditRange, decryptToken, encryptToken, fetchYesterday, shopDomain, verifyCallback } from "./shopifyHelpers";
+import { auditRange, decryptToken, encryptToken, fetchSearchProducts, fetchYesterday, productSearchQuery, shopDomain, verifyCallback } from "./shopifyHelpers";
 
 const modules = import.meta.glob("./**/*.ts");
 const get = makeFunctionReference<"query", Record<string, never>, { shop: string } | null>("shopifyAudit:getConnection");
@@ -15,6 +15,7 @@ const consume = makeFunctionReference<"mutation", { shop: string; state: string 
 type Tokens = Pick<Doc<"shopifyConnections">, "encryptedAccessToken" | "encryptedRefreshToken" | "expiresAt" | "refreshExpiresAt">;
 const finish = makeFunctionReference<"mutation", { stateId: Id<"shopifyOAuthStates"> } & Tokens, null>("shopifyStore:finish");
 const list = makeFunctionReference<"action", { startUtc: string; endUtc: string; date: string }, { shop: string; date: string; products: { id: string; title: string; status: string; url: string }[] }>("shopifyAudit:listYesterday");
+const search = makeFunctionReference<"action", { query: string }, { shop: string; products: { id: string; title: string; status: string; totalInventory: number; url: string; imageUrl: string | null; price: string | null; currencyCode: string | null; sku: string | null; condition: string | null }[] }>("shopifyAudit:searchProducts");
 const shop = "example-store.myshopify.com";
 const state = "a".repeat(64);
 const owner = "clerk|alice";
@@ -175,5 +176,83 @@ describe("Shopify previous calendar day", () => {
     const stored = await t.run(ctx => ctx.db.query("shopifyConnections").first());
     expect(stored?.encryptedAccessToken).not.toBe("new-access");
     expect(await decryptToken(stored?.encryptedRefreshToken ?? "", aad)).toBe("new-refresh");
+  });
+});
+
+describe("Shopify live product search", () => {
+  test("normalizes literal terms for prefix search and rejects broad input", () => {
+    expect(productSearchQuery("  iPhone 13  ")).toBe("iphone 13*");
+    expect(productSearchQuery("AC:DC OR")).toBe("ac dc or*");
+    expect(() => productSearchQuery("a")).toThrow("2 to 120");
+    expect(() => productSearchQuery("a".repeat(121))).toThrow("2 to 120");
+    expect(() => productSearchQuery("--")).toThrow("product name");
+  });
+  test("puts in-stock results first while preserving Shopify relevance within each group", async () => {
+    const node = (id: string, inventory: number, imageUrl: string | null = null) => ({
+      id: `gid://shopify/Product/${id}`, legacyResourceId: id, title: `Product ${id}`, status: "ACTIVE", totalInventory: inventory,
+      featuredMedia: imageUrl ? { preview: { image: { url: imageUrl } } } : null,
+      priceRangeV2: { minVariantPrice: { amount: "19.99", currencyCode: "USD" } },
+      conditionMetafield: id === "1" ? { value: "New" } : null,
+      tags: id === "3" ? ["condition: Used - Good"] : [],
+      variants: { nodes: id === "1" ? [{ sku: "OTHER" }, { sku: "IPHONE 13 BLUE" }] : [{ sku: `SKU-${id}` }] },
+    });
+    const mock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ data: {
+      inStock: { nodes: [node("3", 2), node("1", 10, "https://cdn.shopify.com/image.jpg")] },
+      outOfStock: { nodes: [node("2", 0), node("4", -1)] },
+    } })));
+    vi.stubGlobal("fetch", mock);
+    const result = await fetchSearchProducts(shop, "secret-access", "  iPhone 13 ");
+    expect(result.shop).toBe(shop);
+    expect(result.products.map(product => product.id)).toEqual(["gid://shopify/Product/3", "gid://shopify/Product/1", "gid://shopify/Product/2", "gid://shopify/Product/4"]);
+    expect(result.products[1]).toMatchObject({ totalInventory: 10, imageUrl: "https://cdn.shopify.com/image.jpg", url: "https://admin.shopify.com/store/example-store/products/1", price: "19.99", currencyCode: "USD", sku: "IPHONE 13 BLUE", condition: "New" });
+    expect(result.products[0].imageUrl).toBeNull();
+    expect(result.products[0].condition).toBe("Used - Good");
+    expect(result.products[2].condition).toBeNull();
+    const request = JSON.parse(String(mock.mock.calls[0][1]?.body));
+    expect(request.query).toContain("sortKey: RELEVANCE");
+    expect(request.variables).toEqual({ inStock: "iphone 13* status:active,archived,draft,unlisted inventory_total:>0", outOfStock: "iphone 13* status:active,archived,draft,unlisted inventory_total:<=0" });
+    expect(mock.mock.calls[0][1]?.headers).toMatchObject({ "X-Shopify-Access-Token": "secret-access" });
+  });
+  test("caps results at 30 and rejects an invalid product link ID", async () => {
+    const node = (id: string, totalInventory: number) => ({
+      id: `gid://shopify/Product/${id}`, legacyResourceId: id, title: `Product ${id}`, status: "ACTIVE", totalInventory,
+      featuredMedia: null, priceRangeV2: { minVariantPrice: { amount: "5.00", currencyCode: "USD" } },
+      conditionMetafield: null, tags: [], variants: { nodes: [] },
+    });
+    const inStock = Array.from({ length: 30 }, (_, index) => node(String(index + 1), 1));
+    const mock = vi.fn<typeof fetch>().mockResolvedValueOnce(new Response(JSON.stringify({ data: {
+      inStock: { nodes: inStock }, outOfStock: { nodes: [node("31", 0)] },
+    } })));
+    vi.stubGlobal("fetch", mock);
+    const result = await fetchSearchProducts(shop, "access", "phone");
+    expect(result.products).toHaveLength(30);
+    expect(result.products.every(product => product.totalInventory > 0)).toBe(true);
+    mock.mockResolvedValueOnce(new Response(JSON.stringify({ data: {
+      inStock: { nodes: [{ ...node("1", 1), id: "gid://shopify/Collection/1" }] }, outOfStock: { nodes: [] },
+    } })));
+    await expect(fetchSearchProducts(shop, "access", "phone")).rejects.toThrow("invalid product ID");
+  });
+  test("requires the connected account and does not expose its token", async () => {
+    const t = convexTest(schema, modules);
+    await expect(t.action(search, { query: "phone" })).rejects.toThrow("Sign in");
+    const alice = t.withIdentity({ subject: "alice", tokenIdentifier: owner });
+    await expect(alice.action(search, { query: "phone" })).rejects.toThrow("Connect your Shopify store");
+    const aad = `${owner}|${shop}`;
+    const encryptedAccessToken = await encryptToken("private-access", aad);
+    const encryptedRefreshToken = await encryptToken("private-refresh", aad);
+    await t.run(ctx => ctx.db.insert("shopifyConnections", {
+      ownerTokenIdentifier: owner, shop, encryptedAccessToken,
+      encryptedRefreshToken, expiresAt: Date.now() + 3600000, refreshExpiresAt: Date.now() + 86400000,
+    }));
+    const mock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ data: {
+      inStock: { nodes: [{ id: "gid://shopify/Product/123", legacyResourceId: "123", title: "Phone", status: "ACTIVE", totalInventory: 1, featuredMedia: null, priceRangeV2: { minVariantPrice: { amount: "2.00", currencyCode: "USD" } }, conditionMetafield: null, tags: [], variants: { nodes: [{ sku: "PHONE-123" }] } }] },
+      outOfStock: { nodes: [] },
+    } })));
+    vi.stubGlobal("fetch", mock);
+    const result = await alice.action(search, { query: "phone" });
+    expect(result.products).toHaveLength(1);
+    expect(JSON.stringify(result)).not.toContain("private-");
+    const bob = t.withIdentity({ subject: "bob", tokenIdentifier: "clerk|bob" });
+    await expect(bob.action(search, { query: "phone" })).rejects.toThrow("Connect your Shopify store");
   });
 });

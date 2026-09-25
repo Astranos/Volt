@@ -5,11 +5,11 @@ import { BookmarksColumn } from "../../src/components/newtab/BookmarksColumn";
 import { HeroBlock } from "../../src/components/newtab/HeroBlock";
 import type { SearchMode } from "../../src/components/newtab/NewTabHelp";
 import { ExtensionAccountControl } from "../../src/components/access/ExtensionAccess";
-import { Calculator, ClipboardCheck, ScanLine, Settings } from "lucide-react";
+import { Calculator, ClipboardCheck, ScanLine, Settings, Sparkles } from "lucide-react";
 import { AppClipQrIcon } from "../../src/components/icons/AppClipQrIcon";
 import { TabManager } from "../../src/utils/tab-manager";
-import { extractShopifyStoreName } from "../../src/domain/search";
 import { getShopifyAuditConnection, openShopifyAudit } from "../../src/shopify-audit/client";
+import { WhatsNewDialog } from "../../src/components/newtab/WhatsNewDialog";
 import {
   NEW_TAB_SEARCH_PROVIDERS,
   parseSearchPrefix,
@@ -22,10 +22,9 @@ import "../../src/components/newtab/newtab-layout.css";
 
 export default function NewTab() {
   const [activeMode, setActiveMode] = useState<SearchMode>("closed-tabs");
-  const [shopifyStore, setShopifyStore] = useState<string | null>(null);
-  const [resolvingShopifyStore, setResolvingShopifyStore] = useState(false);
   const [auditBusy, setAuditBusy] = useState(false);
   const [auditNotice, setAuditNotice] = useState<string | null>(null);
+  const [whatsNewRequest, setWhatsNewRequest] = useState(0);
 
   // Randomize the aurora blobs' starting offset + animation phase on every
   // new-tab load so the bg looks fresh each time.
@@ -46,20 +45,6 @@ export default function NewTab() {
     document.title = "Volt";
   }, []);
 
-  useEffect(() => {
-    if (typeof chrome === "undefined" || !chrome.storage?.local) return;
-    chrome.storage.local.get(
-      ["scout_shopify_store"],
-      (result: {
-        scout_shopify_store?: string;
-      }) => {
-        if (result?.scout_shopify_store) {
-          setShopifyStore(result.scout_shopify_store);
-        }
-      }
-    );
-  }, []);
-
   const toggleSearchMode = (mode: SearchMode) => {
     setActiveMode((current) => {
       return current === mode ? "closed-tabs" : mode;
@@ -68,115 +53,6 @@ export default function NewTab() {
 
   const setSearchMode = (mode: SearchMode) => {
     setActiveMode(mode);
-  };
-
-  const resolveShopifyStoreFromTabs = async (): Promise<string | null> => {
-    return new Promise((resolve) => {
-      if (typeof chrome === "undefined" || !chrome.tabs) {
-        resolve(null);
-        return;
-      }
-
-      chrome.tabs.query({}, (tabs) => {
-        for (const tab of tabs) {
-          if (!tab.url) continue;
-          const storeName = extractShopifyStoreName(tab.url);
-          if (storeName) {
-            resolve(storeName);
-            return;
-          }
-        }
-        resolve(null);
-      });
-    });
-  };
-
-  const resolveShopifyStoreViaRedirect = async (): Promise<string | null> => {
-    return new Promise((resolve) => {
-      if (typeof chrome === "undefined" || !chrome.tabs) {
-        resolve(null);
-        return;
-      }
-
-      try {
-        chrome.tabs.create(
-          { url: "https://admin.shopify.com/", active: false },
-          (tab) => {
-            if (!tab || typeof tab.id !== "number") {
-              resolve(null);
-              return;
-            }
-
-            const createdTabId = tab.id;
-
-            const timeoutId = setTimeout(() => {
-              try {
-                chrome.tabs.onUpdated.removeListener(listener);
-                chrome.tabs.remove(createdTabId);
-              } catch (_e) {
-                // ignore cleanup errors
-              }
-              resolve(null);
-            }, 15000);
-
-            const listener = (
-              tabId: number,
-              changeInfo: any,
-              updatedTab: any
-            ) => {
-              if (tabId !== createdTabId) return;
-              if (changeInfo.status !== "complete" || !updatedTab.url) return;
-
-              const storeName = extractShopifyStoreName(updatedTab.url);
-
-              if (storeName) {
-                clearTimeout(timeoutId);
-                try {
-                  chrome.tabs.onUpdated.removeListener(listener);
-                  chrome.tabs.remove(createdTabId);
-                } catch (_e) {
-                  // ignore cleanup errors
-                }
-                resolve(storeName);
-              }
-            };
-
-            chrome.tabs.onUpdated.addListener(listener);
-          }
-        );
-      } catch (_e) {
-        resolve(null);
-      }
-    });
-  };
-
-  const resolveShopifyStore = async (): Promise<string | null> => {
-    if (shopifyStore) return shopifyStore;
-
-    setResolvingShopifyStore(true);
-    try {
-      const fromTabs = await resolveShopifyStoreFromTabs();
-      if (fromTabs) {
-        setShopifyStore(fromTabs);
-        if (typeof chrome !== "undefined" && chrome.storage?.local) {
-          chrome.storage.local.set({ scout_shopify_store: fromTabs });
-        }
-        return fromTabs;
-      }
-
-      const fromRedirect = await resolveShopifyStoreViaRedirect();
-      if (fromRedirect) {
-        setShopifyStore(fromRedirect);
-        if (typeof chrome !== "undefined" && chrome.storage?.local) {
-          chrome.storage.local.set({ scout_shopify_store: fromRedirect });
-        }
-        return fromRedirect;
-      }
-
-      return null;
-    } finally {
-      setResolvingShopifyStore(false);
-    }
   };
 
   const handleSearchSubmit = async (query: string) => {
@@ -191,24 +67,15 @@ export default function NewTab() {
     if (prefixedSearch.mode && prefixedSearch.mode !== activeMode) {
       setSearchMode(prefixedSearch.mode);
     }
-
-    const storeName =
-      effectiveMode === "shopify" ? await resolveShopifyStore() : shopifyStore;
+    if (effectiveMode === "shopify") return;
     const intent = resolveNewTabSearchIntent(trimmed, {
       activeMode,
       providers: NEW_TAB_SEARCH_PROVIDERS,
-      shopifyStoreName: storeName,
     });
 
-    if (!intent) return;
-    if (intent.kind === "missing-shopify-store") {
-      console.warn(
-        "[NewTab] Unable to resolve Shopify store for inventory search."
-      );
-      return;
+    if (intent?.kind === "search-provider" || intent?.kind === "navigate") {
+      await TabManager.updateCurrentTab(intent.url);
     }
-
-    await TabManager.updateCurrentTab(intent.url);
   };
 
   const handleShopifyAudit = async () => {
@@ -257,6 +124,16 @@ export default function NewTab() {
             <h1 className="newtab-header-title">Volt</h1>
           </div>
           <div className="newtab-header-actions">
+            <button
+              type="button"
+              className="newtab-settings-button newtab-whats-new-trigger"
+              onClick={() => setWhatsNewRequest((value) => value + 1)}
+              aria-label="What’s new in Volt"
+              title="What’s new in Volt"
+            >
+              <Sparkles aria-hidden="true" />
+              <span>What’s new</span>
+            </button>
             <button
               type="button"
               className="newtab-settings-button newtab-audit-button"
@@ -329,7 +206,6 @@ export default function NewTab() {
               onSearchSubmit={handleSearchSubmit}
               activeMode={activeMode}
               onToggleSearchMode={toggleSearchMode}
-              resolvingShopifyStore={resolvingShopifyStore}
             />
           </div>
 
@@ -341,6 +217,7 @@ export default function NewTab() {
           <BookmarksColumn id="tour-bookmarks" />
         </section>
       </div>
+      <WhatsNewDialog openRequest={whatsNewRequest} />
     </div>
   );
 }
