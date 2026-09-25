@@ -26,6 +26,10 @@ const offscreen = readFileSync(
   new URL("../offscreen/mobile-scanner-offscreen.ts", import.meta.url),
   "utf8",
 );
+const offscreenWorkspace = readFileSync(
+  new URL("../offscreen/cloud-workspace-subscriptions.ts", import.meta.url),
+  "utf8",
+);
 const computerRegistration = readFileSync(
   new URL("../cloud-scanner/computer-registration.ts", import.meta.url),
   "utf8",
@@ -65,10 +69,10 @@ test("workspace operations relay through the authenticated offscreen Convex clie
   assert.match(controller, /action: "workspaceOffscreenCreatePhotoDownloadUrl"/);
   assert.match(controller, /action: "workspaceOffscreenDeleteResults"/);
   assert.match(controller, /action: "workspaceOffscreenRestoreResults"/);
-  assert.match(offscreen, /api\.cloudWorkspace\.createEnrollment/);
-  assert.match(offscreen, /api\.cloudWorkspace\.createPhotoDownloadUrl/);
-  assert.match(offscreen, /api\.cloudWorkspace\.deleteWorkspaceResults/);
-  assert.match(offscreen, /api\.cloudWorkspace\.restoreWorkspaceResults/);
+  assert.match(offscreenWorkspace, /api\.cloudWorkspace\.createEnrollment/);
+  assert.match(offscreenWorkspace, /api\.cloudWorkspace\.createPhotoDownloadUrl/);
+  assert.match(offscreenWorkspace, /api\.cloudWorkspace\.deleteWorkspaceResults/);
+  assert.match(offscreenWorkspace, /api\.cloudWorkspace\.restoreWorkspaceResults/);
   assert.match(background, /ensureOffscreenDocument: scannerOffscreen\.ensureScannerOffscreenDocument/);
   assert.doesNotMatch(popup, /Authorization|Bearer|deviceSecret|Clerk JWT/);
 });
@@ -92,8 +96,8 @@ test("scanner results are cloud-first and launch the App Clip QR", () => {
 });
 
 test("Chrome reactively inserts installed-app speech dictation at the tracked cursor", () => {
-  assert.match(offscreen, /api\.cloudWorkspace\.liveDictationDraftsForComputer/);
-  assert.match(offscreen, /action: "workspaceOffscreenDictationDraftsChanged"/);
+  assert.match(offscreenWorkspace, /api\.cloudWorkspace\.liveDictationDraftsForComputer/);
+  assert.match(offscreenWorkspace, /action: "workspaceOffscreenDictationDraftsChanged"/);
   assert.match(controller, /case "workspaceOffscreenDictationDraftsChanged":/);
   assert.match(background, /createCloudLiveDictationController/);
   assert.doesNotMatch(mobileScanner, /Live from iPhone|liveDictationDraftsForComputer/);
@@ -101,25 +105,25 @@ test("Chrome reactively inserts installed-app speech dictation at the tracked cu
 
 test("the offscreen workspace signs in from the shared Clerk session itself", () => {
   assert.match(sidepanelEntry, /SidepanelClerkProvider/);
-  assert.match(offscreen, /setAuth\(getClerkToken/);
-  assert.match(offscreen, /api\.cloudWorkspace\.createEnrollment/);
+  assert.match(offscreenWorkspace, /setAuth\(getClerkToken/);
+  assert.match(offscreenWorkspace, /api\.cloudWorkspace\.createEnrollment/);
   assert.doesNotMatch(controller, /clerkToken|getClerkToken/);
   // Offscreen documents have no chrome.cookies, so Clerk cannot run its syncHost
   // handshake there and must fall back to the mirrored client JWT.
-  assert.doesNotMatch(offscreen, /syncHost:/);
-  assert.match(offscreen, /background: true/);
+  assert.doesNotMatch(offscreenWorkspace, /syncHost:/);
+  assert.match(offscreenWorkspace, /background: true/);
   // The sidepanel no longer hands the workspace a token, so cloud sync cannot
   // depend on the panel being open.
   assert.doesNotMatch(extensionAccess, /publishClerkConvexToken|getToken\(\{ template/);
 });
 
 test("workspace sync is reactive without sidepanel reconciliation chatter", () => {
-  assert.match(offscreen, /new ConvexClient/);
-  assert.match(offscreen, /setAuth\(getClerkToken/);
-  assert.match(offscreen, /api\.cloudWorkspace\.workspaceSnapshot/);
-  assert.match(offscreen, /api\.cloudWorkspace\.pendingCursorDeliveries/);
-  assert.match(offscreen, /getMobileScannerExtensionIdentity/);
-  assert.match(offscreen, /api\.cloudWorkspace\.acknowledgeCursorDelivery/);
+  assert.match(offscreenWorkspace, /new ConvexClient/);
+  assert.match(offscreenWorkspace, /setAuth\(getClerkToken/);
+  assert.match(offscreenWorkspace, /api\.cloudWorkspace\.workspaceSnapshot/);
+  assert.match(offscreenWorkspace, /api\.cloudWorkspace\.pendingCursorDeliveries/);
+  assert.match(offscreenWorkspace, /getMobileScannerExtensionIdentity/);
+  assert.match(offscreenWorkspace, /api\.cloudWorkspace\.acknowledgeCursorDelivery/);
   assert.doesNotMatch(mobileScanner, /workspaceReconcile|10_000/);
   assert.doesNotMatch(extensionAccess, /workspaceReconcile/);
 });
@@ -151,7 +155,7 @@ test("the sidepanel owns a Convex subscription that cannot be stranded by the of
   assert.match(sidepanelEntry, /ConvexProviderWithClerk/);
   assert.match(sidepanelEntry, /useAuth=\{useAuth\}/);
   // The offscreen subscription stays: it is the panel-closed path.
-  assert.match(offscreen, /api\.cloudWorkspace\.workspaceSnapshot/);
+  assert.match(offscreenWorkspace, /api\.cloudWorkspace\.workspaceSnapshot/);
   // A failed sync says so instead of showing an empty timeline.
   assert.match(mobileScanner, /useCloudWorkspaceSnapshot\(\)/);
   assert.match(mobileScanner, /cloudWorkspace\.error/);
@@ -232,7 +236,7 @@ test("the panel registers this computer so presence does not depend on the offsc
   assert.match(sidepanel, /useComputerRegistration\(\)/);
   assert.doesNotMatch(mobileScanner, /useComputerRegistration/);
   // A signed-out offscreen document is no longer silent about it.
-  assert.match(offscreen, /offscreen has no Clerk session/);
+  assert.match(offscreenWorkspace, /offscreen has no Clerk session/);
 });
 
 test("ensuring the offscreen document is single flight and survives a slow start", () => {
@@ -288,7 +292,7 @@ test("the service worker mirrors the Clerk session the offscreen document reads"
   assert.match(mobileScanner, /signedOut=\{isSignedIn === false\}/);
   assert.doesNotMatch(mobileScannerCards, /Phone sync is not connected/);
   // The reconcile pass must not be able to reject into silence again.
-  assert.match(offscreen, /auth reconcile failed/);
+  assert.match(offscreenWorkspace, /auth reconcile failed/);
 });
 
 test("the offscreen document shares the service worker's storage", () => {

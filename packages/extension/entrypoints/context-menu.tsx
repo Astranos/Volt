@@ -900,7 +900,7 @@ export default defineContentScript({
         contextSettings?.contextMenuSelectionActions,
         DEFAULT_CONTEXT_ACTIONS,
       );
-      if (!enabled) closeMenu();
+      closeMenu();
       closeSelectionSuggestions();
       if (selectionSuggestionsEnabled) scheduleSelectionSuggestions();
     });

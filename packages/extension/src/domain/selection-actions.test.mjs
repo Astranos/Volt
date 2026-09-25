@@ -32,6 +32,7 @@ test("custom actions keep their order and append encoded selected text", () => {
   const custom = { kind: "custom", id: "my-search", label: "My search", iconName: "search-01", iconCodepoint: 0xf14e0, url: "https://example.com/search?q=" };
   assert.deepEqual(normalizeSelectionActions(["ebay", custom, custom, "look-up"], []), ["ebay", custom, "look-up"]);
   assert.equal(selectionActionUrl(custom, "red & blue"), "https://example.com/search?q=red%20%26%20blue");
+  assert.equal(selectionActionUrl({ ...custom, url: "https://example.com/search?q=#results" }, "red & blue"), "https://example.com/search?q=red%20%26%20blue#results");
   assert.deepEqual(normalizeSelectionActions([{ ...custom, url: "javascript:alert(1)" }], []), []);
   assert.deepEqual(normalizeSelectionActions([{ ...custom, iconCodepoint: 42 }], []), []);
 });

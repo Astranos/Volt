@@ -58,12 +58,13 @@ export async function verifyCallback(params: URLSearchParams): Promise<{ shop: s
 export function auditRange(startUtc: string, endUtc: string, date: string) {
   const start = Date.parse(startUtc);
   const end = Date.parse(endUtc);
+  const now = Date.now();
   if (!Number.isFinite(start) || !Number.isFinite(end) || new Date(start).toISOString() !== startUtc || new Date(end).toISOString() !== endUtc
     || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(Date.parse(`${date}T00:00:00Z`))
     || new Date(`${date}T00:00:00Z`).toISOString().slice(0, 10) !== date
     || Math.abs(start - Date.parse(`${date}T00:00:00Z`)) > 14 * 3600000
     || end - start < 23 * 3600000 || end - start > 25 * 3600000
-    || start < Date.now() - 4 * 86400000 || end > Date.now() + 26 * 3600000) {
+    || end < now - 25 * 3600000 || end > now + 60000) {
     throw new ConvexError("Invalid previous-day date range.");
   }
   return { start: startUtc, end: endUtc, date };

@@ -86,7 +86,13 @@ export function selectionActionLabel(action: SelectionAction): string {
 }
 
 export function selectionActionUrl(action: SelectionAction, text: string): string | null {
-  if (typeof action !== "string") return validCustomActionUrl(action.url) ? `${action.url}${encodeURIComponent(text)}` : null;
+  if (typeof action !== "string") {
+    if (!validCustomActionUrl(action.url)) return null;
+    const fragment = action.url.indexOf("#");
+    return fragment < 0
+      ? `${action.url}${encodeURIComponent(text)}`
+      : `${action.url.slice(0, fragment)}${encodeURIComponent(text)}${action.url.slice(fragment)}`;
+  }
   const id = action;
   const encoded = encodeURIComponent(text);
   switch (id) {

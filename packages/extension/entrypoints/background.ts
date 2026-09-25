@@ -298,8 +298,6 @@ export default defineBackground({
     }
 
     function registerListeners() {
-      chrome.runtime.onMessage.addListener((message, sender, sendResponse) =>
-        cloudSettings.handleMessage(message, sender, sendResponse));
       createContextMenuController({
         chromeApi: chrome,
         getFallbackTabId: () =>
@@ -426,6 +424,7 @@ export default defineBackground({
       sendResponse: RuntimeSendResponse
     ) {
       if (access.handleMessage(rawMessage, sender, sendResponse)) return true;
+      if (cloudSettings.handleMessage(rawMessage, sender, sendResponse)) return true;
       if (cloudWorkspace.handleMessage(rawMessage, sender, sendResponse)) return true;
       if (shopifyAudit.handleMessage(rawMessage, sender, sendResponse)) return true;
       if (isShopifyAuditOffscreenRuntimeMessage(rawMessage)) return false;

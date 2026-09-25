@@ -16,16 +16,12 @@ if (icons.length < 5_000 || new Set(icons.map(([name]) => name)).size !== icons.
   throw new Error("The Hugeicons catalog format changed or contains duplicate names.");
 }
 
-const catalogPath = new URL("../src/domain/hugeicon-catalog.ts", import.meta.url);
+const catalogPath = new URL("../src/domain/hugeicon-catalog.json", import.meta.url);
 const fontPath = new URL("../public/assets/fonts/hugeicons-stroke-rounded.woff2", import.meta.url);
 await mkdir(new URL("../public/assets/fonts/", import.meta.url), { recursive: true });
 await writeFile(
   catalogPath,
-  `// Free Hugeicons Stroke Rounded font catalog from ${source}/icons.css.\n`
-    + `// Regenerate with: node packages/extension/scripts/update-hugeicons-font.mjs\n`
-    + `export const HUGEICON_CATALOG: ReadonlyArray<readonly [string, number]> = [\n`
-    + icons.map(([name, codepoint]) => `  [${JSON.stringify(name)}, 0x${codepoint.toString(16)}],`).join("\n")
-    + `\n];\n`,
+  `[\n${icons.map(([name, codepoint]) => `  ${JSON.stringify([name, codepoint])}`).join(",\n")}\n]\n`,
 );
 await writeFile(fontPath, Buffer.from(await fontResponse.arrayBuffer()));
 process.stdout.write(`Saved ${icons.length} free Hugeicons.\n`);
