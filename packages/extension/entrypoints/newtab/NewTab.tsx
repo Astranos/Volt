@@ -5,10 +5,11 @@ import { BookmarksColumn } from "../../src/components/newtab/BookmarksColumn";
 import { HeroBlock } from "../../src/components/newtab/HeroBlock";
 import type { SearchMode } from "../../src/components/newtab/NewTabHelp";
 import { ExtensionAccountControl } from "../../src/components/access/ExtensionAccess";
-import { Calculator, ScanLine, Settings } from "lucide-react";
+import { Calculator, ClipboardCheck, ScanLine, Settings } from "lucide-react";
 import { AppClipQrIcon } from "../../src/components/icons/AppClipQrIcon";
 import { TabManager } from "../../src/utils/tab-manager";
 import { extractShopifyStoreName } from "../../src/domain/search";
+import { getShopifyAuditConnection, openShopifyAudit } from "../../src/shopify-audit/client";
 import {
   NEW_TAB_SEARCH_PROVIDERS,
   parseSearchPrefix,
@@ -23,6 +24,8 @@ export default function NewTab() {
   const [activeMode, setActiveMode] = useState<SearchMode>("closed-tabs");
   const [shopifyStore, setShopifyStore] = useState<string | null>(null);
   const [resolvingShopifyStore, setResolvingShopifyStore] = useState(false);
+  const [auditBusy, setAuditBusy] = useState(false);
+  const [auditNotice, setAuditNotice] = useState<string | null>(null);
 
   // Randomize the aurora blobs' starting offset + animation phase on every
   // new-tab load so the bg looks fresh each time.
@@ -208,6 +211,28 @@ export default function NewTab() {
     await TabManager.updateCurrentTab(intent.url);
   };
 
+  const handleShopifyAudit = async () => {
+    if (auditBusy) return;
+    setAuditBusy(true);
+    setAuditNotice(null);
+    try {
+      const connection = await getShopifyAuditConnection();
+      if (!connection) {
+        setAuditNotice("Connect your Shopify store in Volt settings first.");
+        await chrome.tabs.create({ url: chrome.runtime.getURL("/options.html#shopify-audit"), active: true });
+        return;
+      }
+      const result = await openShopifyAudit();
+      setAuditNotice(result.count === 0
+        ? `No products were created on ${result.date}.`
+        : `Opened ${result.count} products from ${result.date} in a tab group.`);
+    } catch (cause) {
+      setAuditNotice(cause instanceof Error ? cause.message : "Could not open the Shopify audit.");
+    } finally {
+      setAuditBusy(false);
+    }
+  };
+
   return (
     <div className="newtab-root">
       {/* Decorative aurora background — pointer-events:none, sits behind everything */}
@@ -232,6 +257,17 @@ export default function NewTab() {
             <h1 className="newtab-header-title">Volt</h1>
           </div>
           <div className="newtab-header-actions">
+            <button
+              type="button"
+              className="newtab-settings-button newtab-audit-button"
+              onClick={() => void handleShopifyAudit()}
+              disabled={auditBusy}
+              aria-label="Audit Shopify products created yesterday"
+              title="Open yesterday's Shopify products for review"
+            >
+              <ClipboardCheck aria-hidden="true" />
+              <span>{auditBusy ? "Opening…" : "Audit"}</span>
+            </button>
             <button
               type="button"
               className="newtab-settings-button"
@@ -277,6 +313,8 @@ export default function NewTab() {
             <ExtensionAccountControl surface="newtab" />
           </div>
         </header>
+
+        {auditNotice && <p className="newtab-audit-notice" role="status">{auditNotice}</p>}
 
         {/* Hero: greeting + clock */}
         <HeroBlock />

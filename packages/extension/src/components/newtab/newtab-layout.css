@@ -253,6 +253,24 @@
   transform: translateY(-1px);
 }
 
+.newtab-audit-button {
+  gap: 6px;
+  padding: 0 12px;
+  width: auto;
+  color: var(--nt-text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.newtab-audit-button:disabled { cursor: wait; opacity: 0.55; }
+
+.newtab-audit-notice {
+  color: var(--nt-text-muted);
+  font-size: 12px;
+  margin: 8px 0 0;
+  text-align: right;
+}
+
 .newtab-account-control {
   align-items: center;
   background: rgba(255, 255, 255, 0.72);

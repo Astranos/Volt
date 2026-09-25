@@ -65,6 +65,7 @@ export default defineConfig({
       "storage",
       "cookies",
       "tabs",
+      "tabGroups",
       "activeTab",
       "scripting",
       "sidePanel",

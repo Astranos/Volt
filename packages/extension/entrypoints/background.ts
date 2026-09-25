@@ -27,6 +27,7 @@ import {
 import { createScannerMessageHandler } from "../src/background/scanner-message-handler";
 import { createScannerOffscreenController } from "../src/background/scanner-offscreen";
 import { createScannerTextInserter } from "../src/background/scanner-text-insertion";
+import { createShopifyAuditController } from "../src/background/shopify-audit-controller";
 import { registerSidepanelMessageActions } from "../src/background/sidepanel-message-controller";
 import { createSidepanelToolController } from "../src/background/sidepanel-tool-controller";
 import { createTabDeliveryController } from "../src/background/tab-delivery";
@@ -176,6 +177,11 @@ export default defineBackground({
     });
     cloudSettings.start();
     void cloudSettings.pull().catch(() => undefined);
+    const shopifyAudit = createShopifyAuditController({
+      chromeApi: chrome,
+      extensionId: chrome.runtime.id,
+      sendOffscreenMessage: scannerOffscreen.sendScannerOffscreenMessage,
+    });
     const clerkSessionMirror = createClerkSessionMirror({
       chromeApi: chrome,
       log,
@@ -293,6 +299,8 @@ export default defineBackground({
     function registerListeners() {
       chrome.runtime.onMessage.addListener((message, sender, sendResponse) =>
         cloudSettings.handleMessage(message, sender, sendResponse));
+      chrome.runtime.onMessage.addListener((message, sender, sendResponse) =>
+        shopifyAudit.handleMessage(message, sender, sendResponse));
       createContextMenuController({
         chromeApi: chrome,
         getFallbackTabId: () =>

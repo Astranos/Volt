@@ -3,6 +3,7 @@ import {
   Barcode,
   Bookmark,
   Calculator,
+  ClipboardCheck,
   Check,
   Link2,
   MousePointerClick,
@@ -13,6 +14,7 @@ import { BookmarkFoldersSettings } from "@/src/components/settings/BookmarkFolde
 import { CsvCacheSettings } from "@/src/components/settings/CsvCacheSettings";
 import { FeatureTogglesSettings } from "@/src/components/settings/FeatureTogglesSettings";
 import { SelectionActionsSettings } from "@/src/components/settings/SelectionActionsSettings";
+import { ShopifyAuditSettings } from "@/src/components/settings/ShopifyAuditSettings";
 import { TopOffersSettings } from "@/src/components/settings/TopOffersSettings";
 import { useExtensionSettings } from "@/src/hooks/useExtensionSettings";
 
@@ -22,6 +24,7 @@ const NAV_ITEMS = [
   { href: "#upc", icon: Barcode, label: "UPC Highlighter" },
   { href: "#contextmenu", icon: MousePointerClick, label: "Context Menu" },
   { href: "#selection-actions", icon: MousePointerClick, label: "Selected text actions" },
+  { href: "#shopify-audit", icon: ClipboardCheck, label: "Shopify product audit" },
   { href: "#mobilephotos", icon: Images, label: "Mobile Photos" },
   { href: "#csvlinks", icon: Link2, label: "Quick Links" },
   { href: "#topoffers", icon: Calculator, label: "Offer Calculator" },
@@ -116,6 +119,7 @@ export default function SettingsPage() {
             saveSettings={saveSettings}
           />
           <SelectionActionsSettings settings={settings} saveSettings={saveSettings} />
+          <ShopifyAuditSettings />
           <BookmarkFoldersSettings
             settings={settings}
             saveSettings={saveSettings}

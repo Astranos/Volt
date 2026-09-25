@@ -44,6 +44,19 @@ const saveExtensionSettingsReference = makeFunctionReference<
   { payload: string; expectedRevision: number | null; expectedSubject: string },
   ExtensionSettingsRecord
 >("extensionSettings:save");
+const shopifyStartConnectReference = makeFunctionReference<
+  "action", { shop: string }, { url: string }
+>("shopifyAudit:startConnect");
+const shopifyGetConnectionReference = makeFunctionReference<
+  "query", Record<string, never>, { shop: string } | null
+>("shopifyAudit:getConnection");
+const shopifyDisconnectReference = makeFunctionReference<
+  "mutation", Record<string, never>, null
+>("shopifyAudit:disconnect");
+const shopifyListYesterdayReference = makeFunctionReference<
+  "action", { startUtc: string; endUtc: string; date: string },
+  { shop: string; date: string; products: Array<{ id: string; title: string; status: string; url: string }> }
+>("shopifyAudit:listYesterday");
 
 function serializeLogArg(arg: unknown) {
   if (arg instanceof Error) {
@@ -531,6 +544,30 @@ class CloudWorkspaceSubscriptions {
     return { ...value, subject };
   }
 
+  async getShopifyConnection() {
+    await this.reconcileAuthentication();
+    if (!this.clerkSubject) throw new Error("Sign in to Volt before connecting Shopify.");
+    return this.client.query(shopifyGetConnectionReference, {});
+  }
+
+  async startShopifyConnection(shop: string) {
+    await this.reconcileAuthentication();
+    if (!this.clerkSubject) throw new Error("Sign in to Volt before connecting Shopify.");
+    return this.client.action(shopifyStartConnectReference, { shop });
+  }
+
+  async disconnectShopify() {
+    await this.reconcileAuthentication();
+    if (!this.clerkSubject) throw new Error("Sign in to Volt before disconnecting Shopify.");
+    return this.client.mutation(shopifyDisconnectReference, {});
+  }
+
+  async listShopifyYesterday(startUtc: string, endUtc: string, date: string) {
+    await this.reconcileAuthentication();
+    if (!this.clerkSubject) throw new Error("Sign in to Volt before auditing Shopify.");
+    return this.client.action(shopifyListYesterdayReference, { startUtc, endUtc, date });
+  }
+
   async acknowledgeCursorDelivery(
     deliveryId: string,
     state: "delivered" | "failed",
@@ -783,6 +820,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     || message.action === "workspaceOffscreenAcknowledgeCursorDelivery"
     || message.action === "extensionSettingsOffscreenGet"
     || message.action === "extensionSettingsOffscreenSave"
+    || message.action === "shopifyAuditOffscreenStatus"
+    || message.action === "shopifyAuditOffscreenConnect"
+    || message.action === "shopifyAuditOffscreenDisconnect"
+    || message.action === "shopifyAuditOffscreenListYesterday"
   ) {
     if (sender.id !== chrome.runtime.id || sender.tab) {
       sendResponse({ success: false, error: "unauthorized_extension_sender" });
@@ -820,6 +861,26 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           message.expectedSubject,
         ),
       );
+    }
+    if (message.action === "shopifyAuditOffscreenStatus") {
+      return sendWorkspaceOperation(sendResponse, cloudWorkspaceSubscriptions.getShopifyConnection());
+    }
+    if (message.action === "shopifyAuditOffscreenConnect") {
+      if (typeof message.shop !== "string") {
+        sendResponse({ success: false, error: "invalid_shopify_shop" });
+        return false;
+      }
+      return sendWorkspaceOperation(sendResponse, cloudWorkspaceSubscriptions.startShopifyConnection(message.shop));
+    }
+    if (message.action === "shopifyAuditOffscreenDisconnect") {
+      return sendWorkspaceOperation(sendResponse, cloudWorkspaceSubscriptions.disconnectShopify());
+    }
+    if (message.action === "shopifyAuditOffscreenListYesterday") {
+      if (typeof message.startUtc !== "string" || typeof message.endUtc !== "string" || typeof message.date !== "string") {
+        sendResponse({ success: false, error: "invalid_shopify_audit_date" });
+        return false;
+      }
+      return sendWorkspaceOperation(sendResponse, cloudWorkspaceSubscriptions.listShopifyYesterday(message.startUtc, message.endUtc, message.date));
     }
     if (message.action === "workspaceOffscreenReconcile") {
       void cloudWorkspaceSubscriptions.reconcileSnapshot()

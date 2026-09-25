@@ -12,6 +12,27 @@ const pushSubscription = v.object({
 });
 
 export default defineSchema({
+  shopifyConnections: defineTable({
+    ownerTokenIdentifier: v.string(),
+    shop: v.string(),
+    encryptedAccessToken: v.string(),
+    encryptedRefreshToken: v.string(),
+    expiresAt: v.number(),
+    refreshExpiresAt: v.number(),
+    refreshLease: v.optional(v.object({ nonce: v.string(), expiresAt: v.number() })),
+  })
+    .index("by_ownerTokenIdentifier", ["ownerTokenIdentifier"])
+    .index("by_shop", ["shop"]),
+  shopifyOAuthStates: defineTable({
+    ownerTokenIdentifier: v.string(),
+    shop: v.string(),
+    state: v.string(),
+    expiresAt: v.number(),
+    consumedAt: v.optional(v.number()),
+  })
+    .index("by_state", ["state"])
+    .index("by_ownerTokenIdentifier", ["ownerTokenIdentifier"])
+    .index("by_shop", ["shop"]),
   kioskRequests: defineTable({ ...requestFields, requestKey: v.string(), clientHash: v.string() })
     .index("by_storeSlug_and_requestKey", ["storeSlug", "requestKey"])
     .index("by_storeSlug_and_status_and_expiresAt", ["storeSlug", "status", "expiresAt"])
