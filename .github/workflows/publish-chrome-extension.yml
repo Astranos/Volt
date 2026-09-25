@@ -38,7 +38,7 @@ permissions:
 jobs:
   publish:
     name: Upload or submit
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/codex/issue-28-extension-sync-shopify'
+    if: github.ref == 'refs/heads/main'
     runs-on: blacksmith-4vcpu-ubuntu-2404
     environment: chrome-web-store
 
