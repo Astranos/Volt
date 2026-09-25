@@ -1,5 +1,13 @@
 @import "tailwindcss";
 
+@font-face {
+  font-family: "VoltHugeicons";
+  src: url("/assets/fonts/hugeicons-stroke-rounded.woff2") format("woff2");
+  font-display: block;
+}
+
+.volt-hugeicon { font-family: "VoltHugeicons" !important; font-weight: normal; font-style: normal; line-height: 1; }
+
 /* shadcn theme variables (light) */
 :root {
   --background: 0 0% 100%;

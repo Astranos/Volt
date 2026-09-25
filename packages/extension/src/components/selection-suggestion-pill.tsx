@@ -2,7 +2,9 @@ import React from "react";
 import { PackageSearch, Search, TrendingUp, Copy, Link2, BookOpen, Sparkles } from "lucide-react";
 import { positionSelectionSuggestions } from "../domain/selection-suggestions";
 import {
-  SELECTION_ACTIONS,
+  selectionActionKey,
+  selectionActionLabel,
+  type SelectionAction,
   type SelectionActionId,
 } from "../domain/selection-actions";
 
@@ -26,9 +28,9 @@ export function SelectionSuggestionPill({
   onAction,
   position,
 }: {
-  actions: readonly SelectionActionId[];
+  actions: readonly SelectionAction[];
   onCopy: () => void;
-  onAction: (actionId: SelectionActionId) => void;
+  onAction: (action: SelectionAction) => void;
   position: SelectionSuggestionPosition;
 }) {
   return (
@@ -45,21 +47,20 @@ export function SelectionSuggestionPill({
       }}
     >
       {actions.map((id) => {
-        const Icon = icons[id];
-        const action = SELECTION_ACTIONS.find((candidate) => candidate.id === id);
-        if (!action) return null;
+        const Icon = typeof id === "string" ? icons[id] : null;
+        const label = selectionActionLabel(id);
         return (
           <button
-            key={id}
-            aria-label={action.label}
+            key={selectionActionKey(id)}
+            aria-label={label}
             className="selection-action selection-search-action"
             onClick={() => onAction(id)}
             onPointerDown={(event) => event.preventDefault()}
-            title={action.label}
+            title={label}
             type="button"
           >
-            <Icon size={16} />
-            <span>{action.label}</span>
+            {Icon ? <Icon size={16} /> : typeof id !== "string" ? <span aria-hidden="true" className="volt-hugeicon" style={{ fontSize: 16 }}>{String.fromCodePoint(id.iconCodepoint)}</span> : null}
+            <span>{label}</span>
           </button>
         );
       })}

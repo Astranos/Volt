@@ -242,12 +242,8 @@ export function structuredCloneSettings(settings: CmdkSettings): CmdkSettings {
     csvLinks: { ...(settings.csvLinks || {}) },
     contextMenu: {
       ...(settings.contextMenu || {}),
-      selectionPopupActions: [
-        ...(settings.contextMenu?.selectionPopupActions || DEFAULT_POPUP_ACTIONS),
-      ],
-      contextMenuSelectionActions: [
-        ...(settings.contextMenu?.contextMenuSelectionActions || DEFAULT_CONTEXT_ACTIONS),
-      ],
+      selectionPopupActions: normalizeSelectionActions(settings.contextMenu?.selectionPopupActions, DEFAULT_POPUP_ACTIONS),
+      contextMenuSelectionActions: normalizeSelectionActions(settings.contextMenu?.contextMenuSelectionActions, DEFAULT_CONTEXT_ACTIONS),
     },
     mobilePhotoDownloads: { ...(settings.mobilePhotoDownloads || {}) },
     topOffers: {

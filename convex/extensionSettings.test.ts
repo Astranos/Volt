@@ -95,4 +95,65 @@ describe("extension settings sync", () => {
       })).rejects.toThrow("INVALID_SETTINGS_PAYLOAD");
     }
   });
+
+  test("accepts custom actions in both selection action lists", async () => {
+    const t = convexTest(schema, modules);
+    const alice = asUser(t, "alice");
+    const customAction = {
+      kind: "custom",
+      id: "my-reference",
+      label: "Reference",
+      iconName: "book-open",
+      iconCodepoint: 0xf0123,
+      url: "https://example.com/search?q=",
+    };
+    const payload = JSON.stringify({ contextMenu: {
+      selectionPopupActions: ["look-up", customAction],
+      contextMenuSelectionActions: [customAction],
+    } });
+
+    const saved = await alice.mutation(saveSettings, {
+      payload,
+      expectedRevision: null,
+      expectedSubject: "alice",
+    });
+    expect(saved.payload).toBe(payload);
+  });
+
+  test("rejects malformed custom actions and duplicate action keys", async () => {
+    const t = convexTest(schema, modules);
+    const alice = asUser(t, "alice");
+    const customAction = {
+      kind: "custom",
+      id: "my-reference",
+      label: "Reference",
+      iconName: "book-open",
+      iconCodepoint: 0xf0123,
+      url: "https://example.com/search?q=",
+    };
+    const invalidActions: unknown[][] = [
+      [{ ...customAction, id: "  " }],
+      [{ ...customAction, id: "x".repeat(65) }],
+      [{ ...customAction, label: "x".repeat(49) }],
+      [{ ...customAction, iconName: "Book-Open" }],
+      [{ ...customAction, iconName: "x".repeat(81) }],
+      [{ ...customAction, iconCodepoint: 0xeffff }],
+      [{ ...customAction, iconCodepoint: 0x100000 }],
+      [{ ...customAction, iconCodepoint: 0xf0123 + 0.5 }],
+      [{ ...customAction, url: "javascript:alert(1)" }],
+      [{ ...customAction, url: "https://user:pass@example.com/" }],
+      [{ ...customAction, url: `https://example.com/${"x".repeat(2048)}` }],
+      [customAction, { ...customAction }],
+      ["look-up", { ...customAction, id: "look-up" }],
+    ];
+
+    for (const actions of invalidActions) {
+      await expect(alice.mutation(saveSettings, {
+        payload: JSON.stringify({ contextMenu: { selectionPopupActions: actions } }),
+        expectedRevision: null,
+        expectedSubject: "alice",
+      })).rejects.toThrow("INVALID_SETTINGS_PAYLOAD");
+    }
+    expect(await alice.query(getSettings, {})).toBeNull();
+  });
 });

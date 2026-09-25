@@ -1,5 +1,8 @@
 AppClipQrIcon.tsx adapts QrCodeIcon from @hugeicons/core-free-icons 4.3.2:
 https://unpkg.com/@hugeicons/core-free-icons@4.3.2/dist/esm/QrCodeIcon.js
+The extension settings picker and menus bundle the free Hugeicons Stroke Rounded icon font and catalog from:
+https://use.hugeicons.com/font/icons.css
+https://use.hugeicons.com/font/hgi-stroke-rounded.woff2
 License source: https://github.com/hugeicons/hugeicons/blob/main/LICENSE.md
 
 MIT License

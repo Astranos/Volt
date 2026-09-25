@@ -11,6 +11,15 @@ export const SELECTION_ACTIONS = [
 ] as const;
 
 export type SelectionActionId = (typeof SELECTION_ACTIONS)[number]["id"];
+export type CustomSelectionAction = {
+  kind: "custom";
+  id: string;
+  label: string;
+  iconName: string;
+  iconCodepoint: number;
+  url: string;
+};
+export type SelectionAction = SelectionActionId | CustomSelectionAction;
 
 export const DEFAULT_POPUP_ACTIONS: SelectionActionId[] = [
   "ebay",
@@ -26,26 +35,59 @@ export const DEFAULT_CONTEXT_ACTIONS: SelectionActionId[] = [
 
 const validActionIds = new Set<string>(SELECTION_ACTIONS.map((action) => action.id));
 
+export function validCustomActionUrl(value: string): boolean {
+  if (value.length > 2048) return false;
+  try {
+    const url = new URL(value);
+    return (url.protocol === "http:" || url.protocol === "https:") && !url.username && !url.password;
+  } catch {
+    return false;
+  }
+}
+
+function parseCustomAction(value: unknown): CustomSelectionAction | null {
+  if (!value || typeof value !== "object") return null;
+  const action = value as Partial<CustomSelectionAction>;
+  if (action.kind !== "custom" || typeof action.id !== "string" || !/^[a-zA-Z0-9_-]{1,64}$/.test(action.id)) return null;
+  if (typeof action.label !== "string" || !action.label.trim() || action.label.length > 48) return null;
+  if (typeof action.iconName !== "string" || !/^[a-z0-9-]{1,80}$/.test(action.iconName)) return null;
+  if (typeof action.iconCodepoint !== "number" || !Number.isInteger(action.iconCodepoint) || action.iconCodepoint < 0xf0000 || action.iconCodepoint > 0xfffff) return null;
+  if (typeof action.url !== "string" || !validCustomActionUrl(action.url)) return null;
+  return { kind: "custom", id: action.id, label: action.label.trim(), iconName: action.iconName, iconCodepoint: action.iconCodepoint, url: action.url };
+}
+
+export function selectionActionKey(action: SelectionAction): string {
+  return typeof action === "string" ? action : `custom:${action.id}`;
+}
+
 export function normalizeSelectionActions(
   value: unknown,
-  fallback: readonly SelectionActionId[],
-): SelectionActionId[] {
-  if (!Array.isArray(value)) return [...fallback];
-  const result: SelectionActionId[] = [];
+  fallback: readonly SelectionAction[],
+): SelectionAction[] {
+  if (!Array.isArray(value)) return fallback.map((action) => typeof action === "string" ? action : { ...action });
+  const result: SelectionAction[] = [];
+  const seen = new Set<string>();
   for (const entry of value) {
-    if (typeof entry !== "string" || !validActionIds.has(entry)) continue;
-    const action = SELECTION_ACTIONS.find((candidate) => candidate.id === entry);
-    if (action && !result.includes(action.id)) result.push(action.id);
+    const action = typeof entry === "string" && validActionIds.has(entry)
+      ? entry as SelectionActionId
+      : parseCustomAction(entry);
+    if (!action) continue;
+    const key = selectionActionKey(action);
+    if (!seen.has(key)) { result.push(action); seen.add(key); }
     if (result.length === 3) break;
   }
   return result;
 }
 
-export function selectionActionLabel(id: SelectionActionId): string {
-  return SELECTION_ACTIONS.find((action) => action.id === id)?.label ?? id;
+export function selectionActionLabel(action: SelectionAction): string {
+  return typeof action === "string"
+    ? SELECTION_ACTIONS.find((candidate) => candidate.id === action)?.label ?? action
+    : action.label;
 }
 
-export function selectionActionUrl(id: SelectionActionId, text: string): string | null {
+export function selectionActionUrl(action: SelectionAction, text: string): string | null {
+  if (typeof action !== "string") return validCustomActionUrl(action.url) ? `${action.url}${encodeURIComponent(text)}` : null;
+  const id = action;
   const encoded = encodeURIComponent(text);
   switch (id) {
     case "ebay":

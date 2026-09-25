@@ -11,7 +11,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { createMobileCaptureController } from "./context-menu-mobile-capture";
 import { initializeSidePanelContext } from "../src/lib/sidepanel-gesture";
 import { normalizeSelectionSuggestionText, positionSelectionSuggestions, shouldShowSelectionSuggestions } from "../src/domain/selection-suggestions";
-import { DEFAULT_CONTEXT_ACTIONS, DEFAULT_POPUP_ACTIONS, linkToTextHighlight, normalizeSelectionActions, selectionActionLabel, selectionActionUrl, type SelectionActionId } from "../src/domain/selection-actions";
+import { DEFAULT_CONTEXT_ACTIONS, DEFAULT_POPUP_ACTIONS, linkToTextHighlight, normalizeSelectionActions, selectionActionKey, selectionActionLabel, selectionActionUrl, type SelectionAction } from "../src/domain/selection-actions";
 import { Search, PackageSearch, TrendingUp, Copy, Clipboard, ExternalLink, Download, Settings, ChevronLeft, ChevronRight, Smartphone, Calculator, Link2, BookOpen, Sparkles } from "lucide-react";
 
 export default defineContentScript({
@@ -455,7 +455,7 @@ export default defineContentScript({
       "ask-gemini": Sparkles,
     };
 
-    const invokeSelectionAction = async (actionId: SelectionActionId, selection: string) => {
+    const invokeSelectionAction = async (actionId: SelectionAction, selection: string) => {
       if (!selection) return;
       if (actionId === "copy-highlight-link") {
         const link = linkToTextHighlight(window.location.href, selection);
@@ -474,9 +474,9 @@ export default defineContentScript({
     const selectionMenuActions = (): MenuAction[] => contextMenuSelectionActions.map((id) => {
       const getUrl = selectionActionUrl(id, "example");
       return {
-        id,
+        id: selectionActionKey(id),
         label: selectionActionLabel(id),
-        icon: selectionActionIcons[id],
+        icon: typeof id === "string" ? selectionActionIcons[id] : ({ size = 16 }) => <span aria-hidden="true" className="volt-hugeicon" style={{ fontSize: size }}>{String.fromCodePoint(id.iconCodepoint)}</span>,
         requiresSelection: true,
         description: id === "ask-gemini"
           ? "Copies selected text and opens Gemini for pasting"
@@ -542,7 +542,7 @@ export default defineContentScript({
       host.style.pointerEvents = "none"; // Initially hidden
       shadow = host.attachShadow({ mode: "open" });
       const style = document.createElement("style");
-      style.textContent = styles();
+      style.textContent = styles(chrome.runtime.getURL("assets/fonts/hugeicons-stroke-rounded.woff2"));
       rootEl = document.createElement("div");
       rootEl.className = "volt-cm-root";
       shadow.appendChild(style);
@@ -571,7 +571,7 @@ export default defineContentScript({
       selectionHost.style.pointerEvents = "none";
       const selectionShadow = selectionHost.attachShadow({ mode: "open" });
       const style = document.createElement("style");
-      style.textContent = selectionStyles();
+      style.textContent = selectionStyles(chrome.runtime.getURL("assets/fonts/hugeicons-stroke-rounded.woff2"));
       selectionRootEl = document.createElement("div");
       selectionShadow.appendChild(style);
       selectionShadow.appendChild(selectionRootEl);
@@ -668,7 +668,7 @@ export default defineContentScript({
     };
 
     const openSelectionAction = (
-      actionId: SelectionActionId,
+      actionId: SelectionAction,
       selection: string,
     ) => {
       suppressedSuggestionSelection = selection;

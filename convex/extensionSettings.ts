@@ -12,6 +12,42 @@ const ACTION_IDS = new Set([
   "look-up",
   "ask-gemini",
 ]);
+const CUSTOM_ACTION_ICON_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+function isCustomSelectionAction(value: unknown): value is {
+  kind: "custom";
+  id: string;
+  label: string;
+  iconName: string;
+  iconCodepoint: number;
+  url: string;
+} {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+  const kind = Reflect.get(value, "kind");
+  const id = Reflect.get(value, "id");
+  const label = Reflect.get(value, "label");
+  const iconName = Reflect.get(value, "iconName");
+  const iconCodepoint = Reflect.get(value, "iconCodepoint");
+  const url = Reflect.get(value, "url");
+  if (kind !== "custom"
+    || typeof id !== "string" || id.trim().length === 0 || id.length > 64
+    || typeof label !== "string" || label.length > 48
+    || typeof iconName !== "string" || iconName.length > 80 || !CUSTOM_ACTION_ICON_NAME.test(iconName)
+    || typeof iconCodepoint !== "number" || !Number.isInteger(iconCodepoint)
+    || iconCodepoint < 0xf0000 || iconCodepoint > 0xfffff
+    || typeof url !== "string" || url.length === 0 || url.length > 2048) {
+    return false;
+  }
+
+  try {
+    const parsedUrl = new URL(url);
+    return (parsedUrl.protocol === "http:" || parsedUrl.protocol === "https:")
+      && parsedUrl.username.length === 0
+      && parsedUrl.password.length === 0;
+  } catch {
+    return false;
+  }
+}
 
 const settingsValidator = v.object({
   payload: v.string(),
@@ -36,10 +72,19 @@ function validatePayload(payload: string) {
       for (const key of ["selectionPopupActions", "contextMenuSelectionActions"]) {
         const actions: unknown = Reflect.get(contextMenu, key);
         if (actions === undefined) continue;
-        if (!Array.isArray(actions) || actions.length > 3
-          || actions.some((id) => typeof id !== "string" || !ACTION_IDS.has(id))
-          || new Set(actions).size !== actions.length) {
+        if (!Array.isArray(actions) || actions.length > 3) {
           throw new Error("Invalid selection actions");
+        }
+        const actionKeys = new Set<string>();
+        const actionValues: unknown[] = actions;
+        for (const action of actionValues) {
+          const actionKey = typeof action === "string" && ACTION_IDS.has(action)
+            ? action
+            : isCustomSelectionAction(action) ? action.id : null;
+          if (actionKey === null || actionKeys.has(actionKey)) {
+            throw new Error("Invalid selection actions");
+          }
+          actionKeys.add(actionKey);
         }
       }
     }

@@ -28,6 +28,14 @@ test("search actions encode selected text and non-search actions have no URL", (
   assert.equal(selectionActionUrl("ask-gemini", "red"), null);
 });
 
+test("custom actions keep their order and append encoded selected text", () => {
+  const custom = { kind: "custom", id: "my-search", label: "My search", iconName: "search-01", iconCodepoint: 0xf14e0, url: "https://example.com/search?q=" };
+  assert.deepEqual(normalizeSelectionActions(["ebay", custom, custom, "look-up"], []), ["ebay", custom, "look-up"]);
+  assert.equal(selectionActionUrl(custom, "red & blue"), "https://example.com/search?q=red%20%26%20blue");
+  assert.deepEqual(normalizeSelectionActions([{ ...custom, url: "javascript:alert(1)" }], []), []);
+  assert.deepEqual(normalizeSelectionActions([{ ...custom, iconCodepoint: 42 }], []), []);
+});
+
 test("highlight links keep the page fragment and add a text directive", () => {
   assert.equal(
     linkToTextHighlight("https://example.com/page#section", "  first\nsecond "),
