@@ -2,6 +2,8 @@
 
 Status as checked on September 28, 2026: Shopify Partner Dashboard shows the Volt Resale listing as **Draft**. The install screen says the app is under review and disables installation, but the Partner Dashboard has not recorded a submitted listing. Shopify requires the one-time $19 App Store registration before the listing can proceed. Do not describe the app as submitted or approved until the dashboard confirms it.
 
+The embedded audit backend is live on production Convex, the Admin page and privacy policy are live at `voltresale.app`, and Shopify app version `volt-resale-3` is active. A development-store installation opened the embedded page, authenticated the store, returned an empty previous-day audit for September 27, and found **The Draft Snowboard** by title with the expected Shopify Admin product link, inventory, status, and price. A populated previous-day result remains to be checked after a product is created on the prior local calendar day.
+
 ## Account and distribution choices
 
 - Partner account registration: **Individual**.
@@ -32,13 +34,12 @@ Use `assets/shopify-app-store/volt-resale-icon.png` for the 1200 × 1200 listing
 
 ## Before registration payment and submission
 
-1. Finish and release the embedded frontend, Convex endpoints, and Shopify app configuration as one coherent version.
-2. Install on a development store and run the merchant check in `docs/shopify-product-audit.md`.
-3. Capture real screenshots and a review screencast from that installation.
-4. Complete the Partner account's required emergency phone contact. The account owner should enter it directly into Shopify; never put it in this repository.
-5. Review the Partner account address visibility setting and the legal registration agreement with the account owner.
-6. Have the account owner enter payment details in Shopify's secure payment form and pay the $19 registration fee. Never send card details in chat or store them locally.
-7. Set the listing to limited visibility, enter the reviewed listing copy and support details, attach media, and submit for Shopify review.
-8. Confirm the Partner Dashboard changes from Draft to a submitted review state and record the review status and any Shopify feedback.
+1. Capture real screenshots and a review screencast from the installed development-store app. Record both the empty previous-day state and a populated product search; capture a populated previous-day audit when test data is available.
+2. Check the previous-day audit with a product created on the prior local calendar day, and verify uninstall cleanup on a disposable development-store installation.
+3. Complete the Partner account's required emergency phone contact. The account owner should enter it directly into Shopify; never put it in this repository.
+4. Review the Partner account address visibility setting and the legal registration agreement with the account owner.
+5. Have the account owner enter payment details in Shopify's secure payment form and pay the $19 registration fee. Never send card details in chat or store them locally.
+6. Set the listing to limited visibility, enter the reviewed listing copy and support details, attach media, and submit for Shopify review.
+7. Confirm the Partner Dashboard changes from Draft to a submitted review state and record the review status and any Shopify feedback.
 
 Shopify's [App Store requirements](https://shopify.dev/docs/apps/launch/shopify-app-store/app-store-requirements), [listing guidance](https://shopify.dev/docs/apps/launch/shopify-app-store/best-practices), and [registration fee guidance](https://shopify.dev/docs/apps/launch/distribution/revenue-share) govern the final submission.
