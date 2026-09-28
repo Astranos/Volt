@@ -92,7 +92,7 @@ export function ShopifyAuditApp() {
       <header className="border-b border-zinc-200 bg-white">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-5 py-4 sm:px-8">
           <div className="flex items-center gap-3">
-            <div className="flex size-10 items-center justify-center rounded-xl bg-zinc-950 text-lg font-bold text-white" aria-hidden="true">V</div>
+            <img src="/app-icon-192.png" alt="" className="size-10 rounded-xl" aria-hidden="true" />
             <div>
               <p className="text-sm font-bold leading-5">Volt Resale</p>
               <p className="text-xs text-zinc-500">Shopify product audit</p>
