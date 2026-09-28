@@ -30,6 +30,8 @@
     }
   ],
   "rewrites": [
+    { "source": "/shopify", "destination": "/shopify.html" },
+    { "source": "/shopify/", "destination": "/shopify.html" },
     { "source": "/upc-search", "destination": "/upc-search.html" },
     { "source": "/upc-search/", "destination": "/upc-search.html" },
     { "source": "/robots.txt", "destination": "/robots.txt" },

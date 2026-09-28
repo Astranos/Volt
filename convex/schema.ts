@@ -12,6 +12,14 @@ const pushSubscription = v.object({
 });
 
 export default defineSchema({
+  shopifyEmbeddedInstallations: defineTable({
+    shop: v.string(),
+    encryptedAccessToken: v.optional(v.string()),
+    encryptedRefreshToken: v.optional(v.string()),
+    expiresAt: v.optional(v.number()),
+    refreshExpiresAt: v.optional(v.number()),
+    exchangeLease: v.optional(v.object({ nonce: v.string(), expiresAt: v.number() })),
+  }).index("by_shop", ["shop"]),
   shopifyConnections: defineTable({
     ownerTokenIdentifier: v.string(),
     shop: v.string(),

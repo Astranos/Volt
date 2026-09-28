@@ -21,7 +21,7 @@ const footerLinkGroups = [
       ["Workspace dashboard", "/dashboard"],
       ["Privacy", "/privacy"],
       [
-        "Terms of Use",
+        "Mobile app terms",
         "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/",
       ],
       ["Support", supportUrl],

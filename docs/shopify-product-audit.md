@@ -1,48 +1,46 @@
-# Connect Shopify for product audits
+# Shopify product audit
 
-Volt's new tab page can open every Shopify product created on the previous calendar date in a named Chrome tab group. It uses the computer's timezone. The product query includes active, archived, draft, and unlisted products. Each tab opens the product's Shopify admin page.
+Volt Resale has a product audit inside Shopify Admin. After installation, the merchant opens **Volt Resale** in Shopify Admin to review products created yesterday in their local timezone and search the store catalog. Results link to the corresponding Shopify product pages. The Chrome extension has a separate, optional audit workflow that opens yesterday's products in a Chrome tab group.
 
-## Configure the Shopify app
+## App configuration
 
-Use a standalone app in the Shopify Dev Dashboard. Set its app URL to `https://voltresale.app`, turn off embedding in Shopify admin, request only `read_products`, and allow these callback URLs:
+The checked-in `shopify.app.toml` configures the existing public **Volt Resale** app with `read_products`, an embedded app URL of `https://voltresale.app/shopify`, the legacy extension OAuth callback URLs, and production privacy and uninstall webhooks. The app is intended for limited App Store visibility: merchants install from a direct link after Shopify approval.
 
-- Development: `https://adorable-hornet-19.convex.site/api/shopify/callback`
-- Production: `https://sincere-trout-414.convex.site/api/shopify/callback`
+| Webhook topic | Production endpoint |
+| --- | --- |
+| `customers/data_request` | `https://sincere-trout-414.convex.site/api/shopify/webhooks/customers/data_request` |
+| `customers/redact` | `https://sincere-trout-414.convex.site/api/shopify/webhooks/customers/redact` |
+| `shop/redact` | `https://sincere-trout-414.convex.site/api/shopify/webhooks/shop/redact` |
+| `app/uninstalled` | `https://sincere-trout-414.convex.site/api/shopify/webhooks/app/uninstalled` |
 
-The checked-in `shopify.app.toml` registers the required [privacy webhooks](https://shopify.dev/docs/apps/build/compliance/privacy-law-compliance) on production. Both deployments implement the endpoints; use the development URLs with a separate test app if needed:
+The webhook handlers verify Shopify's signature over the raw body. Shop redaction and app uninstall remove the embedded installation and any legacy extension connection for that shop. Customer callbacks acknowledge the request because Volt stores no Shopify customer data.
 
-| Shopify topic | Development URL | Production URL |
-| --- | --- | --- |
-| `customers/data_request` | `https://adorable-hornet-19.convex.site/api/shopify/webhooks/customers/data_request` | `https://sincere-trout-414.convex.site/api/shopify/webhooks/customers/data_request` |
-| `customers/redact` | `https://adorable-hornet-19.convex.site/api/shopify/webhooks/customers/redact` | `https://sincere-trout-414.convex.site/api/shopify/webhooks/customers/redact` |
-| `shop/redact` | `https://adorable-hornet-19.convex.site/api/shopify/webhooks/shop/redact` | `https://sincere-trout-414.convex.site/api/shopify/webhooks/shop/redact` |
+Validate the configuration with `pnpm dlx @shopify/cli app config validate`. Release a new app version with `pnpm dlx @shopify/cli app deploy` only after the web frontend and Convex backend are live and a Shopify development store installation passes a full audit check.
 
-The webhook handlers verify Shopify's signature over the raw request body. Shop redaction removes all saved connections and pending authorizations for that store. Customer callbacks acknowledge the request because Volt stores no Shopify customer data.
+## Authentication and data
 
-Shopify CLI is linked to the existing **Volt Resale** app. Validate changes with `pnpm dlx @shopify/cli app config validate` and release an app version with `pnpm dlx @shopify/cli app deploy`.
+The embedded screen loads App Bridge, requests a short-lived Shopify ID token for each API call, and sends it to Convex. Convex verifies the signature, audience, expiry, issuer, and shop domain before exchanging the ID token for an expiring offline `read_products` token. The access and refresh tokens are encrypted at rest and keyed by shop. Shopify product data is read on demand; the audit does not copy the catalog into Volt's database. No Volt account or Chrome extension is needed to use the Admin audit.
 
-The app uses Shopify's [authorization code grant](https://shopify.dev/docs/apps/build/authentication-authorization/authenticate-standalone-apps) and expiring offline tokens. Volt stores encrypted access and refresh tokens in Convex, scoped to the signed-in Clerk account. The extension never receives a Shopify token.
+The extension's existing connection is separate. It uses Clerk sign-in, the authorization code grant, and encrypted tokens keyed by the Volt account. Its connection screen and Chrome tab group audit continue to work independently of the embedded Admin screen.
 
-To let merchants from unrelated stores install the app, select [public distribution](https://shopify.dev/docs/apps/launch/distribution). Shopify requires an app review before general distribution. Custom distribution is limited to one store or one Plus organization.
+## Convex configuration
 
-## Set Convex environment variables
-
-Set these variables on both the development and production Convex deployments:
+Set these on both development and production Convex deployments:
 
 | Variable | Value |
 | --- | --- |
-| `SHOPIFY_CLIENT_ID` | The app's client ID from Shopify Dev Dashboard |
-| `SHOPIFY_CLIENT_SECRET` | The app's client secret from Shopify Dev Dashboard |
-| `SHOPIFY_TOKEN_ENCRYPTION_KEY` | A distinct, random 32-byte key encoded as 64 hexadecimal characters per deployment |
+| `SHOPIFY_CLIENT_ID` | Client ID of the corresponding Shopify app |
+| `SHOPIFY_CLIENT_SECRET` | Client secret of that Shopify app |
+| `SHOPIFY_TOKEN_ENCRYPTION_KEY` | Distinct random 32-byte key encoded as 64 hexadecimal characters per deployment |
 
-Use `pnpm exec convex env set NAME` to enter secrets interactively. Add `--prod` to target the production deployment. Do not put secrets in extension environment files or the repository. Convex supplies `CONVEX_SITE_URL`, which the OAuth flow uses to build the exact callback URL.
+Enter secrets interactively with `pnpm exec convex env set NAME` (add `--prod` for production). Do not put them in the repository or browser environment files. The frontend's `VITE_CONVEX_SITE_URL` may select a corresponding Convex site; production defaults to the production site.
 
-## Connect and review
+## Merchant check
 
-1. Sign in to Volt with Clerk.
-2. Open extension settings and find **Shopify product audit**.
-3. Enter the store's permanent `.myshopify.com` domain and select **Connect Shopify**.
-4. Approve read-only product access in Shopify. Return to settings to see the connected store.
-5. On the new tab page, select **Audit**. Volt opens yesterday's products in one Chrome tab group.
+1. Install the app on a Shopify development store from Shopify's installation flow.
+2. Open **Volt Resale** inside Shopify Admin. Confirm that the connection identifies the correct `.myshopify.com` store.
+3. Create or find products with known titles. Check search results and product links.
+4. Create a product and check that it appears in the previous-day audit on the next local calendar day, or test with a controlled date and timezone.
+5. Uninstall the app. Confirm the installation record and any connection for that shop are removed.
 
-If you disconnect the store in Volt, the saved token is deleted. You can also uninstall the app from Shopify. If Shopify rejects an expired or revoked token, reconnect the store.
+Shopify's review requirements and listing preparation are tracked in `docs/shopify-app-store-submission.md`.

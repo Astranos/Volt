@@ -15,7 +15,10 @@ export const redactShop = internalMutation({
     const states = await ctx.db.query("shopifyOAuthStates")
       .withIndex("by_shop", (q) => q.eq("shop", shop))
       .take(BATCH_SIZE);
+    const installation = await ctx.db.query("shopifyEmbeddedInstallations")
+      .withIndex("by_shop", (q) => q.eq("shop", shop)).unique();
     for (const row of [...connections, ...states]) await ctx.db.delete(row._id);
+    if (installation) await ctx.db.delete(installation._id);
     if (connections.length === BATCH_SIZE || states.length === BATCH_SIZE) {
       await ctx.scheduler.runAfter(0, redactShopReference, { shop });
     }
