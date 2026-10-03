@@ -66,21 +66,40 @@ async function postShopify<T>(
   if (typeof bridge?.idToken !== "function") {
     throw new Error("Open Volt Resale from Shopify Admin to start the product audit.");
   }
-  // Shopify ID tokens are short lived. Obtain one for every request.
-  const token = await bridge.idToken();
-  const base = (import.meta.env.VITE_CONVEX_SITE_URL || DEFAULT_CONVEX_SITE_URL).replace(/\/$/, "");
-  const response = await fetch(`${base}${path}`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-    signal,
-  });
-  const payload: unknown = await response.json().catch(() => null);
-  if (!response.ok) {
-    throw new Error(isErrorPayload(payload) ? payload.error : `Shopify request failed (${response.status}).`);
+  // Production requests stay on the app origin. Vercel forwards this narrow
+  // route to Convex, which still verifies the Shopify bearer token.
+  const base = import.meta.env.DEV
+    ? (import.meta.env.VITE_CONVEX_SITE_URL || DEFAULT_CONVEX_SITE_URL).replace(/\/$/, "")
+    : "";
+  for (let attempt = 0; attempt < 2; attempt++) {
+    signal?.throwIfAborted();
+    let response: Response;
+    try {
+      // Refresh the short-lived ID token on every attempt, including retries.
+      const token = await bridge.idToken();
+      signal?.throwIfAborted();
+      response = await fetch(`${base}${path}`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        signal,
+      });
+    } catch (error) {
+      signal?.throwIfAborted();
+      if (!(error instanceof TypeError)) throw error;
+      if (attempt === 0) continue;
+      throw new Error("Could not reach your store. Check your connection and retry.");
+    }
+    if (attempt === 0 && [401, 409, 429, 502, 503, 504].includes(response.status)) continue;
+    const payload: unknown = await response.json().catch(() => null);
+    signal?.throwIfAborted();
+    if (!response.ok) {
+      throw new Error(isErrorPayload(payload) ? payload.error : `Shopify request failed (${response.status}). Please retry.`);
+    }
+    if (!isResponse(payload)) throw new Error("The Shopify response could not be read. Please retry.");
+    return payload;
   }
-  if (!isResponse(payload)) throw new Error("The Shopify response could not be read. Please retry.");
-  return payload;
+  throw new Error("Could not reach your store. Please retry.");
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -16,7 +16,9 @@ type LoadState<T> =
 
 type SearchState =
   | { kind: "idle" }
-  | LoadState<{ query: string; products: SearchProduct[] }>;
+  | { kind: "loading" }
+  | { kind: "ready"; value: { query: string; products: SearchProduct[] } }
+  | { kind: "error"; query: string; message: string };
 
 type AuditState = LoadState<AuditProduct[]> | { kind: "unavailable" };
 
@@ -29,6 +31,7 @@ export function ShopifyAuditApp() {
   const [yesterday, setYesterday] = useState<AuditState>({ kind: "loading" });
   const [query, setQuery] = useState("");
   const [search, setSearch] = useState<SearchState>({ kind: "idle" });
+  const [reloadKey, setReloadKey] = useState(0);
   const searchController = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -45,7 +48,7 @@ export function ShopifyAuditApp() {
         setStatus({ kind: "ready", value: connected });
       } catch (error) {
         if (controller.signal.aborted) return;
-        setStatus({ kind: "error", message: errorMessage(error) });
+        setStatus({ kind: "error", message: formatErrorMessage(error) });
         setYesterday({ kind: "unavailable" });
         return;
       }
@@ -53,18 +56,16 @@ export function ShopifyAuditApp() {
         const audit = await getYesterday(range, controller.signal);
         if (!controller.signal.aborted) setYesterday({ kind: "ready", value: audit.products });
       } catch (error) {
-        if (!controller.signal.aborted) setYesterday({ kind: "error", message: errorMessage(error) });
+        if (!controller.signal.aborted) setYesterday({ kind: "error", message: formatErrorMessage(error) });
       }
     })();
     return () => controller.abort();
-  }, [range]);
+  }, [range, reloadKey]);
 
   useEffect(() => () => searchController.current?.abort(), []);
 
-  function onSearch(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  function runSearch(submittedQuery: string) {
     if (status.kind !== "ready") return;
-    const submittedQuery = query.trim();
     if (submittedQuery.length < 2) {
       setSearch({ kind: "idle" });
       return;
@@ -78,9 +79,18 @@ export function ShopifyAuditApp() {
         if (!controller.signal.aborted) setSearch({ kind: "ready", value: { query: submittedQuery, products: value.products } });
       },
       error => {
-        if (!controller.signal.aborted) setSearch({ kind: "error", message: errorMessage(error) });
+        if (!controller.signal.aborted) setSearch({ kind: "error", query: submittedQuery, message: formatErrorMessage(error) });
       },
     );
+  }
+
+  function onSearch(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    runSearch(query.trim());
+  }
+
+  function retryLoad() {
+    setReloadKey(value => value + 1);
   }
 
   const dateLabel = new Date(`${range.date}T12:00:00`).toLocaleDateString(undefined, {
@@ -113,7 +123,7 @@ export function ShopifyAuditApp() {
           <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-600">Review the products you added yesterday, then search your store by product title.</p>
         </div>
 
-        {status.kind === "error" ? <ErrorNotice message={status.message} /> : null}
+        {status.kind === "error" ? <ErrorNotice message={status.message} onRetry={retryLoad} /> : null}
 
         <section className={`${panelClass} p-5 sm:p-6`} aria-labelledby="yesterday-heading">
           <div className="flex flex-wrap items-start justify-between gap-4">
@@ -128,7 +138,7 @@ export function ShopifyAuditApp() {
           <div className="mt-5" aria-live="polite">
             {yesterday.kind === "loading" ? <LoadingMessage>Loading yesterday&apos;s products…</LoadingMessage> : null}
             {yesterday.kind === "unavailable" ? <EmptyMessage>Product audit will appear when your store connection is available.</EmptyMessage> : null}
-            {yesterday.kind === "error" ? <ErrorNotice message={yesterday.message} /> : null}
+            {yesterday.kind === "error" ? <ErrorNotice message={yesterday.message} onRetry={retryLoad} /> : null}
             {yesterday.kind === "ready" && yesterday.value.length === 0 ? (
               <EmptyMessage>No products were added yesterday. Search your store below to audit an existing product.</EmptyMessage>
             ) : null}
@@ -153,7 +163,7 @@ export function ShopifyAuditApp() {
           <div className="mt-5" aria-live="polite">
             {search.kind === "idle" ? <EmptyMessage>Your product details will appear here.</EmptyMessage> : null}
             {search.kind === "loading" ? <LoadingMessage>Searching products…</LoadingMessage> : null}
-            {search.kind === "error" ? <ErrorNotice message={search.message} /> : null}
+            {search.kind === "error" ? <ErrorNotice message={search.message} onRetry={() => runSearch(search.query)} /> : null}
             {search.kind === "ready" && search.value.products.length === 0 ? <EmptyMessage>No products matched “{search.value.query}”. Try a different title.</EmptyMessage> : null}
             {search.kind === "ready" && search.value.products.length > 0 ? (
               <div className="space-y-3">
@@ -221,10 +231,21 @@ function LoadingMessage({ children }: { children: React.ReactNode }) {
   return <p role="status" className="rounded-xl bg-zinc-50 px-4 py-6 text-sm text-zinc-600">{children}</p>;
 }
 
-function ErrorNotice({ message }: { message: string }) {
-  return <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{message}</p>;
+export function ErrorNotice({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+      <p>{message}</p>
+      <button type="button" onClick={onRetry} className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-red-300 px-3 font-semibold text-red-900 hover:bg-red-100">
+        <RefreshCw size={15} aria-hidden="true" /> Try again
+      </button>
+    </div>
+  );
 }
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Something went wrong. Please retry.";
+export function formatErrorMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : "";
+  if (/^(failed to fetch|networkerror when attempting to fetch resource\.?|load failed)$/i.test(message.trim())) {
+    return "Couldn’t reach Volt’s Shopify service. Check your connection and try again.";
+  }
+  return message || "Something went wrong. Please retry.";
 }

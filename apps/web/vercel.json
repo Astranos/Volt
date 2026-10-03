@@ -27,6 +27,11 @@
     }
   ],
   "rewrites": [
+    { "source": "/api/shopify/admin/status", "destination": "https://sincere-trout-414.convex.site/api/shopify/admin/status" },
+    { "source": "/api/shopify/admin/yesterday", "destination": "https://sincere-trout-414.convex.site/api/shopify/admin/yesterday" },
+    { "source": "/api/shopify/admin/search", "destination": "https://sincere-trout-414.convex.site/api/shopify/admin/search" },
+    { "source": "/shopify", "destination": "/shopify.html" },
+    { "source": "/shopify/", "destination": "/shopify.html" },
     { "source": "/upc-search", "destination": "/upc-search.html" },
     { "source": "/upc-search/", "destination": "/upc-search.html" },
     { "source": "/robots.txt", "destination": "/robots.txt" },

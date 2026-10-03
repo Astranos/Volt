@@ -19,7 +19,7 @@ Validate the configuration with `pnpm dlx @shopify/cli app config validate`. Rel
 
 ## Authentication and data
 
-The embedded screen loads App Bridge, requests a short-lived Shopify ID token for each API call, and sends it to Convex. Convex verifies the signature, audience, expiry, issuer, and shop domain before exchanging the ID token for an expiring offline `read_products` token. The access and refresh tokens are encrypted at rest and keyed by shop. Shopify product data is read on demand; the audit does not copy the catalog into Volt's database. No Volt account or Chrome extension is needed to use the Admin audit.
+The embedded screen loads App Bridge, requests a short-lived Shopify ID token for each API call, and sends it to the same-origin `/api/shopify/admin/*` endpoints. Vercel forwards those three endpoints to production Convex, so the browser does not need a cross-origin connection to Convex. Convex verifies the signature, audience, expiry, issuer, and shop domain before exchanging the ID token for an expiring offline `read_products` token. The access and refresh tokens are encrypted at rest and keyed by shop. Shopify product data is read on demand; the audit does not copy the catalog into Volt's database. No Volt account or Chrome extension is needed to use the Admin audit.
 
 The extension's existing connection is separate. It uses Clerk sign-in, the authorization code grant, and encrypted tokens keyed by the Volt account. Its connection screen and Chrome tab group audit continue to work independently of the embedded Admin screen.
 
@@ -33,7 +33,7 @@ Set these on both development and production Convex deployments:
 | `SHOPIFY_CLIENT_SECRET` | Client secret of that Shopify app |
 | `SHOPIFY_TOKEN_ENCRYPTION_KEY` | Distinct random 32-byte key encoded as 64 hexadecimal characters per deployment |
 
-Enter secrets interactively with `pnpm exec convex env set NAME` (add `--prod` for production). Do not put them in the repository or browser environment files. The frontend's `VITE_CONVEX_SITE_URL` may select a corresponding Convex site; production defaults to the production site.
+Enter secrets interactively with `pnpm exec convex env set NAME` (add `--prod` for production). Do not put them in the repository or browser environment files. During local development, the frontend's `VITE_CONVEX_SITE_URL` may select a corresponding Convex site. Production uses the same-origin routes defined in both Vercel configurations, which forward to the production deployment.
 
 ## Merchant check
 
@@ -44,3 +44,7 @@ Enter secrets interactively with `pnpm exec convex env set NAME` (add `--prod` f
 5. Uninstall the app. Confirm the installation record and any connection for that shop are removed.
 
 Shopify's review requirements and listing preparation are tracked in `docs/shopify-app-store-submission.md`.
+
+## Request recovery
+
+The client obtains a fresh Shopify ID token for each attempt and retries a transient network, session, or service failure once. Permission errors remain visible. If a request still fails, the connection check, previous-day audit, and product search show a retry button; search retries the submitted query. Cancelled or superseded requests do not retry or replace newer results.
