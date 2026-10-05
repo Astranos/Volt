@@ -1,0 +1,11 @@
+{
+  "name": "@volt/kiosk-ios",
+  "private": true,
+  "type": "module",
+  "version": "1.0.0",
+  "scripts": {
+    "open:xcode": "open ios/VoltKiosk.xcodeproj",
+    "typecheck": "node scripts/check.mjs --typecheck",
+    "test": "node scripts/check.mjs"
+  }
+}
