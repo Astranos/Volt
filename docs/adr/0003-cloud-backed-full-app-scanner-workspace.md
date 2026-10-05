@@ -1,5 +1,9 @@
 # Cloud-backed scanner workspace
 
+## Monetization update
+
+The free workspace pilot supersedes this ADR's Pro-only cloud access assumption. Signed-in accounts can sync captures, enroll devices, and use the dashboard without a paid entitlement. See [the monetization rollout](../monetization-rollout.md) for planned seven-day free history and paid persistent storage. The retention defaults below are the original design, not a statement that automated cloud deletion is implemented. This milestone adds no expiration, quota enforcement, or retroactive deletion.
+
 ## Status
 
 Accepted for the cloud-workspace model. Its WebRTC migration notes are historical: neither current iOS target uses WebRTC.

@@ -110,3 +110,38 @@ test("failed verification leaves a batch uploading; a successful retry marks it 
   expect(await t.run(ctx => ctx.db.query("resultBatches").unique())).toMatchObject({ status: "ready" });
   expect(vi.getTimerCount()).toBe(0);
 });
+
+test("free accounts upload and download photos without weakening workspace or device boundaries", async () => {
+  const t = convexTest(schema, modules);
+  const owner = t.withIdentity({ subject: "free-photo-owner" });
+  const foreign = t.withIdentity({ subject: "free-photo-foreign" });
+  const issued = await owner.mutation(api.cloudWorkspace.bootstrapMobileDevice, {
+    installationId: "free-photo-phone", label: "Free photo phone",
+  });
+  const otherIssued = await foreign.mutation(api.cloudWorkspace.bootstrapMobileDevice, {
+    installationId: "foreign-photo-phone", label: "Foreign photo phone",
+  });
+  const credential = { deviceId: issued.deviceId, deviceSecret: issued.deviceSecret };
+  const otherCredential = { deviceId: otherIssued.deviceId, deviceSecret: otherIssued.deviceSecret };
+  await t.mutation(putBatch, {
+    ...credential, batchId: "free-photo-batch", clientCreatedAt: 1,
+    results: [result("free-photo", "photo")],
+  });
+  const photo = { batchId: "free-photo-batch", resultId: "free-photo" };
+  expect(await t.action(api.cloudWorkspace.createPhotoUploadUrl, { ...credential, ...photo }))
+    .toMatchObject({ method: "PUT" });
+  await expect(t.action(api.cloudWorkspace.createPhotoUploadUrl, { ...otherCredential, ...photo }))
+    .rejects.toThrow(/Photo not found/);
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { headers: { "content-length": "10" } })));
+  await t.action(api.cloudWorkspace.finalizeBatchUploads, { ...credential, batchId: photo.batchId });
+  expect(await owner.action(api.cloudWorkspace.createPhotoDownloadUrl, photo))
+    .toMatchObject({ method: "GET" });
+  await expect(foreign.action(api.cloudWorkspace.createPhotoDownloadUrl, photo))
+    .rejects.toThrow(/Photo not found/);
+  await expect(t.action(api.cloudWorkspace.createPhotoDownloadUrl, photo))
+    .rejects.toThrow(/Authentication required/);
+  await owner.mutation(api.cloudWorkspace.revokeDevice, { deviceId: credential.deviceId });
+  await expect(t.action(api.cloudWorkspace.createPhotoDownloadUrl, { ...credential, ...photo }))
+    .rejects.toThrow(/revoked device credential/);
+  expect(await t.run(ctx => ctx.db.query("entitlements").collect())).toEqual([]);
+});

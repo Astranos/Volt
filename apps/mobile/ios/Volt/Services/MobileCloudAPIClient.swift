@@ -216,8 +216,8 @@ enum MobileCloudError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .credentialRevoked: "Volt couldn't reconnect this iPhone. Try again."
-        case .cloudWorkspaceRequired: "Volt Pro cloud workspace access is required for cloud sync."
-        case .aiQuotaExhausted: "Your AI scan limit is used up for this period. Upgrade to Volt Pro or try again after it resets."
+        case .cloudWorkspaceRequired: "Cloud workspace access is unavailable for this account. Try again later."
+        case .aiQuotaExhausted: "Your free AI scans are used up for this period. Try again after they reset."
         case .aiRateLimited: "AI scanning is busy right now. Try again in a moment."
         case .httpStatus(let status): "Cloud sync failed with status \(status)."
         case .invalidResponse: "Cloud sync returned an invalid response."

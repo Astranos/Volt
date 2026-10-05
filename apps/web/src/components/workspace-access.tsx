@@ -6,7 +6,6 @@ import { Cloud, LoaderCircle } from "lucide-react";
 
 import { api } from "../../../../convex/_generated/api";
 import type { AccessStatus } from "../../../../convex/access";
-import { mobileAppDownloadUrl } from "../site-chrome";
 
 type AccessState =
   | { status: "loading" }
@@ -15,16 +14,20 @@ type AccessState =
   | { status: "error" };
 
 export function workspaceAccessState(
-  body: Pick<AccessStatus, "hasFullAppAccess" | "clerkUserId"> | { error: string },
+  body:
+    | Pick<AccessStatus, "clerkUserId"> & {
+        capabilities: Pick<AccessStatus["capabilities"], "cloudWorkspace">;
+      }
+    | { error: string },
   userId: string,
 ): AccessState {
-  if (!("hasFullAppAccess" in body) || body.clerkUserId !== userId) {
+  if (!("capabilities" in body) || body.clerkUserId !== userId) {
     return { status: "error" };
   }
-  return { status: body.hasFullAppAccess ? "allowed" : "locked" };
+  return { status: body.capabilities.cloudWorkspace ? "allowed" : "locked" };
 }
 
-/** A new Clerk session must synchronize its entitlement before workspace reads. */
+/** A new Clerk session must resolve account capabilities before workspace reads. */
 export function WorkspaceAccess({ children }: { children: ReactNode }) {
   const { userId, sessionId } = useAuth();
   const { isAuthenticated } = useConvexAuth();
@@ -78,7 +81,7 @@ function AuthenticatedWorkspaceAccess({ children, userId }: {
   );
 }
 
-/** Also catches a subscription expiring while an existing query is subscribed. */
+/** Also catches access changing while an existing query is subscribed. */
 export class WorkspaceErrorBoundary extends Component<
   { children: ReactNode; retry: () => void },
   { status: "ready" | "locked" | "error" }
@@ -112,7 +115,16 @@ export function WorkspaceAccessContent({ state, retry, children }: {
   retry: () => void;
   children?: ReactNode;
 }) {
-  if (state.status === "allowed") return children;
+  if (state.status === "allowed") {
+    return (
+      <>
+        <p className="mb-5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+          Free cloud workspace. Scan and sync across devices at no cost during the pilot.
+        </p>
+        {children}
+      </>
+    );
+  }
   if (state.status === "loading") {
     return (
       <div
@@ -141,32 +153,15 @@ export function WorkspaceAccessContent({ state, retry, children }: {
         className="mt-3 text-2xl font-semibold tracking-tight text-zinc-950"
       >
         {locked
-          ? "Your cloud workspace comes with Volt Pro"
+          ? "Cloud workspace unavailable"
           : "We couldn't load your workspace"}
       </h1>
       <p className="mt-4 text-sm leading-6 text-zinc-600">
         {locked
-          ? "Save captures across devices, search your history, and export results with a Volt Pro subscription or complimentary access. This account doesn't have cloud workspace access yet."
+          ? "This account can't open the cloud workspace right now. Check access again or try later."
           : "We couldn't confirm access or load your captures. Check your connection and try again."}
       </p>
-      {locked ? (
-        <p className="mt-3 text-sm leading-6 text-zinc-600">
-          Manage your subscription in the Volt iPhone app, then check access
-          again. Already subscribed? Make sure you're signed in to the same account.
-        </p>
-      ) : null}
       <div className="mt-7 flex flex-wrap gap-3">
-        {locked ? (
-          <a
-            href={mobileAppDownloadUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2"
-          >
-            Get Volt for iPhone
-            <span className="sr-only">, opens in a new tab</span>
-          </a>
-        ) : null}
         <button
           type="button"
           onClick={retry}

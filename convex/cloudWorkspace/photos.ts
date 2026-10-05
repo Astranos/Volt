@@ -7,7 +7,6 @@ import {
   requireGuestPrincipal,
   type DeviceCredential,
   type GuestCredential,
-  requireFullAppEntitlement,
   workspaceForUser,
   sha256Hex,
 } from "./identity";
@@ -158,7 +157,6 @@ export const authorizePhotoAccessHandler = async (ctx: QueryCtx, args: ObjectTyp
     let workspace: Doc<"workspaces"> | null = null;
     let sourceDeviceId: string | undefined;
     if (args.clerkUserId) {
-      await requireFullAppEntitlement(ctx, args.clerkUserId);
       workspace = await workspaceForUser(ctx, args.clerkUserId);
     }
     else if (args.guestCloudGrant) {

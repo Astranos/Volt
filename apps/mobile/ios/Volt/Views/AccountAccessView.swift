@@ -22,7 +22,7 @@ struct AccountAccessView: View {
                 }
             }
         }
-        .navigationTitle("Volt Plan")
+        .navigationTitle("Volt Account")
         .refreshable {
             await accessStore.refresh(using: clerk)
         }
@@ -59,13 +59,13 @@ struct AccountAccessView: View {
     }
 
     private var accessSection: some View {
-        Section("Plan & Capabilities") {
+        Section("Volt access") {
             if let status = accessStore.status {
-                LabeledContent("Plan", value: planLabel(for: status))
+                LabeledContent("Scanner", value: planLabel(for: status))
                 LabeledContent("Local Capture", value: "Included")
                 LabeledContent(
                     "Cloud Workspace",
-                    value: status.capabilities.cloudWorkspace ? "Included" : "Volt Pro"
+                    value: status.capabilities.cloudWorkspace ? "Included" : "Unavailable"
                 )
                 LabeledContent("AI Scans", value: aiScannerLabel(for: status))
                 LabeledContent("Subscription", value: subscriptionLabel(for: status))
@@ -86,11 +86,8 @@ struct AccountAccessView: View {
         }
     }
 
-    private func planLabel(for status: AccessStatus) -> String {
-        if status.access == .complimentary {
-            return "Volt Pro · Complimentary"
-        }
-        return status.plan == .pro ? "Volt Pro" : "Volt Free"
+    private func planLabel(for _: AccessStatus) -> String {
+        "Free"
     }
 
     private func aiScannerLabel(for status: AccessStatus) -> String {

@@ -52,7 +52,7 @@ function ClipLandingPage() {
             <Smartphone className="text-green-700" aria-hidden="true" />
             <h2 className="mt-4 font-semibold">No install required</h2>
             <p className="mt-2 text-sm leading-6 text-zinc-600">
-              Use Text, Barcode, Photos, and Upload without the installed app&apos;s Volt Pro gate.
+              Use Text, Barcode, Photos, and Upload for free, without installing the full app.
             </p>
           </div>
         </div>

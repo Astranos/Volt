@@ -9,15 +9,15 @@ import {
 } from "./workspace-access";
 
 describe("workspace access gate", () => {
-  test("accepts only access resolved for the current Clerk account", () => {
+  test("accepts only cloud capability resolved for the current Clerk account", () => {
     expect(workspaceAccessState(
-      { clerkUserId: "current-user", hasFullAppAccess: true }, "current-user",
+      { clerkUserId: "current-user", capabilities: { cloudWorkspace: true } }, "current-user",
     )).toEqual({ status: "allowed" });
     expect(workspaceAccessState(
-      { clerkUserId: "old-user", hasFullAppAccess: true }, "current-user",
+      { clerkUserId: "old-user", capabilities: { cloudWorkspace: true } }, "current-user",
     )).toEqual({ status: "error" });
     expect(workspaceAccessState(
-      { clerkUserId: "current-user", hasFullAppAccess: false }, "current-user",
+      { clerkUserId: "current-user", capabilities: { cloudWorkspace: false } }, "current-user",
     )).toEqual({ status: "locked" });
     expect(workspaceAccessState(
       { error: "private error details" }, "current-user",
@@ -35,22 +35,24 @@ describe("workspace access gate", () => {
     expect(html).not.toContain("Workspace queries mounted too early");
   });
 
-  test("mounts the workspace only after access is allowed", () => {
+  test("mounts the workspace after cloud access is allowed and shows the pilot terms", () => {
     const html = renderToStaticMarkup(
       <WorkspaceAccessContent state={{ status: "allowed" }} retry={() => {}}>
         <p>My captures</p>
       </WorkspaceAccessContent>,
     );
     expect(html).toContain("My captures");
+    expect(html).toContain("Free cloud workspace");
+    expect(html).toContain("at no cost during the pilot");
   });
 
-  test("non-Pro page explains access and offers a real subscription destination and retry", () => {
+  test("unavailable page explains access and offers retry without a purchase pitch", () => {
     const html = renderToStaticMarkup(
       <WorkspaceAccessContent state={{ status: "locked" }} retry={() => {}} />,
     );
-    expect(html).toContain("Your cloud workspace comes with Volt Pro");
-    expect(html).toContain("complimentary access");
-    expect(html).toContain("apps.apple.com/us/app/volt-scanner/id6771770148");
+    expect(html).toContain("Cloud workspace unavailable");
+    expect(html).not.toContain("Volt Pro");
+    expect(html).not.toContain("Get Volt for iPhone");
     expect(html).toContain("Check access again");
     expect(html).not.toContain("ConvexError");
   });
