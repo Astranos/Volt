@@ -1,59 +1,47 @@
-# Free scanning and paid workspace rollout
+# Volt monetization rollout
 
-Volt serves small businesses and resellers first, and developers integrating product data second. The workplace workflow is the pilot. The next business milestone is three paying external businesses.
+Volt serves small businesses/resellers and product-data developers. The workplace is the first pilot; aim for three external paying accounts before expanding the offers.
 
-## Current milestone: free workspace pilot
-
-Every signed-in account can scan locally, sync captures, enroll devices, and open the dashboard without a paid entitlement. The mobile app has no new purchase or upgrade prompts. Existing App Store purchases can still be restored and managed, and verified legacy entitlements continue to determine existing AI allowances. Free accounts retain the configurable monthly AI allowance, initially 10 analyses. Ordinary barcode and text capture do not use that allowance.
-
-Cloud access uses `capabilities.cloudWorkspace`. Legacy `plan`, `hasFullAppAccess`, and anonymous session-trial fields remain compatible with old clients and do not control cloud access. Authentication, workspace ownership, device revocation, and guest grant expiration still apply.
-
-This milestone does not activate scan expiration, storage quotas, advertising, new web payments, or paid API enforcement. Existing records remain intact. App Store products and existing renewals require a separate external transition.
-
-Deploy the backend access change before releasing the updated web and iOS clients. Older backends still require a paid entitlement for cloud sync. Limit the pilot to monitored usage until storage quotas and cleanup are implemented.
-
-## Proposed offers
-
-Prices are hypotheses to validate with pilot customers, not live checkout offers.
-
-| Offer | Starting price | Planned value |
+| Offer | Initial price | Implemented allowance |
 | --- | --- | --- |
-| Free | $0 | Mobile scanning, dashboard sync, seven-day cloud history, basic export |
-| Workspace | $12 per business per month | Persistent cloud history while subscribed, collections, richer exports, ad-free dashboard |
-| API pilot | $29 per month | Product lookup with a defined monthly allowance, keys, and usage reporting |
+| Free scanner | $0 | Free mobile scanning, account sync and export; 7-day cloud history, 1,000 records, 100 MiB |
+| Workspace | $12/month/account | History while paid, up to 25,000 records and 1 GiB |
+| Product API | $29/month/account | 5,000 successful requests per UTC calendar month |
+| API evaluation | $0 | 100 successful requests total across all account keys |
 
-The existing workspace belongs to one Clerk user. Charging per business requires a deliberate business membership and shared workspace model before selling multi-user access. Several devices on one account are not a substitute for separate employee identities.
+Prices and limits are pilot hypotheses. Workspace ownership is currently one Clerk account; shared employee identities, team seats, collections and richer exports are future work. API access is separate from workspace billing. Legacy verified App Store/manual entitlements retain workspace privileges and their existing AI allowances; ordinary capture remains free. AI analysis still has a separate allowance.
 
-Do not set paid record or photo limits until the pilot measures record volume, object storage, transfer, database operations, and support costs. API pricing also depends on data rights, coverage, and cost per lookup.
+## What ships disabled
 
-## Retention contract for the next milestone
+Stripe and AdSense accounts do not exist yet. Checkout, ads, retention enforcement and API allowance enforcement default off. `/billing` shows actual usage and clearly labels pilot behavior. Usage accounting still measures successful API traffic.
 
-- Free cloud captures expire seven days after server receipt. Local device history has its own lifecycle.
-- Paid captures remain while the subscription is active, up to explicit record and photo limits. Do not promise permanent storage.
-- Warn before storage limits. Let users export, delete, or upgrade instead of silently deleting paid history.
-- Cancellation includes a proposed 30-day read-only export period before cleanup.
-- An upgrade can preserve captures that have not expired. Deleted captures cannot be recovered by purchasing a plan.
-- Apply a communicated migration grace period to existing captures. Never retroactively expire old rows by assuming missing policy fields mean free.
-- Enforce quotas transactionally across every capture path, including guest grants, retries, batch appends, and restores.
-- Delete R2 objects through an auditable retryable cleanup path. Soft deletion alone does not free object storage.
-- Use server-calculated text sizes and validated photo sizes. Signed upload URLs must enforce upload bounds before claiming a hard physical storage cap.
+Existing scan rows without `storageManaged` are preserved and excluded from managed counters. Enabling retention only enrolls newly accepted captures. This is deliberate migration protection, not a complete bound on existing database/storage costs. Communicate and implement an explicit legacy migration before claiming every record is managed.
 
-Implement the policy and lifecycle together. A history filter does not establish physical deletion or bounded storage.
+## Storage lifecycle
 
-## API and advertising prerequisites
+Free managed captures expire seven days after server receipt. Paid history remains while paid within caps. When paid access ends, a 30-day read-only export period precedes expiration. Immediate cancellation starts that period at the subscription end; scheduled cancellation follows the paid period. Upgrade can preserve unswept data; retention tombstones cannot be restored.
 
-The product API already exposes search and UPC lookup with revocable keys and rate limits. Add monthly usage accounting, verified billing entitlements, explicit spending limits, and documented charging rules before selling a plan. Ordinary first-party scanning must not require an API subscription.
+Quota reservations are transactional across device/guest upload, append and restore paths. Text size is calculated from UTF-8 content. Photos require a positive declared size of at most 10 MiB and an exact HEAD size match at finalization. Caps bound validated logical storage: presigned PUT does not impose a hard R2 payload limit. Rejected/unfinalized oversized objects need operational monitoring; a bounded upload gateway and orphan-object sweep remain follow-up work.
 
-Catalog imports include PayMore and PriceCharting records. Confirm commercial display and redistribution permissions for each source and field, including images, before offering the data commercially. Keep private captures separate from the public catalog. Benchmark coverage and completeness against representative customer barcodes.
+User deletion releases record allowance immediately, retains byte allowance during the 30-day undo period, then schedules purge. Retention expiry permits no undo. R2 deletion retries on failure; bytes are released only after successful cleanup. A ten-minute delay allows existing five-minute signed URLs to expire. Minimal sync tombstones remain for idempotency; metadata pruning is future work. Cleanup is bounded (100 expiry rows / sweep, 25 objects / purge run) and should be monitored against ingestion volume.
 
-Start advertising on useful public product pages after AdSense site review, publisher configuration, consent handling, and privacy updates. Dashboard advertising is a later experiment. Avoid advertising on empty search, account, billing, or scan-entry screens. Paid workspaces will be ad-free when advertising launches.
+## API charging contract
 
-## Rollout order and evidence
+One successful UPC lookup or nonempty search response counts as one request. Invalid inputs, misses, empty searches, rate-limited requests and server failures do not consume the allowance. Per-key rate limits still apply to attempts. Atomic reservations prevent concurrent keys exceeding the account allowance; retries of reservation/settlement are idempotent, and abandoned reservations expire. A late response after refund returns a retryable error instead of unmetered data. HTTP retrying a completed successful call is a new billable request.
 
-1. Ship the free workspace pilot. Verify free enrollment, capture, finalization, history, photo access, and computer presence, with cross-account and revoked-device access denied.
-2. Measure workplace usage and demonstrate the workflow to five similar businesses. Record time saved and ask for actual paid pilot commitments.
-3. Implement business ownership, web billing, quota accounting, migration grace, and retention cleanup. Test upgrade, cancellation, failed payment, export, expiry, and retries before enabling deletion.
-4. Pilot the API with two developers after rights and coverage are established. Choose allowances using observed costs.
-5. Add public-page advertising and measure revenue against page speed and task completion.
+Monthly paid allowance resets on UTC calendar months, independently of Stripe renewal day. Evaluation allowance never resets. No automatic paid overages. Internal scanner catalog access does not consume external API allowance.
 
-Track active businesses, weekly repeat usage, paid conversion, cancellations, cost per account, and product match rate. Advertising revenue is additional income until traffic and measured earnings justify relying on it.
+Confirm redistribution/commercial rights for each imported source and images before selling API access. `PRODUCT_API_COMMERCIAL_ENABLED` defaults off and gates paid API checkout/access. Public data availability does not prove resale rights.
+
+## Stripe setup and activation
+
+1. Create a Stripe account and start in test mode. Create separate licensed USD monthly prices: Workspace $12 and API $29. The server validates these amounts and intervals.
+2. Configure Convex environment values: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_WORKSPACE_PRICE_ID`, `STRIPE_API_PRICE_ID`, and `APP_URL` (exact site origin). Never expose secret keys in `VITE_*` variables.
+3. Register the Convex HTTP endpoint `/api/billing/stripe/webhook`. Subscribe to `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.paid`, and `invoice.payment_failed`. Enable the Stripe customer portal.
+4. Set `BILLING_ENABLED=true` in test environment. Verify checkout, portal, duplicate webhook delivery, failed renewal, scheduled/immediate cancellation and separate product ownership. Access comes from signed webhooks plus canonical paid invoice proof, never the checkout return URL.
+5. Communicate free retention and migration terms. Test export, expiry and R2 purge using disposable test records. Enable `WORKSPACE_STORAGE_POLICY_ENABLED=true` only after this review. Paid API additionally requires confirmed data rights and `PRODUCT_API_COMMERCIAL_ENABLED=true`; enable `PRODUCT_API_METERING_ENABLED=true` after client notices and boundary tests.
+6. Repeat verified configuration with live Stripe credentials and prices when ready to sell. No accounts, products, deployments or deletion policies were activated by this code change.
+
+Optional server limits: `WORKSPACE_FREE_RECORD_LIMIT`, `WORKSPACE_PAID_RECORD_LIMIT`, `WORKSPACE_FREE_BYTE_LIMIT`, `WORKSPACE_PAID_BYTE_LIMIT`, `PRODUCT_API_EVALUATION_LIMIT`, `PRODUCT_API_MONTHLY_LIMIT`. If changing defaults, update advertised offer copy at the same time.
+
+Track weekly repeat use, conversion, cancellations, product match rate, storage/transfer/database costs and support time. Treat ads as supplemental revenue until traffic demonstrates meaningful earnings.

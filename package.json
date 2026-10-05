@@ -34,6 +34,7 @@
     "@apple/app-store-server-library": "3.1.0",
     "@volt/scanner-protocol": "workspace:*",
     "convex": "^1.41.0",
+    "stripe": "^23.0.0",
     "web-push": "^3.6.7"
   },
   "devDependencies": {

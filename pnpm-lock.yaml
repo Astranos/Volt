@@ -17,6 +17,9 @@ importers:
       convex:
         specifier: ^1.41.0
         version: 1.41.0(@clerk/clerk-react@5.61.3(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@clerk/react@6.12.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(bufferutil@4.1.0)(react@19.2.3)(utf-8-validate@6.0.6)
+      stripe:
+        specifier: ^23.0.0
+        version: 23.0.0(@types/node@25.9.5)
       web-push:
         specifier: ^3.6.7
         version: 3.6.7
@@ -5551,6 +5554,15 @@ packages:
 
   strip-literal@3.1.0:
     resolution: {integrity: sha512-8r3mkIM/2+PpjHoOtiAW8Rg3jJLHaV7xPwG+YRGrv6FP0wwk/toTpATxWYOW0BKdWwl82VT2tFYi5DlROa0Mxg==}
+
+  stripe@23.0.0:
+    resolution: {integrity: sha512-MDE2A5ZVVluYURORaZEVghSmnLJc3w6aHAlZSxDQMsOjOb3V0O6ro/CiaeFlJS4N7uIVmsg98ocRsPmUK6YfyA==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      '@types/node': '>=20'
+    peerDependenciesMeta:
+      '@types/node':
+        optional: true
 
   stubborn-fs@2.0.0:
     resolution: {integrity: sha512-Y0AvSwDw8y+nlSNFXMm2g6L51rBGdAQT20J3YSOqxC53Lo3bjWRtr2BKcfYoAf352WYpsZSTURrA0tqhfgudPA==}
@@ -11707,6 +11719,10 @@ snapshots:
   strip-literal@3.1.0:
     dependencies:
       js-tokens: 9.0.1
+
+  stripe@23.0.0(@types/node@25.9.5):
+    optionalDependencies:
+      '@types/node': 25.9.5
 
   stubborn-fs@2.0.0:
     dependencies:

@@ -49,6 +49,7 @@ const dateTimeFormatter = new Intl.DateTimeFormat("en-US", {
 
 export function ApiKeyManager() {
   const apiKeys = useQuery(api.productApiKeys.list, {});
+  const usage = useQuery(api.productApiUsage.getStatus, {});
   const createApiKey = useMutation(api.productApiKeys.create);
   const revokeApiKey = useMutation(api.productApiKeys.revoke);
 
@@ -104,6 +105,11 @@ export function ApiKeyManager() {
 
   return (
     <div className="space-y-8">
+      {usage && <div className="rounded-xl border border-zinc-200 bg-white p-4 text-sm">
+        <p>{usage.used.toLocaleString()} / {usage.limit.toLocaleString()} successful API requests · {usage.remaining.toLocaleString()} remaining across all keys.</p>
+        {!usage.enforcementEnabled && <p className="mt-1 text-zinc-500">Pilot mode: usage is tracked; the allowance is not yet enforced.</p>}
+        <a href="/billing" className="mt-2 inline-block text-emerald-700 underline">Plans and usage</a>
+      </div>}
       <section className="overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-950 text-white shadow-sm">
         <div className="relative px-5 py-6 sm:px-7 sm:py-8">
           <div className="pointer-events-none absolute -right-14 -top-16 size-56 rounded-full border border-white/10" />

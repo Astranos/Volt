@@ -27,7 +27,7 @@ import { AuthUnavailable } from "./auth-page";
 import { WorkspaceProvider } from "./workspace-provider";
 
 type AuthenticatedDestination =
-  "workspace" | "scanner-results" | "product-data" | "api-keys";
+  "workspace" | "scanner-results" | "product-data" | "api-keys" | "billing";
 type AppLayoutProps = {
   current: AuthenticatedDestination;
   children: ReactNode;
@@ -35,6 +35,7 @@ type AppLayoutProps = {
 };
 
 const destinations = {
+  billing: { href: "/billing", label: "Plans and usage", icon: KeyRound },
   workspace: {
     href: "/dashboard",
     label: "Dashboard / Activity",
@@ -56,6 +57,7 @@ const destinationOrder: readonly AuthenticatedDestination[] = [
   "scanner-results",
   "product-data",
   "api-keys",
+  "billing",
 ];
 
 export function AppShell({

@@ -43,7 +43,7 @@ describe("workspace access gate", () => {
     );
     expect(html).toContain("My captures");
     expect(html).toContain("Free cloud workspace");
-    expect(html).toContain("at no cost during the pilot");
+    expect(html).toContain("Scanning and device sync are free");
   });
 
   test("unavailable page explains access and offers retry without a purchase pitch", () => {

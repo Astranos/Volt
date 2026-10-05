@@ -8,6 +8,13 @@
  * @module
  */
 
+import type * as billingConfiguration from "../billingConfiguration.js";
+import type * as monetization from "../monetization.js";
+import type * as productApiUsage from "../productApiUsage.js";
+import type * as stripeBilling from "../stripeBilling.js";
+import type * as webBilling from "../webBilling.js";
+import type * as workspaceStorage from "../workspaceStorage.js";
+import type * as http_billing from "../http/billing.js";
 import type * as access from "../access.js";
 import type * as admin from "../admin.js";
 import type * as aiScanner from "../aiScanner.js";
@@ -61,6 +68,13 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  "billingConfiguration": typeof billingConfiguration;
+  "monetization": typeof monetization;
+  "productApiUsage": typeof productApiUsage;
+  "stripeBilling": typeof stripeBilling;
+  "webBilling": typeof webBilling;
+  "workspaceStorage": typeof workspaceStorage;
+  "http/billing": typeof http_billing;
   access: typeof access;
   admin: typeof admin;
   aiScanner: typeof aiScanner;

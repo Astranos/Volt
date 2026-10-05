@@ -7,7 +7,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers":
     "Authorization, Content-Type, X-Volt-Anonymous-Id, X-Volt-Anonymous-Secret, X-Volt-Browser-Claim, X-Volt-Pairing-Secret, X-Volt-Device-Id, X-Volt-Device-Secret",
   "Access-Control-Expose-Headers":
-    "X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset, Retry-After",
+    "X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset, X-Usage-Limit, X-Usage-Used, X-Usage-Remaining, X-Usage-Reset, X-Usage-Tier, Retry-After",
   "Cache-Control": "no-store",
 };
 

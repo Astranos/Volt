@@ -9,73 +9,24 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as UpcSearchRouteImport } from './routes/upc-search'
-import { Route as ThankyouRouteImport } from './routes/thankyou'
-import { Route as SignUpRouteImport } from './routes/sign-up'
-import { Route as SignInRouteImport } from './routes/sign-in'
-import { Route as ScannerResultsRouteImport } from './routes/scanner-results'
-import { Route as ScannerDemoRouteImport } from './routes/scanner-demo'
-import { Route as PrivacyRouteImport } from './routes/privacy'
-import { Route as DashboardRouteImport } from './routes/dashboard'
-import { Route as ClipRouteImport } from './routes/clip'
-import { Route as CatalogRouteImport } from './routes/catalog'
-import { Route as ApiKeysRouteImport } from './routes/api-keys'
-import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AdminRouteImport } from './routes/admin'
+import { Route as ApiKeysRouteImport } from './routes/api-keys'
+import { Route as BillingRouteImport } from './routes/billing'
+import { Route as CatalogRouteImport } from './routes/catalog'
+import { Route as ClipRouteImport } from './routes/clip'
+import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as PrivacyRouteImport } from './routes/privacy'
+import { Route as ScannerDemoRouteImport } from './routes/scanner-demo'
+import { Route as ScannerResultsRouteImport } from './routes/scanner-results'
+import { Route as SignInRouteImport } from './routes/sign-in'
+import { Route as SignUpRouteImport } from './routes/sign-up'
+import { Route as ThankyouRouteImport } from './routes/thankyou'
+import { Route as UpcSearchRouteImport } from './routes/upc-search'
 
-const UpcSearchRoute = UpcSearchRouteImport.update({
-  id: '/upc-search',
-  path: '/upc-search',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ThankyouRoute = ThankyouRouteImport.update({
-  id: '/thankyou',
-  path: '/thankyou',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SignUpRoute = SignUpRouteImport.update({
-  id: '/sign-up',
-  path: '/sign-up',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SignInRoute = SignInRouteImport.update({
-  id: '/sign-in',
-  path: '/sign-in',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ScannerResultsRoute = ScannerResultsRouteImport.update({
-  id: '/scanner-results',
-  path: '/scanner-results',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ScannerDemoRoute = ScannerDemoRouteImport.update({
-  id: '/scanner-demo',
-  path: '/scanner-demo',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PrivacyRoute = PrivacyRouteImport.update({
-  id: '/privacy',
-  path: '/privacy',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DashboardRoute = DashboardRouteImport.update({
-  id: '/dashboard',
-  path: '/dashboard',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ClipRoute = ClipRouteImport.update({
-  id: '/clip',
-  path: '/clip',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CatalogRoute = CatalogRouteImport.update({
-  id: '/catalog',
-  path: '/catalog',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiKeysRoute = ApiKeysRouteImport.update({
-  id: '/api-keys',
-  path: '/api-keys',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminRoute = AdminRouteImport.update({
@@ -83,9 +34,64 @@ const AdminRoute = AdminRouteImport.update({
   path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const ApiKeysRoute = ApiKeysRouteImport.update({
+  id: '/api-keys',
+  path: '/api-keys',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BillingRoute = BillingRouteImport.update({
+  id: '/billing',
+  path: '/billing',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CatalogRoute = CatalogRouteImport.update({
+  id: '/catalog',
+  path: '/catalog',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ClipRoute = ClipRouteImport.update({
+  id: '/clip',
+  path: '/clip',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardRoute = DashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrivacyRoute = PrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ScannerDemoRoute = ScannerDemoRouteImport.update({
+  id: '/scanner-demo',
+  path: '/scanner-demo',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ScannerResultsRoute = ScannerResultsRouteImport.update({
+  id: '/scanner-results',
+  path: '/scanner-results',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SignInRoute = SignInRouteImport.update({
+  id: '/sign-in',
+  path: '/sign-in',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SignUpRoute = SignUpRouteImport.update({
+  id: '/sign-up',
+  path: '/sign-up',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ThankyouRoute = ThankyouRouteImport.update({
+  id: '/thankyou',
+  path: '/thankyou',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const UpcSearchRoute = UpcSearchRouteImport.update({
+  id: '/upc-search',
+  path: '/upc-search',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -93,6 +99,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/api-keys': typeof ApiKeysRoute
+  '/billing': typeof BillingRoute
   '/catalog': typeof CatalogRoute
   '/clip': typeof ClipRoute
   '/dashboard': typeof DashboardRoute
@@ -108,6 +115,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/api-keys': typeof ApiKeysRoute
+  '/billing': typeof BillingRoute
   '/catalog': typeof CatalogRoute
   '/clip': typeof ClipRoute
   '/dashboard': typeof DashboardRoute
@@ -124,6 +132,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/api-keys': typeof ApiKeysRoute
+  '/billing': typeof BillingRoute
   '/catalog': typeof CatalogRoute
   '/clip': typeof ClipRoute
   '/dashboard': typeof DashboardRoute
@@ -141,6 +150,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/api-keys'
+    | '/billing'
     | '/catalog'
     | '/clip'
     | '/dashboard'
@@ -156,6 +166,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/api-keys'
+    | '/billing'
     | '/catalog'
     | '/clip'
     | '/dashboard'
@@ -171,6 +182,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/api-keys'
+    | '/billing'
     | '/catalog'
     | '/clip'
     | '/dashboard'
@@ -187,6 +199,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRoute
   ApiKeysRoute: typeof ApiKeysRoute
+  BillingRoute: typeof BillingRoute
   CatalogRoute: typeof CatalogRoute
   ClipRoute: typeof ClipRoute
   DashboardRoute: typeof DashboardRoute
@@ -201,81 +214,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/upc-search': {
-      id: '/upc-search'
-      path: '/upc-search'
-      fullPath: '/upc-search'
-      preLoaderRoute: typeof UpcSearchRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/thankyou': {
-      id: '/thankyou'
-      path: '/thankyou'
-      fullPath: '/thankyou'
-      preLoaderRoute: typeof ThankyouRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/sign-up': {
-      id: '/sign-up'
-      path: '/sign-up'
-      fullPath: '/sign-up'
-      preLoaderRoute: typeof SignUpRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/sign-in': {
-      id: '/sign-in'
-      path: '/sign-in'
-      fullPath: '/sign-in'
-      preLoaderRoute: typeof SignInRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/scanner-results': {
-      id: '/scanner-results'
-      path: '/scanner-results'
-      fullPath: '/scanner-results'
-      preLoaderRoute: typeof ScannerResultsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/scanner-demo': {
-      id: '/scanner-demo'
-      path: '/scanner-demo'
-      fullPath: '/scanner-demo'
-      preLoaderRoute: typeof ScannerDemoRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/privacy': {
-      id: '/privacy'
-      path: '/privacy'
-      fullPath: '/privacy'
-      preLoaderRoute: typeof PrivacyRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/dashboard': {
-      id: '/dashboard'
-      path: '/dashboard'
-      fullPath: '/dashboard'
-      preLoaderRoute: typeof DashboardRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/clip': {
-      id: '/clip'
-      path: '/clip'
-      fullPath: '/clip'
-      preLoaderRoute: typeof ClipRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/catalog': {
-      id: '/catalog'
-      path: '/catalog'
-      fullPath: '/catalog'
-      preLoaderRoute: typeof CatalogRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api-keys': {
-      id: '/api-keys'
-      path: '/api-keys'
-      fullPath: '/api-keys'
-      preLoaderRoute: typeof ApiKeysRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin': {
@@ -285,11 +228,88 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/api-keys': {
+      id: '/api-keys'
+      path: '/api-keys'
+      fullPath: '/api-keys'
+      preLoaderRoute: typeof ApiKeysRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/billing': {
+      id: '/billing'
+      path: '/billing'
+      fullPath: '/billing'
+      preLoaderRoute: typeof BillingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/catalog': {
+      id: '/catalog'
+      path: '/catalog'
+      fullPath: '/catalog'
+      preLoaderRoute: typeof CatalogRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/clip': {
+      id: '/clip'
+      path: '/clip'
+      fullPath: '/clip'
+      preLoaderRoute: typeof ClipRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard': {
+      id: '/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof DashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/privacy': {
+      id: '/privacy'
+      path: '/privacy'
+      fullPath: '/privacy'
+      preLoaderRoute: typeof PrivacyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/scanner-demo': {
+      id: '/scanner-demo'
+      path: '/scanner-demo'
+      fullPath: '/scanner-demo'
+      preLoaderRoute: typeof ScannerDemoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/scanner-results': {
+      id: '/scanner-results'
+      path: '/scanner-results'
+      fullPath: '/scanner-results'
+      preLoaderRoute: typeof ScannerResultsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sign-in': {
+      id: '/sign-in'
+      path: '/sign-in'
+      fullPath: '/sign-in'
+      preLoaderRoute: typeof SignInRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sign-up': {
+      id: '/sign-up'
+      path: '/sign-up'
+      fullPath: '/sign-up'
+      preLoaderRoute: typeof SignUpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/thankyou': {
+      id: '/thankyou'
+      path: '/thankyou'
+      fullPath: '/thankyou'
+      preLoaderRoute: typeof ThankyouRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/upc-search': {
+      id: '/upc-search'
+      path: '/upc-search'
+      fullPath: '/upc-search'
+      preLoaderRoute: typeof UpcSearchRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -299,6 +319,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRoute,
   ApiKeysRoute: ApiKeysRoute,
+  BillingRoute: BillingRoute,
   CatalogRoute: CatalogRoute,
   ClipRoute: ClipRoute,
   DashboardRoute: DashboardRoute,

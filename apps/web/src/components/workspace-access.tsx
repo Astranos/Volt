@@ -119,7 +119,7 @@ export function WorkspaceAccessContent({ state, retry, children }: {
     return (
       <>
         <p className="mb-5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-          Free cloud workspace. Scan and sync across devices at no cost during the pilot.
+          Free cloud workspace. Scanning and device sync are free. Review your cloud history limits in plans and usage.
         </p>
         {children}
       </>
