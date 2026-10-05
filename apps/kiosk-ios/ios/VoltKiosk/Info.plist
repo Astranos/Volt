@@ -22,7 +22,7 @@
         <string>UIInterfaceOrientationLandscapeLeft</string>
         <string>UIInterfaceOrientationLandscapeRight</string>
     </array>
-    <key>KioskPortalURL</key><string>https://pm.juanquenga.com</string>
-    <key>WKAppBoundDomains</key><array><string>pm.juanquenga.com</string></array>
+    <key>KioskAPIBaseURL</key><string>https://pm.juanquenga.com</string>
+    <key>KioskDefaultStoreSlug</key><string></string>
 </dict>
 </plist>
