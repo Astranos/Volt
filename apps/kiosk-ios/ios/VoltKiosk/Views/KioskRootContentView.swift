@@ -28,30 +28,26 @@ struct KioskRootContentView: View {
                     StoreSetupView(session: session)
                 }
             } else {
-                NavigationStack {
-                    KioskCatalogView(session: session)
-                        .navigationBarTitleDisplayMode(.inline)
-                        .toolbar {
-                            ToolbarItem(placement: .topBarTrailing) {
-                                Button("Start over", systemImage: "arrow.counterclockwise", action: session.resetBrowsing)
-                                    .accessibilityIdentifier("startOver")
+                KioskCatalogView(session: session)
+                    .safeAreaInset(edge: .bottom, spacing: 0) {
+                        if session.selectedProduct == nil {
+                            if let seconds = session.remainingIdleSeconds {
+                                KioskIdleNotice(seconds: seconds, keepBrowsing: session.recordActivity)
+                            } else if !guidedAccessEnabled {
+                                KioskStaffBar(openSetup: { staffSheet = .setup }, openRequests: { staffSheet = .requests }, requestsEnabled: session.catalog != nil)
                             }
                         }
-                }
-                .safeAreaInset(edge: .bottom, spacing: 0) {
-                    if let seconds = session.remainingIdleSeconds {
-                        KioskIdleNotice(seconds: seconds, keepBrowsing: session.recordActivity)
-                    } else if !guidedAccessEnabled {
-                        KioskStaffBar(openSetup: { staffSheet = .setup }, openRequests: { staffSheet = .requests }, requestsEnabled: session.catalog != nil)
                     }
-                }
             }
         }
+        .allowsHitTesting(session.selectedProduct == nil)
+        .accessibilityHidden(session.selectedProduct != nil)
         .tint(KioskCustomerStyle.green)
         .simultaneousGesture(DragGesture(minimumDistance: 0).onChanged { _ in session.recordActivity() })
-        .sheet(item: $session.selectedProduct) { product in
-            KioskProductDetailView(product: product, session: session)
-                .simultaneousGesture(DragGesture(minimumDistance: 0).onChanged { _ in session.recordActivity() })
+        .overlay {
+            if let product = session.selectedProduct {
+                KioskProductDetailPopup(product: product, session: session)
+            }
         }
         .sheet(item: $staffSheet) { sheet in
             switch sheet {
@@ -90,5 +86,76 @@ struct KioskRootContentView: View {
             do { try await Task.sleep(for: .seconds(1)) }
             catch { return }
         }
+    }
+}
+
+private struct KioskProductDetailPopup: View {
+    let product: KioskProduct
+    let session: KioskSession
+
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack {
+                Button(action: close) {
+                    Color.black.opacity(0.4)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .ignoresSafeArea()
+                .accessibilityLabel("Close item details")
+                HStack(spacing: 12) {
+                    Button("Previous item", systemImage: "chevron.left") {
+                        selectAdjacentProduct(offset: -1)
+                    }
+                    .labelStyle(.iconOnly)
+                    .foregroundStyle(.primary)
+                    .font(.title3.weight(.semibold))
+                    .frame(width: 48, height: 48)
+                    .background(.regularMaterial, in: Circle())
+                    .disabled(adjacentProduct(offset: -1) == nil)
+                    .opacity(adjacentProduct(offset: -1) == nil ? 0.3 : 0.85)
+
+                    KioskProductDetailView(product: product, session: session)
+                        .frame(width: min(600, max(0, geometry.size.width - 168)), height: max(0, geometry.size.height - 48))
+                        .clipShape(RoundedRectangle(cornerRadius: 24))
+                        .shadow(color: .black.opacity(0.2), radius: 24, y: 8)
+
+                    Button("Next item", systemImage: "chevron.right") {
+                        selectAdjacentProduct(offset: 1)
+                    }
+                    .labelStyle(.iconOnly)
+                    .foregroundStyle(.primary)
+                    .font(.title3.weight(.semibold))
+                    .frame(width: 48, height: 48)
+                    .background(.regularMaterial, in: Circle())
+                    .disabled(adjacentProduct(offset: 1) == nil)
+                    .opacity(adjacentProduct(offset: 1) == nil ? 0.3 : 0.85)
+                }
+                .buttonStyle(.plain)
+                .accessibilityElement(children: .contain)
+                .accessibilityAddTraits(.isModal)
+                .padding(.horizontal, 24)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .simultaneousGesture(DragGesture(minimumDistance: 0).onChanged { _ in session.recordActivity() })
+    }
+
+    private func close() {
+        session.recordActivity()
+        session.selectedProduct = nil
+    }
+
+    private func adjacentProduct(offset: Int) -> KioskProduct? {
+        guard let index = session.visibleProducts.firstIndex(where: { $0.id == product.id }) else { return nil }
+        let adjacentIndex = index + offset
+        guard session.visibleProducts.indices.contains(adjacentIndex) else { return nil }
+        return session.visibleProducts[adjacentIndex]
+    }
+
+    private func selectAdjacentProduct(offset: Int) {
+        guard let adjacent = adjacentProduct(offset: offset) else { return }
+        session.recordActivity()
+        session.selectedProduct = adjacent
     }
 }

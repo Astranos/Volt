@@ -8,7 +8,7 @@ struct KioskProductCard: View {
         Button(action: select) {
             VStack(alignment: .leading, spacing: 12) {
                 KioskRemoteImage(url: product.images.first, title: product.title)
-                    .frame(height: 230)
+                    .aspectRatio(1, contentMode: .fit)
                     .frame(maxWidth: .infinity)
                     .background(.white)
                 Text(product.category.rawValue.uppercased())

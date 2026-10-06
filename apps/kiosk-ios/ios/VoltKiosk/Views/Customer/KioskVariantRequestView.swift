@@ -49,6 +49,7 @@ struct KioskVariantRequestView: View {
         Button(state == .idle ? "Ask to see this item" : "Try request again", systemImage: "hand.raised", action: request)
             .font(.headline).frame(maxWidth: .infinity, minHeight: 52)
             .buttonStyle(.borderedProminent)
+            .foregroundStyle(.white)
             .disabled(!session.canRequest(productID: product.id) || isSending || isSent)
     }
 

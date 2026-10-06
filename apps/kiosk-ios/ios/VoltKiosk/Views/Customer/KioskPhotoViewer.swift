@@ -37,6 +37,16 @@ struct KioskPhotoViewer: View {
                         .scrollPosition(id: $visibleIndex)
                         .scrollIndicators(.hidden)
                         .accessibilityHint("Swipe to view another photo.")
+                        .overlay(alignment: .leading) {
+                            if selectedIndex > 0, sideInset > 16 {
+                                peekButton("Previous photo", symbol: "chevron.left", width: sideInset - 16, height: photoSize, action: previous)
+                            }
+                        }
+                        .overlay(alignment: .trailing) {
+                            if selectedIndex < images.count - 1, sideInset > 16 {
+                                peekButton("Next photo", symbol: "chevron.right", width: sideInset - 16, height: photoSize, action: next)
+                            }
+                        }
                     }
                     HStack(spacing: 24) {
                         Button("Previous", systemImage: "chevron.left", action: previous)
@@ -75,6 +85,24 @@ struct KioskPhotoViewer: View {
             session.recordActivity()
             visibleIndex = index
         }
+    }
+
+    private func peekButton(_ label: String, symbol: String, width: CGFloat, height: CGFloat, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Rectangle()
+                .fill(.white.opacity(0.001))
+                .frame(width: width, height: height)
+                .contentShape(Rectangle())
+                .overlay {
+                    Image(systemName: symbol)
+                        .font(.subheadline.weight(.semibold))
+                        .frame(width: 28, height: 28)
+                        .background(.regularMaterial, in: Circle())
+                }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+        .accessibilityAddTraits(.isButton)
     }
 
     private func previous() { select(max(0, selectedIndex - 1)) }

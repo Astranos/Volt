@@ -12,7 +12,7 @@ struct KioskCatalogView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: KioskCustomerStyle.spacing) {
-                    KioskStoreHero(store: session.catalog?.store).id("catalog-top")
+                    KioskStoreHero(store: session.catalog?.store, startOver: session.resetBrowsing).id("catalog-top")
                     KioskCatalogFiltersView(session: session)
                     KioskCatalogNotice(session: session)
                     if session.isLoading && session.catalog == nil {
