@@ -14,6 +14,7 @@ import { CatalogCompare, toggleComparison } from "./catalog-compare";
 function row(upc: string): CatalogResult {
   return {
     upc,
+    qualityStatus: "unreviewed",
     title: `Phone ${upc}`,
     brand: "Apple",
     model: null,

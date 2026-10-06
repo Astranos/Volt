@@ -1,6 +1,7 @@
 import { v, type Infer } from "convex/values";
 
 import { createProductApiKeyToken, sha256Hex } from "./productApiKeyCrypto";
+import { activeApiAccess, apiEntitlementEnforced } from "./productApiAccess";
 import type { Doc } from "./_generated/dataModel";
 import {
   internalMutation,
@@ -33,6 +34,9 @@ const apiAuthorizationResultValidator = v.union(
   }),
   v.object({
     kind: v.literal("invalid_key"),
+  }),
+  v.object({
+    kind: v.literal("access_required"),
   }),
   v.object({
     kind: v.literal("rate_limited"),
@@ -89,6 +93,10 @@ export const create = mutation({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
     const name = validateKeyName(args.name);
+    if (apiEntitlementEnforced() &&
+      !await activeApiAccess(ctx, identity.tokenIdentifier, Date.now())) {
+      throw new Error("Product API access is required");
+    }
 
     const activeKeys = await ctx.db
       .query("productApiKeys")
@@ -153,6 +161,10 @@ export const authenticateAndConsume = internalMutation({
       .withIndex("by_keyHash", (q) => q.eq("keyHash", args.keyHash))
       .unique();
     if (!key || key.status !== "active") return { kind: "invalid_key" };
+    if (apiEntitlementEnforced() &&
+      !await activeApiAccess(ctx, key.ownerTokenIdentifier, args.now)) {
+      return { kind: "access_required" };
+    }
 
     const windowStartedAt = Math.floor(args.now / RATE_WINDOW_MS) * RATE_WINDOW_MS;
     const resetAt = windowStartedAt + RATE_WINDOW_MS;

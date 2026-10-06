@@ -1,19 +1,23 @@
 import { makeFunctionReference } from "convex/server";
 import { httpAction } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
-import { encryptToken, exchangeToken, verifyCallback } from "../shopifyHelpers";
+import { encryptToken, exchangeToken, nonceHash, verifyCallback } from "../shopifyHelpers";
 
-const consume = makeFunctionReference<"mutation", { shop: string; state: string }, { id: Id<"shopifyOAuthStates">; ownerTokenIdentifier: string }>("shopifyStore:consume");
+const consume = makeFunctionReference<"mutation", { shop: string; state: string; browserNonceHash: string }, { id: Id<"shopifyOAuthStates">; ownerTokenIdentifier: string }>("shopifyStore:consume");
 const finish = makeFunctionReference<"mutation", { stateId: Id<"shopifyOAuthStates"> } & Pick<Doc<"shopifyConnections">, "encryptedAccessToken" | "encryptedRefreshToken" | "expiresAt" | "refreshExpiresAt">, null>("shopifyStore:finish");
 
 export const shopifyCallback = httpAction(async (ctx, request) => {
   const headers = {
     "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store",
     "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'", "Referrer-Policy": "no-referrer",
+    "Set-Cookie": "volt_shopify_oauth=; Max-Age=0; Path=/api/shopify/callback; HttpOnly; Secure; SameSite=Lax",
   };
   try {
     const { shop, state, code } = await verifyCallback(new URL(request.url).searchParams);
-    const owner = await ctx.runMutation(consume, { shop, state });
+    const browserCookie = request.headers.get("Cookie")?.split(";").map((part) => part.trim()).filter((part) => part.startsWith("volt_shopify_oauth=")) ?? [];
+    if (browserCookie.length !== 1) throw new Error("Shopify browser authorization missing.");
+    const browserNonce = browserCookie[0].slice("volt_shopify_oauth=".length);
+    const owner = await ctx.runMutation(consume, { shop, state, browserNonceHash: await nonceHash(browserNonce) });
     const tokens = await exchangeToken(shop, { code, expiring: "1" });
     const aad = `${owner.ownerTokenIdentifier}|${shop}`;
     await ctx.runMutation(finish, {

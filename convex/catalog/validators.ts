@@ -7,6 +7,8 @@ export const catalogListingValidator = v.object({
   sourceUrl: v.string(),
   imageUrl: v.optional(v.string()),
   updatedAt: v.optional(v.number()),
+  lastSeenAt: v.optional(v.number()),
+  active: v.optional(v.boolean()),
 });
 
 export const catalogProductValidator = v.object({
@@ -31,26 +33,8 @@ export const catalogProductValidator = v.object({
   listings: v.array(catalogListingValidator),
 });
 
-export const rejectedListingValidator = v.object({
-  sourceUrl: v.string(),
-  reason: v.union(
-    v.literal("unauthorized-host"),
-    v.literal("missing-title"),
-    v.literal("missing-upc"),
-    v.literal("invalid-upc"),
-    v.literal("invalid-json"),
-    v.literal("fetch-failed"),
-  ),
-  detail: v.optional(v.string()),
-});
-
-export const crawlResultValidator = v.object({
-  products: v.array(catalogProductValidator),
-  rejected: v.array(rejectedListingValidator),
-  fetched: v.number(),
-});
-
 export const upsertStatsValidator = v.object({
+  productsIngested: v.number(),
   inserted: v.number(),
   updated: v.number(),
   sourcesAdded: v.number(),
@@ -58,6 +42,7 @@ export const upsertStatsValidator = v.object({
 
 export const storedCatalogProductValidator = v.object({
   upc: v.string(),
+  qualityStatus: v.union(v.literal("unreviewed"), v.literal("reviewed")),
   title: v.string(),
   platform: nullableString,
   edition: nullableString,
@@ -83,6 +68,7 @@ export const storedCatalogProductValidator = v.object({
 
 export const catalogSummaryValidator = v.object({
   upc: v.string(),
+  qualityStatus: v.union(v.literal("unreviewed"), v.literal("reviewed")),
   title: v.string(),
   platform: nullableString,
   edition: nullableString,

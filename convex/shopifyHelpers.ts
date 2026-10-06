@@ -24,6 +24,10 @@ function unhex(value: string): Uint8Array<ArrayBuffer> {
 export function nonce(): string {
   return hex(crypto.getRandomValues(new Uint8Array(32)));
 }
+export async function nonceHash(value: string): Promise<string> {
+  if (!/^[a-f0-9]{64}$/.test(value)) throw new ConvexError("Invalid Shopify browser nonce.");
+  return hex(new Uint8Array(await crypto.subtle.digest("SHA-256", encoder.encode(value))));
+}
 async function tokenKey() {
   const key = requiredEnv("SHOPIFY_TOKEN_ENCRYPTION_KEY");
   if (!/^[a-f0-9]{64}$/i.test(key)) throw new ConvexError("Shopify encryption key must be 32 bytes encoded as hex.");
@@ -58,12 +62,13 @@ export async function verifyCallback(params: URLSearchParams): Promise<{ shop: s
 export function auditRange(startUtc: string, endUtc: string, date: string) {
   const start = Date.parse(startUtc);
   const end = Date.parse(endUtc);
+  const now = Date.now();
   if (!Number.isFinite(start) || !Number.isFinite(end) || new Date(start).toISOString() !== startUtc || new Date(end).toISOString() !== endUtc
     || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(Date.parse(`${date}T00:00:00Z`))
     || new Date(`${date}T00:00:00Z`).toISOString().slice(0, 10) !== date
     || Math.abs(start - Date.parse(`${date}T00:00:00Z`)) > 14 * 3600000
     || end - start < 23 * 3600000 || end - start > 25 * 3600000
-    || start < Date.now() - 4 * 86400000 || end > Date.now() + 26 * 3600000) {
+    || end < now - 25 * 3600000 || end > now + 60000) {
     throw new ConvexError("Invalid previous-day date range.");
   }
   return { start: startUtc, end: endUtc, date };

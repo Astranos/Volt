@@ -38,6 +38,7 @@ describe("public result advertising placement", () => {
         products: [
           {
             upc: "012345678905",
+            qualityStatus: "unreviewed",
             title: "A useful catalog match",
             brand: null,
             model: null,

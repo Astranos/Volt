@@ -55,17 +55,17 @@ describe("global catalog activity", () => {
     expect(result.points[6]?.dayStart).toBe(today);
   });
 
-  test("counts new records and replay refreshes transactionally across UTC midnight", async () => {
+  test("counts actual catalog changes without treating replay as a refresh", async () => {
     const t = convexTest(schema, modules);
     await t.run((ctx) => upsertCatalogProducts(ctx, [product], today - 1));
     await t.run((ctx) => upsertCatalogProducts(ctx, [product], today + 1));
     await t.run((ctx) => upsertCatalogProducts(ctx, [product], today + 2));
     const result = await signedIn(t).query(activity, { days: 7, endDay: today });
     expect(result.trackingStartedAt).toBe(today - 1);
-    expect(result.lastIngestAt).toBe(today + 2);
+    expect(result.lastIngestAt).toBe(today - 1);
     expect(result.points[5]).toEqual({ dayStart: today - UTC_DAY_MS, inserted: 1, refreshed: 0, sourcesAdded: 1, batches: 1 });
-    expect(result.points[6]).toEqual({ dayStart: today, inserted: 0, refreshed: 2, sourcesAdded: 0, batches: 2 });
-    expect(result.totals).toEqual({ inserted: 1, refreshed: 2, sourcesAdded: 1, batches: 3 });
+    expect(result.points[6]).toEqual({ dayStart: today, inserted: 0, refreshed: 0, sourcesAdded: 0, batches: 0 });
+    expect(result.totals).toEqual({ inserted: 1, refreshed: 0, sourcesAdded: 1, batches: 1 });
   });
 
   test("ignores empty or entirely rejected product batches", async () => {

@@ -12,6 +12,8 @@
     "dev:kiosk": "pnpm --filter @volt/kiosk dev",
     "test:kiosk": "node scripts/run-tests.mjs kiosk",
     "deploy:preview": "vercel deploy --target preview",
+    "deploy:backend": "node scripts/check-shopify-backend.mjs --source-only && pnpm exec convex deploy && node scripts/check-shopify-backend.mjs",
+    "check:shopify-backend": "node scripts/check-shopify-backend.mjs",
     "test:convex": "node scripts/run-tests.mjs convex",
     "test:web": "node scripts/run-tests.mjs web",
     "test": "node scripts/run-tests.mjs all",

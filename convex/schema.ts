@@ -1,6 +1,7 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { requestFields } from "./kioskRequestValidators";
+import { catalogProductValidator } from "./catalog/validators";
 
 const pushSubscription = v.object({
   endpoint: v.string(),
@@ -421,6 +422,41 @@ export default defineSchema({
     lastIngestAt: v.number(),
   }).index("by_dayStart", ["dayStart"]),
 
+  catalogImportControl: defineTable({
+    name: v.string(),
+    runId: v.optional(v.id("catalogImportRuns")),
+  }).index("by_name", ["name"]),
+
+  catalogImportRuns: defineTable({
+    status: v.union(v.literal("running"), v.literal("paused"), v.literal("complete")),
+    fullImport: v.boolean(),
+    leaseId: v.string(),
+    leaseExpiresAt: v.number(),
+    startedAt: v.number(),
+    updatedAt: v.number(),
+    completedAt: v.optional(v.number()),
+  }).index("by_startedAt", ["startedAt"]),
+
+  catalogImportProgress: defineTable({
+    runId: v.id("catalogImportRuns"),
+    slug: v.string(),
+    nextToken: v.union(v.string(), v.null()),
+    lastRequestToken: v.union(v.string(), v.null()),
+    lastNextToken: v.union(v.string(), v.null()),
+    done: v.boolean(),
+    pagesDone: v.number(),
+    itemsSeen: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_runId_and_slug", ["runId", "slug"])
+    .index("by_runId_and_done", ["runId", "done"]),
+
+  catalogImportCursors: defineTable({
+    runId: v.id("catalogImportRuns"),
+    slug: v.string(),
+    token: v.string(),
+  }).index("by_runId_and_slug_and_token", ["runId", "slug", "token"]),
+
   paymoreCatalogProducts: defineTable({
     upc: v.string(),
     title: v.string(),
@@ -439,6 +475,7 @@ export default defineSchema({
     releaseYear: v.union(v.string(), v.null()),
     attributes: v.record(v.string(), v.string()),
     collections: v.optional(v.array(v.string())),
+    qualityStatus: v.optional(v.union(v.literal("unreviewed"), v.literal("reviewed"))),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -454,6 +491,8 @@ export default defineSchema({
     createdAt: v.number(),
     imageUrl: v.optional(v.string()),
     updatedAt: v.optional(v.number()),
+    lastSeenAt: v.optional(v.number()),
+    active: v.optional(v.boolean()),
   })
     .index("by_sourceUrl", ["sourceUrl"])
     .index("by_productId", ["productId"])
@@ -477,6 +516,45 @@ export default defineSchema({
     .index("by_ownerTokenIdentifier_and_periodKey", ["ownerTokenIdentifier", "periodKey"]),
   productApiRequests: defineTable({ requestId: v.string(), ownerTokenIdentifier: v.string(), apiKeyId: v.id("productApiKeys"), periodKey: v.string(), status: v.union(v.literal("reserved"), v.literal("succeeded"), v.literal("refunded")), createdAt: v.number(), expiresAt: v.number(), completedAt: v.optional(v.number()) })
     .index("by_requestId", ["requestId"]).index("by_status_and_expiresAt", ["status", "expiresAt"]),
+
+  catalogObservations: defineTable({
+    sourceUrl: v.string(),
+    source: v.literal("external"),
+    observedUpc: v.string(),
+    title: v.string(),
+    brand: v.union(v.string(), v.null()),
+    model: v.union(v.string(), v.null()),
+    mpn: v.union(v.string(), v.null()),
+    platform: v.union(v.string(), v.null()),
+    edition: v.union(v.string(), v.null()),
+    color: v.union(v.string(), v.null()),
+    storage: v.union(v.string(), v.null()),
+    collectionSlug: v.string(),
+    status: v.union(v.literal("accepted"), v.literal("review"), v.literal("rejected")),
+    reason: v.optional(v.union(
+      v.literal("source_upc_changed"),
+      v.literal("variant_conflict"),
+      v.literal("possible_upc_alias"),
+    )),
+    candidate: catalogProductValidator,
+    classification: v.optional(v.object({
+      model: v.string(),
+      verdict: v.union(v.literal("match"), v.literal("mismatch"), v.literal("unsure")),
+      reasons: v.array(v.string()),
+      classifiedAt: v.number(),
+    })),
+    reviewedAt: v.optional(v.number()),
+    reviewedBy: v.optional(v.string()),
+    runId: v.id("catalogImportRuns"),
+    active: v.boolean(),
+    firstSeenAt: v.number(),
+    lastSeenAt: v.number(),
+    lastChangedAt: v.number(),
+  })
+    .index("by_sourceUrl", ["sourceUrl"])
+    .index("by_status_and_active_and_lastSeenAt", ["status", "active", "lastSeenAt"])
+    .index("by_collectionSlug_and_active_and_lastSeenAt", ["collectionSlug", "active", "lastSeenAt"])
+    .index("by_observedUpc", ["observedUpc"]),
 
   productApiKeys: defineTable(v.union(
     v.object({
@@ -504,6 +582,16 @@ export default defineSchema({
     .index("by_keyHash", ["keyHash"])
     .index("by_ownerTokenIdentifier", ["ownerTokenIdentifier"])
     .index("by_ownerTokenIdentifier_and_status", ["ownerTokenIdentifier", "status"]),
+
+  productApiAccess: defineTable({
+    ownerTokenIdentifier: v.string(),
+    status: v.union(v.literal("active"), v.literal("revoked")),
+    source: v.union(v.literal("manual"), v.literal("billing")),
+    plan: v.string(),
+    expiresAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_ownerTokenIdentifier", ["ownerTokenIdentifier"]),
 
   productApiRateLimits: defineTable({
     apiKeyId: v.id("productApiKeys"),

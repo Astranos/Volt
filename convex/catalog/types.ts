@@ -1,11 +1,3 @@
-export type RejectReason =
-  | "unauthorized-host"
-  | "missing-title"
-  | "missing-upc"
-  | "invalid-upc"
-  | "invalid-json"
-  | "fetch-failed";
-
 export type CatalogListing = {
   sourceUrl: string;
   // The catalog is spec-only: per-unit listing facts (condition, sku,
@@ -15,6 +7,8 @@ export type CatalogListing = {
   // Freshness of the stored source row; set when a listing is loaded back
   // from the database.
   updatedAt?: number;
+  lastSeenAt?: number;
+  active?: boolean;
 };
 
 export type CatalogProduct = {
@@ -34,29 +28,9 @@ export type CatalogProduct = {
   rating: string | null;
   releaseYear: string | null;
   attributes: Record<string, string>;
-  // PayMore collection names carried by the listing; the canonical
-  // collection field above keeps the crawl-time collection slug.
+  // Source collection names; the canonical collection field above keeps
+  // the import group slug.
   collections?: string[];
   sourceUrls: string[];
   listings: CatalogListing[];
-};
-
-export type RejectedListing = {
-  sourceUrl: string;
-  reason: RejectReason;
-  detail?: string;
-};
-
-export type ExtractResult = {
-  products: CatalogProduct[];
-  rejected: RejectedListing[];
-};
-
-export type CrawlResult = ExtractResult & {
-  fetched: number;
-};
-
-export type PageInput = {
-  sourceUrl: string;
-  body: string;
 };

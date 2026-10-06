@@ -1,5 +1,11 @@
 # Shopify product audit
 
+## Production backend release
+
+Use `pnpm deploy:backend` from the integrated release checkout. Convex deployments replace the complete backend, so deploying an older feature branch can remove routes added by another branch. Preserve all production schema changes before deploying; never disable schema validation to force a release.
+
+The release command checks that the embedded Shopify routes exist locally, deploys Convex, then probes all three routes through both Convex and the public app origin. Each unauthenticated probe must return 401. A 404 means the backend route is missing and the release is incomplete. `pnpm check:shopify-backend` reruns these checks without deploying. Verify the authenticated audit and product search inside Shopify Admin after release.
+
 Volt Resale has a product audit inside Shopify Admin. After installation, the merchant opens **Volt Resale** in Shopify Admin to review products created yesterday in their local timezone and search the store catalog. Results link to the corresponding Shopify product pages. The Chrome extension has a separate, optional audit workflow that opens yesterday's products in a Chrome tab group.
 
 ## App configuration
@@ -35,13 +41,21 @@ Set these on both development and production Convex deployments:
 
 Enter secrets interactively with `pnpm exec convex env set NAME` (add `--prod` for production). Do not put them in the repository or browser environment files. During local development, the frontend's `VITE_CONVEX_SITE_URL` may select a corresponding Convex site. Production uses the same-origin routes defined in both Vercel configurations, which forward to the production deployment.
 
-## Merchant check
+## Embedded Admin check
 
 1. Install the app on a Shopify development store from Shopify's installation flow.
 2. Open **Volt Resale** inside Shopify Admin. Confirm that the connection identifies the correct `.myshopify.com` store.
 3. Create or find products with known titles. Check search results and product links.
 4. Create a product and check that it appears in the previous-day audit on the next local calendar day, or test with a controlled date and timezone.
 5. Uninstall the app. Confirm the installation record and any connection for that shop are removed.
+
+## Chrome extension check
+
+1. Sign in to Volt with Clerk.
+2. Open extension settings and find **Shopify product audit**.
+3. Select **Connect Shopify**. Choose a store detected from an open Shopify admin tab, or sign in to Shopify and open your store's admin in the new tab.
+4. Approve read-only product access in Shopify. The settings page shows the connected store.
+5. On the new tab page, select **Audit**. Volt opens yesterday's products in one Chrome tab group.
 
 Shopify's review requirements and listing preparation are tracked in `docs/shopify-app-store-submission.md`.
 
