@@ -160,6 +160,17 @@ describe("catalog import", () => {
     expect(sources).toHaveLength(1);
   });
 
+  test("rejects multiple distinct listings in one source observation", async () => {
+    const t = convexTest(schema, modules);
+    const run = await t.mutation(begin, {
+      secret, leaseId: "one", collections: [group], fullImport: false,
+    });
+    const candidate = product("1", "012345678905");
+    candidate.listings.push(product("2", "012345678905").listings[0]);
+    await expect(t.mutation(ingest, page(run.runId, "one", group, null, null,
+      [candidate]))).rejects.toThrow("one source listing");
+  });
+
   test("normalizes equivalent UPC and EAN codes before checking source changes", async () => {
     const t = convexTest(schema, modules);
     const run = await t.mutation(begin, {

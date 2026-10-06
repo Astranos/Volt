@@ -105,10 +105,13 @@ export const resolve = mutation({
     const now = Date.now();
     if (args.decision === "accept") {
       const upc = normalizeUPCA(row.candidate.upc);
-      if (!upc || !isAuthorizedCatalogProductUrl(row.sourceUrl)) {
+      const listing = row.candidate.listings.find((source) => source.sourceUrl === row.sourceUrl);
+      if (!upc || !listing || !isAuthorizedCatalogProductUrl(row.sourceUrl)) {
         throw new Error("Review candidate has invalid product provenance");
       }
-      await upsertCatalogProducts(ctx, [row.candidate], now, {
+      await upsertCatalogProducts(ctx, [{
+        ...row.candidate, listings: [listing], sourceUrls: [row.sourceUrl],
+      }], now, {
         allowSourceCorrection: true, reviewed: true,
       });
       const source = await ctx.db.query("paymoreCatalogSources")

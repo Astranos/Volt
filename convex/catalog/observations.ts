@@ -44,7 +44,10 @@ export async function observeCatalogProducts(
     const upc = normalizeUPCA(candidate.upc);
     if (!upc) throw new Error("Invalid product UPC");
     if (!candidate.title.trim()) throw new Error("Invalid product title");
-    const product = { ...candidate, upc };
+    const listings = [...new Map(candidate.listings.map((source) =>
+      [source.sourceUrl, source])).values()];
+    if (listings.length !== 1) throw new Error("Observed products need one source listing");
+    const product = { ...candidate, upc, listings, sourceUrls: [listings[0].sourceUrl] };
     const listing = product.listings[0];
     if (!listing || product.listings.some((source) =>
       !isAuthorizedCatalogProductUrl(source.sourceUrl))) {
