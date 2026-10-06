@@ -282,6 +282,75 @@ describe("catalog import", () => {
     })).page).toMatchObject([{ observedUpc: "098765432105" }]);
   });
 
+  test.each(["page", "batch"])("%s import does not activate a source with conflicting claims", async (path) => {
+    const t = convexTest(schema, modules);
+    const products = [product("1", "012345678905"), product("1", "098765432105")];
+    if (path === "page") {
+      const run = await t.mutation(begin, {
+        secret, leaseId: "one", collections: [group], fullImport: false,
+      });
+      expect(await t.mutation(ingest, page(run.runId, "one", group, null, null, products)))
+        .toMatchObject({ productsIngested: 0, reviewCandidates: 1 });
+    } else {
+      expect(await t.mutation(ingestBatch, {
+        secret, collectionSlug: "atari-5200", products, itemsSeen: 2,
+        skippedNoUpc: 0, skippedNoTitle: 0, skippedInvalidSource: 0,
+      })).toMatchObject({ productsIngested: 0, reviewCandidates: 1 });
+    }
+    expect(await t.run((ctx) => ctx.db.query("paymoreCatalogSources").collect())).toHaveLength(0);
+    expect((await admin(t).query(listPending, {
+      paginationOpts: { numItems: 10, cursor: null },
+    })).page).toMatchObject([{ observedUpc: "098765432105" }]);
+  });
+
+  test("a batch conflict leaves an existing source inactive", async () => {
+    const t = convexTest(schema, modules);
+    const input = {
+      secret, collectionSlug: "atari-5200",
+      skippedNoUpc: 0, skippedNoTitle: 0, skippedInvalidSource: 0,
+    };
+    await t.mutation(ingestBatch, {
+      ...input, products: [product("1", "012345678905")], itemsSeen: 1,
+    });
+    expect(await t.mutation(ingestBatch, {
+      ...input, products: [product("1", "012345678905"), product("1", "098765432105")],
+      itemsSeen: 2,
+    })).toMatchObject({ productsIngested: 0, reviewCandidates: 1 });
+    const source = await t.run((ctx) => ctx.db.query("paymoreCatalogSources").first());
+    expect(source?.active).toBe(false);
+  });
+
+  test("batch observations preserve paged collection ownership for stale cleanup", async () => {
+    const t = convexTest(schema, modules);
+    const first = await t.mutation(begin, {
+      secret, leaseId: "one", collections: [group], fullImport: true,
+    });
+    await t.mutation(ingest, page(first.runId, "one", group, null, null,
+      [product("1", "012345678905")]));
+    await t.mutation(finish, { secret, runId: first.runId, leaseId: "one" });
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+
+    vi.setSystemTime(new Date("2026-10-06T11:00:00Z"));
+    await t.mutation(ingestBatch, {
+      secret, collectionSlug: "atari-5200", products: [product("1", "012345678905")],
+      itemsSeen: 1, skippedNoUpc: 0, skippedNoTitle: 0, skippedInvalidSource: 0,
+    });
+    const observation = await t.run((ctx) => ctx.db.query("catalogObservations").first());
+    expect(observation).toMatchObject({
+      collectionSlug: group, lastSeenAt: Date.parse("2026-10-05T12:00:00Z"),
+    });
+
+    vi.setSystemTime(new Date("2026-10-06T12:00:00Z"));
+    const second = await t.mutation(begin, {
+      secret, leaseId: "two", collections: [group], fullImport: true,
+    });
+    await t.mutation(ingest, page(second.runId, "two", group, null, null, []));
+    await t.mutation(finish, { secret, runId: second.runId, leaseId: "two" });
+    await t.finishAllScheduledFunctions(vi.runAllTimers);
+    const source = await t.run((ctx) => ctx.db.query("paymoreCatalogSources").first());
+    expect(source?.active).toBe(false);
+  });
+
   test("marks unseen sources inactive only in collections included in a full run", async () => {
     const t = convexTest(schema, modules);
     const otherGroup = "systems";
