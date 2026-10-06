@@ -1,0 +1,1 @@
+inventory,retail,resale,electronics,store,tablet,catalog,SKU,photos,counter,franchise

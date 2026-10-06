@@ -3,6 +3,7 @@ import SwiftUI
 struct StoreSetupView: View {
     let session: KioskSession
     @Environment(\.dismiss) private var dismiss
+    @State private var showingPrivacy = false
     @State private var address = ""
 
     var body: some View {
@@ -55,6 +56,11 @@ struct StoreSetupView: View {
                         .foregroundStyle(.secondary)
                     Text("Store setup and staff requests are hidden while Guided Access is active.")
                         .foregroundStyle(.secondary)
+                    Divider()
+                    Text("Volt Kiosk is an independent tool for participating stores. It is not affiliated with, sponsored by, or endorsed by PayMore.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                    Button("Privacy policy") { showingPrivacy = true }
+                        .frame(minHeight: 44)
                 }
                 .padding(32)
                 .frame(maxWidth: 640, alignment: .leading)
@@ -69,6 +75,7 @@ struct StoreSetupView: View {
                 }
             }
         }
+        .sheet(isPresented: $showingPrivacy) { KioskPrivacyNoticeView() }
         .onAppear { address = session.storeSlug ?? "" }
     }
 

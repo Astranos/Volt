@@ -2,6 +2,7 @@ import SwiftUI
 
 struct KioskCatalogView: View {
     @Bindable var session: KioskSession
+    @State private var showingPrivacy = false
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     private var columns: [GridItem] {
@@ -41,11 +42,18 @@ struct KioskCatalogView: View {
                                 .buttonStyle(.bordered)
                         }
                     }
+                    Button("Privacy policy") {
+                        session.recordActivity()
+                        showingPrivacy = true
+                    }
+                    .font(.footnote)
+                    .frame(minHeight: 44)
                 }
                 .padding(24)
                 .frame(maxWidth: 1500)
                 .frame(maxWidth: .infinity)
             }
+            .sheet(isPresented: $showingPrivacy) { KioskPrivacyNoticeView() }
             .refreshable { session.recordActivity(); await session.refresh() }
             .scrollDismissesKeyboard(.interactively)
             .background(KioskCustomerStyle.background)

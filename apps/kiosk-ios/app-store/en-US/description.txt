@@ -1,0 +1,20 @@
+Browse a store's resale inventory on iPad and ask an associate to bring an item to the counter.
+
+Volt Kiosk is a native customer catalog for independently operated PayMore franchise stores. Enter a participating store's PayMore address, then explore its available listings in portrait or landscape.
+
+Find the item you want
+- Search product names, descriptions, categories, and exact SKUs.
+- Filter by category and budget, and sort by price or newest listings.
+- Open product details with prices, variants, condition notes, specifications, and included-item information.
+- Browse photo thumbnails and open full-screen photos with paging, pinch zoom, and pan.
+- Move between neighboring items without returning to the catalog.
+
+Ask an associate for help
+Choose an available variant and tap Ask to see item. The request appears in the store's staff queue. This requests an in-store demonstration; it does not place an order, reserve stock, or take payment. Availability and the final sale are confirmed by store staff.
+
+Made for store iPads
+Staff can select the store, handle item requests, and use iPadOS Guided Access to keep customers in the catalog. Staff controls are hidden while Guided Access is active. Start over clears the browsing session, and the app resets after two minutes of inactivity.
+
+The app is free to use. No account, subscription, or Volt Scanner installation is required. An internet connection and an accessible participating store catalog are required. Inventory changes throughout the day.
+
+Volt Kiosk is independently developed for individual franchise operations. It is not affiliated with or endorsed by PayMore corporate. PayMore names and marks belong to their respective owners.
