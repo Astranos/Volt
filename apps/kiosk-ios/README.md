@@ -2,7 +2,7 @@
 
 A native SwiftUI customer catalog for store tablets. This app is separate from the Volt iPhone scanner in `apps/mobile`, with its own `VoltKiosk` Xcode scheme and `com.volt.kiosk` bundle ID. It supports iPadOS 17 or later in portrait and landscape, using Swift 6 and system frameworks.
 
-The customer interface contains no web view or external website links. It fetches inventory and requests from the existing kiosk JSON API at `https://pm.juanquenga.com`. The native app and the web portal share the same store inventory and request queue.
+The customer interface contains no web view or external website links. It fetches inventory and requests from the existing kiosk JSON API at `https://pm.voltresale.app`. The native app and the web portal share the same store inventory and request queue.
 
 ## Customer experience
 

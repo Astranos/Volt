@@ -10,7 +10,7 @@ struct NativeKioskTests {
         try await testSession(catalog)
         try await testQueue(catalog)
         if CommandLine.arguments.contains("--live") {
-            let api = KioskAPI(baseURL: URL(string: "https://pm.juanquenga.com")!)
+            let api = KioskAPI(baseURL: URL(string: "https://pm.voltresale.app")!)
             let live = try await api.catalog(storeSlug: "taylormi")
             precondition(live.store.slug == "taylormi")
             print("Live native API decoded \(live.products.count) products for \(live.store.name), status \(live.status.rawValue).")
@@ -53,7 +53,7 @@ struct NativeKioskTests {
         configuration.protocolClasses = [FixtureURLProtocol.self]
         let session = URLSession(configuration: configuration)
         defer { session.invalidateAndCancel() }
-        let api = KioskAPI(baseURL: URL(string: "https://pm.juanquenga.com")!, session: session)
+        let api = KioskAPI(baseURL: URL(string: "https://pm.voltresale.app")!, session: session)
         await FixtureURLProtocol.http.set(status: 200, data: fixtureData)
         let loaded = try await api.catalog(storeSlug: "taylormi")
         precondition(loaded.products == catalog.products)

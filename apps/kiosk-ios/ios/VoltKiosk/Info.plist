@@ -23,7 +23,7 @@
         <string>UIInterfaceOrientationLandscapeLeft</string>
         <string>UIInterfaceOrientationLandscapeRight</string>
     </array>
-    <key>KioskAPIBaseURL</key><string>https://pm.juanquenga.com</string>
+    <key>KioskAPIBaseURL</key><string>https://pm.voltresale.app</string>
     <key>KioskDefaultStoreSlug</key><string></string>
 </dict>
 </plist>
