@@ -39,6 +39,8 @@ Start with an [open issue](https://github.com/juanquenga/Volt/issues), or report
 | [packages/extension](packages/extension/README.md) | Chrome extension using WXT, React, and TypeScript. |
 | `packages/scanner-protocol` | Shared scanner constants, message types, and validation. |
 | `apps/mobile` | Native SwiftUI iPhone app and App Clip. |
+| [apps/kiosk](apps/kiosk/README.md) | Customer-facing web catalog for store tablets. |
+| [apps/kiosk-ios](apps/kiosk-ios/README.md) | Separate native iPad portal app for Guided Access. |
 | `apps/web` | TanStack Start web app, product pages, and account tools. |
 | [convex](convex/README.md) | Account authorization, scanner workspace, cursor delivery, catalog data, and legacy signaling. |
 
