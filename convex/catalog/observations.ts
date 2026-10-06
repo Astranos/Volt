@@ -104,7 +104,8 @@ export async function observeCatalogProducts(
       storage: observation.storage,
     }, product);
     const manualDecision = observation?.reviewedAt !== undefined && !changed && !samePageConflict;
-    const status = manualDecision ? observation.status : reason ? "review" : "accepted";
+    const pendingReview = observation?.status === "review";
+    const status = manualDecision ? observation.status : (reason || pendingReview ? "review" : "accepted");
     if (status === "review") reviewCandidates += 1;
     if (status === "accepted") {
       accepted.push(product);
@@ -135,7 +136,7 @@ export async function observeCatalogProducts(
       storage: product.storage,
       collectionSlug: ownedByPagedCollection ? observation.collectionSlug : collectionSlug,
       status,
-      reason: manualDecision ? observation.reason : reason ?? undefined,
+      reason: manualDecision ? observation.reason : reason ?? (pendingReview ? observation.reason : undefined),
       candidate: product,
       ...(observationRunId !== undefined ? { runId: observationRunId } : {}),
       active: true,

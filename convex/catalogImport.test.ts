@@ -291,10 +291,21 @@ describe("catalog import", () => {
       });
       expect(await t.mutation(ingest, page(run.runId, "one", group, null, null, products)))
         .toMatchObject({ productsIngested: 0, reviewCandidates: 1 });
+      await t.mutation(finish, { secret, runId: run.runId, leaseId: "one" });
+      const next = await t.mutation(begin, {
+        secret, leaseId: "two", collections: [group], fullImport: false,
+      });
+      expect(await t.mutation(ingest, page(next.runId, "two", group, null, null,
+        [product("1", "098765432105")])))
+        .toMatchObject({ productsIngested: 0, reviewCandidates: 1 });
     } else {
       expect(await t.mutation(ingestBatch, {
         secret, collectionSlug: "atari-5200", products, itemsSeen: 2,
         skippedNoUpc: 0, skippedNoTitle: 0, skippedInvalidSource: 0,
+      })).toMatchObject({ productsIngested: 0, reviewCandidates: 1 });
+      expect(await t.mutation(ingestBatch, {
+        secret, collectionSlug: "atari-5200", products: [product("1", "098765432105")],
+        itemsSeen: 1, skippedNoUpc: 0, skippedNoTitle: 0, skippedInvalidSource: 0,
       })).toMatchObject({ productsIngested: 0, reviewCandidates: 1 });
     }
     expect(await t.run((ctx) => ctx.db.query("paymoreCatalogSources").collect())).toHaveLength(0);
