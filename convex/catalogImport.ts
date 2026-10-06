@@ -12,6 +12,7 @@ const LEASE_MS = 10 * 60_000;
 const MAX_COLLECTIONS = 500;
 const MAX_PAGE_ITEMS = 100;
 const COLLECTION_SLUG = /^[a-z0-9][a-z0-9-]{0,99}$/;
+const BATCH_COLLECTION_PREFIX = "batch-";
 
 const progressValidator = v.object({
   slug: v.string(),
@@ -102,7 +103,8 @@ export const beginRun = mutation({
     requireImportSecret(args.secret);
     if (!args.leaseId || args.leaseId.length > 100) throw new Error("Invalid import lease ID");
     const slugs = [...new Set(args.collections)];
-    if (slugs.length === 0 || slugs.length > MAX_COLLECTIONS || slugs.some((slug) => !COLLECTION_SLUG.test(slug))) {
+    if (slugs.length === 0 || slugs.length > MAX_COLLECTIONS || slugs.some((slug) =>
+      !COLLECTION_SLUG.test(slug) || slug.startsWith(BATCH_COLLECTION_PREFIX))) {
       throw new Error("Invalid import collections");
     }
 
@@ -115,10 +117,16 @@ export const beginRun = mutation({
       if (previous.status === "running" && previous.leaseExpiresAt > now) {
         throw new Error("Another catalog import is still running");
       }
+      const progress = await loadProgress(ctx, previous._id);
+      const storedSlugs = new Set(progress.map((row) => row.slug));
+      if (previous.fullImport !== args.fullImport || storedSlugs.size !== slugs.length
+        || slugs.some((slug) => !storedSlugs.has(slug))) {
+        throw new Error("Unfinished import has different collections or mode");
+      }
       await ctx.db.patch(previous._id, {
         status: "running", leaseId: args.leaseId, leaseExpiresAt: now + LEASE_MS, updatedAt: now,
       });
-      return { runId: previous._id, resumed: true, collections: await loadProgress(ctx, previous._id) };
+      return { runId: previous._id, resumed: true, collections: progress };
     }
 
     const runId = await ctx.db.insert("catalogImportRuns", {
@@ -235,6 +243,7 @@ export const ingestPage = mutation({
 export const ingestBatch = mutation({
   args: {
     secret: v.string(),
+    collectionSlug: v.string(),
     products: v.array(catalogProductValidator),
     itemsSeen: v.number(),
     skippedNoUpc: v.number(),
@@ -250,6 +259,7 @@ export const ingestBatch = mutation({
     inserted: v.number(),
     updated: v.number(),
     sourcesAdded: v.number(),
+    reviewCandidates: v.number(),
   }),
   handler: async (ctx, args) => {
     requireImportSecret(args.secret);
@@ -259,13 +269,22 @@ export const ingestBatch = mutation({
       || args.products.length + args.skippedNoUpc + args.skippedNoTitle + args.skippedInvalidSource > args.itemsSeen) {
       throw new Error("Invalid import batch counts");
     }
-    const stats = await upsertCatalogProducts(ctx, args.products, Date.now());
+    if (!COLLECTION_SLUG.test(args.collectionSlug)) throw new Error("Invalid import collection");
+    const now = Date.now();
+    const observed = await observeCatalogProducts(
+      ctx, args.products, undefined, BATCH_COLLECTION_PREFIX + args.collectionSlug, now,
+    );
+    const stats = await upsertCatalogProducts(ctx, observed.accepted, now);
+    if (stats.productsIngested !== observed.accepted.length) {
+      throw new Error("Import batch contains a conflicting source claim");
+    }
     return {
       itemsSeen: args.itemsSeen,
       skippedNoUpc: args.skippedNoUpc,
       skippedNoTitle: args.skippedNoTitle,
       skippedInvalidSource: args.skippedInvalidSource,
       ...stats,
+      reviewCandidates: observed.reviewCandidates,
     };
   },
 });

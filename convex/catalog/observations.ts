@@ -31,11 +31,12 @@ function materiallyChanged(existing: Claim, incoming: Claim): boolean {
 export async function observeCatalogProducts(
   ctx: MutationCtx,
   products: CatalogProduct[],
-  runId: Id<"catalogImportRuns">,
+  runId: Id<"catalogImportRuns"> | undefined,
   collectionSlug: string,
   now: number,
 ): Promise<{ accepted: CatalogProduct[]; reviewCandidates: number }> {
   const accepted: CatalogProduct[] = [];
+  const heldSources = new Set<string>();
   const seenBySourceUrl = new Map<string, CatalogProduct>();
   const acceptedByUpc = new Map<string, CatalogProduct>();
   let reviewCandidates = 0;
@@ -55,6 +56,7 @@ export async function observeCatalogProducts(
     }
     const sourceUrl = listing.sourceUrl;
     const samePageSource = seenBySourceUrl.get(sourceUrl);
+    const samePageConflict = samePageSource !== undefined && samePageSource.upc !== product.upc;
     seenBySourceUrl.set(sourceUrl, product);
     const observation = await ctx.db.query("catalogObservations")
       .withIndex("by_sourceUrl", (q) => q.eq("sourceUrl", sourceUrl))
@@ -67,7 +69,7 @@ export async function observeCatalogProducts(
       .first();
 
     let reason: ReviewReason | null = null;
-    if ((samePageSource && samePageSource.upc !== product.upc)
+    if (samePageConflict
       || (source && source.upc !== product.upc)
       || (!source && observation && normalizeUPCA(observation.observedUpc) !== product.upc)) {
       reason = "source_upc_changed";
@@ -101,14 +103,24 @@ export async function observeCatalogProducts(
       color: observation.color,
       storage: observation.storage,
     }, product);
-    const manualDecision = observation?.reviewedAt !== undefined && !changed;
-    const status = manualDecision ? observation.status : reason ? "review" : "accepted";
+    const manualDecision = observation?.reviewedAt !== undefined && !changed && !samePageConflict;
+    const pendingReview = observation?.status === "review";
+    const status = manualDecision ? observation.status : (reason || pendingReview ? "review" : "accepted");
     if (status === "review") reviewCandidates += 1;
     if (status === "accepted") {
       accepted.push(product);
       acceptedByUpc.set(product.upc, product);
     }
-    else if (source && source.active !== false) await ctx.db.patch(source._id, { active: false });
+    else {
+      heldSources.add(sourceUrl);
+      if (source && source.active !== false) await ctx.db.patch(source._id, { active: false });
+    }
+
+    // A batch observation must not take ownership from a paged collection:
+    // its lastSeenAt is the timestamp used by that collection's stale sweep.
+    const ownedByPagedCollection = collectionSlug.startsWith("batch-")
+      && observation && !observation.collectionSlug.startsWith("batch-");
+    const observationRunId = ownedByPagedCollection ? observation.runId : runId;
 
     const fields = {
       sourceUrl,
@@ -122,13 +134,13 @@ export async function observeCatalogProducts(
       edition: product.edition,
       color: product.color,
       storage: product.storage,
-      collectionSlug,
+      collectionSlug: ownedByPagedCollection ? observation.collectionSlug : collectionSlug,
       status,
-      reason: manualDecision ? observation.reason : reason ?? undefined,
+      reason: manualDecision ? observation.reason : reason ?? (pendingReview ? observation.reason : undefined),
       candidate: product,
-      runId,
+      ...(observationRunId !== undefined ? { runId: observationRunId } : {}),
       active: true,
-      lastSeenAt: now,
+      lastSeenAt: ownedByPagedCollection ? observation.lastSeenAt : now,
       lastChangedAt: changed ? now : observation.lastChangedAt,
       ...(manualDecision ? { reviewedAt: observation.reviewedAt, reviewedBy: observation.reviewedBy } : {}),
       ...(!changed && observation?.classification ? { classification: observation.classification } : {}),
@@ -140,5 +152,8 @@ export async function observeCatalogProducts(
     }
   }
 
-  return { accepted, reviewCandidates };
+  return {
+    accepted: accepted.filter((product) => !heldSources.has(product.sourceUrls[0])),
+    reviewCandidates,
+  };
 }
