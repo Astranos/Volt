@@ -515,7 +515,7 @@ export default defineSchema({
     })),
     reviewedAt: v.optional(v.number()),
     reviewedBy: v.optional(v.string()),
-    runId: v.id("catalogImportRuns"),
+    runId: v.optional(v.id("catalogImportRuns")),
     active: v.boolean(),
     firstSeenAt: v.number(),
     lastSeenAt: v.number(),

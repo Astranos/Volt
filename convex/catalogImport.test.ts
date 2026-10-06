@@ -20,11 +20,11 @@ const ingest = makeFunctionReference<"mutation", {
   collectionSlug: string; requestToken: string | null; nextToken: string | null;
   itemsSeen: number; skippedNoUpc: number; skippedNoTitle: number;
   products: CatalogProduct[];
-}, { duplicate: boolean; inserted: number; reviewCandidates: number }>("catalogImport:ingestPage");
+}, { duplicate: boolean; inserted: number; reviewCandidates: number; productsIngested: number }>("catalogImport:ingestPage");
 const ingestBatch = makeFunctionReference<"mutation", {
-  secret: string; products: CatalogProduct[]; itemsSeen: number;
+  secret: string; collectionSlug: string; products: CatalogProduct[]; itemsSeen: number;
   skippedNoUpc: number; skippedNoTitle: number; skippedInvalidSource: number;
-}, { productsIngested: number; inserted: number }>("catalogImport:ingestBatch");
+}, { productsIngested: number; inserted: number; reviewCandidates: number }>("catalogImport:ingestBatch");
 const finish = makeFunctionReference<"mutation", {
   secret: string; runId: Id<"catalogImportRuns">; leaseId: string;
 }, "paused" | "complete">("catalogImport:finishRun");
@@ -93,6 +93,24 @@ describe("catalog import", () => {
     expect(await t.mutation(finish, { secret, runId: first.runId, leaseId: "two" })).toBe("complete");
   });
 
+  test("does not silently resume a different import scope", async () => {
+    const t = convexTest(schema, modules);
+    const run = await t.mutation(begin, {
+      secret, leaseId: "one", collections: [group], fullImport: false,
+    });
+    await t.mutation(ingest, page(run.runId, "one", group, null, "next", []));
+    await t.mutation(finish, { secret, runId: run.runId, leaseId: "one" });
+    await expect(t.mutation(begin, {
+      secret, leaseId: "two", collections: [group], fullImport: true,
+    })).rejects.toThrow("different collections or mode");
+    await expect(t.mutation(begin, {
+      secret, leaseId: "two", collections: ["systems"], fullImport: false,
+    })).rejects.toThrow("different collections or mode");
+    expect(await t.mutation(begin, {
+      secret, leaseId: "two", collections: [group], fullImport: false,
+    })).toMatchObject({ runId: run.runId, resumed: true });
+  });
+
   test("holds a possible UPC alias for an administrator to review", async () => {
     const t = convexTest(schema, modules);
     const run = await t.mutation(begin, {
@@ -115,6 +133,18 @@ describe("catalog import", () => {
       .withIndex("by_upc", (q) => q.eq("upc", "098765432105"))
       .first());
     expect(accepted).toMatchObject({ qualityStatus: "reviewed" });
+
+    await t.mutation(finish, { secret, runId: run.runId, leaseId: "one" });
+    const nextRun = await t.mutation(begin, {
+      secret, leaseId: "two", collections: [group], fullImport: false,
+    });
+    expect(await t.mutation(ingest, page(nextRun.runId, "two", group, null, null,
+      [product("2", "098765432105")]))).toMatchObject({
+        productsIngested: 1, reviewCandidates: 0,
+      });
+    expect((await admin(t).query(listPending, {
+      paginationOpts: { numItems: 10, cursor: null },
+    })).page).toHaveLength(0);
   });
 
   test("requires review before moving an existing source to a different UPC", async () => {
@@ -143,6 +173,44 @@ describe("catalog import", () => {
       .withIndex("by_sourceUrl", (q) => q.eq("sourceUrl", product("1", "012345678905").sourceUrls[0]))
       .unique());
     expect(after).toMatchObject({ upc: "098765432105", active: true });
+  });
+
+  test("rejecting a changed UPC keeps its source inactive on later imports", async () => {
+    const t = convexTest(schema, modules);
+    const run = await t.mutation(begin, {
+      secret, leaseId: "one", collections: [group], fullImport: false,
+    });
+    await t.mutation(ingest, page(run.runId, "one", group, null, "next",
+      [product("1", "012345678905")]));
+    await t.mutation(ingest, page(run.runId, "one", group, "next", null,
+      [product("1", "098765432105")]));
+    const pending = await admin(t).query(listPending, {
+      paginationOpts: { numItems: 10, cursor: null },
+    });
+    expect(await admin(t).mutation(resolve, {
+      id: pending.page[0].id, decision: "reject",
+    })).toBe("rejected");
+    await t.mutation(finish, { secret, runId: run.runId, leaseId: "one" });
+    const nextRun = await t.mutation(begin, {
+      secret, leaseId: "two", collections: [group], fullImport: false,
+    });
+    expect(await t.mutation(ingest, page(nextRun.runId, "two", group, null, null,
+      [product("1", "098765432105")]))).toMatchObject({
+        productsIngested: 0, reviewCandidates: 0,
+      });
+    expect((await admin(t).query(listPending, {
+      paginationOpts: { numItems: 10, cursor: null },
+    })).page).toHaveLength(0);
+    const state = await t.run(async (ctx) => ({
+      source: await ctx.db.query("paymoreCatalogSources")
+        .withIndex("by_sourceUrl", (q) => q.eq("sourceUrl", product("1", "012345678905").sourceUrls[0]))
+        .unique(),
+      newProduct: await ctx.db.query("paymoreCatalogProducts")
+        .withIndex("by_upc", (q) => q.eq("upc", "098765432105"))
+        .first(),
+    }));
+    expect(state.source).toMatchObject({ upc: "012345678905", active: false });
+    expect(state.newProduct).toBeNull();
   });
 
   test("deduplicates repeated listing URLs within one product", async () => {
@@ -197,13 +265,21 @@ describe("catalog import", () => {
       .rejects.toThrow("previously seen page cursor");
   });
 
-  test("reports only products actually stored by a batch", async () => {
+  test("batch imports hold a possible UPC alias for review", async () => {
     const t = convexTest(schema, modules);
-    const result = await t.mutation(ingestBatch, {
-      secret, products: [product("1", "invalid")], itemsSeen: 1,
+    const input = {
+      secret, collectionSlug: "atari-5200", itemsSeen: 1,
       skippedNoUpc: 0, skippedNoTitle: 0, skippedInvalidSource: 0,
-    });
-    expect(result).toMatchObject({ productsIngested: 0, inserted: 0 });
+    };
+    expect(await t.mutation(ingestBatch, {
+      ...input, products: [product("1", "012345678905")],
+    })).toMatchObject({ productsIngested: 1, inserted: 1 });
+    expect(await t.mutation(ingestBatch, {
+      ...input, products: [product("2", "098765432105")],
+    })).toMatchObject({ productsIngested: 0, inserted: 0, reviewCandidates: 1 });
+    expect((await admin(t).query(listPending, {
+      paginationOpts: { numItems: 10, cursor: null },
+    })).page).toMatchObject([{ observedUpc: "098765432105" }]);
   });
 
   test("marks unseen sources inactive only in collections included in a full run", async () => {

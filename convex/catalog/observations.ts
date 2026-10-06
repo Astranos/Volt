@@ -31,7 +31,7 @@ function materiallyChanged(existing: Claim, incoming: Claim): boolean {
 export async function observeCatalogProducts(
   ctx: MutationCtx,
   products: CatalogProduct[],
-  runId: Id<"catalogImportRuns">,
+  runId: Id<"catalogImportRuns"> | undefined,
   collectionSlug: string,
   now: number,
 ): Promise<{ accepted: CatalogProduct[]; reviewCandidates: number }> {
@@ -126,7 +126,7 @@ export async function observeCatalogProducts(
       status,
       reason: manualDecision ? observation.reason : reason ?? undefined,
       candidate: product,
-      runId,
+      ...(runId !== undefined ? { runId } : {}),
       active: true,
       lastSeenAt: now,
       lastChangedAt: changed ? now : observation.lastChangedAt,
