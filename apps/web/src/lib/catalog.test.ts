@@ -14,6 +14,7 @@ import {
 
 const summary = {
   upc: "012345678905",
+  qualityStatus: "unreviewed",
   title: "Widget Phone",
   mpn: "WIDGET-128",
   brand: "Volt",

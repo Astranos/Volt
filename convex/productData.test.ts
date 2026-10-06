@@ -1,11 +1,12 @@
 import { convexTest } from "convex-test";
 import { makeFunctionReference } from "convex/server";
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 
 import type { Id } from "./_generated/dataModel";
 import schema from "./schema";
 
 const modules = import.meta.glob("./**/*.ts");
+afterEach(() => vi.unstubAllEnvs());
 
 type ProductSummary = {
   upc: string;
@@ -103,6 +104,7 @@ describe("product data reads", () => {
       expect(result.hasMore).toBe(false);
       expect(result.products).toEqual([{
         upc: "012345678905",
+        qualityStatus: "unreviewed",
         title: "Widget Phone 128GB",
         platform: null,
         edition: null,
@@ -372,6 +374,24 @@ describe("product data reads", () => {
         title: "Widget Phone 128GB",
         brand: "Volt",
         attributes: {},
+      },
+    });
+  });
+
+  test("returns 403 for an existing key when API access is required", async () => {
+    const t = convexTest(schema, modules);
+    const user = t.withIdentity({ subject: "product-user", tokenIdentifier: "clerk|product-user" });
+    const key = await user.mutation(createKey, { name: "Existing key" });
+    vi.stubEnv("PRODUCT_API_REQUIRE_ENTITLEMENT", "true");
+
+    const response = await t.fetch("/v1/products", {
+      headers: { Authorization: `Bearer ${key.token}` },
+    });
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({
+      error: {
+        code: "api_access_required",
+        message: "Product API access is required",
       },
     });
   });

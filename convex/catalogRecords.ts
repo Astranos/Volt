@@ -1,41 +1,14 @@
 import { v } from "convex/values";
 
 import { normalizeUPCA } from "./aiScanner";
-import { crawlSavedPages } from "./catalog/crawl";
 import { loadCatalogProductByUpc, upsertCatalogProducts } from "./catalog/store";
 import {
   catalogProductValidator,
-  rejectedListingValidator,
   storedCatalogProductValidator,
   upsertStatsValidator,
 } from "./catalog/validators";
 import { internal } from "./_generated/api";
 import { internalMutation, internalQuery } from "./_generated/server";
-
-const ingestResultValidator = v.object({
-  products: v.array(catalogProductValidator),
-  rejected: v.array(rejectedListingValidator),
-  fetched: v.number(),
-  inserted: v.number(),
-  updated: v.number(),
-  sourcesAdded: v.number(),
-});
-
-export const ingestPages = internalMutation({
-  args: {
-    pages: v.array(v.object({
-      sourceUrl: v.string(),
-      body: v.string(),
-    })),
-    now: v.optional(v.number()),
-  },
-  returns: ingestResultValidator,
-  handler: async (ctx, args) => {
-    const crawled = crawlSavedPages(args.pages);
-    const stats = await upsertCatalogProducts(ctx, crawled.products, args.now ?? Date.now());
-    return { ...crawled, ...stats };
-  },
-});
 
 export const upsertProducts = internalMutation({
   args: {
@@ -59,7 +32,7 @@ export const getByUpcInternal = internalQuery({
 });
 
 // One-time migration: strips legacy per-listing facts (price, quantity,
-// store name, condition, listingAttributes) from every paymoreCatalogSources
+// store name, condition, listingAttributes) from every source
 // row so a source row is pure provenance (product, UPC, source URL, photo,
 // timestamps). Kept deployed so any environment that still holds rows from
 // before the schema tightening can strip them first; on a clean table it is
@@ -99,7 +72,7 @@ export const stripSourceListingFacts = internalMutation({
     }
 
     if (!page.isDone) {
-      await ctx.scheduler.runAfter(0, internal.paymoreCatalog.stripSourceListingFacts, {
+      await ctx.scheduler.runAfter(0, internal.catalogRecords.stripSourceListingFacts, {
         cursor: page.continueCursor,
       });
     }

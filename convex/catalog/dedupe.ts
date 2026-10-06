@@ -1,5 +1,5 @@
 import { mergeAttributeRecords } from "./attributes";
-import type { CatalogListing, CatalogProduct } from "./types";
+import type { CatalogProduct } from "./types";
 
 function preferText(current: string | null, incoming: string | null): string | null {
   if (!incoming) return current;
@@ -40,44 +40,4 @@ export function mergeProductFields(
     attributes: mergeAttributeRecords(current.attributes, incoming.attributes),
     collections: unionCollections(current.collections, incoming.collections),
   };
-}
-
-function mergeListings(current: CatalogListing[], incoming: CatalogListing[]): CatalogListing[] {
-  const listings = [...current];
-  for (const listing of incoming) {
-    const existing = listings.find((item) => item.sourceUrl === listing.sourceUrl);
-    // Listings are pure provenance now, so a repeated sourceUrl contributes
-    // nothing new; the first copy wins.
-    if (existing) continue;
-    listings.push({ ...listing });
-  }
-  return listings;
-}
-
-function mergeProduct(current: CatalogProduct, incoming: CatalogProduct): CatalogProduct {
-  const listings = mergeListings(current.listings, incoming.listings);
-  return {
-    ...mergeProductFields(current, incoming),
-    listings,
-    sourceUrls: listings.map((listing) => listing.sourceUrl),
-  };
-}
-
-export function dedupeProducts(products: CatalogProduct[]): CatalogProduct[] {
-  const byUpc = new Map<string, CatalogProduct>();
-  for (const product of products) {
-    const existing = byUpc.get(product.upc);
-    byUpc.set(
-      product.upc,
-      existing
-        ? mergeProduct(existing, product)
-        : {
-            ...product,
-            attributes: { ...product.attributes },
-            sourceUrls: [...product.sourceUrls],
-            listings: product.listings.map((listing) => ({ ...listing })),
-          },
-    );
-  }
-  return [...byUpc.values()];
 }

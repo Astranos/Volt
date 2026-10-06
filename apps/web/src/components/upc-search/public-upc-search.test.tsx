@@ -27,6 +27,7 @@ const result: PublicSearchResult = {
   products: [
     {
       upc: "012345678905",
+      qualityStatus: "unreviewed",
       title: "Example game",
       brand: "Example",
       model: "Model",
