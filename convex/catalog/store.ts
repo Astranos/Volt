@@ -111,7 +111,9 @@ export async function upsertCatalogProducts(
   for (const product of products) {
     const upc = normalizeUPCA(product.upc);
     const title = product.title.trim();
-    const listings = product.listings.filter((listing) => isAuthorizedCatalogProductUrl(listing.sourceUrl));
+    const listings = [...new Map(product.listings
+      .filter((listing) => isAuthorizedCatalogProductUrl(listing.sourceUrl))
+      .map((listing) => [listing.sourceUrl, listing])).values()];
     if (!upc || !title || listings.length === 0) continue;
 
     const knownSources = await Promise.all(listings.map((listing) =>

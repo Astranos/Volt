@@ -440,6 +440,12 @@ export default defineSchema({
     .index("by_runId_and_slug", ["runId", "slug"])
     .index("by_runId_and_done", ["runId", "done"]),
 
+  catalogImportCursors: defineTable({
+    runId: v.id("catalogImportRuns"),
+    slug: v.string(),
+    token: v.string(),
+  }).index("by_runId_and_slug_and_token", ["runId", "slug", "token"]),
+
   paymoreCatalogProducts: defineTable({
     upc: v.string(),
     title: v.string(),

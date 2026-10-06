@@ -141,6 +141,47 @@ describe("catalog import", () => {
     expect(after).toMatchObject({ upc: "098765432105", active: true });
   });
 
+  test("deduplicates repeated listing URLs within one product", async () => {
+    const t = convexTest(schema, modules);
+    const run = await t.mutation(begin, {
+      secret, leaseId: "one", collections: [group], fullImport: false,
+    });
+    const candidate = product("1", "012345678905");
+    candidate.listings.push({ ...candidate.listings[0] });
+    expect(await t.mutation(ingest, page(run.runId, "one", group, null, null,
+      [candidate]))).toMatchObject({ inserted: 1 });
+    const sources = await t.run((ctx) => ctx.db.query("paymoreCatalogSources")
+      .withIndex("by_sourceUrl", (q) => q.eq("sourceUrl", candidate.sourceUrls[0]))
+      .collect());
+    expect(sources).toHaveLength(1);
+  });
+
+  test("normalizes equivalent UPC and EAN codes before checking source changes", async () => {
+    const t = convexTest(schema, modules);
+    const run = await t.mutation(begin, {
+      secret, leaseId: "one", collections: [group], fullImport: false,
+    });
+    await t.mutation(ingest, page(run.runId, "one", group, null, "next",
+      [product("1", "0036000291452")]));
+    expect(await t.mutation(ingest, page(run.runId, "one", group, "next", null,
+      [product("1", "036000291452")]))).toMatchObject({ reviewCandidates: 0 });
+    const source = await t.run((ctx) => ctx.db.query("paymoreCatalogSources")
+      .withIndex("by_sourceUrl", (q) => q.eq("sourceUrl", product("1", "036000291452").sourceUrls[0]))
+      .unique());
+    expect(source).toMatchObject({ upc: "036000291452", active: true });
+  });
+
+  test("rejects cursor cycles across committed pages", async () => {
+    const t = convexTest(schema, modules);
+    const run = await t.mutation(begin, {
+      secret, leaseId: "one", collections: [group], fullImport: false,
+    });
+    await t.mutation(ingest, page(run.runId, "one", group, null, "A", []));
+    await t.mutation(ingest, page(run.runId, "one", group, "A", "B", []));
+    await expect(t.mutation(ingest, page(run.runId, "one", group, "B", "A", [])))
+      .rejects.toThrow("previously seen page cursor");
+  });
+
   test("marks unseen sources inactive only in collections included in a full run", async () => {
     const t = convexTest(schema, modules);
     const otherGroup = "systems";

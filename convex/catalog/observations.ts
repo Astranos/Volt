@@ -1,6 +1,8 @@
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import type { CatalogProduct } from "./types";
+import { normalizeUPCA } from "../aiScanner";
+import { isAuthorizedCatalogProductUrl } from "./hosts";
 
 type ReviewReason = "source_upc_changed" | "variant_conflict" | "possible_upc_alias";
 type Claim = Pick<CatalogProduct,
@@ -38,9 +40,15 @@ export async function observeCatalogProducts(
   const acceptedByUpc = new Map<string, CatalogProduct>();
   let reviewCandidates = 0;
 
-  for (const product of products) {
+  for (const candidate of products) {
+    const upc = normalizeUPCA(candidate.upc);
+    if (!upc) throw new Error("Invalid product UPC");
+    const product = { ...candidate, upc };
     const listing = product.listings[0];
-    if (!listing) continue;
+    if (!listing || product.listings.some((source) =>
+      !isAuthorizedCatalogProductUrl(source.sourceUrl))) {
+      throw new Error("Invalid product source URL");
+    }
     const sourceUrl = listing.sourceUrl;
     const samePageSource = seenBySourceUrl.get(sourceUrl);
     seenBySourceUrl.set(sourceUrl, product);
@@ -57,7 +65,7 @@ export async function observeCatalogProducts(
     let reason: ReviewReason | null = null;
     if ((samePageSource && samePageSource.upc !== product.upc)
       || (source && source.upc !== product.upc)
-      || (!source && observation && observation.observedUpc !== product.upc)) {
+      || (!source && observation && normalizeUPCA(observation.observedUpc) !== product.upc)) {
       reason = "source_upc_changed";
     } else if ((existingProduct && variantConflict(existingProduct, product))
       || (acceptedByUpc.get(product.upc) && variantConflict(acceptedByUpc.get(product.upc)!, product))) {
@@ -79,7 +87,7 @@ export async function observeCatalogProducts(
     }
 
     const changed = !observation || materiallyChanged({
-      upc: observation.observedUpc,
+      upc: normalizeUPCA(observation.observedUpc) ?? observation.observedUpc,
       title: observation.title,
       brand: observation.brand,
       model: observation.model,

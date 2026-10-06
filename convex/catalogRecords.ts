@@ -67,6 +67,8 @@ export const stripSourceListingFacts = internalMutation({
         createdAt: source.createdAt,
         ...(source.imageUrl !== undefined ? { imageUrl: source.imageUrl } : {}),
         ...(source.updatedAt !== undefined ? { updatedAt: source.updatedAt } : {}),
+        ...(source.lastSeenAt !== undefined ? { lastSeenAt: source.lastSeenAt } : {}),
+        ...(source.active !== undefined ? { active: source.active } : {}),
       });
       stripped += 1;
     }

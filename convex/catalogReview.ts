@@ -2,6 +2,8 @@ import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 
 import { requireAdmin } from "./admin";
+import { normalizeUPCA } from "./aiScanner";
+import { isAuthorizedCatalogProductUrl } from "./catalog/hosts";
 import { upsertCatalogProducts } from "./catalog/store";
 import { catalogProductValidator } from "./catalog/validators";
 import { internalMutation, mutation, query } from "./_generated/server";
@@ -102,9 +104,20 @@ export const resolve = mutation({
     }
     const now = Date.now();
     if (args.decision === "accept") {
+      const upc = normalizeUPCA(row.candidate.upc);
+      if (!upc || !isAuthorizedCatalogProductUrl(row.sourceUrl)) {
+        throw new Error("Review candidate has invalid product provenance");
+      }
       await upsertCatalogProducts(ctx, [row.candidate], now, {
         allowSourceCorrection: true, reviewed: true,
       });
+      const source = await ctx.db.query("paymoreCatalogSources")
+        .withIndex("by_sourceUrl", (q) => q.eq("sourceUrl", row.sourceUrl))
+        .unique();
+      if (!source || source.upc !== upc || source.active !== true
+        || !await ctx.db.get(source.productId)) {
+        throw new Error("Review candidate could not be added to the catalog");
+      }
     }
     const status = args.decision === "accept" ? "accepted" : "rejected";
     await ctx.db.patch(row._id, { status, reviewedAt: now, reviewedBy: admin.email });

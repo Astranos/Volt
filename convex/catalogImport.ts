@@ -166,6 +166,10 @@ export const ingestPage = mutation({
     if (args.nextToken !== null && args.nextToken === args.requestToken) {
       throw new Error("Source returned a repeated page cursor");
     }
+    if ((args.requestToken !== null && args.requestToken.length > 2_000)
+      || (args.nextToken !== null && (args.nextToken.length === 0 || args.nextToken.length > 2_000))) {
+      throw new Error("Invalid page cursor");
+    }
     const now = Date.now();
     const run = await ctx.db.get(args.runId);
     requireLease(run, args.leaseId, now);
@@ -183,6 +187,16 @@ export const ingestPage = mutation({
     }
     if (progress.done || progress.nextToken !== args.requestToken) {
       throw new Error("Page cursor does not match import progress");
+    }
+    if (args.nextToken !== null) {
+      const seen = await ctx.db.query("catalogImportCursors")
+        .withIndex("by_runId_and_slug_and_token", (q) =>
+          q.eq("runId", args.runId).eq("slug", args.collectionSlug).eq("token", args.nextToken!))
+        .unique();
+      if (seen) throw new Error("Source returned a previously seen page cursor");
+      await ctx.db.insert("catalogImportCursors", {
+        runId: args.runId, slug: args.collectionSlug, token: args.nextToken,
+      });
     }
 
     const observed = await observeCatalogProducts(
@@ -271,6 +285,9 @@ export const finishRun = mutation({
       ...(status === "complete" ? { completedAt: now } : {}),
     });
     if (status === "complete") {
+      await ctx.scheduler.runAfter(0, internal.catalogImport.clearImportCursors, {
+        runId: args.runId,
+      });
       const control = await ctx.db.query("catalogImportControl")
         .withIndex("by_name", (q) => q.eq("name", "catalog"))
         .unique();
@@ -287,6 +304,23 @@ export const finishRun = mutation({
       }
     }
     return status;
+  },
+});
+
+export const clearImportCursors = internalMutation({
+  args: { runId: v.id("catalogImportRuns") },
+  returns: v.number(),
+  handler: async (ctx, args) => {
+    const run = await ctx.db.get(args.runId);
+    if (!run || run.status !== "complete") return 0;
+    const cursors = await ctx.db.query("catalogImportCursors")
+      .withIndex("by_runId_and_slug_and_token", (q) => q.eq("runId", args.runId))
+      .take(100);
+    for (const cursor of cursors) await ctx.db.delete(cursor._id);
+    if (cursors.length === 100) {
+      await ctx.scheduler.runAfter(0, internal.catalogImport.clearImportCursors, args);
+    }
+    return cursors.length;
   },
 });
 
