@@ -7,6 +7,7 @@ import { recordCatalogActivity } from "./activity";
 import type { CatalogListing, CatalogProduct } from "./types";
 
 export type UpsertStats = {
+  productsIngested: number;
   inserted: number;
   updated: number;
   sourcesAdded: number;
@@ -36,47 +37,6 @@ function productFields(product: CatalogProduct, upc: string, title: string): Cat
   };
 }
 
-// A known sourceUrl carrying a different UPC is a UPC correction, not a
-// multi-UPC alias: the legacy insert/repoint/orphan-delete path owns it.
-async function findSourceWithDifferentUpc(
-  ctx: MutationCtx,
-  listings: CatalogListing[],
-  upc: string,
-) {
-  for (const listing of listings) {
-    const existingSource = await ctx.db
-      .query("paymoreCatalogSources")
-      .withIndex("by_sourceUrl", (q) => q.eq("sourceUrl", listing.sourceUrl))
-      .unique();
-    if (existingSource && existingSource.upc !== upc) return existingSource;
-  }
-  return null;
-}
-
-async function findProductByMpn(
-  ctx: MutationCtx,
-  mpn: string,
-  platform: string | null,
-): Promise<Doc<"paymoreCatalogProducts"> | null> {
-  const candidates = await ctx.db
-    .query("paymoreCatalogProducts")
-    .withIndex("by_mpn", (q) => q.eq("mpn", mpn))
-    .take(25);
-  return candidates.find((row) => (row.platform ?? null) === (platform ?? null)) ?? null;
-}
-
-async function findProductByTitle(
-  ctx: MutationCtx,
-  title: string,
-  platform: string | null,
-): Promise<Doc<"paymoreCatalogProducts"> | null> {
-  const candidates = await ctx.db
-    .query("paymoreCatalogProducts")
-    .withIndex("by_title", (q) => q.eq("title", title))
-    .take(25);
-  return candidates.find((row) => (row.platform ?? null) === (platform ?? null)) ?? null;
-}
-
 async function patchProductFields(
   ctx: MutationCtx,
   productId: Id<"paymoreCatalogProducts">,
@@ -104,35 +64,6 @@ async function patchProductFields(
   });
 }
 
-// The canonical UPC is the most-used one across the product's source rows.
-// Ties keep the existing UPC: it is replaced only when a different UPC
-// strictly exceeds its usage.
-async function reconcileCanonicalUpc(
-  ctx: MutationCtx,
-  productId: Id<"paymoreCatalogProducts">,
-  currentUpc: string,
-) {
-  const sources = await ctx.db
-    .query("paymoreCatalogSources")
-    .withIndex("by_productId", (q) => q.eq("productId", productId))
-    .collect();
-  if (sources.length === 0) return;
-  const usage = new Map<string, number>();
-  for (const source of sources) {
-    usage.set(source.upc, (usage.get(source.upc) ?? 0) + 1);
-  }
-  let winnerUpc: string | null = null;
-  let winnerUsage = usage.get(currentUpc) ?? 0;
-  for (const upc of [...usage.keys()].sort()) {
-    const count = usage.get(upc) ?? 0;
-    if (upc !== currentUpc && count > winnerUsage) {
-      winnerUpc = upc;
-      winnerUsage = count;
-    }
-  }
-  if (winnerUpc) await ctx.db.patch(productId, { upc: winnerUpc });
-}
-
 // UPCs across the product's source rows, deduped, ranked by usage count
 // descending; the canonical UPC wins ties.
 function rankUpcs(sources: Array<{ upc: string }>, canonicalUpc: string): string[] {
@@ -149,11 +80,32 @@ function rankUpcs(sources: Array<{ upc: string }>, canonicalUpc: string): string
   });
 }
 
+type UpsertOptions = {
+  // A reviewed correction may move an existing URL to a different UPC.
+  allowSourceCorrection?: boolean;
+  reviewed?: boolean;
+};
+
+function productFieldsChanged(
+  current: Doc<"paymoreCatalogProducts">,
+  merged: CatalogProductFields,
+): boolean {
+  const keys = [
+    "title", "platform", "edition", "collection", "brand", "model", "mpn",
+    "color", "storage", "carrier", "publisher", "genre", "rating", "releaseYear",
+  ] as const;
+  return keys.some((key) => current[key] !== merged[key])
+    || JSON.stringify(current.attributes) !== JSON.stringify(merged.attributes)
+    || JSON.stringify(current.collections ?? []) !== JSON.stringify(merged.collections ?? []);
+}
+
 export async function upsertCatalogProducts(
   ctx: MutationCtx,
   products: CatalogProduct[],
   now: number,
+  options: UpsertOptions = {},
 ): Promise<UpsertStats> {
+  let productsIngested = 0;
   let inserted = 0;
   let updated = 0;
   let sourcesAdded = 0;
@@ -161,91 +113,81 @@ export async function upsertCatalogProducts(
   for (const product of products) {
     const upc = normalizeUPCA(product.upc);
     const title = product.title.trim();
-    const listings = product.listings.filter((listing) => isAuthorizedCatalogProductUrl(listing.sourceUrl));
+    const listings = [...new Map(product.listings
+      .filter((listing) => isAuthorizedCatalogProductUrl(listing.sourceUrl))
+      .map((listing) => [listing.sourceUrl, listing])).values()];
     if (!upc || !title || listings.length === 0) continue;
 
-    const fields = productFields(product, upc, title);
-    const existing = await ctx.db
-      .query("paymoreCatalogProducts")
-      .withIndex("by_upc", (q) => q.eq("upc", upc))
-      .unique();
-
-    // Identity resolution order: exact UPC match, then (for genuinely new
-    // source URLs) the same MPN + platform, then the same title + platform.
-    // A known sourceUrl with a different UPC keeps the legacy correction
-    // path below instead of merging by MPN/title.
-    const correctingSource = existing ? null : await findSourceWithDifferentUpc(ctx, listings, upc);
-
-    let productId = existing?._id ?? null;
-    // Preserve the stored canonical UPC when a new source merges into an
-    // existing product. The incoming UPC is an alias until its source usage
-    // strictly exceeds the current canonical UPC's usage.
-    let canonicalUpc = existing?.upc ?? upc;
-    if (existing) {
-      const merged = mergeProductFields(existing, fields);
-      await patchProductFields(ctx, existing._id, merged, now);
-      updated += 1;
-    } else if (!correctingSource) {
-      const matched =
-        (fields.mpn ? await findProductByMpn(ctx, fields.mpn, fields.platform) : null) ??
-        (await findProductByTitle(ctx, title, fields.platform));
-      if (matched) {
-        const merged = mergeProductFields(matched, fields);
-        await patchProductFields(ctx, matched._id, merged, now);
-        updated += 1;
-        productId = matched._id;
-        canonicalUpc = matched.upc;
-      }
+    const knownSources = await Promise.all(listings.map((listing) =>
+      ctx.db.query("paymoreCatalogSources")
+        .withIndex("by_sourceUrl", (q) => q.eq("sourceUrl", listing.sourceUrl))
+        .unique()));
+    if (!options.allowSourceCorrection && knownSources.some((source) => source && source.upc !== upc)) {
+      continue;
     }
+    productsIngested += 1;
 
-    if (!productId) {
+    const fields = productFields(product, upc, title);
+    const existing = await ctx.db.query("paymoreCatalogProducts")
+      .withIndex("by_upc", (q) => q.eq("upc", upc))
+      .first();
+    let productId: Id<"paymoreCatalogProducts">;
+    if (existing) {
+      productId = existing._id;
+      const merged = mergeProductFields(existing, fields);
+      if (productFieldsChanged(existing, merged)) {
+        await patchProductFields(ctx, existing._id, merged, now);
+        updated += 1;
+      }
+      if (options.reviewed && existing.qualityStatus !== "reviewed") {
+        await ctx.db.patch(existing._id, { qualityStatus: "reviewed" });
+      }
+    } else {
       productId = await ctx.db.insert("paymoreCatalogProducts", {
         ...fields,
+        qualityStatus: options.reviewed ? "reviewed" : "unreviewed",
         createdAt: now,
         updatedAt: now,
       });
       inserted += 1;
     }
 
-    for (const listing of listings) {
-      const existingSource = await ctx.db
-        .query("paymoreCatalogSources")
-        .withIndex("by_sourceUrl", (q) => q.eq("sourceUrl", listing.sourceUrl))
-        .unique();
-      if (existingSource) {
-        // A corrected UPC on re-crawl must move the source row to the new
-        // product; only delete its old product when this is that product's
-        // last source row, so differently-UPC'd sources are not orphaned.
-        if (existingSource.upc !== upc) {
-          const remaining = await ctx.db
-            .query("paymoreCatalogSources")
-            .withIndex("by_productId", (q) => q.eq("productId", existingSource.productId))
-            .collect();
-          if (remaining.length === 1) await ctx.db.delete(existingSource.productId);
-        }
-        await ctx.db.patch(existingSource._id, {
-          productId: productId!,
+    for (const [index, listing] of listings.entries()) {
+      const source = knownSources[index];
+      if (source) {
+        const corrected = source.upc !== upc || source.productId !== productId;
+        const imageChanged = listing.imageUrl !== undefined && listing.imageUrl !== source.imageUrl;
+        await ctx.db.patch(source._id, {
+          productId,
           upc,
-          updatedAt: now,
+          lastSeenAt: now,
+          active: true,
+          ...(corrected || imageChanged ? { updatedAt: now } : {}),
           ...(listing.imageUrl !== undefined ? { imageUrl: listing.imageUrl } : {}),
         });
+        if (corrected && source.productId !== productId) {
+          const remaining = await ctx.db.query("paymoreCatalogSources")
+            .withIndex("by_productId", (q) => q.eq("productId", source.productId))
+            .take(1);
+          if (remaining.length === 0) await ctx.db.delete(source.productId);
+        }
         continue;
       }
       await ctx.db.insert("paymoreCatalogSources", {
-        productId: productId!,
+        productId,
         upc,
         sourceUrl: listing.sourceUrl,
         createdAt: now,
         updatedAt: now,
+        lastSeenAt: now,
+        active: true,
         ...(listing.imageUrl !== undefined ? { imageUrl: listing.imageUrl } : {}),
       });
       sourcesAdded += 1;
     }
-
-    await reconcileCanonicalUpc(ctx, productId!, canonicalUpc);
   }
 
-  const stats = { inserted, updated, sourcesAdded };
+  const stats = { productsIngested, inserted, updated, sourcesAdded };
   await recordCatalogActivity(ctx, stats, now);
   return stats;
 }
@@ -274,6 +216,7 @@ export async function loadCatalogProductByUpc(ctx: QueryCtx, upc: string) {
 
   return {
     upc: canonical.upc,
+    qualityStatus: canonical.qualityStatus ?? "unreviewed",
     title: canonical.title,
     platform: canonical.platform,
     edition: canonical.edition,
@@ -305,5 +248,7 @@ function sourceToListing(source: Doc<"paymoreCatalogSources">): CatalogListing {
   const listing: CatalogListing = { sourceUrl: source.sourceUrl };
   if (source.imageUrl !== undefined) listing.imageUrl = source.imageUrl;
   if (source.updatedAt !== undefined) listing.updatedAt = source.updatedAt;
+  if (source.lastSeenAt !== undefined) listing.lastSeenAt = source.lastSeenAt;
+  if (source.active !== undefined) listing.active = source.active;
   return listing;
 }

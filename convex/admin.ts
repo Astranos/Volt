@@ -52,7 +52,7 @@ async function adminIdentity(ctx: QueryCtx | MutationCtx): Promise<AdminIdentity
   return { clerkUserId, email };
 }
 
-async function requireAdmin(ctx: MutationCtx) {
+export async function requireAdmin(ctx: MutationCtx | QueryCtx) {
   const admin = await adminIdentity(ctx);
   if (!admin) throw new Error("Admin access required");
   return admin;

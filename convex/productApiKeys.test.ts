@@ -1,6 +1,6 @@
 import { convexTest } from "convex-test";
 import { makeFunctionReference } from "convex/server";
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 
 import type { Id } from "./_generated/dataModel";
 import { sha256Hex } from "./productApiKeyCrypto";
@@ -22,6 +22,7 @@ type CreatedKey = KeyMetadata & { token: string };
 type AuthorizationResult =
   | { kind: "authorized"; limit: number; remaining: number; resetAt: number }
   | { kind: "invalid_key" }
+  | { kind: "access_required" }
   | {
       kind: "rate_limited";
       limit: number;
@@ -44,12 +45,41 @@ const authenticateAndConsume = makeFunctionReference<
   { keyHash: string; now: number },
   AuthorizationResult
 >("productApiKeys:authenticateAndConsume");
+const grantApiAccess = makeFunctionReference<"mutation", {
+  ownerTokenIdentifier: string; plan: string; expiresAt?: number;
+}, Id<"productApiAccess">>("productApiAccess:grantManual");
+const revokeApiAccess = makeFunctionReference<"mutation", {
+  id: Id<"productApiAccess">;
+}, boolean>("productApiAccess:revokeManual");
+
+afterEach(() => vi.unstubAllEnvs());
 
 function asUser(t: ReturnType<typeof convexTest>, tokenIdentifier: string) {
   return t.withIdentity({ subject: tokenIdentifier, tokenIdentifier });
 }
 
 describe("product API key lifecycle", () => {
+  test("enforces API entitlement when launch gate is enabled", async () => {
+    vi.stubEnv("PRODUCT_API_REQUIRE_ENTITLEMENT", "true");
+    const t = convexTest(schema, modules);
+    const owner = asUser(t, "clerk|paying-customer");
+    await expect(owner.mutation(createKey, { name: "Catalog" }))
+      .rejects.toThrow("Product API access is required");
+    const admin = t.withIdentity({
+      subject: "admin", tokenIdentifier: "clerk|admin", email: "juanquenga@gmail.com",
+    });
+    const grantId = await admin.mutation(grantApiAccess, {
+      ownerTokenIdentifier: "clerk|paying-customer", plan: "starter",
+    });
+    const key = await owner.mutation(createKey, { name: "Catalog" });
+    const keyHash = await sha256Hex(key.token);
+    expect(await t.mutation(authenticateAndConsume, { keyHash, now: Date.now() }))
+      .toMatchObject({ kind: "authorized" });
+    await admin.mutation(revokeApiAccess, { id: grantId });
+    expect(await t.mutation(authenticateAndConsume, { keyHash, now: Date.now() }))
+      .toEqual({ kind: "access_required" });
+  });
+
   test("requires Clerk authentication for list, create, and revoke", async () => {
     const t = convexTest(schema, modules);
     await expect(t.query(listKeys, {})).rejects.toThrow(/Not authenticated/);

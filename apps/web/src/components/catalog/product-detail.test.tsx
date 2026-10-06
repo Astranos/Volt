@@ -5,7 +5,7 @@ import type { CatalogProduct } from "../../lib/catalog";
 import { ProductDetail } from "./product-detail";
 
 const product: CatalogProduct = {
-  upc: "123456789012", title: "Pocket console", platform: null,
+  upc: "123456789012", qualityStatus: "unreviewed", title: "Pocket console", platform: null,
   edition: null, collection: null, brand: null, model: null, mpn: null,
   color: null, storage: null, carrier: null, publisher: null, genre: null,
   rating: null, releaseYear: null, attributes: {}, upcs: ["123456789012"], collections: [],
