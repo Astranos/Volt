@@ -34,6 +34,7 @@ export const catalogProductValidator = v.object({
 });
 
 export const upsertStatsValidator = v.object({
+  productsIngested: v.number(),
   inserted: v.number(),
   updated: v.number(),
   sourcesAdded: v.number(),

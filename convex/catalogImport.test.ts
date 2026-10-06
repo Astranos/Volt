@@ -21,6 +21,10 @@ const ingest = makeFunctionReference<"mutation", {
   itemsSeen: number; skippedNoUpc: number; skippedNoTitle: number;
   products: CatalogProduct[];
 }, { duplicate: boolean; inserted: number; reviewCandidates: number }>("catalogImport:ingestPage");
+const ingestBatch = makeFunctionReference<"mutation", {
+  secret: string; products: CatalogProduct[]; itemsSeen: number;
+  skippedNoUpc: number; skippedNoTitle: number; skippedInvalidSource: number;
+}, { productsIngested: number; inserted: number }>("catalogImport:ingestBatch");
 const finish = makeFunctionReference<"mutation", {
   secret: string; runId: Id<"catalogImportRuns">; leaseId: string;
 }, "paused" | "complete">("catalogImport:finishRun");
@@ -180,6 +184,15 @@ describe("catalog import", () => {
     await t.mutation(ingest, page(run.runId, "one", group, "A", "B", []));
     await expect(t.mutation(ingest, page(run.runId, "one", group, "B", "A", [])))
       .rejects.toThrow("previously seen page cursor");
+  });
+
+  test("reports only products actually stored by a batch", async () => {
+    const t = convexTest(schema, modules);
+    const result = await t.mutation(ingestBatch, {
+      secret, products: [product("1", "invalid")], itemsSeen: 1,
+      skippedNoUpc: 0, skippedNoTitle: 0, skippedInvalidSource: 0,
+    });
+    expect(result).toMatchObject({ productsIngested: 0, inserted: 0 });
   });
 
   test("marks unseen sources inactive only in collections included in a full run", async () => {

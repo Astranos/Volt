@@ -7,6 +7,7 @@ import { recordCatalogActivity } from "./activity";
 import type { CatalogListing, CatalogProduct } from "./types";
 
 export type UpsertStats = {
+  productsIngested: number;
   inserted: number;
   updated: number;
   sourcesAdded: number;
@@ -104,6 +105,7 @@ export async function upsertCatalogProducts(
   now: number,
   options: UpsertOptions = {},
 ): Promise<UpsertStats> {
+  let productsIngested = 0;
   let inserted = 0;
   let updated = 0;
   let sourcesAdded = 0;
@@ -123,6 +125,7 @@ export async function upsertCatalogProducts(
     if (!options.allowSourceCorrection && knownSources.some((source) => source && source.upc !== upc)) {
       continue;
     }
+    productsIngested += 1;
 
     const fields = productFields(product, upc, title);
     const existing = await ctx.db.query("paymoreCatalogProducts")
@@ -184,7 +187,7 @@ export async function upsertCatalogProducts(
     }
   }
 
-  const stats = { inserted, updated, sourcesAdded };
+  const stats = { productsIngested, inserted, updated, sourcesAdded };
   await recordCatalogActivity(ctx, stats, now);
   return stats;
 }

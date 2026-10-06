@@ -203,6 +203,9 @@ export const ingestPage = mutation({
       ctx, args.products, args.runId, args.collectionSlug, now,
     );
     const stats = await upsertCatalogProducts(ctx, observed.accepted, now);
+    if (stats.productsIngested !== observed.accepted.length) {
+      throw new Error("Import page contains a conflicting source claim");
+    }
     await ctx.db.patch(progress._id, {
       nextToken: args.nextToken,
       lastRequestToken: args.requestToken,
@@ -218,7 +221,7 @@ export const ingestPage = mutation({
     return {
       duplicate: false,
       itemsSeen: args.itemsSeen,
-      productsIngested: observed.accepted.length,
+      productsIngested: stats.productsIngested,
       skippedNoUpc: args.skippedNoUpc,
       skippedNoTitle: args.skippedNoTitle,
       inserted: stats.inserted,
@@ -259,7 +262,6 @@ export const ingestBatch = mutation({
     const stats = await upsertCatalogProducts(ctx, args.products, Date.now());
     return {
       itemsSeen: args.itemsSeen,
-      productsIngested: args.products.length,
       skippedNoUpc: args.skippedNoUpc,
       skippedNoTitle: args.skippedNoTitle,
       skippedInvalidSource: args.skippedInvalidSource,
