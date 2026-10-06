@@ -11,15 +11,15 @@ struct KioskProductDetailView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: 20) {
                     ViewThatFits(in: .horizontal) {
                         HStack(alignment: .top, spacing: 24) {
                             KioskProductGallery(images: currentProduct.images, title: currentProduct.title, session: session)
-                                .frame(minWidth: dynamicTypeSize.isAccessibilitySize ? 500 : 340, maxWidth: .infinity)
+                                .frame(minWidth: dynamicTypeSize.isAccessibilitySize ? 500 : 438, maxWidth: .infinity)
                             KioskProductSummary(product: currentProduct, session: session)
                                 .frame(minWidth: dynamicTypeSize.isAccessibilitySize ? 500 : 340, maxWidth: .infinity)
                         }
-                        VStack(alignment: .leading, spacing: 24) {
+                        VStack(alignment: .leading, spacing: 20) {
                             KioskProductGallery(images: currentProduct.images, title: currentProduct.title, session: session)
                             KioskProductSummary(product: currentProduct, session: session)
                         }
@@ -27,7 +27,9 @@ struct KioskProductDetailView: View {
                     Divider()
                     KioskListingDetailsView(details: currentProduct.details, description: currentProduct.description)
                 }
-                .padding(24)
+                .padding(.horizontal, 20)
+                .padding(.top, 12)
+                .padding(.bottom, 20)
                 .frame(maxWidth: 1200, alignment: .leading)
                 .frame(maxWidth: .infinity)
             }

@@ -10,21 +10,29 @@ struct KioskZoomablePhoto: View {
 
     var body: some View {
         GeometryReader { geometry in
-            ScrollView([.horizontal, .vertical]) {
-                KioskRemoteImage(url: url, title: title)
-                    .frame(width: geometry.size.width * zoom, height: geometry.size.height * zoom)
-                    .contentShape(Rectangle())
-                    .simultaneousGesture(
-                        MagnifyGesture()
-                            .onChanged { value in updateZoom(value.magnification) }
-                            .onEnded { _ in finishZoom() }
-                    )
-                    .accessibilityValue("Zoom \(Int(zoom * 100)) percent")
-                    .accessibilityHint("Pinch to zoom. Swipe to pan while zoomed.")
-                    .accessibilityAdjustableAction(adjustZoom)
+            ZStack {
+                if zoom > 1 {
+                    ScrollView([.horizontal, .vertical]) {
+                        KioskRemoteImage(url: url, title: title)
+                            .frame(width: geometry.size.width * zoom, height: geometry.size.height * zoom)
+                    }
+                    .defaultScrollAnchor(.center)
+                    .scrollIndicators(.hidden)
+                    .simultaneousGesture(DragGesture(minimumDistance: 10).onChanged { _ in session.recordActivity() })
+                } else {
+                    KioskRemoteImage(url: url, title: title)
+                        .frame(width: geometry.size.width, height: geometry.size.height)
+                }
             }
-            .defaultScrollAnchor(.center)
-            .scrollIndicators(.hidden)
+            .contentShape(Rectangle())
+            .simultaneousGesture(
+                MagnifyGesture()
+                    .onChanged { value in updateZoom(value.magnification) }
+                    .onEnded { _ in finishZoom() }
+            )
+            .accessibilityValue("Zoom \(Int(zoom * 100)) percent")
+            .accessibilityHint("Pinch to zoom. Swipe to pan while zoomed.")
+            .accessibilityAdjustableAction(adjustZoom)
             .overlay(alignment: .topTrailing) {
                 if zoom > 1 {
                     Button("Reset zoom", systemImage: "arrow.counterclockwise", action: resetZoom)
@@ -32,7 +40,6 @@ struct KioskZoomablePhoto: View {
                         .background(.regularMaterial, in: Capsule()).padding(12)
                 }
             }
-            .simultaneousGesture(DragGesture(minimumDistance: 10).onChanged { _ in session.recordActivity() })
         }
     }
 

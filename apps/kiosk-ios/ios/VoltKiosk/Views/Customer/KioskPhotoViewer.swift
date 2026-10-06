@@ -6,6 +6,8 @@ struct KioskPhotoViewer: View {
     @Binding var selectedIndex: Int
     let session: KioskSession
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var visibleIndex: Int?
 
     var body: some View {
         NavigationStack {
@@ -13,13 +15,29 @@ struct KioskPhotoViewer: View {
                 if images.isEmpty {
                     ContentUnavailableView("No photos available", systemImage: "photo")
                 } else {
-                    TabView(selection: $selectedIndex) {
-                        ForEach(images.indices, id: \.self) { index in
-                            KioskZoomablePhoto(url: images[index], title: "\(title), photo \(index + 1)", session: session)
-                            .tag(index)
+                    GeometryReader { geometry in
+                        let minimumSideInset: CGFloat = images.count > 1 ? min(44, geometry.size.width * 0.12) : 16
+                        let photoSize = max(1, min(geometry.size.height, geometry.size.width - minimumSideInset * 2))
+                        let sideInset = max(0, (geometry.size.width - photoSize) / 2)
+                        ScrollView(.horizontal) {
+                            HStack(spacing: 16) {
+                                ForEach(images.indices, id: \.self) { index in
+                                    KioskZoomablePhoto(url: images[index], title: "\(title), photo \(index + 1)", session: session)
+                                        .frame(width: photoSize, height: photoSize)
+                                        .background(.white, in: RoundedRectangle(cornerRadius: 16))
+                                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                                        .id(index)
+                                }
+                            }
+                            .scrollTargetLayout()
+                            .frame(height: geometry.size.height)
                         }
+                        .contentMargins(.horizontal, sideInset, for: .scrollContent)
+                        .scrollTargetBehavior(.viewAligned(limitBehavior: .always))
+                        .scrollPosition(id: $visibleIndex)
+                        .scrollIndicators(.hidden)
+                        .accessibilityHint("Swipe to view another photo.")
                     }
-                    .tabViewStyle(.page(indexDisplayMode: .never))
                     HStack(spacing: 24) {
                         Button("Previous", systemImage: "chevron.left", action: previous)
                             .frame(minHeight: 48).disabled(selectedIndex <= 0)
@@ -46,11 +64,27 @@ struct KioskPhotoViewer: View {
             }
         }
         .tint(KioskCustomerStyle.green)
+        .onAppear { visibleIndex = min(max(0, selectedIndex), max(0, images.count - 1)) }
         .onChange(of: session.resetID) { _, _ in dismiss() }
-        .onChange(of: selectedIndex) { _, _ in session.recordActivity() }
+        .onChange(of: visibleIndex) { _, index in
+            if let index, images.indices.contains(index) {
+                selectedIndex = index
+            }
+        }
+        .onChange(of: selectedIndex) { _, index in
+            session.recordActivity()
+            visibleIndex = index
+        }
     }
 
-    private func previous() { session.recordActivity(); selectedIndex = max(0, selectedIndex - 1) }
-    private func next() { session.recordActivity(); selectedIndex = min(images.count - 1, selectedIndex + 1) }
+    private func previous() { select(max(0, selectedIndex - 1)) }
+    private func next() { select(min(images.count - 1, selectedIndex + 1)) }
+    private func select(_ index: Int) {
+        session.recordActivity()
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
+            selectedIndex = index
+            visibleIndex = index
+        }
+    }
     private func close() { session.recordActivity(); dismiss() }
 }

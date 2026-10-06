@@ -30,7 +30,6 @@ struct KioskRootContentView: View {
             } else {
                 NavigationStack {
                     KioskCatalogView(session: session)
-                        .navigationTitle("PayMore")
                         .navigationBarTitleDisplayMode(.inline)
                         .toolbar {
                             ToolbarItem(placement: .topBarTrailing) {
