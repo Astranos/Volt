@@ -49,6 +49,7 @@ const dateTimeFormatter = new Intl.DateTimeFormat("en-US", {
 
 export function ApiKeyManager() {
   const apiKeys = useQuery(api.productApiKeys.list, {});
+  const apiAccess = useQuery(api.productApiAccess.mine, {});
   const createApiKey = useMutation(api.productApiKeys.create);
   const revokeApiKey = useMutation(api.productApiKeys.revoke);
 
@@ -63,11 +64,12 @@ export function ApiKeyManager() {
 
   const nameError = validateApiKeyName(name);
   const isBusy = mutationState.kind !== "idle";
+  const accessRequired = apiAccess?.enforced === true && !apiAccess.active;
 
   async function handleCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setNameTouched(true);
-    if (nameError) return;
+    if (nameError || accessRequired) return;
 
     setMutationState({ kind: "creating" });
     setOperationError(null);
@@ -157,6 +159,7 @@ export function ApiKeyManager() {
               autoComplete="off"
               maxLength={apiKeyNameMaxLength}
               value={name}
+              disabled={accessRequired}
               onBlur={() => setNameTouched(true)}
               onChange={(event) => {
                 setName(event.target.value);
@@ -175,7 +178,7 @@ export function ApiKeyManager() {
           </div>
           <button
             type="submit"
-            disabled={isBusy}
+            disabled={isBusy || accessRequired}
             className="mt-1 flex h-11 items-center justify-center gap-2 rounded-xl bg-zinc-950 px-5 text-sm font-semibold text-white hover:bg-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-60 sm:mt-6"
           >
             {mutationState.kind === "creating" ? (
@@ -186,6 +189,12 @@ export function ApiKeyManager() {
             {mutationState.kind === "creating" ? "Creating key" : "Create key"}
           </button>
         </form>
+
+        {accessRequired ? (
+          <p className="mt-4 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            Your account needs Product Data API access before you can create a key.
+          </p>
+        ) : null}
 
         {operationError?.kind === "create" ? (
           <p role="alert" className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-800">

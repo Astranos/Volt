@@ -23,6 +23,7 @@ type ProductApiAuthorizationResult =
       resetAt: number;
     }
   | { kind: "invalid_key" }
+  | { kind: "access_required" }
   | {
       kind: "rate_limited";
       limit: number;
@@ -112,6 +113,11 @@ async function authorizeProductApiRequest(
       return {
         kind: "rejected",
         response: productApiError("invalid_api_key", "The API key is invalid or revoked", 401),
+      };
+    case "access_required":
+      return {
+        kind: "rejected",
+        response: productApiError("api_access_required", "Product API access is required", 403),
       };
     case "rate_limited": {
       const headers = {

@@ -49,6 +49,7 @@ type SearchProductsArgs = {
 function productSummary(product: Doc<"paymoreCatalogProducts">) {
   return {
     upc: product.upc,
+    qualityStatus: product.qualityStatus ?? "unreviewed",
     title: product.title,
     platform: product.platform,
     edition: product.edition,
