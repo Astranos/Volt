@@ -7,7 +7,7 @@ import { defineContentScript } from "wxt/utils/define-content-script";
 /**
  * Shopify Quick Actions Content Script
  *
- * Adds an inline toolbar above the product fields in Shopify Admin.
+ * Adds product research actions in a reserved gutter, with a compact inline fallback.
  * Provides quick access to:
  * 1. eBay Sold Listings (via product title) - Green Tab
  * 2. PriceCharting (via UPC) - Blue Tab
@@ -36,57 +36,88 @@ export default defineContentScript({
         position: relative;
         display: flex;
         flex-direction: row;
-        flex-wrap: wrap;
+        justify-content: flex-end;
         align-items: center;
-        margin-bottom: 12px;
-        gap: 8px;
-        pointer-events: none; /* Allow clicking through gaps */
-        transition: opacity 0.2s ease;
+        gap: 6px;
+        margin-bottom: 4px;
+        pointer-events: none;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       }
 
       .volt-action-tab {
-        width: 48px;
-        height: 40px;
-        border-radius: 8px;
+        height: 28px;
+        padding: 0 9px;
+        gap: 5px;
+        border: 0;
+        border-radius: 6px;
         display: flex;
         align-items: center;
         justify-content: center;
         cursor: pointer;
-        transition: all 0.2s ease;
         color: white;
-        box-shadow: -2px 0 8px rgba(0, 0, 0, 0.1);
+        font-size: 11px;
+        font-weight: 600;
+        line-height: 1;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
         pointer-events: auto;
         position: relative;
         flex-shrink: 0;
       }
 
       .volt-action-tab img {
-        width: 24px;
-        height: 24px;
+        width: 16px;
+        height: 16px;
         object-fit: contain;
-        filter: drop-shadow(0 1px 2px rgba(0,0,0,0.1)) brightness(0) invert(1);
+        filter: brightness(0) invert(1);
       }
 
       .volt-volt-badge {
-        width: 48px;
-        height: 32px;
+        width: 18px;
+        height: 24px;
         display: flex;
         align-items: center;
         justify-content: center;
-        background: transparent;
-        pointer-events: auto;
       }
 
       .volt-volt-badge img {
-        width: 20px;
-        height: 20px;
+        width: 16px;
+        height: 16px;
         object-fit: contain;
-        filter: none;
+      }
+
+      .volt-quick-actions-overlay[data-layout="gutter"] {
+        position: fixed;
+        flex-direction: column;
+        gap: 8px;
+        width: 36px;
+        margin: 0;
+        z-index: 40;
+      }
+
+      .volt-quick-actions-overlay[data-layout="gutter"] .volt-action-tab {
+        width: 36px;
+        height: 36px;
+        padding: 0;
+        border-radius: 8px;
+      }
+
+      .volt-quick-actions-overlay[data-layout="gutter"] .volt-action-tab img {
+        width: 22px;
+        height: 22px;
+      }
+
+      .volt-quick-actions-overlay[data-layout="gutter"] .volt-action-label {
+        display: none;
       }
 
       .volt-action-tab:hover {
         filter: brightness(0.9);
         box-shadow: -4px 0 12px rgba(0, 0, 0, 0.2);
+      }
+
+      .volt-action-tab:focus-visible {
+        outline: 2px solid #202223;
+        outline-offset: 3px;
       }
 
       .volt-action-tab:active {
@@ -114,7 +145,7 @@ export default defineContentScript({
       .volt-action-tab::after {
         content: attr(data-tooltip);
         position: absolute;
-        left: 0;
+        right: 0;
         top: 100%;
         margin-top: 8px;
         background-color: #202223;
@@ -136,10 +167,21 @@ export default defineContentScript({
         visibility: hidden;
       }
 
+      .volt-quick-actions-overlay[data-layout="gutter"] .volt-action-tab::after {
+        left: calc(100% + 8px);
+        right: auto;
+        top: 0;
+        margin-top: 0;
+      }
+
       .volt-action-tab:hover::after {
         opacity: 1;
         visibility: visible;
         margin-top: 10px;
+      }
+
+      .volt-quick-actions-overlay[data-layout="gutter"] .volt-action-tab:hover::after {
+        margin-top: 0;
       }
     `;
 
@@ -154,7 +196,50 @@ export default defineContentScript({
     };
 
     // State
+    const GUTTER_WIDTH = 52;
+    const MIN_GUTTER_CARD_WIDTH = 560;
+    let reservedCard = null;
+    let reservedStyles = [];
     let mainCard = null;
+
+    // Only undo values we still own; Shopify may update inline styles during navigation.
+    const releaseGutter = () => {
+      if (reservedCard) {
+        for (const saved of reservedStyles) {
+          if (reservedCard.style.getPropertyValue(saved.name) !== saved.applied ||
+            reservedCard.style.getPropertyPriority(saved.name) !== saved.appliedPriority) continue;
+          if (saved.value) reservedCard.style.setProperty(saved.name, saved.value, saved.priority);
+          else reservedCard.style.removeProperty(saved.name);
+        }
+      }
+      reservedCard = null;
+      reservedStyles = [];
+    };
+
+    const reserveGutter = (card) => {
+      if (reservedCard === card) return;
+      releaseGutter();
+      const computed = window.getComputedStyle(card);
+      const startMargin = parseFloat(computed.marginInlineStart) || 0;
+      const endMargin = parseFloat(computed.marginInlineEnd) || 0;
+      const cap = `calc(100% - ${GUTTER_WIDTH + startMargin + endMargin}px)`;
+      const maxWidth = computed.maxWidth && computed.maxWidth !== "none"
+        ? `min(${computed.maxWidth}, ${cap})` : cap;
+      reservedCard = card;
+      reservedStyles = [
+        ["margin-inline-start", `${startMargin + GUTTER_WIDTH}px`],
+        ["max-width", maxWidth],
+      ].map(([name, applied]) => ({
+        name, applied, value: card.style.getPropertyValue(name),
+        priority: card.style.getPropertyPriority(name),
+      }));
+      for (const saved of reservedStyles) {
+        card.style.setProperty(saved.name, saved.applied);
+        // CSSOM can canonicalize nested calc() in min(); compare the stored value.
+        saved.applied = card.style.getPropertyValue(saved.name);
+        saved.appliedPriority = card.style.getPropertyPriority(saved.name);
+      }
+    };
     let productTitle = null;
     let upcValue = null;
     let overlay = null;
@@ -164,6 +249,7 @@ export default defineContentScript({
     let hasLoggedMissingCard = false;
     let lastUrl = location.href;
     let isInitialized = false;
+    let buttonsEnabled = false;
 
     const findShopifyTitleField = () =>
       document.querySelector(
@@ -389,13 +475,19 @@ export default defineContentScript({
       voltBadge.appendChild(voltImg);
 
       // PriceCharting Tab (Blue)
-      const pcTab = document.createElement("div");
+      const pcTab = document.createElement("button");
+      pcTab.type = "button";
+      pcTab.setAttribute("aria-label", "Search PriceCharting by UPC");
       pcTab.className = "volt-action-tab volt-tab-pricecharting";
       pcTab.id = "volt-tab-pc";
       const pcImg = document.createElement("img");
       pcImg.src = LOGO_URLS.pricecharting;
       pcImg.alt = "PriceCharting";
       pcTab.appendChild(pcImg);
+      const pcLabel = document.createElement("span");
+      pcLabel.className = "volt-action-label";
+      pcLabel.textContent = "UPC";
+      pcTab.appendChild(pcLabel);
       pcTab.onclick = (e) => {
         e.stopPropagation();
         findFields();
@@ -408,13 +500,19 @@ export default defineContentScript({
       };
 
       // eBay Tab (Green) - Now searches by product title
-      const ebayTab = document.createElement("div");
+      const ebayTab = document.createElement("button");
+      ebayTab.type = "button";
+      ebayTab.setAttribute("aria-label", "Search eBay sold listings");
       ebayTab.className = "volt-action-tab volt-tab-ebay";
       ebayTab.id = "volt-tab-ebay";
       const ebayImg = document.createElement("img");
       ebayImg.src = LOGO_URLS.ebay;
       ebayImg.alt = "eBay";
       ebayTab.appendChild(ebayImg);
+      const ebayLabel = document.createElement("span");
+      ebayLabel.className = "volt-action-label";
+      ebayLabel.textContent = "eBay";
+      ebayTab.appendChild(ebayLabel);
       ebayTab.onclick = (e) => {
         e.stopPropagation();
         findFields();
@@ -449,21 +547,43 @@ export default defineContentScript({
         return;
       }
 
-      if (!isProductPage()) {
+      if (!buttonsEnabled || !isProductPage()) {
+        releaseGutter();
         overlay.remove();
         return;
       }
 
-      // Reserve space in the product form instead of relying on Shopify's gutter.
-      // Keep the toolbar in light DOM so its styles also apply to web-component cards.
+      // Keep Shopify-owned nodes in place. Reserve a gutter on the light-DOM card
+      // and position the actions outside its shadow section's clipping boundary.
       const titleField = findShopifyTitleField() || findTitleControl();
       const container = mainCard || titleField?.parentElement;
       if (!container) {
+        releaseGutter();
         overlay.remove();
         return;
       }
-      if (overlay.parentElement !== container) {
-        container.insertBefore(overlay, container.firstChild);
+      if (reservedCard && reservedCard !== mainCard) releaseGutter();
+      const bounds = container.getBoundingClientRect();
+      const unreservedWidth = bounds.width + (reservedCard === container ? GUTTER_WIDTH : 0);
+      const gutterFitsViewport = bounds.left >= 0 &&
+        (!window.innerWidth || bounds.left + 36 <= window.innerWidth);
+      const useGutter = mainCard && bounds.height > 0 && gutterFitsViewport &&
+        unreservedWidth >= MIN_GUTTER_CARD_WIDTH;
+      if (useGutter) {
+        reserveGutter(mainCard);
+        const cardBounds = mainCard.getBoundingClientRect();
+        if (overlay.parentElement !== document.body) document.body.appendChild(overlay);
+        overlay.dataset.layout = "gutter";
+        const left = `${cardBounds.left - GUTTER_WIDTH}px`;
+        const top = `${cardBounds.top + 16}px`;
+        if (overlay.style.left !== left) overlay.style.left = left;
+        if (overlay.style.top !== top) overlay.style.top = top;
+      } else {
+        releaseGutter();
+        overlay.dataset.layout = "inline";
+        overlay.style.removeProperty("left");
+        overlay.style.removeProperty("top");
+        if (overlay.parentElement !== container) container.insertBefore(overlay, container.firstChild);
       }
       overlay.style.opacity = "1";
 
@@ -473,12 +593,14 @@ export default defineContentScript({
 
       if (pcTab) {
         if (upcValue) {
+          pcTab.disabled = false;
           pcTab.classList.remove("disabled");
           pcTab.setAttribute(
             "data-tooltip",
             `Search PriceCharting with UPC: ${upcValue}`
           );
         } else {
+          pcTab.disabled = true;
           pcTab.classList.add("disabled");
           pcTab.setAttribute("data-tooltip", "No UPC found");
         }
@@ -486,6 +608,7 @@ export default defineContentScript({
 
       if (ebayTab) {
         if (productTitle) {
+          ebayTab.disabled = false;
           ebayTab.classList.remove("disabled");
           ebayTab.setAttribute(
             "data-tooltip",
@@ -496,6 +619,7 @@ export default defineContentScript({
             }`
           );
         } else {
+          ebayTab.disabled = true;
           ebayTab.classList.add("disabled");
           ebayTab.setAttribute("data-tooltip", "No product title found");
         }
@@ -604,9 +728,9 @@ export default defineContentScript({
     const checkSettingsAndInit = () => {
       chrome.storage.sync.get(["cmdkSettings"], (result) => {
         const settings = result.cmdkSettings || {};
-        const enabled = settings.shopifyButtons?.enabled ?? true;
+        buttonsEnabled = settings.shopifyButtons?.enabled ?? true;
 
-        if (enabled) {
+        if (buttonsEnabled) {
           init();
         }
       });
@@ -615,28 +739,9 @@ export default defineContentScript({
     // Listen for settings changes
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (message.action === "shopify-buttons-settings-changed") {
-        if (message.enabled) {
-          // Re-enable: check if already running or needs init
-          if (!document.getElementById("volt-quick-actions-overlay")) {
-            init();
-          } else {
-            // If overlay exists but was hidden/removed, ensure it's visible
-            const overlay = document.getElementById(
-              "volt-quick-actions-overlay"
-            );
-            if (overlay) {
-              overlay.style.display = "flex";
-            }
-          }
-        } else {
-          // Disable: remove or hide overlay
-          const overlay = document.getElementById(
-            "volt-quick-actions-overlay"
-          );
-          if (overlay) {
-            overlay.style.display = "none";
-          }
-        }
+        buttonsEnabled = Boolean(message.enabled);
+        if (buttonsEnabled) init();
+        updateOverlay();
       }
     });
 
