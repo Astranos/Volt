@@ -33,9 +33,7 @@ import {
   parseExtensionAccessStatus,
   type ExtensionAccessStatus,
 } from "../../access/access-contract";
-import {
-  CLERK_CLIENT_JWT_CACHE_KEY,
-} from "../../access/clerk-client-jwt";
+import { CLERK_CLIENT_JWT_CACHE_KEY } from "../../access/clerk-client-jwt";
 import {
   CLERK_PUBLISHABLE_KEY,
   CLERK_SIGN_IN_URL,
@@ -90,20 +88,22 @@ function useClerkReturnReload() {
 function SidepanelAuthBridge({ children }: { children: ReactNode }) {
   const { isLoaded, isSignedIn, userId } = useAuth();
 
-  // Signing in through the web app ends with a client-side route change (e.g.
-  // localhost:5173/dashboard), which no tab navigation event reports — but the
-  // service worker's cookie mirror does rewrite this storage key. Reloading the
-  // panel on that rewrite lets its Clerk instance pick the new session up
-  // without the user having to close and reopen the panel.
+  // Production signs in in a tab. Refresh a ready, signed-out panel once when
+  // that session arrives. Clerk writes this cache during its own initialization
+  // too, so observing it while loading would continually restart the panel.
+  // Dev signs in inline and must finish without a cache-triggered navigation.
   useEffect(() => {
-    if (isLoaded && isSignedIn) return;
+    if (!isLoaded || isSignedIn || CLERK_PUBLISHABLE_KEY.startsWith("pk_test_")) return;
+    let reloadStarted = false;
     const listener: Parameters<typeof chrome.storage.onChanged.addListener>[0] = (
       changes,
       areaName,
     ) => {
-      if (areaName !== "local") return;
+      if (reloadStarted || areaName !== "local") return;
       const change = changes[CLERK_CLIENT_JWT_CACHE_KEY];
-      if (change?.newValue) window.location.reload();
+      if (!change?.newValue || change.newValue === change.oldValue) return;
+      reloadStarted = true;
+      window.location.reload();
     };
     chrome.storage.onChanged.addListener(listener);
     return () => chrome.storage.onChanged.removeListener(listener);
@@ -147,11 +147,23 @@ export function useSidepanelSignedIn() {
   return useContext(SidepanelAuthContext);
 }
 
+export function useSidepanelSignIn() {
+  const [signInOpen, setSignInOpen] = useState(false);
+  const openSignIn = useCallback(() => {
+    if (CLERK_PUBLISHABLE_KEY.startsWith("pk_test_")) {
+      setSignInOpen(true);
+    } else {
+      void chrome.tabs.create({ url: CLERK_SIGN_IN_URL });
+    }
+  }, []);
+  return { signInOpen, openSignIn };
+}
+
 // In-panel Clerk sign-in. Signing in here establishes the Clerk session
 // directly in the extension's own storage — unlike the web handoff, it does
 // not depend on the __client cookie being set on the Clerk Frontend API host,
 // which Chrome blocks in third-party contexts for dev instances
-// (*.clerk.accounts.dev). Virtual routing is required because the sidepanel
+// (*.clerk.accounts.dev). Hash routing is required because the sidepanel
 // has no router and its URL is a chrome-extension:// page.
 export function SidepanelSignInCard() {
   const currentExtensionPage = chrome.runtime.getURL("/sidepanel.html");
@@ -161,6 +173,7 @@ export function SidepanelSignInCard() {
         routing="hash"
         fallbackRedirectUrl={currentExtensionPage}
         signUpFallbackRedirectUrl={currentExtensionPage}
+        appearance={{ elements: { socialButtonsRoot: "hidden", dividerRow: "hidden" } }}
       />
     </div>
   );

@@ -7,9 +7,9 @@ import { defineContentScript } from "wxt/utils/define-content-script";
 /**
  * Shopify Quick Actions Content Script
  *
- * Adds a vertical toolbar to the left of the main product card in Shopify Admin.
+ * Adds an inline toolbar above the product fields in Shopify Admin.
  * Provides quick access to:
- * 1. eBay Sold Listings (via MPN) - Green Tab
+ * 1. eBay Sold Listings (via product title) - Green Tab
  * 2. PriceCharting (via UPC) - Blue Tab
  */
 export default defineContentScript({
@@ -33,10 +33,12 @@ export default defineContentScript({
     // Styles
     const STYLES = `
       .volt-quick-actions-overlay {
-        position: fixed;
-        z-index: 100; /* Lowered to allow modals to cover it */
+        position: relative;
         display: flex;
-        flex-direction: column;
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
+        margin-bottom: 12px;
         gap: 8px;
         pointer-events: none; /* Allow clicking through gaps */
         transition: opacity 0.2s ease;
@@ -44,11 +46,8 @@ export default defineContentScript({
 
       .volt-action-tab {
         width: 48px;
-        height: 120px;
-        border-top-left-radius: 8px;
-        border-bottom-left-radius: 8px;
-        border-top-right-radius: 0;
-        border-bottom-right-radius: 0;
+        height: 40px;
+        border-radius: 8px;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -62,8 +61,8 @@ export default defineContentScript({
       }
 
       .volt-action-tab img {
-        width: 32px;
-        height: 32px;
+        width: 24px;
+        height: 24px;
         object-fit: contain;
         filter: drop-shadow(0 1px 2px rgba(0,0,0,0.1)) brightness(0) invert(1);
       }
@@ -91,7 +90,7 @@ export default defineContentScript({
       }
 
       .volt-action-tab:active {
-        transform: translateX(-2px);
+        transform: translateY(1px);
       }
 
       .volt-action-tab.disabled {
@@ -115,17 +114,20 @@ export default defineContentScript({
       .volt-action-tab::after {
         content: attr(data-tooltip);
         position: absolute;
-        left: 100%;
-        top: 50%;
-        transform: translateY(-50%);
-        margin-left: 12px;
+        left: 0;
+        top: 100%;
+        margin-top: 8px;
         background-color: #202223;
         color: white;
         padding: 6px 12px;
         border-radius: 6px;
         font-size: 13px;
         font-weight: 500;
-        white-space: nowrap;
+        white-space: normal;
+        width: max-content;
+        max-width: 160px;
+        box-sizing: border-box;
+        overflow-wrap: anywhere;
         opacity: 0;
         pointer-events: none;
         transition: all 0.2s ease;
@@ -137,7 +139,7 @@ export default defineContentScript({
       .volt-action-tab:hover::after {
         opacity: 1;
         visibility: visible;
-        margin-left: 16px;
+        margin-top: 10px;
       }
     `;
 
@@ -242,7 +244,7 @@ export default defineContentScript({
       const sectionCard =
         shopifySection?.shadowRoot?.querySelector("section");
       if (sectionCard && looksLikeProductCard(sectionCard)) {
-        return sectionCard;
+        return shopifySection;
       }
 
       // Strategy: Look for the title input and go up to the card
@@ -427,7 +429,8 @@ export default defineContentScript({
       overlay.appendChild(voltBadge);
       overlay.appendChild(pcTab);
       overlay.appendChild(ebayTab);
-      document.body.appendChild(overlay);
+      overlay.setAttribute("role", "toolbar");
+      overlay.setAttribute("aria-label", "Volt product research");
     };
 
     // Update Overlay Position and State
@@ -437,7 +440,7 @@ export default defineContentScript({
         if (!mainCard && !hasLoggedMissingCard) {
           hasLoggedMissingCard = true;
           log(
-            "Could not find main product card, showing Shopify quick actions in fallback position."
+            "Could not find main product card, placing Shopify quick actions above the title field."
           );
         }
       }
@@ -446,47 +449,22 @@ export default defineContentScript({
         return;
       }
 
-      // If we couldn't find the main card, keep a visible fallback on product
-      // pages so Shopify DOM changes do not make the actions disappear.
-      if (!mainCard) {
-        if (isProductPage()) {
-          const titleControl = findTitleControl();
-          const titleRect = titleControl?.getBoundingClientRect();
-          if (titleRect && titleRect.width > 0 && titleRect.height > 0) {
-            overlay.style.left = `${Math.max(16, titleRect.left - 64)}px`;
-            overlay.style.top = `${Math.max(96, titleRect.top - 28)}px`;
-            overlay.style.opacity = "1";
-          } else {
-            overlay.style.opacity = "0";
-          }
-        } else {
-          overlay.style.opacity = "0";
-        }
+      if (!isProductPage()) {
+        overlay.remove();
         return;
       }
 
-      // Check if card is visible and has reasonable dimensions
-      const rect = mainCard.getBoundingClientRect();
-      const minWidth = 300; // Minimum width to consider card as "loaded"
-      const minHeight = 200; // Minimum height to consider card as "loaded"
-
-      if (
-        rect.width === 0 ||
-        rect.height === 0 ||
-        rect.width < minWidth ||
-        rect.height < minHeight
-      ) {
-        overlay.style.opacity = "0";
+      // Reserve space in the product form instead of relying on Shopify's gutter.
+      // Keep the toolbar in light DOM so its styles also apply to web-component cards.
+      const titleField = findShopifyTitleField() || findTitleControl();
+      const container = mainCard || titleField?.parentElement;
+      if (!container) {
+        overlay.remove();
         return;
       }
-
-      // Position logic: Left of the card
-      const tabWidth = 48; // base width
-      const left = Math.max(16, rect.left - tabWidth);
-      const top = Math.max(96, rect.top + 24); // Offset from top of card
-
-      overlay.style.left = `${left}px`;
-      overlay.style.top = `${top}px`;
+      if (overlay.parentElement !== container) {
+        container.insertBefore(overlay, container.firstChild);
+      }
       overlay.style.opacity = "1";
 
       // Update States
