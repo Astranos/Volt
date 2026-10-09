@@ -9,8 +9,8 @@ import { defineContentScript } from "wxt/utils/define-content-script";
  *
  * Adds product research actions in a reserved gutter, with a compact inline fallback.
  * Provides quick access to:
- * 1. eBay Sold Listings (via product title) - Green Tab
- * 2. PriceCharting (via UPC) - Blue Tab
+ * 1. eBay Sold Listings (via product title)
+ * 2. PriceCharting (via UPC)
  */
 export default defineContentScript({
   matches: ["https://admin.shopify.com/*", "https://*.myshopify.com/*"],
@@ -25,8 +25,7 @@ export default defineContentScript({
 
     // Logo URLs
     const LOGO_URLS = {
-      volt: chrome.runtime.getURL("assets/icons/volt.webp"),
-      ebay: chrome.runtime.getURL("assets/logos/ebay.svg"),
+      ebay: chrome.runtime.getURL("assets/logos/ebay-wordmark.svg"),
       pricecharting: chrome.runtime.getURL("assets/logos/pricecharting.webp"),
     };
 
@@ -38,132 +37,154 @@ export default defineContentScript({
         flex-direction: row;
         justify-content: flex-end;
         align-items: center;
-        gap: 6px;
-        margin-bottom: 4px;
-        pointer-events: none;
+        width: max-content;
+        height: 28px;
+        margin: 0 0 0 auto;
+        box-sizing: border-box;
+        border: 1px solid #d6d8da;
+        border-radius: 7px;
+        background: #fff;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       }
 
+      .volt-quick-actions-overlay[data-layout="title"] {
+        position: fixed;
+        margin: 0;
+        z-index: 40;
+      }
+
       .volt-action-tab {
-        height: 28px;
-        padding: 0 9px;
+        height: 26px;
+        padding: 0 8px;
         gap: 5px;
         border: 0;
-        border-radius: 6px;
+        border-radius: 0;
+        background: transparent;
         display: flex;
         align-items: center;
         justify-content: center;
         cursor: pointer;
-        color: white;
+        color: #45474a;
         font-size: 11px;
-        font-weight: 600;
+        font-weight: 500;
         line-height: 1;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
-        pointer-events: auto;
         position: relative;
         flex-shrink: 0;
+        box-sizing: border-box;
+        transition: background-color 0.15s ease;
+      }
+
+      .volt-action-tab:first-child {
+        border-radius: 6px 0 0 6px;
+      }
+
+      .volt-action-tab:last-child {
+        border-radius: 0 6px 6px 0;
+      }
+
+      .volt-action-tab + .volt-action-tab {
+        border-left: 1px solid #e6e7e8;
       }
 
       .volt-action-tab img {
         width: 16px;
         height: 16px;
         object-fit: contain;
-        filter: brightness(0) invert(1);
       }
 
-      .volt-volt-badge {
-        width: 18px;
-        height: 24px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
+      .volt-tab-pricecharting img {
+        filter: brightness(0) saturate(100%) opacity(0.75);
       }
 
-      .volt-volt-badge img {
-        width: 16px;
-        height: 16px;
-        object-fit: contain;
+      .volt-tab-ebay img {
+        width: 34px;
+        height: 14px;
       }
 
       .volt-quick-actions-overlay[data-layout="gutter"] {
         position: fixed;
         flex-direction: column;
-        gap: 8px;
         width: 36px;
+        height: auto;
         margin: 0;
         z-index: 40;
       }
 
       .volt-quick-actions-overlay[data-layout="gutter"] .volt-action-tab {
-        width: 36px;
+        width: 34px;
         height: 36px;
         padding: 0;
-        border-radius: 8px;
       }
 
-      .volt-quick-actions-overlay[data-layout="gutter"] .volt-action-tab img {
-        width: 22px;
-        height: 22px;
+      .volt-quick-actions-overlay[data-layout="gutter"] .volt-action-tab:first-child {
+        border-radius: 6px 6px 0 0;
+      }
+
+      .volt-quick-actions-overlay[data-layout="gutter"] .volt-action-tab:last-child {
+        border-radius: 0 0 6px 6px;
+      }
+
+      .volt-quick-actions-overlay[data-layout="gutter"] .volt-action-tab + .volt-action-tab {
+        border-left: 0;
+        border-top: 1px solid #e6e7e8;
+      }
+
+      .volt-quick-actions-overlay[data-layout="gutter"] .volt-tab-pricecharting img {
+        width: 20px;
+        height: 20px;
+      }
+
+      .volt-quick-actions-overlay[data-layout="gutter"] .volt-tab-ebay img {
+        width: 28px;
+        height: 12px;
       }
 
       .volt-quick-actions-overlay[data-layout="gutter"] .volt-action-label {
         display: none;
       }
 
-      .volt-action-tab:hover {
-        filter: brightness(0.9);
-        box-shadow: -4px 0 12px rgba(0, 0, 0, 0.2);
+      .volt-action-tab:hover:not(:disabled) {
+        background: #f3f4f5;
       }
 
       .volt-action-tab:focus-visible {
-        outline: 2px solid #202223;
-        outline-offset: 3px;
+        outline: 2px solid #5c6ac4;
+        outline-offset: 2px;
+        z-index: 1;
       }
 
-      .volt-action-tab:active {
-        transform: translateY(1px);
+      .volt-action-tab:active:not(:disabled) {
+        background: #e8eaed;
       }
 
       .volt-action-tab.disabled {
-        opacity: 0.5;
+        opacity: 0.45;
         cursor: not-allowed;
-        filter: grayscale(1);
-        transform: none !important;
       }
 
-      /* eBay Tab - Green */
-      .volt-tab-ebay {
-        background: linear-gradient(135deg, #10b981 0%, #059669 100%); /* Green */
-      }
-
-      /* PriceCharting Tab - Blue */
-      .volt-tab-pricecharting {
-        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); /* Blue */
-      }
-
-      /* Tooltip */
       .volt-action-tab::after {
         content: attr(data-tooltip);
         position: absolute;
         right: 0;
-        top: 100%;
-        margin-top: 8px;
+        top: calc(100% + 8px);
         background-color: #202223;
         color: white;
-        padding: 6px 12px;
+        padding: 6px 10px;
         border-radius: 6px;
-        font-size: 13px;
-        font-weight: 500;
+        font-size: 12px;
+        font-weight: 400;
+        line-height: 1.4;
         white-space: normal;
         width: max-content;
-        max-width: 160px;
+        max-width: 180px;
         box-sizing: border-box;
         overflow-wrap: anywhere;
         opacity: 0;
         pointer-events: none;
-        transition: all 0.2s ease;
+        transition: opacity 0.15s ease;
         z-index: 1000;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        box-shadow: 0 2px 6px rgba(0,0,0,0.12);
         visibility: hidden;
       }
 
@@ -171,17 +192,12 @@ export default defineContentScript({
         left: calc(100% + 8px);
         right: auto;
         top: 0;
-        margin-top: 0;
       }
 
-      .volt-action-tab:hover::after {
+      .volt-action-tab:hover::after,
+      .volt-action-tab:focus-visible::after {
         opacity: 1;
         visibility: visible;
-        margin-top: 10px;
-      }
-
-      .volt-quick-actions-overlay[data-layout="gutter"] .volt-action-tab:hover::after {
-        margin-top: 0;
       }
     `;
 
@@ -196,7 +212,7 @@ export default defineContentScript({
     };
 
     // State
-    const GUTTER_WIDTH = 52;
+    const GUTTER_WIDTH = 40;
     const MIN_GUTTER_CARD_WIDTH = 560;
     let reservedCard = null;
     let reservedStyles = [];
@@ -466,15 +482,7 @@ export default defineContentScript({
       overlay.className = "volt-quick-actions-overlay";
       overlay.style.opacity = "0"; // Start hidden until page is loaded
 
-      // Volt Badge (Top)
-      const voltBadge = document.createElement("div");
-      voltBadge.className = "volt-volt-badge";
-      const voltImg = document.createElement("img");
-      voltImg.src = LOGO_URLS.volt;
-      voltImg.alt = "Volt";
-      voltBadge.appendChild(voltImg);
-
-      // PriceCharting Tab (Blue)
+      // PriceCharting search
       const pcTab = document.createElement("button");
       pcTab.type = "button";
       pcTab.setAttribute("aria-label", "Search PriceCharting by UPC");
@@ -499,7 +507,7 @@ export default defineContentScript({
         }
       };
 
-      // eBay Tab (Green) - Now searches by product title
+      // eBay sold listings search
       const ebayTab = document.createElement("button");
       ebayTab.type = "button";
       ebayTab.setAttribute("aria-label", "Search eBay sold listings");
@@ -509,10 +517,6 @@ export default defineContentScript({
       ebayImg.src = LOGO_URLS.ebay;
       ebayImg.alt = "eBay";
       ebayTab.appendChild(ebayImg);
-      const ebayLabel = document.createElement("span");
-      ebayLabel.className = "volt-action-label";
-      ebayLabel.textContent = "eBay";
-      ebayTab.appendChild(ebayLabel);
       ebayTab.onclick = (e) => {
         e.stopPropagation();
         findFields();
@@ -524,11 +528,41 @@ export default defineContentScript({
         }
       };
 
-      overlay.appendChild(voltBadge);
       overlay.appendChild(pcTab);
       overlay.appendChild(ebayTab);
       overlay.setAttribute("role", "toolbar");
       overlay.setAttribute("aria-label", "Volt product research");
+    };
+
+    // Anchor to a measured label row only when the toolbar clears both label and input.
+    const findTitleRowPlacement = (titleField) => {
+      if (!titleField || !overlay) return null;
+      const input = titleField.tagName === "INPUT" ? titleField :
+        titleField.shadowRoot?.querySelector("input");
+      const label = titleField.shadowRoot?.querySelector("label") ||
+        (input?.id ? Array.from(document.querySelectorAll("label[for]")).find((candidate) => candidate.htmlFor === input.id) : null);
+      if (!input || !label) return null;
+      const fieldBounds = titleField.getBoundingClientRect();
+      const inputBounds = input.getBoundingClientRect();
+      const labelBounds = label.getBoundingClientRect();
+      const top = inputBounds.top - 30;
+      if (fieldBounds.width < 200 || top < labelBounds.top - 6 ||
+        inputBounds.top - labelBounds.top < 24) return null;
+      let labelRight = labelBounds.right;
+      // Shopify's label can wrap the input; measure just its visible text.
+      const textNode = Array.from(label.childNodes).find((node) =>
+        node.nodeType === 3 && node.textContent?.trim());
+      if (textNode && document.createRange) {
+        const range = document.createRange();
+        range.selectNodeContents(textNode);
+        const textBounds = range.getBoundingClientRect?.();
+        if (textBounds?.width > 0) labelRight = textBounds.right;
+      }
+      const toolbarWidth = overlay.getBoundingClientRect().width;
+      const fieldRight = fieldBounds.right ?? fieldBounds.left + fieldBounds.width;
+      if (!toolbarWidth || !Number.isFinite(labelRight) ||
+        fieldRight - toolbarWidth < labelRight + 12) return null;
+      return { left: fieldRight - toolbarWidth, top };
     };
 
     // Update Overlay Position and State
@@ -580,10 +614,23 @@ export default defineContentScript({
         if (overlay.style.top !== top) overlay.style.top = top;
       } else {
         releaseGutter();
-        overlay.dataset.layout = "inline";
-        overlay.style.removeProperty("left");
-        overlay.style.removeProperty("top");
-        if (overlay.parentElement !== container) container.insertBefore(overlay, container.firstChild);
+        // Inline and title layouts share a width, so measure in place. Moving the
+        // node every frame would churn the DOM observer and drop button focus.
+        if (overlay.dataset.layout === "gutter") overlay.dataset.layout = "inline";
+        const titleRow = findTitleRowPlacement(titleField);
+        if (titleRow) {
+          overlay.dataset.layout = "title";
+          if (overlay.parentElement !== document.body) document.body.appendChild(overlay);
+          const left = `${titleRow.left}px`;
+          const top = `${titleRow.top}px`;
+          if (overlay.style.left !== left) overlay.style.left = left;
+          if (overlay.style.top !== top) overlay.style.top = top;
+        } else {
+          overlay.dataset.layout = "inline";
+          overlay.style.removeProperty("left");
+          overlay.style.removeProperty("top");
+          if (overlay.parentElement !== container) container.insertBefore(overlay, container.firstChild);
+        }
       }
       overlay.style.opacity = "1";
 

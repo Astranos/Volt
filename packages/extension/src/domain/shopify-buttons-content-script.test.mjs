@@ -73,8 +73,8 @@ for (const modern of [true, false]) {
     const toolbar = document.getElementById("volt-quick-actions-overlay");
     assert.equal(toolbar.parentElement, document.body, "gutter must escape shadow clipping");
     assert.equal(toolbar.dataset.layout, "gutter");
-    assert.equal(container.style.getPropertyValue("margin-inline-start"), "52px");
-    assert.equal(container.style.getPropertyValue("max-width"), "calc(100% - 52px)");
+    assert.equal(container.style.getPropertyValue("margin-inline-start"), "40px");
+    assert.equal(container.style.getPropertyValue("max-width"), "calc(100% - 40px)");
     assert.equal(toolbar.style.left, "296px");
     assert.equal(toolbar.style.top, "192px");
     frame();
@@ -84,8 +84,14 @@ for (const modern of [true, false]) {
 
 for (const options of [{ width: 480 }, { modern: false, width: 480 }, { card: false }]) {
   test(`narrow or unknown forms use compact inline actions (${JSON.stringify(options)})`, () => {
-    const { document, container } = mount(options);
+    const { document, container, frame } = mount(options);
     const toolbar = document.getElementById("volt-quick-actions-overlay");
+    let moves = 0;
+    const countMove = (method) => function (...args) { moves++; return method.apply(this, args); };
+    document.body.appendChild = countMove(document.body.appendChild);
+    container.insertBefore = countMove(container.insertBefore);
+    frame();
+    assert.equal(moves, 0, "a settled toolbar must not be reinserted every frame");
     assert.equal(toolbar.parentElement, container);
     assert.equal(container.firstChild, toolbar);
     assert.equal(toolbar.dataset.layout, "inline");
@@ -94,8 +100,11 @@ for (const options of [{ width: 480 }, { modern: false, width: 480 }, { card: fa
     const styles = document.getElementById("volt-quick-actions-styles").textContent;
     assert.match(styles, /justify-content: flex-end;/);
     assert.match(styles, /height: 28px;/);
-    assert.match(styles, /margin-bottom: 4px;/);
-    assert.equal(document.querySelector("#volt-tab-ebay .volt-action-label").textContent, "eBay");
+    assert.match(styles, /margin: 0 0 0 auto;/);
+    assert.equal(document.querySelector("#volt-tab-ebay .volt-action-label"), null);
+    assert.equal(document.querySelector("#volt-tab-pc .volt-action-label").textContent, "UPC");
+    assert.equal(document.querySelector(".volt-volt-badge"), null);
+    assert.equal(document.querySelector("#volt-tab-ebay img").getAttribute("src"), "assets/logos/ebay-wordmark.svg");
   });
 }
 
@@ -104,8 +113,8 @@ test("resize restores original card styles, then reserves the gutter again", () 
   container.style.setProperty("margin-inline-start", "12px");
   container.style.setProperty("max-width", "900px");
   resize(720);
-  assert.equal(container.style.getPropertyValue("margin-inline-start"), "64px");
-  assert.equal(container.style.getPropertyValue("max-width"), "min(900px, calc(100% - 64px))");
+  assert.equal(container.style.getPropertyValue("margin-inline-start"), "52px");
+  assert.equal(container.style.getPropertyValue("max-width"), "min(900px, calc(100% - 52px))");
   resize(480);
   assert.equal(container.style.getPropertyValue("margin-inline-start"), "12px");
   assert.equal(container.style.getPropertyValue("max-width"), "900px");
@@ -146,7 +155,7 @@ test("toolbar follows a replaced product section and leaves non-product pages", 
   frame();
   assert.equal(document.getElementById("volt-quick-actions-overlay").dataset.layout, "gutter");
   assert.ok(!container.style.getPropertyValue("margin-inline-start"));
-  assert.equal(replacement.style.getPropertyValue("margin-inline-start"), "52px");
+  assert.equal(replacement.style.getPropertyValue("margin-inline-start"), "40px");
   location.href = "https://admin.shopify.com/store/test/orders";
   frame();
   assert.equal(document.getElementById("volt-quick-actions-overlay"), null);
@@ -161,7 +170,7 @@ test("disabling research actions releases the gutter until explicitly enabled ag
   assert.ok(!container.style.getPropertyValue("margin-inline-start"));
   settings(true);
   assert.equal(document.getElementById("volt-quick-actions-overlay").dataset.layout, "gutter");
-  assert.equal(container.style.getPropertyValue("margin-inline-start"), "52px");
+  assert.equal(container.style.getPropertyValue("margin-inline-start"), "40px");
 });
 
 
@@ -172,11 +181,11 @@ test("restoration compares canonical CSSOM values after reserving the gutter", (
   const originalSetProperty = prototype.setProperty;
   prototype.setProperty = function (name, value, priority) {
     return originalSetProperty.call(this, name,
-      value === "min(900px, calc(100% - 52px))" ? "min(900px, 100% - 52px)" : value, priority);
+      value === "min(900px, calc(100% - 40px))" ? "min(900px, 100% - 40px)" : value, priority);
   };
   try {
     resize(720);
-    assert.equal(container.style.getPropertyValue("max-width"), "min(900px, 100% - 52px)");
+    assert.equal(container.style.getPropertyValue("max-width"), "min(900px, 100% - 40px)");
     resize(480);
     assert.equal(container.style.getPropertyValue("max-width"), "900px");
   } finally {
