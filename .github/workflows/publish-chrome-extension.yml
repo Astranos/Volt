@@ -88,6 +88,8 @@ jobs:
           CWS_PUBLISHER_ID: ${{ vars.CWS_PUBLISHER_ID }}
           WXT_CLERK_PUBLISHABLE_KEY: ${{ vars.WXT_CLERK_PUBLISHABLE_KEY }}
           WXT_EXTENSION_PUBLIC_KEY: ${{ vars.WXT_EXTENSION_PUBLIC_KEY }}
+          # Unset keeps Chrome profile sign-in and its identity permissions off.
+          WXT_GOOGLE_CHROME_EXTENSION_CLIENT_ID: ${{ vars.WXT_GOOGLE_CHROME_EXTENSION_CLIENT_ID }}
           SUBMIT_EXISTING_DRAFT: ${{ inputs.submit_existing_draft }}
           SUBMIT_FOR_REVIEW: ${{ inputs.submit_for_review }}
           PUBLISH_TYPE: ${{ inputs.publish_type }}
