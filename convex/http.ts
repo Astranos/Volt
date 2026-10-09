@@ -1,3 +1,4 @@
+import { chromeProfileAuth } from "./http/chromeProfileAuth";
 import { shopifyCallback } from "./http/shopify";
 import { customerDataRequest, customerRedact, shopRedact } from "./http/shopifyCompliance";
 import { httpRouter, makeFunctionReference } from "convex/server";
@@ -29,6 +30,9 @@ import { signalHandler } from "./http/signal";
 import { mobileComputerListHandler, appClipComputerListHandler } from "./http/computers";
 
 const http = httpRouter();
+
+http.route({ path: "/auth/chrome-profile", method: "POST", handler: chromeProfileAuth });
+http.route({ path: "/auth/chrome-profile", method: "OPTIONS", handler: chromeProfileAuth });
 
 type AccessHttpResult = { statusCode: number; body: unknown };
 

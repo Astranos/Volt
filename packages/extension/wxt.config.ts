@@ -17,6 +17,9 @@ export default defineConfig({
   manifest: () => ({
     // Stable public key => stable extension ID for Clerk's allowed origin.
     key: process.env.WXT_EXTENSION_PUBLIC_KEY || undefined,
+    ...(process.env.WXT_GOOGLE_CHROME_EXTENSION_CLIENT_ID ? {
+      oauth2: { client_id: process.env.WXT_GOOGLE_CHROME_EXTENSION_CLIENT_ID, scopes: ["openid", "email"] },
+    } : {}),
     content_scripts: [
       {
         matches: ["<all_urls>"],
@@ -62,6 +65,7 @@ export default defineConfig({
     description:
       "A versatile Chrome extension with command palette, mobile scanner pairing, and multi-provider search capabilities.",
     permissions: [
+      ...(process.env.WXT_GOOGLE_CHROME_EXTENSION_CLIENT_ID ? ["identity", "identity.email"] : []),
       "storage",
       "cookies",
       "tabs",

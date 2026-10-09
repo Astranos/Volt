@@ -10,6 +10,7 @@ import { createCloudCursorDeliveryController } from "../src/background/cloud-cur
 import { createCloudLiveDictationController } from "../src/background/cloud-live-dictation-controller";
 import { createCloudWorkspaceController } from "../src/background/cloud-workspace-controller";
 import { createCloudSettingsController } from "../src/background/cloud-settings-controller";
+import { createChromeProfileAuthController } from "../src/background/chrome-profile-auth-controller";
 import { createClerkSessionMirror } from "../src/background/clerk-session-mirror";
 import { createClipboardController } from "../src/background/clipboard-controller";
 import { createContextMenuController } from "../src/background/context-menu-controller";
@@ -190,6 +191,13 @@ export default defineBackground({
           .catch(() => undefined)
           .then(() => cloudSettings.pull())
           .catch(() => undefined);
+      },
+    });
+    const chromeProfileAuth = createChromeProfileAuthController({
+      chromeApi: chrome,
+      syncWebSession: () => clerkSessionMirror.sync(),
+      onChanged: () => {
+        void cloudWorkspace.handleAccountSessionChanged().then(() => cloudSettings.pull()).catch(() => undefined);
       },
     });
     const tabDelivery = createTabDeliveryController({ chromeApi: chrome, log });
@@ -380,7 +388,7 @@ export default defineBackground({
 
       void scannerOffscreen.pollScannerReconnectRequests("background-main");
       void access.initialize();
-      void clerkSessionMirror.initialize()
+      void chromeProfileAuth.initialize().then(() => clerkSessionMirror.initialize())
         .then(() => cloudWorkspace.initialize())
         .then(() => cloudSettings.pull())
         .catch(() => undefined);
@@ -426,6 +434,7 @@ export default defineBackground({
       sender: RuntimeMessageSender,
       sendResponse: RuntimeSendResponse
     ) {
+      if (chromeProfileAuth.handleMessage(rawMessage, sender, sendResponse)) return true;
       if (access.handleMessage(rawMessage, sender, sendResponse)) return true;
       if (cloudSettings.handleMessage(rawMessage, sender, sendResponse)) return true;
       if (cloudWorkspace.handleMessage(rawMessage, sender, sendResponse)) return true;

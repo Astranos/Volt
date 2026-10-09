@@ -92,7 +92,7 @@ test("extension auth delegates web sign-in and syncs the Clerk session", async (
     "utf8",
   );
 
-  assert.match(providerSource, /syncHost=\{CLERK_SYNC_HOST\}/);
+  assert.match(providerSource, /syncHost=\{CHROME_PROFILE_AUTH_ENABLED \? undefined : CLERK_SYNC_HOST\}/);
   assert.match(
     providerSource,
     /CLERK_SYNC_HOST/,

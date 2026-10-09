@@ -33,6 +33,7 @@ import {
   parseExtensionAccessStatus,
   type ExtensionAccessStatus,
 } from "../../access/access-contract";
+import { CHROME_PROFILE_AUTH_ENABLED, PROFILE_AUTH_EVENT_KEY } from "../../access/chrome-profile-auth";
 import { CLERK_CLIENT_JWT_CACHE_KEY } from "../../access/clerk-client-jwt";
 import {
   CLERK_PUBLISHABLE_KEY,
@@ -68,7 +69,19 @@ function isClerkReturnUrl(value: string | undefined) {
   }
 }
 
+function useChromeProfileSessionReload() {
+  useEffect(() => {
+    if (!CHROME_PROFILE_AUTH_ENABLED) return;
+    const listener: Parameters<typeof chrome.storage.onChanged.addListener>[0] = (changes, area) => {
+      if (area === "local" && changes[PROFILE_AUTH_EVENT_KEY]?.newValue) window.location.reload();
+    };
+    chrome.storage.onChanged.addListener(listener);
+    return () => chrome.storage.onChanged.removeListener(listener);
+  }, []);
+}
+
 function useClerkReturnReload() {
+  useChromeProfileSessionReload();
   useEffect(() => {
     let reloadStarted = false;
     const handleTabUpdated: Parameters<
@@ -93,7 +106,7 @@ function SidepanelAuthBridge({ children }: { children: ReactNode }) {
   // too, so observing it while loading would continually restart the panel.
   // Dev signs in inline and must finish without a cache-triggered navigation.
   useEffect(() => {
-    if (!isLoaded || isSignedIn || CLERK_PUBLISHABLE_KEY.startsWith("pk_test_")) return;
+    if (CHROME_PROFILE_AUTH_ENABLED || !isLoaded || isSignedIn || CLERK_PUBLISHABLE_KEY.startsWith("pk_test_")) return;
     let reloadStarted = false;
     const listener: Parameters<typeof chrome.storage.onChanged.addListener>[0] = (
       changes,
@@ -119,6 +132,7 @@ function SidepanelAuthBridge({ children }: { children: ReactNode }) {
 }
 
 export function SidepanelClerkProvider({ children }: { children: ReactNode }) {
+  useChromeProfileSessionReload();
   if (!CLERK_PUBLISHABLE_KEY) {
     return (
       <SidepanelAuthContext.Provider value={null}>
@@ -132,7 +146,7 @@ export function SidepanelClerkProvider({ children }: { children: ReactNode }) {
     <ClerkProvider
       __experimental_syncHostListener
       publishableKey={CLERK_PUBLISHABLE_KEY}
-      syncHost={CLERK_SYNC_HOST}
+      syncHost={CHROME_PROFILE_AUTH_ENABLED ? undefined : CLERK_SYNC_HOST}
       afterSignOutUrl={currentExtensionPage}
       signInFallbackRedirectUrl={currentExtensionPage}
       signUpFallbackRedirectUrl={currentExtensionPage}
@@ -150,7 +164,9 @@ export function useSidepanelSignedIn() {
 export function useSidepanelSignIn() {
   const [signInOpen, setSignInOpen] = useState(false);
   const openSignIn = useCallback(() => {
-    if (CLERK_PUBLISHABLE_KEY.startsWith("pk_test_")) {
+    if (CHROME_PROFILE_AUTH_ENABLED) {
+      setSignInOpen(true);
+    } else if (CLERK_PUBLISHABLE_KEY.startsWith("pk_test_")) {
       setSignInOpen(true);
     } else {
       void chrome.tabs.create({ url: CLERK_SIGN_IN_URL });
@@ -166,6 +182,7 @@ export function useSidepanelSignIn() {
 // (*.clerk.accounts.dev). Hash routing is required because the sidepanel
 // has no router and its URL is a chrome-extension:// page.
 export function SidepanelSignInCard() {
+  if (CHROME_PROFILE_AUTH_ENABLED) return <div className="px-4 pb-4"><ChromeProfileSignIn /></div>;
   const currentExtensionPage = chrome.runtime.getURL("/sidepanel.html");
   return (
     <div className="px-4 pb-4">
@@ -285,7 +302,7 @@ export function ExtensionAccessPanel({
       <ClerkProvider
         __experimental_syncHostListener
         publishableKey={CLERK_PUBLISHABLE_KEY}
-        syncHost={CLERK_SYNC_HOST}
+        syncHost={CHROME_PROFILE_AUTH_ENABLED ? undefined : CLERK_SYNC_HOST}
         afterSignOutUrl={currentExtensionPage}
         signInFallbackRedirectUrl={currentExtensionPage}
         signUpFallbackRedirectUrl={currentExtensionPage}
@@ -367,7 +384,7 @@ export function ExtensionAccountControl({
         <ClerkProvider
           __experimental_syncHostListener
           publishableKey={CLERK_PUBLISHABLE_KEY}
-          syncHost={CLERK_SYNC_HOST}
+          syncHost={CHROME_PROFILE_AUTH_ENABLED ? undefined : CLERK_SYNC_HOST}
           afterSignOutUrl={currentExtensionPage}
           signInFallbackRedirectUrl={currentExtensionPage}
           signUpFallbackRedirectUrl={currentExtensionPage}
@@ -400,10 +417,12 @@ function ClerkAccountControl({ surface }: { surface: AccountControlSurface }) {
         name={user?.fullName ?? "Volt account"}
         email={user?.primaryEmailAddress?.emailAddress ?? ""}
         onManageAccount={() => clerk.openUserProfile()}
-        onSignOut={() => void clerk.signOut()}
+        onSignOut={() => void (CHROME_PROFILE_AUTH_ENABLED ? chrome.runtime.sendMessage({ action: "chromeProfileSignOut" }) : clerk.signOut())}
       />
     );
   }
+
+  if (CHROME_PROFILE_AUTH_ENABLED) return <ChromeProfileSignIn surface={surface} />;
 
   return (
     <button
@@ -416,6 +435,36 @@ function ClerkAccountControl({ surface }: { surface: AccountControlSurface }) {
       <span>Sign in</span>
     </button>
   );
+}
+
+const profileSignInMessages: Record<string, string> = {
+  chrome_profile_signed_out: "Sign into a Google account in this Chrome profile first.",
+  account_not_linked: "This Google account is not linked to a Volt account. Use another sign-in method to link it.",
+  account_not_allowed: "This Google account cannot access Volt.",
+  mfa_required: "Use the standard sign-in to complete your account's security checks.",
+  additional_sign_in_required: "Use the standard sign-in to finish signing in.",
+};
+
+function ChromeProfileSignIn({ surface = "sidepanel" }: { surface?: AccountControlSurface }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function signIn() {
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await chrome.runtime.sendMessage({ action: "chromeProfileSignIn" });
+      if (result?.success !== true) setError(profileSignInMessages[result?.error] ?? "Google sign-in could not finish. Try again or use another sign-in method.");
+    } catch {
+      setError("Google sign-in could not finish. Try again or use another sign-in method.");
+    } finally { setBusy(false); }
+  }
+  return <div>
+    <button type="button" className={accountControlClassName(surface, "is-signed-out")} onClick={() => void signIn()} disabled={busy}>
+      <LogIn /><span>{busy ? "Signing in…" : "Sign in with Chrome profile"}</span>
+    </button>
+    {error && <p role="alert" className="text-sm">{error}</p>}
+    <button type="button" className="text-xs underline" onClick={() => void chrome.runtime.sendMessage({ action: "chromeProfileManualSignIn" })} disabled={busy}>Use another sign-in method</button>
+  </div>;
 }
 
 function AccountMenu({
