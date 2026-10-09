@@ -125,6 +125,7 @@ describe("backend compatibility contracts", () => {
       "OPTIONS /api/workspace/results/delete",
       "OPTIONS /api/workspace/results/restore",
       "OPTIONS /api/workspace/snapshot",
+      "OPTIONS /auth/chrome-profile",
       "OPTIONS /v1/products",
       "OPTIONS /v1/products/*",
       "POST /api/access/anonymous",
@@ -158,7 +159,8 @@ describe("backend compatibility contracts", () => {
       "POST /api/workspace/enrollment",
       "POST /api/workspace/photos/download-url",
       "POST /api/workspace/results/delete",
-      "POST /api/workspace/results/restore"
+      "POST /api/workspace/results/restore",
+      "POST /auth/chrome-profile"
 ]);
   });
 });
