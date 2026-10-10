@@ -48,6 +48,7 @@ export function ClosedTabsPanel({
   const [selectedValue, setSelectedValue] = useState<string>("");
   const [shopifySearch, setShopifySearch] = useState<ShopifyProductSearchState>({ kind: "idle" });
   const [shopifyRetry, setShopifyRetry] = useState(0);
+  const shopifySearchGeneration = useRef(0);
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const trimmedSearch = search.trim();
@@ -62,6 +63,7 @@ export function ClosedTabsPanel({
       return;
     }
     let canceled = false;
+    shopifySearchGeneration.current++;
     setShopifySearch({ kind: "loading", query });
     const timer = window.setTimeout(() => {
       void searchShopifyProducts(query)
@@ -82,13 +84,15 @@ export function ClosedTabsPanel({
     const withoutProduct = (current: ShopifyProductSearchState): ShopifyProductSearchState => current.kind === "ready"
       ? { ...current, result: { ...current.result, products: current.result.products.filter((item) => item.id !== product.id) } }
       : current;
-    const query = shopifySearch.kind === "ready" ? shopifySearch.query : null;
+    const generation = shopifySearchGeneration.current;
     setShopifySearch(withoutProduct);
     try {
       await setShopifyProductHidden(product, true);
     } catch (cause) {
-      setShopifySearch((current) => current.kind === "ready" && current.query === query
-        ? { kind: "error", query, message: cause instanceof Error ? cause.message : "Could not hide the product." }
+      // Only report the failure on the results it came from.
+      if (generation !== shopifySearchGeneration.current) return;
+      setShopifySearch((current) => current.kind === "ready"
+        ? { kind: "error", query: current.query, message: cause instanceof Error ? cause.message : "Could not hide the product." }
         : current);
     }
   };
@@ -224,6 +228,8 @@ export function ClosedTabsPanel({
       <div
         className="closed-tabs-search-container"
         onMouseDown={focusInputFromRow}
+        // Enter on the mode toggles must activate them, not cmdk's selected result.
+        onKeyDown={(e) => { if (e.key === "Enter" && e.target !== inputRef.current) e.stopPropagation(); }}
       >
         <div className="closed-tabs-search">
           <SearchIcon className="w-4 h-4 text-gray-400" />
