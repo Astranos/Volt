@@ -1,0 +1,16 @@
+{
+  "appId": "6819648606",
+  "bundleId": "com.volt.kiosk",
+  "version": "1.0.0",
+  "build": "2",
+  "submissionId": "89f517ef-71ba-44e3-b7ef-d8837a6fd31e",
+  "submittedAt": "2026-10-06T11:37:59.594Z",
+  "verifiedState": "WAITING_FOR_REVIEW",
+  "releaseType": "AFTER_APPROVAL",
+  "apiBaseURL": "https://pm.voltresale.app",
+  "privacyURL": "https://pm.voltresale.app/privacy.html",
+  "supportURL": "https://pm.voltresale.app/privacy.html",
+  "marketingURL": "https://voltresale.app",
+  "reviewVideo": "volt-kiosk-reviewer-walkthrough.mp4",
+  "screenshotCount": 5
+}

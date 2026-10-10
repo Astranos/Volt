@@ -12,6 +12,7 @@ import type * as access from "../access.js";
 import type * as admin from "../admin.js";
 import type * as aiScanner from "../aiScanner.js";
 import type * as aiScannerQuota from "../aiScannerQuota.js";
+import type * as billingConfiguration from "../billingConfiguration.js";
 import type * as catalog_activity from "../catalog/activity.js";
 import type * as catalog_attributes from "../catalog/attributes.js";
 import type * as catalog_dedupe from "../catalog/dedupe.js";
@@ -35,18 +36,23 @@ import type * as cloudWorkspace_snapshot from "../cloudWorkspace/snapshot.js";
 import type * as crons from "../crons.js";
 import type * as extensionSettings from "../extensionSettings.js";
 import type * as http from "../http.js";
+import type * as http_billing from "../http/billing.js";
+import type * as http_chromeProfileAuth from "../http/chromeProfileAuth.js";
 import type * as http_computers from "../http/computers.js";
 import type * as http_products from "../http/products.js";
 import type * as http_shared from "../http/shared.js";
 import type * as http_shopify from "../http/shopify.js";
 import type * as http_shopifyCompliance from "../http/shopifyCompliance.js";
+import type * as http_shopifyEmbeddedAdmin from "../http/shopifyEmbeddedAdmin.js";
 import type * as http_signal from "../http/signal.js";
 import type * as http_signalLogging from "../http/signalLogging.js";
 import type * as kioskRequestValidators from "../kioskRequestValidators.js";
 import type * as kioskRequests from "../kioskRequests.js";
+import type * as monetization from "../monetization.js";
 import type * as productApiAccess from "../productApiAccess.js";
 import type * as productApiKeyCrypto from "../productApiKeyCrypto.js";
 import type * as productApiKeys from "../productApiKeys.js";
+import type * as productApiUsage from "../productApiUsage.js";
 import type * as productData from "../productData.js";
 import type * as scannerPush from "../scannerPush.js";
 import type * as scannerSignal_cleanup from "../scannerSignal/cleanup.js";
@@ -64,11 +70,16 @@ import type * as scannerSignal_transitions from "../scannerSignal/transitions.js
 import type * as scannerSignal_validators from "../scannerSignal/validators.js";
 import type * as shopifyAudit from "../shopifyAudit.js";
 import type * as shopifyCompliance from "../shopifyCompliance.js";
+import type * as shopifyEmbeddedAuth from "../shopifyEmbeddedAuth.js";
+import type * as shopifyEmbeddedStore from "../shopifyEmbeddedStore.js";
 import type * as shopifyHelpers from "../shopifyHelpers.js";
 import type * as shopifyStore from "../shopifyStore.js";
 import type * as storeKit from "../storeKit.js";
 import type * as storeKitData from "../storeKitData.js";
+import type * as stripeBilling from "../stripeBilling.js";
+import type * as webBilling from "../webBilling.js";
 import type * as workspaceMaintenance from "../workspaceMaintenance.js";
+import type * as workspaceStorage from "../workspaceStorage.js";
 
 import type {
   ApiFromModules,
@@ -81,6 +92,7 @@ declare const fullApi: ApiFromModules<{
   admin: typeof admin;
   aiScanner: typeof aiScanner;
   aiScannerQuota: typeof aiScannerQuota;
+  billingConfiguration: typeof billingConfiguration;
   "catalog/activity": typeof catalog_activity;
   "catalog/attributes": typeof catalog_attributes;
   "catalog/dedupe": typeof catalog_dedupe;
@@ -104,18 +116,23 @@ declare const fullApi: ApiFromModules<{
   crons: typeof crons;
   extensionSettings: typeof extensionSettings;
   http: typeof http;
+  "http/billing": typeof http_billing;
+  "http/chromeProfileAuth": typeof http_chromeProfileAuth;
   "http/computers": typeof http_computers;
   "http/products": typeof http_products;
   "http/shared": typeof http_shared;
   "http/shopify": typeof http_shopify;
   "http/shopifyCompliance": typeof http_shopifyCompliance;
+  "http/shopifyEmbeddedAdmin": typeof http_shopifyEmbeddedAdmin;
   "http/signal": typeof http_signal;
   "http/signalLogging": typeof http_signalLogging;
   kioskRequestValidators: typeof kioskRequestValidators;
   kioskRequests: typeof kioskRequests;
+  monetization: typeof monetization;
   productApiAccess: typeof productApiAccess;
   productApiKeyCrypto: typeof productApiKeyCrypto;
   productApiKeys: typeof productApiKeys;
+  productApiUsage: typeof productApiUsage;
   productData: typeof productData;
   scannerPush: typeof scannerPush;
   "scannerSignal/cleanup": typeof scannerSignal_cleanup;
@@ -133,11 +150,16 @@ declare const fullApi: ApiFromModules<{
   "scannerSignal/validators": typeof scannerSignal_validators;
   shopifyAudit: typeof shopifyAudit;
   shopifyCompliance: typeof shopifyCompliance;
+  shopifyEmbeddedAuth: typeof shopifyEmbeddedAuth;
+  shopifyEmbeddedStore: typeof shopifyEmbeddedStore;
   shopifyHelpers: typeof shopifyHelpers;
   shopifyStore: typeof shopifyStore;
   storeKit: typeof storeKit;
   storeKitData: typeof storeKitData;
+  stripeBilling: typeof stripeBilling;
+  webBilling: typeof webBilling;
   workspaceMaintenance: typeof workspaceMaintenance;
+  workspaceStorage: typeof workspaceStorage;
 }>;
 
 /**

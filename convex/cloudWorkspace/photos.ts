@@ -7,13 +7,14 @@ import {
   requireGuestPrincipal,
   type DeviceCredential,
   type GuestCredential,
-  requireFullAppEntitlement,
   workspaceForUser,
   sha256Hex,
 } from "./identity";
 import { ConvexError, v, type ObjectType } from "convex/values";
 import { makeFunctionReference } from "convex/server";
 import { type Doc } from "../_generated/dataModel";
+import { assertWorkspaceWritable, resultExpiredForPolicy, resultIsExpired } from "../workspaceStorage";
+import { accountPolicy } from "../monetization";
 
 export const PRESIGN_TTL_SECONDS = 5 * 60;
 
@@ -23,6 +24,7 @@ async function photoManifestForPrincipal(
   batchId: string,
 ) {
     const { workspace, sourceDeviceId } = principal;
+    await assertWorkspaceWritable(ctx, workspace);
     const batch = await ctx.db
       .query("resultBatches")
       .withIndex("by_workspaceId_and_batchId", (q) =>
@@ -38,6 +40,10 @@ async function photoManifestForPrincipal(
         q.eq("workspaceId", workspace._id).eq("batchId", batchId),
       )
       .take(500);
+    const policy = (await accountPolicy(ctx, workspace.ownerClerkUserId)).workspace;
+    for (const result of results) {
+      if (result.deletedAt !== undefined || resultExpiredForPolicy(result, policy)) throw new ConvexError("Batch contains deleted or expired results");
+    }
     return results
       .filter((item) => item.kind === "photo" && item.objectKey)
       .map((item) => ({ objectKey: item.objectKey as string, byteCount: item.byteCount }));
@@ -158,7 +164,6 @@ export const authorizePhotoAccessHandler = async (ctx: QueryCtx, args: ObjectTyp
     let workspace: Doc<"workspaces"> | null = null;
     let sourceDeviceId: string | undefined;
     if (args.clerkUserId) {
-      await requireFullAppEntitlement(ctx, args.clerkUserId);
       workspace = await workspaceForUser(ctx, args.clerkUserId);
     }
     else if (args.guestCloudGrant) {
@@ -190,6 +195,8 @@ export const authorizePhotoAccessHandler = async (ctx: QueryCtx, args: ObjectTyp
     if (!batch || !result || result.batchId !== args.batchId || result.kind !== "photo" || !result.objectKey) {
       throw new ConvexError("Photo not found");
     }
+    if (result.deletedAt !== undefined || await resultIsExpired(ctx, result, workspace)) throw new ConvexError("Photo was deleted or expired");
+    if (args.operation === "put") await assertWorkspaceWritable(ctx, workspace);
     if (args.operation === "put" && batch.status !== "uploading") {
       throw new ConvexError("Photo upload is no longer allowed");
     }
@@ -263,7 +270,7 @@ async function hmac(key: Uint8Array, value: string) {
   return new Uint8Array(await crypto.subtle.sign("HMAC", cryptoKey, new TextEncoder().encode(value)));
 }
 
-export async function presignR2(method: "PUT" | "GET" | "HEAD", objectKey: string, contentType?: string) {
+export async function presignR2(method: "PUT" | "GET" | "HEAD" | "DELETE", objectKey: string, contentType?: string) {
   const accountId = requiredEnv("R2_ACCOUNT_ID");
   const bucket = requiredEnv("R2_BUCKET");
   const accessKeyId = requiredEnv("R2_ACCESS_KEY_ID");

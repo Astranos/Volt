@@ -59,7 +59,9 @@ describe("bounded complete workspace snapshots", () => {
     expect(pages.flatMap(page => page.items)).toHaveLength(12);
     expect(pages.length).toBeGreaterThan(1);
     const snapshot = await fetchWorkspaceSnapshot(args => user.query(api.cloudWorkspace.workspaceSnapshotPage, args));
-    expect(snapshot?.batches.flatMap(batch => batch.results).every(result => result.value === text)).toBe(true);
+    expect(snapshot?.batches.flatMap(batch => batch.results).every(result =>
+      result.deliveryState === "deleted" ? result.value === undefined : result.value === text,
+    )).toBe(true);
   });
 
   test("rejects continuation cursors across accounts or streams", async () => {

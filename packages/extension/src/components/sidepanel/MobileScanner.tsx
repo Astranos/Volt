@@ -27,6 +27,7 @@ import {
 import { cloudResultIds } from "../../cloud-scanner/workspace-hydration";
 import {
   SidepanelSignInCard,
+  useSidepanelSignIn,
   useSidepanelSignedIn,
   useSidepanelUserId,
 } from "../access/ExtensionAccess";
@@ -53,8 +54,7 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
   const cloudWorkspace = useCloudWorkspaceSnapshot();
   const userId = useSidepanelUserId();
   const signedIn = useSidepanelSignedIn();
-  const [signInOpen, setSignInOpen] = useState(false);
-  const openSignIn = useCallback(() => setSignInOpen(true), []);
+  const { signInOpen, openSignIn } = useSidepanelSignIn();
   if (!cloudWorkspace.historyReady) {
     // Mirrors the ScrollArea's px-4 pb-4 gutters so the signed-out state lines
     // up with the rest of the timeline instead of hugging the panel edges.
@@ -77,8 +77,7 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
 function OwnedMobileScanner({ cloudWorkspace }: { cloudWorkspace: ReturnType<typeof useCloudWorkspaceSnapshot> }) {
   const [previewPhoto, setPreviewPhoto] = useState<MobilePhoto | null>(null);
   const isSignedIn = useSidepanelSignedIn();
-  const [signInOpen, setSignInOpen] = useState(false);
-  const openSignIn = useCallback(() => setSignInOpen(true), []);
+  const { signInOpen, openSignIn } = useSidepanelSignIn();
   const [now, setNow] = useState(Date.now());
   const lastCloudDeletedIds = useRef<string[]>([]);
 

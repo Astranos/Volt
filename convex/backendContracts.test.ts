@@ -114,6 +114,9 @@ describe("backend compatibility contracts", () => {
       "OPTIONS /api/mobile/enrollment/exchange",
       "OPTIONS /api/mobile/outbox/sync",
       "OPTIONS /api/mobile/photos/upload-url",
+      "OPTIONS /api/shopify/admin/search",
+      "OPTIONS /api/shopify/admin/status",
+      "OPTIONS /api/shopify/admin/yesterday",
       "OPTIONS /api/signal",
       "OPTIONS /api/signal/*",
       "OPTIONS /api/storekit/notifications",
@@ -125,6 +128,7 @@ describe("backend compatibility contracts", () => {
       "OPTIONS /api/workspace/results/delete",
       "OPTIONS /api/workspace/results/restore",
       "OPTIONS /api/workspace/snapshot",
+      "OPTIONS /auth/chrome-profile",
       "OPTIONS /v1/products",
       "OPTIONS /v1/products/*",
       "POST /api/access/anonymous",
@@ -136,6 +140,7 @@ describe("backend compatibility contracts", () => {
       "POST /api/app-clip/grants/create",
       "POST /api/app-clip/outbox/sync",
       "POST /api/app-clip/photos/upload-url",
+      "POST /api/billing/stripe/webhook",
       "POST /api/mobile/ai/analyze",
       "POST /api/mobile/batches/finalize",
       "POST /api/mobile/computers/list",
@@ -146,6 +151,10 @@ describe("backend compatibility contracts", () => {
       "POST /api/mobile/enrollment/exchange",
       "POST /api/mobile/outbox/sync",
       "POST /api/mobile/photos/upload-url",
+      "POST /api/shopify/admin/search",
+      "POST /api/shopify/admin/status",
+      "POST /api/shopify/admin/yesterday",
+      "POST /api/shopify/webhooks/app/uninstalled",
       "POST /api/shopify/webhooks/customers/data_request",
       "POST /api/shopify/webhooks/customers/redact",
       "POST /api/shopify/webhooks/shop/redact",
@@ -158,7 +167,8 @@ describe("backend compatibility contracts", () => {
       "POST /api/workspace/enrollment",
       "POST /api/workspace/photos/download-url",
       "POST /api/workspace/results/delete",
-      "POST /api/workspace/results/restore"
+      "POST /api/workspace/results/restore",
+      "POST /auth/chrome-profile"
 ]);
   });
 });

@@ -2,6 +2,7 @@ import {
   CLERK_CLIENT_JWT_CACHE_KEY,
   CLERK_CLIENT_JWT_COOKIE,
 } from "../access/clerk-client-jwt";
+import { CHROME_PROFILE_AUTH_ENABLED, PROFILE_AUTH_EVENT_KEY, PROFILE_AUTH_STATE_KEY, profileAuthState, withProfileAuthStateLock } from "../access/chrome-profile-auth";
 import { CLERK_PUBLISHABLE_KEY, CLERK_SYNC_HOST } from "../access/config";
 
 type MirrorOptions = {
@@ -26,8 +27,16 @@ type MirrorOptions = {
 export function createClerkSessionMirror({ chromeApi, log, onChanged }: MirrorOptions) {
   const enabled = Boolean(CLERK_PUBLISHABLE_KEY);
 
-  async function sync() {
+  function sync() {
+    return withProfileAuthStateLock(syncNow);
+  }
+
+  async function syncNow() {
     if (!enabled || !chromeApi.cookies) return;
+    if (CHROME_PROFILE_AUTH_ENABLED) {
+      const stored = await chromeApi.storage.local.get(PROFILE_AUTH_STATE_KEY);
+      if (profileAuthState(stored[PROFILE_AUTH_STATE_KEY]).source !== "web") return;
+    }
     let value: string | null = null;
     try {
       const cookie = await chromeApi.cookies.get({
@@ -48,6 +57,9 @@ export function createClerkSessionMirror({ chromeApi, log, onChanged }: MirrorOp
       await chromeApi.storage.local.set({ [CLERK_CLIENT_JWT_CACHE_KEY]: value });
     } else {
       await chromeApi.storage.local.remove(CLERK_CLIENT_JWT_CACHE_KEY);
+    }
+    if (CHROME_PROFILE_AUTH_ENABLED) {
+      await chromeApi.storage.local.set({ [PROFILE_AUTH_EVENT_KEY]: crypto.randomUUID() });
     }
     onChanged();
   }

@@ -1,0 +1,21 @@
+Volt Kiosk Privacy Policy
+Effective October 6, 2026
+
+Volt Kiosk is an independent in-store iPad catalog operated by Juan Quenga. It is not affiliated with, sponsored by, or endorsed by PayMore. PayMore names and marks belong to their respective owners.
+
+Browsing and local preferences
+The app saves the selected store on the iPad so staff do not have to configure it after each launch. Search text, filters, photo selections, and browsing state are processed locally. They are cleared when staff or customers choose Start over or after two minutes of inactivity. The store selection remains saved until staff change it. No customer account is required. The app does not request customer names, email addresses, phone numbers, precise location, payment information, camera access, or advertising identifiers.
+
+Requests to see an item
+When a customer asks to see an item, the app sends the store, product, and variant identifiers and a temporary random session identifier to our kiosk service. The service stores a product snapshot, request status, and timestamps. The session identifier and its server-side hash prevent duplicate requests and limit repeated requests. They are not used for advertising or tracking across apps or websites. The app creates a new identifier after Start over, an idle reset, a store change, or a new app session. Authorized in-store use relies on the store's staff request queue; staff can see the requested item and its status.
+
+Request records expire one hour after creation and are scheduled for deletion then. Selecting Clear closes the request; it does not delete the record immediately. This one-hour schedule applies to the request database, not to separate hosting logs or provider backups.
+
+Service providers and technical logs
+HTTPS connections to our service and product-image hosts transmit routine network information, including the IP address. Vercel hosts the kiosk API, Convex stores the temporary request queue, and the store's Shopify image service delivers product photos. Hosting providers may process IP addresses, request URLs, user agents, timestamps, and error or performance information to deliver and secure the service. Operational logs and backups follow the providers' retention settings and policies. We do not use the app to sell personal information, serve advertising, or track customers across apps and websites.
+
+Staff operation
+Guided Access is an iPadOS feature configured by store staff. Volt Kiosk observes whether it is active and hides staff setup and request-management controls while it is active. The selected store persists on the device. Staff can change it in Store setup after ending Guided Access.
+
+Choices and contact
+Customers can browse without submitting an item request. Start over clears the local customer browsing session. To ask about this policy or a request record, contact juanquenga@gmail.com. Include the store and approximate request time; do not send payment information or sensitive personal data.

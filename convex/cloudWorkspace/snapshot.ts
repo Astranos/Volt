@@ -1,6 +1,8 @@
 import { ConvexError, v, type ObjectType } from "convex/values";
 import type { Doc } from "../_generated/dataModel";
 import type { QueryCtx } from "../_generated/server";
+import { retentionDeadline } from "../workspaceStorage";
+import { accountPolicy } from "../monetization";
 import { authenticatedWorkspaceOrNull } from "./identity";
 import { mergeWorkspaceSnapshotPages, type WorkspaceSnapshotPage } from "@volt/scanner-protocol";
 
@@ -39,11 +41,13 @@ function snapshotBatch(row: Doc<"resultBatches">) {
   return { id: row.batchId, createdAt: new Date(row.clientCreatedAt).toISOString(), updatedAt: new Date(row.updatedAt).toISOString(),
     deliveryState: row.status === "ready" ? "available" as const : row.status };
 }
-function snapshotResult(row: Doc<"scanResults">) {
+function snapshotResult(row: Doc<"scanResults">, policy: Awaited<ReturnType<typeof accountPolicy>>["workspace"], now: number) {
+  const deadline = retentionDeadline(row, policy);
+  const deleted = row.deletedAt !== undefined || (deadline !== null && deadline <= now);
   return { batchId: row.batchId, id: row.resultId, type: row.kind,
-    deliveryState: row.deletedAt === undefined ? "available" as const : "deleted" as const,
-    ...(row.text !== undefined ? { value: row.text } : {}), ...(row.format !== undefined ? { format: row.format } : {}),
-    ...(row.objectKey !== undefined ? { photoObjectKey: row.objectKey } : {}), ...(row.contentType !== undefined ? { contentType: row.contentType } : {}),
+    deliveryState: !deleted ? "available" as const : "deleted" as const,
+    ...(!deleted && row.text !== undefined ? { value: row.text } : {}), ...(!deleted && row.format !== undefined ? { format: row.format } : {}),
+    ...(!deleted && row.objectKey !== undefined ? { photoObjectKey: row.objectKey } : {}), ...(!deleted && row.contentType !== undefined ? { contentType: row.contentType } : {}),
     byteCount: row.byteCount, createdAt: new Date(row.clientCreatedAt).toISOString() };
 }
 function snapshotDelivery(row: Doc<"resultDeliveries">) {
@@ -78,7 +82,9 @@ export async function workspaceSnapshotPageHandler(ctx: QueryCtx, args: ObjectTy
     response = { ...withBoundary(page), kind: "batches", items: page.page.map(snapshotBatch) };
   } else if (args.kind === "results") {
     const page = await ctx.db.query("scanResults").withIndex("by_workspaceId", q => q.eq("workspaceId", workspace._id)).order("desc").paginate(options);
-    response = { ...withBoundary(page), kind: "results", items: page.page.map(snapshotResult) };
+    const now = Date.now();
+    const policy = (await accountPolicy(ctx, workspace.ownerClerkUserId, now)).workspace;
+    response = { ...withBoundary(page), kind: "results", items: page.page.map(row => snapshotResult(row, policy, now)) };
   } else {
     const page = await ctx.db.query("resultDeliveries").withIndex("by_workspaceId", q => q.eq("workspaceId", workspace._id)).order("desc").paginate(options);
     response = { ...withBoundary(page), kind: "deliveries", items: page.page.map(snapshotDelivery) };
@@ -110,9 +116,11 @@ export async function workspaceSnapshotHandler(ctx: QueryCtx) {
   const results = await bounded(ctx.db.query("scanResults").withIndex("by_workspaceId", q => q.eq("workspaceId", workspace._id)).order("desc"));
   const deliveries = await bounded(ctx.db.query("resultDeliveries").withIndex("by_workspaceId", q => q.eq("workspaceId", workspace._id)).order("desc"));
   const meta = { workspaceId: workspace._id, revision: workspace.updatedAt, continueCursor: "", isDone: true };
+  const now = Date.now();
+  const policy = (await accountPolicy(ctx, workspace.ownerClerkUserId, now)).workspace;
   return mergeWorkspaceSnapshotPages([
     { ...meta, kind: "batches", items: batches.map(snapshotBatch) },
-    { ...meta, kind: "results", items: results.map(snapshotResult) },
+    { ...meta, kind: "results", items: results.map(row => snapshotResult(row, policy, now)) },
     { ...meta, kind: "deliveries", items: deliveries.map(snapshotDelivery) },
   ]);
 }

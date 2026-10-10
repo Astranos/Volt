@@ -40,9 +40,9 @@ test("signed-in AI product scanning is metered, request-id scoped, and uses exis
   assert.match(mobileCloudAPIClientSwiftSource, /X-Volt-Device-Id[\s\S]*X-Volt-Device-Secret/);
   assert.match(mobileCloudAPIClientSwiftSource, /X-Volt-AI-Request-Id/);
   assert.match(mobileCloudAPIClientSwiftSource, /statusCode == 429[\s\S]*quota-exhausted[\s\S]*aiQuotaExhausted[\s\S]*rate-limited[\s\S]*aiRateLimited/);
-  assert.match(mobileCloudAPIClientSwiftSource, /case \.aiQuotaExhausted[\s\S]*Your AI scan limit is used up/);
+  assert.match(mobileCloudAPIClientSwiftSource, /case \.aiQuotaExhausted[\s\S]*Your free AI scans are used up/);
   assert.match(mobileCloudAPIClientSwiftSource, /case \.aiRateLimited[\s\S]*AI scanning is busy right now/);
-  assert.match(mobileCloudAPIClientSwiftSource, /case \.cloudWorkspaceRequired[\s\S]*Volt Pro cloud workspace access/);
+  assert.match(mobileCloudAPIClientSwiftSource, /case \.cloudWorkspaceRequired[\s\S]*Cloud workspace access is unavailable/);
   assert.doesNotMatch(mobileCloudAPIClientSwiftSource, /paidSubscriptionRequired|paid Volt subscription/);
   assert.match(sharedCameraSessionControlsSwiftSource, /var showsProductScanner = false[\s\S]*var productScanMode: ProductScanMode = \.upc/);
   assert.match(sharedCameraSessionControlsSwiftSource, /if isProductScannerSelected, let onToggleProductScanMode[\s\S]*productScanToolSlot/);
@@ -52,7 +52,9 @@ test("signed-in AI product scanning is metered, request-id scoped, and uses exis
   assert.match(captureSessionViewSwiftSource, /productScanQuotaText: store\.productScanQuotaText/);
   assert.match(captureSessionViewSwiftSource, /isRecognizingText: store\.isRecognizingText \|\| store\.isDictationBusy \|\| store\.isProductScanBusy/);
   assert.match(captureSessionViewSwiftSource, /ScannerCameraLayer\(gridVisible: gridVisible && !store\.isProductScannerActive\)/);
-  assert.match(captureSessionViewSwiftSource, /if store\.isProductScannerActive \{[\s\S]*if store\.isProductScanQuotaExhausted \{\s*isSubscriptionPaywallPresented = true[\s\S]*await store\.captureProduct\(using: clerk\)/);
+  assert.match(captureSessionViewSwiftSource, /if store\.isProductScannerActive \{[\s\S]*if store\.isProductScanQuotaExhausted \{\s*isQuotaAlertPresented = true[\s\S]*await store\.captureProduct\(using: clerk\)/);
+  assert.match(captureSessionViewSwiftSource, /\.alert\("Free AI scans used", isPresented: \$isQuotaAlertPresented\)[\s\S]*Text\(store\.productScanQuotaText/);
+  assert.doesNotMatch(captureSessionViewSwiftSource, /SubscriptionPaywallView|Upgrade to Volt Pro|Subscribe/);
   assert.doesNotMatch(captureSessionViewSwiftSource, /hasPaidProductScannerAccess|accessStore\.status\?\.access == \.subscription/);
   assert.match(sharedCameraSessionControlsSwiftSource, /struct CameraSessionTopStatus: View[\s\S]*if let productScanQuotaText[\s\S]*Text\(productScanQuotaText\)/);
   assert.match(sharedCameraSessionControlsSwiftSource, /else if let productScanOutput[\s\S]*"UPC found"[\s\S]*Text\(productScanOutput\.value\)/);
@@ -270,7 +272,8 @@ test("full app uses Liquid Glass for floating status chrome without glassing con
   assert.match(voltBrandSwiftSource, /content\.glassEffect\(\.regular, in: \.rect\(cornerRadius: cornerRadius\)\)/);
   assert.match(voltBrandSwiftSource, /content\.background\([\s\S]*\.regularMaterial/);
   assert.match(captureSessionViewSwiftSource, /CaptureDeliveryToastView[\s\S]*\.voltGlassSurface\(cornerRadius: 16\)/);
-  assert.match(subscriptionActionsSwiftSource, /PaywallStatusBanner[\s\S]*\.voltGlassSurface\(cornerRadius: 14\)/);
+  assert.match(subscriptionActionsSwiftSource, /Section\("Existing App Store purchases"\)/);
+  assert.doesNotMatch(subscriptionActionsSwiftSource, /Paywall|Volt Pro|Subscribe/);
   assert.doesNotMatch(scannerViewSwiftSource, /glassEffect|voltGlassSurface/);
   assert.doesNotMatch(settingsViewSwiftSource, /glassEffect|voltGlassSurface/);
 });

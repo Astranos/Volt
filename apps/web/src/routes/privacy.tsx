@@ -26,7 +26,7 @@ function PrivacyPage() {
         <h1 className="mt-3 text-4xl font-bold tracking-tight sm:text-5xl">
           Privacy Policy
         </h1>
-        <p className="mt-4 text-sm text-zinc-500">Effective July 22, 2026</p>
+        <p className="mt-4 text-sm text-zinc-500">Effective September 28, 2026</p>
 
         <div className="mt-12 space-y-10 text-base leading-7 text-zinc-700">
           <PolicySection title="What Volt processes">
@@ -47,10 +47,29 @@ function PrivacyPage() {
             </p>
           </PolicySection>
 
+          <PolicySection title="Shopify product audit">
+            <p>
+              When you install Volt Resale on a Shopify store, Volt stores the
+              store&apos;s permanent domain and encrypted Shopify access and refresh
+              tokens. Volt uses read-only product access to show products created
+              yesterday and to search the store&apos;s catalog. Results can include
+              product names, status, prices, inventory, images, SKUs, and condition
+              details. Volt does not keep a copy of the product catalog in its
+              database or request Shopify customer data.
+            </p>
+            <p className="mt-3">
+              The Shopify Admin app works without a Volt account. If you separately
+              connect the Chrome extension, Volt stores that connection under your
+              signed-in Volt account. Uninstalling the Shopify app removes saved
+              access for that store. You can also disconnect from extension settings.
+            </p>
+          </PolicySection>
+
           <PolicySection title="Storage and service providers">
             <p>
               Account authentication is provided by Clerk. Workspace records and
-              access state are stored with Convex. Private cloud photos are stored
+              access state, including encrypted Shopify credentials, are stored
+              with Convex. Private cloud photos are stored
               in a non-public Cloudflare R2 bucket and are accessed through
               short-lived signed URLs. Apple processes App Store purchases, and
               Vercel hosts Volt&apos;s public website. These providers process data
@@ -106,11 +125,14 @@ function PrivacyPage() {
 
           <PolicySection title="Contact">
             <p>
-              Questions and privacy requests can be submitted through{` `}
+              Send privacy requests to{` `}
+              <a className="font-semibold text-green-700 underline" href="mailto:juanquenga@gmail.com">
+                juanquenga@gmail.com
+              </a>
+              . For other questions, visit{` `}
               <a className="font-semibold text-green-700 underline" href={supportUrl}>
                 Volt support
-              </a>
-              .
+              </a>.
             </p>
           </PolicySection>
         </div>

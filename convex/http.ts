@@ -1,5 +1,8 @@
+import { chromeProfileAuth } from "./http/chromeProfileAuth";
+import { stripeWebhook } from "./http/billing";
 import { shopifyCallback } from "./http/shopify";
-import { customerDataRequest, customerRedact, shopRedact } from "./http/shopifyCompliance";
+import { appUninstalled, customerDataRequest, customerRedact, shopRedact } from "./http/shopifyCompliance";
+import { options as shopifyAdminOptions, search as shopifyAdminSearch, status as shopifyAdminStatus, yesterday as shopifyAdminYesterday } from "./http/shopifyEmbeddedAdmin";
 import { httpRouter, makeFunctionReference } from "convex/server";
 import type { SnapshotPageArgs, WorkspaceSnapshotPage } from "@volt/scanner-protocol";
 import {
@@ -29,6 +32,9 @@ import { signalHandler } from "./http/signal";
 import { mobileComputerListHandler, appClipComputerListHandler } from "./http/computers";
 
 const http = httpRouter();
+
+http.route({ path: "/auth/chrome-profile", method: "POST", handler: chromeProfileAuth });
+http.route({ path: "/auth/chrome-profile", method: "OPTIONS", handler: chromeProfileAuth });
 
 type AccessHttpResult = { statusCode: number; body: unknown };
 
@@ -946,5 +952,15 @@ http.route({ path: "/api/shopify/callback", method: "GET", handler: shopifyCallb
 http.route({ path: "/api/shopify/webhooks/customers/data_request", method: "POST", handler: customerDataRequest });
 http.route({ path: "/api/shopify/webhooks/customers/redact", method: "POST", handler: customerRedact });
 http.route({ path: "/api/shopify/webhooks/shop/redact", method: "POST", handler: shopRedact });
+http.route({ path: "/api/shopify/webhooks/app/uninstalled", method: "POST", handler: appUninstalled });
+
+http.route({ path: "/api/shopify/admin/status", method: "POST", handler: shopifyAdminStatus });
+http.route({ path: "/api/shopify/admin/yesterday", method: "POST", handler: shopifyAdminYesterday });
+http.route({ path: "/api/shopify/admin/search", method: "POST", handler: shopifyAdminSearch });
+http.route({ path: "/api/shopify/admin/status", method: "OPTIONS", handler: shopifyAdminOptions });
+http.route({ path: "/api/shopify/admin/yesterday", method: "OPTIONS", handler: shopifyAdminOptions });
+http.route({ path: "/api/shopify/admin/search", method: "OPTIONS", handler: shopifyAdminOptions });
+
+http.route({ path: "/api/billing/stripe/webhook", method: "POST", handler: stripeWebhook });
 
 export default http;

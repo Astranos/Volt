@@ -2,7 +2,7 @@ import { makeFunctionReference } from "convex/server";
 import { httpAction } from "../_generated/server";
 import { requiredEnv, shopDomain } from "../shopifyHelpers";
 
-type Topic = "customers/data_request" | "customers/redact" | "shop/redact";
+type Topic = "customers/data_request" | "customers/redact" | "shop/redact" | "app/uninstalled";
 const redactShop = makeFunctionReference<"mutation", { shop: string }, null>("shopifyCompliance:redactShop");
 const encoder = new TextEncoder();
 
@@ -26,7 +26,8 @@ function payloadShop(body: ArrayBuffer, topic: Topic): string {
     || !Object.hasOwn(payload, "shop_domain"))) {
     throw new Error("Invalid shop redaction payload");
   }
-  const shop = payload.shop_domain;
+  // app/uninstalled sends the Shop resource; `domain` may be a custom domain.
+  const shop = topic === "app/uninstalled" ? payload.myshopify_domain : payload.shop_domain;
   if (typeof shop !== "string") throw new Error("Invalid shop");
   return shopDomain(shop);
 }
@@ -52,7 +53,7 @@ export function complianceHandler(topic: Topic) {
     if (headerShop !== null && headerShop !== shop) {
       return new Response(null, { status: 400, headers: responseHeaders });
     }
-    if (topic === "shop/redact") await ctx.runMutation(redactShop, { shop });
+    if (topic === "shop/redact" || topic === "app/uninstalled") await ctx.runMutation(redactShop, { shop });
     return new Response(null, { status: 200, headers: responseHeaders });
   });
 }
@@ -60,3 +61,4 @@ export function complianceHandler(topic: Topic) {
 export const customerDataRequest = complianceHandler("customers/data_request");
 export const customerRedact = complianceHandler("customers/redact");
 export const shopRedact = complianceHandler("shop/redact");
+export const appUninstalled = complianceHandler("app/uninstalled");

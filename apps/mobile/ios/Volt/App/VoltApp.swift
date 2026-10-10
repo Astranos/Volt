@@ -27,8 +27,8 @@ struct VoltApp: App {
     var body: some Scene {
         WindowGroup {
             Group {
-                if ProcessInfo.processInfo.environment["VOLT_SUBSCRIPTION_REVIEW_SCREENSHOT"] == "1" {
-                    SubscriptionReviewScreenshotView()
+                if ProcessInfo.processInfo.environment["VOLT_FREE_WORKSPACE_SCREENSHOT"] == "1" {
+                    FreeWorkspaceScreenshotView()
                 } else {
                     VoltRootScene()
                         .environment(scannerStore)

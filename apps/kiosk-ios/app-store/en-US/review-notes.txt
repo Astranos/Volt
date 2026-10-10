@@ -1,0 +1,25 @@
+Volt Kiosk is a free native SwiftUI iPad catalog for independently operated PayMore franchise stores. It supports iPadOS 17+, landscape, and portrait. No login, subscription, payment account, scanner app, or hardware is required. Internet access is required for inventory, photos, and requests.
+
+Start and browse
+1. Launch the app. Enter taylormi or taylormi.paymore.com and tap Open store for Taylor, Michigan's live inventory. Setup verifies and saves the store. The saved store reopens on later launches.
+2. Search for a visible product name or SKU. Tap a category, choose a Budget limit, and change Sort. Clear search and Clear filters restore the full catalog. Show more items loads additional visible cards. Inventory and item names can change because this is live stock.
+3. Tap an item card. Inspect the price, exact SKU, available variants, condition notes, specifications, and included-item information. Scroll to see the full listing. The photo gallery sits above the summary; thumbnails are beside the active square photo. Use the side Previous item and Next item arrows to browse neighboring items. Close returns to the catalog.
+4. Tap a photo thumbnail to change the main photo. Tap the main photo to open the full-screen viewer. Swipe between photos, tap a visible neighboring photo peek, or use Previous and Next. Pinch to zoom up to 4x, pan the enlarged photo, and use Reset zoom. Done closes the viewer. Items with one photo naturally have no additional photo to select.
+
+Request and staff queue
+5. Choose an available variant and tap Ask to see item. The app shows sending and confirmation, or a retry message. This sends an item/SKU request to the selected store's staff queue. It does not buy, pay for, or reserve an item. A repeated retry uses the same request key to avoid duplicates. Staff confirm actual stock and handle any sale in person.
+6. Outside Guided Access, tap Staff requests in the staff bar. The queue refreshes about every three seconds. Review requests can be marked Found, Shown, Given to customer, or Clear. Clear review requests. Requests expire one hour after creation. The queue controls are intentionally public and do not require a staff account.
+
+Optional physical-iPad kiosk setup
+Guided Access is optional for review. On a physical iPad, open Settings > Accessibility > Guided Access, enable it, and set a staff passcode. Return to Volt Kiosk after choosing the store. Triple-click the top or Home button and start Guided Access. Keep Touch and the software keyboard enabled. The app hides Store setup and Staff requests while Guided Access is active. Staff end it through iPadOS with their passcode or configured biometric method. The app does not start or end Guided Access itself.
+
+Session, connectivity, and privacy
+Start over clears searches, filters, item details, photos, and customer request feedback while retaining the store. After two idle minutes, the app does the same automatically. A notice appears during the final 20 seconds; Keep browsing restarts the timer. Inventory refreshes about every minute. If the network fails, the app reports the problem, retains the last snapshot, and disables requests when stock cannot be confirmed. After five minutes without a valid update, inventory requires a refresh.
+
+Privacy policy is available from the app's Privacy policy control and at https://pm.voltresale.app/privacy.html. No customer names or contact details are requested. Item requests use a temporary random session identifier.
+
+Attached video: volt-kiosk-reviewer-walkthrough.mp4 (3:11), a captioned native iPad Simulator recording. No live request is sent. Pinch zoom and physical-iPad Guided Access are not demonstrated.
+
+The operator has confirmed franchise authorization for this use. Volt Kiosk is independently developed for individual franchise operations and is not affiliated with or endorsed by PayMore corporate.
+
+Review contact: Juan Quenga, juanquenga@gmail.com, +1 734 502 4172.

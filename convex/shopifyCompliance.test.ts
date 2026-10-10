@@ -74,3 +74,23 @@ test("shop redaction deletes every matching connection and pending OAuth state i
   expect(remaining.connections.map((row) => row.shop)).toEqual([otherShop]);
   expect(remaining.states.map((row) => row.shop)).toEqual([otherShop]);
 });
+
+test("app uninstall reads the Shop resource's myshopify domain and redacts that shop", async () => {
+  vi.useFakeTimers();
+  const t = convexTest(schema, modules);
+  await t.run(async (ctx) => {
+    for (const owner of [shop, otherShop]) {
+      await ctx.db.insert("shopifyConnections", {
+        ownerTokenIdentifier: owner, shop: owner, encryptedAccessToken: "encrypted",
+        encryptedRefreshToken: "encrypted", expiresAt: 1, refreshExpiresAt: 1,
+      });
+    }
+  });
+  const path = "/api/shopify/webhooks/app/uninstalled";
+  const resource = { id: 954889, domain: "www.example-store.com", myshopify_domain: shop };
+  expect((await t.fetch(path, signedRequest(path, { shop_domain: shop }, { topic: "app/uninstalled" }))).status).toBe(400);
+  expect((await t.fetch(path, signedRequest(path, resource, { topic: "app/uninstalled" }))).status).toBe(200);
+  await t.finishAllScheduledFunctions(vi.runAllTimers);
+  const remaining = await t.run((ctx) => ctx.db.query("shopifyConnections").collect());
+  expect(remaining.map((row) => row.shop)).toEqual([otherShop]);
+});

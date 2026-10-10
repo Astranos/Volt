@@ -12,6 +12,8 @@
     "dev:kiosk": "pnpm --filter @volt/kiosk dev",
     "test:kiosk": "node scripts/run-tests.mjs kiosk",
     "deploy:preview": "vercel deploy --target preview",
+    "deploy:backend": "node scripts/check-shopify-backend.mjs --source-only && pnpm exec convex deploy && node scripts/check-shopify-backend.mjs",
+    "check:shopify-backend": "node scripts/check-shopify-backend.mjs",
     "test:convex": "node scripts/run-tests.mjs convex",
     "test:web": "node scripts/run-tests.mjs web",
     "test": "node scripts/run-tests.mjs all",
@@ -34,12 +36,14 @@
     "@apple/app-store-server-library": "3.1.0",
     "@volt/scanner-protocol": "workspace:*",
     "convex": "^1.41.0",
+    "stripe": "^23.0.0",
     "web-push": "^3.6.7"
   },
   "devDependencies": {
     "typescript": "5.9.3",
     "@edge-runtime/vm": "^5.0.0",
     "@types/web-push": "^3.6.4",
+    "@vercel/functions": "^3.9.9",
     "convex-test": "^0.0.53",
     "vitest": "^4.1.9"
   }

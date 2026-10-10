@@ -1,0 +1,59 @@
+{
+  "simulator": "iPad Pro 13-inch (M4)",
+  "runtime": "iOS 26.5",
+  "bundleId": "com.volt.kiosk",
+  "store": "taylormi",
+  "finalVideoSeconds": 190.737037037,
+  "files": [
+    {
+      "file": "volt-kiosk-reviewer-walkthrough.mp4",
+      "bytes": 60816307,
+      "sha256": "9696187eee1acb94330e3731746f13da39f43405ed90dc301c7b90cadab2ef52"
+    },
+    {
+      "file": "01-ipad13-catalog.png",
+      "bytes": 2383566,
+      "sha256": "d078be1fd0a05b1cb08f51e540c3ddca383e611c8417972d3ead8e70c8386600",
+      "width": 2064,
+      "height": 2752,
+      "bitDepth": 8,
+      "colorType": 2
+    },
+    {
+      "file": "02-ipad13-search.png",
+      "bytes": 2153170,
+      "sha256": "241fff2ac866c98faedea040d2f41211f0590630ed3be72b60163edb4bf5f812",
+      "width": 2064,
+      "height": 2752,
+      "bitDepth": 8,
+      "colorType": 2
+    },
+    {
+      "file": "03-ipad13-filtered.png",
+      "bytes": 2623920,
+      "sha256": "6fdf4c1d5d7f2df247dcfbab89cbd1e2c893fbb526a5d5b6da8e6e94a419b383",
+      "width": 2064,
+      "height": 2752,
+      "bitDepth": 8,
+      "colorType": 2
+    },
+    {
+      "file": "04-ipad13-detail.png",
+      "bytes": 1701474,
+      "sha256": "98ae6f37cfd88adb2c2e23fc1e12a22fe9b9a4cfa45612e016af617fa9fc29f0",
+      "width": 2064,
+      "height": 2752,
+      "bitDepth": 8,
+      "colorType": 2
+    },
+    {
+      "file": "05-ipad13-photos.png",
+      "bytes": 1960811,
+      "sha256": "47a07cf830b3dbb2f77612b98e4995c9acee29519cf6715e2589fd3772b4feb4",
+      "width": 2064,
+      "height": 2752,
+      "bitDepth": 8,
+      "colorType": 2
+    }
+  ]
+}

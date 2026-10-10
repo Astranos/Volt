@@ -1,0 +1,9 @@
+build/
+DerivedData/
+*.xcresult
+*.xcarchive
+*.ipa
+xcuserdata/
+*.xcuserstate
+project.xcworkspace/
+-Xcc/

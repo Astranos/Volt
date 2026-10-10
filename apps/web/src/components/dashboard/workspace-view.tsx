@@ -1,3 +1,4 @@
+import { StorageSummary } from "../billing/account-plans";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {
@@ -44,12 +45,15 @@ export function WorkspaceView() {
   const resultActions = useResultActions();
   const clipboard = useCopy();
   return (
+    <>
+    <StorageSummary />
     <WorkspaceContent
       {...workspace}
       resolvePhoto={resolvePhoto}
       {...resultActions}
       {...clipboard}
     />
+    </>
   );
 }
 

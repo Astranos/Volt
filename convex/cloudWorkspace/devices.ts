@@ -4,7 +4,6 @@ import {
   randomOpaqueSecret,
   sha256Hex,
   ENROLLMENT_TTL_MS,
-  requireFullAppEntitlement,
   requireOrCreateAuthenticatedWorkspaceForDeviceBootstrap,
   requireOrCreateWorkspaceForClerkUser,
   credentialArgs,
@@ -14,7 +13,6 @@ import {
   requireGuestPrincipal,
   requireAuthenticatedWorkspace,
 } from "./identity";
-import { hasFullAppEntitlement } from "../access";
 import { type Id, type Doc } from "../_generated/dataModel";
 import { type MutationCtx, type QueryCtx } from "../_generated/server";
 import { makeFunctionReference } from "convex/server";
@@ -74,7 +72,6 @@ export const exchangeEnrollmentHandler = async (ctx: MutationCtx, args: ObjectTy
     }
     const workspace = await ctx.db.get(enrollment.workspaceId);
     if (!workspace) throw new ConvexError("Workspace no longer exists");
-    await requireFullAppEntitlement(ctx, workspace.ownerClerkUserId);
     const deviceId = crypto.randomUUID();
     const deviceSecret = randomOpaqueSecret();
     await ctx.db.insert("workspaceDevices", {
@@ -154,10 +151,6 @@ export const registerComputerArgs = {
 export const registerComputerHandler = async (ctx: MutationCtx, args: ObjectType<typeof registerComputerArgs>) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new ConvexError("Authentication required");
-    // Registration is a presence heartbeat, not an authorization boundary.
-    // Returning success without writing for locked accounts lets old clients
-    // terminate their retry chain while every workspace read stays protected.
-    if (!(await hasFullAppEntitlement(ctx, identity.subject))) return null;
     const workspace = await requireOrCreateWorkspaceForClerkUser(
       ctx,
       identity.subject,
