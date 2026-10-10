@@ -27,8 +27,11 @@ function yesterday() {
   const start = new Date(end.getTime() - 86400000);
   return { startUtc: start.toISOString(), endUtc: end.toISOString(), date: start.toISOString().slice(0, 10) };
 }
-function productPage(hasNextPage: boolean, id: string, status = "DRAFT") {
-  return new Response(JSON.stringify({ data: { products: { nodes: [{ id: `gid://shopify/Product/${id}`, legacyResourceId: id, title: `Product ${id}`, status }], pageInfo: { hasNextPage, endCursor: `cursor-${id}` } } } }), { headers: { "Content-Type": "application/json" } });
+function productNode(id: string, status = "DRAFT", tags: string[] = []) {
+  return { id: `gid://shopify/Product/${id}`, legacyResourceId: id, title: `Product ${id}`, status, tags };
+}
+function productPage(hasNextPage: boolean, id: string, status = "DRAFT", extraNodes: ReturnType<typeof productNode>[] = []) {
+  return new Response(JSON.stringify({ data: { products: { nodes: [productNode(id, status), ...extraNodes], pageInfo: { hasNextPage, endCursor: `cursor-${id}` } } } }), { headers: { "Content-Type": "application/json" } });
 }
 beforeEach(() => {
   vi.stubEnv("SHOPIFY_CLIENT_ID", "client-id");
@@ -171,6 +174,14 @@ describe("Shopify previous calendar day", () => {
     expect(first.variables.search).toBe(`created_at:>='${args.startUtc}' created_at:<'${args.endUtc}' status:active,archived,draft,unlisted`);
     expect(second.variables.cursor).toBe("cursor-1");
   });
+  test("skips products tagged checkout", async () => {
+    vi.stubGlobal("fetch", vi.fn<typeof fetch>().mockResolvedValueOnce(productPage(false, "1", "ACTIVE", [
+      productNode("2", "ACTIVE", ["checkout"]), productNode("3", "ACTIVE", [" Checkout "]), productNode("4", "ACTIVE", ["checkout-ready"]),
+    ])));
+    const args = yesterday();
+    const result = await fetchYesterday(shop, "access", auditRange(args.startUtc, args.endUtc, args.date));
+    expect(result.products.map(p => p.id)).toEqual(["gid://shopify/Product/1", "gid://shopify/Product/4"]);
+  });
   test("retries throttling and rejects a failed later page without returning partial results", async () => {
     vi.useFakeTimers();
     const mock = vi.fn<typeof fetch>()
@@ -280,5 +291,73 @@ describe("Shopify live product search", () => {
     expect(JSON.stringify(result)).not.toContain("private-");
     const bob = t.withIdentity({ subject: "bob", tokenIdentifier: "clerk|bob" });
     await expect(bob.action(search, { query: "phone" })).rejects.toThrow("Connect your Shopify store");
+  });
+});
+
+describe("Shopify hidden products", () => {
+  const listHidden = makeFunctionReference<"query", Record<string, never>, { id: string; title: string }[]>("shopifyAudit:listHiddenProducts");
+  const setHidden = makeFunctionReference<"mutation", { productId: string; title: string; hidden: boolean }, null>("shopifyAudit:setProductHidden");
+  const searchNode = (id: string) => ({ id: `gid://shopify/Product/${id}`, legacyResourceId: id, title: `Product ${id}`, status: "ACTIVE", totalInventory: 1, featuredMedia: null, priceRangeV2: null, conditionMetafield: null, tags: [], variants: { nodes: [] } });
+
+  test("skips hidden IDs before capping results", async () => {
+    vi.stubGlobal("fetch", vi.fn<typeof fetch>().mockResolvedValueOnce(new Response(JSON.stringify({ data: {
+      inStock: { nodes: Array.from({ length: 30 }, (_, index) => searchNode(String(index + 1))) }, outOfStock: { nodes: [{ ...searchNode("31"), totalInventory: 0 }] },
+    } }))));
+    const result = await fetchSearchProducts(shop, "access", "phone", new Set(["gid://shopify/Product/2"]));
+    expect(result.products).toHaveLength(30);
+    expect(result.products.map(p => p.id)).not.toContain("gid://shopify/Product/2");
+    expect(result.products.at(-1)?.id).toBe("gid://shopify/Product/31");
+  });
+
+  test("stores hidden products per account and store, and filters live search", async () => {
+    const t = convexTest(schema, modules);
+    const alice = t.withIdentity({ subject: "alice", tokenIdentifier: owner });
+    await expect(t.query(listHidden, {})).rejects.toThrow("Sign in");
+    expect(await alice.query(listHidden, {})).toEqual([]);
+    await expect(alice.mutation(setHidden, { productId: "gid://shopify/Product/1", title: "Phone", hidden: true })).rejects.toThrow("Connect your Shopify store");
+    const aad = `${owner}|${shop}`;
+    await t.run(async ctx => ctx.db.insert("shopifyConnections", {
+      ownerTokenIdentifier: owner, shop, encryptedAccessToken: await encryptToken("access", aad),
+      encryptedRefreshToken: await encryptToken("refresh", aad), expiresAt: Date.now() + 3600000, refreshExpiresAt: Date.now() + 86400000,
+    }));
+    await expect(alice.mutation(setHidden, { productId: "gid://shopify/Collection/1", title: "Phone", hidden: true })).rejects.toThrow("Invalid Shopify product");
+    await alice.mutation(setHidden, { productId: "gid://shopify/Product/1", title: " Phone ", hidden: true });
+    await alice.mutation(setHidden, { productId: "gid://shopify/Product/1", title: "Phone", hidden: true });
+    expect(await alice.query(listHidden, {})).toEqual([{ id: "gid://shopify/Product/1", title: "Phone" }]);
+
+    // Bob on the same shop has his own list.
+    const bobOwner = "clerk|bob";
+    const bob = t.withIdentity({ subject: "bob", tokenIdentifier: bobOwner });
+    await t.run(async ctx => ctx.db.insert("shopifyConnections", {
+      ownerTokenIdentifier: bobOwner, shop, encryptedAccessToken: await encryptToken("access", `${bobOwner}|${shop}`),
+      encryptedRefreshToken: await encryptToken("refresh", `${bobOwner}|${shop}`), expiresAt: Date.now() + 3600000, refreshExpiresAt: Date.now() + 86400000,
+    }));
+    expect(await bob.query(listHidden, {})).toEqual([]);
+    await bob.mutation(setHidden, { productId: "gid://shopify/Product/2", title: "Case", hidden: true });
+
+    vi.stubGlobal("fetch", vi.fn<typeof fetch>().mockImplementation(async () => new Response(JSON.stringify({ data: {
+      inStock: { nodes: [searchNode("1"), searchNode("2")] }, outOfStock: { nodes: [] },
+    } }))));
+    expect((await alice.action(search, { query: "phone" })).products.map(p => p.id)).toEqual(["gid://shopify/Product/2"]);
+    expect((await bob.action(search, { query: "phone" })).products.map(p => p.id)).toEqual(["gid://shopify/Product/1"]);
+
+    // Bob unhiding doesn't touch Alice's list.
+    await bob.mutation(setHidden, { productId: "gid://shopify/Product/1", title: "Phone", hidden: false });
+    expect(await alice.query(listHidden, {})).toEqual([{ id: "gid://shopify/Product/1", title: "Phone" }]);
+
+    await alice.mutation(setHidden, { productId: "gid://shopify/Product/1", title: "Phone", hidden: false });
+    expect(await alice.query(listHidden, {})).toEqual([]);
+  });
+
+  test("scopes hidden products to the connected shop", async () => {
+    const t = convexTest(schema, modules);
+    const alice = t.withIdentity({ subject: "alice", tokenIdentifier: owner });
+    const connectionId = await t.run(async ctx => ctx.db.insert("shopifyConnections", { ownerTokenIdentifier: owner, shop, ...tokens }));
+    await alice.mutation(setHidden, { productId: "gid://shopify/Product/1", title: "Phone", hidden: true });
+    await t.run(ctx => ctx.db.patch(connectionId, { shop: "second-store.myshopify.com" }));
+    expect(await alice.query(listHidden, {})).toEqual([]);
+    await alice.mutation(setHidden, { productId: "gid://shopify/Product/1", title: "Phone", hidden: false });
+    await t.run(ctx => ctx.db.patch(connectionId, { shop }));
+    expect(await alice.query(listHidden, {})).toEqual([{ id: "gid://shopify/Product/1", title: "Phone" }]);
   });
 });

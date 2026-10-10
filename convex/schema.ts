@@ -32,6 +32,14 @@ export default defineSchema({
   })
     .index("by_ownerTokenIdentifier", ["ownerTokenIdentifier"])
     .index("by_shop", ["shop"]),
+  shopifyHiddenProducts: defineTable({
+    ownerTokenIdentifier: v.string(),
+    shop: v.string(),
+    productId: v.string(),
+    title: v.string(),
+  })
+    .index("by_ownerTokenIdentifier_and_shop_and_productId", ["ownerTokenIdentifier", "shop", "productId"])
+    .index("by_shop", ["shop"]),
   shopifyOAuthStates: defineTable({
     ownerTokenIdentifier: v.string(),
     shop: v.string(),

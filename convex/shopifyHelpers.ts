@@ -138,7 +138,7 @@ export function productSearchQuery(input: string): string {
   return terms.join(" ");
 }
 
-export async function fetchSearchProducts(shop: string, access: string, input: string): Promise<{ shop: string; products: SearchProduct[] }> {
+export async function fetchSearchProducts(shop: string, access: string, input: string, hiddenIds: ReadonlySet<string> = new Set()): Promise<{ shop: string; products: SearchProduct[] }> {
   const search = productSearchQuery(input);
   const data = await graphql(shop, access, `query SearchProducts($inStock: String!, $outOfStock: String!) {
     inStock: products(first: 30, query: $inStock, sortKey: RELEVANCE) {
@@ -172,7 +172,7 @@ export async function fetchSearchProducts(shop: string, access: string, input: s
       }
       const inventory = product.totalInventory;
       if (typeof inventory !== "number" || !Number.isSafeInteger(inventory)) throw new ConvexError("Shopify returned invalid inventory.");
-      if (seen.has(id)) continue;
+      if (seen.has(id) || hiddenIds.has(id)) continue;
       const media = product.featuredMedia === null ? null : object(product.featuredMedia);
       const preview = media?.preview === null || media === null ? null : object(media.preview);
       const image = preview?.image === null || preview === null ? null : object(preview.image);
@@ -217,7 +217,7 @@ export async function fetchYesterday(shop: string, access: string, range: { date
   do {
     const data = await graphql(shop, access, `query YesterdayProducts($search: String!, $cursor: String) {
       products(first: 250, after: $cursor, query: $search, sortKey: CREATED_AT) {
-        nodes { id legacyResourceId title status }
+        nodes { id legacyResourceId title status tags }
         pageInfo { hasNextPage endCursor }
       }
     }`, { search: `created_at:>='${range.start}' created_at:<'${range.end}' status:active,archived,draft,unlisted`, cursor });
@@ -228,7 +228,11 @@ export async function fetchYesterday(shop: string, access: string, range: { date
       const id = string(product.id);
       const legacyId = string(product.legacyResourceId);
       if (!/^\d+$/.test(legacyId)) throw new ConvexError("Shopify returned an invalid product ID.");
-      if (!seen.has(id)) products.push({ id, title: typeof product.title === "string" ? product.title : string(product.title), status: string(product.status), url: `https://admin.shopify.com/store/${shop.split(".")[0]}/products/${legacyId}` });
+      const tags = product.tags;
+      if (!Array.isArray(tags)) throw new ConvexError("Shopify returned invalid product tags.");
+      // Checkout-tagged listings are excluded from the audit.
+      const checkout = tags.some(tag => typeof tag === "string" && tag.trim().toLowerCase() === "checkout");
+      if (!seen.has(id) && !checkout) products.push({ id, title: typeof product.title === "string" ? product.title : string(product.title), status: string(product.status), url: `https://admin.shopify.com/store/${shop.split(".")[0]}/products/${legacyId}` });
       seen.add(id);
     }
     const info = object(page.pageInfo);

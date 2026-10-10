@@ -3,12 +3,11 @@ import { Command } from "cmdk";
 import { TabManager, TabInfo } from "@/src/utils/tab-manager";
 import { TabItem } from "../cmdk-palette/TabItem";
 import { RecentTabTiles } from "./RecentTabTiles";
-import { ScrollArea } from "@/src/components/ui/scroll-area";
 import { ToggleGroup, ToggleGroupItem } from "@/src/components/ui/toggle-group";
 import { Search as SearchIcon, Clock } from "lucide-react";
 import { type SearchMode } from "./NewTabHelp";
 import { ShopifyProductResults, type ShopifyProductSearchState } from "./ShopifyProductResults";
-import { searchShopifyProducts } from "../../shopify-audit/client";
+import { searchShopifyProducts, setShopifyProductHidden, type ShopifySearchProduct } from "../../shopify-audit/client";
 import {
   getSearchPrefixMode,
   NEW_TAB_SEARCH_PROVIDERS,
@@ -49,6 +48,7 @@ export function ClosedTabsPanel({
   const [selectedValue, setSelectedValue] = useState<string>("");
   const [shopifySearch, setShopifySearch] = useState<ShopifyProductSearchState>({ kind: "idle" });
   const [shopifyRetry, setShopifyRetry] = useState(0);
+  const shopifySearchGeneration = useRef(0);
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const trimmedSearch = search.trim();
@@ -63,6 +63,7 @@ export function ClosedTabsPanel({
       return;
     }
     let canceled = false;
+    shopifySearchGeneration.current++;
     setShopifySearch({ kind: "loading", query });
     const timer = window.setTimeout(() => {
       void searchShopifyProducts(query)
@@ -78,6 +79,23 @@ export function ClosedTabsPanel({
     }, 280);
     return () => { canceled = true; window.clearTimeout(timer); };
   }, [displayedMode, displayedQuery, shopifyRetry]);
+
+  const hideShopifyProduct = async (product: ShopifySearchProduct) => {
+    const withoutProduct = (current: ShopifyProductSearchState): ShopifyProductSearchState => current.kind === "ready"
+      ? { ...current, result: { ...current.result, products: current.result.products.filter((item) => item.id !== product.id) } }
+      : current;
+    const generation = shopifySearchGeneration.current;
+    setShopifySearch(withoutProduct);
+    try {
+      await setShopifyProductHidden(product, true);
+    } catch (cause) {
+      // Only report the failure on the results it came from.
+      if (generation !== shopifySearchGeneration.current) return;
+      setShopifySearch((current) => current.kind === "ready"
+        ? { kind: "error", query: current.query, message: cause instanceof Error ? cause.message : "Could not hide the product." }
+        : current);
+    }
+  };
 
   // Treat clicks anywhere on the search row's padding/icon area as a
   // request to focus the input, except when they land on a real control.
@@ -197,11 +215,21 @@ export function ClosedTabsPanel({
     });
   };
 
+  // Command wraps the search input too, so arrow keys typed in it move the selection.
   return (
-    <div className="closed-tabs-panel">
+    <Command
+      shouldFilter={false}
+      filter={() => 1}
+      onKeyDown={handleKeyDown}
+      className="closed-tabs-panel"
+      value={selectedValue}
+      onValueChange={setSelectedValue}
+    >
       <div
         className="closed-tabs-search-container"
         onMouseDown={focusInputFromRow}
+        // Enter on the mode toggles must activate them, not cmdk's selected result.
+        onKeyDown={(e) => { if (e.key === "Enter" && e.target !== inputRef.current) e.stopPropagation(); }}
       >
         <div className="closed-tabs-search">
           <SearchIcon className="w-4 h-4 text-gray-400" />
@@ -248,15 +276,8 @@ export function ClosedTabsPanel({
         </ToggleGroup>
       </div>
 
-      <Command
-        shouldFilter={false}
-        filter={() => 1}
-        onKeyDown={handleKeyDown}
-        className="closed-tabs-command"
-        value={selectedValue}
-        onValueChange={setSelectedValue}
-      >
-        <ScrollArea className="flex-1">
+      <div className="closed-tabs-command">
+        <div className="closed-tabs-scroll">
           {showTiles && (
             <div id="tour-recent-tabs" className="closed-tabs-tiles-section">
               <div className="closed-tabs-section-label">
@@ -276,6 +297,7 @@ export function ClosedTabsPanel({
                 query={displayedQuery.trim()}
                 state={shopifySearch}
                 onOpenProduct={(url) => { void chrome.tabs.create({ url, active: true }); }}
+                onHideProduct={(product) => { void hideShopifyProduct(product); }}
                 onRetry={() => setShopifyRetry((current) => current + 1)}
                 onOpenSettings={() => { void chrome.tabs.create({ url: chrome.runtime.getURL("/options.html#shopify-audit"), active: true }); }}
               />
@@ -347,8 +369,8 @@ export function ClosedTabsPanel({
               </>
             )}
           </Command.List>
-        </ScrollArea>
-      </Command>
-    </div>
+        </div>
+      </div>
+    </Command>
   );
 }

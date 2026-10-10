@@ -5,6 +5,7 @@ const tokenFields = {
   encryptedAccessToken: v.string(), encryptedRefreshToken: v.string(),
   expiresAt: v.number(), refreshExpiresAt: v.number(),
 };
+export const MAX_HIDDEN_PRODUCTS = 500;
 export const connectionValidator = v.object({
   _id: v.id("shopifyConnections"), _creationTime: v.number(), ownerTokenIdentifier: v.string(), shop: v.string(),
   ...tokenFields, refreshLease: v.optional(v.object({ nonce: v.string(), expiresAt: v.number() })),
@@ -62,5 +63,14 @@ export const finishRefresh = internalMutation({
     if (!row || row.refreshLease?.nonce !== args.nonce) throw new ConvexError("Shopify connection changed. Try again.");
     await ctx.db.patch(row._id, { ...(args.tokens ?? {}), refreshLease: undefined });
     return null;
+  },
+});
+export const hiddenProductIds = internalQuery({
+  args: { ownerTokenIdentifier: v.string(), shop: v.string() }, returns: v.array(v.string()),
+  handler: async (ctx, args) => {
+    const rows = await ctx.db.query("shopifyHiddenProducts")
+      .withIndex("by_ownerTokenIdentifier_and_shop_and_productId", q => q.eq("ownerTokenIdentifier", args.ownerTokenIdentifier).eq("shop", args.shop))
+      .take(MAX_HIDDEN_PRODUCTS);
+    return rows.map(row => row.productId);
   },
 });

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import { ExternalLink, RefreshCw } from "lucide-react";
+import { Eye, ExternalLink, RefreshCw } from "lucide-react";
 import { CLERK_SIGN_IN_URL } from "../../access/config";
-import { connectShopifyAudit, disconnectShopifyAudit, getShopifyAuditConnection } from "../../shopify-audit/client";
+import { connectShopifyAudit, disconnectShopifyAudit, getShopifyAuditConnection, listHiddenShopifyProducts, setShopifyProductHidden, type ShopifyHiddenProduct } from "../../shopify-audit/client";
 import { findOpenShopifyAdminShops, shopDomainFromAdminUrl } from "../../shopify-audit/store-discovery";
 
 export function ShopifyAuditSettings() {
@@ -13,6 +13,7 @@ export function ShopifyAuditSettings() {
   const [working, setWorking] = useState(false);
   const [waitingForInstall, setWaitingForInstall] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hiddenProducts, setHiddenProducts] = useState<ShopifyHiddenProduct[] | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -30,6 +31,12 @@ export function ShopifyAuditSettings() {
   }, []);
 
   useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => {
+    if (!connectedShop) { setHiddenProducts(null); return; }
+    void listHiddenShopifyProducts()
+      .then(setHiddenProducts)
+      .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "Could not load hidden products."));
+  }, [connectedShop]);
   useEffect(() => {
     void findOpenShopifyAdminShops()
       .then((shops) => {
@@ -113,6 +120,16 @@ export function ShopifyAuditSettings() {
     }
   };
 
+  const unhide = async (product: ShopifyHiddenProduct) => {
+    setError(null);
+    try {
+      await setShopifyProductHidden(product, false);
+      setHiddenProducts((current) => current?.filter((item) => item.id !== product.id) ?? null);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not show the product again.");
+    }
+  };
+
   return (
     <section className="scroll-mt-20 space-y-4" id="shopify-audit">
       <div>
@@ -142,6 +159,22 @@ export function ShopifyAuditSettings() {
             </div>
             {discoveryTabId !== null && <p className="text-sm text-muted-foreground">Choose your store in the Shopify tab. Volt will continue when its admin page opens.</p>}
             {waitingForInstall && <p className="text-sm text-muted-foreground">Finish the approval in the Shopify tab. This page will update when your store connects.</p>}
+          </div>
+        )}
+        {connectedShop && hiddenProducts && (
+          <div className="mt-5 border-t border-border pt-4">
+            <p className="font-medium">Hidden from new tab search</p>
+            <p className="text-sm text-muted-foreground">Use the hide button on a Shopify search result to keep it out of new tab results.</p>
+            {hiddenProducts.length === 0 ? <p className="mt-2 text-sm text-muted-foreground">No hidden products.</p> : (
+              <ul className="mt-3 divide-y divide-border rounded-md border border-border">
+                {hiddenProducts.map((product) => (
+                  <li className="flex items-center justify-between gap-3 px-3 py-2" key={product.id}>
+                    <span className="truncate text-sm" title={product.title}>{product.title}</span>
+                    <button className="shrink-0 rounded-md border border-border px-2.5 py-1 text-xs hover:bg-muted" onClick={() => void unhide(product)} type="button"><Eye aria-hidden="true" className="mr-1 inline h-3.5 w-3.5" />Show in results</button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         )}
         {error && <div className="mt-3 text-sm text-destructive" role="alert">{error} {error.toLowerCase().includes("sign in") && <button className="underline" onClick={() => void chrome.tabs.create({ url: CLERK_SIGN_IN_URL })} type="button">Sign in to Volt</button>}</div>}

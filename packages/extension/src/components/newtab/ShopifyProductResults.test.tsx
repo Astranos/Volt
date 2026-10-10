@@ -12,6 +12,7 @@ test("shows stock, price, condition, and SKU in Shopify result cards", () => {
         { id: "gid://shopify/Product/1", title: "Canon EOS", status: "ACTIVE", totalInventory: 3, url: "https://admin.shopify.com/store/sample/products/1", imageUrl: null, price: "299.99", currencyCode: "USD", sku: "CANON-1", condition: "Used - Good" },
       ] } }}
       onOpenProduct={vi.fn()}
+      onHideProduct={vi.fn()}
       onRetry={vi.fn()}
       onOpenSettings={vi.fn()}
     />
@@ -21,4 +22,5 @@ test("shows stock, price, condition, and SKU in Shopify result cards", () => {
   expect(html).toContain("From $299.99");
   expect(html).toContain("3 in stock");
   expect(html).toContain("Used - Good");
+  expect(html).toContain("Hide Canon EOS from results");
 });
