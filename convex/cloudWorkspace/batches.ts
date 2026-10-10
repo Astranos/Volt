@@ -224,14 +224,15 @@ async function markBatchReadyForPrincipal(
   if (!batch || batch.sourceDeviceId !== principal.sourceDeviceId) {
     throw new ConvexError("Batch not found");
   }
-  await assertWorkspaceWritable(ctx, principal.workspace);
   if (batch.status === "deleted") throw new ConvexError("Batch was deleted");
+  // A retry of a finished batch succeeds even after the workspace became read-only.
+  if (batch.status === "ready") return { idempotent: true };
+  await assertWorkspaceWritable(ctx, principal.workspace);
   const results = await ctx.db.query("scanResults").withIndex("by_workspaceId_and_batchId", q => q.eq("workspaceId", principal.workspace._id).eq("batchId", batchId)).take(500);
   const policy = (await accountPolicy(ctx, principal.workspace.ownerClerkUserId)).workspace;
   for (const result of results) {
     if (result.deletedAt !== undefined || resultExpiredForPolicy(result, policy)) throw new ConvexError("Batch contains deleted or expired results");
   }
-  if (batch.status === "ready") return { idempotent: true };
   await ctx.db.patch(batch._id, { status: "ready", updatedAt: Date.now() });
   return { idempotent: false };
 }

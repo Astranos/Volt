@@ -26,7 +26,8 @@ function payloadShop(body: ArrayBuffer, topic: Topic): string {
     || !Object.hasOwn(payload, "shop_domain"))) {
     throw new Error("Invalid shop redaction payload");
   }
-  const shop = payload.shop_domain;
+  // app/uninstalled sends the Shop resource; `domain` may be a custom domain.
+  const shop = topic === "app/uninstalled" ? payload.myshopify_domain : payload.shop_domain;
   if (typeof shop !== "string") throw new Error("Invalid shop");
   return shopDomain(shop);
 }

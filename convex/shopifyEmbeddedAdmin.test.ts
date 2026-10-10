@@ -101,7 +101,8 @@ test("verified uninstall removes only that shop's embedded credential", async ()
     await ctx.db.insert("shopifyOAuthStates", { ownerTokenIdentifier: "legacy-owner", shop, state: "legacy-state", expiresAt: 1 });
   });
   const path = "/api/shopify/webhooks/app/uninstalled";
-  const payload = JSON.stringify({ shop_domain: shop });
+  // app/uninstalled delivers the Shop resource, not a shop_domain envelope.
+  const payload = JSON.stringify({ id: 1, domain: "www.example.com", myshopify_domain: shop });
   const signature = createHmac("sha256", secret).update(payload).digest("base64");
   const request = { method: "POST", headers: { "X-Shopify-Topic": "app/uninstalled", "X-Shopify-Shop-Domain": shop,
     "X-Shopify-Hmac-Sha256": signature }, body: payload } as const;

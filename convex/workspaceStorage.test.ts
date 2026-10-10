@@ -330,6 +330,10 @@ test("cancellation preserves read-only access for thirty days and then expires p
   await expect(capture(t, credential, "during-grace")).rejects.toThrow(
     /read-only/,
   );
+  // Retrying a batch finished before the workspace became read-only stays idempotent.
+  expect(
+    await t.mutation(markBatchReady, { ...credential, batchId: "paid-photo" }),
+  ).toEqual({ idempotent: true });
   expect(
     await t.query(authorizePhotoAccess, {
       ...credential,

@@ -34,8 +34,9 @@ struct KioskListingDetailsView: View {
                 .background(.background, in: RoundedRectangle(cornerRadius: 16))
             }
             Text("Product details").font(.title2).bold().accessibilityAddTraits(.isHeader)
-            if details.isEmpty {
-                Text(description.isEmpty ? "No additional details provided. Please ask an associate if you have questions." : description)
+            if partition.main.isEmpty {
+                // The description repeats every block, so use it only when there are no blocks.
+                Text(details.isEmpty && !description.isEmpty ? description : "No additional details provided. Please ask an associate if you have questions.")
             } else {
                 ForEach(partition.main.indices, id: \.self) { index in
                     KioskListingBlockView(block: partition.main[index])
