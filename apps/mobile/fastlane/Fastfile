@@ -1,3 +1,5 @@
+require "json"
+require "net/http"
 require "shellwords"
 
 default_platform(:ios)
@@ -271,7 +273,7 @@ def upload_app_store_release_notes(api_key:, app_version:, build_number:, releas
   localized_release_notes = {}
   localized_release_notes["en-US"] = release_notes if release_notes.to_s.strip.length.positive?
 
-  deliver(
+  deliver_options = {
     api_key: api_key,
     app_identifier: APP_IDENTIFIER,
     app_version: app_version,
@@ -279,18 +281,79 @@ def upload_app_store_release_notes(api_key:, app_version:, build_number:, releas
     build_number: submit_for_review ? build_number.to_s : nil,
     skip_binary_upload: true,
     skip_screenshots: true,
-    skip_metadata: false,
     skip_app_version_update: false,
     release_notes: localized_release_notes,
     app_review_information: app_review_information,
-    submit_for_review: submit_for_review,
     automatic_release: automatic_release,
     submission_information: {
       export_compliance_uses_encryption: false
     },
     run_precheck_before_submit: false,
     force: true
+  }
+
+  # The first pass creates the App Store version, which the App Clip experience
+  # must be attached to before Apple accepts the submission.
+  deliver(**deliver_options, skip_metadata: false, submit_for_review: false)
+  return unless submit_for_review
+
+  ensure_app_clip_default_experience!(api_key: api_key, app_version: app_version)
+  deliver(**deliver_options, skip_metadata: true, submit_for_review: true)
+end
+
+def app_store_connect_request(token, method, path, body = nil)
+  token.refresh! if token.expired?
+  uri = URI("https://api.appstoreconnect.apple.com#{path}")
+  request = Net::HTTP.const_get(method.capitalize).new(uri)
+  request["Authorization"] = "Bearer #{token.text}"
+  request["Content-Type"] = "application/json"
+  request.body = JSON.generate(body) if body
+  response = Net::HTTP.start(uri.host, uri.port, use_ssl: true) { |http| http.request(request) }
+  UI.user_error!("App Store Connect #{method} #{uri.path} failed (#{response.code}): #{response.body}") unless response.is_a?(Net::HTTPSuccess)
+
+  response.body.to_s.empty? ? {} : JSON.parse(response.body)
+end
+
+# Versions created through the API do not inherit the App Clip default experience
+# the way the App Store Connect website does, and Apple rejects the submission
+# without one. Copy it, including the header image, from the newest version that has it.
+def ensure_app_clip_default_experience!(api_key:, app_version:)
+  token = Spaceship::ConnectAPI::Token.from(hash: api_key)
+  app = app_store_connect_request(token, :get, "/v1/apps?filter[bundleId]=#{APP_IDENTIFIER}")["data"].first
+  UI.user_error!("No App Store Connect app found for #{APP_IDENTIFIER}") unless app
+
+  versions = app_store_connect_request(
+    token,
+    :get,
+    "/v1/apps/#{app['id']}/appStoreVersions?filter[platform]=IOS&include=appClipDefaultExperience&limit=20"
+  )["data"].sort_by { |version| version.dig("attributes", "createdDate").to_s }.reverse
+  experience_id = ->(version) { version.dig("relationships", "appClipDefaultExperience", "data", "id") }
+
+  target = versions.find { |version| version.dig("attributes", "versionString") == app_version }
+  UI.user_error!("App Store version #{app_version} does not exist") unless target
+  return UI.message("App Clip default experience already attached to #{app_version}") if experience_id.call(target)
+
+  template = versions.find { |version| version != target && experience_id.call(version) }
+  UI.user_error!("No earlier App Store version has an App Clip default experience to copy") unless template
+
+  template_experience = app_store_connect_request(token, :get, "/v1/appClipDefaultExperiences/#{experience_id.call(template)}?include=appClip")["data"]
+  app_store_connect_request(
+    token,
+    :post,
+    "/v1/appClipDefaultExperiences",
+    {
+      data: {
+        type: "appClipDefaultExperiences",
+        attributes: { action: template_experience.dig("attributes", "action") },
+        relationships: {
+          appClip: { data: template_experience.dig("relationships", "appClip", "data") },
+          releaseWithAppStoreVersion: { data: { type: "appStoreVersions", id: target["id"] } },
+          appClipDefaultExperienceTemplate: { data: { type: "appClipDefaultExperiences", id: template_experience["id"] } }
+        }
+      }
+    }
   )
+  UI.success("Copied the App Clip default experience from #{template.dig('attributes', 'versionString')} to #{app_version}")
 end
 
 def write_screenshot_report(output_directory)

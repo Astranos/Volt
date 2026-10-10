@@ -36,7 +36,7 @@ pnpm --filter @volt/mobile fastlane:install
 
 The mobile package has its own `Gemfile`; run fastlane through Bundler so every machine uses the locked Ruby dependencies. The package scripts set `BUNDLE_PATH=vendor/bundle` so gems install inside `apps/mobile` instead of the macOS system Ruby path. Runtime scripts also set `FASTLANE_SKIP_UPDATE_CHECK=1` to keep local and CI output stable.
 
-On this machine, macOS system Ruby 2.6 resolves fastlane `2.230.0`; fastlane `2.235.0+` requires Ruby 3.0. Use a Ruby 3 runtime and run `bundle update fastlane` when the team wants to move to the newest fastlane release.
+The lockfile pins Bundler 2.7.2 and needs Ruby 3.1 or newer; macOS system Ruby 2.6 cannot run it. Run `bundle update fastlane` when the team wants to move to the newest fastlane release.
 
 ## Local Build Validation
 
