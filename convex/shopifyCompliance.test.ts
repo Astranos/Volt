@@ -1,5 +1,6 @@
 import { createHmac } from "node:crypto";
 import { convexTest } from "convex-test";
+import { makeFunctionReference } from "convex/server";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import schema from "./schema";
 
@@ -97,5 +98,20 @@ test("app uninstall reads the Shop resource's myshopify domain and redacts that 
   expect((await t.fetch(path, signedRequest(path, resource, { topic: "app/uninstalled" }))).status).toBe(200);
   await t.finishAllScheduledFunctions(vi.runAllTimers);
   const remaining = await t.run((ctx) => ctx.db.query("shopifyConnections").collect());
+  expect(remaining.map((row) => row.shop)).toEqual([otherShop]);
+});
+
+test("shop redaction keeps paging until every hidden product is removed", async () => {
+  vi.useFakeTimers();
+  const t = convexTest(schema, modules);
+  await t.run(async (ctx) => {
+    for (let i = 0; i < 215; i++) {
+      await ctx.db.insert("shopifyHiddenProducts", { ownerTokenIdentifier: "owner", shop, productId: `gid://shopify/Product/${i}`, title: "Hidden" });
+    }
+    await ctx.db.insert("shopifyHiddenProducts", { ownerTokenIdentifier: "owner", shop: otherShop, productId: "gid://shopify/Product/1", title: "Hidden" });
+  });
+  await t.mutation(makeFunctionReference<"mutation", { shop: string }, null>("shopifyCompliance:redactShop"), { shop });
+  await t.finishAllScheduledFunctions(vi.runAllTimers);
+  const remaining = await t.run((ctx) => ctx.db.query("shopifyHiddenProducts").collect());
   expect(remaining.map((row) => row.shop)).toEqual([otherShop]);
 });

@@ -75,23 +75,29 @@ export function createShopifyAuditController({
       let creationError: unknown = null;
       // Open tabs one at a time so Shopify admin pages don't all load at once.
       for (const [index, product] of result.products.entries()) {
+        if (index > 0) {
+          await wait(AUDIT_TAB_DELAY_MS);
+          // Closing the audit group cancels the rest of the audit.
+          if (groupId !== null && !await chromeApi.tabGroups.get(groupId).then(() => true, () => false)) break;
+        }
+        let tabId: number | undefined;
         try {
-          if (index > 0) await wait(AUDIT_TAB_DELAY_MS);
-          const tab = await chromeApi.tabs.create({
+          tabId = (await chromeApi.tabs.create({
             url: product.url,
             active: false,
             ...(windowId === undefined ? {} : { windowId }),
-          });
-          if (typeof tab.id !== "number") continue;
-          opened++;
+          })).id;
+          if (typeof tabId !== "number") continue;
           if (groupId === null) {
-            groupId = await chromeApi.tabs.group({ tabIds: [tab.id] });
+            groupId = await chromeApi.tabs.group({ tabIds: [tabId] });
             await chromeApi.tabGroups.update(groupId, { title: `Shopify audit · ${result.date}`, color: "blue", collapsed: false });
-            await chromeApi.tabs.update(tab.id, { active: true });
+            await chromeApi.tabs.update(tabId, { active: true });
           } else {
-            await chromeApi.tabs.group({ groupId, tabIds: [tab.id] });
+            await chromeApi.tabs.group({ groupId, tabIds: [tabId] });
           }
+          opened++;
         } catch (error) {
+          if (typeof tabId === "number") await chromeApi.tabs.remove(tabId).catch(() => undefined);
           creationError = error;
           break;
         }

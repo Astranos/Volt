@@ -4,18 +4,26 @@ import { createShopifyAuditController } from "./shopify-audit-controller.ts";
 import { yesterdayInComputerTimezone } from "../domain/shopify-audit.ts";
 import { EXTENSION_SCANNER_SIGNAL_URL } from "../domain/mobile-scanner-signal-url.ts";
 
-function setup(products) {
-  const calls = { created: [], grouped: [], updatedGroups: [], activated: [], waits: [] };
+function setup(products, { groupExists = () => true, groupFails = () => false } = {}) {
+  const calls = { created: [], grouped: [], updatedGroups: [], activated: [], waits: [], removed: [] };
   const chromeApi = {
     tabs: {
       create: async (options) => {
         calls.created.push(options);
         return { id: calls.created.length };
       },
-      group: async (options) => { calls.grouped.push(options); return 7; },
+      group: async (options) => {
+        if (groupFails(options)) throw new Error("No group with id: 7.");
+        calls.grouped.push(options);
+        return 7;
+      },
       update: async (id, options) => { calls.activated.push({ id, options }); },
+      remove: async (id) => { calls.removed.push(id); },
     },
-    tabGroups: { update: async (id, options) => { calls.updatedGroups.push({ id, options }); } },
+    tabGroups: {
+      get: async (id) => { if (!groupExists(calls)) throw new Error(`No group with id: ${id}.`); return { id }; },
+      update: async (id, options) => { calls.updatedGroups.push({ id, options }); },
+    },
   };
   const controller = createShopifyAuditController({
     chromeApi,
@@ -46,6 +54,24 @@ test("opens yesterday's product admin pages one at a time in one named tab group
   assert.deepEqual(calls.grouped, [{ tabIds: [1] }, { groupId: 7, tabIds: [2] }, { groupId: 7, tabIds: [3] }]);
   assert.equal(calls.updatedGroups[0].options.title, `Shopify audit · ${yesterdayInComputerTimezone().date}`);
   assert.deepEqual(calls.activated, [{ id: 1, options: { active: true } }]);
+});
+
+test("stops opening tabs once the user closes the audit group", async () => {
+  const products = [11, 12, 13].map((id) => ({ id: String(id), title: `Product ${id}`, status: "DRAFT", url: `https://admin.shopify.com/store/sample/products/${id}` }));
+  const { calls, request } = setup(products, { groupExists: (calls) => calls.created.length < 2 });
+  const response = await request();
+  assert.deepEqual(response.value.count, 2);
+  assert.equal(calls.created.length, 2);
+  assert.deepEqual(calls.removed, []);
+});
+
+test("closes a tab that could not join the audit group and reports the failure", async () => {
+  const products = [11, 12].map((id) => ({ id: String(id), title: `Product ${id}`, status: "DRAFT", url: `https://admin.shopify.com/store/sample/products/${id}` }));
+  const { calls, request } = setup(products, { groupFails: (options) => options.groupId !== undefined });
+  const response = await request();
+  assert.equal(response.success, false);
+  assert.match(response.error, /Opened 1 of 2 products/);
+  assert.deepEqual(calls.removed, [2]);
 });
 
 test("does not open an unexpected product URL", async () => {

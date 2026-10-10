@@ -324,15 +324,40 @@ describe("Shopify hidden products", () => {
     await alice.mutation(setHidden, { productId: "gid://shopify/Product/1", title: " Phone ", hidden: true });
     await alice.mutation(setHidden, { productId: "gid://shopify/Product/1", title: "Phone", hidden: true });
     expect(await alice.query(listHidden, {})).toEqual([{ id: "gid://shopify/Product/1", title: "Phone" }]);
-    const bob = t.withIdentity({ subject: "bob", tokenIdentifier: "clerk|bob" });
-    expect(await bob.query(listHidden, {})).toEqual([]);
 
-    vi.stubGlobal("fetch", vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ data: {
+    // Bob on the same shop has his own list.
+    const bobOwner = "clerk|bob";
+    const bob = t.withIdentity({ subject: "bob", tokenIdentifier: bobOwner });
+    await t.run(async ctx => ctx.db.insert("shopifyConnections", {
+      ownerTokenIdentifier: bobOwner, shop, encryptedAccessToken: await encryptToken("access", `${bobOwner}|${shop}`),
+      encryptedRefreshToken: await encryptToken("refresh", `${bobOwner}|${shop}`), expiresAt: Date.now() + 3600000, refreshExpiresAt: Date.now() + 86400000,
+    }));
+    expect(await bob.query(listHidden, {})).toEqual([]);
+    await bob.mutation(setHidden, { productId: "gid://shopify/Product/2", title: "Case", hidden: true });
+
+    vi.stubGlobal("fetch", vi.fn<typeof fetch>().mockImplementation(async () => new Response(JSON.stringify({ data: {
       inStock: { nodes: [searchNode("1"), searchNode("2")] }, outOfStock: { nodes: [] },
     } }))));
     expect((await alice.action(search, { query: "phone" })).products.map(p => p.id)).toEqual(["gid://shopify/Product/2"]);
+    expect((await bob.action(search, { query: "phone" })).products.map(p => p.id)).toEqual(["gid://shopify/Product/1"]);
+
+    // Bob unhiding doesn't touch Alice's list.
+    await bob.mutation(setHidden, { productId: "gid://shopify/Product/1", title: "Phone", hidden: false });
+    expect(await alice.query(listHidden, {})).toEqual([{ id: "gid://shopify/Product/1", title: "Phone" }]);
 
     await alice.mutation(setHidden, { productId: "gid://shopify/Product/1", title: "Phone", hidden: false });
     expect(await alice.query(listHidden, {})).toEqual([]);
+  });
+
+  test("scopes hidden products to the connected shop", async () => {
+    const t = convexTest(schema, modules);
+    const alice = t.withIdentity({ subject: "alice", tokenIdentifier: owner });
+    const connectionId = await t.run(async ctx => ctx.db.insert("shopifyConnections", { ownerTokenIdentifier: owner, shop, ...tokens }));
+    await alice.mutation(setHidden, { productId: "gid://shopify/Product/1", title: "Phone", hidden: true });
+    await t.run(ctx => ctx.db.patch(connectionId, { shop: "second-store.myshopify.com" }));
+    expect(await alice.query(listHidden, {})).toEqual([]);
+    await alice.mutation(setHidden, { productId: "gid://shopify/Product/1", title: "Phone", hidden: false });
+    await t.run(ctx => ctx.db.patch(connectionId, { shop }));
+    expect(await alice.query(listHidden, {})).toEqual([{ id: "gid://shopify/Product/1", title: "Phone" }]);
   });
 });

@@ -82,12 +82,13 @@ export function ClosedTabsPanel({
     const withoutProduct = (current: ShopifyProductSearchState): ShopifyProductSearchState => current.kind === "ready"
       ? { ...current, result: { ...current.result, products: current.result.products.filter((item) => item.id !== product.id) } }
       : current;
+    const query = shopifySearch.kind === "ready" ? shopifySearch.query : null;
     setShopifySearch(withoutProduct);
     try {
       await setShopifyProductHidden(product, true);
     } catch (cause) {
-      setShopifySearch((current) => current.kind === "ready"
-        ? { kind: "error", query: current.query, message: cause instanceof Error ? cause.message : "Could not hide the product." }
+      setShopifySearch((current) => current.kind === "ready" && current.query === query
+        ? { kind: "error", query, message: cause instanceof Error ? cause.message : "Could not hide the product." }
         : current);
     }
   };
@@ -210,8 +211,16 @@ export function ClosedTabsPanel({
     });
   };
 
+  // Command wraps the search input too, so arrow keys typed in it move the selection.
   return (
-    <div className="closed-tabs-panel">
+    <Command
+      shouldFilter={false}
+      filter={() => 1}
+      onKeyDown={handleKeyDown}
+      className="closed-tabs-panel"
+      value={selectedValue}
+      onValueChange={setSelectedValue}
+    >
       <div
         className="closed-tabs-search-container"
         onMouseDown={focusInputFromRow}
@@ -261,14 +270,7 @@ export function ClosedTabsPanel({
         </ToggleGroup>
       </div>
 
-      <Command
-        shouldFilter={false}
-        filter={() => 1}
-        onKeyDown={handleKeyDown}
-        className="closed-tabs-command"
-        value={selectedValue}
-        onValueChange={setSelectedValue}
-      >
+      <div className="closed-tabs-command">
         <div className="closed-tabs-scroll">
           {showTiles && (
             <div id="tour-recent-tabs" className="closed-tabs-tiles-section">
@@ -362,7 +364,7 @@ export function ClosedTabsPanel({
             )}
           </Command.List>
         </div>
-      </Command>
-    </div>
+      </div>
+    </Command>
   );
 }

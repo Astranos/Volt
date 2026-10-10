@@ -112,6 +112,7 @@ export function ShopifyProductResults({
               aria-label={`Hide ${product.title} from results`}
               className="shopify-product-hide"
               onClick={(event) => { event.stopPropagation(); onHideProduct(product); }}
+              onKeyDown={(event) => { if (event.key === "Enter") event.stopPropagation(); }}
               title="Hide from results"
               type="button"
             >
