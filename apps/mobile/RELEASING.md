@@ -4,9 +4,9 @@ This guide is for maintainers authorized to publish Volt. Ordinary contributions
 
 ## Prepare the release environment
 
-The existing lockfile pins Bundler 1.17.2, which fails on Ruby 3.4. Use the established release Ruby environment until the Ruby dependencies are upgraded and verified. This limitation does not affect JavaScript contribution checks or the CocoaPods setup.
+Use Ruby 3.1 or newer. The lockfile pins Bundler 2.7.2, which `bundle` installs or switches to automatically.
 
-1. Complete the [native development setup](../../CONTRIBUTING.md#iphone-app).
+1. Complete the [native development setup](../../CONTRIBUTING.md#iphone-app), including `pod install` in `ios`.
 2. Run `pnpm --filter @volt/mobile fastlane:install` to install the Ruby dependencies from `Gemfile.lock`.
 3. Copy [fastlane/.env.example](fastlane/.env.example) to `fastlane/.env` within this package.
 4. Supply the production Clerk configuration and your authorized App Store Connect key. Keep the key file outside the repository.
@@ -22,7 +22,7 @@ Run `pnpm --filter @volt/mobile ios:fastlane:build` for local simulator build ve
 
 ## Upload only after approval
 
-After the maintainer approves the release, run `pnpm --filter @volt/mobile ios:beta` to upload to TestFlight. This lane also updates App Store release notes and can submit for review when `SUBMIT_FOR_REVIEW` is enabled. Review that environment setting before running it.
+After the maintainer approves the release, run `pnpm --filter @volt/mobile ios:beta` to upload to TestFlight. This lane also updates App Store release notes and can submit for review when `SUBMIT_FOR_REVIEW` is enabled. Review that environment setting before running it. Before submitting, the lane copies the App Clip default experience from the previous version, because versions created through the API do not inherit it.
 
 To submit an already uploaded build, use the separate `submit` lane. Review its options and confirm the intended release before invoking it.
 
