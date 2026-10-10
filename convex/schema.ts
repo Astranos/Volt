@@ -15,10 +15,11 @@ const pushSubscription = v.object({
 export default defineSchema({
   shopifyEmbeddedInstallations: defineTable({
     shop: v.string(),
-    encryptedAccessToken: v.string(),
-    encryptedRefreshToken: v.string(),
-    expiresAt: v.number(),
-    refreshExpiresAt: v.number(),
+    encryptedAccessToken: v.optional(v.string()),
+    encryptedRefreshToken: v.optional(v.string()),
+    expiresAt: v.optional(v.number()),
+    refreshExpiresAt: v.optional(v.number()),
+    exchangeLease: v.optional(v.object({ nonce: v.string(), expiresAt: v.number() })),
   }).index("by_shop", ["shop"]),
   shopifyConnections: defineTable({
     ownerTokenIdentifier: v.string(),
@@ -49,6 +50,8 @@ export default defineSchema({
     .index("by_storeSlug_and_createdAt", ["storeSlug", "createdAt"]),
   workspaces: defineTable({
     ownerClerkUserId: v.string(),
+    managedRecordCount: v.optional(v.number()),
+    managedByteCount: v.optional(v.number()),
     name: v.string(),
     createdAt: v.number(),
     updatedAt: v.number(),
@@ -151,6 +154,12 @@ export default defineSchema({
     objectKey: v.optional(v.string()),
     contentType: v.optional(v.string()),
     byteCount: v.number(),
+    storageManaged: v.optional(v.boolean()),
+    retentionTier: v.optional(v.union(v.literal("free"), v.literal("workspace"))),
+    expiresAt: v.optional(v.number()),
+    retentionCheckAt: v.optional(v.number()),
+    purgeAfter: v.optional(v.number()),
+    objectPurgedAt: v.optional(v.number()),
     checksum: v.optional(v.string()),
     deletedAt: v.optional(v.number()),
     clientCreatedAt: v.number(),
@@ -158,7 +167,9 @@ export default defineSchema({
   })
     .index("by_workspaceId", ["workspaceId"])
     .index("by_workspaceId_and_batchId", ["workspaceId", "batchId"])
-    .index("by_workspaceId_and_resultId", ["workspaceId", "resultId"]),
+    .index("by_workspaceId_and_resultId", ["workspaceId", "resultId"])
+    .index("by_retentionCheckAt", ["retentionCheckAt"])
+    .index("by_purgeAfter", ["purgeAfter"]),
 
   resultDeliveries: defineTable({
     workspaceId: v.id("workspaces"),
@@ -487,6 +498,25 @@ export default defineSchema({
     .index("by_productId", ["productId"])
     .index("by_upc", ["upc"]),
 
+  webBillingCustomers: defineTable({
+    ownerClerkUserId: v.string(), ownerTokenIdentifier: v.string(), stripeCustomerId: v.string(), createdAt: v.number(),
+    workspaceCheckout: v.optional(v.object({ requestKey: v.string(), expiresAt: v.number(), sessionId: v.optional(v.string()), url: v.optional(v.string()) })),
+    apiCheckout: v.optional(v.object({ requestKey: v.string(), expiresAt: v.number(), sessionId: v.optional(v.string()), url: v.optional(v.string()) })),
+  }).index("by_ownerClerkUserId", ["ownerClerkUserId"]).index("by_stripeCustomerId", ["stripeCustomerId"]),
+  webSubscriptions: defineTable({
+    ownerClerkUserId: v.string(), ownerTokenIdentifier: v.string(), product: v.union(v.literal("workspace"), v.literal("api")),
+    stripeCustomerId: v.string(), stripeSubscriptionId: v.string(),
+    status: v.union(v.literal("active"), v.literal("past_due"), v.literal("canceled"), v.literal("unpaid"), v.literal("incomplete"), v.literal("incomplete_expired"), v.literal("trialing"), v.literal("paused")),
+    currentPeriodEnd: v.number(), paidThrough: v.optional(v.number()), cancelAtPeriodEnd: v.boolean(), endedAt: v.optional(v.number()), updatedAt: v.number(), lastEventCreated: v.number(),
+  }).index("by_ownerClerkUserId_and_product", ["ownerClerkUserId", "product"])
+    .index("by_ownerTokenIdentifier_and_product", ["ownerTokenIdentifier", "product"])
+    .index("by_stripeSubscriptionId", ["stripeSubscriptionId"]),
+  webBillingEvents: defineTable({ eventId: v.string(), eventCreated: v.number(), processedAt: v.number() }).index("by_eventId", ["eventId"]),
+  productApiUsage: defineTable({ ownerTokenIdentifier: v.string(), periodKey: v.string(), used: v.number(), reserved: v.number(), updatedAt: v.number() })
+    .index("by_ownerTokenIdentifier_and_periodKey", ["ownerTokenIdentifier", "periodKey"]),
+  productApiRequests: defineTable({ requestId: v.string(), ownerTokenIdentifier: v.string(), apiKeyId: v.id("productApiKeys"), periodKey: v.string(), status: v.union(v.literal("reserved"), v.literal("succeeded"), v.literal("refunded")), createdAt: v.number(), expiresAt: v.number(), completedAt: v.optional(v.number()) })
+    .index("by_requestId", ["requestId"]).index("by_status_and_expiresAt", ["status", "expiresAt"]),
+
   catalogObservations: defineTable({
     sourceUrl: v.string(),
     source: v.literal("external"),
@@ -529,6 +559,7 @@ export default defineSchema({
   productApiKeys: defineTable(v.union(
     v.object({
       ownerTokenIdentifier: v.string(),
+      ownerClerkUserId: v.optional(v.string()),
       name: v.string(),
       keyHash: v.string(),
       prefix: v.string(),
@@ -538,6 +569,7 @@ export default defineSchema({
     }),
     v.object({
       ownerTokenIdentifier: v.string(),
+      ownerClerkUserId: v.optional(v.string()),
       name: v.string(),
       keyHash: v.string(),
       prefix: v.string(),

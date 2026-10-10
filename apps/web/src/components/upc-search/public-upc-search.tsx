@@ -4,6 +4,7 @@ import { ConvexHttpClient } from "convex/browser";
 import { api } from "../../../../../convex/_generated/api";
 import { CONVEX_URL } from "../../lib/env";
 import type { CatalogResult } from "../../lib/catalog";
+import { PublicSearchAd } from "../ads/public-search-ad";
 import {
   createPublicSearch,
   UPC_SEARCH_CANONICAL,
@@ -257,6 +258,7 @@ export function PublicSearchResults({
           product name to narrow your search.
         </p>
       ) : null}
+      <PublicSearchAd usefulResults={state.result.products.length > 0} />
     </section>
   );
 }

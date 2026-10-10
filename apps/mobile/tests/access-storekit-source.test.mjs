@@ -17,6 +17,8 @@ const accessSettingsSource = readIOSSource("Volt/Views/AccessSettingsSection.swi
 const accountViewSource = readIOSSource("Volt/Views/AccountAccessView.swift");
 const subscriptionViewSource = readIOSSource("Volt/Views/SubscriptionActionsView.swift");
 const rootSceneSource = readIOSSource("Volt/Views/VoltRootScene.swift");
+const screenshotFixtureSource = readIOSSource("Volt/Services/ScreenshotFixtures.swift");
+const screenshotHarnessSource = readIOSSource("VoltScreenshots/VoltScreenshots.swift");
 const clipRootSource = readClipViewSources();
 const clipStoreSource = readIOSSource("VoltClip/Services/ClipScannerStore.swift");
 const clipInfoSource = readIOSSource("VoltClip/Info.plist");
@@ -43,7 +45,7 @@ test("full app configures and injects Clerk through AppConfiguration", () => {
   assert.match(appSource, /clerk = Clerk\.shared/);
   assert.match(appSource, /\.environment\(clerk\)/);
   assert.match(appSource, /try await clerk\.handle\(url\)/);
-  assert.match(configurationSource, /static let clerkPublishableKey = "pk_live_[A-Za-z0-9]+"/);
+  assert.match(configurationSource, /static let clerkPublishableKey\s*=\s*(configuredString\(for: "VoltClerkPublishableKey"\) \?\? )?"pk_live_[A-Za-z0-9]+"/);
   assert.match(entitlementSource, /webcredentials:\$\(VOLT_CLERK_FRONTEND_API_DOMAIN\)/);
   assert.doesNotMatch(appSource + configurationSource, /sk_(test|live)_[A-Za-z0-9]+/);
 });
@@ -80,8 +82,8 @@ test("StoreKit purchase associates the server UUID and synchronizes verified JWS
   assert.match(storeKitSource, /Product\.products\(for: \[productID\]\)/);
   assert.match(storeKitSource, /accessStore\.appAccountToken\(using: clerk\)/);
   assert.match(storeKitSource, /return \[\.appAccountToken\(appAccountToken\)\]/);
-  assert.match(subscriptionViewSource, /\.inAppPurchaseOptions \{ _ in\s+await subscriptionStore\.purchaseOptions\(using: clerk\)/);
-  assert.match(subscriptionViewSource, /\.onInAppPurchaseCompletion \{ _, result in\s+await subscriptionStore\.completePurchase\(result, using: clerk\)/);
+  assert.match(storeKitSource, /func purchaseOptions\(using clerk: Clerk\)/);
+  assert.match(storeKitSource, /func completePurchase\(/);
   assert.match(storeKitSource, /case \.verified\(let transaction\)/);
   assert.match(storeKitSource, /transaction\.appAccountToken == appAccountToken/);
   assert.match(storeKitSource, /signedTransaction: verification\.jwsRepresentation/);
@@ -107,83 +109,54 @@ test("full app launches signed-in users immediately and refreshes access in the 
   assert.match(rootSceneSource, /await accessStore\.refresh\(using: clerk\)/);
   assert.match(rootSceneSource, /await scannerStore\.cloudWorkspace\.bootstrapIfNeeded\(using: clerk\)/);
   assert.match(rootSceneSource, /setCloudWorkspaceEnabled\([\s\n]*clerk\.user != nil && accessStore\.status\?\.capabilities\.cloudWorkspace == true/);
-  assert.match(subscriptionViewSource, /struct SubscriptionPaywallView: View/);
-  assert.match(storeKitSource, /subscription\.isEligibleForIntroOffer/);
-  assert.match(storeKitSource, /offer\.paymentMode == \.freeTrial/);
+  assert.doesNotMatch(subscriptionViewSource, /SubscriptionPaywallView|Volt Pro|See Volt Pro Plan|Start.*Trial/i);
 });
 
-test("purchase screen states subscription title, length, price, and policy links (Guideline 3.1.2(c))", () => {
-  assert.match(
-    subscriptionViewSource,
-    /SubscriptionStoreView\(productIDs: \[AppConfiguration\.storeKitProductID\]\)/
-  );
-  // The subscribe and restore controls are ordinary SwiftUI buttons so they pick up the
-  // Liquid Glass press animation, while `subscribe()` keeps the purchase inside
-  // SubscriptionStoreView.
-  assert.match(subscriptionViewSource, /struct GlassSubscriptionControlStyle: SubscriptionStoreControlStyle/);
-  assert.match(subscriptionViewSource, /option\.subscribe\(\)/);
-  assert.match(subscriptionViewSource, /\.buttonStyle\(\.glassProminent\)/);
-  assert.match(subscriptionViewSource, /\.storeButton\(\.hidden, for: \.cancellation, \.restorePurchases, \.policies\)/);
+test("account keeps restore and manage controls for existing App Store purchases only", () => {
+  assert.match(subscriptionViewSource, /Section\("Existing App Store purchases"\)/);
+  assert.match(subscriptionViewSource, /Restore Purchases/);
+  assert.match(subscriptionViewSource, /Manage in App Store/);
   assert.match(subscriptionViewSource, /subscriptionStore\.restore\(using: clerk\)/);
-  assert.match(subscriptionViewSource, /@Environment\(\\\.dismiss\) private var dismiss/);
-  assert.match(subscriptionViewSource, /let showsDismissAction: Bool/);
-  assert.match(subscriptionViewSource, /Button\("Done"\) \{ dismiss\(\) \}/);
-  assert.match(subscriptionViewSource, /PaywallMarketingContent\(showsAccountButton: !showsDismissAction\)/);
-  assert.doesNotMatch(subscriptionViewSource, /\.safeAreaInset\(edge: \.top/);
-  assert.doesNotMatch(subscriptionViewSource, /SubscriptionPaywallView\(\)\s*\.toolbar/);
-  assert.match(subscriptionViewSource, /\.sheet\(isPresented: \$isPresentingPaywall\)[\s\S]*SubscriptionPaywallView\(showsDismissAction: true\)/);
-  assert.doesNotMatch(subscriptionViewSource, /\.sheet\(isPresented: \$isPresentingPaywall\)[\s\S]*NavigationStack/);
-
-  // Both policy links belong in the pinned control area, not the scrolling content the
-  // bottom bar covers, so the reviewer sees them without scrolling.
-  const glassControlsSource = subscriptionViewSource.slice(
-    subscriptionViewSource.indexOf("struct GlassSubscriptionControls: View"),
-    subscriptionViewSource.indexOf("struct PaywallUnavailableView: View")
-  );
-  assert.ok(glassControlsSource.length > 0);
-  assert.match(glassControlsSource, /Link\("Terms of Use", destination: AppConfiguration\.termsOfUseURL\)/);
-  assert.match(glassControlsSource, /Link\("Privacy Policy", destination: AppConfiguration\.privacyPolicyURL\)/);
-
-  assert.match(subscriptionViewSource, /subscriptionStore\.planSummary/);
-  assert.match(subscriptionViewSource, /subscriptionStore\.renewalDisclosure/);
-  assert.match(storeKitSource, /static func purchaseCaption\(for product: Product, activeOffer: Product\.SubscriptionOffer\?\)/);
-
-  // A rejected or unavailable product must not strand the reviewer on the store view's
-  // bare "Subscription Unavailable" placeholder with no policy links and no sign-out.
-  assert.match(subscriptionViewSource, /if subscriptionStore\.isProductUnavailable \{\s*PaywallUnavailableView\(showsAccountButton: !showsDismissAction\)/);
-  assert.match(storeKitSource, /product == nil && !isLoadingProduct && hasAttemptedProductLoad/);
-  assert.match(subscriptionViewSource, /struct PaywallUnavailableView: View/);
-
-  // Length and price must come from StoreKit, never from a hardcoded fallback price.
-  assert.match(storeKitSource, /product\.displayPrice/);
-  assert.match(storeKitSource, /renewalPeriodDescription\(subscription\.subscriptionPeriod\)/);
-  assert.doesNotMatch(storeKitSource + subscriptionViewSource, /\$\d/);
+  assert.doesNotMatch(subscriptionViewSource, /SubscriptionPaywallView|Volt Pro|See Volt Pro Plan|Start.*Trial/i);
+  assert.doesNotMatch(subscriptionViewSource, /\$\d/);
 });
 
 test("canceled StoreKit purchases do not become visible errors", () => {
   assert.match(storeKitSource, /catch let error as StoreKitError[\s\S]*if case \.userCancelled = error[\s\S]*return/);
 });
 
-test("account UI distinguishes the plan, local capture, cloud workspace, AI quota, and StoreKit status", () => {
+test("account UI shows free scanner access, cloud workspace, AI quota, and purchase status", () => {
   assert.match(accountViewSource, /UserButton\(\)/);
   assert.match(accountViewSource, /OrganizationSwitcher\(\)/);
   assert.match(accountViewSource, /Section\("Account"\)/);
   assert.match(accountViewSource, /Section\("Workspace"\)/);
-  assert.match(accountViewSource, /Section\("Plan & Capabilities"\)/);
-  assert.match(accountViewSource, /LabeledContent\("Plan"/);
+  assert.match(accountViewSource, /Section\("Volt access"\)/);
+  assert.match(accountViewSource, /LabeledContent\("Scanner"/);
   assert.match(accountViewSource, /LabeledContent\("Local Capture", value: "Included"\)/);
   assert.match(accountViewSource, /"Cloud Workspace"/);
   assert.match(accountViewSource, /LabeledContent\("AI Scans"/);
   assert.match(accountViewSource, /remaining this month/);
+  assert.match(accountViewSource, /planLabel\(for _: AccessStatus\)[\s\S]*"Free"/);
+  assert.match(accountViewSource, /status\.capabilities\.cloudWorkspace \? "Included" : "Unavailable"/);
   assert.match(accountViewSource, /LabeledContent\("Subscription"/);
   assert.doesNotMatch(accountViewSource + accessSettingsSource, /Full App Access|Subscription required/);
-  assert.match(subscriptionViewSource, /accessStore\.status\?\.access == \.complimentary/);
-  assert.match(subscriptionViewSource, /Complimentary Volt Pro access/);
   assert.match(subscriptionViewSource, /accessStore\.isRefreshing \|\| !hasCurrentAccessContext/);
   assert.match(subscriptionViewSource, /status\.organizationId == clerk\.organization\?\.id/);
-  assert.match(subscriptionViewSource, /SubscriptionPaywallView\(showsDismissAction: true\)/);
   assert.doesNotMatch(accountViewSource + accessSettingsSource, /Free Sessions/);
   assert.doesNotMatch(subscriptionViewSource + accessSettingsSource, /Transaction\.currentEntitlements/);
+});
+
+test("review screenshot shows the free workspace pilot", () => {
+  assert.match(appSource, /VOLT_FREE_WORKSPACE_SCREENSHOT/);
+  assert.match(appSource, /FreeWorkspaceScreenshotView\(\)/);
+  assert.match(screenshotFixtureSource, /LabeledContent\("Scanner", value: "Free"\)/);
+  assert.match(screenshotFixtureSource, /Cloud workspace/);
+  assert.match(screenshotFixtureSource, /at no cost during the pilot/);
+  assert.match(screenshotHarnessSource, /VOLT_FREE_WORKSPACE_SCREENSHOT/);
+  assert.match(screenshotHarnessSource, /captureFreeWorkspace\(\)/);
+  assert.match(screenshotHarnessSource, /10-volt-free-workspace/);
+  assert.doesNotMatch(screenshotHarnessSource, /captureSubscriptionReview/);
+  assert.doesNotMatch(screenshotHarnessSource, /Subscribe for \$|10-volt-pro-subscription/);
 });
 
 test("App Clip has no full-app entitlement blocker, authentication, or checkout", () => {

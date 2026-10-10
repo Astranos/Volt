@@ -3,6 +3,7 @@ import { convexTest } from "convex-test";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 import schema from "./schema";
+import { api } from "./_generated/api";
 import {
   bootstrapMobileDevice,
   createEnrollment,
@@ -53,28 +54,54 @@ describe("cloud scanner workspace devices", () => {
     ).rejects.toThrow(/revoked device credential/);
   });
 
-  test("requires a full-app entitlement before creating a durable workspace device", async () => {
+  test("syncs captures from a free account's enrolled device to its workspace", async () => {
     const t = convexTest(schema, modules);
-    const signedIn = t.withIdentity({ subject: "locked-user" });
-
-    await expect(signedIn.mutation(createEnrollment, {
-      kind: "ios",
-      label: "Locked iPhone",
-    })).rejects.toThrow(/subscription or complimentary access required/);
+    const signedIn = t.withIdentity({ subject: "free-user" });
+    const enrollment = await signedIn.mutation(createEnrollment, {
+      kind: "ios", label: "Free iPhone",
+    });
+    const issued = await t.mutation(exchangeEnrollment, {
+      enrollmentCode: enrollment.enrollmentCode,
+    });
+    const credential = { deviceId: issued.deviceId, deviceSecret: issued.deviceSecret };
+    expect(await t.run(ctx => ctx.db.query("entitlements").collect())).toEqual([]);
+    await t.mutation(putBatch, {
+      ...credential, batchId: "free-batch", clientCreatedAt: 1,
+      results: [result("free-result")],
+    });
+    await t.action(api.cloudWorkspace.finalizeBatchUploads, {
+      ...credential, batchId: "free-batch",
+    });
+    expect(await signedIn.query(api.cloudWorkspace.workspaceSnapshot, {})).toMatchObject({
+      batches: [{ id: "free-batch", deliveryState: "available", results: [{ id: "free-result" }] }],
+    });
+    const foreign = t.withIdentity({ subject: "foreign-free-user" });
+    expect(await foreign.query(api.cloudWorkspace.workspaceSnapshot, {})).toBeNull();
+    await expect(foreign.mutation(revokeDevice, { deviceId: credential.deviceId }))
+      .rejects.toThrow(/Device not found/);
+    await signedIn.mutation(revokeDevice, { deviceId: credential.deviceId });
+    await expect(t.mutation(putBatch, {
+      ...credential, batchId: "revoked-free-batch", clientCreatedAt: 1,
+      results: [result("revoked-free-result")],
+    })).rejects.toThrow(/revoked device credential/);
   });
 
-  test("treats a non-entitled computer heartbeat as a successful no-op", async () => {
+  test("registers a free account's computer and renews its presence", async () => {
     const t = convexTest(schema, modules);
-    const signedIn = t.withIdentity({ subject: "locked-computer-user" });
-
-    await expect(signedIn.mutation(registerComputer, {
-      installationId: "locked-computer",
-      label: "Locked Chrome",
+    const signedIn = t.withIdentity({ subject: "free-computer-user" });
+    const args = {
+      installationId: "free-computer", label: "Free Chrome",
       capabilities: ["cursor-insertion"],
-    })).resolves.toBeNull();
-
-    expect(await t.run((ctx) => ctx.db.query("workspaceDevices").collect())).toEqual([]);
-    expect(await t.run((ctx) => ctx.db.query("workspacePresence").collect())).toEqual([]);
+    };
+    const registered = await signedIn.mutation(registerComputer, args);
+    const heartbeat = await signedIn.mutation(registerComputer, args);
+    expect(heartbeat.registrationId).toBe(registered.registrationId);
+    expect(await t.run(ctx => ctx.db.query("workspaceDevices").unique())).toMatchObject({
+      deviceId: "free-computer", workspaceId: registered.workspaceId,
+    });
+    expect(await t.run(ctx => ctx.db.query("workspacePresence").unique())).toMatchObject({
+      deviceId: "free-computer", state: "online",
+    });
   });
 
   test("grants full cloud access to complimentary email accounts", async () => {
@@ -111,6 +138,12 @@ describe("cloud scanner workspace devices", () => {
   test("requires Clerk authentication to create account workspaces", async () => {
     const t = convexTest(schema, modules);
     await expect(t.mutation(ensureWorkspace, {})).rejects.toThrow(/Authentication required/);
+    await expect(t.mutation(createEnrollment, { kind: "ios", label: "Anonymous" }))
+      .rejects.toThrow(/Authentication required/);
+    await expect(t.mutation(registerComputer, { installationId: "anonymous", label: "Anonymous" }))
+      .rejects.toThrow(/Authentication required/);
+    await expect(t.query(api.cloudWorkspace.workspaceSnapshot, {}))
+      .rejects.toThrow(/Authentication required/);
   });
 
   test("rebinds a signed-in Chrome installation across accounts without leaking pending deliveries", async () => {

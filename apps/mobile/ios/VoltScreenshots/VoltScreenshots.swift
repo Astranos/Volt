@@ -50,7 +50,7 @@ final class VoltScreenshots: XCTestCase {
             name: "09-upload-batches",
             waitFor: "Uploaded 5 photos"
         )
-        captureSubscriptionReview()
+        captureFreeWorkspace()
     }
 
     @MainActor
@@ -84,16 +84,16 @@ final class VoltScreenshots: XCTestCase {
     }
 
     @MainActor
-    private func captureSubscriptionReview() {
+    private func captureFreeWorkspace() {
         let app = XCUIApplication()
         app.launchArguments += ["--ui-testing", "--screenshots"]
-        app.launchEnvironment["VOLT_SUBSCRIPTION_REVIEW_SCREENSHOT"] = "1"
+        app.launchEnvironment["VOLT_FREE_WORKSPACE_SCREENSHOT"] = "1"
         setupSnapshot(app)
         app.launch()
 
         XCTAssertTrue(app.wait(for: .runningForeground, timeout: 15))
-        XCTAssertTrue(app.buttons["Subscribe for $9.00 per month"].waitForExistence(timeout: 10))
-        snapshot("10-volt-pro-subscription")
+        XCTAssertTrue(app.staticTexts["Scan and sync across devices at no cost during the pilot."].waitForExistence(timeout: 10))
+        snapshot("10-volt-free-workspace")
         app.terminate()
     }
 }

@@ -10,6 +10,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: path.resolve(__dirname, "index.html"),
+        shopify: path.resolve(__dirname, "shopify.html"),
         upcSearch: path.resolve(__dirname, "upc-search.html"),
       },
     },

@@ -39,7 +39,7 @@ enum ScreenshotScenario: String {
     }
 }
 
-struct SubscriptionReviewScreenshotView: View {
+struct FreeWorkspaceScreenshotView: View {
     var body: some View {
         NavigationStack {
             Form {
@@ -48,28 +48,11 @@ struct SubscriptionReviewScreenshotView: View {
                     LabeledContent("Workspace", value: "Personal")
                 }
 
-                Section("Volt Pro") {
-                    Label("Sync scanner results and private photos across Volt on iPhone and Chrome.", systemImage: "icloud.fill")
+                Section("Volt access") {
+                    LabeledContent("Scanner", value: "Free")
+                    LabeledContent("Cloud workspace", value: "Included")
+                    Label("Scan and sync across devices at no cost during the pilot.", systemImage: "icloud.fill")
                         .foregroundStyle(.secondary)
-
-                    Button(action: {}) {
-                        Label("Start 1 Week Free Trial", systemImage: "bolt.fill")
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                    }
-                    .buttonStyle(.borderedProminent)
-
-                    Button("Restore Purchases", systemImage: "arrow.clockwise", action: {})
-                        .frame(maxWidth: .infinity, minHeight: 44)
-
-                    Text("1 week free, then $9.00 per month. The subscription renews automatically unless canceled at least 24 hours before the current period ends. Manage or cancel in App Store account settings.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-
-                    HStack(spacing: 16) {
-                        Link("Privacy Policy", destination: AppConfiguration.privacyPolicyURL)
-                        Link("Terms of Use", destination: AppConfiguration.termsOfUseURL)
-                    }
-                    .font(.footnote.weight(.semibold))
                 }
             }
             .navigationTitle("Volt Access")

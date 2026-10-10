@@ -112,6 +112,7 @@ export const create = mutation({
     const createdAt = Date.now();
     const id = await ctx.db.insert("productApiKeys", {
       ownerTokenIdentifier: identity.tokenIdentifier,
+      ownerClerkUserId: identity.subject,
       name,
       keyHash,
       prefix,

@@ -509,7 +509,7 @@ async function buildAccessStatus(
     ? "pro" as const
     : "free" as const;
   const aiScannerQuota = await aiScannerQuotaForAccess(ctx, principal.user?.clerkUserId, plan, now);
-  const capabilities = { localCapture: true as const, cloudWorkspace: plan === "pro", aiProductScanner: true as const };
+  const capabilities = { localCapture: true as const, cloudWorkspace: Boolean(principal.user), aiProductScanner: true as const };
   const withCapabilities = { ...shared, plan, capabilities, aiScannerQuota };
 
   if (organization || subscription.source === "complimentary") {

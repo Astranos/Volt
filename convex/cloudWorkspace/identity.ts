@@ -1,7 +1,7 @@
 import { v, ConvexError, type ObjectType } from "convex/values";
 import { type QueryCtx, type MutationCtx } from "../_generated/server";
 import { type Doc } from "../_generated/dataModel";
-import { hasFullAppEntitlement, RECONNECT_WINDOW_MS, MAX_SESSION_DURATION_MS } from "../access";
+import { RECONNECT_WINDOW_MS, MAX_SESSION_DURATION_MS } from "../access";
 
 export const ENROLLMENT_TTL_MS = 5 * 60 * 1000;
 
@@ -49,16 +49,9 @@ export async function workspaceForUser(ctx: DatabaseReaderCtx, clerkUserId: stri
     .unique();
 }
 
-export async function requireFullAppEntitlement(ctx: DatabaseReaderCtx, clerkUserId: string) {
-  if (!(await hasFullAppEntitlement(ctx, clerkUserId))) {
-    throw new ConvexError("Volt Pro subscription or complimentary access required");
-  }
-}
-
 export async function requireAuthenticatedWorkspace(ctx: QueryCtx) {
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) throw new ConvexError("Authentication required");
-  await requireFullAppEntitlement(ctx, identity.subject);
   const workspace = await workspaceForUser(ctx, identity.subject);
   if (!workspace) throw new ConvexError("Workspace has not been created");
   return workspace;
@@ -71,14 +64,12 @@ export async function requireAuthenticatedWorkspace(ctx: QueryCtx) {
 export async function authenticatedWorkspaceOrNull(ctx: QueryCtx) {
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) throw new ConvexError("Authentication required");
-  await requireFullAppEntitlement(ctx, identity.subject);
   return await workspaceForUser(ctx, identity.subject);
 }
 
 export async function requireOrCreateAuthenticatedWorkspace(ctx: MutationCtx) {
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) throw new ConvexError("Authentication required");
-  await requireFullAppEntitlement(ctx, identity.subject);
   return requireOrCreateWorkspaceForClerkUser(ctx, identity.subject, identity.name);
 }
 
@@ -120,7 +111,6 @@ export async function requireDevicePrincipal(
   }
   const workspace = await ctx.db.get(device.workspaceId);
   if (!workspace) throw new ConvexError("Workspace no longer exists");
-  await requireFullAppEntitlement(ctx, workspace.ownerClerkUserId);
   return { workspace, sourceDeviceId: device.deviceId, device };
 }
 

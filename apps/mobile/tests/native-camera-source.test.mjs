@@ -88,8 +88,8 @@ test("native capture session exposes the optional cloud cursor target", () => {
   assert.doesNotMatch(captureSessionViewSwiftSource, /CloudTargetButton/);
   assert.match(captureSessionViewSwiftSource, /connectionLabel: "Write"[\s\S]*onConnection: \{\s*isTargetPickerPresented = true/);
   assert.match(captureSessionViewSwiftSource, /\.sheet\(isPresented: \$isTargetPickerPresented\) \{\s*CloudTargetPickerSheet\(\)/);
-  assert.match(captureSessionViewSwiftSource, /\.sheet\(isPresented: \$isSubscriptionPaywallPresented\)[\s\S]*SubscriptionPaywallView\(showsDismissAction: true\)/);
-  assert.doesNotMatch(captureSessionViewSwiftSource, /\.sheet\(isPresented: \$isSubscriptionPaywallPresented\)[\s\S]*NavigationStack/);
+  assert.match(captureSessionViewSwiftSource, /\.alert\("Free AI scans used", isPresented: \$isQuotaAlertPresented\)/);
+  assert.doesNotMatch(captureSessionViewSwiftSource, /SubscriptionPaywallView|isSubscriptionPaywallPresented/);
   assert.match(cloudTargetPickerSwiftSource, /var isCompact = false[\s\S]*frame\(minHeight: isCompact \? 36 : 48\)[\s\S]*controlSize\(isCompact \? \.small : \.regular\)/);
   assert.match(cloudTargetPickerSwiftSource, /frame\(minHeight: isCompact \? 36 : 48\)/);
   // Computer availability now streams continuously over a live Convex subscription

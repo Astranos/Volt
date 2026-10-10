@@ -14,7 +14,7 @@ struct CaptureSessionView: View {
     @State private var isCleaningSelectedText = false
     @State private var cleanupRequestID = UUID()
     @State private var isTargetPickerPresented = false
-    @State private var isSubscriptionPaywallPresented = false
+    @State private var isQuotaAlertPresented = false
 
     var body: some View {
         @Bindable var store = store
@@ -157,7 +157,7 @@ struct CaptureSessionView: View {
                         Task {
                             if store.isProductScannerActive {
                                 if store.isProductScanQuotaExhausted {
-                                    isSubscriptionPaywallPresented = true
+                                    isQuotaAlertPresented = true
                                 } else {
                                     await store.captureProduct(using: clerk)
                                 }
@@ -179,7 +179,7 @@ struct CaptureSessionView: View {
                         if !store.isProductScanQuotaExhausted {
                             store.activateProductScanner()
                         } else {
-                            isSubscriptionPaywallPresented = true
+                            isQuotaAlertPresented = true
                         }
                     },
                     onToggleProductScanMode: {
@@ -198,8 +198,10 @@ struct CaptureSessionView: View {
         .sheet(isPresented: $isTargetPickerPresented) {
             CloudTargetPickerSheet()
         }
-        .sheet(isPresented: $isSubscriptionPaywallPresented) {
-            SubscriptionPaywallView(showsDismissAction: true)
+        .alert("Free AI scans used", isPresented: $isQuotaAlertPresented) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(store.productScanQuotaText ?? "Your free AI scans will reset later.")
         }
         .onAppear {
             store.activeMode = mode

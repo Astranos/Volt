@@ -9,12 +9,12 @@ struct AccessSettingsSection: View {
         Section("Access") {
             LabeledContent("Account", value: accountLabel)
             LabeledContent("Workspace", value: workspaceLabel)
-            LabeledContent("Plan", value: planLabel)
+            LabeledContent("Scanner", value: planLabel)
             LabeledContent("Cloud Workspace", value: cloudWorkspaceLabel)
             LabeledContent("AI Scans", value: aiScannerLabel)
             LabeledContent("Subscription", value: subscriptionLabel)
 
-            NavigationLink("Account & Subscription") {
+            NavigationLink("Account") {
                 AccountAccessView()
             }
         }
@@ -33,14 +33,14 @@ struct AccessSettingsSection: View {
 
     private var planLabel: String {
         guard clerk.user != nil else { return "Sign in required" }
-        guard let status = accessStore.status else { return accessStore.isRefreshing ? "Checking…" : "Unavailable" }
-        return status.plan == .pro ? "Volt Pro" : "Volt Free"
+        guard accessStore.status != nil else { return accessStore.isRefreshing ? "Checking…" : "Unavailable" }
+        return "Free"
     }
 
     private var cloudWorkspaceLabel: String {
         guard clerk.user != nil else { return "Sign in required" }
         guard let status = accessStore.status else { return accessStore.isRefreshing ? "Checking…" : "Unavailable" }
-        return status.capabilities.cloudWorkspace ? "Included" : "Volt Pro"
+        return status.capabilities.cloudWorkspace ? "Included" : "Unavailable"
     }
 
     private var aiScannerLabel: String {
@@ -56,7 +56,7 @@ struct AccessSettingsSection: View {
     }
 
     private var subscriptionLabel: String {
-        guard clerk.user != nil else { return "Sign in to subscribe" }
+        guard clerk.user != nil else { return "Sign in required" }
         guard let status = accessStore.status else { return accessStore.isRefreshing ? "Checking…" : "Unavailable" }
 
         if status.access == .complimentary {

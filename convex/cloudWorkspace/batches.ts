@@ -10,6 +10,8 @@ import {
   requireAuthenticatedWorkspace,
   requireOrCreateAuthenticatedWorkspace,
 } from "./identity";
+import { assertWorkspaceWritable, adjustWorkspaceStorage, managedResultByteCount, reserveWorkspaceStorage, resultExpiredForPolicy, WORKSPACE_UNDO_MS } from "../workspaceStorage";
+import { accountPolicy, workspaceLifecycleEnabled } from "../monetization";
 
 const resultInput = v.object({
   resultId: v.string(),
@@ -46,6 +48,7 @@ async function insertBatchResults(
   batchId: string,
   results: CloudBatchInput["results"],
   now: number,
+  tier: "free" | "workspace" | null,
 ) {
   for (const result of results) {
     const objectKey = result.kind === "photo"
@@ -65,6 +68,7 @@ async function insertBatchResults(
       ...(result.checksum ? { checksum: result.checksum } : {}),
       clientCreatedAt: result.clientCreatedAt,
       createdAt: now,
+      ...(tier ? { storageManaged: true, retentionTier: tier, retentionCheckAt: now + 24 * 60 * 60 * 1000, ...(tier === "free" ? { expiresAt: now + 7 * 24 * 60 * 60 * 1000 } : {}) } : {}),
     });
   }
 }
@@ -94,6 +98,9 @@ async function putBatchForPrincipal(
   args: CloudBatchInput,
 ) {
     const { workspace, sourceDeviceId } = principal;
+    const normalizedResults = workspaceLifecycleEnabled()
+      ? args.results.map(result => ({ ...result, byteCount: managedResultByteCount(result) }))
+      : args.results;
     if (args.results.length === 0) throw new ConvexError("A batch must contain at least one result");
     if (args.results.length > 500) throw new ConvexError("A batch may contain at most 500 results");
     const existing = await ctx.db
@@ -117,9 +124,13 @@ async function putBatchForPrincipal(
         )
         .take(500);
       const existingIds = new Set(existingResults.map((item) => item.resultId));
-      const appendedResults = args.results.filter((result) => !existingIds.has(result.resultId));
+      const appendedResults = normalizedResults.filter((result) => !existingIds.has(result.resultId));
       if (appendedResults.length === 0) {
         return { batchId: existing.batchId, idempotent: true, status: existing.status };
+      }
+      const policyForExisting = (await accountPolicy(ctx, workspace.ownerClerkUserId)).workspace;
+      for (const result of existingResults) {
+        if (result.deletedAt !== undefined || resultExpiredForPolicy(result, policyForExisting)) throw new ConvexError("Cannot append to a batch with deleted or expired results");
       }
       if (existingResults.length + appendedResults.length > 500) {
         throw new ConvexError("A batch may contain at most 500 results");
@@ -128,6 +139,7 @@ async function putBatchForPrincipal(
       await assertResultsAreBatchCompatible(ctx, workspace._id, appendedResults);
       const addedBytes = appendedResults.reduce((sum, result) => sum + result.byteCount, 0);
       const now = Date.now();
+      const policy = await reserveWorkspaceStorage(ctx, workspace, appendedResults.length, addedBytes, now);
       await insertBatchResults(
         ctx,
         workspace._id,
@@ -135,19 +147,21 @@ async function putBatchForPrincipal(
         args.batchId,
         appendedResults,
         now,
+        policy?.tier ?? null,
       );
       await ctx.db.patch(existing._id, {
         status: "uploading",
-        resultCount: existingResults.length + appendedResults.length,
+        resultCount: existing.resultCount + appendedResults.length,
         byteCount: existing.byteCount + addedBytes,
         updatedAt: now,
       });
       return { batchId: args.batchId, idempotent: false, status: "uploading" as const };
     }
 
-    await assertResultsAreBatchCompatible(ctx, workspace._id, args.results);
-    const byteCount = args.results.reduce((sum, result) => sum + result.byteCount, 0);
+    await assertResultsAreBatchCompatible(ctx, workspace._id, normalizedResults);
+    const byteCount = normalizedResults.reduce((sum, result) => sum + result.byteCount, 0);
     const now = Date.now();
+    const policy = await reserveWorkspaceStorage(ctx, workspace, normalizedResults.length, byteCount, now);
     await ctx.db.insert("resultBatches", {
       workspaceId: workspace._id,
       batchId: args.batchId,
@@ -164,8 +178,9 @@ async function putBatchForPrincipal(
       workspace._id,
       sourceDeviceId,
       args.batchId,
-      args.results,
+      normalizedResults,
       now,
+      policy?.tier ?? null,
     );
     return { batchId: args.batchId, idempotent: false, status: "uploading" as const };
 }
@@ -209,6 +224,13 @@ async function markBatchReadyForPrincipal(
   if (!batch || batch.sourceDeviceId !== principal.sourceDeviceId) {
     throw new ConvexError("Batch not found");
   }
+  await assertWorkspaceWritable(ctx, principal.workspace);
+  if (batch.status === "deleted") throw new ConvexError("Batch was deleted");
+  const results = await ctx.db.query("scanResults").withIndex("by_workspaceId_and_batchId", q => q.eq("workspaceId", principal.workspace._id).eq("batchId", batchId)).take(500);
+  const policy = (await accountPolicy(ctx, principal.workspace.ownerClerkUserId)).workspace;
+  for (const result of results) {
+    if (result.deletedAt !== undefined || resultExpiredForPolicy(result, policy)) throw new ConvexError("Batch contains deleted or expired results");
+  }
   if (batch.status === "ready") return { idempotent: true };
   await ctx.db.patch(batch._id, { status: "ready", updatedAt: Date.now() });
   return { idempotent: false };
@@ -237,12 +259,21 @@ export const listBatchesHandler = async (ctx: QueryCtx) => {
 export const listBatchResultsArgs = { batchId: v.string() };
 export const listBatchResultsHandler = async (ctx: QueryCtx, args: ObjectType<typeof listBatchResultsArgs>) => {
     const workspace = await requireAuthenticatedWorkspace(ctx);
-    return ctx.db
+    const results = await ctx.db
       .query("scanResults")
       .withIndex("by_workspaceId_and_batchId", (q) =>
         q.eq("workspaceId", workspace._id).eq("batchId", args.batchId),
       )
-      .collect();
+      .take(500);
+    const visible = [];
+    const policy = (await accountPolicy(ctx, workspace.ownerClerkUserId)).workspace;
+    for (const result of results) {
+      if (result.deletedAt !== undefined || resultExpiredForPolicy(result, policy)) {
+        const { text: _text, objectKey: _objectKey, ...tombstone } = result;
+        visible.push({ ...tombstone, deletedAt: result.deletedAt ?? Date.now() });
+      } else visible.push(result);
+    }
+    return visible;
   };
 
 export const deleteWorkspaceResultsArgs = { resultIds: v.array(v.string()) };
@@ -250,6 +281,7 @@ export const deleteWorkspaceResultsHandler = async (ctx: MutationCtx, args: Obje
     const workspace = await requireOrCreateAuthenticatedWorkspace(ctx);
     const requestedIds = [...new Set(args.resultIds)].slice(0, 500);
     const now = Date.now();
+    const policy = (await accountPolicy(ctx, workspace.ownerClerkUserId, now)).workspace;
     const affectedBatches = new Map<string, { resultCount: number; byteCount: number }>();
     const deletedIds: string[] = [];
     const newlyDeletedIds: string[] = [];
@@ -268,7 +300,8 @@ export const deleteWorkspaceResultsHandler = async (ctx: MutationCtx, args: Obje
         idempotent += 1;
         continue;
       }
-      await ctx.db.patch(result._id, { deletedAt: now });
+      await ctx.db.patch(result._id, { deletedAt: now, ...(result.storageManaged ? { purgeAfter: now + WORKSPACE_UNDO_MS, retentionCheckAt: undefined, ...(resultExpiredForPolicy(result, policy, now) ? { expiresAt: now } : { expiresAt: undefined }) } : {}) });
+      if (result.storageManaged) await adjustWorkspaceStorage(ctx, workspace._id, -1, 0);
       newlyDeletedIds.push(resultId);
       deleted += 1;
       const adjustment = affectedBatches.get(result.batchId) ?? { resultCount: 0, byteCount: 0 };
@@ -305,6 +338,8 @@ export const restoreWorkspaceResultsHandler = async (ctx: MutationCtx, args: Obj
     const workspace = await requireOrCreateAuthenticatedWorkspace(ctx);
     const requestedIds = [...new Set(args.resultIds)].slice(0, 500);
     const matches: Array<Doc<"scanResults">> = [];
+    const now = Date.now();
+    const policy = (await accountPolicy(ctx, workspace.ownerClerkUserId, now)).workspace;
     const restoredIds: string[] = [];
     const newlyRestoredIds: string[] = [];
     for (const resultId of requestedIds) {
@@ -315,13 +350,21 @@ export const restoreWorkspaceResultsHandler = async (ctx: MutationCtx, args: Obj
         )
         .first();
       if (!result) continue;
+      if (result.storageManaged && (result.objectPurgedAt !== undefined || (result.deletedAt !== undefined && result.deletedAt + WORKSPACE_UNDO_MS <= now) || resultExpiredForPolicy(result, policy, now))) {
+        throw new ConvexError("Expired workspace results cannot be restored");
+      }
       restoredIds.push(resultId);
       if (result.deletedAt !== undefined) matches.push(result);
     }
-    const now = Date.now();
+    if (matches.length) await assertWorkspaceWritable(ctx, workspace, now);
+    const managedCount = matches.filter(result => result.storageManaged).length;
+    if (managedCount) {
+      if (workspaceLifecycleEnabled()) await reserveWorkspaceStorage(ctx, workspace, managedCount, 0, now);
+      else await adjustWorkspaceStorage(ctx, workspace._id, managedCount, 0);
+    }
     const affectedBatches = new Map<string, { resultCount: number; byteCount: number }>();
     for (const result of matches) {
-      await ctx.db.patch(result._id, { deletedAt: undefined });
+      await ctx.db.patch(result._id, { deletedAt: undefined, ...(result.storageManaged ? { purgeAfter: undefined, retentionCheckAt: now + 24 * 60 * 60 * 1000 } : {}) });
       newlyRestoredIds.push(result.resultId);
       const adjustment = affectedBatches.get(result.batchId) ?? { resultCount: 0, byteCount: 0 };
       adjustment.resultCount += 1;
