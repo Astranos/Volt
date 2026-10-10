@@ -10,6 +10,11 @@ const swiftFiles = directory => readdirSync(directory, { withFileTypes: true }).
   const path = join(directory, entry.name);
   return entry.isDirectory() ? swiftFiles(path) : entry.name.endsWith('.swift') ? [path] : [];
 });
+// Xcode tools exist only on macOS. The macOS CI job runs these checks.
+if (process.platform !== 'darwin') {
+  console.log('Skipping iPad app checks: Xcode is unavailable on this platform.');
+  process.exit(0);
+}
 const scratch = mkdtempSync(join(tmpdir(), 'volt-kiosk-check-'));
 const run = (tool, args) => execFileSync(tool, args, { stdio: 'inherit', cwd: root });
 
