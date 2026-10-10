@@ -11,6 +11,9 @@ type ShopifyMessage = {
   action?: unknown;
   shop?: unknown;
   query?: unknown;
+  productId?: unknown;
+  title?: unknown;
+  hidden?: unknown;
 };
 
 type ShopifyResponse = { success: true; value: unknown } | { success: false; error: string };
@@ -37,14 +40,18 @@ function auditResultFrom(value: unknown): ShopifyAuditResult {
   return result as ShopifyAuditResult;
 }
 
+const AUDIT_TAB_DELAY_MS = 400;
+
 export function createShopifyAuditController({
   chromeApi,
   extensionId,
   sendOffscreenMessage,
+  wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
 }: {
   chromeApi: typeof chrome;
   extensionId: string;
   sendOffscreenMessage: (message: unknown) => Promise<unknown>;
+  wait?: (ms: number) => Promise<unknown>;
 }) {
   let opening = false;
   const MAX_AUDIT_TABS = 100;
@@ -63,28 +70,34 @@ export function createShopifyAuditController({
       if (result.products.length > MAX_AUDIT_TABS) {
         throw new Error(`Yesterday has ${result.products.length} products. Volt can open up to ${MAX_AUDIT_TABS} audit tabs at once.`);
       }
-      const tabIds: number[] = [];
+      let opened = 0;
+      let groupId: number | null = null;
       let creationError: unknown = null;
-      for (const product of result.products) {
+      // Open tabs one at a time so Shopify admin pages don't all load at once.
+      for (const [index, product] of result.products.entries()) {
         try {
+          if (index > 0) await wait(AUDIT_TAB_DELAY_MS);
           const tab = await chromeApi.tabs.create({
             url: product.url,
             active: false,
             ...(windowId === undefined ? {} : { windowId }),
           });
-          if (typeof tab.id === "number") tabIds.push(tab.id);
+          if (typeof tab.id !== "number") continue;
+          opened++;
+          if (groupId === null) {
+            groupId = await chromeApi.tabs.group({ tabIds: [tab.id] });
+            await chromeApi.tabGroups.update(groupId, { title: `Shopify audit · ${result.date}`, color: "blue", collapsed: false });
+            await chromeApi.tabs.update(tab.id, { active: true });
+          } else {
+            await chromeApi.tabs.group({ groupId, tabIds: [tab.id] });
+          }
         } catch (error) {
           creationError = error;
           break;
         }
       }
-      if (tabIds.length > 0) {
-        const groupId = await chromeApi.tabs.group({ tabIds: tabIds as [number, ...number[]] });
-        await chromeApi.tabGroups.update(groupId, { title: `Shopify audit · ${result.date}`, color: "blue", collapsed: false });
-        await chromeApi.tabs.update(tabIds[0], { active: true });
-      }
-      if (creationError) throw new Error(`Opened ${tabIds.length} of ${result.products.length} products: ${String(creationError)}`);
-      return { shop: result.shop, date: result.date, count: tabIds.length };
+      if (creationError) throw new Error(`Opened ${opened} of ${result.products.length} products: ${String(creationError)}`);
+      return { shop: result.shop, date: result.date, count: opened };
     } finally {
       opening = false;
     }
@@ -95,6 +108,7 @@ export function createShopifyAuditController({
     const message = rawMessage as ShopifyMessage;
     if (![
       "shopifyAuditStatus", "shopifyAuditConnect", "shopifyAuditDisconnect", "shopifyAuditOpenYesterday", "shopifyAuditSearchProducts",
+      "shopifyAuditHiddenProducts", "shopifyAuditSetProductHidden",
     ].includes(String(message.action))) return false;
     if (!isTrustedExtensionPageSender(sender, extensionId, ["/options.html", "/newtab.html"])) {
       sendResponse({ success: false, error: "unauthorized_extension_sender" });
@@ -144,6 +158,15 @@ export function createShopifyAuditController({
           const query = message.query.trim();
           if (query.length < 2 || query.length > 120) throw new Error("Search must be 2 to 120 characters.");
           return forward("shopifyAuditOffscreenSearchProducts", { query });
+        }
+        case "shopifyAuditHiddenProducts":
+          return forward("shopifyAuditOffscreenHiddenProducts");
+        case "shopifyAuditSetProductHidden": {
+          if (typeof message.productId !== "string" || !/^gid:\/\/shopify\/Product\/\d+$/.test(message.productId)
+            || typeof message.title !== "string" || !message.title.trim() || typeof message.hidden !== "boolean") {
+            throw new Error("Invalid Shopify product.");
+          }
+          return forward("shopifyAuditOffscreenSetProductHidden", { productId: message.productId, title: message.title, hidden: message.hidden });
         }
         default:
           return null;

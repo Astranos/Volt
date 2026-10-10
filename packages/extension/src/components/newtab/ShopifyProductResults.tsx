@@ -1,5 +1,5 @@
 import { Command } from "cmdk";
-import { ArrowUpRight, Boxes, PackageSearch, RefreshCw, Store } from "lucide-react";
+import { ArrowUpRight, Boxes, EyeOff, PackageSearch, RefreshCw, Store } from "lucide-react";
 import type { ShopifySearchProduct, ShopifySearchResult } from "../../shopify-audit/client";
 import "./shopify-product-results.css";
 
@@ -26,12 +26,14 @@ export function ShopifyProductResults({
   query,
   state,
   onOpenProduct,
+  onHideProduct,
   onRetry,
   onOpenSettings,
 }: {
   query: string;
   state: ShopifyProductSearchState;
   onOpenProduct: (url: string) => void;
+  onHideProduct: (product: ShopifySearchProduct) => void;
   onRetry: () => void;
   onOpenSettings: () => void;
 }) {
@@ -104,7 +106,18 @@ export function ShopifyProductResults({
               {product.condition && <span className="shopify-product-condition" title={product.condition}>{product.condition}</span>}
             </span>
           </span>
-          <ArrowUpRight aria-hidden="true" className="shopify-product-open" size={16} />
+          <span className="shopify-product-actions">
+            <ArrowUpRight aria-hidden="true" className="shopify-product-open" size={16} />
+            <button
+              aria-label={`Hide ${product.title} from results`}
+              className="shopify-product-hide"
+              onClick={(event) => { event.stopPropagation(); onHideProduct(product); }}
+              title="Hide from results"
+              type="button"
+            >
+              <EyeOff aria-hidden="true" size={14} />
+            </button>
+          </span>
         </Command.Item>;
       })}
     </div>}

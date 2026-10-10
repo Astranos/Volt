@@ -270,6 +270,16 @@
    List rows
    ============================================================ */
 
+/* A plain overflow container: the panel only has a max-height, so a
+   percentage-height viewport (Radix ScrollArea) never becomes scrollable. */
+.closed-tabs-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
 .closed-tabs-list {
   flex: 1;
   padding: 6px 8px 10px;

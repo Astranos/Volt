@@ -86,3 +86,19 @@ function validImageUrl(value: string): boolean {
     return false;
   }
 }
+
+export type ShopifyHiddenProduct = { id: string; title: string };
+
+export async function listHiddenShopifyProducts(): Promise<ShopifyHiddenProduct[]> {
+  const value = await send("shopifyAuditHiddenProducts");
+  if (!Array.isArray(value)) throw new Error("Shopify returned an invalid hidden product list.");
+  return value.map((item: unknown) => {
+    const product = (item ?? {}) as Partial<ShopifyHiddenProduct>;
+    if (typeof product.id !== "string" || typeof product.title !== "string") throw new Error("Shopify returned an invalid hidden product.");
+    return { id: product.id, title: product.title };
+  });
+}
+
+export async function setShopifyProductHidden(product: ShopifyHiddenProduct, hidden: boolean): Promise<void> {
+  await send("shopifyAuditSetProductHidden", { productId: product.id, title: product.title, hidden });
+}

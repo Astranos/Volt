@@ -59,6 +59,9 @@ test("shop redaction deletes every matching connection and pending OAuth state i
     await ctx.db.insert("shopifyOAuthStates", {
       ownerTokenIdentifier: "unrelated", shop: otherShop, state: "unrelated", expiresAt: 1,
     });
+    for (const hiddenShop of [shop, otherShop]) {
+      await ctx.db.insert("shopifyHiddenProducts", { ownerTokenIdentifier: "owner", shop: hiddenShop, productId: "gid://shopify/Product/1", title: "Hidden" });
+    }
   });
   const path = "/api/shopify/webhooks/shop/redact";
   expect((await t.fetch(path, signedRequest(path, { shop_domain: shop }, { signature: "A".repeat(43) + "=" }))).status).toBe(401);
@@ -70,9 +73,11 @@ test("shop redaction deletes every matching connection and pending OAuth state i
   const remaining = await t.run(async (ctx) => ({
     connections: await ctx.db.query("shopifyConnections").collect(),
     states: await ctx.db.query("shopifyOAuthStates").collect(),
+    hiddenProducts: await ctx.db.query("shopifyHiddenProducts").collect(),
   }));
   expect(remaining.connections.map((row) => row.shop)).toEqual([otherShop]);
   expect(remaining.states.map((row) => row.shop)).toEqual([otherShop]);
+  expect(remaining.hiddenProducts.map((row) => row.shop)).toEqual([otherShop]);
 });
 
 test("app uninstall reads the Shop resource's myshopify domain and redacts that shop", async () => {

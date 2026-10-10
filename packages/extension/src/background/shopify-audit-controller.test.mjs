@@ -5,7 +5,7 @@ import { yesterdayInComputerTimezone } from "../domain/shopify-audit.ts";
 import { EXTENSION_SCANNER_SIGNAL_URL } from "../domain/mobile-scanner-signal-url.ts";
 
 function setup(products) {
-  const calls = { created: [], grouped: [], updatedGroups: [], activated: [] };
+  const calls = { created: [], grouped: [], updatedGroups: [], activated: [], waits: [] };
   const chromeApi = {
     tabs: {
       create: async (options) => {
@@ -24,6 +24,7 @@ function setup(products) {
       success: true,
       value: { shop: "sample.myshopify.com", date: message.date, products },
     }),
+    wait: async (ms) => { calls.waits.push(ms); },
   });
   const request = () => new Promise((resolve) => {
     assert.equal(controller.handleMessage(
@@ -35,13 +36,14 @@ function setup(products) {
   return { calls, request };
 }
 
-test("opens all yesterday product admin pages in one named tab group", async () => {
-  const products = [11, 12].map((id) => ({ id: String(id), title: `Product ${id}`, status: "DRAFT", url: `https://admin.shopify.com/store/sample/products/${id}` }));
+test("opens yesterday's product admin pages one at a time in one named tab group", async () => {
+  const products = [11, 12, 13].map((id) => ({ id: String(id), title: `Product ${id}`, status: "DRAFT", url: `https://admin.shopify.com/store/sample/products/${id}` }));
   const { calls, request } = setup(products);
   const response = await request();
-  assert.deepEqual(response, { success: true, value: { shop: "sample.myshopify.com", date: yesterdayInComputerTimezone().date, count: 2 } });
+  assert.deepEqual(response, { success: true, value: { shop: "sample.myshopify.com", date: yesterdayInComputerTimezone().date, count: 3 } });
   assert.deepEqual(calls.created, products.map((product) => ({ url: product.url, active: false, windowId: 5 })));
-  assert.deepEqual(calls.grouped, [{ tabIds: [1, 2] }]);
+  assert.deepEqual(calls.waits, [400, 400]);
+  assert.deepEqual(calls.grouped, [{ tabIds: [1] }, { groupId: 7, tabIds: [2] }, { groupId: 7, tabIds: [3] }]);
   assert.equal(calls.updatedGroups[0].options.title, `Shopify audit · ${yesterdayInComputerTimezone().date}`);
   assert.deepEqual(calls.activated, [{ id: 1, options: { active: true } }]);
 });

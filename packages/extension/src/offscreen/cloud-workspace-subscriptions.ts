@@ -43,6 +43,12 @@ const shopifySearchProductsReference = makeFunctionReference<
   "action", { query: string },
   { shop: string; products: Array<{ id: string; title: string; status: string; totalInventory: number; url: string; imageUrl: string | null; price: string | null; currencyCode: string | null; condition: string | null; sku: string | null }> }
 >("shopifyAudit:searchProducts");
+const shopifyListHiddenProductsReference = makeFunctionReference<
+  "query", Record<string, never>, Array<{ id: string; title: string }>
+>("shopifyAudit:listHiddenProducts");
+const shopifySetProductHiddenReference = makeFunctionReference<
+  "mutation", { productId: string; title: string; hidden: boolean }, null
+>("shopifyAudit:setProductHidden");
 
 export function objectFrom(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -508,6 +514,18 @@ export class CloudWorkspaceSubscriptions {
     await this.reconcileAuthentication();
     if (!this.clerkSubject) throw new Error("Sign in to Volt before searching Shopify.");
     return this.client.action(shopifySearchProductsReference, { query });
+  }
+
+  async listHiddenShopifyProducts() {
+    await this.reconcileAuthentication();
+    if (!this.clerkSubject) throw new Error("Sign in to Volt before managing Shopify.");
+    return this.client.query(shopifyListHiddenProductsReference, {});
+  }
+
+  async setShopifyProductHidden(productId: string, title: string, hidden: boolean) {
+    await this.reconcileAuthentication();
+    if (!this.clerkSubject) throw new Error("Sign in to Volt before managing Shopify.");
+    return this.client.mutation(shopifySetProductHiddenReference, { productId, title, hidden });
   }
 
   async acknowledgeCursorDelivery(

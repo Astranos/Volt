@@ -304,6 +304,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     || message.action === "shopifyAuditOffscreenDisconnect"
     || message.action === "shopifyAuditOffscreenListYesterday"
     || message.action === "shopifyAuditOffscreenSearchProducts"
+    || message.action === "shopifyAuditOffscreenHiddenProducts"
+    || message.action === "shopifyAuditOffscreenSetProductHidden"
   ) {
     if (sender.id !== chrome.runtime.id || sender.tab) {
       sendResponse({ success: false, error: "unauthorized_extension_sender" });
@@ -368,6 +370,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return false;
       }
       return sendWorkspaceOperation(sendResponse, cloudWorkspaceSubscriptions.searchShopifyProducts(message.query));
+    }
+    if (message.action === "shopifyAuditOffscreenHiddenProducts") {
+      return sendWorkspaceOperation(sendResponse, cloudWorkspaceSubscriptions.listHiddenShopifyProducts());
+    }
+    if (message.action === "shopifyAuditOffscreenSetProductHidden") {
+      if (typeof message.productId !== "string" || typeof message.title !== "string" || typeof message.hidden !== "boolean") {
+        sendResponse({ success: false, error: "invalid_shopify_product" });
+        return false;
+      }
+      return sendWorkspaceOperation(sendResponse, cloudWorkspaceSubscriptions.setShopifyProductHidden(message.productId, message.title, message.hidden));
     }
     if (message.action === "workspaceOffscreenReconcile") {
       void cloudWorkspaceSubscriptions.reconcileSnapshot()
