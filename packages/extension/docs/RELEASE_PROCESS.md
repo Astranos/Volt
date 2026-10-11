@@ -123,30 +123,22 @@ curl -s "https://clients2.google.com/service/update2/crx?response=updatecheck&pr
 
 ### Agent procedure
 
-Agents roll back only when the maintainer asks. Drive Chrome on the
-maintainer's Mac with computer use; the maintainer approves Google sign-in from
-their phone and may not be at the Mac.
+Agents do not perform the rollback. The maintainer does it from their phone.
+When a release needs rolling back, send them this message (push notification
+when available):
 
-1. Open the package page in Chrome. If Google shows **Verify it's you**:
-   - Cancel any passkey / Touch ID sheet; nobody is at the Mac to answer it.
-   - Choose **Try another way**, then **Tap Yes on your phone or tablet**.
-   - Tell the maintainer (push notification when available): "Google sent a
-     sign-in prompt to your phone. Open the Gmail app and tap **Yes**." If the
-     page shows a number, include it so they can tap the matching number.
-   - Never type passwords, request SMS codes, or use backup codes.
-2. Click **Roll back to previous version** and read the dialog. If it warns
-   that a pending submission will be discarded, ask the maintainer before
-   continuing; they will have to resubmit that fix and wait for review again.
-3. Enter a version one patch above the highest published or draft version
-   shown on the page, and a short reason. Click **Roll back**, then
-   **Confirm**.
-4. Verify "Rolled back item successfully", the new published version on the
-   package page, and the `curl` check above.
+> Roll back Volt on your phone:
+> 1. Open https://chrome.google.com/webstore/devconsole/54967cb5-3a3c-4361-b5cd-27bc34b1f4ea/bmgghhmlflbhlnomgnoodpidekpaaifk/edit/package
+>    (switch the browser to desktop site if the layout is cramped).
+> 2. Tap **Roll back to previous version**.
+> 3. Enter a version one patch above the highest Published or Draft version
+>    on that page, and a short reason.
+> 4. Tap **Roll back**, then **Confirm**.
+>
+> If the dialog says a pending submission will be discarded, rolling back
+> cancels that review and the fix has to be resubmitted.
 
-If the maintainer would rather do it themselves, give them the package-page
-link and these steps on their phone: tap **Roll back to previous version**
-(switch the browser to desktop site if the layout is cramped), enter the next
-version number and a reason, then tap **Roll back** and **Confirm**.
+Afterwards, confirm the new version with the `curl` check.
 
 ### Resubmitting the fix
 
