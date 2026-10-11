@@ -224,7 +224,7 @@ async function filesBelow(directory) {
 
 async function verifyArtifact(version, artifactPath, buildConfig) {
   const manifest = JSON.parse(
-    await readFile(path.join(packageRoot, ".output", "volt", "manifest.json"), "utf8"),
+    execFileSync("unzip", ["-p", artifactPath, "manifest.json"], { encoding: "utf8" }),
   );
   if (manifest.version !== version) {
     throw new Error(`Built manifest version ${manifest.version} does not match ${version}`);
@@ -241,6 +241,14 @@ async function verifyArtifact(version, artifactPath, buildConfig) {
   if (!scriptContents.some((contents) => contents.includes(buildConfig.clerkPublishableKey))) {
     throw new Error("Built extension omitted WXT_CLERK_PUBLISHABLE_KEY");
   }
+  const worker = manifest.background?.service_worker;
+  if (!worker) throw new Error("Built manifest omitted the background service worker");
+  const workerSource = execFileSync("unzip", ["-p", artifactPath, worker], { maxBuffer: 20 * 1024 * 1024 });
+  execFileSync(process.execPath, [
+    "--unhandled-rejections=strict",
+    path.join(packageRoot, "scripts", "background-smoke.mjs"),
+    "-", worker,
+  ], { input: workerSource, stdio: ["pipe", "inherit", "inherit"] });
   await readFile(artifactPath);
 }
 

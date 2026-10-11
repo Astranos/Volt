@@ -45,6 +45,7 @@ import {
   type RuntimeSendResponse,
 } from "../src/background/messages";
 import { EXTENSION_SCANNER_SIGNAL_URL } from "../src/domain/mobile-scanner-signal-url";
+import { PROFILE_CLERK_OFFSCREEN_ACTION } from "../src/access/profile-clerk-client";
 
 type RuntimePath =
   | `/mobile-scanner-popup.html${string}`
@@ -195,6 +196,7 @@ export default defineBackground({
     });
     const chromeProfileAuth = createChromeProfileAuthController({
       chromeApi: chrome,
+      sendOffscreenMessage: scannerOffscreen.sendScannerOffscreenMessage,
       syncWebSession: () => clerkSessionMirror.sync(),
       onChanged: () => {
         void cloudWorkspace.handleAccountSessionChanged().then(() => cloudSettings.pull()).catch(() => undefined);
@@ -434,6 +436,7 @@ export default defineBackground({
       sender: RuntimeMessageSender,
       sendResponse: RuntimeSendResponse
     ) {
+      if (getMessageAction(rawMessage) === PROFILE_CLERK_OFFSCREEN_ACTION) return false;
       if (chromeProfileAuth.handleMessage(rawMessage, sender, sendResponse)) return true;
       if (access.handleMessage(rawMessage, sender, sendResponse)) return true;
       if (cloudSettings.handleMessage(rawMessage, sender, sendResponse)) return true;

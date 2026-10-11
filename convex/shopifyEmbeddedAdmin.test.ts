@@ -58,12 +58,17 @@ test("ID token validation rejects forged, stale, future, wrong-audience, and cro
   const valid = idToken();
   expect(await verifyShopifyIdToken(valid)).toBe(shop);
   expect(await verifyShopifyIdToken(valid)).toBe(shop);
+  // Changing the last base64url character can leave the decoded HMAC unchanged.
+  const [header, payload, signature] = valid.split(".");
+  const forgedSignature = Buffer.from(signature!, "base64url");
+  forgedSignature[0] = forgedSignature[0]! ^ 1;
+  const forged = `${header}.${payload}.${forgedSignature.toString("base64url")}`;
   const now = Math.floor(Date.now() / 1000);
   for (const token of [
     idToken(shop, {}, "none"), idToken(shop, { exp: now }), idToken(shop, { nbf: now + 60 }),
     idToken(shop, { aud: "another-app" }), idToken(shop, { iss: `https://${otherShop}/admin` }),
     idToken(shop, { dest: `https://${otherShop}` }), idToken(shop, { dest: "https://first-store.myshopify.com.evil.test" }),
-    `${valid.slice(0, -1)}x`,
+    forged,
   ]) await expect(verifyShopifyIdToken(token)).rejects.toThrow("Invalid Shopify ID token");
   vi.useFakeTimers();
   vi.setSystemTime(Date.now() + 61_000);

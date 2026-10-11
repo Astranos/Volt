@@ -1,16 +1,11 @@
-import { CLERK_PUBLISHABLE_KEY, CLERK_SIGN_IN_URL } from "../access/config";
+import { CLERK_SIGN_IN_URL } from "../access/config";
+import { createProfileClerkProxy, type ProfileClerkClient } from "../access/profile-clerk-client";
 import { CLERK_CLIENT_JWT_CACHE_KEY } from "../access/clerk-client-jwt";
 import { CHROME_PROFILE_AUTH_ENABLED, PROFILE_AUTH_EVENT_KEY, PROFILE_AUTH_STATE_KEY, profileAuthState, withProfileAuthStateLock, type ProfileAuthState } from "../access/chrome-profile-auth";
 import { isTrustedExtensionPageSender, type ExtensionMessageSender } from "../access/sender-policy";
 import { EXTENSION_SCANNER_SIGNAL_URL } from "../domain/mobile-scanner-signal-url";
 
-type NativeClerk = {
-  session: { id: string } | null | undefined;
-  user: { id: string } | null | undefined;
-  client: { signIn: { create(args: { strategy: "ticket"; ticket: string }): Promise<{ status: string | null; createdSessionId: string | null }> } } | null | undefined;
-  setActive(args: { session: string }): Promise<void>;
-  signOut(): Promise<void>;
-};
+type NativeClerk = ProfileClerkClient;
 type Result = { success: true } | { success: false; error: string };
 type Options = {
   chromeApi: typeof chrome;
@@ -19,12 +14,10 @@ type Options = {
   fetcher?: typeof fetch;
   createClient?: () => Promise<NativeClerk>;
   syncWebSession?: () => Promise<void>;
+  sendOffscreenMessage?: (message: unknown) => Promise<unknown>;
 };
 
-export function createChromeProfileAuthController({ chromeApi, onChanged, enabled = CHROME_PROFILE_AUTH_ENABLED, fetcher = fetch, syncWebSession = async () => {}, createClient = async () => {
-  const { createClerkClient } = await import("@clerk/chrome-extension/client");
-  return createClerkClient({ publishableKey: CLERK_PUBLISHABLE_KEY, background: true });
-} }: Options) {
+export function createChromeProfileAuthController({ chromeApi, onChanged, enabled = CHROME_PROFILE_AUTH_ENABLED, fetcher = fetch, syncWebSession = async () => {}, sendOffscreenMessage = (message) => chromeApi.runtime.sendMessage(message), createClient = () => createProfileClerkProxy(sendOffscreenMessage) }: Options) {
   let pending: Promise<Result> | null = null;
   let epoch = 0;
   let transitions = 0;
