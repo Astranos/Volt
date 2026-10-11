@@ -105,6 +105,56 @@ pnpm --filter @volt/extension compile
 
 The generated zip is also retained as a workflow artifact.
 
+## Rolling back a bad release
+
+The Chrome Web Store API has no rollback endpoint, so rollback only exists in
+the Developer Dashboard. It always republishes the previously published version
+under a new, higher version number, goes live in about a minute without review,
+and discards any pending or staged submission.
+
+Package page:
+<https://chrome.google.com/webstore/devconsole/54967cb5-3a3c-4361-b5cd-27bc34b1f4ea/bmgghhmlflbhlnomgnoodpidekpaaifk/edit/package>
+
+Check the live version without signing in:
+
+```sh
+curl -s "https://clients2.google.com/service/update2/crx?response=updatecheck&prodversion=140.0&acceptformat=crx3&x=id%3Dbmgghhmlflbhlnomgnoodpidekpaaifk%26uc" | grep -o 'version="[^"]*"'
+```
+
+### Agent procedure
+
+Agents roll back only when the maintainer asks. Drive Chrome on the
+maintainer's Mac with computer use; the maintainer approves Google sign-in from
+their phone and may not be at the Mac.
+
+1. Open the package page in Chrome. If Google shows **Verify it's you**:
+   - Cancel any passkey / Touch ID sheet; nobody is at the Mac to answer it.
+   - Choose **Try another way**, then **Tap Yes on your phone or tablet**.
+   - Tell the maintainer (push notification when available): "Google sent a
+     sign-in prompt to your phone. Open the Gmail app and tap **Yes**." If the
+     page shows a number, include it so they can tap the matching number.
+   - Never type passwords, request SMS codes, or use backup codes.
+2. Click **Roll back to previous version** and read the dialog. If it warns
+   that a pending submission will be discarded, ask the maintainer before
+   continuing; they will have to resubmit that fix and wait for review again.
+3. Enter a version one patch above the highest published or draft version
+   shown on the page, and a short reason. Click **Roll back**, then
+   **Confirm**.
+4. Verify "Rolled back item successfully", the new published version on the
+   package page, and the `curl` check above.
+
+If the maintainer would rather do it themselves, give them the package-page
+link and these steps on their phone: tap **Roll back to previous version**
+(switch the browser to desktop site if the layout is cramped), enter the next
+version number and a reason, then tap **Roll back** and **Confirm**.
+
+### Resubmitting the fix
+
+Run the **Publish Chrome Extension** workflow on `main` again. The release
+script picks a version above the rollback automatically. The
+`chrome-web-store` environment waits for the maintainer's approval; tell them to
+approve it from the GitHub app unless they explicitly asked the agent to.
+
 ## References
 
 - [Chrome Web Store API V2 guide](https://developer.chrome.com/docs/webstore/using-api)
