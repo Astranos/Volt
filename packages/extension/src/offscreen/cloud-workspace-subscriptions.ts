@@ -101,7 +101,7 @@ function ensureManifestAccess(): Promise<void> {
   return manifestAccessPromise;
 }
 
-function backgroundClerkClient() {
+export function backgroundClerkClient() {
   if (!backgroundClerkPromise) {
     // Imported lazily: clerk-js is by far the heaviest thing this document
     // touches, and pulling it into the startup path delayed the message

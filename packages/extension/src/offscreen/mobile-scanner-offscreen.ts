@@ -8,7 +8,8 @@ import {
   type PhotoMessage,
   type SessionTarget,
 } from "../domain/mobile-scanner-session";
-import { CloudWorkspaceSubscriptions, getClerkToken, objectFrom } from "./cloud-workspace-subscriptions";
+import { CloudWorkspaceSubscriptions, backgroundClerkClient, getClerkToken, objectFrom } from "./cloud-workspace-subscriptions";
+import { createProfileClerkOffscreenController } from "./profile-clerk-controller";
 import { EXTENSION_SCANNER_SIGNAL_URL } from "../domain/mobile-scanner-signal-url";
 
 function serializeLogArg(arg: unknown) {
@@ -264,6 +265,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
 const mobileScannerSession = new MobileScannerOffscreenSession();
 const cloudWorkspaceSubscriptions = new CloudWorkspaceSubscriptions();
+const profileClerk = createProfileClerkOffscreenController({ extensionId: chrome.runtime.id, createClient: backgroundClerkClient });
 cloudWorkspaceSubscriptions.start();
 
 function sendScannerError(sendResponse: (response?: unknown) => void, err: unknown) {
@@ -289,6 +291,7 @@ function sendWorkspaceOperation(
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (profileClerk.handleMessage(message, sender, sendResponse)) return true;
   if (
     message.action === "workspaceOffscreenStartSubscriptions"
     || message.action === "workspaceOffscreenReconcile"

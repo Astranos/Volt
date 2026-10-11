@@ -1,3 +1,46 @@
+.extension-profile-sign-in {
+  align-items: center;
+  display: inline-flex;
+  flex: none;
+  flex-direction: column;
+  gap: 4px;
+  position: relative;
+}
+
+.extension-profile-sign-in-details {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 240px;
+  text-align: center;
+}
+
+.extension-profile-sign-in--newtab .extension-profile-sign-in-details {
+  color: var(--nt-text-muted);
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  width: 100%;
+}
+
+.extension-profile-sign-in-error {
+  font-size: 12px;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.extension-profile-sign-in-fallback {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1.4;
+  padding: 0;
+  text-decoration: underline;
+}
+
 .extension-account-menu {
   flex: none;
   position: relative;

@@ -458,12 +458,14 @@ function ChromeProfileSignIn({ surface = "sidepanel" }: { surface?: AccountContr
       setError("Google sign-in could not finish. Try again or use another sign-in method.");
     } finally { setBusy(false); }
   }
-  return <div>
+  return <div className={`extension-profile-sign-in extension-profile-sign-in--${surface}`}>
     <button type="button" className={accountControlClassName(surface, "is-signed-out")} onClick={() => void signIn()} disabled={busy}>
       <LogIn /><span>{busy ? "Signing in…" : "Sign in with Chrome profile"}</span>
     </button>
-    {error && <p role="alert" className="text-sm">{error}</p>}
-    <button type="button" className="text-xs underline" onClick={() => void chrome.runtime.sendMessage({ action: "chromeProfileManualSignIn" })} disabled={busy}>Use another sign-in method</button>
+    <div className="extension-profile-sign-in-details">
+      {error && <p role="alert" className="extension-profile-sign-in-error">{error}</p>}
+      <button type="button" className="extension-profile-sign-in-fallback" onClick={() => void chrome.runtime.sendMessage({ action: "chromeProfileManualSignIn" })} disabled={busy}>Use another sign-in method</button>
+    </div>
   </div>;
 }
 

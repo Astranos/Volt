@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
+import { verifyBackgroundBoot } from "./background-smoke.mjs";
 
 import {
   chromeExtensionIdFromPublicKey,
@@ -13,6 +16,40 @@ import {
   submitExistingDraft,
   validateProductionBuildEnv,
 } from "./chrome-web-store.mjs";
+
+const registeredWorker = `
+  chrome.action.onClicked.addListener(() => {});
+  chrome.runtime.onMessage.addListener(() => {});
+`;
+
+test("release smoke check boots a worker without waiting for storage/network", () => {
+  verifyBackgroundBoot(`
+    chrome.storage.local.get("account").then(() => fetch("https://example.com"));
+    ${registeredWorker}
+  `);
+});
+
+test("release smoke check rejects bundled UI initialization even after listeners register", () => {
+  assert.throws(() => verifyBackgroundBoot(`
+    ${registeredWorker}
+    document.querySelector("style#cl-style-insertion-point");
+  `), /document is not defined/);
+});
+
+test("release smoke check requires both toolbar and runtime message handlers", () => {
+  assert.throws(() => verifyBackgroundBoot(""), /chrome.action.onClicked/);
+  assert.throws(() => verifyBackgroundBoot("chrome.action.onClicked.addListener(() => {});"), /chrome.runtime.onMessage/);
+});
+
+test("release smoke subprocess rejects asynchronous module startup failures", () => {
+  const result = spawnSync(process.execPath, [
+    "--unhandled-rejections=strict",
+    fileURLToPath(new URL("./background-smoke.mjs", import.meta.url)),
+    "-", "background.js",
+  ], { encoding: "utf8", input: `${registeredWorker} Promise.resolve().then(() => document.querySelector('style'));` });
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /document is not defined/);
+});
 
 test("parses and pads valid Chrome versions", () => {
   assert.deepEqual(parseChromeVersion("1.2.3"), [1, 2, 3, 0]);
