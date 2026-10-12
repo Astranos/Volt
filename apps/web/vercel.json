@@ -3,6 +3,10 @@
   "outputDirectory": "dist",
   "headers": [
     {
+      "source": "/:path((?!upc-search|privacy|api/|assets/|\\.well-known/|.*\\.[^/]+$).+)",
+      "headers": [{ "key": "X-Robots-Tag", "value": "noindex" }]
+    },
+    {
       "source": "/upc-search/:path*",
       "has": [{ "type": "query", "key": "q" }],
       "headers": [{ "key": "X-Robots-Tag", "value": "noindex, follow" }]
@@ -52,6 +56,6 @@
       "source": "/clip/",
       "destination": "/clip.html"
     },
-    { "source": "/((?!api/).*)", "destination": "/index.html" }
+    { "source": "/((?!api/).*)", "destination": "/app.html" }
   ]
 }

@@ -48,6 +48,16 @@ describe("public UPC search SEO", () => {
         await readFile(path.join(webRoot, "index.html"), "utf8"),
       );
       expect(home).not.toContain("What is a UPC code?");
+      expect(home).not.toContain("<!--home-landing-->");
+      expect(home).toContain("The fastest way to resell electronics.");
+      expect(home).toContain('href="https://voltresale.app/"');
+      expect(home).toContain('name="description"');
+      const shell = await server.transformIndexHtml(
+        "/app.html",
+        await readFile(path.join(webRoot, "app.html"), "utf8"),
+      );
+      expect(shell).toContain('<div id="root"></div>');
+      expect(shell).not.toContain('rel="canonical"');
     } finally {
       await server.close();
       await rm(cacheDir, { recursive: true, force: true });
@@ -55,7 +65,7 @@ describe("public UPC search SEO", () => {
   }, 30_000);
 
   it.each(["../../vercel.json", "vercel.json"])(
-    "routes static landing and noindexes query URLs in %s",
+    "routes static landing and noindexes query and app URLs in %s",
     async (filename) => {
       const config = JSON.parse(
         await readFile(path.resolve(webRoot, filename), "utf8"),
@@ -73,6 +83,30 @@ describe("public UPC search SEO", () => {
       });
       for (const source of ["/robots.txt", "/sitemap.xml"]) {
         expect(config.rewrites).toContainEqual({ source, destination: source });
+      }
+      // App routes get the empty shell; it must not inherit the homepage.
+      expect(config.rewrites.at(-1)).toEqual({
+        source: "/((?!api/).*)",
+        destination: "/app.html",
+      });
+      const noindex = config.headers.find(
+        (rule: { has?: unknown; headers: { key: string }[] }) =>
+          !rule.has && rule.headers[0]?.key === "X-Robots-Tag",
+      );
+      const pattern = new RegExp(
+        `^/${noindex.source.slice("/:path(".length, -1)}$`,
+      );
+      for (const page of ["/dashboard", "/sign-in", "/billing", "/missing"]) {
+        expect(pattern.test(page), page).toBe(true);
+      }
+      for (const page of [
+        "/",
+        "/upc-search",
+        "/privacy",
+        "/sitemap.xml",
+        "/assets/product/mobile-02-capture-text-chip.png",
+      ]) {
+        expect(pattern.test(page), page).toBe(false);
       }
     },
   );
