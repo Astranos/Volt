@@ -6,7 +6,7 @@
   "outputDirectory": "apps/web/dist",
   "headers": [
     {
-      "source": "/:path((?!upc-search|privacy|api/|assets/|\\.well-known/|.*\\.[^/]+$).+)",
+      "source": "/:path((?!upc-search(?:/|$)|privacy(?:/|$)|api/|assets/|\\.well-known/|.*\\.[^/]+$).+)",
       "headers": [{ "key": "X-Robots-Tag", "value": "noindex" }]
     },
     {

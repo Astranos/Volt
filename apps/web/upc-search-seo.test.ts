@@ -96,12 +96,20 @@ describe("public UPC search SEO", () => {
       const pattern = new RegExp(
         `^/${noindex.source.slice("/:path(".length, -1)}$`,
       );
-      for (const page of ["/dashboard", "/sign-in", "/billing", "/missing"]) {
+      for (const page of [
+        "/dashboard",
+        "/sign-in",
+        "/billing",
+        "/missing",
+        "/privacy-policy",
+        "/upc-searchfoo",
+      ]) {
         expect(pattern.test(page), page).toBe(true);
       }
       for (const page of [
         "/",
         "/upc-search",
+        "/upc-search/",
         "/privacy",
         "/sitemap.xml",
         "/assets/product/mobile-02-capture-text-chip.png",
