@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { motion, type Variants } from "motion/react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import {
   Bookmark,
   Calculator,
@@ -162,9 +162,14 @@ const softScale: Variants = {
 };
 
 function Home() {
+  return <HomePage header={<SiteHeader anchorPrefix="" />} />;
+}
+
+/** The build prerenders this with an auth-free header for crawlers. */
+export function HomePage({ header }: { header: ReactNode }) {
   return (
     <main className="min-h-screen bg-zinc-50 text-zinc-950">
-      <SiteHeader anchorPrefix="" />
+      {header}
 
       <section id="top" className="border-b border-zinc-200 bg-white">
         <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8 lg:py-12">
