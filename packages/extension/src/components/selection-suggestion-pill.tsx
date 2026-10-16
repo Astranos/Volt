@@ -1,7 +1,7 @@
 import React from "react";
 import { PackageSearch, Search, TrendingUp, Copy, Link2, BookOpen, Sparkles } from "lucide-react";
 import { positionSelectionSuggestions } from "../domain/selection-suggestions";
-import { OpenModeSwitch, opensInNewTab, type OpenMode } from "./open-mode-switch";
+import { OpenModeSwitch, opensInNewTab, useOpenMode, type OpenMode } from "./open-mode-switch";
 import {
   selectionActionKey,
   selectionActionLabel,
@@ -29,7 +29,6 @@ export function SelectionSuggestionPill({
   onCopy,
   onAction,
   openMode: initialOpenMode,
-  onOpenModeChange,
   position,
 }: {
   actions: readonly SelectionAction[];
@@ -37,10 +36,9 @@ export function SelectionSuggestionPill({
   onCopy: () => void;
   onAction: (action: SelectionAction, newTab: boolean) => void;
   openMode: OpenMode;
-  onOpenModeChange: (mode: OpenMode) => void;
   position: SelectionSuggestionPosition;
 }) {
-  const [openMode, setOpenMode] = React.useState(initialOpenMode);
+  const [openMode, chooseOpenMode] = useOpenMode(initialOpenMode);
   return (
     <div
       aria-label="Actions for selected text"
@@ -90,13 +88,7 @@ export function SelectionSuggestionPill({
           <Copy size={15} />
           <span>Copy</span>
         </button>
-        <OpenModeSwitch
-          mode={openMode}
-          onChange={(mode) => {
-            setOpenMode(mode);
-            onOpenModeChange(mode);
-          }}
-        />
+        <OpenModeSwitch mode={openMode} onChange={chooseOpenMode} />
       </div>
     </div>
   );

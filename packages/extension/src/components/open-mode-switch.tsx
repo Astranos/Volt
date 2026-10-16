@@ -1,6 +1,51 @@
+import { useEffect, useState } from "react";
 import { AppWindow, ExternalLink } from "lucide-react";
 
 export type OpenMode = "popup" | "tab";
+
+/**
+ * Shared by the Shopify buttons, right-click menu, highlight pill, and settings.
+ * Kept in its own chrome.storage.sync key so writing it can never clobber a
+ * concurrent cmdkSettings save.
+ */
+export const OPEN_MODE_STORAGE_KEY = "openSearchResultsIn";
+
+export const parseOpenMode = (value: unknown): OpenMode => (value === "tab" ? "tab" : "popup");
+
+// Static renders (tests) have no extension APIs.
+const extensionStorage = () => (typeof chrome === "undefined" ? undefined : chrome.storage);
+
+/** The stored mode, following changes made anywhere while mounted. */
+export function useOpenMode(initial: OpenMode = "popup"): [OpenMode, (mode: OpenMode) => void] {
+  const [mode, setMode] = useState(initial);
+  useEffect(() => {
+    const storage = extensionStorage();
+    if (!storage) return;
+    let active = true;
+    storage.sync.get(OPEN_MODE_STORAGE_KEY).then((stored: Record<string, unknown>) => {
+      if (active) setMode(parseOpenMode(stored[OPEN_MODE_STORAGE_KEY]));
+    }).catch(() => {});
+    const onChanged = (changes: Record<string, { newValue?: unknown }>, area: string) => {
+      if (area === "sync" && changes[OPEN_MODE_STORAGE_KEY]) {
+        setMode(parseOpenMode(changes[OPEN_MODE_STORAGE_KEY].newValue));
+      }
+    };
+    storage.onChanged.addListener(onChanged);
+    return () => {
+      active = false;
+      storage.onChanged.removeListener(onChanged);
+    };
+  }, []);
+  const choose = (next: OpenMode) => {
+    setMode(next);
+    try {
+      extensionStorage()?.sync.set({ [OPEN_MODE_STORAGE_KEY]: next }).catch(() => {});
+    } catch (_) {
+      // An extension update invalidates this context; keep the local choice.
+    }
+  };
+  return [mode, choose];
+}
 
 type Modifiers = { metaKey?: boolean; ctrlKey?: boolean; button?: number };
 

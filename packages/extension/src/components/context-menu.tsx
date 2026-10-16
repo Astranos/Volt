@@ -1,5 +1,5 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { OpenModeSwitch, opensInNewTab, type OpenMode } from "./open-mode-switch";
+import { OpenModeSwitch, opensInNewTab, useOpenMode, type OpenMode } from "./open-mode-switch";
 
 export type MenuAction = {
   id: string;
@@ -25,22 +25,17 @@ type ContextMenuProps = {
   x: number;
   y: number;
   closeMenu: (options?: { restoreFocus?: boolean }) => void;
+  /** Last known stored mode, so the switch renders without a flash. */
   openMode: OpenMode;
-  onOpenModeChange: (mode: OpenMode) => void;
   dismiss: () => void;
 };
 
-export function ContextMenu({ actions, selectionActionCount, quickActions, lastSelection, clickedUrl, x, y, closeMenu, openMode: initialOpenMode, onOpenModeChange, dismiss }: ContextMenuProps) {
+export function ContextMenu({ actions, selectionActionCount, quickActions, lastSelection, clickedUrl, x, y, closeMenu, openMode: initialOpenMode, dismiss }: ContextMenuProps) {
   const items = actions;
   const hasSelection = !!lastSelection;
   const menuRef = useRef<HTMLDivElement>(null);
-  const [openMode, setOpenMode] = useState(initialOpenMode);
+  const [openMode, chooseOpenMode] = useOpenMode(initialOpenMode);
   const hasUrlActions = items.some((item) => item.opensUrl);
-
-  const chooseOpenMode = (mode: OpenMode) => {
-    setOpenMode(mode);
-    onOpenModeChange(mode);
-  };
 
   const invoke = (item: MenuAction, modifiers?: Parameters<typeof opensInNewTab>[1]) => {
     const newTab = opensInNewTab(openMode, modifiers);

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { SaveExtensionSettings } from "@/src/hooks/useExtensionSettings";
 import type { CmdkSettings } from "@/src/types/settings";
+import { parseOpenMode, useOpenMode } from "@/src/components/open-mode-switch";
 
 const MOBILE_PHOTO_RETENTION_OPTIONS = [
   { value: 12, label: "12 hours" },
@@ -18,6 +19,7 @@ export function FeatureTogglesSettings({
   settings,
   saveSettings,
 }: FeatureTogglesSettingsProps) {
+  const [openMode, chooseOpenMode] = useOpenMode();
   return (
     <>
       <ToggleSection
@@ -53,13 +55,8 @@ export function FeatureTogglesSettings({
           </div>
           <select
             className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm sm:w-44"
-            value={settings.openSearchResultsIn ?? "popup"}
-            onChange={(event) =>
-              void saveSettings({
-                ...settings,
-                openSearchResultsIn: event.target.value === "tab" ? "tab" : "popup",
-              })
-            }
+            value={openMode}
+            onChange={(event) => chooseOpenMode(parseOpenMode(event.target.value))}
           >
             <option value="popup">Popup window</option>
             <option value="tab">New tab</option>

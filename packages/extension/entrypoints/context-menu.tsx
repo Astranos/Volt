@@ -2,6 +2,7 @@
 import { ContextMenu, type MenuAction } from "../src/components/context-menu";
 import { styles, selectionStyles } from "../src/components/context-menu-styles";
 import { SelectionSuggestionPill } from "../src/components/selection-suggestion-pill";
+import { OPEN_MODE_STORAGE_KEY, parseOpenMode } from "../src/components/open-mode-switch";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* global chrome */
 
@@ -45,7 +46,6 @@ export default defineContentScript({
       chrome.storage.sync.get(["cmdkSettings"], (result) => {
         const s = result?.cmdkSettings || {};
         enabled = s?.contextMenu?.enabled ?? true;
-        openSearchResultsIn = s?.openSearchResultsIn === "tab" ? "tab" : "popup";
         selectionSuggestionsEnabled =
           s?.contextMenu?.selectionSuggestionsEnabled ?? true;
         selectionPopupActions = normalizeSelectionActions(
@@ -68,17 +68,12 @@ export default defineContentScript({
       } catch (_) {}
     };
 
-    // Shared with the Shopify research buttons through cmdkSettings.
-    const saveOpenSearchResultsIn = (mode: "popup" | "tab") => {
-      openSearchResultsIn = mode;
-      try {
-        chrome.storage.sync.get(["cmdkSettings"], (result) => {
-          chrome.storage.sync.set({
-            cmdkSettings: { ...(result?.cmdkSettings || {}), openSearchResultsIn: mode },
-          });
-        });
-      } catch (_) {}
-    };
+    // Initial value for the menu and pill; their switch keeps itself in sync.
+    try {
+      chrome.storage.sync.get(OPEN_MODE_STORAGE_KEY, (result) => {
+        openSearchResultsIn = parseOpenMode(result?.[OPEN_MODE_STORAGE_KEY]);
+      });
+    } catch (_) {}
 
     const openSearchPopup = (url: string) => {
       // Use Chrome's windows API via background script for reliable cross-origin popup management
@@ -759,7 +754,6 @@ export default defineContentScript({
             openSelectionAction(actionId, selection, newTab)
           }
           openMode={openSearchResultsIn}
-          onOpenModeChange={saveOpenSearchResultsIn}
           position={position}
         />,
       );
@@ -799,7 +793,7 @@ export default defineContentScript({
       host.style.pointerEvents = "auto";
       isOpen = true;
       if (!reactRoot) reactRoot = createRoot(rootEl);
-      reactRoot.render(<ContextMenu actions={[...selectionMenuActions(), ...toolActions]} selectionActionCount={contextMenuSelectionActions.length} quickActions={quickActions} lastSelection={lastSelection} clickedUrl={clickedUrl} x={x} y={y} closeMenu={closeMenu} openMode={openSearchResultsIn} onOpenModeChange={saveOpenSearchResultsIn} dismiss={() => { dismissedUntilRefresh = true; }} />);
+      reactRoot.render(<ContextMenu actions={[...selectionMenuActions(), ...toolActions]} selectionActionCount={contextMenuSelectionActions.length} quickActions={quickActions} lastSelection={lastSelection} clickedUrl={clickedUrl} x={x} y={y} closeMenu={closeMenu} openMode={openSearchResultsIn} dismiss={() => { dismissedUntilRefresh = true; }} />);
     };
 
     const closeMenu = (options: CloseMenuOptions = {}) => {
@@ -926,12 +920,11 @@ export default defineContentScript({
     });
 
     chrome.storage.onChanged.addListener((changes, areaName) => {
-      if (areaName !== "sync" || !changes.cmdkSettings) return;
-      const { openSearchResultsIn: mode, ...next } = changes.cmdkSettings.newValue || {};
-      const { openSearchResultsIn: _previousMode, ...previous } = changes.cmdkSettings.oldValue || {};
-      openSearchResultsIn = mode === "tab" ? "tab" : "popup";
-      // Switching Popup / New tab from inside the menu must not close it.
-      if (JSON.stringify(next) === JSON.stringify(previous)) return;
+      if (areaName !== "sync") return;
+      if (changes[OPEN_MODE_STORAGE_KEY]) {
+        openSearchResultsIn = parseOpenMode(changes[OPEN_MODE_STORAGE_KEY].newValue);
+      }
+      if (!changes.cmdkSettings) return;
       const contextSettings = changes.cmdkSettings.newValue?.contextMenu;
       enabled = contextSettings?.enabled ?? true;
       selectionSuggestionsEnabled = contextSettings?.selectionSuggestionsEnabled ?? true;

@@ -13,7 +13,7 @@ const script = ts.transpileModule(source.replace(/^import .*define-content-scrip
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
 }).outputText;
 
-function mount({ modern = true, card = true, width = 720, settings = {} } = {}) {
+function mount({ modern = true, card = true, width = 720, settings = {}, stored = {} } = {}) {
   let availableWidth = width;
   const { document, window } = parseHTML(`<html><head></head><body><main>${modern
     ? '<s-internal-section><s-internal-text-field name="title"></s-internal-text-field></s-internal-section>'
@@ -56,7 +56,7 @@ function mount({ modern = true, card = true, width = 720, settings = {} } = {}) 
     chrome: {
       runtime: { getURL: (path) => path, onMessage: { addListener(callback) { onMessage = callback; } }, sendMessage: (message) => messages.push(message) },
       storage: {
-        sync: { get: (_, callback) => callback({ cmdkSettings: settings }) },
+        sync: { get: (_, callback) => callback({ cmdkSettings: settings, ...stored }) },
         onChanged: { addListener(callback) { onStorageChanged = callback; } },
       },
     },
@@ -70,7 +70,7 @@ function mount({ modern = true, card = true, width = 720, settings = {} } = {}) 
   context.exports.default.main();
   frame();
   return { document, window, container, location, messages, frame: () => frame(), resize: (width) => { availableWidth = width; frame(); }, settings: (enabled) => onMessage({ action: "shopify-buttons-settings-changed", enabled }),
-    storageChanged: (newValue) => onStorageChanged({ cmdkSettings: { newValue } }, "sync") };
+    storageChanged: (changes) => onStorageChanged(changes, "sync") };
 }
 
 for (const modern of [true, false]) {
@@ -181,14 +181,17 @@ test("research actions open a new tab on modifier or middle click, or when prefe
   frame();
   assert.match(ebay.getAttribute("data-tooltip"), /\nCtrl\+click to open in a new tab$/);
 
-  storageChanged({ shopifyButtons: { enabled: true }, openSearchResultsIn: "tab" });
+  storageChanged({ cmdkSettings: { newValue: { shopifyButtons: { enabled: true } } } });
+  click();
+  assert.equal(messages.at(-1).action, "openPreviewPopup", "unrelated settings changes keep the mode");
+  storageChanged({ openSearchResultsIn: { newValue: "tab" } });
   click();
   assert.equal(messages.at(-1).action, "openUrl");
   assert.match(messages.at(-1).url, /_nkw=Dell%20Latitude.*LH_Sold=1/);
 });
 
 test("stored new-tab preference applies on load and drops the hint", () => {
-  const { document, messages, frame } = mount({ settings: { openSearchResultsIn: "tab" } });
+  const { document, messages, frame } = mount({ stored: { openSearchResultsIn: "tab" } });
   document.getElementById("volt-tab-ebay").onclick({ stopPropagation() {}, button: 0 });
   assert.equal(messages[0].action, "openUrl");
   frame();

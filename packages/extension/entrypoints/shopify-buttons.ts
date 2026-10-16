@@ -811,10 +811,10 @@ export default defineContentScript({
     };
 
     const checkSettingsAndInit = () => {
-      chrome.storage.sync.get(["cmdkSettings"], (result) => {
+      chrome.storage.sync.get(["cmdkSettings", "openSearchResultsIn"], (result) => {
         const settings = result.cmdkSettings || {};
         buttonsEnabled = settings.shopifyButtons?.enabled ?? true;
-        openIn = settings.openSearchResultsIn === "tab" ? "tab" : "popup";
+        openIn = result.openSearchResultsIn === "tab" ? "tab" : "popup";
 
         if (buttonsEnabled) {
           init();
@@ -824,8 +824,9 @@ export default defineContentScript({
 
     // Listen for settings changes
     chrome.storage.onChanged?.addListener((changes, area) => {
-      if (area === "sync" && changes.cmdkSettings) {
-        openIn = changes.cmdkSettings.newValue?.openSearchResultsIn === "tab" ? "tab" : "popup";
+      // Shared "openSearchResultsIn" preference (see open-mode-switch.tsx).
+      if (area === "sync" && changes.openSearchResultsIn) {
+        openIn = changes.openSearchResultsIn.newValue === "tab" ? "tab" : "popup";
       }
     });
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {

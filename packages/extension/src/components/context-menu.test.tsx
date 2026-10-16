@@ -10,7 +10,7 @@ const actions: MenuAction[] = [
 ];
 
 function render(selection: string, clickedUrl: string | null, selectionActionCount = 1, { openMode = "popup" as OpenMode, menuActions = actions } = {}) {
-  return renderToStaticMarkup(<ContextMenu actions={menuActions} selectionActionCount={selectionActionCount} quickActions={[]} lastSelection={selection} clickedUrl={clickedUrl} x={0} y={0} closeMenu={vi.fn()} openMode={openMode} onOpenModeChange={vi.fn()} dismiss={vi.fn()} />);
+  return renderToStaticMarkup(<ContextMenu actions={menuActions} selectionActionCount={selectionActionCount} quickActions={[]} lastSelection={selection} clickedUrl={clickedUrl} x={0} y={0} closeMenu={vi.fn()} openMode={openMode} dismiss={vi.fn()} />);
 }
 
 const checkedOption = (html: string) =>

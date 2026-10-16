@@ -1,15 +1,24 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
-import { RELEASE_NOTES_VERSION, RELEASE_SETTINGS_LINKS, notesForVersion } from "./release-notes";
+import { RELEASE_NOTES_VERSION, RELEASE_SETTINGS_LINKS, shouldAnnounceRelease } from "./release-notes";
 
 const packagePath = fileURLToPath(new URL("../../../package.json", import.meta.url));
 const extensionPackage = JSON.parse(readFileSync(packagePath, "utf8")) as { version: string };
 
 describe("new-tab release notes", () => {
-  test("are updated whenever the extension version changes", () => {
-    expect(RELEASE_NOTES_VERSION).toBe(extensionPackage.version);
-    expect(notesForVersion(extensionPackage.version)).toHaveLength(4);
+  test("announce a release no newer than the package version", () => {
+    const [notes, pkg] = [RELEASE_NOTES_VERSION, extensionPackage.version].map((v) => v.split(".").map(Number));
+    expect(notes[0] * 1e10 + notes[1] * 1e5 + notes[2]).toBeLessThanOrEqual(pkg[0] * 1e10 + pkg[1] * 1e5 + pkg[2]);
+  });
+
+  test("open once per announced release, and stay quiet for bug-fix updates", () => {
+    expect(shouldAnnounceRelease(undefined)).toBe(true);
+    expect(shouldAnnounceRelease("1.0.60")).toBe(true);
+    expect(shouldAnnounceRelease(RELEASE_NOTES_VERSION)).toBe(false);
+    // Users who already dismissed a later (bug-fix) version aren't shown it again.
+    expect(shouldAnnounceRelease("1.0.73")).toBe(false);
+    expect(shouldAnnounceRelease("1.0.100")).toBe(false);
   });
 
   test("link to existing settings sections", () => {

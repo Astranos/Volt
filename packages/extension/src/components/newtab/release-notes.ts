@@ -1,3 +1,9 @@
+/**
+ * The release these notes announce. The new tab opens "What's new" once for
+ * anyone who last saw an older version. Bug-fix releases leave this alone so
+ * they update quietly; to announce one, rewrite the notes and set this to the
+ * version being shipped (or the next version after the current store version).
+ */
 export const RELEASE_NOTES_VERSION = "1.0.69";
 
 export const RELEASE_NOTES = [
@@ -25,8 +31,17 @@ export const RELEASE_SETTINGS_LINKS = [
   { label: "Context menu", hash: "contextmenu" },
 ] as const;
 
-export function notesForVersion(version: string) {
-  return version === RELEASE_NOTES_VERSION
-    ? RELEASE_NOTES
-    : [{ title: `Volt ${version} is ready`, description: "Open Settings to review the features and shortcuts available in this release." }];
+function compareVersions(a: string, b: string) {
+  const left = a.split(".").map(Number);
+  const right = b.split(".").map(Number);
+  for (let i = 0; i < Math.max(left.length, right.length); i++) {
+    const diff = (left[i] || 0) - (right[i] || 0);
+    if (diff) return diff;
+  }
+  return 0;
+}
+
+/** First run, or the user hasn't seen the release these notes announce. */
+export function shouldAnnounceRelease(seenVersion: unknown) {
+  return typeof seenVersion !== "string" || compareVersions(seenVersion, RELEASE_NOTES_VERSION) < 0;
 }

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowUpRight, Sparkles, X } from "lucide-react";
-import { notesForVersion, RELEASE_SETTINGS_LINKS } from "./release-notes";
+import { RELEASE_NOTES, RELEASE_SETTINGS_LINKS, shouldAnnounceRelease } from "./release-notes";
 import "./whats-new-dialog.css";
 
 const SEEN_VERSION_KEY = "voltWhatsNewSeenVersion";
@@ -13,7 +13,7 @@ export function WhatsNewDialog({ openRequest = 0 }: { openRequest?: number }) {
   useEffect(() => {
     let canceled = false;
     void chrome.storage.local.get(SEEN_VERSION_KEY).then((stored) => {
-      if (!canceled && stored[SEEN_VERSION_KEY] !== version) setOpen(true);
+      if (!canceled && shouldAnnounceRelease(stored[SEEN_VERSION_KEY])) setOpen(true);
     });
     return () => { canceled = true; };
   }, [version]);
@@ -48,7 +48,7 @@ export function WhatsNewDialog({ openRequest = 0 }: { openRequest?: number }) {
     <h2 id="whats-new-title">What’s new</h2>
     <p className="newtab-whats-new-lede">A faster way to find, review, and act on your products.</p>
     <div className="newtab-whats-new-items">
-      {notesForVersion(version).map((note) => <section className="newtab-whats-new-item" key={note.title}>
+      {RELEASE_NOTES.map((note) => <section className="newtab-whats-new-item" key={note.title}>
         <span className="newtab-whats-new-item-dot" aria-hidden="true" />
         <div><h3>{note.title}</h3><p>{note.description}</p></div>
       </section>)}
