@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { SaveExtensionSettings } from "@/src/hooks/useExtensionSettings";
 import type { CmdkSettings } from "@/src/types/settings";
 
@@ -42,7 +43,32 @@ export function FeatureTogglesSettings({
             )
           );
         }}
-      />
+      >
+        <div className="p-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="font-semibold text-base mb-1">Open results in</h3>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              {"\u2318"}/Ctrl-click or middle-click a button to always open a new tab.
+            </p>
+          </div>
+          <select
+            className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm sm:w-44"
+            value={settings.shopifyButtons?.openIn ?? "popup"}
+            onChange={(event) =>
+              void saveSettings({
+                ...settings,
+                shopifyButtons: {
+                  ...settings.shopifyButtons,
+                  openIn: event.target.value === "tab" ? "tab" : "popup",
+                },
+              })
+            }
+          >
+            <option value="popup">Popup window</option>
+            <option value="tab">New tab</option>
+          </select>
+        </div>
+      </ToggleSection>
 
       <ToggleSection
         id="ebay"
@@ -253,6 +279,7 @@ function ToggleSection({
   details = [],
   enabled,
   onToggle,
+  children,
 }: {
   id: string;
   title: string;
@@ -262,6 +289,7 @@ function ToggleSection({
   details?: string[];
   enabled: boolean;
   onToggle: () => void;
+  children?: ReactNode;
 }) {
   return (
     <section id={id} className="scroll-mt-20">
@@ -291,6 +319,7 @@ function ToggleSection({
             </div>
             <ToggleSwitch enabled={enabled} onClick={onToggle} />
           </div>
+          {children}
         </div>
       </div>
     </section>

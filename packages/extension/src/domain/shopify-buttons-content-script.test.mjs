@@ -13,7 +13,7 @@ const script = ts.transpileModule(source.replace(/^import .*define-content-scrip
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
 }).outputText;
 
-function mount({ modern = true, card = true, width = 720 } = {}) {
+function mount({ modern = true, card = true, width = 720, settings = {} } = {}) {
   let availableWidth = width;
   const { document, window } = parseHTML(`<html><head></head><body><main>${modern
     ? '<s-internal-section><s-internal-text-field name="title"></s-internal-text-field></s-internal-section>'
@@ -37,6 +37,7 @@ function mount({ modern = true, card = true, width = 720 } = {}) {
   Object.getPrototypeOf(container.style).getPropertyPriority = () => "";
   window.screen = { width: 1440, height: 900 };
   window.HTMLElement.prototype.getBoundingClientRect = function () {
+    if (this.id === "volt-quick-actions-overlay") return { left: 0, top: 0, width: 120, height: 28 };
     const gutter = parseFloat(this.style.getPropertyValue("margin-inline-start")) || 0;
     return { left: 296 + gutter, top: 176, width: availableWidth - gutter, height: 400 };
   };
@@ -45,6 +46,7 @@ function mount({ modern = true, card = true, width = 720 } = {}) {
   let frame;
   const messages = [];
   let onMessage;
+  let onStorageChanged;
   const context = vm.createContext({
     exports: {}, defineContentScript: (config) => config, document, window, location,
     history: { pushState() {}, replaceState() {} },
@@ -53,7 +55,10 @@ function mount({ modern = true, card = true, width = 720 } = {}) {
     console: { log() {} },
     chrome: {
       runtime: { getURL: (path) => path, onMessage: { addListener(callback) { onMessage = callback; } }, sendMessage: (message) => messages.push(message) },
-      storage: { sync: { get: (_, callback) => callback({}) } },
+      storage: {
+        sync: { get: (_, callback) => callback({ cmdkSettings: settings }) },
+        onChanged: { addListener(callback) { onStorageChanged = callback; } },
+      },
     },
   });
   window.getComputedStyle = (element) => ({
@@ -64,7 +69,8 @@ function mount({ modern = true, card = true, width = 720 } = {}) {
   vm.runInContext(script, context);
   context.exports.default.main();
   frame();
-  return { document, window, container, location, messages, frame: () => frame(), resize: (width) => { availableWidth = width; frame(); }, settings: (enabled) => onMessage({ action: "shopify-buttons-settings-changed", enabled }) };
+  return { document, window, container, location, messages, frame: () => frame(), resize: (width) => { availableWidth = width; frame(); }, settings: (enabled) => onMessage({ action: "shopify-buttons-settings-changed", enabled }),
+    storageChanged: (newValue) => onStorageChanged({ cmdkSettings: { newValue } }, "sync") };
 }
 
 for (const modern of [true, false]) {
@@ -83,7 +89,7 @@ for (const modern of [true, false]) {
 }
 
 for (const options of [{ width: 480 }, { modern: false, width: 480 }, { card: false }]) {
-  test(`narrow or unknown forms use compact inline actions (${JSON.stringify(options)})`, () => {
+  test(`narrow or unknown forms place actions above the title input (${JSON.stringify(options)})`, () => {
     const { document, container, frame } = mount(options);
     const toolbar = document.getElementById("volt-quick-actions-overlay");
     let moves = 0;
@@ -92,21 +98,40 @@ for (const options of [{ width: 480 }, { modern: false, width: 480 }, { card: fa
     container.insertBefore = countMove(container.insertBefore);
     frame();
     assert.equal(moves, 0, "a settled toolbar must not be reinserted every frame");
-    assert.equal(toolbar.parentElement, container);
-    assert.equal(container.firstChild, toolbar);
-    assert.equal(toolbar.dataset.layout, "inline");
-    assert.ok(!toolbar.style.left);
+    assert.equal(toolbar.parentElement, document.body, "never insert into Shopify-owned nodes");
+    assert.equal(toolbar.dataset.layout, "title");
+    const fieldRight = 296 + (options.width ?? 720);
+    assert.equal(toolbar.style.left, `${fieldRight - 120}px`);
+    assert.equal(toolbar.style.top, "146px");
+    assert.equal(toolbar.style.visibility, "");
     assert.ok(!container.style.getPropertyValue("margin-inline-start"));
-    const styles = document.getElementById("volt-quick-actions-styles").textContent;
-    assert.match(styles, /justify-content: flex-end;/);
-    assert.match(styles, /height: 28px;/);
-    assert.match(styles, /margin: 0 0 0 auto;/);
     assert.equal(document.querySelector("#volt-tab-ebay .volt-action-label"), null);
     assert.equal(document.querySelector("#volt-tab-pc .volt-action-label").textContent, "UPC");
-    assert.equal(document.querySelector(".volt-volt-badge"), null);
     assert.equal(document.querySelector("#volt-tab-ebay img").getAttribute("src"), "assets/logos/ebay-wordmark.svg");
   });
 }
+
+test("toolbar stays hidden until the title input has a box", () => {
+  const { document, window, frame } = mount({ width: 480 });
+  const toolbar = document.getElementById("volt-quick-actions-overlay");
+  const measure = window.HTMLElement.prototype.getBoundingClientRect;
+  window.HTMLElement.prototype.getBoundingClientRect = function () {
+    return this.tagName === "INPUT" ? { left: 0, top: 0, width: 0, height: 0 } : measure.call(this);
+  };
+  frame();
+  assert.equal(toolbar.style.visibility, "hidden");
+  window.HTMLElement.prototype.getBoundingClientRect = measure;
+  frame();
+  assert.equal(toolbar.style.visibility, "");
+});
+
+test("disabled actions fade their icon, not their tooltip", () => {
+  const { document } = mount();
+  const styles = document.getElementById("volt-quick-actions-styles").textContent;
+  assert.doesNotMatch(styles, /\.volt-action-tab\.disabled \{[^}]*opacity/);
+  assert.match(styles, /\.volt-action-tab\.disabled > \* \{\s*opacity: 0\.45;/);
+  assert.equal(document.getElementById("volt-tab-pc").getAttribute("data-tooltip"), "No UPC found");
+});
 
 test("resize restores original card styles, then reserves the gutter again", () => {
   const { container, document, resize, location, frame } = mount({ width: 480 });
@@ -118,7 +143,7 @@ test("resize restores original card styles, then reserves the gutter again", () 
   resize(480);
   assert.equal(container.style.getPropertyValue("margin-inline-start"), "12px");
   assert.equal(container.style.getPropertyValue("max-width"), "900px");
-  assert.equal(document.getElementById("volt-quick-actions-overlay").dataset.layout, "inline");
+  assert.equal(document.getElementById("volt-quick-actions-overlay").dataset.layout, "title");
   resize(720);
   assert.equal(document.getElementById("volt-quick-actions-overlay").dataset.layout, "gutter");
   location.href = "https://admin.shopify.com/store/test/orders";
@@ -140,6 +165,35 @@ test("research action reads Shopify's shadow title and still opens sold listings
   document.getElementById("volt-tab-ebay").onclick({ stopPropagation() {} });
   assert.equal(messages[0].action, "openPreviewPopup");
   assert.match(messages[0].url, /_nkw=Dell%20Latitude.*LH_Sold=1/);
+});
+
+test("research actions open a new tab on modifier or middle click, or when preferred", () => {
+  const { document, messages, storageChanged, frame } = mount();
+  const ebay = document.getElementById("volt-tab-ebay");
+  const click = (event = {}) => ebay.onclick({ stopPropagation() {}, preventDefault() {}, button: 0, ...event });
+  click();
+  click({ metaKey: true });
+  click({ ctrlKey: true });
+  ebay.onauxclick({ stopPropagation() {}, preventDefault() {}, button: 1 });
+  ebay.onauxclick({ stopPropagation() {}, preventDefault() {}, button: 2 });
+  assert.deepEqual(messages.map((message) => message.action),
+    ["openPreviewPopup", "openUrl", "openUrl", "openUrl"]);
+  frame();
+  assert.match(ebay.getAttribute("data-tooltip"), /\nCtrl\+click to open in a new tab$/);
+
+  storageChanged({ shopifyButtons: { enabled: true, openIn: "tab" } });
+  click();
+  assert.equal(messages.at(-1).action, "openUrl");
+  assert.match(messages.at(-1).url, /_nkw=Dell%20Latitude.*LH_Sold=1/);
+});
+
+test("stored new-tab preference applies on load and drops the hint", () => {
+  const { document, messages, frame } = mount({ settings: { shopifyButtons: { openIn: "tab" } } });
+  document.getElementById("volt-tab-ebay").onclick({ stopPropagation() {}, button: 0 });
+  assert.equal(messages[0].action, "openUrl");
+  frame();
+  const tooltip = document.getElementById("volt-tab-ebay").getAttribute("data-tooltip");
+  assert.equal(tooltip, "Search eBay sold prices: Dell Latitude");
 });
 
 test("toolbar follows a replaced product section and leaves non-product pages", () => {

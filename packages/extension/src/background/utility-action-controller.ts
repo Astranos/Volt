@@ -63,13 +63,18 @@ export function registerUtilityActions({
     return true;
   });
 
-  registry.register("openUrl", (message, _sender, sendResponse) => {
+  registry.register("openUrl", (message, sender, sendResponse) => {
     const url = message.url;
     if (!url) {
       sendResponse({ success: false, error: "missing_url" });
       return true;
     }
-    chromeApi.tabs.create({ url }, (tab) => {
+    // Open beside the requesting tab rather than at the end of the strip.
+    const opener = sender.tab;
+    const placement = opener?.id !== undefined
+      ? { index: opener.index + 1, openerTabId: opener.id, windowId: opener.windowId }
+      : {};
+    chromeApi.tabs.create({ url, ...placement }, (tab) => {
       sendResponse({ success: true, tabId: tab?.id });
     });
     return true;
