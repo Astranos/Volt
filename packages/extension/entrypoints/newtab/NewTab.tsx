@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ClosedTabsPanel } from "../../src/components/newtab/ClosedTabsPanel";
 import { QuickLinksColumn } from "../../src/components/newtab/QuickLinksColumn";
 import { BookmarksColumn } from "../../src/components/newtab/BookmarksColumn";
@@ -43,6 +43,29 @@ export default function NewTab() {
 
   useEffect(() => {
     document.title = "Volt";
+  }, []);
+
+  // Height that reaches the bottom of the viewport, used when Shopify results
+  // expand the panel. offsetTop ignores the panel's entrance transform.
+  const searchPanelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const fit = () => {
+      const panel = searchPanelRef.current;
+      if (!panel) return;
+      let top = 0;
+      for (let el: HTMLElement | null = panel; el; el = el.offsetParent as HTMLElement | null) top += el.offsetTop;
+      panel.style.setProperty("--nt-search-fill-height", `${window.innerHeight - top - 24}px`);
+    };
+    fit();
+    window.addEventListener("resize", fit);
+    // Late content above the panel (notices, fonts) moves it down.
+    const observer = new ResizeObserver(fit);
+    const container = searchPanelRef.current?.closest(".newtab-container");
+    if (container) observer.observe(container);
+    return () => {
+      window.removeEventListener("resize", fit);
+      observer.disconnect();
+    };
   }, []);
 
   const toggleSearchMode = (mode: SearchMode) => {
@@ -191,6 +214,7 @@ export default function NewTab() {
           <div
             id="tour-search-history"
             className="newtab-search-panel"
+            ref={searchPanelRef}
           >
             <ClosedTabsPanel
               onSearchSubmit={handleSearchSubmit}

@@ -54,7 +54,7 @@ test("selection suggestions normalize whitespace and reject noisy selections", (
 test("selection suggestions stay inside the viewport above or below text", () => {
   assert.deepEqual([69, 90, 86].map(selectionSuggestionActionWidth), [114, 135, 131]);
   assert.equal(selectionSuggestionPillWidth([114, 135, 131]), 390);
-  assert.equal(selectionSuggestionPillWidth([114]), 170);
+  assert.equal(selectionSuggestionPillWidth([114]), 230);
   assert.deepEqual(
     positionSelectionSuggestions({
       rect: visibleRect,

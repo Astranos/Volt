@@ -1,5 +1,7 @@
+import type { ReactNode } from "react";
 import type { SaveExtensionSettings } from "@/src/hooks/useExtensionSettings";
 import type { CmdkSettings } from "@/src/types/settings";
+import { parseOpenMode, useOpenMode } from "@/src/components/open-mode-switch";
 
 const MOBILE_PHOTO_RETENTION_OPTIONS = [
   { value: 12, label: "12 hours" },
@@ -17,6 +19,7 @@ export function FeatureTogglesSettings({
   settings,
   saveSettings,
 }: FeatureTogglesSettingsProps) {
+  const [openMode, chooseOpenMode] = useOpenMode();
   return (
     <>
       <ToggleSection
@@ -42,7 +45,24 @@ export function FeatureTogglesSettings({
             )
           );
         }}
-      />
+      >
+        <div className="p-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="font-semibold text-base mb-1">Open search results in</h3>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              Shared with the right-click and highlight menus. {"\u2318"}/Ctrl-click opens a new tab.
+            </p>
+          </div>
+          <select
+            className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm sm:w-44"
+            value={openMode}
+            onChange={(event) => chooseOpenMode(parseOpenMode(event.target.value))}
+          >
+            <option value="popup">Popup window</option>
+            <option value="tab">New tab</option>
+          </select>
+        </div>
+      </ToggleSection>
 
       <ToggleSection
         id="ebay"
@@ -253,6 +273,7 @@ function ToggleSection({
   details = [],
   enabled,
   onToggle,
+  children,
 }: {
   id: string;
   title: string;
@@ -262,6 +283,7 @@ function ToggleSection({
   details?: string[];
   enabled: boolean;
   onToggle: () => void;
+  children?: ReactNode;
 }) {
   return (
     <section id={id} className="scroll-mt-20">
@@ -291,6 +313,7 @@ function ToggleSection({
             </div>
             <ToggleSwitch enabled={enabled} onClick={onToggle} />
           </div>
+          {children}
         </div>
       </div>
     </section>

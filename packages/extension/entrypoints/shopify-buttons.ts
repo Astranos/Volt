@@ -32,26 +32,21 @@ export default defineContentScript({
     // Styles
     const STYLES = `
       .volt-quick-actions-overlay {
-        position: relative;
+        position: fixed;
+        z-index: 40;
         display: flex;
         flex-direction: row;
         justify-content: flex-end;
         align-items: center;
         width: max-content;
         height: 28px;
-        margin: 0 0 0 auto;
+        margin: 0;
         box-sizing: border-box;
         border: 1px solid #d6d8da;
         border-radius: 7px;
         background: #fff;
         box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      }
-
-      .volt-quick-actions-overlay[data-layout="title"] {
-        position: fixed;
-        margin: 0;
-        z-index: 40;
       }
 
       .volt-action-tab {
@@ -102,13 +97,30 @@ export default defineContentScript({
         height: 14px;
       }
 
+      /* Compact enough to share the label row without crowding the input. */
+      .volt-quick-actions-overlay[data-layout="title"] {
+        height: 24px;
+      }
+
+      .volt-quick-actions-overlay[data-layout="title"] .volt-action-tab {
+        height: 22px;
+        padding: 0 7px;
+      }
+
+      .volt-quick-actions-overlay[data-layout="title"] .volt-action-tab img {
+        width: 14px;
+        height: 14px;
+      }
+
+      .volt-quick-actions-overlay[data-layout="title"] .volt-tab-ebay img {
+        width: 30px;
+        height: 12px;
+      }
+
       .volt-quick-actions-overlay[data-layout="gutter"] {
-        position: fixed;
         flex-direction: column;
         width: 36px;
         height: auto;
-        margin: 0;
-        z-index: 40;
       }
 
       .volt-quick-actions-overlay[data-layout="gutter"] .volt-action-tab {
@@ -159,8 +171,12 @@ export default defineContentScript({
       }
 
       .volt-action-tab.disabled {
-        opacity: 0.45;
         cursor: not-allowed;
+      }
+
+      /* Fade only the contents: opacity on the button would also fade its tooltip. */
+      .volt-action-tab.disabled > * {
+        opacity: 0.45;
       }
 
       .volt-action-tab::after {
@@ -175,7 +191,7 @@ export default defineContentScript({
         font-size: 12px;
         font-weight: 400;
         line-height: 1.4;
-        white-space: normal;
+        white-space: pre-line;
         width: max-content;
         max-width: 180px;
         box-sizing: border-box;
@@ -217,6 +233,10 @@ export default defineContentScript({
     let reservedCard = null;
     let reservedStyles = [];
     let mainCard = null;
+    // Searching is expensive (computed styles on many nodes); after a miss,
+    // retry a few times a second instead of every frame.
+    const CARD_RETRY_MS = 400;
+    let nextCardSearchAt = 0;
 
     // Only undo values we still own; Shopify may update inline styles during navigation.
     const releaseGutter = () => {
@@ -266,6 +286,8 @@ export default defineContentScript({
     let lastUrl = location.href;
     let isInitialized = false;
     let buttonsEnabled = false;
+    let openIn = "popup";
+    const NEW_TAB_HINT = `${/Mac/i.test(globalThis.navigator?.platform || "") ? "\u2318-click" : "Ctrl+click"} to open in a new tab`;
 
     const findShopifyTitleField = () =>
       document.querySelector(
@@ -473,6 +495,46 @@ export default defineContentScript({
       }
     };
 
+    // Modifier and middle clicks follow browser link conventions.
+    const openResearch = (url, event) => {
+      const newTab = openIn === "tab" || event?.metaKey || event?.ctrlKey ||
+        event?.button === 1;
+      if (!newTab) {
+        openSearchPopup(url);
+        return;
+      }
+      try {
+        chrome.runtime.sendMessage({ action: "openUrl", url }, (response) => {
+          if (chrome.runtime.lastError || response?.success === false) window.open(url, "_blank", "noopener");
+        });
+      } catch (_) {
+        window.open(url, "_blank", "noopener");
+      }
+    };
+
+    const getPriceChartingUrl = () => upcValue &&
+      `https://www.pricecharting.com/search-products?q=${encodeURIComponent(upcValue)}&type=videogames`;
+    const getEbayUrl = () => productTitle &&
+      `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(productTitle)}&LH_Sold=1&LH_Complete=1&_dmd=2&rt=nc`;
+
+    const bindResearchAction = (button, getUrl) => {
+      const run = (e) => {
+        e.preventDefault?.();
+        e.stopPropagation();
+        findFields();
+        const url = getUrl();
+        if (url) openResearch(url, e);
+      };
+      button.onclick = run;
+      button.onauxclick = (e) => {
+        if (e.button === 1) run(e);
+      };
+      // Stop middle-click autoscroll so the auxclick reaches the button.
+      button.onmousedown = (e) => {
+        if (e.button === 1) e.preventDefault();
+      };
+    };
+
     // Create Overlay
     const createOverlay = () => {
       if (document.getElementById("volt-quick-actions-overlay")) return;
@@ -480,7 +542,7 @@ export default defineContentScript({
       overlay = document.createElement("div");
       overlay.id = "volt-quick-actions-overlay";
       overlay.className = "volt-quick-actions-overlay";
-      overlay.style.opacity = "0"; // Start hidden until page is loaded
+      overlay.style.visibility = "hidden"; // Hidden until placed
 
       // PriceCharting search
       const pcTab = document.createElement("button");
@@ -496,16 +558,7 @@ export default defineContentScript({
       pcLabel.className = "volt-action-label";
       pcLabel.textContent = "UPC";
       pcTab.appendChild(pcLabel);
-      pcTab.onclick = (e) => {
-        e.stopPropagation();
-        findFields();
-        if (upcValue) {
-          const url = `https://www.pricecharting.com/search-products?q=${encodeURIComponent(
-            upcValue
-          )}&type=videogames`;
-          openSearchPopup(url);
-        }
-      };
+      bindResearchAction(pcTab, getPriceChartingUrl);
 
       // eBay sold listings search
       const ebayTab = document.createElement("button");
@@ -517,16 +570,7 @@ export default defineContentScript({
       ebayImg.src = LOGO_URLS.ebay;
       ebayImg.alt = "eBay";
       ebayTab.appendChild(ebayImg);
-      ebayTab.onclick = (e) => {
-        e.stopPropagation();
-        findFields();
-        if (productTitle) {
-          const url = `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(
-            productTitle
-          )}&LH_Sold=1&LH_Complete=1&_dmd=2&rt=nc`;
-          openSearchPopup(url);
-        }
-      };
+      bindResearchAction(ebayTab, getEbayUrl);
 
       overlay.appendChild(pcTab);
       overlay.appendChild(ebayTab);
@@ -534,41 +578,58 @@ export default defineContentScript({
       overlay.setAttribute("aria-label", "Volt product research");
     };
 
-    // Anchor to a measured label row only when the toolbar clears both label and input.
-    const findTitleRowPlacement = (titleField) => {
+    // Bounds of the label's visible text, wherever Shopify nests it.
+    const findLabelTextBounds = (titleField, input) => {
+      const label = titleField.shadowRoot?.querySelector("label") ||
+        (input?.id ? Array.from(document.querySelectorAll("label[for]"))
+          .find((candidate) => candidate.htmlFor === input.id) : null);
+      if (!label || !document.createRange) return null;
+      const walker = document.createTreeWalker(label, NodeFilter.SHOW_TEXT);
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        if (!node.textContent?.trim()) continue;
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        const bounds = range.getBoundingClientRect?.();
+        if (bounds?.height > 0) return bounds;
+      }
+      return null;
+    };
+
+    // Sit at the right end of the title's label row: bottom-aligned with the
+    // "Title" text so the gap above the input matches the label's. Only the
+    // input's box is required, so unknown label markup can't strand the toolbar.
+    const findTitlePlacement = (titleField) => {
       if (!titleField || !overlay) return null;
       const input = titleField.tagName === "INPUT" ? titleField :
         titleField.shadowRoot?.querySelector("input");
-      const label = titleField.shadowRoot?.querySelector("label") ||
-        (input?.id ? Array.from(document.querySelectorAll("label[for]")).find((candidate) => candidate.htmlFor === input.id) : null);
-      if (!input || !label) return null;
+      const inputBounds = (input || titleField).getBoundingClientRect();
       const fieldBounds = titleField.getBoundingClientRect();
-      const inputBounds = input.getBoundingClientRect();
-      const labelBounds = label.getBoundingClientRect();
-      const top = inputBounds.top - 30;
-      if (fieldBounds.width < 200 || top < labelBounds.top - 6 ||
-        inputBounds.top - labelBounds.top < 24) return null;
-      let labelRight = labelBounds.right;
-      // Shopify's label can wrap the input; measure just its visible text.
-      const textNode = Array.from(label.childNodes).find((node) =>
-        node.nodeType === 3 && node.textContent?.trim());
-      if (textNode && document.createRange) {
-        const range = document.createRange();
-        range.selectNodeContents(textNode);
-        const textBounds = range.getBoundingClientRect?.();
-        if (textBounds?.width > 0) labelRight = textBounds.right;
-      }
-      const toolbarWidth = overlay.getBoundingClientRect().width;
+      const toolbar = overlay.getBoundingClientRect();
+      if (!inputBounds.width || !inputBounds.height || !toolbar.width) return null;
       const fieldRight = fieldBounds.right ?? fieldBounds.left + fieldBounds.width;
-      if (!toolbarWidth || !Number.isFinite(labelRight) ||
-        fieldRight - toolbarWidth < labelRight + 12) return null;
-      return { left: fieldRight - toolbarWidth, top };
+      const labelText = findLabelTextBounds(titleField, input);
+      const bottom = labelText && labelText.bottom <= inputBounds.top
+        ? labelText.bottom : inputBounds.top - 8;
+      return {
+        left: Math.max(fieldBounds.left, fieldRight - toolbar.width),
+        top: Math.min(bottom, inputBounds.top - 4) - toolbar.height,
+      };
     };
 
     // Update Overlay Position and State
     const updateOverlay = () => {
-      if (!mainCard || !document.contains(mainCard)) {
+      const titleField = findShopifyTitleField() || findTitleControl();
+      const titleHost = titleField?.getRootNode?.()?.host || titleField;
+      if (mainCard && (!document.contains(mainCard) ||
+        (titleHost && !mainCard.contains(titleHost)))) {
+        mainCard = null;
+        nextCardSearchAt = 0;
+      }
+      if (!mainCard && Date.now() >= nextCardSearchAt) {
         mainCard = findMainCard();
+        // A card that doesn't hold the title is not the product card; never pad it.
+        if (mainCard && titleHost && !mainCard.contains(titleHost)) mainCard = null;
+        if (!mainCard) nextCardSearchAt = Date.now() + CARD_RETRY_MS;
         if (!mainCard && !hasLoggedMissingCard) {
           hasLoggedMissingCard = true;
           log(
@@ -587,56 +648,42 @@ export default defineContentScript({
         return;
       }
 
-      // Keep Shopify-owned nodes in place. Reserve a gutter on the light-DOM card
-      // and position the actions outside its shadow section's clipping boundary.
-      const titleField = findShopifyTitleField() || findTitleControl();
-      const container = mainCard || titleField?.parentElement;
-      if (!container) {
-        releaseGutter();
-        overlay.remove();
-        return;
-      }
+      // Keep Shopify-owned nodes in place: the toolbar always lives in <body> with
+      // fixed coordinates, so it escapes shadow-root clipping and can be measured.
+      if (overlay.parentElement !== document.body) document.body.appendChild(overlay);
       if (reservedCard && reservedCard !== mainCard) releaseGutter();
-      const bounds = container.getBoundingClientRect();
-      const unreservedWidth = bounds.width + (reservedCard === container ? GUTTER_WIDTH : 0);
-      const gutterFitsViewport = bounds.left >= 0 &&
+      const bounds = mainCard?.getBoundingClientRect();
+      const unreservedWidth = bounds ? bounds.width + (reservedCard === mainCard ? GUTTER_WIDTH : 0) : 0;
+      const gutterFitsViewport = bounds && bounds.left >= 0 &&
         (!window.innerWidth || bounds.left + 36 <= window.innerWidth);
-      const useGutter = mainCard && bounds.height > 0 && gutterFitsViewport &&
+      const useGutter = bounds?.height > 0 && gutterFitsViewport &&
         unreservedWidth >= MIN_GUTTER_CARD_WIDTH;
+      const layout = useGutter ? "gutter" : "title";
+      // Switch layout before measuring the toolbar for the title placement.
+      if (overlay.dataset.layout !== layout) overlay.dataset.layout = layout;
+      let placement = null;
       if (useGutter) {
         reserveGutter(mainCard);
         const cardBounds = mainCard.getBoundingClientRect();
-        if (overlay.parentElement !== document.body) document.body.appendChild(overlay);
-        overlay.dataset.layout = "gutter";
-        const left = `${cardBounds.left - GUTTER_WIDTH}px`;
-        const top = `${cardBounds.top + 16}px`;
-        if (overlay.style.left !== left) overlay.style.left = left;
-        if (overlay.style.top !== top) overlay.style.top = top;
+        placement = { left: cardBounds.left - GUTTER_WIDTH, top: cardBounds.top + 16 };
       } else {
         releaseGutter();
-        // Inline and title layouts share a width, so measure in place. Moving the
-        // node every frame would churn the DOM observer and drop button focus.
-        if (overlay.dataset.layout === "gutter") overlay.dataset.layout = "inline";
-        const titleRow = findTitleRowPlacement(titleField);
-        if (titleRow) {
-          overlay.dataset.layout = "title";
-          if (overlay.parentElement !== document.body) document.body.appendChild(overlay);
-          const left = `${titleRow.left}px`;
-          const top = `${titleRow.top}px`;
-          if (overlay.style.left !== left) overlay.style.left = left;
-          if (overlay.style.top !== top) overlay.style.top = top;
-        } else {
-          overlay.dataset.layout = "inline";
-          overlay.style.removeProperty("left");
-          overlay.style.removeProperty("top");
-          if (overlay.parentElement !== container) container.insertBefore(overlay, container.firstChild);
-        }
+        placement = findTitlePlacement(titleField);
       }
-      overlay.style.opacity = "1";
+      if (!placement) {
+        overlay.style.visibility = "hidden";
+      } else {
+        const left = `${placement.left}px`;
+        const top = `${placement.top}px`;
+        if (overlay.style.left !== left) overlay.style.left = left;
+        if (overlay.style.top !== top) overlay.style.top = top;
+        overlay.style.visibility = "";
+      }
 
       // Update States
       const pcTab = document.getElementById("volt-tab-pc");
       const ebayTab = document.getElementById("volt-tab-ebay");
+      const tooltipHint = openIn === "tab" ? "" : `\n${NEW_TAB_HINT}`;
 
       if (pcTab) {
         if (upcValue) {
@@ -644,7 +691,7 @@ export default defineContentScript({
           pcTab.classList.remove("disabled");
           pcTab.setAttribute(
             "data-tooltip",
-            `Search PriceCharting with UPC: ${upcValue}`
+            `Search PriceCharting with UPC: ${upcValue}${tooltipHint}`
           );
         } else {
           pcTab.disabled = true;
@@ -663,7 +710,7 @@ export default defineContentScript({
               productTitle.length > 40
                 ? productTitle.slice(0, 40) + "..."
                 : productTitle
-            }`
+            }${tooltipHint}`
           );
         } else {
           ebayTab.disabled = true;
@@ -682,6 +729,7 @@ export default defineContentScript({
     // Reset state for new page navigation
     const resetState = () => {
       mainCard = null;
+      nextCardSearchAt = 0;
       productTitle = null;
       upcValue = null;
       hasLoggedMissingCard = false;
@@ -773,9 +821,10 @@ export default defineContentScript({
     };
 
     const checkSettingsAndInit = () => {
-      chrome.storage.sync.get(["cmdkSettings"], (result) => {
+      chrome.storage.sync.get(["cmdkSettings", "openSearchResultsIn"], (result) => {
         const settings = result.cmdkSettings || {};
         buttonsEnabled = settings.shopifyButtons?.enabled ?? true;
+        openIn = result.openSearchResultsIn === "tab" ? "tab" : "popup";
 
         if (buttonsEnabled) {
           init();
@@ -784,6 +833,12 @@ export default defineContentScript({
     };
 
     // Listen for settings changes
+    chrome.storage.onChanged?.addListener((changes, area) => {
+      // Shared "openSearchResultsIn" preference (see open-mode-switch.tsx).
+      if (area === "sync" && changes.openSearchResultsIn) {
+        openIn = changes.openSearchResultsIn.newValue === "tab" ? "tab" : "popup";
+      }
+    });
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (message.action === "shopify-buttons-settings-changed") {
         buttonsEnabled = Boolean(message.enabled);

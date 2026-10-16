@@ -300,6 +300,10 @@
   to { opacity: 0.45; }
 }
 
+@container (min-width: 960px) {
+  .shopify-results-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
 @media (max-width: 650px) {
   .shopify-results-grid { grid-template-columns: 1fr; }
 }
