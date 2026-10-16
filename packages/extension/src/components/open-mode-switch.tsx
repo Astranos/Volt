@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AppWindow, ExternalLink } from "lucide-react";
 
 export type OpenMode = "popup" | "tab";
@@ -18,10 +18,13 @@ const extensionStorage = () => (typeof chrome === "undefined" ? undefined : chro
 /** The stored mode, following changes made anywhere while mounted. */
 export function useOpenMode(initial: OpenMode = "popup"): [OpenMode, (mode: OpenMode) => void] {
   const [mode, setMode] = useState(initial);
+  // A click or storage event is newer than the initial read; don't let it revert.
+  const settled = useRef(false);
   useEffect(() => {
     let active = true;
     const onChanged = (changes: Record<string, { newValue?: unknown }>, area: string) => {
       if (area === "sync" && changes[OPEN_MODE_STORAGE_KEY]) {
+        settled.current = true;
         setMode(parseOpenMode(changes[OPEN_MODE_STORAGE_KEY].newValue));
       }
     };
@@ -31,7 +34,7 @@ export function useOpenMode(initial: OpenMode = "popup"): [OpenMode, (mode: Open
       const storage = extensionStorage();
       if (!storage) return;
       storage.sync.get(OPEN_MODE_STORAGE_KEY).then((stored: Record<string, unknown>) => {
-        if (active) setMode(parseOpenMode(stored[OPEN_MODE_STORAGE_KEY]));
+        if (active && !settled.current) setMode(parseOpenMode(stored[OPEN_MODE_STORAGE_KEY]));
       }).catch(() => {});
       storage.onChanged.addListener(onChanged);
     } catch (_) {
@@ -45,6 +48,7 @@ export function useOpenMode(initial: OpenMode = "popup"): [OpenMode, (mode: Open
     };
   }, []);
   const choose = (next: OpenMode) => {
+    settled.current = true;
     setMode(next);
     try {
       extensionStorage()?.sync.set({ [OPEN_MODE_STORAGE_KEY]: next }).catch(() => {});

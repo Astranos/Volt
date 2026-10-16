@@ -66,10 +66,7 @@ export function SelectionSuggestionPill({
             onAuxClick={(event) => {
               if (event.button === 1) onAction(id, true);
             }}
-            onMouseDown={(event) => {
-              // Stop middle-click autoscroll so the auxclick reaches the button.
-              if (event.button === 1) event.preventDefault();
-            }}
+            // Keeps the selection (cancelling pointerdown also suppresses mousedown).
             onPointerDown={(event) => event.preventDefault()}
             title={label}
             type="button"
