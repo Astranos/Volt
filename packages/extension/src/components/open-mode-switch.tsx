@@ -44,9 +44,10 @@ export function OpenModeSwitch({
 }
 
 export const openModeStyles = `
-      .open-mode{display:flex;flex:none;padding:2px;border-radius:8px;background:#f1f5f9;border:1px solid #e2e8f0}
-      .open-mode-option{display:flex;align-items:center;gap:4px;height:22px;padding:0 7px;border:0;border-radius:6px;background:transparent;color:#64748b;cursor:pointer;font:600 11px/1 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;white-space:nowrap;transition:background .12s,color .12s}
-      .open-mode-option:hover{color:#0f172a}
-      .open-mode-option[aria-checked="true"]{background:#fff;color:#0f172a;box-shadow:0 1px 2px rgba(15,23,42,.12)}
+      .open-mode{display:flex;flex:none;gap:2px;padding:2px;border-radius:8px;background:#eef2f6;border:1px solid #e2e8f0}
+      .open-mode-option{display:flex;align-items:center;gap:5px;height:22px;padding:0 8px;border:0;border-radius:6px;background:transparent;color:#64748b;cursor:pointer;font:600 11px/1 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;white-space:nowrap;transition:background .12s,color .12s,box-shadow .12s}
+      .open-mode-option:hover{color:#0f172a;background:rgba(255,255,255,.6)}
+      .open-mode-option[aria-checked="true"]{background:#fff;color:#0f172a;box-shadow:0 0 0 1px #cbd5e1,0 1px 2px rgba(15,23,42,.12)}
+      .open-mode-option[aria-checked="true"] svg{color:#16a34a}
       .open-mode-option:focus-visible{outline:2px solid #22c55e;outline-offset:1px}
 `;

@@ -97,6 +97,26 @@ export default defineContentScript({
         height: 14px;
       }
 
+      /* Compact enough to share the label row without crowding the input. */
+      .volt-quick-actions-overlay[data-layout="title"] {
+        height: 24px;
+      }
+
+      .volt-quick-actions-overlay[data-layout="title"] .volt-action-tab {
+        height: 22px;
+        padding: 0 7px;
+      }
+
+      .volt-quick-actions-overlay[data-layout="title"] .volt-action-tab img {
+        width: 14px;
+        height: 14px;
+      }
+
+      .volt-quick-actions-overlay[data-layout="title"] .volt-tab-ebay img {
+        width: 30px;
+        height: 12px;
+      }
+
       .volt-quick-actions-overlay[data-layout="gutter"] {
         flex-direction: column;
         width: 36px;
@@ -554,8 +574,26 @@ export default defineContentScript({
       overlay.setAttribute("aria-label", "Volt product research");
     };
 
-    // Sit just above the right end of the title input, in the label row. This only
-    // needs the input's box, so it works whatever Shopify renders around the label.
+    // Bounds of the label's visible text, wherever Shopify nests it.
+    const findLabelTextBounds = (titleField, input) => {
+      const label = titleField.shadowRoot?.querySelector("label") ||
+        (input?.id ? Array.from(document.querySelectorAll("label[for]"))
+          .find((candidate) => candidate.htmlFor === input.id) : null);
+      if (!label || !document.createRange) return null;
+      const walker = document.createTreeWalker(label, NodeFilter.SHOW_TEXT);
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        if (!node.textContent?.trim()) continue;
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        const bounds = range.getBoundingClientRect?.();
+        if (bounds?.height > 0) return bounds;
+      }
+      return null;
+    };
+
+    // Sit at the right end of the title's label row: bottom-aligned with the
+    // "Title" text so the gap above the input matches the label's. Only the
+    // input's box is required, so unknown label markup can't strand the toolbar.
     const findTitlePlacement = (titleField) => {
       if (!titleField || !overlay) return null;
       const input = titleField.tagName === "INPUT" ? titleField :
@@ -565,9 +603,12 @@ export default defineContentScript({
       const toolbar = overlay.getBoundingClientRect();
       if (!inputBounds.width || !inputBounds.height || !toolbar.width) return null;
       const fieldRight = fieldBounds.right ?? fieldBounds.left + fieldBounds.width;
+      const labelText = findLabelTextBounds(titleField, input);
+      const bottom = labelText && labelText.bottom <= inputBounds.top
+        ? labelText.bottom : inputBounds.top - 8;
       return {
         left: Math.max(fieldBounds.left, fieldRight - toolbar.width),
-        top: inputBounds.top - toolbar.height - 2,
+        top: Math.min(bottom, inputBounds.top - 4) - toolbar.height,
       };
     };
 

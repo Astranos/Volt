@@ -202,10 +202,15 @@ export function ContextMenu({ actions, selectionActionCount, quickActions, lastS
             return (
               <React.Fragment key={item.id}>
                 {i === 0 && selectionActionCount > 0 && (
-                  <div className="section-row">
+                  <>
                     <div className="section-label">Search</div>
-                    {hasUrlActions && <OpenModeSwitch mode={openMode} onChange={chooseOpenMode} />}
-                  </div>
+                    {hasUrlActions && (
+                      <div className="open-mode-row">
+                        <span className="open-mode-caption">Open in</span>
+                        <OpenModeSwitch mode={openMode} onChange={chooseOpenMode} />
+                      </div>
+                    )}
+                  </>
                 )}
                 {i === selectionActionCount && (
                   <>

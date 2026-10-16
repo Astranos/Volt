@@ -102,7 +102,7 @@ for (const options of [{ width: 480 }, { modern: false, width: 480 }, { card: fa
     assert.equal(toolbar.dataset.layout, "title");
     const fieldRight = 296 + (options.width ?? 720);
     assert.equal(toolbar.style.left, `${fieldRight - 120}px`);
-    assert.equal(toolbar.style.top, "146px");
+    assert.equal(toolbar.style.top, "140px", "no label text: sit 8px above the input");
     assert.equal(toolbar.style.visibility, "");
     assert.ok(!container.style.getPropertyValue("margin-inline-start"));
     assert.equal(document.querySelector("#volt-tab-ebay .volt-action-label"), null);
