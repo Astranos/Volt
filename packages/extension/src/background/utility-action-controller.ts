@@ -69,13 +69,22 @@ export function registerUtilityActions({
       sendResponse({ success: false, error: "missing_url" });
       return true;
     }
-    // Open beside the requesting tab rather than at the end of the strip.
+    const create = (placement: { index?: number; openerTabId?: number; windowId?: number }) => {
+      chromeApi.tabs.create({ url, ...placement }, (tab) => {
+        const error = chromeApi.runtime.lastError;
+        sendResponse(error ? { success: false, error: error.message } : { success: true, tabId: tab?.id });
+      });
+    };
+    // Open beside the requesting tab rather than at the end of the strip, but
+    // only from a normal window (not e.g. Volt's popup preview window).
     const opener = sender.tab;
-    const placement = opener?.id !== undefined
-      ? { index: opener.index + 1, openerTabId: opener.id, windowId: opener.windowId }
-      : {};
-    chromeApi.tabs.create({ url, ...placement }, (tab) => {
-      sendResponse({ success: true, tabId: tab?.id });
+    if (opener?.id === undefined) {
+      create({});
+      return true;
+    }
+    chromeApi.windows.get(opener.windowId, (openerWindow) => {
+      const normal = !chromeApi.runtime.lastError && openerWindow?.type === "normal";
+      create(normal ? { index: opener.index + 1, openerTabId: opener.id, windowId: opener.windowId } : {});
     });
     return true;
   });

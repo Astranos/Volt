@@ -233,6 +233,10 @@ export default defineContentScript({
     let reservedCard = null;
     let reservedStyles = [];
     let mainCard = null;
+    // Searching is expensive (computed styles on many nodes); after a miss,
+    // retry a few times a second instead of every frame.
+    const CARD_RETRY_MS = 400;
+    let nextCardSearchAt = 0;
 
     // Only undo values we still own; Shopify may update inline styles during navigation.
     const releaseGutter = () => {
@@ -500,8 +504,8 @@ export default defineContentScript({
         return;
       }
       try {
-        chrome.runtime.sendMessage({ action: "openUrl", url }, () => {
-          if (chrome.runtime.lastError) window.open(url, "_blank", "noopener");
+        chrome.runtime.sendMessage({ action: "openUrl", url }, (response) => {
+          if (chrome.runtime.lastError || response?.success === false) window.open(url, "_blank", "noopener");
         });
       } catch (_) {
         window.open(url, "_blank", "noopener");
@@ -616,11 +620,16 @@ export default defineContentScript({
     const updateOverlay = () => {
       const titleField = findShopifyTitleField() || findTitleControl();
       const titleHost = titleField?.getRootNode?.()?.host || titleField;
-      if (!mainCard || !document.contains(mainCard) ||
-        (titleHost && !mainCard.contains(titleHost))) {
+      if (mainCard && (!document.contains(mainCard) ||
+        (titleHost && !mainCard.contains(titleHost)))) {
+        mainCard = null;
+        nextCardSearchAt = 0;
+      }
+      if (!mainCard && Date.now() >= nextCardSearchAt) {
         mainCard = findMainCard();
         // A card that doesn't hold the title is not the product card; never pad it.
         if (mainCard && titleHost && !mainCard.contains(titleHost)) mainCard = null;
+        if (!mainCard) nextCardSearchAt = Date.now() + CARD_RETRY_MS;
         if (!mainCard && !hasLoggedMissingCard) {
           hasLoggedMissingCard = true;
           log(
@@ -720,6 +729,7 @@ export default defineContentScript({
     // Reset state for new page navigation
     const resetState = () => {
       mainCard = null;
+      nextCardSearchAt = 0;
       productTitle = null;
       upcValue = null;
       hasLoggedMissingCard = false;

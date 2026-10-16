@@ -58,7 +58,14 @@ export default function NewTab() {
     };
     fit();
     window.addEventListener("resize", fit);
-    return () => window.removeEventListener("resize", fit);
+    // Late content above the panel (notices, fonts) moves it down.
+    const observer = new ResizeObserver(fit);
+    const container = searchPanelRef.current?.closest(".newtab-container");
+    if (container) observer.observe(container);
+    return () => {
+      window.removeEventListener("resize", fit);
+      observer.disconnect();
+    };
   }, []);
 
   const toggleSearchMode = (mode: SearchMode) => {

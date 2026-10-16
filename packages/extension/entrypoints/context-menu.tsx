@@ -64,8 +64,12 @@ export default defineContentScript({
 
     const openUrl = (url: string) => {
       try {
-        chrome.runtime.sendMessage({ action: "openUrl", url });
-      } catch (_) {}
+        chrome.runtime.sendMessage({ action: "openUrl", url }, (response) => {
+          if (chrome.runtime.lastError || response?.success === false) window.open(url, "_blank", "noopener");
+        });
+      } catch (_) {
+        window.open(url, "_blank", "noopener");
+      }
     };
 
     // Initial value for the menu and pill; their switch keeps itself in sync.

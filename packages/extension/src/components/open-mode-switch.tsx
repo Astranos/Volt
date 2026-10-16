@@ -19,21 +19,29 @@ const extensionStorage = () => (typeof chrome === "undefined" ? undefined : chro
 export function useOpenMode(initial: OpenMode = "popup"): [OpenMode, (mode: OpenMode) => void] {
   const [mode, setMode] = useState(initial);
   useEffect(() => {
-    const storage = extensionStorage();
-    if (!storage) return;
     let active = true;
-    storage.sync.get(OPEN_MODE_STORAGE_KEY).then((stored: Record<string, unknown>) => {
-      if (active) setMode(parseOpenMode(stored[OPEN_MODE_STORAGE_KEY]));
-    }).catch(() => {});
     const onChanged = (changes: Record<string, { newValue?: unknown }>, area: string) => {
       if (area === "sync" && changes[OPEN_MODE_STORAGE_KEY]) {
         setMode(parseOpenMode(changes[OPEN_MODE_STORAGE_KEY].newValue));
       }
     };
-    storage.onChanged.addListener(onChanged);
+    // After an extension update, old content scripts throw synchronously here;
+    // an uncaught throw would unmount the menu and strand its click-blocking host.
+    try {
+      const storage = extensionStorage();
+      if (!storage) return;
+      storage.sync.get(OPEN_MODE_STORAGE_KEY).then((stored: Record<string, unknown>) => {
+        if (active) setMode(parseOpenMode(stored[OPEN_MODE_STORAGE_KEY]));
+      }).catch(() => {});
+      storage.onChanged.addListener(onChanged);
+    } catch (_) {
+      return;
+    }
     return () => {
       active = false;
-      storage.onChanged.removeListener(onChanged);
+      try {
+        extensionStorage()?.onChanged.removeListener(onChanged);
+      } catch (_) {}
     };
   }, []);
   const choose = (next: OpenMode) => {
