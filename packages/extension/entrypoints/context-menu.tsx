@@ -37,6 +37,7 @@ export default defineContentScript({
     let selectionPopupActions = [...DEFAULT_POPUP_ACTIONS];
     let contextMenuSelectionActions = [...DEFAULT_CONTEXT_ACTIONS];
     let dismissedUntilRefresh = false;
+    let openSearchResultsIn: "popup" | "tab" = "popup";
     let activePopup: Window | null = null;
     let activePopupOpenedAt = 0;
     const POPUP_OPENING_GRACE_MS = 700;
@@ -44,6 +45,7 @@ export default defineContentScript({
       chrome.storage.sync.get(["cmdkSettings"], (result) => {
         const s = result?.cmdkSettings || {};
         enabled = s?.contextMenu?.enabled ?? true;
+        openSearchResultsIn = s?.openSearchResultsIn === "tab" ? "tab" : "popup";
         selectionSuggestionsEnabled =
           s?.contextMenu?.selectionSuggestionsEnabled ?? true;
         selectionPopupActions = normalizeSelectionActions(
@@ -63,6 +65,18 @@ export default defineContentScript({
     const openUrl = (url: string) => {
       try {
         chrome.runtime.sendMessage({ action: "openUrl", url });
+      } catch (_) {}
+    };
+
+    // Shared with the Shopify research buttons through cmdkSettings.
+    const saveOpenSearchResultsIn = (mode: "popup" | "tab") => {
+      openSearchResultsIn = mode;
+      try {
+        chrome.storage.sync.get(["cmdkSettings"], (result) => {
+          chrome.storage.sync.set({
+            cmdkSettings: { ...(result?.cmdkSettings || {}), openSearchResultsIn: mode },
+          });
+        });
       } catch (_) {}
     };
 
@@ -455,7 +469,11 @@ export default defineContentScript({
       "ask-gemini": Sparkles,
     };
 
-    const invokeSelectionAction = async (actionId: SelectionAction, selection: string) => {
+    const invokeSelectionAction = async (
+      actionId: SelectionAction,
+      selection: string,
+      newTab = openSearchResultsIn === "tab",
+    ) => {
       if (!selection) return;
       if (actionId === "copy-highlight-link") {
         const link = linkToTextHighlight(window.location.href, selection);
@@ -468,11 +486,10 @@ export default defineContentScript({
         return;
       }
       const url = selectionActionUrl(actionId, selection);
-      if (url) openSearchPopup(url);
+      if (url) (newTab ? openUrl : openSearchPopup)(url);
     };
 
     const selectionMenuActions = (): MenuAction[] => contextMenuSelectionActions.map((id) => {
-      const getUrl = selectionActionUrl(id, "example");
       return {
         id: selectionActionKey(id),
         label: selectionActionLabel(id),
@@ -483,8 +500,8 @@ export default defineContentScript({
           : id === "look-up"
             ? "Opens a Google definition search"
             : undefined,
-        ...(getUrl ? { getUrl: (selection: string) => selectionActionUrl(id, selection) || "" } : {}),
-        onInvoke: ({ selection }) => { void invokeSelectionAction(id, selection); },
+        opensUrl: !!selectionActionUrl(id, "example"),
+        onInvoke: ({ selection, newTab }) => { void invokeSelectionAction(id, selection, newTab); },
       };
     });
 
@@ -688,10 +705,11 @@ export default defineContentScript({
     const openSelectionAction = (
       actionId: SelectionAction,
       selection: string,
+      newTab: boolean,
     ) => {
       suppressedSuggestionSelection = selection;
       closeSelectionSuggestions();
-      void invokeSelectionAction(actionId, selection);
+      void invokeSelectionAction(actionId, selection, newTab);
     };
 
     const copySelection = async (selection: string) => {
@@ -737,9 +755,11 @@ export default defineContentScript({
           onCopy={() => {
             void copySelection(selection);
           }}
-          onAction={(actionId) =>
-            openSelectionAction(actionId, selection)
+          onAction={(actionId, newTab) =>
+            openSelectionAction(actionId, selection, newTab)
           }
+          openMode={openSearchResultsIn}
+          onOpenModeChange={saveOpenSearchResultsIn}
           position={position}
         />,
       );
@@ -779,7 +799,7 @@ export default defineContentScript({
       host.style.pointerEvents = "auto";
       isOpen = true;
       if (!reactRoot) reactRoot = createRoot(rootEl);
-      reactRoot.render(<ContextMenu actions={[...selectionMenuActions(), ...toolActions]} selectionActionCount={contextMenuSelectionActions.length} quickActions={quickActions} lastSelection={lastSelection} clickedUrl={clickedUrl} x={x} y={y} closeMenu={closeMenu} openUrl={openUrl} dismiss={() => { dismissedUntilRefresh = true; }} />);
+      reactRoot.render(<ContextMenu actions={[...selectionMenuActions(), ...toolActions]} selectionActionCount={contextMenuSelectionActions.length} quickActions={quickActions} lastSelection={lastSelection} clickedUrl={clickedUrl} x={x} y={y} closeMenu={closeMenu} openMode={openSearchResultsIn} onOpenModeChange={saveOpenSearchResultsIn} dismiss={() => { dismissedUntilRefresh = true; }} />);
     };
 
     const closeMenu = (options: CloseMenuOptions = {}) => {
@@ -907,6 +927,11 @@ export default defineContentScript({
 
     chrome.storage.onChanged.addListener((changes, areaName) => {
       if (areaName !== "sync" || !changes.cmdkSettings) return;
+      const { openSearchResultsIn: mode, ...next } = changes.cmdkSettings.newValue || {};
+      const { openSearchResultsIn: _previousMode, ...previous } = changes.cmdkSettings.oldValue || {};
+      openSearchResultsIn = mode === "tab" ? "tab" : "popup";
+      // Switching Popup / New tab from inside the menu must not close it.
+      if (JSON.stringify(next) === JSON.stringify(previous)) return;
       const contextSettings = changes.cmdkSettings.newValue?.contextMenu;
       enabled = contextSettings?.enabled ?? true;
       selectionSuggestionsEnabled = contextSettings?.selectionSuggestionsEnabled ?? true;

@@ -181,14 +181,14 @@ test("research actions open a new tab on modifier or middle click, or when prefe
   frame();
   assert.match(ebay.getAttribute("data-tooltip"), /\nCtrl\+click to open in a new tab$/);
 
-  storageChanged({ shopifyButtons: { enabled: true, openIn: "tab" } });
+  storageChanged({ shopifyButtons: { enabled: true }, openSearchResultsIn: "tab" });
   click();
   assert.equal(messages.at(-1).action, "openUrl");
   assert.match(messages.at(-1).url, /_nkw=Dell%20Latitude.*LH_Sold=1/);
 });
 
 test("stored new-tab preference applies on load and drops the hint", () => {
-  const { document, messages, frame } = mount({ settings: { shopifyButtons: { openIn: "tab" } } });
+  const { document, messages, frame } = mount({ settings: { openSearchResultsIn: "tab" } });
   document.getElementById("volt-tab-ebay").onclick({ stopPropagation() {}, button: 0 });
   assert.equal(messages[0].action, "openUrl");
   frame();

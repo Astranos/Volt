@@ -20,7 +20,7 @@ export function selectionSuggestionActionWidth(textWidth: number) {
 }
 
 export function selectionSuggestionPillWidth(actionWidths: readonly number[]) {
-  return Math.max(170, actionWidths.reduce((total, width) => total + width, SELECTION_SUGGESTION_PILL_PADDING));
+  return Math.max(230, actionWidths.reduce((total, width) => total + width, SELECTION_SUGGESTION_PILL_PADDING));
 }
 
 export function normalizeSelectionSuggestionText(value: string) {

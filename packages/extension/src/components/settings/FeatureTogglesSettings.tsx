@@ -46,21 +46,18 @@ export function FeatureTogglesSettings({
       >
         <div className="p-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h3 className="font-semibold text-base mb-1">Open results in</h3>
+            <h3 className="font-semibold text-base mb-1">Open search results in</h3>
             <p className="text-sm text-muted-foreground leading-relaxed">
-              {"\u2318"}/Ctrl-click or middle-click a button to always open a new tab.
+              Shared with the right-click and highlight menus. {"\u2318"}/Ctrl-click opens a new tab.
             </p>
           </div>
           <select
             className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm sm:w-44"
-            value={settings.shopifyButtons?.openIn ?? "popup"}
+            value={settings.openSearchResultsIn ?? "popup"}
             onChange={(event) =>
               void saveSettings({
                 ...settings,
-                shopifyButtons: {
-                  ...settings.shopifyButtons,
-                  openIn: event.target.value === "tab" ? "tab" : "popup",
-                },
+                openSearchResultsIn: event.target.value === "tab" ? "tab" : "popup",
               })
             }
           >

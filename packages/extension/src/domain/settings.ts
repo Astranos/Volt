@@ -53,8 +53,8 @@ export const DEFAULT_SETTINGS: CmdkSettings = {
   customSearchProviders: [],
   shopifyButtons: {
     enabled: true,
-    openIn: "popup",
   },
+  openSearchResultsIn: "popup",
   newTabOverride: {
     enabled: true,
   },

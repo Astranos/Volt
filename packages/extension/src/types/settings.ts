@@ -72,8 +72,9 @@ export interface CmdkSettings {
   customSearchProviders: CustomSearchProviderSettings[];
   shopifyButtons?: {
     enabled?: boolean;
-    openIn?: "popup" | "tab";
   };
+  /** Where search results from Shopify buttons and the right-click menu open. */
+  openSearchResultsIn?: "popup" | "tab";
   newTabOverride?: {
     enabled?: boolean;
   };

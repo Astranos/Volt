@@ -1,6 +1,7 @@
 import React from "react";
 import { PackageSearch, Search, TrendingUp, Copy, Link2, BookOpen, Sparkles } from "lucide-react";
 import { positionSelectionSuggestions } from "../domain/selection-suggestions";
+import { OpenModeSwitch, opensInNewTab, type OpenMode } from "./open-mode-switch";
 import {
   selectionActionKey,
   selectionActionLabel,
@@ -27,14 +28,19 @@ export function SelectionSuggestionPill({
   actionWidths,
   onCopy,
   onAction,
+  openMode: initialOpenMode,
+  onOpenModeChange,
   position,
 }: {
   actions: readonly SelectionAction[];
   actionWidths: readonly number[];
   onCopy: () => void;
-  onAction: (action: SelectionAction) => void;
+  onAction: (action: SelectionAction, newTab: boolean) => void;
+  openMode: OpenMode;
+  onOpenModeChange: (mode: OpenMode) => void;
   position: SelectionSuggestionPosition;
 }) {
+  const [openMode, setOpenMode] = React.useState(initialOpenMode);
   return (
     <div
       aria-label="Actions for selected text"
@@ -58,7 +64,11 @@ export function SelectionSuggestionPill({
             key={selectionActionKey(id)}
             aria-label={label}
             className="selection-action selection-search-action"
-            onClick={() => onAction(id)}
+            onClick={(event) => onAction(id, opensInNewTab(openMode, event))}
+            onAuxClick={(event) => {
+              if (event.button === 1) onAction(id, true);
+            }}
+            // Keeps the selection; also stops middle-click autoscroll.
             onPointerDown={(event) => event.preventDefault()}
             title={label}
             type="button"
@@ -68,17 +78,26 @@ export function SelectionSuggestionPill({
           </button>
         );
       })}
-      <button
-        aria-label="Copy selected text"
-        className="selection-copy"
-        onClick={onCopy}
-        onPointerDown={(event) => event.preventDefault()}
-        title="Copy selected text"
-        type="button"
-      >
-        <Copy size={15} />
-        <span>Copy selected text</span>
-      </button>
+      <div className="selection-footer">
+        <button
+          aria-label="Copy selected text"
+          className="selection-copy"
+          onClick={onCopy}
+          onPointerDown={(event) => event.preventDefault()}
+          title="Copy selected text"
+          type="button"
+        >
+          <Copy size={15} />
+          <span>Copy</span>
+        </button>
+        <OpenModeSwitch
+          mode={openMode}
+          onChange={(mode) => {
+            setOpenMode(mode);
+            onOpenModeChange(mode);
+          }}
+        />
+      </div>
     </div>
   );
 }

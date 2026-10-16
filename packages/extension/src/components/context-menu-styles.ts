@@ -1,3 +1,5 @@
+import { openModeStyles } from "./open-mode-switch";
+
 export const styles = () => `
       .volt-hugeicon{font-family:VoltHugeicons!important;font-weight:normal;font-style:normal;line-height:1}
       :host{all:initial}
@@ -23,13 +25,11 @@ export const styles = () => `
       .selection-context-value{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#334155;font-weight:600}
       .group{padding:7px}
       .section-label{padding:7px 10px 5px;color:#94a3b8;font:700 10px/1 ui-sans-serif,system-ui,-apple-system;text-transform:uppercase;letter-spacing:.08em}
-      .item{display:flex;align-items:center;gap:10px;min-height:40px;padding:0 10px;border-radius:9px;cursor:pointer;outline:none;font-size:14px;font-weight:450;transition:background .12s,color .12s;position:relative}
+      .section-row{display:flex;align-items:center;justify-content:space-between;gap:6px;padding-right:3px}
+      .section-row .section-label{white-space:nowrap}
+${openModeStyles}      .item{display:flex;align-items:center;gap:10px;min-height:40px;padding:0 10px;border-radius:9px;cursor:pointer;outline:none;font-size:14px;font-weight:450;transition:background .12s,color .12s;position:relative}
       .item:hover:not(.disabled){background:#f1f5f9}
       .item[data-active="true"]:not(.disabled),.item:focus:not(.disabled){background:#e8eef5}
-      .item .new-tab-btn{display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:6px;border:none;background:transparent;color:#9ca3af;cursor:pointer;transition:all 0.15s;opacity:0;margin-left:4px}
-      .item:hover .new-tab-btn{opacity:1}
-      .item .new-tab-btn:hover{background:#d1d5db;color:#111827}
-      .item .new-tab-btn:focus-visible{opacity:1;outline:2px solid #22c55e;outline-offset:1px}
       .item.disabled{opacity:0.4;cursor:not-allowed}
       .item-tooltip{position:absolute;left:calc(100% + 8px);top:50%;transform:translateY(-50%);background:#111827;color:#fff;padding:6px 10px;border-radius:6px;font-size:12px;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity 0.2s;z-index:10;max-width:200px}
       .item:hover .item-tooltip{opacity:1;transition-delay:0.5s}
@@ -54,7 +54,9 @@ export const selectionStyles = () => `
       .selection-action:focus-visible{outline:2px solid #22c55e;outline-offset:1px}
       .selection-action svg{flex:none}
       .selection-action span{min-width:0;overflow:hidden;text-overflow:ellipsis}
-      .selection-copy{box-sizing:border-box;display:flex;grid-column:1/-1;align-items:center;justify-content:center;gap:7px;height:32px;margin-top:2px;border:0;border-top:1px solid #eef2f7;border-radius:0 0 9px 9px;background:transparent;color:#64748b;cursor:pointer;font:600 12px/1 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;transition:background 100ms ease,color 100ms ease}
+      .selection-footer{grid-column:1/-1;display:flex;align-items:center;gap:6px;margin-top:2px;padding-top:3px;border-top:1px solid #eef2f7}
+${openModeStyles}
+      .selection-copy{box-sizing:border-box;display:flex;flex:1;align-items:center;justify-content:center;gap:7px;height:30px;border:0;border-radius:0 0 0 9px;background:transparent;color:#64748b;cursor:pointer;font:600 12px/1 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;transition:background 100ms ease,color 100ms ease}
       .selection-copy:hover{background:#f1f5f9;color:#0f172a}
       .selection-copy:active{background:#e2e8f0}
       .selection-copy:focus-visible{outline:2px solid #22c55e;outline-offset:1px}

@@ -1,5 +1,5 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ExternalLink } from "lucide-react";
+import { OpenModeSwitch, opensInNewTab, type OpenMode } from "./open-mode-switch";
 
 export type MenuAction = {
   id: string;
@@ -9,9 +9,12 @@ export type MenuAction = {
   icon?: React.ComponentType<{ size?: number }>;
   requiresSelection?: boolean;
   requiresUrl?: boolean;
-  onInvoke: (ctx: { x: number; y: number; selection: string }) => void;
-  getUrl?: (selection: string) => string;
+  onInvoke: (ctx: { x: number; y: number; selection: string; newTab: boolean }) => void;
+  /** Opens a search URL, so it follows the Popup / New tab choice. */
+  opensUrl?: boolean;
 };
+
+export type { OpenMode };
 
 type ContextMenuProps = {
   actions: MenuAction[];
@@ -22,14 +25,30 @@ type ContextMenuProps = {
   x: number;
   y: number;
   closeMenu: (options?: { restoreFocus?: boolean }) => void;
-  openUrl: (url: string) => void;
+  openMode: OpenMode;
+  onOpenModeChange: (mode: OpenMode) => void;
   dismiss: () => void;
 };
 
-export function ContextMenu({ actions, selectionActionCount, quickActions, lastSelection, clickedUrl, x, y, closeMenu, openUrl, dismiss }: ContextMenuProps) {
+export function ContextMenu({ actions, selectionActionCount, quickActions, lastSelection, clickedUrl, x, y, closeMenu, openMode: initialOpenMode, onOpenModeChange, dismiss }: ContextMenuProps) {
   const items = actions;
   const hasSelection = !!lastSelection;
   const menuRef = useRef<HTMLDivElement>(null);
+  const [openMode, setOpenMode] = useState(initialOpenMode);
+  const hasUrlActions = items.some((item) => item.opensUrl);
+
+  const chooseOpenMode = (mode: OpenMode) => {
+    setOpenMode(mode);
+    onOpenModeChange(mode);
+  };
+
+  const invoke = (item: MenuAction, modifiers?: Parameters<typeof opensInNewTab>[1]) => {
+    const newTab = opensInNewTab(openMode, modifiers);
+    try {
+      item.onInvoke({ x, y, selection: lastSelection, newTab });
+    } catch (_) {}
+    closeMenu({ restoreFocus: false });
+  };
 
   const visibleItems = useMemo(() => {
     return items.filter((item) => {
@@ -86,12 +105,7 @@ export function ContextMenu({ actions, selectionActionCount, quickActions, lastS
       } else if (ev.key === "Enter") {
         ev.preventDefault();
         const item = enabledItems[index];
-        if (item) {
-          try {
-            item.onInvoke({ x, y, selection: lastSelection });
-          } catch (_) {}
-          closeMenu({ restoreFocus: false });
-        }
+        if (item) invoke(item, ev);
       } else {
         // Check for letter shortcuts
         const key = ev.key.toUpperCase();
@@ -100,36 +114,23 @@ export function ContextMenu({ actions, selectionActionCount, quickActions, lastS
         );
         if (matchingItem) {
           ev.preventDefault();
-          try {
-            matchingItem.onInvoke({ x, y, selection: lastSelection });
-          } catch (_) {}
-          closeMenu({ restoreFocus: false });
+          invoke(matchingItem);
         }
       }
     };
     document.addEventListener("keydown", handle, true);
     return () => document.removeEventListener("keydown", handle, true);
-  }, [enabledItems, index, closeMenu, x, y, lastSelection]);
+  });
 
   const onOverlayClick = (e: React.MouseEvent) => {
     const el = e.nativeEvent.composedPath()[0];
     if (!(el instanceof Element && el.closest(".menu"))) closeMenu();
   };
 
-  const onItemClick = (item: MenuAction) => {
-    try {
-      item.onInvoke({ x, y, selection: lastSelection });
-    } catch (_) {}
-    closeMenu({ restoreFocus: false });
-  };
-
   const onQuickActionClick = (action: MenuAction) => {
     if (action.requiresSelection && !hasSelection) return;
     if (action.requiresUrl && !clickedUrl) return;
-    try {
-      action.onInvoke({ x, y, selection: lastSelection });
-    } catch (_) {}
-    closeMenu({ restoreFocus: false });
+    invoke(action);
   };
 
   const onDismiss = () => {
@@ -201,7 +202,10 @@ export function ContextMenu({ actions, selectionActionCount, quickActions, lastS
             return (
               <React.Fragment key={item.id}>
                 {i === 0 && selectionActionCount > 0 && (
-                  <div className="section-label">Search selected text</div>
+                  <div className="section-row">
+                    <div className="section-label">Search</div>
+                    {hasUrlActions && <OpenModeSwitch mode={openMode} onChange={chooseOpenMode} />}
+                  </div>
                 )}
                 {i === selectionActionCount && (
                   <>
@@ -216,9 +220,17 @@ export function ContextMenu({ actions, selectionActionCount, quickActions, lastS
                   }`}
                   tabIndex={-1}
                   data-active={enabledIndex === index}
-                  onClick={() => {
+                  onClick={(e) => {
                     if (item.requiresSelection && !hasSelection) return;
-                    onItemClick(item);
+                    invoke(item, e);
+                  }}
+                  onAuxClick={(e) => {
+                    if (e.button !== 1 || (item.requiresSelection && !hasSelection)) return;
+                    invoke(item, e);
+                  }}
+                  onMouseDown={(e) => {
+                    // Stop middle-click autoscroll so the auxclick reaches the row.
+                    if (e.button === 1) e.preventDefault();
                   }}
                   onMouseEnter={() => {
                     if (enabledIndex >= 0) setIndex(enabledIndex);
@@ -228,21 +240,6 @@ export function ContextMenu({ actions, selectionActionCount, quickActions, lastS
                     {item.icon && <item.icon size={16} />}
                   </div>
                   <div className="label">{item.label}</div>
-                  {item.getUrl && hasSelection && (
-                    <button
-                      aria-label={`Open ${item.label} in new tab`}
-                      className="new-tab-btn"
-                      title="Open in New Tab"
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openUrl(item.getUrl!(lastSelection));
-                        closeMenu({ restoreFocus: false });
-                      }}
-                    >
-                      <ExternalLink size={14} />
-                    </button>
-                  )}
                   {item.shortcut && (
                     <div className="shortcut">{item.shortcut}</div>
                   )}

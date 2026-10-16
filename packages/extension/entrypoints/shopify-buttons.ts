@@ -773,7 +773,7 @@ export default defineContentScript({
       chrome.storage.sync.get(["cmdkSettings"], (result) => {
         const settings = result.cmdkSettings || {};
         buttonsEnabled = settings.shopifyButtons?.enabled ?? true;
-        openIn = settings.shopifyButtons?.openIn === "tab" ? "tab" : "popup";
+        openIn = settings.openSearchResultsIn === "tab" ? "tab" : "popup";
 
         if (buttonsEnabled) {
           init();
@@ -784,7 +784,7 @@ export default defineContentScript({
     // Listen for settings changes
     chrome.storage.onChanged?.addListener((changes, area) => {
       if (area === "sync" && changes.cmdkSettings) {
-        openIn = changes.cmdkSettings.newValue?.shopifyButtons?.openIn === "tab" ? "tab" : "popup";
+        openIn = changes.cmdkSettings.newValue?.openSearchResultsIn === "tab" ? "tab" : "popup";
       }
     });
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
