@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Chrome, Smartphone } from "lucide-react";
+import { ChevronRight, Chrome } from "lucide-react";
 
 import { chromeExtensionDownloadUrl, mobileAppDownloadUrl, supportUrl } from "../site-chrome";
 
@@ -22,81 +22,68 @@ export const Route = createFileRoute("/clip")({
 });
 
 const steps = [
-  ["Open a Volt new tab in Chrome", "Tap the phone button to show the workspace QR code."],
-  ["Point your iPhone Camera at it", "Use the built-in Camera app or Control Center code scanner."],
-  ["Tap Open on the App Clip card", "Pick any online computer and start scanning text, barcodes, and photos."],
-] as const;
+  "Open a new tab in Chrome",
+  "Click the phone button to show the QR code",
+  "Scan it with your iPhone’s Camera, then tap Open",
+];
 
 function ClipLandingPage() {
   return (
-    <div className="dark-grid flex min-h-svh flex-col bg-volt-ink text-zinc-50">
-      <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col px-5 py-5">
-        <header className="flex items-center justify-between">
-          <a href="/" className="flex items-center gap-2.5 font-semibold" aria-label="Volt home">
-            <img src="/favicon.svg" alt="" className="size-7" />
-            Volt
-          </a>
-          <span className="rounded-full border border-white/10 px-2.5 py-1.5 text-xs font-semibold text-zinc-400">
-            App Clip
-          </span>
-        </header>
-
-        <main className="flex-1 py-10 lg:py-16">
-          <p className="flex items-center gap-2 text-sm font-semibold text-volt-green">
-            <span className="size-1.5 rounded-full bg-volt-green" />
-            No install needed
-          </p>
-          <h1 className="mt-3.5 text-4xl font-semibold leading-none tracking-tight sm:text-6xl">
-            Scan straight into <span className="text-volt-green">Chrome</span>.
-          </h1>
-          <p className="mt-4 max-w-xl text-[17px] leading-relaxed text-zinc-400">
-            The Volt App Clip turns your iPhone into a scanner for your computer. It opens from a QR code in
-            Chrome, so there&rsquo;s nothing to download.
-          </p>
-
-          <ol className="mt-7 grid max-w-xl gap-2.5">
-            {steps.map(([title, detail], index) => (
-              <li
-                key={title}
-                className="grid grid-cols-[2rem_1fr] gap-3.5 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3.5"
-              >
-                <span className="grid size-8 place-items-center rounded-[10px] bg-zinc-50 text-sm font-bold text-volt-ink">
-                  {index + 1}
-                </span>
-                <div>
-                  <strong className="block text-[15px] font-semibold">{title}</strong>
-                  <p className="mt-0.5 text-sm leading-normal text-zinc-400">{detail}</p>
-                </div>
-              </li>
-            ))}
-          </ol>
-
-          <div className="mt-7 flex flex-col gap-2.5 sm:flex-row">
+    <div className="min-h-svh bg-[#f2f2f7] text-[17px] leading-snug text-black dark:bg-black dark:text-white">
+      <main className="mx-auto w-full max-w-[480px] px-4 pt-7 pb-8">
+        <section className="grid grid-cols-[96px_1fr] items-center gap-4 px-1 pt-2" aria-label="Volt">
+          <img src="/app-icon-512.png" alt="" className="size-24 rounded-[22px]" />
+          <div>
+            <h1 className="text-[22px] font-bold">Volt</h1>
+            <p className="mt-0.5 mb-2.5 text-[15px] text-black/60 dark:text-white/60">Scan text and barcodes into Chrome</p>
             <a
               href={mobileAppDownloadUrl}
-              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-[14px] bg-volt-green px-5 font-semibold text-volt-ink hover:brightness-110"
+              className="inline-block rounded-full bg-[#34c759] px-[18px] py-1.5 text-[15px] font-bold text-white"
             >
-              <Smartphone size={18} aria-hidden="true" />
-              Get the full app
-            </a>
-            <a
-              href={chromeExtensionDownloadUrl}
-              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-[14px] border border-white/20 px-5 font-semibold hover:border-white/40"
-            >
-              <Chrome size={18} aria-hidden="true" />
-              Add Volt to Chrome
+              Get the app
             </a>
           </div>
-        </main>
+        </section>
 
-        <footer className="flex flex-wrap justify-between gap-x-5 gap-y-1.5 border-t border-white/10 pt-5 text-[13px] text-zinc-500">
-          <span>Not affiliated with Volt Resale or Paymore Electronics.</span>
-          <nav className="flex gap-5">
-            <a href="/privacy" className="hover:text-zinc-50">Privacy</a>
-            <a href={supportUrl} className="hover:text-zinc-50">Support</a>
-          </nav>
+        <h2 className="mx-1 mt-9 mb-2 text-[28px] leading-tight font-bold">Open the App Clip from Chrome</h2>
+        <p className="mx-1 text-black/60 dark:text-white/60">
+          The App Clip joins your workspace through the QR code on Volt’s Chrome new tab, so that’s where it opens from.
+        </p>
+
+        <p className="mx-5 mt-7 mb-2 text-[13px] text-black/60 dark:text-white/60">On your computer</p>
+        <ol className="overflow-hidden rounded-xl bg-white dark:bg-[#1c1c1e]">
+          {steps.map((step, index) => (
+            <li key={step} className="flex min-h-[52px] items-center gap-3.5 pl-4">
+              <span className="grid size-[26px] flex-none place-items-center rounded-full bg-[#34c759] text-sm font-bold text-white">
+                {index + 1}
+              </span>
+              <span className={`flex-1 py-3 pr-4 ${index > 0 ? "border-t-[0.5px] border-black/30 dark:border-white/20" : ""}`}>
+                {step}
+              </span>
+            </li>
+          ))}
+        </ol>
+        <p className="mx-5 mt-2 text-[13px] text-black/60 dark:text-white/60">
+          Nothing to install. The App Clip opens straight to the camera.
+        </p>
+
+        <p className="mx-5 mt-7 mb-2 text-[13px] text-black/60 dark:text-white/60">Don’t have Volt in Chrome?</p>
+        <a
+          href={chromeExtensionDownloadUrl}
+          className="flex min-h-[52px] items-center gap-3.5 rounded-xl bg-white px-4 active:bg-black/10 dark:bg-[#1c1c1e]"
+        >
+          <span className="grid size-[29px] place-items-center rounded-[7px] bg-[#1a73e8] text-white">
+            <Chrome size={17} aria-hidden="true" />
+          </span>
+          <span className="flex-1">Add Volt to Chrome</span>
+          <ChevronRight size={18} className="text-black/40 dark:text-white/40" aria-hidden="true" />
+        </a>
+
+        <footer className="mx-5 mt-9 flex gap-5 text-[13px] text-[#248a3d] dark:text-[#30d158]">
+          <a href="/privacy">Privacy</a>
+          <a href={supportUrl}>Support</a>
         </footer>
-      </div>
+      </main>
     </div>
   );
 }
