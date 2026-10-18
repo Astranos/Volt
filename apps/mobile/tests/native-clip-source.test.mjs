@@ -248,6 +248,11 @@ test("photo captures flash the viewfinder and tap in both the app and App Clip",
   assert.doesNotMatch(clipViewsSwiftSource, /ClipCaptureSessionBackdrop\([^)]*?\)\s*\.ignoresSafeArea\(\)\s*\.shutterFeedback/);
 });
 
+test("app clip waits for the target picker to close before showing the connection sheet", () => {
+  assert.match(clipViewsSwiftSource, /\.onChange\(of: store\.isConnected\) \{ _, isConnected in\s*if !isConnected, isTargetPickerPresented \{[\s\S]*?opensConnectionAfterTargetPicker = true\s*isTargetPickerPresented = false\s*\} else \{\s*isConnectionSheetPresented = !isConnected/);
+  assert.match(clipViewsSwiftSource, /\.sheet\(isPresented: \$isTargetPickerPresented, onDismiss: \{\s*if opensConnectionAfterTargetPicker \{\s*opensConnectionAfterTargetPicker = false\s*isConnectionSheetPresented = true/);
+});
+
 test("app clip bottom CTAs show connection progress while pairing", () => {
   assert.match(sharedScannerTabComponentsSwiftSource, /var isConnecting = false/);
   assert.match(sharedScannerTabComponentsSwiftSource, /isConnecting \? "Connecting\.\.\." : title/);

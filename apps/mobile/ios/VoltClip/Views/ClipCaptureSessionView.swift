@@ -313,7 +313,14 @@ struct ClipCaptureSessionView: View {
             syncCameraForOcrPostCapture()
         }
         .onChange(of: store.isConnected) { _, isConnected in
-            isConnectionSheetPresented = !isConnected
+            if !isConnected, isTargetPickerPresented {
+                // Only one sheet can show at a time: open the connection sheet once the
+                // picker has finished dismissing.
+                opensConnectionAfterTargetPicker = true
+                isTargetPickerPresented = false
+            } else {
+                isConnectionSheetPresented = !isConnected
+            }
             if !isConnected {
                 resetSelectedText()
                 onClearOcrReview()
