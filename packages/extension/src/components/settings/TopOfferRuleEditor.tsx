@@ -1,14 +1,26 @@
 import { Plus, Trash2 } from "lucide-react";
 import type { ReactNode } from "react";
 import {
+  formatCurrency,
+  getRatePercentage,
   percentageFromInputValue,
   percentageToInputValue,
 } from "@/src/domain/top-offers";
-import type { RateRule } from "@/src/types/settings";
+import type { OfferRateTable, RateRule } from "@/src/types/settings";
+
+// Sales price | % of sale | vs. guide | delete — mirrors the printed Max Offer Guide.
+const ROW_GRID =
+  "grid grid-cols-[15rem_10rem_minmax(0,1fr)_2.5rem] items-center gap-3 px-3";
+
+const INPUT_CLASS =
+  "w-full py-1.5 border border-border rounded-lg bg-background text-sm font-semibold tabular-nums focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors";
 
 interface RateRuleEditorProps {
   title?: string;
   headerAction?: ReactNode;
+  valueLabel?: string;
+  /** Standard guide to compare against, shown as "+10% over guide". */
+  guide?: OfferRateTable;
   rules: RateRule[];
   defaultPercentage: number;
   onRuleChange: (
@@ -22,9 +34,13 @@ interface RateRuleEditorProps {
   onDefaultPercentageChange: (value: number) => void;
 }
 
+const money = (value: number) => `$${formatCurrency(value)}`;
+
 export function RateRuleEditor({
   title,
   headerAction,
+  valueLabel = "Max cash % of sale",
+  guide,
   rules,
   defaultPercentage,
   onRuleChange,
@@ -33,102 +49,122 @@ export function RateRuleEditor({
   onRemoveRule,
   onDefaultPercentageChange,
 }: RateRuleEditorProps) {
+  const lastThreshold = rules[rules.length - 1]?.threshold;
+  const guideRate = (price: number) =>
+    guide ? getRatePercentage(price, guide.rules, guide.defaultPercentage) : undefined;
+
   return (
     <div>
       {(title || headerAction) && (
-        <div className="mb-4 flex items-center justify-between gap-4">
+        <div className="mb-3 flex items-center justify-between gap-4">
           {title ? <h3 className="font-semibold text-lg">{title}</h3> : <div />}
           {headerAction}
         </div>
       )}
-      <div className="space-y-3">
-        <RateRuleHeader />
-        {rules.map((rule, index) => (
-          <div key={index} className="grid grid-cols-12 gap-4 items-center">
-            <div className="col-span-5">
-              <input
-                type="number"
-                value={rule.threshold}
-                onChange={(event) =>
-                  onRuleChange(
-                    index,
-                    "threshold",
-                    parseFloat(event.target.value)
-                  )
-                }
-                onBlur={onSortRules}
-                className="w-full px-3 py-2 border border-border rounded-lg bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
-              />
-            </div>
-            <div className="col-span-5">
-              <input
-                type="number"
-                step="0.1"
-                min="0"
-                max="100"
-                inputMode="decimal"
-                value={percentageToInputValue(rule.percentage)}
-                onChange={(event) =>
-                  onRuleChange(
-                    index,
-                    "percentage",
-                    percentageFromInputValue(parseFloat(event.target.value))
-                  )
-                }
-                className="w-full px-3 py-2 border border-border rounded-lg bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
-              />
-            </div>
-            <div className="col-span-2 flex justify-end">
-              <button
-                onClick={() => onRemoveRule(index)}
-                className="p-2 text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        ))}
-        <DefaultPercentageRow
+      <RateTableHeader valueLabel={valueLabel} showGuide={Boolean(guide)} />
+      <div className="space-y-1">
+        <RateTableRow
+          label={
+            lastThreshold === undefined
+              ? "All sales prices"
+              : `${money(lastThreshold)} & up`
+          }
           value={defaultPercentage}
+          guideValue={guideRate(lastThreshold ?? 0)}
           onChange={onDefaultPercentageChange}
         />
-        <div className="pt-2">
-          <button
-            onClick={onAddRule}
-            className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-primary hover:bg-primary/10 rounded-lg transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            Add Rule
-          </button>
-        </div>
+        {rules
+          .map((rule, index) => ({ rule, index }))
+          .reverse()
+          .map(({ rule, index }) => {
+            const from = index === 0 ? 0 : rules[index - 1].threshold;
+            // Thresholds are exclusive ("under 500"), so a middle tier reads
+            // like the paper: "$200 – $499".
+            const offset = index === 0 ? 0 : 1;
+            return (
+              <RateTableRow
+                key={index}
+                label={
+                  <>
+                    <span className="w-16">{index === 0 ? "Under" : `${money(from)} –`}</span>
+                    <span className="relative w-24">
+                      <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                        $
+                      </span>
+                      <input
+                        type="number"
+                        aria-label={`Price tier ${index + 1} upper bound`}
+                        value={rule.threshold - offset}
+                        onChange={(event) =>
+                          onRuleChange(
+                            index,
+                            "threshold",
+                            parseFloat(event.target.value) + offset
+                          )
+                        }
+                        onBlur={onSortRules}
+                        className={`${INPUT_CLASS} pl-6 pr-2`}
+                      />
+                    </span>
+                  </>
+                }
+                value={rule.percentage}
+                guideValue={guideRate(from)}
+                onChange={(value) => onRuleChange(index, "percentage", value)}
+                onRemove={() => onRemoveRule(index)}
+              />
+            );
+          })}
+      </div>
+      <div className="pt-2">
+        <button
+          onClick={onAddRule}
+          className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-primary hover:bg-primary/10 rounded-lg transition-colors"
+        >
+          <Plus className="w-4 h-4" />
+          Add price tier
+        </button>
       </div>
     </div>
   );
 }
 
-export function RateRuleHeader() {
-  return (
-    <div className="grid grid-cols-12 gap-4 text-sm font-medium text-muted-foreground px-2">
-      <div className="col-span-5">Under Amount ($)</div>
-      <div className="col-span-5">Percentage (%)</div>
-      <div className="col-span-2"></div>
-    </div>
-  );
-}
-
-export function DefaultPercentageRow({
-  value,
-  onChange,
+export function RateTableHeader({
+  valueLabel = "Max cash % of sale",
+  showGuide = false,
 }: {
-  value: number;
-  onChange: (value: number) => void;
+  valueLabel?: string;
+  showGuide?: boolean;
 }) {
   return (
-    <div className="grid grid-cols-12 gap-4 items-center pt-2">
-      <div className="col-span-5 text-sm font-medium pl-2">
-        Everything else
-      </div>
-      <div className="col-span-5">
+    <div
+      className={`${ROW_GRID} mb-1 border-b-2 border-foreground/80 pb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground`}
+    >
+      <div>Sales price</div>
+      <div>{valueLabel}</div>
+      <div>{showGuide ? "vs. guide" : null}</div>
+      <div />
+    </div>
+  );
+}
+
+export function RateTableRow({
+  label,
+  value,
+  guideValue,
+  onChange,
+  onRemove,
+}: {
+  label: ReactNode;
+  value: number;
+  guideValue?: number;
+  onChange: (value: number) => void;
+  onRemove?: () => void;
+}) {
+  return (
+    <div className={`${ROW_GRID} rounded-lg py-1.5 even:bg-muted/60`}>
+      <div className="flex items-center gap-2 text-sm font-semibold">{label}</div>
+      <div className="relative">
         <input
           type="number"
           step="0.1"
@@ -139,10 +175,48 @@ export function DefaultPercentageRow({
           onChange={(event) =>
             onChange(percentageFromInputValue(parseFloat(event.target.value)))
           }
-          className="w-full px-3 py-2 border border-border rounded-lg bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
+          className={`${INPUT_CLASS} pl-3 pr-7`}
         />
+        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+          %
+        </span>
       </div>
-      <div className="col-span-2"></div>
+      <div>
+        {guideValue === undefined ? null : (
+          <GuideDelta value={value} guideValue={guideValue} />
+        )}
+      </div>
+      <div className="flex justify-end">
+        {onRemove ? (
+          <button
+            onClick={onRemove}
+            aria-label="Remove price tier"
+            className="p-2 text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        ) : null}
+      </div>
     </div>
+  );
+}
+
+function GuideDelta({ value, guideValue }: { value: number; guideValue: number }) {
+  const delta = percentageToInputValue(value - guideValue);
+  const rounded = Math.round(delta * 10) / 10;
+  if (rounded === 0) {
+    return <span className="text-xs text-muted-foreground">Same as guide</span>;
+  }
+  return (
+    <span
+      className={
+        rounded > 0
+          ? "rounded-md bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-800"
+          : "rounded-md bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800"
+      }
+    >
+      {rounded > 0 ? "+" : "−"}
+      {Math.abs(rounded)}% {rounded > 0 ? "over" : "under"} guide
+    </span>
   );
 }

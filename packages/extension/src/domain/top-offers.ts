@@ -58,15 +58,25 @@ export const DEFAULT_PREMIUM_STARTING_RULES: RateRule[] = [
 export const DEFAULT_PREMIUM_STARTING_DEFAULT_PERCENTAGE = 0.65;
 export const DEFAULT_CHECKOUT_PERCENTAGE = 0.65;
 
+// Paper guide: new customers can go 5-10% above the standard guide.
 export const DEFAULT_NEW_CUSTOMER_RULES: RateRule[] = [
+  { threshold: 50, percentage: 0.3 },
+  { threshold: 100, percentage: 0.35 },
+  { threshold: 200, percentage: 0.4 },
+  { threshold: 500, percentage: 0.5 },
+  { threshold: 750, percentage: 0.6 },
+];
+
+export const DEFAULT_NEW_CUSTOMER_DEFAULT_PERCENTAGE = 0.7;
+
+// The Google Sheet's new customer row used a stale $250 break.
+const LEGACY_NEW_CUSTOMER_RULES: RateRule[] = [
   { threshold: 50, percentage: 0.3 },
   { threshold: 100, percentage: 0.35 },
   { threshold: 250, percentage: 0.45 },
   { threshold: 500, percentage: 0.55 },
   { threshold: 750, percentage: 0.6 },
 ];
-
-export const DEFAULT_NEW_CUSTOMER_DEFAULT_PERCENTAGE = 0.7;
 
 const LEGACY_STANDARD_RULES: RateRule[] = [
   { threshold: 50, percentage: 0.2 },
@@ -201,11 +211,20 @@ export function migrateDefaultTopOfferRates(customRates?: CustomRates): CustomRa
     Math.abs(
       customRates.premium.defaultPercentage - LEGACY_PREMIUM_DEFAULT_PERCENTAGE
     ) < 0.001;
+  // 80% is a valid checkout rate, so only treat it as the old default when it
+  // was saved alongside the old standard table.
   const isLegacyCheckoutDefault =
-    Math.abs(
-      (customRates.checkout?.percentage ?? LEGACY_CHECKOUT_PERCENTAGE) -
-        LEGACY_CHECKOUT_PERCENTAGE
-    ) < 0.001;
+    !customRates.checkout ||
+    (isLegacyStandard &&
+      Math.abs(customRates.checkout.percentage - LEGACY_CHECKOUT_PERCENTAGE) <
+        0.001);
+  const isLegacyNewCustomer =
+    !customRates.newCustomer ||
+    (rulesEqual(customRates.newCustomer.rules, LEGACY_NEW_CUSTOMER_RULES) &&
+      Math.abs(
+        customRates.newCustomer.defaultPercentage -
+          DEFAULT_NEW_CUSTOMER_DEFAULT_PERCENTAGE
+      ) < 0.001);
 
   return {
     ...customRates,
@@ -213,19 +232,23 @@ export function migrateDefaultTopOfferRates(customRates?: CustomRates): CustomRa
     premium: isLegacyPremium ? DEFAULT_CUSTOM_RATES.premium : customRates.premium,
     checkout: isLegacyCheckoutDefault
       ? DEFAULT_CUSTOM_RATES.checkout
-      : customRates.checkout ?? DEFAULT_CUSTOM_RATES.checkout,
-    newCustomer: customRates.newCustomer ?? DEFAULT_CUSTOM_RATES.newCustomer,
+      : customRates.checkout,
+    newCustomer: isLegacyNewCustomer
+      ? DEFAULT_CUSTOM_RATES.newCustomer
+      : customRates.newCustomer,
   };
 }
 
-function calculateFromRules(projection: number, rules: RateRule[], defaultPercentage: number): number {
-  for (const rule of rules) {
-    if (projection < rule.threshold) {
-      return floorToMultiple(projection * rule.percentage);
-    }
-  }
+export function getRatePercentage(
+  projection: number,
+  rules: RateRule[],
+  defaultPercentage: number
+): number {
+  return rules.find((rule) => projection < rule.threshold)?.percentage ?? defaultPercentage;
+}
 
-  return floorToMultiple(projection * defaultPercentage);
+function calculateFromRules(projection: number, rules: RateRule[], defaultPercentage: number): number {
+  return floorToMultiple(projection * getRatePercentage(projection, rules, defaultPercentage));
 }
 
 export function calculateTopOffer(projection: number, customRates?: CustomRates): number {
