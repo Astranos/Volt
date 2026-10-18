@@ -307,6 +307,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     || message.action === "shopifyAuditOffscreenDisconnect"
     || message.action === "shopifyAuditOffscreenListYesterday"
     || message.action === "shopifyAuditOffscreenSearchProducts"
+    || message.action === "shopifyAuditOffscreenProductDetails"
     || message.action === "shopifyAuditOffscreenHiddenProducts"
     || message.action === "shopifyAuditOffscreenSetProductHidden"
   ) {
@@ -373,6 +374,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return false;
       }
       return sendWorkspaceOperation(sendResponse, cloudWorkspaceSubscriptions.searchShopifyProducts(message.query));
+    }
+    if (message.action === "shopifyAuditOffscreenProductDetails") {
+      if (!Array.isArray(message.productIds) || !message.productIds.every((id: unknown) => typeof id === "string")) {
+        sendResponse({ success: false, error: "invalid_shopify_product" });
+        return false;
+      }
+      return sendWorkspaceOperation(sendResponse, cloudWorkspaceSubscriptions.getShopifyProductDetails(message.productIds));
     }
     if (message.action === "shopifyAuditOffscreenHiddenProducts") {
       return sendWorkspaceOperation(sendResponse, cloudWorkspaceSubscriptions.listHiddenShopifyProducts());

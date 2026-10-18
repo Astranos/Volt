@@ -1,6 +1,7 @@
 import { isTrustedExtensionPageSender, type ExtensionMessageSender } from "../access/sender-policy.ts";
 import { EXTENSION_SCANNER_SIGNAL_URL } from "../domain/mobile-scanner-signal-url.ts";
 import {
+  MAX_COMPARE_PRODUCTS,
   normalizeShopifyShopInput,
   validShopifyAdminProductUrl,
   yesterdayInComputerTimezone,
@@ -12,6 +13,7 @@ type ShopifyMessage = {
   shop?: unknown;
   query?: unknown;
   productId?: unknown;
+  productIds?: unknown;
   title?: unknown;
   hidden?: unknown;
 };
@@ -114,9 +116,9 @@ export function createShopifyAuditController({
     const message = rawMessage as ShopifyMessage;
     if (![
       "shopifyAuditStatus", "shopifyAuditConnect", "shopifyAuditDisconnect", "shopifyAuditOpenYesterday", "shopifyAuditSearchProducts",
-      "shopifyAuditHiddenProducts", "shopifyAuditSetProductHidden",
+      "shopifyAuditProductDetails", "shopifyAuditHiddenProducts", "shopifyAuditSetProductHidden",
     ].includes(String(message.action))) return false;
-    if (!isTrustedExtensionPageSender(sender, extensionId, ["/options.html", "/newtab.html"])) {
+    if (!isTrustedExtensionPageSender(sender, extensionId, ["/options.html", "/newtab.html", "/shopify-compare.html"])) {
       sendResponse({ success: false, error: "unauthorized_extension_sender" });
       return true;
     }
@@ -164,6 +166,14 @@ export function createShopifyAuditController({
           const query = message.query.trim();
           if (query.length < 2 || query.length > 120) throw new Error("Search must be 2 to 120 characters.");
           return forward("shopifyAuditOffscreenSearchProducts", { query });
+        }
+        case "shopifyAuditProductDetails": {
+          const ids = message.productIds;
+          if (!Array.isArray(ids) || !ids.length || ids.length > MAX_COMPARE_PRODUCTS || new Set(ids).size !== ids.length
+            || !ids.every((id) => typeof id === "string" && /^gid:\/\/shopify\/Product\/\d+$/.test(id))) {
+            throw new Error(`Pick 1 to ${MAX_COMPARE_PRODUCTS} Shopify products to compare.`);
+          }
+          return forward("shopifyAuditOffscreenProductDetails", { productIds: ids });
         }
         case "shopifyAuditHiddenProducts":
           return forward("shopifyAuditOffscreenHiddenProducts");

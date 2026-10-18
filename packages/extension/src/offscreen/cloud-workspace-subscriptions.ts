@@ -7,6 +7,7 @@ import { CLERK_PUBLISHABLE_KEY, convexDeploymentUrlFromHttpActionsUrl } from "..
 import { offscreenStorageCache } from "./offscreen-storage-cache";
 import { getMobileScannerExtensionIdentity } from "../domain/mobile-scanner-identity";
 import { EXTENSION_SCANNER_SIGNAL_URL } from "../domain/mobile-scanner-signal-url";
+import type { ShopifyProductDetails } from "../domain/shopify-audit";
 import { COMPUTER_REGISTRATION_INTERVAL_MS, registerComputer } from "../cloud-scanner/computer-registration";
 import { createComputerRegistrationHeartbeat } from "../cloud-scanner/computer-registration-heartbeat";
 
@@ -43,6 +44,10 @@ const shopifySearchProductsReference = makeFunctionReference<
   "action", { query: string },
   { shop: string; products: Array<{ id: string; title: string; status: string; totalInventory: number; url: string; imageUrl: string | null; price: string | null; currencyCode: string | null; condition: string | null; sku: string | null }> }
 >("shopifyAudit:searchProducts");
+const shopifyProductDetailsReference = makeFunctionReference<
+  "action", { productIds: string[] },
+  { shop: string; products: ShopifyProductDetails[] }
+>("shopifyAudit:productDetails");
 const shopifyListHiddenProductsReference = makeFunctionReference<
   "query", Record<string, never>, Array<{ id: string; title: string }>
 >("shopifyAudit:listHiddenProducts");
@@ -514,6 +519,12 @@ export class CloudWorkspaceSubscriptions {
     await this.reconcileAuthentication();
     if (!this.clerkSubject) throw new Error("Sign in to Volt before searching Shopify.");
     return this.client.action(shopifySearchProductsReference, { query });
+  }
+
+  async getShopifyProductDetails(productIds: string[]) {
+    await this.reconcileAuthentication();
+    if (!this.clerkSubject) throw new Error("Sign in to Volt before comparing Shopify products.");
+    return this.client.action(shopifyProductDetailsReference, { productIds });
   }
 
   async listHiddenShopifyProducts() {

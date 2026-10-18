@@ -3,7 +3,7 @@ import { makeFunctionReference } from "convex/server";
 import { action, mutation, query, type ActionCtx } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
 import { MAX_HIDDEN_PRODUCTS } from "./shopifyStore";
-import { auditRange, decryptToken, encryptToken, exchangeToken, fetchSearchProducts, fetchYesterday, nonce, nonceHash, productSearchQuery, requiredEnv, shopDomain, type Product, type SearchProduct } from "./shopifyHelpers";
+import { auditRange, decryptToken, encryptToken, exchangeToken, fetchProductDetails, fetchSearchProducts, fetchYesterday, MAX_COMPARE_PRODUCTS, nonce, nonceHash, productSearchQuery, requiredEnv, shopDomain, type Product, type ProductDetails, type SearchProduct } from "./shopifyHelpers";
 
 const begin = makeFunctionReference<"mutation", { ownerTokenIdentifier: string; shop: string; state: string; browserNonceHash: string }, null>("shopifyStore:begin");
 const read = makeFunctionReference<"query", { ownerTokenIdentifier: string }, Doc<"shopifyConnections"> | null>("shopifyStore:read");
@@ -76,6 +76,22 @@ export const searchProducts = action({
       const hidden = new Set(await ctx.runQuery(hiddenProductIds, { ownerTokenIdentifier: owner, shop }));
       return fetchSearchProducts(shop, access, args.query, hidden);
     });
+  },
+});
+export const productDetails = action({
+  args: { productIds: v.array(v.string()) },
+  returns: v.object({
+    shop: v.string(),
+    products: v.array(v.object({
+      id: v.string(), title: v.string(), status: v.string(), totalInventory: v.number(), url: v.string(), images: v.array(v.string()),
+      currencyCode: v.union(v.string(), v.null()), minPrice: v.union(v.string(), v.null()), maxPrice: v.union(v.string(), v.null()),
+      condition: v.union(v.string(), v.null()), vendor: v.union(v.string(), v.null()), productType: v.union(v.string(), v.null()), descriptionHtml: v.string(),
+      variants: v.array(v.object({ id: v.string(), title: v.string(), sku: v.union(v.string(), v.null()), price: v.union(v.string(), v.null()) })),
+    })),
+  }),
+  handler: async (ctx, args): Promise<{ shop: string; products: ProductDetails[] }> => {
+    if (!args.productIds.length || args.productIds.length > MAX_COMPARE_PRODUCTS) throw new ConvexError(`Compare 1 to ${MAX_COMPARE_PRODUCTS} products.`);
+    return withShopifyAccess(ctx, async (shop, access) => ({ shop, products: await fetchProductDetails(shop, access, args.productIds) }));
   },
 });
 export const listHiddenProducts = query({

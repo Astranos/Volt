@@ -4,11 +4,10 @@ import {
 } from "./search.ts";
 
 export type NewTabSearchMode =
-  | "closed-tabs"
+  | "shopify"
   | "ebay"
   | "pricecharting"
-  | "barcodelookup"
-  | "shopify";
+  | "barcodelookup";
 
 export interface SearchIntentProvider {
   id: string;
@@ -97,8 +96,6 @@ export function resolveNewTabSearchIntent(
   const mode = prefixed.mode ?? options.activeMode;
   const query = prefixed.query.trim();
   if (!query) return null;
-
-  if (mode === "closed-tabs") return null;
 
   if (mode === "shopify") {
     const storeName = options.shopifyStoreName;
