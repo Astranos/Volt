@@ -11,6 +11,25 @@ export type ShopifyAuditResult = {
   products: ShopifyAuditProduct[];
 };
 
+export const MAX_COMPARE_PRODUCTS = 8;
+
+export type ShopifyProductDetails = {
+  id: string;
+  title: string;
+  status: string;
+  totalInventory: number;
+  url: string;
+  images: string[];
+  currencyCode: string | null;
+  minPrice: string | null;
+  maxPrice: string | null;
+  condition: string | null;
+  vendor: string | null;
+  productType: string | null;
+  descriptionHtml: string;
+  variants: Array<{ id: string; title: string; sku: string | null; price: string | null }>;
+};
+
 export type ShopifyAuditDateRange = {
   date: string;
   startUtc: string;

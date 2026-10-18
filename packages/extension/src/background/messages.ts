@@ -175,6 +175,7 @@ const SHOPIFY_AUDIT_OFFSCREEN_ACTIONS = new Set([
   "shopifyAuditOffscreenDisconnect",
   "shopifyAuditOffscreenListYesterday",
   "shopifyAuditOffscreenSearchProducts",
+  "shopifyAuditOffscreenProductDetails",
   "shopifyAuditOffscreenHiddenProducts",
   "shopifyAuditOffscreenSetProductHidden",
 ]);

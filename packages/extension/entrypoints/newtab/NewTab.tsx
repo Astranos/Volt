@@ -21,7 +21,7 @@ import "../../src/components/newtab/closed-tabs-panel.css";
 import "../../src/components/newtab/newtab-layout.css";
 
 export default function NewTab() {
-  const [activeMode, setActiveMode] = useState<SearchMode>("closed-tabs");
+  const [activeMode, setActiveMode] = useState<SearchMode>("shopify");
   const [auditBusy, setAuditBusy] = useState(false);
   const [auditNotice, setAuditNotice] = useState<string | null>(null);
   const [whatsNewRequest, setWhatsNewRequest] = useState(0);
@@ -68,15 +68,6 @@ export default function NewTab() {
     };
   }, []);
 
-  const toggleSearchMode = (mode: SearchMode) => {
-    setActiveMode((current) => {
-      return current === mode ? "closed-tabs" : mode;
-    });
-  };
-
-  const setSearchMode = (mode: SearchMode) => {
-    setActiveMode(mode);
-  };
 
   const handleSearchSubmit = async (query: string) => {
     const trimmed = query.trim();
@@ -88,7 +79,7 @@ export default function NewTab() {
     if (!prefixedSearch.query) return;
 
     if (prefixedSearch.mode && prefixedSearch.mode !== activeMode) {
-      setSearchMode(prefixedSearch.mode);
+      setActiveMode(prefixedSearch.mode);
     }
     if (effectiveMode === "shopify") return;
     const intent = resolveNewTabSearchIntent(trimmed, {
@@ -219,7 +210,7 @@ export default function NewTab() {
             <ClosedTabsPanel
               onSearchSubmit={handleSearchSubmit}
               activeMode={activeMode}
-              onToggleSearchMode={toggleSearchMode}
+              onToggleSearchMode={setActiveMode}
             />
           </div>
 

@@ -114,6 +114,29 @@ test("forwards live searches only from trusted extension pages", async () => {
   assert.equal(messages.length, 1);
 });
 
+test("forwards compare detail requests from the compare page with valid product IDs", async () => {
+  const messages = [];
+  const controller = createShopifyAuditController({
+    chromeApi: {},
+    extensionId: "ext",
+    sendOffscreenMessage: async (message) => {
+      messages.push(message);
+      return { success: true, value: { shop: "sample.myshopify.com", products: [] } };
+    },
+  });
+  const request = (productIds) => new Promise((resolve) => {
+    assert.equal(controller.handleMessage({ action: "shopifyAuditProductDetails", productIds }, { id: "ext", url: "chrome-extension://ext/shopify-compare.html?ids=1" }, resolve), true);
+  });
+  const ids = ["gid://shopify/Product/2", "gid://shopify/Product/1"];
+  assert.equal((await request(ids)).success, true);
+  assert.deepEqual(messages, [{ action: "shopifyAuditOffscreenProductDetails", productIds: ids }]);
+  assert.equal((await request([])).success, false);
+  assert.equal((await request(["gid://shopify/Product/1", "gid://shopify/Product/1"])).success, false);
+  assert.equal((await request(["gid://shopify/Collection/1"])).success, false);
+  assert.equal((await request(Array.from({ length: 9 }, (_, index) => `gid://shopify/Product/${index}`))).success, false);
+  assert.equal(messages.length, 1);
+});
+
 test("binds Shopify authorization to this browser before opening the approval tab", async () => {
   const callback = `${new URL(EXTENSION_SCANNER_SIGNAL_URL).origin}/api/shopify/callback`;
   const cookies = [];

@@ -1,4 +1,6 @@
-import { normalizeShopifyShopInput, validShopifyAdminProductUrl } from "../domain/shopify-audit";
+import { normalizeShopifyShopInput, validShopifyAdminProductUrl, MAX_COMPARE_PRODUCTS, type ShopifyProductDetails } from "../domain/shopify-audit";
+
+export type { ShopifyProductDetails };
 
 export type ShopifySearchProduct = {
   id: string;
@@ -48,6 +50,37 @@ export async function openShopifyAudit(): Promise<{ shop: string; date: string; 
     throw new Error("Shopify audit result was invalid.");
   }
   return { shop: result.shop, date: result.date, count: result.count };
+}
+
+const optionalText = (value: unknown, max: number) => value === null || (typeof value === "string" && value.length <= max);
+const optionalAmount = (value: unknown) => value === null || (typeof value === "string" && /^\d+(?:\.\d+)?$/.test(value));
+
+export async function getShopifyProductDetails(productIds: string[]): Promise<{ shop: string; products: ShopifyProductDetails[] }> {
+  const value = await send("shopifyAuditProductDetails", { productIds });
+  if (!value || typeof value !== "object") throw new Error("Shopify returned invalid product details.");
+  const result = value as { shop?: unknown; products?: unknown };
+  if (typeof result.shop !== "string" || normalizeShopifyShopInput(result.shop) !== result.shop
+    || !Array.isArray(result.products) || result.products.length > MAX_COMPARE_PRODUCTS) {
+    throw new Error("Shopify returned invalid product details.");
+  }
+  const shop = result.shop;
+  const products = result.products.map((item: unknown): ShopifyProductDetails => {
+    const product = (item && typeof item === "object" ? item : {}) as Partial<ShopifyProductDetails>;
+    if (typeof product.id !== "string" || !productIds.includes(product.id) || typeof product.title !== "string"
+      || typeof product.status !== "string" || typeof product.totalInventory !== "number" || !Number.isInteger(product.totalInventory)
+      || typeof product.url !== "string" || !validShopifyAdminProductUrl(product.url, shop)
+      || !Array.isArray(product.images) || !product.images.every((url) => typeof url === "string" && validImageUrl(url))
+      || (product.currencyCode !== null && (typeof product.currencyCode !== "string" || !/^[A-Z]{3}$/.test(product.currencyCode)))
+      || !optionalAmount(product.minPrice) || !optionalAmount(product.maxPrice)
+      || !optionalText(product.condition, 200) || !optionalText(product.vendor, 255) || !optionalText(product.productType, 255)
+      || typeof product.descriptionHtml !== "string" || !Array.isArray(product.variants)
+      || !product.variants.every((variant) => variant && typeof variant.id === "string" && typeof variant.title === "string"
+        && optionalText(variant.sku, 255) && optionalAmount(variant.price))) {
+      throw new Error("Shopify returned an invalid product.");
+    }
+    return product as ShopifyProductDetails;
+  });
+  return { shop, products };
 }
 
 export async function searchShopifyProducts(query: string): Promise<ShopifySearchResult> {

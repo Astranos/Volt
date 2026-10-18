@@ -32,7 +32,7 @@ const TOUR_STEPS: TourStep[] = [
     targetId: "tour-search-history",
     title: "Unified Search & History",
     description:
-      "Type normally to filter recently closed tabs. Choose a resale provider, or use prefixes like e iphone 15, p pokemon blue, u 012345678905, and s iphone 15.",
+      "Type to search your Shopify products, then pick a few to compare side by side. Choose another resale provider, or use prefixes like e iphone 15, p pokemon blue, u 012345678905, and s iphone 15.",
     icon: <Search className="h-5 w-5 text-green-600" />,
     position: "right",
   },
