@@ -113,6 +113,11 @@ struct CaptureSessionView: View {
             if store.ocrReviewImage != nil {
                 OcrReviewControls(
                     regionCount: store.ocrTextRegions.count,
+                    targetLabel: CloudTargetLabel.targetLabel(for: store),
+                    targetSystemImage: store.cloudWorkspace.selectedTargetComputer == nil ? "iphone" : "desktopcomputer",
+                    onChangeTarget: {
+                        isTargetPickerPresented = true
+                    },
                     onRetake: {
                         resetSelectedText()
                         store.clearOcrReview()

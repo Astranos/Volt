@@ -96,3 +96,99 @@ struct FocusReticle: View {
             .transition(.scale.combined(with: .opacity))
     }
 }
+
+struct OcrReviewControls: View {
+    let regionCount: Int
+    let targetLabel: String
+    let targetSystemImage: String
+    let onChangeTarget: () -> Void
+    let onRetake: () -> Void
+    let onFinish: () -> Void
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Text("Tap highlighted text")
+                .font(.subheadline.bold())
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+
+            // Switching the destination here keeps the recognized text, so there's no need to
+            // retake the photo just to send it to a different computer.
+            Button(action: onChangeTarget) {
+                HStack(spacing: 8) {
+                    Image(systemName: targetSystemImage)
+                        .foregroundStyle(.green)
+                    Text("Send to")
+                        .foregroundStyle(.white.opacity(0.68))
+                    Text(targetLabel)
+                        .fontWeight(.bold)
+                        .lineLimit(1)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.caption.bold())
+                        .foregroundStyle(.white.opacity(0.68))
+                }
+                .font(.subheadline)
+                .foregroundStyle(.white)
+                .padding(.horizontal, 18)
+                .frame(minHeight: 44)
+                .background(.black.opacity(0.86), in: Capsule())
+                .overlay {
+                    Capsule().stroke(.green.opacity(0.55), lineWidth: 1)
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Send to \(targetLabel)")
+            .accessibilityHint("Choose a different computer without retaking the photo.")
+
+            HStack(spacing: 12) {
+                Button(action: onRetake) {
+                    Label("Retake", systemImage: "arrow.clockwise")
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.white)
+                        .frame(minWidth: 104, minHeight: 48)
+                        .background(.black.opacity(0.86), in: Capsule())
+                        .overlay {
+                            Capsule().stroke(.white.opacity(0.22), lineWidth: 1)
+                        }
+                }
+
+                Spacer()
+
+                Label("\(regionCount)", systemImage: "text.viewfinder")
+                    .font(.subheadline.monospacedDigit().bold())
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 14)
+                    .frame(minHeight: 48)
+                    .background(.black.opacity(0.86), in: Capsule())
+                    .overlay {
+                        Capsule().stroke(.white.opacity(0.22), lineWidth: 1)
+                    }
+                    .accessibilityLabel("\(regionCount) recognized text regions")
+
+                Spacer()
+
+                Button(action: onFinish) {
+                    Label("Finish", systemImage: "checkmark")
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.white)
+                        .frame(minWidth: 104, minHeight: 48)
+                        .background(.black.opacity(0.86), in: Capsule())
+                        .overlay {
+                            Capsule().stroke(.white.opacity(0.22), lineWidth: 1)
+                        }
+                }
+            }
+        }
+        .padding(.horizontal, 18)
+        .padding(.top, 18)
+        .padding(.bottom, 22)
+        .background {
+            LinearGradient(
+                colors: [.black.opacity(0), .black.opacity(0.88), .black.opacity(0.98)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea(edges: .bottom)
+        }
+    }
+}

@@ -36,6 +36,8 @@ struct ClipCaptureSessionView: View {
     @State private var focusRequestID = UUID()
     @State private var cameraStateRevision = 0
     @State private var isConnectionSheetPresented = false
+    @State private var isTargetPickerPresented = false
+    @State private var opensConnectionAfterTargetPicker = false
     private let topToolbarTopPadding: CGFloat = 12
     private let photoPreviewToolbarGap: CGFloat = 0
 
@@ -173,8 +175,11 @@ struct ClipCaptureSessionView: View {
         .background(.black)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if ocrReviewImage != nil {
-                ClipOcrReviewControls(
+                OcrReviewControls(
                     regionCount: ocrTextRegions.count,
+                    targetLabel: store.typingTargetLabel,
+                    targetSystemImage: store.selectedWorkspaceComputerId == nil ? "iphone" : "desktopcomputer",
+                    onChangeTarget: showConnectionOptions,
                     onRetake: {
                         resetSelectedText()
                         cameraService.setTorchEnabled(false)
@@ -199,7 +204,7 @@ struct ClipCaptureSessionView: View {
                     controlRotation: .degrees(cameraService.captureOrientation.controlRotationDegrees),
                     connectionSystemImage: isConnected ? "character.cursor.ibeam" : "desktopcomputer",
                     connectionLabel: isConnected ? "Write" : "Connect",
-                    connectionAccessibilityLabel: "Open connection options",
+                    connectionAccessibilityLabel: isConnected ? "Choose write destination" : "Open connection options",
                     onToggleTorch: {
                         cameraService.setTorchEnabled(!cameraService.torchEnabled)
                     },
@@ -219,9 +224,7 @@ struct ClipCaptureSessionView: View {
                             captureCurrentFrame()
                         }
                     },
-                    onConnection: {
-                        isConnectionSheetPresented = true
-                    },
+                    onConnection: showConnectionOptions,
                     onFinish: {
                         dismiss()
                     }
@@ -230,6 +233,16 @@ struct ClipCaptureSessionView: View {
         }
         return captureSurface
         .animation(.spring(response: 0.28, dampingFraction: 0.86), value: selectedTextRegion?.id)
+        .sheet(isPresented: $isTargetPickerPresented, onDismiss: {
+            if opensConnectionAfterTargetPicker {
+                opensConnectionAfterTargetPicker = false
+                isConnectionSheetPresented = true
+            }
+        }) {
+            ClipWorkspaceTargetPickerSheet(store: store) {
+                opensConnectionAfterTargetPicker = true
+            }
+        }
         .sheet(isPresented: $isConnectionSheetPresented) {
             ClipConnectionSheet(
                 store: store,
@@ -313,6 +326,16 @@ struct ClipCaptureSessionView: View {
             if message != nil && !store.isConnected {
                 isConnectionSheetPresented = true
             }
+        }
+    }
+
+    // Matches the installed app: once connected, the session's Write button picks the target
+    // computer; connection management stays one tap away inside that picker.
+    private func showConnectionOptions() {
+        if store.canChooseWorkspaceComputer {
+            isTargetPickerPresented = true
+        } else {
+            isConnectionSheetPresented = true
         }
     }
 

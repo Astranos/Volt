@@ -57,7 +57,7 @@ struct SettingsSheet: View {
 
     var body: some View {
         SettingsView(showsAccountSettings: showsAccountSettings, showsDoneButton: true)
-            .presentationDetents([.medium, .large])
+            .presentationDetents([.large])
             .presentationDragIndicator(.visible)
     }
 }
