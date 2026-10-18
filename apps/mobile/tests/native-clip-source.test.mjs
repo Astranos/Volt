@@ -249,8 +249,12 @@ test("photo captures flash the viewfinder and tap in both the app and App Clip",
 });
 
 test("app clip waits for the target picker to close before showing the connection sheet", () => {
-  assert.match(clipViewsSwiftSource, /\.onChange\(of: store\.isConnected\) \{ _, isConnected in\s*if !isConnected, isTargetPickerPresented \{[\s\S]*?opensConnectionAfterTargetPicker = true\s*isTargetPickerPresented = false\s*\} else \{\s*isConnectionSheetPresented = !isConnected/);
+  assert.match(readClipView("ClipCaptureSessionView.swift"), /private func presentConnectionSheet\(\) \{\s*if isTargetPickerPresented \|\| opensConnectionAfterTargetPicker \{\s*opensConnectionAfterTargetPicker = true\s*isTargetPickerPresented = false\s*\} else \{\s*isConnectionSheetPresented = true/);
   assert.match(clipViewsSwiftSource, /\.sheet\(isPresented: \$isTargetPickerPresented, onDismiss: \{\s*if opensConnectionAfterTargetPicker \{\s*opensConnectionAfterTargetPicker = false\s*isConnectionSheetPresented = true/);
+  // Every automatic presentation (disconnect, pairing, pairing failure) goes through the helper.
+  const session = readClipView("ClipCaptureSessionView.swift");
+  assert.equal(session.match(/isConnectionSheetPresented = true/g).length, 2,
+    "only presentConnectionSheet and the picker's onDismiss may present the connection sheet");
 });
 
 test("app clip bottom CTAs show connection progress while pairing", () => {
@@ -343,7 +347,7 @@ test("app clip pairing and failure reuse one connection sheet", () => {
   assert.match(clipViewsSwiftSource, /struct ClipConnectionSheet: View/);
   assert.match(clipViewsSwiftSource, /if store\.isPairing[\s\S]*ClipConnectionProgressView[\s\S]*else if store\.pairingFailureMessage != nil[\s\S]*ClipPairingFailureView[\s\S]*else[\s\S]*ClipConnectChoicesView/);
   assert.match(clipViewsSwiftSource, /struct ClipCaptureSessionView: View[\s\S]*\.sheet\(isPresented: \$isConnectionSheetPresented\)[\s\S]*ClipConnectionSheet\(/);
-  assert.match(clipViewsSwiftSource, /\.onChange\(of: store\.isConnected\)[\s\S]*isConnectionSheetPresented = !isConnected/);
+  assert.match(clipViewsSwiftSource, /\.onChange\(of: store\.isConnected\) \{ _, isConnected in\s*if isConnected \{[\s\S]*?isConnectionSheetPresented = false\s*\} else \{\s*presentConnectionSheet\(\)/);
 });
 
 test("app clip fresh qr connection uses the workspace label", () => {
@@ -419,7 +423,7 @@ test("app clip OCR reuses the main async recognizer and identifier extractor", (
 
 test("app clip capture session picks workspace computers like the installed app", () => {
   const session = readClipView("ClipCaptureSessionView.swift");
-  assert.match(session, /private func showConnectionOptions\(\) \{\s*if store\.canChooseWorkspaceComputer \{\s*isTargetPickerPresented = true\s*\} else \{\s*isConnectionSheetPresented = true/);
+  assert.match(session, /private func showConnectionOptions\(\) \{\s*if store\.canChooseWorkspaceComputer \{\s*isTargetPickerPresented = true\s*\} else \{\s*presentConnectionSheet\(\)/);
   assert.match(session, /\.sheet\(isPresented: \$isTargetPickerPresented[\s\S]*ClipWorkspaceTargetPickerSheet\(store: store\)/);
   assert.match(session, /OcrReviewControls\([\s\S]*targetLabel: store\.typingTargetLabel[\s\S]*onChangeTarget: showConnectionOptions/);
   assert.doesNotMatch(clipViewsSwiftSource, /struct ClipOcrReviewControls/);

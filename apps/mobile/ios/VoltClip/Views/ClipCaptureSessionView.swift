@@ -313,13 +313,11 @@ struct ClipCaptureSessionView: View {
             syncCameraForOcrPostCapture()
         }
         .onChange(of: store.isConnected) { _, isConnected in
-            if !isConnected, isTargetPickerPresented {
-                // Only one sheet can show at a time: open the connection sheet once the
-                // picker has finished dismissing.
-                opensConnectionAfterTargetPicker = true
-                isTargetPickerPresented = false
+            if isConnected {
+                opensConnectionAfterTargetPicker = false
+                isConnectionSheetPresented = false
             } else {
-                isConnectionSheetPresented = !isConnected
+                presentConnectionSheet()
             }
             if !isConnected {
                 resetSelectedText()
@@ -328,12 +326,12 @@ struct ClipCaptureSessionView: View {
         }
         .onChange(of: store.isPairing) { _, isPairing in
             if isPairing {
-                isConnectionSheetPresented = true
+                presentConnectionSheet()
             }
         }
         .onChange(of: store.pairingFailureMessage) { _, message in
             if message != nil && !store.isConnected {
-                isConnectionSheetPresented = true
+                presentConnectionSheet()
             }
         }
     }
@@ -343,6 +341,17 @@ struct ClipCaptureSessionView: View {
     private func showConnectionOptions() {
         if store.canChooseWorkspaceComputer {
             isTargetPickerPresented = true
+        } else {
+            presentConnectionSheet()
+        }
+    }
+
+    /// Only one sheet can show at a time. While the target picker is open or still
+    /// dismissing, hand the connection sheet to the picker's onDismiss instead.
+    private func presentConnectionSheet() {
+        if isTargetPickerPresented || opensConnectionAfterTargetPicker {
+            opensConnectionAfterTargetPicker = true
+            isTargetPickerPresented = false
         } else {
             isConnectionSheetPresented = true
         }
