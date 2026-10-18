@@ -22,11 +22,9 @@ export const styles = () => `
       .tooltip::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:4px solid transparent;border-top-color:#0f172a}
       .icon-btn-wrapper:hover .tooltip{opacity:1;transition-delay:.3s}
       .icon-btn:disabled + .tooltip{display:none}
-      .selection-context{display:flex;align-items:center;gap:8px;margin:0 2px 2px;padding:7px 10px;border-radius:10px;background:#f0fdf4;border:1px solid #dcfce7;font-size:12px;line-height:1.3}
-      .selection-context-label{flex:none;color:#16a34a;font:700 10px/1 ui-sans-serif,system-ui,-apple-system;text-transform:uppercase;letter-spacing:.06em}
-      .selection-context-value{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#14532d;font:600 12.5px/1.3 ui-monospace,SFMono-Regular,Menlo,monospace}
       .group{padding:0}
-      .section-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 2px 4px 0}
+      .section-head{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:30px;padding:4px 2px 4px 0}
+      .section-hint{padding-right:8px;color:#94a3b8;font:500 11.5px/1 ui-sans-serif,system-ui,-apple-system}
       .section-label{padding:8px 10px 6px;color:#94a3b8;font:700 10px/1 ui-sans-serif,system-ui,-apple-system;text-transform:uppercase;letter-spacing:.08em}
       .section-head .section-label{padding:0 10px}
 ${openModeStyles}
@@ -43,8 +41,7 @@ ${openModeStyles}
       .label{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#1e293b;font-size:13.5px;font-weight:500;line-height:1.4}
       .shortcut{display:flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 5px;box-sizing:border-box;border:1px solid #e2e8f0;border-bottom-width:2px;border-radius:6px;background:#fff;color:#64748b;font:600 10.5px/1 ui-sans-serif,system-ui,-apple-system}
       .sep{height:1px;background:#eef0f3;margin:6px 6px 2px}
-      .empty-hint{margin:0 2px 2px;padding:8px 10px;border-radius:10px;background:#f8fafc;border:1px dashed #e2e8f0;font-size:12px;color:#94a3b8;text-align:left}
-      .group .empty-hint{margin-top:4px}
+      .empty-hint{margin:4px 2px 2px;padding:8px 10px;border-radius:10px;background:#f8fafc;border:1px dashed #e2e8f0;font-size:12px;color:#94a3b8;text-align:left}
       .footer{display:flex;gap:12px;margin:6px -6px -6px;padding:8px 12px;border-top:1px solid #eef0f3;background:#fafbfc;color:#94a3b8;font:500 11px/1 ui-sans-serif,system-ui,-apple-system}
       .footer span{display:flex;align-items:center;gap:3px}
       .footer kbd{display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;padding:0 3px;box-sizing:border-box;border:1px solid #e2e8f0;border-radius:4px;background:#fff;color:#64748b;font:600 10px/1 ui-sans-serif,system-ui,-apple-system}

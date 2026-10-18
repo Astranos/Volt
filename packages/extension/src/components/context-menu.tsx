@@ -191,14 +191,6 @@ export function ContextMenu({ actions, selectionActionCount, quickActions, lastS
             );
           })}
         </div>
-        {hasSelection ? (
-          <div className="selection-context" title={lastSelection}>
-            <span className="selection-context-label">Selected</span>
-            <span className="selection-context-value">{lastSelection}</span>
-          </div>
-        ) : (
-          <div className="empty-hint">Select text for search actions</div>
-        )}
         <div className="group">
           {visibleItems.length === 0 && hasSelection && (
             <div className="empty-hint">No matching actions</div>
@@ -210,7 +202,11 @@ export function ContextMenu({ actions, selectionActionCount, quickActions, lastS
                 {i === 0 && selectionActionCount > 0 && (
                   <div className="section-head">
                     <div className="section-label">Search</div>
-                    {hasUrlActions && <OpenModeSwitch mode={openMode} onChange={chooseOpenMode} />}
+                    {!hasSelection ? (
+                      <span className="section-hint">Select text on the page first</span>
+                    ) : (
+                      hasUrlActions && <OpenModeSwitch mode={openMode} onChange={chooseOpenMode} />
+                    )}
                   </div>
                 )}
                 {i === selectionActionCount && (
