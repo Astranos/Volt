@@ -244,7 +244,8 @@ test("photo captures flash the viewfinder and tap in both the app and App Clip",
   assert.match(sharedCaptureSessionOverlaysSwiftSource, /\.sensoryFeedback\(\.impact\(weight: \.medium\), trigger: trigger\)/);
   assert.match(scannerStoreCaptureActionsSwiftSource, /func captureSquarePhoto\(\) async \{[\s\S]*?guard let image = await camera\.capturePhoto\(matchingDeviceOrientation: true\) else \{ return \}\s*photoCaptureCount \+= 1/);
   assert.match(captureSessionViewSwiftSource, /ScannerCameraLayer\([\s\S]*?\.shutterFeedback\(trigger: store\.photoCaptureCount\)/);
-  assert.match(clipViewsSwiftSource, /ClipCaptureSessionBackdrop\([\s\S]*?\.shutterFeedback\(trigger: photoCaptureCount\)/);
+  assert.match(clipViewsSwiftSource, /ClipPhotoPreview\([\s\S]*?\.frame\(width: side, height: side\)\s*\.shutterFeedback\(trigger: photoCaptureCount\)/);
+  assert.doesNotMatch(clipViewsSwiftSource, /ClipCaptureSessionBackdrop\([^)]*?\)\s*\.ignoresSafeArea\(\)\s*\.shutterFeedback/);
 });
 
 test("app clip bottom CTAs show connection progress while pairing", () => {

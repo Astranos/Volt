@@ -70,7 +70,6 @@ struct ClipCaptureSessionView: View {
                     }
                 )
                 .ignoresSafeArea()
-                .shutterFeedback(trigger: photoCaptureCount)
                 .opacity(activeMode == .dictation ? 0 : 1)
                 .allowsHitTesting(activeMode != .dictation)
             }
@@ -125,6 +124,7 @@ struct ClipCaptureSessionView: View {
                             }
                         )
                         .frame(width: side, height: side)
+                        .shutterFeedback(trigger: photoCaptureCount)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     }
                     .padding(.top, photoPreviewToolbarGap)
