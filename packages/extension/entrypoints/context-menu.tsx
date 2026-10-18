@@ -12,7 +12,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { createMobileCaptureController } from "./context-menu-mobile-capture";
 import { initializeSidePanelContext } from "../src/lib/sidepanel-gesture";
 import { normalizeSelectionSuggestionText, positionSelectionSuggestions, selectionSuggestionActionWidth, selectionSuggestionPillWidth, shouldShowSelectionSuggestions } from "../src/domain/selection-suggestions";
-import { DEFAULT_CONTEXT_ACTIONS, DEFAULT_POPUP_ACTIONS, linkToTextHighlight, normalizeSelectionActions, selectionActionKey, selectionActionLabel, selectionActionUrl, type SelectionAction } from "../src/domain/selection-actions";
+import { DEFAULT_CONTEXT_ACTIONS, DEFAULT_POPUP_ACTIONS, UPC_HOVER_ACTIONS, linkToTextHighlight, normalizeSelectionActions, selectionActionKey, selectionActionLabel, selectionActionUrl, type SelectionAction } from "../src/domain/selection-actions";
 import { Search, PackageSearch, TrendingUp, Copy, Clipboard, ExternalLink, Download, Settings, ChevronLeft, ChevronRight, Smartphone, Calculator, Link2, BookOpen, Sparkles } from "lucide-react";
 
 export default defineContentScript({
@@ -547,6 +547,9 @@ export default defineContentScript({
     let selectionPointerIsDown = false;
     let activeSuggestionSelection = "";
     let suppressedSuggestionSelection = "";
+    // The UPC highlighter's spans (.volt-upc-highlight) get the same pill on hover.
+    let hoveredUpcElement: Element | null = null;
+    let upcHoverTimer: number | null = null;
 
     let hugeiconsFont: FontFace | null = null;
     const ensureHugeiconsFont = () => {
@@ -626,6 +629,7 @@ export default defineContentScript({
         suppressedSuggestionSelection = activeSuggestionSelection;
       }
       activeSuggestionSelection = "";
+      hoveredUpcElement = null;
       selectionReactRoot?.unmount();
       selectionReactRoot = null;
       selectionRootEl = null;
@@ -722,6 +726,9 @@ export default defineContentScript({
     const renderSelectionSuggestions = ({
       rect,
       selection,
+      actions = selectionPopupActions,
+      copyLabel,
+      onHoverChange,
     }: {
       rect: {
         bottom: number;
@@ -731,13 +738,16 @@ export default defineContentScript({
         width: number;
       };
       selection: string;
+      actions?: readonly SelectionAction[];
+      copyLabel?: string;
+      onHoverChange?: (hovered: boolean) => void;
     }) => {
       ensureSelectionHost();
       if (!selectionReactRoot) return;
       activeSuggestionSelection = selection;
       const textMeasure = document.createElement("canvas").getContext("2d");
       if (textMeasure) textMeasure.font = "600 12px system-ui";
-      const actionWidths = selectionPopupActions.map((action) => {
+      const actionWidths = actions.map((action) => {
         const label = selectionActionLabel(action);
         return selectionSuggestionActionWidth(textMeasure?.measureText(label).width ?? label.length * 7);
       });
@@ -749,14 +759,16 @@ export default defineContentScript({
       });
       selectionReactRoot.render(
         <SelectionSuggestionPill
-          actions={selectionPopupActions}
+          actions={actions}
           actionWidths={actionWidths}
+          copyLabel={copyLabel}
           onCopy={() => {
             void copySelection(selection);
           }}
           onAction={(actionId, newTab) =>
             openSelectionAction(actionId, selection, newTab)
           }
+          onHoverChange={onHoverChange}
           openMode={openSearchResultsIn}
           position={position}
         />,
@@ -786,6 +798,73 @@ export default defineContentScript({
         renderSelectionSuggestions(snapshot);
       });
     };
+
+    const clearUpcHoverTimer = () => {
+      if (upcHoverTimer !== null) window.clearTimeout(upcHoverTimer);
+      upcHoverTimer = null;
+    };
+
+    const setUpcHoverTimer = (callback: () => void, delay: number) => {
+      clearUpcHoverTimer();
+      upcHoverTimer = window.setTimeout(() => {
+        upcHoverTimer = null;
+        callback();
+      }, delay);
+    };
+
+    const leaveUpcHover = () => {
+      setUpcHoverTimer(() => {
+        if (hoveredUpcElement) closeSelectionSuggestions();
+      }, 250);
+    };
+
+    const showUpcHoverMenu = (element: Element) => {
+      const upc = element.getAttribute("data-upc");
+      if (!upc || !element.isConnected || isOpen || selectionPointerIsDown) return;
+      renderSelectionSuggestions({
+        rect: element.getBoundingClientRect(),
+        selection: upc,
+        actions: UPC_HOVER_ACTIONS,
+        copyLabel: "Copy UPC",
+        onHoverChange: (hovered) => {
+          if (hovered) clearUpcHoverTimer();
+          else leaveUpcHover();
+        },
+      });
+      hoveredUpcElement = element;
+    };
+
+    document.addEventListener(
+      "mouseover",
+      (event) => {
+        const upcElement =
+          event.target instanceof Element
+            ? event.target.closest(".volt-upc-highlight")
+            : null;
+        if (!upcElement) return;
+        if (upcElement === hoveredUpcElement) {
+          clearUpcHoverTimer();
+          return;
+        }
+        // A short delay so sweeping the mouse across a page of UPCs doesn't flash menus.
+        setUpcHoverTimer(() => showUpcHoverMenu(upcElement), 150);
+      },
+      true,
+    );
+    document.addEventListener(
+      "mouseout",
+      (event) => {
+        const upcElement =
+          event.target instanceof Element
+            ? event.target.closest(".volt-upc-highlight")
+            : null;
+        if (!upcElement) return;
+        if (event.relatedTarget instanceof Node && upcElement.contains(event.relatedTarget)) return;
+        if (upcElement === hoveredUpcElement) leaveUpcHover();
+        else clearUpcHoverTimer();
+      },
+      true,
+    );
 
     // Menu React component
     const openMenu = () => {

@@ -26,15 +26,19 @@ const icons: Record<SelectionActionId, React.ComponentType<{ size?: number }>> =
 export function SelectionSuggestionPill({
   actions,
   actionWidths,
+  copyLabel = "Copy",
   onCopy,
   onAction,
+  onHoverChange,
   openMode: initialOpenMode,
   position,
 }: {
   actions: readonly SelectionAction[];
   actionWidths: readonly number[];
+  copyLabel?: string;
   onCopy: () => void;
   onAction: (action: SelectionAction, newTab: boolean) => void;
+  onHoverChange?: (hovered: boolean) => void;
   openMode: OpenMode;
   position: SelectionSuggestionPosition;
 }) {
@@ -44,6 +48,8 @@ export function SelectionSuggestionPill({
       aria-label="Actions for selected text"
       className="selection-pill"
       data-placement={position.placement}
+      onPointerEnter={() => onHoverChange?.(true)}
+      onPointerLeave={() => onHoverChange?.(false)}
       role="toolbar"
       style={{
         gridTemplateColumns: actionWidths.length
@@ -78,15 +84,15 @@ export function SelectionSuggestionPill({
       })}
       <div className="selection-footer">
         <button
-          aria-label="Copy selected text"
+          aria-label={copyLabel === "Copy" ? "Copy selected text" : copyLabel}
           className="selection-copy"
           onClick={onCopy}
           onPointerDown={(event) => event.preventDefault()}
-          title="Copy selected text"
+          title={copyLabel === "Copy" ? "Copy selected text" : copyLabel}
           type="button"
         >
           <Copy size={15} />
-          <span>Copy</span>
+          <span>{copyLabel}</span>
         </button>
         <OpenModeSwitch mode={openMode} onChange={chooseOpenMode} />
       </div>

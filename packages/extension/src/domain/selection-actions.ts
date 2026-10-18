@@ -33,6 +33,9 @@ export const DEFAULT_CONTEXT_ACTIONS: SelectionActionId[] = [
   "pricecharting",
 ];
 
+/** Hovering a highlighted UPC shows these, plus Copy UPC. */
+export const UPC_HOVER_ACTIONS: SelectionActionId[] = ["ebay", "pricecharting"];
+
 const validActionIds = new Set<string>(SELECTION_ACTIONS.map((action) => action.id));
 
 export function validCustomActionUrl(value: string): boolean {
