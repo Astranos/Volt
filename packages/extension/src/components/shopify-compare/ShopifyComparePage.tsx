@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { ArrowUpRight, Columns3, RefreshCw } from "lucide-react";
 import { getShopifyProductDetails, type ShopifyProductDetails } from "../../shopify-audit/client";
 import { compareProductIds, shopifyComparePath } from "../../shopify-compare/compare-url";
+import { buildCompareModel, compareRowCount } from "../../shopify-compare/compare-model";
 import { parseListingHtml } from "../../shopify-compare/listing";
 import { CompareColumn } from "./CompareColumn";
 import "./shopify-compare.css";
@@ -16,6 +17,7 @@ export function ShopifyComparePage() {
   const [requestedIds] = useState(ids);
   const [state, setState] = useState<LoadState>({ kind: "loading" });
   const [retry, setRetry] = useState(0);
+  const [onlyDifferences, setOnlyDifferences] = useState(false);
 
   useEffect(() => {
     document.title = "Compare · Volt";
@@ -33,11 +35,19 @@ export function ShopifyComparePage() {
     return () => { canceled = true; };
   }, [requestedIds, retry]);
 
-  const products = state.kind === "ready" ? state.products.filter((product) => ids.includes(product.id)) : [];
+  const products = useMemo(
+    () => (state.kind === "ready" ? state.products.filter((product) => ids.includes(product.id)) : []),
+    [state, ids],
+  );
   const details = useMemo(
     () => new Map(state.kind === "ready" ? state.products.map((product) => [product.id, parseListingHtml(product.descriptionHtml, product.title)]) : []),
     [state],
   );
+  const model = useMemo(() => buildCompareModel(products, (product) => details.get(product.id) ?? []), [products, details]);
+  const showOnlyDifferences = onlyDifferences && products.length > 1;
+  const facts = showOnlyDifferences ? model.facts.filter((row) => row.differs) : model.facts;
+  const specs = showOnlyDifferences ? model.specs.filter((row) => row.differs) : model.specs;
+  const rowCount = compareRowCount({ ...model, facts, specs });
   const missing = state.kind === "ready" ? requestedIds.length - state.products.length : 0;
 
   const remove = (id: string) => {
@@ -58,7 +68,16 @@ export function ShopifyComparePage() {
             <p>{columnCount} {columnCount === 1 ? "item" : "items"} side by side</p>
           </div>
         </div>
-        {missing > 0 && <p className="compare-notice" role="status">{missing} {missing === 1 ? "product is" : "products are"} no longer in Shopify.</p>}
+        <div className="compare-header-tools">
+          {missing > 0 && <p className="compare-notice" role="status">{missing} {missing === 1 ? "product is" : "products are"} no longer in Shopify.</p>}
+          {products.length > 1 && (
+            <label className="compare-toggle">
+              <input checked={onlyDifferences} onChange={(event) => setOnlyDifferences(event.target.checked)} type="checkbox" />
+              <span aria-hidden="true" className="compare-toggle-track" />
+              Only differences
+            </label>
+          )}
+        </div>
       </header>
 
       {!requestedIds.length || (state.kind === "ready" && !products.length) ? (
@@ -80,7 +99,7 @@ export function ShopifyComparePage() {
         <main
           aria-busy={state.kind === "loading"}
           className="compare-grid"
-          style={{ "--compare-columns": columnCount } as CSSProperties}
+          style={{ "--compare-columns": columnCount, "--compare-rows": state.kind === "loading" ? 1 : rowCount } as CSSProperties}
         >
           {state.kind === "loading"
             ? requestedIds.map((id) => (
@@ -88,8 +107,17 @@ export function ShopifyComparePage() {
                 <span /><span /><span /><span /><span /><span />
               </div>
             ))
-            : products.map((product) => (
-              <CompareColumn details={details.get(product.id) ?? []} key={product.id} onRemove={() => remove(product.id)} product={product} />
+            : model.items.map((item, index) => (
+              <CompareColumn
+                facts={facts}
+                hasDetails={model.hasDetails}
+                hasNotes={model.hasNotes}
+                index={index}
+                item={item}
+                key={item.product.id}
+                onRemove={() => remove(item.product.id)}
+                specs={specs}
+              />
             ))}
         </main>
       )}
