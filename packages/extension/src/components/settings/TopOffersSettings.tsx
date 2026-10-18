@@ -462,6 +462,7 @@ export function TopOffersSettings({
             <RateTableHeader />
             <RateTableRow
               label="All sales prices"
+              ariaLabel="Checkout max cash % of sale, all sales prices"
               value={
                 customRates.checkout?.percentage ??
                 DEFAULT_CUSTOM_RATES.checkout!.percentage

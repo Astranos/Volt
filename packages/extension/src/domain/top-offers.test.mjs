@@ -109,6 +109,12 @@ test("premium offer only goes above the guide for prices over 200", () => {
   assert.equal(calculateTopOfferResults(200).topOfferPremium, 100);
 });
 
+test("offers that land exactly on a $5 step are not rounded down", () => {
+  const results = calculateTopOfferResults(1300);
+  assert.equal(results.topOfferPremium, 910);
+  assert.equal(results.topOfferNewCustomer, 910);
+});
+
 test("legacy default offer rates migrate to the current guide", () => {
   assert.deepEqual(migrateDefaultTopOfferRates(LEGACY_CUSTOM_RATES), DEFAULT_CUSTOM_RATES);
   assert.equal(

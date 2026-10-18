@@ -151,7 +151,8 @@ export const DEFAULT_TOP_OFFERS_SETTINGS: TopOffersSettings = {
 };
 
 export function floorToMultiple(value: number, multiple = TOP_OFFER_FLOOR_MULTIPLE): number {
-  return Math.floor(value / multiple) * multiple;
+  // Round off float noise first: 1300 * 0.7 is 909.999…, which should be $910.
+  return Math.floor(Number((value / multiple).toFixed(9))) * multiple;
 }
 
 export function formatCurrency(value: number): string {

@@ -50,8 +50,14 @@ export function RateRuleEditor({
   onDefaultPercentageChange,
 }: RateRuleEditorProps) {
   const lastThreshold = rules[rules.length - 1]?.threshold;
-  const guideRate = (price: number) =>
-    guide ? getRatePercentage(price, guide.rules, guide.defaultPercentage) : undefined;
+  // Guide rates across [from, to); a row can span several guide tiers.
+  const guideRates = (from: number, to: number) =>
+    guide
+      ? [from, ...guide.rules.map((rule) => rule.threshold).filter((t) => t > from && t < to)]
+          .map((price) => getRatePercentage(price, guide.rules, guide.defaultPercentage))
+      : undefined;
+  const topLabel =
+    lastThreshold === undefined ? "All sales prices" : `${money(lastThreshold)} & up`;
 
   return (
     <div>
@@ -64,13 +70,10 @@ export function RateRuleEditor({
       <RateTableHeader valueLabel={valueLabel} showGuide={Boolean(guide)} />
       <div className="space-y-1">
         <RateTableRow
-          label={
-            lastThreshold === undefined
-              ? "All sales prices"
-              : `${money(lastThreshold)} & up`
-          }
+          label={topLabel}
+          ariaLabel={`${valueLabel}, ${topLabel}`}
           value={defaultPercentage}
-          guideValue={guideRate(lastThreshold ?? 0)}
+          guideValues={guideRates(lastThreshold ?? 0, Infinity)}
           onChange={onDefaultPercentageChange}
         />
         {rules
@@ -81,9 +84,14 @@ export function RateRuleEditor({
             // Thresholds are exclusive ("under 500"), so a middle tier reads
             // like the paper: "$200 – $499".
             const offset = index === 0 ? 0 : 1;
+            const rangeLabel =
+              index === 0
+                ? `Under ${money(rule.threshold)}`
+                : `${money(from)} – ${money(rule.threshold - 1)}`;
             return (
               <RateTableRow
                 key={index}
+                ariaLabel={`${valueLabel}, ${rangeLabel}`}
                 label={
                   <>
                     <span className="w-16">{index === 0 ? "Under" : `${money(from)} –`}</span>
@@ -94,14 +102,15 @@ export function RateRuleEditor({
                       <input
                         type="number"
                         aria-label={`Price tier ${index + 1} upper bound`}
+                        step="1"
                         value={rule.threshold - offset}
-                        onChange={(event) =>
-                          onRuleChange(
-                            index,
-                            "threshold",
-                            parseFloat(event.target.value) + offset
-                          )
-                        }
+                        onChange={(event) => {
+                          // Whole dollars keep the "$200 – $499" ranges exact.
+                          const value = Math.round(parseFloat(event.target.value));
+                          if (Number.isFinite(value)) {
+                            onRuleChange(index, "threshold", value + offset);
+                          }
+                        }}
                         onBlur={onSortRules}
                         className={`${INPUT_CLASS} pl-6 pr-2`}
                       />
@@ -109,7 +118,7 @@ export function RateRuleEditor({
                   </>
                 }
                 value={rule.percentage}
-                guideValue={guideRate(from)}
+                guideValues={guideRates(from, rule.threshold)}
                 onChange={(value) => onRuleChange(index, "percentage", value)}
                 onRemove={() => onRemoveRule(index)}
               />
@@ -150,14 +159,16 @@ export function RateTableHeader({
 
 export function RateTableRow({
   label,
+  ariaLabel,
   value,
-  guideValue,
+  guideValues,
   onChange,
   onRemove,
 }: {
   label: ReactNode;
+  ariaLabel: string;
   value: number;
-  guideValue?: number;
+  guideValues?: number[];
   onChange: (value: number) => void;
   onRemove?: () => void;
 }) {
@@ -171,10 +182,14 @@ export function RateTableRow({
           min="0"
           max="100"
           inputMode="decimal"
+          aria-label={ariaLabel}
           value={percentageToInputValue(value)}
-          onChange={(event) =>
-            onChange(percentageFromInputValue(parseFloat(event.target.value)))
-          }
+          onChange={(event) => {
+            const percentage = parseFloat(event.target.value);
+            if (Number.isFinite(percentage)) {
+              onChange(percentageFromInputValue(percentage));
+            }
+          }}
           className={`${INPUT_CLASS} pl-3 pr-7`}
         />
         <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
@@ -182,8 +197,8 @@ export function RateTableRow({
         </span>
       </div>
       <div>
-        {guideValue === undefined ? null : (
-          <GuideDelta value={value} guideValue={guideValue} />
+        {guideValues === undefined ? null : (
+          <GuideDelta value={value} guideValues={guideValues} />
         )}
       </div>
       <div className="flex justify-end">
@@ -201,22 +216,33 @@ export function RateTableRow({
   );
 }
 
-function GuideDelta({ value, guideValue }: { value: number; guideValue: number }) {
-  const delta = percentageToInputValue(value - guideValue);
-  const rounded = Math.round(delta * 10) / 10;
-  if (rounded === 0) {
+function GuideDelta({ value, guideValues }: { value: number; guideValues: number[] }) {
+  const deltas = guideValues.map(
+    (guideValue) => Math.round(percentageToInputValue(value - guideValue) * 10) / 10
+  );
+  const low = Math.min(...deltas);
+  const high = Math.max(...deltas);
+  if (low === 0 && high === 0) {
     return <span className="text-xs text-muted-foreground">Same as guide</span>;
   }
+  const signed = (delta: number) => `${delta > 0 ? "+" : delta < 0 ? "−" : ""}${Math.abs(delta)}%`;
+  const text =
+    low === high
+      ? `${signed(low)} ${low > 0 ? "over" : "under"} guide`
+      : low >= 0
+        ? `+${low}–${high}% over guide`
+        : high <= 0
+          ? `−${Math.abs(high)}–${Math.abs(low)}% under guide`
+          : `${signed(low)} to ${signed(high)} vs. guide`;
   return (
     <span
       className={
-        rounded > 0
+        low >= 0
           ? "rounded-md bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-800"
           : "rounded-md bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800"
       }
     >
-      {rounded > 0 ? "+" : "−"}
-      {Math.abs(rounded)}% {rounded > 0 ? "over" : "under"} guide
+      {text}
     </span>
   );
 }
