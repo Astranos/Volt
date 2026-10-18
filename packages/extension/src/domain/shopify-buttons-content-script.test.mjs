@@ -20,7 +20,10 @@ function mount({ modern = true, card = true, width = 720, settings = {}, stored 
     : '<div class="Polaris-Card"><label for="title">Title</label><input id="title" name="title" value="Dell Latitude"><div>Description</div></div>'
   }</main></body></html>`);
   const title = document.querySelector('[name="title"]');
-  let container = title.parentElement;
+  const host = title.parentElement;
+  // Shopify's web components are `:host { display: contents }`: hosts measure
+  // 0x0 and ignore margins. The card box is the shadow <section>.
+  let container = host;
   if (modern) {
     const input = document.createElement("input");
     input.value = "Dell Latitude";
@@ -29,8 +32,8 @@ function mount({ modern = true, card = true, width = 720, settings = {}, stored 
       const section = document.createElement("section");
       section.className = "Polaris-Card";
       section.appendChild(document.createElement("slot"));
-      section.getBoundingClientRect = () => ({ left: 280, top: 160, width: 720, height: 600 });
-      container.attachShadow({ mode: "open" }).appendChild(section);
+      host.attachShadow({ mode: "open" }).appendChild(section);
+      container = section;
     }
   }
   // Linkedom omits this standard CSSOM method.
@@ -38,10 +41,11 @@ function mount({ modern = true, card = true, width = 720, settings = {}, stored 
   window.screen = { width: 1440, height: 900 };
   window.HTMLElement.prototype.getBoundingClientRect = function () {
     if (this.id === "volt-quick-actions-overlay") return { left: 0, top: 0, width: 120, height: 28 };
+    if (this.tagName.startsWith("S-INTERNAL")) return { left: 0, top: 0, right: 0, width: 0, height: 0 };
     const gutter = parseFloat(this.style.getPropertyValue("margin-inline-start")) || 0;
     return { left: 296 + gutter, top: 176, width: availableWidth - gutter, height: 400 };
   };
-  if (!card) container.className = "";
+  if (!card) host.className = "";
   const location = { href: "https://admin.shopify.com/store/test/products/123" };
   let frame;
   const messages = [];
@@ -69,18 +73,19 @@ function mount({ modern = true, card = true, width = 720, settings = {}, stored 
   vm.runInContext(script, context);
   context.exports.default.main();
   frame();
-  return { document, window, container, location, messages, frame: () => frame(), resize: (width) => { availableWidth = width; frame(); }, settings: (enabled) => onMessage({ action: "shopify-buttons-settings-changed", enabled }),
+  return { document, window, host, container, location, messages, frame: () => frame(), resize: (width) => { availableWidth = width; frame(); }, settings: (enabled) => onMessage({ action: "shopify-buttons-settings-changed", enabled }),
     storageChanged: (changes) => onStorageChanged(changes, "sync") };
 }
 
 for (const modern of [true, false]) {
   test(`research actions reserve an external gutter (${modern ? "shadow" : "legacy"} card)`, () => {
-    const { document, container, frame } = mount({ modern });
+    const { document, host, container, frame } = mount({ modern });
     const toolbar = document.getElementById("volt-quick-actions-overlay");
     assert.equal(toolbar.parentElement, document.body, "gutter must escape shadow clipping");
     assert.equal(toolbar.dataset.layout, "gutter");
     assert.equal(container.style.getPropertyValue("margin-inline-start"), "40px");
     assert.equal(container.style.getPropertyValue("max-width"), "calc(100% - 40px)");
+    if (modern) assert.ok(!host.style.getPropertyValue("margin-inline-start"), "margins on a contents host do nothing");
     assert.equal(toolbar.style.left, "296px");
     assert.equal(toolbar.style.top, "192px");
     frame();
@@ -200,19 +205,17 @@ test("stored new-tab preference applies on load and drops the hint", () => {
 });
 
 test("toolbar follows a replaced product section and leaves non-product pages", () => {
-  const { document, container, location, frame } = mount();
-  const replacement = container.cloneNode(true);
-  replacement.style.removeProperty("margin-inline-start");
-  replacement.style.removeProperty("max-width");
+  const { document, host, container, location, frame } = mount();
+  const replacement = host.cloneNode(true);
   const section = document.createElement("section");
   section.className = "Polaris-Card";
   section.appendChild(document.createElement("slot"));
   replacement.attachShadow({ mode: "open" }).appendChild(section);
-  container.replaceWith(replacement);
+  host.replaceWith(replacement);
   frame();
   assert.equal(document.getElementById("volt-quick-actions-overlay").dataset.layout, "gutter");
   assert.ok(!container.style.getPropertyValue("margin-inline-start"));
-  assert.equal(replacement.style.getPropertyValue("margin-inline-start"), "40px");
+  assert.equal(section.style.getPropertyValue("margin-inline-start"), "40px");
   location.href = "https://admin.shopify.com/store/test/orders";
   frame();
   assert.equal(document.getElementById("volt-quick-actions-overlay"), null);

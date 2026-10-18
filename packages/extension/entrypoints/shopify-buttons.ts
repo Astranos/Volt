@@ -227,6 +227,22 @@ export default defineContentScript({
       }
     };
 
+    // Shopify's web-component hosts (s-internal-section, s-internal-text-field)
+    // can be display: contents, so they measure 0x0 and ignore margins. Measure
+    // and pad the first element that actually renders, searching shadow children
+    // before slotted ones.
+    const renderedBox = (el, depth = 0) => {
+      if (!el) return null;
+      const rect = el.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) return el;
+      if (depth >= 4) return null;
+      for (const child of [...(el.shadowRoot?.children || []), ...(el.children || [])]) {
+        const found = renderedBox(child, depth + 1);
+        if (found) return found;
+      }
+      return null;
+    };
+
     // State
     const GUTTER_WIDTH = 40;
     const MIN_GUTTER_CARD_WIDTH = 560;
@@ -603,7 +619,7 @@ export default defineContentScript({
       const input = titleField.tagName === "INPUT" ? titleField :
         titleField.shadowRoot?.querySelector("input");
       const inputBounds = (input || titleField).getBoundingClientRect();
-      const fieldBounds = titleField.getBoundingClientRect();
+      const fieldBounds = (renderedBox(titleField) || input || titleField).getBoundingClientRect();
       const toolbar = overlay.getBoundingClientRect();
       if (!inputBounds.width || !inputBounds.height || !toolbar.width) return null;
       const fieldRight = fieldBounds.right ?? fieldBounds.left + fieldBounds.width;
@@ -651,9 +667,11 @@ export default defineContentScript({
       // Keep Shopify-owned nodes in place: the toolbar always lives in <body> with
       // fixed coordinates, so it escapes shadow-root clipping and can be measured.
       if (overlay.parentElement !== document.body) document.body.appendChild(overlay);
-      if (reservedCard && reservedCard !== mainCard) releaseGutter();
-      const bounds = mainCard?.getBoundingClientRect();
-      const unreservedWidth = bounds ? bounds.width + (reservedCard === mainCard ? GUTTER_WIDTH : 0) : 0;
+      // s-internal-section draws its card in a shadow <section> (see findMainCard).
+      const cardBox = mainCard?.shadowRoot?.querySelector("section") || renderedBox(mainCard);
+      if (reservedCard && reservedCard !== cardBox) releaseGutter();
+      const bounds = cardBox?.getBoundingClientRect();
+      const unreservedWidth = bounds ? bounds.width + (reservedCard === cardBox ? GUTTER_WIDTH : 0) : 0;
       const gutterFitsViewport = bounds && bounds.left >= 0 &&
         (!window.innerWidth || bounds.left + 36 <= window.innerWidth);
       const useGutter = bounds?.height > 0 && gutterFitsViewport &&
@@ -663,8 +681,8 @@ export default defineContentScript({
       if (overlay.dataset.layout !== layout) overlay.dataset.layout = layout;
       let placement = null;
       if (useGutter) {
-        reserveGutter(mainCard);
-        const cardBounds = mainCard.getBoundingClientRect();
+        reserveGutter(cardBox);
+        const cardBounds = cardBox.getBoundingClientRect();
         placement = { left: cardBounds.left - GUTTER_WIDTH, top: cardBounds.top + 16 };
       } else {
         releaseGutter();
