@@ -5,7 +5,7 @@
 //   pnpm shots newtab "scanner-history?state=loading" [--dark] [--before origin/main] [--publish]
 
 import { execFileSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, symlinkSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -135,10 +135,8 @@ async function shoot(base, scenario, colorScheme, file) {
 // renders this checkout's scenarios, so only the app code differs.
 function checkout(ref) {
   const sha = git(["rev-parse", "--short", ref]);
-  const dir = path.join(tmpdir(), `volt-shots-${sha}`);
-  // An interrupted run can leave a registration behind for a directory that's gone.
-  git(["worktree", "prune"]);
-  if (existsSync(dir)) git(["worktree", "remove", "--force", dir]);
+  // A fresh directory per run, so a registration left by an interrupted run never collides.
+  const dir = mkdtempSync(path.join(tmpdir(), `volt-shots-${sha}-`));
   git(["worktree", "add", "--detach", dir, sha]);
   cleanup.push(() => git(["worktree", "remove", "--force", dir]));
   // Untracked but needed: installed packages and WXT's generated tsconfig.
