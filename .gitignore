@@ -15,6 +15,7 @@ lerna-debug.log*
 
 node_modules
 .output
+packages/extension/.shots/
 stats.html
 stats-*.json
 .wxt
