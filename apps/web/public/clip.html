@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta
       name="description"
       content="Open the Volt App Clip and connect it securely to your Chrome workspace."
@@ -11,56 +11,263 @@
       name="apple-itunes-app"
       content="app-id=6771770148, app-clip-bundle-id=com.volt.mobile.Clip, app-clip-display=card"
     />
+    <meta name="theme-color" content="#080808" />
     <link rel="icon" href="/favicon.svg" />
     <title>Open Volt App Clip</title>
     <style>
       :root {
-        color-scheme: light;
+        color-scheme: dark;
+        --ink: #080808;
+        --green: #34c759;
+        --muted: #a1a1aa;
+        --line: rgb(255 255 255 / 10%);
         font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        color: #18181b;
-        background: #fafafa;
+        color: #fafafa;
+        background: var(--ink);
       }
 
       * { box-sizing: border-box; }
-      body { margin: 0; }
-      a { color: inherit; }
-      header, main { width: min(100% - 32px, 768px); margin-inline: auto; }
-      header { display: flex; align-items: center; gap: 10px; padding-block: 20px; font-weight: 750; }
-      header img { width: 32px; height: 32px; border-radius: 9px; }
-      main { padding: 64px 0 96px; text-align: center; }
-      .icon { display: grid; place-items: center; width: 64px; height: 64px; margin: 0 auto; border-radius: 18px; background: #dcfce7; color: #15803d; font-size: 32px; }
-      .eyebrow { margin: 24px 0 0; color: #15803d; font-size: 13px; font-weight: 750; letter-spacing: .18em; text-transform: uppercase; }
-      h1 { margin: 12px 0 0; font-size: clamp(38px, 7vw, 54px); line-height: 1.05; letter-spacing: -.04em; }
-      .intro { max-width: 640px; margin: 20px auto 0; color: #52525b; font-size: 18px; line-height: 1.65; }
-      .cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 36px; text-align: left; }
-      .card { padding: 22px; border: 1px solid #e4e4e7; border-radius: 18px; background: white; box-shadow: 0 8px 28px rgb(24 24 27 / 6%); }
-      .card strong { display: block; margin-bottom: 8px; }
-      .card p { margin: 0; color: #52525b; font-size: 15px; line-height: 1.55; }
-      .button { display: inline-flex; align-items: center; min-height: 46px; margin-top: 36px; padding: 0 20px; border-radius: 12px; background: #18181b; color: white; font-size: 14px; font-weight: 700; text-decoration: none; }
-      @media (max-width: 600px) { .cards { grid-template-columns: 1fr; } main { padding-top: 44px; } }
+      html, body { min-height: 100%; }
+      body {
+        margin: 0;
+        background:
+          radial-gradient(60rem 32rem at 50% -12rem, rgb(52 199 89 / 22%), transparent 70%),
+          linear-gradient(to right, rgb(255 255 255 / 5%) 1px, transparent 1px) 0 0 / 40px 40px,
+          linear-gradient(to bottom, rgb(255 255 255 / 5%) 1px, transparent 1px) 0 0 / 40px 40px,
+          var(--ink);
+        -webkit-font-smoothing: antialiased;
+      }
+      a { color: inherit; -webkit-tap-highlight-color: transparent; }
+
+      .shell {
+        width: min(100% - 40px, 1040px);
+        margin-inline: auto;
+        padding: max(20px, env(safe-area-inset-top)) 0 max(28px, env(safe-area-inset-bottom));
+        min-height: 100svh;
+        display: flex;
+        flex-direction: column;
+      }
+
+      header { display: flex; align-items: center; justify-content: space-between; }
+      .brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 650; text-decoration: none; }
+      .brand img { width: 28px; height: 28px; }
+      .chip {
+        font-size: 12px; font-weight: 600; color: var(--muted);
+        padding: 6px 10px; border: 1px solid var(--line); border-radius: 999px;
+      }
+
+      main {
+        flex: 1;
+        display: grid;
+        gap: 40px;
+        align-items: center;
+        padding: 40px 0 32px;
+      }
+
+      .eyebrow {
+        display: inline-flex; align-items: center; gap: 8px;
+        margin: 0; color: var(--green); font-size: 13px; font-weight: 650;
+      }
+      .eyebrow::before {
+        content: ""; width: 7px; height: 7px; border-radius: 50%;
+        background: var(--green); box-shadow: 0 0 12px var(--green);
+      }
+      h1 {
+        margin: 14px 0 0;
+        font-size: clamp(36px, 9vw, 60px);
+        line-height: 1.02;
+        letter-spacing: -0.035em;
+        font-weight: 650;
+      }
+      h1 span { color: var(--green); }
+      .lede { margin: 16px 0 0; max-width: 34rem; color: var(--muted); font-size: 17px; line-height: 1.6; }
+
+      ol.steps { list-style: none; margin: 28px 0 0; padding: 0; display: grid; gap: 10px; max-width: 34rem; }
+      .steps li {
+        display: grid; grid-template-columns: 32px 1fr; gap: 14px; align-items: start;
+        padding: 14px 16px; border: 1px solid var(--line); border-radius: 16px;
+        background: rgb(255 255 255 / 4%);
+      }
+      .steps .n {
+        display: grid; place-items: center; width: 32px; height: 32px; border-radius: 10px;
+        background: #fafafa; color: var(--ink); font-size: 14px; font-weight: 700;
+      }
+      .steps strong { display: block; font-size: 15px; font-weight: 600; }
+      .steps p { margin: 3px 0 0; color: var(--muted); font-size: 14px; line-height: 1.5; }
+
+      .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 28px; }
+      .button {
+        display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+        min-height: 48px; padding: 0 20px; border-radius: 14px;
+        font-size: 15px; font-weight: 650; text-decoration: none;
+      }
+      .button.primary { background: var(--green); color: var(--ink); }
+      .button.primary:hover { background: #4cd471; }
+      .button.secondary { border: 1px solid rgb(255 255 255 / 18%); color: #fafafa; }
+      .button.secondary:hover { border-color: rgb(255 255 255 / 40%); }
+      .button svg { width: 18px; height: 18px; }
+
+      /* Phone mock showing the App Clip card the Camera app presents after scanning. */
+      .stage { display: grid; place-items: center; }
+      .phone {
+        position: relative; width: 272px; height: 540px; border-radius: 46px; padding: 10px;
+        background: linear-gradient(160deg, #3f3f46, #18181b 40%, #27272a);
+        box-shadow: 0 40px 80px rgb(0 0 0 / 55%), 0 0 0 1px rgb(255 255 255 / 8%), 0 0 90px rgb(52 199 89 / 14%);
+      }
+      .screen {
+        position: relative; height: 100%; border-radius: 37px; overflow: hidden;
+        background:
+          linear-gradient(to right, rgb(255 255 255 / 6%) 1px, transparent 1px) 0 0 / 28px 28px,
+          linear-gradient(to bottom, rgb(255 255 255 / 6%) 1px, transparent 1px) 0 0 / 28px 28px,
+          #111113;
+      }
+      .island { position: absolute; top: 10px; left: 50%; translate: -50% 0; width: 86px; height: 24px; border-radius: 999px; background: #000; z-index: 2; }
+      .viewfinder {
+        position: absolute; top: 74px; left: 50%; translate: -50% 0;
+        width: 150px; height: 150px; border-radius: 22px;
+        display: grid; place-items: center;
+      }
+      .viewfinder::before {
+        content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 3px;
+        background: conic-gradient(var(--green) 0 12.5%, transparent 0 37.5%, var(--green) 0 62.5%, transparent 0 87.5%, var(--green) 0);
+        -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+        -webkit-mask-composite: xor; mask-composite: exclude;
+        opacity: .9;
+      }
+      .qr { width: 104px; height: 104px; border-radius: 8px; background: #fafafa; padding: 8px; }
+      .beam {
+        position: absolute; left: 14px; right: 14px; height: 2px; top: 18px;
+        background: var(--green); box-shadow: 0 0 14px 2px rgb(52 199 89 / 70%);
+        animation: beam 2.6s ease-in-out infinite;
+      }
+      @keyframes beam { 0%, 100% { top: 18px; } 50% { top: 130px; } }
+      .clip-card {
+        position: absolute; left: 10px; right: 10px; bottom: 10px;
+        border-radius: 30px; background: #fafafa; color: var(--ink); overflow: hidden;
+        animation: rise 900ms cubic-bezier(.22, 1, .36, 1) 400ms both;
+      }
+      @keyframes rise { from { transform: translateY(110%); } to { transform: none; } }
+      .clip-hero {
+        height: 92px; display: grid; place-items: center;
+        background: linear-gradient(135deg, #0b0b0c, #1f2a22);
+      }
+      .clip-hero img { width: 46px; height: 46px; }
+      .clip-body { display: flex; align-items: center; gap: 12px; padding: 14px 16px 18px; }
+      .clip-body div { flex: 1; min-width: 0; }
+      .clip-body strong { display: block; font-size: 15px; }
+      .clip-body div span { display: block; color: #71717a; font-size: 12px; margin-top: 2px; }
+      .clip-open { padding: 8px 18px; border-radius: 999px; background: #0a84ff; color: white; font-size: 14px; font-weight: 700; }
+      .clip-foot { padding: 0 16px 16px; color: #a1a1aa; font-size: 10px; }
+
+      footer {
+        display: flex; flex-wrap: wrap; gap: 6px 18px; justify-content: space-between;
+        padding-top: 20px; border-top: 1px solid var(--line); color: #71717a; font-size: 13px;
+      }
+      footer nav { display: flex; gap: 18px; }
+      footer a { text-decoration: none; }
+      footer a:hover { color: #fafafa; }
+
+      @media (min-width: 900px) {
+        main { grid-template-columns: 1.1fr 0.9fr; gap: 56px; padding: 56px 0 48px; }
+      }
+      @media (max-width: 899px) {
+        .stage { order: -1; }
+        .phone { width: 220px; height: 236px; border-radius: 40px 40px 0 0; padding-bottom: 0; }
+        .screen { border-radius: 31px 31px 0 0; }
+        .viewfinder { top: 56px; width: 128px; height: 128px; }
+        .qr { width: 88px; height: 88px; padding: 7px; }
+        .clip-card { display: none; }
+        @keyframes beam { 0%, 100% { top: 14px; } 50% { top: 110px; } }
+        main { padding-top: 24px; gap: 28px; }
+        .actions .button { flex: 1 1 100%; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .beam, .clip-card { animation: none; }
+      }
     </style>
   </head>
   <body>
-    <header><img src="/favicon.svg" alt="" /> Volt</header>
-    <main>
-      <div class="icon" aria-hidden="true">⌁</div>
-      <p class="eyebrow">Volt App Clip</p>
-      <h1>Scan into your Chrome workspace</h1>
-      <p class="intro">
-        Open a Volt new tab in Chrome, select the phone button, and scan its QR code with your iPhone.
-        The App Clip joins that signed-in workspace and lets you choose any online computer as the typing target.
-      </p>
-      <div class="cards">
-        <section class="card">
-          <strong>Start in Chrome</strong>
-          <p>The short-lived QR carries the secure workspace grant needed by the App Clip.</p>
+    <div class="shell">
+      <header>
+        <a class="brand" href="/" aria-label="Volt home"><img src="/favicon.svg" alt="" /> Volt</a>
+        <span class="chip">App Clip</span>
+      </header>
+
+      <main>
+        <section>
+          <p class="eyebrow">No install needed</p>
+          <h1>Scan straight into <span>Chrome</span>.</h1>
+          <p class="lede">
+            The Volt App Clip turns your iPhone into a scanner for your computer. It opens from a QR code in Chrome,
+            so there&rsquo;s nothing to download.
+          </p>
+
+          <ol class="steps">
+            <li>
+              <span class="n">1</span>
+              <div>
+                <strong>Open a Volt new tab in Chrome</strong>
+                <p>Tap the phone button to show the workspace QR code.</p>
+              </div>
+            </li>
+            <li>
+              <span class="n">2</span>
+              <div>
+                <strong>Point your iPhone Camera at it</strong>
+                <p>Use the built-in Camera app or Control Center code scanner.</p>
+              </div>
+            </li>
+            <li>
+              <span class="n">3</span>
+              <div>
+                <strong>Tap Open on the App Clip card</strong>
+                <p>Pick any online computer and start scanning text, barcodes, and photos.</p>
+              </div>
+            </li>
+          </ol>
+
+          <div class="actions">
+            <a class="button primary" href="https://apps.apple.com/us/app/volt-scanner/id6771770148">
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.37 12.6c-.02-2.3 1.88-3.4 1.96-3.46-1.07-1.56-2.73-1.77-3.32-1.8-1.41-.14-2.76.83-3.47.83-.72 0-1.82-.81-3-.79-1.54.02-2.96.9-3.75 2.27-1.6 2.78-.41 6.89 1.15 9.14.76 1.1 1.67 2.34 2.86 2.3 1.15-.05 1.58-.74 2.97-.74 1.38 0 1.78.74 2.99.72 1.24-.02 2.02-1.12 2.77-2.23.88-1.28 1.24-2.52 1.26-2.59-.03-.01-2.4-.92-2.42-3.65ZM14.1 5.86c.63-.77 1.06-1.83.94-2.89-.91.04-2.02.61-2.67 1.37-.58.67-1.1 1.76-.96 2.8 1.02.08 2.06-.52 2.69-1.28Z"/></svg>
+              Get the full app
+            </a>
+            <a class="button secondary" href="https://chromewebstore.google.com/detail/volt/bmgghhmlflbhlnomgnoodpidekpaaifk">
+              Add Volt to Chrome
+            </a>
+          </div>
         </section>
-        <section class="card">
-          <strong>No install required</strong>
-          <p>Use Text, Barcode, Photos, and Upload without the installed app’s Volt Pro gate.</p>
-        </section>
-      </div>
-      <a class="button" href="https://apps.apple.com/us/app/volt-scanner/id6771770148">Get the full Volt app →</a>
-    </main>
+
+        <div class="stage" aria-hidden="true">
+          <div class="phone">
+            <div class="screen">
+              <div class="island"></div>
+              <div class="viewfinder">
+                <svg class="qr" viewBox="0 0 25 25" shape-rendering="crispEdges"><path stroke="#080808" d="M0 0.5h7m1 0h1m1 0h1m1 0h1m3 0h1m1 0h7M0 1.5h1m5 0h1m2 0h4m5 0h1m5 0h1M0 2.5h1m1 0h3m1 0h1m1 0h3m2 0h2m3 0h1m1 0h3m1 0h1M0 3.5h1m1 0h3m1 0h1m1 0h3m1 0h2m4 0h1m1 0h3m1 0h1M0 4.5h1m1 0h3m1 0h1m1 0h1m2 0h6m1 0h1m1 0h3m1 0h1M0 5.5h1m5 0h1m3 0h2m2 0h1m3 0h1m5 0h1M0 6.5h7m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h7M10 7.5h1m1 0h1m1 0h1M0 8.5h4m2 0h1m1 0h1m1 0h2m2 0h1m1 0h2m2 0h3m1 0h1M0 9.5h1m2 0h1m3 0h1m2 0h1m1 0h1m3 0h1m2 0h1m3 0h1M0 10.5h1m2 0h4m1 0h4m2 0h1m1 0h1m1 0h1M1 11.5h4m4 0h2m2 0h6m2 0h2M0 12.5h2m2 0h1m1 0h1m1 0h3m2 0h8m1 0h3M1 13.5h3m5 0h1m2 0h1m2 0h6m3 0h1M1 14.5h1m2 0h3m5 0h2m3 0h2m1 0h1m1 0h2M0 15.5h1m1 0h1m2 0h1m3 0h2m1 0h1m2 0h2m1 0h3m3 0h1M2 16.5h2m2 0h2m5 0h1m2 0h9M8 17.5h7m1 0h1m3 0h1m1 0h1m1 0h1M0 18.5h7m3 0h1m1 0h1m3 0h1m1 0h1m1 0h1m1 0h3M0 19.5h1m5 0h1m3 0h3m1 0h3m3 0h1m3 0h1M0 20.5h1m1 0h3m1 0h1m2 0h3m4 0h6m2 0h1M0 21.5h1m1 0h3m1 0h1m1 0h4m1 0h1m1 0h4m1 0h5M0 22.5h1m1 0h3m1 0h1m1 0h6m4 0h1m1 0h1m1 0h2M0 23.5h1m5 0h1m1 0h2m1 0h1m1 0h3m1 0h1m2 0h1m1 0h1M0 24.5h7m1 0h3m1 0h3m3 0h7"/></svg>
+                <div class="beam"></div>
+              </div>
+              <div class="clip-card">
+                <div class="clip-hero"><img src="/favicon.svg" alt="" /></div>
+                <div class="clip-body">
+                  <div>
+                    <strong>Volt</strong>
+                    <span>Scan into your Chrome workspace</span>
+                  </div>
+                  <span class="clip-open">Open</span>
+                </div>
+                <div class="clip-foot">App Clip · voltresale.app</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <footer>
+        <span>Not affiliated with Volt Resale or Paymore Electronics.</span>
+        <nav>
+          <a href="/privacy">Privacy</a>
+          <a href="https://github.com/JuanQuenga/Volt/issues">Support</a>
+        </nav>
+      </footer>
+    </div>
   </body>
 </html>

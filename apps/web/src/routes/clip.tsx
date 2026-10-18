@@ -1,8 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { ArrowRight, Chrome, Smartphone } from "lucide-react";
+import { Chrome, Smartphone } from "lucide-react";
 
-import { mobileAppDownloadUrl, SiteFooter, SiteHeader } from "../site-chrome";
+import { chromeExtensionDownloadUrl, mobileAppDownloadUrl, supportUrl } from "../site-chrome";
 
+// Production serves the static apps/web/public/clip.html for /clip; keep this route's copy in sync.
 export const Route = createFileRoute("/clip")({
   head: () => ({
     meta: [
@@ -20,52 +21,82 @@ export const Route = createFileRoute("/clip")({
   component: ClipLandingPage,
 });
 
+const steps = [
+  ["Open a Volt new tab in Chrome", "Tap the phone button to show the workspace QR code."],
+  ["Point your iPhone Camera at it", "Use the built-in Camera app or Control Center code scanner."],
+  ["Tap Open on the App Clip card", "Pick any online computer and start scanning text, barcodes, and photos."],
+] as const;
+
 function ClipLandingPage() {
   return (
-    <div className="min-h-screen bg-zinc-50 text-zinc-950">
-      <SiteHeader />
-      <main className="mx-auto flex max-w-3xl flex-col items-center px-4 py-20 text-center sm:px-6 lg:py-28">
-        <div className="flex size-16 items-center justify-center rounded-2xl bg-green-100 text-green-700">
-          <Smartphone size={32} aria-hidden="true" />
-        </div>
+    <div className="dark-grid flex min-h-svh flex-col bg-volt-ink text-zinc-50">
+      <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col px-5 py-5">
+        <header className="flex items-center justify-between">
+          <a href="/" className="flex items-center gap-2.5 font-semibold" aria-label="Volt home">
+            <img src="/favicon.svg" alt="" className="size-7" />
+            Volt
+          </a>
+          <span className="rounded-full border border-white/10 px-2.5 py-1.5 text-xs font-semibold text-zinc-400">
+            App Clip
+          </span>
+        </header>
 
-        <p className="mt-6 text-sm font-semibold uppercase tracking-[0.18em] text-green-700">
-          Volt App Clip
-        </p>
-        <h1 className="mt-3 text-4xl font-bold tracking-tight sm:text-5xl">
-          Scan into your Chrome workspace
-        </h1>
-        <p className="mt-5 max-w-2xl text-base leading-7 text-zinc-600 sm:text-lg">
-          Open a Volt new tab in Chrome, select the phone button, and scan its QR code with your iPhone.
-          The App Clip joins that signed-in workspace and lets you choose any online computer as the typing target.
-        </p>
+        <main className="flex-1 py-10 lg:py-16">
+          <p className="flex items-center gap-2 text-sm font-semibold text-volt-green">
+            <span className="size-1.5 rounded-full bg-volt-green" />
+            No install needed
+          </p>
+          <h1 className="mt-3.5 text-4xl font-semibold leading-none tracking-tight sm:text-6xl">
+            Scan straight into <span className="text-volt-green">Chrome</span>.
+          </h1>
+          <p className="mt-4 max-w-xl text-[17px] leading-relaxed text-zinc-400">
+            The Volt App Clip turns your iPhone into a scanner for your computer. It opens from a QR code in
+            Chrome, so there&rsquo;s nothing to download.
+          </p>
 
-        <div className="mt-9 grid w-full gap-4 text-left sm:grid-cols-2">
-          <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
-            <Chrome className="text-green-700" aria-hidden="true" />
-            <h2 className="mt-4 font-semibold">Start in Chrome</h2>
-            <p className="mt-2 text-sm leading-6 text-zinc-600">
-              The short-lived QR carries the secure workspace grant needed by the App Clip.
-            </p>
+          <ol className="mt-7 grid max-w-xl gap-2.5">
+            {steps.map(([title, detail], index) => (
+              <li
+                key={title}
+                className="grid grid-cols-[2rem_1fr] gap-3.5 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3.5"
+              >
+                <span className="grid size-8 place-items-center rounded-[10px] bg-zinc-50 text-sm font-bold text-volt-ink">
+                  {index + 1}
+                </span>
+                <div>
+                  <strong className="block text-[15px] font-semibold">{title}</strong>
+                  <p className="mt-0.5 text-sm leading-normal text-zinc-400">{detail}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+
+          <div className="mt-7 flex flex-col gap-2.5 sm:flex-row">
+            <a
+              href={mobileAppDownloadUrl}
+              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-[14px] bg-volt-green px-5 font-semibold text-volt-ink hover:brightness-110"
+            >
+              <Smartphone size={18} aria-hidden="true" />
+              Get the full app
+            </a>
+            <a
+              href={chromeExtensionDownloadUrl}
+              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-[14px] border border-white/20 px-5 font-semibold hover:border-white/40"
+            >
+              <Chrome size={18} aria-hidden="true" />
+              Add Volt to Chrome
+            </a>
           </div>
-          <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
-            <Smartphone className="text-green-700" aria-hidden="true" />
-            <h2 className="mt-4 font-semibold">No install required</h2>
-            <p className="mt-2 text-sm leading-6 text-zinc-600">
-              Use Text, Barcode, Photos, and Upload for free, without installing the full app.
-            </p>
-          </div>
-        </div>
+        </main>
 
-        <a
-          href={mobileAppDownloadUrl}
-          className="mt-9 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-zinc-950 px-5 py-3 text-sm font-semibold text-white hover:bg-zinc-800"
-        >
-          Get the full Volt app
-          <ArrowRight size={16} aria-hidden="true" />
-        </a>
-      </main>
-      <SiteFooter />
+        <footer className="flex flex-wrap justify-between gap-x-5 gap-y-1.5 border-t border-white/10 pt-5 text-[13px] text-zinc-500">
+          <span>Not affiliated with Volt Resale or Paymore Electronics.</span>
+          <nav className="flex gap-5">
+            <a href="/privacy" className="hover:text-zinc-50">Privacy</a>
+            <a href={supportUrl} className="hover:text-zinc-50">Support</a>
+          </nav>
+        </footer>
+      </div>
     </div>
   );
 }
