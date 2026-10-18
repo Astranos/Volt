@@ -70,6 +70,7 @@ try {
             shots.set(key, [...(shots.get(key) ?? []), file]);
           } catch (error) {
             console.warn(`✗ ${scenario} (${theme}${side.label ? `, ${side.label}` : ""}): ${error.message}`);
+            process.exitCode = 1;
           }
         }
       });
@@ -85,7 +86,8 @@ try {
       files.push(...pair);
     }
     for (const file of files) console.log(file);
-    if (options.publish && files.length) publish(files);
+    // Never publish a partial set.
+    if (options.publish && files.length && !process.exitCode) publish(files);
   }
 } finally {
   for (const step of cleanup.reverse()) await step();
