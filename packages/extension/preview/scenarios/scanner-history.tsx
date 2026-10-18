@@ -37,8 +37,8 @@ const noop = () => {};
 // ?state=loading | empty | signed-out; ?expanded=1 opens every session.
 export default defineScenario({
   description: "Sidepanel scanner history cards (?state=loading|empty|signed-out, ?expanded=1)",
-  viewport: { width: 380, height: 760 },
-  fullPage: true,
+  // Tall enough for every session: sidepanel.css pins the page to the window height.
+  viewport: { width: 380, height: 800 },
   render: (params) => {
     const state = params.get("state");
     const groups = buildTimelineGroups(entries);

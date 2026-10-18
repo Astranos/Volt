@@ -5,7 +5,7 @@ export type Scenario = {
   /** One line, shown by `pnpm shots --list`. */
   description: string;
   viewport: { width: number; height: number };
-  /** Capture the whole scrollable page instead of just the viewport. */
+  /** Capture the whole scrollable page. No help when the page CSS pins its height; use a taller viewport. */
   fullPage?: boolean;
   chrome?: ChromeFixture;
   /** `params` is the scenario's query string, e.g. `scanner-history?state=loading`. */
