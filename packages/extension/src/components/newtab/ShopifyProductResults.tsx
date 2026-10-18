@@ -1,5 +1,5 @@
 import { Command } from "cmdk";
-import { ArrowUpRight, Boxes, EyeOff, PackageSearch, RefreshCw, Store } from "lucide-react";
+import { ArrowUpRight, Boxes, Columns3, EyeOff, PackageSearch, RefreshCw, Store, X } from "lucide-react";
 import type { ShopifySearchProduct, ShopifySearchResult } from "../../shopify-audit/client";
 import "./shopify-product-results.css";
 
@@ -27,6 +27,9 @@ export function ShopifyProductResults({
   state,
   onOpenProduct,
   onHideProduct,
+  compareIds,
+  compareFull,
+  onToggleCompare,
   onRetry,
   onOpenSettings,
 }: {
@@ -34,6 +37,9 @@ export function ShopifyProductResults({
   state: ShopifyProductSearchState;
   onOpenProduct: (url: string) => void;
   onHideProduct: (product: ShopifySearchProduct) => void;
+  compareIds: ReadonlySet<string>;
+  compareFull: boolean;
+  onToggleCompare: (product: ShopifySearchProduct) => void;
   onRetry: () => void;
   onOpenSettings: () => void;
 }) {
@@ -41,7 +47,7 @@ export function ShopifyProductResults({
     return <div className="shopify-search-intro">
       <span className="shopify-search-intro-icon"><Store aria-hidden="true" size={22} /></span>
       <strong>Search your Shopify products</strong>
-      <span>Find products by title, SKU, or barcode. In-stock items appear first.</span>
+      <span>Find products by title, SKU, or barcode. In-stock items appear first. Pick a few with <Columns3 aria-hidden="true" className="shopify-search-intro-inline-icon" size={12} /> to compare them side by side.</span>
     </div>;
   }
 
@@ -81,9 +87,10 @@ export function ShopifyProductResults({
     </div> : <div className="shopify-results-grid">
       {products.map((product) => {
         const price = formatPrice(product);
+        const comparing = compareIds.has(product.id);
         return <Command.Item
           aria-label={`Open ${product.title} in Shopify`}
-          className="shopify-product-card"
+          className={comparing ? "shopify-product-card is-comparing" : "shopify-product-card"}
           key={product.id}
           onSelect={() => onOpenProduct(product.url)}
           value={`shopify-product-${product.id}`}
@@ -107,7 +114,18 @@ export function ShopifyProductResults({
             </span>
           </span>
           <span className="shopify-product-actions">
-            <ArrowUpRight aria-hidden="true" className="shopify-product-open" size={16} />
+            <button
+              aria-label={comparing ? `Remove ${product.title} from compare` : `Add ${product.title} to compare`}
+              aria-pressed={comparing}
+              className="shopify-product-compare"
+              disabled={!comparing && compareFull}
+              onClick={(event) => { event.stopPropagation(); onToggleCompare(product); }}
+              onKeyDown={(event) => { if (event.key === "Enter") event.stopPropagation(); }}
+              title={comparing ? "Remove from compare" : compareFull ? "Compare is full" : "Add to compare"}
+              type="button"
+            >
+              <Columns3 aria-hidden="true" size={14} />
+            </button>
             <button
               aria-label={`Hide ${product.title} from results`}
               className="shopify-product-hide"
@@ -118,6 +136,7 @@ export function ShopifyProductResults({
             >
               <EyeOff aria-hidden="true" size={14} />
             </button>
+            <ArrowUpRight aria-hidden="true" className="shopify-product-open" size={16} />
           </span>
         </Command.Item>;
       })}
@@ -125,5 +144,43 @@ export function ShopifyProductResults({
     <a className="shopify-results-view-all" href={fullSearchUrl} rel="noopener noreferrer" target="_blank">
       View all matches in Shopify <ArrowUpRight aria-hidden="true" size={14} />
     </a>
+  </div>;
+}
+
+/** Picked products waiting to be compared; stays put while the user searches again. */
+export function ShopifyCompareTray({
+  products,
+  onRemove,
+  onClear,
+  onCompare,
+}: {
+  products: ShopifySearchProduct[];
+  onRemove: (product: ShopifySearchProduct) => void;
+  onClear: () => void;
+  onCompare: () => void;
+}) {
+  return <div className="shopify-compare-tray" role="region" aria-label="Products to compare">
+    <ul className="shopify-compare-tray-items">
+      {products.map((product) => <li key={product.id} title={product.title}>
+        <span className="shopify-compare-tray-thumb">
+          <Boxes aria-hidden="true" size={14} />
+          {product.imageUrl && <img alt="" src={product.imageUrl} />}
+        </span>
+        <span className="shopify-compare-tray-title">{product.title}</span>
+        <button aria-label={`Remove ${product.title} from compare`} onClick={() => onRemove(product)} type="button"><X aria-hidden="true" size={12} /></button>
+      </li>)}
+    </ul>
+    <div className="shopify-compare-tray-actions">
+      <button className="shopify-compare-tray-clear" onClick={onClear} type="button">Clear</button>
+      <button
+        className="shopify-compare-tray-open"
+        disabled={products.length < 2}
+        onClick={onCompare}
+        title={products.length < 2 ? "Pick at least 2 products" : "Open the comparison in a new tab"}
+        type="button"
+      >
+        <Columns3 aria-hidden="true" size={14} /> Compare {products.length}
+      </button>
+    </div>
   </div>;
 }

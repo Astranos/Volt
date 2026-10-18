@@ -23,6 +23,7 @@ struct ClipCaptureSessionView: View {
     @State private var captureError: String?
     @State private var captureNotice: String?
     @State private var isCapturingPhoto = false
+    @State private var photoCaptureCount = 0
     @State private var gridVisible = true
     @State private var liveTextCandidates: [LiveTextCandidate] = []
     @State private var detectedBarcodeBounds: CGRect?
@@ -36,6 +37,10 @@ struct ClipCaptureSessionView: View {
     @State private var focusRequestID = UUID()
     @State private var cameraStateRevision = 0
     @State private var isConnectionSheetPresented = false
+    @State private var isTargetPickerPresented = false
+    @State private var opensConnectionAfterTargetPicker = false
+    /// True from the picker appearing until its onDismiss, so it covers the dismissal animation.
+    @State private var isTargetPickerOnScreen = false
     private let topToolbarTopPadding: CGFloat = 12
     private let photoPreviewToolbarGap: CGFloat = 0
 
@@ -121,6 +126,7 @@ struct ClipCaptureSessionView: View {
                             }
                         )
                         .frame(width: side, height: side)
+                        .shutterFeedback(trigger: photoCaptureCount)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     }
                     .padding(.top, photoPreviewToolbarGap)
@@ -173,8 +179,11 @@ struct ClipCaptureSessionView: View {
         .background(.black)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if ocrReviewImage != nil {
-                ClipOcrReviewControls(
+                OcrReviewControls(
                     regionCount: ocrTextRegions.count,
+                    targetLabel: store.typingTargetLabel,
+                    targetSystemImage: store.selectedWorkspaceComputerId == nil ? "iphone" : "desktopcomputer",
+                    onChangeTarget: showConnectionOptions,
                     onRetake: {
                         resetSelectedText()
                         cameraService.setTorchEnabled(false)
@@ -199,7 +208,7 @@ struct ClipCaptureSessionView: View {
                     controlRotation: .degrees(cameraService.captureOrientation.controlRotationDegrees),
                     connectionSystemImage: isConnected ? "character.cursor.ibeam" : "desktopcomputer",
                     connectionLabel: isConnected ? "Write" : "Connect",
-                    connectionAccessibilityLabel: "Open connection options",
+                    connectionAccessibilityLabel: isConnected ? "Choose write destination" : "Open connection options",
                     onToggleTorch: {
                         cameraService.setTorchEnabled(!cameraService.torchEnabled)
                     },
@@ -219,9 +228,7 @@ struct ClipCaptureSessionView: View {
                             captureCurrentFrame()
                         }
                     },
-                    onConnection: {
-                        isConnectionSheetPresented = true
-                    },
+                    onConnection: showConnectionOptions,
                     onFinish: {
                         dismiss()
                     }
@@ -230,6 +237,18 @@ struct ClipCaptureSessionView: View {
         }
         return captureSurface
         .animation(.spring(response: 0.28, dampingFraction: 0.86), value: selectedTextRegion?.id)
+        .sheet(isPresented: $isTargetPickerPresented, onDismiss: {
+            isTargetPickerOnScreen = false
+            if opensConnectionAfterTargetPicker {
+                opensConnectionAfterTargetPicker = false
+                isConnectionSheetPresented = true
+            }
+        }) {
+            ClipWorkspaceTargetPickerSheet(store: store) {
+                opensConnectionAfterTargetPicker = true
+            }
+            .onAppear { isTargetPickerOnScreen = true }
+        }
         .sheet(isPresented: $isConnectionSheetPresented) {
             ClipConnectionSheet(
                 store: store,
@@ -298,7 +317,12 @@ struct ClipCaptureSessionView: View {
             syncCameraForOcrPostCapture()
         }
         .onChange(of: store.isConnected) { _, isConnected in
-            isConnectionSheetPresented = !isConnected
+            if isConnected {
+                opensConnectionAfterTargetPicker = false
+                isConnectionSheetPresented = false
+            } else {
+                presentConnectionSheet()
+            }
             if !isConnected {
                 resetSelectedText()
                 onClearOcrReview()
@@ -306,13 +330,34 @@ struct ClipCaptureSessionView: View {
         }
         .onChange(of: store.isPairing) { _, isPairing in
             if isPairing {
-                isConnectionSheetPresented = true
+                presentConnectionSheet()
             }
         }
         .onChange(of: store.pairingFailureMessage) { _, message in
             if message != nil && !store.isConnected {
-                isConnectionSheetPresented = true
+                presentConnectionSheet()
             }
+        }
+    }
+
+    // Matches the installed app: once connected, the session's Write button picks the target
+    // computer; connection management stays one tap away inside that picker.
+    private func showConnectionOptions() {
+        if store.canChooseWorkspaceComputer {
+            isTargetPickerPresented = true
+        } else {
+            presentConnectionSheet()
+        }
+    }
+
+    /// Only one sheet can show at a time. While the target picker is presenting, open, or
+    /// still dismissing, hand the connection sheet to the picker's onDismiss instead.
+    private func presentConnectionSheet() {
+        if isTargetPickerPresented || isTargetPickerOnScreen {
+            opensConnectionAfterTargetPicker = true
+            isTargetPickerPresented = false
+        } else {
+            isConnectionSheetPresented = true
         }
     }
 
@@ -434,6 +479,7 @@ struct ClipCaptureSessionView: View {
                     onCaptureImage(image, mode, batchId)
                     captureNotice = successNotice(for: mode)
                 } else if mode == .photo {
+                    photoCaptureCount += 1
                     onCaptureImage(image, mode, batchId)
                     captureNotice = nil
                 } else {

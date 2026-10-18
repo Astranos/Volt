@@ -182,7 +182,7 @@ test("app clip capture modes share one camera and unified History area", () => {
   assert.match(sharedCameraSessionControlsSwiftSource, /modeButton\("Audio", mode: \.dictation\)/);
   assert.match(clipViewsSwiftSource, /Set\(store\.captures\.map/);
   assert.match(clipViewsSwiftSource, /CameraSessionTopStatus\([\s\S]*liveTextCandidates: liveTextCandidates/);
-  assert.match(clipViewsSwiftSource, /connectionLabel: isConnected \? "Write" : "Connect"[\s\S]*onConnection: \{\s*isConnectionSheetPresented = true/);
+  assert.match(clipViewsSwiftSource, /connectionLabel: isConnected \? "Write" : "Connect"[\s\S]*onConnection: showConnectionOptions/);
   assert.match(clipViewsSwiftSource, /Button\("Delete session", systemImage: "trash", role: \.destructive\)/);
   assert.match(clipScannerStoreSwiftSource, /func removeSession\(batchId: String\)/);
   assert.match(clipViewsSwiftSource, /private var sessionIDs: \[String\]/);
@@ -227,15 +227,36 @@ test("app clip photo capture keeps the stable shared control geometry", () => {
   assert.match(clipViewsSwiftSource, /captureNotice = mode == \.ocr \? "Capturing text image" : "Capturing photo"/);
   assert.match(clipViewsSwiftSource, /private func successNotice\(for mode: CaptureMode\) -> String\?/);
   assert.match(clipViewsSwiftSource, /case \.photo, \.dictation:\s*nil/);
-  assert.match(clipViewsSwiftSource, /CameraSessionControls\([\s\S]*onConnection: \{\s*isConnectionSheetPresented = true[\s\S]*onFinish: \{\s*dismiss\(\)/);
+  assert.match(clipViewsSwiftSource, /CameraSessionControls\([\s\S]*onConnection: showConnectionOptions,[\s\S]*onFinish: \{\s*dismiss\(\)/);
   assert.doesNotMatch(clipViewsSwiftSource, /hasLatestCapture|onSendLatest/);
 });
 
 test("app clip photo sessions capture immediately without an extra review step", () => {
   assert.match(clipScannerStoreSwiftSource, /private func prepareCapturedPhoto\(_ image: UIImage\) -> UIImage/);
   assert.match(clipScannerStoreSwiftSource, /let preparedImage = prepareCapturedPhoto\(image\)/);
-  assert.match(clipViewsSwiftSource, /else if mode == \.photo \{\s*onCaptureImage\(image, mode, batchId\)\s*captureNotice = nil/);
+  assert.match(clipViewsSwiftSource, /else if mode == \.photo \{\s*photoCaptureCount \+= 1\s*onCaptureImage\(image, mode, batchId\)\s*captureNotice = nil/);
   assert.doesNotMatch(clipViewsSwiftSource, /photoReviewImage|ClipPhotoReviewControls|Use Photo|Review photo/);
+});
+
+test("photo captures flash the viewfinder and tap in both the app and App Clip", () => {
+  assert.match(sharedCaptureSessionOverlaysSwiftSource, /func shutterFeedback\(trigger: Int\) -> some View/);
+  assert.match(sharedCaptureSessionOverlaysSwiftSource, /keyframeAnimator\(initialValue: 0\.0, trigger: trigger\)/);
+  assert.match(sharedCaptureSessionOverlaysSwiftSource, /\.sensoryFeedback\(\.impact\(weight: \.medium\), trigger: trigger\)/);
+  assert.match(scannerStoreCaptureActionsSwiftSource, /func captureSquarePhoto\(\) async \{[\s\S]*?guard let image = await camera\.capturePhoto\(matchingDeviceOrientation: true\) else \{ return \}\s*photoCaptureCount \+= 1/);
+  assert.match(captureSessionViewSwiftSource, /ScannerCameraLayer\([\s\S]*?\.shutterFeedback\(trigger: store\.photoCaptureCount\)/);
+  assert.match(clipViewsSwiftSource, /ClipPhotoPreview\([\s\S]*?\.frame\(width: side, height: side\)\s*\.shutterFeedback\(trigger: photoCaptureCount\)/);
+  assert.doesNotMatch(clipViewsSwiftSource, /ClipCaptureSessionBackdrop\([^)]*?\)\s*\.ignoresSafeArea\(\)\s*\.shutterFeedback/);
+});
+
+test("app clip waits for the target picker to close before showing the connection sheet", () => {
+  assert.match(readClipView("ClipCaptureSessionView.swift"), /private func presentConnectionSheet\(\) \{\s*if isTargetPickerPresented \|\| isTargetPickerOnScreen \{\s*opensConnectionAfterTargetPicker = true\s*isTargetPickerPresented = false\s*\} else \{\s*isConnectionSheetPresented = true/);
+  // The picker counts as on screen until onDismiss, so its dismissal animation is covered.
+  assert.match(clipViewsSwiftSource, /\.sheet\(isPresented: \$isTargetPickerPresented, onDismiss: \{\s*isTargetPickerOnScreen = false\s*if opensConnectionAfterTargetPicker \{\s*opensConnectionAfterTargetPicker = false\s*isConnectionSheetPresented = true/);
+  assert.match(clipViewsSwiftSource, /ClipWorkspaceTargetPickerSheet\(store: store\) \{[\s\S]*?\}\s*\.onAppear \{ isTargetPickerOnScreen = true \}/);
+  // Every automatic presentation (disconnect, pairing, pairing failure) goes through the helper.
+  const session = readClipView("ClipCaptureSessionView.swift");
+  assert.equal(session.match(/isConnectionSheetPresented = true/g).length, 2,
+    "only presentConnectionSheet and the picker's onDismiss may present the connection sheet");
 });
 
 test("app clip bottom CTAs show connection progress while pairing", () => {
@@ -328,7 +349,7 @@ test("app clip pairing and failure reuse one connection sheet", () => {
   assert.match(clipViewsSwiftSource, /struct ClipConnectionSheet: View/);
   assert.match(clipViewsSwiftSource, /if store\.isPairing[\s\S]*ClipConnectionProgressView[\s\S]*else if store\.pairingFailureMessage != nil[\s\S]*ClipPairingFailureView[\s\S]*else[\s\S]*ClipConnectChoicesView/);
   assert.match(clipViewsSwiftSource, /struct ClipCaptureSessionView: View[\s\S]*\.sheet\(isPresented: \$isConnectionSheetPresented\)[\s\S]*ClipConnectionSheet\(/);
-  assert.match(clipViewsSwiftSource, /\.onChange\(of: store\.isConnected\)[\s\S]*isConnectionSheetPresented = !isConnected/);
+  assert.match(clipViewsSwiftSource, /\.onChange\(of: store\.isConnected\) \{ _, isConnected in\s*if isConnected \{[\s\S]*?isConnectionSheetPresented = false\s*\} else \{\s*presentConnectionSheet\(\)/);
 });
 
 test("app clip fresh qr connection uses the workspace label", () => {
@@ -400,4 +421,17 @@ test("app clip OCR reuses the main async recognizer and identifier extractor", (
   assert.match(clipOCRServiceSwiftSource, /LiveTextIdentifierMatcher\.match\(text\)/);
   assert.match(clipOCRServiceSwiftSource, /candidate\.boundingBox\(for: match\.range\)/);
   assert.match(clipOCRServiceSwiftSource, /DeviceIdentifierRegionExtractor\.reviewRegions\(from: recognizedRegions\)/);
+});
+
+test("app clip capture session picks workspace computers like the installed app", () => {
+  const session = readClipView("ClipCaptureSessionView.swift");
+  assert.match(session, /private func showConnectionOptions\(\) \{\s*if store\.canChooseWorkspaceComputer \{\s*isTargetPickerPresented = true\s*\} else \{\s*presentConnectionSheet\(\)/);
+  assert.match(session, /\.sheet\(isPresented: \$isTargetPickerPresented[\s\S]*ClipWorkspaceTargetPickerSheet\(store: store\)/);
+  assert.match(session, /OcrReviewControls\([\s\S]*targetLabel: store\.typingTargetLabel[\s\S]*onChangeTarget: showConnectionOptions/);
+  assert.doesNotMatch(clipViewsSwiftSource, /struct ClipOcrReviewControls/);
+});
+
+test("app clip settings sheet opens at the large detent", () => {
+  const settings = readClipView("ClipCaptureHomeView.swift").split("struct ClipSettingsSheet:")[1].split("struct ClipChromeSectionHeader:")[0];
+  assert.match(settings, /\.presentationDetents\(\[\.large\]\)/);
 });

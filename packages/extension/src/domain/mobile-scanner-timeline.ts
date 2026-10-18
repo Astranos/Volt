@@ -217,11 +217,17 @@ export function buildTimelineGroups(results: TimelineEntry[]): TimelineGroup[] {
   return [...groups.values()]
     .map((group) => ({
       ...group,
-      entries: [...group.entries].sort(
-        (a, b) => timestamp(a.capturedAt) - timestamp(b.capturedAt),
-      ),
+      entries: [...group.entries].sort(compareGroupEntries),
     }))
     .sort((a, b) => b.capturedAt - a.capturedAt);
+}
+
+// Scans read newest-first like the timeline itself; photos stay in shot order
+// because that is the order a dragged batch uploads in.
+function compareGroupEntries(a: TimelineEntry, b: TimelineEntry) {
+  if (a.type !== b.type) return a.type === "scan" ? -1 : 1;
+  const order = timestamp(a.capturedAt) - timestamp(b.capturedAt);
+  return a.type === "scan" ? -order : order;
 }
 
 function timelineGroupIdentity(result: TimelineEntry) {

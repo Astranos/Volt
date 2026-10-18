@@ -1,8 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { ArrowRight, Chrome, Smartphone } from "lucide-react";
+import { ChevronRight, Chrome } from "lucide-react";
 
-import { mobileAppDownloadUrl, SiteFooter, SiteHeader } from "../site-chrome";
+import { chromeExtensionDownloadUrl, mobileAppDownloadUrl, supportUrl } from "../site-chrome";
 
+// Production serves the static apps/web/public/clip.html for /clip; keep this route's copy in sync.
 export const Route = createFileRoute("/clip")({
   head: () => ({
     meta: [
@@ -20,52 +21,69 @@ export const Route = createFileRoute("/clip")({
   component: ClipLandingPage,
 });
 
+const steps = [
+  "Open a new tab in Chrome",
+  "Click the phone button to show the QR code",
+  "Scan it with your iPhone’s Camera, then tap Open",
+];
+
 function ClipLandingPage() {
   return (
-    <div className="min-h-screen bg-zinc-50 text-zinc-950">
-      <SiteHeader />
-      <main className="mx-auto flex max-w-3xl flex-col items-center px-4 py-20 text-center sm:px-6 lg:py-28">
-        <div className="flex size-16 items-center justify-center rounded-2xl bg-green-100 text-green-700">
-          <Smartphone size={32} aria-hidden="true" />
-        </div>
-
-        <p className="mt-6 text-sm font-semibold uppercase tracking-[0.18em] text-green-700">
-          Volt App Clip
-        </p>
-        <h1 className="mt-3 text-4xl font-bold tracking-tight sm:text-5xl">
-          Scan into your Chrome workspace
-        </h1>
-        <p className="mt-5 max-w-2xl text-base leading-7 text-zinc-600 sm:text-lg">
-          Open a Volt new tab in Chrome, select the phone button, and scan its QR code with your iPhone.
-          The App Clip joins that signed-in workspace and lets you choose any online computer as the typing target.
-        </p>
-
-        <div className="mt-9 grid w-full gap-4 text-left sm:grid-cols-2">
-          <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
-            <Chrome className="text-green-700" aria-hidden="true" />
-            <h2 className="mt-4 font-semibold">Start in Chrome</h2>
-            <p className="mt-2 text-sm leading-6 text-zinc-600">
-              The short-lived QR carries the secure workspace grant needed by the App Clip.
-            </p>
+    <div className="min-h-svh bg-[#f2f2f7] text-[17px] leading-snug text-black dark:bg-black dark:text-white">
+      <main className="mx-auto w-full max-w-[480px] px-4 pt-7 pb-8">
+        <section className="grid grid-cols-[96px_1fr] items-center gap-4 px-1 pt-2" aria-label="Volt">
+          <img src="/app-icon-512.png" alt="" className="size-24 rounded-[22px]" />
+          <div>
+            <h1 className="text-[22px] font-bold">Volt</h1>
+            <p className="mt-0.5 mb-2.5 text-[15px] text-black/60 dark:text-white/60">Scan text and barcodes into Chrome</p>
+            <a
+              href={mobileAppDownloadUrl}
+              className="inline-block rounded-full bg-[#1a7f37] px-[18px] py-1.5 text-[15px] font-bold text-white"
+            >
+              Get the app
+            </a>
           </div>
-          <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
-            <Smartphone className="text-green-700" aria-hidden="true" />
-            <h2 className="mt-4 font-semibold">No install required</h2>
-            <p className="mt-2 text-sm leading-6 text-zinc-600">
-              Use Text, Barcode, Photos, and Upload for free, without installing the full app.
-            </p>
-          </div>
-        </div>
+        </section>
 
+        <h2 className="mx-1 mt-9 mb-2 text-[28px] leading-tight font-bold">Open the App Clip from Chrome</h2>
+        <p className="mx-1 text-black/60 dark:text-white/60">
+          The App Clip joins your workspace through the QR code on Volt’s Chrome new tab, so that’s where it opens from.
+        </p>
+
+        <p className="mx-5 mt-7 mb-2 text-[13px] text-black/60 dark:text-white/60">On your computer</p>
+        <ol className="overflow-hidden rounded-xl bg-white dark:bg-[#1c1c1e]">
+          {steps.map((step, index) => (
+            <li key={step} className="flex min-h-[52px] items-center gap-3.5 pl-4">
+              <span className="grid size-[26px] flex-none place-items-center rounded-full bg-[#1a7f37] text-sm font-bold text-white">
+                {index + 1}
+              </span>
+              <span className={`flex-1 py-3 pr-4 ${index > 0 ? "border-t-[0.5px] border-black/30 dark:border-white/20" : ""}`}>
+                {step}
+              </span>
+            </li>
+          ))}
+        </ol>
+        <p className="mx-5 mt-2 text-[13px] text-black/60 dark:text-white/60">
+          Nothing to install. The App Clip opens straight to the camera.
+        </p>
+
+        <p className="mx-5 mt-7 mb-2 text-[13px] text-black/60 dark:text-white/60">Don’t have Volt in Chrome?</p>
         <a
-          href={mobileAppDownloadUrl}
-          className="mt-9 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-zinc-950 px-5 py-3 text-sm font-semibold text-white hover:bg-zinc-800"
+          href={chromeExtensionDownloadUrl}
+          className="flex min-h-[52px] items-center gap-3.5 rounded-xl bg-white px-4 active:bg-black/10 dark:bg-[#1c1c1e]"
         >
-          Get the full Volt app
-          <ArrowRight size={16} aria-hidden="true" />
+          <span className="grid size-[29px] place-items-center rounded-[7px] bg-[#1a73e8] text-white">
+            <Chrome size={17} aria-hidden="true" />
+          </span>
+          <span className="flex-1">Add Volt to Chrome</span>
+          <ChevronRight size={18} className="text-black/40 dark:text-white/40" aria-hidden="true" />
         </a>
+
+        <footer className="mx-5 mt-9 flex gap-5 text-[13px] text-[#248a3d] dark:text-[#30d158]">
+          <a href="/privacy">Privacy</a>
+          <a href={supportUrl}>Support</a>
+        </footer>
       </main>
-      <SiteFooter />
     </div>
   );
 }

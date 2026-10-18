@@ -4,7 +4,7 @@ import { makeFunctionReference } from "convex/server";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import type { Doc, Id } from "./_generated/dataModel";
 import schema from "./schema";
-import { auditRange, decryptToken, encryptToken, fetchSearchProducts, fetchYesterday, nonceHash, productSearchQuery, shopDomain, verifyCallback } from "./shopifyHelpers";
+import { auditRange, decryptToken, encryptToken, fetchProductDetails, fetchSearchProducts, fetchYesterday, nonceHash, productSearchQuery, shopDomain, verifyCallback } from "./shopifyHelpers";
 
 const modules = import.meta.glob("./**/*.ts");
 const get = makeFunctionReference<"query", Record<string, never>, { shop: string } | null>("shopifyAudit:getConnection");
@@ -268,6 +268,25 @@ describe("Shopify live product search", () => {
       inStock: { nodes: [{ ...node("1", 1), id: "gid://shopify/Collection/1" }] }, outOfStock: { nodes: [] },
     } })));
     await expect(fetchSearchProducts(shop, "access", "phone")).rejects.toThrow("invalid product ID");
+  });
+  test("loads compare details in the picked order and skips deleted products", async () => {
+    const node = (id: string) => ({
+      id: `gid://shopify/Product/${id}`, legacyResourceId: id, title: `Product ${id}`, status: "ACTIVE", totalInventory: 2,
+      tags: [], vendor: "Apple", productType: "Phones", descriptionHtml: "<p>Unlocked</p>",
+      media: { nodes: [{ preview: { image: { url: "https://cdn.shopify.com/a.jpg" } } }, { preview: null }] },
+      priceRangeV2: { minVariantPrice: { amount: "199.00", currencyCode: "USD" }, maxVariantPrice: { amount: "249.00", currencyCode: "USD" } },
+      conditionMetafield: { value: "Used - Good" },
+      variants: { nodes: [{ id: "gid://shopify/ProductVariant/9", title: "128GB", sku: " IP-128 ", price: "199.00" }] },
+    });
+    const mock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ data: { nodes: [node("1"), null, node("2")] } })));
+    vi.stubGlobal("fetch", mock);
+    const ids = ["gid://shopify/Product/2", "gid://shopify/Product/3", "gid://shopify/Product/1"];
+    const products = await fetchProductDetails(shop, "access", ids);
+    expect(products.map(product => product.id)).toEqual(["gid://shopify/Product/2", "gid://shopify/Product/1"]);
+    expect(products[0]).toMatchObject({ images: ["https://cdn.shopify.com/a.jpg"], minPrice: "199.00", maxPrice: "249.00", currencyCode: "USD", condition: "Used - Good", vendor: "Apple", descriptionHtml: "<p>Unlocked</p>", variants: [{ title: "128GB", sku: "IP-128", price: "199.00" }] });
+    expect(JSON.parse(String(mock.mock.calls[0][1]?.body)).variables).toEqual({ ids });
+    await expect(fetchProductDetails(shop, "access", ["gid://shopify/Collection/1"])).rejects.toThrow("Compare 1 to 8");
+    await expect(fetchProductDetails(shop, "access", [])).rejects.toThrow("Compare 1 to 8");
   });
   test("requires the connected account and does not expose its token", async () => {
     const t = convexTest(schema, modules);

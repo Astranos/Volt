@@ -75,6 +75,22 @@ test("timeline groups mixed cloud captures by batch and direct photos by photo b
   assert.deepEqual(groups[2].entries.map((entry) => entry.id), ["photo-1", "photo-2"]);
 });
 
+test("timeline lists a batch's scans newest-first and its photos in shot order", () => {
+  const groups = buildTimelineGroups([
+    createScan("scan-1", "2026-06-03T15:00:00.000Z", "cloud-1"),
+    createPhotoResult("photo-1", "photo-batch-1", "2026-06-03T15:01:00.000Z", "cloud-1"),
+    createScan("scan-2", "2026-06-03T15:02:00.000Z", "cloud-1"),
+    createPhotoResult("photo-2", "photo-batch-1", "2026-06-03T15:03:00.000Z", "cloud-1"),
+    createScan("scan-3", "2026-06-03T15:04:00.000Z", "cloud-1"),
+  ]);
+
+  assert.equal(groups.length, 1);
+  assert.deepEqual(
+    groups[0].entries.map((entry) => entry.id),
+    ["scan-3", "scan-2", "scan-1", "photo-1", "photo-2"],
+  );
+});
+
 test("timeline derives selected photo drag order from visible photo order", () => {
   const newest = createPhotoResult("photo-3", "batch-2", "2026-06-03T15:03:00.000Z");
   const middle = createPhotoResult("photo-2", "batch-1", "2026-06-03T15:02:00.000Z");

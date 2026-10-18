@@ -230,6 +230,7 @@ extension ScannerStore {
     func captureSquarePhoto() async {
         let batchId = currentCaptureBatchId()
         guard let image = await camera.capturePhoto(matchingDeviceOrientation: true) else { return }
+        photoCaptureCount += 1
         let croppedImage = image
             .normalizedForProcessing()
             .croppedToVisiblePreview(previewSize: camera.previewLayer.bounds.size)
