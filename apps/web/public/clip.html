@@ -26,7 +26,8 @@
         --label: #000000;
         --secondary: rgb(60 60 67 / 60%);
         --separator: rgb(60 60 67 / 29%);
-        --green: #34c759;
+        /* Darker than system green so white text clears 4.5:1 contrast. */
+        --green: #1a7f37;
         --tint: #248a3d;
         font: 17px/1.35 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
         color: var(--label);
@@ -39,7 +40,6 @@
           --label: #ffffff;
           --secondary: rgb(235 235 245 / 60%);
           --separator: rgb(84 84 88 / 65%);
-          --green: #30d158;
           --tint: #30d158;
         }
       }
@@ -116,8 +116,8 @@
       <p class="note">Nothing to install. The App Clip opens straight to the camera.</p>
 
       <p class="group-title" id="links">Don&rsquo;t have Volt in Chrome?</p>
-      <div class="group" role="list" aria-labelledby="links">
-        <a class="row" role="listitem" href="https://chromewebstore.google.com/detail/volt/bmgghhmlflbhlnomgnoodpidekpaaifk">
+      <div class="group">
+        <a class="row" href="https://chromewebstore.google.com/detail/volt/bmgghhmlflbhlnomgnoodpidekpaaifk">
           <span class="icon" style="background:#1a73e8" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/><path d="M12 8.5h8.2M8.97 13.75 4.9 6.7M15.03 13.75l-4.1 7.1"/></svg>
           </span>

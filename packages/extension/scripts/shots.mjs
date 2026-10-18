@@ -136,6 +136,8 @@ async function shoot(base, scenario, colorScheme, file) {
 function checkout(ref) {
   const sha = git(["rev-parse", "--short", ref]);
   const dir = path.join(tmpdir(), `volt-shots-${sha}`);
+  // An interrupted run can leave a registration behind for a directory that's gone.
+  git(["worktree", "prune"]);
   if (existsSync(dir)) git(["worktree", "remove", "--force", dir]);
   git(["worktree", "add", "--detach", dir, sha]);
   cleanup.push(() => git(["worktree", "remove", "--force", dir]));
@@ -164,6 +166,7 @@ async function sideBySide([before, after], file) {
 // of main) and prints Markdown for the PR description.
 function publish(files) {
   const name = options.name ?? slug(git(["branch", "--show-current"]));
+  if (!name) throw new Error("No branch checked out; pass --publish --name <name>.");
   const ref = `refs/heads/pr-assets/${name}`;
   const parent = git(["ls-remote", "origin", ref]).split(/\s/)[0];
   if (parent) git(["fetch", "-q", "origin", ref]);

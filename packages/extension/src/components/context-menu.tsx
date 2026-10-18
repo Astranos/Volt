@@ -157,7 +157,7 @@ export function ContextMenu({ actions, selectionActionCount, quickActions, lastS
             Volt
           </span>
           <button
-            aria-label="Dismiss Menu"
+            aria-label="Dismiss Volt menu until this page reloads"
             className="dismiss-btn"
             onClick={onDismiss}
             title="Use the browser menu until this page reloads"

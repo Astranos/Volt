@@ -38,7 +38,7 @@ function ClipLandingPage() {
             <p className="mt-0.5 mb-2.5 text-[15px] text-black/60 dark:text-white/60">Scan text and barcodes into Chrome</p>
             <a
               href={mobileAppDownloadUrl}
-              className="inline-block rounded-full bg-[#34c759] px-[18px] py-1.5 text-[15px] font-bold text-white"
+              className="inline-block rounded-full bg-[#1a7f37] px-[18px] py-1.5 text-[15px] font-bold text-white"
             >
               Get the app
             </a>
@@ -54,7 +54,7 @@ function ClipLandingPage() {
         <ol className="overflow-hidden rounded-xl bg-white dark:bg-[#1c1c1e]">
           {steps.map((step, index) => (
             <li key={step} className="flex min-h-[52px] items-center gap-3.5 pl-4">
-              <span className="grid size-[26px] flex-none place-items-center rounded-full bg-[#34c759] text-sm font-bold text-white">
+              <span className="grid size-[26px] flex-none place-items-center rounded-full bg-[#1a7f37] text-sm font-bold text-white">
                 {index + 1}
               </span>
               <span className={`flex-1 py-3 pr-4 ${index > 0 ? "border-t-[0.5px] border-black/30 dark:border-white/20" : ""}`}>
