@@ -234,8 +234,17 @@ test("app clip photo capture keeps the stable shared control geometry", () => {
 test("app clip photo sessions capture immediately without an extra review step", () => {
   assert.match(clipScannerStoreSwiftSource, /private func prepareCapturedPhoto\(_ image: UIImage\) -> UIImage/);
   assert.match(clipScannerStoreSwiftSource, /let preparedImage = prepareCapturedPhoto\(image\)/);
-  assert.match(clipViewsSwiftSource, /else if mode == \.photo \{\s*onCaptureImage\(image, mode, batchId\)\s*captureNotice = nil/);
+  assert.match(clipViewsSwiftSource, /else if mode == \.photo \{\s*photoCaptureCount \+= 1\s*onCaptureImage\(image, mode, batchId\)\s*captureNotice = nil/);
   assert.doesNotMatch(clipViewsSwiftSource, /photoReviewImage|ClipPhotoReviewControls|Use Photo|Review photo/);
+});
+
+test("photo captures flash the viewfinder and tap in both the app and App Clip", () => {
+  assert.match(sharedCaptureSessionOverlaysSwiftSource, /func shutterFeedback\(trigger: Int\) -> some View/);
+  assert.match(sharedCaptureSessionOverlaysSwiftSource, /keyframeAnimator\(initialValue: 0\.0, trigger: trigger\)/);
+  assert.match(sharedCaptureSessionOverlaysSwiftSource, /\.sensoryFeedback\(\.impact\(weight: \.medium\), trigger: trigger\)/);
+  assert.match(scannerStoreCaptureActionsSwiftSource, /func captureSquarePhoto\(\) async \{[\s\S]*?guard let image = await camera\.capturePhoto\(matchingDeviceOrientation: true\) else \{ return \}\s*photoCaptureCount \+= 1/);
+  assert.match(captureSessionViewSwiftSource, /ScannerCameraLayer\([\s\S]*?\.shutterFeedback\(trigger: store\.photoCaptureCount\)/);
+  assert.match(clipViewsSwiftSource, /ClipCaptureSessionBackdrop\([\s\S]*?\.shutterFeedback\(trigger: photoCaptureCount\)/);
 });
 
 test("app clip bottom CTAs show connection progress while pairing", () => {

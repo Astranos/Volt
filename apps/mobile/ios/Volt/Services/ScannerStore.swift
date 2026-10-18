@@ -37,6 +37,8 @@ final class ScannerStore {
     var productScanError: String?
     var productScanQuota: AIScannerQuota?
     var photoUploadProgress: PhotoUploadProgress?
+    /// Bumped on every successful shutter capture so the viewfinder can flash and tap.
+    var photoCaptureCount = 0
     var barcodeRecognitionMode: BarcodeRecognitionMode = .upc {
         didSet {
             UserDefaults.standard.set(barcodeRecognitionMode.rawValue, forKey: Self.barcodeRecognitionModeStorageKey)

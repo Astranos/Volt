@@ -23,6 +23,7 @@ struct ClipCaptureSessionView: View {
     @State private var captureError: String?
     @State private var captureNotice: String?
     @State private var isCapturingPhoto = false
+    @State private var photoCaptureCount = 0
     @State private var gridVisible = true
     @State private var liveTextCandidates: [LiveTextCandidate] = []
     @State private var detectedBarcodeBounds: CGRect?
@@ -69,6 +70,7 @@ struct ClipCaptureSessionView: View {
                     }
                 )
                 .ignoresSafeArea()
+                .shutterFeedback(trigger: photoCaptureCount)
                 .opacity(activeMode == .dictation ? 0 : 1)
                 .allowsHitTesting(activeMode != .dictation)
             }
@@ -457,6 +459,7 @@ struct ClipCaptureSessionView: View {
                     onCaptureImage(image, mode, batchId)
                     captureNotice = successNotice(for: mode)
                 } else if mode == .photo {
+                    photoCaptureCount += 1
                     onCaptureImage(image, mode, batchId)
                     captureNotice = nil
                 } else {

@@ -192,3 +192,31 @@ struct OcrReviewControls: View {
         }
     }
 }
+
+/// Confirms a photo the moment it is taken. Silent mode mutes the shutter sound, so the viewfinder
+/// blinks dark and the phone taps once each time `trigger` changes.
+private struct ShutterFeedbackModifier: ViewModifier {
+    let trigger: Int
+
+    func body(content: Content) -> some View {
+        content
+            .overlay {
+                Color.black
+                    .keyframeAnimator(initialValue: 0.0, trigger: trigger) { flash, opacity in
+                        flash.opacity(opacity)
+                    } keyframes: { _ in
+                        LinearKeyframe(0.75, duration: 0.04)
+                        CubicKeyframe(0, duration: 0.22)
+                    }
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
+            .sensoryFeedback(.impact(weight: .medium), trigger: trigger)
+    }
+}
+
+extension View {
+    func shutterFeedback(trigger: Int) -> some View {
+        modifier(ShutterFeedbackModifier(trigger: trigger))
+    }
+}

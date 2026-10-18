@@ -36,6 +36,7 @@ struct CaptureSessionView: View {
                 // their full-bleed preview.
                 ScannerCameraLayer(gridVisible: gridVisible && !store.isProductScannerActive)
                     .ignoresSafeArea(edges: store.activeMode == .photo ? [] : .all)
+                    .shutterFeedback(trigger: store.photoCaptureCount)
                     .opacity(store.activeMode == .dictation ? 0 : 1)
                     .allowsHitTesting(store.activeMode != .dictation)
             }
