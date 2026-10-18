@@ -39,6 +39,8 @@ struct ClipCaptureSessionView: View {
     @State private var isConnectionSheetPresented = false
     @State private var isTargetPickerPresented = false
     @State private var opensConnectionAfterTargetPicker = false
+    /// True from the picker appearing until its onDismiss, so it covers the dismissal animation.
+    @State private var isTargetPickerOnScreen = false
     private let topToolbarTopPadding: CGFloat = 12
     private let photoPreviewToolbarGap: CGFloat = 0
 
@@ -236,6 +238,7 @@ struct ClipCaptureSessionView: View {
         return captureSurface
         .animation(.spring(response: 0.28, dampingFraction: 0.86), value: selectedTextRegion?.id)
         .sheet(isPresented: $isTargetPickerPresented, onDismiss: {
+            isTargetPickerOnScreen = false
             if opensConnectionAfterTargetPicker {
                 opensConnectionAfterTargetPicker = false
                 isConnectionSheetPresented = true
@@ -244,6 +247,7 @@ struct ClipCaptureSessionView: View {
             ClipWorkspaceTargetPickerSheet(store: store) {
                 opensConnectionAfterTargetPicker = true
             }
+            .onAppear { isTargetPickerOnScreen = true }
         }
         .sheet(isPresented: $isConnectionSheetPresented) {
             ClipConnectionSheet(
@@ -346,10 +350,10 @@ struct ClipCaptureSessionView: View {
         }
     }
 
-    /// Only one sheet can show at a time. While the target picker is open or still
-    /// dismissing, hand the connection sheet to the picker's onDismiss instead.
+    /// Only one sheet can show at a time. While the target picker is presenting, open, or
+    /// still dismissing, hand the connection sheet to the picker's onDismiss instead.
     private func presentConnectionSheet() {
-        if isTargetPickerPresented || opensConnectionAfterTargetPicker {
+        if isTargetPickerPresented || isTargetPickerOnScreen {
             opensConnectionAfterTargetPicker = true
             isTargetPickerPresented = false
         } else {

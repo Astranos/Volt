@@ -249,8 +249,10 @@ test("photo captures flash the viewfinder and tap in both the app and App Clip",
 });
 
 test("app clip waits for the target picker to close before showing the connection sheet", () => {
-  assert.match(readClipView("ClipCaptureSessionView.swift"), /private func presentConnectionSheet\(\) \{\s*if isTargetPickerPresented \|\| opensConnectionAfterTargetPicker \{\s*opensConnectionAfterTargetPicker = true\s*isTargetPickerPresented = false\s*\} else \{\s*isConnectionSheetPresented = true/);
-  assert.match(clipViewsSwiftSource, /\.sheet\(isPresented: \$isTargetPickerPresented, onDismiss: \{\s*if opensConnectionAfterTargetPicker \{\s*opensConnectionAfterTargetPicker = false\s*isConnectionSheetPresented = true/);
+  assert.match(readClipView("ClipCaptureSessionView.swift"), /private func presentConnectionSheet\(\) \{\s*if isTargetPickerPresented \|\| isTargetPickerOnScreen \{\s*opensConnectionAfterTargetPicker = true\s*isTargetPickerPresented = false\s*\} else \{\s*isConnectionSheetPresented = true/);
+  // The picker counts as on screen until onDismiss, so its dismissal animation is covered.
+  assert.match(clipViewsSwiftSource, /\.sheet\(isPresented: \$isTargetPickerPresented, onDismiss: \{\s*isTargetPickerOnScreen = false\s*if opensConnectionAfterTargetPicker \{\s*opensConnectionAfterTargetPicker = false\s*isConnectionSheetPresented = true/);
+  assert.match(clipViewsSwiftSource, /ClipWorkspaceTargetPickerSheet\(store: store\) \{[\s\S]*?\}\s*\.onAppear \{ isTargetPickerOnScreen = true \}/);
   // Every automatic presentation (disconnect, pairing, pairing failure) goes through the helper.
   const session = readClipView("ClipCaptureSessionView.swift");
   assert.equal(session.match(/isConnectionSheetPresented = true/g).length, 2,
