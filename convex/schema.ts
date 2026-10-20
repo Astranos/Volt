@@ -58,12 +58,18 @@ export default defineSchema({
     .index("by_storeSlug_and_createdAt", ["storeSlug", "createdAt"]),
   workspaces: defineTable({
     ownerClerkUserId: v.string(),
+    // Legacy storage counters, superseded by workspaceStorageUsage.
     managedRecordCount: v.optional(v.number()),
     managedByteCount: v.optional(v.number()),
     name: v.string(),
     createdAt: v.number(),
     updatedAt: v.number(),
   }).index("by_ownerClerkUserId", ["ownerClerkUserId"]),
+  workspaceStorageUsage: defineTable({
+    workspaceId: v.id("workspaces"),
+    recordCount: v.number(),
+    byteCount: v.number(),
+  }).index("by_workspaceId", ["workspaceId"]),
 
   workspaceEnrollments: defineTable({
     workspaceId: v.id("workspaces"),
