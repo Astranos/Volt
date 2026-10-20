@@ -44,8 +44,8 @@ function snapshotBatch(row: Doc<"resultBatches">) {
 type Retention = { policy: Awaited<ReturnType<typeof accountPolicy>>["workspace"]; now: number } | null;
 /**
  * Only storage-managed rows can expire, so pages without them skip the clock
- * and the billing reads. Calling Date.now() keeps Convex from serving the page
- * from its query cache, and every client auth refresh re-runs every page.
+ * and the billing reads. Reading the clock shortens query-cache reuse, so each
+ * client auth refresh re-read every page instead of hitting the cache.
  */
 async function retentionFor(ctx: QueryCtx, ownerClerkUserId: string, rows: Array<Doc<"scanResults">>): Promise<Retention> {
   if (!rows.some(row => row.storageManaged)) return null;
