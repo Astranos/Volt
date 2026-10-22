@@ -94,3 +94,11 @@ test("sweeping across another UPC still closes the open pill", () => {
   expect(show).toHaveBeenCalledTimes(1);
   expect(close).toHaveBeenCalledTimes(1);
 });
+
+test("dismissing the pill cancels a pending hover", () => {
+  const { root, show, menu } = setup({ value: true });
+  pointer(root, "mouseover", new FakeElement("012345678905"));
+  menu.pillClosed();
+  vi.advanceTimersByTime(150);
+  expect(show).not.toHaveBeenCalled();
+});

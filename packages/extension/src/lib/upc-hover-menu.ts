@@ -70,8 +70,10 @@ export function installUpcHoverMenu(root: EventTarget, { canShow, show, close }:
   );
 
   return {
-    /** The pill closed for any reason, so no UPC owns it any more. */
+    /** The pill closed for any reason (Escape, scroll, ...), so no UPC owns it
+     * and a pending hover must not reopen it. */
     pillClosed: () => {
+      clearTimer();
       hoveredUpcElement = null;
     },
   };
