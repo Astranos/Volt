@@ -63,8 +63,8 @@ export function installUpcHoverMenu(root: EventTarget, { canShow, show, close }:
       if (!upcElement) return;
       const relatedTarget = (event as MouseEvent).relatedTarget;
       if (relatedTarget instanceof Node && upcElement.contains(relatedTarget)) return;
-      if (upcElement === hoveredUpcElement) leave();
-      else clearTimer();
+      // Also replaces another UPC's pending open, so an open pill still closes.
+      leave();
     },
     true,
   );

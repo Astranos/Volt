@@ -79,3 +79,18 @@ test("moving into the pill keeps it open", () => {
   vi.advanceTimersByTime(250);
   expect(close).toHaveBeenCalledTimes(1);
 });
+
+test("sweeping across another UPC still closes the open pill", () => {
+  const { root, show, close } = setup({ value: true });
+  const first = new FakeElement("012345678905");
+  const second = new FakeElement("036000291452");
+  pointer(root, "mouseover", first);
+  vi.advanceTimersByTime(150);
+
+  pointer(root, "mouseout", first);
+  pointer(root, "mouseover", second);
+  pointer(root, "mouseout", second);
+  vi.advanceTimersByTime(250);
+  expect(show).toHaveBeenCalledTimes(1);
+  expect(close).toHaveBeenCalledTimes(1);
+});
