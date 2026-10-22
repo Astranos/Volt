@@ -14,6 +14,7 @@ import {
   updateCustomTopOfferStartingDefaultPercentage,
   updateCustomTopOfferStartingRule,
   updateTopOfferStartingDefaultPercentage,
+  updateTopOfferCheckoutRate,
   updateTopOfferStartingRateRule,
 } from "./top-offers.ts";
 
@@ -79,13 +80,13 @@ test("calculateTopOfferResults follows the all-customer max cash guide", () => {
       startingOfferCheckout: 45,
       topOfferCheckout: 95,
       startingOfferNewCustomer: 45,
-      topOfferNewCustomer: 65,
+      topOfferNewCustomer: 60,
       customOffers: [],
     }
   );
 });
 
-test("calculateTopOfferResults matches the Google Sheet top-offer row", () => {
+test("calculateTopOfferResults matches the paper guide at $250", () => {
   assert.deepEqual(
     calculateTopOfferResults(250),
     {
@@ -97,7 +98,7 @@ test("calculateTopOfferResults matches the Google Sheet top-offer row", () => {
       startingOfferCheckout: 100,
       topOfferCheckout: 160,
       startingOfferNewCustomer: 100,
-      topOfferNewCustomer: 135,
+      topOfferNewCustomer: 125,
       customOffers: [],
     }
   );
@@ -106,6 +107,12 @@ test("calculateTopOfferResults matches the Google Sheet top-offer row", () => {
 test("premium offer only goes above the guide for prices over 200", () => {
   assert.equal(calculateTopOfferResults(199).topOfferPremium, 55);
   assert.equal(calculateTopOfferResults(200).topOfferPremium, 100);
+});
+
+test("offers that land exactly on a $5 step are not rounded down", () => {
+  const results = calculateTopOfferResults(1300);
+  assert.equal(results.topOfferPremium, 910);
+  assert.equal(results.topOfferNewCustomer, 910);
 });
 
 test("legacy default offer rates migrate to the current guide", () => {
@@ -118,6 +125,41 @@ test("legacy default offer rates migrate to the current guide", () => {
     calculateTopOfferResults(250, { customRates: LEGACY_CUSTOM_RATES }).topOfferCheckout,
     160
   );
+});
+
+test("new customer max stays 5-10% above the guide at every tier", () => {
+  for (const price of [40, 80, 150, 199, 200, 249, 250, 499, 600, 1000]) {
+    const { topOffer, topOfferNewCustomer } = calculateTopOfferResults(price);
+    const guideRate = topOffer / price;
+    const newCustomerRate = topOfferNewCustomer / price;
+    assert.ok(
+      newCustomerRate - guideRate <= 0.1 + 5 / price,
+      `$${price}: new customer ${topOfferNewCustomer} vs guide ${topOffer}`
+    );
+  }
+});
+
+test("sheet-era new customer defaults migrate to the paper guide", () => {
+  const customRates = {
+    ...DEFAULT_CUSTOM_RATES,
+    newCustomer: {
+      rules: [
+        { threshold: 50, percentage: 0.3 },
+        { threshold: 100, percentage: 0.35 },
+        { threshold: 250, percentage: 0.45 },
+        { threshold: 500, percentage: 0.55 },
+        { threshold: 750, percentage: 0.6 },
+      ],
+      defaultPercentage: 0.7,
+    },
+  };
+  assert.deepEqual(migrateDefaultTopOfferRates(customRates), DEFAULT_CUSTOM_RATES);
+  assert.equal(calculateTopOfferResults(150, { customRates }).topOfferNewCustomer, 60);
+});
+
+test("checkout rate can be set to 80%", () => {
+  const settings = updateTopOfferCheckoutRate(undefined, 0.8);
+  assert.equal(calculateTopOfferResults(1000, settings).topOfferCheckout, 800);
 });
 
 test("new customer max offer can be customized", () => {
