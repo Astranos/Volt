@@ -119,16 +119,14 @@ export async function reserveWorkspaceStorage(
   // Read the row again so a caller performing multiple adjustments cannot use stale counters.
   const current = await ctx.db.get(workspace._id);
   if (!current) throw new ConvexError("Workspace no longer exists");
-  const recordsUsed = (current.managedRecordCount ?? 0) + records;
-  const bytesUsed = (current.managedByteCount ?? 0) + bytes;
+  const usage = await storageUsage(ctx, current);
+  const recordsUsed = usage.records + records;
+  const bytesUsed = usage.bytes + bytes;
   if (recordsUsed > policy.recordsLimit)
     throw new ConvexError("Workspace record quota exceeded");
   if (bytesUsed > policy.bytesLimit)
     throw new ConvexError("Workspace storage quota exceeded");
-  await ctx.db.patch(workspace._id, {
-    managedRecordCount: recordsUsed,
-    managedByteCount: bytesUsed,
-  });
+  await writeStorageUsage(ctx, current._id, usage.row, recordsUsed, bytesUsed);
   return policy;
 }
 
@@ -140,13 +138,42 @@ export async function adjustWorkspaceStorage(
 ) {
   const workspace = await ctx.db.get(workspaceId);
   if (!workspace) return;
-  await ctx.db.patch(workspaceId, {
-    managedRecordCount: Math.max(
-      0,
-      (workspace.managedRecordCount ?? 0) + records,
-    ),
-    managedByteCount: Math.max(0, (workspace.managedByteCount ?? 0) + bytes),
-  });
+  const usage = await storageUsage(ctx, workspace);
+  await writeStorageUsage(
+    ctx,
+    workspaceId,
+    usage.row,
+    Math.max(0, usage.records + records),
+    Math.max(0, usage.bytes + bytes),
+  );
+}
+
+/**
+ * Counters live beside the workspace, not on it: every snapshot page reads the
+ * workspace row, so patching it on each capture re-ran every subscribed page.
+ * Workspaces without a usage row fall back to the legacy fields.
+ */
+async function storageUsage(ctx: ReaderCtx, workspace: Doc<"workspaces">) {
+  const row = await ctx.db
+    .query("workspaceStorageUsage")
+    .withIndex("by_workspaceId", (q) => q.eq("workspaceId", workspace._id))
+    .unique();
+  return {
+    row,
+    records: row?.recordCount ?? workspace.managedRecordCount ?? 0,
+    bytes: row?.byteCount ?? workspace.managedByteCount ?? 0,
+  };
+}
+
+async function writeStorageUsage(
+  ctx: MutationCtx,
+  workspaceId: Id<"workspaces">,
+  row: Doc<"workspaceStorageUsage"> | null,
+  recordCount: number,
+  byteCount: number,
+) {
+  if (row) await ctx.db.patch(row._id, { recordCount, byteCount });
+  else await ctx.db.insert("workspaceStorageUsage", { workspaceId, recordCount, byteCount });
 }
 
 export const getUsage = query({
@@ -168,11 +195,12 @@ export const getUsage = query({
     if (!identity) throw new ConvexError("Authentication required");
     const workspace = await workspaceForUser(ctx, identity.subject);
     const policy = (await accountPolicy(ctx, identity.subject)).workspace;
+    const usage = workspace ? await storageUsage(ctx, workspace) : null;
     return {
       enabled: workspaceLifecycleEnabled(),
       ...policy,
-      recordsUsed: workspace?.managedRecordCount ?? 0,
-      bytesUsed: workspace?.managedByteCount ?? 0,
+      recordsUsed: usage?.records ?? 0,
+      bytesUsed: usage?.bytes ?? 0,
     };
   },
 });
