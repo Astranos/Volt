@@ -12,7 +12,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { createMobileCaptureController } from "./context-menu-mobile-capture";
 import { initializeSidePanelContext } from "../src/lib/sidepanel-gesture";
 import { installUpcHoverMenu } from "../src/lib/upc-hover-menu";
-import { normalizeSelectionSuggestionText, positionSelectionSuggestions, selectionSuggestionActionWidth, selectionSuggestionPillWidth, shouldShowSelectionSuggestions } from "../src/domain/selection-suggestions";
+import { readPageSelection } from "../src/lib/page-selection";
+import { positionSelectionSuggestions, selectionSuggestionActionWidth, selectionSuggestionPillWidth, shouldShowSelectionSuggestions } from "../src/domain/selection-suggestions";
 import { DEFAULT_CONTEXT_ACTIONS, DEFAULT_POPUP_ACTIONS, UPC_HOVER_ACTIONS, linkToTextHighlight, normalizeSelectionActions, selectionActionKey, selectionActionLabel, selectionActionUrl, type SelectionAction } from "../src/domain/selection-actions";
 import { deepActiveElement, isolateMenuPointerEvents } from "../src/domain/context-menu-host";
 import { Search, PackageSearch, TrendingUp, Copy, Clipboard, ExternalLink, Download, Settings, ChevronLeft, ChevronRight, Smartphone, Calculator, Link2, BookOpen, Sparkles } from "lucide-react";
@@ -647,71 +648,17 @@ export default defineContentScript({
     };
 
     const getSelectionSnapshot = () => {
-      const pageSelection = window.getSelection();
+      const snapshot = readPageSelection();
       if (
-        !pageSelection ||
-        pageSelection.isCollapsed ||
-        pageSelection.rangeCount === 0
-      ) {
-        return null;
-      }
-
-      const selection = normalizeSelectionSuggestionText(
-        pageSelection.toString(),
-      );
-      const selectionNode = pageSelection.anchorNode;
-      const selectionElement =
-        selectionNode instanceof Element
-          ? selectionNode
-          : selectionNode?.parentElement ?? null;
-      const isEditable =
-        document.designMode?.toLowerCase() === "on" ||
-        Boolean(
-          selectionElement?.closest(
-            "input, textarea, [contenteditable=''], [contenteditable='true'], [role='textbox']",
-          ),
-        );
-      const range = pageSelection.getRangeAt(0);
-      const visibleRects = Array.from(range.getClientRects()).filter(
-        (rect) => rect.width > 0 && rect.height > 0,
-      );
-      const sourceRect = range.getBoundingClientRect();
-      const selectionTop = visibleRects.reduce(
-        (top, rect) => Math.min(top, rect.top),
-        sourceRect.top,
-      );
-      const selectionBottom = visibleRects.reduce(
-        (bottom, rect) => Math.max(bottom, rect.bottom),
-        sourceRect.bottom,
-      );
-      const selectionLeft = visibleRects.reduce(
-        (left, rect) => Math.min(left, rect.left),
-        sourceRect.left,
-      );
-      const selectionRight = visibleRects.reduce(
-        (right, rect) => Math.max(right, rect.right),
-        sourceRect.right,
-      );
-      const rect = {
-        bottom: selectionBottom,
-        height: selectionBottom - selectionTop,
-        left: selectionLeft,
-        top: selectionTop,
-        width: selectionRight - selectionLeft,
-      };
-
-      if (
+        !snapshot ||
         !shouldShowSelectionSuggestions({
           enabled: selectionSuggestionsEnabled,
-          isEditable,
-          rect,
-          selection,
+          ...snapshot,
         })
       ) {
         return null;
       }
-
-      return { rect, selection };
+      return { rect: snapshot.rect, selection: snapshot.selection };
     };
 
     const openSelectionAction = (
