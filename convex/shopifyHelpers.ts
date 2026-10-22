@@ -138,6 +138,24 @@ export function productSearchQuery(input: string): string {
   return terms.join(" ");
 }
 
+function moneyAmount(value: unknown): { amount: string; currencyCode: string } | null {
+  if (value === null || value === undefined) return null;
+  const money = object(value);
+  return typeof money.amount === "string" && /^\d+(?:\.\d+)?$/.test(money.amount)
+    && typeof money.currencyCode === "string" && /^[A-Z]{3}$/.test(money.currencyCode)
+    ? { amount: money.amount, currencyCode: money.currencyCode } : null;
+}
+
+function productCondition(product: Record<string, unknown>): string | null {
+  const metafield = product.conditionMetafield === null || product.conditionMetafield === undefined ? null : object(product.conditionMetafield);
+  const customCondition = typeof metafield?.value === "string" ? metafield.value.trim() : "";
+  const tags = product.tags;
+  if (!Array.isArray(tags)) throw new ConvexError("Shopify returned invalid product tags.");
+  const conditionTag = tags.find(tag => typeof tag === "string" && /^condition\s*:/i.test(tag));
+  const taggedCondition = typeof conditionTag === "string" ? conditionTag.replace(/^condition\s*:/i, "").trim() : "";
+  return (customCondition || taggedCondition || null)?.slice(0, 200) ?? null;
+}
+
 export async function fetchSearchProducts(shop: string, access: string, input: string, hiddenIds: ReadonlySet<string> = new Set()): Promise<{ shop: string; products: SearchProduct[] }> {
   const search = productSearchQuery(input);
   const data = await graphql(shop, access, `query SearchProducts($inStock: String!, $outOfStock: String!) {
@@ -192,22 +210,87 @@ export async function fetchSearchProducts(shop: string, access: string, input: s
       const skus = variants.map(variant => object(variant).sku).filter((sku): sku is string => typeof sku === "string" && sku.trim().length > 0);
       const queryLower = input.trim().toLowerCase();
       const sku = (skus.find(value => value.toLowerCase().includes(queryLower)) ?? skus[0] ?? null)?.slice(0, 255) ?? null;
-      const metafield = product.conditionMetafield === null ? null : object(product.conditionMetafield);
-      const customCondition = typeof metafield?.value === "string" ? metafield.value.trim() : "";
-      const tags = product.tags;
-      if (!Array.isArray(tags)) throw new ConvexError("Shopify returned invalid product tags.");
-      const conditionTag = tags.find(tag => typeof tag === "string" && /^condition\s*:/i.test(tag));
-      const taggedCondition = typeof conditionTag === "string" ? conditionTag.replace(/^condition\s*:/i, "").trim() : "";
       products.push({
         id, title: string(product.title), status: string(product.status), totalInventory: inventory,
         url: `https://admin.shopify.com/store/${shop.split(".")[0]}/products/${legacyId}`, imageUrl,
         price, currencyCode,
-        sku, condition: (customCondition || taggedCondition || null)?.slice(0, 200) ?? null,
+        sku, condition: productCondition(product),
       });
       seen.add(id);
     }
   }
   return { shop, products: products.sort((a, b) => Number(b.totalInventory > 0) - Number(a.totalInventory > 0)).slice(0, 30) };
+}
+
+export type ProductDetails = {
+  id: string; title: string; status: string; totalInventory: number; url: string;
+  images: string[]; currencyCode: string | null; minPrice: string | null; maxPrice: string | null;
+  condition: string | null; vendor: string | null; productType: string | null; descriptionHtml: string;
+  variants: { id: string; title: string; sku: string | null; price: string | null }[];
+};
+export const MAX_COMPARE_PRODUCTS = 8;
+const MAX_DESCRIPTION_HTML = 60000;
+
+export async function fetchProductDetails(shop: string, access: string, ids: string[]): Promise<ProductDetails[]> {
+  if (!ids.length || ids.length > MAX_COMPARE_PRODUCTS || new Set(ids).size !== ids.length
+    || !ids.every(id => /^gid:\/\/shopify\/Product\/\d+$/.test(id))) {
+    throw new ConvexError(`Compare 1 to ${MAX_COMPARE_PRODUCTS} products.`);
+  }
+  const data = await graphql(shop, access, `query CompareProducts($ids: [ID!]!) {
+    nodes(ids: $ids) {
+      ... on Product {
+        id legacyResourceId title status totalInventory tags vendor productType descriptionHtml
+        media(first: 12) { nodes { preview { image { url } } } }
+        priceRangeV2 { minVariantPrice { amount currencyCode } maxVariantPrice { amount currencyCode } }
+        conditionMetafield: metafield(namespace: "custom", key: "condition") { value }
+        variants(first: 20) { nodes { id title sku price } }
+      }
+    }
+  }`, { ids });
+  if (!Array.isArray(data.nodes)) throw new ConvexError("Shopify returned invalid products.");
+  const products: ProductDetails[] = [];
+  for (const value of data.nodes) {
+    // Deleted products come back as null; skip them instead of failing the whole comparison.
+    if (value === null) continue;
+    const product = object(value);
+    const id = string(product.id);
+    const legacyId = string(product.legacyResourceId);
+    if (id !== `gid://shopify/Product/${legacyId}` || !ids.includes(id)) throw new ConvexError("Shopify returned an invalid product ID.");
+    const inventory = product.totalInventory;
+    if (typeof inventory !== "number" || !Number.isSafeInteger(inventory)) throw new ConvexError("Shopify returned invalid inventory.");
+    const media = object(product.media).nodes;
+    if (!Array.isArray(media)) throw new ConvexError("Shopify returned invalid media.");
+    const images = media.flatMap((item) => {
+      const preview = object(item).preview;
+      const image = preview === null || preview === undefined ? null : object(preview).image;
+      const url = image === null || image === undefined ? null : object(image).url;
+      return typeof url === "string" && /^https:\/\//i.test(url) ? [url] : [];
+    });
+    const priceRange = product.priceRangeV2 === null || product.priceRangeV2 === undefined ? null : object(product.priceRangeV2);
+    const min = moneyAmount(priceRange?.minVariantPrice);
+    const max = moneyAmount(priceRange?.maxVariantPrice);
+    const variants = object(product.variants).nodes;
+    if (!Array.isArray(variants)) throw new ConvexError("Shopify returned invalid variants.");
+    const description = product.descriptionHtml;
+    products.push({
+      id, title: string(product.title), status: string(product.status), totalInventory: inventory,
+      url: `https://admin.shopify.com/store/${shop.split(".")[0]}/products/${legacyId}`, images,
+      currencyCode: min?.currencyCode ?? null, minPrice: min?.amount ?? null,
+      maxPrice: max && max.currencyCode === min?.currencyCode ? max.amount : min?.amount ?? null,
+      condition: productCondition(product),
+      vendor: typeof product.vendor === "string" && product.vendor.trim() ? product.vendor.trim().slice(0, 255) : null,
+      productType: typeof product.productType === "string" && product.productType.trim() ? product.productType.trim().slice(0, 255) : null,
+      descriptionHtml: typeof description === "string" ? description.slice(0, MAX_DESCRIPTION_HTML) : "",
+      variants: variants.map((item) => {
+        const variant = object(item);
+        const sku = typeof variant.sku === "string" && variant.sku.trim() ? variant.sku.trim().slice(0, 255) : null;
+        const price = typeof variant.price === "string" && /^\d+(?:\.\d+)?$/.test(variant.price) ? variant.price : null;
+        return { id: string(variant.id), title: typeof variant.title === "string" ? variant.title.slice(0, 255) : "", sku, price };
+      }),
+    });
+  }
+  // Keep the order the user picked.
+  return products.sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
 }
 
 export async function fetchYesterday(shop: string, access: string, range: { date: string; start: string; end: string }) {

@@ -19,7 +19,8 @@ const checkedOption = (html: string) =>
 test("without a selection, disables search while retaining general actions", () => {
   const html = render("", null);
   expect(html).toContain('aria-disabled="true"');
-  expect(html).toContain("Select text for search actions");
+  expect(html).toContain("Select text on the page first");
+  expect(html).not.toContain('role="radiogroup"');
   expect(html).toContain("Settings");
   expect(html).not.toContain("Open link");
 });
@@ -28,7 +29,6 @@ test("selection and clicked link enable their corresponding actions", () => {
   const html = render("hello", "https://example.test");
   expect(html).toContain("Search text");
   expect(html).toContain("Open link");
-  expect(html).toContain("hello");
   expect(html).not.toContain('aria-disabled="true"');
 });
 

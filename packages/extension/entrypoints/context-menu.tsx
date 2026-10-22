@@ -13,6 +13,7 @@ import { createMobileCaptureController } from "./context-menu-mobile-capture";
 import { initializeSidePanelContext } from "../src/lib/sidepanel-gesture";
 import { normalizeSelectionSuggestionText, positionSelectionSuggestions, selectionSuggestionActionWidth, selectionSuggestionPillWidth, shouldShowSelectionSuggestions } from "../src/domain/selection-suggestions";
 import { DEFAULT_CONTEXT_ACTIONS, DEFAULT_POPUP_ACTIONS, linkToTextHighlight, normalizeSelectionActions, selectionActionKey, selectionActionLabel, selectionActionUrl, type SelectionAction } from "../src/domain/selection-actions";
+import { deepActiveElement, isolateMenuPointerEvents } from "../src/domain/context-menu-host";
 import { Search, PackageSearch, TrendingUp, Copy, Clipboard, ExternalLink, Download, Settings, ChevronLeft, ChevronRight, Smartphone, Calculator, Link2, BookOpen, Sparkles } from "lucide-react";
 
 export default defineContentScript({
@@ -241,25 +242,30 @@ export default defineContentScript({
         return text;
       };
 
+      // The textarea fallback focuses a hidden element, which closes popovers that
+      // dismiss on focusout (Shopify's search), so it runs last and restores focus.
       const strategies = [
         () =>
           tryNavigatorApi().catch((err) => {
             log("navigator.clipboard.readText failed", err);
             return "";
           }),
-        () => {
-          try {
-            return tryExecCommand();
-          } catch (err) {
-            log("document.execCommand paste failed", err);
-            return "";
-          }
-        },
         () =>
           tryBackgroundFallback().catch((err) => {
             log("Background clipboard read failed", err);
             return "";
           }),
+        () => {
+          const focused = deepActiveElement();
+          try {
+            return tryExecCommand();
+          } catch (err) {
+            log("document.execCommand paste failed", err);
+            return "";
+          } finally {
+            focused?.focus?.();
+          }
+        },
       ];
 
       for (const strategy of strategies) {
@@ -315,6 +321,9 @@ export default defineContentScript({
         label: "Paste",
         icon: Clipboard,
         onInvoke: async () => {
+          // closeMenu clears these as soon as this returns its promise; capture them first.
+          const focusedTarget = focusedElementBeforeMenu;
+          const clickedTarget = clickedElement;
           try {
             const text = await readClipboardText();
             if (!text) {
@@ -327,9 +336,7 @@ export default defineContentScript({
             // 2. The clicked element
             // 3. The current active element
             let targetEl: HTMLElement | null =
-              focusedElementBeforeMenu ||
-              clickedElement ||
-              (document.activeElement as HTMLElement);
+              focusedTarget || clickedTarget || deepActiveElement();
 
             // If the target is the clicked element but it's not an input,
             // check if it's inside a contentEditable or look for a nearby input
@@ -359,6 +366,9 @@ export default defineContentScript({
 
               // Focus the element first
               input.focus();
+
+              // A real edit (undoable, composed input event) when the browser allows it.
+              if (document.execCommand?.("insertText", false, text)) return;
 
               const start = input.selectionStart || 0;
               const end = input.selectionEnd || 0;
@@ -580,6 +590,7 @@ export default defineContentScript({
       rootEl.className = "volt-cm-root";
       shadow.appendChild(style);
       shadow.appendChild(rootEl);
+      isolateMenuPointerEvents(host);
       document.documentElement.appendChild(host);
     };
 
@@ -848,7 +859,7 @@ export default defineContentScript({
         lastSelection = sel ? sel.toString().trim() : "";
         x = e.clientX;
         y = e.clientY;
-        focusedElementBeforeMenu = document.activeElement as HTMLElement;
+        focusedElementBeforeMenu = deepActiveElement();
 
         e.preventDefault();
         e.stopPropagation();

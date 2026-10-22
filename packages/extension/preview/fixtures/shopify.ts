@@ -1,0 +1,42 @@
+// Sample store data. Images are real product photos so shots look like a real
+// store; they load from Wikimedia, so capturing needs a network connection.
+const wikimedia = "https://upload.wikimedia.org/wikipedia/commons/thumb";
+
+export const productImages = {
+  iphone13: `${wikimedia}/0/0c/IPhone_13_vector.svg/500px-IPhone_13_vector.svg.png`,
+  iphone13Pro: `${wikimedia}/b/b5/IPhone_13_Pro_vector.svg/500px-IPhone_13_Pro_vector.svg.png`,
+  iphone13Mini: `${wikimedia}/8/8b/IPhone_13_Mini_Gr%C3%BCn_Freigestellt.png/500px-IPhone_13_Mini_Gr%C3%BCn_Freigestellt.png`,
+  iphone13ProMax: `${wikimedia}/1/13/Back_view_of_iPhone_13_Pro_Max_Gold.jpg/500px-Back_view_of_iPhone_13_Pro_Max_Gold.jpg`,
+};
+
+export const shop = "volt-demo.myshopify.com";
+
+const product = (id: number, title: string, totalInventory: number, price: string, sku: string, condition: string, imageUrl: string) => ({
+  id: `gid://shopify/Product/${id}`,
+  title,
+  status: "ACTIVE",
+  totalInventory,
+  url: `https://admin.shopify.com/store/volt-demo/products/${id}`,
+  imageUrl,
+  price,
+  currencyCode: "USD",
+  sku,
+  condition,
+});
+
+export const shopifySearchResult = {
+  shop,
+  products: [
+    product(101, "Apple iPhone 13 128GB Midnight — Unlocked", 3, "389.00", "IP13-128-MID-A", "Used - Excellent", productImages.iphone13),
+    product(102, "Apple iPhone 13 Pro 256GB Graphite — Unlocked", 1, "529.00", "IP13P-256-GR", "Used - Good", productImages.iphone13Pro),
+    product(103, "Apple iPhone 13 mini 128GB Green — AT&T", 2, "279.00", "IP13M-128-GRN", "Used - Fair", productImages.iphone13Mini),
+    product(104, "Apple iPhone 13 Pro Max 512GB Gold — Unlocked", 1, "689.00", "IP13PM-512-GLD", "Open Box", productImages.iphone13ProMax),
+    product(105, "Apple iPhone 13 128GB Pink — Verizon (For parts)", 0, "119.00", "IP13-128-PNK-P", "For parts", productImages.iphone13),
+  ],
+};
+
+/** chrome.runtime message handlers for a connected store. */
+export const shopifyMessages = {
+  shopifyAuditStatus: () => ({ success: true, value: { shop } }),
+  shopifyAuditSearchProducts: () => ({ success: true, value: shopifySearchResult }),
+};

@@ -114,7 +114,7 @@ Run the checks relevant to the files you changed. These commands run from the re
 
 `pnpm test` runs the repository test suites. Run `pnpm check:repo-health` to check maintainability limits. For native compilation, use `pnpm --filter @volt/mobile build:ios`, which targets a generic iOS Simulator and needs no personal device ID. When build verification is relevant, use `pnpm build:extension` or `pnpm build:web`. Root `pnpm build` includes iOS and requires Xcode.
 
-For UI or cross-device changes, include the tested browser/device, steps, expected result, and actual result. Add screenshots for visual changes. Test scanner retries and account boundaries when those behaviors change.
+For UI or cross-device changes, include the tested browser/device, steps, expected result, and actual result. Add screenshots for visual changes (`pnpm shots`, see `packages/extension/preview/README.md`). Test scanner retries and account boundaries when those behaviors change.
 
 ## Submit a pull request
 

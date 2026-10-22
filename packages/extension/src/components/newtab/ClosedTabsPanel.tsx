@@ -6,8 +6,10 @@ import { RecentTabTiles } from "./RecentTabTiles";
 import { ToggleGroup, ToggleGroupItem } from "@/src/components/ui/toggle-group";
 import { Search as SearchIcon, Clock } from "lucide-react";
 import { type SearchMode } from "./NewTabHelp";
-import { ShopifyProductResults, type ShopifyProductSearchState } from "./ShopifyProductResults";
+import { ShopifyCompareTray, ShopifyProductResults, type ShopifyProductSearchState } from "./ShopifyProductResults";
 import { searchShopifyProducts, setShopifyProductHidden, type ShopifySearchProduct } from "../../shopify-audit/client";
+import { MAX_COMPARE_PRODUCTS } from "../../domain/shopify-audit";
+import { shopifyComparePath } from "../../shopify-compare/compare-url";
 import {
   getSearchPrefixMode,
   NEW_TAB_SEARCH_PROVIDERS,
@@ -26,7 +28,7 @@ const SEARCH_MODE_OPTIONS: Array<{
   label: string;
   id: string;
 }> = [
-  { mode: "closed-tabs", label: "Tabs", id: "tour-search-tabs" },
+  { mode: "shopify", label: "Shopify", id: "tour-search-shopify" },
   {
     mode: "pricecharting",
     label: "PriceCharting",
@@ -34,12 +36,11 @@ const SEARCH_MODE_OPTIONS: Array<{
   },
   { mode: "barcodelookup", label: "UPC", id: "tour-search-upc" },
   { mode: "ebay", label: "eBay", id: "tour-search-ebay" },
-  { mode: "shopify", label: "Shopify", id: "tour-search-shopify" },
 ];
 
 export function ClosedTabsPanel({
   onSearchSubmit,
-  activeMode = "closed-tabs",
+  activeMode = "shopify",
   onToggleSearchMode,
 }: ClosedTabsPanelProps) {
   const [search, setSearch] = useState("");
@@ -48,6 +49,7 @@ export function ClosedTabsPanel({
   const [selectedValue, setSelectedValue] = useState<string>("");
   const [shopifySearch, setShopifySearch] = useState<ShopifyProductSearchState>({ kind: "idle" });
   const [shopifyRetry, setShopifyRetry] = useState(0);
+  const [compareProducts, setCompareProducts] = useState<ShopifySearchProduct[]>([]);
   const shopifySearchGeneration = useRef(0);
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -97,6 +99,16 @@ export function ClosedTabsPanel({
     }
   };
 
+  const toggleCompare = (product: ShopifySearchProduct) => {
+    setCompareProducts((current) => current.some((item) => item.id === product.id)
+      ? current.filter((item) => item.id !== product.id)
+      : current.length < MAX_COMPARE_PRODUCTS ? [...current, product] : current);
+  };
+
+  const openCompare = () => {
+    void chrome.tabs.create({ url: chrome.runtime.getURL(shopifyComparePath(compareProducts.map((product) => product.id))), active: true });
+  };
+
   // Treat clicks anywhere on the search row's padding/icon area as a
   // request to focus the input, except when they land on a real control.
   const focusInputFromRow = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -127,11 +139,10 @@ export function ClosedTabsPanel({
     }
   };
 
-  const filteredTabs = TabManager.filterTabs(closedTabs, search);
-  // Top tiles show the 4 most-recently-closed tabs, only when no search active.
+  // Provider modes show recently closed tabs until the user starts typing a search.
   const showTiles = displayedMode !== "shopify" && !trimmedSearch && closedTabs.length > 0;
   const topTiles = showTiles ? closedTabs.slice(0, 4) : [];
-  const listTabs = showTiles ? closedTabs.slice(4) : filteredTabs;
+  const listTabs = showTiles ? closedTabs.slice(4) : [];
 
   // Build a single intermixed list of closed tabs
   const combinedItems: Array<
@@ -148,23 +159,19 @@ export function ClosedTabsPanel({
     const provider = NEW_TAB_SEARCH_PROVIDERS.find(
       (candidate) => candidate.id === displayedMode
     );
-    return provider?.name || "Closed tabs";
+    return provider?.name ?? "";
   };
 
   const getSearchPlaceholder = () => {
     switch (activeMode) {
-      case "closed-tabs":
-        return "Search closed tabs...";
       case "ebay":
         return "Search on eBay (sold prices)";
       case "pricecharting":
         return "Search on PriceCharting";
       case "barcodelookup":
         return "Search on BarcodeLookup (UPC)";
-      case "shopify":
-        return "Search your Shopify products...";
       default:
-        return "Search closed tabs...";
+        return "Search your Shopify products...";
     }
   };
 
@@ -193,8 +200,7 @@ export function ClosedTabsPanel({
     if (
       e.key === "Enter" &&
       onSearchSubmit &&
-      displayedMode !== "shopify" &&
-      (activeMode !== "closed-tabs" || prefixedSearch.mode)
+      displayedMode !== "shopify"
     ) {
       e.preventDefault();
       onSearchSubmit(search);
@@ -298,6 +304,9 @@ export function ClosedTabsPanel({
                 state={shopifySearch}
                 onOpenProduct={(url) => { void chrome.tabs.create({ url, active: true }); }}
                 onHideProduct={(product) => { void hideShopifyProduct(product); }}
+                compareIds={new Set(compareProducts.map((product) => product.id))}
+                compareFull={compareProducts.length >= MAX_COMPARE_PRODUCTS}
+                onToggleCompare={toggleCompare}
                 onRetry={() => setShopifyRetry((current) => current + 1)}
                 onOpenSettings={() => { void chrome.tabs.create({ url: chrome.runtime.getURL("/options.html#shopify-audit"), active: true }); }}
               />
@@ -307,9 +316,7 @@ export function ClosedTabsPanel({
               </div>
             ) : (
               <>
-                {trimmedSearch &&
-                  onSearchSubmit &&
-                  displayedMode !== "closed-tabs" && (
+                {trimmedSearch && onSearchSubmit && (
                   <Command.Item
                     key="search-action"
                     value="search-action"
@@ -371,6 +378,14 @@ export function ClosedTabsPanel({
           </Command.List>
         </div>
       </div>
+      {displayedMode === "shopify" && compareProducts.length > 0 && (
+        <ShopifyCompareTray
+          products={compareProducts}
+          onRemove={toggleCompare}
+          onClear={() => setCompareProducts([])}
+          onCompare={openCompare}
+        />
+      )}
     </Command>
   );
 }

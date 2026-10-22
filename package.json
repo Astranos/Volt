@@ -26,6 +26,7 @@
     "build:web": "pnpm --filter @volt/web build",
     "build": "pnpm -r build",
     "zip:extension": "pnpm --filter @volt/extension zip",
+    "shots": "pnpm --filter @volt/extension shots",
     "status:extension-store": "pnpm --filter @volt/extension store:status",
     "release:extension:dry-run": "pnpm --filter @volt/extension release:dry-run",
     "release:extension": "pnpm --filter @volt/extension release"

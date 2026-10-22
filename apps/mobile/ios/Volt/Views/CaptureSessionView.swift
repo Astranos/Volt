@@ -36,6 +36,7 @@ struct CaptureSessionView: View {
                 // their full-bleed preview.
                 ScannerCameraLayer(gridVisible: gridVisible && !store.isProductScannerActive)
                     .ignoresSafeArea(edges: store.activeMode == .photo ? [] : .all)
+                    .shutterFeedback(trigger: store.photoCaptureCount)
                     .opacity(store.activeMode == .dictation ? 0 : 1)
                     .allowsHitTesting(store.activeMode != .dictation)
             }
@@ -113,6 +114,11 @@ struct CaptureSessionView: View {
             if store.ocrReviewImage != nil {
                 OcrReviewControls(
                     regionCount: store.ocrTextRegions.count,
+                    targetLabel: CloudTargetLabel.targetLabel(for: store),
+                    targetSystemImage: store.cloudWorkspace.selectedTargetComputer == nil ? "iphone" : "desktopcomputer",
+                    onChangeTarget: {
+                        isTargetPickerPresented = true
+                    },
                     onRetake: {
                         resetSelectedText()
                         store.clearOcrReview()

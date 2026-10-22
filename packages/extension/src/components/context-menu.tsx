@@ -1,4 +1,5 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { X } from "lucide-react";
 import { OpenModeSwitch, opensInNewTab, useOpenMode, type OpenMode } from "./open-mode-switch";
 
 export type MenuAction = {
@@ -148,9 +149,21 @@ export function ContextMenu({ actions, selectionActionCount, quickActions, lastS
         style={{ left: `${pos.left}px`, top: `${pos.top}px` }}
       >
         <div className="hdr">
-          <span>Volt</span>
-          <button className="dismiss-btn" onClick={onDismiss} type="button">
-            Dismiss Menu
+          <span className="brand">
+            <svg aria-hidden="true" className="brand-mark" viewBox="0 0 128 128">
+              <path d="M18 42H43L60 80 49 100Z" />
+              <path d="M104 2 61 53h17l-27 51 11 22 49-89H94L104 2Z" />
+            </svg>
+            Volt
+          </span>
+          <button
+            aria-label="Dismiss Volt menu until this page reloads"
+            className="dismiss-btn"
+            onClick={onDismiss}
+            title="Use the browser menu until this page reloads"
+            type="button"
+          >
+            <X size={14} />
           </button>
         </div>
         <div className="quick-actions">
@@ -178,16 +191,6 @@ export function ContextMenu({ actions, selectionActionCount, quickActions, lastS
             );
           })}
         </div>
-        {hasSelection ? (
-          <div className="selection-context" title={lastSelection}>
-            <span className="selection-context-label">Selected</span>
-            <span className="selection-context-value">
-              “{lastSelection}”
-            </span>
-          </div>
-        ) : (
-          <div className="empty-hint">Select text for search actions</div>
-        )}
         <div className="group">
           {visibleItems.length === 0 && hasSelection && (
             <div className="empty-hint">No matching actions</div>
@@ -197,15 +200,14 @@ export function ContextMenu({ actions, selectionActionCount, quickActions, lastS
             return (
               <React.Fragment key={item.id}>
                 {i === 0 && selectionActionCount > 0 && (
-                  <>
+                  <div className="section-head">
                     <div className="section-label">Search</div>
-                    {hasUrlActions && (
-                      <div className="open-mode-row">
-                        <span className="open-mode-caption">Open in</span>
-                        <OpenModeSwitch mode={openMode} onChange={chooseOpenMode} />
-                      </div>
+                    {!hasSelection ? (
+                      <span className="section-hint">Select text on the page first</span>
+                    ) : (
+                      hasUrlActions && <OpenModeSwitch mode={openMode} onChange={chooseOpenMode} />
                     )}
-                  </>
+                  </div>
                 )}
                 {i === selectionActionCount && (
                   <>
@@ -248,6 +250,11 @@ export function ContextMenu({ actions, selectionActionCount, quickActions, lastS
               </React.Fragment>
             );
           })}
+        </div>
+        <div className="footer" aria-hidden="true">
+          <span><kbd>↑</kbd><kbd>↓</kbd> Navigate</span>
+          <span><kbd>↵</kbd> Open</span>
+          <span><kbd>esc</kbd> Close</span>
         </div>
       </div>
     </div>

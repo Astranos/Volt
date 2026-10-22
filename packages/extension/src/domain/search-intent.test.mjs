@@ -21,13 +21,13 @@ test("new-tab search providers are limited to resale workflows", () => {
   );
 });
 
-test("plain new-tab queries stay inside closed-tab search", () => {
+test("plain new-tab queries search the active provider", () => {
   assert.equal(
     resolveNewTabSearchIntent("iphone", {
-      activeMode: "closed-tabs",
-      providers: [],
-    }),
-    null,
+      activeMode: "ebay",
+      providers: NEW_TAB_SEARCH_PROVIDERS,
+    })?.kind,
+    "search-provider",
   );
 });
 
