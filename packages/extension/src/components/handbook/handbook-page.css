@@ -1,0 +1,504 @@
+/* Full-tab handbook. Builds on the sidepanel tokens and handbook.css. */
+
+#root {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.handbook-page {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.handbook-page-center {
+  align-items: center;
+  display: flex;
+  flex: 1;
+  justify-content: center;
+  padding: 32px;
+}
+
+.handbook-page-grid {
+  display: grid;
+  flex: 1;
+  grid-template-columns: 232px minmax(0, 1fr) 260px;
+  min-height: 0;
+}
+
+.handbook-nav,
+.handbook-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 20px 14px;
+}
+
+.handbook-nav {
+  background: rgba(255, 255, 255, 0.03);
+  border-right: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.handbook-nav nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.handbook-rail {
+  background: rgba(255, 255, 255, 0.02);
+  border-left: 1px solid rgba(255, 255, 255, 0.07);
+  gap: 8px;
+}
+
+.handbook-brand {
+  align-items: center;
+  color: #fafaf9;
+  display: flex;
+  font-size: 16px;
+  font-weight: 800;
+  gap: 8px;
+  margin: 0 8px 16px;
+}
+
+.handbook-brand img {
+  height: 22px;
+  width: 22px;
+}
+
+.handbook-nav-item {
+  align-items: center;
+  border-radius: 10px;
+  color: rgba(231, 229, 228, 0.86);
+  display: flex;
+  font-size: 13px;
+  font-weight: 550;
+  gap: 9px;
+  padding: 7px 10px;
+  text-align: left;
+  width: 100%;
+}
+
+.handbook-nav-item svg {
+  flex: none;
+  height: 15px;
+  opacity: 0.75;
+  width: 15px;
+}
+
+.handbook-nav-item > span:not(.handbook-nav-count) {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.handbook-nav-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.handbook-nav-item.is-active {
+  background: rgba(255, 255, 255, 0.1);
+  color: #4ade80;
+  font-weight: 650;
+}
+
+.handbook-nav-item.is-accent {
+  color: #4ade80;
+  font-weight: 650;
+}
+
+.handbook-nav-item.is-subtle {
+  color: rgba(214, 211, 209, 0.7);
+}
+
+.handbook-nav-count {
+  color: rgba(214, 211, 209, 0.6);
+  font-size: 11px;
+}
+
+.handbook-main {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 20px 28px 40px;
+}
+
+.handbook-main-top {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+
+.handbook-main-top .handbook-search {
+  flex: 1;
+}
+
+.handbook-list,
+.handbook-article,
+.handbook-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 760px;
+  width: 100%;
+}
+
+.handbook-list-row {
+  gap: 8px;
+}
+
+.handbook-list-open {
+  align-items: center;
+  display: flex;
+  flex: 1;
+  gap: 10px;
+  min-width: 0;
+  text-align: left;
+}
+
+.handbook-list-open:hover .handbook-row-value {
+  color: #4ade80;
+}
+
+.handbook-pin-mark {
+  display: inline;
+  height: 12px;
+  margin-left: 6px;
+  opacity: 0.6;
+  vertical-align: -1px;
+  width: 12px;
+}
+
+.handbook-reveal-on-hover {
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.handbook-list-row:hover .handbook-reveal-on-hover,
+.handbook-reveal-on-hover:focus-within {
+  opacity: 1;
+}
+
+.handbook-article-head {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.handbook-article-title {
+  color: #fafaf9;
+  font-size: 24px;
+  font-weight: 760;
+  letter-spacing: -0.015em;
+  line-height: 1.2;
+}
+
+.handbook-row-value.is-large {
+  font-size: 18px;
+  white-space: normal;
+}
+
+.handbook-article .handbook-segmented {
+  max-width: 360px;
+}
+
+.handbook-mini {
+  align-items: flex-start;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 11px;
+  color: #f5f5f4;
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+  gap: 4px;
+  padding: 9px 10px;
+  text-align: left;
+}
+
+.handbook-mini.is-link:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.handbook-mini-value {
+  font-weight: 650;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.handbook-rail .handbook-section-title {
+  margin-top: 6px;
+}
+
+.handbook-page-notice {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 24px auto;
+  max-width: 480px;
+  padding: 32px 28px;
+  text-align: center;
+}
+
+.handbook-page-notice-icon {
+  align-items: center;
+  display: flex;
+  height: 48px;
+  justify-content: center;
+  margin-bottom: 4px;
+  width: 48px;
+}
+
+.handbook-page-notice-icon svg {
+  height: 20px;
+  width: 20px;
+}
+
+.handbook-page-notice-actions {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.handbook-page-notice-actions .is-wide {
+  flex: none;
+}
+
+.handbook-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+}
+
+/* Editor */
+
+.handbook-editor-head {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.handbook-editor-head .handbook-segmented {
+  min-width: 300px;
+}
+
+.handbook-field {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.handbook-field-label {
+  color: rgba(231, 229, 228, 0.86);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.handbook-field-hint {
+  color: rgba(214, 211, 209, 0.6);
+  font-size: 11.5px;
+}
+
+.handbook-editor input:not([type="checkbox"]),
+.handbook-editor textarea {
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  color: #f5f5f4;
+  font-size: 13.5px;
+  min-width: 0;
+  outline: none;
+  padding: 8px 10px;
+  width: 100%;
+}
+
+.handbook-editor input:focus,
+.handbook-editor textarea:focus {
+  border-color: rgba(53, 213, 114, 0.45);
+}
+
+.handbook-field-row {
+  align-items: flex-end;
+  display: flex;
+  gap: 12px;
+}
+
+.handbook-field-row.is-compact {
+  gap: 8px;
+}
+
+.handbook-variants {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.handbook-variant {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+}
+
+.handbook-variant > .handbook-button {
+  align-self: flex-start;
+}
+
+.handbook-variant-remove {
+  height: 36px;
+}
+
+.handbook-step-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.handbook-step-editor li {
+  align-items: flex-start;
+  display: flex;
+  gap: 10px;
+}
+
+.handbook-step-editor .handbook-step-number {
+  margin-top: 6px;
+}
+
+.handbook-step-fields {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.handbook-step-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.handbook-checkbox {
+  align-items: center;
+  color: rgba(231, 229, 228, 0.86);
+  display: flex;
+  font-size: 13px;
+  gap: 8px;
+}
+
+.handbook-checkbox input {
+  accent-color: #16a34a;
+  height: 15px;
+  width: 15px;
+}
+
+.handbook-editor-error {
+  color: #f87171;
+  font-size: 13px;
+}
+
+.handbook-editor-actions {
+  display: flex;
+  gap: 8px;
+  max-width: 360px;
+}
+
+@media (max-width: 1080px) {
+  .handbook-page-grid {
+    grid-template-columns: 210px minmax(0, 1fr);
+  }
+
+  .handbook-rail {
+    display: none;
+  }
+}
+
+@media (prefers-color-scheme: light) {
+  .handbook-nav {
+    background: rgba(255, 255, 255, 0.4);
+    border-right-color: rgba(15, 23, 42, 0.07);
+  }
+
+  .handbook-rail {
+    background: rgba(255, 255, 255, 0.3);
+    border-left-color: rgba(15, 23, 42, 0.07);
+  }
+
+  .handbook-brand,
+  .handbook-article-title {
+    color: #1c1917;
+  }
+
+  .handbook-nav-item,
+  .handbook-field-label,
+  .handbook-checkbox {
+    color: #44403c;
+  }
+
+  .handbook-nav-item:hover {
+    background: rgba(255, 255, 255, 0.6);
+  }
+
+  .handbook-nav-item.is-active {
+    background: #fff;
+    box-shadow: 0 1px 4px rgba(15, 23, 42, 0.08);
+    color: #15803d;
+  }
+
+  .handbook-nav-item.is-accent,
+  .handbook-list-open:hover .handbook-row-value {
+    color: #15803d;
+  }
+
+  .handbook-nav-item.is-subtle,
+  .handbook-nav-count,
+  .handbook-field-hint {
+    color: #78716c;
+  }
+
+  .handbook-mini {
+    background: #fff;
+    border-color: rgba(15, 23, 42, 0.1);
+    color: #1c1917;
+  }
+
+  .handbook-mini.is-link:hover {
+    border-color: rgba(15, 23, 42, 0.2);
+  }
+
+  .handbook-editor input:not([type="checkbox"]),
+  .handbook-editor textarea {
+    background: #fff;
+    border-color: rgba(15, 23, 42, 0.12);
+    color: #1c1917;
+  }
+
+  .handbook-editor input:focus,
+  .handbook-editor textarea:focus {
+    border-color: rgba(22, 163, 74, 0.5);
+  }
+
+  .handbook-editor-error {
+    color: #dc2626;
+  }
+}
