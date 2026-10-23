@@ -83,6 +83,11 @@ export default function ShopifyAuditReview({ onClose }: { onClose?: () => void }
         const created = await chrome.tabs.create({ url: product.url, active: true, ...(typeof panelWindow.id === "number" ? { windowId: panelWindow.id } : {}) });
         if (typeof created.id !== "number") throw new Error("Chrome did not open the product tab.");
         tabId = created.id;
+        // Cancelled while opening: don't leave an untracked tab behind.
+        if (stale()) {
+          await chrome.tabs.remove(tabId).catch(() => undefined);
+          return;
+        }
       }
       if (stale()) return;
       await save({ ...(reviewRef.current ?? current), currentId: productId, tabId });
