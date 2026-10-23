@@ -48,6 +48,7 @@ function mount({ modern = true, card = true, width = 720, settings = {}, stored 
   if (!card) host.className = "";
   const location = { href: "https://admin.shopify.com/store/test/products/123" };
   let frame;
+  let checkFields;
   const messages = [];
   let onMessage;
   let onStorageChanged;
@@ -55,7 +56,7 @@ function mount({ modern = true, card = true, width = 720, settings = {}, stored 
     exports: {}, defineContentScript: (config) => config, document, window, location,
     history: { pushState() {}, replaceState() {} },
     MutationObserver: class { observe() {} },
-    requestAnimationFrame(callback) { frame = callback; }, setTimeout() {}, setInterval() {},
+    requestAnimationFrame(callback) { frame = callback; }, setTimeout() {}, setInterval(callback) { checkFields = callback; },
     console: { log() {} },
     chrome: {
       runtime: { getURL: (path) => path, onMessage: { addListener(callback) { onMessage = callback; } }, sendMessage: (message) => messages.push(message) },
@@ -74,7 +75,77 @@ function mount({ modern = true, card = true, width = 720, settings = {}, stored 
   context.exports.default.main();
   frame();
   return { document, window, host, container, location, messages, frame: () => frame(), resize: (width) => { availableWidth = width; frame(); }, settings: (enabled) => onMessage({ action: "shopify-buttons-settings-changed", enabled }),
+    poll: () => { checkFields(); frame(); },
     storageChanged: (changes) => onStorageChanged(changes, "sync") };
+}
+
+function addShadowUpc(document, value) {
+  const container = document.createElement("div");
+  container.id = "PRODUCT.metafields.custom.upc-anchor";
+  const field = document.createElement("s-internal-quick-text-field");
+  field.setAttribute("accessibilitylabel", "UPC");
+  field.value = "";
+  const root = field.attachShadow({ mode: "open" });
+  const display = document.createElement("span");
+  display.className = "display-value";
+  display.textContent = value;
+  const input = document.createElement("input");
+  input.value = value;
+  root.append(display, input);
+  container.appendChild(field);
+  document.querySelector("main").appendChild(container);
+  return input;
+}
+
+test("the toolbar's CSS clears Shopify's z-index 100 app frame", () => {
+  const { document } = mount();
+  // Linkedom has no paint/hit-testing engine. Lock down the external layer
+  // contract here; verify actual visibility with elementFromPoint in Chrome.
+  const rules = document.getElementById("volt-quick-actions-styles").sheet.cssRules;
+  const toolbarRule = rules.find((rule) => rule.selectorText === ".volt-quick-actions-overlay");
+  assert.ok(Number(toolbarRule.style.getPropertyValue("z-index")) > 100,
+    "a body-level toolbar must paint above Shopify's AppFrameBevel");
+});
+
+test("PriceCharting reads the UPC in Shopify's quick-field shadow root", () => {
+  const { document, messages, poll } = mount();
+  addShadowUpc(document, "012345678905");
+  poll();
+  const button = document.getElementById("volt-tab-pc");
+  assert.equal(button.disabled, false);
+  button.onclick({ stopPropagation() {} });
+  assert.equal(messages[0].url,
+    "https://www.pricecharting.com/search-products?q=012345678905&type=videogames");
+});
+
+test("PriceCharting rereads edited and cleared shadow UPCs instead of stale display text", () => {
+  const { document, messages, poll } = mount();
+  const input = addShadowUpc(document, "012345678905");
+  poll();
+  const button = document.getElementById("volt-tab-pc");
+  input.value = "0012345678905";
+  button.onclick({ stopPropagation() {} });
+  assert.match(messages[0].url, /q=0012345678905&/);
+  input.value = "";
+  poll();
+  assert.equal(button.disabled, true);
+  button.onclick({ stopPropagation() {} });
+  assert.equal(messages.length, 1, "a cleared UPC must not launch the old displayed value");
+});
+
+for (const html of ['<span class="_ReadField_abc">012345678905</span>', '<input value="012345678905">']) {
+  test(`PriceCharting still reads legacy UPC markup: ${html}`, () => {
+    const { document, messages, poll } = mount({ modern: false });
+    const container = document.createElement("div");
+    container.id = "PRODUCT.metafields.custom.upc-anchor";
+    container.innerHTML = html;
+    document.querySelector("main").appendChild(container);
+    poll();
+    const button = document.getElementById("volt-tab-pc");
+    assert.equal(button.disabled, false);
+    button.onclick({ stopPropagation() {} });
+    assert.match(messages[0].url, /q=012345678905&/);
+  });
 }
 
 for (const modern of [true, false]) {
