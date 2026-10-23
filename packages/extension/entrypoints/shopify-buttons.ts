@@ -33,7 +33,8 @@ export default defineContentScript({
     const STYLES = `
       .volt-quick-actions-overlay {
         position: fixed;
-        z-index: 40;
+        /* Shopify's AppFrameBevel paints at 100, above body-level siblings. */
+        z-index: 101;
         display: flex;
         flex-direction: row;
         justify-content: flex-end;
@@ -430,6 +431,12 @@ export default defineContentScript({
 
       const input = container.querySelector("input");
       if (input) return input.value;
+
+      // Shopify's quick metafield keeps its value input inside an open shadow
+      // root. Read the input, including an empty edit, rather than display text.
+      const quickField = container.querySelector("s-internal-quick-text-field");
+      const shadowInput = quickField?.shadowRoot?.querySelector("input");
+      if (shadowInput) return shadowInput.value.trim() || null;
 
       return null;
     };
