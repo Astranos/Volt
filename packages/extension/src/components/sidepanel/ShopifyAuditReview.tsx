@@ -59,9 +59,13 @@ export default function ShopifyAuditReview({ onClose }: { onClose?: () => void }
   const openProduct = useCallback(async (current: Review, productId: string) => {
     const product = current.products.find((item) => item.id === productId);
     if (!product || !isShopifyAdminProductUrl(product.url)) return;
+    // Ending the audit or starting a newer load mid-navigation cancels this one.
+    const run = generation.current;
+    const stale = () => run !== generation.current;
     setError(null);
     try {
       const tab = await reviewTab(current);
+      if (stale()) return;
       let tabId: number;
       if (tab?.id !== undefined) {
         tabId = tab.id;
@@ -74,9 +78,10 @@ export default function ShopifyAuditReview({ onClose }: { onClose?: () => void }
         if (typeof created.id !== "number") throw new Error("Chrome did not open the product tab.");
         tabId = created.id;
       }
+      if (stale()) return;
       await save({ ...(reviewRef.current ?? current), currentId: productId, tabId });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not open the product.");
+      if (!stale()) setError(cause instanceof Error ? cause.message : "Could not open the product.");
     }
   }, [save]);
 
@@ -93,13 +98,17 @@ export default function ShopifyAuditReview({ onClose }: { onClose?: () => void }
       }
       const result = await listShopifyAuditYesterday();
       if (stale()) return;
-      let next = startShopifyAuditReview(reviewRef.current, result);
+      const previous = reviewRef.current;
+      let next = startShopifyAuditReview(previous, result);
       // Keep reviewing in the existing tab; the new tab that asked becomes the
       // review tab only when there isn't a usable one already.
       if (request?.tabId != null && !await reviewTab(next)) next = { ...next, tabId: request.tabId };
       if (stale()) return;
       await save(next);
-      if (request && next.currentId) await openProduct(next, next.currentId);
+      // Show the selected product whenever the selection moved (a new day, or
+      // a first load), so "Done" never marks a product that isn't on screen.
+      const moved = previous?.date !== next.date || previous?.currentId !== next.currentId;
+      if (next.currentId && (request || moved)) await openProduct(next, next.currentId);
     } catch (cause) {
       if (!stale()) setError(cause instanceof Error ? cause.message : "Could not load the Shopify audit.");
     } finally {
