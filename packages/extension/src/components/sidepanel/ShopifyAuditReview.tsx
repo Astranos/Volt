@@ -47,6 +47,9 @@ export default function ShopifyAuditReview({ onClose }: { onClose?: () => void }
   // Bumped by every load and by ending the audit, so a slower earlier load
   // can't overwrite a newer one or bring back an audit that was just ended.
   const generation = useRef(0);
+  // Navigations run one at a time, so quick clicks reuse the tab the previous
+  // one opened instead of each opening their own.
+  const navigation = useRef<Promise<unknown>>(Promise.resolve());
   const listRef = useRef<HTMLDivElement | null>(null);
 
   const save = useCallback(async (next: Review | null) => {
@@ -58,14 +61,15 @@ export default function ShopifyAuditReview({ onClose }: { onClose?: () => void }
 
   // `origin` is the generation of the action that led here; ending the audit or
   // starting a newer load since then cancels the navigation.
-  const openProduct = useCallback(async (current: Review, productId: string, origin = generation.current) => {
+  const navigate = useCallback(async (current: Review, productId: string, origin: number) => {
     const product = current.products.find((item) => item.id === productId);
     if (!product || !isShopifyAdminProductUrl(product.url)) return;
     const stale = () => origin !== generation.current;
     if (stale()) return;
     setError(null);
     try {
-      const tab = await reviewTab(current);
+      // The latest saved review carries a tab an earlier queued navigation opened.
+      const tab = await reviewTab(reviewRef.current ?? current);
       if (stale()) return;
       let tabId: number;
       if (tab?.id !== undefined) {
@@ -86,6 +90,12 @@ export default function ShopifyAuditReview({ onClose }: { onClose?: () => void }
       if (!stale()) setError(cause instanceof Error ? cause.message : "Could not open the product.");
     }
   }, [save]);
+
+  const openProduct = useCallback((current: Review, productId: string, origin = generation.current) => {
+    const task = navigation.current.then(() => navigate(current, productId, origin));
+    navigation.current = task.catch(() => undefined);
+    return task;
+  }, [navigate]);
 
   const load = useCallback(async (request: ShopifyAuditReviewRequest | null) => {
     const run = ++generation.current;
