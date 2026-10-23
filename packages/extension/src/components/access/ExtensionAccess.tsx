@@ -182,7 +182,7 @@ export function useSidepanelSignIn() {
 // (*.clerk.accounts.dev). Hash routing is required because the sidepanel
 // has no router and its URL is a chrome-extension:// page.
 export function SidepanelSignInCard() {
-  if (CHROME_PROFILE_AUTH_ENABLED) return <div className="px-4 pb-4"><ChromeProfileSignIn /></div>;
+  if (CHROME_PROFILE_AUTH_ENABLED) return <div className="px-4 pb-4"><ChromeProfileSignIn layout="card" /></div>;
   const currentExtensionPage = chrome.runtime.getURL("/sidepanel.html");
   return (
     <div className="px-4 pb-4">
@@ -422,7 +422,8 @@ function ClerkAccountControl({ surface }: { surface: AccountControlSurface }) {
     );
   }
 
-  if (CHROME_PROFILE_AUTH_ENABLED) return <ChromeProfileSignIn surface={surface} />;
+  // The sidepanel header is one row of tabs, so only the icon fits there.
+  if (CHROME_PROFILE_AUTH_ENABLED) return <ChromeProfileSignIn surface={surface} layout={surface === "sidepanel" ? "compact" : "inline"} />;
 
   return (
     <button
@@ -445,7 +446,15 @@ const profileSignInMessages: Record<string, string> = {
   additional_sign_in_required: "Use the standard sign-in to finish signing in.",
 };
 
-function ChromeProfileSignIn({ surface = "sidepanel" }: { surface?: AccountControlSurface }) {
+// compact: icon only, details float below and only when there is an error.
+// card: full-width labelled button for the panel body.
+export function ChromeProfileSignIn({
+  surface = "sidepanel",
+  layout = "inline",
+}: {
+  surface?: AccountControlSurface;
+  layout?: "inline" | "compact" | "card";
+}) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   async function signIn() {
@@ -458,14 +467,15 @@ function ChromeProfileSignIn({ surface = "sidepanel" }: { surface?: AccountContr
       setError("Google sign-in could not finish. Try again or use another sign-in method.");
     } finally { setBusy(false); }
   }
-  return <div className={`extension-profile-sign-in extension-profile-sign-in--${surface}`}>
-    <button type="button" className={accountControlClassName(surface, "is-signed-out")} onClick={() => void signIn()} disabled={busy}>
-      <LogIn /><span>{busy ? "Signing in…" : "Sign in with Chrome profile"}</span>
+  const label = busy ? "Signing in…" : "Sign in with Chrome profile";
+  return <div className={`extension-profile-sign-in extension-profile-sign-in--${surface} extension-profile-sign-in--${layout}`}>
+    <button type="button" className={accountControlClassName(surface, "is-signed-out")} onClick={() => void signIn()} disabled={busy} title={layout === "compact" ? label : undefined} aria-label={layout === "compact" ? label : undefined}>
+      <LogIn /><span>{label}</span>
     </button>
-    <div className="extension-profile-sign-in-details">
+    {(layout !== "compact" || error) && <div className="extension-profile-sign-in-details">
       {error && <p role="alert" className="extension-profile-sign-in-error">{error}</p>}
       <button type="button" className="extension-profile-sign-in-fallback" onClick={() => void chrome.runtime.sendMessage({ action: "chromeProfileManualSignIn" })} disabled={busy}>Use another sign-in method</button>
-    </div>
+    </div>}
   </div>;
 }
 
