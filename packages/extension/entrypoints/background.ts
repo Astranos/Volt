@@ -317,6 +317,10 @@ export default defineBackground({
         toggleSidePanelForTab: sidepanelTools.toggleForTab,
       }).register();
 
+      chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
+        void shopifyAudit.handleTabRemoved(tabId, removeInfo);
+      });
+
       chrome.action.onClicked.addListener((tab) => {
         sidepanelTools.openForWindowPreservingTool(tab.windowId);
       });

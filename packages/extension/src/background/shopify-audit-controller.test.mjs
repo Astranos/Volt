@@ -1,77 +1,126 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createShopifyAuditController } from "./shopify-audit-controller.ts";
+import { AUDIT_TAB_LIMIT, createShopifyAuditController } from "./shopify-audit-controller.ts";
 import { yesterdayInComputerTimezone } from "../domain/shopify-audit.ts";
 import { EXTENSION_SCANNER_SIGNAL_URL } from "../domain/mobile-scanner-signal-url.ts";
 
-function setup(products, { groupExists = () => true, groupFails = () => false } = {}) {
-  const calls = { created: [], grouped: [], updatedGroups: [], activated: [], waits: [], removed: [] };
+const product = (id) => ({ id: String(id), title: `Product ${id}`, status: "DRAFT", url: `https://admin.shopify.com/store/sample/products/${id}` });
+const lazyUrl = (item) => `chrome-extension://ext/shopify-audit-tab.html?${new URLSearchParams({ u: item.url, t: item.title })}`;
+
+function setup(products, { groupFails = () => false } = {}) {
+  const calls = { created: [], grouped: [], updatedGroups: [], activated: [], removed: [], fetches: 0 };
+  const session = {};
+  const openTabs = new Set();
+  let groupAlive = true;
   const chromeApi = {
+    runtime: { getURL: (path) => `chrome-extension://ext${path}` },
+    storage: { session: {
+      get: async (key) => (key in session ? { [key]: structuredClone(session[key]) } : {}),
+      set: async (items) => { Object.assign(session, structuredClone(items)); },
+      remove: async (key) => { delete session[key]; },
+    } },
     tabs: {
       create: async (options) => {
         calls.created.push(options);
-        return { id: calls.created.length };
+        const id = calls.created.length;
+        openTabs.add(id);
+        return { id };
       },
+      get: async (id) => { if (!openTabs.has(id)) throw new Error(`No tab with id: ${id}.`); return { id }; },
       group: async (options) => {
         if (groupFails(options)) throw new Error("No group with id: 7.");
         calls.grouped.push(options);
         return 7;
       },
       update: async (id, options) => { calls.activated.push({ id, options }); },
-      remove: async (id) => { calls.removed.push(id); },
+      remove: async (id) => { calls.removed.push(id); openTabs.delete(id); },
     },
     tabGroups: {
-      get: async (id) => { if (!groupExists(calls)) throw new Error(`No group with id: ${id}.`); return { id }; },
+      get: async (id) => { if (!groupAlive) throw new Error(`No group with id: ${id}.`); return { id }; },
       update: async (id, options) => { calls.updatedGroups.push({ id, options }); },
     },
   };
   const controller = createShopifyAuditController({
     chromeApi,
     extensionId: "ext",
-    sendOffscreenMessage: async (message) => ({
-      success: true,
-      value: { shop: "sample.myshopify.com", date: message.date, products },
-    }),
-    wait: async (ms) => { calls.waits.push(ms); },
+    sendOffscreenMessage: async (message) => {
+      calls.fetches++;
+      return { success: true, value: { shop: "sample.myshopify.com", date: message.date, products } };
+    },
+    wait: async () => {},
   });
-  const request = () => new Promise((resolve) => {
+  const request = (action = "shopifyAuditOpenYesterday") => new Promise((resolve) => {
     assert.equal(controller.handleMessage(
-      { action: "shopifyAuditOpenYesterday" },
+      { action },
       { id: "ext", url: "chrome-extension://ext/newtab.html", tab: { windowId: 5 } },
       resolve,
     ), true);
   });
-  return { calls, request };
+  // The user closing a tab: Chrome removes it, then fires onRemoved.
+  const close = (id, removeInfo) => { openTabs.delete(id); return controller.handleTabRemoved(id, removeInfo); };
+  const closeGroup = () => { groupAlive = false; };
+  return { calls, request, close, closeGroup, session, openTabs };
 }
 
-test("opens yesterday's product admin pages one at a time in one named tab group", async () => {
-  const products = [11, 12, 13].map((id) => ({ id: String(id), title: `Product ${id}`, status: "DRAFT", url: `https://admin.shopify.com/store/sample/products/${id}` }));
-  const { calls, request } = setup(products);
+test("opens only the first products, as lazy placeholders, in one named tab group", async () => {
+  const products = [11, 12, 13, 14, 15].map(product);
+  const { calls, request, session } = setup(products);
   const response = await request();
-  assert.deepEqual(response, { success: true, value: { shop: "sample.myshopify.com", date: yesterdayInComputerTimezone().date, count: 3 } });
-  assert.deepEqual(calls.created, products.map((product) => ({ url: product.url, active: false, windowId: 5 })));
-  assert.deepEqual(calls.waits, [400, 400]);
-  assert.deepEqual(calls.grouped, [{ tabIds: [1] }, { groupId: 7, tabIds: [2] }, { groupId: 7, tabIds: [3] }]);
-  assert.equal(calls.updatedGroups[0].options.title, `Shopify audit · ${yesterdayInComputerTimezone().date}`);
+  const date = yesterdayInComputerTimezone().date;
+  assert.deepEqual(response, { success: true, value: { shop: "sample.myshopify.com", date, count: 5, opened: AUDIT_TAB_LIMIT, resumed: false } });
+  assert.deepEqual(calls.created, products.slice(0, 3).map((item, index) => ({ url: lazyUrl(item), active: index === 0, windowId: 5 })));
+  assert.deepEqual(calls.grouped, [{ tabIds: [1, 2, 3] }]);
+  assert.equal(calls.updatedGroups[0].options.title, `Shopify audit · ${date}`);
+  assert.deepEqual(session.shopifyAuditTabsRun.queue.map((item) => item.id), ["14", "15"]);
+});
+
+test("closing a reviewed tab opens the next queued product until the queue is empty", async () => {
+  const { calls, request, close, session } = setup([11, 12, 13, 14].map(product));
+  await request();
+  await close(1);
+  assert.deepEqual(calls.created.at(-1), { url: lazyUrl(product(14)), active: false, windowId: 5 });
+  assert.deepEqual(calls.grouped.at(-1), { groupId: 7, tabIds: [4] });
+  assert.deepEqual(session.shopifyAuditTabsRun.tabIds, [2, 3, 4]);
+  await close(2);
+  assert.equal(calls.created.length, 4);
+  assert.deepEqual(session.shopifyAuditTabsRun.tabIds, [3, 4]);
+});
+
+test("closing the audit group cancels the rest of the audit", async () => {
+  const { calls, request, close, closeGroup, openTabs, session } = setup([11, 12, 13, 14, 15].map(product));
+  await request();
+  closeGroup();
+  openTabs.clear();
+  await Promise.all([close(1), close(2), close(3)]);
+  assert.equal(calls.created.length, 3);
+  assert.equal(session.shopifyAuditTabsRun, undefined);
+});
+
+test("closing the window cancels the audit", async () => {
+  const { calls, request, close, session } = setup([11, 12, 13, 14].map(product));
+  await request();
+  await close(1, { isWindowClosing: true });
+  assert.equal(calls.created.length, 3);
+  assert.equal(session.shopifyAuditTabsRun, undefined);
+});
+
+test("clicking Audit again returns to the open audit instead of opening a duplicate", async () => {
+  const { calls, request } = setup([11, 12, 13, 14].map(product));
+  await request();
+  const again = await request();
+  assert.equal(again.value.resumed, true);
+  assert.equal(calls.created.length, 3);
+  assert.equal(calls.fetches, 1);
   assert.deepEqual(calls.activated, [{ id: 1, options: { active: true } }]);
 });
 
-test("stops opening tabs once the user closes the audit group", async () => {
-  const products = [11, 12, 13].map((id) => ({ id: String(id), title: `Product ${id}`, status: "DRAFT", url: `https://admin.shopify.com/store/sample/products/${id}` }));
-  const { calls, request } = setup(products, { groupExists: (calls) => calls.created.length < 2 });
-  const response = await request();
-  assert.deepEqual(response.value.count, 2);
-  assert.equal(calls.created.length, 2);
-  assert.deepEqual(calls.removed, []);
-});
-
-test("closes a tab that could not join the audit group and reports the failure", async () => {
-  const products = [11, 12].map((id) => ({ id: String(id), title: `Product ${id}`, status: "DRAFT", url: `https://admin.shopify.com/store/sample/products/${id}` }));
-  const { calls, request } = setup(products, { groupFails: (options) => options.groupId !== undefined });
+test("closes the opened tabs and reports the failure when grouping fails", async () => {
+  const { calls, request, session } = setup([11, 12].map(product), { groupFails: () => true });
   const response = await request();
   assert.equal(response.success, false);
-  assert.match(response.error, /Opened 1 of 2 products/);
-  assert.deepEqual(calls.removed, [2]);
+  assert.match(response.error, /Could not open the Shopify audit/);
+  assert.deepEqual(calls.removed, [1, 2]);
+  assert.equal(session.shopifyAuditTabsRun, undefined);
 });
 
 test("does not open an unexpected product URL", async () => {
@@ -81,15 +130,18 @@ test("does not open an unexpected product URL", async () => {
   assert.deepEqual(calls.created, []);
 });
 
-test("refuses an audit day too large to open safely", async () => {
-  const products = Array.from({ length: 101 }, (_, index) => ({
-    id: String(index + 1), title: `Product ${index + 1}`, status: "DRAFT",
-    url: `https://admin.shopify.com/store/sample/products/${index + 1}`,
-  }));
-  const { calls, request } = setup(products);
+test("large audit days no longer hit a tab cap", async () => {
+  const { calls, request } = setup(Array.from({ length: 150 }, (_, index) => product(index + 1)));
   const response = await request();
-  assert.equal(response.success, false);
-  assert.match(response.error, /up to 100 audit tabs/);
+  assert.equal(response.value.count, 150);
+  assert.equal(calls.created.length, AUDIT_TAB_LIMIT);
+});
+
+test("lists yesterday's products for the side panel review without opening tabs", async () => {
+  const { calls, request } = setup([11, 12].map(product));
+  const response = await request("shopifyAuditListYesterday");
+  assert.equal(response.success, true);
+  assert.deepEqual(response.value.products.map((item) => item.id), ["11", "12"]);
   assert.deepEqual(calls.created, []);
 });
 

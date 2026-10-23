@@ -225,7 +225,7 @@ test("pairing popup stays QR-only while sidepanel owns tools and setup", async (
     /Offer Calculator|Scanner Results|openSidepanelTool|workspaceCreateEnrollment|open-settings/,
   );
   assert.match(unifiedSidepanelSource, /role="tablist"/);
-  assert.match(unifiedSidepanelSource, /SIDEPANEL_TOOLS\.map/);
+  assert.match(unifiedSidepanelSource, /SIDEPANEL_TOOLS\.(map|filter)/);
   assert.doesNotMatch(unifiedSidepanelSource, /workspaceCreateEnrollment/);
   assert.doesNotMatch(unifiedSidepanelSource, /saveMobileScannerSessionLabel/);
   assert.match(popupSource, /saveMobileScannerSessionLabel/);

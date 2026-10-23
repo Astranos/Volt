@@ -40,3 +40,26 @@ export const shopifyMessages = {
   shopifyAuditStatus: () => ({ success: true, value: { shop } }),
   shopifyAuditSearchProducts: () => ({ success: true, value: shopifySearchResult }),
 };
+
+// Yesterday's products for the Shopify audit review.
+const auditTitles: Array<[string, string]> = [
+  ["Nintendo Switch OLED — White", "ACTIVE"],
+  ["Apple iPad 9th Gen 64GB Wi-Fi", "ACTIVE"],
+  ["Sony WH-1000XM4 Wireless Headphones", "DRAFT"],
+  ["PS5 DualSense Controller — Cosmic Red", "ACTIVE"],
+  ["Pokémon Scarlet (Nintendo Switch)", "ACTIVE"],
+  ["Xbox Series S 512GB", "UNLISTED"],
+  ["Canon EOS Rebel T7 Kit 18-55mm", "DRAFT"],
+  ["Apple Watch SE 40mm GPS", "ACTIVE"],
+  ["Bose SoundLink Flex Speaker", "ARCHIVED"],
+  ["Meta Quest 2 128GB", "ACTIVE"],
+  ["Zelda: Tears of the Kingdom", "ACTIVE"],
+  ["Kindle Paperwhite 11th Gen", "DRAFT"],
+];
+
+export const auditProducts = auditTitles.map(([title, status], index) => ({
+  id: `gid://shopify/Product/${8800 + index}`,
+  title,
+  status,
+  url: `https://admin.shopify.com/store/volt-demo/products/${8800 + index}`,
+}));

@@ -1,4 +1,4 @@
-import { normalizeShopifyShopInput, validShopifyAdminProductUrl, MAX_COMPARE_PRODUCTS, type ShopifyProductDetails } from "../domain/shopify-audit";
+import { normalizeShopifyShopInput, validShopifyAdminProductUrl, MAX_COMPARE_PRODUCTS, type ShopifyAuditResult, type ShopifyProductDetails } from "../domain/shopify-audit";
 
 export type { ShopifyProductDetails };
 
@@ -42,14 +42,30 @@ export async function disconnectShopifyAudit(): Promise<void> {
   await send("shopifyAuditDisconnect");
 }
 
-export async function openShopifyAudit(): Promise<{ shop: string; date: string; count: number }> {
+export type ShopifyAuditTabsResult = { shop: string; date: string; count: number; opened: number; resumed: boolean };
+
+export async function openShopifyAudit(): Promise<ShopifyAuditTabsResult> {
   const value = await send("shopifyAuditOpenYesterday");
   if (!value || typeof value !== "object") throw new Error("Shopify audit result was invalid.");
-  const result = value as { shop?: unknown; date?: unknown; count?: unknown };
-  if (typeof result.shop !== "string" || typeof result.date !== "string" || typeof result.count !== "number") {
+  const result = value as Partial<ShopifyAuditTabsResult>;
+  if (typeof result.shop !== "string" || typeof result.date !== "string" || typeof result.count !== "number"
+    || typeof result.opened !== "number" || typeof result.resumed !== "boolean") {
     throw new Error("Shopify audit result was invalid.");
   }
-  return { shop: result.shop, date: result.date, count: result.count };
+  return { shop: result.shop, date: result.date, count: result.count, opened: result.opened, resumed: result.resumed };
+}
+
+export async function listShopifyAuditYesterday(): Promise<ShopifyAuditResult> {
+  const value = await send("shopifyAuditListYesterday");
+  if (!value || typeof value !== "object") throw new Error("Shopify audit result was invalid.");
+  const result = value as Partial<ShopifyAuditResult>;
+  const shop = result.shop;
+  if (typeof shop !== "string" || normalizeShopifyShopInput(shop) !== shop || typeof result.date !== "string"
+    || !Array.isArray(result.products) || !result.products.every((product) => product && typeof product.id === "string"
+      && typeof product.title === "string" && typeof product.status === "string" && validShopifyAdminProductUrl(product.url, shop))) {
+    throw new Error("Shopify audit result was invalid.");
+  }
+  return { shop, date: result.date, products: result.products.map(({ id, title, status, url }) => ({ id, title, status, url })) };
 }
 
 const optionalText = (value: unknown, max: number) => value === null || (typeof value === "string" && value.length <= max);

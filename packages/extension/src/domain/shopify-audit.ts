@@ -70,3 +70,83 @@ export function normalizeShopifyShopInput(value: string): string | null {
     return null;
   }
 }
+
+/** How the new tab's Audit button presents yesterday's products. */
+export type ShopifyAuditMode = "sidepanel" | "tabs";
+export const SHOPIFY_AUDIT_MODE_KEY = "shopifyAuditMode";
+export const parseShopifyAuditMode = (value: unknown): ShopifyAuditMode => (value === "tabs" ? "tabs" : "sidepanel");
+
+export type ShopifyAuditMark = "done" | "flagged";
+
+/** Side panel review progress, kept in chrome.storage.local so it survives restarts. */
+export type ShopifyAuditReview = {
+  shop: string;
+  date: string;
+  products: ShopifyAuditProduct[];
+  marks: Record<string, ShopifyAuditMark>;
+  currentId: string | null;
+  /** The one tab the review navigates; null until a product is opened. */
+  tabId: number | null;
+};
+export const SHOPIFY_AUDIT_REVIEW_KEY = "shopifyAuditReview";
+/** Set by the new tab to ask the side panel to load yesterday's list. */
+export const SHOPIFY_AUDIT_REVIEW_REQUEST_KEY = "shopifyAuditReviewRequest";
+export type ShopifyAuditReviewRequest = { at: number; tabId: number | null };
+
+export function parseShopifyAuditReview(value: unknown): ShopifyAuditReview | null {
+  if (!value || typeof value !== "object") return null;
+  const review = value as Partial<ShopifyAuditReview>;
+  if (typeof review.shop !== "string" || normalizeShopifyShopInput(review.shop) !== review.shop
+    || typeof review.date !== "string" || !Array.isArray(review.products)
+    || !review.marks || typeof review.marks !== "object") return null;
+  const shop = review.shop;
+  const products = review.products.filter((product): product is ShopifyAuditProduct => !!product
+    && typeof product.id === "string" && typeof product.title === "string" && typeof product.status === "string"
+    && typeof product.url === "string" && validShopifyAdminProductUrl(product.url, shop));
+  const ids = new Set(products.map((product) => product.id));
+  const marks: Record<string, ShopifyAuditMark> = {};
+  for (const [id, mark] of Object.entries(review.marks)) {
+    if (ids.has(id) && (mark === "done" || mark === "flagged")) marks[id] = mark;
+  }
+  return {
+    shop,
+    date: review.date,
+    products,
+    marks,
+    currentId: typeof review.currentId === "string" && ids.has(review.currentId) ? review.currentId : null,
+    tabId: typeof review.tabId === "number" && Number.isInteger(review.tabId) ? review.tabId : null,
+  };
+}
+
+/** Starts a review of `result`, keeping progress when it is the same shop and day. */
+export function startShopifyAuditReview(previous: ShopifyAuditReview | null, result: ShopifyAuditResult): ShopifyAuditReview {
+  const same = previous?.shop === result.shop && previous.date === result.date ? previous : null;
+  const ids = new Set(result.products.map((product) => product.id));
+  const marks = Object.fromEntries(Object.entries(same?.marks ?? {}).filter(([id]) => ids.has(id)));
+  const review: ShopifyAuditReview = { shop: result.shop, date: result.date, products: result.products, marks, currentId: null, tabId: same?.tabId ?? null };
+  const current = same?.currentId && ids.has(same.currentId) && !marks[same.currentId] ? same.currentId : null;
+  return { ...review, currentId: current ?? nextShopifyAuditProduct(review, null)?.id ?? null };
+}
+
+/** The first unmarked product after `afterId`, wrapping around; null once every product is marked. */
+export function nextShopifyAuditProduct(review: ShopifyAuditReview, afterId: string | null): ShopifyAuditProduct | null {
+  const start = afterId === null ? 0 : review.products.findIndex((product) => product.id === afterId) + 1;
+  const count = review.products.length;
+  for (let offset = 0; offset < count; offset++) {
+    const product = review.products[(start + offset) % count];
+    if (!review.marks[product.id]) return product;
+  }
+  return null;
+}
+
+/** Product pages only: the URL an audit tab may navigate to. */
+export function isShopifyAdminProductUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && url.hostname === "admin.shopify.com"
+      && /^\/store\/[a-z0-9][a-z0-9-]*\/products\/\d+$/.test(url.pathname)
+      && !url.username && !url.password && !url.search && !url.hash;
+  } catch {
+    return false;
+  }
+}

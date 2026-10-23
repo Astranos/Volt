@@ -9,6 +9,8 @@ import { Calculator, ClipboardCheck, ScanLine, Settings } from "lucide-react";
 import { AppClipQrIcon } from "../../src/components/icons/AppClipQrIcon";
 import { TabManager } from "../../src/utils/tab-manager";
 import { getShopifyAuditConnection, openShopifyAudit } from "../../src/shopify-audit/client";
+import { useShopifyAuditMode } from "../../src/shopify-audit/use-audit-mode";
+import { SHOPIFY_AUDIT_REVIEW_REQUEST_KEY, type ShopifyAuditReviewRequest } from "../../src/domain/shopify-audit";
 import { WhatsNewDialog } from "../../src/components/newtab/WhatsNewDialog";
 import {
   NEW_TAB_SEARCH_PROVIDERS,
@@ -24,6 +26,15 @@ export default function NewTab() {
   const [activeMode, setActiveMode] = useState<SearchMode>("shopify");
   const [auditBusy, setAuditBusy] = useState(false);
   const [auditNotice, setAuditNotice] = useState<string | null>(null);
+  const [auditMode] = useShopifyAuditMode();
+  // Read up front: the side panel must open inside the click's user gesture,
+  // before anything is awaited.
+  const currentTab = useRef<{ id: number | null; windowId: number | null }>({ id: null, windowId: null });
+  useEffect(() => {
+    void chrome.tabs?.getCurrent().then((tab) => {
+      currentTab.current = { id: tab?.id ?? null, windowId: tab?.windowId ?? null };
+    }).catch(() => undefined);
+  }, []);
   const [whatsNewRequest, setWhatsNewRequest] = useState(0);
 
   // Randomize the aurora blobs' starting offset + animation phase on every
@@ -92,7 +103,25 @@ export default function NewTab() {
     }
   };
 
+  const openAuditSidePanel = () => {
+    const { id, windowId } = currentTab.current;
+    setAuditNotice(null);
+    const request: ShopifyAuditReviewRequest = { at: Date.now(), tabId: id };
+    void chrome.storage.local.set({ sidePanelTool: "shopify-audit", sidePanelUrl: null, [SHOPIFY_AUDIT_REVIEW_REQUEST_KEY]: request });
+    const opened = windowId !== null ? chrome.sidePanel.open({ windowId }) : id !== null ? chrome.sidePanel.open({ tabId: id }) : Promise.reject(new Error("Could not find this window."));
+    void opened.then(() => {
+      // Keep the background's panel state in step, as the other panel openers do.
+      if (id !== null) chrome.runtime.sendMessage({ action: "sidePanelToggleResult", status: "opened", tabId: id, tool: "shopify-audit", source: "newtab-audit" }).catch(() => undefined);
+    }).catch((cause: unknown) => {
+      setAuditNotice(cause instanceof Error ? `Could not open the side panel: ${cause.message}` : "Could not open the side panel.");
+    });
+  };
+
   const handleShopifyAudit = async () => {
+    if (auditMode === "sidepanel") {
+      openAuditSidePanel();
+      return;
+    }
     if (auditBusy) return;
     setAuditBusy(true);
     setAuditNotice(null);
@@ -104,9 +133,14 @@ export default function NewTab() {
         return;
       }
       const result = await openShopifyAudit();
+      const waiting = result.count - result.opened;
       setAuditNotice(result.count === 0
         ? `No products were created on ${result.date}.`
-        : `Opened ${result.count} products from ${result.date} in a tab group.`);
+        : result.resumed
+          ? `The ${result.date} audit is already open. Close a reviewed tab to open the next product.`
+          : waiting > 0
+            ? `Opened ${result.opened} of ${result.count} products from ${result.date}. Close a reviewed tab to open the next one.`
+            : `Opened ${result.count} products from ${result.date} in a tab group.`);
     } catch (cause) {
       setAuditNotice(cause instanceof Error ? cause.message : "Could not open the Shopify audit.");
     } finally {
