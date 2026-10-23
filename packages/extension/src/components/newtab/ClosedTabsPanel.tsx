@@ -2,6 +2,13 @@ import React, { useState, useEffect, useRef } from "react";
 import { Command } from "cmdk";
 import { TabManager, TabInfo } from "@/src/utils/tab-manager";
 import { TabItem } from "../cmdk-palette/TabItem";
+import {
+  HandbookCommandGroup,
+  handbookCommandMatches,
+  handbookCommandValue,
+  useHandbookCommandEntries,
+  wantsHandbookAction,
+} from "../cmdk-palette/HandbookCommandGroup";
 import { RecentTabTiles } from "./RecentTabTiles";
 import { ToggleGroup, ToggleGroupItem } from "@/src/components/ui/toggle-group";
 import { Search as SearchIcon, Clock } from "lucide-react";
@@ -74,6 +81,17 @@ export function ClosedTabsPanel({
   const prefixedSearch = parseSearchPrefix(trimmedSearch);
   const displayedMode = prefixedSearch.mode ?? activeMode;
   const displayedQuery = prefixedSearch.mode ? prefixedSearch.query : trimmedSearch;
+  const handbookEntries = useHandbookCommandEntries(displayedQuery.trim().length >= 2);
+  const handbookMatches = handbookCommandMatches(handbookEntries, displayedQuery);
+  const showHandbookAction = wantsHandbookAction(displayedQuery, handbookMatches);
+  const firstHandbookValue = handbookMatches[0] ? handbookCommandValue(handbookMatches[0]) : null;
+  const firstHandbookValueRef = useRef(firstHandbookValue);
+  firstHandbookValueRef.current = firstHandbookValue;
+
+  // A handbook match leads the list, so Enter copies it, as in the Command Menu.
+  useEffect(() => {
+    if (firstHandbookValue) setSelectedValue(firstHandbookValue);
+  }, [firstHandbookValue]);
 
   useEffect(() => {
     const query = displayedQuery.trim();
@@ -89,7 +107,8 @@ export function ClosedTabsPanel({
         .then((result) => {
           if (canceled) return;
           setShopifySearch({ kind: "ready", query, result });
-          setSelectedValue(result.products[0] ? `shopify-product-${result.products[0].id}` : "");
+          setSelectedValue(firstHandbookValueRef.current
+            ?? (result.products[0] ? `shopify-product-${result.products[0].id}` : ""));
         })
         .catch((cause: unknown) => {
           if (canceled) return;
@@ -217,7 +236,8 @@ export function ClosedTabsPanel({
     if (
       e.key === "Enter" &&
       onSearchSubmit &&
-      displayedMode !== "shopify"
+      displayedMode !== "shopify" &&
+      !selectedValue.startsWith("handbook-")
     ) {
       e.preventDefault();
       onSearchSubmit(search);
@@ -318,6 +338,11 @@ export function ClosedTabsPanel({
           )}
 
           <Command.List className={displayedMode === "shopify" ? "closed-tabs-list shopify-results-list" : "closed-tabs-list"} ref={listRef}>
+            <HandbookCommandGroup
+              matches={handbookMatches}
+              showOpenAction={showHandbookAction}
+              itemClassName="closed-tabs-item"
+            />
             {displayedMode === "shopify" ? (
               <ShopifyProductResults
                 query={displayedQuery.trim()}

@@ -3,6 +3,7 @@ import type { createClerkClient } from "@clerk/chrome-extension/client";
 import { ConvexClient } from "convex/browser";
 import { makeFunctionReference } from "convex/server";
 import { api } from "../../../../convex/_generated/api";
+import type { Id } from "../../../../convex/_generated/dataModel";
 import { CLERK_PUBLISHABLE_KEY, convexDeploymentUrlFromHttpActionsUrl } from "../access/config";
 import { offscreenStorageCache } from "./offscreen-storage-cache";
 import { getMobileScannerExtensionIdentity } from "../domain/mobile-scanner-identity";
@@ -566,6 +567,19 @@ export class CloudWorkspaceSubscriptions {
   async setShopifyProductHidden(productId: string, title: string, hidden: boolean) {
     await this.requireSignedIn("Sign in to Volt before managing Shopify.");
     return this.client.mutation(shopifySetProductHiddenReference, { productId, title, hidden });
+  }
+
+  async listHandbook() {
+    await this.reconcileAuthentication();
+    if (!this.clerkSubject) throw new Error("Sign in to Volt to use the handbook.");
+    return this.client.query(api.handbook.list, {});
+  }
+
+  async revealHandbookSecret(id: string) {
+    await this.reconcileAuthentication();
+    if (!this.clerkSubject) throw new Error("Sign in to Volt to use the handbook.");
+    // Convex validates the id and refuses entries from another account.
+    return this.client.mutation(api.handbook.revealSecret, { id: id as Id<"handbookEntries"> });
   }
 
   async acknowledgeCursorDelivery(

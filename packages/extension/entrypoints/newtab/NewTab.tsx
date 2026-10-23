@@ -5,7 +5,7 @@ import { BookmarksColumn } from "../../src/components/newtab/BookmarksColumn";
 import { HeroBlock } from "../../src/components/newtab/HeroBlock";
 import type { SearchMode } from "../../src/components/newtab/NewTabHelp";
 import { ExtensionAccountControl } from "../../src/components/access/ExtensionAccess";
-import { Calculator, ClipboardCheck, ScanLine, Settings } from "lucide-react";
+import { BookOpen, Calculator, ClipboardCheck, ScanLine, Settings } from "lucide-react";
 import { AppClipQrIcon } from "../../src/components/icons/AppClipQrIcon";
 import { TabManager } from "../../src/utils/tab-manager";
 import { getShopifyAuditConnection, openShopifyAudit } from "../../src/shopify-audit/client";
@@ -204,6 +204,17 @@ export default function NewTab() {
               data-tooltip="Scanner"
             >
               <ScanLine />
+            </button>
+            <button
+              type="button"
+              className="newtab-settings-button"
+              onClick={() =>
+                void chrome.runtime.sendMessage({ action: "openInSidebar", tool: "handbook", mode: "open" })
+              }
+              aria-label="Open Handbook in sidepanel"
+              title="Open Handbook"
+            >
+              <BookOpen />
             </button>
             <button
               type="button"

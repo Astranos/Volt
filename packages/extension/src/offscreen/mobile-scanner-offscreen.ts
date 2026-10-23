@@ -310,6 +310,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     || message.action === "shopifyAuditOffscreenProductDetails"
     || message.action === "shopifyAuditOffscreenHiddenProducts"
     || message.action === "shopifyAuditOffscreenSetProductHidden"
+    || message.action === "handbookOffscreenList"
+    || message.action === "handbookOffscreenRevealSecret"
   ) {
     if (sender.id !== chrome.runtime.id || sender.tab) {
       sendResponse({ success: false, error: "unauthorized_extension_sender" });
@@ -347,6 +349,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           message.expectedSubject,
         ),
       );
+    }
+    if (message.action === "handbookOffscreenList") {
+      return sendWorkspaceOperation(sendResponse, cloudWorkspaceSubscriptions.listHandbook());
+    }
+    if (message.action === "handbookOffscreenRevealSecret") {
+      if (typeof message.id !== "string") {
+        sendResponse({ success: false, error: "invalid_handbook_entry" });
+        return false;
+      }
+      return sendWorkspaceOperation(sendResponse, cloudWorkspaceSubscriptions.revealHandbookSecret(message.id));
     }
     if (message.action === "shopifyAuditOffscreenStatus") {
       return sendWorkspaceOperation(sendResponse, cloudWorkspaceSubscriptions.getShopifyConnection());
