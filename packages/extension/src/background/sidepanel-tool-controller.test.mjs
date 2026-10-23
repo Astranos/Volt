@@ -222,3 +222,17 @@ test("toggleForTab reports missing_window when the tab has no window id", async 
     tool: "mobile-scanner",
   });
 });
+
+test("switching an open panel to the handbook stores it as the preferred tool", async () => {
+  const { calls, chromeApi } = createChromeApi();
+  const controller = createController(chromeApi);
+
+  controller.setStateForWindow(7, { open: true, tool: "top-offers" });
+  const result = await toggleForWindow(controller, 7, "handbook", "toggle");
+
+  assert.equal(result.success, true);
+  assert.equal(result.mode, "switch");
+  assert.equal(calls.open.length, 0);
+  assert.deepEqual(calls.storageSet, [{ sidePanelTool: "handbook", sidePanelUrl: null }]);
+  assert.deepEqual(controller.getStateForWindow(7), { open: true, tool: "handbook" });
+});

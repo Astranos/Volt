@@ -1,6 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import TopOffersPage from "./TopOffers";
 import MobileScanner from "./MobileScanner";
+import HandbookPanel from "../handbook/HandbookPanel";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -176,6 +177,7 @@ export default function UnifiedSidepanel() {
     "top-offers": TopOffersPage,
     "mobile-scanner": MobileScanner,
     "mobile-photos": MobileScanner,
+    handbook: HandbookPanel,
   };
 
   const tools = SIDEPANEL_TOOLS.map((tool) => ({

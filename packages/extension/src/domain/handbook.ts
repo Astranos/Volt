@@ -1,0 +1,87 @@
+import type { FunctionReturnType } from "convex/server";
+import type { api } from "../../../../convex/_generated/api";
+
+export type HandbookEntry = FunctionReturnType<typeof api.handbook.list>[number];
+export type HandbookEntryId = HandbookEntry["_id"];
+export type HandbookVariant = NonNullable<HandbookEntry["variants"]>[number];
+export type HandbookStep = HandbookVariant["steps"][number];
+export type HandbookFilter = { kind: "all" } | { kind: "pinned" } | { kind: "category"; category: string };
+
+// Written by the Command Menu or New Tab right before opening the sidepanel on a guide.
+export const HANDBOOK_OPEN_ENTRY_KEY = "volt.handbook.openEntry";
+export const HANDBOOK_PAGE_PATH = "/handbook.html";
+
+export const DEFAULT_HANDBOOK_CATEGORIES = ["Store info", "Logins", "Setup guides", "Testing"];
+
+// Offered as blanks in the editor. Values are typed in by the user, never shipped.
+export const LOGIN_SUGGESTIONS = [
+  { title: "PSN", note: "Testing consoles" },
+  { title: "Microsoft account", note: "Testing PCs and Xbox" },
+  { title: "Mac test user", note: "Local account on test Macs" },
+];
+
+export function handbookCategories(entries: HandbookEntry[]) {
+  return [...new Set(entries.map((entry) => entry.category))];
+}
+
+function searchText(entry: HandbookEntry) {
+  const steps = (entry.variants ?? []).flatMap((variant) => [
+    variant.label,
+    variant.warning,
+    ...variant.steps.flatMap((step) => [step.text, step.command, step.tip, ...(step.keys ?? [])]),
+  ]);
+  return [entry.title, entry.category, entry.note, entry.value, entry.body, ...steps]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
+/** Every word of the query must appear somewhere in the entry. Secret values are never searchable. */
+export function matchesHandbookQuery(entry: HandbookEntry, query: string) {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  if (!words.length) return true;
+  const haystack = searchText(entry);
+  return words.every((word) => haystack.includes(word));
+}
+
+export function filterHandbook(entries: HandbookEntry[], query: string, filter: HandbookFilter) {
+  return entries.filter((entry) =>
+    (filter.kind === "all"
+      || (filter.kind === "pinned" && entry.pinned)
+      || (filter.kind === "category" && entry.category === filter.category))
+    && matchesHandbookQuery(entry, query));
+}
+
+/** Groups by category in first-seen order, pinned entries first within each group. */
+export function groupHandbook(entries: HandbookEntry[]) {
+  return handbookCategories(entries).map((category) => ({
+    category,
+    entries: entries
+      .filter((entry) => entry.category === category)
+      .sort((a, b) => Number(b.pinned) - Number(a.pinned) || a.order - b.order),
+  }));
+}
+
+export function guideSummary(entry: HandbookEntry) {
+  const variants = entry.variants ?? [];
+  const steps = variants[0]?.steps ?? [];
+  const command = steps.find((step) => step.command)?.command;
+  const count = variants.length > 1
+    ? `${variants.length} methods`
+    : `${steps.length} ${steps.length === 1 ? "step" : "steps"}`;
+  return command ? `${count} · ${command}` : count;
+}
+
+export function formatHandbookUpdated(entry: Pick<HandbookEntry, "updatedAt" | "updatedByName">, now = Date.now()) {
+  const days = Math.floor((now - entry.updatedAt) / 86_400_000);
+  const when = days <= 0 ? "today"
+    : days === 1 ? "yesterday"
+      : days < 7 ? `${days}d ago`
+        : new Date(entry.updatedAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  return `Updated ${when} by ${entry.updatedByName}`;
+}
+
+/** Splits a typed key combo like "Shift + Fn + F10" into keycaps. */
+export function parseKeyCombo(value: string) {
+  return value.split("+").map((key) => key.trim()).filter(Boolean);
+}
