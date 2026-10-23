@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  isReusableShopifyAuditTab,
   isShopifyAdminProductUrl,
   nextShopifyAuditProduct,
   normalizeShopifyShopInput,
@@ -100,4 +101,17 @@ test("audit tabs only navigate to Shopify admin product pages", () => {
   assert.equal(isShopifyAdminProductUrl("https://admin.shopify.com/store/sample/orders/12"), false);
   assert.equal(isShopifyAdminProductUrl("https://evil.example/store/sample/products/12"), false);
   assert.equal(isShopifyAdminProductUrl("javascript:alert(1)"), false);
+});
+
+test("the review tab is reused only on an audit product or the new tab", () => {
+  const review = startShopifyAuditReview(null, result("2026-10-22", [1, 2]));
+  const newTab = "chrome-extension://ext/newtab.html";
+  assert.equal(isReusableShopifyAuditTab(product(2).url, review, newTab), true);
+  assert.equal(isReusableShopifyAuditTab(`${product(1).url}?variant=3`, review, newTab), true);
+  assert.equal(isReusableShopifyAuditTab("chrome://newtab/", review, newTab), true);
+  assert.equal(isReusableShopifyAuditTab(newTab, review, newTab), true);
+  assert.equal(isReusableShopifyAuditTab("https://admin.shopify.com/store/sample/products/99", review, newTab), false);
+  assert.equal(isReusableShopifyAuditTab("https://admin.shopify.com/store/sample/orders/1", review, newTab), false);
+  assert.equal(isReusableShopifyAuditTab("https://mail.google.com/", review, newTab), false);
+  assert.equal(isReusableShopifyAuditTab(undefined, review, newTab), false);
 });

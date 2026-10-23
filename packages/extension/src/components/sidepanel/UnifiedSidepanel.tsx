@@ -130,6 +130,17 @@ export default function UnifiedSidepanel() {
     };
   }, []);
 
+  // The Audit tab only appears while a Shopify audit is saved.
+  useEffect(() => {
+    if (typeof chrome === "undefined" || !chrome.storage) return;
+    void chrome.storage.local.get(SHOPIFY_AUDIT_REVIEW_KEY).then((stored) => setAuditInProgress(!!stored[SHOPIFY_AUDIT_REVIEW_KEY]));
+    const onChanged = (changes: Record<string, { newValue?: unknown }>, area: string) => {
+      if (area === "local" && changes[SHOPIFY_AUDIT_REVIEW_KEY]) setAuditInProgress(!!changes[SHOPIFY_AUDIT_REVIEW_KEY].newValue);
+    };
+    chrome.storage.onChanged.addListener(onChanged);
+    return () => chrome.storage.onChanged.removeListener(onChanged);
+  }, []);
+
   // Load the initial tool from storage
   useEffect(() => {
     if (typeof chrome !== "undefined" && chrome.storage) {

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, Check, Flag, RefreshCw, X } from "lucide-react";
 import { cn } from "../../lib/utils";
 import {
+  isReusableShopifyAuditTab,
   isShopifyAdminProductUrl,
   nextShopifyAuditProduct,
   parseShopifyAuditReview,
@@ -28,12 +29,11 @@ const formatDate = (date: string) => {
   return Number.isNaN(parsed.getTime()) ? date : parsed.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 };
 
-// The review tab is reused only while it still shows Shopify admin or the new
-// tab it was started from; anything else the user navigated to is left alone.
-const isReusableReviewTab = (url: string | undefined) => !!url && (
-  url.startsWith("https://admin.shopify.com/") || url === "chrome://newtab/"
-  || url.startsWith(chrome.runtime.getURL("/newtab.html")) || url.startsWith(chrome.runtime.getURL("/shopify-audit-tab.html"))
-);
+async function reviewTab(review: Review) {
+  if (review.tabId === null) return null;
+  const tab = await chrome.tabs.get(review.tabId).catch(() => null);
+  return tab?.id !== undefined && isReusableShopifyAuditTab(tab.pendingUrl ?? tab.url, review, chrome.runtime.getURL("/newtab.html")) ? tab : null;
+}
 
 export default function ShopifyAuditReview({ onClose }: { onClose?: () => void }) {
   const [review, setReview] = useState<Review | null>(null);
@@ -44,6 +44,9 @@ export default function ShopifyAuditReview({ onClose }: { onClose?: () => void }
   const [filter, setFilter] = useState<Filter>("all");
   const reviewRef = useRef<Review | null>(null);
   const handledRequestAt = useRef(0);
+  // Bumped by every load and by ending the audit, so a slower earlier load
+  // can't overwrite a newer one or bring back an audit that was just ended.
+  const generation = useRef(0);
   const listRef = useRef<HTMLDivElement | null>(null);
 
   const save = useCallback(async (next: Review | null) => {
@@ -58,9 +61,9 @@ export default function ShopifyAuditReview({ onClose }: { onClose?: () => void }
     if (!product || !isShopifyAdminProductUrl(product.url)) return;
     setError(null);
     try {
-      const tab = current.tabId === null ? null : await chrome.tabs.get(current.tabId).catch(() => null);
+      const tab = await reviewTab(current);
       let tabId: number;
-      if (tab?.id !== undefined && isReusableReviewTab(tab.pendingUrl ?? tab.url)) {
+      if (tab?.id !== undefined) {
         tabId = tab.id;
         // Same product: just bring it forward rather than reloading the editor.
         const update = (tab.pendingUrl ?? tab.url) === product.url ? { active: true } : { url: product.url, active: true };
@@ -78,6 +81,8 @@ export default function ShopifyAuditReview({ onClose }: { onClose?: () => void }
   }, [save]);
 
   const load = useCallback(async (request: ShopifyAuditReviewRequest | null) => {
+    const run = ++generation.current;
+    const stale = () => run !== generation.current;
     setBusy(true);
     setError(null);
     setNeedsConnection(false);
@@ -87,15 +92,18 @@ export default function ShopifyAuditReview({ onClose }: { onClose?: () => void }
         throw new Error("Connect your Shopify store in Volt settings first.");
       }
       const result = await listShopifyAuditYesterday();
+      if (stale()) return;
       let next = startShopifyAuditReview(reviewRef.current, result);
-      // The new tab that asked for the audit becomes the review tab.
-      if (request?.tabId != null) next = { ...next, tabId: request.tabId };
+      // Keep reviewing in the existing tab; the new tab that asked becomes the
+      // review tab only when there isn't a usable one already.
+      if (request?.tabId != null && !await reviewTab(next)) next = { ...next, tabId: request.tabId };
+      if (stale()) return;
       await save(next);
       if (request && next.currentId) await openProduct(next, next.currentId);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not load the Shopify audit.");
+      if (!stale()) setError(cause instanceof Error ? cause.message : "Could not load the Shopify audit.");
     } finally {
-      setBusy(false);
+      if (!stale()) setBusy(false);
     }
   }, [openProduct, save]);
 
@@ -131,6 +139,7 @@ export default function ShopifyAuditReview({ onClose }: { onClose?: () => void }
     chrome.storage.onChanged.addListener(onChanged);
     return () => {
       active = false;
+      generation.current++;
       chrome.storage.onChanged.removeListener(onChanged);
     };
   }, [load]);
@@ -168,6 +177,8 @@ export default function ShopifyAuditReview({ onClose }: { onClose?: () => void }
   };
 
   const finish = async () => {
+    generation.current++;
+    setBusy(false);
     await save(null);
     onClose?.();
   };

@@ -150,3 +150,15 @@ export function isShopifyAdminProductUrl(value: string): boolean {
     return false;
   }
 }
+
+/**
+ * The review tab is reused only while it shows one of the audit's products or
+ * the new tab the audit started from; a tab the user took elsewhere (an order,
+ * another product, another site) is left alone.
+ */
+export function isReusableShopifyAuditTab(url: string | undefined, review: Pick<ShopifyAuditReview, "products">, newTabPageUrl: string): boolean {
+  if (!url) return false;
+  if (url === "chrome://newtab/" || url.startsWith(newTabPageUrl)) return true;
+  const page = url.split(/[?#]/)[0];
+  return review.products.some((product) => product.url === page);
+}
