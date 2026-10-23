@@ -143,6 +143,11 @@ export default function ShopifyAuditReview({ onClose }: { onClose?: () => void }
       if (changes[SHOPIFY_AUDIT_REVIEW_KEY]) {
         // Another window's panel moved the review along.
         const next = parseShopifyAuditReview(changes[SHOPIFY_AUDIT_REVIEW_KEY].newValue);
+        if (!next && reviewRef.current) {
+          // Ended elsewhere: cancel anything this panel still has in flight.
+          generation.current++;
+          setBusy(false);
+        }
         reviewRef.current = next;
         setReview(next);
       }
