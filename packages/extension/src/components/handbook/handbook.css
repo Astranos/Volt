@@ -1,6 +1,12 @@
 /* Handbook surfaces share the sidepanel's glass tokens. Dark is the default;
    the light block at the end mirrors the sidepanel's own overrides. */
 
+/* Radix wraps scroll content in a display:table box that grows to fit
+   unwrapped text; the list truncates long values instead. */
+.handbook-scroll [data-radix-scroll-area-viewport] > div {
+  display: block !important;
+}
+
 .handbook-panel {
   display: flex;
   flex-direction: column;

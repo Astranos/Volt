@@ -147,7 +147,7 @@ function HandbookList({ entries, onOpenGuide }: { entries: HandbookEntry[]; onOp
   }
 
   return (
-    <SidepanelLayout className="bg-transparent">
+    <SidepanelLayout className="handbook-scroll bg-transparent">
       <div className="handbook-panel">
         <label className="handbook-search">
           <Search aria-hidden="true" />
@@ -268,7 +268,7 @@ function GuideView({ entry, onBack }: { entry: HandbookEntry; onBack: () => void
   };
 
   return (
-    <SidepanelLayout className="bg-transparent">
+    <SidepanelLayout className="handbook-scroll bg-transparent">
       <div className="handbook-panel">
         <button type="button" className="handbook-back" onClick={onBack}>
           <ChevronLeft aria-hidden="true" />
@@ -353,7 +353,7 @@ function HandbookNotice({
           type="button"
           onClick={action.onClick}
           disabled={action.disabled}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-500 active:bg-emerald-700 disabled:opacity-60 [&>svg]:h-4 [&>svg]:w-4"
+          className="handbook-button is-primary handbook-footer-action"
         >
           {action.icon ?? null}
           {action.label}
