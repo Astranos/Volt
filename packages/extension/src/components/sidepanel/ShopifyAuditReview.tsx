@@ -56,12 +56,13 @@ export default function ShopifyAuditReview({ onClose }: { onClose?: () => void }
     else await chrome.storage.local.remove(SHOPIFY_AUDIT_REVIEW_KEY);
   }, []);
 
-  const openProduct = useCallback(async (current: Review, productId: string) => {
+  // `origin` is the generation of the action that led here; ending the audit or
+  // starting a newer load since then cancels the navigation.
+  const openProduct = useCallback(async (current: Review, productId: string, origin = generation.current) => {
     const product = current.products.find((item) => item.id === productId);
     if (!product || !isShopifyAdminProductUrl(product.url)) return;
-    // Ending the audit or starting a newer load mid-navigation cancels this one.
-    const run = generation.current;
-    const stale = () => run !== generation.current;
+    const stale = () => origin !== generation.current;
+    if (stale()) return;
     setError(null);
     try {
       const tab = await reviewTab(current);
@@ -74,6 +75,7 @@ export default function ShopifyAuditReview({ onClose }: { onClose?: () => void }
         await chrome.tabs.update(tabId, update);
       } else {
         const panelWindow = await chrome.windows.getCurrent();
+        if (stale()) return;
         const created = await chrome.tabs.create({ url: product.url, active: true, ...(typeof panelWindow.id === "number" ? { windowId: panelWindow.id } : {}) });
         if (typeof created.id !== "number") throw new Error("Chrome did not open the product tab.");
         tabId = created.id;
@@ -108,7 +110,7 @@ export default function ShopifyAuditReview({ onClose }: { onClose?: () => void }
       // Show the selected product whenever the selection moved (a new day, or
       // a first load), so "Done" never marks a product that isn't on screen.
       const moved = previous?.date !== next.date || previous?.currentId !== next.currentId;
-      if (next.currentId && (request || moved)) await openProduct(next, next.currentId);
+      if (next.currentId && (request || moved) && !stale()) await openProduct(next, next.currentId, run);
     } catch (cause) {
       if (!stale()) setError(cause instanceof Error ? cause.message : "Could not load the Shopify audit.");
     } finally {
@@ -158,6 +160,7 @@ export default function ShopifyAuditReview({ onClose }: { onClose?: () => void }
   }, [review?.currentId, filter]);
 
   const mark = async (value: ShopifyAuditMark, advance: boolean) => {
+    const run = generation.current;
     const current = reviewRef.current;
     if (!current?.currentId) return;
     const marks = { ...current.marks };
@@ -167,7 +170,7 @@ export default function ShopifyAuditReview({ onClose }: { onClose?: () => void }
     await save(next);
     if (!advance) return;
     const following = nextShopifyAuditProduct(next, current.currentId);
-    if (following) await openProduct(next, following.id);
+    if (following) await openProduct(next, following.id, run);
   };
 
   const previous = () => {
