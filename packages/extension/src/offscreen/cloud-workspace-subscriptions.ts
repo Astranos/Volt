@@ -69,7 +69,7 @@ type ClerkAuthState =
   | { status: "unknown" };
 
 const SIGNED_OUT_RECHECK_MS = 60_000;
-const SIGN_IN_SETTLE_MS = 10_000;
+const SIGN_IN_SETTLE_MS = 6_000;
 const SIGN_IN_SETTLE_POLL_MS = 500;
 
 // createClerkClient({ background: true }) performs a full Frontend API
