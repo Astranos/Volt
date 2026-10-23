@@ -131,7 +131,13 @@ function SidepanelAuthBridge({ children }: { children: ReactNode }) {
   );
 }
 
-export function SidepanelClerkProvider({ children }: { children: ReactNode }) {
+export function SidepanelClerkProvider({
+  children,
+  page = "/sidepanel.html",
+}: {
+  children: ReactNode;
+  page?: "/sidepanel.html" | "/handbook.html";
+}) {
   useChromeProfileSessionReload();
   if (!CLERK_PUBLISHABLE_KEY) {
     return (
@@ -141,7 +147,7 @@ export function SidepanelClerkProvider({ children }: { children: ReactNode }) {
     );
   }
 
-  const currentExtensionPage = chrome.runtime.getURL("/sidepanel.html");
+  const currentExtensionPage = chrome.runtime.getURL(page);
   return (
     <ClerkProvider
       __experimental_syncHostListener
@@ -183,7 +189,8 @@ export function useSidepanelSignIn() {
 // has no router and its URL is a chrome-extension:// page.
 export function SidepanelSignInCard() {
   if (CHROME_PROFILE_AUTH_ENABLED) return <div className="px-4 pb-4"><ChromeProfileSignIn layout="card" /></div>;
-  const currentExtensionPage = chrome.runtime.getURL("/sidepanel.html");
+  // The sidepanel and the handbook page both host this card; return to whichever one it is.
+  const currentExtensionPage = `${window.location.origin}${window.location.pathname}`;
   return (
     <div className="px-4 pb-4">
       <SignIn
