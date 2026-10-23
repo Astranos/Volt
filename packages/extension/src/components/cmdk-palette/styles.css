@@ -264,3 +264,36 @@
   align-items: center;
   gap: 4px;
 }
+
+/* Handbook results */
+.cmdk-handbook-icon {
+  background: rgba(22, 163, 74, 0.1);
+  color: #15803d;
+}
+
+[data-selected="true"] .cmdk-handbook-hint {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.cmdk-handbook-copied {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #15803d;
+}
+
+/* The palette itself is light-only; the New Tab search follows the system theme. */
+@media (prefers-color-scheme: dark) {
+  .closed-tabs-panel .cmdk-handbook-icon {
+    background: rgba(74, 222, 128, 0.12);
+    color: #4ade80;
+  }
+
+  .closed-tabs-panel .cmdk-handbook-copied {
+    color: #4ade80;
+  }
+}

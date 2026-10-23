@@ -29,6 +29,7 @@ import { createScannerMessageHandler } from "../src/background/scanner-message-h
 import { createScannerOffscreenController } from "../src/background/scanner-offscreen";
 import { createScannerTextInserter } from "../src/background/scanner-text-insertion";
 import { createShopifyAuditController } from "../src/background/shopify-audit-controller";
+import { createHandbookController } from "../src/background/handbook-controller";
 import { registerSidepanelMessageActions } from "../src/background/sidepanel-message-controller";
 import { createSidepanelToolController } from "../src/background/sidepanel-tool-controller";
 import { createTabDeliveryController } from "../src/background/tab-delivery";
@@ -39,6 +40,7 @@ import {
   getMessageAction,
   isScannerOffscreenRuntimeMessage,
   isShopifyAuditOffscreenRuntimeMessage,
+  isHandbookOffscreenRuntimeMessage,
   parseMessageRecord,
   parseRuntimeMessage,
   type RuntimeMessageSender,
@@ -181,6 +183,10 @@ export default defineBackground({
     cloudSettings.start();
     const shopifyAudit = createShopifyAuditController({
       chromeApi: chrome,
+      extensionId: chrome.runtime.id,
+      sendOffscreenMessage: scannerOffscreen.sendScannerOffscreenMessage,
+    });
+    const handbook = createHandbookController({
       extensionId: chrome.runtime.id,
       sendOffscreenMessage: scannerOffscreen.sendScannerOffscreenMessage,
     });
@@ -443,6 +449,8 @@ export default defineBackground({
       if (cloudWorkspace.handleMessage(rawMessage, sender, sendResponse)) return true;
       if (shopifyAudit.handleMessage(rawMessage, sender, sendResponse)) return true;
       if (isShopifyAuditOffscreenRuntimeMessage(rawMessage)) return false;
+      if (handbook.handleMessage(rawMessage, sender, sendResponse)) return true;
+      if (isHandbookOffscreenRuntimeMessage(rawMessage)) return false;
       const message = parseRuntimeMessage(rawMessage);
 
       if (message && isScannerOffscreenRuntimeMessage(message)) {
