@@ -12,6 +12,7 @@ Convex owns account authorization, scanner workspace metadata, device enrollment
 | [cloudWorkspace.ts](cloudWorkspace.ts) | Workspace devices, capture results, and delivery operations. |
 | [access.ts](access.ts) | Account access and entitlement handling. |
 | [crons.ts](crons.ts) | Scheduled cleanup. |
+| [handbook.ts](handbook.ts) | Account-scoped store handbook. Lists return only masked previews of secret entries; `revealSecret` returns one login on demand. |
 
 The current installed app and App Clip use cloud delivery. Legacy signaling tables and routes remain for older clients; their presence does not make WebRTC the current scanner architecture. See [project context](../CONTEXT.md) for domain terms.
 

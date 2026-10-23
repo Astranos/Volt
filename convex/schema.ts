@@ -2,6 +2,7 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { requestFields } from "./kioskRequestValidators";
 import { catalogProductValidator } from "./catalog/validators";
+import { handbookEntryFields } from "./handbookValidators";
 
 const pushSubscription = v.object({
   endpoint: v.string(),
@@ -243,6 +244,26 @@ export default defineSchema({
     revision: v.number(),
     updatedAt: v.number(),
   }).index("by_ownerTokenIdentifier", ["ownerTokenIdentifier"]),
+
+  handbookEntries: defineTable({
+    workspaceId: v.id("workspaces"),
+    ...handbookEntryFields,
+    // Masked display text for secret entries; the values live in handbookSecrets.
+    secretPreview: v.optional(v.string()),
+    starterKey: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    updatedByName: v.string(),
+  })
+    .index("by_workspaceId_and_order", ["workspaceId", "order"])
+    .index("by_workspaceId_and_starterKey", ["workspaceId", "starterKey"]),
+  // Kept apart from handbookEntries so list and search reads never load a secret.
+  handbookSecrets: defineTable({
+    workspaceId: v.id("workspaces"),
+    entryId: v.id("handbookEntries"),
+    username: v.optional(v.string()),
+    secret: v.string(),
+  }).index("by_entryId", ["entryId"]),
 
   anonymousTrialGrants: defineTable({
     anonymousId: v.string(),
