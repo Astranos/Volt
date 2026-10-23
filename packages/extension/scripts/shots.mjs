@@ -127,6 +127,12 @@ async function shoot(base, scenario, colorScheme, file) {
     await page.waitForLoadState("networkidle");
     await page.evaluate(() => document.fonts.ready);
     await page.waitForTimeout(400);
+    // ?hover=<css selector> captures hover-only UI such as tooltips.
+    const hover = new URLSearchParams(query).get("hover");
+    if (hover) {
+      await page.hover(hover);
+      await page.waitForTimeout(400);
+    }
     await page.screenshot({ path: file, fullPage: !!fullPage, animations: "disabled" });
   } finally {
     await page.close();

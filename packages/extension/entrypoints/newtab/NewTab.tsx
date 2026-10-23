@@ -178,7 +178,7 @@ export default function NewTab() {
               onClick={() => void handleShopifyAudit()}
               disabled={auditBusy}
               aria-label="Audit Shopify products created yesterday"
-              title="Open yesterday's Shopify products for review"
+              data-tooltip="Review yesterday's new Shopify products"
             >
               <ClipboardCheck aria-hidden="true" />
               <span>{auditBusy ? "Opening…" : "Audit"}</span>
@@ -190,7 +190,7 @@ export default function NewTab() {
                 void chrome.runtime.sendMessage({ action: "openInSidebar", tool: "top-offers", mode: "open" })
               }
               aria-label="Open Offer Calculator in sidepanel"
-              title="Open Offer Calculator"
+              data-tooltip="Offer calculator"
             >
               <Calculator />
             </button>
@@ -201,7 +201,7 @@ export default function NewTab() {
                 void chrome.runtime.sendMessage({ action: "openInSidebar", tool: "mobile-scanner", mode: "open" })
               }
               aria-label="Open Scanner in sidepanel"
-              title="Open Scanner"
+              data-tooltip="Scanner"
             >
               <ScanLine />
             </button>
@@ -212,7 +212,7 @@ export default function NewTab() {
                 void chrome.runtime.sendMessage({ action: "openMobileCapturePopup" })
               }
               aria-label="Open Volt App Clip QR code"
-              title="Connect Volt App Clip"
+              data-tooltip="Connect Volt App Clip"
             >
               <AppClipQrIcon />
             </button>
@@ -221,7 +221,7 @@ export default function NewTab() {
               className="newtab-settings-button"
               onClick={() => void chrome.runtime.sendMessage({ action: "open-settings" })}
               aria-label="Open Volt settings"
-              title="Open Volt settings"
+              data-tooltip="Settings"
             >
               <Settings />
             </button>
