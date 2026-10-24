@@ -55,3 +55,23 @@ test("a signed-out user still gets the sign-in message", async () => {
   const workspace = new CloudWorkspaceSubscriptions();
   await expect(workspace.getShopifyConnection()).rejects.toThrow("Sign in to Volt before connecting Shopify.");
 });
+
+test("after signing out, Shopify calls refuse instead of running as the previous account", async () => {
+  const { CloudWorkspaceSubscriptions } = await import("./cloud-workspace-subscriptions");
+  clerkState.token = jwt("user_1");
+  const workspace = new CloudWorkspaceSubscriptions();
+  await expect(workspace.getShopifyConnection()).resolves.toEqual({ shop: "sample.myshopify.com" });
+  clerkState.token = null;
+  await expect(workspace.getShopifyConnection()).rejects.toThrow("Sign in to Volt before connecting Shopify.");
+});
+
+test("after switching accounts, Shopify calls wait for the new account", async () => {
+  const { CloudWorkspaceSubscriptions } = await import("./cloud-workspace-subscriptions");
+  clerkState.token = jwt("user_1");
+  const workspace = new CloudWorkspaceSubscriptions();
+  await workspace.getShopifyConnection();
+  clerkState.token = jwt("user_2");
+  await expect(workspace.getShopifyConnection()).resolves.toEqual({ shop: "sample.myshopify.com" });
+  // The Convex client was re-armed and now reports the new account.
+  expect((workspace as unknown as { acceptedClientSubject: string }).acceptedClientSubject).toBe("user_2");
+});

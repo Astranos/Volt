@@ -91,10 +91,33 @@ export default function ShopifyAuditReview({ onClose }: { onClose?: () => void }
         const shown = (reviewRef.current ?? current).products.find((item) => item.id === (reviewRef.current ?? current).currentId);
         // Same product: just bring it forward rather than reloading the editor.
         // Otherwise let Shopify swap the product in place, and reload only if that doesn't take.
-        const inPlace = shownUrl !== product.url && tab.status === "complete"
-          && await openProductInPlace(chrome.scripting, tabId, shownUrl, shown, product);
+        const outcome = shownUrl === product.url ? "done"
+          : tab.status === "complete" ? await openProductInPlace(chrome.scripting, tabId, shownUrl, shown, product) : "fallback";
         if (stale()) return;
-        await chrome.tabs.update(tabId, shownUrl === product.url || inPlace ? { active: true } : { url: product.url, active: true });
+        if (outcome === "blocked") {
+          // Shopify kept the old product (unsaved changes): leave the selection where it is.
+          await chrome.tabs.update(tabId, { active: true });
+          return;
+        }
+        if (outcome === "fallback") {
+          // The tab may have moved on while we tried; only reload it if it's still ours.
+          const fresh = await reviewTab(reviewRef.current ?? current);
+          if (stale()) return;
+          if (fresh?.id === tabId) await chrome.tabs.update(tabId, { url: product.url, active: true });
+          else {
+            const panelWindow = await chrome.windows.getCurrent();
+            if (stale()) return;
+            const created = await chrome.tabs.create({ url: product.url, active: true, ...(typeof panelWindow.id === "number" ? { windowId: panelWindow.id } : {}) });
+            if (typeof created.id !== "number") throw new Error("Chrome did not open the product tab.");
+            tabId = created.id;
+            if (stale()) {
+              await chrome.tabs.remove(tabId).catch(() => undefined);
+              return;
+            }
+          }
+        } else {
+          await chrome.tabs.update(tabId, { active: true });
+        }
       } else {
         const panelWindow = await chrome.windows.getCurrent();
         if (stale()) return;
