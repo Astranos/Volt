@@ -7,7 +7,8 @@ import { ToggleGroup, ToggleGroupItem } from "@/src/components/ui/toggle-group";
 import { Search as SearchIcon, Clock } from "lucide-react";
 import { type SearchMode } from "./NewTabHelp";
 import { ShopifyCompareTray, ShopifyProductResults, type ShopifyProductSearchState } from "./ShopifyProductResults";
-import { searchShopifyProducts, setShopifyProductHidden, type ShopifySearchProduct } from "../../shopify-audit/client";
+import { getShopifyAuditConnection, searchShopifyProducts, setShopifyProductHidden, type ShopifySearchProduct } from "../../shopify-audit/client";
+import { useKioskQueue, useKioskStore } from "../../kiosk/use-kiosk";
 import { MAX_COMPARE_PRODUCTS } from "../../domain/shopify-audit";
 import { shopifyComparePath } from "../../shopify-compare/compare-url";
 import {
@@ -50,6 +51,22 @@ export function ClosedTabsPanel({
   const [shopifySearch, setShopifySearch] = useState<ShopifyProductSearchState>({ kind: "idle" });
   const [shopifyRetry, setShopifyRetry] = useState(0);
   const [compareProducts, setCompareProducts] = useState<ShopifySearchProduct[]>([]);
+  // Compare mode can be turned on before anything is picked (the Compare button).
+  const [compareModeOn, setCompareModeOn] = useState(false);
+  const compareMode = compareModeOn || compareProducts.length > 0;
+  // Kiosk "Ask to see item" requests for the store chosen in settings.
+  const [kioskStore] = useKioskStore();
+  const kioskQueue = useKioskQueue(kioskStore);
+  const kioskWaiting = kioskQueue.requests.filter((request) => request.status === "waiting").length;
+  const [shopifyShop, setShopifyShop] = useState<string | null>(null);
+  useEffect(() => {
+    if (!kioskStore) return;
+    void getShopifyAuditConnection().then((connection) => setShopifyShop(connection?.shop ?? null)).catch(() => undefined);
+  }, [kioskStore]);
+  const leaveCompare = () => {
+    setCompareModeOn(false);
+    setCompareProducts([]);
+  };
   const shopifySearchGeneration = useRef(0);
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -277,6 +294,9 @@ export function ClosedTabsPanel({
               className="text-xs px-2"
             >
               <span>{option.label}</span>
+              {option.mode === "shopify" && kioskWaiting > 0 && (
+                <span aria-label={`${kioskWaiting} kiosk requests waiting`} className="shopify-mode-count" title="Customers waiting at the kiosk">{kioskWaiting}</span>
+              )}
             </ToggleGroupItem>
           ))}
         </ToggleGroup>
@@ -306,9 +326,12 @@ export function ClosedTabsPanel({
                 onHideProduct={(product) => { void hideShopifyProduct(product); }}
                 compareIds={new Set(compareProducts.map((product) => product.id))}
                 compareFull={compareProducts.length >= MAX_COMPARE_PRODUCTS}
+                compareMode={compareMode}
                 onToggleCompare={toggleCompare}
+                onToggleCompareMode={() => { if (compareMode) leaveCompare(); else setCompareModeOn(true); }}
                 onRetry={() => setShopifyRetry((current) => current + 1)}
                 onOpenSettings={() => { void chrome.tabs.create({ url: chrome.runtime.getURL("/options.html#shopify-audit"), active: true }); }}
+                kiosk={kioskStore ? { store: kioskStore, shop: shopifyShop, requests: kioskQueue.requests, clockOffset: kioskQueue.clockOffset, error: kioskQueue.error, busy: kioskQueue.busy, onUpdate: kioskQueue.update } : null}
               />
             ) : loading ? (
               <div className="closed-tabs-loading">
@@ -382,7 +405,7 @@ export function ClosedTabsPanel({
         <ShopifyCompareTray
           products={compareProducts}
           onRemove={toggleCompare}
-          onClear={() => setCompareProducts([])}
+          onClear={leaveCompare}
           onCompare={openCompare}
         />
       )}

@@ -39,6 +39,8 @@ test("renders a product like the Kiosk popup with condition notes and aligned sp
   expect(html).toMatch(/aria-label="Item condition">.*Light scratches/);
   expect(html).toMatch(/aria-label="Listing details">.*Items included.*<li>Cable<\/li>/);
   expect(html).toMatch(/Specifications<\/h3>.*Storage.*128GB/);
+  // Listing details come before the specs; condition notes close the column.
+  expect(html).toMatch(/aria-label="Listing details">.*Specifications<\/h3>.*aria-label="Item condition">/);
   expect(html).toContain("Remove iPhone 13 from comparison");
 });
 

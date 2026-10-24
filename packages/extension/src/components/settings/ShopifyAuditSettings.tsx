@@ -4,6 +4,52 @@ import { CLERK_SIGN_IN_URL } from "../../access/config";
 import { connectShopifyAudit, disconnectShopifyAudit, getShopifyAuditConnection, listHiddenShopifyProducts, setShopifyProductHidden, type ShopifyHiddenProduct } from "../../shopify-audit/client";
 import { findOpenShopifyAdminShops, shopDomainFromAdminUrl } from "../../shopify-audit/store-discovery";
 import { useShopifyAuditMode } from "../../shopify-audit/use-audit-mode";
+import { fetchKioskQueue, normalizeKioskStore } from "../../kiosk/kiosk-requests";
+import { useKioskStore } from "../../kiosk/use-kiosk";
+
+/** Which store kiosk's "Ask to see item" requests show on the new tab. */
+function KioskStoreSetting() {
+  const [store, saveStore] = useKioskStore();
+  const [draft, setDraft] = useState("");
+  const [checking, setChecking] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const save = async () => {
+    const slug = normalizeKioskStore(draft);
+    if (!slug) {
+      setMessage("Enter a store like taylormi or taylormi.paymore.com.");
+      return;
+    }
+    setChecking(true);
+    setMessage(null);
+    try {
+      await fetchKioskQueue(slug);
+      await saveStore(slug);
+      setDraft("");
+    } catch (cause) {
+      setMessage(cause instanceof Error ? `Couldn't reach that kiosk: ${cause.message}` : "Couldn't reach that kiosk.");
+    } finally {
+      setChecking(false);
+    }
+  };
+  return (
+    <div className="mt-5 border-t border-border pt-4">
+      <p className="font-medium">Kiosk requests</p>
+      <p className="text-sm text-muted-foreground">Show customers' "Ask to see item" requests from your store kiosk on the new tab, with Found and Shown buttons.</p>
+      {store ? (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm">Showing requests for <span className="font-medium">{store}</span></p>
+          <button className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted" onClick={() => void saveStore(null)} type="button">Stop showing</button>
+        </div>
+      ) : (
+        <form className="mt-3 flex flex-wrap gap-2" onSubmit={(event) => { event.preventDefault(); void save(); }}>
+          <input aria-label="Kiosk store" className="h-9 min-w-56 flex-1 rounded-md border border-input bg-background px-3 text-sm" onChange={(event) => setDraft(event.target.value)} placeholder="taylormi or taylormi.paymore.com" value={draft} />
+          <button className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground disabled:opacity-50" disabled={checking || !draft.trim()} type="submit">{checking ? "Checking…" : "Save"}</button>
+        </form>
+      )}
+      {message && <p className="mt-2 text-sm text-destructive" role="alert">{message}</p>}
+    </div>
+  );
+}
 import type { ShopifyAuditMode } from "../../domain/shopify-audit";
 
 const AUDIT_MODES: Array<{ value: ShopifyAuditMode; label: string; description: string }> = [
@@ -187,6 +233,7 @@ export function ShopifyAuditSettings() {
             ))}
           </div>
         </div>
+        <KioskStoreSetting />
         {connectedShop && hiddenProducts && (
           <div className="mt-5 border-t border-border pt-4">
             <p className="font-medium">Hidden from new tab search</p>

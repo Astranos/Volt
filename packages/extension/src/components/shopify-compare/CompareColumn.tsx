@@ -1,5 +1,6 @@
-import { useState } from "react";
-import { ArrowUpRight, Boxes, Check, Copy, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { ArrowUpRight, Boxes, Check, ChevronLeft, ChevronRight, Copy, X } from "lucide-react";
 import type { DetailBlock } from "../../shopify-compare/listing";
 import type { CompareItem, CompareRow } from "../../shopify-compare/compare-model";
 
@@ -37,15 +38,66 @@ function ListingBlock({ block }: { block: DetailBlock }) {
   }
 }
 
+/** The photos full screen: arrows or arrow keys to move, Esc or a click outside to close. */
+export function Lightbox({ images, index, title, onIndex, onClose }: {
+  images: string[];
+  index: number;
+  title: string;
+  onIndex: (index: number) => void;
+  onClose: () => void;
+}) {
+  const count = images.length;
+  const step = (delta: number) => onIndex((index + delta + count) % count);
+  const dialog = useRef<HTMLDivElement | null>(null);
+  // Focus moves into the viewer and comes back to whatever opened it.
+  useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null;
+    dialog.current?.querySelector<HTMLElement>(".is-close")?.focus();
+    return () => opener?.focus();
+  }, []);
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+      else if (event.key === "ArrowLeft" && count > 1) onIndex((index - 1 + count) % count);
+      else if (event.key === "ArrowRight" && count > 1) onIndex((index + 1) % count);
+      else if (event.key === "Tab") {
+        // Keep Tab inside the viewer while it covers the page.
+        const buttons = Array.from(dialog.current?.querySelectorAll<HTMLElement>("button") ?? []);
+        const at = buttons.indexOf(document.activeElement as HTMLElement);
+        buttons[(at + (event.shiftKey ? -1 : 1) + buttons.length) % buttons.length]?.focus();
+      } else return;
+      event.preventDefault();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [count, index, onClose, onIndex]);
+  return createPortal(
+    <div aria-label={`${title} photos`} aria-modal="true" className="compare-lightbox" onClick={onClose} ref={dialog} role="dialog">
+      <img alt={`${title}, photo ${index + 1} of ${count}`} onClick={(event) => event.stopPropagation()} src={images[index]} />
+      <button aria-label="Close photos" className="compare-lightbox-button is-close" onClick={onClose} type="button"><X aria-hidden="true" size={20} /></button>
+      {count > 1 && <>
+        <button aria-label="Previous photo" className="compare-lightbox-button is-previous" onClick={(event) => { event.stopPropagation(); step(-1); }} type="button"><ChevronLeft aria-hidden="true" size={22} /></button>
+        <button aria-label="Next photo" className="compare-lightbox-button is-next" onClick={(event) => { event.stopPropagation(); step(1); }} type="button"><ChevronRight aria-hidden="true" size={22} /></button>
+        <span className="compare-lightbox-count">{index + 1} / {count}</span>
+      </>}
+    </div>,
+    document.body,
+  );
+}
+
 function Gallery({ images, title }: { images: string[]; title: string }) {
   const [index, setIndex] = useState(0);
-  const image = images[Math.min(index, images.length - 1)];
+  const [enlarged, setEnlarged] = useState(false);
+  const position = Math.min(index, images.length - 1);
+  const image = images[position];
   return (
     <div className="compare-cell compare-gallery">
-      <div className="compare-gallery-frame">
+      <div className={image ? "compare-gallery-frame is-zoomable" : "compare-gallery-frame"}>
         <span className="compare-gallery-placeholder"><Boxes aria-hidden="true" size={28} /> No photo</span>
         {image && <img alt={title} key={image} onError={(event) => { event.currentTarget.style.display = "none"; }} src={image} />}
+        {image && <button aria-label={`Enlarge photo of ${title}`} className="compare-gallery-zoom" onClick={() => setEnlarged(true)} type="button" />}
       </div>
+      {enlarged && image && <Lightbox images={images} index={position} onClose={() => setEnlarged(false)} onIndex={setIndex} title={title} />}
       {images.length > 1 && (
         <div className="compare-gallery-thumbnails" aria-label={`${title} photos`}>
           {images.map((url, position) => (
@@ -164,24 +216,24 @@ export function CompareColumn({
         )}
       </section>
 
-      {hasNotes && (
-        <section className="compare-cell compare-section compare-listing" aria-label="Item condition">
-          <h3 className="compare-section-label">Condition notes</h3>
-          {conditionNotes.length
-            ? <div className="compare-notes">{conditionNotes.map((block, position) => <ListingBlock block={block} key={position} />)}</div>
-            : <p className="compare-muted">No condition notes.</p>}
-        </section>
-      )}
-
-      {specs.length > 0 && <h3 className="compare-cell compare-section-label compare-specs-heading">Specifications</h3>}
-      {specs.map((row) => <AttributeRow index={index} key={row.label} row={row} />)}
-
       {hasDetails && (
         <section className="compare-cell compare-section compare-listing" aria-label="Listing details">
           <h3 className="compare-section-label">Listing details</h3>
           {otherDetails.length
             ? otherDetails.map((block, position) => <ListingBlock block={block} key={position} />)
             : <p className="compare-muted">No additional details provided.</p>}
+        </section>
+      )}
+
+      {specs.length > 0 && <h3 className="compare-cell compare-section-label compare-specs-heading">Specifications</h3>}
+      {specs.map((row) => <AttributeRow index={index} key={row.label} row={row} />)}
+
+      {hasNotes && (
+        <section className="compare-cell compare-section compare-listing" aria-label="Item condition">
+          <h3 className="compare-section-label">Condition notes</h3>
+          {conditionNotes.length
+            ? <div className="compare-notes">{conditionNotes.map((block, position) => <ListingBlock block={block} key={position} />)}</div>
+            : <p className="compare-muted">No condition notes.</p>}
         </section>
       )}
     </article>

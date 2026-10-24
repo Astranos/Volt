@@ -109,4 +109,16 @@ describe('item request HTTP boundary', () => {
       expect(db.enqueue).not.toHaveBeenCalled();
     } finally { vi.useRealTimers(); }
   });
+  it('lets the Volt extension read the queue and set statuses, but not create requests', async () => {
+    const { api, db } = setup();
+    const origin = { origin: 'chrome-extension://bmgghhmlflbhlnomgnoodpidekpaaifk' };
+    expect((await api.GET(new Request('https://pm.juanquenga.com/api/requests?store=taylormi', { headers: origin }))).status).toBe(200);
+    db.setStatus.mockResolvedValueOnce({ id: 'request1', storeSlug: 'taylormi', productId: '12', variantId: '34', title: 'Camera', variantTitle: 'Default Title', sku: null, imageUrl: null, priceCents: 2000, productUrl: 'https://taylormi.paymore.com/products/camera', status: 'found', createdAt: time, updatedAt: time, expiresAt: time + 3600000 });
+    const patch = new Request('https://pm.juanquenga.com/api/requests', { method: 'PATCH', headers: { 'content-type': 'application/json', ...origin }, body: JSON.stringify({ storeSlug: 'taylormi', id: 'request1', status: 'found' }) });
+    expect((await api.PATCH(patch)).status).toBe(200);
+    expect((await api.POST(post(input, origin))).status).toBe(400);
+    expect(db.enqueue).not.toHaveBeenCalled();
+    const other = { origin: 'chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' };
+    expect((await api.GET(new Request('https://pm.juanquenga.com/api/requests?store=taylormi', { headers: other }))).status).toBe(400);
+  });
 });

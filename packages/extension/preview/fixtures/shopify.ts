@@ -63,3 +63,37 @@ export const auditProducts = auditTitles.map(([title, status], index) => ({
   status,
   url: `https://admin.shopify.com/store/volt-demo/products/${8800 + index}`,
 }));
+
+const details = (id: number, title: string, price: string, condition: string, images: string[], cosmetic: string) => ({
+  id: `gid://shopify/Product/${id}`, title, status: "ACTIVE", totalInventory: 1,
+  url: `https://admin.shopify.com/store/volt-demo/products/${id}`, images,
+  currencyCode: "USD", minPrice: price, maxPrice: price, condition, vendor: "PayMore", productType: "Cell Phones",
+  descriptionHtml: `<h3>Cosmetic condition:</h3><p>${cosmetic}</p><h3>Functionality condition:</h3><p>Tested and fully working. Battery health 88%. Factory reset and ready to activate.</p><h3>Items included in this sale:</h3><ul><li>${title}</li><li>USB-C cable</li></ul>`,
+  variants: [{ id: `gid://shopify/ProductVariant/${id}`, title: "Default Title", sku: `IP-${id}`, price }],
+});
+
+/** Product details for the compare page. */
+export const compareDetails = {
+  shop,
+  products: [
+    details(101, "Apple iPhone 13 128GB Midnight — Unlocked", "389.00", "Used - Excellent", [productImages.iphone13, productImages.iphone13Mini], "Light scratches on the frame. Screen is clean with no marks. See pictures for details."),
+    details(102, "Apple iPhone 13 Pro 256GB Graphite — Unlocked", "529.00", "Used - Good", [productImages.iphone13Pro, productImages.iphone13ProMax], "Visible scuffs on the back glass and corners. Screen has minor wear. See pictures for details."),
+  ],
+};
+
+const minutesAgo = (minutes: number) => Date.now() - minutes * 60_000;
+const kioskRequest = (id: string, title: string, sku: string, minutes: number, status: "waiting" | "found", imageUrl: string) => ({
+  id, storeSlug: "taylormi", productId: String(900 + Number(id.slice(1))), variantId: "1", title, variantTitle: "Default Title",
+  sku, imageUrl, priceCents: 0, productUrl: "https://taylormi.paymore.com/products/sample", status,
+  createdAt: minutesAgo(minutes), updatedAt: minutesAgo(minutes), expiresAt: minutesAgo(minutes - 60),
+});
+
+/** The kiosk's GET /api/requests response for taylormi. */
+export const kioskQueue = () => ({
+  serverNow: Date.now(),
+  requests: [
+    kioskRequest("k1", "Apple iPhone 13 Pro 256GB Graphite — Unlocked", "IP13P-256-GR", 9, "found", productImages.iphone13Pro),
+    kioskRequest("k2", "Apple iPhone 13 128GB Midnight — Unlocked", "IP13-128-MID-A", 4, "waiting", productImages.iphone13),
+    kioskRequest("k3", "Apple iPhone 13 mini 128GB Green — AT&T", "IP13M-128-GRN", 1, "waiting", productImages.iphone13Mini),
+  ],
+});
