@@ -178,7 +178,7 @@ export default function NewTab() {
               onClick={() => void handleShopifyAudit()}
               disabled={auditBusy}
               aria-label="Audit Shopify products created yesterday"
-              data-tooltip="Review yesterday's new Shopify products"
+              data-tooltip="Review yesterday's listings"
             >
               <ClipboardCheck aria-hidden="true" />
               <span>{auditBusy ? "Opening…" : "Audit"}</span>
