@@ -114,15 +114,16 @@ const renderKiosk = (query: string) => renderToStaticMarkup(<Command shouldFilte
   />
 </Command.List></Command>);
 
-test("an empty search shows waiting kiosk requests with Found and Shown", () => {
+test("an empty search shows waiting kiosk requests; the card opens Shopify and Clear closes it", () => {
   const html = renderKiosk("");
   expect(html).toContain("Kiosk requests");
   expect(html).toContain("PS5 Slim");
   expect(html).toContain("SKU MI01-1");
   expect(html).toContain("4 min");
-  expect(html).toContain(">Found<");
-  expect(html).toContain(">Shown<");
-  expect(html).toContain("Open PS5 Slim in Shopify");
+  expect(html).toContain('aria-label="Open PS5 Slim in Shopify" class="kiosk-request-open"');
+  expect(html).toContain('aria-label="Clear request for PS5 Slim"');
+  expect(html).not.toContain(">Found<");
+  expect(html).not.toContain(">Shown<");
   expect(html).not.toContain("Search your Shopify products</strong>");
 });
 
@@ -134,7 +135,7 @@ test("while searching, kiosk requests collapse to one line above the results", (
   expect(html).toContain("Canon EOS");
 });
 
-test("a request's Found and Shown wait while one of them is being saved", () => {
+test("a request's Clear waits while it is being saved", () => {
   const html = renderToStaticMarkup(<Command shouldFilter={false}><Command.List>
     <ShopifyProductResults
       query="" state={{ kind: "idle" }}
@@ -143,5 +144,5 @@ test("a request's Found and Shown wait while one of them is being saved", () => 
       kiosk={{ ...kiosk, busy: new Set(["k1"]) }}
     />
   </Command.List></Command>);
-  expect(html.match(/disabled=""/g)?.length).toBe(2);
+  expect(html.match(/disabled=""/g)?.length).toBe(1);
 });

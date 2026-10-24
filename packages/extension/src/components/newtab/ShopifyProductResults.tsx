@@ -10,7 +10,7 @@ import {
   type ShopifyResultSort,
 } from "./shopify-result-filters";
 import { KioskRequestList } from "./KioskRequestList";
-import type { KioskRequest } from "../../kiosk/kiosk-requests";
+import type { KioskRequest, KioskStaffStatus } from "../../kiosk/kiosk-requests";
 import "./shopify-product-results.css";
 
 /** The store kiosk's live requests, when a kiosk store is set in settings. */
@@ -21,7 +21,7 @@ export type ShopifyKioskRequests = {
   clockOffset: number;
   error: string | null;
   busy: ReadonlySet<string>;
-  onUpdate: (request: KioskRequest, status: "found" | "shown") => void;
+  onUpdate: (request: KioskRequest, status: KioskStaffStatus) => void;
 };
 
 // cmdk moves its selection on arrow keys; keep those inside the filter controls.

@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
-import { ArrowUpRight, Boxes } from "lucide-react";
-import { KIOSK_API_BASE, kioskProductAdminUrl, waitedFor, type KioskRequest } from "../../kiosk/kiosk-requests";
+import { ArrowUpRight, Boxes, X } from "lucide-react";
+import { KIOSK_API_BASE, kioskProductAdminUrl, waitedFor, type KioskRequest, type KioskStaffStatus } from "../../kiosk/kiosk-requests";
 import "./kiosk-requests.css";
 
 // Buttons live inside cmdk's list; keep Enter from selecting a search result instead.
 const keepEnter = (event: React.KeyboardEvent) => { if (event.key === "Enter") event.stopPropagation(); };
 
-/** Customers' "Ask to see item" requests from the store kiosk, with the staff page's main actions. */
+/** Customers' "Ask to see item" requests from the store kiosk: click one to open it in Shopify, Clear when handled. */
 export function KioskRequestList({
   store,
   shop,
@@ -23,7 +23,7 @@ export function KioskRequestList({
   clockOffset: number;
   error: string | null;
   busy?: ReadonlySet<string>;
-  onUpdate: (request: KioskRequest, status: "found" | "shown") => void;
+  onUpdate: (request: KioskRequest, status: KioskStaffStatus) => void;
   onOpen: (url: string) => void;
 }) {
   // Waiting times read "4 min"; refresh them without waiting for the next change.
@@ -52,7 +52,7 @@ export function KioskRequestList({
         const adminUrl = kioskProductAdminUrl(shop, request.productId);
         const saving = busy.has(request.id);
         const variant = request.variantTitle && request.variantTitle !== "Default Title" ? request.variantTitle : null;
-        return <li className="kiosk-request" key={request.id}>
+        const details = <>
           <span className="kiosk-request-thumb">
             <Boxes aria-hidden="true" size={16} />
             {request.imageUrl && <img alt="" loading="lazy" onError={(event) => { event.currentTarget.style.display = "none"; }} src={request.imageUrl} />}
@@ -67,13 +67,15 @@ export function KioskRequestList({
               <span>{waitedFor(now + clockOffset - request.createdAt)}</span>
             </span>
           </span>
-          <span className="kiosk-request-actions">
-            {request.status === "waiting" && <button className="kiosk-request-button is-primary" data-tooltip="Staff found the item" disabled={saving} onClick={() => onUpdate(request, "found")} onKeyDown={keepEnter} type="button">Found</button>}
-            <button className="kiosk-request-button" data-tooltip="Customer was shown the item" disabled={saving} onClick={() => onUpdate(request, "shown")} onKeyDown={keepEnter} type="button">Shown</button>
-            {adminUrl && <button aria-label={`Open ${request.title} in Shopify`} className="kiosk-request-button is-icon" data-tooltip="Open in Shopify" onClick={() => onOpen(adminUrl)} onKeyDown={keepEnter} type="button">
-              <ArrowUpRight aria-hidden="true" size={14} />
-            </button>}
-          </span>
+        </>;
+        return <li className="kiosk-request" key={request.id}>
+          {/* The whole card opens the product; Clear closes the request like the staff page. */}
+          {adminUrl
+            ? <button aria-label={`Open ${request.title} in Shopify`} className="kiosk-request-open" onClick={() => onOpen(adminUrl)} onKeyDown={keepEnter} type="button">{details}</button>
+            : <span className="kiosk-request-open">{details}</span>}
+          <button aria-label={`Clear request for ${request.title}`} className="kiosk-request-button" data-tooltip="Done: remove from the queue" disabled={saving} onClick={() => onUpdate(request, "cleared")} onKeyDown={keepEnter} type="button">
+            <X aria-hidden="true" size={13} /> Clear
+          </button>
         </li>;
       })}
     </ul>

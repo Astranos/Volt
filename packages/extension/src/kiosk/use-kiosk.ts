@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { fetchKioskQueue, KIOSK_STORE_KEY, normalizeKioskStore, setKioskRequestStatus, type KioskRequest } from "./kiosk-requests";
+import { fetchKioskQueue, KIOSK_STORE_KEY, normalizeKioskStore, setKioskRequestStatus, type KioskRequest, type KioskStaffStatus } from "./kiosk-requests";
 
 const POLL_MS = 3_000;
 
@@ -34,12 +34,12 @@ export type KioskQueueState = {
   /** Server clock minus this computer's, so waiting times match the kiosk. */
   clockOffset: number;
   error: string | null;
-  /** Requests with a Found/Shown still being saved; their buttons wait. */
+  /** Requests with a Found/Clear still being saved; their buttons wait. */
   busy: ReadonlySet<string>;
-  update: (request: KioskRequest, status: "found" | "shown") => void;
+  update: (request: KioskRequest, status: KioskStaffStatus) => void;
 };
 
-type Pending = { status: "found" | "shown"; token: number };
+type Pending = { status: KioskStaffStatus; token: number };
 
 const byCreated = (a: KioskRequest, b: KioskRequest) => a.createdAt - b.createdAt;
 
@@ -51,11 +51,11 @@ export function useKioskQueue(store: string | null): KioskQueueState {
   const [busy, setBusy] = useState<ReadonlySet<string>>(new Set());
   // Bumped when the store changes or the page unmounts, so late callbacks do nothing.
   const generation = useRef(0);
-  // Found/Shown not yet confirmed, applied over every poll. The token lets only
+  // Found/Clear not yet confirmed, applied over every poll. The token lets only
   // the newest change for a request roll itself back or clear itself.
   const pending = useRef(new Map<string, Pending>());
   // When each request was last changed here (start and settlement of each
-  // Found/Shown), on a sequence shared with polls: a poll keeps what's on screen
+  // Found/Clear), on a sequence shared with polls: a poll keeps what's on screen
   // for requests changed while it was in flight and takes everything else.
   const sequence = useRef(0);
   const lastChange = useRef(new Map<string, number>());
@@ -94,7 +94,7 @@ export function useKioskQueue(store: string | null): KioskQueueState {
                   continue;
                 }
                 const override = pending.current.get(item.id)?.status;
-                if (override === "shown") continue;
+                if (override && override !== "found") continue;
                 merged.push(override === "found" ? { ...item, status: "found" } : item);
               }
               // A row this page put back (a failed Shown) that the poll predates.
@@ -121,7 +121,7 @@ export function useKioskQueue(store: string | null): KioskQueueState {
     };
   }, [store]);
 
-  const update = useCallback((request: KioskRequest, status: "found" | "shown") => {
+  const update = useCallback((request: KioskRequest, status: KioskStaffStatus) => {
     // One change per request at a time, so a rollback always returns to a state
     // the server confirmed rather than another unconfirmed click.
     if (!store || pending.current.has(request.id)) return;
@@ -130,7 +130,7 @@ export function useKioskQueue(store: string | null): KioskQueueState {
     pending.current.set(request.id, { status, token });
     lastChange.current.set(request.id, ++sequence.current);
     setBusy((current) => new Set(current).add(request.id));
-    setRequests((shown) => status === "shown"
+    setRequests((shown) => status !== "found"
       ? shown.filter((item) => item.id !== request.id)
       : shown.map((item) => item.id === request.id ? { ...item, status } : item));
     // Settles in one step: clear the override and mark the change together, so

@@ -4,6 +4,8 @@ export const KIOSK_API_BASE = "https://pm.voltresale.app";
 export const KIOSK_STORE_KEY = "kioskStoreSlug";
 
 export type KioskRequestStatus = "waiting" | "found" | "shown" | "given" | "cleared";
+/** What staff can set; every one but "found" closes the request. */
+export type KioskStaffStatus = Exclude<KioskRequestStatus, "waiting">;
 export type KioskRequest = {
   id: string;
   productId: string;
@@ -81,7 +83,7 @@ export async function fetchKioskQueue(store: string, fetcher: typeof fetch = fet
   return { requests, serverNow: record.serverNow };
 }
 
-export async function setKioskRequestStatus(store: string, id: string, status: "found" | "shown", fetcher: typeof fetch = fetch): Promise<void> {
+export async function setKioskRequestStatus(store: string, id: string, status: KioskStaffStatus, fetcher: typeof fetch = fetch): Promise<void> {
   await readJson(await fetcher(`${KIOSK_API_BASE}/api/requests`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
