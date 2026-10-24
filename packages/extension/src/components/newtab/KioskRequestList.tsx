@@ -57,9 +57,9 @@ export function KioskRequestList({
             <Boxes aria-hidden="true" size={16} />
             {request.imageUrl && <img alt="" loading="lazy" onError={(event) => { event.currentTarget.style.display = "none"; }} src={request.imageUrl} />}
           </span>
-          <span className="kiosk-request-body">
+          <span className="kiosk-request-body" id={`kiosk-request-${request.id}`}>
             <span className="kiosk-request-title" title={request.title}>{request.title}{variant ? ` — ${variant}` : ""}</span>
-            <span className="kiosk-request-meta">
+            <span className="kiosk-request-meta" id={`kiosk-request-${request.id}-meta`}>
               <span className={request.status === "found" ? "kiosk-request-status is-found" : "kiosk-request-status"}>
                 {request.status === "found" ? "Found" : "Waiting"}
               </span>
@@ -71,9 +71,9 @@ export function KioskRequestList({
         return <li className="kiosk-request" key={request.id}>
           {/* The whole card opens the product; Clear closes the request like the staff page. */}
           {adminUrl
-            ? <button aria-label={`Open ${request.title} in Shopify`} className="kiosk-request-open" onClick={() => onOpen(adminUrl)} onKeyDown={keepEnter} type="button">{details}</button>
+            ? <button aria-describedby={`kiosk-request-${request.id}-meta`} aria-label={`Open ${request.title}${variant ? ` — ${variant}` : ""} in Shopify`} className="kiosk-request-open" onClick={() => onOpen(adminUrl)} onKeyDown={keepEnter} type="button">{details}</button>
             : <span className="kiosk-request-open">{details}</span>}
-          <button aria-label={`Clear request for ${request.title}`} className="kiosk-request-button" data-tooltip="Done: remove from the queue" disabled={saving} onClick={() => onUpdate(request, "cleared")} onKeyDown={keepEnter} type="button">
+          <button aria-describedby={`kiosk-request-${request.id}-meta`} aria-label={`Clear request for ${request.title}${variant ? ` — ${variant}` : ""}`} className="kiosk-request-button" data-tooltip="Done: remove from the queue" disabled={saving} onClick={() => onUpdate(request, "cleared")} onKeyDown={keepEnter} type="button">
             <X aria-hidden="true" size={13} /> Clear
           </button>
         </li>;

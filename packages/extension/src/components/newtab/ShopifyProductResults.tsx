@@ -83,7 +83,11 @@ export function ShopifyProductResults({
   // While searching, kiosk requests collapse into one line above the results.
   const [kioskOpen, setKioskOpen] = useState(false);
   useEffect(() => {
-    const onKey = (event: KeyboardEvent) => { if (event.key === "ArrowDown" || event.key === "ArrowUp") setKeyboardNav(true); };
+    // Every key cmdk moves its selection with: arrows, Home/End, and Ctrl+J/K/N/P.
+    const onKey = (event: KeyboardEvent) => {
+      const key = event.key.toLowerCase();
+      if (["arrowdown", "arrowup", "home", "end"].includes(key) || (event.ctrlKey && ["j", "k", "n", "p"].includes(key))) setKeyboardNav(true);
+    };
     const onMouse = () => setKeyboardNav(false);
     window.addEventListener("keydown", onKey, true);
     window.addEventListener("mousemove", onMouse, { passive: true });

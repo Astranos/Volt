@@ -146,3 +146,19 @@ test("a request's Clear waits while it is being saved", () => {
   </Command.List></Command>);
   expect(html.match(/disabled=""/g)?.length).toBe(1);
 });
+
+test("kiosk cards for variants of one product announce which variant, with the details attached", () => {
+  const blue = { ...kioskRequest, id: "k2", variantTitle: "Blue" };
+  const html = renderToStaticMarkup(<Command shouldFilter={false}><Command.List>
+    <ShopifyProductResults
+      query="" state={{ kind: "idle" }}
+      onOpenProduct={vi.fn()} onHideProduct={vi.fn()} compareIds={new Set()} compareFull={false} compareMode={false}
+      onToggleCompareMode={vi.fn()} onToggleCompare={vi.fn()} onRetry={vi.fn()} onOpenSettings={vi.fn()}
+      kiosk={{ ...kiosk, requests: [kioskRequest, blue] }}
+    />
+  </Command.List></Command>);
+  expect(html).toContain('aria-label="Open PS5 Slim in Shopify"');
+  expect(html).toContain('aria-label="Open PS5 Slim — Blue in Shopify"');
+  expect(html).toContain('aria-describedby="kiosk-request-k2-meta"');
+  expect(html).toContain('id="kiosk-request-k2-meta"');
+});
