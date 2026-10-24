@@ -76,7 +76,7 @@ export type ShopifyAuditMode = "sidepanel" | "tabs";
 export const SHOPIFY_AUDIT_MODE_KEY = "shopifyAuditMode";
 export const parseShopifyAuditMode = (value: unknown): ShopifyAuditMode => (value === "tabs" ? "tabs" : "sidepanel");
 
-export type ShopifyAuditMark = "done" | "flagged";
+export type ShopifyAuditMark = "done";
 
 /** Side panel review progress, kept in chrome.storage.local so it survives restarts. */
 export type ShopifyAuditReview = {
@@ -106,7 +106,7 @@ export function parseShopifyAuditReview(value: unknown): ShopifyAuditReview | nu
   const ids = new Set(products.map((product) => product.id));
   const marks: Record<string, ShopifyAuditMark> = {};
   for (const [id, mark] of Object.entries(review.marks)) {
-    if (ids.has(id) && (mark === "done" || mark === "flagged")) marks[id] = mark;
+    if (ids.has(id) && mark === "done") marks[id] = mark;
   }
   return {
     shop,

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, Check, Flag, RefreshCw, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, RefreshCw, X } from "lucide-react";
 import { cn } from "../../lib/utils";
 import {
   isReusableShopifyAuditTab,
@@ -9,13 +9,12 @@ import {
   startShopifyAuditReview,
   SHOPIFY_AUDIT_REVIEW_KEY,
   SHOPIFY_AUDIT_REVIEW_REQUEST_KEY,
-  type ShopifyAuditMark,
   type ShopifyAuditReview as Review,
   type ShopifyAuditReviewRequest,
 } from "../../domain/shopify-audit";
 import { getShopifyAuditConnection, listShopifyAuditYesterday } from "../../shopify-audit/client";
 
-type Filter = "all" | "todo" | "flagged";
+type Filter = "all" | "todo";
 
 const STATUS_STYLES: Record<string, string> = {
   ACTIVE: "bg-green-100 text-green-800 dark:bg-green-500/15 dark:text-green-300",
@@ -179,16 +178,12 @@ export default function ShopifyAuditReview({ onClose }: { onClose?: () => void }
     listRef.current?.querySelector<HTMLElement>("[data-current='true']")?.scrollIntoView({ block: "nearest" });
   }, [review?.currentId, filter]);
 
-  const mark = async (value: ShopifyAuditMark, advance: boolean) => {
+  const doneAndNext = async () => {
     const run = generation.current;
     const current = reviewRef.current;
     if (!current?.currentId) return;
-    const marks = { ...current.marks };
-    // "Done" keeps an earlier flag so flagged products stay easy to find.
-    marks[current.currentId] = value === "done" && marks[current.currentId] === "flagged" ? "flagged" : value;
-    const next = { ...current, marks };
+    const next: Review = { ...current, marks: { ...current.marks, [current.currentId]: "done" } };
     await save(next);
-    if (!advance) return;
     const following = nextShopifyAuditProduct(next, current.currentId);
     if (following) await openProduct(next, following.id, run);
   };
@@ -219,10 +214,9 @@ export default function ShopifyAuditReview({ onClose }: { onClose?: () => void }
 
   const products = review?.products ?? [];
   const doneCount = products.filter((product) => review?.marks[product.id]).length;
-  const flaggedCount = products.filter((product) => review?.marks[product.id] === "flagged").length;
   const allDone = products.length > 0 && doneCount === products.length;
   const visible = products.filter((product) => filter === "all"
-    || (filter === "todo" ? !review?.marks[product.id] : review?.marks[product.id] === "flagged"));
+    || !review?.marks[product.id]);
   const currentIndex = products.findIndex((product) => product.id === review?.currentId);
 
   return (
@@ -251,7 +245,6 @@ export default function ShopifyAuditReview({ onClose }: { onClose?: () => void }
                 </div>
                 <div className="mt-1.5 flex justify-between text-xs text-stone-500 dark:text-stone-400">
                   <span>{doneCount} of {products.length} reviewed</span>
-                  {flaggedCount > 0 && <span className="text-amber-700 dark:text-amber-300">{flaggedCount} flagged</span>}
                 </div>
               </>
             )}
@@ -282,7 +275,7 @@ export default function ShopifyAuditReview({ onClose }: { onClose?: () => void }
       ) : (
         <>
           <div className="flex flex-wrap gap-1.5 px-4 pb-1.5 pt-3" role="radiogroup" aria-label="Show">
-            {([["all", `All ${products.length}`], ["todo", `To review ${products.length - doneCount}`], ["flagged", `Flagged ${flaggedCount}`]] as const).map(([value, label]) => (
+            {([["all", `All ${products.length}`], ["todo", `To review ${products.length - doneCount}`]] as const).map(([value, label]) => (
               <button
                 aria-checked={filter === value}
                 className="audit-chip px-2.5 py-0.5 text-[11px] font-medium text-stone-600 transition-colors hover:text-stone-900 dark:text-stone-300 dark:hover:text-stone-50"
@@ -317,7 +310,7 @@ export default function ShopifyAuditReview({ onClose }: { onClose?: () => void }
                   </button>
                   {productMark ? (
                     <button aria-label="Mark as not reviewed" className="audit-icon-button shrink-0 p-1" onClick={() => void clearMark(product.id)} title="Mark as not reviewed" type="button">
-                      {productMark === "done" ? <Check className="h-3.5 w-3.5 text-green-600 dark:text-green-400" /> : <Flag className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />}
+                      <Check className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
                     </button>
                   ) : isCurrent ? <span aria-hidden="true" className="mr-1.5 h-2 w-2 shrink-0 rounded-full bg-green-600" /> : null}
                 </div>
@@ -328,7 +321,7 @@ export default function ShopifyAuditReview({ onClose }: { onClose?: () => void }
             {allDone ? (
               <div className="space-y-2 text-center">
                 <p className="text-xs text-stone-500 dark:text-stone-400">
-                  All {products.length} reviewed{flaggedCount > 0 ? ` · ${flaggedCount} flagged to revisit` : ""}.
+                  All {products.length} reviewed.
                 </p>
                 <button className="audit-button-primary w-full px-3 py-2 text-xs font-semibold" onClick={() => void finish()} type="button">Finish audit</button>
               </div>
@@ -337,10 +330,7 @@ export default function ShopifyAuditReview({ onClose }: { onClose?: () => void }
                 <button aria-label="Previous product" className="audit-button px-3 py-2 disabled:opacity-40" disabled={currentIndex <= 0} onClick={previous} title="Previous product" type="button">
                   <ArrowLeft className="h-3.5 w-3.5" />
                 </button>
-                <button className="audit-button flex items-center gap-1 px-3 py-2 text-xs font-semibold disabled:opacity-40" disabled={!review.currentId} onClick={() => void mark("flagged", true)} type="button">
-                  <Flag className="h-3.5 w-3.5" /> Flag
-                </button>
-                <button className="audit-button-primary flex flex-1 items-center justify-center gap-1 px-3 py-2 text-xs font-semibold disabled:opacity-40" disabled={!review.currentId} onClick={() => void mark("done", true)} type="button">
+                <button className="audit-button-primary flex flex-1 items-center justify-center gap-1 px-3 py-2 text-xs font-semibold disabled:opacity-40" disabled={!review.currentId} onClick={() => void doneAndNext()} type="button">
                   Done &amp; next <ArrowRight className="h-3.5 w-3.5" />
                 </button>
               </div>

@@ -59,7 +59,7 @@ test("a new review starts on the first product", () => {
 
 test("restarting the same day keeps progress and drops products that are gone", () => {
   const first = startShopifyAuditReview(null, result("2026-10-22", [1, 2, 3]));
-  const progressed = { ...first, marks: { [product(1).id]: "done", [product(2).id]: "flagged" }, currentId: product(3).id, tabId: 9 };
+  const progressed = { ...first, marks: { [product(1).id]: "done", [product(2).id]: "done" }, currentId: product(3).id, tabId: 9 };
   const again = startShopifyAuditReview(progressed, result("2026-10-22", [1, 3, 4]));
   assert.deepEqual(again.marks, { [product(1).id]: "done" });
   assert.equal(again.currentId, product(3).id);
@@ -78,7 +78,7 @@ test("next product skips marked products and wraps around", () => {
   const review = { ...startShopifyAuditReview(null, result("2026-10-22", [1, 2, 3])), marks: { [product(2).id]: "done" } };
   assert.equal(nextShopifyAuditProduct(review, product(1).id)?.id, product(3).id);
   assert.equal(nextShopifyAuditProduct(review, product(3).id)?.id, product(1).id);
-  assert.equal(nextShopifyAuditProduct({ ...review, marks: { [product(1).id]: "done", [product(2).id]: "done", [product(3).id]: "flagged" } }, null), null);
+  assert.equal(nextShopifyAuditProduct({ ...review, marks: { [product(1).id]: "done", [product(2).id]: "done", [product(3).id]: "done" } }, null), null);
 });
 
 test("stored reviews are validated before use", () => {

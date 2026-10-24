@@ -9,11 +9,11 @@ const ids = auditProducts.map((product) => product.id);
 const states: Record<string, unknown> = {
   progress: {
     shop, date, products: auditProducts, tabId: 1, currentId: ids[6],
-    marks: { [ids[0]]: "done", [ids[1]]: "done", [ids[2]]: "flagged", [ids[3]]: "done", [ids[4]]: "done", [ids[5]]: "done" },
+    marks: { [ids[0]]: "done", [ids[1]]: "done", [ids[2]]: "done", [ids[3]]: "done", [ids[4]]: "done", [ids[5]]: "done" },
   },
   done: {
     shop, date, products: auditProducts, tabId: 1, currentId: null,
-    marks: Object.fromEntries(ids.map((id, index) => [id, index === 2 || index === 9 ? "flagged" : "done"])),
+    marks: Object.fromEntries(ids.map((id) => [id, "done"])),
   },
   empty: { shop, date, products: [], tabId: null, currentId: null, marks: {} },
 };
