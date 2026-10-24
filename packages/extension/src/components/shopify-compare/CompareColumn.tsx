@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArrowUpRight, Boxes, Check, ChevronLeft, ChevronRight, Copy, X } from "lucide-react";
 import type { DetailBlock } from "../../shopify-compare/listing";
@@ -48,17 +48,31 @@ export function Lightbox({ images, index, title, onIndex, onClose }: {
 }) {
   const count = images.length;
   const step = (delta: number) => onIndex((index + delta + count) % count);
+  const dialog = useRef<HTMLDivElement | null>(null);
+  // Focus moves into the viewer and comes back to whatever opened it.
+  useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null;
+    dialog.current?.querySelector<HTMLElement>(".is-close")?.focus();
+    return () => opener?.focus();
+  }, []);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
       else if (event.key === "ArrowLeft" && count > 1) onIndex((index - 1 + count) % count);
       else if (event.key === "ArrowRight" && count > 1) onIndex((index + 1) % count);
+      else if (event.key === "Tab") {
+        // Keep Tab inside the viewer while it covers the page.
+        const buttons = Array.from(dialog.current?.querySelectorAll<HTMLElement>("button") ?? []);
+        const at = buttons.indexOf(document.activeElement as HTMLElement);
+        buttons[(at + (event.shiftKey ? -1 : 1) + buttons.length) % buttons.length]?.focus();
+      } else return;
+      event.preventDefault();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [count, index, onClose, onIndex]);
   return createPortal(
-    <div aria-label={`${title} photos`} aria-modal="true" className="compare-lightbox" onClick={onClose} role="dialog">
+    <div aria-label={`${title} photos`} aria-modal="true" className="compare-lightbox" onClick={onClose} ref={dialog} role="dialog">
       <img alt={`${title}, photo ${index + 1} of ${count}`} onClick={(event) => event.stopPropagation()} src={images[index]} />
       <button aria-label="Close photos" className="compare-lightbox-button is-close" onClick={onClose} type="button"><X aria-hidden="true" size={20} /></button>
       {count > 1 && <>

@@ -70,3 +70,16 @@ test("card buttons carry styled tooltips and filters offer the conditions presen
   expect(html).toContain("<option value=\"New\">New</option>");
   expect(html).toContain("Price: high to low");
 });
+
+test("when compare is full, unpicked cards are disabled for keyboard and screen readers", () => {
+  const html = renderToStaticMarkup(<Command shouldFilter={false}><Command.List>
+    <ShopifyProductResults
+      query="camera"
+      state={{ kind: "ready", query: "camera", result: { shop: "sample.myshopify.com", products: [camera, nikon] } }}
+      onOpenProduct={vi.fn()} onHideProduct={vi.fn()} compareIds={new Set([camera.id])} compareFull
+      onToggleCompare={vi.fn()} onRetry={vi.fn()} onOpenSettings={vi.fn()}
+    />
+  </Command.List></Command>);
+  expect(html).toMatch(/aria-disabled="true"[^>]*aria-label="Nikon Z \(compare is full\)"|aria-label="Nikon Z \(compare is full\)"[^>]*aria-disabled="true"/);
+  expect(html).toMatch(/aria-disabled="false"[^>]*aria-label="Remove Canon EOS from compare"|aria-label="Remove Canon EOS from compare"[^>]*aria-disabled="false"/);
+});

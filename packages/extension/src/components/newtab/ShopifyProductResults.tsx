@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Command } from "cmdk";
 import { ArrowUpRight, Boxes, Columns3, EyeOff, PackageSearch, RefreshCw, Store, X } from "lucide-react";
 import type { ShopifySearchProduct, ShopifySearchResult } from "../../shopify-audit/client";
@@ -58,6 +58,13 @@ export function ShopifyProductResults({
   const [filters, setFilters] = useState<ShopifyResultFilters>(DEFAULT_SHOPIFY_RESULT_FILTERS);
   // Once something is picked to compare, clicking a card adds or removes it.
   const compareMode = compareIds.size > 0;
+  // A condition missing from new results is dropped, not kept to resurface on a later search.
+  const readyProducts = state.kind === "ready" && state.query === query ? state.result.products : null;
+  useEffect(() => {
+    if (!readyProducts) return;
+    const available = conditionOptions(readyProducts);
+    setFilters((current) => current.condition && !available.includes(current.condition) ? { ...current, condition: null } : current);
+  }, [readyProducts]);
 
   if (query.trim().length < 2) {
     return <div className="shopify-search-intro">
@@ -135,7 +142,7 @@ export function ShopifyProductResults({
       <PackageSearch aria-hidden="true" size={24} />
       <strong>No products match these filters</strong>
       <div className="shopify-search-message-actions">
-        <button onClick={() => setFilters(DEFAULT_SHOPIFY_RESULT_FILTERS)} type="button">Clear filters</button>
+        <button onClick={() => setFilters(DEFAULT_SHOPIFY_RESULT_FILTERS)} onKeyDown={keepKeys} type="button">Clear filters</button>
       </div>
     </div> : <div className="shopify-results-grid">
       {shown.map((product) => {
@@ -152,6 +159,7 @@ export function ShopifyProductResults({
             compareMode && "is-compare-mode",
             compareMode && !canToggle && "is-compare-full",
           ].filter(Boolean).join(" ")}
+          disabled={compareMode && !canToggle}
           key={product.id}
           onSelect={() => {
             if (!compareMode) onOpenProduct(product.url);
