@@ -41,7 +41,7 @@
 }
 
 .shopify-product-card:hover,
-.shopify-product-card[data-selected="true"] {
+.shopify-results.is-keyboard-nav .shopify-product-card[data-selected="true"] {
   background: var(--nt-surface-hover);
   border-color: var(--nt-accent);
   box-shadow: var(--nt-shadow-sm);
@@ -338,11 +338,11 @@
 }
 
 .shopify-product-card:hover .shopify-product-open,
-.shopify-product-card[data-selected="true"] .shopify-product-open,
+.shopify-results.is-keyboard-nav .shopify-product-card[data-selected="true"] .shopify-product-open,
 .shopify-product-card:hover .shopify-product-hide,
-.shopify-product-card[data-selected="true"] .shopify-product-hide,
+.shopify-results.is-keyboard-nav .shopify-product-card[data-selected="true"] .shopify-product-hide,
 .shopify-product-card:hover .shopify-product-compare,
-.shopify-product-card[data-selected="true"] .shopify-product-compare,
+.shopify-results.is-keyboard-nav .shopify-product-card[data-selected="true"] .shopify-product-compare,
 .shopify-product-compare:focus-visible,
 .shopify-product-hide:focus-visible {
   opacity: 1;

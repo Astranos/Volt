@@ -58,6 +58,20 @@ export function ShopifyProductResults({
   const [filters, setFilters] = useState<ShopifyResultFilters>(DEFAULT_SHOPIFY_RESULT_FILTERS);
   // Once something is picked to compare, clicking a card adds or removes it.
   const compareMode = compareIds.size > 0;
+  // cmdk preselects the first result for arrow keys; only show that highlight
+  // once someone is actually using the arrow keys, so the first card doesn't
+  // look hovered while the mouse is elsewhere.
+  const [keyboardNav, setKeyboardNav] = useState(false);
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => { if (event.key === "ArrowDown" || event.key === "ArrowUp") setKeyboardNav(true); };
+    const onMouse = () => setKeyboardNav(false);
+    window.addEventListener("keydown", onKey, true);
+    window.addEventListener("mousemove", onMouse, { passive: true });
+    return () => {
+      window.removeEventListener("keydown", onKey, true);
+      window.removeEventListener("mousemove", onMouse);
+    };
+  }, []);
   // A condition missing from new results is dropped, not kept to resurface on a later search.
   const readyProducts = state.kind === "ready" && state.query === query ? state.result.products : null;
   useEffect(() => {
@@ -102,7 +116,7 @@ export function ShopifyProductResults({
   const filtered = active.inStockOnly || active.condition !== null;
   const fullSearchUrl = `https://${shop}/admin/products?query=${encodeURIComponent(query)}`;
 
-  return <div className="shopify-results">
+  return <div className={keyboardNav ? "shopify-results is-keyboard-nav" : "shopify-results"}>
     <div className="shopify-results-heading">
       <span>{filtered ? `${shown.length} of ${products.length}` : products.length} {products.length === 1 ? "product" : "products"}</span>
       {compareMode && <span className="shopify-compare-hint">Compare mode · click products to add or remove</span>}

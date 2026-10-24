@@ -83,3 +83,9 @@ test("when compare is full, unpicked cards are disabled for keyboard and screen 
   expect(html).toMatch(/aria-disabled="true"[^>]*aria-label="Nikon Z \(compare is full\)"|aria-label="Nikon Z \(compare is full\)"[^>]*aria-disabled="true"/);
   expect(html).toMatch(/aria-disabled="false"[^>]*aria-label="Remove Canon EOS from compare"|aria-label="Remove Canon EOS from compare"[^>]*aria-disabled="false"/);
 });
+
+test("the preselected first result isn't highlighted until arrow keys are used", () => {
+  const html = render([]);
+  expect(html).toContain('class="shopify-results"');
+  expect(html).not.toContain("is-keyboard-nav");
+});
