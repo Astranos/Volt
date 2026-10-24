@@ -100,6 +100,8 @@ export type ShopifyAuditReview = {
   tabId: number | null;
 };
 export const SHOPIFY_AUDIT_REVIEW_KEY = "shopifyAuditReview";
+/** Enough for several busy days of listings without growing forever. */
+const MAX_VIEWED_MARKS = 2000;
 /** Set by the new tab to ask the side panel to load yesterday's list. */
 export const SHOPIFY_AUDIT_REVIEW_REQUEST_KEY = "shopifyAuditReviewRequest";
 export type ShopifyAuditReviewRequest = { at: number; tabId: number | null };
@@ -115,9 +117,11 @@ export function parseShopifyAuditReview(value: unknown): ShopifyAuditReview | nu
     && typeof product.id === "string" && typeof product.title === "string" && typeof product.status === "string"
     && typeof product.url === "string" && validShopifyAdminProductUrl(product.url, shop));
   const ids = new Set(products.map((product) => product.id));
+  // Viewed marks are kept for the whole shop, not just the products in range,
+  // so narrowing the range and widening it again doesn't forget progress.
   const marks: Record<string, ShopifyAuditMark> = {};
   for (const [id, mark] of Object.entries(review.marks)) {
-    if (ids.has(id) && mark === "done") marks[id] = mark;
+    if (/^gid:\/\/shopify\/Product\/\d+$/.test(id) && mark === "done") marks[id] = mark;
   }
   return {
     shop,
@@ -137,7 +141,8 @@ export function parseShopifyAuditReview(value: unknown): ShopifyAuditReview | nu
 export function startShopifyAuditReview(previous: ShopifyAuditReview | null, result: ShopifyAuditResult, days: ShopifyAuditDays = 1): ShopifyAuditReview {
   const same = previous?.shop === result.shop ? previous : null;
   const ids = new Set(result.products.map((product) => product.id));
-  const marks = Object.fromEntries(Object.entries(same?.marks ?? {}).filter(([id]) => ids.has(id)));
+  // Keep the shop's viewed marks even for products outside this range, newest last, capped.
+  const marks = Object.fromEntries(Object.entries(same?.marks ?? {}).slice(-MAX_VIEWED_MARKS));
   const review: ShopifyAuditReview = { shop: result.shop, date: result.date, days, products: result.products, marks, currentId: null, tabId: same?.tabId ?? null };
   const current = same?.currentId && ids.has(same.currentId) ? same.currentId : null;
   return { ...review, currentId: current ?? nextShopifyAuditProduct(review, null)?.id ?? null };

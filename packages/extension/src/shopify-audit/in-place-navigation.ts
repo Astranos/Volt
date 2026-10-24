@@ -1,34 +1,47 @@
 import type { ShopifyAuditProduct } from "../domain/shopify-audit";
 
 type ScriptingApi = Pick<typeof chrome.scripting, "executeScript">;
+/** done: the new product shows. blocked: Shopify kept the old page (unsaved changes). fallback: do a normal load. */
+export type InPlaceOutcome = "done" | "blocked" | "fallback";
 
 const POLL_MS = 250;
 const TIMEOUT_MS = 4_000;
 
-// Runs inside Shopify's page. The admin is a single-page app: changing the
-// address and announcing it the way the back button does lets its own router
-// swap the product in place, like Sidekick does, instead of a full page load.
-function routeTo(path: string) {
-  history.pushState(null, "", path);
+/**
+ * Runs inside Shopify's page. Only acts if the page is still the expected
+ * Shopify product (the tab may have moved since Volt looked at it), then
+ * marks the document so later probes can tell it's the same page, changes
+ * the address, and announces it the way the back button does so Shopify's
+ * own router swaps the product in place, like Sidekick.
+ */
+export function routeTo(origin: string, fromPath: string, toPath: string, marker: string) {
+  if (location.origin !== origin || location.pathname !== fromPath) return false;
+  (window as unknown as Record<string, unknown>).__voltAuditNavigation = marker;
+  history.pushState(null, "", toPath);
   window.dispatchEvent(new PopStateEvent("popstate", { state: null }));
   return true;
 }
 
-// Runs inside Shopify's page: where it is now and whether the new product shows.
-function readRoute(title: string) {
-  const clean = (value: string | null | undefined) => (value ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+/**
+ * Runs inside Shopify's page: whether it's still the page routeTo marked, where
+ * it is, and whether the product heading now exactly matches the new title
+ * (Shopify puts a status badge like "Active" in the same heading).
+ */
+export function readRoute(origin: string, marker: string, title: string) {
+  if (location.origin !== origin || (window as unknown as Record<string, unknown>).__voltAuditNavigation !== marker) return null;
+  const clean = (value: string | null | undefined) => (value ?? "").replace(/\s+/g, " ").trim().toLowerCase()
+    .replace(/\s+(active|draft|archived|unlisted)$/, "");
   const wanted = clean(title);
-  const headings = Array.from(document.querySelectorAll("h1"), (heading) => clean(heading.textContent));
   return {
     path: location.pathname,
-    shown: !!wanted && (clean(document.title).includes(wanted) || headings.some((heading) => heading.includes(wanted))),
+    shown: !!wanted && Array.from(document.querySelectorAll("h1")).some((heading) => clean(heading.textContent) === wanted),
   };
 }
 
 /**
- * Moves a Shopify admin tab to another product without a full reload. Returns
- * false when that isn't possible or didn't take, so the caller falls back to a
- * normal page load; Shopify internals can change at any time.
+ * Moves a Shopify admin tab to another product without a full reload. Anything
+ * short of confirming the new product is a fallback to a normal load, since
+ * Shopify internals can change at any time.
  */
 export async function openProductInPlace(
   scripting: ScriptingApi,
@@ -37,34 +50,39 @@ export async function openProductInPlace(
   from: ShopifyAuditProduct | undefined,
   to: ShopifyAuditProduct,
   wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms)),
-): Promise<boolean> {
+): Promise<InPlaceOutcome> {
   let current: URL;
   let target: URL;
   try {
     current = new URL(currentUrl ?? "");
     target = new URL(to.url);
   } catch {
-    return false;
+    return "fallback";
   }
-  // Same store's admin only, and a title check can't tell two same-named products apart.
   const store = (path: string) => path.split("/").slice(0, 3).join("/");
-  if (current.origin !== target.origin || store(current.pathname) !== store(target.pathname)) return false;
-  if (!from || from.title.trim().toLowerCase() === to.title.trim().toLowerCase()) return false;
+  if (current.origin !== target.origin || store(current.pathname) !== store(target.pathname)) return "fallback";
+  if (!from || from.url !== `${current.origin}${current.pathname}`) return "fallback";
+  // The heading check can't tell two same-named products apart.
+  if (from.title.trim().toLowerCase() === to.title.trim().toLowerCase()) return "fallback";
+  const marker = crypto.randomUUID();
 
   try {
-    const [started] = await scripting.executeScript({ target: { tabId }, world: "MAIN", func: routeTo, args: [target.pathname] });
-    if (started?.result !== true) return false;
+    const [started] = await scripting.executeScript({
+      target: { tabId }, world: "MAIN", func: routeTo, args: [target.origin, current.pathname, target.pathname, marker],
+    });
+    if (started?.result !== true) return "fallback";
     for (let waited = 0; waited < TIMEOUT_MS; waited += POLL_MS) {
       await wait(POLL_MS);
-      const [probe] = await scripting.executeScript({ target: { tabId }, world: "MAIN", func: readRoute, args: [to.title] });
+      const [probe] = await scripting.executeScript({ target: { tabId }, world: "MAIN", func: readRoute, args: [target.origin, marker, to.title] });
       const route = probe?.result;
-      if (!route) return false;
-      // Shopify held the old page (its "unsaved changes" prompt): don't force a reload over it.
-      if (route.path !== target.pathname) return true;
-      if (route.shown) return true;
+      // A different document (reloaded or navigated away): not ours to judge.
+      if (!route) return "fallback";
+      // Shopify held the old page (its "unsaved changes" prompt): leave it alone.
+      if (route.path !== target.pathname) return "blocked";
+      if (route.shown) return "done";
     }
   } catch {
-    return false;
+    return "fallback";
   }
-  return false;
+  return "fallback";
 }

@@ -243,11 +243,15 @@ export class CloudWorkspaceSubscriptions {
     let armed = false;
     for (;;) {
       await this.reconcileAuthentication();
-      const subject = this.clerkSubject ?? this.clientAuthSubject();
-      if (subject) return subject;
+      // Always ask Clerk who is signed in right now, and go ahead only once the
+      // Convex client is authenticated as that same account — never on a
+      // remembered subject from before a sign-out or an account switch.
       const auth = await resolveClerkAuth();
-      if (auth.status === "signed-out" || Date.now() >= deadline) throw new Error(message);
-      if (auth.status === "signed-in" && !armed) {
+      if (auth.status === "signed-out") throw new Error(message);
+      const subject = auth.status === "signed-in" ? clerkSubjectFromToken(auth.token) : null;
+      if (subject && this.clientAuthSubject() === subject) return subject;
+      if (Date.now() >= deadline) throw new Error(message);
+      if (subject && !armed) {
         armed = true;
         this.armClientAuth();
       }
@@ -363,6 +367,9 @@ export class CloudWorkspaceSubscriptions {
     this.hasReconciledSubject = true;
     this.lastSnapshot = null;
     if (!subject) {
+      // Signed out: drop the Convex client's last login too, so nothing can
+      // still run as the previous account. Re-arming fetches no token.
+      if (this.acceptedClientSubject !== null) this.armClientAuth();
       // Not an error on its own — but this document reads the account from the
       // cookie the service worker mirrors into storage, so it can sit here
       // signed out while the panel is signed in perfectly well. Nothing else

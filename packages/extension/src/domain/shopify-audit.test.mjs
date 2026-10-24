@@ -59,11 +59,11 @@ test("a new review starts on the first product", () => {
   assert.equal(review.tabId, null);
 });
 
-test("restarting the same day keeps progress and drops products that are gone", () => {
+test("restarting the same day keeps progress, including for products no longer in range", () => {
   const first = startShopifyAuditReview(null, result("2026-10-22", [1, 2, 3]));
   const progressed = { ...first, marks: { [product(1).id]: "done", [product(2).id]: "done" }, currentId: product(3).id, tabId: 9 };
   const again = startShopifyAuditReview(progressed, result("2026-10-22", [1, 3, 4]));
-  assert.deepEqual(again.marks, { [product(1).id]: "done" });
+  assert.deepEqual(again.marks, { [product(1).id]: "done", [product(2).id]: "done" });
   assert.equal(again.currentId, product(3).id);
   assert.equal(again.tabId, 9);
 });
@@ -112,7 +112,8 @@ test("stored reviews are validated before use", () => {
     currentId: product(2).id, tabId: 4,
   });
   assert.deepEqual(parsed.products.map((item) => item.id), [product(1).id]);
-  assert.deepEqual(parsed.marks, { [product(1).id]: "done" });
+  // Marks for valid product IDs are kept even when that product isn't listed.
+  assert.deepEqual(parsed.marks, { [product(1).id]: "done", [product(2).id]: "done" });
   assert.equal(parsed.currentId, null);
   assert.equal(parsed.tabId, 4);
 });
@@ -135,4 +136,11 @@ test("the review tab is reused only on an audit product or the new tab", () => {
   assert.equal(isReusableShopifyAuditTab("https://admin.shopify.com/store/sample/orders/1", review, newTab), false);
   assert.equal(isReusableShopifyAuditTab("https://mail.google.com/", review, newTab), false);
   assert.equal(isReusableShopifyAuditTab(undefined, review, newTab), false);
+});
+
+test("narrowing the range and widening it again keeps what was viewed", () => {
+  const wide = { ...startShopifyAuditReview(null, result("2026-10-20", [1, 2, 3]), 3), marks: { [product(1).id]: "done" } };
+  const narrow = startShopifyAuditReview(wide, result("2026-10-22", [3]), 1);
+  const wideAgain = startShopifyAuditReview(narrow, result("2026-10-20", [1, 2, 3]), 3);
+  assert.equal(wideAgain.marks[product(1).id], "done");
 });

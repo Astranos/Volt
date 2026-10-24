@@ -169,6 +169,14 @@ describe("Shopify previous calendar day", () => {
     expect(range(2)().start).toBe(new Date(Date.parse(endUtc) - 2 * 86400000).toISOString());
     expect(range(3)().date).toBe(new Date(Date.parse(endUtc) - 3 * 86400000).toISOString().slice(0, 10));
     expect(range(4)).toThrow("Invalid audit date range.");
+    // Partial days don't count, even when they end yesterday or span about two days.
+    const partial = (hours: number) => () => {
+      const start = new Date(Date.parse(endUtc) - hours * 3600000).toISOString();
+      return auditRange(start, endUtc, start.slice(0, 10));
+    };
+    expect(partial(36)).toThrow("Invalid audit date range.");
+    expect(partial(60)).toThrow("Invalid audit date range.");
+    expect(partial(47)().start).toBeTruthy(); // a 2-day range across a daylight saving change
   });
   test("paginates every status and uses inclusive start / exclusive end creation dates", async () => {
     const mock = vi.fn<typeof fetch>().mockResolvedValueOnce(productPage(true, "1", "ARCHIVED")).mockResolvedValueOnce(productPage(false, "2", "UNLISTED"));
