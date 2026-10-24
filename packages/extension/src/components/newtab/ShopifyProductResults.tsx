@@ -40,7 +40,9 @@ export function ShopifyProductResults({
   onHideProduct,
   compareIds,
   compareFull,
+  compareMode,
   onToggleCompare,
+  onToggleCompareMode,
   onRetry,
   onOpenSettings,
 }: {
@@ -50,14 +52,15 @@ export function ShopifyProductResults({
   onHideProduct: (product: ShopifySearchProduct) => void;
   compareIds: ReadonlySet<string>;
   compareFull: boolean;
+  /** On when picking products to compare; clicking a card then adds or removes it. */
+  compareMode: boolean;
   onToggleCompare: (product: ShopifySearchProduct) => void;
+  onToggleCompareMode: () => void;
   onRetry: () => void;
   onOpenSettings: () => void;
 }) {
   // Kept while mounted, so filters survive a new search.
   const [filters, setFilters] = useState<ShopifyResultFilters>(DEFAULT_SHOPIFY_RESULT_FILTERS);
-  // Once something is picked to compare, clicking a card adds or removes it.
-  const compareMode = compareIds.size > 0;
   // cmdk preselects the first result for arrow keys; only show that highlight
   // once someone is actually using the arrow keys, so the first card doesn't
   // look hovered while the mouse is elsewhere.
@@ -121,6 +124,13 @@ export function ShopifyProductResults({
       <span>{filtered ? `${shown.length} of ${products.length}` : products.length} {products.length === 1 ? "product" : "products"}</span>
       {compareMode && <span className="shopify-compare-hint">Compare mode · click products to add or remove</span>}
       {products.length > 0 && <div className="shopify-results-filters" onKeyDown={keepKeys}>
+        <button
+          aria-pressed={compareMode}
+          className="shopify-filter-chip shopify-compare-chip"
+          onClick={onToggleCompareMode}
+          title={compareMode ? "Leave compare mode and clear picks" : "Pick products to compare side by side"}
+          type="button"
+        ><Columns3 aria-hidden="true" size={13} /> Compare</button>
         <button
           aria-pressed={active.inStockOnly}
           className="shopify-filter-chip"

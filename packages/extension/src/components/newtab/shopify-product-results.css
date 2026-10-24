@@ -580,3 +580,9 @@
     color: #0a0a0a;
   }
 }
+
+.shopify-compare-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}

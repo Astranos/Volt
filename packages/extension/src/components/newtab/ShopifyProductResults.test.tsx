@@ -15,7 +15,9 @@ test("shows stock, price, condition, and SKU in Shopify result cards", () => {
       onHideProduct={vi.fn()}
       compareIds={new Set(["gid://shopify/Product/1"])}
       compareFull={false}
+      compareMode
       onToggleCompare={vi.fn()}
+      onToggleCompareMode={vi.fn()}
       onRetry={vi.fn()}
       onOpenSettings={vi.fn()}
     />
@@ -41,11 +43,12 @@ test("compare tray needs at least two products", () => {
 
 const camera = { id: "gid://shopify/Product/1", title: "Canon EOS", status: "ACTIVE", totalInventory: 3, url: "https://admin.shopify.com/store/sample/products/1", imageUrl: null, price: "299.99", currencyCode: "USD", sku: "CANON-1", condition: "Used - Good" };
 const nikon = { ...camera, id: "gid://shopify/Product/2", title: "Nikon Z", totalInventory: 0, condition: "New" };
-const render = (compareIds: string[]) => renderToStaticMarkup(<Command shouldFilter={false}><Command.List>
+const render = (compareIds: string[], compareMode?: boolean) => renderToStaticMarkup(<Command shouldFilter={false}><Command.List>
   <ShopifyProductResults
     query="camera"
     state={{ kind: "ready", query: "camera", result: { shop: "sample.myshopify.com", products: [camera, nikon] } }}
     onOpenProduct={vi.fn()} onHideProduct={vi.fn()} compareIds={new Set(compareIds)} compareFull={false}
+    compareMode={compareMode ?? compareIds.length > 0} onToggleCompareMode={vi.fn()}
     onToggleCompare={vi.fn()} onRetry={vi.fn()} onOpenSettings={vi.fn()}
   />
 </Command.List></Command>);
@@ -77,6 +80,7 @@ test("when compare is full, unpicked cards are disabled for keyboard and screen 
       query="camera"
       state={{ kind: "ready", query: "camera", result: { shop: "sample.myshopify.com", products: [camera, nikon] } }}
       onOpenProduct={vi.fn()} onHideProduct={vi.fn()} compareIds={new Set([camera.id])} compareFull
+      compareMode onToggleCompareMode={vi.fn()}
       onToggleCompare={vi.fn()} onRetry={vi.fn()} onOpenSettings={vi.fn()}
     />
   </Command.List></Command>);
@@ -88,4 +92,13 @@ test("the preselected first result isn't highlighted until arrow keys are used",
   const html = render([]);
   expect(html).toContain('class="shopify-results"');
   expect(html).not.toContain("is-keyboard-nav");
+});
+
+test("a Compare button turns on compare mode before anything is picked", () => {
+  const off = render([]);
+  expect(off).toMatch(/aria-pressed="false" class="shopify-filter-chip shopify-compare-chip"/);
+  const on = render([], true);
+  expect(on).toMatch(/aria-pressed="true" class="shopify-filter-chip shopify-compare-chip"/);
+  expect(on).toContain('aria-label="Add Canon EOS to compare"');
+  expect(on).toContain("Compare mode · click products to add or remove");
 });

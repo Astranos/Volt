@@ -50,6 +50,13 @@ export function ClosedTabsPanel({
   const [shopifySearch, setShopifySearch] = useState<ShopifyProductSearchState>({ kind: "idle" });
   const [shopifyRetry, setShopifyRetry] = useState(0);
   const [compareProducts, setCompareProducts] = useState<ShopifySearchProduct[]>([]);
+  // Compare mode can be turned on before anything is picked (the Compare button).
+  const [compareModeOn, setCompareModeOn] = useState(false);
+  const compareMode = compareModeOn || compareProducts.length > 0;
+  const leaveCompare = () => {
+    setCompareModeOn(false);
+    setCompareProducts([]);
+  };
   const shopifySearchGeneration = useRef(0);
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -306,7 +313,9 @@ export function ClosedTabsPanel({
                 onHideProduct={(product) => { void hideShopifyProduct(product); }}
                 compareIds={new Set(compareProducts.map((product) => product.id))}
                 compareFull={compareProducts.length >= MAX_COMPARE_PRODUCTS}
+                compareMode={compareMode}
                 onToggleCompare={toggleCompare}
+                onToggleCompareMode={() => { if (compareMode) leaveCompare(); else setCompareModeOn(true); }}
                 onRetry={() => setShopifyRetry((current) => current + 1)}
                 onOpenSettings={() => { void chrome.tabs.create({ url: chrome.runtime.getURL("/options.html#shopify-audit"), active: true }); }}
               />
@@ -382,7 +391,7 @@ export function ClosedTabsPanel({
         <ShopifyCompareTray
           products={compareProducts}
           onRemove={toggleCompare}
-          onClear={() => setCompareProducts([])}
+          onClear={leaveCompare}
           onCompare={openCompare}
         />
       )}
