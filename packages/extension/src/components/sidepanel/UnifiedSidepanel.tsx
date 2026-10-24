@@ -1,6 +1,8 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import TopOffersPage from "./TopOffers";
 import MobileScanner from "./MobileScanner";
+import ShopifyAuditReview from "./ShopifyAuditReview";
+import { SHOPIFY_AUDIT_REVIEW_KEY } from "../../domain/shopify-audit";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -63,6 +65,7 @@ export default function UnifiedSidepanel() {
   const toolTabsRef = useRef<HTMLDivElement | null>(null);
   const toolTabRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const [tabIndicator, setTabIndicator] = useState({ x: 0, width: 0, visible: false });
+  const [auditInProgress, setAuditInProgress] = useState(false);
 
   // Registered from the panel root rather than from MobileScanner, which
   // unmounts on every tool switch and would let presence lapse while the user
@@ -127,6 +130,17 @@ export default function UnifiedSidepanel() {
     };
   }, []);
 
+  // The Audit tab only appears while a Shopify audit is saved.
+  useEffect(() => {
+    if (typeof chrome === "undefined" || !chrome.storage) return;
+    void chrome.storage.local.get(SHOPIFY_AUDIT_REVIEW_KEY).then((stored) => setAuditInProgress(!!stored[SHOPIFY_AUDIT_REVIEW_KEY]));
+    const onChanged = (changes: Record<string, { newValue?: unknown }>, area: string) => {
+      if (area === "local" && changes[SHOPIFY_AUDIT_REVIEW_KEY]) setAuditInProgress(!!changes[SHOPIFY_AUDIT_REVIEW_KEY].newValue);
+    };
+    chrome.storage.onChanged.addListener(onChanged);
+    return () => chrome.storage.onChanged.removeListener(onChanged);
+  }, []);
+
   // Load the initial tool from storage
   useEffect(() => {
     if (typeof chrome !== "undefined" && chrome.storage) {
@@ -176,9 +190,12 @@ export default function UnifiedSidepanel() {
     "top-offers": TopOffersPage,
     "mobile-scanner": MobileScanner,
     "mobile-photos": MobileScanner,
+    "shopify-audit": ShopifyAuditReview,
   };
 
-  const tools = SIDEPANEL_TOOLS.map((tool) => ({
+  const visibleTools = SIDEPANEL_TOOLS.filter((tool) =>
+    tool.id !== "shopify-audit" || auditInProgress || activeTool === "shopify-audit");
+  const tools = visibleTools.map((tool) => ({
     ...tool,
     component: componentMap[tool.id],
   }));
@@ -188,9 +205,9 @@ export default function UnifiedSidepanel() {
     if (!tablist || typeof window === "undefined") return;
 
     const updateIndicator = () => {
-      const activeIndex = SIDEPANEL_TOOLS.findIndex((tool) => tool.id === activeTool);
+      const activeIndex = visibleTools.findIndex((tool) => tool.id === activeTool);
       setTabIndicator(computeToolTabIndicator(
-        SIDEPANEL_TOOLS.map((_, index) => {
+        visibleTools.map((_, index) => {
           const tab = toolTabRefs.current[index];
           return tab
             ? { offsetLeft: tab.offsetLeft, offsetWidth: tab.offsetWidth }
@@ -238,12 +255,12 @@ export default function UnifiedSidepanel() {
                   visibility: tabIndicator.visible ? "visible" : "hidden",
                 }}
               />
-              {SIDEPANEL_TOOLS.map((tool) => {
+              {visibleTools.map((tool, index) => {
                 const ToolIcon = tool.icon;
                 const selected = activeTool === tool.id;
                 return (
                   <button
-                    ref={(element) => { toolTabRefs.current[SIDEPANEL_TOOLS.indexOf(tool)] = element; }}
+                    ref={(element) => { toolTabRefs.current[index] = element; }}
                     key={tool.id}
                     type="button"
                     role="tab"

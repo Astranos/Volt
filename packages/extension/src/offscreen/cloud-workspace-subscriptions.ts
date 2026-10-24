@@ -69,6 +69,8 @@ type ClerkAuthState =
   | { status: "unknown" };
 
 const SIGNED_OUT_RECHECK_MS = 60_000;
+const SIGN_IN_SETTLE_MS = 6_000;
+const SIGN_IN_SETTLE_POLL_MS = 500;
 
 // createClerkClient({ background: true }) performs a full Frontend API
 // handshake on every call, so the reconcile loop must reuse one client instead
@@ -227,6 +229,38 @@ export class CloudWorkspaceSubscriptions {
     return this.acceptedClientSubject;
   }
 
+  // Shopify calls come from someone clicking a button, so they must not fail
+  // just because this document hasn't caught up with a session Clerk already
+  // has. A reconcile pass can return before that: before the background has
+  // assigned an account epoch, while the Convex client is still confirming
+  // the token (or stuck in noAuth from a check made before sign-in), or
+  // inside the signed-out recheck window. Wait briefly for it instead.
+  private async requireSignedIn(message: string): Promise<string> {
+    const deadline = Date.now() + SIGN_IN_SETTLE_MS;
+    // An explicit request re-checks Clerk now rather than trusting a recent
+    // signed-out result.
+    lastSignedOutAt = 0;
+    let armed = false;
+    for (;;) {
+      await this.reconcileAuthentication();
+      // Always ask Clerk who is signed in right now, and go ahead only once the
+      // Convex client is authenticated as that same account — never on a
+      // remembered subject from before a sign-out or an account switch. This asks
+      // Clerk again even though the reconcile pass may just have: reusing that
+      // answer could hand back the previous account mid-switch.
+      const auth = await resolveClerkAuth();
+      if (auth.status === "signed-out") throw new Error(message);
+      const subject = auth.status === "signed-in" ? clerkSubjectFromToken(auth.token) : null;
+      if (subject && this.clientAuthSubject() === subject) return subject;
+      if (Date.now() >= deadline) throw new Error(message);
+      if (subject && !armed) {
+        armed = true;
+        this.armClientAuth();
+      }
+      await new Promise((resolve) => setTimeout(resolve, SIGN_IN_SETTLE_POLL_MS));
+    }
+  }
+
   start() {
     if (this.started) return;
     this.started = true;
@@ -335,6 +369,9 @@ export class CloudWorkspaceSubscriptions {
     this.hasReconciledSubject = true;
     this.lastSnapshot = null;
     if (!subject) {
+      // Signed out: drop the Convex client's last login too, so nothing can
+      // still run as the previous account. Re-arming fetches no token.
+      if (this.acceptedClientSubject !== null) this.armClientAuth();
       // Not an error on its own — but this document reads the account from the
       // cookie the service worker mirrors into storage, so it can sit here
       // signed out while the panel is signed in perfectly well. Nothing else
@@ -492,50 +529,42 @@ export class CloudWorkspaceSubscriptions {
   }
 
   async getShopifyConnection() {
-    await this.reconcileAuthentication();
-    if (!this.clerkSubject) throw new Error("Sign in to Volt before connecting Shopify.");
+    await this.requireSignedIn("Sign in to Volt before connecting Shopify.");
     return this.client.query(shopifyGetConnectionReference, {});
   }
 
   async startShopifyConnection(shop: string) {
-    await this.reconcileAuthentication();
-    if (!this.clerkSubject) throw new Error("Sign in to Volt before connecting Shopify.");
+    await this.requireSignedIn("Sign in to Volt before connecting Shopify.");
     return this.client.action(shopifyStartConnectReference, { shop });
   }
 
   async disconnectShopify() {
-    await this.reconcileAuthentication();
-    if (!this.clerkSubject) throw new Error("Sign in to Volt before disconnecting Shopify.");
+    await this.requireSignedIn("Sign in to Volt before disconnecting Shopify.");
     return this.client.mutation(shopifyDisconnectReference, {});
   }
 
   async listShopifyYesterday(startUtc: string, endUtc: string, date: string) {
-    await this.reconcileAuthentication();
-    if (!this.clerkSubject) throw new Error("Sign in to Volt before auditing Shopify.");
+    await this.requireSignedIn("Sign in to Volt before auditing Shopify.");
     return this.client.action(shopifyListYesterdayReference, { startUtc, endUtc, date });
   }
 
   async searchShopifyProducts(query: string) {
-    await this.reconcileAuthentication();
-    if (!this.clerkSubject) throw new Error("Sign in to Volt before searching Shopify.");
+    await this.requireSignedIn("Sign in to Volt before searching Shopify.");
     return this.client.action(shopifySearchProductsReference, { query });
   }
 
   async getShopifyProductDetails(productIds: string[]) {
-    await this.reconcileAuthentication();
-    if (!this.clerkSubject) throw new Error("Sign in to Volt before comparing Shopify products.");
+    await this.requireSignedIn("Sign in to Volt before comparing Shopify products.");
     return this.client.action(shopifyProductDetailsReference, { productIds });
   }
 
   async listHiddenShopifyProducts() {
-    await this.reconcileAuthentication();
-    if (!this.clerkSubject) throw new Error("Sign in to Volt before managing Shopify.");
+    await this.requireSignedIn("Sign in to Volt before managing Shopify.");
     return this.client.query(shopifyListHiddenProductsReference, {});
   }
 
   async setShopifyProductHidden(productId: string, title: string, hidden: boolean) {
-    await this.reconcileAuthentication();
-    if (!this.clerkSubject) throw new Error("Sign in to Volt before managing Shopify.");
+    await this.requireSignedIn("Sign in to Volt before managing Shopify.");
     return this.client.mutation(shopifySetProductHiddenReference, { productId, title, hidden });
   }
 

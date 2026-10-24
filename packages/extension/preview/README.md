@@ -40,7 +40,9 @@ export default defineScenario({
 ```
 
 Query strings after the scenario name (`scanner-history?state=loading`) reach
-`render` and `act`, so one scenario can cover several states. Shared sample
+`render` and `act`, so one scenario can cover several states. `?hover=<css selector>`
+works with any scenario and hovers that element before capture, for tooltips
+(e.g. `"newtab?hover=.newtab-audit-button"`). Shared sample
 data lives in `fixtures/`; `dom.ts` has helpers for `act`. Unstubbed `chrome.*`
 calls resolve to `undefined`.
 

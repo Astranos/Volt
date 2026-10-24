@@ -7,7 +7,8 @@ import { defineContentScript } from "wxt/utils/define-content-script";
 /**
  * Shopify Quick Actions Content Script
  *
- * Adds product research actions in a reserved gutter, with a compact inline fallback.
+ * Adds compact product research actions on the Title label row. It never moves
+ * or resizes Shopify's own layout.
  * Provides quick access to:
  * 1. eBay Sold Listings (via product title)
  * 2. PriceCharting (via UPC)
@@ -33,7 +34,8 @@ export default defineContentScript({
     const STYLES = `
       .volt-quick-actions-overlay {
         position: fixed;
-        z-index: 40;
+        /* Shopify's AppFrameBevel paints at 100, above body-level siblings. */
+        z-index: 101;
         display: flex;
         flex-direction: row;
         justify-content: flex-end;
@@ -117,45 +119,6 @@ export default defineContentScript({
         height: 12px;
       }
 
-      .volt-quick-actions-overlay[data-layout="gutter"] {
-        flex-direction: column;
-        width: 36px;
-        height: auto;
-      }
-
-      .volt-quick-actions-overlay[data-layout="gutter"] .volt-action-tab {
-        width: 34px;
-        height: 36px;
-        padding: 0;
-      }
-
-      .volt-quick-actions-overlay[data-layout="gutter"] .volt-action-tab:first-child {
-        border-radius: 6px 6px 0 0;
-      }
-
-      .volt-quick-actions-overlay[data-layout="gutter"] .volt-action-tab:last-child {
-        border-radius: 0 0 6px 6px;
-      }
-
-      .volt-quick-actions-overlay[data-layout="gutter"] .volt-action-tab + .volt-action-tab {
-        border-left: 0;
-        border-top: 1px solid #e6e7e8;
-      }
-
-      .volt-quick-actions-overlay[data-layout="gutter"] .volt-tab-pricecharting img {
-        width: 20px;
-        height: 20px;
-      }
-
-      .volt-quick-actions-overlay[data-layout="gutter"] .volt-tab-ebay img {
-        width: 28px;
-        height: 12px;
-      }
-
-      .volt-quick-actions-overlay[data-layout="gutter"] .volt-action-label {
-        display: none;
-      }
-
       .volt-action-tab:hover:not(:disabled) {
         background: #f3f4f5;
       }
@@ -204,12 +167,6 @@ export default defineContentScript({
         visibility: hidden;
       }
 
-      .volt-quick-actions-overlay[data-layout="gutter"] .volt-action-tab::after {
-        left: calc(100% + 8px);
-        right: auto;
-        top: 0;
-      }
-
       .volt-action-tab:hover::after,
       .volt-action-tab:focus-visible::after {
         opacity: 1;
@@ -244,61 +201,12 @@ export default defineContentScript({
     };
 
     // State
-    const GUTTER_WIDTH = 40;
-    const MIN_GUTTER_CARD_WIDTH = 560;
-    let reservedCard = null;
-    let reservedStyles = [];
-    let mainCard = null;
-    // Searching is expensive (computed styles on many nodes); after a miss,
-    // retry a few times a second instead of every frame.
-    const CARD_RETRY_MS = 400;
-    let nextCardSearchAt = 0;
-
-    // Only undo values we still own; Shopify may update inline styles during navigation.
-    const releaseGutter = () => {
-      if (reservedCard) {
-        for (const saved of reservedStyles) {
-          if (reservedCard.style.getPropertyValue(saved.name) !== saved.applied ||
-            reservedCard.style.getPropertyPriority(saved.name) !== saved.appliedPriority) continue;
-          if (saved.value) reservedCard.style.setProperty(saved.name, saved.value, saved.priority);
-          else reservedCard.style.removeProperty(saved.name);
-        }
-      }
-      reservedCard = null;
-      reservedStyles = [];
-    };
-
-    const reserveGutter = (card) => {
-      if (reservedCard === card) return;
-      releaseGutter();
-      const computed = window.getComputedStyle(card);
-      const startMargin = parseFloat(computed.marginInlineStart) || 0;
-      const endMargin = parseFloat(computed.marginInlineEnd) || 0;
-      const cap = `calc(100% - ${GUTTER_WIDTH + startMargin + endMargin}px)`;
-      const maxWidth = computed.maxWidth && computed.maxWidth !== "none"
-        ? `min(${computed.maxWidth}, ${cap})` : cap;
-      reservedCard = card;
-      reservedStyles = [
-        ["margin-inline-start", `${startMargin + GUTTER_WIDTH}px`],
-        ["max-width", maxWidth],
-      ].map(([name, applied]) => ({
-        name, applied, value: card.style.getPropertyValue(name),
-        priority: card.style.getPropertyPriority(name),
-      }));
-      for (const saved of reservedStyles) {
-        card.style.setProperty(saved.name, saved.applied);
-        // CSSOM can canonicalize nested calc() in min(); compare the stored value.
-        saved.applied = card.style.getPropertyValue(saved.name);
-        saved.appliedPriority = card.style.getPropertyPriority(saved.name);
-      }
-    };
     let productTitle = null;
     let upcValue = null;
     let overlay = null;
     let activePopup = null;
     let activePopupOpenedAt = 0;
     const POPUP_OPENING_GRACE_MS = 700;
-    let hasLoggedMissingCard = false;
     let lastUrl = location.href;
     let isInitialized = false;
     let buttonsEnabled = false;
@@ -354,71 +262,6 @@ export default defineContentScript({
       return "";
     };
 
-    const looksLikeProductCard = (el) => {
-      if (!el || el === document.body) return false;
-      const rect = el.getBoundingClientRect();
-      if (rect.width < 300 || rect.height < 120) return false;
-
-      const classes = (el.className || "").toString();
-      if (
-        classes.includes("Polaris-ShadowBevel") ||
-        classes.includes("Polaris-LegacyCard") ||
-        classes.includes("Polaris-Card")
-      ) {
-        return true;
-      }
-
-      const style = window.getComputedStyle(el);
-      return (
-        style.backgroundColor === "rgb(255, 255, 255)" &&
-        (style.boxShadow !== "none" ||
-          style.borderRadius !== "0px" ||
-          style.borderColor !== "rgba(0, 0, 0, 0)")
-      );
-    };
-
-    // Find the main product card
-    const findMainCard = () => {
-      const shopifySection =
-        findShopifyTitleField()?.closest("s-internal-section");
-      const sectionCard =
-        shopifySection?.shadowRoot?.querySelector("section");
-      if (sectionCard && looksLikeProductCard(sectionCard)) {
-        return shopifySection;
-      }
-
-      // Strategy: Look for the title input and go up to the card
-      const titleControl = findTitleControl();
-      if (titleControl) {
-        const section = titleControl.closest(
-          ".Polaris-Layout__Section"
-        ) as HTMLElement | null;
-        if (section) return section;
-
-        let current = titleControl.parentElement;
-        while (current && current !== document.body) {
-          if (looksLikeProductCard(current)) {
-            return current;
-          }
-          current = current.parentElement;
-        }
-      }
-
-      const cards = Array.from(
-        document.querySelectorAll(
-          'main [class*="Polaris-ShadowBevel"], main [class*="Polaris-LegacyCard"], main [class*="Polaris-Card"], main section'
-        )
-      );
-      const productCard = cards.find((card) => {
-        if (!looksLikeProductCard(card)) return false;
-        const text = card.textContent || "";
-        return text.includes("Title") && text.includes("Description");
-      });
-      if (productCard) return productCard;
-
-      return null;
-    };
-
     // Generic function to extract value from a metafield container
     const extractMetafieldValue = (container) => {
       if (!container) return null;
@@ -430,6 +273,12 @@ export default defineContentScript({
 
       const input = container.querySelector("input");
       if (input) return input.value;
+
+      // Shopify's quick metafield keeps its value input inside an open shadow
+      // root. Read the input, including an empty edit, rather than display text.
+      const quickField = container.querySelector("s-internal-quick-text-field");
+      const shadowInput = quickField?.shadowRoot?.querySelector("input");
+      if (shadowInput) return shadowInput.value.trim() || null;
 
       return null;
     };
@@ -558,6 +407,7 @@ export default defineContentScript({
       overlay = document.createElement("div");
       overlay.id = "volt-quick-actions-overlay";
       overlay.className = "volt-quick-actions-overlay";
+      overlay.dataset.layout = "title";
       overlay.style.visibility = "hidden"; // Hidden until placed
 
       // PriceCharting search
@@ -635,31 +485,11 @@ export default defineContentScript({
     // Update Overlay Position and State
     const updateOverlay = () => {
       const titleField = findShopifyTitleField() || findTitleControl();
-      const titleHost = titleField?.getRootNode?.()?.host || titleField;
-      if (mainCard && (!document.contains(mainCard) ||
-        (titleHost && !mainCard.contains(titleHost)))) {
-        mainCard = null;
-        nextCardSearchAt = 0;
-      }
-      if (!mainCard && Date.now() >= nextCardSearchAt) {
-        mainCard = findMainCard();
-        // A card that doesn't hold the title is not the product card; never pad it.
-        if (mainCard && titleHost && !mainCard.contains(titleHost)) mainCard = null;
-        if (!mainCard) nextCardSearchAt = Date.now() + CARD_RETRY_MS;
-        if (!mainCard && !hasLoggedMissingCard) {
-          hasLoggedMissingCard = true;
-          log(
-            "Could not find main product card, placing Shopify quick actions above the title field."
-          );
-        }
-      }
-
       if (!overlay) {
         return;
       }
 
       if (!buttonsEnabled || !isProductPage()) {
-        releaseGutter();
         overlay.remove();
         return;
       }
@@ -667,27 +497,7 @@ export default defineContentScript({
       // Keep Shopify-owned nodes in place: the toolbar always lives in <body> with
       // fixed coordinates, so it escapes shadow-root clipping and can be measured.
       if (overlay.parentElement !== document.body) document.body.appendChild(overlay);
-      // s-internal-section draws its card in a shadow <section> (see findMainCard).
-      const cardBox = mainCard?.shadowRoot?.querySelector("section") || renderedBox(mainCard);
-      if (reservedCard && reservedCard !== cardBox) releaseGutter();
-      const bounds = cardBox?.getBoundingClientRect();
-      const unreservedWidth = bounds ? bounds.width + (reservedCard === cardBox ? GUTTER_WIDTH : 0) : 0;
-      const gutterFitsViewport = bounds && bounds.left >= 0 &&
-        (!window.innerWidth || bounds.left + 36 <= window.innerWidth);
-      const useGutter = bounds?.height > 0 && gutterFitsViewport &&
-        unreservedWidth >= MIN_GUTTER_CARD_WIDTH;
-      const layout = useGutter ? "gutter" : "title";
-      // Switch layout before measuring the toolbar for the title placement.
-      if (overlay.dataset.layout !== layout) overlay.dataset.layout = layout;
-      let placement = null;
-      if (useGutter) {
-        reserveGutter(cardBox);
-        const cardBounds = cardBox.getBoundingClientRect();
-        placement = { left: cardBounds.left - GUTTER_WIDTH, top: cardBounds.top + 16 };
-      } else {
-        releaseGutter();
-        placement = findTitlePlacement(titleField);
-      }
+      const placement = findTitlePlacement(titleField);
       if (!placement) {
         overlay.style.visibility = "hidden";
       } else {
@@ -746,11 +556,8 @@ export default defineContentScript({
 
     // Reset state for new page navigation
     const resetState = () => {
-      mainCard = null;
-      nextCardSearchAt = 0;
       productTitle = null;
       upcValue = null;
-      hasLoggedMissingCard = false;
       log("State reset for new page navigation");
     };
 

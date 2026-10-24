@@ -160,6 +160,24 @@ describe("Shopify previous calendar day", () => {
     expect(() => auditRange("not-a-date", args.endUtc, args.date)).toThrow();
     expect(() => auditRange("2020-01-01T00:00:00.000Z", "2020-01-02T00:00:00.000Z", "2020-01-01")).toThrow();
   });
+  test("accepts the last 2 or 3 days ending yesterday, but nothing longer", () => {
+    const { endUtc } = yesterday();
+    const range = (days: number) => {
+      const start = new Date(Date.parse(endUtc) - days * 86400000).toISOString();
+      return () => auditRange(start, endUtc, start.slice(0, 10));
+    };
+    expect(range(2)().start).toBe(new Date(Date.parse(endUtc) - 2 * 86400000).toISOString());
+    expect(range(3)().date).toBe(new Date(Date.parse(endUtc) - 3 * 86400000).toISOString().slice(0, 10));
+    expect(range(4)).toThrow("Invalid audit date range.");
+    // Partial days don't count, even when they end yesterday or span about two days.
+    const partial = (hours: number) => () => {
+      const start = new Date(Date.parse(endUtc) - hours * 3600000).toISOString();
+      return auditRange(start, endUtc, start.slice(0, 10));
+    };
+    expect(partial(36)).toThrow("Invalid audit date range.");
+    expect(partial(60)).toThrow("Invalid audit date range.");
+    expect(partial(47)().start).toBeTruthy(); // a 2-day range across a daylight saving change
+  });
   test("paginates every status and uses inclusive start / exclusive end creation dates", async () => {
     const mock = vi.fn<typeof fetch>().mockResolvedValueOnce(productPage(true, "1", "ARCHIVED")).mockResolvedValueOnce(productPage(false, "2", "UNLISTED"));
     vi.stubGlobal("fetch", mock);

@@ -48,6 +48,7 @@ function mount({ modern = true, card = true, width = 720, settings = {}, stored 
   if (!card) host.className = "";
   const location = { href: "https://admin.shopify.com/store/test/products/123" };
   let frame;
+  let checkFields;
   const messages = [];
   let onMessage;
   let onStorageChanged;
@@ -55,7 +56,7 @@ function mount({ modern = true, card = true, width = 720, settings = {}, stored 
     exports: {}, defineContentScript: (config) => config, document, window, location,
     history: { pushState() {}, replaceState() {} },
     MutationObserver: class { observe() {} },
-    requestAnimationFrame(callback) { frame = callback; }, setTimeout() {}, setInterval() {},
+    requestAnimationFrame(callback) { frame = callback; }, setTimeout() {}, setInterval(callback) { checkFields = callback; },
     console: { log() {} },
     chrome: {
       runtime: { getURL: (path) => path, onMessage: { addListener(callback) { onMessage = callback; } }, sendMessage: (message) => messages.push(message) },
@@ -74,27 +75,81 @@ function mount({ modern = true, card = true, width = 720, settings = {}, stored 
   context.exports.default.main();
   frame();
   return { document, window, host, container, location, messages, frame: () => frame(), resize: (width) => { availableWidth = width; frame(); }, settings: (enabled) => onMessage({ action: "shopify-buttons-settings-changed", enabled }),
+    poll: () => { checkFields(); frame(); },
     storageChanged: (changes) => onStorageChanged(changes, "sync") };
 }
 
-for (const modern of [true, false]) {
-  test(`research actions reserve an external gutter (${modern ? "shadow" : "legacy"} card)`, () => {
-    const { document, host, container, frame } = mount({ modern });
-    const toolbar = document.getElementById("volt-quick-actions-overlay");
-    assert.equal(toolbar.parentElement, document.body, "gutter must escape shadow clipping");
-    assert.equal(toolbar.dataset.layout, "gutter");
-    assert.equal(container.style.getPropertyValue("margin-inline-start"), "40px");
-    assert.equal(container.style.getPropertyValue("max-width"), "calc(100% - 40px)");
-    if (modern) assert.ok(!host.style.getPropertyValue("margin-inline-start"), "margins on a contents host do nothing");
-    assert.equal(toolbar.style.left, "296px");
-    assert.equal(toolbar.style.top, "192px");
-    frame();
-    assert.equal(document.querySelectorAll("#volt-quick-actions-overlay").length, 1);
+function addShadowUpc(document, value) {
+  const container = document.createElement("div");
+  container.id = "PRODUCT.metafields.custom.upc-anchor";
+  const field = document.createElement("s-internal-quick-text-field");
+  field.setAttribute("accessibilitylabel", "UPC");
+  field.value = "";
+  const root = field.attachShadow({ mode: "open" });
+  const display = document.createElement("span");
+  display.className = "display-value";
+  display.textContent = value;
+  const input = document.createElement("input");
+  input.value = value;
+  root.append(display, input);
+  container.appendChild(field);
+  document.querySelector("main").appendChild(container);
+  return input;
+}
+
+test("the toolbar's CSS clears Shopify's z-index 100 app frame", () => {
+  const { document } = mount();
+  // Linkedom has no paint/hit-testing engine. Lock down the external layer
+  // contract here; verify actual visibility with elementFromPoint in Chrome.
+  const rules = document.getElementById("volt-quick-actions-styles").sheet.cssRules;
+  const toolbarRule = rules.find((rule) => rule.selectorText === ".volt-quick-actions-overlay");
+  assert.ok(Number(toolbarRule.style.getPropertyValue("z-index")) > 100,
+    "a body-level toolbar must paint above Shopify's AppFrameBevel");
+});
+
+test("PriceCharting reads the UPC in Shopify's quick-field shadow root", () => {
+  const { document, messages, poll } = mount();
+  addShadowUpc(document, "012345678905");
+  poll();
+  const button = document.getElementById("volt-tab-pc");
+  assert.equal(button.disabled, false);
+  button.onclick({ stopPropagation() {} });
+  assert.equal(messages[0].url,
+    "https://www.pricecharting.com/search-products?q=012345678905&type=videogames");
+});
+
+test("PriceCharting rereads edited and cleared shadow UPCs instead of stale display text", () => {
+  const { document, messages, poll } = mount();
+  const input = addShadowUpc(document, "012345678905");
+  poll();
+  const button = document.getElementById("volt-tab-pc");
+  input.value = "0012345678905";
+  button.onclick({ stopPropagation() {} });
+  assert.match(messages[0].url, /q=0012345678905&/);
+  input.value = "";
+  poll();
+  assert.equal(button.disabled, true);
+  button.onclick({ stopPropagation() {} });
+  assert.equal(messages.length, 1, "a cleared UPC must not launch the old displayed value");
+});
+
+for (const html of ['<span class="_ReadField_abc">012345678905</span>', '<input value="012345678905">']) {
+  test(`PriceCharting still reads legacy UPC markup: ${html}`, () => {
+    const { document, messages, poll } = mount({ modern: false });
+    const container = document.createElement("div");
+    container.id = "PRODUCT.metafields.custom.upc-anchor";
+    container.innerHTML = html;
+    document.querySelector("main").appendChild(container);
+    poll();
+    const button = document.getElementById("volt-tab-pc");
+    assert.equal(button.disabled, false);
+    button.onclick({ stopPropagation() {} });
+    assert.match(messages[0].url, /q=012345678905&/);
   });
 }
 
-for (const options of [{ width: 480 }, { modern: false, width: 480 }, { card: false }]) {
-  test(`narrow or unknown forms place actions above the title input (${JSON.stringify(options)})`, () => {
+for (const options of [{}, { modern: false }, { width: 480 }, { modern: false, width: 480 }, { card: false }]) {
+  test(`actions sit on the title row and never move Shopify's card (${JSON.stringify(options)})`, () => {
     const { document, container, frame } = mount(options);
     const toolbar = document.getElementById("volt-quick-actions-overlay");
     let moves = 0;
@@ -110,6 +165,7 @@ for (const options of [{ width: 480 }, { modern: false, width: 480 }, { card: fa
     assert.equal(toolbar.style.top, "140px", "no label text: sit 8px above the input");
     assert.equal(toolbar.style.visibility, "");
     assert.ok(!container.style.getPropertyValue("margin-inline-start"));
+    assert.ok(!container.style.getPropertyValue("max-width"));
     assert.equal(document.querySelector("#volt-tab-ebay .volt-action-label"), null);
     assert.equal(document.querySelector("#volt-tab-pc .volt-action-label").textContent, "UPC");
     assert.equal(document.querySelector("#volt-tab-ebay img").getAttribute("src"), "assets/logos/ebay-wordmark.svg");
@@ -136,25 +192,6 @@ test("disabled actions fade their icon, not their tooltip", () => {
   assert.doesNotMatch(styles, /\.volt-action-tab\.disabled \{[^}]*opacity/);
   assert.match(styles, /\.volt-action-tab\.disabled > \* \{\s*opacity: 0\.45;/);
   assert.equal(document.getElementById("volt-tab-pc").getAttribute("data-tooltip"), "No UPC found");
-});
-
-test("resize restores original card styles, then reserves the gutter again", () => {
-  const { container, document, resize, location, frame } = mount({ width: 480 });
-  container.style.setProperty("margin-inline-start", "12px");
-  container.style.setProperty("max-width", "900px");
-  resize(720);
-  assert.equal(container.style.getPropertyValue("margin-inline-start"), "52px");
-  assert.equal(container.style.getPropertyValue("max-width"), "min(900px, calc(100% - 52px))");
-  resize(480);
-  assert.equal(container.style.getPropertyValue("margin-inline-start"), "12px");
-  assert.equal(container.style.getPropertyValue("max-width"), "900px");
-  assert.equal(document.getElementById("volt-quick-actions-overlay").dataset.layout, "title");
-  resize(720);
-  assert.equal(document.getElementById("volt-quick-actions-overlay").dataset.layout, "gutter");
-  location.href = "https://admin.shopify.com/store/test/orders";
-  frame();
-  assert.equal(container.style.getPropertyValue("margin-inline-start"), "12px");
-  assert.equal(container.style.getPropertyValue("max-width"), "900px");
 });
 
 test("cleanup preserves newer Shopify inline style changes", () => {
@@ -213,42 +250,22 @@ test("toolbar follows a replaced product section and leaves non-product pages", 
   replacement.attachShadow({ mode: "open" }).appendChild(section);
   host.replaceWith(replacement);
   frame();
-  assert.equal(document.getElementById("volt-quick-actions-overlay").dataset.layout, "gutter");
+  assert.equal(document.getElementById("volt-quick-actions-overlay").dataset.layout, "title");
   assert.ok(!container.style.getPropertyValue("margin-inline-start"));
-  assert.equal(section.style.getPropertyValue("margin-inline-start"), "40px");
+  assert.ok(!section.style.getPropertyValue("margin-inline-start"));
   location.href = "https://admin.shopify.com/store/test/orders";
   frame();
   assert.equal(document.getElementById("volt-quick-actions-overlay"), null);
 });
 
 
-test("disabling research actions releases the gutter until explicitly enabled again", () => {
+test("disabling research actions removes them until explicitly enabled again", () => {
   const { container, document, settings, frame } = mount();
   settings(false);
   frame();
   assert.equal(document.getElementById("volt-quick-actions-overlay"), null);
   assert.ok(!container.style.getPropertyValue("margin-inline-start"));
   settings(true);
-  assert.equal(document.getElementById("volt-quick-actions-overlay").dataset.layout, "gutter");
-  assert.equal(container.style.getPropertyValue("margin-inline-start"), "40px");
-});
-
-
-test("restoration compares canonical CSSOM values after reserving the gutter", () => {
-  const { container, resize } = mount({ width: 480 });
-  container.style.setProperty("max-width", "900px");
-  const prototype = Object.getPrototypeOf(container.style);
-  const originalSetProperty = prototype.setProperty;
-  prototype.setProperty = function (name, value, priority) {
-    return originalSetProperty.call(this, name,
-      value === "min(900px, calc(100% - 40px))" ? "min(900px, 100% - 40px)" : value, priority);
-  };
-  try {
-    resize(720);
-    assert.equal(container.style.getPropertyValue("max-width"), "min(900px, 100% - 40px)");
-    resize(480);
-    assert.equal(container.style.getPropertyValue("max-width"), "900px");
-  } finally {
-    prototype.setProperty = originalSetProperty;
-  }
+  assert.equal(document.getElementById("volt-quick-actions-overlay").dataset.layout, "title");
+  assert.ok(!container.style.getPropertyValue("margin-inline-start"));
 });

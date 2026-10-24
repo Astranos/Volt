@@ -3,6 +3,13 @@ import { Eye, ExternalLink, RefreshCw } from "lucide-react";
 import { CLERK_SIGN_IN_URL } from "../../access/config";
 import { connectShopifyAudit, disconnectShopifyAudit, getShopifyAuditConnection, listHiddenShopifyProducts, setShopifyProductHidden, type ShopifyHiddenProduct } from "../../shopify-audit/client";
 import { findOpenShopifyAdminShops, shopDomainFromAdminUrl } from "../../shopify-audit/store-discovery";
+import { useShopifyAuditMode } from "../../shopify-audit/use-audit-mode";
+import type { ShopifyAuditMode } from "../../domain/shopify-audit";
+
+const AUDIT_MODES: Array<{ value: ShopifyAuditMode; label: string; description: string }> = [
+  { value: "sidepanel", label: "Side panel", description: "Review one product at a time in a single tab, with a checklist in the side panel." },
+  { value: "tabs", label: "Tab group", description: "Open products in a tab group, three at a time. Closing a reviewed tab opens the next one." },
+];
 
 export function ShopifyAuditSettings() {
   const [connectedShop, setConnectedShop] = useState<string | null>(null);
@@ -14,6 +21,7 @@ export function ShopifyAuditSettings() {
   const [waitingForInstall, setWaitingForInstall] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hiddenProducts, setHiddenProducts] = useState<ShopifyHiddenProduct[] | null>(null);
+  const [auditMode, setAuditMode] = useShopifyAuditMode();
 
   const refresh = useCallback(async () => {
     try {
@@ -134,7 +142,7 @@ export function ShopifyAuditSettings() {
     <section className="scroll-mt-20 space-y-4" id="shopify-audit">
       <div>
         <h2 className="text-2xl font-bold">Shopify product audit</h2>
-        <p className="text-muted-foreground">Connect your store to open yesterday's new products in a tab group from the Volt new tab page. Draft and unpublished products are included.</p>
+        <p className="text-muted-foreground">Connect your store to review yesterday's new products from the Volt new tab page. Draft and unpublished products are included.</p>
       </div>
       <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
         {loading ? <p className="text-sm text-muted-foreground">Checking Shopify connection…</p> : connectedShop ? (
@@ -161,6 +169,24 @@ export function ShopifyAuditSettings() {
             {waitingForInstall && <p className="text-sm text-muted-foreground">Finish the approval in the Shopify tab. This page will update when your store connects.</p>}
           </div>
         )}
+        <div className="mt-5 border-t border-border pt-4">
+          <p className="font-medium">Open audits in</p>
+          <div aria-label="Open audits in" className="mt-2 grid gap-2 sm:grid-cols-2" role="radiogroup">
+            {AUDIT_MODES.map((mode) => (
+              <button
+                aria-checked={auditMode === mode.value}
+                className={`rounded-lg border p-3 text-left transition-colors ${auditMode === mode.value ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-border hover:bg-muted"}`}
+                key={mode.value}
+                onClick={() => setAuditMode(mode.value)}
+                role="radio"
+                type="button"
+              >
+                <span className="block text-sm font-medium">{mode.label}{mode.value === "sidepanel" ? " (default)" : ""}</span>
+                <span className="mt-0.5 block text-xs text-muted-foreground">{mode.description}</span>
+              </button>
+            ))}
+          </div>
+        </div>
         {connectedShop && hiddenProducts && (
           <div className="mt-5 border-t border-border pt-4">
             <p className="font-medium">Hidden from new tab search</p>
