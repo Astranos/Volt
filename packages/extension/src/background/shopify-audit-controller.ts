@@ -4,7 +4,9 @@ import {
   MAX_COMPARE_PRODUCTS,
   normalizeShopifyShopInput,
   validShopifyAdminProductUrl,
-  yesterdayInComputerTimezone,
+  auditRangeInComputerTimezone,
+  parseShopifyAuditDays,
+  type ShopifyAuditDays,
   type ShopifyAuditProduct,
   type ShopifyAuditResult,
 } from "../domain/shopify-audit.ts";
@@ -17,6 +19,7 @@ type ShopifyMessage = {
   productIds?: unknown;
   title?: unknown;
   hidden?: unknown;
+  days?: unknown;
 };
 
 type ShopifyResponse = { success: true; value: unknown } | { success: false; error: string };
@@ -78,8 +81,8 @@ export function createShopifyAuditController({
     return offscreenValue(await sendOffscreenMessage({ action, ...extra }));
   }
 
-  async function listYesterday() {
-    const range = yesterdayInComputerTimezone();
+  async function listYesterday(days: ShopifyAuditDays = 1) {
+    const range = auditRangeInComputerTimezone(days);
     const result = auditResultFrom(await forward("shopifyAuditOffscreenListYesterday", range));
     if (result.date !== range.date) throw new Error("Shopify returned the wrong audit date.");
     return result;
@@ -224,7 +227,7 @@ export function createShopifyAuditController({
         case "shopifyAuditOpenYesterday":
           return openYesterday(sender.tab?.windowId);
         case "shopifyAuditListYesterday":
-          return listYesterday();
+          return listYesterday(parseShopifyAuditDays(message.days));
         case "shopifyAuditSearchProducts": {
           if (typeof message.query !== "string") throw new Error("Enter a product search.");
           const query = message.query.trim();

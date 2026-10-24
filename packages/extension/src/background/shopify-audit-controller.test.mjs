@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { AUDIT_TAB_LIMIT, createShopifyAuditController } from "./shopify-audit-controller.ts";
-import { yesterdayInComputerTimezone } from "../domain/shopify-audit.ts";
+import { auditRangeInComputerTimezone, yesterdayInComputerTimezone } from "../domain/shopify-audit.ts";
 import { EXTENSION_SCANNER_SIGNAL_URL } from "../domain/mobile-scanner-signal-url.ts";
 
 const product = (id) => ({ id: String(id), title: `Product ${id}`, status: "DRAFT", url: `https://admin.shopify.com/store/sample/products/${id}` });
@@ -135,6 +135,24 @@ test("large audit days no longer hit a tab cap", async () => {
   const response = await request();
   assert.equal(response.value.count, 150);
   assert.equal(calls.created.length, AUDIT_TAB_LIMIT);
+});
+
+test("lists the last 3 days when the side panel asks for them", async () => {
+  const sent = [];
+  const controller = createShopifyAuditController({
+    chromeApi: {}, extensionId: "ext",
+    sendOffscreenMessage: async (message) => {
+      sent.push(message);
+      return { success: true, value: { shop: "sample.myshopify.com", date: message.date, products: [] } };
+    },
+  });
+  const response = await new Promise((resolve) => controller.handleMessage(
+    { action: "shopifyAuditListYesterday", days: 3 }, { id: "ext", url: "chrome-extension://ext/sidepanel.html" }, resolve));
+  assert.equal(response.success, true);
+  const range = auditRangeInComputerTimezone(3);
+  assert.equal(sent[0].startUtc, range.startUtc);
+  assert.equal(sent[0].endUtc, range.endUtc);
+  assert.equal(response.value.date, range.date);
 });
 
 test("lists yesterday's products for the side panel review without opening tabs", async () => {

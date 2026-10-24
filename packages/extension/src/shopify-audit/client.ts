@@ -1,4 +1,4 @@
-import { normalizeShopifyShopInput, validShopifyAdminProductUrl, MAX_COMPARE_PRODUCTS, type ShopifyAuditResult, type ShopifyProductDetails } from "../domain/shopify-audit";
+import { normalizeShopifyShopInput, validShopifyAdminProductUrl, MAX_COMPARE_PRODUCTS, type ShopifyAuditDays, type ShopifyAuditResult, type ShopifyProductDetails } from "../domain/shopify-audit";
 
 export type { ShopifyProductDetails };
 
@@ -55,8 +55,8 @@ export async function openShopifyAudit(): Promise<ShopifyAuditTabsResult> {
   return { shop: result.shop, date: result.date, count: result.count, opened: result.opened, resumed: result.resumed };
 }
 
-export async function listShopifyAuditYesterday(): Promise<ShopifyAuditResult> {
-  const value = await send("shopifyAuditListYesterday");
+export async function listShopifyAuditYesterday(days: ShopifyAuditDays = 1): Promise<ShopifyAuditResult> {
+  const value = await send("shopifyAuditListYesterday", { days });
   if (!value || typeof value !== "object") throw new Error("Shopify audit result was invalid.");
   const result = value as Partial<ShopifyAuditResult>;
   const shop = result.shop;

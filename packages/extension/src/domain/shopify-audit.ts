@@ -36,15 +36,23 @@ export type ShopifyAuditDateRange = {
   endUtc: string;
 };
 
-export function yesterdayInComputerTimezone(now = new Date()): ShopifyAuditDateRange {
+/** How many days back an audit covers: yesterday, or the last 2 or 3 days. */
+export type ShopifyAuditDays = 1 | 2 | 3;
+export const SHOPIFY_AUDIT_DAYS_KEY = "shopifyAuditDays";
+export const parseShopifyAuditDays = (value: unknown): ShopifyAuditDays => (value === 2 || value === 3 ? value : 1);
+
+/** The last `days` whole calendar days before today, in this computer's timezone. `date` is the first day. */
+export function auditRangeInComputerTimezone(days: ShopifyAuditDays = 1, now = new Date()): ShopifyAuditDateRange {
   const year = now.getFullYear();
   const month = now.getMonth();
   const day = now.getDate();
-  const start = new Date(year, month, day - 1);
+  const start = new Date(year, month, day - days);
   const end = new Date(year, month, day);
   const date = [start.getFullYear(), String(start.getMonth() + 1).padStart(2, "0"), String(start.getDate()).padStart(2, "0")].join("-");
   return { date, startUtc: start.toISOString(), endUtc: end.toISOString() };
 }
+
+export const yesterdayInComputerTimezone = (now = new Date()) => auditRangeInComputerTimezone(1, now);
 
 export function validShopifyAdminProductUrl(value: string, shop: string): boolean {
   try {
@@ -76,12 +84,15 @@ export type ShopifyAuditMode = "sidepanel" | "tabs";
 export const SHOPIFY_AUDIT_MODE_KEY = "shopifyAuditMode";
 export const parseShopifyAuditMode = (value: unknown): ShopifyAuditMode => (value === "tabs" ? "tabs" : "sidepanel");
 
+/** "done" means the product has been opened (viewed) during the review. */
 export type ShopifyAuditMark = "done";
 
 /** Side panel review progress, kept in chrome.storage.local so it survives restarts. */
 export type ShopifyAuditReview = {
   shop: string;
+  /** First day covered; the review spans `days` days from it. */
   date: string;
+  days: ShopifyAuditDays;
   products: ShopifyAuditProduct[];
   marks: Record<string, ShopifyAuditMark>;
   currentId: string | null;
@@ -111,6 +122,7 @@ export function parseShopifyAuditReview(value: unknown): ShopifyAuditReview | nu
   return {
     shop,
     date: review.date,
+    days: parseShopifyAuditDays(review.days),
     products,
     marks,
     currentId: typeof review.currentId === "string" && ids.has(review.currentId) ? review.currentId : null,
@@ -118,13 +130,16 @@ export function parseShopifyAuditReview(value: unknown): ShopifyAuditReview | nu
   };
 }
 
-/** Starts a review of `result`, keeping progress when it is the same shop and day. */
-export function startShopifyAuditReview(previous: ShopifyAuditReview | null, result: ShopifyAuditResult): ShopifyAuditReview {
-  const same = previous?.shop === result.shop && previous.date === result.date ? previous : null;
+/**
+ * Starts a review of `result`. Viewed products stay viewed for the same shop,
+ * so widening to the last 2 or 3 days keeps yesterday's progress.
+ */
+export function startShopifyAuditReview(previous: ShopifyAuditReview | null, result: ShopifyAuditResult, days: ShopifyAuditDays = 1): ShopifyAuditReview {
+  const same = previous?.shop === result.shop ? previous : null;
   const ids = new Set(result.products.map((product) => product.id));
   const marks = Object.fromEntries(Object.entries(same?.marks ?? {}).filter(([id]) => ids.has(id)));
-  const review: ShopifyAuditReview = { shop: result.shop, date: result.date, products: result.products, marks, currentId: null, tabId: same?.tabId ?? null };
-  const current = same?.currentId && ids.has(same.currentId) && !marks[same.currentId] ? same.currentId : null;
+  const review: ShopifyAuditReview = { shop: result.shop, date: result.date, days, products: result.products, marks, currentId: null, tabId: same?.tabId ?? null };
+  const current = same?.currentId && ids.has(same.currentId) ? same.currentId : null;
   return { ...review, currentId: current ?? nextShopifyAuditProduct(review, null)?.id ?? null };
 }
 

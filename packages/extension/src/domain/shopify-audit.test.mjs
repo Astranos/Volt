@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  auditRangeInComputerTimezone,
   isReusableShopifyAuditTab,
   isShopifyAdminProductUrl,
   nextShopifyAuditProduct,
   normalizeShopifyShopInput,
+  parseShopifyAuditDays,
   parseShopifyAuditMode,
   parseShopifyAuditReview,
   startShopifyAuditReview,
@@ -66,12 +68,31 @@ test("restarting the same day keeps progress and drops products that are gone", 
   assert.equal(again.tabId, 9);
 });
 
-test("a different day or shop starts over", () => {
+test("viewed products carry over to a new day or a wider range for the same shop", () => {
+  const first = { ...startShopifyAuditReview(null, result("2026-10-21", [1, 2])), marks: { [product(1).id]: "done" }, tabId: 9 };
+  const wider = startShopifyAuditReview(first, result("2026-10-20", [0, 1, 2]), 3);
+  assert.deepEqual(wider.marks, { [product(1).id]: "done" });
+  assert.equal(wider.days, 3);
+  assert.equal(wider.tabId, 9);
+});
+
+test("another shop starts over", () => {
   const first = { ...startShopifyAuditReview(null, result("2026-10-21", [1])), marks: { [product(1).id]: "done" }, tabId: 9 };
-  const next = startShopifyAuditReview(first, result("2026-10-22", [1]));
-  assert.deepEqual(next.marks, {});
-  assert.equal(next.tabId, null);
-  assert.equal(next.currentId, product(1).id);
+  const other = startShopifyAuditReview(first, { ...result("2026-10-21", [1]), shop: "other.myshopify.com", products: [{ ...product(1), url: "https://admin.shopify.com/store/other/products/1" }] });
+  assert.deepEqual(other.marks, {});
+  assert.equal(other.tabId, null);
+});
+
+test("audit ranges cover whole local days ending today", () => {
+  const now = new Date(2026, 9, 23, 15, 30);
+  const one = auditRangeInComputerTimezone(1, now);
+  const three = auditRangeInComputerTimezone(3, now);
+  assert.equal(one.date, "2026-10-22");
+  assert.equal(three.date, "2026-10-20");
+  assert.equal(three.endUtc, one.endUtc);
+  assert.equal(three.startUtc, new Date(2026, 9, 20).toISOString());
+  assert.equal(parseShopifyAuditDays(3), 3);
+  assert.equal(parseShopifyAuditDays(7), 1);
 });
 
 test("next product skips marked products and wraps around", () => {
