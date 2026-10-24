@@ -39,24 +39,30 @@ export type KioskQueueState = {
 
 type Pending = { status: "found" | "shown"; token: number };
 
+const byCreated = (a: KioskRequest, b: KioskRequest) => a.createdAt - b.createdAt;
+
 /** The store's live request queue, polled like the staff page while this page is visible. */
 export function useKioskQueue(store: string | null): KioskQueueState {
   const [requests, setRequests] = useState<KioskRequest[]>([]);
   const [clockOffset, setClockOffset] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  // Bumped when the store changes, so late callbacks from the old store do nothing.
+  // Bumped when the store changes or the page unmounts, so late callbacks do nothing.
   const generation = useRef(0);
-  // Status changes not yet confirmed, applied over every poll; the token lets
-  // only the newest change for a request roll itself back or clear itself.
+  // Found/Shown not yet confirmed, applied over every poll. The token lets only
+  // the newest change for a request roll itself back or clear itself.
   const pending = useRef(new Map<string, Pending>());
-  // Bumped on every change, so a poll that started before one is discarded.
-  const changes = useRef(0);
+  // When each request was last changed here (start and settlement of each
+  // Found/Shown), on a sequence shared with polls: a poll keeps what's on screen
+  // for requests changed while it was in flight and takes everything else.
+  const sequence = useRef(0);
+  const lastChange = useRef(new Map<string, number>());
   const nextToken = useRef(0);
 
   useEffect(() => {
     const run = ++generation.current;
     const current = () => run === generation.current;
     pending.current = new Map();
+    lastChange.current = new Map();
     setRequests([]);
     setError(null);
     if (!store) return;
@@ -67,15 +73,30 @@ export function useKioskQueue(store: string | null): KioskQueueState {
       if (polling) return;
       if (document.visibilityState === "visible") {
         polling = true;
-        const startedAt = changes.current;
+        const startedAt = sequence.current;
         try {
           const queue = await fetchKioskQueue(store);
-          // A Found/Shown made while this was in flight may not be in it yet.
-          if (current() && startedAt === changes.current) {
+          if (current()) {
+            const changedSince = (id: string) => (lastChange.current.get(id) ?? -1) > startedAt;
+            const polled = new Set(queue.requests.map((item) => item.id));
             setClockOffset(queue.serverNow - Date.now());
-            setRequests(queue.requests
-              .filter((item) => pending.current.get(item.id)?.status !== "shown")
-              .map((item) => pending.current.get(item.id)?.status === "found" ? { ...item, status: "found" } : item));
+            setRequests((shown) => {
+              const onScreen = new Map(shown.map((item) => [item.id, item]));
+              const merged: KioskRequest[] = [];
+              for (const item of queue.requests) {
+                if (changedSince(item.id)) {
+                  const mine = onScreen.get(item.id);
+                  if (mine) merged.push(mine);
+                  continue;
+                }
+                const override = pending.current.get(item.id)?.status;
+                if (override === "shown") continue;
+                merged.push(override === "found" ? { ...item, status: "found" } : item);
+              }
+              // A row this page put back (a failed Shown) that the poll predates.
+              for (const item of shown) if (!polled.has(item.id) && changedSince(item.id)) merged.push(item);
+              return merged.sort(byCreated);
+            });
             setError(null);
           }
         } catch (cause) {
@@ -100,24 +121,22 @@ export function useKioskQueue(store: string | null): KioskQueueState {
     if (!store) return;
     const run = generation.current;
     const token = ++nextToken.current;
-    changes.current++;
     pending.current.set(request.id, { status, token });
-    setRequests((current) => status === "shown"
-      ? current.filter((item) => item.id !== request.id)
-      : current.map((item) => item.id === request.id ? { ...item, status } : item));
-    const newest = () => run === generation.current && pending.current.get(request.id)?.token === token;
-    void setKioskRequestStatus(store, request.id, status)
-      .then(() => {
-        if (newest()) pending.current.delete(request.id);
-      })
-      .catch((cause: unknown) => {
-        // Only the newest change for this request, in this store, may undo itself.
-        if (!newest()) return;
-        pending.current.delete(request.id);
-        setError(cause instanceof Error ? cause.message : "Could not update the request.");
-        setRequests((current) => [...current.filter((item) => item.id !== request.id), request].sort((a, b) => a.createdAt - b.createdAt));
-      })
-      .finally(() => { changes.current++; });
+    lastChange.current.set(request.id, ++sequence.current);
+    setRequests((shown) => status === "shown"
+      ? shown.filter((item) => item.id !== request.id)
+      : shown.map((item) => item.id === request.id ? { ...item, status } : item));
+    // Settles in one step: clear the override and mark the change together, so
+    // no poll can land in between. Only the newest change, in this store, counts.
+    const settle = (failed: unknown) => {
+      if (run !== generation.current || pending.current.get(request.id)?.token !== token) return;
+      pending.current.delete(request.id);
+      lastChange.current.set(request.id, ++sequence.current);
+      if (failed === undefined) return;
+      setError(failed instanceof Error ? failed.message : "Could not update the request.");
+      setRequests((shown) => [...shown.filter((item) => item.id !== request.id), request].sort(byCreated));
+    };
+    void setKioskRequestStatus(store, request.id, status).then(() => settle(undefined), (cause: unknown) => settle(cause ?? new Error("Could not update the request.")));
   }, [store]);
 
   return { requests, clockOffset, error, update };
