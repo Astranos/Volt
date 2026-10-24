@@ -28,7 +28,8 @@ function setup(products, { groupFails = () => false } = {}) {
       },
       get: async (id) => { if (!openTabs.has(id)) throw new Error(`No tab with id: ${id}.`); return { id }; },
       group: async (options) => {
-        if (groupFails(options)) throw new Error("No group with id: 7.");
+        const failure = groupFails(options);
+        if (failure) throw new Error(typeof failure === "string" ? failure : "No group with id: 7.");
         calls.grouped.push(options);
         return 7;
       },
@@ -234,4 +235,15 @@ test("binds Shopify authorization to this browser before opening the approval ta
   assert.equal(cookies[0].httpOnly, true);
   assert.equal(cookies[0].sameSite, "lax");
   assert.deepEqual(tabs, [{ url: url.href, active: true, windowId: 5 }]);
+});
+
+test("a tab drag in progress doesn't cancel the audit; grouping is retried", async () => {
+  let refusals = 2;
+  const { calls, request, close, session } = setup([11, 12, 13, 14].map(product), {
+    groupFails: (options) => options.groupId !== undefined && refusals-- > 0 && "Tabs cannot be edited right now (user may be dragging a tab).",
+  });
+  await request();
+  await close(1);
+  assert.deepEqual(session.shopifyAuditTabsRun.tabIds, [2, 3, 4]);
+  assert.equal(calls.created.length, 4);
 });
