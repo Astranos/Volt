@@ -13,6 +13,7 @@ import {
   type ShopifyAuditReviewRequest,
 } from "../../domain/shopify-audit";
 import { getShopifyAuditConnection, listShopifyAuditYesterday } from "../../shopify-audit/client";
+import { openProductInPlace } from "../../shopify-audit/in-place-navigation";
 
 type Filter = "all" | "todo";
 
@@ -73,9 +74,14 @@ export default function ShopifyAuditReview({ onClose }: { onClose?: () => void }
       let tabId: number;
       if (tab?.id !== undefined) {
         tabId = tab.id;
+        const shownUrl = tab.pendingUrl ?? tab.url;
+        const shown = (reviewRef.current ?? current).products.find((item) => item.id === (reviewRef.current ?? current).currentId);
         // Same product: just bring it forward rather than reloading the editor.
-        const update = (tab.pendingUrl ?? tab.url) === product.url ? { active: true } : { url: product.url, active: true };
-        await chrome.tabs.update(tabId, update);
+        // Otherwise let Shopify swap the product in place, and reload only if that doesn't take.
+        const inPlace = shownUrl !== product.url && tab.status === "complete"
+          && await openProductInPlace(chrome.scripting, tabId, shownUrl, shown, product);
+        if (stale()) return;
+        await chrome.tabs.update(tabId, shownUrl === product.url || inPlace ? { active: true } : { url: product.url, active: true });
       } else {
         const panelWindow = await chrome.windows.getCurrent();
         if (stale()) return;
