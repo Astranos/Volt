@@ -9,7 +9,19 @@ import {
   type ShopifyResultFilters,
   type ShopifyResultSort,
 } from "./shopify-result-filters";
+import { KioskRequestList } from "./KioskRequestList";
+import type { KioskRequest } from "../../kiosk/kiosk-requests";
 import "./shopify-product-results.css";
+
+/** The store kiosk's live requests, when a kiosk store is set in settings. */
+export type ShopifyKioskRequests = {
+  store: string;
+  shop: string | null;
+  requests: KioskRequest[];
+  clockOffset: number;
+  error: string | null;
+  onUpdate: (request: KioskRequest, status: "found" | "shown") => void;
+};
 
 // cmdk moves its selection on arrow keys; keep those inside the filter controls.
 const keepKeys = (event: React.KeyboardEvent) => event.stopPropagation();
@@ -45,6 +57,7 @@ export function ShopifyProductResults({
   onToggleCompareMode,
   onRetry,
   onOpenSettings,
+  kiosk = null,
 }: {
   query: string;
   state: ShopifyProductSearchState;
@@ -58,6 +71,7 @@ export function ShopifyProductResults({
   onToggleCompareMode: () => void;
   onRetry: () => void;
   onOpenSettings: () => void;
+  kiosk?: ShopifyKioskRequests | null;
 }) {
   // Kept while mounted, so filters survive a new search.
   const [filters, setFilters] = useState<ShopifyResultFilters>(DEFAULT_SHOPIFY_RESULT_FILTERS);
@@ -65,6 +79,8 @@ export function ShopifyProductResults({
   // once someone is actually using the arrow keys, so the first card doesn't
   // look hovered while the mouse is elsewhere.
   const [keyboardNav, setKeyboardNav] = useState(false);
+  // While searching, kiosk requests collapse into one line above the results.
+  const [kioskOpen, setKioskOpen] = useState(false);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => { if (event.key === "ArrowDown" || event.key === "ArrowUp") setKeyboardNav(true); };
     const onMouse = () => setKeyboardNav(false);
@@ -83,11 +99,24 @@ export function ShopifyProductResults({
     setFilters((current) => current.condition && !available.includes(current.condition) ? { ...current, condition: null } : current);
   }, [readyProducts]);
 
+  const kioskList = kiosk && <KioskRequestList
+    clockOffset={kiosk.clockOffset} error={kiosk.error} onOpen={onOpenProduct} onUpdate={kiosk.onUpdate}
+    requests={kiosk.requests} shop={kiosk.shop} store={kiosk.store}
+  />;
+
   if (query.trim().length < 2) {
+    // An empty search shows who's waiting at the kiosk, when anyone is.
+    if (kiosk && (kiosk.requests.length > 0 || kiosk.error)) {
+      return <div className="shopify-results">
+        {kioskList}
+        <p className="shopify-kiosk-hint">Start typing to search your Shopify products.</p>
+      </div>;
+    }
     return <div className="shopify-search-intro">
       <span className="shopify-search-intro-icon"><Store aria-hidden="true" size={22} /></span>
       <strong>Search your Shopify products</strong>
       <span>Find products by title, SKU, or barcode. In-stock items appear first. Pick a few with <Columns3 aria-hidden="true" className="shopify-search-intro-inline-icon" size={12} /> to compare them side by side.</span>
+      {kiosk && <span className="shopify-kiosk-none">No kiosk requests at {kiosk.store} right now.</span>}
     </div>;
   }
 
@@ -119,7 +148,19 @@ export function ShopifyProductResults({
   const filtered = active.inStockOnly || active.condition !== null;
   const fullSearchUrl = `https://${shop}/admin/products?query=${encodeURIComponent(query)}`;
 
+  const kioskWaiting = kiosk?.requests.filter((request) => request.status === "waiting").length ?? 0;
+
   return <div className={keyboardNav ? "shopify-results is-keyboard-nav" : "shopify-results"}>
+    {kiosk && kiosk.requests.length > 0 && <>
+      <button aria-expanded={kioskOpen} className="kiosk-requests-banner" onClick={() => setKioskOpen(!kioskOpen)} onKeyDown={keepKeys} type="button">
+        <span aria-hidden="true" className={kioskWaiting > 0 ? "kiosk-requests-dot is-waiting" : "kiosk-requests-dot"} />
+        {kioskWaiting > 0
+          ? `${kioskWaiting} kiosk ${kioskWaiting === 1 ? "request" : "requests"} waiting`
+          : `${kiosk.requests.length} kiosk ${kiosk.requests.length === 1 ? "request" : "requests"} found, not yet shown`}
+        <span>{kioskOpen ? "Hide" : "Show"}</span>
+      </button>
+      {kioskOpen && kioskList}
+    </>}
     <div className="shopify-results-heading">
       <span>{filtered ? `${shown.length} of ${products.length}` : products.length} {products.length === 1 ? "product" : "products"}</span>
       {compareMode && <span className="shopify-compare-hint">Compare mode · click products to add or remove</span>}

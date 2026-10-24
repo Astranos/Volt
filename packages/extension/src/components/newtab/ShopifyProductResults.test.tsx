@@ -102,3 +102,34 @@ test("a Compare button turns on compare mode before anything is picked", () => {
   expect(on).toContain('aria-label="Add Canon EOS to compare"');
   expect(on).toContain("Compare mode · click products to add or remove");
 });
+
+const kioskRequest = { id: "k1", productId: "12", variantId: "34", title: "PS5 Slim", variantTitle: "Default Title", sku: "MI01-1", imageUrl: null, priceCents: 45000, status: "waiting" as const, createdAt: Date.now() - 4 * 60_000, expiresAt: Date.now() + 3_000_000 };
+const kiosk = { store: "taylormi", shop: "paymore-taylor.myshopify.com", requests: [kioskRequest], clockOffset: 0, error: null, onUpdate: vi.fn() };
+const renderKiosk = (query: string) => renderToStaticMarkup(<Command shouldFilter={false}><Command.List>
+  <ShopifyProductResults
+    query={query}
+    state={query ? { kind: "ready", query, result: { shop: "sample.myshopify.com", products: [camera] } } : { kind: "idle" }}
+    onOpenProduct={vi.fn()} onHideProduct={vi.fn()} compareIds={new Set()} compareFull={false} compareMode={false}
+    onToggleCompareMode={vi.fn()} onToggleCompare={vi.fn()} onRetry={vi.fn()} onOpenSettings={vi.fn()} kiosk={kiosk}
+  />
+</Command.List></Command>);
+
+test("an empty search shows waiting kiosk requests with Found and Shown", () => {
+  const html = renderKiosk("");
+  expect(html).toContain("Kiosk requests");
+  expect(html).toContain("PS5 Slim");
+  expect(html).toContain("SKU MI01-1");
+  expect(html).toContain("4 min");
+  expect(html).toContain(">Found<");
+  expect(html).toContain(">Shown<");
+  expect(html).toContain("Open PS5 Slim in Shopify");
+  expect(html).not.toContain("Search your Shopify products</strong>");
+});
+
+test("while searching, kiosk requests collapse to one line above the results", () => {
+  const html = renderKiosk("camera");
+  expect(html).toContain("1 kiosk request waiting");
+  expect(html).toContain('aria-expanded="false"');
+  expect(html).not.toContain("SKU MI01-1");
+  expect(html).toContain("Canon EOS");
+});

@@ -1,0 +1,235 @@
+.kiosk-requests {
+  margin-bottom: 14px;
+}
+
+.kiosk-requests-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  color: var(--nt-text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.kiosk-requests-dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 999px;
+  background: var(--nt-text-faint);
+}
+
+.kiosk-requests-dot.is-waiting {
+  background: #f59e0b;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.2);
+}
+
+.kiosk-requests-summary {
+  color: var(--nt-text-muted);
+  font-weight: 500;
+}
+
+.kiosk-requests-queue {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: auto;
+  color: var(--nt-text-muted);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.kiosk-requests-queue:hover {
+  color: var(--nt-text);
+}
+
+.kiosk-requests-error {
+  margin: 0 0 8px;
+  color: #ef4444;
+  font-size: 12px;
+}
+
+.kiosk-requests-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.kiosk-request {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  border: 1px solid var(--nt-border);
+  border-radius: 12px;
+  background: var(--nt-surface);
+}
+
+.kiosk-request-thumb {
+  position: relative;
+  display: grid;
+  width: 44px;
+  height: 44px;
+  overflow: hidden;
+  border-radius: 9px;
+  background: var(--nt-surface-strong);
+  color: var(--nt-text-faint);
+  place-items: center;
+}
+
+.kiosk-request-thumb img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.kiosk-request-body {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.kiosk-request-title {
+  overflow: hidden;
+  color: var(--nt-text);
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kiosk-request-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  color: var(--nt-text-muted);
+  font-size: 11px;
+}
+
+.kiosk-request-status {
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: rgba(245, 158, 11, 0.18);
+  color: #b45309;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.kiosk-request-status.is-found {
+  background: var(--nt-accent-soft);
+  color: var(--nt-accent-strong);
+}
+
+.kiosk-request-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.kiosk-request-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--nt-border-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--nt-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.kiosk-request-button:hover {
+  background: var(--nt-surface-hover);
+}
+
+.kiosk-request-button.is-primary {
+  border-color: var(--nt-accent);
+  background: var(--nt-accent);
+  color: white;
+}
+
+.kiosk-request-button.is-primary:hover {
+  background: var(--nt-accent-strong);
+}
+
+.kiosk-request-button.is-icon {
+  padding: 0 9px;
+}
+
+/* Same instant tooltips as the result cards, to the left so the list can't clip them. */
+.kiosk-request-button[data-tooltip]::after {
+  position: absolute;
+  top: 50%;
+  right: calc(100% + 6px);
+  z-index: 5;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: rgba(10, 10, 10, 0.9);
+  color: #fafafa;
+  content: attr(data-tooltip);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(2px, -50%);
+  transition: opacity 120ms ease 150ms, transform 120ms ease 150ms;
+}
+
+.kiosk-request-button[data-tooltip]:hover::after,
+.kiosk-request-button[data-tooltip]:focus-visible::after {
+  opacity: 1;
+  transform: translate(0, -50%);
+}
+
+/* While searching: a single line above the results. */
+.kiosk-requests-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin-bottom: 12px;
+  padding: 7px 12px;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  border-radius: 10px;
+  background: rgba(245, 158, 11, 0.08);
+  color: var(--nt-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.kiosk-requests-banner span:last-child {
+  margin-left: auto;
+  color: var(--nt-text-muted);
+}
+
+.shopify-mode-count {
+  margin-left: 5px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #f59e0b;
+  color: #0a0a0a;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 15px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .kiosk-request-status { color: #fbbf24; }
+  .kiosk-request-status.is-found { color: var(--nt-accent); }
+  .kiosk-request-button[data-tooltip]::after { background: rgba(250, 250, 250, 0.92); color: #0a0a0a; }
+}

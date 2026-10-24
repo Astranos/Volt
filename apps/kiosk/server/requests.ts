@@ -84,6 +84,9 @@ function errorResponse(error: unknown): Response {
   return Response.json({ error: message }, { status, headers });
 }
 
+/** The Chrome Web Store Volt extension. */
+const VOLT_EXTENSION_ORIGINS = new Set(['chrome-extension://bmgghhmlflbhlnomgnoodpidekpaaifk']);
+
 export function createRequestHandlers({ getCatalog = catalogService.getCatalog, getConfig = config, createBackend = backend, now = Date.now }: {
   getCatalog?: typeof catalogService.getCatalog;
   getConfig?: () => Config;
@@ -96,7 +99,10 @@ export function createRequestHandlers({ getCatalog = catalogService.getCatalog, 
     try {
       const operation = async () => {
         const origin = request.headers.get('origin');
-        if (origin && origin !== new URL(request.url).origin) throw failure(400, 'Use this store’s website to send requests.');
+        // Staff can also see the queue and mark Found/Shown from the Volt Chrome extension's
+        // new tab; creating requests stays limited to the store's own kiosk site.
+        const staffExtension = origin !== null && VOLT_EXTENSION_ORIGINS.has(origin) && request.method !== 'POST';
+        if (origin && origin !== new URL(request.url).origin && !staffExtension) throw failure(400, 'Use this store’s website to send requests.');
         if (!['GET', 'POST', 'PATCH'].includes(request.method)) return Response.json({ error: 'Method not allowed.' }, { status: 405, headers: { ...headers, Allow: 'GET, POST, PATCH' } });
         const configuration = getConfig();
         const db = createBackend(configuration, controller.signal);

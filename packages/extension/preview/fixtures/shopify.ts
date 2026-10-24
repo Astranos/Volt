@@ -80,3 +80,20 @@ export const compareDetails = {
     details(102, "Apple iPhone 13 Pro 256GB Graphite — Unlocked", "529.00", "Used - Good", [productImages.iphone13Pro, productImages.iphone13ProMax], "Visible scuffs on the back glass and corners. Screen has minor wear. See pictures for details."),
   ],
 };
+
+const minutesAgo = (minutes: number) => Date.now() - minutes * 60_000;
+const kioskRequest = (id: string, title: string, sku: string, minutes: number, status: "waiting" | "found", imageUrl: string) => ({
+  id, storeSlug: "taylormi", productId: String(900 + Number(id.slice(1))), variantId: "1", title, variantTitle: "Default Title",
+  sku, imageUrl, priceCents: 0, productUrl: "https://taylormi.paymore.com/products/sample", status,
+  createdAt: minutesAgo(minutes), updatedAt: minutesAgo(minutes), expiresAt: minutesAgo(minutes - 60),
+});
+
+/** The kiosk's GET /api/requests response for taylormi. */
+export const kioskQueue = () => ({
+  serverNow: Date.now(),
+  requests: [
+    kioskRequest("k1", "Apple iPhone 13 Pro 256GB Graphite — Unlocked", "IP13P-256-GR", 9, "found", productImages.iphone13Pro),
+    kioskRequest("k2", "Apple iPhone 13 128GB Midnight — Unlocked", "IP13-128-MID-A", 4, "waiting", productImages.iphone13),
+    kioskRequest("k3", "Apple iPhone 13 mini 128GB Green — AT&T", "IP13M-128-GRN", 1, "waiting", productImages.iphone13Mini),
+  ],
+});

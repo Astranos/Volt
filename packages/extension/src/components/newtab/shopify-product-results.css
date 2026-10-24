@@ -586,3 +586,16 @@
   align-items: center;
   gap: 5px;
 }
+
+.shopify-kiosk-hint {
+  margin: 4px 0 0;
+  color: var(--nt-text-faint);
+  font-size: 12px;
+  text-align: center;
+}
+
+.shopify-kiosk-none {
+  margin-top: 6px;
+  color: var(--nt-text-faint);
+  font-size: 12px;
+}
