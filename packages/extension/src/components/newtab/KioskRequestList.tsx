@@ -40,7 +40,7 @@ export function KioskRequestList({
       <span className="kiosk-requests-summary">
         · {store} · {waiting} waiting{found > 0 ? `, ${found} found` : ""}
       </span>
-      <a className="kiosk-requests-queue" href={`${KIOSK_API_BASE}/${store}/requests`} rel="noopener noreferrer" target="_blank">
+      <a className="kiosk-requests-queue" href={`${KIOSK_API_BASE}/${store}/requests`} onKeyDown={keepEnter} rel="noopener noreferrer" target="_blank">
         Staff queue <ArrowUpRight aria-hidden="true" size={12} />
       </a>
     </div>

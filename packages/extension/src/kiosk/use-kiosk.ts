@@ -37,42 +37,60 @@ export type KioskQueueState = {
   update: (request: KioskRequest, status: "found" | "shown") => void;
 };
 
+type Pending = { status: "found" | "shown"; token: number };
+
 /** The store's live request queue, polled like the staff page while this page is visible. */
 export function useKioskQueue(store: string | null): KioskQueueState {
   const [requests, setRequests] = useState<KioskRequest[]>([]);
   const [clockOffset, setClockOffset] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  // Status changes in flight, so a poll that started earlier can't undo them on screen.
-  const pending = useRef(new Map<string, "found" | "shown">());
+  // Bumped when the store changes, so late callbacks from the old store do nothing.
+  const generation = useRef(0);
+  // Status changes not yet confirmed, applied over every poll; the token lets
+  // only the newest change for a request roll itself back or clear itself.
+  const pending = useRef(new Map<string, Pending>());
+  // Bumped on every change, so a poll that started before one is discarded.
+  const changes = useRef(0);
+  const nextToken = useRef(0);
 
   useEffect(() => {
+    const run = ++generation.current;
+    const current = () => run === generation.current;
+    pending.current = new Map();
     setRequests([]);
     setError(null);
     if (!store) return;
-    let cancelled = false;
     let timer: number | undefined;
+    let polling = false;
     const poll = async () => {
       window.clearTimeout(timer);
+      if (polling) return;
       if (document.visibilityState === "visible") {
+        polling = true;
+        const startedAt = changes.current;
         try {
           const queue = await fetchKioskQueue(store);
-          if (cancelled) return;
-          setClockOffset(queue.serverNow - Date.now());
-          setRequests(queue.requests
-            .filter((item) => pending.current.get(item.id) !== "shown")
-            .map((item) => pending.current.get(item.id) === "found" ? { ...item, status: "found" } : item));
-          setError(null);
+          // A Found/Shown made while this was in flight may not be in it yet.
+          if (current() && startedAt === changes.current) {
+            setClockOffset(queue.serverNow - Date.now());
+            setRequests(queue.requests
+              .filter((item) => pending.current.get(item.id)?.status !== "shown")
+              .map((item) => pending.current.get(item.id)?.status === "found" ? { ...item, status: "found" } : item));
+            setError(null);
+          }
         } catch (cause) {
-          if (!cancelled) setError(cause instanceof Error ? cause.message : "Kiosk requests are unavailable.");
+          if (current()) setError(cause instanceof Error ? cause.message : "Kiosk requests are unavailable.");
+        } finally {
+          polling = false;
         }
       }
-      if (!cancelled) timer = window.setTimeout(() => void poll(), POLL_MS);
+      if (current()) timer = window.setTimeout(() => void poll(), POLL_MS);
     };
     const onVisible = () => { if (document.visibilityState === "visible") void poll(); };
     void poll();
     document.addEventListener("visibilitychange", onVisible);
     return () => {
-      cancelled = true;
+      generation.current++;
       window.clearTimeout(timer);
       document.removeEventListener("visibilitychange", onVisible);
     };
@@ -80,17 +98,26 @@ export function useKioskQueue(store: string | null): KioskQueueState {
 
   const update = useCallback((request: KioskRequest, status: "found" | "shown") => {
     if (!store) return;
-    pending.current.set(request.id, status);
+    const run = generation.current;
+    const token = ++nextToken.current;
+    changes.current++;
+    pending.current.set(request.id, { status, token });
     setRequests((current) => status === "shown"
       ? current.filter((item) => item.id !== request.id)
       : current.map((item) => item.id === request.id ? { ...item, status } : item));
+    const newest = () => run === generation.current && pending.current.get(request.id)?.token === token;
     void setKioskRequestStatus(store, request.id, status)
+      .then(() => {
+        if (newest()) pending.current.delete(request.id);
+      })
       .catch((cause: unknown) => {
+        // Only the newest change for this request, in this store, may undo itself.
+        if (!newest()) return;
+        pending.current.delete(request.id);
         setError(cause instanceof Error ? cause.message : "Could not update the request.");
-        // Put it back as it was; the next poll confirms the real state.
         setRequests((current) => [...current.filter((item) => item.id !== request.id), request].sort((a, b) => a.createdAt - b.createdAt));
       })
-      .finally(() => { pending.current.delete(request.id); });
+      .finally(() => { changes.current++; });
   }, [store]);
 
   return { requests, clockOffset, error, update };
