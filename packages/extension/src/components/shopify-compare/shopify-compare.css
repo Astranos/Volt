@@ -649,6 +649,12 @@ body {
   .compare-toggle-track::after { transition: none; }
 }
 
+/* No title tooltip here: Chrome on macOS can drop the zoom cursor while one shows. */
+.compare-gallery-frame.is-zoomable,
+.compare-gallery-frame.is-zoomable > img {
+  cursor: zoom-in;
+}
+
 .compare-gallery-zoom {
   position: absolute;
   inset: 0;

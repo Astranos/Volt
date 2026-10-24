@@ -92,10 +92,10 @@ function Gallery({ images, title }: { images: string[]; title: string }) {
   const image = images[position];
   return (
     <div className="compare-cell compare-gallery">
-      <div className="compare-gallery-frame">
+      <div className={image ? "compare-gallery-frame is-zoomable" : "compare-gallery-frame"}>
         <span className="compare-gallery-placeholder"><Boxes aria-hidden="true" size={28} /> No photo</span>
         {image && <img alt={title} key={image} onError={(event) => { event.currentTarget.style.display = "none"; }} src={image} />}
-        {image && <button aria-label={`Enlarge photo of ${title}`} className="compare-gallery-zoom" onClick={() => setEnlarged(true)} title="Enlarge photo" type="button" />}
+        {image && <button aria-label={`Enlarge photo of ${title}`} className="compare-gallery-zoom" onClick={() => setEnlarged(true)} type="button" />}
       </div>
       {enlarged && image && <Lightbox images={images} index={position} onClose={() => setEnlarged(false)} onIndex={setIndex} title={title} />}
       {images.length > 1 && (
