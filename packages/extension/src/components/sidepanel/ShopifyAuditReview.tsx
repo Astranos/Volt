@@ -8,6 +8,7 @@ import {
   parseShopifyAuditDays,
   parseShopifyAuditReview,
   startShopifyAuditReview,
+  withViewed,
   SHOPIFY_AUDIT_DAYS_KEY,
   SHOPIFY_AUDIT_REVIEW_KEY,
   SHOPIFY_AUDIT_REVIEW_REQUEST_KEY,
@@ -135,7 +136,7 @@ export default function ShopifyAuditReview({ onClose }: { onClose?: () => void }
       if (stale()) return;
       // Opening a product is what marks it viewed; nobody has to remember a Done button.
       const latest = reviewRef.current ?? current;
-      await save({ ...latest, currentId: productId, tabId, marks: { ...latest.marks, [productId]: "done" } });
+      await save({ ...latest, currentId: productId, tabId, marks: withViewed(latest.marks, productId) });
     } catch (cause) {
       if (!stale()) setError(cause instanceof Error ? cause.message : "Could not open the product.");
     }

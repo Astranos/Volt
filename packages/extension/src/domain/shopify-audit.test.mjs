@@ -10,6 +10,8 @@ import {
   parseShopifyAuditMode,
   parseShopifyAuditReview,
   startShopifyAuditReview,
+  MAX_VIEWED_MARKS,
+  withViewed,
   validShopifyAdminProductUrl,
   yesterdayInComputerTimezone,
 } from "./shopify-audit.ts";
@@ -143,4 +145,16 @@ test("narrowing the range and widening it again keeps what was viewed", () => {
   const narrow = startShopifyAuditReview(wide, result("2026-10-22", [3]), 1);
   const wideAgain = startShopifyAuditReview(narrow, result("2026-10-20", [1, 2, 3]), 3);
   assert.equal(wideAgain.marks[product(1).id], "done");
+});
+
+test("revisiting a product makes it the newest viewed mark, and the cap keeps the newest", () => {
+  let marks = {};
+  for (let id = 1; id <= MAX_VIEWED_MARKS; id++) marks = withViewed(marks, product(id).id);
+  marks = withViewed(marks, product(1).id); // revisit the oldest
+  marks = withViewed(marks, product(MAX_VIEWED_MARKS + 1).id);
+  assert.equal(Object.keys(marks).length, MAX_VIEWED_MARKS);
+  assert.equal(marks[product(1).id], "done");
+  assert.equal(marks[product(2).id], undefined);
+  const stored = { shop: "sample.myshopify.com", date: "2026-10-22", products: [], marks: Object.fromEntries(Array.from({ length: MAX_VIEWED_MARKS + 5 }, (_, i) => [product(i + 1).id, "done"])) };
+  assert.equal(Object.keys(parseShopifyAuditReview(stored).marks).length, MAX_VIEWED_MARKS);
 });

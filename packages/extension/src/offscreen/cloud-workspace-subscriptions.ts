@@ -138,7 +138,19 @@ export function backgroundClerkClient() {
   return backgroundClerkPromise;
 }
 
+// Clerk answers are numbered as they're asked, so a Shopify request can reuse
+// the one its own reconcile pass just fetched instead of asking twice.
+let clerkAsks = 0;
+let lastClerkAuth: { ask: number; state: ClerkAuthState } | null = null;
+
 async function resolveClerkAuth(): Promise<ClerkAuthState> {
+  const ask = ++clerkAsks;
+  const state = await resolveClerkAuthNow();
+  if (!lastClerkAuth || ask > lastClerkAuth.ask) lastClerkAuth = { ask, state };
+  return state;
+}
+
+async function resolveClerkAuthNow(): Promise<ClerkAuthState> {
   if (!CLERK_PUBLISHABLE_KEY) return { status: "unknown" };
   if (!backgroundClerkPromise && Date.now() - lastSignedOutAt < SIGNED_OUT_RECHECK_MS) {
     return { status: "signed-out" };
@@ -242,11 +254,13 @@ export class CloudWorkspaceSubscriptions {
     lastSignedOutAt = 0;
     let armed = false;
     for (;;) {
+      const askedAfter = clerkAsks;
       await this.reconcileAuthentication();
       // Always ask Clerk who is signed in right now, and go ahead only once the
       // Convex client is authenticated as that same account — never on a
-      // remembered subject from before a sign-out or an account switch.
-      const auth = await resolveClerkAuth();
+      // remembered subject from before a sign-out or an account switch. The
+      // reconcile pass usually just asked; reuse that answer rather than ask again.
+      const auth = lastClerkAuth && lastClerkAuth.ask > askedAfter ? lastClerkAuth.state : await resolveClerkAuth();
       if (auth.status === "signed-out") throw new Error(message);
       const subject = auth.status === "signed-in" ? clerkSubjectFromToken(auth.token) : null;
       if (subject && this.clientAuthSubject() === subject) return subject;

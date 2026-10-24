@@ -29,12 +29,14 @@ export function routeTo(origin: string, fromPath: string, toPath: string, marker
  */
 export function readRoute(origin: string, marker: string, title: string) {
   if (location.origin !== origin || (window as unknown as Record<string, unknown>).__voltAuditNavigation !== marker) return null;
-  const clean = (value: string | null | undefined) => (value ?? "").replace(/\s+/g, " ").trim().toLowerCase()
-    .replace(/\s+(active|draft|archived|unlisted)$/, "");
+  const clean = (value: string | null | undefined) => (value ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+  // Only the heading carries the badge; the title is compared as-is.
+  const withoutBadge = (heading: string) => heading.replace(/\s+(active|draft|archived|unlisted)$/, "");
   const wanted = clean(title);
   return {
     path: location.pathname,
-    shown: !!wanted && Array.from(document.querySelectorAll("h1")).some((heading) => clean(heading.textContent) === wanted),
+    shown: !!wanted && Array.from(document.querySelectorAll("h1"))
+      .some((heading) => clean(heading.textContent) === wanted || withoutBadge(clean(heading.textContent)) === wanted),
   };
 }
 
@@ -62,8 +64,12 @@ export async function openProductInPlace(
   const store = (path: string) => path.split("/").slice(0, 3).join("/");
   if (current.origin !== target.origin || store(current.pathname) !== store(target.pathname)) return "fallback";
   if (!from || from.url !== `${current.origin}${current.pathname}`) return "fallback";
-  // The heading check can't tell two same-named products apart.
-  if (from.title.trim().toLowerCase() === to.title.trim().toLowerCase()) return "fallback";
+  // The heading check can't tell apart titles that are equal, or differ only by
+  // a status word (the old heading "Blue Shirt Active" vs a product titled that).
+  const norm = (value: string) => value.replace(/\s+/g, " ").trim().toLowerCase();
+  const badge = /\s+(active|draft|archived|unlisted)$/;
+  const [a, b] = [norm(from.title), norm(to.title)];
+  if (a === b || a.replace(badge, "") === b || b.replace(badge, "") === a) return "fallback";
   const marker = crypto.randomUUID();
 
   try {
