@@ -331,7 +331,7 @@ export function ClosedTabsPanel({
                 onToggleCompareMode={() => { if (compareMode) leaveCompare(); else setCompareModeOn(true); }}
                 onRetry={() => setShopifyRetry((current) => current + 1)}
                 onOpenSettings={() => { void chrome.tabs.create({ url: chrome.runtime.getURL("/options.html#shopify-audit"), active: true }); }}
-                kiosk={kioskStore ? { store: kioskStore, shop: shopifyShop, requests: kioskQueue.requests, clockOffset: kioskQueue.clockOffset, error: kioskQueue.error, onUpdate: kioskQueue.update } : null}
+                kiosk={kioskStore ? { store: kioskStore, shop: shopifyShop, requests: kioskQueue.requests, clockOffset: kioskQueue.clockOffset, error: kioskQueue.error, busy: kioskQueue.busy, onUpdate: kioskQueue.update } : null}
               />
             ) : loading ? (
               <div className="closed-tabs-loading">

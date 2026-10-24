@@ -20,6 +20,7 @@ export type ShopifyKioskRequests = {
   requests: KioskRequest[];
   clockOffset: number;
   error: string | null;
+  busy: ReadonlySet<string>;
   onUpdate: (request: KioskRequest, status: "found" | "shown") => void;
 };
 
@@ -100,7 +101,7 @@ export function ShopifyProductResults({
   }, [readyProducts]);
 
   const kioskList = kiosk && <KioskRequestList
-    clockOffset={kiosk.clockOffset} error={kiosk.error} onOpen={onOpenProduct} onUpdate={kiosk.onUpdate}
+    busy={kiosk.busy} clockOffset={kiosk.clockOffset} error={kiosk.error} onOpen={onOpenProduct} onUpdate={kiosk.onUpdate}
     requests={kiosk.requests} shop={kiosk.shop} store={kiosk.store}
   />;
 

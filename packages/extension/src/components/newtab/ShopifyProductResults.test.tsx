@@ -104,7 +104,7 @@ test("a Compare button turns on compare mode before anything is picked", () => {
 });
 
 const kioskRequest = { id: "k1", productId: "12", variantId: "34", title: "PS5 Slim", variantTitle: "Default Title", sku: "MI01-1", imageUrl: null, priceCents: 45000, status: "waiting" as const, createdAt: Date.now() - 4 * 60_000, expiresAt: Date.now() + 3_000_000 };
-const kiosk = { store: "taylormi", shop: "paymore-taylor.myshopify.com", requests: [kioskRequest], clockOffset: 0, error: null, onUpdate: vi.fn() };
+const kiosk = { store: "taylormi", shop: "paymore-taylor.myshopify.com", requests: [kioskRequest], clockOffset: 0, error: null, busy: new Set<string>(), onUpdate: vi.fn() };
 const renderKiosk = (query: string) => renderToStaticMarkup(<Command shouldFilter={false}><Command.List>
   <ShopifyProductResults
     query={query}
@@ -132,4 +132,16 @@ test("while searching, kiosk requests collapse to one line above the results", (
   expect(html).toContain('aria-expanded="false"');
   expect(html).not.toContain("SKU MI01-1");
   expect(html).toContain("Canon EOS");
+});
+
+test("a request's Found and Shown wait while one of them is being saved", () => {
+  const html = renderToStaticMarkup(<Command shouldFilter={false}><Command.List>
+    <ShopifyProductResults
+      query="" state={{ kind: "idle" }}
+      onOpenProduct={vi.fn()} onHideProduct={vi.fn()} compareIds={new Set()} compareFull={false} compareMode={false}
+      onToggleCompareMode={vi.fn()} onToggleCompare={vi.fn()} onRetry={vi.fn()} onOpenSettings={vi.fn()}
+      kiosk={{ ...kiosk, busy: new Set(["k1"]) }}
+    />
+  </Command.List></Command>);
+  expect(html.match(/disabled=""/g)?.length).toBe(2);
 });

@@ -148,7 +148,12 @@
   font-weight: 600;
 }
 
-.kiosk-request-button:hover {
+.kiosk-request-button:disabled {
+  cursor: progress;
+  opacity: 0.55;
+}
+
+.kiosk-request-button:hover:not(:disabled) {
   background: var(--nt-surface-hover);
 }
 
@@ -158,7 +163,7 @@
   color: white;
 }
 
-.kiosk-request-button.is-primary:hover {
+.kiosk-request-button.is-primary:hover:not(:disabled) {
   background: var(--nt-accent-strong);
 }
 

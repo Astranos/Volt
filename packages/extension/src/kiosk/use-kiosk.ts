@@ -34,6 +34,8 @@ export type KioskQueueState = {
   /** Server clock minus this computer's, so waiting times match the kiosk. */
   clockOffset: number;
   error: string | null;
+  /** Requests with a Found/Shown still being saved; their buttons wait. */
+  busy: ReadonlySet<string>;
   update: (request: KioskRequest, status: "found" | "shown") => void;
 };
 
@@ -46,6 +48,7 @@ export function useKioskQueue(store: string | null): KioskQueueState {
   const [requests, setRequests] = useState<KioskRequest[]>([]);
   const [clockOffset, setClockOffset] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState<ReadonlySet<string>>(new Set());
   // Bumped when the store changes or the page unmounts, so late callbacks do nothing.
   const generation = useRef(0);
   // Found/Shown not yet confirmed, applied over every poll. The token lets only
@@ -63,6 +66,7 @@ export function useKioskQueue(store: string | null): KioskQueueState {
     const current = () => run === generation.current;
     pending.current = new Map();
     lastChange.current = new Map();
+    setBusy(new Set());
     setRequests([]);
     setError(null);
     if (!store) return;
@@ -118,11 +122,14 @@ export function useKioskQueue(store: string | null): KioskQueueState {
   }, [store]);
 
   const update = useCallback((request: KioskRequest, status: "found" | "shown") => {
-    if (!store) return;
+    // One change per request at a time, so a rollback always returns to a state
+    // the server confirmed rather than another unconfirmed click.
+    if (!store || pending.current.has(request.id)) return;
     const run = generation.current;
     const token = ++nextToken.current;
     pending.current.set(request.id, { status, token });
     lastChange.current.set(request.id, ++sequence.current);
+    setBusy((current) => new Set(current).add(request.id));
     setRequests((shown) => status === "shown"
       ? shown.filter((item) => item.id !== request.id)
       : shown.map((item) => item.id === request.id ? { ...item, status } : item));
@@ -132,6 +139,11 @@ export function useKioskQueue(store: string | null): KioskQueueState {
       if (run !== generation.current || pending.current.get(request.id)?.token !== token) return;
       pending.current.delete(request.id);
       lastChange.current.set(request.id, ++sequence.current);
+      setBusy((current) => {
+        const next = new Set(current);
+        next.delete(request.id);
+        return next;
+      });
       if (failed === undefined) return;
       setError(failed instanceof Error ? failed.message : "Could not update the request.");
       setRequests((shown) => [...shown.filter((item) => item.id !== request.id), request].sort(byCreated));
@@ -139,5 +151,5 @@ export function useKioskQueue(store: string | null): KioskQueueState {
     void setKioskRequestStatus(store, request.id, status).then(() => settle(undefined), (cause: unknown) => settle(cause ?? new Error("Could not update the request.")));
   }, [store]);
 
-  return { requests, clockOffset, error, update };
+  return { requests, clockOffset, error, busy, update };
 }

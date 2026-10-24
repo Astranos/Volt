@@ -13,6 +13,7 @@ export function KioskRequestList({
   requests,
   clockOffset,
   error,
+  busy = new Set(),
   onUpdate,
   onOpen,
 }: {
@@ -21,6 +22,7 @@ export function KioskRequestList({
   requests: KioskRequest[];
   clockOffset: number;
   error: string | null;
+  busy?: ReadonlySet<string>;
   onUpdate: (request: KioskRequest, status: "found" | "shown") => void;
   onOpen: (url: string) => void;
 }) {
@@ -48,6 +50,7 @@ export function KioskRequestList({
     <ul className="kiosk-requests-list">
       {requests.map((request) => {
         const adminUrl = kioskProductAdminUrl(shop, request.productId);
+        const saving = busy.has(request.id);
         const variant = request.variantTitle && request.variantTitle !== "Default Title" ? request.variantTitle : null;
         return <li className="kiosk-request" key={request.id}>
           <span className="kiosk-request-thumb">
@@ -65,8 +68,8 @@ export function KioskRequestList({
             </span>
           </span>
           <span className="kiosk-request-actions">
-            {request.status === "waiting" && <button className="kiosk-request-button is-primary" data-tooltip="Staff found the item" onClick={() => onUpdate(request, "found")} onKeyDown={keepEnter} type="button">Found</button>}
-            <button className="kiosk-request-button" data-tooltip="Customer was shown the item" onClick={() => onUpdate(request, "shown")} onKeyDown={keepEnter} type="button">Shown</button>
+            {request.status === "waiting" && <button className="kiosk-request-button is-primary" data-tooltip="Staff found the item" disabled={saving} onClick={() => onUpdate(request, "found")} onKeyDown={keepEnter} type="button">Found</button>}
+            <button className="kiosk-request-button" data-tooltip="Customer was shown the item" disabled={saving} onClick={() => onUpdate(request, "shown")} onKeyDown={keepEnter} type="button">Shown</button>
             {adminUrl && <button aria-label={`Open ${request.title} in Shopify`} className="kiosk-request-button is-icon" data-tooltip="Open in Shopify" onClick={() => onOpen(adminUrl)} onKeyDown={keepEnter} type="button">
               <ArrowUpRight aria-hidden="true" size={14} />
             </button>}
