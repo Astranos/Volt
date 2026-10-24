@@ -162,3 +162,15 @@ test("kiosk cards for variants of one product announce which variant, with the d
   expect(html).toContain('aria-describedby="kiosk-request-k2-meta"');
   expect(html).toContain('id="kiosk-request-k2-meta"');
 });
+
+test("while searching, an unreachable kiosk queue says so instead of disappearing", () => {
+  const html = renderToStaticMarkup(<Command shouldFilter={false}><Command.List>
+    <ShopifyProductResults
+      query="camera" state={{ kind: "ready", query: "camera", result: { shop: "sample.myshopify.com", products: [camera] } }}
+      onOpenProduct={vi.fn()} onHideProduct={vi.fn()} compareIds={new Set()} compareFull={false} compareMode={false}
+      onToggleCompareMode={vi.fn()} onToggleCompare={vi.fn()} onRetry={vi.fn()} onOpenSettings={vi.fn()}
+      kiosk={{ ...kiosk, requests: [], error: "Kiosk requests failed (503)." }}
+    />
+  </Command.List></Command>);
+  expect(html).toContain("Kiosk queue unavailable");
+});

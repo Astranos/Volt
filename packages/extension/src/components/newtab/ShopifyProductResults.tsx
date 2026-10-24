@@ -156,10 +156,13 @@ export function ShopifyProductResults({
   const kioskWaiting = kiosk?.requests.filter((request) => request.status === "waiting").length ?? 0;
 
   return <div className={keyboardNav ? "shopify-results is-keyboard-nav" : "shopify-results"}>
-    {kiosk && kiosk.requests.length > 0 && <>
+    {kiosk && (kiosk.requests.length > 0 || kiosk.error) && <>
       <button aria-expanded={kioskOpen} className="kiosk-requests-banner" onClick={() => setKioskOpen(!kioskOpen)} onKeyDown={keepKeys} type="button">
         <span aria-hidden="true" className={kioskWaiting > 0 ? "kiosk-requests-dot is-waiting" : "kiosk-requests-dot"} />
-        {kioskWaiting > 0
+        {/* An unreachable queue must not look the same as an empty one. */}
+        {kiosk.error && kiosk.requests.length === 0
+          ? "Kiosk queue unavailable"
+          : kioskWaiting > 0
           ? `${kioskWaiting} kiosk ${kioskWaiting === 1 ? "request" : "requests"} waiting`
           : `${kiosk.requests.length} kiosk ${kiosk.requests.length === 1 ? "request" : "requests"} found, not yet shown`}
         <span>{kioskOpen ? "Hide" : "Show"}</span>
