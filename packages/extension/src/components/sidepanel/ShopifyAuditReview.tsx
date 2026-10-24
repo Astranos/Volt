@@ -20,6 +20,8 @@ import { getShopifyAuditConnection, listShopifyAuditYesterday } from "../../shop
 import { openProductInPlace } from "../../shopify-audit/in-place-navigation";
 
 type Filter = "all" | "todo";
+/** A product ID, or a function choosing one from the latest review when the navigation runs. */
+type NavigationTarget = string | ((latest: Review) => string | null);
 
 const DAY_OPTIONS: Array<[ShopifyAuditDays, string]> = [[1, "Yesterday"], [2, "Last 2 days"], [3, "Last 3 days"]];
 
@@ -75,7 +77,11 @@ export default function ShopifyAuditReview({ onClose }: { onClose?: () => void }
 
   // `origin` is the generation of the action that led here; ending the audit or
   // starting a newer load since then cancels the navigation.
-  const navigate = useCallback(async (current: Review, productId: string, origin: number) => {
+  const navigate = useCallback(async (current: Review, target: NavigationTarget, origin: number) => {
+    // Next/Previous pick their product when they run, from the latest review,
+    // so several quick clicks step through the list instead of repeating one move.
+    const productId = typeof target === "function" ? target(reviewRef.current ?? current) : target;
+    if (!productId) return;
     const product = current.products.find((item) => item.id === productId);
     if (!product || !isShopifyAdminProductUrl(product.url)) return;
     // A click queued before the list reloaded (e.g. a range change) no longer applies.
@@ -142,8 +148,8 @@ export default function ShopifyAuditReview({ onClose }: { onClose?: () => void }
     }
   }, [save]);
 
-  const openProduct = useCallback((current: Review, productId: string, origin = generation.current) => {
-    const task = navigation.current.then(() => navigate(current, productId, origin));
+  const openProduct = useCallback((current: Review, target: NavigationTarget, origin = generation.current) => {
+    const task = navigation.current.then(() => navigate(current, target, origin));
     navigation.current = task.catch(() => undefined);
     return task;
   }, [navigate]);
@@ -174,7 +180,9 @@ export default function ShopifyAuditReview({ onClose }: { onClose?: () => void }
       // review tab only when there isn't a usable one already.
       if (request?.tabId != null && !await reviewTab(next)) next = { ...next, tabId: request.tabId };
       if (stale()) return;
-      await save(next);
+      // Keep marks made while this load waited on the tab lookup.
+      const latest = reviewRef.current;
+      await save(latest?.shop === next.shop ? { ...next, marks: { ...next.marks, ...latest.marks } } : next);
       // Show the selected product whenever the selection moved (a new day, or
       // a first load), so the highlighted product is the one on screen.
       const moved = previous?.date !== next.date || previous?.currentId !== next.currentId;
@@ -194,8 +202,18 @@ export default function ShopifyAuditReview({ onClose }: { onClose?: () => void }
       // The panel can see one request both on its first read and as a change.
       if (typeof request.at !== "number" || request.at <= handledRequestAt.current) return;
       handledRequestAt.current = request.at;
-      void chrome.storage.local.remove(SHOPIFY_AUDIT_REVIEW_REQUEST_KEY);
-      void load({ at: request.at, tabId: typeof request.tabId === "number" ? request.tabId : null });
+      const tabId = typeof request.tabId === "number" ? request.tabId : null;
+      void (async () => {
+        // With panels open in several windows, only the one in the window the
+        // Audit click came from handles it, so one click opens one tab.
+        if (tabId !== null) {
+          const [tab, panelWindow] = await Promise.all([chrome.tabs.get(tabId).catch(() => null), chrome.windows.getCurrent().catch(() => null)]);
+          if (tab && panelWindow && tab.windowId !== panelWindow.id) return;
+        }
+        if (!active) return;
+        void chrome.storage.local.remove(SHOPIFY_AUDIT_REVIEW_REQUEST_KEY);
+        void load({ at: request.at, tabId });
+      })();
     };
     void chrome.storage.local.get([SHOPIFY_AUDIT_REVIEW_KEY, SHOPIFY_AUDIT_REVIEW_REQUEST_KEY, SHOPIFY_AUDIT_DAYS_KEY]).then((stored) => {
       if (!active) return;
@@ -213,6 +231,11 @@ export default function ShopifyAuditReview({ onClose }: { onClose?: () => void }
       if (changes[SHOPIFY_AUDIT_REVIEW_KEY]) {
         // Another window's panel moved the review along.
         const next = parseShopifyAuditReview(changes[SHOPIFY_AUDIT_REVIEW_KEY].newValue);
+        // Follow the range another window's panel picked, so Reload keeps it.
+        if (next) {
+          daysRef.current = next.days;
+          setDays(next.days);
+        }
         if (!next && reviewRef.current) {
           // Ended elsewhere: cancel anything this panel still has in flight.
           generation.current++;
@@ -237,8 +260,7 @@ export default function ShopifyAuditReview({ onClose }: { onClose?: () => void }
   const next = () => {
     const current = reviewRef.current;
     if (!current?.currentId) return;
-    const following = nextShopifyAuditProduct(current, current.currentId);
-    if (following) void openProduct(current, following.id);
+    void openProduct(current, (latest) => latest.currentId ? nextShopifyAuditProduct(latest, latest.currentId)?.id ?? null : null);
   };
 
   const changeDays = (value: ShopifyAuditDays) => {
@@ -251,8 +273,10 @@ export default function ShopifyAuditReview({ onClose }: { onClose?: () => void }
   const previous = () => {
     const current = reviewRef.current;
     if (!current?.currentId) return;
-    const index = current.products.findIndex((product) => product.id === current.currentId);
-    if (index > 0) void openProduct(current, current.products[index - 1].id);
+    void openProduct(current, (latest) => {
+      const index = latest.products.findIndex((product) => product.id === latest.currentId);
+      return index > 0 ? latest.products[index - 1].id : null;
+    });
   };
 
   const finish = async () => {

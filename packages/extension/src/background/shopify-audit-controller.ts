@@ -144,6 +144,21 @@ export function createShopifyAuditController({
     }
   }
 
+  // Chrome refuses tab edits while a tab is being dragged; that's not the
+  // audit being closed, so wait it out briefly instead of giving up.
+  async function groupWithRetry(groupId: number, tabId: number) {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        await chromeApi.tabs.group({ groupId, tabIds: [tabId] });
+        return;
+      } catch (error) {
+        const busy = error instanceof Error && /cannot be edited right now/i.test(error.message);
+        if (!busy || attempt >= 10) throw error;
+        await wait(300);
+      }
+    }
+  }
+
   async function refillAfterClose(tabId: number, windowClosing: boolean) {
     const run = await loadRun();
     if (!run || !run.tabIds.includes(tabId)) return;
@@ -160,7 +175,7 @@ export function createShopifyAuditController({
       const product = queue.shift()!;
       const id = await openTab(product, run.windowId, false);
       try {
-        await chromeApi.tabs.group({ groupId: run.groupId, tabIds: [id] });
+        await groupWithRetry(run.groupId, id);
       } catch {
         await chromeApi.tabs.remove(id).catch(() => undefined);
         return clearRun();
