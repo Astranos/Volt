@@ -84,3 +84,18 @@ test("readRoute needs an exact heading match and the same marked page", () => {
   expect(readRoute("https://admin.shopify.com", "m2", "Blue Shirt Large")).toBeNull();
   expect(readRoute("https://example.com", "m1", "Blue Shirt Large")).toBeNull();
 });
+
+test("a target title ending in a status word isn't confused with the old heading's badge", () => {
+  fakeShopifyPage("https://admin.shopify.com", "/store/sample/products/1", ["Blue Shirt Active"]);
+  routeTo("https://admin.shopify.com", "/store/sample/products/1", "/store/sample/products/2", "m1");
+  expect(readRoute("https://admin.shopify.com", "m1", "Blue Shirt Draft")?.shown).toBe(false);
+  fakeShopifyPage("https://admin.shopify.com", "/store/sample/products/2", ["Blue Shirt Draft Active"]);
+  (window as unknown as Record<string, unknown>).__voltAuditNavigation = "m1";
+  expect(readRoute("https://admin.shopify.com", "m1", "Blue Shirt Draft")?.shown).toBe(true);
+});
+
+test("titles that differ only by a status word use a normal load", async () => {
+  const { scripting, calls } = page([]);
+  await expect(openProductInPlace(scripting, 7, from.url, { ...from, title: "Blue Shirt" }, { ...to, title: "Blue Shirt Active" }, noWait)).resolves.toBe("fallback");
+  expect(calls).toEqual([]);
+});

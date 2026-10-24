@@ -101,7 +101,7 @@ export type ShopifyAuditReview = {
 };
 export const SHOPIFY_AUDIT_REVIEW_KEY = "shopifyAuditReview";
 /** Enough for several busy days of listings without growing forever. */
-const MAX_VIEWED_MARKS = 2000;
+export const MAX_VIEWED_MARKS = 2000;
 /** Set by the new tab to ask the side panel to load yesterday's list. */
 export const SHOPIFY_AUDIT_REVIEW_REQUEST_KEY = "shopifyAuditReviewRequest";
 export type ShopifyAuditReviewRequest = { at: number; tabId: number | null };
@@ -120,7 +120,7 @@ export function parseShopifyAuditReview(value: unknown): ShopifyAuditReview | nu
   // Viewed marks are kept for the whole shop, not just the products in range,
   // so narrowing the range and widening it again doesn't forget progress.
   const marks: Record<string, ShopifyAuditMark> = {};
-  for (const [id, mark] of Object.entries(review.marks)) {
+  for (const [id, mark] of Object.entries(review.marks).slice(-MAX_VIEWED_MARKS)) {
     if (/^gid:\/\/shopify\/Product\/\d+$/.test(id) && mark === "done") marks[id] = mark;
   }
   return {
@@ -132,6 +132,12 @@ export function parseShopifyAuditReview(value: unknown): ShopifyAuditReview | nu
     currentId: typeof review.currentId === "string" && ids.has(review.currentId) ? review.currentId : null,
     tabId: typeof review.tabId === "number" && Number.isInteger(review.tabId) ? review.tabId : null,
   };
+}
+
+/** Marks a product viewed as the most recent entry, keeping the newest MAX_VIEWED_MARKS. */
+export function withViewed(marks: Record<string, ShopifyAuditMark>, productId: string): Record<string, ShopifyAuditMark> {
+  const rest = Object.entries(marks).filter(([id]) => id !== productId);
+  return Object.fromEntries([...rest, [productId, "done" as const]].slice(-MAX_VIEWED_MARKS));
 }
 
 /**
