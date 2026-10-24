@@ -99,7 +99,7 @@ export function createRequestHandlers({ getCatalog = catalogService.getCatalog, 
     try {
       const operation = async () => {
         const origin = request.headers.get('origin');
-        // Staff can also see the queue and mark Found/Shown from the Volt Chrome extension's
+        // Staff can also see the queue and update request statuses from the Volt Chrome extension's
         // new tab; creating requests stays limited to the store's own kiosk site.
         const staffExtension = origin !== null && VOLT_EXTENSION_ORIGINS.has(origin) && request.method !== 'POST';
         if (origin && origin !== new URL(request.url).origin && !staffExtension) throw failure(400, 'Use this store’s website to send requests.');
