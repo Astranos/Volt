@@ -247,3 +247,19 @@ test("a tab drag in progress doesn't cancel the audit; grouping is retried", asy
   assert.deepEqual(session.shopifyAuditTabsRun.tabIds, [2, 3, 4]);
   assert.equal(calls.created.length, 4);
 });
+
+test("a close handler still settling can't erase an audit started meanwhile", async () => {
+  const { request, close, closeGroup, openTabs, session } = setup([11, 12, 13, 14].map(product));
+  await request();
+  // Close the whole group; its handler waits before deciding the audit ended.
+  closeGroup();
+  openTabs.clear();
+  const closing = close(1);
+  // A new audit starts while that handler is still waiting.
+  const starting = request();
+  await closing;
+  const response = await starting;
+  assert.equal(response.success, true);
+  assert.equal(response.value.resumed, false);
+  assert.ok(session.shopifyAuditTabsRun, "the new audit's state survives");
+});

@@ -111,7 +111,16 @@ export function createShopifyAuditController({
     return tab.id;
   }
 
-  async function openYesterday(windowId: number | undefined) {
+  // Starting an audit goes through the same one-at-a-time chain as tab-close
+  // handling, so a late close handler can never clear or overwrite a new run.
+  function openYesterday(windowId: number | undefined) {
+    if (opening) return Promise.reject(new Error("A Shopify audit is already opening."));
+    const result = tabEvents.then(() => openYesterdayNow(windowId));
+    tabEvents = result.catch(() => undefined);
+    return result;
+  }
+
+  async function openYesterdayNow(windowId: number | undefined) {
     if (opening) throw new Error("A Shopify audit is already opening.");
     opening = true;
     try {
