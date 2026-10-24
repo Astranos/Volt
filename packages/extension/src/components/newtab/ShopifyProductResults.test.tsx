@@ -55,7 +55,7 @@ test("cards open Shopify until something is picked, then toggle compare with a s
   expect(browsing).toContain('aria-label="Open Canon EOS in Shopify"');
   expect(browsing).not.toContain("Compare mode");
   const comparing = render([camera.id]);
-  expect(comparing).toContain("Compare mode: click products to add or remove them.");
+  expect(comparing).toContain("Compare mode · click products to add or remove");
   expect(comparing).toMatch(/aria-label="Remove Canon EOS from compare"[^>]*class="shopify-product-card is-comparing is-compare-mode"/);
   expect(comparing).toContain('aria-label="Add Nikon Z to compare"');
   expect(comparing).toContain('class="shopify-product-open-button" data-tooltip="Open in Shopify"');

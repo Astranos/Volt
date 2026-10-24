@@ -105,6 +105,7 @@ export function ShopifyProductResults({
   return <div className="shopify-results">
     <div className="shopify-results-heading">
       <span>{filtered ? `${shown.length} of ${products.length}` : products.length} {products.length === 1 ? "product" : "products"}</span>
+      {compareMode && <span className="shopify-compare-hint">Compare mode · click products to add or remove</span>}
       {products.length > 0 && <div className="shopify-results-filters" onKeyDown={keepKeys}>
         <button
           aria-pressed={active.inStockOnly}
@@ -133,7 +134,6 @@ export function ShopifyProductResults({
         </select>
       </div>}
     </div>
-    {compareMode && <p className="shopify-compare-hint">Compare mode: click products to add or remove them.</p>}
     {products.length === 0 ? <div className="shopify-search-message">
       <PackageSearch aria-hidden="true" size={24} />
       <strong>No matching products</strong>

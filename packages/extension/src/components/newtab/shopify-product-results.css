@@ -508,11 +508,17 @@
   color: var(--nt-accent);
 }
 
+/* Sits between the count and the filters so results don't shift down. */
 .shopify-compare-hint {
-  margin: -4px 0 10px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
   color: var(--nt-accent);
   font-size: 12px;
   font-weight: 600;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Compare mode: the whole card toggles it; a separate button still opens Shopify. */
