@@ -216,24 +216,24 @@ export function CompareColumn({
         )}
       </section>
 
-      {hasNotes && (
-        <section className="compare-cell compare-section compare-listing" aria-label="Item condition">
-          <h3 className="compare-section-label">Condition notes</h3>
-          {conditionNotes.length
-            ? <div className="compare-notes">{conditionNotes.map((block, position) => <ListingBlock block={block} key={position} />)}</div>
-            : <p className="compare-muted">No condition notes.</p>}
-        </section>
-      )}
-
-      {specs.length > 0 && <h3 className="compare-cell compare-section-label compare-specs-heading">Specifications</h3>}
-      {specs.map((row) => <AttributeRow index={index} key={row.label} row={row} />)}
-
       {hasDetails && (
         <section className="compare-cell compare-section compare-listing" aria-label="Listing details">
           <h3 className="compare-section-label">Listing details</h3>
           {otherDetails.length
             ? otherDetails.map((block, position) => <ListingBlock block={block} key={position} />)
             : <p className="compare-muted">No additional details provided.</p>}
+        </section>
+      )}
+
+      {specs.length > 0 && <h3 className="compare-cell compare-section-label compare-specs-heading">Specifications</h3>}
+      {specs.map((row) => <AttributeRow index={index} key={row.label} row={row} />)}
+
+      {hasNotes && (
+        <section className="compare-cell compare-section compare-listing" aria-label="Item condition">
+          <h3 className="compare-section-label">Condition notes</h3>
+          {conditionNotes.length
+            ? <div className="compare-notes">{conditionNotes.map((block, position) => <ListingBlock block={block} key={position} />)}</div>
+            : <p className="compare-muted">No condition notes.</p>}
         </section>
       )}
     </article>

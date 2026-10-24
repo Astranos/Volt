@@ -7,6 +7,7 @@ import { defineScenario } from "../scenario";
 export default defineScenario({
   description: "Compare page for two products (?ids=101,102; ?photo=1 enlarges the first photo)",
   viewport: { width: 1280, height: 900 },
+  fullPage: true,
   chrome: { messages: { shopifyAuditProductDetails: () => ({ success: true, value: compareDetails }) } },
   render: () => <ShopifyComparePage />,
   act: async (params) => {
