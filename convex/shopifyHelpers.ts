@@ -67,8 +67,8 @@ export function auditRange(startUtc: string, endUtc: string, date: string) {
     || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(Date.parse(`${date}T00:00:00Z`))
     || new Date(`${date}T00:00:00Z`).toISOString().slice(0, 10) !== date
     || Math.abs(start - Date.parse(`${date}T00:00:00Z`)) > 14 * 3600000
-    // One to three whole local days (a day is 23-25h across daylight saving changes).
-    || end - start < 23 * 3600000 || end - start > 3 * 24 * 3600000 + 3600000
+    // One to three whole local days: within an hour (daylight saving) of 24, 48, or 72 hours.
+    || ![1, 2, 3].some(days => Math.abs(end - start - days * 24 * 3600000) <= 3600000)
     || end < now - 25 * 3600000 || end > now + 60000) {
     throw new ConvexError("Invalid audit date range.");
   }

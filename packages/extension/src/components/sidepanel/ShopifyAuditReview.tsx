@@ -77,6 +77,8 @@ export default function ShopifyAuditReview({ onClose }: { onClose?: () => void }
   const navigate = useCallback(async (current: Review, productId: string, origin: number) => {
     const product = current.products.find((item) => item.id === productId);
     if (!product || !isShopifyAdminProductUrl(product.url)) return;
+    // A click queued before the list reloaded (e.g. a range change) no longer applies.
+    if (reviewRef.current && !reviewRef.current.products.some((item) => item.id === productId)) return;
     const stale = () => origin !== generation.current;
     if (stale()) return;
     setError(null);
@@ -303,13 +305,13 @@ export default function ShopifyAuditReview({ onClose }: { onClose?: () => void }
                   {viewedCount} of {products.length} viewed · {formatRange(review.date, review.days)}
                 </p>
               </div>
-              <button aria-label="Previous product" className="audit-button flex h-8 w-8 shrink-0 items-center justify-center disabled:opacity-40" disabled={currentIndex <= 0} onClick={previous} title="Previous product" type="button">
+              <button aria-label="Previous product" className="audit-button flex h-8 w-8 shrink-0 items-center justify-center disabled:opacity-40" disabled={busy || currentIndex <= 0} onClick={previous} title="Previous product" type="button">
                 <ArrowLeft className="h-3.5 w-3.5" />
               </button>
               {allViewed ? (
                 <button className="audit-button-primary h-8 shrink-0 px-3 text-xs font-semibold" onClick={() => void finish()} title="All products viewed: clear this audit" type="button">Finish</button>
               ) : (
-                <button className="audit-button-primary flex h-8 shrink-0 items-center gap-1 px-3 text-xs font-semibold disabled:opacity-40" disabled={!review.currentId} onClick={next} title="Next product you haven't viewed" type="button">
+                <button className="audit-button-primary flex h-8 shrink-0 items-center gap-1 px-3 text-xs font-semibold disabled:opacity-40" disabled={busy || !review.currentId} onClick={next} title="Next product you haven't viewed" type="button">
                   Next <ArrowRight className="h-3.5 w-3.5" />
                 </button>
               )}
@@ -370,7 +372,7 @@ export default function ShopifyAuditReview({ onClose }: { onClose?: () => void }
                 data-current={isCurrent}
                 key={product.id}
               >
-                <button className="flex w-full items-center gap-2 px-2.5 py-2 text-left" onClick={() => void openProduct(review, product.id)} title={product.title} type="button">
+                <button className="flex w-full items-center gap-2 px-2.5 py-2 text-left disabled:opacity-60" disabled={busy} onClick={() => void openProduct(review, product.id)} title={product.title} type="button">
                   <span className={cn("min-w-0 flex-1 truncate text-[13px] font-medium", viewed && !isCurrent && "text-stone-400 dark:text-stone-500")}>
                     {product.title || "Untitled product"}
                   </span>
