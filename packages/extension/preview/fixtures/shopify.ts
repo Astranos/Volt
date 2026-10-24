@@ -63,3 +63,20 @@ export const auditProducts = auditTitles.map(([title, status], index) => ({
   status,
   url: `https://admin.shopify.com/store/volt-demo/products/${8800 + index}`,
 }));
+
+const details = (id: number, title: string, price: string, condition: string, images: string[], cosmetic: string) => ({
+  id: `gid://shopify/Product/${id}`, title, status: "ACTIVE", totalInventory: 1,
+  url: `https://admin.shopify.com/store/volt-demo/products/${id}`, images,
+  currencyCode: "USD", minPrice: price, maxPrice: price, condition, vendor: "PayMore", productType: "Cell Phones",
+  descriptionHtml: `<h3>Cosmetic condition:</h3><p>${cosmetic}</p><h3>Functionality condition:</h3><p>Tested and fully working. Battery health 88%. Factory reset and ready to activate.</p><h3>Items included in this sale:</h3><ul><li>${title}</li><li>USB-C cable</li></ul>`,
+  variants: [{ id: `gid://shopify/ProductVariant/${id}`, title: "Default Title", sku: `IP-${id}`, price }],
+});
+
+/** Product details for the compare page. */
+export const compareDetails = {
+  shop,
+  products: [
+    details(101, "Apple iPhone 13 128GB Midnight — Unlocked", "389.00", "Used - Excellent", [productImages.iphone13, productImages.iphone13Mini], "Light scratches on the frame. Screen is clean with no marks. See pictures for details."),
+    details(102, "Apple iPhone 13 Pro 256GB Graphite — Unlocked", "529.00", "Used - Good", [productImages.iphone13Pro, productImages.iphone13ProMax], "Visible scuffs on the back glass and corners. Screen has minor wear. See pictures for details."),
+  ],
+};

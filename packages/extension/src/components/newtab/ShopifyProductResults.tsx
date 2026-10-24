@@ -1,7 +1,18 @@
+import { useState } from "react";
 import { Command } from "cmdk";
 import { ArrowUpRight, Boxes, Columns3, EyeOff, PackageSearch, RefreshCw, Store, X } from "lucide-react";
 import type { ShopifySearchProduct, ShopifySearchResult } from "../../shopify-audit/client";
+import {
+  applyShopifyResultFilters,
+  conditionOptions,
+  DEFAULT_SHOPIFY_RESULT_FILTERS,
+  type ShopifyResultFilters,
+  type ShopifyResultSort,
+} from "./shopify-result-filters";
 import "./shopify-product-results.css";
+
+// cmdk moves its selection on arrow keys; keep those inside the filter controls.
+const keepKeys = (event: React.KeyboardEvent) => event.stopPropagation();
 
 export type ShopifyProductSearchState =
   | { kind: "idle" }
@@ -43,6 +54,11 @@ export function ShopifyProductResults({
   onRetry: () => void;
   onOpenSettings: () => void;
 }) {
+  // Kept while mounted, so filters survive a new search.
+  const [filters, setFilters] = useState<ShopifyResultFilters>(DEFAULT_SHOPIFY_RESULT_FILTERS);
+  // Once something is picked to compare, clicking a card adds or removes it.
+  const compareMode = compareIds.size > 0;
+
   if (query.trim().length < 2) {
     return <div className="shopify-search-intro">
       <span className="shopify-search-intro-icon"><Store aria-hidden="true" size={22} /></span>
@@ -72,27 +88,75 @@ export function ShopifyProductResults({
   }
 
   const { products, shop } = state.result;
-  const inStockCount = products.filter((product) => product.totalInventory > 0).length;
+  const conditions = conditionOptions(products);
+  // A condition from an earlier search that isn't in these results would hide everything.
+  const active = { ...filters, condition: filters.condition && conditions.includes(filters.condition) ? filters.condition : null };
+  const shown = applyShopifyResultFilters(products, active);
+  const filtered = active.inStockOnly || active.condition !== null;
   const fullSearchUrl = `https://${shop}/admin/products?query=${encodeURIComponent(query)}`;
 
   return <div className="shopify-results">
     <div className="shopify-results-heading">
-      <span>{products.length} {products.length === 1 ? "product" : "products"}</span>
-      <span className="shopify-results-stock-first">{inStockCount} in stock · shown first</span>
+      <span>{filtered ? `${shown.length} of ${products.length}` : products.length} {products.length === 1 ? "product" : "products"}</span>
+      {products.length > 0 && <div className="shopify-results-filters" onKeyDown={keepKeys}>
+        <button
+          aria-pressed={active.inStockOnly}
+          className="shopify-filter-chip"
+          onClick={() => setFilters({ ...active, inStockOnly: !active.inStockOnly })}
+          type="button"
+        >In stock</button>
+        {conditions.length > 0 && <select
+          aria-label="Condition"
+          className="shopify-filter-select"
+          onChange={(event) => setFilters({ ...active, condition: event.target.value || null })}
+          value={active.condition ?? ""}
+        >
+          <option value="">Any condition</option>
+          {conditions.map((condition) => <option key={condition} value={condition}>{condition}</option>)}
+        </select>}
+        <select
+          aria-label="Sort"
+          className="shopify-filter-select"
+          onChange={(event) => setFilters({ ...active, sort: event.target.value as ShopifyResultSort })}
+          value={active.sort}
+        >
+          <option value="relevance">In stock first</option>
+          <option value="price-asc">Price: low to high</option>
+          <option value="price-desc">Price: high to low</option>
+        </select>
+      </div>}
     </div>
+    {compareMode && <p className="shopify-compare-hint">Compare mode: click products to add or remove them.</p>}
     {products.length === 0 ? <div className="shopify-search-message">
       <PackageSearch aria-hidden="true" size={24} />
       <strong>No matching products</strong>
       <span>Try a different title, SKU, or barcode.</span>
+    </div> : shown.length === 0 ? <div className="shopify-search-message">
+      <PackageSearch aria-hidden="true" size={24} />
+      <strong>No products match these filters</strong>
+      <div className="shopify-search-message-actions">
+        <button onClick={() => setFilters(DEFAULT_SHOPIFY_RESULT_FILTERS)} type="button">Clear filters</button>
+      </div>
     </div> : <div className="shopify-results-grid">
-      {products.map((product) => {
+      {shown.map((product) => {
         const price = formatPrice(product);
         const comparing = compareIds.has(product.id);
+        const canToggle = comparing || !compareFull;
         return <Command.Item
-          aria-label={`Open ${product.title} in Shopify`}
-          className={comparing ? "shopify-product-card is-comparing" : "shopify-product-card"}
+          aria-label={compareMode
+            ? comparing ? `Remove ${product.title} from compare` : canToggle ? `Add ${product.title} to compare` : `${product.title} (compare is full)`
+            : `Open ${product.title} in Shopify`}
+          className={[
+            "shopify-product-card",
+            comparing && "is-comparing",
+            compareMode && "is-compare-mode",
+            compareMode && !canToggle && "is-compare-full",
+          ].filter(Boolean).join(" ")}
           key={product.id}
-          onSelect={() => onOpenProduct(product.url)}
+          onSelect={() => {
+            if (!compareMode) onOpenProduct(product.url);
+            else if (canToggle) onToggleCompare(product);
+          }}
           value={`shopify-product-${product.id}`}
         >
           <span className="shopify-product-image">
@@ -118,10 +182,10 @@ export function ShopifyProductResults({
               aria-label={comparing ? `Remove ${product.title} from compare` : `Add ${product.title} to compare`}
               aria-pressed={comparing}
               className="shopify-product-compare"
+              data-tooltip={comparing ? "Remove from compare" : compareFull ? "Compare is full (8 max)" : "Add to compare"}
               disabled={!comparing && compareFull}
               onClick={(event) => { event.stopPropagation(); onToggleCompare(product); }}
               onKeyDown={(event) => { if (event.key === "Enter") event.stopPropagation(); }}
-              title={comparing ? "Remove from compare" : compareFull ? "Compare is full" : "Add to compare"}
               type="button"
             >
               <Columns3 aria-hidden="true" size={14} />
@@ -129,14 +193,23 @@ export function ShopifyProductResults({
             <button
               aria-label={`Hide ${product.title} from results`}
               className="shopify-product-hide"
+              data-tooltip="Hide from search results"
               onClick={(event) => { event.stopPropagation(); onHideProduct(product); }}
               onKeyDown={(event) => { if (event.key === "Enter") event.stopPropagation(); }}
-              title="Hide from results"
               type="button"
             >
               <EyeOff aria-hidden="true" size={14} />
             </button>
-            <ArrowUpRight aria-hidden="true" className="shopify-product-open" size={16} />
+            {compareMode ? <button
+              aria-label={`Open ${product.title} in Shopify`}
+              className="shopify-product-open-button"
+              data-tooltip="Open in Shopify"
+              onClick={(event) => { event.stopPropagation(); onOpenProduct(product.url); }}
+              onKeyDown={(event) => { if (event.key === "Enter") event.stopPropagation(); }}
+              type="button"
+            >
+              <ArrowUpRight aria-hidden="true" size={16} />
+            </button> : <ArrowUpRight aria-hidden="true" className="shopify-product-open" size={16} />}
           </span>
         </Command.Item>;
       })}
@@ -171,7 +244,7 @@ export function ShopifyCompareTray({
       </li>)}
     </ul>
     <div className="shopify-compare-tray-actions">
-      <button className="shopify-compare-tray-clear" onClick={onClear} type="button">Clear</button>
+      <button className="shopify-compare-tray-clear" onClick={onClear} title="Clear and leave compare mode" type="button">Clear</button>
       <button
         className="shopify-compare-tray-open"
         disabled={products.length < 2}
