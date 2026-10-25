@@ -31,6 +31,7 @@ export default defineSchema({
     refreshLease: v.optional(v.object({ nonce: v.string(), expiresAt: v.number() })),
   })
     .index("by_ownerTokenIdentifier", ["ownerTokenIdentifier"])
+    .index("by_ownerTokenIdentifier_and_shop", ["ownerTokenIdentifier", "shop"])
     .index("by_shop", ["shop"]),
   shopifyHiddenProducts: defineTable({
     ownerTokenIdentifier: v.string(),

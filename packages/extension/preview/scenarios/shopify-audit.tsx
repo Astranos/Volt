@@ -1,7 +1,7 @@
 import "@/entrypoints/sidepanel/sidepanel.css";
 import ShopifyAuditReview from "@/src/components/sidepanel/ShopifyAuditReview";
 import { SHOPIFY_AUDIT_DAYS_KEY, SHOPIFY_AUDIT_REVIEW_KEY } from "@/src/domain/shopify-audit";
-import { auditProducts, shop } from "../fixtures/shopify";
+import { auditProducts, shop, shopifyStatus } from "../fixtures/shopify";
 import { defineScenario } from "../scenario";
 
 const date = "2026-10-17";
@@ -24,7 +24,7 @@ export default defineScenario({
   viewport: { width: 380, height: 720 },
   chrome: {
     messages: {
-      shopifyAuditStatus: () => ({ success: true, value: { shop } }),
+      shopifyAuditStatus: shopifyStatus,
       shopifyAuditListYesterday: () => ({ success: true, value: { shop, date, products: auditProducts } }),
     },
   },

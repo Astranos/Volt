@@ -1,6 +1,6 @@
 import "@/entrypoints/options/options.css";
 import { ShopifyAuditSettings } from "@/src/components/settings/ShopifyAuditSettings";
-import { shop } from "../fixtures/shopify";
+import { shopifyStatus } from "../fixtures/shopify";
 import { defineScenario } from "../scenario";
 
 // ?mode=tabs shows the tab group option selected.
@@ -9,7 +9,7 @@ export default defineScenario({
   viewport: { width: 900, height: 560 },
   chrome: {
     messages: {
-      shopifyAuditStatus: () => ({ success: true, value: { shop } }),
+      shopifyAuditStatus: shopifyStatus,
       shopifyAuditHiddenProducts: () => ({ success: true, value: [] }),
     },
     apis: { "tabs.query": [] },

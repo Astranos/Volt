@@ -171,6 +171,7 @@ export function getMessageAction(value: unknown): string | null {
 
 const SHOPIFY_AUDIT_OFFSCREEN_ACTIONS = new Set([
   "shopifyAuditOffscreenStatus",
+  "shopifyAuditOffscreenStores",
   "shopifyAuditOffscreenConnect",
   "shopifyAuditOffscreenDisconnect",
   "shopifyAuditOffscreenListYesterday",

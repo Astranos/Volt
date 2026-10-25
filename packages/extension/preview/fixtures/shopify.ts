@@ -10,6 +10,9 @@ export const productImages = {
 };
 
 export const shop = "volt-demo.myshopify.com";
+/** A franchise with three stores connected to one Volt account. */
+export const connectedShops = [shop, "volt-demo-eastside.myshopify.com", "volt-demo-westside.myshopify.com"];
+export const shopifyStatus = () => ({ success: true, value: { shop, shops: connectedShops } });
 
 const product = (id: number, title: string, totalInventory: number, price: string, sku: string, condition: string, imageUrl: string) => ({
   id: `gid://shopify/Product/${id}`,
@@ -37,7 +40,7 @@ export const shopifySearchResult = {
 
 /** chrome.runtime message handlers for a connected store. */
 export const shopifyMessages = {
-  shopifyAuditStatus: () => ({ success: true, value: { shop } }),
+  shopifyAuditStatus: shopifyStatus,
   shopifyAuditSearchProducts: () => ({ success: true, value: shopifySearchResult }),
 };
 

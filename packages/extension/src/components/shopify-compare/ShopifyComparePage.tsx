@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { ArrowUpRight, Columns3, RefreshCw } from "lucide-react";
 import { getShopifyProductDetails, type ShopifyProductDetails } from "../../shopify-audit/client";
-import { compareProductIds, shopifyComparePath } from "../../shopify-compare/compare-url";
+import { compareProductIds, compareShop, shopifyComparePath } from "../../shopify-compare/compare-url";
 import { buildCompareModel, compareRowCount } from "../../shopify-compare/compare-model";
 import { parseListingHtml } from "../../shopify-compare/listing";
 import { CompareColumn } from "./CompareColumn";
@@ -15,6 +15,7 @@ type LoadState =
 export function ShopifyComparePage() {
   const [ids, setIds] = useState(() => compareProductIds(window.location.search));
   const [requestedIds] = useState(ids);
+  const [shop] = useState(() => compareShop(window.location.search));
   const [state, setState] = useState<LoadState>({ kind: "loading" });
   const [retry, setRetry] = useState(0);
   const [onlyDifferences, setOnlyDifferences] = useState(false);
@@ -27,13 +28,13 @@ export function ShopifyComparePage() {
     if (!requestedIds.length) return;
     let canceled = false;
     setState({ kind: "loading" });
-    getShopifyProductDetails(requestedIds)
+    getShopifyProductDetails(requestedIds, shop)
       .then((result) => { if (!canceled) setState({ kind: "ready", products: result.products }); })
       .catch((cause: unknown) => {
         if (!canceled) setState({ kind: "error", message: cause instanceof Error ? cause.message : "Could not load Shopify products." });
       });
     return () => { canceled = true; };
-  }, [requestedIds, retry]);
+  }, [requestedIds, shop, retry]);
 
   const products = useMemo(
     () => (state.kind === "ready" ? state.products.filter((product) => ids.includes(product.id)) : []),
@@ -53,7 +54,7 @@ export function ShopifyComparePage() {
   const remove = (id: string) => {
     const next = ids.filter((value) => value !== id);
     setIds(next);
-    window.history.replaceState(null, "", shopifyComparePath(next));
+    window.history.replaceState(null, "", shopifyComparePath(next, shop));
   };
 
   const columnCount = state.kind === "ready" ? products.length : requestedIds.length;

@@ -1,11 +1,17 @@
-import { MAX_COMPARE_PRODUCTS } from "../domain/shopify-audit";
+import { MAX_COMPARE_PRODUCTS, normalizeShopifyShopInput } from "../domain/shopify-audit";
 
 const PRODUCT_GID = /^gid:\/\/shopify\/Product\/(\d+)$/;
 
-/** Compare page path for the picked products, e.g. `/shopify-compare.html?ids=12,34`. */
-export function shopifyComparePath(productIds: readonly string[]): `/shopify-compare.html?ids=${string}` {
+/** Compare page path for the picked products, e.g. `/shopify-compare.html?ids=12,34&shop=store.myshopify.com`. */
+export function shopifyComparePath(productIds: readonly string[], shop?: string | null): `/shopify-compare.html?ids=${string}` {
   const ids = productIds.flatMap((id) => PRODUCT_GID.exec(id)?.[1] ?? []);
-  return `/shopify-compare.html?ids=${ids.join(",")}`;
+  return `/shopify-compare.html?ids=${ids.join(",")}${shop ? `&shop=${encodeURIComponent(shop)}` : ""}`;
+}
+
+/** The store the compared products belong to; absent on links from before multiple stores. */
+export function compareShop(search: string): string | undefined {
+  const shop = new URLSearchParams(search).get("shop");
+  return (shop && normalizeShopifyShopInput(shop)) || undefined;
 }
 
 /** Product GIDs from the compare page's `ids` param, deduped and capped. */

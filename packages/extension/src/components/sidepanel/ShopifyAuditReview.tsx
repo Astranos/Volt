@@ -12,12 +12,14 @@ import {
   SHOPIFY_AUDIT_DAYS_KEY,
   SHOPIFY_AUDIT_REVIEW_KEY,
   SHOPIFY_AUDIT_REVIEW_REQUEST_KEY,
+  shopifyShopLabel,
   type ShopifyAuditDays,
   type ShopifyAuditReview as Review,
   type ShopifyAuditReviewRequest,
 } from "../../domain/shopify-audit";
 import { getShopifyAuditConnection, listShopifyAuditYesterday } from "../../shopify-audit/client";
 import { openProductInPlace } from "../../shopify-audit/in-place-navigation";
+import { useShopifyStores } from "../../shopify-audit/use-shopify-stores";
 
 type Filter = "all" | "todo";
 /** A product ID, or a function choosing one from the latest review when the navigation runs. */
@@ -57,6 +59,7 @@ export default function ShopifyAuditReview({ onClose }: { onClose?: () => void }
   const [needsConnection, setNeedsConnection] = useState(false);
   const [filter, setFilter] = useState<Filter>("all");
   const [days, setDays] = useState<ShopifyAuditDays>(1);
+  const stores = useShopifyStores();
   const daysRef = useRef<ShopifyAuditDays>(1);
   const reviewRef = useRef<Review | null>(null);
   const handledRequestAt = useRef(0);
@@ -161,12 +164,13 @@ export default function ShopifyAuditReview({ onClose }: { onClose?: () => void }
     setError(null);
     setNeedsConnection(false);
     try {
-      if (!await getShopifyAuditConnection()) {
+      const connection = await getShopifyAuditConnection();
+      if (!connection) {
         setNeedsConnection(true);
         throw new Error("Connect your Shopify store in Volt settings first.");
       }
       const range = daysRef.current;
-      const result = await listShopifyAuditYesterday(range).catch((cause: unknown) => {
+      const result = await listShopifyAuditYesterday(range, connection.shop).catch((cause: unknown) => {
         // Production must be updated before it accepts more than one day.
         if (range > 1 && cause instanceof Error && /date range/i.test(cause.message)) {
           throw new Error("Volt's server doesn't support multiple days yet. Use Yesterday for now.");
@@ -293,13 +297,27 @@ export default function ShopifyAuditReview({ onClose }: { onClose?: () => void }
   const allViewed = products.length > 0 && viewedCount === products.length;
   const visible = products.filter((product) => filter === "all" || !review?.marks[product.id]);
   const currentIndex = products.findIndex((product) => product.id === review?.currentId);
+  const multiStore = (stores.connection?.shops.length ?? 0) > 1;
   const iconButton = "audit-icon-button p-1.5 text-stone-500 hover:text-stone-900 disabled:opacity-50 dark:text-stone-400 dark:hover:text-stone-50";
 
   return (
     <div className="flex h-full min-h-0 flex-col text-stone-900 dark:text-stone-50">
       <div className="space-y-2.5 border-b border-stone-900/10 px-4 py-3 dark:border-white/10">
         <div className="flex items-center gap-2">
-          <h2 className="min-w-0 flex-1 truncate text-sm font-bold" title={review?.shop}>Shopify audit</h2>
+          {/* With several stores, the store picker stands in for the title. */}
+          <h2 className={multiStore ? "sr-only" : "min-w-0 flex-1 truncate text-sm font-bold"} title={review?.shop}>Shopify audit</h2>
+          {stores.connection && multiStore && (
+            <select
+              aria-label="Store to audit"
+              className="min-w-0 flex-1 truncate rounded-md border border-stone-900/15 bg-transparent px-1.5 py-1 text-xs text-stone-700 disabled:opacity-50 dark:border-white/15 dark:bg-stone-900 dark:text-stone-200"
+              disabled={busy}
+              onChange={(event) => { void stores.select(event.target.value).then(() => load(null), () => undefined); }}
+              title="Audit another connected store"
+              value={review?.shop && stores.connection.shops.includes(review.shop) ? review.shop : stores.connection.shop}
+            >
+              {stores.connection.shops.map((shop) => <option key={shop} value={shop}>{shopifyShopLabel(shop)}</option>)}
+            </select>
+          )}
           <select
             aria-label="Products created"
             className="rounded-md border border-stone-900/15 bg-transparent px-1.5 py-1 text-xs text-stone-700 disabled:opacity-50 dark:border-white/15 dark:bg-stone-900 dark:text-stone-200"
