@@ -252,10 +252,8 @@ function EntryList({ entries, query, onOpen }: { entries: HandbookEntry[]; query
                         {entry.title}
                         {entry.pinned ? <Pin className="handbook-pin-mark" aria-label="Pinned" /> : null}
                       </span>
-                      <span className="handbook-row-label">
-                        {rowSummary(entry)}
-                        {entry.note ? ` · ${entry.note}` : ""}
-                      </span>
+                      <span className="handbook-row-label">{rowSummary(entry)}</span>
+                      {entry.note ? <span className="handbook-row-note">{entry.note}</span> : null}
                     </span>
                   </button>
                   <span className="handbook-row-actions handbook-reveal-on-hover">

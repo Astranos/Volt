@@ -221,10 +221,11 @@ function EntryRow({ entry, onOpen }: { entry: HandbookEntry; onOpen: (id: Handbo
       <EntryIcon entry={entry} />
       <span className="handbook-row-text">
         <span className="handbook-row-label">
-          <span className="handbook-row-label-text">{entry.note ? `${entry.title} · ${entry.note}` : entry.title}</span>
+          <span className="handbook-row-label-text">{entry.title}</span>
           {entry.body ? <NotebookText className="handbook-notes-mark" aria-label="Has notes" /> : null}
         </span>
         <span className="handbook-row-value is-wrapping">{value}</span>
+        {entry.note ? <span className="handbook-row-note">{entry.note}</span> : null}
       </span>
     </button>
   );

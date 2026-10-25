@@ -74,6 +74,6 @@ describe("page markdown", () => {
     expect(parseHandbookMarkdown("[x](javascript:alert(1))")).toEqual([
       { type: "paragraph", lines: [[{ type: "text", text: "[x](javascript:alert(1))" }]] },
     ]);
-    expect(markdownPlainText("# Title\n- **one**\n- `two`")).toBe("Title one two");
+    expect(markdownPlainText("# Title\n- **one**\n- `two`")).toBe("Title · one · two");
   });
 });

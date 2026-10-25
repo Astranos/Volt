@@ -23,7 +23,7 @@ import { cn } from "../../lib/utils";
 import "./handbook.css";
 
 const COPIED_MS = 1500;
-const REVEAL_MS = 30_000;
+const REVEAL_MS = 5 * 60_000;
 
 export function CopyButton({
   getText,

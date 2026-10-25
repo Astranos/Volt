@@ -538,6 +538,15 @@
   width: 12px;
 }
 
+/* A short note gets its own line and wraps rather than being cut off. */
+.handbook-row-note {
+  color: rgba(214, 211, 209, 0.72);
+  font-size: 11.5px;
+  line-height: 1.35;
+  margin-top: 1px;
+  overflow-wrap: anywhere;
+}
+
 .handbook-row-value.is-wrapping {
   overflow-wrap: anywhere;
   white-space: normal;
@@ -632,6 +641,7 @@ a.handbook-button {
 @media (prefers-color-scheme: light) {
   .handbook-row-open:hover .handbook-row-label-text,
   .handbook-row-open:focus-visible .handbook-row-label-text { color: #15803d; }
+  .handbook-row-note { color: #78716c; }
   .handbook-entry-note,
   .handbook-notes,
   .handbook-md { color: #44403c; }
