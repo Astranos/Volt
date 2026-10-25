@@ -96,7 +96,9 @@ export function draftFor(entry: HandbookEntry | null, defaults: Partial<Handbook
 function switchKind(draft: HandbookDraft, kind: Kind): HandbookDraft {
   if (draft.kind !== "value" || kind !== "page") return { ...draft, kind };
   const value = (draft.valueFormat === "address" ? formatAddress(draft.address) : draft.value).trim();
-  const body = value && !draft.body.includes(value) ? [value, draft.body].filter(Boolean).join("\n\n") : draft.body;
+  // Skip it only if a line of the notes is already exactly the value.
+  const alreadyThere = draft.body.split("\n").some((line) => line.trim() === value);
+  const body = value && !alreadyThere ? [value, draft.body].filter(Boolean).join("\n\n") : draft.body;
   return { ...draft, kind, body };
 }
 
@@ -460,7 +462,8 @@ type Wrap = { before: string; after?: string; placeholder: string; line?: boolea
 const TOOLS: Array<{ label: string; icon: ReactNode; wrap: Wrap }> = [
   { label: "Heading", icon: <Heading2 />, wrap: { before: "## ", placeholder: "Heading", line: true } },
   { label: "Bold", icon: <Bold />, wrap: { before: "**", after: "**", placeholder: "bold text" } },
-  { label: "Italic", icon: <Italic />, wrap: { before: "_", after: "_", placeholder: "italic text" } },
+  // Asterisks, not underscores, so italicizing words like sku_code_123 works.
+  { label: "Italic", icon: <Italic />, wrap: { before: "*", after: "*", placeholder: "italic text" } },
   { label: "Bulleted list", icon: <List />, wrap: { before: "- ", placeholder: "List item", line: true } },
   { label: "Numbered list", icon: <ListOrdered />, wrap: { before: "1. ", placeholder: "First step", line: true } },
   { label: "Checklist", icon: <ListChecks />, wrap: { before: "- [ ] ", placeholder: "To do", line: true } },

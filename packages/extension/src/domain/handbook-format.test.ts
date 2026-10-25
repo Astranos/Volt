@@ -130,6 +130,11 @@ describe("page markdown", () => {
       ]],
     });
     expect(markdownPlainText("_real italics_ and *these*")).toBe("real italics and these");
+    // The toolbar's Italic wraps in asterisks, which works around underscores inside words.
+    expect(parseHandbookMarkdown("*sku_code_123*")[0]).toEqual({
+      type: "paragraph",
+      lines: [[{ type: "italic", children: [{ type: "text", text: "sku_code_123" }] }]],
+    });
   });
 
   test("parses pages full of unmatched markers quickly", () => {
