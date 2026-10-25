@@ -8,6 +8,18 @@ export const RELEASE_NOTES_VERSION = "1.0.69";
 
 export const RELEASE_NOTES = [
   {
+    title: "Store handbook",
+    description: "Keep your store's phone, address, logins, and setup guides in one place. Open it from the side panel, or search it from the new tab. Logins stay hidden until you reveal them.",
+  },
+  {
+    title: "Connect more than one Shopify store",
+    description: "Link up to five stores to one Volt account, then switch stores in new tab search, the audit, and settings.",
+  },
+  {
+    title: "Faster scanner results",
+    description: "The scanner side panel loads your cloud results faster.",
+  },
+  {
     title: "Shopify products in your new tab",
     description: "Search your connected store without leaving Volt. In-stock products appear first, with photos, prices, SKU, and condition when available.",
   },
