@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { addressLines, displayValue, formatAddress, formatPhoneInput, parseAddress, valueFormatOf } from "./handbook-format";
+import { addressLines, displayValue, formatAddress, formatPhoneInput, formatPhoneTyping, parseAddress, recognizeAddress, valueFormatOf } from "./handbook-format";
 import { markdownPlainText, parseHandbookMarkdown } from "./handbook-markdown";
 
 describe("phone formatting", () => {
@@ -16,6 +16,21 @@ describe("phone formatting", () => {
     expect(formatPhoneInput("+44 20 7946 0958")).toBe("+44 20 7946 0958");
     expect(formatPhoneInput("Call front desk")).toBe("Call front desk");
     expect(formatPhoneInput("123456789012")).toBe("123456789012");
+  });
+});
+
+describe("phone typing", () => {
+  // Types each character at the end, like a person would, following the caret.
+  const type = (text: string) => [...text].reduce((value, char) => formatPhoneTyping(value + char, value.length + 1).value, "");
+
+  test("an extension typed at the end lands after the x", () => {
+    expect(type("7342876611x6")).toBe("734-287-6611 x6");
+    expect(type("3136390861ext12")).toBe("313-639-0861 x12");
+  });
+
+  test("an edit in the middle keeps the caret after the same digit", () => {
+    expect(formatPhoneTyping("313-639", 5)).toEqual({ value: "313-639", caret: 5 });
+    expect(formatPhoneTyping("3136390861", 4)).toEqual({ value: "313-639-0861", caret: 5 });
   });
 });
 
@@ -51,6 +66,10 @@ describe("addresses", () => {
     // Even an entry saved as an address keeps an unrecognized value exactly as typed.
     expect(displayValue({ kind: "value", title: "Store address", value: "Shelf 10234", valueFormat: "address" })).toBe("Shelf 10234");
     expect(addressLines("Shelf 10234")).toEqual(["Shelf 10234"]);
+    // Long or adversarial values are never addresses, and checking them stays fast.
+    const started = performance.now();
+    expect(recognizeAddress(`1, ${" ".repeat(1_900)}!`)).toBeNull();
+    expect(performance.now() - started).toBeLessThan(50);
     expect(parseAddress("123 Main St, Apt 4, Springfield, IL 62701"))
       .toEqual({ street: "123 Main St, Apt 4", city: "Springfield", state: "IL", zip: "62701" });
   });

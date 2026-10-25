@@ -234,7 +234,11 @@ function EntryRow({ entry, onOpen }: { entry: HandbookEntry; onOpen: (id: Handbo
   const open = (value: ReactNode) => (
     <div
       className="handbook-row-open"
-      onClick={(event) => { if (!(event.target as Element).closest("button, a")) onOpen(entry._id); }}
+      onClick={(event) => {
+        // Buttons and links do their own thing, and selecting text (to copy it by hand) doesn't open.
+        if ((event.target as Element).closest("button, a") || window.getSelection()?.toString()) return;
+        onOpen(entry._id);
+      }}
     >
       <EntryIcon entry={entry} />
       <span className="handbook-row-text">

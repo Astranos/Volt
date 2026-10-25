@@ -11,6 +11,7 @@ import {
 import {
   formatAddress,
   formatPhoneInput,
+  formatPhoneTyping,
   parseAddress,
   valueFormatOf,
   type AddressParts,
@@ -558,17 +559,9 @@ function PhoneInput({ value, onChange }: { value: string; onChange: (value: stri
           onChange(raw);
           return;
         }
-        const caret = event.target.selectionStart ?? raw.length;
-        const digitsBefore = raw.slice(0, caret).replace(/\D/g, "").length;
-        const formatted = formatPhoneInput(raw);
+        const { value: formatted, caret } = formatPhoneTyping(raw, event.target.selectionStart ?? raw.length);
         onChange(formatted);
-        if (formatted === raw) return;
-        let position = formatted.length;
-        for (let index = 0, seen = 0; index < formatted.length; index++) {
-          if (seen === digitsBefore) { position = index; break; }
-          if (/\d/.test(formatted[index])) seen++;
-        }
-        requestAnimationFrame(() => input.current?.setSelectionRange(position, position));
+        if (formatted !== raw) requestAnimationFrame(() => input.current?.setSelectionRange(caret, caret));
       }}
     />
   );

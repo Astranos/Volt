@@ -521,7 +521,7 @@
 }
 
 .handbook-row-open:hover .handbook-row-label-text,
-.handbook-row-open:focus-visible .handbook-row-label-text {
+.handbook-row-title:focus-visible .handbook-row-label-text {
   color: #4ade80;
 }
 
@@ -661,7 +661,7 @@ a.handbook-button {
 
 @media (prefers-color-scheme: light) {
   .handbook-row-open:hover .handbook-row-label-text,
-  .handbook-row-open:focus-visible .handbook-row-label-text { color: #15803d; }
+  .handbook-row-title:focus-visible .handbook-row-label-text { color: #15803d; }
   .handbook-row-note { color: #78716c; }
   .handbook-inline-page + .handbook-row,
   .handbook-row + .handbook-inline-page,

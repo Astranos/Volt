@@ -23,6 +23,24 @@ export function formatPhoneInput(value: string) {
   return `${country}${parts.join("-")}${suffix}`;
 }
 
+/**
+ * Formats a phone field after a keystroke and says where the caret goes: after the
+ * same digit it followed before, or at the very end if it was typing at the end
+ * (so "…6611" + "x" + "6" becomes "…6611 x6", not "…66116 x").
+ */
+export function formatPhoneTyping(raw: string, caret: number) {
+  const value = formatPhoneInput(raw);
+  if (value === raw) return { value, caret };
+  if (caret >= raw.length) return { value, caret: value.length };
+  const digitsBefore = raw.slice(0, caret).replace(/\D/g, "").length;
+  let position = value.length;
+  for (let index = 0, seen = 0; index < value.length; index++) {
+    if (seen === digitsBefore) { position = index; break; }
+    if (/\d/.test(value[index])) seen++;
+  }
+  return { value, caret: position };
+}
+
 /** Joins address parts into one line: "9058 Telegraph Rd, Taylor, MI 48180". */
 export function formatAddress({ street, city, state, zip }: AddressParts) {
   const region = [state.trim().toUpperCase(), zip.trim()].filter(Boolean).join(" ");
@@ -36,6 +54,8 @@ const US_ADDRESS_NO_ZIP = /^\s*(\d.*?),\s*([^,]+?),\s*([A-Za-z]{2})\s*$/;
 
 /** The parts of a value that is clearly a US street address, or null. Nothing is guessed. */
 export function recognizeAddress(value: string): AddressParts | null {
+  // Real addresses are short; the length cap also keeps the patterns below fast on any input.
+  if (value.length > 200) return null;
   const full = value.match(US_ADDRESS);
   if (full) return { street: full[1].trim(), city: full[2].trim(), state: full[3].toUpperCase(), zip: full[4] };
   const noZip = value.match(US_ADDRESS_NO_ZIP);
