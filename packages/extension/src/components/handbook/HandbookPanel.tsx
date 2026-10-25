@@ -283,6 +283,12 @@ function EntryView({ entry, onBack }: { entry: HandbookEntry; onBack: () => void
         ) : null}
         {entry.kind === "page" ? (
           <div className="mobile-scanner-card handbook-card handbook-page-body"><MarkdownView source={entry.body ?? ""} /></div>
+        ) : entry.body ? (
+          // Notes left on a quick value or login that were too long to fold into its short note.
+          <section className="handbook-section">
+            <h3 className="handbook-section-title">Older notes</h3>
+            <div className="mobile-scanner-card handbook-card handbook-notes">{entry.body}</div>
+          </section>
         ) : null}
       </div>
     </SidepanelLayout>

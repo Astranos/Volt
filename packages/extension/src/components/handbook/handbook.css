@@ -59,33 +59,6 @@
   padding: 1px 6px;
 }
 
-.handbook-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.handbook-chip {
-  background: rgba(255, 255, 255, 0.045);
-  border: 1px solid rgba(255, 255, 255, 0.11);
-  border-radius: 999px;
-  color: rgba(231, 229, 228, 0.86);
-  font-size: 12px;
-  font-weight: 600;
-  padding: 4px 11px;
-  transition: background-color 160ms ease, border-color 160ms ease;
-}
-
-.handbook-chip:hover {
-  border-color: rgba(255, 255, 255, 0.2);
-}
-
-.handbook-chip.is-active {
-  background: #16a34a;
-  border-color: #16a34a;
-  color: #fff;
-}
-
 .handbook-section {
   display: flex;
   flex-direction: column;
@@ -551,6 +524,7 @@
   line-height: 1.35;
   margin-top: 1px;
   overflow-wrap: anywhere;
+  white-space: pre-line;
 }
 
 .handbook-row-value.is-wrapping {
@@ -567,6 +541,8 @@
   color: rgba(231, 229, 228, 0.86);
   font-size: 13px;
   margin-top: 6px;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
 }
 
 .handbook-notes {
@@ -740,7 +716,6 @@ a.handbook-button {
   .handbook-icon.is-amber { background: #fef3c7; color: #b45309; }
 
   .handbook-search,
-  .handbook-chip,
   .handbook-button {
     background: rgba(255, 255, 255, 0.78);
     border-color: rgba(15, 23, 42, 0.1);
@@ -767,13 +742,11 @@ a.handbook-button {
     border-color: rgba(15, 23, 42, 0.14);
   }
 
-  .handbook-button:hover,
-  .handbook-chip:hover {
+  .handbook-button:hover {
     background: #fff;
     border-color: rgba(15, 23, 42, 0.16);
   }
 
-  .handbook-chip.is-active,
   .handbook-button.is-primary {
     background: #16a34a;
     border-color: #16a34a;

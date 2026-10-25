@@ -75,14 +75,12 @@ export function draftFor(entry: HandbookEntry | null, defaults: Partial<Handbook
     kind: entry?.kind ?? "value",
     title: entry?.title ?? "",
     category: entry?.category ?? "",
-    // Quick values and logins no longer have notes: any left from older versions are shown
-    // in the short note (as the server would fold them), so saving never drops them.
-    note: entry && (entry.kind === "value" || entry.kind === "secret") && entry.body?.trim()
-      ? [entry.note, ...entry.body.split("\n")].map((line) => line?.trim()).filter(Boolean).join(" · ")
-      : entry?.note ?? "",
+    note: entry?.note ?? "",
     fields,
-    // Quick values and logins no longer have notes; only guides (intro) and pages use this.
-    body: entry?.kind === "guide" || entry?.kind === "page" ? entry.body ?? "" : "",
+    // Guides (intro) and pages use this. Quick values and logins no longer have notes, but
+    // any left from older versions are kept here and sent back, so the server can fold
+    // them into the short note instead of a save dropping them.
+    body: entry?.body ?? "",
     showInList: entry?.showInList ?? false,
     pinned: entry?.pinned ?? false,
     variants: entry?.variants?.map((variant) => ({
@@ -169,10 +167,12 @@ export function HandbookEditor({
       // `value`/`valueFormat` mirror the first field for older extensions; `fields` is the source of truth.
       value: draft.kind === "value" ? fieldValue(draft.fields[0]) : undefined,
       valueFormat: draft.kind === "value" ? draft.fields[0].format : undefined,
+      // An empty list for other kinds tells the server this editor already moved the values
+      // (into a page, say); its fallback for older extensions would otherwise add them again.
       fields: draft.kind === "value"
         ? draft.fields.map((field) => ({ label: field.label.trim() || undefined, value: fieldValue(field), format: field.format }))
-        : undefined,
-      body: draft.kind === "guide" || draft.kind === "page" ? draft.body || undefined : undefined,
+        : [],
+      body: draft.body.trim() ? draft.body : undefined,
       showInList: draft.kind === "page" ? draft.showInList : undefined,
       pinned: draft.pinned,
       variants: draft.kind === "guide"
@@ -251,9 +251,14 @@ export function HandbookEditor({
           </datalist>
         </Field>
       </div>
-      <Field label="Short note" hint="Shown next to the title, like “next to the bank” or “non-emergency”.">
-        <input value={draft.note} onChange={(event) => set("note", event.target.value)} />
+      <Field label="Short note" hint="Shown under the title, like “next to the bank” or “non-emergency”.">
+        <textarea value={draft.note} onChange={(event) => set("note", event.target.value)} rows={2} />
       </Field>
+      {(draft.kind === "value" || draft.kind === "secret") && draft.body.trim() ? (
+        <Field label="Older notes" hint="Left from an earlier version. Move what you need into the short note (or a page), then clear this.">
+          <textarea value={draft.body} onChange={(event) => set("body", event.target.value)} rows={3} />
+        </Field>
+      ) : null}
 
       {draft.kind === "value" ? (
         <ValueFieldsEditor fields={draft.fields} onChange={(fields) => set("fields", fields)} />

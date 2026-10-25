@@ -183,7 +183,7 @@ describe("handbook", () => {
     // An older extension still sends notes; they're folded into the short note.
     await alice.mutation(api.handbook.create, { ...valueEntry, note: "Front desk", body: "Ask for Juan\nAfter 5 PM" });
     const [entry] = await alice.query(api.handbook.list, {});
-    expect(entry.note).toBe("Front desk · Ask for Juan · After 5 PM");
+    expect(entry.note).toBe("Front desk\nAsk for Juan\nAfter 5 PM");
     expect(entry.body).toBeUndefined();
 
     // Entries saved before this change are moved by the one-time migration; guides keep their intro.
@@ -202,6 +202,23 @@ describe("handbook", () => {
     expect(entries.find((item) => item.title === "Guide")?.body).toBe("Intro");
   });
 
+  test("every save an older extension could make still works", async () => {
+    const t = convexTest(schema, modules);
+    const alice = asUser(t, "alice");
+    // The most a 1.0.79 editor allowed: a 200-character short note and 10,000 characters of notes.
+    const longest = { ...valueEntry, note: "n".repeat(200), body: `${"b".repeat(4_999)}\n${"c".repeat(5_000)}` };
+    const id = await alice.mutation(api.handbook.create, longest);
+    const [folded] = await alice.query(api.handbook.list, {});
+    expect(folded.note).toBe(`${longest.note}\n${longest.body}`);
+    expect(folded.body).toBeUndefined();
+    await alice.mutation(api.handbook.update, { id, ...longest });
+    // A note that can't take the notes too keeps them as they are, instead of failing.
+    await alice.mutation(api.handbook.update, { id, ...valueEntry, note: "n".repeat(11_995), body: "kept as notes" });
+    const [kept] = await alice.query(api.handbook.list, {});
+    expect(kept.body).toBe("kept as notes");
+    expect(kept.note).toHaveLength(11_995);
+  });
+
   test("a long folded note stays editable", async () => {
     const t = convexTest(schema, modules);
     const alice = asUser(t, "alice");
@@ -215,16 +232,35 @@ describe("handbook", () => {
     const t = convexTest(schema, modules);
     const alice = asUser(t, "alice");
     const base = { kind: "value" as const, title: "Store address", category: "Store info", pinned: false };
-    const fields = [{ label: "Email", value: "store@example.com", format: "text" as const }, { label: "Phone", value: "313-555-0100", format: "phone" as const }];
+    // The first value has no saved format, so 1.0.79 guesses "address" from the title.
+    const fields = [{ label: "Email", value: "store@example.com" }, { label: "Phone", value: "313-555-0100", format: "phone" as const }];
     const id = await alice.mutation(api.handbook.create, { ...base, fields });
-    // 1.0.79 guesses "address" from the title; the saved Text format wins.
     await alice.mutation(api.handbook.update, { id, ...base, value: "store@example.com", valueFormat: "address" });
     const [kept] = await alice.query(api.handbook.list, {});
-    expect(kept.fields?.[0]).toMatchObject({ label: "Email", format: "text" });
+    expect(kept.fields?.[0]).toEqual({ label: "Email", value: "store@example.com" });
+    // With a saved format, a different one from 1.0.79 is a deliberate change and is honored.
+    await alice.mutation(api.handbook.update, { id, ...base, fields: [{ ...fields[0], format: "text" }, fields[1]] });
+    await alice.mutation(api.handbook.update, { id, ...base, value: "store@example.com", valueFormat: "phone" });
+    expect((await alice.query(api.handbook.list, {}))[0].fields?.[0].format).toBe("phone");
+    await alice.mutation(api.handbook.update, { id, ...base, fields });
     // 1.0.79 turning it into a page moves only the first value; the rest are added as lines.
     await alice.mutation(api.handbook.update, { id, kind: "page", title: "Store", category: "Store info", pinned: false, body: "store@example.com" });
     const [page] = await alice.query(api.handbook.list, { includePages: true });
     expect(page.body).toBe("store@example.com\n\nPhone: 313-555-0100");
+  });
+
+  test("the current editor's own page conversion isn't padded with old values", async () => {
+    const t = convexTest(schema, modules);
+    const alice = asUser(t, "alice");
+    const id = await alice.mutation(api.handbook.create, {
+      kind: "value", title: "Store", category: "Store info", pinned: false,
+      fields: [{ label: "Email", value: "old@example.com" }, { label: "Phone", value: "313-555-0100" }],
+    });
+    // The editor already moved (and the user edited) the values; it sends `fields: []`.
+    await alice.mutation(api.handbook.update, {
+      id, kind: "page", title: "Store", category: "Store info", pinned: false, fields: [], body: "Email: new@example.com",
+    });
+    expect((await alice.query(api.handbook.list, { includePages: true }))[0].body).toBe("Email: new@example.com");
   });
 
   test("a login that can't be read hides its username instead of failing the list", async () => {

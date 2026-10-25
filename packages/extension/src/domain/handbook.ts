@@ -39,9 +39,9 @@ function searchText(entry: HandbookEntry) {
     variant.warning,
     ...variant.steps.flatMap((step) => [step.text, step.command, step.tip, ...(step.keys ?? [])]),
   ]);
-  // Notes on quick values and logins are no longer shown, so they aren't searched either.
-  const body = entry.kind === "page" && entry.body ? markdownPlainText(entry.body)
-    : entry.kind === "guide" ? entry.body : undefined;
+  // Pages are searched as plain text; guide intros and any older notes left on a quick
+  // value or login (shown when they couldn't be folded) as written.
+  const body = entry.kind === "page" && entry.body ? markdownPlainText(entry.body) : entry.body;
   const fields = (entry.fields ?? []).flatMap((field) => [field.label, field.value]);
   return [entry.title, entry.category, entry.note, entry.value, entry.username, body, ...fields, ...steps]
     .filter(Boolean)

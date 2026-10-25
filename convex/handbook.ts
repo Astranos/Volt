@@ -29,8 +29,9 @@ const MAX_ENTRY_BYTES = 16_000;
 const LIMITS = {
   title: 120,
   category: 40,
-  // Shown with the title; long enough that notes folded in from older extensions stay editable.
-  note: 10_000,
+  // Shown with the title. Room for anything older extensions could save (a 200-character
+  // short note plus a 10,000-character note) once folded together.
+  note: 12_000,
   value: 2_000,
   body: 10_000,
   page: 15_000,
@@ -117,41 +118,47 @@ function cleanContent(content: HandbookContent): HandbookContent {
     : undefined;
   if (fields && fields.length > LIMITS.fields) throw new ConvexError("HANDBOOK_FIELDS_TOO_MANY");
   // Quick values and logins no longer have notes (longer write-ups are pages). Notes sent
-  // by older extensions are folded into the short note so nothing is hidden or lost.
+  // by older extensions are folded into the short note, keeping their line breaks. If the
+  // folded note wouldn't fit, the notes are kept as they are (and still shown) rather than
+  // failing a save that used to work.
   const foldsNotes = content.kind === "value" || content.kind === "secret";
-  const note = text(foldsNotes && content.body?.trim() ? mergeNotes(content.note, content.body) : content.note, LIMITS.note, "NOTE");
-  const cleaned = {
+  const folded = foldsNotes && content.body?.trim() ? mergeNotes(content.note, content.body) : undefined;
+  const build = (fold: boolean) => ({
     kind: content.kind,
     title: text(content.title, LIMITS.title, "TITLE", true) ?? "",
     category: text(content.category, LIMITS.category, "CATEGORY", true) ?? "",
-    note,
+    note: text(fold ? folded : content.note, LIMITS.note, "NOTE"),
     value: fields?.[0].value,
     // An explicit "text" is kept so a client's choice overrides title-based inference.
     valueFormat: fields?.[0].format,
     fields: fields && (fields.length > 1 || fields[0].label) ? fields : undefined,
     body: content.kind === "page"
       ? text(content.body, LIMITS.page, "PAGE", true)
-      : foldsNotes ? undefined : text(content.body, LIMITS.body, "BODY"),
+      : fold ? undefined : text(content.body, LIMITS.body, "BODY"),
     showInList: content.kind === "page" && content.showInList ? true : undefined,
     variants,
     pinned: content.pinned,
-  };
-  if (new TextEncoder().encode(JSON.stringify(cleaned)).length > MAX_ENTRY_BYTES) {
-    throw new ConvexError("HANDBOOK_ENTRY_TOO_LARGE");
+  });
+  const fits = (entry: object) => new TextEncoder().encode(JSON.stringify(entry)).length <= MAX_ENTRY_BYTES;
+  if (folded !== undefined && folded.length <= LIMITS.note) {
+    const cleaned = build(true);
+    if (fits(cleaned)) return cleaned;
   }
+  const cleaned = build(false);
+  if (!fits(cleaned)) throw new ConvexError("HANDBOOK_ENTRY_TOO_LARGE");
   return cleaned;
 }
 
-/** A short note followed by former notes, flattened to one line ("a · b · c"). */
+/** A short note followed by former notes, keeping their line breaks (so it never grows longer). */
 function mergeNotes(note: string | undefined, body: string) {
-  const lines = [note, ...body.split("\n")].map((line) => line?.trim()).filter(Boolean);
-  return lines.join(" · ");
+  return [note?.trim(), body.trim()].filter(Boolean).join("\n");
 }
 
 /**
  * One-time move of existing notes on quick values and logins into their short note, a
- * page of entries at a time. Run after deploying, passing `continueCursor` back until
- * `isDone`: `npx convex run --prod handbook:moveNotesIntoShortNotes '{}'`.
+ * page of entries at a time. Run after deploying: first with `'{}'`, then with
+ * `'{"cursor":"<continueCursor>"}'` from each result until `isDone` is true. Check that
+ * `skipped` is 0; a skipped entry keeps its notes, which stay shown as "Older notes".
  * An entry whose merged note wouldn't fit is skipped (and counted), never truncated.
  */
 export const moveNotesIntoShortNotes = internalMutation({
@@ -185,9 +192,14 @@ export const moveNotesIntoShortNotes = internalMutation({
 function keepNewerValueShape(input: HandbookContent, entry: Doc<"handbookEntries">): HandbookContent {
   if (input.fields !== undefined) return input;
   if (!entry.fields?.length) return { ...input, valueFormat: input.valueFormat ?? entry.valueFormat };
-  // An older client guesses the format from the title; the first field's saved format wins.
+  // An older client shows the saved format and only guesses one from the title when none
+  // is saved. So a format that differs from a saved one is a deliberate change; a guess
+  // (nothing saved) doesn't override the first field.
   const [first, ...rest] = entry.fields;
-  return { ...input, valueFormat: first.format, fields: [{ ...first, value: input.value ?? first.value }, ...rest] };
+  const format = entry.valueFormat !== undefined && input.valueFormat !== undefined && input.valueFormat !== entry.valueFormat
+    ? input.valueFormat
+    : first.format;
+  return { ...input, valueFormat: format, fields: [{ ...first, value: input.value ?? first.value, format }, ...rest] };
 }
 
 /**

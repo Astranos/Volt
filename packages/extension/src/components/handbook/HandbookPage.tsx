@@ -341,10 +341,8 @@ function Article({ entry, onBack, onEdit }: { entry: HandbookEntry; onBack: () =
       <div className="handbook-article-head">
         <div className="min-w-0">
           <h1 className="handbook-article-title">{entry.title}</h1>
-          <p className="handbook-meta">
-            {formatHandbookUpdated(entry)}
-            {entry.note ? ` · ${entry.note}` : ""}
-          </p>
+          <p className="handbook-meta">{formatHandbookUpdated(entry)}</p>
+          {entry.note ? <p className="handbook-entry-note">{entry.note}</p> : null}
         </div>
         <div className="handbook-row-actions">
           <button type="button" className="handbook-button" onClick={() => void setPinned({ id: entry._id, pinned: !entry.pinned })}>
@@ -392,6 +390,12 @@ function Article({ entry, onBack, onEdit }: { entry: HandbookEntry; onBack: () =
         <div className="mobile-scanner-card handbook-card handbook-page-body"><MarkdownView source={entry.body ?? ""} /></div>
       ) : entry.kind === "guide" && entry.body ? (
         <p className="handbook-guide-body">{entry.body}</p>
+      ) : entry.body ? (
+        // Notes left on a quick value or login that were too long to fold into its short note.
+        <section className="handbook-section">
+          <h2 className="handbook-section-title">Older notes</h2>
+          <div className="mobile-scanner-card handbook-card handbook-notes">{entry.body}</div>
+        </section>
       ) : null}
     </article>
   );
