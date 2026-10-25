@@ -3,7 +3,7 @@ import { getToolLabel, isSidepanelToolId, SIDEPANEL_TOOLS } from "./sidepanel-to
 
 describe("sidepanel tools", () => {
   test("registers the handbook as the third tab", () => {
-    expect(SIDEPANEL_TOOLS.map((tool) => tool.id)).toEqual(["top-offers", "mobile-scanner", "handbook"]);
+    expect(SIDEPANEL_TOOLS.map((tool) => tool.id)).toEqual(["top-offers", "mobile-scanner", "handbook", "shopify-audit"]);
     expect(isSidepanelToolId("handbook")).toBe(true);
     expect(getToolLabel("handbook")).toBe("Handbook");
   });
