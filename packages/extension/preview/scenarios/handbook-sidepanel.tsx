@@ -5,9 +5,10 @@ import { waitFor } from "../dom";
 import { handbookGuide, HandbookPreviewProvider } from "../fixtures/handbook";
 import { defineScenario } from "../scenario";
 
-// ?view=guide opens the Windows guide with its first step done; ?state=empty shows the starter prompt.
+// ?view=guide opens the Windows guide with its first step done; ?reveal=1 reveals the first login;
+// ?state=empty shows the starter prompt.
 export default defineScenario({
-  description: "Sidepanel Handbook tab (?view=guide for step-by-step mode, ?state=empty)",
+  description: "Sidepanel Handbook tab (?view=guide for step-by-step mode, ?reveal=1, ?state=empty)",
   viewport: { width: 400, height: 820 },
   chrome: {
     storage: {
@@ -33,6 +34,10 @@ export default defineScenario({
       await waitFor(".handbook-step-number.is-done");
     } else {
       await waitFor(params.get("state") === "empty" ? ".sidepanel-empty-history" : ".handbook-row");
+      if (params.get("reveal") === "1") {
+        (await waitFor<HTMLButtonElement>("[aria-label^='Reveal']")).click();
+        await waitFor("[aria-label^='Hide']");
+      }
     }
   },
 });

@@ -31,6 +31,11 @@ const KIND_OPTIONS: Array<{ kind: Kind; label: string }> = [
   { kind: "secret", label: "Login" },
   { kind: "guide", label: "Guide" },
 ];
+const PLACEHOLDERS: Record<Kind, { title: string; category: string }> = {
+  value: { title: "Store phone", category: "Store info" },
+  secret: { title: "PSN", category: "Logins" },
+  guide: { title: "Skip Windows sign-in", category: "Setup guides" },
+};
 const emptyStep = (): DraftStep => ({ text: "", keys: "", command: "", tip: "" });
 const emptyVariant = (): DraftVariant => ({ label: "", warning: "", steps: [emptyStep()] });
 
@@ -175,14 +180,14 @@ export function HandbookEditor({
 
       <div className="handbook-field-row">
         <Field label="Title">
-          <input value={draft.title} onChange={(event) => set("title", event.target.value)} placeholder="Store phone" required autoFocus />
+          <input value={draft.title} onChange={(event) => set("title", event.target.value)} placeholder={PLACEHOLDERS[draft.kind].title} required autoFocus />
         </Field>
         <Field label="Category">
           <input
             value={draft.category}
             onChange={(event) => set("category", event.target.value)}
             list="handbook-categories"
-            placeholder="Store info"
+            placeholder={PLACEHOLDERS[draft.kind].category}
             required
           />
           <datalist id="handbook-categories">
@@ -190,13 +195,13 @@ export function HandbookEditor({
           </datalist>
         </Field>
       </div>
-      <Field label="Short note" hint="Shown next to the title, like “right off Wick” or “non-emergency”.">
+      <Field label="Short note" hint="Shown next to the title, like “next to the bank” or “non-emergency”.">
         <input value={draft.note} onChange={(event) => set("note", event.target.value)} />
       </Field>
 
       {draft.kind === "value" ? (
         <Field label="Value to copy">
-          <input value={draft.value} onChange={(event) => set("value", event.target.value)} placeholder="313-555-0100" required />
+          <input value={draft.value} onChange={(event) => set("value", event.target.value)} placeholder="555-0100" required />
         </Field>
       ) : null}
 
