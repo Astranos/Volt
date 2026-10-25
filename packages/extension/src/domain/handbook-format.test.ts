@@ -130,6 +130,16 @@ describe("page markdown", () => {
       ]],
     });
     expect(markdownPlainText("_real italics_ and *these*")).toBe("real italics and these");
+    // Bold then Italic on the same word makes ***word***, which renders as both.
+    expect(parseHandbookMarkdown("a ***word*** b")[0]).toEqual({
+      type: "paragraph",
+      lines: [[
+        { type: "text", text: "a " },
+        { type: "bold", children: [{ type: "italic", children: [{ type: "text", text: "word" }] }] },
+        { type: "text", text: " b" },
+      ]],
+    });
+    expect(markdownPlainText("**_both_** and ***both***")).toBe("both and both");
     // The toolbar's Italic wraps in asterisks, which works around underscores inside words.
     expect(parseHandbookMarkdown("*sku_code_123*")[0]).toEqual({
       type: "paragraph",

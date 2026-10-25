@@ -19,6 +19,8 @@ const SAFE_LINK = /^(?:https?:\/\/[^\s/?#]+|mailto:\S+|tel:\S+)/i;
 // Sticky patterns tried only where a marker character appears. Every span is bounded,
 // so a page full of unmatched markers parses in linear time.
 const CODE = /`([^`\n]{1,300})`/y;
+// ***both*** is what Bold then Italic produces in the editor.
+const BOLD_ITALIC = /\*\*\*(?=[^\s*])([^\n]{1,300}?)(?<=[^\s*])\*\*\*/y;
 const BOLD = /\*\*(?=\S)([^\n]{1,300}?)(?<=\S)\*\*/y;
 const STAR_ITALIC = /\*(?=\S)([^*\n]{1,300}?)(?<=\S)\*(?!\*)/y;
 const UNDERSCORE_ITALIC = /_(?=\S)([^_\n]{1,300}?)(?<=\S)_(?!\w)/y;
@@ -52,6 +54,8 @@ export function parseInline(text: string): Inline[] {
     let node: Inline | null = null;
     if (char === "`" && (match = matchAt(CODE, text, i))) {
       node = { type: "code", text: match[1] };
+    } else if (char === "*" && (match = matchAt(BOLD_ITALIC, text, i))) {
+      node = { type: "bold", children: [{ type: "italic", children: parseInline(match[1]) }] };
     } else if (char === "*" && (match = matchAt(BOLD, text, i))) {
       node = { type: "bold", children: parseInline(match[1]) };
     } else if (char === "*" && atWordStart && (match = matchAt(STAR_ITALIC, text, i))) {
