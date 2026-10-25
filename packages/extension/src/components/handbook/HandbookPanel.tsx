@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useMutation } from "convex/react";
-import { BookOpen, ChevronLeft, ChevronRight, ExternalLink, LogIn, Search, Sparkles } from "lucide-react";
+import { BookOpen, ChevronLeft, ChevronRight, ExternalLink, LogIn, NotebookText, Search, Sparkles } from "lucide-react";
 import { api } from "../../../../../convex/_generated/api";
 import {
   filterHandbook,
@@ -10,6 +10,7 @@ import {
   handbookCategories,
   HANDBOOK_OPEN_ENTRY_KEY,
   HANDBOOK_PAGE_PATH,
+  pageSummary,
   type HandbookEntry,
   type HandbookEntryId,
   type HandbookFilter,
@@ -19,12 +20,14 @@ import { cn } from "../../lib/utils";
 import { SidepanelSignInCard, useSidepanelSignIn, useSidepanelSignedIn } from "../access/ExtensionAccess";
 import SidepanelLayout from "../sidepanel/SidepanelLayout";
 import {
-  CopyButton,
   EntryIcon,
   GuideWarning,
+  MarkdownView,
   SecretRow,
   StepDetails,
   StepNumber,
+  ValueActions,
+  ValueText,
   VariantToggle,
 } from "./handbook-parts";
 
@@ -91,13 +94,13 @@ function HandbookReader() {
     );
   }
 
-  const openEntry = entriesState.data.find((entry) => entry._id === openId && entry.kind === "guide");
-  return openEntry
-    ? <GuideView key={openEntry._id} entry={openEntry} onBack={() => setOpenId(null)} />
-    : <HandbookList entries={entriesState.data} onOpenGuide={setOpenId} />;
+  const openEntry = entriesState.data.find((entry) => entry._id === openId);
+  if (openEntry?.kind === "guide") return <GuideView key={openEntry._id} entry={openEntry} onBack={() => setOpenId(null)} />;
+  if (openEntry) return <EntryView key={openEntry._id} entry={openEntry} onBack={() => setOpenId(null)} />;
+  return <HandbookList entries={entriesState.data} onOpen={setOpenId} />;
 }
 
-function HandbookList({ entries, onOpenGuide }: { entries: HandbookEntry[]; onOpenGuide: (id: HandbookEntryId) => void }) {
+function HandbookList({ entries, onOpen }: { entries: HandbookEntry[]; onOpen: (id: HandbookEntryId) => void }) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<HandbookFilter>({ kind: "all" });
   const searchRef = useRef<HTMLInputElement>(null);
@@ -182,7 +185,7 @@ function HandbookList({ entries, onOpenGuide }: { entries: HandbookEntry[]; onOp
             <h2 className="handbook-section-title">{group.category}</h2>
             <div className="mobile-scanner-card handbook-card">
               {group.entries.map((entry) => (
-                <EntryRow key={entry._id} entry={entry} onOpenGuide={onOpenGuide} />
+                <EntryRow key={entry._id} entry={entry} onOpen={onOpen} />
               ))}
             </div>
           </section>
@@ -199,30 +202,38 @@ function HandbookList({ entries, onOpenGuide }: { entries: HandbookEntry[]; onOp
   );
 }
 
-function EntryRow({ entry, onOpenGuide }: { entry: HandbookEntry; onOpenGuide: (id: HandbookEntryId) => void }) {
-  const label = entry.note ? `${entry.title} · ${entry.note}` : entry.title;
-  if (entry.kind === "guide") {
+function EntryRow({ entry, onOpen }: { entry: HandbookEntry; onOpen: (id: HandbookEntryId) => void }) {
+  if (entry.kind === "guide" || entry.kind === "page") {
     return (
-      <button type="button" className="handbook-row is-guide" onClick={() => onOpenGuide(entry._id)}>
+      <button type="button" className="handbook-row is-guide" onClick={() => onOpen(entry._id)}>
         <EntryIcon entry={entry} />
         <span className="handbook-row-text">
           <span className="handbook-row-value">{entry.title}</span>
-          <span className="handbook-row-label">{guideSummary(entry)}</span>
+          <span className="handbook-row-label">{entry.kind === "guide" ? guideSummary(entry) : pageSummary(entry)}</span>
         </span>
         <ChevronRight className="handbook-row-chevron" aria-hidden="true" />
       </button>
     );
   }
+  // Tapping the text opens the entry with its full note and notes; the buttons still copy in place.
+  const open = (value: ReactNode) => (
+    <button type="button" className="handbook-row-open" onClick={() => onOpen(entry._id)} aria-label={`Open ${entry.title}`}>
+      <EntryIcon entry={entry} />
+      <span className="handbook-row-text">
+        <span className="handbook-row-label">
+          <span className="handbook-row-label-text">{entry.note ? `${entry.title} · ${entry.note}` : entry.title}</span>
+          {entry.body ? <NotebookText className="handbook-notes-mark" aria-label="Has notes" /> : null}
+        </span>
+        <span className="handbook-row-value is-wrapping">{value}</span>
+      </span>
+    </button>
+  );
   if (entry.kind === "secret") {
     return (
       <SecretRow key={entry._id} entry={entry}>
         {({ value, actions }) => (
           <div className="handbook-row">
-            <EntryIcon entry={entry} />
-            <span className="handbook-row-text">
-              <span className="handbook-row-label">{label}</span>
-              <span className="handbook-row-value">{value}</span>
-            </span>
+            {open(value)}
             <span className="handbook-row-actions">{actions}</span>
           </div>
         )}
@@ -231,15 +242,56 @@ function EntryRow({ entry, onOpenGuide }: { entry: HandbookEntry; onOpenGuide: (
   }
   return (
     <div className="handbook-row">
-      <EntryIcon entry={entry} />
-      <span className="handbook-row-text">
-        <span className="handbook-row-label">{label}</span>
-        <span className="handbook-row-value" title={entry.value}>{entry.value}</span>
-      </span>
-      <span className="handbook-row-actions">
-        <CopyButton getText={() => entry.value ?? ""} />
-      </span>
+      {open(<ValueText entry={entry} />)}
+      <span className="handbook-row-actions"><ValueActions entry={entry} /></span>
     </div>
+  );
+}
+
+/** One entry on its own: the full value, short note, notes, or a page's content. */
+function EntryView({ entry, onBack }: { entry: HandbookEntry; onBack: () => void }) {
+  return (
+    <SidepanelLayout className="handbook-scroll bg-transparent">
+      <div className="handbook-panel">
+        <button type="button" className="handbook-back" onClick={onBack}>
+          <ChevronLeft aria-hidden="true" />
+          {entry.category}
+        </button>
+        <div>
+          <h2 className="handbook-guide-title">{entry.title}</h2>
+          <p className="handbook-meta">{formatHandbookUpdated(entry)}</p>
+          {entry.note ? <p className="handbook-entry-note">{entry.note}</p> : null}
+        </div>
+        {entry.kind === "value" ? (
+          <div className="mobile-scanner-card handbook-card">
+            <div className="handbook-row">
+              <span className="handbook-row-text"><ValueText entry={entry} className="handbook-row-value is-large is-wrapping" /></span>
+              <span className="handbook-row-actions"><ValueActions entry={entry} /></span>
+            </div>
+          </div>
+        ) : null}
+        {entry.kind === "secret" ? (
+          <SecretRow entry={entry}>
+            {({ value, actions }) => (
+              <div className="mobile-scanner-card handbook-card">
+                <div className="handbook-row">
+                  <span className="handbook-row-text"><span className="handbook-row-value is-large is-wrapping">{value}</span></span>
+                  <span className="handbook-row-actions">{actions}</span>
+                </div>
+              </div>
+            )}
+          </SecretRow>
+        ) : null}
+        {entry.kind === "page" ? (
+          <div className="mobile-scanner-card handbook-card handbook-page-body"><MarkdownView source={entry.body ?? ""} /></div>
+        ) : entry.body ? (
+          <section className="handbook-section">
+            <h3 className="handbook-section-title">Notes</h3>
+            <div className="mobile-scanner-card handbook-card handbook-notes">{entry.body}</div>
+          </section>
+        ) : null}
+      </div>
+    </SidepanelLayout>
   );
 }
 

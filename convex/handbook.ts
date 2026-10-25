@@ -10,6 +10,7 @@ import {
   handbookContentFields,
   handbookCredentialsValidator,
   handbookKindValidator,
+  handbookValueFormatValidator,
   handbookVariantValidator,
   type HandbookContent,
   type HandbookCredentials,
@@ -30,6 +31,7 @@ const LIMITS = {
   note: 200,
   value: 2_000,
   body: 10_000,
+  page: 15_000,
   variants: 4,
   variantLabel: 40,
   steps: 40,
@@ -50,6 +52,7 @@ const entryValidator = v.object({
   category: v.string(),
   note: v.optional(v.string()),
   value: v.optional(v.string()),
+  valueFormat: v.optional(handbookValueFormatValidator),
   body: v.optional(v.string()),
   variants: v.optional(v.array(handbookVariantValidator)),
   pinned: v.boolean(),
@@ -101,7 +104,10 @@ function cleanContent(content: HandbookContent): HandbookContent {
     category: text(content.category, LIMITS.category, "CATEGORY", true) ?? "",
     note: text(content.note, LIMITS.note, "NOTE"),
     value: content.kind === "value" ? text(content.value, LIMITS.value, "VALUE", true) : undefined,
-    body: text(content.body, LIMITS.body, "BODY"),
+    valueFormat: content.kind === "value" && content.valueFormat !== "text" ? content.valueFormat : undefined,
+    body: content.kind === "page"
+      ? text(content.body, LIMITS.page, "PAGE", true)
+      : text(content.body, LIMITS.body, "BODY"),
     variants,
     pinned: content.pinned,
   };
@@ -137,6 +143,7 @@ function toSummary(entry: Doc<"handbookEntries">) {
     category: entry.category,
     note: entry.note,
     value: entry.value,
+    valueFormat: entry.valueFormat,
     body: entry.body,
     variants: entry.variants,
     pinned: entry.pinned,
@@ -210,11 +217,15 @@ async function writeSecret(ctx: MutationCtx, workspaceId: Id<"workspaces">, entr
   else await ctx.db.insert("handbookSecrets", row);
 }
 
-/** Every entry in the account's handbook. Secret entries carry only a masked preview. */
+/**
+ * Every entry in the account's handbook. Secret entries carry only a masked preview.
+ * Pages are left out unless `includePages` is set, so extensions released before pages
+ * existed (which call this with no arguments) never see an entry kind they can't show.
+ */
 export const list = query({
-  args: {},
+  args: { includePages: v.optional(v.boolean()) },
   returns: v.array(entryValidator),
-  handler: async (ctx) => {
+  handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new ConvexError("AUTHENTICATION_REQUIRED");
     const workspace = await authenticatedWorkspaceOrNull(ctx);
@@ -223,7 +234,7 @@ export const list = query({
       .query("handbookEntries")
       .withIndex("by_workspaceId_and_order", (q) => q.eq("workspaceId", workspace._id))
       .take(MAX_ENTRIES);
-    return entries.map(toSummary);
+    return entries.filter((entry) => args.includePages || entry.kind !== "page").map(toSummary);
   },
 });
 

@@ -5,9 +5,11 @@ import {
   Copy,
   Eye,
   EyeOff,
+  FileText,
   KeyRound,
   ListChecks,
   MapPin,
+  Navigation,
   Phone,
   Siren,
   StickyNote,
@@ -15,6 +17,8 @@ import {
 } from "lucide-react";
 import { api } from "../../../../../convex/_generated/api";
 import type { HandbookEntry, HandbookEntryId, HandbookStep } from "../../domain/handbook";
+import { addressLines, displayValue, mapsUrl, valueFormatOf } from "../../domain/handbook-format";
+import { parseHandbookMarkdown, type Inline } from "../../domain/handbook-markdown";
 import { cn } from "../../lib/utils";
 import "./handbook.css";
 
@@ -120,12 +124,14 @@ export function SecretRow({ entry, children }: { entry: HandbookEntry; children:
 
 export function EntryIcon({ entry }: { entry: HandbookEntry }) {
   const title = entry.title.toLowerCase();
+  const format = valueFormatOf(entry);
   const [Icon, tone] = entry.kind === "secret" ? [KeyRound, "violet"]
     : entry.kind === "guide" ? [ListChecks, "blue"]
-      : /police|emergency/.test(title) ? [Siren, "red"]
-        : /phone|call|line/.test(title) ? [Phone, "green"]
-          : /address|location/.test(title) ? [MapPin, "sky"]
-            : [StickyNote, "stone"];
+      : entry.kind === "page" ? [FileText, "amber"]
+        : /police|emergency/.test(title) ? [Siren, "red"]
+          : format === "phone" || /phone|call|line/.test(title) ? [Phone, "green"]
+            : format === "address" ? [MapPin, "sky"]
+              : [StickyNote, "stone"];
   return (
     <span className={`handbook-icon is-${tone}`} aria-hidden="true">
       <Icon />
@@ -215,6 +221,93 @@ export function VariantToggle({
           {label || `Method ${index + 1}`}
         </button>
       ))}
+    </div>
+  );
+}
+
+/** A value entry's value: addresses on two lines (street, then city/state/ZIP), anything else wraps. */
+export function ValueText({ entry, className }: { entry: HandbookEntry; className?: string }) {
+  if (valueFormatOf(entry) === "address") {
+    return (
+      <span className={cn("handbook-value-text", className)}>
+        {addressLines(entry.value ?? "").map((line) => <span key={line} className="handbook-value-line">{line}</span>)}
+      </span>
+    );
+  }
+  return <span className={cn("handbook-value-text", className)}>{entry.value}</span>;
+}
+
+/** Copy, plus "Open in Maps" for addresses. */
+export function ValueActions({ entry }: { entry: HandbookEntry }) {
+  return (
+    <>
+      {valueFormatOf(entry) === "address" ? (
+        <a
+          className="handbook-button is-icon"
+          href={mapsUrl(displayValue(entry))}
+          target="_blank"
+          rel="noreferrer"
+          aria-label="Open in Google Maps"
+          title="Open in Google Maps"
+        >
+          <Navigation aria-hidden="true" />
+        </a>
+      ) : null}
+      <CopyButton getText={() => displayValue(entry)} />
+    </>
+  );
+}
+
+function InlineNodes({ nodes }: { nodes: Inline[] }) {
+  return (
+    <>
+      {nodes.map((node, index) => {
+        switch (node.type) {
+          case "text": return <span key={index}>{node.text}</span>;
+          case "code": return <code key={index} className="handbook-md-code">{node.text}</code>;
+          case "bold": return <strong key={index}><InlineNodes nodes={node.children} /></strong>;
+          case "italic": return <em key={index}><InlineNodes nodes={node.children} /></em>;
+          case "link": return <a key={index} href={node.href} target="_blank" rel="noreferrer"><InlineNodes nodes={node.children} /></a>;
+        }
+      })}
+    </>
+  );
+}
+
+/** Renders a page's formatted content. Only the parsed subset is rendered; never raw HTML. */
+export function MarkdownView({ source }: { source: string }) {
+  return (
+    <div className="handbook-md">
+      {parseHandbookMarkdown(source).map((block, index) => {
+        if (block.type === "heading") {
+          const Heading = (["h2", "h3", "h4"] as const)[block.level - 1];
+          return <Heading key={index}><InlineNodes nodes={block.children} /></Heading>;
+        }
+        if (block.type === "paragraph") {
+          return (
+            <p key={index}>
+              {block.lines.map((line, lineIndex) => (
+                <span key={lineIndex}>{lineIndex > 0 ? <br /> : null}<InlineNodes nodes={line} /></span>
+              ))}
+            </p>
+          );
+        }
+        const List = block.ordered ? "ol" : "ul";
+        return (
+          <List key={index} className={cn(block.items.some((item) => item.checked !== undefined) && "is-checklist")}>
+            {block.items.map((item, itemIndex) => (
+              <li key={itemIndex} className={cn(item.checked !== undefined && "is-check", item.checked && "is-checked")}>
+                {item.checked !== undefined ? (
+                  <span className="handbook-md-check" aria-label={item.checked ? "Done" : "Not done"}>
+                    {item.checked ? <Check aria-hidden="true" /> : null}
+                  </span>
+                ) : null}
+                <span><InlineNodes nodes={item.children} /></span>
+              </li>
+            ))}
+          </List>
+        );
+      })}
     </div>
   );
 }

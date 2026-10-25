@@ -12,6 +12,7 @@ const entry = (fields: Partial<HandbookEntry> & Pick<HandbookEntry, "kind" | "ti
   _id: `preview${String(order).padStart(12, "0")}` as HandbookEntry["_id"],
   note: undefined,
   value: undefined,
+  valueFormat: undefined,
   body: undefined,
   variants: undefined,
   secretPreview: undefined,
@@ -23,9 +24,18 @@ const entry = (fields: Partial<HandbookEntry> & Pick<HandbookEntry, "kind" | "ti
 });
 
 export const handbookEntries: HandbookEntry[] = [
-  entry({ kind: "value", title: "Store phone", category: "Store info", value: "555-0100", pinned: true }),
-  entry({ kind: "value", title: "Store address", category: "Store info", note: "Next to the bank", value: "123 Main St", pinned: true }),
-  entry({ kind: "value", title: "Local police", category: "Store info", note: "Non-emergency line", value: "555-0199" }),
+  entry({ kind: "value", valueFormat: "phone", title: "Store phone", category: "Store info", value: "313-555-0100", pinned: true }),
+  entry({
+    kind: "value",
+    valueFormat: "address",
+    title: "Store address",
+    category: "Store info",
+    note: "Next to the bank",
+    value: "1234 Main Street, Springfield, MI 48180",
+    body: "Deliveries use the side door on Elm St.\nThe back lot closes at 9 PM.",
+    pinned: true,
+  }),
+  entry({ kind: "value", valueFormat: "phone", title: "Local police", category: "Store info", note: "Non-emergency line", value: "313-555-0199 x6" }),
   entry({ kind: "secret", title: "PSN", category: "Logins", note: "Testing consoles", secretPreview: "stor••• · ••••••", pinned: true }),
   entry({ kind: "secret", title: "Microsoft account", category: "Logins", note: "Testing PCs and Xbox", secretPreview: "stor••• · ••••••" }),
   entry({ kind: "secret", title: "Mac test user", category: "Logins", secretPreview: "u••• · ••••••" }),
@@ -58,7 +68,31 @@ export const handbookEntries: HandbookEntry[] = [
     ],
   }),
   entry({ kind: "value", title: "Wipe checklist before listing", category: "Testing", value: "Sign out of iCloud, Google, and console accounts", updatedAt: now - day }),
+  entry({
+    kind: "page",
+    title: "Opening checklist",
+    category: "Procedures",
+    pinned: true,
+    updatedAt: now - 2 * day,
+    body: [
+      "Do these in order before unlocking the front door.",
+      "",
+      "## Before opening",
+      "- [x] Turn on the lights and the open sign",
+      "- [x] Unlock the display cases",
+      "- [ ] Count the drawer and log it",
+      "",
+      "## If something is missing",
+      "1. Don't open the register.",
+      "2. Call the manager at [313-555-0100](tel:3135550100).",
+      "3. Write it in the **daily log**.",
+      "",
+      "Return policy details are on the _Returns_ page.",
+    ].join("\n"),
+  }),
 ];
+
+export const handbookEntryByTitle = (title: string) => handbookEntries.find((item) => item.title === title);
 
 export const handbookGuide = handbookEntries.find((item) => item.kind === "guide")!;
 

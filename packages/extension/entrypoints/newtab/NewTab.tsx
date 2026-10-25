@@ -212,7 +212,7 @@ export default function NewTab() {
                 void chrome.runtime.sendMessage({ action: "openInSidebar", tool: "handbook", mode: "open" })
               }
               aria-label="Open Handbook in sidepanel"
-              title="Open Handbook"
+              data-tooltip="Handbook"
             >
               <BookOpen />
             </button>
