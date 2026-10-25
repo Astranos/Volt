@@ -3,19 +3,44 @@ import { Command } from "cmdk";
 import { BookOpen, Check, KeyRound, ListChecks, StickyNote } from "lucide-react";
 import { guideSummary, matchesHandbookQuery, type HandbookEntry } from "../../domain/handbook";
 import { listHandbook, openHandbookInSidepanel, revealHandbookSecret } from "../../handbook/client";
+import { PROFILE_AUTH_EVENT_KEY } from "../../access/chrome-profile-auth";
+import { CLERK_CLIENT_JWT_CACHE_KEY } from "../../access/clerk-client-jwt";
 
 const MAX_RESULTS = 6;
 export const HANDBOOK_OPEN_ACTION_VALUE = "handbook-open-sidepanel";
 
-/** Loads the handbook once `enabled` turns on. Signed-out or failed loads show no results. */
+// Local storage keys that change whenever the extension's signed-in account does.
+const AUTH_KEYS = [CLERK_CLIENT_JWT_CACHE_KEY, PROFILE_AUTH_EVENT_KEY];
+
+/**
+ * Loads the handbook each time `enabled` turns on, so every new search sees fresh
+ * entries. Entries are dropped as soon as the account changes or signs out, and a
+ * response from before that change is ignored. Signed-out or failed loads show nothing.
+ */
 export function useHandbookCommandEntries(enabled: boolean) {
   const [entries, setEntries] = useState<HandbookEntry[]>([]);
-  const [requested, setRequested] = useState(false);
+  const [authVersion, setAuthVersion] = useState(0);
   useEffect(() => {
-    if (!enabled || requested) return;
-    setRequested(true);
-    void listHandbook().then(setEntries, () => setEntries([]));
-  }, [enabled, requested]);
+    const onChanged: Parameters<typeof chrome.storage.onChanged.addListener>[0] = (changes, area) => {
+      if (area !== "local" || !AUTH_KEYS.some((key) => key in changes && changes[key].newValue !== changes[key].oldValue)) return;
+      setEntries([]);
+      setAuthVersion((version) => version + 1);
+    };
+    chrome.storage.onChanged.addListener(onChanged);
+    return () => chrome.storage.onChanged.removeListener(onChanged);
+  }, []);
+  useEffect(() => {
+    if (!enabled) {
+      setEntries([]);
+      return;
+    }
+    let current = true;
+    void listHandbook().then(
+      (list) => { if (current) setEntries(list); },
+      () => { if (current) setEntries([]); },
+    );
+    return () => { current = false; };
+  }, [enabled, authVersion]);
   return entries;
 }
 

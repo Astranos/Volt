@@ -193,6 +193,7 @@ function HandbookLayout({ entries }: { entries: HandbookEntry[] }) {
           />
         ) : selected ? (
           <Article
+            key={selected._id}
             entry={selected}
             onBack={() => setView({ kind: "list" })}
             onEdit={() => setView({ kind: "edit", id: selected._id })}
@@ -314,7 +315,7 @@ function Article({ entry, onBack, onEdit }: { entry: HandbookEntry; onBack: () =
       ) : null}
 
       {entry.kind === "secret" ? (
-        <SecretRow entry={entry}>
+        <SecretRow key={entry._id} entry={entry}>
           {({ value, actions }) => (
             <div className="mobile-scanner-card handbook-card">
               <div className="handbook-row">

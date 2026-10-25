@@ -215,7 +215,7 @@ function EntryRow({ entry, onOpenGuide }: { entry: HandbookEntry; onOpenGuide: (
   }
   if (entry.kind === "secret") {
     return (
-      <SecretRow entry={entry}>
+      <SecretRow key={entry._id} entry={entry}>
         {({ value, actions }) => (
           <div className="handbook-row">
             <EntryIcon entry={entry} />

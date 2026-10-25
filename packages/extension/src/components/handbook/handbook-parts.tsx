@@ -59,20 +59,23 @@ export function CopyButton({
  */
 export function useHandbookSecret(id: HandbookEntryId) {
   const revealSecret = useMutation(api.handbook.revealSecret);
-  const [revealed, setRevealed] = useState<{ username?: string; secret: string } | null>(null);
+  // Tagged with the entry it belongs to, so a reused component never shows one
+  // entry's login under another, even if a reveal resolves after switching.
+  const [state, setState] = useState<{ id: HandbookEntryId; login: { username?: string; secret: string } } | null>(null);
+  const revealed = state?.id === id ? state.login : null;
   const timer = useRef<number | null>(null);
   useEffect(() => () => { if (timer.current) window.clearTimeout(timer.current); }, []);
 
   const fetchSecret = () => revealSecret({ id });
   const reveal = async () => {
     const login = await fetchSecret();
-    setRevealed(login);
+    setState({ id, login });
     if (timer.current) window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => setRevealed(null), REVEAL_MS);
+    timer.current = window.setTimeout(() => setState(null), REVEAL_MS);
   };
   return {
     revealed,
-    toggle: () => (revealed ? setRevealed(null) : void reveal()),
+    toggle: () => (revealed ? setState(null) : void reveal()),
     copySecret: async () => (await fetchSecret()).secret,
   };
 }

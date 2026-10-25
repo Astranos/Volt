@@ -131,15 +131,17 @@ describe("Shopify authorization and account isolation", () => {
     };
     const stores = ["one", "two", "three", "four", "five"].map(name => `${name}.myshopify.com`);
     for (const [index, store] of stores.entries()) await connect(store, String(index).repeat(64));
-    // Reconnecting a store replaces it instead of adding a duplicate.
+    // Reconnecting a store replaces it in place instead of adding a duplicate, so
+    // the first-connected store stays the default for clients that omit a shop.
     await connect(stores[1], "c".repeat(64));
-    expect(await alice.query(listConnections, {})).toEqual(stores.map(store => ({ shop: store })).filter(row => row.shop !== stores[1]).concat({ shop: stores[1] }));
+    await connect(stores[0], "e".repeat(64));
+    expect(await alice.query(listConnections, {})).toEqual(stores.map(store => ({ shop: store })));
     expect(await alice.query(get, {})).toEqual({ shop: stores[0] });
     await expect(t.mutation(begin, { ownerTokenIdentifier: owner, shop: "six.myshopify.com", state: "d".repeat(64), browserNonceHash })).rejects.toThrow("up to 5");
 
     await alice.mutation(disconnectShop, { shop: stores[0] });
     expect((await alice.query(listConnections, {})).map(row => row.shop)).not.toContain(stores[0]);
-    expect(await alice.query(get, {})).toEqual({ shop: stores[2] });
+    expect(await alice.query(get, {})).toEqual({ shop: stores[1] });
     await expect(alice.action(search, { query: "phone", shop: stores[0] })).rejects.toThrow("isn't connected");
     await alice.mutation(disconnectShop, {});
     expect(await alice.query(listConnections, {})).toEqual([]);

@@ -5,7 +5,6 @@ import { TabItem } from "../cmdk-palette/TabItem";
 import {
   HandbookCommandGroup,
   handbookCommandMatches,
-  handbookCommandValue,
   useHandbookCommandEntries,
   wantsHandbookAction,
 } from "../cmdk-palette/HandbookCommandGroup";
@@ -68,6 +67,7 @@ export function ClosedTabsPanel({
   const kioskWaiting = kioskQueue.requests.filter((request) => request.status === "waiting").length;
   const shopifyStores = useShopifyStores();
   const shopifyShop = shopifyStores.connection?.shop ?? null;
+  const refreshShopifyStores = shopifyStores.refresh;
   const leaveCompare = () => {
     setCompareModeOn(false);
     setCompareProducts([]);
@@ -84,14 +84,6 @@ export function ClosedTabsPanel({
   const handbookEntries = useHandbookCommandEntries(displayedQuery.trim().length >= 2);
   const handbookMatches = handbookCommandMatches(handbookEntries, displayedQuery);
   const showHandbookAction = wantsHandbookAction(displayedQuery, handbookMatches);
-  const firstHandbookValue = handbookMatches[0] ? handbookCommandValue(handbookMatches[0]) : null;
-  const firstHandbookValueRef = useRef(firstHandbookValue);
-  firstHandbookValueRef.current = firstHandbookValue;
-
-  // A handbook match leads the list, so Enter copies it, as in the Command Menu.
-  useEffect(() => {
-    if (firstHandbookValue) setSelectedValue(firstHandbookValue);
-  }, [firstHandbookValue]);
 
   useEffect(() => {
     const query = displayedQuery.trim();
@@ -109,16 +101,20 @@ export function ClosedTabsPanel({
         .then((result) => {
           if (canceled) return;
           setShopifySearch({ kind: "ready", query, result });
-          setSelectedValue(firstHandbookValueRef.current
-            ?? (result.products[0] ? `shopify-product-${result.products[0].id}` : ""));
+          // Keep a result the user already arrowed to (e.g. a handbook entry).
+          setSelectedValue((current) => current.startsWith("handbook-") ? current
+            : result.products[0] ? `shopify-product-${result.products[0].id}` : "");
         })
         .catch((cause: unknown) => {
           if (canceled) return;
           setShopifySearch({ kind: "error", query, message: cause instanceof Error ? cause.message : "Could not search Shopify." });
+          // The active store may have been disconnected elsewhere; re-checking applies
+          // the fallback store, which reruns this search if it changed.
+          void refreshShopifyStores().catch(() => undefined);
         });
     }, 280);
     return () => { canceled = true; window.clearTimeout(timer); };
-  }, [displayedMode, displayedQuery, shopifyRetry, shopifyStores.loaded, shopifyShop]);
+  }, [displayedMode, displayedQuery, shopifyRetry, shopifyStores.loaded, shopifyShop, refreshShopifyStores]);
 
   const hideShopifyProduct = async (product: ShopifySearchProduct) => {
     const withoutProduct = (current: ShopifyProductSearchState): ShopifyProductSearchState => current.kind === "ready"
@@ -341,11 +337,6 @@ export function ClosedTabsPanel({
           )}
 
           <Command.List className={displayedMode === "shopify" ? "closed-tabs-list shopify-results-list" : "closed-tabs-list"} ref={listRef}>
-            <HandbookCommandGroup
-              matches={handbookMatches}
-              showOpenAction={showHandbookAction}
-              itemClassName="closed-tabs-item"
-            />
             {displayedMode === "shopify" ? (
               <ShopifyProductResults
                 query={displayedQuery.trim()}
@@ -429,6 +420,13 @@ export function ClosedTabsPanel({
                 )}
               </>
             )}
+            {/* Below the main results and never preselected, so Enter keeps opening
+                the top product or running the search unless the user picks an entry. */}
+            <HandbookCommandGroup
+              matches={handbookMatches}
+              showOpenAction={showHandbookAction}
+              itemClassName="closed-tabs-item"
+            />
           </Command.List>
         </div>
       </div>

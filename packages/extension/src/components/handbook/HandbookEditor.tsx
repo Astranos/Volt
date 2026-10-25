@@ -132,8 +132,8 @@ export function HandbookEditor({
         }))
         : undefined,
     };
-    // A blank password while editing a login keeps the stored one.
-    const credentials = draft.kind === "secret" && (draft.secret || !keepsLogin)
+    // While editing a login, a blank username or password keeps the stored one.
+    const credentials = draft.kind === "secret" && (draft.secret || draft.username || !keepsLogin)
       ? { username: draft.username || undefined, secret: draft.secret }
       : undefined;
     try {

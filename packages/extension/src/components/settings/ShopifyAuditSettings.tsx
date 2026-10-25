@@ -70,7 +70,10 @@ export function ShopifyAuditSettings() {
   // The store being approved in a Shopify tab; cleared once it shows up as connected.
   const [pendingShop, setPendingShop] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [hiddenProducts, setHiddenProducts] = useState<ShopifyHiddenProduct[] | null>(null);
+  // Tagged with the store it was loaded for, so a store switch never shows or
+  // unhides another store's products while the new list loads.
+  const [hiddenList, setHiddenList] = useState<{ shop: string; products: ShopifyHiddenProduct[] } | null>(null);
+  const hiddenProducts = hiddenList && hiddenList.shop === activeShop ? hiddenList.products : null;
   const [auditMode, setAuditMode] = useShopifyAuditMode();
   const { refresh } = stores;
   // Stores open in Shopify tabs that aren't connected yet.
@@ -78,10 +81,11 @@ export function ShopifyAuditSettings() {
   const showConnect = shops.length === 0 || adding;
 
   useEffect(() => {
-    if (!activeShop) { setHiddenProducts(null); return; }
+    setHiddenList(null);
+    if (!activeShop) return;
     let current = true;
     void listHiddenShopifyProducts(activeShop)
-      .then((products) => { if (current) setHiddenProducts(products); })
+      .then((products) => { if (current) setHiddenList({ shop: activeShop, products }); })
       .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "Could not load hidden products."));
     return () => { current = false; };
   }, [activeShop]);
@@ -174,11 +178,13 @@ export function ShopifyAuditSettings() {
     }
   };
 
-  const unhide = async (product: ShopifyHiddenProduct) => {
+  const unhide = async (shop: string, product: ShopifyHiddenProduct) => {
     setError(null);
     try {
-      await setShopifyProductHidden(product, false, activeShop ?? undefined);
-      setHiddenProducts((current) => current?.filter((item) => item.id !== product.id) ?? null);
+      await setShopifyProductHidden(product, false, shop);
+      setHiddenList((current) => current?.shop === shop
+        ? { shop, products: current.products.filter((item) => item.id !== product.id) }
+        : current);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not show the product again.");
     }
@@ -267,7 +273,7 @@ export function ShopifyAuditSettings() {
           </div>
         </div>
         <KioskStoreSetting />
-        {activeShop && hiddenProducts && (
+        {activeShop && hiddenList && hiddenProducts && (
           <div className="mt-5 border-t border-border pt-4">
             <p className="font-medium">Hidden from new tab search{shops.length > 1 && ` · ${activeShop}`}</p>
             <p className="text-sm text-muted-foreground">Use the hide button on a Shopify search result to keep it out of new tab results.</p>
@@ -276,7 +282,7 @@ export function ShopifyAuditSettings() {
                 {hiddenProducts.map((product) => (
                   <li className="flex items-center justify-between gap-3 px-3 py-2" key={product.id}>
                     <span className="truncate text-sm" title={product.title}>{product.title}</span>
-                    <button className="shrink-0 rounded-md border border-border px-2.5 py-1 text-xs hover:bg-muted" onClick={() => void unhide(product)} type="button"><Eye aria-hidden="true" className="mr-1 inline h-3.5 w-3.5" />Show in results</button>
+                    <button className="shrink-0 rounded-md border border-border px-2.5 py-1 text-xs hover:bg-muted" onClick={() => void unhide(hiddenList.shop, product)} type="button"><Eye aria-hidden="true" className="mr-1 inline h-3.5 w-3.5" />Show in results</button>
                   </li>
                 ))}
               </ul>

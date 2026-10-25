@@ -14,18 +14,22 @@ import {
   type HandbookContent,
   type HandbookCredentials,
 } from "./handbookValidators";
+import { decryptToken, encryptToken } from "./shopifyHelpers";
 
 // The handbook is account-scoped: it lives in the signed-in account's Cloud
 // Scanner Workspace, the only tenancy boundary Volt has. Coworkers on separate
 // accounts do not share entries.
 
-const MAX_ENTRIES = 500;
+// Bounds what a full list read can return: MAX_ENTRIES * MAX_ENTRY_BYTES stays well
+// under Convex's per-function read limit.
+const MAX_ENTRIES = 300;
+const MAX_ENTRY_BYTES = 16_000;
 const LIMITS = {
   title: 120,
   category: 40,
   note: 200,
   value: 2_000,
-  body: 20_000,
+  body: 10_000,
   variants: 4,
   variantLabel: 40,
   steps: 40,
@@ -91,7 +95,7 @@ function cleanContent(content: HandbookContent): HandbookContent {
     if (variants.length > LIMITS.variants) throw new ConvexError("HANDBOOK_VARIANTS_TOO_MANY");
     if (variants.some((variant) => variant.steps.length > LIMITS.steps)) throw new ConvexError("HANDBOOK_STEPS_TOO_MANY");
   }
-  return {
+  const cleaned = {
     kind: content.kind,
     title: text(content.title, LIMITS.title, "TITLE", true) ?? "",
     category: text(content.category, LIMITS.category, "CATEGORY", true) ?? "",
@@ -101,13 +105,21 @@ function cleanContent(content: HandbookContent): HandbookContent {
     variants,
     pinned: content.pinned,
   };
+  if (new TextEncoder().encode(JSON.stringify(cleaned)).length > MAX_ENTRY_BYTES) {
+    throw new ConvexError("HANDBOOK_ENTRY_TOO_LARGE");
+  }
+  return cleaned;
 }
 
-function cleanCredentials(credentials: HandbookCredentials) {
-  const secret = credentials.secret.trim();
+type Login = { username?: string; secret: string };
+
+// Passwords are stored exactly as typed; only an all-whitespace password counts as blank.
+// A blank username or password falls back to the saved one, when there is one.
+function cleanCredentials(credentials: HandbookCredentials, saved: Login | null = null): Login {
+  const secret = credentials.secret.trim() ? credentials.secret : saved?.secret;
   if (!secret) throw new ConvexError("HANDBOOK_SECRET_REQUIRED");
   if (secret.length > LIMITS.secret) throw new ConvexError("HANDBOOK_SECRET_TOO_LONG");
-  return { username: text(credentials.username, LIMITS.username, "USERNAME"), secret };
+  return { username: text(credentials.username, LIMITS.username, "USERNAME") ?? saved?.username, secret };
 }
 
 // Shows enough of a username to tell logins apart, and nothing of the secret.
@@ -170,15 +182,32 @@ async function assertCapacity(ctx: MutationCtx, workspaceId: Id<"workspaces">, a
   if (existing.length + adding > MAX_ENTRIES) throw new ConvexError("HANDBOOK_FULL");
 }
 
-async function writeSecret(
-  ctx: MutationCtx,
-  workspaceId: Id<"workspaces">,
-  entryId: Id<"handbookEntries">,
-  credentials: { username?: string; secret: string },
-) {
+// Logins are encrypted at rest with the server's token key. The workspace and entry
+// are bound in as associated data, so a ciphertext can't be replayed onto another entry.
+const secretContext = (workspaceId: Id<"workspaces">, entryId: Id<"handbookEntries">) =>
+  `handbook:${workspaceId}:${entryId}`;
+
+async function readSecret(ctx: Pick<MutationCtx, "db">, workspaceId: Id<"workspaces">, entryId: Id<"handbookEntries">) {
+  const stored = await secretFor(ctx, entryId);
+  if (!stored || stored.workspaceId !== workspaceId) return null;
+  const context = secretContext(workspaceId, entryId);
+  return {
+    username: stored.username === undefined ? undefined : await decryptToken(stored.username, context),
+    secret: await decryptToken(stored.secret, context),
+  };
+}
+
+async function writeSecret(ctx: MutationCtx, workspaceId: Id<"workspaces">, entryId: Id<"handbookEntries">, login: Login) {
+  const context = secretContext(workspaceId, entryId);
+  const row = {
+    workspaceId,
+    entryId,
+    username: login.username === undefined ? undefined : await encryptToken(login.username, context),
+    secret: await encryptToken(login.secret, context),
+  };
   const existing = await secretFor(ctx, entryId);
-  if (existing) await ctx.db.replace(existing._id, { workspaceId, entryId, ...credentials });
-  else await ctx.db.insert("handbookSecrets", { workspaceId, entryId, ...credentials });
+  if (existing) await ctx.db.replace(existing._id, row);
+  else await ctx.db.insert("handbookSecrets", row);
 }
 
 /** Every entry in the account's handbook. Secret entries carry only a masked preview. */
@@ -211,9 +240,9 @@ export const revealSecret = mutation({
     const workspace = await authenticatedWorkspaceOrNull(ctx);
     if (!workspace) throw new ConvexError("HANDBOOK_ENTRY_NOT_FOUND");
     const entry = await requireOwnedEntry(ctx, workspace._id, args.id);
-    const stored = entry.kind === "secret" ? await secretFor(ctx, entry._id) : null;
-    if (!stored || stored.workspaceId !== workspace._id) throw new ConvexError("HANDBOOK_SECRET_NOT_FOUND");
-    return { username: stored.username, secret: stored.secret };
+    const login = entry.kind === "secret" ? await readSecret(ctx, workspace._id, entry._id) : null;
+    if (!login) throw new ConvexError("HANDBOOK_SECRET_NOT_FOUND");
+    return login.username === undefined ? { secret: login.secret } : login;
   },
 });
 
@@ -242,7 +271,10 @@ export const create = mutation({
   },
 });
 
-/** Replaces an entry's content. Omit `credentials` to keep a secret entry's login. */
+/**
+ * Replaces an entry's content. Omit `credentials` to keep a secret entry's login;
+ * a blank username or password inside `credentials` keeps that saved part.
+ */
 export const update = mutation({
   args: {
     id: v.id("handbookEntries"),
@@ -258,7 +290,7 @@ export const update = mutation({
     let secretPreview: string | undefined;
     if (content.kind === "secret") {
       if (credentials) {
-        const login = cleanCredentials(credentials);
+        const login = cleanCredentials(credentials, await readSecret(ctx, workspace._id, id));
         await writeSecret(ctx, workspace._id, id, login);
         secretPreview = maskedSecretPreview(login.username);
       } else if (existingSecret) {

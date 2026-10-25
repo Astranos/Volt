@@ -1,5 +1,5 @@
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import { api } from "./_generated/api";
 import schema from "./schema";
@@ -23,6 +23,10 @@ const valueEntry = {
 const secretEntry = { kind: "secret" as const, title: "Console login", category: "Logins", pinned: false };
 
 describe("handbook", () => {
+  beforeEach(() => {
+    vi.stubEnv("SHOPIFY_TOKEN_ENCRYPTION_KEY", "cd".repeat(32));
+  });
+
   test("requires sign-in for every function", async () => {
     const t = convexTest(schema, modules);
     const id = await asUser(t, "alice").mutation(api.handbook.create, valueEntry);
@@ -88,13 +92,41 @@ describe("handbook", () => {
     await alice.mutation(api.handbook.update, { id, ...secretEntry, title: "Renamed login" });
     expect(await alice.mutation(api.handbook.revealSecret, { id })).toEqual(LOGIN);
 
+    // Changing only the password keeps the saved username, and vice versa.
     await alice.mutation(api.handbook.update, { id, ...secretEntry, credentials: { secret: "another-fake-value" } });
-    expect(await alice.mutation(api.handbook.revealSecret, { id })).toEqual({ secret: "another-fake-value" });
-    expect((await alice.query(api.handbook.list, {}))[0].secretPreview).toBe("••••••");
+    expect(await alice.mutation(api.handbook.revealSecret, { id })).toEqual({ username: LOGIN.username, secret: "another-fake-value" });
+    await alice.mutation(api.handbook.update, { id, ...secretEntry, credentials: { username: "other@example.com", secret: "" } });
+    expect(await alice.mutation(api.handbook.revealSecret, { id })).toEqual({ username: "other@example.com", secret: "another-fake-value" });
+    expect((await alice.query(api.handbook.list, {}))[0].secretPreview).toBe("othe••• · ••••••");
 
     await alice.mutation(api.handbook.update, { id, ...valueEntry });
     await expect(alice.mutation(api.handbook.revealSecret, { id })).rejects.toThrow("HANDBOOK_SECRET_NOT_FOUND");
     expect(await t.run((ctx) => ctx.db.query("handbookSecrets").collect())).toEqual([]);
+  });
+
+  test("stores passwords exactly as typed and encrypted at rest", async () => {
+    const t = convexTest(schema, modules);
+    const alice = asUser(t, "alice");
+    const login = { username: "tester@example.com", secret: "  fake pass  " };
+    const id = await alice.mutation(api.handbook.create, { ...secretEntry, credentials: login });
+    expect(await alice.mutation(api.handbook.revealSecret, { id })).toEqual(login);
+    await expect(alice.mutation(api.handbook.create, { ...secretEntry, credentials: { secret: "   " } }))
+      .rejects.toThrow("HANDBOOK_SECRET_REQUIRED");
+    const [row] = await t.run((ctx) => ctx.db.query("handbookSecrets").collect());
+    expect(JSON.stringify(row)).not.toContain("fake pass");
+    expect(JSON.stringify(row)).not.toContain("tester@example.com");
+  });
+
+  test("rejects entries too large for the list to return", async () => {
+    const t = convexTest(schema, modules);
+    const step = { text: "x".repeat(1_000), command: "y".repeat(1_000), tip: "z".repeat(500) };
+    await expect(asUser(t, "alice").mutation(api.handbook.create, {
+      kind: "guide",
+      title: "Huge guide",
+      category: "Setup guides",
+      pinned: false,
+      variants: [{ label: "", steps: Array.from({ length: 10 }, () => step) }],
+    })).rejects.toThrow("HANDBOOK_ENTRY_TOO_LARGE");
   });
 
   test("orders, pins and removes entries", async () => {

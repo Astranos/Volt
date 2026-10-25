@@ -526,6 +526,7 @@ export function createAccessController({
     const internalPages = [
       "/mobile-scanner-popup.html",
       "/sidepanel.html",
+      "/handbook.html",
     ] as const;
     const offscreenPages = ["/offscreen.html"] as const;
     if (

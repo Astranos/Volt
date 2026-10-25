@@ -153,7 +153,7 @@ export function createChromeProfileAuthController({ chromeApi, onChanged, enable
     handleMessage(raw: unknown, sender: ExtensionMessageSender, respond: (result: Result) => void) {
       const action = raw && typeof raw === "object" ? (raw as Record<string, unknown>).action : null;
       if (action !== "chromeProfileSignIn" && action !== "chromeProfileSignOut" && action !== "chromeProfileManualSignIn") return false;
-      if (!isTrustedExtensionPageSender(sender, chromeApi.runtime.id, ["/newtab.html", "/sidepanel.html", "/options.html", "/mobile-scanner-popup.html"])) {
+      if (!isTrustedExtensionPageSender(sender, chromeApi.runtime.id, ["/newtab.html", "/sidepanel.html", "/options.html", "/mobile-scanner-popup.html", "/handbook.html"])) {
         respond({ success: false, error: "unauthorized_extension_sender" }); return true;
       }
       const operation = action === "chromeProfileSignIn" ? signIn(true) : action === "chromeProfileSignOut" ? signOut() : manualSignIn();

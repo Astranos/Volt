@@ -50,11 +50,12 @@ export const finish = internalMutation({
   handler: async (ctx, { stateId, ...tokens }) => {
     const state = await ctx.db.get(stateId);
     if (!state || state.consumedAt === undefined || state.expiresAt <= Date.now()) throw new ConvexError("Shopify connection was canceled. Start again.");
-    // Reconnecting a store replaces its tokens; other connected stores are kept.
+    // Reconnecting a store replaces its tokens in place, so the first-connected store
+    // (the default for clients that don't pass a shop) stays first. Other stores are kept.
     const old = await connectionFor(ctx, state.ownerTokenIdentifier, state.shop);
-    if (old) await ctx.db.delete(old._id);
+    if (old) await ctx.db.patch(old._id, { ...tokens, refreshLease: undefined });
     else if (await atStoreLimit(ctx, state.ownerTokenIdentifier, state.shop)) throw new ConvexError(storeLimitMessage);
-    await ctx.db.insert("shopifyConnections", { ...tokens, ownerTokenIdentifier: state.ownerTokenIdentifier, shop: state.shop });
+    else await ctx.db.insert("shopifyConnections", { ...tokens, ownerTokenIdentifier: state.ownerTokenIdentifier, shop: state.shop });
     await ctx.db.delete(stateId);
     return null;
   },
