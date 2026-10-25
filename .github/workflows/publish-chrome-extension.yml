@@ -127,8 +127,12 @@ jobs:
 
       # Every uploaded build also lands in GitHub Releases as a prerelease, so it can be
       # loaded unpacked for testing before the Chrome Web Store approves it.
+      # Non-fatal: the store submission already happened, so a GitHub hiccup here must not
+      # make the run look like a failed release (and invite a --replace-pending rerun).
       - name: Attach build to GitHub release
         if: ${{ success() && inputs.submit_existing_draft == false }}
+        continue-on-error: true
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           SUBMIT_FOR_REVIEW: ${{ inputs.submit_for_review }}
@@ -156,6 +160,10 @@ jobs:
           Built from ${GITHUB_SHA} by run ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}.
           NOTES
           if gh release view "$tag" >/dev/null 2>&1; then
+            # A rerun for the same version: point the tag at this build and refresh the
+            # title, notes, and zip so the release describes what was actually uploaded.
+            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/git/refs/tags/${tag}" -f sha="$GITHUB_SHA" -F force=true >/dev/null
+            gh release edit "$tag" --title "Volt extension ${version} (${state})" --notes-file "$notes"
             gh release upload "$tag" "$zip" --clobber
           else
             gh release create "$tag" "$zip" --prerelease --target "$GITHUB_SHA" \

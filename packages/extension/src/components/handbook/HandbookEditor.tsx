@@ -88,6 +88,17 @@ export function draftFor(entry: HandbookEntry | null, defaults: Partial<Handbook
   };
 }
 
+/**
+ * Changes an entry's type. Turning a quick value into a page moves the value into
+ * the page (above any notes) so it isn't silently dropped on save.
+ */
+function switchKind(draft: HandbookDraft, kind: Kind): HandbookDraft {
+  if (draft.kind !== "value" || kind !== "page") return { ...draft, kind };
+  const value = (draft.valueFormat === "address" ? formatAddress(draft.address) : draft.value).trim();
+  const body = value && !draft.body.includes(value) ? [value, draft.body].filter(Boolean).join("\n\n") : draft.body;
+  return { ...draft, kind, body };
+}
+
 function move<T>(items: T[], index: number, offset: number) {
   const target = index + offset;
   if (target < 0 || target >= items.length) return items;
@@ -193,7 +204,7 @@ export function HandbookEditor({
               role="radio"
               aria-checked={draft.kind === option.kind}
               className={cn(draft.kind === option.kind && "is-active")}
-              onClick={() => set("kind", option.kind)}
+              onClick={() => setDraft((current) => switchKind(current, option.kind))}
             >
               {option.label}
             </button>
@@ -252,13 +263,7 @@ export function HandbookEditor({
             <AddressFields value={draft.address} onChange={(address) => set("address", address)} />
           ) : draft.valueFormat === "phone" ? (
             <Field label="Phone number" hint="Dashes are added as you type. Add an extension with “x”, like 734-287-6611 x6.">
-              <input
-                value={draft.value}
-                onChange={(event) => set("value", formatPhoneInput(event.target.value))}
-                inputMode="tel"
-                placeholder="313-555-0100"
-                required
-              />
+              <PhoneInput value={draft.value} onChange={(value) => set("value", value)} />
             </Field>
           ) : (
             <Field label="Value to copy">
@@ -468,17 +473,29 @@ function PageBodyEditor({ value, onChange }: { value: string; onChange: (value: 
 
   const apply = ({ before, after = "", placeholder, line }: Wrap) => {
     const element = textarea.current;
-    const start = element?.selectionStart ?? value.length;
+    let start = element?.selectionStart ?? value.length;
     const end = element?.selectionEnd ?? value.length;
-    const selected = value.slice(start, end) || placeholder;
-    // Line tools start on a fresh line.
-    const lead = line && start > 0 && value[start - 1] !== "\n" ? "\n" : "";
-    const next = `${value.slice(0, start)}${lead}${before}${selected}${after}${value.slice(end)}`;
+    let next: string;
+    let selection: [number, number];
+    if (line && start !== end) {
+      // Line tools apply to every selected line: two lines become two checklist items.
+      start = value.lastIndexOf("\n", start - 1) + 1;
+      const lines = value.slice(start, end).split("\n").map((text) => (text.trim() ? `${before}${text}` : text));
+      const replaced = lines.join("\n");
+      next = `${value.slice(0, start)}${replaced}${value.slice(end)}`;
+      selection = [start, start + replaced.length];
+    } else {
+      const selected = value.slice(start, end) || placeholder;
+      // Line tools start on a fresh line.
+      const lead = line && start > 0 && value[start - 1] !== "\n" ? "\n" : "";
+      next = `${value.slice(0, start)}${lead}${before}${selected}${after}${value.slice(end)}`;
+      const selectFrom = start + lead.length + before.length;
+      selection = [selectFrom, selectFrom + selected.length];
+    }
     onChange(next);
-    const selectFrom = start + lead.length + before.length;
     requestAnimationFrame(() => {
       element?.focus();
-      element?.setSelectionRange(selectFrom, selectFrom + selected.length);
+      element?.setSelectionRange(...selection);
     });
   };
 
@@ -517,5 +534,42 @@ function PageBodyEditor({ value, onChange }: { value: string; onChange: (value: 
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * A phone field that adds dashes as you type. Deleting never re-adds what was just
+ * removed (the number is tidied when the field loses focus), and the caret stays
+ * after the same digit when formatting shifts the text.
+ */
+function PhoneInput({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const input = useRef<HTMLInputElement>(null);
+  return (
+    <input
+      ref={input}
+      value={value}
+      inputMode="tel"
+      placeholder="313-555-0100"
+      required
+      onBlur={() => onChange(formatPhoneInput(value))}
+      onChange={(event) => {
+        const raw = event.target.value;
+        if ((event.nativeEvent as InputEvent).inputType?.startsWith("delete")) {
+          onChange(raw);
+          return;
+        }
+        const caret = event.target.selectionStart ?? raw.length;
+        const digitsBefore = raw.slice(0, caret).replace(/\D/g, "").length;
+        const formatted = formatPhoneInput(raw);
+        onChange(formatted);
+        if (formatted === raw) return;
+        let position = formatted.length;
+        for (let index = 0, seen = 0; index < formatted.length; index++) {
+          if (seen === digitsBefore) { position = index; break; }
+          if (/\d/.test(formatted[index])) seen++;
+        }
+        requestAnimationFrame(() => input.current?.setSelectionRange(position, position));
+      }}
+    />
   );
 }

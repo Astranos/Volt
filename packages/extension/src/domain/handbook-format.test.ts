@@ -35,6 +35,26 @@ describe("addresses", () => {
     expect(addressLines("9058 Telegraph Rd, Taylor MI, 48180")).toEqual(["9058 Telegraph Rd", "Taylor, MI 48180"]);
   });
 
+  test("never rewrites values that aren't clearly an address", () => {
+    const entry = (title: string, value: string) => ({ kind: "value" as const, title, value, valueFormat: undefined });
+    for (const [title, value] of [
+      ["Store address", "9058 Telegraph Rd 48180"],
+      ["Store address", "9058 Telegraph Rd, Taylor 48180"],
+      ["Spare key location", "Shelf 10234"],
+      ["Store location", "https://maps.google.com/?cid=123456789012345"],
+      ["Email address", "mi01@paymore.com"],
+      ["IP address", "192.168.1.20"],
+    ]) {
+      expect(valueFormatOf(entry(title, value))).toBe("text");
+      expect(displayValue(entry(title, value))).toBe(value);
+    }
+    // Even an entry saved as an address keeps an unrecognized value exactly as typed.
+    expect(displayValue({ kind: "value", title: "Store address", value: "Shelf 10234", valueFormat: "address" })).toBe("Shelf 10234");
+    expect(addressLines("Shelf 10234")).toEqual(["Shelf 10234"]);
+    expect(parseAddress("123 Main St, Apt 4, Springfield, IL 62701"))
+      .toEqual({ street: "123 Main St, Apt 4", city: "Springfield", state: "IL", zip: "62701" });
+  });
+
   test("infers formats for entries saved before formats existed", () => {
     const entry = (title: string, value: string) => ({ kind: "value" as const, title, value, valueFormat: undefined });
     expect(valueFormatOf(entry("Store Address", "9058 Telegraph Rd, Taylor MI, 48180"))).toBe("address");
@@ -75,5 +95,27 @@ describe("page markdown", () => {
       { type: "paragraph", lines: [[{ type: "text", text: "[x](javascript:alert(1))" }]] },
     ]);
     expect(markdownPlainText("# Title\n- **one**\n- `two`")).toBe("Title · one · two");
+    expect(parseHandbookMarkdown("[empty](https://)")).toEqual([
+      { type: "paragraph", lines: [[{ type: "text", text: "[empty](https://)" }]] },
+    ]);
+  });
+
+  test("keeps underscores and asterisks inside words, and balanced link parentheses", () => {
+    expect(markdownPlainText("sku_code_123 and 2*3*4 and https://x.com/my_page_here")).toBe("sku_code_123 and 2*3*4 and https://x.com/my_page_here");
+    expect(parseHandbookMarkdown("See [policy](https://en.wikipedia.org/wiki/Policy_(retail)).")[0]).toEqual({
+      type: "paragraph",
+      lines: [[
+        { type: "text", text: "See " },
+        { type: "link", href: "https://en.wikipedia.org/wiki/Policy_(retail)", children: [{ type: "text", text: "policy" }] },
+        { type: "text", text: "." },
+      ]],
+    });
+    expect(markdownPlainText("_real italics_ and *these*")).toBe("real italics and these");
+  });
+
+  test("parses pages full of unmatched markers quickly", () => {
+    const started = performance.now();
+    for (const marker of ["[", "*", "_", "`", "**"]) parseHandbookMarkdown(marker.repeat(15_000));
+    expect(performance.now() - started).toBeLessThan(1_000);
   });
 });

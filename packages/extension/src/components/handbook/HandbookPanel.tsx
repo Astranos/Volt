@@ -228,19 +228,24 @@ function EntryRow({ entry, onOpen }: { entry: HandbookEntry; onOpen: (id: Handbo
       </button>
     );
   }
-  // Tapping the text opens the entry with its full note and notes; the buttons still copy in place.
+  // Clicking the row's text opens the entry with its full note and notes. The title is the
+  // real (keyboard) button; the value sits outside it so a revealed login's own
+  // "copy username" button isn't nested inside another button.
   const open = (value: ReactNode) => (
-    <button type="button" className="handbook-row-open" onClick={() => onOpen(entry._id)} aria-label={`Open ${entry.title}`}>
+    <div
+      className="handbook-row-open"
+      onClick={(event) => { if (!(event.target as Element).closest("button, a")) onOpen(entry._id); }}
+    >
       <EntryIcon entry={entry} />
       <span className="handbook-row-text">
-        <span className="handbook-row-label">
+        <button type="button" className="handbook-row-label handbook-row-title" onClick={() => onOpen(entry._id)} aria-label={`Open ${entry.title}`}>
           <span className="handbook-row-label-text">{entry.title}</span>
           {entry.body ? <NotebookText className="handbook-notes-mark" aria-label="Has notes" /> : null}
-        </span>
+        </button>
         <span className="handbook-row-value is-wrapping">{value}</span>
         {entry.note ? <span className="handbook-row-note">{entry.note}</span> : null}
       </span>
-    </button>
+    </div>
   );
   if (entry.kind === "secret") {
     return (

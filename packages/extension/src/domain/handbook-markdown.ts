@@ -13,7 +13,23 @@ export type Block =
   | { type: "paragraph"; lines: Inline[][] }
   | { type: "list"; ordered: boolean; items: Array<{ checked?: boolean; children: Inline[] }> };
 
-const SAFE_LINK = /^(https?:\/\/|mailto:|tel:)/i;
+// A link needs a host (or an address/number) after the scheme; "https://" alone stays text.
+const SAFE_LINK = /^(?:https?:\/\/[^\s/?#]+|mailto:\S+|tel:\S+)/i;
+
+// Sticky patterns tried only where a marker character appears. Every span is bounded,
+// so a page full of unmatched markers parses in linear time.
+const CODE = /`([^`\n]{1,300})`/y;
+const BOLD = /\*\*(?=\S)([^\n]{1,300}?)(?<=\S)\*\*/y;
+const STAR_ITALIC = /\*(?=\S)([^*\n]{1,300}?)(?<=\S)\*(?!\*)/y;
+const UNDERSCORE_ITALIC = /_(?=\S)([^_\n]{1,300}?)(?<=\S)_(?!\w)/y;
+// Link targets may contain one level of balanced parentheses, like Policy_(retail).
+const LINK = /\[([^\]\n]{1,300})\]\(((?:[^()\s]|\([^()\s]{0,200}\)){1,2000})\)/y;
+const MARKER = /[`*_[]/g;
+
+function matchAt(pattern: RegExp, text: string, index: number) {
+  pattern.lastIndex = index;
+  return pattern.exec(text);
+}
 
 export function parseInline(text: string): Inline[] {
   const out: Inline[] = [];
@@ -24,32 +40,37 @@ export function parseInline(text: string): Inline[] {
   };
   let i = 0;
   while (i < text.length) {
-    const rest = text.slice(i);
-    const code = rest.match(/^`([^`]+)`/);
-    const bold = rest.match(/^\*\*(.+?)\*\*/);
-    const italic = !bold ? rest.match(/^[*_]([^*_]+?)[*_]/) : null;
-    const link = rest.match(/^\[([^\]]+)\]\(([^)\s]+)\)/);
-    if (code) {
+    MARKER.lastIndex = i;
+    const next = MARKER.exec(text);
+    if (!next) break;
+    plain += text.slice(i, next.index);
+    i = next.index;
+    const char = text[i];
+    // Underscores and single asterisks inside a word (sku_code_123, 2*3) stay literal.
+    const atWordStart = i === 0 || !/\w/.test(text[i - 1]);
+    let match: RegExpExecArray | null = null;
+    let node: Inline | null = null;
+    if (char === "`" && (match = matchAt(CODE, text, i))) {
+      node = { type: "code", text: match[1] };
+    } else if (char === "*" && (match = matchAt(BOLD, text, i))) {
+      node = { type: "bold", children: parseInline(match[1]) };
+    } else if (char === "*" && atWordStart && (match = matchAt(STAR_ITALIC, text, i))) {
+      node = { type: "italic", children: parseInline(match[1]) };
+    } else if (char === "_" && atWordStart && (match = matchAt(UNDERSCORE_ITALIC, text, i))) {
+      node = { type: "italic", children: parseInline(match[1]) };
+    } else if (char === "[" && (match = matchAt(LINK, text, i)) && SAFE_LINK.test(match[2])) {
+      node = { type: "link", href: match[2], children: parseInline(match[1]) };
+    }
+    if (node && match) {
       flush();
-      out.push({ type: "code", text: code[1] });
-      i += code[0].length;
-    } else if (bold) {
-      flush();
-      out.push({ type: "bold", children: parseInline(bold[1]) });
-      i += bold[0].length;
-    } else if (italic) {
-      flush();
-      out.push({ type: "italic", children: parseInline(italic[1]) });
-      i += italic[0].length;
-    } else if (link && SAFE_LINK.test(link[2])) {
-      flush();
-      out.push({ type: "link", href: link[2], children: parseInline(link[1]) });
-      i += link[0].length;
+      out.push(node);
+      i += match[0].length;
     } else {
-      plain += text[i];
+      plain += char;
       i += 1;
     }
   }
+  plain += text.slice(i);
   flush();
   return out;
 }

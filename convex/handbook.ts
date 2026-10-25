@@ -105,7 +105,8 @@ function cleanContent(content: HandbookContent): HandbookContent {
     category: text(content.category, LIMITS.category, "CATEGORY", true) ?? "",
     note: text(content.note, LIMITS.note, "NOTE"),
     value: content.kind === "value" ? text(content.value, LIMITS.value, "VALUE", true) : undefined,
-    valueFormat: content.kind === "value" && content.valueFormat !== "text" ? content.valueFormat : undefined,
+    // An explicit "text" is kept so a client's choice overrides title-based inference.
+    valueFormat: content.kind === "value" ? content.valueFormat : undefined,
     body: content.kind === "page"
       ? text(content.body, LIMITS.page, "PAGE", true)
       : text(content.body, LIMITS.body, "BODY"),
@@ -299,7 +300,11 @@ export const update = mutation({
   handler: async (ctx, { id, credentials, ...input }) => {
     const { workspace, updatedByName } = await requireEditor(ctx);
     const entry = await requireOwnedEntry(ctx, workspace._id, id);
-    const content = cleanContent(input);
+    // Extensions released before value formats existed don't send one; keep the saved format
+    // instead of letting their edit erase a phone or address choice.
+    const content = cleanContent(input.kind === "value" && entry.kind === "value" && input.valueFormat === undefined
+      ? { ...input, valueFormat: entry.valueFormat }
+      : input);
     const existingSecret = await secretFor(ctx, id);
     let secretPreview: string | undefined;
     if (content.kind === "secret") {

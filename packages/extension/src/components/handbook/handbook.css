@@ -507,10 +507,16 @@
 /* Value rows open the entry; their text wraps instead of being cut off. */
 .handbook-row-open {
   align-items: center;
+  cursor: pointer;
   display: flex;
   flex: 1;
   gap: 10px;
   min-width: 0;
+  text-align: left;
+}
+
+.handbook-row-title {
+  max-width: 100%;
   text-align: left;
 }
 

@@ -29,50 +29,57 @@ export function formatAddress({ street, city, state, zip }: AddressParts) {
   return [street.trim(), city.trim(), region].filter(Boolean).join(", ");
 }
 
-/**
- * Best-effort split of a one-line US address, including loosely typed ones like
- * "9058 Telegraph Rd, Taylor MI, 48180". Anything it can't place stays in `street`.
- */
-export function parseAddress(value: string): AddressParts {
-  let rest = value.trim();
-  const zip = rest.match(/(\d{5}(?:-\d{4})?)\s*$/)?.[1] ?? "";
-  if (zip) rest = rest.slice(0, rest.length - zip.length).replace(/[\s,]+$/, "");
-  const state = zip ? rest.match(/(?:^|[\s,])([A-Za-z]{2})$/)?.[1] ?? "" : "";
-  if (state) rest = rest.slice(0, rest.length - state.length).replace(/[\s,]+$/, "");
-  const comma = rest.lastIndexOf(",");
-  return comma === -1 || !(zip || state)
-    ? { street: rest, city: "", state: state.toUpperCase(), zip }
-    : { street: rest.slice(0, comma).trim(), city: rest.slice(comma + 1).trim(), state: state.toUpperCase(), zip };
+// "9058 Telegraph Rd, Taylor, MI 48180", also loosely typed as "…, Taylor MI, 48180".
+// The street must start with a number, and a city and a two-letter state must follow it.
+const US_ADDRESS = /^\s*(\d.*?),\s*([^,]+?),?\s+([A-Za-z]{2}),?\s+(\d{5}(?:-\d{4})?)\s*$/;
+const US_ADDRESS_NO_ZIP = /^\s*(\d.*?),\s*([^,]+?),\s*([A-Za-z]{2})\s*$/;
+
+/** The parts of a value that is clearly a US street address, or null. Nothing is guessed. */
+export function recognizeAddress(value: string): AddressParts | null {
+  const full = value.match(US_ADDRESS);
+  if (full) return { street: full[1].trim(), city: full[2].trim(), state: full[3].toUpperCase(), zip: full[4] };
+  const noZip = value.match(US_ADDRESS_NO_ZIP);
+  if (noZip) return { street: noZip[1].trim(), city: noZip[2].trim(), state: noZip[3].toUpperCase(), zip: "" };
+  return null;
 }
 
-/** An address as two display lines: the street, then "City, ST ZIP". */
+/** Splits a value into address fields for editing; anything unrecognized stays whole in `street`. */
+export function parseAddress(value: string): AddressParts {
+  return recognizeAddress(value) ?? { street: value.trim(), city: "", state: "", zip: "" };
+}
+
+/** An address as two display lines: the street, then "City, ST ZIP". Unrecognized values stay as typed. */
 export function addressLines(value: string) {
-  const { street, city, state, zip } = parseAddress(value);
-  const region = [state, zip].filter(Boolean).join(" ");
-  const second = [city, region].filter(Boolean).join(", ");
-  return second ? [street, second] : [street];
+  const parts = recognizeAddress(value);
+  if (!parts) return [value];
+  return [parts.street, [parts.city, [parts.state, parts.zip].filter(Boolean).join(" ")].filter(Boolean).join(", ")];
 }
 
 export function mapsUrl(address: string) {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
 }
 
+// Titles that say "address" but aren't street addresses.
+const NOT_STREET_ADDRESS = /\b(e-?mail|ip|mac|wallet|web|website|url|bitcoin|crypto)\b/;
+
 /**
  * The format a value entry is edited and shown with. Entries saved before formats
- * existed are inferred from their title, so an existing "Store address" still gets
- * address fields and two-line display.
+ * existed are inferred, but only when both the title and the value agree, so an
+ * existing "Store address" gets address fields while an "Email address" or a link
+ * in a "Store location" entry is left alone.
  */
 export function valueFormatOf(entry: Pick<HandbookEntry, "kind" | "title" | "value" | "valueFormat">): HandbookValueFormat {
   if (entry.kind !== "value") return "text";
   if (entry.valueFormat) return entry.valueFormat;
   const title = entry.title.toLowerCase();
-  if (/address|location/.test(title)) return "address";
+  if (/\baddress\b/.test(title) && !NOT_STREET_ADDRESS.test(title) && recognizeAddress(entry.value ?? "")) return "address";
   if (/phone|police|fax|\bcell\b|\btel\b/.test(title) && formatPhoneInput(entry.value ?? "") === entry.value) return "phone";
   return "text";
 }
 
-/** The value as it should be shown and copied: addresses are normalized to one clean line. */
+/** The value as it should be shown and copied. A recognized address is normalized to one clean line; anything else is exact. */
 export function displayValue(entry: Pick<HandbookEntry, "kind" | "title" | "value" | "valueFormat">) {
   const value = entry.value ?? "";
-  return valueFormatOf(entry) === "address" ? formatAddress(parseAddress(value)) : value;
+  const parts = valueFormatOf(entry) === "address" ? recognizeAddress(value) : null;
+  return parts ? formatAddress(parts) : value;
 }

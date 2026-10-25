@@ -158,8 +158,12 @@ describe("handbook", () => {
     const alice = asUser(t, "alice");
     const id = await alice.mutation(api.handbook.create, { ...valueEntry, valueFormat: "phone" });
     expect((await alice.query(api.handbook.list, {}))[0].valueFormat).toBe("phone");
+    // An older extension's edit (no valueFormat) keeps the saved format.
+    await alice.mutation(api.handbook.update, { id, ...valueEntry, note: "Front desk" });
+    expect((await alice.query(api.handbook.list, {}))[0].valueFormat).toBe("phone");
+    // An explicit Text choice is kept, so it overrides inference from the title.
     await alice.mutation(api.handbook.update, { id, ...valueEntry, valueFormat: "text" });
-    expect((await alice.query(api.handbook.list, {}))[0].valueFormat).toBeUndefined();
+    expect((await alice.query(api.handbook.list, {}))[0].valueFormat).toBe("text");
     await alice.mutation(api.handbook.update, {
       id, kind: "page", title: "Phone tips", category: "Store info", body: "Call **first**.", pinned: false, valueFormat: "phone",
     });
