@@ -75,7 +75,11 @@ export function draftFor(entry: HandbookEntry | null, defaults: Partial<Handbook
     kind: entry?.kind ?? "value",
     title: entry?.title ?? "",
     category: entry?.category ?? "",
-    note: entry?.note ?? "",
+    // Quick values and logins no longer have notes: any left from older versions are shown
+    // in the short note (as the server would fold them), so saving never drops them.
+    note: entry && (entry.kind === "value" || entry.kind === "secret") && entry.body?.trim()
+      ? [entry.note, ...entry.body.split("\n")].map((line) => line?.trim()).filter(Boolean).join(" · ")
+      : entry?.note ?? "",
     fields,
     // Quick values and logins no longer have notes; only guides (intro) and pages use this.
     body: entry?.kind === "guide" || entry?.kind === "page" ? entry.body ?? "" : "",

@@ -193,11 +193,52 @@ describe("handbook", () => {
       await ctx.db.insert("handbookEntries", { ...base, kind: "value", title: "Old", value: "1", body: "Right off Wick" });
       await ctx.db.insert("handbookEntries", { ...base, kind: "guide", title: "Guide", body: "Intro", variants: [{ label: "", steps: [{ text: "Do it" }] }] });
     });
-    expect(await t.mutation(internal.handbook.moveNotesIntoShortNotes, {})).toBe(1);
+    expect(await t.mutation(internal.handbook.moveNotesIntoShortNotes, {})).toMatchObject({ moved: 1, skipped: 0, isDone: true });
+    // Running it again finds nothing left to move.
+    expect(await t.mutation(internal.handbook.moveNotesIntoShortNotes, {})).toMatchObject({ moved: 0 });
     const entries = await alice.query(api.handbook.list, {});
     expect(entries.find((item) => item.title === "Old")).toMatchObject({ note: "Right off Wick" });
     expect(entries.find((item) => item.title === "Old")?.body).toBeUndefined();
     expect(entries.find((item) => item.title === "Guide")?.body).toBe("Intro");
+  });
+
+  test("a long folded note stays editable", async () => {
+    const t = convexTest(schema, modules);
+    const alice = asUser(t, "alice");
+    const id = await alice.mutation(api.handbook.create, { ...valueEntry, body: "x".repeat(250) });
+    // A normal save afterwards (no notes) keeps working with the longer short note.
+    await alice.mutation(api.handbook.update, { id, ...valueEntry, note: "y".repeat(250), title: "Renamed" });
+    expect((await alice.query(api.handbook.list, {}))[0].title).toBe("Renamed");
+  });
+
+  test("an older extension's edits keep every value and the first value's format", async () => {
+    const t = convexTest(schema, modules);
+    const alice = asUser(t, "alice");
+    const base = { kind: "value" as const, title: "Store address", category: "Store info", pinned: false };
+    const fields = [{ label: "Email", value: "store@example.com", format: "text" as const }, { label: "Phone", value: "313-555-0100", format: "phone" as const }];
+    const id = await alice.mutation(api.handbook.create, { ...base, fields });
+    // 1.0.79 guesses "address" from the title; the saved Text format wins.
+    await alice.mutation(api.handbook.update, { id, ...base, value: "store@example.com", valueFormat: "address" });
+    const [kept] = await alice.query(api.handbook.list, {});
+    expect(kept.fields?.[0]).toMatchObject({ label: "Email", format: "text" });
+    // 1.0.79 turning it into a page moves only the first value; the rest are added as lines.
+    await alice.mutation(api.handbook.update, { id, kind: "page", title: "Store", category: "Store info", pinned: false, body: "store@example.com" });
+    const [page] = await alice.query(api.handbook.list, { includePages: true });
+    expect(page.body).toBe("store@example.com\n\nPhone: 313-555-0100");
+  });
+
+  test("a login that can't be read hides its username instead of failing the list", async () => {
+    const t = convexTest(schema, modules);
+    const alice = asUser(t, "alice");
+    const id = await alice.mutation(api.handbook.create, { ...secretEntry, credentials: LOGIN });
+    await alice.mutation(api.handbook.create, valueEntry);
+    await t.run(async (ctx) => {
+      const row = await ctx.db.query("handbookSecrets").withIndex("by_entryId", (q) => q.eq("entryId", id)).unique();
+      await ctx.db.patch(row!._id, { username: "00.ff" });
+    });
+    const entries = await alice.query(api.handbook.list, {});
+    expect(entries).toHaveLength(2);
+    expect(entries.find((entry) => entry._id === id)?.username).toBeUndefined();
   });
 
   test("saves the category order per account", async () => {
@@ -209,6 +250,9 @@ describe("handbook", () => {
     expect(await alice.query(api.handbook.categoryOrder, {})).toEqual(["Logins", "Store info"]);
     expect(await asUser(t, "bob").query(api.handbook.categoryOrder, {})).toEqual([]);
     await expect(alice.mutation(api.handbook.setCategoryOrder, { categories: ["A", "A"] })).rejects.toThrow("HANDBOOK_INVALID_ORDER");
+    // More than 50 categories can still be ordered.
+    await alice.mutation(api.handbook.setCategoryOrder, { categories: Array.from({ length: 60 }, (_, i) => `Category ${i}`) });
+    expect(await alice.query(api.handbook.categoryOrder, {})).toHaveLength(60);
     await expect(t.query(api.handbook.categoryOrder, {})).rejects.toThrow("AUTHENTICATION_REQUIRED");
   });
 

@@ -29,7 +29,8 @@ const MAX_ENTRY_BYTES = 16_000;
 const LIMITS = {
   title: 120,
   category: 40,
-  note: 200,
+  // Shown with the title; long enough that notes folded in from older extensions stay editable.
+  note: 10_000,
   value: 2_000,
   body: 10_000,
   page: 15_000,
@@ -118,9 +119,7 @@ function cleanContent(content: HandbookContent): HandbookContent {
   // Quick values and logins no longer have notes (longer write-ups are pages). Notes sent
   // by older extensions are folded into the short note so nothing is hidden or lost.
   const foldsNotes = content.kind === "value" || content.kind === "secret";
-  const note = foldsNotes && content.body?.trim()
-    ? text(mergeNotes(content.note, content.body), LIMITS.body, "NOTE")
-    : text(content.note, LIMITS.note, "NOTE");
+  const note = text(foldsNotes && content.body?.trim() ? mergeNotes(content.note, content.body) : content.note, LIMITS.note, "NOTE");
   const cleaned = {
     kind: content.kind,
     title: text(content.title, LIMITS.title, "TITLE", true) ?? "",
@@ -150,20 +149,31 @@ function mergeNotes(note: string | undefined, body: string) {
 }
 
 /**
- * One-time move of existing notes on quick values and logins into their short note.
- * Run once after deploying: `npx convex run --prod handbook:moveNotesIntoShortNotes`.
+ * One-time move of existing notes on quick values and logins into their short note, a
+ * page of entries at a time. Run after deploying, passing `continueCursor` back until
+ * `isDone`: `npx convex run --prod handbook:moveNotesIntoShortNotes '{}'`.
+ * An entry whose merged note wouldn't fit is skipped (and counted), never truncated.
  */
 export const moveNotesIntoShortNotes = internalMutation({
-  args: {},
-  returns: v.number(),
-  handler: async (ctx) => {
+  args: { cursor: v.optional(v.union(v.string(), v.null())) },
+  returns: v.object({ moved: v.number(), skipped: v.number(), isDone: v.boolean(), continueCursor: v.string() }),
+  handler: async (ctx, args) => {
+    const page = await ctx.db.query("handbookEntries").paginate({ cursor: args.cursor ?? null, numItems: 200 });
     let moved = 0;
-    for await (const entry of ctx.db.query("handbookEntries")) {
+    let skipped = 0;
+    for (const entry of page.page) {
       if ((entry.kind !== "value" && entry.kind !== "secret") || !entry.body?.trim()) continue;
-      await ctx.db.patch(entry._id, { note: mergeNotes(entry.note, entry.body), body: undefined });
+      const note = mergeNotes(entry.note, entry.body);
+      const fits = note.length <= LIMITS.note
+        && new TextEncoder().encode(JSON.stringify({ ...entry, note, body: undefined })).length <= MAX_ENTRY_BYTES;
+      if (!fits) {
+        skipped++;
+        continue;
+      }
+      await ctx.db.patch(entry._id, { note, body: undefined });
       moved++;
     }
-    return moved;
+    return { moved, skipped, isDone: page.isDone, continueCursor: page.continueCursor };
   },
 });
 
@@ -174,10 +184,21 @@ export const moveNotesIntoShortNotes = internalMutation({
  */
 function keepNewerValueShape(input: HandbookContent, entry: Doc<"handbookEntries">): HandbookContent {
   if (input.fields !== undefined) return input;
-  const valueFormat = input.valueFormat ?? entry.valueFormat;
-  if (!entry.fields?.length) return { ...input, valueFormat };
+  if (!entry.fields?.length) return { ...input, valueFormat: input.valueFormat ?? entry.valueFormat };
+  // An older client guesses the format from the title; the first field's saved format wins.
   const [first, ...rest] = entry.fields;
-  return { ...input, valueFormat, fields: [{ ...first, value: input.value ?? first.value, format: valueFormat }, ...rest] };
+  return { ...input, valueFormat: first.format, fields: [{ ...first, value: input.value ?? first.value }, ...rest] };
+}
+
+/**
+ * An older client turning a multi-value entry into a page only moves the first value
+ * into the page. Add the other values as "Label: value" lines so none is lost.
+ */
+function keepValuesInPage(input: HandbookContent, entry: Doc<"handbookEntries">): HandbookContent {
+  const extra = (entry.fields ?? []).slice(1)
+    .map((field) => (field.label ? `${field.label}: ${field.value}` : field.value))
+    .filter((line) => !(input.body ?? "").split("\n").some((existing) => existing.trim() === line));
+  return extra.length ? { ...input, body: [input.body, extra.join("\n")].filter(Boolean).join("\n\n") } : input;
 }
 
 type Login = { username?: string; secret: string };
@@ -260,6 +281,20 @@ async function assertCapacity(ctx: MutationCtx, workspaceId: Id<"workspaces">, a
 const secretContext = (workspaceId: Id<"workspaces">, entryId: Id<"handbookEntries">) =>
   `handbook:${workspaceId}:${entryId}`;
 
+/**
+ * A login's username for display, or undefined. Only the username is decrypted, and a
+ * row that can't be read hides that one username instead of failing the whole list.
+ */
+async function readUsername(ctx: Pick<QueryCtx, "db">, workspaceId: Id<"workspaces">, entryId: Id<"handbookEntries">) {
+  const stored = await secretFor(ctx, entryId);
+  if (!stored || stored.workspaceId !== workspaceId || stored.username === undefined) return undefined;
+  try {
+    return await decryptToken(stored.username, secretContext(workspaceId, entryId));
+  } catch {
+    return undefined;
+  }
+}
+
 async function readSecret(ctx: Pick<QueryCtx, "db">, workspaceId: Id<"workspaces">, entryId: Id<"handbookEntries">) {
   const stored = await secretFor(ctx, entryId);
   if (!stored || stored.workspaceId !== workspaceId) return null;
@@ -304,12 +339,13 @@ export const list = query({
     // Usernames are decrypted for display; passwords never leave revealSecret.
     return await Promise.all(shown.map(async (entry) => toSummary(
       entry,
-      entry.kind === "secret" ? (await readSecret(ctx, workspace._id, entry._id))?.username : undefined,
+      entry.kind === "secret" ? await readUsername(ctx, workspace._id, entry._id) : undefined,
     )));
   },
 });
 
-const MAX_CATEGORIES = 50;
+// Every entry could have its own category.
+const MAX_CATEGORIES = MAX_ENTRIES;
 
 /** The account's chosen category order (possibly empty). */
 export const categoryOrder = query({
@@ -408,7 +444,11 @@ export const update = mutation({
     const entry = await requireOwnedEntry(ctx, workspace._id, id);
     // Extensions released before value formats existed don't send one; keep the saved format
     // instead of letting their edit erase a phone or address choice.
-    const content = cleanContent(input.kind === "value" && entry.kind === "value" ? keepNewerValueShape(input, entry) : input);
+    const content = cleanContent(
+      input.kind === "value" && entry.kind === "value" ? keepNewerValueShape(input, entry)
+        : input.kind === "page" && entry.kind === "value" && input.fields === undefined ? keepValuesInPage(input, entry)
+          : input,
+    );
     const existingSecret = await secretFor(ctx, id);
     let secretPreview: string | undefined;
     if (content.kind === "secret") {

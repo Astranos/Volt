@@ -7,13 +7,11 @@ import {
   formatHandbookUpdated,
   groupHandbook,
   guideSummary,
-  handbookCategories,
   HANDBOOK_OPEN_ENTRY_KEY,
   HANDBOOK_PAGE_PATH,
   pageSummary,
   type HandbookEntry,
   type HandbookEntryId,
-  type HandbookFilter,
 } from "../../domain/handbook";
 import { hasFieldRows } from "../../domain/handbook-format";
 import { useHandbookCategoryOrder, useHandbookEntries } from "../../hooks/useHandbookEntries";
@@ -103,7 +101,6 @@ function HandbookReader() {
 
 function HandbookList({ entries, onOpen }: { entries: HandbookEntry[]; onOpen: (id: HandbookEntryId) => void }) {
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<HandbookFilter>({ kind: "all" });
   const searchRef = useRef<HTMLInputElement>(null);
   const addStarterEntries = useMutation(api.handbook.addStarterEntries);
   const [adding, setAdding] = useState(false);
@@ -119,14 +116,8 @@ function HandbookList({ entries, onOpen }: { entries: HandbookEntry[]; onOpen: (
   }, []);
 
   const categoryOrder = useHandbookCategoryOrder();
-  const groups = useMemo(() => groupHandbook(filterHandbook(entries, query, filter), categoryOrder), [entries, query, filter, categoryOrder]);
-  const chips: Array<{ label: string; filter: HandbookFilter }> = [
-    { label: "All", filter: { kind: "all" } },
-    ...(entries.some((entry) => entry.pinned) ? [{ label: "Pinned", filter: { kind: "pinned" } as const }] : []),
-    ...handbookCategories(entries, categoryOrder).map((category) => ({ label: category, filter: { kind: "category", category } as const })),
-  ];
-  const isActive = (candidate: HandbookFilter) => candidate.kind === filter.kind
-    && (candidate.kind !== "category" || (filter.kind === "category" && filter.category === candidate.category));
+  // No category chips: the sections below already list every category, in the saved order.
+  const groups = useMemo(() => groupHandbook(filterHandbook(entries, query, { kind: "all" }), categoryOrder), [entries, query, categoryOrder]);
 
   const addStarters = async () => {
     setAdding(true);
@@ -167,20 +158,6 @@ function HandbookList({ entries, onOpen }: { entries: HandbookEntry[]; onOpen: (
           <kbd className="handbook-kbd">/</kbd>
         </label>
 
-        <div className="handbook-chips" role="tablist" aria-label="Handbook sections">
-          {chips.map((chip) => (
-            <button
-              key={chip.label}
-              type="button"
-              role="tab"
-              aria-selected={isActive(chip.filter)}
-              className={cn("handbook-chip", isActive(chip.filter) && "is-active")}
-              onClick={() => setFilter(chip.filter)}
-            >
-              {chip.label}
-            </button>
-          ))}
-        </div>
 
         {groups.length ? groups.map((group) => (
           <section key={group.category} className="handbook-section">

@@ -97,10 +97,19 @@ function HandbookLayout({ entries }: { entries: HandbookEntry[] }) {
   const categoryOrder = useHandbookCategoryOrder();
   const setCategoryOrder = useMutation(api.handbook.setCategoryOrder);
   const categories = handbookCategories(entries, categoryOrder);
-  const moveCategory = (index: number, offset: number) => {
+  // One move at a time, so a quick double click can't send the same swap twice.
+  const [movingCategory, setMovingCategory] = useState(false);
+  const moveCategory = async (index: number, offset: number) => {
     const next = [...categories];
     [next[index], next[index + offset]] = [next[index + offset], next[index]];
-    void setCategoryOrder({ categories: next });
+    setMovingCategory(true);
+    try {
+      await setCategoryOrder({ categories: next });
+    } catch (cause) {
+      window.alert(`Couldn't move the category: ${cause instanceof Error ? cause.message : String(cause)}`);
+    } finally {
+      setMovingCategory(false);
+    }
   };
   const selected = view.kind === "article" || view.kind === "edit"
     ? entries.find((entry) => entry._id === view.id) ?? null
@@ -164,11 +173,11 @@ function HandbookLayout({ entries }: { entries: HandbookEntry[] }) {
               {item.categoryIndex !== undefined && categories.length > 1 ? (
                 <span className="handbook-nav-move">
                   <button type="button" className="handbook-button is-icon" aria-label={`Move ${item.label} up`}
-                    disabled={item.categoryIndex === 0} onClick={() => moveCategory(item.categoryIndex!, -1)}>
+                    disabled={movingCategory || item.categoryIndex === 0} onClick={() => void moveCategory(item.categoryIndex!, -1)}>
                     <ArrowUp aria-hidden="true" />
                   </button>
                   <button type="button" className="handbook-button is-icon" aria-label={`Move ${item.label} down`}
-                    disabled={item.categoryIndex === categories.length - 1} onClick={() => moveCategory(item.categoryIndex!, 1)}>
+                    disabled={movingCategory || item.categoryIndex === categories.length - 1} onClick={() => void moveCategory(item.categoryIndex!, 1)}>
                     <ArrowDown aria-hidden="true" />
                   </button>
                 </span>
