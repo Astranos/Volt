@@ -5,19 +5,22 @@ import { isHandbookOffscreenRuntimeMessage } from "./messages.ts";
 
 const newTab = { id: "ext", url: "chrome-extension://ext/newtab.html" };
 
-function setup(value = []) {
+function setup(value = [], { onForward } = {}) {
   const forwarded = [];
+  const state = { epoch: "epoch-1" };
   const controller = createHandbookController({
     extensionId: "ext",
+    accountEpoch: () => state.epoch,
     sendOffscreenMessage: async (message) => {
       forwarded.push(message);
+      onForward?.(state);
       return { success: true, value };
     },
   });
   const request = (message, sender = newTab) => new Promise((resolve) => {
     assert.equal(controller.handleMessage(message, sender, resolve), true);
   });
-  return { controller, forwarded, request };
+  return { controller, forwarded, request, state };
 }
 
 test("relays list and reveal requests from the New Tab to the offscreen client", async () => {
@@ -25,9 +28,18 @@ test("relays list and reveal requests from the New Tab to the offscreen client",
   assert.deepEqual(await request({ action: "handbookList" }), { success: true, value: [{ _id: "abc" }] });
   await request({ action: "handbookRevealSecret", id: "k57abcdefghijklmnop" });
   assert.deepEqual(forwarded, [
-    { action: "handbookOffscreenList" },
-    { action: "handbookOffscreenRevealSecret", id: "k57abcdefghijklmnop" },
+    { action: "handbookOffscreenList", accountEpoch: "epoch-1" },
+    { action: "handbookOffscreenRevealSecret", accountEpoch: "epoch-1", id: "k57abcdefghijklmnop" },
   ]);
+});
+
+test("discards a response when the account changed while it was in flight", async () => {
+  const { request } = setup([{ _id: "abc" }], { onForward: (state) => { state.epoch += "-next"; } });
+  assert.deepEqual(await request({ action: "handbookList" }), { success: false, error: "Volt account changed. Try again." });
+  assert.deepEqual(await request({ action: "handbookRevealSecret", id: "k57abcdefghijklmnop" }), {
+    success: false,
+    error: "Volt account changed. Try again.",
+  });
 });
 
 test("refuses senders outside the Command Menu pages and malformed ids", async () => {

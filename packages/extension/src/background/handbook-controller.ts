@@ -14,16 +14,25 @@ function offscreenValue(response: unknown): unknown {
   return envelope.value;
 }
 
-/** Relays Command Menu handbook reads to the offscreen document's signed-in Convex client. */
+/**
+ * Relays Command Menu handbook reads to the offscreen document's signed-in Convex client.
+ * Each request carries the background's current account epoch; a response is discarded
+ * if the account changed while it was in flight, so it can never belong to the old account.
+ */
 export function createHandbookController({
   extensionId,
   sendOffscreenMessage,
+  accountEpoch,
 }: {
   extensionId: string;
   sendOffscreenMessage: (message: unknown) => Promise<unknown>;
+  accountEpoch: () => string;
 }) {
   async function forward(action: string, extra: Record<string, unknown> = {}) {
-    return offscreenValue(await sendOffscreenMessage({ action, ...extra }));
+    const epoch = accountEpoch();
+    const value = offscreenValue(await sendOffscreenMessage({ action, accountEpoch: epoch, ...extra }));
+    if (accountEpoch() !== epoch) throw new Error("Volt account changed. Try again.");
+    return value;
   }
 
   function handleMessage(rawMessage: unknown, sender: ExtensionMessageSender, sendResponse: (response?: unknown) => void) {

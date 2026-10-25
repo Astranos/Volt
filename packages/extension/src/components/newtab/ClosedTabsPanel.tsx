@@ -75,6 +75,11 @@ export function ClosedTabsPanel({
   // Picks can't be compared across stores, so switching stores clears them.
   useEffect(() => { setCompareProducts([]); }, [shopifyShop]);
   const shopifySearchGeneration = useRef(0);
+  // Set once the user moves the selection with the keyboard or pointer during the
+  // current query. cmdk also selects the first row on its own (for example a handbook
+  // row while Shopify loads); only a row the user picked may take over Enter.
+  const userPickedRef = useRef(false);
+  const userPickedHandbook = () => selectedValue.startsWith("handbook-") && userPickedRef.current;
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const trimmedSearch = search.trim();
@@ -101,8 +106,8 @@ export function ClosedTabsPanel({
         .then((result) => {
           if (canceled) return;
           setShopifySearch({ kind: "ready", query, result });
-          // Keep a result the user already arrowed to (e.g. a handbook entry).
-          setSelectedValue((current) => current.startsWith("handbook-") ? current
+          // Keep a handbook entry only if the user picked it.
+          setSelectedValue((current) => current.startsWith("handbook-") && userPickedRef.current ? current
             : result.products[0] ? `shopify-product-${result.products[0].id}` : "");
         })
         .catch((cause: unknown) => {
@@ -211,9 +216,8 @@ export function ClosedTabsPanel({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-      // Arrow key navigation is handled by CMDK
-    }
+    // Arrow key navigation itself is handled by CMDK.
+    if (["ArrowDown", "ArrowUp", "Home", "End"].includes(e.key)) userPickedRef.current = true;
   };
 
   const handleSearchInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -232,12 +236,11 @@ export function ClosedTabsPanel({
       }
     }
 
-    if (
-      e.key === "Enter" &&
-      onSearchSubmit &&
-      displayedMode !== "shopify" &&
-      !selectedValue.startsWith("handbook-")
-    ) {
+    if (e.key !== "Enter" || userPickedHandbook()) return;
+    if (displayedMode === "shopify") {
+      // A handbook row cmdk selected by itself (Shopify still loading) must not copy or open.
+      if (selectedValue.startsWith("handbook-")) e.preventDefault();
+    } else if (onSearchSubmit) {
       e.preventDefault();
       onSearchSubmit(search);
     }
@@ -282,6 +285,7 @@ export function ClosedTabsPanel({
             value={search}
             onChange={(e) => {
               setSearch(e.target.value);
+              userPickedRef.current = false;
               if (listRef.current) {
                 listRef.current.scrollTop = 0;
               }
@@ -336,7 +340,11 @@ export function ClosedTabsPanel({
             </div>
           )}
 
-          <Command.List className={displayedMode === "shopify" ? "closed-tabs-list shopify-results-list" : "closed-tabs-list"} ref={listRef}>
+          <Command.List
+            className={displayedMode === "shopify" ? "closed-tabs-list shopify-results-list" : "closed-tabs-list"}
+            ref={listRef}
+            onPointerMove={() => { userPickedRef.current = true; }}
+          >
             {displayedMode === "shopify" ? (
               <ShopifyProductResults
                 query={displayedQuery.trim()}

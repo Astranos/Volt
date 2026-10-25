@@ -353,15 +353,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         ),
       );
     }
+    if (message.action === "handbookOffscreenList" || message.action === "handbookOffscreenRevealSecret") {
+      if (typeof message.accountEpoch !== "string" || !message.accountEpoch) {
+        sendResponse({ success: false, error: "missing_workspace_account_epoch" });
+        return false;
+      }
+    }
     if (message.action === "handbookOffscreenList") {
-      return sendWorkspaceOperation(sendResponse, cloudWorkspaceSubscriptions.listHandbook());
+      return sendWorkspaceOperation(sendResponse, cloudWorkspaceSubscriptions.listHandbook(message.accountEpoch));
     }
     if (message.action === "handbookOffscreenRevealSecret") {
       if (typeof message.id !== "string") {
         sendResponse({ success: false, error: "invalid_handbook_entry" });
         return false;
       }
-      return sendWorkspaceOperation(sendResponse, cloudWorkspaceSubscriptions.revealHandbookSecret(message.id));
+      return sendWorkspaceOperation(sendResponse, cloudWorkspaceSubscriptions.revealHandbookSecret(message.accountEpoch, message.id));
     }
     if (message.action === "shopifyAuditOffscreenStatus") {
       return sendWorkspaceOperation(sendResponse, cloudWorkspaceSubscriptions.getShopifyConnection());

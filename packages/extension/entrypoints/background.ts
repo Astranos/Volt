@@ -189,6 +189,7 @@ export default defineBackground({
     const handbook = createHandbookController({
       extensionId: chrome.runtime.id,
       sendOffscreenMessage: scannerOffscreen.sendScannerOffscreenMessage,
+      accountEpoch: cloudWorkspace.accountEpoch,
     });
     const clerkSessionMirror = createClerkSessionMirror({
       chromeApi: chrome,

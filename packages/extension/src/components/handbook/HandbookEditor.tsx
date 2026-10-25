@@ -105,10 +105,6 @@ export function HandbookEditor({
   const keepsLogin = entry?.kind === "secret" && draft.kind === "secret";
 
   const save = async () => {
-    if (keepsLogin && draft.username && !draft.secret) {
-      setError("Enter the password too to change the username.");
-      return;
-    }
     setSaving(true);
     setError(null);
     const content = {

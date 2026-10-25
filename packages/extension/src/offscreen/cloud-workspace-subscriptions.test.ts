@@ -75,3 +75,22 @@ test("after switching accounts, Shopify calls wait for the new account", async (
   // The Convex client was re-armed and now reports the new account.
   expect((workspace as unknown as { acceptedClientSubject: string }).acceptedClientSubject).toBe("user_2");
 });
+
+test("handbook calls refuse when signed out", async () => {
+  const { CloudWorkspaceSubscriptions } = await import("./cloud-workspace-subscriptions");
+  const workspace = new CloudWorkspaceSubscriptions();
+  await expect(workspace.listHandbook("epoch-1")).rejects.toThrow("Sign in to Volt to use the handbook.");
+});
+
+test("a handbook call tagged with a newer account epoch runs as the new account", async () => {
+  const { CloudWorkspaceSubscriptions } = await import("./cloud-workspace-subscriptions");
+  clerkState.token = jwt("user_1");
+  const workspace = new CloudWorkspaceSubscriptions();
+  await workspace.listHandbook("epoch-1");
+  // The background saw the account change before this document did.
+  clerkState.token = jwt("user_2");
+  await workspace.listHandbook("epoch-2");
+  const state = workspace as unknown as { acceptedClientSubject: string; accountEpoch: string };
+  expect(state.accountEpoch).toBe("epoch-2");
+  expect(state.acceptedClientSubject).toBe("user_2");
+});

@@ -579,17 +579,28 @@ export class CloudWorkspaceSubscriptions {
     return this.client.mutation(shopifySetProductHiddenReference, { productId, title, hidden, ...forShop(shop) });
   }
 
-  async listHandbook() {
-    await this.reconcileAuthentication();
-    if (!this.clerkSubject) throw new Error("Sign in to Volt to use the handbook.");
-    return this.client.query(api.handbook.list, {});
+  // Runs a handbook call only as the account the background currently knows about.
+  // A newer epoch than this document has seen means an account change it hasn't
+  // processed yet, so it is applied first (dropping the cached Clerk session). The
+  // call then waits for Clerk and the Convex client to agree on the account, and its
+  // result is refused if the account changed while it ran.
+  private async asCurrentAccount<T>(epoch: string, run: () => Promise<T>): Promise<T> {
+    if (epoch !== this.accountEpoch) await this.accountChanged(epoch);
+    const subject = await this.requireSignedIn("Sign in to Volt to use the handbook.");
+    const result = await run();
+    if (this.accountEpoch !== epoch || this.clientAuthSubject() !== subject) {
+      throw new Error("Volt account changed. Try again.");
+    }
+    return result;
   }
 
-  async revealHandbookSecret(id: string) {
-    await this.reconcileAuthentication();
-    if (!this.clerkSubject) throw new Error("Sign in to Volt to use the handbook.");
+  listHandbook(epoch: string) {
+    return this.asCurrentAccount(epoch, () => this.client.query(api.handbook.list, {}));
+  }
+
+  revealHandbookSecret(epoch: string, id: string) {
     // Convex validates the id and refuses entries from another account.
-    return this.client.mutation(api.handbook.revealSecret, { id: id as Id<"handbookEntries"> });
+    return this.asCurrentAccount(epoch, () => this.client.mutation(api.handbook.revealSecret, { id: id as Id<"handbookEntries"> }));
   }
 
   async acknowledgeCursorDelivery(
