@@ -26,7 +26,7 @@ function PrivacyPage() {
         <h1 className="mt-3 text-4xl font-bold tracking-tight sm:text-5xl">
           Privacy Policy
         </h1>
-        <p className="mt-4 text-sm text-zinc-500">Effective September 28, 2026</p>
+        <p className="mt-4 text-sm text-zinc-500">Effective October 25, 2026</p>
 
         <div className="mt-12 space-y-10 text-base leading-7 text-zinc-700">
           <PolicySection title="What Volt processes">
@@ -65,10 +65,23 @@ function PrivacyPage() {
             </p>
           </PolicySection>
 
+          <PolicySection title="Store handbook">
+            <p>
+              The Chrome extension&apos;s handbook stores the entries you write,
+              such as store phone numbers, addresses, setup guides, and logins
+              your team saves, in your signed-in Volt account&apos;s workspace.
+              Saved usernames and passwords are encrypted before they are stored,
+              are hidden in lists and search, and are decrypted only when someone
+              signed in to that account reveals or copies one. Volt does not use
+              handbook entries for any other purpose. Deleting an entry removes it.
+            </p>
+          </PolicySection>
+
           <PolicySection title="Storage and service providers">
             <p>
               Account authentication is provided by Clerk. Workspace records and
-              access state, including encrypted Shopify credentials, are stored
+              access state, including encrypted Shopify credentials and handbook
+              logins, are stored
               with Convex. Private cloud photos are stored
               in a non-public Cloudflare R2 bucket and are accessed through
               short-lived signed URLs. Apple processes App Store purchases, and

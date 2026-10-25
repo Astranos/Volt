@@ -1,6 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import TopOffersPage from "./TopOffers";
 import MobileScanner from "./MobileScanner";
+import HandbookPanel from "../handbook/HandbookPanel";
 import ShopifyAuditReview from "./ShopifyAuditReview";
 import { SHOPIFY_AUDIT_REVIEW_KEY } from "../../domain/shopify-audit";
 import {
@@ -190,6 +191,7 @@ export default function UnifiedSidepanel() {
     "top-offers": TopOffersPage,
     "mobile-scanner": MobileScanner,
     "mobile-photos": MobileScanner,
+    handbook: HandbookPanel,
     "shopify-audit": ShopifyAuditReview,
   };
 

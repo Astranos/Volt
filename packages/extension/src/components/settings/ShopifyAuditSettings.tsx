@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Eye, ExternalLink, RefreshCw } from "lucide-react";
 import { CLERK_SIGN_IN_URL } from "../../access/config";
-import { connectShopifyAudit, disconnectShopifyAudit, getShopifyAuditConnection, listHiddenShopifyProducts, setShopifyProductHidden, type ShopifyHiddenProduct } from "../../shopify-audit/client";
+import { connectShopifyAudit, disconnectShopifyAudit, listHiddenShopifyProducts, setShopifyProductHidden, type ShopifyHiddenProduct } from "../../shopify-audit/client";
+import { useShopifyStores } from "../../shopify-audit/use-shopify-stores";
 import { findOpenShopifyAdminShops, shopDomainFromAdminUrl } from "../../shopify-audit/store-discovery";
 import { useShopifyAuditMode } from "../../shopify-audit/use-audit-mode";
 import { fetchKioskQueue, normalizeKioskStore } from "../../kiosk/kiosk-requests";
@@ -50,7 +51,7 @@ function KioskStoreSetting() {
     </div>
   );
 }
-import type { ShopifyAuditMode } from "../../domain/shopify-audit";
+import { MAX_SHOPIFY_STORES, type ShopifyAuditMode } from "../../domain/shopify-audit";
 
 const AUDIT_MODES: Array<{ value: ShopifyAuditMode; label: string; description: string }> = [
   { value: "sidepanel", label: "Side panel", description: "Review one product at a time in a single tab, with a checklist in the side panel." },
@@ -58,65 +59,68 @@ const AUDIT_MODES: Array<{ value: ShopifyAuditMode; label: string; description: 
 ];
 
 export function ShopifyAuditSettings() {
-  const [connectedShop, setConnectedShop] = useState<string | null>(null);
-  const [availableShops, setAvailableShops] = useState<string[]>([]);
+  const stores = useShopifyStores();
+  const shops = useMemo(() => stores.connection?.shops ?? [], [stores.connection]);
+  const activeShop = stores.connection?.shop ?? null;
+  const [openShops, setOpenShops] = useState<string[]>([]);
   const [selectedShop, setSelectedShop] = useState("");
   const [discoveryTabId, setDiscoveryTabId] = useState<number | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [adding, setAdding] = useState(false);
   const [working, setWorking] = useState(false);
-  const [waitingForInstall, setWaitingForInstall] = useState(false);
+  // The store being approved in a Shopify tab; cleared once it shows up as connected.
+  const [pendingShop, setPendingShop] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [hiddenProducts, setHiddenProducts] = useState<ShopifyHiddenProduct[] | null>(null);
+  // Tagged with the store it was loaded for, so a store switch never shows or
+  // unhides another store's products while the new list loads.
+  const [hiddenList, setHiddenList] = useState<{ shop: string; products: ShopifyHiddenProduct[] } | null>(null);
+  const hiddenProducts = hiddenList && hiddenList.shop === activeShop ? hiddenList.products : null;
   const [auditMode, setAuditMode] = useShopifyAuditMode();
+  const { refresh } = stores;
+  // Stores open in Shopify tabs that aren't connected yet.
+  const availableShops = useMemo(() => openShops.filter((shop) => !shops.includes(shop)), [openShops, shops]);
+  const showConnect = shops.length === 0 || adding;
 
-  const refresh = useCallback(async () => {
-    try {
-      const connection = await getShopifyAuditConnection();
-      setConnectedShop(connection?.shop ?? null);
-      if (connection) {
-        setWaitingForInstall(false);
-        setError(null);
-      }
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not check Shopify connection.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { void refresh(); }, [refresh]);
   useEffect(() => {
-    if (!connectedShop) { setHiddenProducts(null); return; }
-    void listHiddenShopifyProducts()
-      .then(setHiddenProducts)
+    setHiddenList(null);
+    if (!activeShop) return;
+    let current = true;
+    void listHiddenShopifyProducts(activeShop)
+      .then((products) => { if (current) setHiddenList({ shop: activeShop, products }); })
       .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "Could not load hidden products."));
-  }, [connectedShop]);
+    return () => { current = false; };
+  }, [activeShop]);
   useEffect(() => {
-    void findOpenShopifyAdminShops()
-      .then((shops) => {
-        setAvailableShops(shops);
-        setSelectedShop((current) => shops.includes(current) ? current : shops[0] ?? "");
-      })
-      .catch(() => undefined);
+    void findOpenShopifyAdminShops().then(setOpenShops).catch(() => undefined);
   }, []);
   useEffect(() => {
-    if (!waitingForInstall) return;
-    const timer = window.setInterval(() => { void refresh(); }, 3000);
+    setSelectedShop((current) => availableShops.includes(current) ? current : availableShops[0] ?? "");
+  }, [availableShops]);
+  useEffect(() => {
+    if (pendingShop && shops.includes(pendingShop)) {
+      setPendingShop(null);
+      setAdding(false);
+      setError(null);
+    }
+  }, [pendingShop, shops]);
+  useEffect(() => {
+    if (!pendingShop) return;
+    const timer = window.setInterval(() => { void refresh().catch(() => undefined); }, 3000);
     return () => window.clearInterval(timer);
-  }, [refresh, waitingForInstall]);
+  }, [refresh, pendingShop]);
 
   const startOAuth = useCallback(async (shop: string) => {
     setWorking(true);
     setError(null);
     try {
       await connectShopifyAudit(shop);
-      setWaitingForInstall(true);
+      // A reconnect is already listed, so there's nothing to wait for.
+      setPendingShop(shops.includes(shop) ? null : shop);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not start Shopify connection.");
     } finally {
       setWorking(false);
     }
-  }, []);
+  }, [shops]);
 
   useEffect(() => {
     if (discoveryTabId === null) return;
@@ -160,13 +164,13 @@ export function ShopifyAuditSettings() {
     }
   };
 
-  const disconnect = async () => {
+  const disconnect = async (shop: string) => {
     setWorking(true);
     setError(null);
     try {
-      await disconnectShopifyAudit();
-      setConnectedShop(null);
-      setWaitingForInstall(false);
+      await disconnectShopifyAudit(shop);
+      if (pendingShop === shop) setPendingShop(null);
+      await refresh();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not disconnect Shopify.");
     } finally {
@@ -174,45 +178,80 @@ export function ShopifyAuditSettings() {
     }
   };
 
-  const unhide = async (product: ShopifyHiddenProduct) => {
+  const unhide = async (shop: string, product: ShopifyHiddenProduct) => {
     setError(null);
     try {
-      await setShopifyProductHidden(product, false);
-      setHiddenProducts((current) => current?.filter((item) => item.id !== product.id) ?? null);
+      await setShopifyProductHidden(product, false, shop);
+      setHiddenList((current) => current?.shop === shop
+        ? { shop, products: current.products.filter((item) => item.id !== product.id) }
+        : current);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not show the product again.");
     }
   };
 
+  const shownError = error ?? (stores.connection ? null : stores.error);
+  const button = "rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted disabled:opacity-50";
+
   return (
     <section className="scroll-mt-20 space-y-4" id="shopify-audit">
       <div>
         <h2 className="text-2xl font-bold">Shopify product audit</h2>
-        <p className="text-muted-foreground">Connect your store to review yesterday's new products from the Volt new tab page. Draft and unpublished products are included.</p>
+        <p className="text-muted-foreground">Connect your stores to search their inventory and review yesterday's new products from the Volt new tab page. Draft and unpublished products are included.</p>
       </div>
       <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
-        {loading ? <p className="text-sm text-muted-foreground">Checking Shopify connection…</p> : connectedShop ? (
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div><p className="font-medium">Connected to {connectedShop}</p><p className="text-sm text-muted-foreground">Volt has read-only product access for your account.</p></div>
-            <button className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted disabled:opacity-50" disabled={working} onClick={() => void disconnect()} type="button">Disconnect</button>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {availableShops.length > 0 ? (
-              <label className="block max-w-md space-y-1 text-sm font-medium">
-                <span>Store found in your Shopify tabs</span>
-                <select className="h-10 w-full rounded-md border border-input bg-background px-3" onChange={(event) => setSelectedShop(event.target.value)} value={selectedShop}>
-                  {availableShops.map((shop) => <option key={shop} value={shop}>{shop}</option>)}
-                </select>
-              </label>
-            ) : <p className="text-sm text-muted-foreground">Sign in to Shopify and choose your store. Volt will detect it automatically.</p>}
-            <p className="text-xs text-muted-foreground">Shopify will ask you to approve read-only access to products.</p>
-            <div className="flex flex-wrap gap-2">
-              <button className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50" disabled={working || discoveryTabId !== null} onClick={() => void connect()} type="button">{discoveryTabId !== null ? "Waiting for Shopify…" : waitingForInstall ? "Try connecting again" : "Connect Shopify"} <ExternalLink aria-hidden="true" className="ml-1 inline h-3.5 w-3.5" /></button>
-              <button aria-label="Refresh Shopify connection" className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted" onClick={() => void refresh()} type="button"><RefreshCw aria-hidden="true" className="inline h-4 w-4" /> Check connection</button>
-            </div>
-            {discoveryTabId !== null && <p className="text-sm text-muted-foreground">Choose your store in the Shopify tab. Volt will continue when its admin page opens.</p>}
-            {waitingForInstall && <p className="text-sm text-muted-foreground">Finish the approval in the Shopify tab. This page will update when your store connects.</p>}
+        {!stores.loaded ? <p className="text-sm text-muted-foreground">Checking Shopify connection…</p> : (
+          <div className="space-y-4">
+            {shops.length > 0 && (
+              <div className="space-y-2">
+                <div>
+                  <p className="font-medium">{shops.length === 1 ? "Connected store" : `${shops.length} stores connected`}</p>
+                  <p className="text-sm text-muted-foreground">
+                    Volt has read-only product access for your account.
+                    {shops.length > 1 && " This computer searches and audits the active store. Switch stores here or from the new tab's Shopify results."}
+                  </p>
+                </div>
+                <ul className="divide-y divide-border rounded-md border border-border">
+                  {shops.map((shop) => (
+                    <li className="flex flex-wrap items-center justify-between gap-2 px-3 py-2" key={shop}>
+                      <span className="min-w-0 truncate text-sm">
+                        <span className="font-medium">{shop}</span>
+                        {shops.length > 1 && shop === activeShop && <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">Active</span>}
+                      </span>
+                      <span className="flex shrink-0 flex-wrap gap-2">
+                        {shop !== activeShop && <button className={button} disabled={working} onClick={() => void stores.select(shop).catch(() => undefined)} type="button">Make active</button>}
+                        <button className={button} disabled={working} onClick={() => void startOAuth(shop)} title="Approve access again if Shopify asks you to reconnect" type="button">Reconnect</button>
+                        <button className={button} disabled={working} onClick={() => void disconnect(shop)} type="button">Disconnect</button>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                {!showConnect && (shops.length < MAX_SHOPIFY_STORES
+                  ? <button className={button} disabled={working} onClick={() => setAdding(true)} type="button">Connect another store</button>
+                  : <p className="text-xs text-muted-foreground">You can connect up to {MAX_SHOPIFY_STORES} stores.</p>)}
+              </div>
+            )}
+            {showConnect && (
+              <div className="space-y-3">
+                {shops.length > 0 && <p className="font-medium">Connect another store</p>}
+                {availableShops.length > 0 ? (
+                  <label className="block max-w-md space-y-1 text-sm font-medium">
+                    <span>Store found in your Shopify tabs</span>
+                    <select className="h-10 w-full rounded-md border border-input bg-background px-3" onChange={(event) => setSelectedShop(event.target.value)} value={selectedShop}>
+                      {availableShops.map((shop) => <option key={shop} value={shop}>{shop}</option>)}
+                    </select>
+                  </label>
+                ) : <p className="text-sm text-muted-foreground">Sign in to Shopify and choose {shops.length > 0 ? "the store to add" : "your store"}. Volt will detect it automatically.</p>}
+                <p className="text-xs text-muted-foreground">Shopify will ask you to approve read-only access to products.</p>
+                <div className="flex flex-wrap gap-2">
+                  <button className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50" disabled={working || discoveryTabId !== null} onClick={() => void connect()} type="button">{discoveryTabId !== null ? "Waiting for Shopify…" : pendingShop ? "Try connecting again" : "Connect Shopify"} <ExternalLink aria-hidden="true" className="ml-1 inline h-3.5 w-3.5" /></button>
+                  <button aria-label="Refresh Shopify connection" className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted" onClick={() => void refresh().catch(() => undefined)} type="button"><RefreshCw aria-hidden="true" className="inline h-4 w-4" /> Check connection</button>
+                  {shops.length > 0 && <button className="rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted" onClick={() => { setAdding(false); setPendingShop(null); }} type="button">Cancel</button>}
+                </div>
+                {discoveryTabId !== null && <p className="text-sm text-muted-foreground">Choose your store in the Shopify tab. Volt will continue when its admin page opens.</p>}
+                {pendingShop && <p className="text-sm text-muted-foreground">Finish the approval in the Shopify tab. This page will update when {pendingShop} connects.</p>}
+              </div>
+            )}
           </div>
         )}
         <div className="mt-5 border-t border-border pt-4">
@@ -234,23 +273,23 @@ export function ShopifyAuditSettings() {
           </div>
         </div>
         <KioskStoreSetting />
-        {connectedShop && hiddenProducts && (
+        {activeShop && hiddenList && hiddenProducts && (
           <div className="mt-5 border-t border-border pt-4">
-            <p className="font-medium">Hidden from new tab search</p>
+            <p className="font-medium">Hidden from new tab search{shops.length > 1 && ` · ${activeShop}`}</p>
             <p className="text-sm text-muted-foreground">Use the hide button on a Shopify search result to keep it out of new tab results.</p>
             {hiddenProducts.length === 0 ? <p className="mt-2 text-sm text-muted-foreground">No hidden products.</p> : (
               <ul className="mt-3 divide-y divide-border rounded-md border border-border">
                 {hiddenProducts.map((product) => (
                   <li className="flex items-center justify-between gap-3 px-3 py-2" key={product.id}>
                     <span className="truncate text-sm" title={product.title}>{product.title}</span>
-                    <button className="shrink-0 rounded-md border border-border px-2.5 py-1 text-xs hover:bg-muted" onClick={() => void unhide(product)} type="button"><Eye aria-hidden="true" className="mr-1 inline h-3.5 w-3.5" />Show in results</button>
+                    <button className="shrink-0 rounded-md border border-border px-2.5 py-1 text-xs hover:bg-muted" onClick={() => void unhide(hiddenList.shop, product)} type="button"><Eye aria-hidden="true" className="mr-1 inline h-3.5 w-3.5" />Show in results</button>
                   </li>
                 ))}
               </ul>
             )}
           </div>
         )}
-        {error && <div className="mt-3 text-sm text-destructive" role="alert">{error} {error.toLowerCase().includes("sign in") && <button className="underline" onClick={() => void chrome.tabs.create({ url: CLERK_SIGN_IN_URL })} type="button">Sign in to Volt</button>}</div>}
+        {shownError && <div className="mt-3 text-sm text-destructive" role="alert">{shownError} {shownError.toLowerCase().includes("sign in") && <button className="underline" onClick={() => void chrome.tabs.create({ url: CLERK_SIGN_IN_URL })} type="button">Sign in to Volt</button>}</div>}
       </div>
     </section>
   );

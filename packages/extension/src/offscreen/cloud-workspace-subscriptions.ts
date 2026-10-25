@@ -3,6 +3,7 @@ import type { createClerkClient } from "@clerk/chrome-extension/client";
 import { ConvexClient } from "convex/browser";
 import { makeFunctionReference } from "convex/server";
 import { api } from "../../../../convex/_generated/api";
+import type { Id } from "../../../../convex/_generated/dataModel";
 import { CLERK_PUBLISHABLE_KEY, convexDeploymentUrlFromHttpActionsUrl } from "../access/config";
 import { offscreenStorageCache } from "./offscreen-storage-cache";
 import { getMobileScannerExtensionIdentity } from "../domain/mobile-scanner-identity";
@@ -33,27 +34,32 @@ const shopifyStartConnectReference = makeFunctionReference<
 const shopifyGetConnectionReference = makeFunctionReference<
   "query", Record<string, never>, { shop: string } | null
 >("shopifyAudit:getConnection");
+const shopifyListConnectionsReference = makeFunctionReference<
+  "query", Record<string, never>, Array<{ shop: string }>
+>("shopifyAudit:listConnections");
 const shopifyDisconnectReference = makeFunctionReference<
-  "mutation", Record<string, never>, null
+  "mutation", { shop?: string }, null
 >("shopifyAudit:disconnect");
 const shopifyListYesterdayReference = makeFunctionReference<
-  "action", { startUtc: string; endUtc: string; date: string },
+  "action", { startUtc: string; endUtc: string; date: string; shop?: string },
   { shop: string; date: string; products: Array<{ id: string; title: string; status: string; url: string }> }
 >("shopifyAudit:listYesterday");
 const shopifySearchProductsReference = makeFunctionReference<
-  "action", { query: string },
+  "action", { query: string; shop?: string },
   { shop: string; products: Array<{ id: string; title: string; status: string; totalInventory: number; url: string; imageUrl: string | null; price: string | null; currencyCode: string | null; condition: string | null; sku: string | null }> }
 >("shopifyAudit:searchProducts");
 const shopifyProductDetailsReference = makeFunctionReference<
-  "action", { productIds: string[] },
+  "action", { productIds: string[]; shop?: string },
   { shop: string; products: ShopifyProductDetails[] }
 >("shopifyAudit:productDetails");
 const shopifyListHiddenProductsReference = makeFunctionReference<
-  "query", Record<string, never>, Array<{ id: string; title: string }>
+  "query", { shop?: string }, Array<{ id: string; title: string }>
 >("shopifyAudit:listHiddenProducts");
 const shopifySetProductHiddenReference = makeFunctionReference<
-  "mutation", { productId: string; title: string; hidden: boolean }, null
+  "mutation", { productId: string; title: string; hidden: boolean; shop?: string }, null
 >("shopifyAudit:setProductHidden");
+// Without a shop, the backend uses the account's first-connected store.
+const forShop = (shop: string | undefined) => (shop ? { shop } : {});
 
 export function objectFrom(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -533,39 +539,68 @@ export class CloudWorkspaceSubscriptions {
     return this.client.query(shopifyGetConnectionReference, {});
   }
 
+  async listShopifyConnections() {
+    await this.requireSignedIn("Sign in to Volt before connecting Shopify.");
+    return this.client.query(shopifyListConnectionsReference, {});
+  }
+
   async startShopifyConnection(shop: string) {
     await this.requireSignedIn("Sign in to Volt before connecting Shopify.");
     return this.client.action(shopifyStartConnectReference, { shop });
   }
 
-  async disconnectShopify() {
+  async disconnectShopify(shop?: string) {
     await this.requireSignedIn("Sign in to Volt before disconnecting Shopify.");
-    return this.client.mutation(shopifyDisconnectReference, {});
+    return this.client.mutation(shopifyDisconnectReference, forShop(shop));
   }
 
-  async listShopifyYesterday(startUtc: string, endUtc: string, date: string) {
+  async listShopifyYesterday(startUtc: string, endUtc: string, date: string, shop?: string) {
     await this.requireSignedIn("Sign in to Volt before auditing Shopify.");
-    return this.client.action(shopifyListYesterdayReference, { startUtc, endUtc, date });
+    return this.client.action(shopifyListYesterdayReference, { startUtc, endUtc, date, ...forShop(shop) });
   }
 
-  async searchShopifyProducts(query: string) {
+  async searchShopifyProducts(query: string, shop?: string) {
     await this.requireSignedIn("Sign in to Volt before searching Shopify.");
-    return this.client.action(shopifySearchProductsReference, { query });
+    return this.client.action(shopifySearchProductsReference, { query, ...forShop(shop) });
   }
 
-  async getShopifyProductDetails(productIds: string[]) {
+  async getShopifyProductDetails(productIds: string[], shop?: string) {
     await this.requireSignedIn("Sign in to Volt before comparing Shopify products.");
-    return this.client.action(shopifyProductDetailsReference, { productIds });
+    return this.client.action(shopifyProductDetailsReference, { productIds, ...forShop(shop) });
   }
 
-  async listHiddenShopifyProducts() {
+  async listHiddenShopifyProducts(shop?: string) {
     await this.requireSignedIn("Sign in to Volt before managing Shopify.");
-    return this.client.query(shopifyListHiddenProductsReference, {});
+    return this.client.query(shopifyListHiddenProductsReference, forShop(shop));
   }
 
-  async setShopifyProductHidden(productId: string, title: string, hidden: boolean) {
+  async setShopifyProductHidden(productId: string, title: string, hidden: boolean, shop?: string) {
     await this.requireSignedIn("Sign in to Volt before managing Shopify.");
-    return this.client.mutation(shopifySetProductHiddenReference, { productId, title, hidden });
+    return this.client.mutation(shopifySetProductHiddenReference, { productId, title, hidden, ...forShop(shop) });
+  }
+
+  // Runs a handbook call only as the account the background currently knows about.
+  // A newer epoch than this document has seen means an account change it hasn't
+  // processed yet, so it is applied first (dropping the cached Clerk session). The
+  // call then waits for Clerk and the Convex client to agree on the account, and its
+  // result is refused if the account changed while it ran.
+  private async asCurrentAccount<T>(epoch: string, run: () => Promise<T>): Promise<T> {
+    if (epoch !== this.accountEpoch) await this.accountChanged(epoch);
+    const subject = await this.requireSignedIn("Sign in to Volt to use the handbook.");
+    const result = await run();
+    if (this.accountEpoch !== epoch || this.clientAuthSubject() !== subject) {
+      throw new Error("Volt account changed. Try again.");
+    }
+    return result;
+  }
+
+  listHandbook(epoch: string) {
+    return this.asCurrentAccount(epoch, () => this.client.query(api.handbook.list, {}));
+  }
+
+  revealHandbookSecret(epoch: string, id: string) {
+    // Convex validates the id and refuses entries from another account.
+    return this.asCurrentAccount(epoch, () => this.client.mutation(api.handbook.revealSecret, { id: id as Id<"handbookEntries"> }));
   }
 
   async acknowledgeCursorDelivery(

@@ -45,6 +45,8 @@ import "./ExtensionAccess.css";
 
 type AccessSurface = "popup" | "sidepanel";
 type AccountControlSurface = "newtab" | "sidepanel";
+// Extension pages that host the shared Clerk session and return there after sign-in.
+type ClerkHostPage = "/sidepanel.html" | "/handbook.html";
 // null while Clerk is still loading — the panel must not claim a signed-out
 // account before it knows one way or the other.
 const SidepanelAuthContext = createContext<boolean | null>(null);
@@ -131,7 +133,13 @@ function SidepanelAuthBridge({ children }: { children: ReactNode }) {
   );
 }
 
-export function SidepanelClerkProvider({ children }: { children: ReactNode }) {
+export function SidepanelClerkProvider({
+  children,
+  page = "/sidepanel.html",
+}: {
+  children: ReactNode;
+  page?: ClerkHostPage;
+}) {
   useChromeProfileSessionReload();
   if (!CLERK_PUBLISHABLE_KEY) {
     return (
@@ -141,7 +149,7 @@ export function SidepanelClerkProvider({ children }: { children: ReactNode }) {
     );
   }
 
-  const currentExtensionPage = chrome.runtime.getURL("/sidepanel.html");
+  const currentExtensionPage = chrome.runtime.getURL(page);
   return (
     <ClerkProvider
       __experimental_syncHostListener
@@ -181,9 +189,9 @@ export function useSidepanelSignIn() {
 // which Chrome blocks in third-party contexts for dev instances
 // (*.clerk.accounts.dev). Hash routing is required because the sidepanel
 // has no router and its URL is a chrome-extension:// page.
-export function SidepanelSignInCard() {
+export function SidepanelSignInCard({ page = "/sidepanel.html" }: { page?: ClerkHostPage }) {
   if (CHROME_PROFILE_AUTH_ENABLED) return <div className="px-4 pb-4"><ChromeProfileSignIn layout="card" /></div>;
-  const currentExtensionPage = chrome.runtime.getURL("/sidepanel.html");
+  const currentExtensionPage = chrome.runtime.getURL(page);
   return (
     <div className="px-4 pb-4">
       <SignIn

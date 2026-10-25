@@ -5,6 +5,15 @@ import { auditRangeInComputerTimezone, yesterdayInComputerTimezone } from "../do
 import { EXTENSION_SCANNER_SIGNAL_URL } from "../domain/mobile-scanner-signal-url.ts";
 
 const product = (id) => ({ id: String(id), title: `Product ${id}`, status: "DRAFT", url: `https://admin.shopify.com/store/sample/products/${id}` });
+// chrome.storage.local, where the active store is saved.
+function memoryStorage(items = {}) {
+  return {
+    items,
+    get: async (key) => (key in items ? { [key]: items[key] } : {}),
+    set: async (values) => { Object.assign(items, values); },
+    remove: async (key) => { delete items[key]; },
+  };
+}
 const lazyUrl = (item) => `chrome-extension://ext/shopify-audit-tab.html?${new URLSearchParams({ u: item.url, t: item.title })}`;
 
 function setup(products, { groupFails = () => false } = {}) {
@@ -14,7 +23,7 @@ function setup(products, { groupFails = () => false } = {}) {
   let groupAlive = true;
   const chromeApi = {
     runtime: { getURL: (path) => `chrome-extension://ext${path}` },
-    storage: { session: {
+    storage: { local: memoryStorage(), session: {
       get: async (key) => (key in session ? { [key]: structuredClone(session[key]) } : {}),
       set: async (items) => { Object.assign(session, structuredClone(items)); },
       remove: async (key) => { delete session[key]; },
@@ -141,7 +150,7 @@ test("large audit days no longer hit a tab cap", async () => {
 test("lists the last 3 days when the side panel asks for them", async () => {
   const sent = [];
   const controller = createShopifyAuditController({
-    chromeApi: {}, extensionId: "ext",
+    chromeApi: { storage: { local: memoryStorage() } }, extensionId: "ext",
     sendOffscreenMessage: async (message) => {
       sent.push(message);
       return { success: true, value: { shop: "sample.myshopify.com", date: message.date, products: [] } };
@@ -167,7 +176,7 @@ test("lists yesterday's products for the side panel review without opening tabs"
 test("forwards live searches only from trusted extension pages", async () => {
   const messages = [];
   const controller = createShopifyAuditController({
-    chromeApi: {},
+    chromeApi: { storage: { local: memoryStorage() } },
     extensionId: "ext",
     sendOffscreenMessage: async (message) => {
       messages.push(message);
@@ -188,7 +197,7 @@ test("forwards live searches only from trusted extension pages", async () => {
 test("forwards compare detail requests from the compare page with valid product IDs", async () => {
   const messages = [];
   const controller = createShopifyAuditController({
-    chromeApi: {},
+    chromeApi: { storage: { local: memoryStorage() } },
     extensionId: "ext",
     sendOffscreenMessage: async (message) => {
       messages.push(message);
@@ -262,4 +271,49 @@ test("a close handler still settling can't erase an audit started meanwhile", as
   assert.equal(response.success, true);
   assert.equal(response.value.resumed, false);
   assert.ok(session.shopifyAuditTabsRun, "the new audit's state survives");
+});
+
+test("status lists every connected store and keeps the saved one active while it's connected", async () => {
+  const local = memoryStorage({ shopifyActiveShop: "two.myshopify.com" });
+  let shops = ["one.myshopify.com", "two.myshopify.com"];
+  const controller = createShopifyAuditController({
+    chromeApi: { storage: { local } }, extensionId: "ext",
+    sendOffscreenMessage: async (message) => {
+      assert.equal(message.action, "shopifyAuditOffscreenStores");
+      return { success: true, value: shops.map((shop) => ({ shop })) };
+    },
+  });
+  const status = () => new Promise((resolve) => controller.handleMessage(
+    { action: "shopifyAuditStatus" }, { id: "ext", url: "chrome-extension://ext/newtab.html" }, resolve));
+  assert.deepEqual(await status(), { success: true, value: { shop: "two.myshopify.com", shops } });
+  // Disconnected elsewhere: fall back to the first store and remember that.
+  shops = ["one.myshopify.com"];
+  assert.deepEqual(await status(), { success: true, value: { shop: "one.myshopify.com", shops } });
+  assert.equal(local.items.shopifyActiveShop, "one.myshopify.com");
+  shops = [];
+  assert.deepEqual(await status(), { success: true, value: null });
+  assert.equal("shopifyActiveShop" in local.items, false);
+});
+
+test("searches the active store unless the page names another one", async () => {
+  const messages = [];
+  const controller = createShopifyAuditController({
+    chromeApi: { storage: { local: memoryStorage({ shopifyActiveShop: "two.myshopify.com" }) } }, extensionId: "ext",
+    sendOffscreenMessage: async (message) => {
+      messages.push(message);
+      return { success: true, value: null };
+    },
+  });
+  const send = (message) => new Promise((resolve) => controller.handleMessage(message, { id: "ext", url: "chrome-extension://ext/newtab.html" }, resolve));
+  await send({ action: "shopifyAuditSearchProducts", query: "camera" });
+  await send({ action: "shopifyAuditSearchProducts", query: "camera", shop: "One.myshopify.com" });
+  assert.equal((await send({ action: "shopifyAuditSearchProducts", query: "camera", shop: "evil.test" })).success, false);
+  await send({ action: "shopifyAuditDisconnect", shop: "two.myshopify.com" });
+  await send({ action: "shopifyAuditDisconnect" });
+  assert.deepEqual(messages, [
+    { action: "shopifyAuditOffscreenSearchProducts", query: "camera", shop: "two.myshopify.com" },
+    { action: "shopifyAuditOffscreenSearchProducts", query: "camera", shop: "one.myshopify.com" },
+    { action: "shopifyAuditOffscreenDisconnect", shop: "two.myshopify.com" },
+    { action: "shopifyAuditOffscreenDisconnect" },
+  ]);
 });

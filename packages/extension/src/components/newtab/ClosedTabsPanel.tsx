@@ -2,12 +2,19 @@ import React, { useState, useEffect, useRef } from "react";
 import { Command } from "cmdk";
 import { TabManager, TabInfo } from "@/src/utils/tab-manager";
 import { TabItem } from "../cmdk-palette/TabItem";
+import {
+  HandbookCommandGroup,
+  handbookCommandMatches,
+  useHandbookCommandEntries,
+  wantsHandbookAction,
+} from "../cmdk-palette/HandbookCommandGroup";
 import { RecentTabTiles } from "./RecentTabTiles";
 import { ToggleGroup, ToggleGroupItem } from "@/src/components/ui/toggle-group";
 import { Search as SearchIcon, Clock } from "lucide-react";
 import { type SearchMode } from "./NewTabHelp";
 import { ShopifyCompareTray, ShopifyProductResults, type ShopifyProductSearchState } from "./ShopifyProductResults";
-import { getShopifyAuditConnection, searchShopifyProducts, setShopifyProductHidden, type ShopifySearchProduct } from "../../shopify-audit/client";
+import { searchShopifyProducts, setShopifyProductHidden, type ShopifySearchProduct } from "../../shopify-audit/client";
+import { useShopifyStores } from "../../shopify-audit/use-shopify-stores";
 import { useKioskQueue, useKioskStore } from "../../kiosk/use-kiosk";
 import { MAX_COMPARE_PRODUCTS } from "../../domain/shopify-audit";
 import { shopifyComparePath } from "../../shopify-compare/compare-url";
@@ -58,22 +65,30 @@ export function ClosedTabsPanel({
   const [kioskStore] = useKioskStore();
   const kioskQueue = useKioskQueue(kioskStore);
   const kioskWaiting = kioskQueue.requests.filter((request) => request.status === "waiting").length;
-  const [shopifyShop, setShopifyShop] = useState<string | null>(null);
-  useEffect(() => {
-    if (!kioskStore) return;
-    void getShopifyAuditConnection().then((connection) => setShopifyShop(connection?.shop ?? null)).catch(() => undefined);
-  }, [kioskStore]);
+  const shopifyStores = useShopifyStores();
+  const shopifyShop = shopifyStores.connection?.shop ?? null;
+  const refreshShopifyStores = shopifyStores.refresh;
   const leaveCompare = () => {
     setCompareModeOn(false);
     setCompareProducts([]);
   };
+  // Picks can't be compared across stores, so switching stores clears them.
+  useEffect(() => { setCompareProducts([]); }, [shopifyShop]);
   const shopifySearchGeneration = useRef(0);
+  // Set once the user moves the selection with the keyboard or pointer during the
+  // current query. cmdk also selects the first row on its own (for example a handbook
+  // row while Shopify loads); only a row the user picked may take over Enter.
+  const userPickedRef = useRef(false);
+  const userPickedHandbook = () => selectedValue.startsWith("handbook-") && userPickedRef.current;
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const trimmedSearch = search.trim();
   const prefixedSearch = parseSearchPrefix(trimmedSearch);
   const displayedMode = prefixedSearch.mode ?? activeMode;
   const displayedQuery = prefixedSearch.mode ? prefixedSearch.query : trimmedSearch;
+  const handbookEntries = useHandbookCommandEntries(displayedQuery.trim().length >= 2);
+  const handbookMatches = handbookCommandMatches(handbookEntries, displayedQuery);
+  const showHandbookAction = wantsHandbookAction(displayedQuery, handbookMatches);
 
   useEffect(() => {
     const query = displayedQuery.trim();
@@ -81,32 +96,40 @@ export function ClosedTabsPanel({
       setShopifySearch({ kind: "idle" });
       return;
     }
+    // Wait to learn the active store so a switch can't race the first search.
+    if (!shopifyStores.loaded) return;
     let canceled = false;
     shopifySearchGeneration.current++;
     setShopifySearch({ kind: "loading", query });
     const timer = window.setTimeout(() => {
-      void searchShopifyProducts(query)
+      void searchShopifyProducts(query, shopifyShop ?? undefined)
         .then((result) => {
           if (canceled) return;
           setShopifySearch({ kind: "ready", query, result });
-          setSelectedValue(result.products[0] ? `shopify-product-${result.products[0].id}` : "");
+          // Keep a handbook entry only if the user picked it.
+          setSelectedValue((current) => current.startsWith("handbook-") && userPickedRef.current ? current
+            : result.products[0] ? `shopify-product-${result.products[0].id}` : "");
         })
         .catch((cause: unknown) => {
           if (canceled) return;
           setShopifySearch({ kind: "error", query, message: cause instanceof Error ? cause.message : "Could not search Shopify." });
+          // The active store may have been disconnected elsewhere; re-checking applies
+          // the fallback store, which reruns this search if it changed.
+          void refreshShopifyStores().catch(() => undefined);
         });
     }, 280);
     return () => { canceled = true; window.clearTimeout(timer); };
-  }, [displayedMode, displayedQuery, shopifyRetry]);
+  }, [displayedMode, displayedQuery, shopifyRetry, shopifyStores.loaded, shopifyShop, refreshShopifyStores]);
 
   const hideShopifyProduct = async (product: ShopifySearchProduct) => {
     const withoutProduct = (current: ShopifyProductSearchState): ShopifyProductSearchState => current.kind === "ready"
       ? { ...current, result: { ...current.result, products: current.result.products.filter((item) => item.id !== product.id) } }
       : current;
     const generation = shopifySearchGeneration.current;
+    const shop = shopifySearch.kind === "ready" ? shopifySearch.result.shop : undefined;
     setShopifySearch(withoutProduct);
     try {
-      await setShopifyProductHidden(product, true);
+      await setShopifyProductHidden(product, true, shop);
     } catch (cause) {
       // Only report the failure on the results it came from.
       if (generation !== shopifySearchGeneration.current) return;
@@ -123,7 +146,7 @@ export function ClosedTabsPanel({
   };
 
   const openCompare = () => {
-    void chrome.tabs.create({ url: chrome.runtime.getURL(shopifyComparePath(compareProducts.map((product) => product.id))), active: true });
+    void chrome.tabs.create({ url: chrome.runtime.getURL(shopifyComparePath(compareProducts.map((product) => product.id), shopifyShop)), active: true });
   };
 
   // Treat clicks anywhere on the search row's padding/icon area as a
@@ -193,9 +216,8 @@ export function ClosedTabsPanel({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-      // Arrow key navigation is handled by CMDK
-    }
+    // Arrow key navigation itself is handled by CMDK.
+    if (["ArrowDown", "ArrowUp", "Home", "End"].includes(e.key)) userPickedRef.current = true;
   };
 
   const handleSearchInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -214,11 +236,11 @@ export function ClosedTabsPanel({
       }
     }
 
-    if (
-      e.key === "Enter" &&
-      onSearchSubmit &&
-      displayedMode !== "shopify"
-    ) {
+    if (e.key !== "Enter" || userPickedHandbook()) return;
+    if (displayedMode === "shopify") {
+      // A handbook row cmdk selected by itself (Shopify still loading) must not copy or open.
+      if (selectedValue.startsWith("handbook-")) e.preventDefault();
+    } else if (onSearchSubmit) {
       e.preventDefault();
       onSearchSubmit(search);
     }
@@ -263,6 +285,7 @@ export function ClosedTabsPanel({
             value={search}
             onChange={(e) => {
               setSearch(e.target.value);
+              userPickedRef.current = false;
               if (listRef.current) {
                 listRef.current.scrollTop = 0;
               }
@@ -317,7 +340,11 @@ export function ClosedTabsPanel({
             </div>
           )}
 
-          <Command.List className={displayedMode === "shopify" ? "closed-tabs-list shopify-results-list" : "closed-tabs-list"} ref={listRef}>
+          <Command.List
+            className={displayedMode === "shopify" ? "closed-tabs-list shopify-results-list" : "closed-tabs-list"}
+            ref={listRef}
+            onPointerMove={() => { userPickedRef.current = true; }}
+          >
             {displayedMode === "shopify" ? (
               <ShopifyProductResults
                 query={displayedQuery.trim()}
@@ -331,6 +358,9 @@ export function ClosedTabsPanel({
                 onToggleCompareMode={() => { if (compareMode) leaveCompare(); else setCompareModeOn(true); }}
                 onRetry={() => setShopifyRetry((current) => current + 1)}
                 onOpenSettings={() => { void chrome.tabs.create({ url: chrome.runtime.getURL("/options.html#shopify-audit"), active: true }); }}
+                stores={shopifyStores.connection && shopifyStores.connection.shops.length > 1
+                  ? { shops: shopifyStores.connection.shops, active: shopifyStores.connection.shop, onSelect: (shop) => { void shopifyStores.select(shop).catch(() => undefined); } }
+                  : null}
                 kiosk={kioskStore ? { store: kioskStore, shop: shopifyShop, requests: kioskQueue.requests, clockOffset: kioskQueue.clockOffset, error: kioskQueue.error, busy: kioskQueue.busy, onUpdate: kioskQueue.update } : null}
               />
             ) : loading ? (
@@ -398,6 +428,13 @@ export function ClosedTabsPanel({
                 )}
               </>
             )}
+            {/* Below the main results and never preselected, so Enter keeps opening
+                the top product or running the search unless the user picks an entry. */}
+            <HandbookCommandGroup
+              matches={handbookMatches}
+              showOpenAction={showHandbookAction}
+              itemClassName="closed-tabs-item"
+            />
           </Command.List>
         </div>
       </div>

@@ -492,6 +492,19 @@
   padding-right: 4px;
 }
 
+.shopify-results-lead {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.shopify-store-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--nt-text-muted);
+}
+
 .shopify-filter-select option {
   background: var(--nt-surface-strong);
   color: var(--nt-text);

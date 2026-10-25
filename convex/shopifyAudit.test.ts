@@ -15,7 +15,7 @@ const consume = makeFunctionReference<"mutation", { shop: string; state: string;
 type Tokens = Pick<Doc<"shopifyConnections">, "encryptedAccessToken" | "encryptedRefreshToken" | "expiresAt" | "refreshExpiresAt">;
 const finish = makeFunctionReference<"mutation", { stateId: Id<"shopifyOAuthStates"> } & Tokens, null>("shopifyStore:finish");
 const list = makeFunctionReference<"action", { startUtc: string; endUtc: string; date: string }, { shop: string; date: string; products: { id: string; title: string; status: string; url: string }[] }>("shopifyAudit:listYesterday");
-const search = makeFunctionReference<"action", { query: string }, { shop: string; products: { id: string; title: string; status: string; totalInventory: number; url: string; imageUrl: string | null; price: string | null; currencyCode: string | null; sku: string | null; condition: string | null }[] }>("shopifyAudit:searchProducts");
+const search = makeFunctionReference<"action", { query: string; shop?: string }, { shop: string; products: { id: string; title: string; status: string; totalInventory: number; url: string; imageUrl: string | null; price: string | null; currencyCode: string | null; sku: string | null; condition: string | null }[] }>("shopifyAudit:searchProducts");
 const shop = "example-store.myshopify.com";
 const state = "a".repeat(64);
 const browserNonce = "b".repeat(64);
@@ -118,6 +118,51 @@ describe("Shopify authorization and account isolation", () => {
     await alice.mutation(disconnect, {});
     await expect(t.mutation(finish, { stateId: pending.id, ...tokens })).rejects.toThrow("canceled");
     expect(await alice.query(get, {})).toBeNull();
+  });
+  test("connects several stores to one account and disconnects them one at a time", async () => {
+    const t = convexTest(schema, modules);
+    const alice = t.withIdentity({ subject: "alice", tokenIdentifier: owner });
+    const listConnections = makeFunctionReference<"query", Record<string, never>, { shop: string }[]>("shopifyAudit:listConnections");
+    const disconnectShop = makeFunctionReference<"mutation", { shop?: string }, null>("shopifyAudit:disconnect");
+    const connect = async (store: string, storeState: string) => {
+      await t.mutation(begin, { ownerTokenIdentifier: owner, shop: store, state: storeState, browserNonceHash });
+      const consumed = await t.mutation(consume, { shop: store, state: storeState, browserNonceHash });
+      await t.mutation(finish, { stateId: consumed.id, ...tokens });
+    };
+    const stores = ["one", "two", "three", "four", "five"].map(name => `${name}.myshopify.com`);
+    for (const [index, store] of stores.entries()) await connect(store, String(index).repeat(64));
+    // Reconnecting a store replaces it in place instead of adding a duplicate, so
+    // the first-connected store stays the default for clients that omit a shop.
+    await connect(stores[1], "c".repeat(64));
+    await connect(stores[0], "e".repeat(64));
+    expect(await alice.query(listConnections, {})).toEqual(stores.map(store => ({ shop: store })));
+    expect(await alice.query(get, {})).toEqual({ shop: stores[0] });
+    await expect(t.mutation(begin, { ownerTokenIdentifier: owner, shop: "six.myshopify.com", state: "d".repeat(64), browserNonceHash })).rejects.toThrow("up to 5");
+
+    await alice.mutation(disconnectShop, { shop: stores[0] });
+    expect((await alice.query(listConnections, {})).map(row => row.shop)).not.toContain(stores[0]);
+    expect(await alice.query(get, {})).toEqual({ shop: stores[1] });
+    await expect(alice.action(search, { query: "phone", shop: stores[0] })).rejects.toThrow("isn't connected");
+    await alice.mutation(disconnectShop, {});
+    expect(await alice.query(listConnections, {})).toEqual([]);
+  });
+  test("searches the store that was asked for", async () => {
+    const t = convexTest(schema, modules);
+    const alice = t.withIdentity({ subject: "alice", tokenIdentifier: owner });
+    const second = "second-store.myshopify.com";
+    for (const store of [shop, second]) {
+      const aad = `${owner}|${store}`;
+      await t.run(async ctx => ctx.db.insert("shopifyConnections", {
+        ownerTokenIdentifier: owner, shop: store, encryptedAccessToken: await encryptToken(`access-${store}`, aad),
+        encryptedRefreshToken: await encryptToken("refresh", aad), expiresAt: Date.now() + 3600000, refreshExpiresAt: Date.now() + 86400000,
+      }));
+    }
+    const mock = vi.fn<typeof fetch>().mockImplementation(async () => new Response(JSON.stringify({ data: { inStock: { nodes: [] }, outOfStock: { nodes: [] } } })));
+    vi.stubGlobal("fetch", mock);
+    expect((await alice.action(search, { query: "phone" })).shop).toBe(shop);
+    expect((await alice.action(search, { query: "phone", shop: second })).shop).toBe(second);
+    expect(String(mock.mock.calls[1][0])).toContain(second);
+    expect(new Headers(mock.mock.calls[1][1]?.headers).get("X-Shopify-Access-Token")).toBe(`access-${second}`);
   });
   test("encrypts secrets with randomized authenticated encryption bound to account and shop", async () => {
     const aad = `${owner}|${shop}`;

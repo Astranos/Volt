@@ -1,6 +1,6 @@
-import { Calculator, ClipboardCheck, type LucideIcon, ScanLine } from "lucide-react";
+import { BookOpen, Calculator, ClipboardCheck, type LucideIcon, ScanLine } from "lucide-react";
 
-export type SidepanelToolId = "top-offers" | "mobile-scanner" | "mobile-photos" | "shopify-audit";
+export type SidepanelToolId = "top-offers" | "mobile-scanner" | "mobile-photos" | "handbook" | "shopify-audit";
 
 export interface SidepanelToolMetadata {
   id: SidepanelToolId;
@@ -22,6 +22,12 @@ export const SIDEPANEL_TOOLS: SidepanelToolMetadata[] = [
     label: "Scanner",
     description: "Scan barcodes with your phone",
     icon: ScanLine,
+  },
+  {
+    id: "handbook",
+    label: "Handbook",
+    description: "Look up store info, logins, and setup guides",
+    icon: BookOpen,
   },
   {
     // Shown only while a Shopify audit is open or in progress.

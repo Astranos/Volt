@@ -162,6 +162,16 @@ describe("Chrome profile authentication", () => {
     await f.controller.signIn();
     expect(f.chromeApi.identity.removeCachedAuthToken).toHaveBeenCalledWith({ token: "google-access-token" });
   });
+  test("the handbook page can sign in, fall back to manual sign-in, and sign out", async () => {
+    const f = fixture();
+    const sender = { id: "extension", url: "chrome-extension://extension/handbook.html" };
+    for (const action of ["chromeProfileSignIn", "chromeProfileManualSignIn", "chromeProfileSignOut"]) {
+      const respond = vi.fn();
+      expect(f.controller.handleMessage({ action }, sender, respond)).toBe(true);
+      await vi.waitFor(() => expect(respond).toHaveBeenCalled());
+      expect(respond).not.toHaveBeenCalledWith({ success: false, error: "unauthorized_extension_sender" });
+    }
+  });
   test("content scripts cannot start or stop profile authentication", () => {
     const f = fixture(); const respond = vi.fn();
     expect(f.controller.handleMessage({ action: "chromeProfileSignOut" }, { id: "extension", url: "https://admin.shopify.com" }, respond)).toBe(true);

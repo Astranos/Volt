@@ -22,6 +22,12 @@ import {
 } from "./SearchProviders";
 import { PaletteSourceGroups } from "./PaletteSourceGroups";
 import {
+  HandbookCommandGroup,
+  handbookCommandMatches,
+  useHandbookCommandEntries,
+  wantsHandbookAction,
+} from "./HandbookCommandGroup";
+import {
   X,
   Search as SearchIcon,
   Gamepad2,
@@ -96,6 +102,9 @@ export function CMDKPalette({
     ...DEFAULT_SETTINGS.sourceOrder,
   ]);
   const trimmedSearch = search.trim();
+  const handbookEntries = useHandbookCommandEntries(isOpen && trimmedSearch.length >= 2);
+  const handbookMatches = activeProvider ? [] : handbookCommandMatches(handbookEntries, trimmedSearch);
+  const showHandbookAction = !activeProvider && wantsHandbookAction(trimmedSearch, handbookMatches);
 
   const previousTab =
     previousTabId !== null
@@ -579,6 +588,8 @@ export function CMDKPalette({
 
   // Check if there are any visible items
   const hasVisibleItems =
+    handbookMatches.length > 0 ||
+    showHandbookAction ||
     filteredTabs.length > 0 ||
     filteredCSVLinks.length > 0 ||
     filteredTools.length > 0 ||
@@ -806,6 +817,13 @@ export function CMDKPalette({
                 </Command.Item>
               </Command.Group>
             )}
+
+            <HandbookCommandGroup
+              matches={handbookMatches}
+              showOpenAction={showHandbookAction}
+              itemClassName="cmdk-item"
+              onDone={() => onClose()}
+            />
 
             <PaletteSourceGroups
               sourceOrder={sourceOrder}

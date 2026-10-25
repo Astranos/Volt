@@ -1,0 +1,642 @@
+/* Handbook surfaces share the sidepanel's glass tokens. Dark is the default;
+   the light block at the end mirrors the sidepanel's own overrides. */
+
+/* Radix wraps scroll content in a display:table box that grows to fit
+   unwrapped text; the list truncates long values instead. */
+.handbook-scroll [data-radix-scroll-area-viewport] > div {
+  display: block !important;
+}
+
+.handbook-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  padding: 6px 16px 16px;
+}
+
+.handbook-search {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 14px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.055);
+  color: rgba(214, 211, 209, 0.7);
+  display: flex;
+  gap: 8px;
+  height: 40px;
+  padding: 0 12px;
+}
+
+.handbook-search:focus-within {
+  border-color: rgba(53, 213, 114, 0.34);
+}
+
+.handbook-search svg {
+  flex: none;
+  height: 16px;
+  width: 16px;
+}
+
+.handbook-search input {
+  background: transparent;
+  color: inherit;
+  flex: 1;
+  font-size: 14px;
+  min-width: 0;
+  outline: none;
+}
+
+.handbook-search input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.handbook-kbd {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 11px;
+  padding: 1px 6px;
+}
+
+.handbook-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.handbook-chip {
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 999px;
+  color: rgba(231, 229, 228, 0.86);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 11px;
+  transition: background-color 160ms ease, border-color 160ms ease;
+}
+
+.handbook-chip:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.handbook-chip.is-active {
+  background: #16a34a;
+  border-color: #16a34a;
+  color: #fff;
+}
+
+.handbook-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.handbook-section-title {
+  color: rgba(214, 211, 209, 0.7);
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  margin: 2px 2px 0;
+  text-transform: uppercase;
+}
+
+.handbook-card {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 12px;
+}
+
+.handbook-row {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  min-width: 0;
+  padding: 9px 0;
+  text-align: left;
+  width: 100%;
+}
+
+.handbook-row + .handbook-row {
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.handbook-row.is-guide {
+  cursor: pointer;
+}
+
+.handbook-row.is-guide:hover .handbook-row-value {
+  color: #4ade80;
+}
+
+.handbook-row-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.handbook-row-label {
+  color: rgba(214, 211, 209, 0.7);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.handbook-row-value {
+  color: #f5f5f4;
+  font-size: 14px;
+  font-weight: 650;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.handbook-row-actions {
+  display: flex;
+  flex: none;
+  gap: 4px;
+}
+
+.handbook-row-chevron {
+  color: rgba(214, 211, 209, 0.5);
+  flex: none;
+  height: 16px;
+  width: 16px;
+}
+
+.handbook-mono,
+.handbook-command code,
+.handbook-key {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.handbook-mono {
+  font-size: 13px;
+}
+
+.handbook-inline-copy {
+  border-bottom: 1px dashed currentColor;
+}
+
+.handbook-icon {
+  align-items: center;
+  border-radius: 9px;
+  display: grid;
+  flex: none;
+  height: 30px;
+  place-items: center;
+  width: 30px;
+}
+
+.handbook-icon svg {
+  height: 15px;
+  width: 15px;
+}
+
+.handbook-icon.is-green { background: rgba(34, 197, 94, 0.16); color: #4ade80; }
+.handbook-icon.is-sky { background: rgba(14, 165, 233, 0.16); color: #38bdf8; }
+.handbook-icon.is-red { background: rgba(239, 68, 68, 0.16); color: #f87171; }
+.handbook-icon.is-violet { background: rgba(139, 92, 246, 0.18); color: #a78bfa; }
+.handbook-icon.is-blue { background: rgba(59, 130, 246, 0.16); color: #60a5fa; }
+.handbook-icon.is-stone { background: rgba(168, 162, 158, 0.16); color: #d6d3d1; }
+
+.handbook-button {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 9px;
+  color: rgba(245, 245, 244, 0.86);
+  display: inline-flex;
+  flex: none;
+  font-size: 12px;
+  font-weight: 650;
+  gap: 5px;
+  height: 28px;
+  justify-content: center;
+  padding: 0 10px;
+  transition: background-color 160ms ease, border-color 160ms ease;
+}
+
+.handbook-button:hover {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.handbook-button:disabled {
+  opacity: 0.55;
+}
+
+.handbook-button svg {
+  height: 13px;
+  width: 13px;
+}
+
+.handbook-button.is-icon {
+  padding: 0;
+  width: 28px;
+}
+
+.handbook-button.is-primary {
+  background: #16a34a;
+  border-color: #16a34a;
+  color: #fff;
+}
+
+.handbook-button.is-primary:hover {
+  background: #22c55e;
+}
+
+.handbook-button.is-wide {
+  flex: 1;
+  font-size: 13px;
+  height: 36px;
+}
+
+.handbook-button.is-danger {
+  color: #f87171;
+}
+
+.handbook-footer-action {
+  align-items: center;
+  display: flex;
+  font-size: 13px;
+  font-weight: 700;
+  gap: 8px;
+  height: 40px;
+  justify-content: center;
+  width: 100%;
+}
+
+.handbook-footer-action svg {
+  height: 15px;
+  width: 15px;
+}
+
+.handbook-empty-search {
+  color: rgba(214, 211, 209, 0.7);
+  font-size: 13px;
+  padding: 24px 0;
+  text-align: center;
+}
+
+/* Guide */
+
+.handbook-back {
+  align-items: center;
+  align-self: flex-start;
+  color: rgba(214, 211, 209, 0.78);
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 650;
+  gap: 2px;
+}
+
+.handbook-back svg {
+  height: 15px;
+  width: 15px;
+}
+
+.handbook-guide-title {
+  color: #fafaf9;
+  font-size: 18px;
+  font-weight: 750;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+}
+
+.handbook-meta {
+  color: rgba(214, 211, 209, 0.7);
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.handbook-guide-body {
+  color: rgba(231, 229, 228, 0.86);
+  font-size: 13px;
+  line-height: 1.5;
+  margin-top: 8px;
+  white-space: pre-wrap;
+}
+
+.handbook-segmented {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 11px;
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+}
+
+.handbook-segmented button {
+  border-radius: 8px;
+  color: rgba(214, 211, 209, 0.75);
+  flex: 1;
+  font-size: 12px;
+  font-weight: 650;
+  padding: 5px 6px;
+}
+
+.handbook-segmented button.is-active {
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  color: #fafaf9;
+}
+
+.handbook-progress {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  height: 5px;
+  overflow: hidden;
+}
+
+.handbook-progress span {
+  background: #16a34a;
+  border-radius: 999px;
+  display: block;
+  height: 100%;
+  transition: width 220ms ease;
+}
+
+.handbook-steps {
+  gap: 14px;
+  list-style: none;
+  margin: 0;
+  padding: 14px 12px;
+}
+
+.handbook-step {
+  align-items: flex-start;
+  display: flex;
+  gap: 10px;
+}
+
+.handbook-step-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.handbook-step-text {
+  color: #f5f5f4;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.4;
+  margin-top: 1px;
+}
+
+.handbook-step.is-done .handbook-step-text,
+.handbook-step.is-upcoming .handbook-step-text {
+  color: rgba(214, 211, 209, 0.72);
+  font-weight: 500;
+}
+
+.handbook-step-tip {
+  color: rgba(214, 211, 209, 0.7);
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+.handbook-step-number {
+  align-items: center;
+  border: 1.5px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  color: rgba(214, 211, 209, 0.75);
+  display: grid;
+  flex: none;
+  font-size: 11px;
+  font-weight: 750;
+  height: 24px;
+  place-items: center;
+  width: 24px;
+}
+
+.handbook-step-number svg {
+  height: 13px;
+  width: 13px;
+}
+
+.handbook-step-number.is-done {
+  background: #16a34a;
+  border-color: #16a34a;
+  color: #fff;
+}
+
+.handbook-step-number.is-current {
+  border-color: #22c55e;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.22);
+  color: #4ade80;
+}
+
+.handbook-keys,
+.handbook-keys-item {
+  align-items: center;
+  color: rgba(214, 211, 209, 0.7);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.handbook-key {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-bottom-width: 2px;
+  border-radius: 6px;
+  color: #fafaf9;
+  font-size: 11.5px;
+  font-weight: 650;
+  padding: 2px 7px;
+}
+
+.handbook-command {
+  align-items: center;
+  background: #0c0a09;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 9px;
+  color: #e7e5e4;
+  display: flex;
+  gap: 8px;
+  padding: 6px 6px 6px 10px;
+}
+
+.handbook-command code {
+  flex: 1;
+  font-size: 12.5px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.handbook-button.is-dark {
+  background: #1c1917;
+  border-color: #292524;
+  color: #e7e5e4;
+}
+
+.handbook-warning {
+  align-items: flex-start;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.28);
+  border-radius: 11px;
+  color: #fcd34d;
+  display: flex;
+  font-size: 12px;
+  gap: 8px;
+  line-height: 1.45;
+  padding: 8px 10px;
+}
+
+.handbook-warning svg {
+  flex: none;
+  height: 14px;
+  margin-top: 2px;
+  width: 14px;
+}
+
+.handbook-guide-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.handbook-guide-actions .is-primary {
+  flex: 2;
+}
+
+@media (prefers-color-scheme: light) {
+  .handbook-search,
+  .handbook-chip,
+  .handbook-button {
+    background: rgba(255, 255, 255, 0.78);
+    border-color: rgba(15, 23, 42, 0.1);
+    color: #44403c;
+  }
+
+  .handbook-search {
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+    color: #78716c;
+  }
+
+  .handbook-search input,
+  .handbook-row-value,
+  .handbook-guide-title,
+  .handbook-step-text {
+    color: #1c1917;
+  }
+
+  .handbook-search:focus-within {
+    border-color: rgba(22, 163, 74, 0.4);
+  }
+
+  .handbook-kbd {
+    border-color: rgba(15, 23, 42, 0.14);
+  }
+
+  .handbook-button:hover,
+  .handbook-chip:hover {
+    background: #fff;
+    border-color: rgba(15, 23, 42, 0.16);
+  }
+
+  .handbook-chip.is-active,
+  .handbook-button.is-primary {
+    background: #16a34a;
+    border-color: #16a34a;
+    color: #fff;
+  }
+
+  .handbook-button.is-primary:hover {
+    background: #15803d;
+  }
+
+  .handbook-button.is-danger {
+    color: #dc2626;
+  }
+
+  .handbook-section-title,
+  .handbook-row-label,
+  .handbook-meta,
+  .handbook-back,
+  .handbook-step-tip,
+  .handbook-keys,
+  .handbook-keys-item,
+  .handbook-empty-search {
+    color: #78716c;
+  }
+
+  .handbook-guide-body {
+    color: #44403c;
+  }
+
+  .handbook-row + .handbook-row {
+    border-top-color: rgba(15, 23, 42, 0.07);
+  }
+
+  .handbook-row.is-guide:hover .handbook-row-value {
+    color: #15803d;
+  }
+
+  .handbook-icon.is-green { background: #dcfce7; color: #15803d; }
+  .handbook-icon.is-sky { background: #e0f2fe; color: #0369a1; }
+  .handbook-icon.is-red { background: #fee2e2; color: #b91c1c; }
+  .handbook-icon.is-violet { background: #ede9fe; color: #6d28d9; }
+  .handbook-icon.is-blue { background: #dbeafe; color: #1d4ed8; }
+  .handbook-icon.is-stone { background: #f5f5f4; color: #57534e; }
+
+  .handbook-segmented {
+    background: rgba(15, 23, 42, 0.06);
+  }
+
+  .handbook-segmented button {
+    color: #78716c;
+  }
+
+  .handbook-segmented button.is-active {
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+    color: #1c1917;
+  }
+
+  .handbook-progress {
+    background: rgba(15, 23, 42, 0.08);
+  }
+
+  .handbook-step.is-done .handbook-step-text,
+  .handbook-step.is-upcoming .handbook-step-text {
+    color: #78716c;
+  }
+
+  .handbook-step-number {
+    background: #fff;
+    border-color: rgba(15, 23, 42, 0.14);
+    color: #78716c;
+  }
+
+  .handbook-step-number.is-current {
+    border-color: #16a34a;
+    box-shadow: 0 0 0 3px #dcfce7;
+    color: #15803d;
+  }
+
+  .handbook-step-number.is-done {
+    background: #16a34a;
+    color: #fff;
+  }
+
+  .handbook-key {
+    background: #fff;
+    border-color: #d6d3d1;
+    color: #1c1917;
+  }
+
+  .handbook-command {
+    background: #1c1917;
+  }
+
+  .handbook-warning {
+    background: #fffbeb;
+    border-color: #fde68a;
+    color: #92400e;
+  }
+}

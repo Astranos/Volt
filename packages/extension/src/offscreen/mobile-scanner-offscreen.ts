@@ -277,6 +277,8 @@ function sendScannerError(sendResponse: (response?: unknown) => void, err: unkno
   });
 }
 
+const optionalShop = (value: unknown) => (typeof value === "string" ? value : undefined);
+
 function sendWorkspaceOperation(
   sendResponse: (response?: unknown) => void,
   operation: Promise<unknown>,
@@ -303,6 +305,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     || message.action === "extensionSettingsOffscreenGet"
     || message.action === "extensionSettingsOffscreenSave"
     || message.action === "shopifyAuditOffscreenStatus"
+    || message.action === "shopifyAuditOffscreenStores"
     || message.action === "shopifyAuditOffscreenConnect"
     || message.action === "shopifyAuditOffscreenDisconnect"
     || message.action === "shopifyAuditOffscreenListYesterday"
@@ -310,6 +313,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     || message.action === "shopifyAuditOffscreenProductDetails"
     || message.action === "shopifyAuditOffscreenHiddenProducts"
     || message.action === "shopifyAuditOffscreenSetProductHidden"
+    || message.action === "handbookOffscreenList"
+    || message.action === "handbookOffscreenRevealSecret"
   ) {
     if (sender.id !== chrome.runtime.id || sender.tab) {
       sendResponse({ success: false, error: "unauthorized_extension_sender" });
@@ -348,8 +353,27 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         ),
       );
     }
+    if (message.action === "handbookOffscreenList" || message.action === "handbookOffscreenRevealSecret") {
+      if (typeof message.accountEpoch !== "string" || !message.accountEpoch) {
+        sendResponse({ success: false, error: "missing_workspace_account_epoch" });
+        return false;
+      }
+    }
+    if (message.action === "handbookOffscreenList") {
+      return sendWorkspaceOperation(sendResponse, cloudWorkspaceSubscriptions.listHandbook(message.accountEpoch));
+    }
+    if (message.action === "handbookOffscreenRevealSecret") {
+      if (typeof message.id !== "string") {
+        sendResponse({ success: false, error: "invalid_handbook_entry" });
+        return false;
+      }
+      return sendWorkspaceOperation(sendResponse, cloudWorkspaceSubscriptions.revealHandbookSecret(message.accountEpoch, message.id));
+    }
     if (message.action === "shopifyAuditOffscreenStatus") {
       return sendWorkspaceOperation(sendResponse, cloudWorkspaceSubscriptions.getShopifyConnection());
+    }
+    if (message.action === "shopifyAuditOffscreenStores") {
+      return sendWorkspaceOperation(sendResponse, cloudWorkspaceSubscriptions.listShopifyConnections());
     }
     if (message.action === "shopifyAuditOffscreenConnect") {
       if (typeof message.shop !== "string") {
@@ -359,38 +383,38 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return sendWorkspaceOperation(sendResponse, cloudWorkspaceSubscriptions.startShopifyConnection(message.shop));
     }
     if (message.action === "shopifyAuditOffscreenDisconnect") {
-      return sendWorkspaceOperation(sendResponse, cloudWorkspaceSubscriptions.disconnectShopify());
+      return sendWorkspaceOperation(sendResponse, cloudWorkspaceSubscriptions.disconnectShopify(optionalShop(message.shop)));
     }
     if (message.action === "shopifyAuditOffscreenListYesterday") {
       if (typeof message.startUtc !== "string" || typeof message.endUtc !== "string" || typeof message.date !== "string") {
         sendResponse({ success: false, error: "invalid_shopify_audit_date" });
         return false;
       }
-      return sendWorkspaceOperation(sendResponse, cloudWorkspaceSubscriptions.listShopifyYesterday(message.startUtc, message.endUtc, message.date));
+      return sendWorkspaceOperation(sendResponse, cloudWorkspaceSubscriptions.listShopifyYesterday(message.startUtc, message.endUtc, message.date, optionalShop(message.shop)));
     }
     if (message.action === "shopifyAuditOffscreenSearchProducts") {
       if (typeof message.query !== "string") {
         sendResponse({ success: false, error: "invalid_shopify_search_query" });
         return false;
       }
-      return sendWorkspaceOperation(sendResponse, cloudWorkspaceSubscriptions.searchShopifyProducts(message.query));
+      return sendWorkspaceOperation(sendResponse, cloudWorkspaceSubscriptions.searchShopifyProducts(message.query, optionalShop(message.shop)));
     }
     if (message.action === "shopifyAuditOffscreenProductDetails") {
       if (!Array.isArray(message.productIds) || !message.productIds.every((id: unknown) => typeof id === "string")) {
         sendResponse({ success: false, error: "invalid_shopify_product" });
         return false;
       }
-      return sendWorkspaceOperation(sendResponse, cloudWorkspaceSubscriptions.getShopifyProductDetails(message.productIds));
+      return sendWorkspaceOperation(sendResponse, cloudWorkspaceSubscriptions.getShopifyProductDetails(message.productIds, optionalShop(message.shop)));
     }
     if (message.action === "shopifyAuditOffscreenHiddenProducts") {
-      return sendWorkspaceOperation(sendResponse, cloudWorkspaceSubscriptions.listHiddenShopifyProducts());
+      return sendWorkspaceOperation(sendResponse, cloudWorkspaceSubscriptions.listHiddenShopifyProducts(optionalShop(message.shop)));
     }
     if (message.action === "shopifyAuditOffscreenSetProductHidden") {
       if (typeof message.productId !== "string" || typeof message.title !== "string" || typeof message.hidden !== "boolean") {
         sendResponse({ success: false, error: "invalid_shopify_product" });
         return false;
       }
-      return sendWorkspaceOperation(sendResponse, cloudWorkspaceSubscriptions.setShopifyProductHidden(message.productId, message.title, message.hidden));
+      return sendWorkspaceOperation(sendResponse, cloudWorkspaceSubscriptions.setShopifyProductHidden(message.productId, message.title, message.hidden, optionalShop(message.shop)));
     }
     if (message.action === "workspaceOffscreenReconcile") {
       void cloudWorkspaceSubscriptions.reconcileSnapshot()

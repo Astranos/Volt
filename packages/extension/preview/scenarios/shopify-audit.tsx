@@ -1,7 +1,7 @@
 import "@/entrypoints/sidepanel/sidepanel.css";
 import ShopifyAuditReview from "@/src/components/sidepanel/ShopifyAuditReview";
 import { SHOPIFY_AUDIT_DAYS_KEY, SHOPIFY_AUDIT_REVIEW_KEY } from "@/src/domain/shopify-audit";
-import { auditProducts, shop } from "../fixtures/shopify";
+import { auditProducts, shop, shopifyStatus } from "../fixtures/shopify";
 import { defineScenario } from "../scenario";
 
 const date = "2026-10-17";
@@ -18,13 +18,14 @@ const states: Record<string, unknown> = {
   empty: { shop, date, products: [], tabId: null, currentId: null, marks: {} },
 };
 
-// ?state=progress (default) | done | empty | start (no audit saved yet); ?days=2|3 widens the range.
+// ?state=progress (default) | done | empty | start (no audit saved yet); ?days=2|3 widens the range;
+// ?stores=1 hides the store picker shown when several stores are connected.
 export default defineScenario({
-  description: "Side panel Shopify audit review (?state=progress|done|empty|start, ?days=3)",
+  description: "Side panel Shopify audit review (?state=progress|done|empty|start, ?days=3, ?stores=1 for a single store)",
   viewport: { width: 380, height: 720 },
   chrome: {
     messages: {
-      shopifyAuditStatus: () => ({ success: true, value: { shop } }),
+      shopifyAuditStatus: shopifyStatus,
       shopifyAuditListYesterday: () => ({ success: true, value: { shop, date, products: auditProducts } }),
     },
   },

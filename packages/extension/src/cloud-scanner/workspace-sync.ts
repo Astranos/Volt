@@ -16,7 +16,14 @@ export type WorkspacePhotoDownload = {
 export type WorkspaceSyncOptions = {
   chromeApi: typeof chrome;
   getPhotoDownload: (batchId: string, resultId: string) => Promise<WorkspacePhotoDownload>;
+  // Called (throttled) as hydrated results land, so this context can render
+  // them before the whole snapshot finishes. Other contexts get a broadcast.
+  onProgress?: () => void;
 };
+
+// Every progress notice makes the panel re-read the whole local history, so a
+// large first sync announces itself a few times a second, not once per photo.
+const PROGRESS_INTERVAL_MS = 400;
 
 let fallbackQueue = Promise.resolve();
 
@@ -71,8 +78,19 @@ export function createWorkspaceSync(options: WorkspaceSyncOptions) {
     // that did land still belong in the timeline, so the broadcast happens
     // either way and the error is raised after it.
     let hydrationError: Error | null = null;
+    let lastProgressAt = 0;
+    const onProgress = () => {
+      const now = Date.now();
+      if (now - lastProgressAt < PROGRESS_INTERVAL_MS) return;
+      lastProgressAt = now;
+      options.onProgress?.();
+      void options.chromeApi.runtime.sendMessage({
+        action: "workspaceReplicaChanged",
+        workspaceId: replica.workspaceId,
+      }).catch(() => undefined);
+    };
     try {
-      await hydrateWorkspaceReplica(replica, { getPhotoDownload: options.getPhotoDownload, isCurrent });
+      await hydrateWorkspaceReplica(replica, { getPhotoDownload: options.getPhotoDownload, isCurrent, onProgress });
     } catch (error) {
       hydrationError = error instanceof Error ? error : new Error(String(error));
     }

@@ -79,6 +79,20 @@ export function normalizeShopifyShopInput(value: string): string | null {
   }
 }
 
+/** Stores one account can connect; matches the server's limit. */
+export const MAX_SHOPIFY_STORES = 5;
+
+/** The connected store that search, audits, and hidden products use on this computer. */
+export const SHOPIFY_ACTIVE_SHOP_KEY = "shopifyActiveShop";
+
+/** The saved store while it's still connected, otherwise the first connected store. */
+export function pickActiveShopifyShop(saved: unknown, shops: readonly string[]): string | null {
+  return typeof saved === "string" && shops.includes(saved) ? saved : shops[0] ?? null;
+}
+
+/** The store's admin handle, e.g. "taylor" for taylor.myshopify.com. */
+export const shopifyShopLabel = (shop: string) => shop.replace(/\.myshopify\.com$/, "");
+
 /** How the new tab's Audit button presents yesterday's products. */
 export type ShopifyAuditMode = "sidepanel" | "tabs";
 export const SHOPIFY_AUDIT_MODE_KEY = "shopifyAuditMode";
