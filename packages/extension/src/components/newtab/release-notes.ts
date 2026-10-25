@@ -8,6 +8,14 @@ export const RELEASE_NOTES_VERSION = "1.0.69";
 
 export const RELEASE_NOTES = [
   {
+    title: "Handbook pages",
+    description: "Write checklists, policies, and how-tos with headings, lists, and links. Short pages can show in full right in the side panel.",
+  },
+  {
+    title: "Phone numbers and addresses format themselves",
+    description: "Phone numbers get their dashes as you type. Addresses are entered as street, city, state, and ZIP, show on two lines, and open in Maps.",
+  },
+  {
     title: "Store handbook",
     description: "Keep your store's phone, address, logins, and setup guides in one place. Open it from the side panel, or search it from the new tab. Logins stay hidden until you reveal them.",
   },

@@ -129,6 +129,50 @@ describe("handbook", () => {
     })).rejects.toThrow("HANDBOOK_ENTRY_TOO_LARGE");
   });
 
+  test("pages are listed only for clients that ask for them", async () => {
+    const t = convexTest(schema, modules);
+    const alice = asUser(t, "alice");
+    const page = { kind: "page" as const, title: "Opening checklist", category: "Procedures", pinned: false };
+    await expect(alice.mutation(api.handbook.create, page)).rejects.toThrow("HANDBOOK_PAGE_REQUIRED");
+    await alice.mutation(api.handbook.create, { ...page, body: "## Before opening\n- [ ] Count the drawer" });
+    await alice.mutation(api.handbook.create, valueEntry);
+    // Extensions released before pages existed call list with no arguments.
+    expect((await alice.query(api.handbook.list, {})).map((entry) => entry.kind)).toEqual(["value"]);
+    expect((await alice.query(api.handbook.list, { includePages: true })).map((entry) => entry.kind)).toEqual(["page", "value"]);
+  });
+
+  test("keeps the show-in-list option only on pages", async () => {
+    const t = convexTest(schema, modules);
+    const alice = asUser(t, "alice");
+    const page = { kind: "page" as const, title: "Returns", category: "Policies", body: "30 days with receipt.", pinned: false };
+    const id = await alice.mutation(api.handbook.create, { ...page, showInList: true });
+    expect((await alice.query(api.handbook.list, { includePages: true }))[0].showInList).toBe(true);
+    await alice.mutation(api.handbook.update, { id, ...page, showInList: false });
+    expect((await alice.query(api.handbook.list, { includePages: true }))[0].showInList).toBeUndefined();
+    await alice.mutation(api.handbook.update, { id, ...valueEntry, showInList: true });
+    expect((await alice.query(api.handbook.list, {}))[0].showInList).toBeUndefined();
+  });
+
+  test("keeps a value's format only on value entries", async () => {
+    const t = convexTest(schema, modules);
+    const alice = asUser(t, "alice");
+    const id = await alice.mutation(api.handbook.create, { ...valueEntry, valueFormat: "phone" });
+    expect((await alice.query(api.handbook.list, {}))[0].valueFormat).toBe("phone");
+    // An older extension's edit (no valueFormat) keeps the saved format.
+    await alice.mutation(api.handbook.update, { id, ...valueEntry, note: "Front desk" });
+    expect((await alice.query(api.handbook.list, {}))[0].valueFormat).toBe("phone");
+    // An explicit Text choice is kept, so it overrides inference from the title.
+    await alice.mutation(api.handbook.update, { id, ...valueEntry, valueFormat: "text" });
+    expect((await alice.query(api.handbook.list, {}))[0].valueFormat).toBe("text");
+    await alice.mutation(api.handbook.update, {
+      id, kind: "page", title: "Phone tips", category: "Store info", body: "Call **first**.", pinned: false, valueFormat: "phone",
+    });
+    const [page] = await alice.query(api.handbook.list, { includePages: true });
+    expect(page.kind).toBe("page");
+    expect(page.valueFormat).toBeUndefined();
+    expect(page.value).toBeUndefined();
+  });
+
   test("orders, pins and removes entries", async () => {
     const t = convexTest(schema, modules);
     const alice = asUser(t, "alice");

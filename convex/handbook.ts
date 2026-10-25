@@ -10,6 +10,7 @@ import {
   handbookContentFields,
   handbookCredentialsValidator,
   handbookKindValidator,
+  handbookValueFormatValidator,
   handbookVariantValidator,
   type HandbookContent,
   type HandbookCredentials,
@@ -30,6 +31,7 @@ const LIMITS = {
   note: 200,
   value: 2_000,
   body: 10_000,
+  page: 15_000,
   variants: 4,
   variantLabel: 40,
   steps: 40,
@@ -50,7 +52,9 @@ const entryValidator = v.object({
   category: v.string(),
   note: v.optional(v.string()),
   value: v.optional(v.string()),
+  valueFormat: v.optional(handbookValueFormatValidator),
   body: v.optional(v.string()),
+  showInList: v.optional(v.boolean()),
   variants: v.optional(v.array(handbookVariantValidator)),
   pinned: v.boolean(),
   order: v.number(),
@@ -101,7 +105,12 @@ function cleanContent(content: HandbookContent): HandbookContent {
     category: text(content.category, LIMITS.category, "CATEGORY", true) ?? "",
     note: text(content.note, LIMITS.note, "NOTE"),
     value: content.kind === "value" ? text(content.value, LIMITS.value, "VALUE", true) : undefined,
-    body: text(content.body, LIMITS.body, "BODY"),
+    // An explicit "text" is kept so a client's choice overrides title-based inference.
+    valueFormat: content.kind === "value" ? content.valueFormat : undefined,
+    body: content.kind === "page"
+      ? text(content.body, LIMITS.page, "PAGE", true)
+      : text(content.body, LIMITS.body, "BODY"),
+    showInList: content.kind === "page" && content.showInList ? true : undefined,
     variants,
     pinned: content.pinned,
   };
@@ -137,7 +146,9 @@ function toSummary(entry: Doc<"handbookEntries">) {
     category: entry.category,
     note: entry.note,
     value: entry.value,
+    valueFormat: entry.valueFormat,
     body: entry.body,
+    showInList: entry.showInList,
     variants: entry.variants,
     pinned: entry.pinned,
     order: entry.order,
@@ -210,11 +221,15 @@ async function writeSecret(ctx: MutationCtx, workspaceId: Id<"workspaces">, entr
   else await ctx.db.insert("handbookSecrets", row);
 }
 
-/** Every entry in the account's handbook. Secret entries carry only a masked preview. */
+/**
+ * Every entry in the account's handbook. Secret entries carry only a masked preview.
+ * Pages are left out unless `includePages` is set, so extensions released before pages
+ * existed (which call this with no arguments) never see an entry kind they can't show.
+ */
 export const list = query({
-  args: {},
+  args: { includePages: v.optional(v.boolean()) },
   returns: v.array(entryValidator),
-  handler: async (ctx) => {
+  handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new ConvexError("AUTHENTICATION_REQUIRED");
     const workspace = await authenticatedWorkspaceOrNull(ctx);
@@ -223,7 +238,7 @@ export const list = query({
       .query("handbookEntries")
       .withIndex("by_workspaceId_and_order", (q) => q.eq("workspaceId", workspace._id))
       .take(MAX_ENTRIES);
-    return entries.map(toSummary);
+    return entries.filter((entry) => args.includePages || entry.kind !== "page").map(toSummary);
   },
 });
 
@@ -285,7 +300,11 @@ export const update = mutation({
   handler: async (ctx, { id, credentials, ...input }) => {
     const { workspace, updatedByName } = await requireEditor(ctx);
     const entry = await requireOwnedEntry(ctx, workspace._id, id);
-    const content = cleanContent(input);
+    // Extensions released before value formats existed don't send one; keep the saved format
+    // instead of letting their edit erase a phone or address choice.
+    const content = cleanContent(input.kind === "value" && entry.kind === "value" && input.valueFormat === undefined
+      ? { ...input, valueFormat: entry.valueFormat }
+      : input);
     const existingSecret = await secretFor(ctx, id);
     let secretPreview: string | undefined;
     if (content.kind === "secret") {

@@ -1,6 +1,11 @@
 import { v, type Infer } from "convex/values";
 
-export const handbookKindValidator = v.union(v.literal("value"), v.literal("secret"), v.literal("guide"));
+// "page" is a formatted article. Clients from before pages existed never receive them (see `list`).
+export const handbookKindValidator = v.union(v.literal("value"), v.literal("secret"), v.literal("guide"), v.literal("page"));
+
+// How a "value" entry is typed and shown. Phone values are formatted as they're typed;
+// addresses are edited as street / city / state / ZIP and stored as one line.
+export const handbookValueFormatValidator = v.union(v.literal("text"), v.literal("phone"), v.literal("address"));
 
 export const handbookStepValidator = v.object({
   text: v.string(),
@@ -25,7 +30,11 @@ export const handbookContentFields = {
   note: v.optional(v.string()),
   // The copyable value of a "value" entry.
   value: v.optional(v.string()),
+  valueFormat: v.optional(handbookValueFormatValidator),
+  // Notes for most kinds; the formatted content (a small Markdown subset) of a page.
   body: v.optional(v.string()),
+  // Pages only: show the whole page in the sidepanel list instead of a row to tap.
+  showInList: v.optional(v.boolean()),
   // Guide steps. A guide without alternatives has one variant with an empty label.
   variants: v.optional(v.array(handbookVariantValidator)),
   pinned: v.boolean(),

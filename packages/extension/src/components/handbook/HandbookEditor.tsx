@@ -1,6 +1,6 @@
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { useMutation } from "convex/react";
-import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Bold, Heading2, Italic, Link2, List, ListChecks, ListOrdered, Plus, Trash2 } from "lucide-react";
 import { api } from "../../../../../convex/_generated/api";
 import {
   DEFAULT_HANDBOOK_CATEGORIES,
@@ -8,7 +8,17 @@ import {
   type HandbookEntry,
   type HandbookEntryId,
 } from "../../domain/handbook";
+import {
+  formatAddress,
+  formatPhoneInput,
+  formatPhoneTyping,
+  parseAddress,
+  valueFormatOf,
+  type AddressParts,
+  type HandbookValueFormat,
+} from "../../domain/handbook-format";
 import { cn } from "../../lib/utils";
+import { MarkdownView } from "./handbook-parts";
 
 type Kind = HandbookEntry["kind"];
 type DraftStep = { text: string; keys: string; command: string; tip: string };
@@ -19,7 +29,10 @@ export type HandbookDraft = {
   category: string;
   note: string;
   value: string;
+  valueFormat: HandbookValueFormat;
+  address: AddressParts;
   body: string;
+  showInList: boolean;
   pinned: boolean;
   variants: DraftVariant[];
   username: string;
@@ -30,23 +43,35 @@ const KIND_OPTIONS: Array<{ kind: Kind; label: string }> = [
   { kind: "value", label: "Quick value" },
   { kind: "secret", label: "Login" },
   { kind: "guide", label: "Guide" },
+  { kind: "page", label: "Page" },
+];
+const FORMAT_OPTIONS: Array<{ format: HandbookValueFormat; label: string }> = [
+  { format: "text", label: "Text" },
+  { format: "phone", label: "Phone" },
+  { format: "address", label: "Address" },
 ];
 const PLACEHOLDERS: Record<Kind, { title: string; category: string }> = {
   value: { title: "Store phone", category: "Store info" },
   secret: { title: "PSN", category: "Logins" },
   guide: { title: "Skip Windows sign-in", category: "Setup guides" },
+  page: { title: "Opening checklist", category: "Procedures" },
 };
+const emptyAddress = (): AddressParts => ({ street: "", city: "", state: "", zip: "" });
 const emptyStep = (): DraftStep => ({ text: "", keys: "", command: "", tip: "" });
 const emptyVariant = (): DraftVariant => ({ label: "", warning: "", steps: [emptyStep()] });
 
 export function draftFor(entry: HandbookEntry | null, defaults: Partial<HandbookDraft> = {}): HandbookDraft {
+  const valueFormat = entry ? valueFormatOf(entry) : "text";
   return {
     kind: entry?.kind ?? "value",
     title: entry?.title ?? "",
     category: entry?.category ?? "",
     note: entry?.note ?? "",
     value: entry?.value ?? "",
+    valueFormat,
+    address: valueFormat === "address" ? parseAddress(entry?.value ?? "") : emptyAddress(),
     body: entry?.body ?? "",
+    showInList: entry?.showInList ?? false,
     pinned: entry?.pinned ?? false,
     variants: entry?.variants?.map((variant) => ({
       label: variant.label,
@@ -62,6 +87,19 @@ export function draftFor(entry: HandbookEntry | null, defaults: Partial<Handbook
     secret: "",
     ...defaults,
   };
+}
+
+/**
+ * Changes an entry's type. Turning a quick value into a page moves the value into
+ * the page (above any notes) so it isn't silently dropped on save.
+ */
+function switchKind(draft: HandbookDraft, kind: Kind): HandbookDraft {
+  if (draft.kind !== "value" || kind !== "page") return { ...draft, kind };
+  const value = (draft.valueFormat === "address" ? formatAddress(draft.address) : draft.value).trim();
+  // Skip it only if a line of the notes is already exactly the value.
+  const alreadyThere = draft.body.split("\n").some((line) => line.trim() === value);
+  const body = value && !alreadyThere ? [value, draft.body].filter(Boolean).join("\n\n") : draft.body;
+  return { ...draft, kind, body };
 }
 
 function move<T>(items: T[], index: number, offset: number) {
@@ -112,8 +150,11 @@ export function HandbookEditor({
       title: draft.title,
       category: draft.category,
       note: draft.note || undefined,
-      value: draft.kind === "value" ? draft.value : undefined,
+      value: draft.kind !== "value" ? undefined
+        : draft.valueFormat === "address" ? formatAddress(draft.address) : draft.value,
+      valueFormat: draft.kind === "value" ? draft.valueFormat : undefined,
       body: draft.body || undefined,
+      showInList: draft.kind === "page" ? draft.showInList : undefined,
       pinned: draft.pinned,
       variants: draft.kind === "guide"
         ? draft.variants.map((variant) => ({
@@ -166,7 +207,7 @@ export function HandbookEditor({
               role="radio"
               aria-checked={draft.kind === option.kind}
               className={cn(draft.kind === option.kind && "is-active")}
-              onClick={() => set("kind", option.kind)}
+              onClick={() => setDraft((current) => switchKind(current, option.kind))}
             >
               {option.label}
             </button>
@@ -196,9 +237,47 @@ export function HandbookEditor({
       </Field>
 
       {draft.kind === "value" ? (
-        <Field label="Value to copy">
-          <input value={draft.value} onChange={(event) => set("value", event.target.value)} placeholder="555-0100" required />
-        </Field>
+        <>
+          <div className="handbook-field">
+            <span className="handbook-field-label">Type</span>
+            <div className="handbook-segmented is-inline" role="radiogroup" aria-label="Value type">
+              {FORMAT_OPTIONS.map((option) => (
+                <button
+                  key={option.format}
+                  type="button"
+                  role="radio"
+                  aria-checked={draft.valueFormat === option.format}
+                  className={cn(draft.valueFormat === option.format && "is-active")}
+                  onClick={() => setDraft((current) => ({
+                    ...current,
+                    valueFormat: option.format,
+                    // Carry what's typed across, so switching types doesn't lose it.
+                    address: option.format === "address" && current.valueFormat !== "address" ? parseAddress(current.value) : current.address,
+                    value: current.valueFormat === "address" && option.format !== "address" ? formatAddress(current.address)
+                      : option.format === "phone" ? formatPhoneInput(current.value) : current.value,
+                  }))}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          {draft.valueFormat === "address" ? (
+            <AddressFields value={draft.address} onChange={(address) => set("address", address)} />
+          ) : draft.valueFormat === "phone" ? (
+            <Field label="Phone number" hint="Dashes are added as you type. Add an extension with “x”, like 734-287-6611 x6.">
+              <PhoneInput value={draft.value} onChange={(value) => set("value", value)} />
+            </Field>
+          ) : (
+            <Field label="Value to copy">
+              <input value={draft.value} onChange={(event) => set("value", event.target.value)} required />
+            </Field>
+          )}
+        </>
+      ) : null}
+
+      {draft.kind === "page" ? (
+        <PageBodyEditor value={draft.body} onChange={(body) => set("body", body)} />
       ) : null}
 
       {draft.kind === "secret" ? (
@@ -305,9 +384,20 @@ export function HandbookEditor({
         </div>
       ) : null}
 
-      <Field label="Notes">
-        <textarea value={draft.body} onChange={(event) => set("body", event.target.value)} rows={4} />
-      </Field>
+      {draft.kind !== "page" ? (
+        <Field label="Notes" hint="Shown when someone opens the entry, in the sidepanel or here.">
+          <textarea value={draft.body} onChange={(event) => set("body", event.target.value)} rows={4} />
+        </Field>
+      ) : null}
+      {draft.kind === "page" ? (
+        <label className="handbook-checkbox">
+          <input type="checkbox" checked={draft.showInList} onChange={(event) => set("showInList", event.target.checked)} />
+          <span>
+            Show the whole page in the sidepanel list
+            <span className="handbook-field-hint handbook-checkbox-hint">Best for short pages, so staff can read it without tapping in.</span>
+          </span>
+        </label>
+      ) : null}
       <label className="handbook-checkbox">
         <input type="checkbox" checked={draft.pinned} onChange={(event) => set("pinned", event.target.checked)} />
         Pin to the top of the handbook
@@ -331,5 +421,151 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
       {children}
       {hint ? <span className="handbook-field-hint">{hint}</span> : null}
     </label>
+  );
+}
+
+function AddressFields({ value, onChange }: { value: AddressParts; onChange: (value: AddressParts) => void }) {
+  const set = (key: keyof AddressParts, next: string) => onChange({ ...value, [key]: next });
+  return (
+    <div className="handbook-address-fields">
+      <Field label="Street">
+        <input value={value.street} onChange={(event) => set("street", event.target.value)} placeholder="9058 Telegraph Rd" autoComplete="street-address" required />
+      </Field>
+      <div className="handbook-field-row is-address">
+        <Field label="City">
+          <input value={value.city} onChange={(event) => set("city", event.target.value)} placeholder="Taylor" autoComplete="address-level2" />
+        </Field>
+        <Field label="State">
+          <input
+            value={value.state}
+            onChange={(event) => set("state", event.target.value.replace(/[^a-z]/gi, "").slice(0, 2).toUpperCase())}
+            placeholder="MI"
+            autoComplete="address-level1"
+          />
+        </Field>
+        <Field label="ZIP">
+          <input
+            value={value.zip}
+            onChange={(event) => set("zip", event.target.value.replace(/[^\d-]/g, "").slice(0, 10))}
+            inputMode="numeric"
+            placeholder="48180"
+            autoComplete="postal-code"
+          />
+        </Field>
+      </div>
+      <p className="handbook-field-hint">Saved as “{formatAddress(value) || "9058 Telegraph Rd, Taylor, MI 48180"}”.</p>
+    </div>
+  );
+}
+
+type Wrap = { before: string; after?: string; placeholder: string; line?: boolean };
+const TOOLS: Array<{ label: string; icon: ReactNode; wrap: Wrap }> = [
+  { label: "Heading", icon: <Heading2 />, wrap: { before: "## ", placeholder: "Heading", line: true } },
+  { label: "Bold", icon: <Bold />, wrap: { before: "**", after: "**", placeholder: "bold text" } },
+  // Asterisks, not underscores, so italicizing words like sku_code_123 works.
+  { label: "Italic", icon: <Italic />, wrap: { before: "*", after: "*", placeholder: "italic text" } },
+  { label: "Bulleted list", icon: <List />, wrap: { before: "- ", placeholder: "List item", line: true } },
+  { label: "Numbered list", icon: <ListOrdered />, wrap: { before: "1. ", placeholder: "First step", line: true } },
+  { label: "Checklist", icon: <ListChecks />, wrap: { before: "- [ ] ", placeholder: "To do", line: true } },
+  { label: "Link", icon: <Link2 />, wrap: { before: "[", after: "](https://)", placeholder: "link text" } },
+];
+
+/** A Markdown textarea with a formatting toolbar and a preview of how the page will look. */
+function PageBodyEditor({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const [preview, setPreview] = useState(false);
+  const textarea = useRef<HTMLTextAreaElement>(null);
+
+  const apply = ({ before, after = "", placeholder, line }: Wrap) => {
+    const element = textarea.current;
+    let start = element?.selectionStart ?? value.length;
+    const end = element?.selectionEnd ?? value.length;
+    let next: string;
+    let selection: [number, number];
+    if (line && start !== end) {
+      // Line tools apply to every selected line: two lines become two checklist items.
+      start = value.lastIndexOf("\n", start - 1) + 1;
+      const lines = value.slice(start, end).split("\n").map((text) => (text.trim() ? `${before}${text}` : text));
+      const replaced = lines.join("\n");
+      next = `${value.slice(0, start)}${replaced}${value.slice(end)}`;
+      selection = [start, start + replaced.length];
+    } else {
+      const selected = value.slice(start, end) || placeholder;
+      // Line tools start on a fresh line.
+      const lead = line && start > 0 && value[start - 1] !== "\n" ? "\n" : "";
+      next = `${value.slice(0, start)}${lead}${before}${selected}${after}${value.slice(end)}`;
+      const selectFrom = start + lead.length + before.length;
+      selection = [selectFrom, selectFrom + selected.length];
+    }
+    onChange(next);
+    requestAnimationFrame(() => {
+      element?.focus();
+      element?.setSelectionRange(...selection);
+    });
+  };
+
+  return (
+    <div className="handbook-field">
+      <div className="handbook-page-editor-head">
+        <span className="handbook-field-label">Page</span>
+        <div className="handbook-segmented is-inline" role="tablist" aria-label="Page editor view">
+          <button type="button" role="tab" aria-selected={!preview} className={cn(!preview && "is-active")} onClick={() => setPreview(false)}>Write</button>
+          <button type="button" role="tab" aria-selected={preview} className={cn(preview && "is-active")} onClick={() => setPreview(true)}>Preview</button>
+        </div>
+      </div>
+      {preview ? (
+        <div className="mobile-scanner-card handbook-card handbook-page-preview">
+          {value.trim() ? <MarkdownView source={value} /> : <p className="handbook-field-hint">Nothing to preview yet.</p>}
+        </div>
+      ) : (
+        <>
+          <div className="handbook-md-toolbar" role="toolbar" aria-label="Formatting">
+            {TOOLS.map((tool) => (
+              <button key={tool.label} type="button" className="handbook-button is-icon" aria-label={tool.label} title={tool.label} onClick={() => apply(tool.wrap)}>
+                {tool.icon}
+              </button>
+            ))}
+          </div>
+          <textarea
+            ref={textarea}
+            className="handbook-page-textarea"
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+            rows={14}
+            placeholder={"## Before opening\n- [ ] Turn on the lights\n- [ ] Count the drawer\n\nCall the manager if anything is **missing**."}
+            required
+          />
+          <span className="handbook-field-hint">Use the buttons, or type ## for a heading, - for a list, - [ ] for a checklist, and **bold**.</span>
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * A phone field that adds dashes as you type. Deleting never re-adds what was just
+ * removed (the number is tidied when the field loses focus), and the caret stays
+ * after the same digit when formatting shifts the text.
+ */
+function PhoneInput({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const input = useRef<HTMLInputElement>(null);
+  return (
+    <input
+      ref={input}
+      value={value}
+      inputMode="tel"
+      placeholder="313-555-0100"
+      required
+      onBlur={() => onChange(formatPhoneInput(value))}
+      onChange={(event) => {
+        const raw = event.target.value;
+        if ((event.nativeEvent as InputEvent).inputType?.startsWith("delete")) {
+          onChange(raw);
+          return;
+        }
+        const { value: formatted, caret } = formatPhoneTyping(raw, event.target.selectionStart ?? raw.length);
+        onChange(formatted);
+        if (formatted !== raw) requestAnimationFrame(() => input.current?.setSelectionRange(caret, caret));
+      }}
+    />
   );
 }

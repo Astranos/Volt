@@ -1,5 +1,6 @@
 import type { FunctionReturnType } from "convex/server";
 import type { api } from "../../../../convex/_generated/api";
+import { markdownPlainText } from "./handbook-markdown";
 
 export type HandbookEntry = FunctionReturnType<typeof api.handbook.list>[number];
 export type HandbookEntryId = HandbookEntry["_id"];
@@ -7,17 +8,17 @@ export type HandbookVariant = NonNullable<HandbookEntry["variants"]>[number];
 export type HandbookStep = HandbookVariant["steps"][number];
 export type HandbookFilter = { kind: "all" } | { kind: "pinned" } | { kind: "category"; category: string };
 
-// Written by the Command Menu or New Tab right before opening the sidepanel on a guide.
+// Written by the Command Menu or New Tab right before opening the sidepanel on an entry.
 export const HANDBOOK_OPEN_ENTRY_KEY = "volt.handbook.openEntry";
 export const HANDBOOK_PAGE_PATH = "/handbook.html";
 
-export const DEFAULT_HANDBOOK_CATEGORIES = ["Store info", "Logins", "Setup guides", "Testing"];
+export const DEFAULT_HANDBOOK_CATEGORIES = ["Store info", "Logins", "Setup guides", "Procedures", "Testing"];
 
 // Offered as blanks for each store to fill in. Values are typed in by the user, never shipped.
 export const BLANK_SUGGESTIONS = [
-  { kind: "value", category: "Store info", title: "Store phone", note: "" },
-  { kind: "value", category: "Store info", title: "Store address", note: "" },
-  { kind: "value", category: "Store info", title: "Local police", note: "Non-emergency line" },
+  { kind: "value", valueFormat: "phone", category: "Store info", title: "Store phone", note: "" },
+  { kind: "value", valueFormat: "address", category: "Store info", title: "Store address", note: "" },
+  { kind: "value", valueFormat: "phone", category: "Store info", title: "Local police", note: "Non-emergency line" },
   { kind: "secret", category: "Logins", title: "PSN", note: "Testing consoles" },
   { kind: "secret", category: "Logins", title: "Microsoft account", note: "Testing PCs and Xbox" },
   { kind: "secret", category: "Logins", title: "Mac test user", note: "Local account on test Macs" },
@@ -33,7 +34,8 @@ function searchText(entry: HandbookEntry) {
     variant.warning,
     ...variant.steps.flatMap((step) => [step.text, step.command, step.tip, ...(step.keys ?? [])]),
   ]);
-  return [entry.title, entry.category, entry.note, entry.value, entry.body, ...steps]
+  const body = entry.kind === "page" && entry.body ? markdownPlainText(entry.body) : entry.body;
+  return [entry.title, entry.category, entry.note, entry.value, body, ...steps]
     .filter(Boolean)
     .join(" ")
     .toLowerCase();
@@ -73,6 +75,15 @@ export function guideSummary(entry: HandbookEntry) {
     ? `${variants.length} methods`
     : `${steps.length} ${steps.length === 1 ? "step" : "steps"}`;
   return command ? `${count} · ${command}` : count;
+}
+
+/** Entries that open in their own view in the sidepanel and from the Command Menu. */
+export const opensAsDocument = (entry: Pick<HandbookEntry, "kind">) => entry.kind === "guide" || entry.kind === "page";
+
+/** First words of a page, for list rows. */
+export function pageSummary(entry: HandbookEntry, max = 90) {
+  const text = markdownPlainText(entry.body ?? "").trim();
+  return text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
 }
 
 export function formatHandbookUpdated(entry: Pick<HandbookEntry, "updatedAt" | "updatedByName">, now = Date.now()) {

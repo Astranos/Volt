@@ -12,12 +12,12 @@ const clickText = async (selector: string, text: string) => {
 };
 
 // ?open=<title> opens an article (?view=guide is the Windows guide), &edit=1 opens it in the
-// editor (?view=edit), &reveal=1 reveals its login; ?new=value|secret|guide starts a new entry;
+// editor (?view=edit), &reveal=1 reveals its login; ?new=value|secret|guide|page starts a new entry;
 // ?state=empty shows the starter prompt.
-const NEW_KIND_LABELS: Record<string, string> = { value: "Quick value", secret: "Login", guide: "Guide" };
+const NEW_KIND_LABELS: Record<string, string> = { value: "Quick value", secret: "Login", guide: "Guide", page: "Page" };
 
 export default defineScenario({
-  description: "Full Handbook page (?open=<title>[&edit=1|&reveal=1], ?view=guide|edit, ?new=value|secret|guide, ?state=empty)",
+  description: "Full Handbook page (?open=<title>[&edit=1|&reveal=1], ?view=guide|edit, ?new=value|secret|guide|page, ?state=empty)",
   viewport: { width: 1280, height: 820 },
   render: (params) => (
     <HandbookPreviewProvider entries={params.get("state") === "empty" ? [] : undefined}>

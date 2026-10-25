@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Command } from "cmdk";
-import { BookOpen, Check, KeyRound, ListChecks, StickyNote } from "lucide-react";
-import { guideSummary, matchesHandbookQuery, type HandbookEntry } from "../../domain/handbook";
+import { BookOpen, Check, FileText, KeyRound, ListChecks, StickyNote } from "lucide-react";
+import { guideSummary, matchesHandbookQuery, opensAsDocument, pageSummary, type HandbookEntry } from "../../domain/handbook";
+import { displayValue } from "../../domain/handbook-format";
 import { listHandbook, openHandbookInSidepanel, revealHandbookSecret } from "../../handbook/client";
 import { PROFILE_AUTH_EVENT_KEY } from "../../access/chrome-profile-auth";
 import { CLERK_CLIENT_JWT_CACHE_KEY } from "../../access/clerk-client-jwt";
@@ -62,11 +63,11 @@ export const handbookCommandValue = (entry: HandbookEntry) => `handbook-${entry.
  * a guide in the sidepanel.
  */
 export async function runHandbookCommand(entry: HandbookEntry) {
-  if (entry.kind === "guide") {
+  if (opensAsDocument(entry)) {
     await openHandbookInSidepanel(entry._id);
     return "opened" as const;
   }
-  await navigator.clipboard.writeText(entry.kind === "secret" ? await revealHandbookSecret(entry._id) : entry.value ?? "");
+  await navigator.clipboard.writeText(entry.kind === "secret" ? await revealHandbookSecret(entry._id) : displayValue(entry));
   return "copied" as const;
 }
 
@@ -102,10 +103,11 @@ export function HandbookCommandGroup({
       {matches.length ? (
         <Command.Group heading="Handbook" className="cmdk-group">
           {matches.map((entry) => {
-            const Icon = entry.kind === "guide" ? ListChecks : entry.kind === "secret" ? KeyRound : StickyNote;
+            const Icon = entry.kind === "guide" ? ListChecks : entry.kind === "page" ? FileText : entry.kind === "secret" ? KeyRound : StickyNote;
             const detail = entry.kind === "guide" ? guideSummary(entry)
-              : entry.kind === "secret" ? `${entry.secretPreview ?? ""}${entry.note ? ` · ${entry.note}` : ""}`
-                : [entry.value, entry.note].filter(Boolean).join(" · ");
+              : entry.kind === "page" ? pageSummary(entry)
+                : entry.kind === "secret" ? `${entry.secretPreview ?? ""}${entry.note ? ` · ${entry.note}` : ""}`
+                  : [displayValue(entry), entry.note].filter(Boolean).join(" · ");
             return (
               <Command.Item key={entry._id} value={handbookCommandValue(entry)} onSelect={() => void select(entry)} className={itemClassName}>
                 <div className="flex items-center gap-3 px-4 py-3 w-full">
@@ -120,7 +122,7 @@ export function HandbookCommandGroup({
                     {copiedId === entry._id ? (
                       <span className="cmdk-handbook-copied"><Check className="w-3.5 h-3.5" /> Copied</span>
                     ) : (
-                      <><kbd className="cmdk-kbd">↵</kbd><span className="text-xs text-gray-500">{entry.kind === "guide" ? "open" : "copy"}</span></>
+                      <><kbd className="cmdk-kbd">↵</kbd><span className="text-xs text-gray-500">{opensAsDocument(entry) ? "open" : "copy"}</span></>
                     )}
                   </div>
                 </div>

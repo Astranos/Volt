@@ -16,6 +16,8 @@ function entry(fields: Partial<HandbookEntry> & Pick<HandbookEntry, "kind" | "ti
     _id: `entry${nextId}` as HandbookEntry["_id"],
     note: undefined,
     value: undefined,
+    valueFormat: undefined,
+    showInList: undefined,
     body: undefined,
     variants: undefined,
     secretPreview: undefined,

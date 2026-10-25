@@ -24,6 +24,7 @@ import {
   groupHandbook,
   guideSummary,
   handbookCategories,
+  pageSummary,
   BLANK_SUGGESTIONS,
   type HandbookEntry,
   type HandbookEntryId,
@@ -32,13 +33,16 @@ import {
 import { useHandbookEntries } from "../../hooks/useHandbookEntries";
 import { cn } from "../../lib/utils";
 import { ExtensionAccountControl, SidepanelSignInCard, useSidepanelSignIn, useSidepanelSignedIn } from "../access/ExtensionAccess";
+import { displayValue } from "../../domain/handbook-format";
 import {
-  CopyButton,
   EntryIcon,
   GuideWarning,
+  MarkdownView,
   SecretRow,
   StepDetails,
   StepNumber,
+  ValueActions,
+  ValueText,
   VariantToggle,
 } from "./handbook-parts";
 import { draftFor, HandbookEditor, type HandbookDraft } from "./HandbookEditor";
@@ -214,8 +218,16 @@ function HandbookLayout({ entries }: { entries: HandbookEntry[] }) {
   );
 }
 
+function rowSummary(entry: HandbookEntry) {
+  return entry.kind === "guide" ? guideSummary(entry)
+    : entry.kind === "page" ? pageSummary(entry)
+      : entry.kind === "secret" ? entry.secretPreview
+        : displayValue(entry);
+}
+
 function EntryList({ entries, query, onOpen }: { entries: HandbookEntry[]; query: string; onOpen: (id: HandbookEntryId) => void }) {
   const reorder = useMutation(api.handbook.reorder);
+  const setPinned = useMutation(api.handbook.setPinned);
   const groups = useMemo(() => groupHandbook(entries), [entries]);
   if (!groups.length) return <p className="handbook-empty-search">No entries match “{query}”.</p>;
   return (
@@ -240,13 +252,21 @@ function EntryList({ entries, query, onOpen }: { entries: HandbookEntry[]; query
                         {entry.title}
                         {entry.pinned ? <Pin className="handbook-pin-mark" aria-label="Pinned" /> : null}
                       </span>
-                      <span className="handbook-row-label">
-                        {entry.kind === "guide" ? guideSummary(entry) : entry.kind === "secret" ? entry.secretPreview : entry.value}
-                        {entry.note ? ` · ${entry.note}` : ""}
-                      </span>
+                      <span className="handbook-row-label">{rowSummary(entry)}</span>
+                      {entry.note ? <span className="handbook-row-note">{entry.note}</span> : null}
                     </span>
                   </button>
                   <span className="handbook-row-actions handbook-reveal-on-hover">
+                    <button
+                      type="button"
+                      className={cn("handbook-button is-icon", entry.pinned && "is-active")}
+                      aria-label={entry.pinned ? `Unpin ${entry.title}` : `Pin ${entry.title}`}
+                      aria-pressed={entry.pinned}
+                      title={entry.pinned ? "Unpin" : "Pin to the top"}
+                      onClick={() => void setPinned({ id: entry._id, pinned: !entry.pinned })}
+                    >
+                      {entry.pinned ? <PinOff aria-hidden="true" /> : <Pin aria-hidden="true" />}
+                    </button>
                     <button type="button" className="handbook-button is-icon" aria-label={`Move ${entry.title} up`} disabled={!canMove(-1)} onClick={() => moveBy(-1)}>
                       <ArrowUp aria-hidden="true" />
                     </button>
@@ -308,8 +328,8 @@ function Article({ entry, onBack, onEdit }: { entry: HandbookEntry; onBack: () =
         <div className="mobile-scanner-card handbook-card">
           <div className="handbook-row">
             <EntryIcon entry={entry} />
-            <span className="handbook-row-text"><span className="handbook-row-value is-large">{entry.value}</span></span>
-            <CopyButton getText={() => entry.value ?? ""} />
+            <span className="handbook-row-text"><ValueText entry={entry} className="handbook-row-value is-large is-wrapping" /></span>
+            <span className="handbook-row-actions"><ValueActions entry={entry} /></span>
           </div>
         </div>
       ) : null}
@@ -343,13 +363,20 @@ function Article({ entry, onBack, onEdit }: { entry: HandbookEntry; onBack: () =
         </>
       ) : null}
 
-      {entry.body ? <p className="handbook-guide-body">{entry.body}</p> : null}
+      {entry.kind === "page" ? (
+        <div className="mobile-scanner-card handbook-card handbook-page-body"><MarkdownView source={entry.body ?? ""} /></div>
+      ) : entry.body ? (
+        <section className="handbook-section">
+          <h2 className="handbook-section-title">Notes</h2>
+          <div className="mobile-scanner-card handbook-card handbook-notes">{entry.body}</div>
+        </section>
+      ) : null}
     </article>
   );
 }
 
 function Rail({ entries, selected, onOpen }: { entries: HandbookEntry[]; selected: HandbookEntry | null; onOpen: (id: HandbookEntryId) => void }) {
-  const quick = entries.filter((entry) => entry.pinned && entry.kind !== "guide").slice(0, 6);
+  const quick = entries.filter((entry) => entry.pinned && (entry.kind === "value" || entry.kind === "secret")).slice(0, 6);
   const related = selected
     ? entries.filter((entry) => entry.category === selected.category && entry._id !== selected._id).slice(0, 5)
     : [...entries].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 5);
@@ -371,8 +398,8 @@ function Rail({ entries, selected, onOpen }: { entries: HandbookEntry[]; selecte
           ) : (
             <div key={entry._id} className="handbook-mini">
               <span className="handbook-row-label">{entry.title}</span>
-              <span className="handbook-mini-value">{entry.value}</span>
-              <span className="handbook-row-actions"><CopyButton getText={() => entry.value ?? ""} /></span>
+              <ValueText entry={entry} className="handbook-mini-value" />
+              <span className="handbook-row-actions"><ValueActions entry={entry} /></span>
             </div>
           ))}
         </>

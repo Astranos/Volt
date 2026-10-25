@@ -294,7 +294,12 @@
 }
 
 .handbook-editor-head .handbook-segmented {
-  min-width: 300px;
+  min-width: 380px;
+}
+
+.handbook-editor .handbook-segmented button {
+  padding-inline: 12px;
+  white-space: nowrap;
 }
 
 .handbook-field {
@@ -406,6 +411,15 @@
   gap: 8px;
 }
 
+.handbook-checkbox:has(.handbook-checkbox-hint) {
+  align-items: flex-start;
+}
+
+.handbook-checkbox-hint {
+  display: block;
+  margin-top: 2px;
+}
+
 .handbook-checkbox input {
   accent-color: #16a34a;
   height: 15px;
@@ -431,6 +445,49 @@
   .handbook-rail {
     display: none;
   }
+}
+
+.handbook-segmented.is-inline {
+  align-self: flex-start;
+  min-width: 260px;
+}
+
+.handbook-address-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.handbook-field-row.is-address > :nth-child(1) { flex: 2; }
+.handbook-field-row.is-address > :nth-child(2) { flex: 0 0 76px; }
+.handbook-field-row.is-address > :nth-child(3) { flex: 0 0 120px; }
+
+.handbook-page-editor-head {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.handbook-page-editor-head .handbook-segmented.is-inline {
+  min-width: 170px;
+}
+
+.handbook-md-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.handbook-editor textarea.handbook-page-textarea {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  line-height: 1.55;
+  min-height: 260px;
+}
+
+.handbook-page-preview {
+  min-height: 260px;
+  padding: 14px 16px;
 }
 
 @media (prefers-color-scheme: light) {
