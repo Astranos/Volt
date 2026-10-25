@@ -199,7 +199,7 @@ export function ShopifyAuditSettings() {
             {shops.length > 0 && (
               <div className="space-y-2">
                 <div>
-                  <p className="font-medium">{shops.length === 1 ? `Connected to ${shops[0]}` : `${shops.length} stores connected`}</p>
+                  <p className="font-medium">{shops.length === 1 ? "Connected store" : `${shops.length} stores connected`}</p>
                   <p className="text-sm text-muted-foreground">
                     Volt has read-only product access for your account.
                     {shops.length > 1 && " This computer searches and audits the active store. Switch stores here or from the new tab's Shopify results."}

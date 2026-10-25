@@ -18,9 +18,10 @@ const states: Record<string, unknown> = {
   empty: { shop, date, products: [], tabId: null, currentId: null, marks: {} },
 };
 
-// ?state=progress (default) | done | empty | start (no audit saved yet); ?days=2|3 widens the range.
+// ?state=progress (default) | done | empty | start (no audit saved yet); ?days=2|3 widens the range;
+// ?stores=1 hides the store picker shown when several stores are connected.
 export default defineScenario({
-  description: "Side panel Shopify audit review (?state=progress|done|empty|start, ?days=3)",
+  description: "Side panel Shopify audit review (?state=progress|done|empty|start, ?days=3, ?stores=1 for a single store)",
   viewport: { width: 380, height: 720 },
   chrome: {
     messages: {

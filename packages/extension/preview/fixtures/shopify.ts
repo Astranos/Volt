@@ -10,9 +10,15 @@ export const productImages = {
 };
 
 export const shop = "volt-demo.myshopify.com";
-/** A franchise with three stores connected to one Volt account. */
-export const connectedShops = [shop, "volt-demo-eastside.myshopify.com", "volt-demo-westside.myshopify.com"];
-export const shopifyStatus = () => ({ success: true, value: { shop, shops: connectedShops } });
+/** A franchise's stores connected to one Volt account. */
+export const franchiseShops = [shop, "volt-demo-eastside.myshopify.com", "volt-demo-westside.myshopify.com", "volt-demo-northside.myshopify.com", "volt-demo-southside.myshopify.com"];
+// ?stores=0|1|3|5 picks how many are connected; 3 by default.
+const previewParam = (name: string) => new URLSearchParams(location.search).get(name);
+export const connectedShops = () => franchiseShops.slice(0, Math.min(5, Math.max(0, Number(previewParam("stores") ?? 3))));
+export const shopifyStatus = () => {
+  const shops = connectedShops();
+  return { success: true, value: shops.length ? { shop, shops } : null };
+};
 
 const product = (id: number, title: string, totalInventory: number, price: string, sku: string, condition: string, imageUrl: string) => ({
   id: `gid://shopify/Product/${id}`,
@@ -41,7 +47,10 @@ export const shopifySearchResult = {
 /** chrome.runtime message handlers for a connected store. */
 export const shopifyMessages = {
   shopifyAuditStatus: shopifyStatus,
-  shopifyAuditSearchProducts: () => ({ success: true, value: shopifySearchResult }),
+  // ?shopifyError=1 shows the failed-search state.
+  shopifyAuditSearchProducts: () => previewParam("shopifyError") === "1"
+    ? { success: false, error: "Shopify authorization expired. Reconnect your store." }
+    : { success: true, value: shopifySearchResult },
 };
 
 // Yesterday's products for the Shopify audit review.

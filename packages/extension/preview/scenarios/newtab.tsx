@@ -10,7 +10,7 @@ import { defineScenario } from "../scenario";
 
 // ?q=<text> types into the search box; "s iphone" searches the Shopify store.
 export default defineScenario({
-  description: "New tab page with closed tabs and bookmarks (?q= types a search, e.g. q=s+iphone; &compare=1 picks one; kiosk=1 shows kiosk requests)",
+  description: "New tab page with closed tabs and bookmarks (?q= types a search, e.g. q=s+iphone; &compare=1 picks one; kiosk=1 shows kiosk requests; stores=1 hides the store picker; shopifyError=1 fails the search)",
   viewport: { width: 1440, height: 900 },
   chrome: {
     storage: { local: { voltWhatsNewSeenVersion: RELEASE_NOTES_VERSION } },
