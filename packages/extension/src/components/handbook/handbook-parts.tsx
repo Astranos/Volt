@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { api } from "../../../../../convex/_generated/api";
 import type { HandbookEntry, HandbookEntryId, HandbookStep } from "../../domain/handbook";
-import { addressLines, displayValue, mapsUrl, valueFormatOf } from "../../domain/handbook-format";
+import { addressLines, entryFields, fieldDisplayValue, mapsUrl, valueFormatOf, type HandbookField } from "../../domain/handbook-format";
 import { parseHandbookMarkdown, type Inline } from "../../domain/handbook-markdown";
 import { cn } from "../../lib/utils";
 import "./handbook.css";
@@ -84,42 +84,66 @@ export function useHandbookSecret(id: HandbookEntryId) {
   };
 }
 
-/** Masked login with reveal and copy. Copy always goes through the reveal mutation. */
-export function SecretRow({ entry, children }: { entry: HandbookEntry; children: (parts: { value: ReactNode; actions: ReactNode }) => ReactNode }) {
+/**
+ * A login as two labeled rows: the username (shown, with Copy) and the password
+ * (hidden until revealed, with Copy). The password only ever comes from the reveal
+ * mutation.
+ */
+export function SecretFields({ entry }: { entry: HandbookEntry }) {
   const { revealed, toggle, copySecret } = useHandbookSecret(entry._id);
-  const value = revealed ? (
-    <span className="handbook-mono">
-      {revealed.username ? (
-        <button
-          type="button"
-          className="handbook-inline-copy"
-          title="Copy username"
-          onClick={() => void navigator.clipboard.writeText(revealed.username ?? "")}
-        >
-          {revealed.username}
-        </button>
+  return (
+    <div className="handbook-fields">
+      {entry.username ? (
+        <div className="handbook-field-item">
+          <span className="handbook-field-text">
+            <span className="handbook-field-name">Username</span>
+            <span className="handbook-field-value">{entry.username}</span>
+          </span>
+          <span className="handbook-row-actions"><CopyButton getText={() => entry.username ?? ""} /></span>
+        </div>
       ) : null}
-      {revealed.username ? " · " : null}
-      {revealed.secret}
-    </span>
-  ) : (
-    <span className="handbook-mono">{entry.secretPreview}</span>
+      <div className="handbook-field-item">
+        <span className="handbook-field-text">
+          <span className="handbook-field-name">Password</span>
+          <span className={cn("handbook-field-value", !revealed && "is-masked")}>{revealed ? revealed.secret : "••••••••"}</span>
+        </span>
+        <span className="handbook-row-actions">
+          <button
+            type="button"
+            className="handbook-button is-icon"
+            onClick={toggle}
+            aria-label={revealed ? `Hide the ${entry.title} password` : `Reveal the ${entry.title} password`}
+            title={revealed ? "Hide" : "Reveal"}
+          >
+            {revealed ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}
+          </button>
+          <CopyButton getText={copySecret} />
+        </span>
+      </div>
+    </div>
   );
-  const actions = (
-    <>
-      <button
-        type="button"
-        className="handbook-button is-icon"
-        onClick={toggle}
-        aria-label={revealed ? `Hide ${entry.title}` : `Reveal ${entry.title}`}
-        title={revealed ? "Hide" : "Reveal"}
-      >
-        {revealed ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}
-      </button>
-      <CopyButton getText={copySecret} />
-    </>
+}
+
+/** A value entry's values as labeled rows, each with Copy (and Open in Maps for addresses). */
+export function ValueFields({ entry }: { entry: HandbookEntry }) {
+  return (
+    <div className="handbook-fields">
+      {entryFields(entry).map((field, index) => (
+        <div key={index} className="handbook-field-item">
+          <span className="handbook-field-text">
+            {field.label ? <span className="handbook-field-name">{field.label}</span> : null}
+            <FieldText field={field} className="handbook-field-value" />
+          </span>
+          <span className="handbook-row-actions"><FieldActions field={field} /></span>
+        </div>
+      ))}
+    </div>
   );
-  return <>{children({ value, actions })}</>;
+}
+
+/** Labeled rows for a login or a multi-value entry. */
+export function EntryFields({ entry }: { entry: HandbookEntry }) {
+  return entry.kind === "secret" ? <SecretFields entry={entry} /> : <ValueFields entry={entry} />;
 }
 
 export function EntryIcon({ entry }: { entry: HandbookEntry }) {
@@ -225,26 +249,26 @@ export function VariantToggle({
   );
 }
 
-/** A value entry's value: addresses on two lines (street, then city/state/ZIP), anything else wraps. */
-export function ValueText({ entry, className }: { entry: HandbookEntry; className?: string }) {
-  if (valueFormatOf(entry) === "address") {
+/** A value: an address on two lines (street, then city/state/ZIP); anything else wraps. */
+export function FieldText({ field, className }: { field: HandbookField; className?: string }) {
+  if (field.format === "address") {
     return (
       <span className={cn("handbook-value-text", className)}>
-        {addressLines(entry.value ?? "").map((line) => <span key={line} className="handbook-value-line">{line}</span>)}
+        {addressLines(field.value).map((line) => <span key={line} className="handbook-value-line">{line}</span>)}
       </span>
     );
   }
-  return <span className={cn("handbook-value-text", className)}>{entry.value}</span>;
+  return <span className={cn("handbook-value-text", className)}>{field.value}</span>;
 }
 
 /** Copy, plus "Open in Maps" for addresses. */
-export function ValueActions({ entry }: { entry: HandbookEntry }) {
+export function FieldActions({ field }: { field: HandbookField }) {
   return (
     <>
-      {valueFormatOf(entry) === "address" ? (
+      {field.format === "address" ? (
         <a
           className="handbook-button is-icon"
-          href={mapsUrl(displayValue(entry))}
+          href={mapsUrl(fieldDisplayValue(field))}
           target="_blank"
           rel="noreferrer"
           aria-label="Open in Google Maps"
@@ -253,9 +277,21 @@ export function ValueActions({ entry }: { entry: HandbookEntry }) {
           <Navigation aria-hidden="true" />
         </a>
       ) : null}
-      <CopyButton getText={() => displayValue(entry)} />
+      <CopyButton getText={() => fieldDisplayValue(field)} />
     </>
   );
+}
+
+/** A single-value entry's value. */
+export function ValueText({ entry, className }: { entry: HandbookEntry; className?: string }) {
+  const [field] = entryFields(entry);
+  return field ? <FieldText field={field} className={className} /> : null;
+}
+
+/** A single-value entry's actions. */
+export function ValueActions({ entry }: { entry: HandbookEntry }) {
+  const [field] = entryFields(entry);
+  return field ? <FieldActions field={field} /> : null;
 }
 
 function InlineNodes({ nodes }: { nodes: Inline[] }) {

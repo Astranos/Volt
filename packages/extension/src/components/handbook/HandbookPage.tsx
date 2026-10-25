@@ -30,22 +30,22 @@ import {
   type HandbookEntryId,
   type HandbookFilter,
 } from "../../domain/handbook";
-import { useHandbookEntries } from "../../hooks/useHandbookEntries";
+import { useHandbookCategoryOrder, useHandbookEntries } from "../../hooks/useHandbookEntries";
 import { cn } from "../../lib/utils";
 import { ExtensionAccountControl, SidepanelSignInCard, useSidepanelSignIn, useSidepanelSignedIn } from "../access/ExtensionAccess";
-import { displayValue } from "../../domain/handbook-format";
+import { entryFields, fieldDisplayValue, hasFieldRows } from "../../domain/handbook-format";
 import {
+  EntryFields,
   EntryIcon,
   GuideWarning,
   MarkdownView,
-  SecretRow,
   StepDetails,
   StepNumber,
   ValueActions,
   ValueText,
   VariantToggle,
 } from "./handbook-parts";
-import { draftFor, HandbookEditor, type HandbookDraft } from "./HandbookEditor";
+import { draftFor, emptyField, HandbookEditor, type HandbookDraft } from "./HandbookEditor";
 import "./handbook-page.css";
 
 type View =
@@ -94,7 +94,14 @@ function HandbookLayout({ entries }: { entries: HandbookEntry[] }) {
   const [query, setQuery] = useState("");
   const [view, setView] = useState<View>({ kind: "list" });
   const searchRef = useRef<HTMLInputElement>(null);
-  const categories = handbookCategories(entries);
+  const categoryOrder = useHandbookCategoryOrder();
+  const setCategoryOrder = useMutation(api.handbook.setCategoryOrder);
+  const categories = handbookCategories(entries, categoryOrder);
+  const moveCategory = (index: number, offset: number) => {
+    const next = [...categories];
+    [next[index], next[index + offset]] = [next[index + offset], next[index]];
+    void setCategoryOrder({ categories: next });
+  };
   const selected = view.kind === "article" || view.kind === "edit"
     ? entries.find((entry) => entry._id === view.id) ?? null
     : null;
@@ -115,14 +122,15 @@ function HandbookLayout({ entries }: { entries: HandbookEntry[] }) {
     if ((view.kind === "article" || view.kind === "edit") && !selected) setView({ kind: "list" });
   }, [view, selected]);
 
-  const navItems: Array<{ label: string; filter: HandbookFilter; icon: ReactNode; count: number }> = [
+  const navItems: Array<{ label: string; filter: HandbookFilter; icon: ReactNode; count: number; categoryIndex?: number }> = [
     { label: "All entries", filter: { kind: "all" }, icon: <Layers />, count: entries.length },
     { label: "Pinned", filter: { kind: "pinned" }, icon: <Pin />, count: entries.filter((entry) => entry.pinned).length },
-    ...categories.map((category) => ({
+    ...categories.map((category, categoryIndex) => ({
       label: category,
       filter: { kind: "category", category } as const,
       icon: <BookOpen />,
       count: entries.filter((entry) => entry.category === category).length,
+      categoryIndex,
     })),
   ];
   const isActive = (candidate: HandbookFilter) => candidate.kind === filter.kind
@@ -142,16 +150,30 @@ function HandbookLayout({ entries }: { entries: HandbookEntry[] }) {
         </div>
         <nav aria-label="Handbook categories">
           {navItems.map((item) => (
-            <button
-              key={item.label}
-              type="button"
-              className={cn("handbook-nav-item", isActive(item.filter) && "is-active")}
-              onClick={() => { setFilter(item.filter); setView({ kind: "list" }); }}
-            >
-              {item.icon}
-              <span>{item.label}</span>
-              <span className="handbook-nav-count">{item.count}</span>
-            </button>
+            <div key={item.label} className="handbook-nav-row">
+              <button
+                type="button"
+                className={cn("handbook-nav-item", isActive(item.filter) && "is-active")}
+                onClick={() => { setFilter(item.filter); setView({ kind: "list" }); }}
+              >
+                {item.icon}
+                <span>{item.label}</span>
+                <span className="handbook-nav-count">{item.count}</span>
+              </button>
+              {/* Categories can be moved; the order is used here, in the list, and in the sidepanel. */}
+              {item.categoryIndex !== undefined && categories.length > 1 ? (
+                <span className="handbook-nav-move">
+                  <button type="button" className="handbook-button is-icon" aria-label={`Move ${item.label} up`}
+                    disabled={item.categoryIndex === 0} onClick={() => moveCategory(item.categoryIndex!, -1)}>
+                    <ArrowUp aria-hidden="true" />
+                  </button>
+                  <button type="button" className="handbook-button is-icon" aria-label={`Move ${item.label} down`}
+                    disabled={item.categoryIndex === categories.length - 1} onClick={() => moveCategory(item.categoryIndex!, 1)}>
+                    <ArrowDown aria-hidden="true" />
+                  </button>
+                </span>
+              ) : null}
+            </div>
           ))}
         </nav>
         <div className="flex-1" />
@@ -205,6 +227,7 @@ function HandbookLayout({ entries }: { entries: HandbookEntry[] }) {
         ) : entries.length ? (
           <EntryList
             entries={filterHandbook(entries, query, filter)}
+            categoryOrder={categoryOrder}
             query={query}
             onOpen={(id) => setView({ kind: "article", id })}
           />
@@ -221,14 +244,19 @@ function HandbookLayout({ entries }: { entries: HandbookEntry[] }) {
 function rowSummary(entry: HandbookEntry) {
   return entry.kind === "guide" ? guideSummary(entry)
     : entry.kind === "page" ? pageSummary(entry)
-      : entry.kind === "secret" ? entry.secretPreview
-        : displayValue(entry);
+      : entry.kind === "secret" ? entry.username ?? entry.secretPreview
+        : entryFields(entry).map(fieldDisplayValue).join(" · ");
 }
 
-function EntryList({ entries, query, onOpen }: { entries: HandbookEntry[]; query: string; onOpen: (id: HandbookEntryId) => void }) {
+function EntryList({ entries, categoryOrder, query, onOpen }: {
+  entries: HandbookEntry[];
+  categoryOrder: string[];
+  query: string;
+  onOpen: (id: HandbookEntryId) => void;
+}) {
   const reorder = useMutation(api.handbook.reorder);
   const setPinned = useMutation(api.handbook.setPinned);
-  const groups = useMemo(() => groupHandbook(entries), [entries]);
+  const groups = useMemo(() => groupHandbook(entries, categoryOrder), [entries, categoryOrder]);
   if (!groups.length) return <p className="handbook-empty-search">No entries match “{query}”.</p>;
   return (
     <div className="handbook-list">
@@ -324,7 +352,9 @@ function Article({ entry, onBack, onEdit }: { entry: HandbookEntry; onBack: () =
         </div>
       </div>
 
-      {entry.kind === "value" ? (
+      {hasFieldRows(entry) ? (
+        <div className="mobile-scanner-card handbook-card handbook-fields-card"><EntryFields entry={entry} /></div>
+      ) : entry.kind === "value" ? (
         <div className="mobile-scanner-card handbook-card">
           <div className="handbook-row">
             <EntryIcon entry={entry} />
@@ -332,20 +362,6 @@ function Article({ entry, onBack, onEdit }: { entry: HandbookEntry; onBack: () =
             <span className="handbook-row-actions"><ValueActions entry={entry} /></span>
           </div>
         </div>
-      ) : null}
-
-      {entry.kind === "secret" ? (
-        <SecretRow key={entry._id} entry={entry}>
-          {({ value, actions }) => (
-            <div className="mobile-scanner-card handbook-card">
-              <div className="handbook-row">
-                <EntryIcon entry={entry} />
-                <span className="handbook-row-text"><span className="handbook-row-value is-large">{value}</span></span>
-                <span className="handbook-row-actions">{actions}</span>
-              </div>
-            </div>
-          )}
-        </SecretRow>
       ) : null}
 
       {entry.kind === "guide" && variant ? (
@@ -365,11 +381,8 @@ function Article({ entry, onBack, onEdit }: { entry: HandbookEntry; onBack: () =
 
       {entry.kind === "page" ? (
         <div className="mobile-scanner-card handbook-card handbook-page-body"><MarkdownView source={entry.body ?? ""} /></div>
-      ) : entry.body ? (
-        <section className="handbook-section">
-          <h2 className="handbook-section-title">Notes</h2>
-          <div className="mobile-scanner-card handbook-card handbook-notes">{entry.body}</div>
-        </section>
+      ) : entry.kind === "guide" && entry.body ? (
+        <p className="handbook-guide-body">{entry.body}</p>
       ) : null}
     </article>
   );
@@ -385,16 +398,11 @@ function Rail({ entries, selected, onOpen }: { entries: HandbookEntry[]; selecte
       {quick.length ? (
         <>
           <h2 className="handbook-section-title">Quick copy</h2>
-          {quick.map((entry) => entry.kind === "secret" ? (
-            <SecretRow key={entry._id} entry={entry}>
-              {({ value, actions }) => (
-                <div className="handbook-mini">
-                  <span className="handbook-row-label">{entry.title}</span>
-                  <span className="handbook-mini-value">{value}</span>
-                  <span className="handbook-row-actions">{actions}</span>
-                </div>
-              )}
-            </SecretRow>
+          {quick.map((entry) => hasFieldRows(entry) ? (
+            <div key={entry._id} className="handbook-mini">
+              <span className="handbook-row-label">{entry.title}</span>
+              <EntryFields entry={entry} />
+            </div>
           ) : (
             <div key={entry._id} className="handbook-mini">
               <span className="handbook-row-label">{entry.title}</span>
@@ -440,15 +448,22 @@ function EmptyHandbook({ onNew }: { onNew: (defaults?: Partial<HandbookDraft>) =
         {adding ? "Adding…" : "Add starter entries"}
       </button>
       <div className="handbook-suggestions">
-        {BLANK_SUGGESTIONS.map(({ kind, category, title, note }) => (
+        {BLANK_SUGGESTIONS.map((suggestion) => (
           <button
-            key={title}
+            key={suggestion.title}
             type="button"
             className="handbook-button"
-            onClick={() => onNew({ kind, category, title, note })}
+            onClick={() => onNew({
+              kind: suggestion.kind,
+              category: suggestion.category,
+              title: suggestion.title,
+              note: suggestion.note,
+              // Preset the value's type, so "Store phone" opens with phone formatting.
+              ...("valueFormat" in suggestion ? { fields: [emptyField(suggestion.valueFormat)] } : {}),
+            })}
           >
-            {kind === "secret" ? <KeyRound aria-hidden="true" /> : <Plus aria-hidden="true" />}
-            Add {title}{kind === "secret" ? " login" : ""}
+            {suggestion.kind === "secret" ? <KeyRound aria-hidden="true" /> : <Plus aria-hidden="true" />}
+            Add {suggestion.title}{suggestion.kind === "secret" ? " login" : ""}
           </button>
         ))}
       </div>

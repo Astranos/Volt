@@ -18,6 +18,8 @@ function entry(fields: Partial<HandbookEntry> & Pick<HandbookEntry, "kind" | "ti
     value: undefined,
     valueFormat: undefined,
     showInList: undefined,
+    fields: undefined,
+    username: undefined,
     body: undefined,
     variants: undefined,
     secretPreview: undefined,
@@ -67,6 +69,11 @@ describe("handbook domain", () => {
       ["Logins", ["Console login"]],
       ["Setup guides", ["Skip sign-in"]],
     ]);
+  });
+
+  test("follows the saved category order, with unlisted categories after in first-seen order", () => {
+    expect(groupHandbook(entries, ["Setup guides", "Retired category"]).map((group) => group.category))
+      .toEqual(["Setup guides", "Store info", "Logins"]);
   });
 
   test("summarizes guides and formats metadata", () => {

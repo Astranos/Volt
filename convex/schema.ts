@@ -258,6 +258,11 @@ export default defineSchema({
   })
     .index("by_workspaceId_and_order", ["workspaceId", "order"])
     .index("by_workspaceId_and_starterKey", ["workspaceId", "starterKey"]),
+  // The account's chosen order of handbook categories. Categories not listed follow, in first-seen order.
+  handbookCategoryOrders: defineTable({
+    workspaceId: v.id("workspaces"),
+    categories: v.array(v.string()),
+  }).index("by_workspaceId", ["workspaceId"]),
   // Kept apart from handbookEntries so list and search reads never load a secret.
   handbookSecrets: defineTable({
     workspaceId: v.id("workspaces"),

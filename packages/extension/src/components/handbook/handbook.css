@@ -590,6 +590,65 @@ a.handbook-button {
 
 .handbook-icon.is-amber { background: rgba(245, 158, 11, 0.16); color: #fbbf24; }
 
+/* Labeled value rows: a login's username and password, or a multi-value entry. */
+.handbook-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+  width: 100%;
+}
+
+.handbook-field-item {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.035);
+  border-radius: 9px;
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+  padding: 6px 6px 6px 10px;
+}
+
+/* The label sits above its value, so the value gets the full width. */
+.handbook-field-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.handbook-field-name {
+  color: rgba(214, 211, 209, 0.6);
+  font-size: 10.5px;
+}
+
+.handbook-field-value {
+  color: #f5f5f4;
+  font-size: 13px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.handbook-field-value.is-masked {
+  color: rgba(214, 211, 209, 0.8);
+  letter-spacing: 2px;
+  white-space: nowrap;
+}
+
+.handbook-row.is-fields,
+.handbook-row.is-fields .handbook-row-open {
+  align-items: flex-start;
+}
+
+.handbook-fields-card {
+  padding: 10px 12px;
+}
+
+.handbook-fields-card .handbook-fields {
+  margin-top: 0;
+}
+
 /* A page shown in full in the sidepanel list. */
 .handbook-inline-page {
   padding-bottom: 12px;
@@ -663,6 +722,10 @@ a.handbook-button {
   .handbook-row-open:hover .handbook-row-label-text,
   .handbook-row-title:focus-visible .handbook-row-label-text { color: #15803d; }
   .handbook-row-note { color: #78716c; }
+  .handbook-field-item { background: rgba(15, 23, 42, 0.045); }
+  .handbook-field-name { color: #78716c; }
+  .handbook-field-value { color: #1c1917; }
+  .handbook-field-value.is-masked { color: #57534e; }
   .handbook-inline-page + .handbook-row,
   .handbook-row + .handbook-inline-page,
   .handbook-inline-page + .handbook-inline-page { border-top-color: rgba(15, 23, 42, 0.07); }

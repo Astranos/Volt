@@ -106,7 +106,7 @@ export function HandbookCommandGroup({
             const Icon = entry.kind === "guide" ? ListChecks : entry.kind === "page" ? FileText : entry.kind === "secret" ? KeyRound : StickyNote;
             const detail = entry.kind === "guide" ? guideSummary(entry)
               : entry.kind === "page" ? pageSummary(entry)
-                : entry.kind === "secret" ? `${entry.secretPreview ?? ""}${entry.note ? ` · ${entry.note}` : ""}`
+                : entry.kind === "secret" ? [entry.username ?? entry.secretPreview, entry.note].filter(Boolean).join(" · ")
                   : [displayValue(entry), entry.note].filter(Boolean).join(" · ");
             return (
               <Command.Item key={entry._id} value={handbookCommandValue(entry)} onSelect={() => void select(entry)} className={itemClassName}>

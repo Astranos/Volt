@@ -447,6 +447,65 @@
   }
 }
 
+/* Category rows in the left menu, with move arrows that appear on hover. */
+.handbook-nav-row {
+  align-items: center;
+  display: flex;
+  position: relative;
+}
+
+.handbook-nav-move {
+  display: none;
+  gap: 2px;
+  position: absolute;
+  right: 4px;
+}
+
+.handbook-nav-move .handbook-button.is-icon {
+  height: 24px;
+  width: 24px;
+}
+
+.handbook-nav-row:hover .handbook-nav-move,
+.handbook-nav-row:focus-within .handbook-nav-move {
+  display: flex;
+}
+
+.handbook-nav-row:hover .handbook-nav-count,
+.handbook-nav-row:focus-within .handbook-nav-count {
+  visibility: hidden;
+}
+
+/* Editor: a quick value's values. */
+.handbook-value-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.handbook-value-field {
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+}
+
+.handbook-value-field.mobile-scanner-card {
+  padding: 12px;
+}
+
+.handbook-value-field-tools {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.handbook-add-value {
+  align-self: flex-start;
+}
+
 .handbook-segmented.is-inline {
   align-self: flex-start;
   min-width: 260px;

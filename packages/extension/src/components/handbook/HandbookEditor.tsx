@@ -9,11 +9,11 @@ import {
   type HandbookEntryId,
 } from "../../domain/handbook";
 import {
+  entryFields,
   formatAddress,
   formatPhoneInput,
   formatPhoneTyping,
   parseAddress,
-  valueFormatOf,
   type AddressParts,
   type HandbookValueFormat,
 } from "../../domain/handbook-format";
@@ -23,14 +23,13 @@ import { MarkdownView } from "./handbook-parts";
 type Kind = HandbookEntry["kind"];
 type DraftStep = { text: string; keys: string; command: string; tip: string };
 type DraftVariant = { label: string; warning: string; steps: DraftStep[] };
+export type DraftField = { label: string; format: HandbookValueFormat; value: string; address: AddressParts };
 export type HandbookDraft = {
   kind: Kind;
   title: string;
   category: string;
   note: string;
-  value: string;
-  valueFormat: HandbookValueFormat;
-  address: AddressParts;
+  fields: DraftField[];
   body: string;
   showInList: boolean;
   pinned: boolean;
@@ -57,20 +56,29 @@ const PLACEHOLDERS: Record<Kind, { title: string; category: string }> = {
   page: { title: "Opening checklist", category: "Procedures" },
 };
 const emptyAddress = (): AddressParts => ({ street: "", city: "", state: "", zip: "" });
+export const emptyField = (format: HandbookValueFormat = "text"): DraftField => ({ label: "", format, value: "", address: emptyAddress() });
+const MAX_FIELDS = 8;
+const fieldValue = (field: DraftField) => (field.format === "address" ? formatAddress(field.address) : field.value);
 const emptyStep = (): DraftStep => ({ text: "", keys: "", command: "", tip: "" });
 const emptyVariant = (): DraftVariant => ({ label: "", warning: "", steps: [emptyStep()] });
 
 export function draftFor(entry: HandbookEntry | null, defaults: Partial<HandbookDraft> = {}): HandbookDraft {
-  const valueFormat = entry ? valueFormatOf(entry) : "text";
+  const fields = entry?.kind === "value"
+    ? entryFields(entry).map((field) => ({
+      label: field.label ?? "",
+      format: field.format,
+      value: field.value,
+      address: field.format === "address" ? parseAddress(field.value) : emptyAddress(),
+    }))
+    : [emptyField()];
   return {
     kind: entry?.kind ?? "value",
     title: entry?.title ?? "",
     category: entry?.category ?? "",
     note: entry?.note ?? "",
-    value: entry?.value ?? "",
-    valueFormat,
-    address: valueFormat === "address" ? parseAddress(entry?.value ?? "") : emptyAddress(),
-    body: entry?.body ?? "",
+    fields,
+    // Quick values and logins no longer have notes; only guides (intro) and pages use this.
+    body: entry?.kind === "guide" || entry?.kind === "page" ? entry.body ?? "" : "",
     showInList: entry?.showInList ?? false,
     pinned: entry?.pinned ?? false,
     variants: entry?.variants?.map((variant) => ({
@@ -95,10 +103,14 @@ export function draftFor(entry: HandbookEntry | null, defaults: Partial<Handbook
  */
 function switchKind(draft: HandbookDraft, kind: Kind): HandbookDraft {
   if (draft.kind !== "value" || kind !== "page") return { ...draft, kind };
-  const value = (draft.valueFormat === "address" ? formatAddress(draft.address) : draft.value).trim();
-  // Skip it only if a line of the notes is already exactly the value.
-  const alreadyThere = draft.body.split("\n").some((line) => line.trim() === value);
-  const body = value && !alreadyThere ? [value, draft.body].filter(Boolean).join("\n\n") : draft.body;
+  // Each value becomes a line ("Phone: 313-555-0100"), unless the page already has that exact line.
+  const lines = draft.fields
+    .map((field) => [field.label.trim(), fieldValue(field).trim()])
+    .filter(([, value]) => value)
+    .map(([label, value]) => (label ? `${label}: ${value}` : value));
+  const existing = new Set(draft.body.split("\n").map((line) => line.trim()));
+  const added = lines.filter((line) => !existing.has(line));
+  const body = added.length ? [added.join("\n"), draft.body].filter(Boolean).join("\n\n") : draft.body;
   return { ...draft, kind, body };
 }
 
@@ -150,10 +162,13 @@ export function HandbookEditor({
       title: draft.title,
       category: draft.category,
       note: draft.note || undefined,
-      value: draft.kind !== "value" ? undefined
-        : draft.valueFormat === "address" ? formatAddress(draft.address) : draft.value,
-      valueFormat: draft.kind === "value" ? draft.valueFormat : undefined,
-      body: draft.body || undefined,
+      // `value`/`valueFormat` mirror the first field for older extensions; `fields` is the source of truth.
+      value: draft.kind === "value" ? fieldValue(draft.fields[0]) : undefined,
+      valueFormat: draft.kind === "value" ? draft.fields[0].format : undefined,
+      fields: draft.kind === "value"
+        ? draft.fields.map((field) => ({ label: field.label.trim() || undefined, value: fieldValue(field), format: field.format }))
+        : undefined,
+      body: draft.kind === "guide" || draft.kind === "page" ? draft.body || undefined : undefined,
       showInList: draft.kind === "page" ? draft.showInList : undefined,
       pinned: draft.pinned,
       variants: draft.kind === "guide"
@@ -237,43 +252,7 @@ export function HandbookEditor({
       </Field>
 
       {draft.kind === "value" ? (
-        <>
-          <div className="handbook-field">
-            <span className="handbook-field-label">Type</span>
-            <div className="handbook-segmented is-inline" role="radiogroup" aria-label="Value type">
-              {FORMAT_OPTIONS.map((option) => (
-                <button
-                  key={option.format}
-                  type="button"
-                  role="radio"
-                  aria-checked={draft.valueFormat === option.format}
-                  className={cn(draft.valueFormat === option.format && "is-active")}
-                  onClick={() => setDraft((current) => ({
-                    ...current,
-                    valueFormat: option.format,
-                    // Carry what's typed across, so switching types doesn't lose it.
-                    address: option.format === "address" && current.valueFormat !== "address" ? parseAddress(current.value) : current.address,
-                    value: current.valueFormat === "address" && option.format !== "address" ? formatAddress(current.address)
-                      : option.format === "phone" ? formatPhoneInput(current.value) : current.value,
-                  }))}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-          </div>
-          {draft.valueFormat === "address" ? (
-            <AddressFields value={draft.address} onChange={(address) => set("address", address)} />
-          ) : draft.valueFormat === "phone" ? (
-            <Field label="Phone number" hint="Dashes are added as you type. Add an extension with “x”, like 734-287-6611 x6.">
-              <PhoneInput value={draft.value} onChange={(value) => set("value", value)} />
-            </Field>
-          ) : (
-            <Field label="Value to copy">
-              <input value={draft.value} onChange={(event) => set("value", event.target.value)} required />
-            </Field>
-          )}
-        </>
+        <ValueFieldsEditor fields={draft.fields} onChange={(fields) => set("fields", fields)} />
       ) : null}
 
       {draft.kind === "page" ? (
@@ -384,9 +363,9 @@ export function HandbookEditor({
         </div>
       ) : null}
 
-      {draft.kind !== "page" ? (
-        <Field label="Notes" hint="Shown when someone opens the entry, in the sidepanel or here.">
-          <textarea value={draft.body} onChange={(event) => set("body", event.target.value)} rows={4} />
+      {draft.kind === "guide" ? (
+        <Field label="Intro (optional)" hint="A line shown above the steps, like “For Windows: no password.”">
+          <textarea value={draft.body} onChange={(event) => set("body", event.target.value)} rows={2} />
         </Field>
       ) : null}
       {draft.kind === "page" ? (
@@ -567,5 +546,88 @@ function PhoneInput({ value, onChange }: { value: string; onChange: (value: stri
         if (formatted !== raw) requestAnimationFrame(() => input.current?.setSelectionRange(caret, caret));
       }}
     />
+  );
+}
+
+/**
+ * A quick value's values: one or more, each with an optional label, a type, and its
+ * own input. A single unlabeled value is the classic "copy this" entry.
+ */
+function ValueFieldsEditor({ fields, onChange }: { fields: DraftField[]; onChange: (fields: DraftField[]) => void }) {
+  const setField = (index: number, next: DraftField) => onChange(fields.map((field, i) => (i === index ? next : field)));
+  const several = fields.length > 1;
+  return (
+    <div className="handbook-value-fields">
+      {fields.map((field, index) => (
+        <fieldset key={index} className={cn("handbook-value-field", several && "mobile-scanner-card")}>
+          <div className="handbook-field-row">
+            <Field label={several ? `Value ${index + 1} label` : "Label (optional)"}>
+              <input
+                value={field.label}
+                onChange={(event) => setField(index, { ...field, label: event.target.value })}
+                placeholder={several ? "Phone, Address, Network…" : "Only needed with more than one value"}
+              />
+            </Field>
+            <div className="handbook-field">
+              <span className="handbook-field-label">Type</span>
+              <div className="handbook-segmented is-inline" role="radiogroup" aria-label={`Value ${index + 1} type`}>
+                {FORMAT_OPTIONS.map((option) => (
+                  <button
+                    key={option.format}
+                    type="button"
+                    role="radio"
+                    aria-checked={field.format === option.format}
+                    className={cn(field.format === option.format && "is-active")}
+                    // Carry what's typed across, so switching types doesn't lose it.
+                    onClick={() => setField(index, {
+                      ...field,
+                      format: option.format,
+                      address: option.format === "address" && field.format !== "address" ? parseAddress(field.value) : field.address,
+                      value: field.format === "address" && option.format !== "address" ? formatAddress(field.address)
+                        : option.format === "phone" ? formatPhoneInput(field.value) : field.value,
+                    })}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+          {field.format === "address" ? (
+            <AddressFields value={field.address} onChange={(address) => setField(index, { ...field, address })} />
+          ) : field.format === "phone" ? (
+            <Field label="Phone number" hint="Dashes are added as you type. Add an extension with “x”, like 734-287-6611 x6.">
+              <PhoneInput value={field.value} onChange={(value) => setField(index, { ...field, value })} />
+            </Field>
+          ) : (
+            <Field label="Value to copy">
+              <input value={field.value} onChange={(event) => setField(index, { ...field, value: event.target.value })} required />
+            </Field>
+          )}
+          {several ? (
+            <div className="handbook-value-field-tools">
+              <button type="button" className="handbook-button is-icon" aria-label={`Move value ${index + 1} up`} disabled={index === 0}
+                onClick={() => onChange(move(fields, index, -1))}>
+                <ArrowUp aria-hidden="true" />
+              </button>
+              <button type="button" className="handbook-button is-icon" aria-label={`Move value ${index + 1} down`} disabled={index === fields.length - 1}
+                onClick={() => onChange(move(fields, index, 1))}>
+                <ArrowDown aria-hidden="true" />
+              </button>
+              <button type="button" className="handbook-button is-danger" onClick={() => onChange(fields.filter((_, i) => i !== index))}>
+                <Trash2 aria-hidden="true" />
+                Remove value
+              </button>
+            </div>
+          ) : null}
+        </fieldset>
+      ))}
+      {fields.length < MAX_FIELDS ? (
+        <button type="button" className="handbook-button handbook-add-value" onClick={() => onChange([...fields, emptyField()])}>
+          <Plus aria-hidden="true" />
+          Add another value
+        </button>
+      ) : null}
+    </div>
   );
 }

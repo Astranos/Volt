@@ -14,6 +14,8 @@ const entry = (fields: Partial<HandbookEntry> & Pick<HandbookEntry, "kind" | "ti
   value: undefined,
   valueFormat: undefined,
   showInList: undefined,
+  fields: undefined,
+  username: undefined,
   body: undefined,
   variants: undefined,
   secretPreview: undefined,
@@ -33,13 +35,22 @@ export const handbookEntries: HandbookEntry[] = [
     category: "Store info",
     note: "Next to the bank",
     value: "1234 Main Street, Springfield, MI 48180",
-    body: "Deliveries use the side door on Elm St.\nThe back lot closes at 9 PM.",
     pinned: true,
   }),
   entry({ kind: "value", valueFormat: "phone", title: "Local police", category: "Store info", note: "Non-emergency line", value: "313-555-0199 x6" }),
-  entry({ kind: "secret", title: "PSN", category: "Logins", note: "Testing consoles", secretPreview: "stor••• · ••••••", pinned: true }),
-  entry({ kind: "secret", title: "Microsoft account", category: "Logins", note: "Testing PCs and Xbox", secretPreview: "stor••• · ••••••" }),
-  entry({ kind: "secret", title: "Mac test user", category: "Logins", secretPreview: "u••• · ••••••" }),
+  entry({
+    kind: "value",
+    title: "Guest Wi-Fi",
+    category: "Store info",
+    value: "Store-Guest",
+    fields: [
+      { label: "Network", value: "Store-Guest", format: "text" },
+      { label: "Password", value: "example-wifi-pass", format: "text" },
+    ],
+  }),
+  entry({ kind: "secret", title: "PSN", category: "Logins", note: "Testing consoles", secretPreview: "stor••• · ••••••", username: "store01@example.com", pinned: true }),
+  entry({ kind: "secret", title: "Microsoft account", category: "Logins", note: "Testing PCs and Xbox", secretPreview: "stor••• · ••••••", username: "store01@example.com" }),
+  entry({ kind: "secret", title: "Mac test user", category: "Logins", secretPreview: "u••• · ••••••", username: "User" }),
   entry({
     kind: "guide",
     title: "Skip Windows sign-in",
@@ -117,6 +128,7 @@ export const handbookMessages = {
 function previewClient(entries: HandbookEntry[]) {
   const results: Record<string, unknown> = {
     "handbook:list": entries,
+    "handbook:categoryOrder": [],
     "handbook:revealSecret": fakeLogin,
   };
   return {

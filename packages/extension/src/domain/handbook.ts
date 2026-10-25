@@ -24,8 +24,13 @@ export const BLANK_SUGGESTIONS = [
   { kind: "secret", category: "Logins", title: "Mac test user", note: "Local account on test Macs" },
 ] as const;
 
-export function handbookCategories(entries: HandbookEntry[]) {
-  return [...new Set(entries.map((entry) => entry.category))];
+/** Categories in the account's saved order; any not in it follow, in first-seen order. */
+export function handbookCategories(entries: HandbookEntry[], order: readonly string[] = []) {
+  const rank = new Map(order.map((category, index) => [category, index]));
+  return [...new Set(entries.map((entry) => entry.category))]
+    .map((category, index) => ({ category, index }))
+    .sort((a, b) => (rank.get(a.category) ?? Infinity) - (rank.get(b.category) ?? Infinity) || a.index - b.index)
+    .map(({ category }) => category);
 }
 
 function searchText(entry: HandbookEntry) {
@@ -34,8 +39,11 @@ function searchText(entry: HandbookEntry) {
     variant.warning,
     ...variant.steps.flatMap((step) => [step.text, step.command, step.tip, ...(step.keys ?? [])]),
   ]);
-  const body = entry.kind === "page" && entry.body ? markdownPlainText(entry.body) : entry.body;
-  return [entry.title, entry.category, entry.note, entry.value, body, ...steps]
+  // Notes on quick values and logins are no longer shown, so they aren't searched either.
+  const body = entry.kind === "page" && entry.body ? markdownPlainText(entry.body)
+    : entry.kind === "guide" ? entry.body : undefined;
+  const fields = (entry.fields ?? []).flatMap((field) => [field.label, field.value]);
+  return [entry.title, entry.category, entry.note, entry.value, entry.username, body, ...fields, ...steps]
     .filter(Boolean)
     .join(" ")
     .toLowerCase();
@@ -57,9 +65,9 @@ export function filterHandbook(entries: HandbookEntry[], query: string, filter: 
     && matchesHandbookQuery(entry, query));
 }
 
-/** Groups by category in first-seen order, pinned entries first within each group. */
-export function groupHandbook(entries: HandbookEntry[]) {
-  return handbookCategories(entries).map((category) => ({
+/** Groups by category (in the saved category order), pinned entries first within each group. */
+export function groupHandbook(entries: HandbookEntry[], order: readonly string[] = []) {
+  return handbookCategories(entries, order).map((category) => ({
     category,
     entries: entries
       .filter((entry) => entry.category === category)

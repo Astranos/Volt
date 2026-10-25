@@ -1,7 +1,7 @@
 import { convexTest } from "convex-test";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import schema from "./schema";
 
 const modules = import.meta.glob("./**/*.ts");
@@ -37,7 +37,7 @@ describe("handbook", () => {
     await expect(t.mutation(api.handbook.addStarterEntries, {})).rejects.toThrow("AUTHENTICATION_REQUIRED");
   });
 
-  test("lists return a masked preview and never the secret", async () => {
+  test("lists show a login's username but never its password", async () => {
     const t = convexTest(schema, modules);
     const alice = asUser(t, "alice");
     expect(await alice.query(api.handbook.list, {})).toEqual([]);
@@ -46,9 +46,8 @@ describe("handbook", () => {
     const [entry] = await alice.query(api.handbook.list, {});
     expect(entry).toMatchObject({ _id: id, kind: "secret", title: "Console login", updatedByName: "alice Example" });
     expect(entry.secretPreview).toBe("test••• · ••••••");
-    const serialized = JSON.stringify(entry);
-    expect(serialized).not.toContain(LOGIN.secret);
-    expect(serialized).not.toContain(LOGIN.username);
+    expect(entry.username).toBe(LOGIN.username);
+    expect(JSON.stringify(entry)).not.toContain(LOGIN.secret);
 
     expect(await alice.mutation(api.handbook.revealSecret, { id })).toEqual(LOGIN);
   });
@@ -139,6 +138,78 @@ describe("handbook", () => {
     // Extensions released before pages existed call list with no arguments.
     expect((await alice.query(api.handbook.list, {})).map((entry) => entry.kind)).toEqual(["value"]);
     expect((await alice.query(api.handbook.list, { includePages: true })).map((entry) => entry.kind)).toEqual(["page", "value"]);
+  });
+
+  test("value entries can hold several labeled values", async () => {
+    const t = convexTest(schema, modules);
+    const alice = asUser(t, "alice");
+    const store = {
+      kind: "value" as const,
+      title: "Store",
+      category: "Store info",
+      pinned: false,
+      fields: [
+        { label: "Phone", value: "313-555-0100", format: "phone" as const },
+        { label: "Address", value: "1234 Main St, Springfield, MI 48180", format: "address" as const },
+        { label: "Email", value: "store@example.com" },
+      ],
+    };
+    const id = await alice.mutation(api.handbook.create, store);
+    const [saved] = await alice.query(api.handbook.list, {});
+    expect(saved.fields?.map((field) => field.label)).toEqual(["Phone", "Address", "Email"]);
+    // The first value is mirrored for extensions released before fields existed.
+    expect(saved).toMatchObject({ value: "313-555-0100", valueFormat: "phone" });
+
+    // Such an extension edits only `value`: the other fields survive, the first one changes.
+    await alice.mutation(api.handbook.update, { id, kind: "value", title: "Store", category: "Store info", pinned: false, value: "313-555-0111" });
+    const [edited] = await alice.query(api.handbook.list, {});
+    expect(edited.fields?.map((field) => field.value)).toEqual(["313-555-0111", "1234 Main St, Springfield, MI 48180", "store@example.com"]);
+    expect(edited.valueFormat).toBe("phone");
+
+    // A single unlabeled value keeps the original shape.
+    await alice.mutation(api.handbook.update, { id, ...store, fields: [{ value: "555-0100", format: "phone" }] });
+    const [single] = await alice.query(api.handbook.list, {});
+    expect(single.fields).toBeUndefined();
+    expect(single.value).toBe("555-0100");
+
+    await expect(alice.mutation(api.handbook.create, { ...store, fields: [{ label: "Phone", value: " " }] })).rejects.toThrow("HANDBOOK_VALUE_REQUIRED");
+    await expect(alice.mutation(api.handbook.create, { ...store, fields: Array.from({ length: 9 }, () => ({ value: "x" })) }))
+      .rejects.toThrow("HANDBOOK_FIELDS_TOO_MANY");
+  });
+
+  test("notes on quick values and logins become the short note", async () => {
+    const t = convexTest(schema, modules);
+    const alice = asUser(t, "alice");
+    // An older extension still sends notes; they're folded into the short note.
+    await alice.mutation(api.handbook.create, { ...valueEntry, note: "Front desk", body: "Ask for Juan\nAfter 5 PM" });
+    const [entry] = await alice.query(api.handbook.list, {});
+    expect(entry.note).toBe("Front desk · Ask for Juan · After 5 PM");
+    expect(entry.body).toBeUndefined();
+
+    // Entries saved before this change are moved by the one-time migration; guides keep their intro.
+    const workspaceId = await t.run(async (ctx) => (await ctx.db.query("handbookEntries").first())!.workspaceId);
+    await t.run(async (ctx) => {
+      const base = { workspaceId, category: "Store info", pinned: false, order: 9, createdAt: 1, updatedAt: 1, updatedByName: "x" };
+      await ctx.db.insert("handbookEntries", { ...base, kind: "value", title: "Old", value: "1", body: "Right off Wick" });
+      await ctx.db.insert("handbookEntries", { ...base, kind: "guide", title: "Guide", body: "Intro", variants: [{ label: "", steps: [{ text: "Do it" }] }] });
+    });
+    expect(await t.mutation(internal.handbook.moveNotesIntoShortNotes, {})).toBe(1);
+    const entries = await alice.query(api.handbook.list, {});
+    expect(entries.find((item) => item.title === "Old")).toMatchObject({ note: "Right off Wick" });
+    expect(entries.find((item) => item.title === "Old")?.body).toBeUndefined();
+    expect(entries.find((item) => item.title === "Guide")?.body).toBe("Intro");
+  });
+
+  test("saves the category order per account", async () => {
+    const t = convexTest(schema, modules);
+    const alice = asUser(t, "alice");
+    expect(await alice.query(api.handbook.categoryOrder, {})).toEqual([]);
+    await alice.mutation(api.handbook.setCategoryOrder, { categories: ["Store info", "Logins", "Setup guides"] });
+    await alice.mutation(api.handbook.setCategoryOrder, { categories: ["Logins", "Store info"] });
+    expect(await alice.query(api.handbook.categoryOrder, {})).toEqual(["Logins", "Store info"]);
+    expect(await asUser(t, "bob").query(api.handbook.categoryOrder, {})).toEqual([]);
+    await expect(alice.mutation(api.handbook.setCategoryOrder, { categories: ["A", "A"] })).rejects.toThrow("HANDBOOK_INVALID_ORDER");
+    await expect(t.query(api.handbook.categoryOrder, {})).rejects.toThrow("AUTHENTICATION_REQUIRED");
   });
 
   test("keeps the show-in-list option only on pages", async () => {
