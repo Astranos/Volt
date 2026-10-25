@@ -125,6 +125,43 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
 
+      # Every uploaded build also lands in GitHub Releases as a prerelease, so it can be
+      # loaded unpacked for testing before the Chrome Web Store approves it.
+      - name: Attach build to GitHub release
+        if: ${{ success() && inputs.submit_existing_draft == false }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SUBMIT_FOR_REVIEW: ${{ inputs.submit_for_review }}
+        run: |
+          zip="$(ls packages/extension/.output/volt-extension-*-chrome.zip | head -n 1)"
+          version="$(basename "$zip" | sed -E 's/^volt-extension-(.+)-chrome\.zip$/\1/')"
+          tag="v${version}"
+          if [[ "${SUBMIT_FOR_REVIEW}" == "true" ]]; then
+            state="in Chrome Web Store review"
+          else
+            state="uploaded to the Chrome Web Store, not submitted"
+          fi
+          notes="${RUNNER_TEMP}/release-notes.md"
+          cat > "$notes" <<NOTES
+          Volt Chrome extension **${version}**, ${state}. This is the exact zip uploaded to the Chrome Web Store.
+
+          ## Load it for testing
+          The zip keeps the Web Store extension ID, so Volt sign-in works. Chrome can't run two copies with the same ID:
+          1. In \`chrome://extensions\`, remove the Web Store copy of Volt. Data stored only on that computer is cleared; account data comes back after signing in.
+          2. Unzip \`$(basename "$zip")\` into a folder you'll keep.
+          3. Turn on **Developer mode**, click **Load unpacked**, and pick that folder.
+
+          An unpacked copy never updates itself. Once the Web Store approves this version, remove it and reinstall Volt from the Web Store.
+
+          Built from ${GITHUB_SHA} by run ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}.
+          NOTES
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" "$zip" --clobber
+          else
+            gh release create "$tag" "$zip" --prerelease --target "$GITHUB_SHA" \
+              --title "Volt extension ${version} (${state})" --notes-file "$notes"
+          fi
+
       - name: Persist accepted version
         if: always()
         run: |

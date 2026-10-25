@@ -103,7 +103,7 @@ pnpm --filter @volt/extension test:scanner
 pnpm --filter @volt/extension compile
 ```
 
-The generated zip is also retained as a workflow artifact.
+The generated zip is also retained as a workflow artifact. Every run that uploads a build also attaches that zip to a GitHub prerelease tagged `v<version>` ("in Chrome Web Store review" or "uploaded, not submitted"), with steps for loading it unpacked. Rerunning for the same version replaces the zip on the existing release.
 
 ## References
 
