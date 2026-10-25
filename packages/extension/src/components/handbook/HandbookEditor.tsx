@@ -155,6 +155,10 @@ export function HandbookEditor({
   const setVariant = (index: number, variant: DraftVariant) =>
     set("variants", draft.variants.map((item, itemIndex) => (itemIndex === index ? variant : item)));
   const keepsLogin = entry?.kind === "secret" && draft.kind === "secret";
+  // Notes left on a saved quick value or login from an earlier version. A page's or guide's
+  // text never counts as that, even after switching the type here.
+  const hadOlderNotes = (entry?.kind === "value" || entry?.kind === "secret") && Boolean(entry.body?.trim());
+  const keepsBody = draft.kind === "guide" || draft.kind === "page" || hadOlderNotes;
 
   const save = async () => {
     setSaving(true);
@@ -172,7 +176,7 @@ export function HandbookEditor({
       fields: draft.kind === "value"
         ? draft.fields.map((field) => ({ label: field.label.trim() || undefined, value: fieldValue(field), format: field.format }))
         : [],
-      body: draft.body.trim() ? draft.body : undefined,
+      body: keepsBody && draft.body.trim() ? draft.body : undefined,
       showInList: draft.kind === "page" ? draft.showInList : undefined,
       pinned: draft.pinned,
       variants: draft.kind === "guide"
@@ -254,7 +258,7 @@ export function HandbookEditor({
       <Field label="Short note" hint="Shown under the title, like “next to the bank” or “non-emergency”.">
         <textarea value={draft.note} onChange={(event) => set("note", event.target.value)} rows={2} />
       </Field>
-      {(draft.kind === "value" || draft.kind === "secret") && draft.body.trim() ? (
+      {(draft.kind === "value" || draft.kind === "secret") && hadOlderNotes ? (
         <Field label="Older notes" hint="Left from an earlier version. Move what you need into the short note (or a page), then clear this.">
           <textarea value={draft.body} onChange={(event) => set("body", event.target.value)} rows={3} />
         </Field>

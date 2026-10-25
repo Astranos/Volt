@@ -525,6 +525,11 @@
   margin-top: 1px;
   overflow-wrap: anywhere;
   white-space: pre-line;
+  /* Two lines in lists; the full note shows when the entry is opened. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
 }
 
 .handbook-row-value.is-wrapping {
