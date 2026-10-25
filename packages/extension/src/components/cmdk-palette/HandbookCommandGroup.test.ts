@@ -10,6 +10,8 @@ const entry = (index: number, title: string): HandbookEntry => ({
   note: undefined,
   valueFormat: undefined,
   showInList: undefined,
+  fields: undefined,
+  username: undefined,
   value: `value ${index}`,
   body: undefined,
   variants: undefined,

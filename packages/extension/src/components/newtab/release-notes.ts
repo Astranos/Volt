@@ -8,6 +8,14 @@ export const RELEASE_NOTES_VERSION = "1.0.69";
 
 export const RELEASE_NOTES = [
   {
+    title: "Clearer logins, and several values per entry",
+    description: "Logins show the username and password on their own rows, each with Copy. Quick values can hold several things to copy, like a store's phone, address, and email.",
+  },
+  {
+    title: "Put categories in your order",
+    description: "Move handbook categories up or down on the full handbook page. The side panel follows the same order.",
+  },
+  {
     title: "Handbook pages",
     description: "Write checklists, policies, and how-tos with headings, lists, and links. Short pages can show in full right in the side panel.",
   },

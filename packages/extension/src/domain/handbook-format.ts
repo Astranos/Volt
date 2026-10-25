@@ -103,3 +103,31 @@ export function displayValue(entry: Pick<HandbookEntry, "kind" | "title" | "valu
   const parts = valueFormatOf(entry) === "address" ? recognizeAddress(value) : null;
   return parts ? formatAddress(parts) : value;
 }
+
+export type HandbookField = { label?: string; value: string; format: HandbookValueFormat };
+
+/**
+ * A value entry's copyable values. Entries with one unlabeled value (including every
+ * entry saved before fields existed) come back as a single field, with its format
+ * inferred the same way as before.
+ */
+export function entryFields(entry: Pick<HandbookEntry, "kind" | "title" | "value" | "valueFormat" | "fields">): HandbookField[] {
+  if (entry.kind !== "value") return [];
+  if (entry.fields?.length) {
+    return entry.fields.map((field) => ({ label: field.label, value: field.value, format: field.format ?? "text" }));
+  }
+  return [{ value: entry.value ?? "", format: valueFormatOf(entry) }];
+}
+
+/** Several values, or a labeled one, are shown as labeled rows instead of a single value. */
+export function hasFieldRows(entry: Pick<HandbookEntry, "kind" | "title" | "value" | "valueFormat" | "fields">) {
+  if (entry.kind === "secret") return true;
+  const fields = entryFields(entry);
+  return fields.length > 1 || Boolean(fields[0]?.label);
+}
+
+/** A field's value as shown and copied: a recognized address is one clean line; anything else is exact. */
+export function fieldDisplayValue(field: HandbookField) {
+  const parts = field.format === "address" ? recognizeAddress(field.value) : null;
+  return parts ? formatAddress(parts) : field.value;
+}

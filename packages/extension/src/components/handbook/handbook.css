@@ -59,33 +59,6 @@
   padding: 1px 6px;
 }
 
-.handbook-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.handbook-chip {
-  background: rgba(255, 255, 255, 0.045);
-  border: 1px solid rgba(255, 255, 255, 0.11);
-  border-radius: 999px;
-  color: rgba(231, 229, 228, 0.86);
-  font-size: 12px;
-  font-weight: 600;
-  padding: 4px 11px;
-  transition: background-color 160ms ease, border-color 160ms ease;
-}
-
-.handbook-chip:hover {
-  border-color: rgba(255, 255, 255, 0.2);
-}
-
-.handbook-chip.is-active {
-  background: #16a34a;
-  border-color: #16a34a;
-  color: #fff;
-}
-
 .handbook-section {
   display: flex;
   flex-direction: column;
@@ -551,6 +524,12 @@
   line-height: 1.35;
   margin-top: 1px;
   overflow-wrap: anywhere;
+  white-space: pre-line;
+  /* Two lines in lists; the full note shows when the entry is opened. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
 }
 
 .handbook-row-value.is-wrapping {
@@ -567,6 +546,8 @@
   color: rgba(231, 229, 228, 0.86);
   font-size: 13px;
   margin-top: 6px;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
 }
 
 .handbook-notes {
@@ -589,6 +570,65 @@ a.handbook-button {
 }
 
 .handbook-icon.is-amber { background: rgba(245, 158, 11, 0.16); color: #fbbf24; }
+
+/* Labeled value rows: a login's username and password, or a multi-value entry. */
+.handbook-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+  width: 100%;
+}
+
+.handbook-field-item {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.035);
+  border-radius: 9px;
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+  padding: 6px 6px 6px 10px;
+}
+
+/* The label sits above its value, so the value gets the full width. */
+.handbook-field-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.handbook-field-name {
+  color: rgba(214, 211, 209, 0.6);
+  font-size: 10.5px;
+}
+
+.handbook-field-value {
+  color: #f5f5f4;
+  font-size: 13px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.handbook-field-value.is-masked {
+  color: rgba(214, 211, 209, 0.8);
+  letter-spacing: 2px;
+  white-space: nowrap;
+}
+
+.handbook-row.is-fields,
+.handbook-row.is-fields .handbook-row-open {
+  align-items: flex-start;
+}
+
+.handbook-fields-card {
+  padding: 10px 12px;
+}
+
+.handbook-fields-card .handbook-fields {
+  margin-top: 0;
+}
 
 /* A page shown in full in the sidepanel list. */
 .handbook-inline-page {
@@ -663,6 +703,10 @@ a.handbook-button {
   .handbook-row-open:hover .handbook-row-label-text,
   .handbook-row-title:focus-visible .handbook-row-label-text { color: #15803d; }
   .handbook-row-note { color: #78716c; }
+  .handbook-field-item { background: rgba(15, 23, 42, 0.045); }
+  .handbook-field-name { color: #78716c; }
+  .handbook-field-value { color: #1c1917; }
+  .handbook-field-value.is-masked { color: #57534e; }
   .handbook-inline-page + .handbook-row,
   .handbook-row + .handbook-inline-page,
   .handbook-inline-page + .handbook-inline-page { border-top-color: rgba(15, 23, 42, 0.07); }
@@ -677,7 +721,6 @@ a.handbook-button {
   .handbook-icon.is-amber { background: #fef3c7; color: #b45309; }
 
   .handbook-search,
-  .handbook-chip,
   .handbook-button {
     background: rgba(255, 255, 255, 0.78);
     border-color: rgba(15, 23, 42, 0.1);
@@ -704,13 +747,11 @@ a.handbook-button {
     border-color: rgba(15, 23, 42, 0.14);
   }
 
-  .handbook-button:hover,
-  .handbook-chip:hover {
+  .handbook-button:hover {
     background: #fff;
     border-color: rgba(15, 23, 42, 0.16);
   }
 
-  .handbook-chip.is-active,
   .handbook-button.is-primary {
     background: #16a34a;
     border-color: #16a34a;

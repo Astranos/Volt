@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { addressLines, displayValue, formatAddress, formatPhoneInput, formatPhoneTyping, parseAddress, recognizeAddress, valueFormatOf } from "./handbook-format";
+import { addressLines, displayValue, entryFields, fieldDisplayValue, formatAddress, formatPhoneInput, formatPhoneTyping, hasFieldRows, parseAddress, recognizeAddress, valueFormatOf } from "./handbook-format";
 import { markdownPlainText, parseHandbookMarkdown } from "./handbook-markdown";
 
 describe("phone formatting", () => {
@@ -151,5 +151,25 @@ describe("page markdown", () => {
     const started = performance.now();
     for (const marker of ["[", "*", "_", "`", "**"]) parseHandbookMarkdown(marker.repeat(15_000));
     expect(performance.now() - started).toBeLessThan(1_000);
+  });
+});
+
+describe("entry fields", () => {
+  const base = { kind: "value" as const, title: "Store", value: "313-555-0100", valueFormat: undefined, fields: undefined };
+
+  test("an entry saved before fields existed is one unlabeled field with its inferred format", () => {
+    expect(entryFields({ ...base, title: "Store phone" })).toEqual([{ value: "313-555-0100", format: "phone" }]);
+    expect(hasFieldRows({ ...base, title: "Store phone" })).toBe(false);
+  });
+
+  test("several or labeled values are shown as labeled rows", () => {
+    const fields = [
+      { label: "Phone", value: "313-555-0100", format: "phone" as const },
+      { label: "Address", value: "1234 Main St, Springfield MI, 48180", format: "address" as const },
+    ];
+    expect(hasFieldRows({ ...base, fields })).toBe(true);
+    expect(entryFields({ ...base, fields }).map(fieldDisplayValue)).toEqual(["313-555-0100", "1234 Main St, Springfield, MI 48180"]);
+    expect(hasFieldRows({ ...base, fields: [{ label: "Phone", value: "1" }] })).toBe(true);
+    expect(hasFieldRows({ kind: "secret", title: "PSN", value: undefined, valueFormat: undefined, fields: undefined })).toBe(true);
   });
 });

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Command } from "cmdk";
 import { BookOpen, Check, FileText, KeyRound, ListChecks, StickyNote } from "lucide-react";
 import { guideSummary, matchesHandbookQuery, opensAsDocument, pageSummary, type HandbookEntry } from "../../domain/handbook";
-import { displayValue } from "../../domain/handbook-format";
+import { entryFields, fieldDisplayValue, hasFieldRows } from "../../domain/handbook-format";
 import { listHandbook, openHandbookInSidepanel, revealHandbookSecret } from "../../handbook/client";
 import { PROFILE_AUTH_EVENT_KEY } from "../../access/chrome-profile-auth";
 import { CLERK_CLIENT_JWT_CACHE_KEY } from "../../access/clerk-client-jwt";
@@ -58,16 +58,20 @@ export function wantsHandbookAction(query: string, matches: HandbookEntry[]) {
 
 export const handbookCommandValue = (entry: HandbookEntry) => `handbook-${entry._id}`;
 
+// Guides, pages, and quick values with several values open in the sidepanel: there's
+// no single thing for Enter to copy.
+const opensFromMenu = (entry: HandbookEntry) => opensAsDocument(entry) || (entry.kind === "value" && hasFieldRows(entry));
+
 /**
- * Enter copies a quick value, copies a login through the reveal path, or opens
- * a guide in the sidepanel.
+ * Enter copies a single quick value, copies a login's password through the reveal
+ * path, or opens the entry in the sidepanel.
  */
 export async function runHandbookCommand(entry: HandbookEntry) {
-  if (opensAsDocument(entry)) {
+  if (opensFromMenu(entry)) {
     await openHandbookInSidepanel(entry._id);
     return "opened" as const;
   }
-  await navigator.clipboard.writeText(entry.kind === "secret" ? await revealHandbookSecret(entry._id) : displayValue(entry));
+  await navigator.clipboard.writeText(entry.kind === "secret" ? await revealHandbookSecret(entry._id) : fieldDisplayValue(entryFields(entry)[0]));
   return "copied" as const;
 }
 
@@ -106,8 +110,8 @@ export function HandbookCommandGroup({
             const Icon = entry.kind === "guide" ? ListChecks : entry.kind === "page" ? FileText : entry.kind === "secret" ? KeyRound : StickyNote;
             const detail = entry.kind === "guide" ? guideSummary(entry)
               : entry.kind === "page" ? pageSummary(entry)
-                : entry.kind === "secret" ? `${entry.secretPreview ?? ""}${entry.note ? ` · ${entry.note}` : ""}`
-                  : [displayValue(entry), entry.note].filter(Boolean).join(" · ");
+                : entry.kind === "secret" ? [entry.username ?? entry.secretPreview, entry.note].filter(Boolean).join(" · ")
+                  : [...entryFields(entry).map(fieldDisplayValue), entry.note].filter(Boolean).join(" · ");
             return (
               <Command.Item key={entry._id} value={handbookCommandValue(entry)} onSelect={() => void select(entry)} className={itemClassName}>
                 <div className="flex items-center gap-3 px-4 py-3 w-full">
@@ -122,7 +126,7 @@ export function HandbookCommandGroup({
                     {copiedId === entry._id ? (
                       <span className="cmdk-handbook-copied"><Check className="w-3.5 h-3.5" /> Copied</span>
                     ) : (
-                      <><kbd className="cmdk-kbd">↵</kbd><span className="text-xs text-gray-500">{opensAsDocument(entry) ? "open" : "copy"}</span></>
+                      <><kbd className="cmdk-kbd">↵</kbd><span className="text-xs text-gray-500">{opensFromMenu(entry) ? "open" : "copy"}</span></>
                     )}
                   </div>
                 </div>
