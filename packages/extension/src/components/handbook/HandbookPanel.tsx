@@ -138,7 +138,7 @@ function HandbookList({ entries, onOpenGuide }: { entries: HandbookEntry[]; onOp
         <HandbookNotice
           icon={<BookOpen />}
           title="Your handbook is empty"
-          copy="Add the store's phone, address, and the Windows setup guide in one click. Logins are added on the full handbook page."
+          copy="Add the default setup guides in one click. Store phone, address, and logins are filled in on the full handbook page."
           action={{ label: adding ? "Adding…" : "Add starter entries", onClick: () => void addStarters(), icon: <Sparkles />, disabled: adding }}
           secondary={{ label: "Open full handbook", onClick: openFullHandbook }}
         />

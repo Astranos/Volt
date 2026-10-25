@@ -24,7 +24,7 @@ import {
   groupHandbook,
   guideSummary,
   handbookCategories,
-  LOGIN_SUGGESTIONS,
+  BLANK_SUGGESTIONS,
   type HandbookEntry,
   type HandbookEntryId,
   type HandbookFilter,
@@ -405,22 +405,22 @@ function EmptyHandbook({ onNew }: { onNew: (defaults?: Partial<HandbookDraft>) =
     <PageNotice
       icon={<BookOpen />}
       title="Start your store handbook"
-      copy="Add the store phone, address, police line, and the Windows setup guide in one click. Then add the logins your team uses."
+      copy="Add the default setup guides in one click. Then fill in your store's phone, address, police line, and the logins your team uses."
     >
       <button type="button" className="handbook-button is-primary is-wide" disabled={adding} onClick={() => void addStarters()}>
         <Sparkles aria-hidden="true" />
         {adding ? "Adding…" : "Add starter entries"}
       </button>
       <div className="handbook-suggestions">
-        {LOGIN_SUGGESTIONS.map((suggestion) => (
+        {BLANK_SUGGESTIONS.map(({ kind, category, title, note }) => (
           <button
-            key={suggestion.title}
+            key={title}
             type="button"
             className="handbook-button"
-            onClick={() => onNew({ kind: "secret", category: "Logins", title: suggestion.title, note: suggestion.note })}
+            onClick={() => onNew({ kind, category, title, note })}
           >
-            <KeyRound aria-hidden="true" />
-            Add {suggestion.title} login
+            {kind === "secret" ? <KeyRound aria-hidden="true" /> : <Plus aria-hidden="true" />}
+            Add {title}{kind === "secret" ? " login" : ""}
           </button>
         ))}
       </div>

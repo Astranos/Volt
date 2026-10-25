@@ -13,12 +13,15 @@ export const HANDBOOK_PAGE_PATH = "/handbook.html";
 
 export const DEFAULT_HANDBOOK_CATEGORIES = ["Store info", "Logins", "Setup guides", "Testing"];
 
-// Offered as blanks in the editor. Values are typed in by the user, never shipped.
-export const LOGIN_SUGGESTIONS = [
-  { title: "PSN", note: "Testing consoles" },
-  { title: "Microsoft account", note: "Testing PCs and Xbox" },
-  { title: "Mac test user", note: "Local account on test Macs" },
-];
+// Offered as blanks for each store to fill in. Values are typed in by the user, never shipped.
+export const BLANK_SUGGESTIONS = [
+  { kind: "value", category: "Store info", title: "Store phone", note: "" },
+  { kind: "value", category: "Store info", title: "Store address", note: "" },
+  { kind: "value", category: "Store info", title: "Local police", note: "Non-emergency line" },
+  { kind: "secret", category: "Logins", title: "PSN", note: "Testing consoles" },
+  { kind: "secret", category: "Logins", title: "Microsoft account", note: "Testing PCs and Xbox" },
+  { kind: "secret", category: "Logins", title: "Mac test user", note: "Local account on test Macs" },
+] as const;
 
 export function handbookCategories(entries: HandbookEntry[]) {
   return [...new Set(entries.map((entry) => entry.category))];

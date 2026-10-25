@@ -23,9 +23,9 @@ const entry = (fields: Partial<HandbookEntry> & Pick<HandbookEntry, "kind" | "ti
 });
 
 export const handbookEntries: HandbookEntry[] = [
-  entry({ kind: "value", title: "Store phone", category: "Store info", value: "313-639-0861", pinned: true }),
-  entry({ kind: "value", title: "Store address", category: "Store info", note: "Right off Wick on Telegraph", value: "9058 Telegraph, 48180", pinned: true }),
-  entry({ kind: "value", title: "Taylor Police", category: "Store info", note: "Non-emergency, ext. 6", value: "(734) 287-6611 x6" }),
+  entry({ kind: "value", title: "Store phone", category: "Store info", value: "555-0100", pinned: true }),
+  entry({ kind: "value", title: "Store address", category: "Store info", note: "Next to the bank", value: "123 Main St", pinned: true }),
+  entry({ kind: "value", title: "Local police", category: "Store info", note: "Non-emergency line", value: "555-0199" }),
   entry({ kind: "secret", title: "PSN", category: "Logins", note: "Testing consoles", secretPreview: "test••• · ••••••", pinned: true }),
   entry({ kind: "secret", title: "Microsoft account", category: "Logins", note: "Testing PCs and Xbox", secretPreview: "stor••• · ••••••" }),
   entry({ kind: "secret", title: "Mac test user", category: "Logins", secretPreview: "u••• · ••••••" }),

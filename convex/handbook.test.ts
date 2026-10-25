@@ -118,10 +118,10 @@ describe("handbook", () => {
   test("adds starter entries once and never seeds a secret", async () => {
     const t = convexTest(schema, modules);
     const alice = asUser(t, "alice");
-    expect(await alice.mutation(api.handbook.addStarterEntries, {})).toBe(4);
+    expect(await alice.mutation(api.handbook.addStarterEntries, {})).toBe(1);
     expect(await alice.mutation(api.handbook.addStarterEntries, {})).toBe(0);
     const entries = await alice.query(api.handbook.list, {});
-    expect(entries.map((entry) => entry.kind).sort()).toEqual(["guide", "value", "value", "value"]);
+    expect(entries.map((entry) => entry.kind)).toEqual(["guide"]);
     const guide = entries.find((entry) => entry.kind === "guide");
     expect(guide?.variants?.map((variant) => variant.label)).toEqual(["New method (24H2+)", "Older builds"]);
     expect(guide?.variants?.[0].steps[2].command).toBe("start ms-cxh:localonly");

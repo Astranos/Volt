@@ -323,35 +323,9 @@ export const remove = mutation({
   },
 });
 
-// Non-secret notes from the store's corkboard. Logins are never seeded; the
-// editor only suggests their titles.
+// Defaults that apply to any store. Store-specific details (phone, address,
+// local police, logins) are never seeded; the editor offers them as blanks.
 const STARTER_ENTRIES: Array<HandbookContent & { starterKey: string }> = [
-  {
-    starterKey: "store-phone",
-    kind: "value",
-    title: "Store phone",
-    category: "Store info",
-    value: "313-639-0861",
-    pinned: true,
-  },
-  {
-    starterKey: "store-address",
-    kind: "value",
-    title: "Store address",
-    category: "Store info",
-    note: "Right off Wick on Telegraph",
-    value: "9058 Telegraph, 48180",
-    pinned: true,
-  },
-  {
-    starterKey: "taylor-police",
-    kind: "value",
-    title: "Taylor Police",
-    category: "Store info",
-    note: "Non-emergency line, extension 6",
-    value: "(734) 287-6611 x6",
-    pinned: false,
-  },
   {
     starterKey: "skip-windows-sign-in",
     kind: "guide",
