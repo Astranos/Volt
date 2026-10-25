@@ -19,6 +19,8 @@ For development, preview, staging, production, and service names, use the [envir
 - Search Provider: a configured destination that turns a query into a navigable URL.
 - Search Intent: the resolved action from user input, such as opening a URL, searching a provider, or searching Shopify inventory.
 - Shopify Inventory Search: a search that resolves the current Shopify store and opens the admin products page ordered by available inventory.
+- Connected Shopify Store: a store linked to a Volt account through Shopify OAuth with read-only product access. One account can connect up to five, so a franchise owner can search every location's inventory from one Chrome profile. Hidden products are kept per account and store.
+- Active Shopify Store: the Connected Shopify Store that live product search, audits, and hidden products use on this computer. It's saved in `chrome.storage.local`, so each store's computer can default to its own store. It falls back to the first-connected store, and can be switched from settings, the new tab's Shopify results, or the audit side panel.
 - Sidepanel Tool: a tool hosted in the extension sidepanel. The live sidepanel switcher currently exposes Offer Calculator and Mobile Scanner.
 - Top Offer: a resale offer value calculated from a projected selling price and configurable rate rules.
 - Cloud Scanner Workspace: the account-owned collection of enrolled devices, computers, Result Batches, Capture Results, delivery state, entitlement state, and quota usage synchronized by Convex.

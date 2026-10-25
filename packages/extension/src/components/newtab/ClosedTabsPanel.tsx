@@ -14,7 +14,8 @@ import { ToggleGroup, ToggleGroupItem } from "@/src/components/ui/toggle-group";
 import { Search as SearchIcon, Clock } from "lucide-react";
 import { type SearchMode } from "./NewTabHelp";
 import { ShopifyCompareTray, ShopifyProductResults, type ShopifyProductSearchState } from "./ShopifyProductResults";
-import { getShopifyAuditConnection, searchShopifyProducts, setShopifyProductHidden, type ShopifySearchProduct } from "../../shopify-audit/client";
+import { searchShopifyProducts, setShopifyProductHidden, type ShopifySearchProduct } from "../../shopify-audit/client";
+import { useShopifyStores } from "../../shopify-audit/use-shopify-stores";
 import { useKioskQueue, useKioskStore } from "../../kiosk/use-kiosk";
 import { MAX_COMPARE_PRODUCTS } from "../../domain/shopify-audit";
 import { shopifyComparePath } from "../../shopify-compare/compare-url";
@@ -65,15 +66,14 @@ export function ClosedTabsPanel({
   const [kioskStore] = useKioskStore();
   const kioskQueue = useKioskQueue(kioskStore);
   const kioskWaiting = kioskQueue.requests.filter((request) => request.status === "waiting").length;
-  const [shopifyShop, setShopifyShop] = useState<string | null>(null);
-  useEffect(() => {
-    if (!kioskStore) return;
-    void getShopifyAuditConnection().then((connection) => setShopifyShop(connection?.shop ?? null)).catch(() => undefined);
-  }, [kioskStore]);
+  const shopifyStores = useShopifyStores();
+  const shopifyShop = shopifyStores.connection?.shop ?? null;
   const leaveCompare = () => {
     setCompareModeOn(false);
     setCompareProducts([]);
   };
+  // Picks can't be compared across stores, so switching stores clears them.
+  useEffect(() => { setCompareProducts([]); }, [shopifyShop]);
   const shopifySearchGeneration = useRef(0);
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -99,11 +99,13 @@ export function ClosedTabsPanel({
       setShopifySearch({ kind: "idle" });
       return;
     }
+    // Wait to learn the active store so a switch can't race the first search.
+    if (!shopifyStores.loaded) return;
     let canceled = false;
     shopifySearchGeneration.current++;
     setShopifySearch({ kind: "loading", query });
     const timer = window.setTimeout(() => {
-      void searchShopifyProducts(query)
+      void searchShopifyProducts(query, shopifyShop ?? undefined)
         .then((result) => {
           if (canceled) return;
           setShopifySearch({ kind: "ready", query, result });
@@ -116,16 +118,17 @@ export function ClosedTabsPanel({
         });
     }, 280);
     return () => { canceled = true; window.clearTimeout(timer); };
-  }, [displayedMode, displayedQuery, shopifyRetry]);
+  }, [displayedMode, displayedQuery, shopifyRetry, shopifyStores.loaded, shopifyShop]);
 
   const hideShopifyProduct = async (product: ShopifySearchProduct) => {
     const withoutProduct = (current: ShopifyProductSearchState): ShopifyProductSearchState => current.kind === "ready"
       ? { ...current, result: { ...current.result, products: current.result.products.filter((item) => item.id !== product.id) } }
       : current;
     const generation = shopifySearchGeneration.current;
+    const shop = shopifySearch.kind === "ready" ? shopifySearch.result.shop : undefined;
     setShopifySearch(withoutProduct);
     try {
-      await setShopifyProductHidden(product, true);
+      await setShopifyProductHidden(product, true, shop);
     } catch (cause) {
       // Only report the failure on the results it came from.
       if (generation !== shopifySearchGeneration.current) return;
@@ -142,7 +145,7 @@ export function ClosedTabsPanel({
   };
 
   const openCompare = () => {
-    void chrome.tabs.create({ url: chrome.runtime.getURL(shopifyComparePath(compareProducts.map((product) => product.id))), active: true });
+    void chrome.tabs.create({ url: chrome.runtime.getURL(shopifyComparePath(compareProducts.map((product) => product.id), shopifyShop)), active: true });
   };
 
   // Treat clicks anywhere on the search row's padding/icon area as a
@@ -356,6 +359,9 @@ export function ClosedTabsPanel({
                 onToggleCompareMode={() => { if (compareMode) leaveCompare(); else setCompareModeOn(true); }}
                 onRetry={() => setShopifyRetry((current) => current + 1)}
                 onOpenSettings={() => { void chrome.tabs.create({ url: chrome.runtime.getURL("/options.html#shopify-audit"), active: true }); }}
+                stores={shopifyStores.connection && shopifyStores.connection.shops.length > 1
+                  ? { shops: shopifyStores.connection.shops, active: shopifyStores.connection.shop, onSelect: (shop) => { void shopifyStores.select(shop).catch(() => undefined); } }
+                  : null}
                 kiosk={kioskStore ? { store: kioskStore, shop: shopifyShop, requests: kioskQueue.requests, clockOffset: kioskQueue.clockOffset, error: kioskQueue.error, busy: kioskQueue.busy, onUpdate: kioskQueue.update } : null}
               />
             ) : loading ? (

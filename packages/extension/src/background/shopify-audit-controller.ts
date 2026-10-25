@@ -3,6 +3,8 @@ import { EXTENSION_SCANNER_SIGNAL_URL } from "../domain/mobile-scanner-signal-ur
 import {
   MAX_COMPARE_PRODUCTS,
   normalizeShopifyShopInput,
+  pickActiveShopifyShop,
+  SHOPIFY_ACTIVE_SHOP_KEY,
   validShopifyAdminProductUrl,
   auditRangeInComputerTimezone,
   parseShopifyAuditDays,
@@ -81,9 +83,37 @@ export function createShopifyAuditController({
     return offscreenValue(await sendOffscreenMessage({ action, ...extra }));
   }
 
-  async function listYesterday(days: ShopifyAuditDays = 1) {
+  // A page may name the store it's showing; otherwise the store picked on this computer is used.
+  async function storeFor(message: ShopifyMessage): Promise<{ shop?: string }> {
+    if (message.shop !== undefined) {
+      const shop = typeof message.shop === "string" ? normalizeShopifyShopInput(message.shop) : null;
+      if (!shop) throw new Error("Enter a valid store.myshopify.com domain.");
+      return { shop };
+    }
+    const saved = (await chromeApi.storage.local.get(SHOPIFY_ACTIVE_SHOP_KEY))[SHOPIFY_ACTIVE_SHOP_KEY];
+    const shop = typeof saved === "string" ? normalizeShopifyShopInput(saved) : null;
+    return shop ? { shop } : {};
+  }
+
+  async function status() {
+    const value = await forward("shopifyAuditOffscreenStores");
+    if (!Array.isArray(value)) throw new Error("Shopify connection status was invalid.");
+    const shops = value.map((row: unknown) => {
+      const shop = row && typeof row === "object" ? (row as { shop?: unknown }).shop : null;
+      if (typeof shop !== "string" || normalizeShopifyShopInput(shop) !== shop) throw new Error("Shopify connection status was invalid.");
+      return shop;
+    });
+    const saved = (await chromeApi.storage.local.get(SHOPIFY_ACTIVE_SHOP_KEY))[SHOPIFY_ACTIVE_SHOP_KEY];
+    const shop = pickActiveShopifyShop(saved, shops);
+    // A store disconnected elsewhere stops being the active one here.
+    if (shop !== saved) await (shop ? chromeApi.storage.local.set({ [SHOPIFY_ACTIVE_SHOP_KEY]: shop }) : chromeApi.storage.local.remove(SHOPIFY_ACTIVE_SHOP_KEY));
+    return shop ? { shop, shops } : null;
+  }
+
+  async function listYesterday(days: ShopifyAuditDays = 1, store: { shop?: string } = {}) {
     const range = auditRangeInComputerTimezone(days);
-    const result = auditResultFrom(await forward("shopifyAuditOffscreenListYesterday", range));
+    const result = auditResultFrom(await forward("shopifyAuditOffscreenListYesterday", { ...range, ...store }));
+    if (store.shop && result.shop !== store.shop) throw new Error("Shopify returned the wrong store.");
     if (result.date !== range.date) throw new Error("Shopify returned the wrong audit date.");
     return result;
   }
@@ -133,7 +163,7 @@ export function createShopifyAuditController({
       }
       if (existing) await clearRun();
 
-      const result = await listYesterday();
+      const result = await listYesterday(1, await storeFor({}));
       const targetWindow = windowId ?? null;
       const first = result.products.slice(0, AUDIT_TAB_LIMIT);
       const tabIds: number[] = [];
@@ -214,7 +244,7 @@ export function createShopifyAuditController({
     const operation = async () => {
       switch (message.action) {
         case "shopifyAuditStatus":
-          return forward("shopifyAuditOffscreenStatus");
+          return status();
         case "shopifyAuditConnect": {
           if (typeof message.shop !== "string") throw new Error("Enter a Shopify store domain.");
           const shop = normalizeShopifyShopInput(message.shop);
@@ -246,17 +276,20 @@ export function createShopifyAuditController({
           await chromeApi.tabs.create({ url: url.href, active: true, ...(sender.tab?.windowId === undefined ? {} : { windowId: sender.tab.windowId }) });
           return { shop };
         }
-        case "shopifyAuditDisconnect":
-          return forward("shopifyAuditOffscreenDisconnect");
+        case "shopifyAuditDisconnect": {
+          // Naming no store disconnects all of them.
+          const store = message.shop === undefined ? {} : await storeFor(message);
+          return forward("shopifyAuditOffscreenDisconnect", store);
+        }
         case "shopifyAuditOpenYesterday":
           return openYesterday(sender.tab?.windowId);
         case "shopifyAuditListYesterday":
-          return listYesterday(parseShopifyAuditDays(message.days));
+          return listYesterday(parseShopifyAuditDays(message.days), await storeFor(message));
         case "shopifyAuditSearchProducts": {
           if (typeof message.query !== "string") throw new Error("Enter a product search.");
           const query = message.query.trim();
           if (query.length < 2 || query.length > 120) throw new Error("Search must be 2 to 120 characters.");
-          return forward("shopifyAuditOffscreenSearchProducts", { query });
+          return forward("shopifyAuditOffscreenSearchProducts", { query, ...await storeFor(message) });
         }
         case "shopifyAuditProductDetails": {
           const ids = message.productIds;
@@ -264,16 +297,16 @@ export function createShopifyAuditController({
             || !ids.every((id) => typeof id === "string" && /^gid:\/\/shopify\/Product\/\d+$/.test(id))) {
             throw new Error(`Pick 1 to ${MAX_COMPARE_PRODUCTS} Shopify products to compare.`);
           }
-          return forward("shopifyAuditOffscreenProductDetails", { productIds: ids });
+          return forward("shopifyAuditOffscreenProductDetails", { productIds: ids, ...await storeFor(message) });
         }
         case "shopifyAuditHiddenProducts":
-          return forward("shopifyAuditOffscreenHiddenProducts");
+          return forward("shopifyAuditOffscreenHiddenProducts", await storeFor(message));
         case "shopifyAuditSetProductHidden": {
           if (typeof message.productId !== "string" || !/^gid:\/\/shopify\/Product\/\d+$/.test(message.productId)
             || typeof message.title !== "string" || !message.title.trim() || typeof message.hidden !== "boolean") {
             throw new Error("Invalid Shopify product.");
           }
-          return forward("shopifyAuditOffscreenSetProductHidden", { productId: message.productId, title: message.title, hidden: message.hidden });
+          return forward("shopifyAuditOffscreenSetProductHidden", { productId: message.productId, title: message.title, hidden: message.hidden, ...await storeFor(message) });
         }
         default:
           return null;

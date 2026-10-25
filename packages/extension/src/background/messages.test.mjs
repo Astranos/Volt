@@ -35,6 +35,7 @@ test("offscreen delivery messages are handled by background scanner delivery", (
 test("Shopify audit commands addressed to the offscreen document bypass background's unknown-action reply", () => {
   for (const action of [
     "shopifyAuditOffscreenStatus",
+    "shopifyAuditOffscreenStores",
     "shopifyAuditOffscreenConnect",
     "shopifyAuditOffscreenDisconnect",
     "shopifyAuditOffscreenListYesterday",

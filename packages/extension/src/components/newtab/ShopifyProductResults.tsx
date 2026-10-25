@@ -11,6 +11,7 @@ import {
 } from "./shopify-result-filters";
 import { KioskRequestList } from "./KioskRequestList";
 import type { KioskRequest, KioskStaffStatus } from "../../kiosk/kiosk-requests";
+import { shopifyShopLabel } from "../../domain/shopify-audit";
 import "./shopify-product-results.css";
 
 /** The store kiosk's live requests, when a kiosk store is set in settings. */
@@ -22,6 +23,13 @@ export type ShopifyKioskRequests = {
   error: string | null;
   busy: ReadonlySet<string>;
   onUpdate: (request: KioskRequest, status: KioskStaffStatus) => void;
+};
+
+/** The connected stores to switch between, when there's more than one. */
+export type ShopifyStoreChoice = {
+  shops: string[];
+  active: string;
+  onSelect: (shop: string) => void;
 };
 
 // cmdk moves its selection on arrow keys; keep those inside the filter controls.
@@ -58,6 +66,7 @@ export function ShopifyProductResults({
   onToggleCompareMode,
   onRetry,
   onOpenSettings,
+  stores = null,
   kiosk = null,
 }: {
   query: string;
@@ -72,6 +81,7 @@ export function ShopifyProductResults({
   onToggleCompareMode: () => void;
   onRetry: () => void;
   onOpenSettings: () => void;
+  stores?: ShopifyStoreChoice | null;
   kiosk?: ShopifyKioskRequests | null;
 }) {
   // Kept while mounted, so filters survive a new search.
@@ -104,6 +114,13 @@ export function ShopifyProductResults({
     setFilters((current) => current.condition && !available.includes(current.condition) ? { ...current, condition: null } : current);
   }, [readyProducts]);
 
+  const storePicker = stores && <label className="shopify-store-picker" onKeyDown={keepKeys} title="Search another connected store">
+    <Store aria-hidden="true" size={13} />
+    <select aria-label="Store to search" className="shopify-filter-select" onChange={(event) => stores.onSelect(event.target.value)} value={stores.active}>
+      {stores.shops.map((shop) => <option key={shop} value={shop}>{shopifyShopLabel(shop)}</option>)}
+    </select>
+  </label>;
+
   const kioskList = kiosk && <KioskRequestList
     busy={kiosk.busy} clockOffset={kiosk.clockOffset} error={kiosk.error} onOpen={onOpenProduct} onUpdate={kiosk.onUpdate}
     requests={kiosk.requests} shop={kiosk.shop} store={kiosk.store}
@@ -113,6 +130,7 @@ export function ShopifyProductResults({
     // An empty search shows who's waiting at the kiosk, when anyone is.
     if (kiosk && (kiosk.requests.length > 0 || kiosk.error)) {
       return <div className="shopify-results">
+        {storePicker && <div className="shopify-results-heading">{storePicker}</div>}
         {kioskList}
         <p className="shopify-kiosk-hint">Start typing to search your Shopify products.</p>
       </div>;
@@ -121,6 +139,7 @@ export function ShopifyProductResults({
       <span className="shopify-search-intro-icon"><Store aria-hidden="true" size={22} /></span>
       <strong>Search your Shopify products</strong>
       <span>Find products by title, SKU, or barcode. In-stock items appear first. Pick a few with <Columns3 aria-hidden="true" className="shopify-search-intro-inline-icon" size={12} /> to compare them side by side.</span>
+      {storePicker}
       {kiosk && <span className="shopify-kiosk-none">No kiosk requests at {kiosk.store} right now.</span>}
     </div>;
   }
@@ -133,12 +152,13 @@ export function ShopifyProductResults({
         <button onClick={onRetry} type="button"><RefreshCw aria-hidden="true" size={14} /> Try again</button>
         <button onClick={onOpenSettings} type="button">Shopify settings <ArrowUpRight aria-hidden="true" size={14} /></button>
       </div>
+      {storePicker}
     </div>;
   }
 
   if (state.kind !== "ready" || state.query !== query) {
     return <div className="shopify-results" aria-label="Loading Shopify products">
-      <div className="shopify-results-heading"><span>Searching Shopify…</span></div>
+      <div className="shopify-results-heading"><span className="shopify-results-lead">{storePicker}<span>Searching {stores ? shopifyShopLabel(stores.active) : "Shopify"}…</span></span></div>
       <div className="shopify-results-grid" aria-hidden="true">
         {[0, 1, 2, 3].map((index) => <div className="shopify-product-skeleton" key={index}><span /><span /></div>)}
       </div>
@@ -170,7 +190,7 @@ export function ShopifyProductResults({
       {kioskOpen && kioskList}
     </>}
     <div className="shopify-results-heading">
-      <span>{filtered ? `${shown.length} of ${products.length}` : products.length} {products.length === 1 ? "product" : "products"}</span>
+      <span className="shopify-results-lead">{storePicker}<span>{filtered ? `${shown.length} of ${products.length}` : products.length} {products.length === 1 ? "product" : "products"}</span></span>
       {compareMode && <span className="shopify-compare-hint">Compare mode · click products to add or remove</span>}
       {products.length > 0 && <div className="shopify-results-filters" onKeyDown={keepKeys}>
         <button
