@@ -72,6 +72,9 @@ function sharedWorkspaceSync() {
           expiresAt: download.expiresAt,
         };
       },
+      // This document never hears its own broadcast, so progress bumps the
+      // version directly and the timeline fills in while photos download.
+      onProgress: () => publishApplyState({ ...applyState, version: applyState.version + 1 }),
     });
   }
   return workspaceSync;
