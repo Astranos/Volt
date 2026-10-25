@@ -33,6 +33,8 @@ export const handbookContentFields = {
   valueFormat: v.optional(handbookValueFormatValidator),
   // Notes for most kinds; the formatted content (a small Markdown subset) of a page.
   body: v.optional(v.string()),
+  // Pages only: show the whole page in the sidepanel list instead of a row to tap.
+  showInList: v.optional(v.boolean()),
   // Guide steps. A guide without alternatives has one variant with an empty label.
   variants: v.optional(v.array(handbookVariantValidator)),
   pinned: v.boolean(),

@@ -141,6 +141,18 @@ describe("handbook", () => {
     expect((await alice.query(api.handbook.list, { includePages: true })).map((entry) => entry.kind)).toEqual(["page", "value"]);
   });
 
+  test("keeps the show-in-list option only on pages", async () => {
+    const t = convexTest(schema, modules);
+    const alice = asUser(t, "alice");
+    const page = { kind: "page" as const, title: "Returns", category: "Policies", body: "30 days with receipt.", pinned: false };
+    const id = await alice.mutation(api.handbook.create, { ...page, showInList: true });
+    expect((await alice.query(api.handbook.list, { includePages: true }))[0].showInList).toBe(true);
+    await alice.mutation(api.handbook.update, { id, ...page, showInList: false });
+    expect((await alice.query(api.handbook.list, { includePages: true }))[0].showInList).toBeUndefined();
+    await alice.mutation(api.handbook.update, { id, ...valueEntry, showInList: true });
+    expect((await alice.query(api.handbook.list, {}))[0].showInList).toBeUndefined();
+  });
+
   test("keeps a value's format only on value entries", async () => {
     const t = convexTest(schema, modules);
     const alice = asUser(t, "alice");

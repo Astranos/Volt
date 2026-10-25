@@ -31,6 +31,7 @@ export type HandbookDraft = {
   valueFormat: HandbookValueFormat;
   address: AddressParts;
   body: string;
+  showInList: boolean;
   pinned: boolean;
   variants: DraftVariant[];
   username: string;
@@ -69,6 +70,7 @@ export function draftFor(entry: HandbookEntry | null, defaults: Partial<Handbook
     valueFormat,
     address: valueFormat === "address" ? parseAddress(entry?.value ?? "") : emptyAddress(),
     body: entry?.body ?? "",
+    showInList: entry?.showInList ?? false,
     pinned: entry?.pinned ?? false,
     variants: entry?.variants?.map((variant) => ({
       label: variant.label,
@@ -138,6 +140,7 @@ export function HandbookEditor({
         : draft.valueFormat === "address" ? formatAddress(draft.address) : draft.value,
       valueFormat: draft.kind === "value" ? draft.valueFormat : undefined,
       body: draft.body || undefined,
+      showInList: draft.kind === "page" ? draft.showInList : undefined,
       pinned: draft.pinned,
       variants: draft.kind === "guide"
         ? draft.variants.map((variant) => ({
@@ -377,6 +380,15 @@ export function HandbookEditor({
         <Field label="Notes" hint="Shown when someone opens the entry, in the sidepanel or here.">
           <textarea value={draft.body} onChange={(event) => set("body", event.target.value)} rows={4} />
         </Field>
+      ) : null}
+      {draft.kind === "page" ? (
+        <label className="handbook-checkbox">
+          <input type="checkbox" checked={draft.showInList} onChange={(event) => set("showInList", event.target.checked)} />
+          <span>
+            Show the whole page in the sidepanel list
+            <span className="handbook-field-hint handbook-checkbox-hint">Best for short pages, so staff can read it without tapping in.</span>
+          </span>
+        </label>
       ) : null}
       <label className="handbook-checkbox">
         <input type="checkbox" checked={draft.pinned} onChange={(event) => set("pinned", event.target.checked)} />

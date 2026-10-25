@@ -13,6 +13,7 @@ const entry = (fields: Partial<HandbookEntry> & Pick<HandbookEntry, "kind" | "ti
   note: undefined,
   value: undefined,
   valueFormat: undefined,
+  showInList: undefined,
   body: undefined,
   variants: undefined,
   secretPreview: undefined,
@@ -66,6 +67,13 @@ export const handbookEntries: HandbookEntry[] = [
         ],
       },
     ],
+  }),
+  entry({
+    kind: "page",
+    title: "Returns",
+    category: "Policies",
+    showInList: true,
+    body: "- **30 days** with the receipt, in the same condition\n- No returns on items marked **For parts**\n- Refund goes back to the original payment",
   }),
   entry({ kind: "value", title: "Wipe checklist before listing", category: "Testing", value: "Sign out of iCloud, Google, and console accounts", updatedAt: now - day }),
   entry({

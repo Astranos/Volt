@@ -584,6 +584,21 @@ a.handbook-button {
 
 .handbook-icon.is-amber { background: rgba(245, 158, 11, 0.16); color: #fbbf24; }
 
+/* A page shown in full in the sidepanel list. */
+.handbook-inline-page {
+  padding-bottom: 12px;
+}
+
+.handbook-inline-page + .handbook-row,
+.handbook-row + .handbook-inline-page,
+.handbook-inline-page + .handbook-inline-page {
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.handbook-inline-page .handbook-md {
+  padding-left: 40px;
+}
+
 /* Page content */
 .handbook-page-body {
   padding: 12px 14px;
@@ -642,6 +657,9 @@ a.handbook-button {
   .handbook-row-open:hover .handbook-row-label-text,
   .handbook-row-open:focus-visible .handbook-row-label-text { color: #15803d; }
   .handbook-row-note { color: #78716c; }
+  .handbook-inline-page + .handbook-row,
+  .handbook-row + .handbook-inline-page,
+  .handbook-inline-page + .handbook-inline-page { border-top-color: rgba(15, 23, 42, 0.07); }
   .handbook-entry-note,
   .handbook-notes,
   .handbook-md { color: #44403c; }

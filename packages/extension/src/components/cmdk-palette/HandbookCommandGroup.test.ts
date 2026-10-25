@@ -9,6 +9,7 @@ const entry = (index: number, title: string): HandbookEntry => ({
   category: "Store info",
   note: undefined,
   valueFormat: undefined,
+  showInList: undefined,
   value: `value ${index}`,
   body: undefined,
   variants: undefined,

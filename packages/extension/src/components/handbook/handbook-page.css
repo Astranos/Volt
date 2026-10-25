@@ -411,6 +411,15 @@
   gap: 8px;
 }
 
+.handbook-checkbox:has(.handbook-checkbox-hint) {
+  align-items: flex-start;
+}
+
+.handbook-checkbox-hint {
+  display: block;
+  margin-top: 2px;
+}
+
 .handbook-checkbox input {
   accent-color: #16a34a;
   height: 15px;

@@ -54,6 +54,7 @@ const entryValidator = v.object({
   value: v.optional(v.string()),
   valueFormat: v.optional(handbookValueFormatValidator),
   body: v.optional(v.string()),
+  showInList: v.optional(v.boolean()),
   variants: v.optional(v.array(handbookVariantValidator)),
   pinned: v.boolean(),
   order: v.number(),
@@ -108,6 +109,7 @@ function cleanContent(content: HandbookContent): HandbookContent {
     body: content.kind === "page"
       ? text(content.body, LIMITS.page, "PAGE", true)
       : text(content.body, LIMITS.body, "BODY"),
+    showInList: content.kind === "page" && content.showInList ? true : undefined,
     variants,
     pinned: content.pinned,
   };
@@ -145,6 +147,7 @@ function toSummary(entry: Doc<"handbookEntries">) {
     value: entry.value,
     valueFormat: entry.valueFormat,
     body: entry.body,
+    showInList: entry.showInList,
     variants: entry.variants,
     pinned: entry.pinned,
     order: entry.order,

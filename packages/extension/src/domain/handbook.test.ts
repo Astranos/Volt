@@ -17,6 +17,7 @@ function entry(fields: Partial<HandbookEntry> & Pick<HandbookEntry, "kind" | "ti
     note: undefined,
     value: undefined,
     valueFormat: undefined,
+    showInList: undefined,
     body: undefined,
     variants: undefined,
     secretPreview: undefined,

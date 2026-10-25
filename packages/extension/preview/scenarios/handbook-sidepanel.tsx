@@ -6,7 +6,7 @@ import { handbookEntryByTitle, handbookGuide, HandbookPreviewProvider } from "..
 import { defineScenario } from "../scenario";
 
 // ?view=guide opens the Windows guide with its first step done; ?open=<title> opens any entry;
-// ?reveal=1 reveals the first login; ?state=empty shows the starter prompt.
+// ?chip=<label> filters to a category; ?reveal=1 reveals the first login; ?state=empty shows the starter prompt.
 const params = new URLSearchParams(location.search);
 const openId = params.get("view") === "guide" ? handbookGuide._id : handbookEntryByTitle(params.get("open") ?? "")?._id;
 export default defineScenario({
@@ -35,6 +35,9 @@ export default defineScenario({
     } else {
       await waitFor(params.get("state") === "empty" ? ".sidepanel-empty-history"
         : params.get("open") ? ".handbook-guide-title" : ".handbook-row");
+      // ?chip=<label> picks a category chip, e.g. chip=Policies.
+      const chip = params.get("chip");
+      if (chip) [...document.querySelectorAll<HTMLButtonElement>(".handbook-chip")].find((button) => button.textContent === chip)?.click();
       if (params.get("reveal") === "1") {
         (await waitFor<HTMLButtonElement>("[aria-label^='Reveal']")).click();
         await waitFor("[aria-label^='Hide']");

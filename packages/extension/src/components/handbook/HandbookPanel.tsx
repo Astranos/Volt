@@ -203,6 +203,19 @@ function HandbookList({ entries, onOpen }: { entries: HandbookEntry[]; onOpen: (
 }
 
 function EntryRow({ entry, onOpen }: { entry: HandbookEntry; onOpen: (id: HandbookEntryId) => void }) {
+  // A page marked "show in list" is read right here; its title still opens it on its own.
+  if (entry.kind === "page" && entry.showInList) {
+    return (
+      <div className="handbook-inline-page">
+        <button type="button" className="handbook-row is-guide" onClick={() => onOpen(entry._id)}>
+          <EntryIcon entry={entry} />
+          <span className="handbook-row-text"><span className="handbook-row-value">{entry.title}</span></span>
+          <ChevronRight className="handbook-row-chevron" aria-hidden="true" />
+        </button>
+        <MarkdownView source={entry.body ?? ""} />
+      </div>
+    );
+  }
   if (entry.kind === "guide" || entry.kind === "page") {
     return (
       <button type="button" className="handbook-row is-guide" onClick={() => onOpen(entry._id)}>
