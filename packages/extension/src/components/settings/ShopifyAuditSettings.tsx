@@ -65,6 +65,8 @@ export function ShopifyAuditSettings() {
   const [openShops, setOpenShops] = useState<string[]>([]);
   const [selectedShop, setSelectedShop] = useState("");
   const [discoveryTabId, setDiscoveryTabId] = useState<number | null>(null);
+  // Shopify reopens the last-used store, which is often one that's already connected.
+  const [skippedShop, setSkippedShop] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [working, setWorking] = useState(false);
   // The store being approved in a Shopify tab; cleared once it shows up as connected.
@@ -123,6 +125,7 @@ export function ShopifyAuditSettings() {
   }, [shops]);
 
   useEffect(() => {
+    setSkippedShop(null);
     if (discoveryTabId === null) return;
     let finished = false;
     const check = async () => {
@@ -132,6 +135,11 @@ export function ShopifyAuditSettings() {
         if (finished) return;
         const shop = shopDomainFromAdminUrl(tab.url);
         if (!shop) return;
+        // Keep waiting until they switch to a store that isn't connected yet.
+        if (shops.includes(shop)) {
+          setSkippedShop(shop);
+          return;
+        }
         finished = true;
         setDiscoveryTabId(null);
         await startOAuth(shop);
@@ -144,7 +152,7 @@ export function ShopifyAuditSettings() {
     void check();
     const timer = window.setInterval(() => { void check(); }, 1000);
     return () => { finished = true; window.clearInterval(timer); };
-  }, [discoveryTabId, startOAuth]);
+  }, [discoveryTabId, shops, startOAuth]);
 
   const connect = async () => {
     if (selectedShop) {
@@ -248,7 +256,9 @@ export function ShopifyAuditSettings() {
                   <button aria-label="Refresh Shopify connection" className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted" onClick={() => void refresh().catch(() => undefined)} type="button"><RefreshCw aria-hidden="true" className="inline h-4 w-4" /> Check connection</button>
                   {shops.length > 0 && <button className="rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted" onClick={() => { setAdding(false); setPendingShop(null); }} type="button">Cancel</button>}
                 </div>
-                {discoveryTabId !== null && <p className="text-sm text-muted-foreground">Choose your store in the Shopify tab. Volt will continue when its admin page opens.</p>}
+                {discoveryTabId !== null && <p className="text-sm text-muted-foreground">{skippedShop
+                  ? `Shopify opened ${skippedShop}, which is already connected. In that tab, switch to the store you want to add, or sign in with the Shopify account that owns it.`
+                  : "Choose your store in the Shopify tab. Volt will continue when its admin page opens."}</p>}
                 {pendingShop && <p className="text-sm text-muted-foreground">Finish the approval in the Shopify tab. This page will update when {pendingShop} connects.</p>}
               </div>
             )}
