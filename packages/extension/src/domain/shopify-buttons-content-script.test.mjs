@@ -158,6 +158,16 @@ test("PriceCharting falls back to the title and skips a platform it already name
   assert.match(messages[0].url, /q=Halo%203%20Xbox%20360&/);
 });
 
+test("an exact Platform label beats an earlier label that only mentions a console", () => {
+  const { document, messages, poll } = mount();
+  addMetafield(document, "game_name", "Game name", "  Halo 3 ");
+  addMetafield(document, "console_color", "Console color", "Black");
+  addMetafield(document, "platform", "Platform", "Xbox 360");
+  poll();
+  document.getElementById("volt-tab-pc").onclick({ stopPropagation() {} });
+  assert.match(messages[0].url, /q=Halo%203%20Xbox%20360&/);
+});
+
 test("a UPC still wins over the game name", () => {
   const { document, messages, poll } = mount();
   addMetafield(document, "game_name", "Game name", "Halo 3");

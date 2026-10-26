@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Eye, ExternalLink, RefreshCw } from "lucide-react";
 import { CLERK_SIGN_IN_URL } from "../../access/config";
 import { connectShopifyAudit, disconnectShopifyAudit, listHiddenShopifyProducts, setShopifyProductHidden, type ShopifyHiddenProduct } from "../../shopify-audit/client";
@@ -61,6 +61,9 @@ const AUDIT_MODES: Array<{ value: ShopifyAuditMode; label: string; description: 
 export function ShopifyAuditSettings() {
   const stores = useShopifyStores();
   const shops = useMemo(() => stores.connection?.shops ?? [], [stores.connection]);
+  // Read through a ref so a store switch or refresh doesn't restart the Shopify wait.
+  const shopsRef = useRef(shops);
+  shopsRef.current = shops;
   const activeShop = stores.connection?.shop ?? null;
   const [openShops, setOpenShops] = useState<string[]>([]);
   const [selectedShop, setSelectedShop] = useState("");
@@ -118,13 +121,13 @@ export function ShopifyAuditSettings() {
     try {
       await connectShopifyAudit(shop);
       // A reconnect is already listed, so there's nothing to wait for.
-      setPendingShop(shops.includes(shop) ? null : shop);
+      setPendingShop(shopsRef.current.includes(shop) ? null : shop);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not start Shopify connection.");
     } finally {
       setWorking(false);
     }
-  }, [shops]);
+  }, []);
 
   useEffect(() => {
     setSkippedShop(null);
@@ -138,7 +141,7 @@ export function ShopifyAuditSettings() {
         const shop = shopDomainFromAdminUrl(tab.url);
         if (!shop) return;
         // Keep waiting until they switch to a store that isn't connected yet.
-        if (shops.includes(shop)) {
+        if (shopsRef.current.includes(shop)) {
           setSkippedShop(shop);
           return;
         }
@@ -154,7 +157,7 @@ export function ShopifyAuditSettings() {
     void check();
     const timer = window.setInterval(() => { void check(); }, 1000);
     return () => { finished = true; window.clearInterval(timer); };
-  }, [discoveryTabId, shops, startOAuth]);
+  }, [discoveryTabId, startOAuth]);
 
   const connect = async () => {
     if (typedShop.trim()) {
@@ -272,7 +275,7 @@ export function ShopifyAuditSettings() {
                   <input
                     className="h-10 w-full rounded-md border border-input bg-background px-3 font-normal"
                     onChange={(event) => setTypedShop(event.target.value)}
-                    onKeyDown={(event) => { if (event.key === "Enter") void connect(); }}
+                    onKeyDown={(event) => { if (event.key === "Enter" && typedShop.trim() && !working && !event.nativeEvent.isComposing) void connect(); }}
                     placeholder="your-store-name"
                     value={typedShop}
                   />
@@ -282,7 +285,7 @@ export function ShopifyAuditSettings() {
                 <div className="flex flex-wrap gap-2">
                   <button className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50" disabled={working || (discoveryTabId !== null && !typedShop.trim())} onClick={() => void connect()} type="button">{discoveryTabId !== null && !typedShop.trim() ? "Waiting for Shopify…" : pendingShop ? "Try connecting again" : "Connect Shopify"} <ExternalLink aria-hidden="true" className="ml-1 inline h-3.5 w-3.5" /></button>
                   <button aria-label="Refresh Shopify connection" className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted" onClick={() => void refresh().catch(() => undefined)} type="button"><RefreshCw aria-hidden="true" className="inline h-4 w-4" /> Check connection</button>
-                  {shops.length > 0 && <button className="rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted" onClick={() => { setAdding(false); setPendingShop(null); setTypedShop(""); }} type="button">Cancel</button>}
+                  {shops.length > 0 && <button className="rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted" onClick={() => { setAdding(false); setPendingShop(null); setTypedShop(""); setDiscoveryTabId(null); }} type="button">Cancel</button>}
                 </div>
                 {discoveryTabId !== null && <p className="text-sm text-muted-foreground">{skippedShop
                   ? `Shopify opened ${skippedShop}, which is already connected. Type the store above, or in that tab click the store name at the top, choose View all, and pick the store to add.`

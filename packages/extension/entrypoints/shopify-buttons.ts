@@ -299,8 +299,11 @@ export default defineContentScript({
         findMetafieldByLabel(/UPC|Barcode/);
 
       upcValue = extractMetafieldValue(upcContainer);
-      gameName = extractMetafieldValue(findMetafieldByLabel(/\bgame\s*(name|title)\b/i));
-      platform = extractMetafieldValue(findMetafieldByLabel(/\b(platform|console)\b/i));
+      gameName = extractMetafieldValue(findMetafieldByLabel(/^\s*game\s*(name|title)\s*$/i) ||
+        findMetafieldByLabel(/\bgame\s*(name|title)\b/i))?.trim() || null;
+      // An exact label first, so "Console color" or "Sales platform" can't win by appearing earlier.
+      platform = extractMetafieldValue(findMetafieldByLabel(/^\s*(platform|console|system)\s*$/i) ||
+        findMetafieldByLabel(/\b(platform|console)\b/i))?.trim() || null;
     };
 
     const findMetafieldByLabel = (pattern) =>
