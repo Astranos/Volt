@@ -189,11 +189,13 @@ export function useSidepanelSignIn() {
 // which Chrome blocks in third-party contexts for dev instances
 // (*.clerk.accounts.dev). Hash routing is required because the sidepanel
 // has no router and its URL is a chrome-extension:// page.
-export function SidepanelSignInCard({ page = "/sidepanel.html" }: { page?: ClerkHostPage }) {
-  if (CHROME_PROFILE_AUTH_ENABLED) return <div className="px-4 pb-4"><ChromeProfileSignIn layout="card" /></div>;
+// `gutter` adds the side panel margins; pass false when the parent already has them.
+export function SidepanelSignInCard({ page = "/sidepanel.html", gutter = true }: { page?: ClerkHostPage; gutter?: boolean }) {
+  const className = gutter ? "sidepanel-gutter pb-4" : undefined;
+  if (CHROME_PROFILE_AUTH_ENABLED) return <div className={className}><ChromeProfileSignIn layout="card" /></div>;
   const currentExtensionPage = chrome.runtime.getURL(page);
   return (
-    <div className="px-4 pb-4">
+    <div className={className}>
       <SignIn
         routing="hash"
         fallbackRedirectUrl={currentExtensionPage}

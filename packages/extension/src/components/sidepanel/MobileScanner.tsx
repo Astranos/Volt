@@ -56,14 +56,14 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
   const signedIn = useSidepanelSignedIn();
   const { signInOpen, openSignIn } = useSidepanelSignIn();
   if (!cloudWorkspace.historyReady) {
-    // Mirrors the ScrollArea's px-4 pb-4 gutters so these states line up with
+    // Mirrors the ScrollArea's gutters so these states line up with
     // the rest of the timeline instead of hugging the panel edges.
     return (
-      <div className="min-h-0 flex-1 px-4 pb-4">
+      <div className="sidepanel-gutter min-h-0 flex-1 pb-4">
         {signedIn !== false ? (
           <LoadingHistory />
         ) : signInOpen ? (
-          <SidepanelSignInCard />
+          <SidepanelSignInCard gutter={false} />
         ) : (
           <EmptyHistory signedOut onSignIn={openSignIn} />
         )}
@@ -284,19 +284,19 @@ function OwnedMobileScanner({ cloudWorkspace }: { cloudWorkspace: ReturnType<typ
 
       {cloudWorkspace.error ? (
         <div
-          className="mx-3 mb-2 flex-none rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-800 dark:text-amber-200"
+          className="mx-[var(--sidepanel-gutter,16px)] mb-2 flex-none rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-800 dark:text-amber-200"
           aria-live="polite"
         >
           {cloudWorkspace.error}
         </div>
       ) : null}
 
-      <ScrollArea className="min-h-0 min-w-0 flex-1 px-4 pb-4 [&>div]:!overflow-x-hidden">
+      <ScrollArea className="sidepanel-gutter min-h-0 min-w-0 flex-1 pb-4 [&>div]:!overflow-x-hidden">
         <div className="min-w-0 space-y-3">
           {loadingResults || awaitingCloudResults ? (
             <LoadingHistory />
           ) : signInOpen && isSignedIn === false ? (
-            <SidepanelSignInCard />
+            <SidepanelSignInCard gutter={false} />
           ) : groups.length === 0 ? (
             <EmptyHistory
               signedOut={isSignedIn === false}

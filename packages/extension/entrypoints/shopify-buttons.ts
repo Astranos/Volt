@@ -90,10 +90,6 @@ export default defineContentScript({
         object-fit: contain;
       }
 
-      .volt-tab-pricecharting img {
-        filter: brightness(0) saturate(100%) opacity(0.75);
-      }
-
       .volt-tab-ebay img {
         width: 34px;
         height: 14px;
@@ -203,6 +199,9 @@ export default defineContentScript({
     // State
     let productTitle = null;
     let upcValue = null;
+    // Used for PriceCharting when a product has no UPC.
+    let gameName = null;
+    let platform = null;
     let overlay = null;
     let activePopup = null;
     let activePopupOpenedAt = 0;
@@ -210,8 +209,8 @@ export default defineContentScript({
     let lastUrl = location.href;
     let isInitialized = false;
     let buttonsEnabled = false;
-    let openIn = "popup";
-    const NEW_TAB_HINT = `${/Mac/i.test(globalThis.navigator?.platform || "") ? "\u2318-click" : "Ctrl+click"} to open in a new tab`;
+    // Always a popup, ignoring the menus' open-in setting: a modifier or middle click opens a tab.
+    const NEW_TAB_HINT = `${/Mac/i.test(globalThis.navigator?.platform || "") ? "\u2318-click" : "Ctrl+click"} or middle-click to open in a new tab`;
 
     const findShopifyTitleField = () =>
       document.querySelector(
@@ -271,7 +270,7 @@ export default defineContentScript({
         return readField.textContent?.trim() || null;
       }
 
-      const input = container.querySelector("input");
+      const input = container.querySelector("input, textarea");
       if (input) return input.value;
 
       // Shopify's quick metafield keeps its value input inside an open shadow
@@ -296,19 +295,63 @@ export default defineContentScript({
       const upcContainer =
         document.querySelector('[id*="metafields.custom.upc"]') ||
         document.querySelector('[id*="metafields.custom.barcode"]') ||
-        document.querySelector('[id*="metafields.barcode"]') ||
-        Array.from(document.querySelectorAll('[id*="metafields"]')).find(
-          (el) => {
-            const label = el.querySelector("label");
-            return (
-              label &&
-              (label.textContent.includes("UPC") ||
-                label.textContent.includes("Barcode"))
-            );
-          }
-        );
+        document.querySelector('[id*="metafields.barcode"]');
 
-      upcValue = extractMetafieldValue(upcContainer);
+      upcValue = upcContainer ? extractMetafieldValue(upcContainer) : findMetafieldValueByLabel(/UPC|Barcode/);
+      // Whole labels only (trailing ":" or "*" allowed), so "Game name notes" or
+      // "Console color" never feed the search.
+      gameName = findMetafieldValueByLabel(/^\s*(video\s*)?game\s*(name|title)\s*[:*]?\s*$/i);
+      platform = findMetafieldValueByLabel(/^\s*((video\s*)?game|gaming)?\s*(platform|console|system)\s*[:*]?\s*$/i);
+    };
+
+    // A <label> in older markup; Shopify's quick fields carry an accessibilitylabel instead.
+    const metafieldLabel = (el) =>
+      el.querySelector("label")?.textContent?.trim() ||
+      el.querySelector("[accessibilitylabel]")?.getAttribute("accessibilitylabel") || "";
+
+    const hasMetafieldControl = (el) =>
+      !!el.querySelector('input, textarea, s-internal-quick-text-field, [class*="_ReadField_"]');
+
+    // "PRODUCT.metafields.custom.game_name-anchor" and its "-label"/"-input" parts are one field.
+    const metafieldKey = (el) => el.id.replace(/-[a-z]+$/i, "");
+
+    // Start at the innermost matching container (the label may sit in its own element), then
+    // step out to the first one with a control. Never use or step into a container that also
+    // holds a different field, so another field's input can't answer. An empty field ends that
+    // field's search; a later matching field may still have the value.
+    const findMetafieldValueByLabel = (pattern) => {
+      const containers = Array.from(document.querySelectorAll('[id*="metafields"]'));
+      const holdsOtherField = (el, key) =>
+        containers.some((other) => other !== el && el.contains(other) && metafieldKey(other) !== key);
+      const matches = containers.filter((el) => pattern.test(metafieldLabel(el)));
+      for (const inner of matches) {
+        const key = metafieldKey(inner);
+        if (matches.some((other) => other !== inner && inner.contains(other)) || holdsOtherField(inner, key)) continue;
+        for (let el = inner; el; el = el.parentElement) {
+          if (el !== inner && holdsOtherField(el, key)) break;
+          if (matches.includes(el) && hasMetafieldControl(el)) {
+            const value = extractMetafieldValue(el)?.trim();
+            if (value) return value;
+            break;
+          }
+        }
+      }
+      return null;
+    };
+
+    const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+    // UPC first; otherwise the game name (or product title) plus its platform.
+    const getPriceChartingQuery = () => {
+      if (upcValue) return { query: upcValue, by: "UPC" };
+      const name = gameName || productTitle;
+      if (!name) return null;
+      // Whole words only: "DS" isn't already in "My Friends".
+      const withPlatform = platform && !new RegExp(`(^|[^\\p{L}\\p{N}])${escapeRegExp(platform)}($|[^\\p{L}\\p{N}])`, "iu").test(name);
+      return {
+        query: withPlatform ? `${name} ${platform}` : name,
+        by: gameName ? (withPlatform ? "game name + platform" : "game name") : (withPlatform ? "title + platform" : "title"),
+      };
     };
 
     // Open Popup Helper
@@ -362,7 +405,7 @@ export default defineContentScript({
 
     // Modifier and middle clicks follow browser link conventions.
     const openResearch = (url, event) => {
-      const newTab = openIn === "tab" || event?.metaKey || event?.ctrlKey ||
+      const newTab = event?.metaKey || event?.ctrlKey ||
         event?.button === 1;
       if (!newTab) {
         openSearchPopup(url);
@@ -377,8 +420,10 @@ export default defineContentScript({
       }
     };
 
-    const getPriceChartingUrl = () => upcValue &&
-      `https://www.pricecharting.com/search-products?q=${encodeURIComponent(upcValue)}&type=videogames`;
+    const getPriceChartingUrl = () => {
+      const search = getPriceChartingQuery();
+      return search && `https://www.pricecharting.com/search-products?q=${encodeURIComponent(search.query)}&type=videogames`;
+    };
     const getEbayUrl = () => productTitle &&
       `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(productTitle)}&LH_Sold=1&LH_Complete=1&_dmd=2&rt=nc`;
 
@@ -413,7 +458,7 @@ export default defineContentScript({
       // PriceCharting search
       const pcTab = document.createElement("button");
       pcTab.type = "button";
-      pcTab.setAttribute("aria-label", "Search PriceCharting by UPC");
+      pcTab.setAttribute("aria-label", "Search PriceCharting");
       pcTab.className = "volt-action-tab volt-tab-pricecharting";
       pcTab.id = "volt-tab-pc";
       const pcImg = document.createElement("img");
@@ -422,7 +467,7 @@ export default defineContentScript({
       pcTab.appendChild(pcImg);
       const pcLabel = document.createElement("span");
       pcLabel.className = "volt-action-label";
-      pcLabel.textContent = "UPC";
+      pcLabel.textContent = "PriceCharting";
       pcTab.appendChild(pcLabel);
       bindResearchAction(pcTab, getPriceChartingUrl);
 
@@ -511,20 +556,22 @@ export default defineContentScript({
       // Update States
       const pcTab = document.getElementById("volt-tab-pc");
       const ebayTab = document.getElementById("volt-tab-ebay");
-      const tooltipHint = openIn === "tab" ? "" : `\n${NEW_TAB_HINT}`;
+      const tooltipHint = `\n${NEW_TAB_HINT}`;
 
       if (pcTab) {
-        if (upcValue) {
+        const search = getPriceChartingQuery();
+        if (search) {
           pcTab.disabled = false;
           pcTab.classList.remove("disabled");
+          const query = search.query.length > 40 ? search.query.slice(0, 40) + "..." : search.query;
           pcTab.setAttribute(
             "data-tooltip",
-            `Search PriceCharting with UPC: ${upcValue}${tooltipHint}`
+            `Search PriceCharting by ${search.by}: ${query}${tooltipHint}`
           );
         } else {
           pcTab.disabled = true;
           pcTab.classList.add("disabled");
-          pcTab.setAttribute("data-tooltip", "No UPC found");
+          pcTab.setAttribute("data-tooltip", "No UPC or product name found");
         }
       }
 
@@ -558,6 +605,8 @@ export default defineContentScript({
     const resetState = () => {
       productTitle = null;
       upcValue = null;
+      gameName = null;
+      platform = null;
       log("State reset for new page navigation");
     };
 
@@ -646,10 +695,9 @@ export default defineContentScript({
     };
 
     const checkSettingsAndInit = () => {
-      chrome.storage.sync.get(["cmdkSettings", "openSearchResultsIn"], (result) => {
+      chrome.storage.sync.get(["cmdkSettings"], (result) => {
         const settings = result.cmdkSettings || {};
         buttonsEnabled = settings.shopifyButtons?.enabled ?? true;
-        openIn = result.openSearchResultsIn === "tab" ? "tab" : "popup";
 
         if (buttonsEnabled) {
           init();
@@ -657,13 +705,6 @@ export default defineContentScript({
       });
     };
 
-    // Listen for settings changes
-    chrome.storage.onChanged?.addListener((changes, area) => {
-      // Shared "openSearchResultsIn" preference (see open-mode-switch.tsx).
-      if (area === "sync" && changes.openSearchResultsIn) {
-        openIn = changes.openSearchResultsIn.newValue === "tab" ? "tab" : "popup";
-      }
-    });
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (message.action === "shopify-buttons-settings-changed") {
         buttonsEnabled = Boolean(message.enabled);

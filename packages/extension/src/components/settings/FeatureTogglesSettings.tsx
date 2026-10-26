@@ -45,24 +45,7 @@ export function FeatureTogglesSettings({
             )
           );
         }}
-      >
-        <div className="p-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h3 className="font-semibold text-base mb-1">Open search results in</h3>
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              Shared with the right-click and highlight menus. {"\u2318"}/Ctrl-click opens a new tab.
-            </p>
-          </div>
-          <select
-            className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm sm:w-44"
-            value={openMode}
-            onChange={(event) => chooseOpenMode(parseOpenMode(event.target.value))}
-          >
-            <option value="popup">Popup window</option>
-            <option value="tab">New tab</option>
-          </select>
-        </div>
-      </ToggleSection>
+      />
 
       <ToggleSection
         id="ebay"
@@ -156,7 +139,24 @@ export function FeatureTogglesSettings({
             )
           );
         }}
-      />
+      >
+        <div className="p-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="font-semibold text-base mb-1">Open search results in</h3>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              For the right-click and highlight menus. {"\u2318"}/Ctrl-click or middle-click always opens a new tab.
+            </p>
+          </div>
+          <select
+            className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm sm:w-44"
+            value={openMode}
+            onChange={(event) => chooseOpenMode(parseOpenMode(event.target.value))}
+          >
+            <option value="popup">Popup window</option>
+            <option value="tab">New tab</option>
+          </select>
+        </div>
+      </ToggleSection>
 
       <ToggleSection
         id="selection-suggestions"

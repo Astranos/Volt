@@ -1,7 +1,8 @@
 import { convexTest } from "convex-test";
+import { makeFunctionReference } from "convex/server";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
-import { api, internal } from "./_generated/api";
+import { api } from "./_generated/api";
 import schema from "./schema";
 
 const modules = import.meta.glob("./**/*.ts");
@@ -31,19 +32,38 @@ describe("handbook", () => {
     const t = convexTest(schema, modules);
     const id = await asUser(t, "alice").mutation(api.handbook.create, valueEntry);
     await expect(t.query(api.handbook.entries, {})).rejects.toThrow("AUTHENTICATION_REQUIRED");
-    await expect(t.query(api.handbook.list, {})).rejects.toThrow("AUTHENTICATION_REQUIRED");
     await expect(t.mutation(api.handbook.create, valueEntry)).rejects.toThrow("AUTHENTICATION_REQUIRED");
     await expect(t.mutation(api.handbook.revealSecret, { id })).rejects.toThrow("AUTHENTICATION_REQUIRED");
     await expect(t.mutation(api.handbook.remove, { id })).rejects.toThrow("AUTHENTICATION_REQUIRED");
     await expect(t.mutation(api.handbook.addStarterEntries, {})).rejects.toThrow("AUTHENTICATION_REQUIRED");
   });
 
-  test("an entry that fit before the rename still saves", async () => {
+  test("accepts normalized content up to 16,003 bytes", async () => {
     const t = convexTest(schema, modules);
-    // Exactly 16,000 bytes as a legacy page with a note; "comment" is 3 bytes longer than "note".
-    const legacy = { kind: "page" as const, title: "Page", category: "Procedures", pinned: false, body: "b".repeat(15_000), note: "n".repeat(911) };
-    const id = await asUser(t, "alice").mutation(api.handbook.create, legacy);
-    expect((await asUser(t, "alice").query(api.handbook.entries, {})).find((entry) => entry._id === id)?.comment).toHaveLength(911);
+    const alice = asUser(t, "alice");
+    const content = { kind: "note" as const, title: "Note", category: "Procedures", pinned: false, body: "b".repeat(15_000), comment: "n".repeat(911) };
+    expect(new TextEncoder().encode(JSON.stringify(content))).toHaveLength(16_003);
+    const id = await alice.mutation(api.handbook.create, content);
+    expect((await alice.query(api.handbook.entries, {})).find((entry) => entry._id === id)?.comment).toHaveLength(911);
+    await alice.mutation(api.handbook.update, { id, ...content });
+    await expect(alice.mutation(api.handbook.create, { ...content, comment: `${content.comment}n` }))
+      .rejects.toThrow("HANDBOOK_ENTRY_TOO_LARGE");
+  });
+
+  test("rejects removed input shapes during argument validation", async () => {
+    const t = convexTest(schema, modules);
+    const alice = asUser(t, "alice");
+    const id = await alice.mutation(api.handbook.create, valueEntry);
+    // A signed-out, untyped RPC caller proves argument validation runs before authentication.
+    for (const name of ["handbook:create", "handbook:update"]) {
+      const mutation = makeFunctionReference<"mutation", Record<string, unknown>, unknown>(name);
+      const args = name === "handbook:update" ? { id, ...valueEntry } : valueEntry;
+      await expect(t.mutation(mutation, { ...args, kind: "page", body: "Text" }))
+        .rejects.toThrow("Validator error: Expected one of");
+      await expect(t.mutation(mutation, { ...args, note: "Removed field" }))
+        .rejects.toThrow("Validator error: Unexpected field `note`");
+    }
+    expect(await alice.query(api.handbook.entries, {})).toMatchObject([{ _id: id, kind: "value" }]);
   });
 
   test("lists show a login's username but never its password", async () => {
@@ -137,82 +157,23 @@ describe("handbook", () => {
     })).rejects.toThrow("HANDBOOK_ENTRY_TOO_LARGE");
   });
 
-  test("entries returns the current shape and list the legacy one", async () => {
+  test("entries return notes and comments", async () => {
     const t = convexTest(schema, modules);
     const alice = asUser(t, "alice");
     const note = { kind: "note" as const, title: "Opening checklist", category: "Procedures", pinned: false };
     await expect(alice.mutation(api.handbook.create, note)).rejects.toThrow("HANDBOOK_PAGE_REQUIRED");
-    const noteId = await alice.mutation(api.handbook.create, {
+    await expect(alice.mutation(api.handbook.create, { ...note, body: "x".repeat(15_001) }))
+      .rejects.toThrow("HANDBOOK_PAGE_TOO_LONG");
+    await expect(alice.mutation(api.handbook.create, { ...valueEntry, comment: "x".repeat(12_001) }))
+      .rejects.toThrow("HANDBOOK_NOTE_TOO_LONG");
+    await alice.mutation(api.handbook.create, {
       ...note, comment: "Before 9 AM", body: "## Before opening\n- [ ] Count the drawer",
     });
-    const valueId = await alice.mutation(api.handbook.create, { ...valueEntry, comment: "Front desk" });
+    await alice.mutation(api.handbook.create, { ...valueEntry, comment: "Front desk" });
 
     const current = await alice.query(api.handbook.entries, {});
     expect(current.map((entry) => [entry.kind, entry.comment])).toEqual([["note", "Before 9 AM"], ["value", "Front desk"]]);
     expect(current.every((entry) => !("note" in entry))).toBe(true);
-
-    // Extensions released before 1.0.81 see a note as a page, with its comment as `note`.
-    const legacy = await alice.query(api.handbook.list, { includePages: true });
-    expect(legacy.map((entry) => [entry._id, entry.kind, entry.note])).toEqual([[noteId, "page", "Before 9 AM"], [valueId, "value", "Front desk"]]);
-    expect(legacy.every((entry) => !("comment" in entry))).toBe(true);
-    expect(legacy[0].body).toBe(current[0].body);
-    // Extensions released before pages existed call list with no arguments.
-    expect((await alice.query(api.handbook.list, {})).map((entry) => entry.kind)).toEqual(["value"]);
-    expect((await alice.query(api.handbook.list, { includePages: false })).map((entry) => entry.kind)).toEqual(["value"]);
-  });
-
-  test("legacy saves (kind \"page\", note) are stored in the current shape", async () => {
-    const t = convexTest(schema, modules);
-    const alice = asUser(t, "alice");
-    const page = { kind: "page" as const, title: "Returns", category: "Policies", body: "30 days with receipt.", pinned: false };
-    const id = await alice.mutation(api.handbook.create, { ...page, note: "Ask a manager" });
-    const stored = async () => (await t.run((ctx) => ctx.db.get(id)))!;
-    expect(await stored()).toMatchObject({ kind: "note", comment: "Ask a manager" });
-    expect((await stored()).note).toBeUndefined();
-    expect((await alice.query(api.handbook.list, { includePages: true }))[0]).toMatchObject({ kind: "page", note: "Ask a manager" });
-
-    await alice.mutation(api.handbook.update, { id, ...page, note: "Edited by 1.0.80" });
-    expect(await stored()).toMatchObject({ kind: "note", comment: "Edited by 1.0.80" });
-    expect((await stored()).note).toBeUndefined();
-    expect((await alice.query(api.handbook.list, { includePages: true }))[0]).toMatchObject({ kind: "page", note: "Edited by 1.0.80" });
-    expect((await alice.query(api.handbook.entries, {}))[0]).toMatchObject({ kind: "note", comment: "Edited by 1.0.80" });
-
-    // When both are sent, `comment` wins.
-    await alice.mutation(api.handbook.update, { id, ...page, kind: "note", note: "old", comment: "new" });
-    expect(await stored()).toMatchObject({ kind: "note", comment: "new" });
-    expect((await stored()).note).toBeUndefined();
-  });
-
-  test("migratePagesToNotes renames pages and notes, and can run again", async () => {
-    const t = convexTest(schema, modules);
-    const alice = asUser(t, "alice");
-    await alice.mutation(api.handbook.create, valueEntry);
-    const workspaceId = await t.run(async (ctx) => (await ctx.db.query("handbookEntries").first())!.workspaceId);
-    const [pageId, valueId, bothId] = await t.run(async (ctx) => {
-      const base = { workspaceId, category: "Store info", pinned: false, createdAt: 1, updatedAt: 1, updatedByName: "x" };
-      return [
-        await ctx.db.insert("handbookEntries", { ...base, order: 1, kind: "page", title: "Page", body: "Text", note: "Page note" }),
-        await ctx.db.insert("handbookEntries", { ...base, order: 2, kind: "value", title: "Old", value: "1", note: "Right off Wick" }),
-        await ctx.db.insert("handbookEntries", { ...base, order: 3, kind: "value", title: "Both", value: "2", note: "old", comment: "new" }),
-      ];
-    });
-    // Before the migration both queries already show unmigrated entries correctly.
-    expect((await alice.query(api.handbook.entries, {})).find((entry) => entry._id === pageId))
-      .toMatchObject({ kind: "note", comment: "Page note" });
-    expect((await alice.query(api.handbook.list, { includePages: true })).find((entry) => entry._id === bothId))
-      .toMatchObject({ kind: "value", note: "new" });
-
-    expect(await t.mutation(internal.handbook.migratePagesToNotes, {}))
-      .toMatchObject({ pagesRenamed: 1, notesMoved: 2, notesDropped: 1, isDone: true });
-    const docs = await t.run((ctx) => Promise.all([pageId, valueId, bothId].map((id) => ctx.db.get(id))));
-    expect(docs.map((doc) => [doc?.kind, doc?.comment, doc?.note])).toEqual([
-      ["note", "Page note", undefined],
-      ["value", "Right off Wick", undefined],
-      ["value", "new", undefined],
-    ]);
-    expect(await t.mutation(internal.handbook.migratePagesToNotes, {}))
-      .toMatchObject({ pagesRenamed: 0, notesMoved: 0, notesDropped: 0, isDone: true });
-    expect(await t.run((ctx) => Promise.all([pageId, valueId, bothId].map((id) => ctx.db.get(id))))).toEqual(docs);
   });
 
   test("value entries can hold several labeled values", async () => {
@@ -232,10 +193,10 @@ describe("handbook", () => {
     const id = await alice.mutation(api.handbook.create, store);
     const [saved] = await alice.query(api.handbook.entries, {});
     expect(saved.fields?.map((field) => field.label)).toEqual(["Phone", "Address", "Email"]);
-    // The first value is mirrored for extensions released before fields existed.
+    // The first value is mirrored in the single-value fields.
     expect(saved).toMatchObject({ value: "313-555-0100", valueFormat: "phone" });
 
-    // Such an extension edits only `value`: the other fields survive, the first one changes.
+    // An edit with only `value` changes the first field and preserves the others.
     await alice.mutation(api.handbook.update, { id, kind: "value", title: "Store", category: "Store info", pinned: false, value: "313-555-0111" });
     const [edited] = await alice.query(api.handbook.entries, {});
     expect(edited.fields?.map((field) => field.value)).toEqual(["313-555-0111", "1234 Main St, Springfield, MI 48180", "store@example.com"]);
@@ -252,42 +213,30 @@ describe("handbook", () => {
       .rejects.toThrow("HANDBOOK_FIELDS_TOO_MANY");
   });
 
-  test("notes on quick values and logins become the comment", async () => {
+  test.each(["value", "secret"] as const)("body text on a %s becomes the comment", async (kind) => {
     const t = convexTest(schema, modules);
     const alice = asUser(t, "alice");
-    // An older extension still sends notes (and its short note as `note`); they're folded into the comment.
-    await alice.mutation(api.handbook.create, { ...valueEntry, note: "Front desk", body: "Ask for Juan\nAfter 5 PM" });
+    const input = kind === "value" ? valueEntry : { ...secretEntry, credentials: LOGIN };
+    const id = await alice.mutation(api.handbook.create, { ...input, comment: "Front desk", body: "Ask for Juan\nAfter 5 PM" });
     const [entry] = await alice.query(api.handbook.entries, {});
     expect(entry.comment).toBe("Front desk\nAsk for Juan\nAfter 5 PM");
     expect(entry.body).toBeUndefined();
 
-    // Entries saved before this change are moved by the one-time migration; guides keep their intro.
-    const workspaceId = await t.run(async (ctx) => (await ctx.db.query("handbookEntries").first())!.workspaceId);
-    await t.run(async (ctx) => {
-      const base = { workspaceId, category: "Store info", pinned: false, order: 9, createdAt: 1, updatedAt: 1, updatedByName: "x" };
-      await ctx.db.insert("handbookEntries", { ...base, kind: "value", title: "Old", value: "1", body: "Right off Wick" });
-      await ctx.db.insert("handbookEntries", { ...base, kind: "guide", title: "Guide", body: "Intro", variants: [{ label: "", steps: [{ text: "Do it" }] }] });
-    });
-    expect(await t.mutation(internal.handbook.moveNotesIntoShortNotes, {})).toMatchObject({ moved: 1, skipped: 0, isDone: true });
-    // Running it again finds nothing left to move.
-    expect(await t.mutation(internal.handbook.moveNotesIntoShortNotes, {})).toMatchObject({ moved: 0 });
-    const entries = await alice.query(api.handbook.entries, {});
-    expect(entries.find((item) => item.title === "Old")).toMatchObject({ comment: "Right off Wick" });
-    expect(entries.find((item) => item.title === "Old")?.body).toBeUndefined();
-    expect(entries.find((item) => item.title === "Guide")?.body).toBe("Intro");
+    await alice.mutation(api.handbook.update, { id, ...input, comment: "Updated", body: "More context" });
+    expect((await alice.query(api.handbook.entries, {}))[0]).toMatchObject({ comment: "Updated\nMore context" });
+    expect((await alice.query(api.handbook.entries, {}))[0].body).toBeUndefined();
   });
 
-  test("every save an older extension could make still works", async () => {
+  test("folds long body text and keeps it separate when the comment cannot fit", async () => {
     const t = convexTest(schema, modules);
     const alice = asUser(t, "alice");
-    // The most a 1.0.79 editor allowed: a 200-character short note and 10,000 characters of notes.
-    const longest = { ...valueEntry, note: "n".repeat(200), body: `${"b".repeat(4_999)}\n${"c".repeat(5_000)}` };
+    const longest = { ...valueEntry, comment: "n".repeat(200), body: `${"b".repeat(4_999)}\n${"c".repeat(5_000)}` };
     const id = await alice.mutation(api.handbook.create, longest);
     const [folded] = await alice.query(api.handbook.entries, {});
-    expect(folded.comment).toBe(`${longest.note}\n${longest.body}`);
+    expect(folded.comment).toBe(`${longest.comment}\n${longest.body}`);
     expect(folded.body).toBeUndefined();
     await alice.mutation(api.handbook.update, { id, ...longest });
-    // A comment that can't take the notes too keeps them as they are, instead of failing.
+    // A comment that cannot take the body keeps it separate instead of failing.
     await alice.mutation(api.handbook.update, { id, ...valueEntry, comment: "n".repeat(11_995), body: "kept as notes" });
     const [kept] = await alice.query(api.handbook.entries, {});
     expect(kept.body).toBe("kept as notes");
@@ -303,23 +252,23 @@ describe("handbook", () => {
     expect((await alice.query(api.handbook.entries, {}))[0].title).toBe("Renamed");
   });
 
-  test("an older extension's edits keep every value and the first value's format", async () => {
+  test("edits without fields keep every value and the first value's format", async () => {
     const t = convexTest(schema, modules);
     const alice = asUser(t, "alice");
     const base = { kind: "value" as const, title: "Store address", category: "Store info", pinned: false };
-    // The first value has no saved format, so 1.0.79 guesses "address" from the title.
+    // Title-based format inference does not override a field without a saved format.
     const fields = [{ label: "Email", value: "store@example.com" }, { label: "Phone", value: "313-555-0100", format: "phone" as const }];
     const id = await alice.mutation(api.handbook.create, { ...base, fields });
     await alice.mutation(api.handbook.update, { id, ...base, value: "store@example.com", valueFormat: "address" });
     const [kept] = await alice.query(api.handbook.entries, {});
     expect(kept.fields?.[0]).toEqual({ label: "Email", value: "store@example.com" });
-    // With a saved format, a different one from 1.0.79 is a deliberate change and is honored.
+    // A different format overrides an explicitly saved format.
     await alice.mutation(api.handbook.update, { id, ...base, fields: [{ ...fields[0], format: "text" }, fields[1]] });
     await alice.mutation(api.handbook.update, { id, ...base, value: "store@example.com", valueFormat: "phone" });
     expect((await alice.query(api.handbook.entries, {}))[0].fields?.[0].format).toBe("phone");
     await alice.mutation(api.handbook.update, { id, ...base, fields });
-    // 1.0.79 turning it into a page (a note) moves only the first value; the rest are added as lines.
-    await alice.mutation(api.handbook.update, { id, kind: "page", title: "Store", category: "Store info", pinned: false, body: "store@example.com" });
+    // Conversion without fields preserves the remaining values as lines in the note.
+    await alice.mutation(api.handbook.update, { id, kind: "note", title: "Store", category: "Store info", pinned: false, body: "store@example.com" });
     const [note] = await alice.query(api.handbook.entries, {});
     expect(note).toMatchObject({ kind: "note", body: "store@example.com\n\nPhone: 313-555-0100" });
   });
@@ -384,7 +333,7 @@ describe("handbook", () => {
     const alice = asUser(t, "alice");
     const id = await alice.mutation(api.handbook.create, { ...valueEntry, valueFormat: "phone" });
     expect((await alice.query(api.handbook.entries, {}))[0].valueFormat).toBe("phone");
-    // An older extension's edit (no valueFormat) keeps the saved format.
+    // An edit without valueFormat keeps the saved format.
     await alice.mutation(api.handbook.update, { id, ...valueEntry, comment: "Front desk" });
     expect((await alice.query(api.handbook.entries, {}))[0].valueFormat).toBe("phone");
     // An explicit Text choice is kept, so it overrides inference from the title.
