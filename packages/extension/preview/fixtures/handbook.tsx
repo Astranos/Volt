@@ -10,7 +10,7 @@ const now = Date.UTC(2026, 9, 18, 14, 30);
 let order = 0;
 const entry = (fields: Partial<HandbookEntry> & Pick<HandbookEntry, "kind" | "title" | "category">): HandbookEntry => ({
   _id: `preview${String(order).padStart(12, "0")}` as HandbookEntry["_id"],
-  note: undefined,
+  comment: undefined,
   value: undefined,
   valueFormat: undefined,
   showInList: undefined,
@@ -33,11 +33,11 @@ export const handbookEntries: HandbookEntry[] = [
     valueFormat: "address",
     title: "Store address",
     category: "Store info",
-    note: "Next to the bank",
+    comment: "Next to the bank",
     value: "1234 Main Street, Springfield, MI 48180",
     pinned: true,
   }),
-  entry({ kind: "value", valueFormat: "phone", title: "Local police", category: "Store info", note: "Non-emergency line", value: "313-555-0199 x6" }),
+  entry({ kind: "value", valueFormat: "phone", title: "Local police", category: "Store info", comment: "Non-emergency line", value: "313-555-0199 x6" }),
   entry({
     kind: "value",
     title: "Guest Wi-Fi",
@@ -48,8 +48,8 @@ export const handbookEntries: HandbookEntry[] = [
       { label: "Password", value: "example-wifi-pass", format: "text" },
     ],
   }),
-  entry({ kind: "secret", title: "PSN", category: "Logins", note: "Testing consoles", secretPreview: "stor••• · ••••••", username: "store01@example.com", pinned: true }),
-  entry({ kind: "secret", title: "Microsoft account", category: "Logins", note: "Testing PCs and Xbox", secretPreview: "stor••• · ••••••", username: "store01@example.com" }),
+  entry({ kind: "secret", title: "PSN", category: "Logins", comment: "Testing consoles", secretPreview: "stor••• · ••••••", username: "store01@example.com", pinned: true }),
+  entry({ kind: "secret", title: "Microsoft account", category: "Logins", comment: "Testing PCs and Xbox", secretPreview: "stor••• · ••••••", username: "store01@example.com" }),
   entry({ kind: "secret", title: "Mac test user", category: "Logins", secretPreview: "u••• · ••••••", username: "User" }),
   entry({
     kind: "guide",
@@ -80,7 +80,7 @@ export const handbookEntries: HandbookEntry[] = [
     ],
   }),
   entry({
-    kind: "page",
+    kind: "note",
     title: "Returns",
     category: "Policies",
     showInList: true,
@@ -88,7 +88,7 @@ export const handbookEntries: HandbookEntry[] = [
   }),
   entry({ kind: "value", title: "Wipe checklist before listing", category: "Testing", value: "Sign out of iCloud, Google, and console accounts", updatedAt: now - day }),
   entry({
-    kind: "page",
+    kind: "note",
     title: "Opening checklist",
     category: "Procedures",
     pinned: true,
@@ -106,7 +106,7 @@ export const handbookEntries: HandbookEntry[] = [
       "2. Call the manager at [313-555-0100](tel:3135550100).",
       "3. Write it in the **daily log**.",
       "",
-      "Return policy details are on the _Returns_ page.",
+      "Return policy details are on the _Returns_ note.",
     ].join("\n"),
   }),
 ];
@@ -127,7 +127,7 @@ export const handbookMessages = {
 // queries answer from the fixture, mutations resolve without a server.
 function previewClient(entries: HandbookEntry[]) {
   const results: Record<string, unknown> = {
-    "handbook:list": entries,
+    "handbook:entries": entries,
     "handbook:categoryOrder": [],
     "handbook:revealSecret": fakeLogin,
   };

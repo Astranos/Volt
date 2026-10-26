@@ -1,4 +1,4 @@
-import { ConvexError, v } from "convex/values";
+import { ConvexError, v, type Infer } from "convex/values";
 
 import { internalMutation, mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -7,14 +7,16 @@ import {
   requireOrCreateAuthenticatedWorkspace,
 } from "./cloudWorkspace/identity";
 import {
-  handbookContentFields,
   handbookCredentialsValidator,
   handbookFieldValidator,
+  handbookInputFields,
   handbookKindValidator,
+  handbookLegacyKindValidator,
   handbookValueFormatValidator,
   handbookVariantValidator,
   type HandbookContent,
   type HandbookCredentials,
+  type HandbookInput,
 } from "./handbookValidators";
 import { decryptToken, encryptToken } from "./shopifyHelpers";
 
@@ -25,16 +27,17 @@ import { decryptToken, encryptToken } from "./shopifyHelpers";
 // Bounds what a full list read can return: MAX_ENTRIES * MAX_ENTRY_BYTES stays well
 // under Convex's per-function read limit.
 const MAX_ENTRIES = 300;
-const MAX_ENTRY_BYTES = 16_000;
+// 16,003, not 16,000: renaming `note` to `comment` adds 3 bytes, and entries that fit before still save.
+const MAX_ENTRY_BYTES = 16_003;
 const LIMITS = {
   title: 120,
   category: 40,
   // Shown with the title. Room for anything older extensions could save (a 200-character
-  // short note plus a 10,000-character note) once folded together.
-  note: 12_000,
+  // short note plus 10,000 characters of notes) once folded together.
+  comment: 12_000,
   value: 2_000,
   body: 10_000,
-  page: 15_000,
+  noteBody: 15_000,
   variants: 4,
   fields: 8,
   fieldLabel: 40,
@@ -50,12 +53,10 @@ const LIMITS = {
 };
 const MASK = "••••••";
 
-const entryValidator = v.object({
+const entrySummaryFields = {
   _id: v.id("handbookEntries"),
-  kind: handbookKindValidator,
   title: v.string(),
   category: v.string(),
-  note: v.optional(v.string()),
   value: v.optional(v.string()),
   valueFormat: v.optional(handbookValueFormatValidator),
   fields: v.optional(v.array(handbookFieldValidator)),
@@ -69,7 +70,13 @@ const entryValidator = v.object({
   username: v.optional(v.string()),
   updatedAt: v.number(),
   updatedByName: v.string(),
-});
+};
+
+// What `entries` returns.
+const entryValidator = v.object({ ...entrySummaryFields, kind: handbookKindValidator, comment: v.optional(v.string()) });
+// What `list` returns, unchanged for extensions released before 1.0.81: a note is a "page"
+// and its comment is `note`.
+const legacyEntryValidator = v.object({ ...entrySummaryFields, kind: handbookLegacyKindValidator, note: v.optional(v.string()) });
 
 function authorName(identity: { name?: string; givenName?: string; email?: string }) {
   return identity.name ?? identity.givenName ?? identity.email ?? "Volt user";
@@ -80,6 +87,11 @@ function text(value: string | undefined, max: number, field: string, required = 
   if (required && !trimmed) throw new ConvexError(`HANDBOOK_${field}_REQUIRED`);
   if (trimmed.length > max) throw new ConvexError(`HANDBOOK_${field}_TOO_LONG`);
   return trimmed || undefined;
+}
+
+/** Editor input in the current shape: a "page" is a "note", and `note` is `comment` (which wins). */
+function toCurrentShape({ note, comment, kind, ...rest }: HandbookInput): HandbookContent {
+  return { ...rest, kind: kind === "page" ? "note" : kind, comment: comment ?? note };
 }
 
 // Normalizes editor input and enforces each kind's required content.
@@ -117,30 +129,31 @@ function cleanContent(content: HandbookContent): HandbookContent {
     }))
     : undefined;
   if (fields && fields.length > LIMITS.fields) throw new ConvexError("HANDBOOK_FIELDS_TOO_MANY");
-  // Quick values and logins no longer have notes (longer write-ups are pages). Notes sent
-  // by older extensions are folded into the short note, keeping their line breaks. If the
-  // folded note wouldn't fit, the notes are kept as they are (and still shown) rather than
-  // failing a save that used to work.
+  // Quick values and logins no longer have notes (longer write-ups are note entries). Notes
+  // (`body`) sent by older extensions are folded into the comment, keeping their line breaks.
+  // If the folded comment wouldn't fit, the notes are kept as they are (and still shown)
+  // rather than failing a save that used to work.
   const foldsNotes = content.kind === "value" || content.kind === "secret";
-  const folded = foldsNotes && content.body?.trim() ? mergeNotes(content.note, content.body) : undefined;
-  const build = (fold: boolean) => ({
+  const folded = foldsNotes && content.body?.trim() ? mergeNotes(content.comment, content.body) : undefined;
+  const build = (fold: boolean): HandbookContent => ({
     kind: content.kind,
     title: text(content.title, LIMITS.title, "TITLE", true) ?? "",
     category: text(content.category, LIMITS.category, "CATEGORY", true) ?? "",
-    note: text(fold ? folded : content.note, LIMITS.note, "NOTE"),
+    // The error codes keep their older names ("NOTE", "PAGE"); published extensions show them.
+    comment: text(fold ? folded : content.comment, LIMITS.comment, "NOTE"),
     value: fields?.[0].value,
     // An explicit "text" is kept so a client's choice overrides title-based inference.
     valueFormat: fields?.[0].format,
     fields: fields && (fields.length > 1 || fields[0].label) ? fields : undefined,
-    body: content.kind === "page"
-      ? text(content.body, LIMITS.page, "PAGE", true)
+    body: content.kind === "note"
+      ? text(content.body, LIMITS.noteBody, "PAGE", true)
       : fold ? undefined : text(content.body, LIMITS.body, "BODY"),
-    showInList: content.kind === "page" && content.showInList ? true : undefined,
+    showInList: content.kind === "note" && content.showInList ? true : undefined,
     variants,
     pinned: content.pinned,
   });
   const fits = (entry: object) => new TextEncoder().encode(JSON.stringify(entry)).length <= MAX_ENTRY_BYTES;
-  if (folded !== undefined && folded.length <= LIMITS.note) {
+  if (folded !== undefined && folded.length <= LIMITS.comment) {
     const cleaned = build(true);
     if (fits(cleaned)) return cleaned;
   }
@@ -149,9 +162,9 @@ function cleanContent(content: HandbookContent): HandbookContent {
   return cleaned;
 }
 
-/** A short note followed by former notes, keeping their line breaks (so it never grows longer). */
-function mergeNotes(note: string | undefined, body: string) {
-  return [note?.trim(), body.trim()].filter(Boolean).join("\n");
+/** A comment followed by former notes, keeping their line breaks (so it never grows longer). */
+function mergeNotes(comment: string | undefined, body: string) {
+  return [comment?.trim(), body.trim()].filter(Boolean).join("\n");
 }
 
 /**
@@ -170,17 +183,59 @@ export const moveNotesIntoShortNotes = internalMutation({
     let skipped = 0;
     for (const entry of page.page) {
       if ((entry.kind !== "value" && entry.kind !== "secret") || !entry.body?.trim()) continue;
-      const note = mergeNotes(entry.note, entry.body);
-      const fits = note.length <= LIMITS.note
-        && new TextEncoder().encode(JSON.stringify({ ...entry, note, body: undefined })).length <= MAX_ENTRY_BYTES;
+      // Writes the current field (`comment`), so a rerun after the rename never hides text.
+      const comment = mergeNotes(entry.comment ?? entry.note, entry.body);
+      const fits = comment.length <= LIMITS.comment
+        && new TextEncoder().encode(JSON.stringify({ ...entry, comment, note: undefined, body: undefined })).length <= MAX_ENTRY_BYTES;
       if (!fits) {
         skipped++;
         continue;
       }
-      await ctx.db.patch(entry._id, { note, body: undefined });
+      await ctx.db.patch(entry._id, { comment, note: undefined, body: undefined });
       moved++;
     }
     return { moved, skipped, isDone: page.isDone, continueCursor: page.continueCursor };
+  },
+});
+
+/**
+ * One-time rename of the data model, a page of entries at a time: kind "page" becomes "note"
+ * and `note` becomes `comment` (an entry that has both keeps `comment`). Run after deploying:
+ * first with `'{}'`, then with `'{"cursor":"<continueCursor>"}'` from each result until
+ * `isDone` is true. Safe to run again; a migrated entry is left as it is.
+ */
+export const migratePagesToNotes = internalMutation({
+  args: { cursor: v.optional(v.union(v.string(), v.null())) },
+  returns: v.object({
+    pagesRenamed: v.number(),
+    notesMoved: v.number(),
+    notesDropped: v.number(),
+    isDone: v.boolean(),
+    continueCursor: v.string(),
+  }),
+  handler: async (ctx, args) => {
+    const page = await ctx.db.query("handbookEntries").paginate({ cursor: args.cursor ?? null, numItems: 200 });
+    let pagesRenamed = 0;
+    let notesMoved = 0;
+    let notesDropped = 0;
+    for (const entry of page.page) {
+      const patch: Partial<Pick<Doc<"handbookEntries">, "kind" | "comment" | "note">> = {};
+      if (entry.kind === "page") {
+        patch.kind = "note";
+        pagesRenamed++;
+      }
+      if (entry.note !== undefined) {
+        if (entry.comment === undefined) {
+          patch.comment = entry.note;
+          notesMoved++;
+        } else {
+          notesDropped++;
+        }
+        patch.note = undefined;
+      }
+      if (Object.keys(patch).length) await ctx.db.patch(entry._id, patch);
+    }
+    return { pagesRenamed, notesMoved, notesDropped, isDone: page.isDone, continueCursor: page.continueCursor };
   },
 });
 
@@ -203,10 +258,10 @@ function keepNewerValueShape(input: HandbookContent, entry: Doc<"handbookEntries
 }
 
 /**
- * An older client turning a multi-value entry into a page only moves the first value
- * into the page. Add the other values as "Label: value" lines so none is lost.
+ * An older client turning a multi-value entry into a note (a "page" to it) only moves the
+ * first value into the note. Add the other values as "Label: value" lines so none is lost.
  */
-function keepValuesInPage(input: HandbookContent, entry: Doc<"handbookEntries">): HandbookContent {
+function keepValuesInNote(input: HandbookContent, entry: Doc<"handbookEntries">): HandbookContent {
   const extra = (entry.fields ?? []).slice(1)
     .map((field) => (field.label ? `${field.label}: ${field.value}` : field.value))
     .filter((line) => !(input.body ?? "").split("\n").some((existing) => existing.trim() === line));
@@ -231,13 +286,14 @@ export function maskedSecretPreview(username: string | undefined) {
   return `${username.slice(0, visible)}••• · ${MASK}`;
 }
 
-function toSummary(entry: Doc<"handbookEntries">, username?: string) {
+/** An entry in the current shape, whether or not `migratePagesToNotes` has reached it. */
+function toSummary(entry: Doc<"handbookEntries">, username?: string): Infer<typeof entryValidator> {
   return {
     _id: entry._id,
-    kind: entry.kind,
+    kind: entry.kind === "page" ? "note" : entry.kind,
     title: entry.title,
     category: entry.category,
-    note: entry.note,
+    comment: entry.comment ?? entry.note,
     value: entry.value,
     valueFormat: entry.valueFormat,
     fields: entry.fields,
@@ -251,6 +307,11 @@ function toSummary(entry: Doc<"handbookEntries">, username?: string) {
     updatedAt: entry.updatedAt,
     updatedByName: entry.updatedByName,
   };
+}
+
+/** An entry as extensions released before 1.0.81 expect it. */
+function toLegacySummary({ kind, comment, ...rest }: Infer<typeof entryValidator>): Infer<typeof legacyEntryValidator> {
+  return { ...rest, kind: kind === "note" ? "page" : kind, note: comment };
 }
 
 async function requireEditor(ctx: MutationCtx) {
@@ -330,30 +391,41 @@ async function writeSecret(ctx: MutationCtx, workspaceId: Id<"workspaces">, entr
   else await ctx.db.insert("handbookSecrets", row);
 }
 
+/** Every entry in the account's handbook, in order. Secret entries carry only a masked preview. */
+async function readEntries(ctx: QueryCtx) {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) throw new ConvexError("AUTHENTICATION_REQUIRED");
+  const workspace = await authenticatedWorkspaceOrNull(ctx);
+  if (!workspace) return [];
+  const entries = await ctx.db
+    .query("handbookEntries")
+    .withIndex("by_workspaceId_and_order", (q) => q.eq("workspaceId", workspace._id))
+    .take(MAX_ENTRIES);
+  // Usernames are decrypted for display; passwords never leave revealSecret.
+  return await Promise.all(entries.map(async (entry) => toSummary(
+    entry,
+    entry.kind === "secret" ? await readUsername(ctx, workspace._id, entry._id) : undefined,
+  )));
+}
+
+/** Every entry in the account's handbook. Secret entries carry only a masked preview. */
+export const entries = query({
+  args: {},
+  returns: v.array(entryValidator),
+  handler: async (ctx) => await readEntries(ctx),
+});
+
 /**
- * Every entry in the account's handbook. Secret entries carry only a masked preview.
- * Pages are left out unless `includePages` is set, so extensions released before pages
- * existed (which call this with no arguments) never see an entry kind they can't show.
+ * `entries` for extensions released before 1.0.81: a note is a "page" and its comment is
+ * `note`. Pages are left out unless `includePages` is set, so extensions released before
+ * pages existed (which call this with no arguments) never see an entry kind they can't show.
  */
 export const list = query({
   args: { includePages: v.optional(v.boolean()) },
-  returns: v.array(entryValidator),
-  handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new ConvexError("AUTHENTICATION_REQUIRED");
-    const workspace = await authenticatedWorkspaceOrNull(ctx);
-    if (!workspace) return [];
-    const entries = await ctx.db
-      .query("handbookEntries")
-      .withIndex("by_workspaceId_and_order", (q) => q.eq("workspaceId", workspace._id))
-      .take(MAX_ENTRIES);
-    const shown = entries.filter((entry) => args.includePages || entry.kind !== "page");
-    // Usernames are decrypted for display; passwords never leave revealSecret.
-    return await Promise.all(shown.map(async (entry) => toSummary(
-      entry,
-      entry.kind === "secret" ? await readUsername(ctx, workspace._id, entry._id) : undefined,
-    )));
-  },
+  returns: v.array(legacyEntryValidator),
+  handler: async (ctx, args) => (await readEntries(ctx))
+    .map(toLegacySummary)
+    .filter((entry) => args.includePages || entry.kind !== "page"),
 });
 
 // Every entry could have its own category.
@@ -415,12 +487,13 @@ export const revealSecret = mutation({
   },
 });
 
+/** Accepts the current shape or the legacy one (kind "page", `note`); always stores the current one. */
 export const create = mutation({
-  args: { ...handbookContentFields, credentials: v.optional(handbookCredentialsValidator) },
+  args: { ...handbookInputFields, credentials: v.optional(handbookCredentialsValidator) },
   returns: v.id("handbookEntries"),
   handler: async (ctx, { credentials, ...input }) => {
     const { workspace, updatedByName } = await requireEditor(ctx);
-    const content = cleanContent(input);
+    const content = cleanContent(toCurrentShape(input));
     const login = content.kind === "secret"
       ? cleanCredentials(credentials ?? { secret: "" })
       : null;
@@ -441,24 +514,26 @@ export const create = mutation({
 });
 
 /**
- * Replaces an entry's content. Omit `credentials` to keep a secret entry's login;
- * a blank username or password inside `credentials` keeps that saved part.
+ * Replaces an entry's content, accepting the current shape or the legacy one (kind "page",
+ * `note`) and always storing the current one. Omit `credentials` to keep a secret entry's
+ * login; a blank username or password inside `credentials` keeps that saved part.
  */
 export const update = mutation({
   args: {
     id: v.id("handbookEntries"),
-    ...handbookContentFields,
+    ...handbookInputFields,
     credentials: v.optional(handbookCredentialsValidator),
   },
   returns: v.null(),
-  handler: async (ctx, { id, credentials, ...input }) => {
+  handler: async (ctx, { id, credentials, ...rawInput }) => {
     const { workspace, updatedByName } = await requireEditor(ctx);
     const entry = await requireOwnedEntry(ctx, workspace._id, id);
+    const input = toCurrentShape(rawInput);
     // Extensions released before value formats existed don't send one; keep the saved format
     // instead of letting their edit erase a phone or address choice.
     const content = cleanContent(
       input.kind === "value" && entry.kind === "value" ? keepNewerValueShape(input, entry)
-        : input.kind === "page" && entry.kind === "value" && input.fields === undefined ? keepValuesInPage(input, entry)
+        : input.kind === "note" && entry.kind === "value" && input.fields === undefined ? keepValuesInNote(input, entry)
           : input,
     );
     const existingSecret = await secretFor(ctx, id);

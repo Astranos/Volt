@@ -1,6 +1,6 @@
-// A small Markdown subset for handbook pages: headings, paragraphs, bulleted,
+// A small Markdown subset for handbook notes: headings, paragraphs, bulleted,
 // numbered and checklist items, bold, italic, inline code, and links. It parses to
-// plain data so pages render as React elements and never as raw HTML.
+// plain data so notes render as React elements and never as raw HTML.
 
 export type Inline =
   | { type: "text"; text: string }
@@ -15,9 +15,10 @@ export type Block =
 
 // A link needs a host (or an address/number) after the scheme; "https://" alone stays text.
 const SAFE_LINK = /^(?:https?:\/\/[^\s/?#]+|mailto:\S+|tel:\S+)/i;
+export const isSafeHandbookLink = (href: string) => SAFE_LINK.test(href);
 
 // Sticky patterns tried only where a marker character appears. Every span is bounded,
-// so a page full of unmatched markers parses in linear time.
+// so a note full of unmatched markers parses in linear time.
 const CODE = /`([^`\n]{1,300})`/y;
 // ***both*** is what Bold then Italic produces in the editor.
 const BOLD_ITALIC = /\*\*\*(?=[^\s*])([^\n]{1,300}?)(?<=[^\s*])\*\*\*/y;
@@ -80,7 +81,7 @@ export function parseInline(text: string): Inline[] {
 }
 
 const HEADING = /^(#{1,3})\s+(.*)$/;
-const BULLET = /^[-*]\s+(?:\[( |x|X)\]\s+)?(.*)$/;
+const BULLET = /^[-*]\s+(?:\[( |x|X)\](?:\s+|$))?(.*)$/;
 const NUMBERED = /^\d+[.)]\s+(.*)$/;
 
 export function parseHandbookMarkdown(source: string): Block[] {
@@ -117,13 +118,14 @@ export function parseHandbookMarkdown(source: string): Block[] {
   return blocks;
 }
 
-/** Plain text of a page, for previews and search. */
+/** Plain text of a note, for previews and search. */
 export function markdownPlainText(source: string) {
   const inlineText = (nodes: Inline[]): string => nodes.map((node) =>
     node.type === "text" || node.type === "code" ? node.text : inlineText(node.children)).join("");
   // Headings and list items are separated so previews read "Sales floor · Lock the cases".
+  // Empty items (a bare "- [ ]") are left out rather than leaving "a ·  · b".
   return parseHandbookMarkdown(source).map((block) =>
     block.type === "heading" ? inlineText(block.children)
       : block.type === "paragraph" ? block.lines.map(inlineText).join(" ")
-        : block.items.map((item) => inlineText(item.children)).join(" · ")).join(" · ");
+        : block.items.map((item) => inlineText(item.children)).filter(Boolean).join(" · ")).filter(Boolean).join(" · ");
 }

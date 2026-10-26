@@ -24,7 +24,7 @@ import {
   groupHandbook,
   guideSummary,
   handbookCategories,
-  pageSummary,
+  noteSummary,
   BLANK_SUGGESTIONS,
   type HandbookEntry,
   type HandbookEntryId,
@@ -252,7 +252,7 @@ function HandbookLayout({ entries }: { entries: HandbookEntry[] }) {
 
 function rowSummary(entry: HandbookEntry) {
   return entry.kind === "guide" ? guideSummary(entry)
-    : entry.kind === "page" ? pageSummary(entry)
+    : entry.kind === "note" ? noteSummary(entry)
       : entry.kind === "secret" ? entry.username ?? entry.secretPreview
         : entryFields(entry).map(fieldDisplayValue).join(" · ");
 }
@@ -270,14 +270,19 @@ function EntryList({ entries, categoryOrder, query, onOpen }: {
   return (
     <div className="handbook-list">
       {groups.map((group) => (
-        <section key={group.category} className="handbook-section">
-          <h2 className="handbook-section-title">{group.category}</h2>
+        <section key={group.key} className="handbook-section">
+          <h2 className="handbook-section-title">{group.title}</h2>
           <div className="mobile-scanner-card handbook-card">
             {group.entries.map((entry, index) => {
-              // Pinned entries always lead their group, so only swap within the same pin state.
-              const canMove = (offset: number) => group.entries[index + offset]?.pinned === entry.pinned;
+              // `order` is shared across categories, so in the mixed Pinned group an arrow swaps
+              // with the nearest pinned entry of the same category; elsewhere, the next entry.
+              const neighborFor = (offset: number) => {
+                const candidates = offset < 0 ? group.entries.slice(0, index).reverse() : group.entries.slice(index + 1);
+                return group.key === "pinned" ? candidates.find((other) => other.category === entry.category) : candidates[0];
+              };
+              const canMove = (offset: number) => Boolean(neighborFor(offset));
               const moveBy = (offset: number) => {
-                const neighbor = group.entries[index + offset]._id;
+                const neighbor = neighborFor(offset)!._id;
                 void reorder({ ids: offset < 0 ? [entry._id, neighbor] : [neighbor, entry._id] });
               };
               return (
@@ -290,7 +295,7 @@ function EntryList({ entries, categoryOrder, query, onOpen }: {
                         {entry.pinned ? <Pin className="handbook-pin-mark" aria-label="Pinned" /> : null}
                       </span>
                       <span className="handbook-row-label">{rowSummary(entry)}</span>
-                      {entry.note ? <span className="handbook-row-note">{entry.note}</span> : null}
+                      {entry.comment ? <span className="handbook-row-note">{entry.comment}</span> : null}
                     </span>
                   </button>
                   <span className="handbook-row-actions handbook-reveal-on-hover">
@@ -342,7 +347,7 @@ function Article({ entry, onBack, onEdit }: { entry: HandbookEntry; onBack: () =
         <div className="min-w-0">
           <h1 className="handbook-article-title">{entry.title}</h1>
           <p className="handbook-meta">{formatHandbookUpdated(entry)}</p>
-          {entry.note ? <p className="handbook-entry-note">{entry.note}</p> : null}
+          {entry.comment ? <p className="handbook-entry-note">{entry.comment}</p> : null}
         </div>
         <div className="handbook-row-actions">
           <button type="button" className="handbook-button" onClick={() => void setPinned({ id: entry._id, pinned: !entry.pinned })}>
@@ -386,14 +391,14 @@ function Article({ entry, onBack, onEdit }: { entry: HandbookEntry; onBack: () =
         </>
       ) : null}
 
-      {entry.kind === "page" ? (
+      {entry.kind === "note" ? (
         <div className="mobile-scanner-card handbook-card handbook-page-body"><MarkdownView source={entry.body ?? ""} /></div>
       ) : entry.kind === "guide" && entry.body ? (
         <p className="handbook-guide-body">{entry.body}</p>
       ) : entry.body ? (
-        // Notes left on a quick value or login that were too long to fold into its short note.
+        // Notes left on a quick value or login that were too long to fold into its comment.
         <section className="handbook-section">
-          <h2 className="handbook-section-title">Older notes</h2>
+          <h2 className="handbook-section-title">Older text</h2>
           <div className="mobile-scanner-card handbook-card handbook-notes">{entry.body}</div>
         </section>
       ) : null}
@@ -470,7 +475,7 @@ function EmptyHandbook({ onNew }: { onNew: (defaults?: Partial<HandbookDraft>) =
               kind: suggestion.kind,
               category: suggestion.category,
               title: suggestion.title,
-              note: suggestion.note,
+              comment: suggestion.comment,
               // Preset the value's type, so "Store phone" opens with phone formatting.
               ...("valueFormat" in suggestion ? { fields: [emptyField(suggestion.valueFormat)] } : {}),
             })}

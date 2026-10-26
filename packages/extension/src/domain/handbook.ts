@@ -2,7 +2,7 @@ import type { FunctionReturnType } from "convex/server";
 import type { api } from "../../../../convex/_generated/api";
 import { markdownPlainText } from "./handbook-markdown";
 
-export type HandbookEntry = FunctionReturnType<typeof api.handbook.list>[number];
+export type HandbookEntry = FunctionReturnType<typeof api.handbook.entries>[number];
 export type HandbookEntryId = HandbookEntry["_id"];
 export type HandbookVariant = NonNullable<HandbookEntry["variants"]>[number];
 export type HandbookStep = HandbookVariant["steps"][number];
@@ -16,12 +16,12 @@ export const DEFAULT_HANDBOOK_CATEGORIES = ["Store info", "Logins", "Setup guide
 
 // Offered as blanks for each store to fill in. Values are typed in by the user, never shipped.
 export const BLANK_SUGGESTIONS = [
-  { kind: "value", valueFormat: "phone", category: "Store info", title: "Store phone", note: "" },
-  { kind: "value", valueFormat: "address", category: "Store info", title: "Store address", note: "" },
-  { kind: "value", valueFormat: "phone", category: "Store info", title: "Local police", note: "Non-emergency line" },
-  { kind: "secret", category: "Logins", title: "PSN", note: "Testing consoles" },
-  { kind: "secret", category: "Logins", title: "Microsoft account", note: "Testing PCs and Xbox" },
-  { kind: "secret", category: "Logins", title: "Mac test user", note: "Local account on test Macs" },
+  { kind: "value", valueFormat: "phone", category: "Store info", title: "Store phone", comment: "" },
+  { kind: "value", valueFormat: "address", category: "Store info", title: "Store address", comment: "" },
+  { kind: "value", valueFormat: "phone", category: "Store info", title: "Local police", comment: "Non-emergency line" },
+  { kind: "secret", category: "Logins", title: "PSN", comment: "Testing consoles" },
+  { kind: "secret", category: "Logins", title: "Microsoft account", comment: "Testing PCs and Xbox" },
+  { kind: "secret", category: "Logins", title: "Mac test user", comment: "Local account on test Macs" },
 ] as const;
 
 /** Categories in the account's saved order; any not in it follow, in first-seen order. */
@@ -39,11 +39,11 @@ function searchText(entry: HandbookEntry) {
     variant.warning,
     ...variant.steps.flatMap((step) => [step.text, step.command, step.tip, ...(step.keys ?? [])]),
   ]);
-  // Pages are searched as plain text; guide intros and any older notes left on a quick
+  // Notes are searched as plain text; guide intros and any older notes left on a quick
   // value or login (shown when they couldn't be folded) as written.
-  const body = entry.kind === "page" && entry.body ? markdownPlainText(entry.body) : entry.body;
+  const body = entry.kind === "note" && entry.body ? markdownPlainText(entry.body) : entry.body;
   const fields = (entry.fields ?? []).flatMap((field) => [field.label, field.value]);
-  return [entry.title, entry.category, entry.note, entry.value, entry.username, body, ...fields, ...steps]
+  return [entry.title, entry.category, entry.comment, entry.value, entry.username, body, ...fields, ...steps]
     .filter(Boolean)
     .join(" ")
     .toLowerCase();
@@ -65,14 +65,20 @@ export function filterHandbook(entries: HandbookEntry[], query: string, filter: 
     && matchesHandbookQuery(entry, query));
 }
 
-/** Groups by category (in the saved category order), pinned entries first within each group. */
+/**
+ * Pinned entries lead in their own group, then the rest by category (in the saved
+ * category order). Keys are unique even if someone names a category "Pinned".
+ */
 export function groupHandbook(entries: HandbookEntry[], order: readonly string[] = []) {
-  return handbookCategories(entries, order).map((category) => ({
-    category,
-    entries: entries
-      .filter((entry) => entry.category === category)
-      .sort((a, b) => Number(b.pinned) - Number(a.pinned) || a.order - b.order),
+  const byOrder = (a: HandbookEntry, b: HandbookEntry) => a.order - b.order;
+  const pinned = entries.filter((entry) => entry.pinned).sort(byOrder);
+  const rest = entries.filter((entry) => !entry.pinned);
+  const groups = handbookCategories(rest, order).map((category) => ({
+    key: `category:${category}`,
+    title: category,
+    entries: rest.filter((entry) => entry.category === category).sort(byOrder),
   }));
+  return pinned.length ? [{ key: "pinned", title: "Pinned", entries: pinned }, ...groups] : groups;
 }
 
 export function guideSummary(entry: HandbookEntry) {
@@ -86,10 +92,10 @@ export function guideSummary(entry: HandbookEntry) {
 }
 
 /** Entries that open in their own view in the sidepanel and from the Command Menu. */
-export const opensAsDocument = (entry: Pick<HandbookEntry, "kind">) => entry.kind === "guide" || entry.kind === "page";
+export const opensAsDocument = (entry: Pick<HandbookEntry, "kind">) => entry.kind === "guide" || entry.kind === "note";
 
-/** First words of a page, for list rows. */
-export function pageSummary(entry: HandbookEntry, max = 90) {
+/** First words of a note, for list rows. */
+export function noteSummary(entry: HandbookEntry, max = 90) {
   const text = markdownPlainText(entry.body ?? "").trim();
   return text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
 }

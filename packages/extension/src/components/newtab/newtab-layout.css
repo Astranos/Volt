@@ -264,6 +264,19 @@
 
 .newtab-audit-button:disabled { cursor: wait; opacity: 0.55; }
 
+.newtab-settings-button.newtab-update-button {
+  gap: 6px;
+  padding: 0 12px;
+  width: auto;
+  border-color: rgba(22, 163, 74, 0.35);
+  background: var(--nt-accent-soft);
+  color: var(--nt-accent-strong);
+  font-size: 12px;
+  font-weight: 650;
+}
+.newtab-settings-button.newtab-update-button svg { height: 14px; width: 14px; }
+.newtab-settings-button.newtab-update-button:hover { background: var(--nt-accent-soft); border-color: var(--nt-accent); color: var(--nt-accent-strong); }
+
 /* Header button tooltips: instant and styled, unlike the browser's title tooltip. */
 .newtab-settings-button[data-tooltip] { position: relative; }
 .newtab-settings-button[data-tooltip]::after {

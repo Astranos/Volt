@@ -1,6 +1,6 @@
 import { useRef, useState, type ReactNode } from "react";
 import { useMutation } from "convex/react";
-import { ArrowDown, ArrowUp, Bold, Heading2, Italic, Link2, List, ListChecks, ListOrdered, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
 import { api } from "../../../../../convex/_generated/api";
 import {
   DEFAULT_HANDBOOK_CATEGORIES,
@@ -18,7 +18,7 @@ import {
   type HandbookValueFormat,
 } from "../../domain/handbook-format";
 import { cn } from "../../lib/utils";
-import { MarkdownView } from "./handbook-parts";
+import { NoteEditor } from "./NoteEditor";
 
 type Kind = HandbookEntry["kind"];
 type DraftStep = { text: string; keys: string; command: string; tip: string };
@@ -28,7 +28,7 @@ export type HandbookDraft = {
   kind: Kind;
   title: string;
   category: string;
-  note: string;
+  comment: string;
   fields: DraftField[];
   body: string;
   showInList: boolean;
@@ -42,7 +42,7 @@ const KIND_OPTIONS: Array<{ kind: Kind; label: string }> = [
   { kind: "value", label: "Quick value" },
   { kind: "secret", label: "Login" },
   { kind: "guide", label: "Guide" },
-  { kind: "page", label: "Page" },
+  { kind: "note", label: "Note" },
 ];
 const FORMAT_OPTIONS: Array<{ format: HandbookValueFormat; label: string }> = [
   { format: "text", label: "Text" },
@@ -53,7 +53,7 @@ const PLACEHOLDERS: Record<Kind, { title: string; category: string }> = {
   value: { title: "Store phone", category: "Store info" },
   secret: { title: "PSN", category: "Logins" },
   guide: { title: "Skip Windows sign-in", category: "Setup guides" },
-  page: { title: "Opening checklist", category: "Procedures" },
+  note: { title: "Opening checklist", category: "Procedures" },
 };
 const emptyAddress = (): AddressParts => ({ street: "", city: "", state: "", zip: "" });
 export const emptyField = (format: HandbookValueFormat = "text"): DraftField => ({ label: "", format, value: "", address: emptyAddress() });
@@ -75,11 +75,11 @@ export function draftFor(entry: HandbookEntry | null, defaults: Partial<Handbook
     kind: entry?.kind ?? "value",
     title: entry?.title ?? "",
     category: entry?.category ?? "",
-    note: entry?.note ?? "",
+    comment: entry?.comment ?? "",
     fields,
-    // Guides (intro) and pages use this. Quick values and logins no longer have notes, but
+    // Guides (intro) and notes use this. Quick values and logins no longer have notes, but
     // any left from older versions are kept here and sent back, so the server can fold
-    // them into the short note instead of a save dropping them.
+    // them into the comment instead of a save dropping them.
     body: entry?.body ?? "",
     showInList: entry?.showInList ?? false,
     pinned: entry?.pinned ?? false,
@@ -100,12 +100,12 @@ export function draftFor(entry: HandbookEntry | null, defaults: Partial<Handbook
 }
 
 /**
- * Changes an entry's type. Turning a quick value into a page moves the value into
- * the page (above any notes) so it isn't silently dropped on save.
+ * Changes an entry's type. Turning a quick value into a note moves the value into
+ * the note (above any older notes) so it isn't silently dropped on save.
  */
 function switchKind(draft: HandbookDraft, kind: Kind): HandbookDraft {
-  if (draft.kind !== "value" || kind !== "page") return { ...draft, kind };
-  // Each value becomes a line ("Phone: 313-555-0100"), unless the page already has that exact line.
+  if (draft.kind !== "value" || kind !== "note") return { ...draft, kind };
+  // Each value becomes a line ("Phone: 313-555-0100"), unless the note already has that exact line.
   const lines = draft.fields
     .map((field) => [field.label.trim(), fieldValue(field).trim()])
     .filter(([, value]) => value)
@@ -124,12 +124,18 @@ function move<T>(items: T[], index: number, offset: number) {
   return next;
 }
 
+// Codes named before notes were called pages and short notes were called notes.
+const RENAMED_ERRORS: Record<string, string> = {
+  HANDBOOK_NOTE_TOO_LONG: "Comment too long.",
+  HANDBOOK_PAGE_REQUIRED: "Write something in the note before saving.",
+  HANDBOOK_PAGE_TOO_LONG: "Note too long.",
+};
+
 function errorText(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
   const code = message.match(/HANDBOOK_[A-Z_]+/)?.[0];
-  return code
-    ? code.replace(/^HANDBOOK_/, "").replaceAll("_", " ").toLowerCase().replace(/^./, (letter) => letter.toUpperCase()) + "."
-    : message;
+  if (!code) return message;
+  return RENAMED_ERRORS[code] ?? code.replace(/^HANDBOOK_/, "").replaceAll("_", " ").toLowerCase().replace(/^./, (letter) => letter.toUpperCase()) + ".";
 }
 
 export function HandbookEditor({
@@ -155,10 +161,10 @@ export function HandbookEditor({
   const setVariant = (index: number, variant: DraftVariant) =>
     set("variants", draft.variants.map((item, itemIndex) => (itemIndex === index ? variant : item)));
   const keepsLogin = entry?.kind === "secret" && draft.kind === "secret";
-  // Notes left on a saved quick value or login from an earlier version. A page's or guide's
+  // Notes left on a saved quick value or login from an earlier version. A note's or guide's
   // text never counts as that, even after switching the type here.
   const hadOlderNotes = (entry?.kind === "value" || entry?.kind === "secret") && Boolean(entry.body?.trim());
-  const keepsBody = draft.kind === "guide" || draft.kind === "page" || hadOlderNotes;
+  const keepsBody = draft.kind === "guide" || draft.kind === "note" || hadOlderNotes;
 
   const save = async () => {
     setSaving(true);
@@ -167,17 +173,17 @@ export function HandbookEditor({
       kind: draft.kind,
       title: draft.title,
       category: draft.category,
-      note: draft.note || undefined,
+      comment: draft.comment || undefined,
       // `value`/`valueFormat` mirror the first field for older extensions; `fields` is the source of truth.
       value: draft.kind === "value" ? fieldValue(draft.fields[0]) : undefined,
       valueFormat: draft.kind === "value" ? draft.fields[0].format : undefined,
       // An empty list for other kinds tells the server this editor already moved the values
-      // (into a page, say); its fallback for older extensions would otherwise add them again.
+      // (into a note, say); its fallback for older extensions would otherwise add them again.
       fields: draft.kind === "value"
         ? draft.fields.map((field) => ({ label: field.label.trim() || undefined, value: fieldValue(field), format: field.format }))
         : [],
       body: keepsBody && draft.body.trim() ? draft.body : undefined,
-      showInList: draft.kind === "page" ? draft.showInList : undefined,
+      showInList: draft.kind === "note" ? draft.showInList : undefined,
       pinned: draft.pinned,
       variants: draft.kind === "guide"
         ? draft.variants.map((variant) => ({
@@ -217,6 +223,11 @@ export function HandbookEditor({
       className="handbook-editor"
       onSubmit={(event) => {
         event.preventDefault();
+        // The note editor isn't a form field, so it can't be `required`.
+        if (draft.kind === "note" && !draft.body.trim()) {
+          setError("Write something in the note before saving.");
+          return;
+        }
         void save();
       }}
     >
@@ -255,21 +266,12 @@ export function HandbookEditor({
           </datalist>
         </Field>
       </div>
-      <Field label="Short note" hint="Shown under the title, like “next to the bank” or “non-emergency”.">
-        <textarea value={draft.note} onChange={(event) => set("note", event.target.value)} rows={2} />
-      </Field>
-      {(draft.kind === "value" || draft.kind === "secret") && hadOlderNotes ? (
-        <Field label="Older notes" hint="Left from an earlier version. Move what you need into the short note (or a page), then clear this.">
-          <textarea value={draft.body} onChange={(event) => set("body", event.target.value)} rows={3} />
-        </Field>
-      ) : null}
-
       {draft.kind === "value" ? (
         <ValueFieldsEditor fields={draft.fields} onChange={(fields) => set("fields", fields)} />
       ) : null}
 
-      {draft.kind === "page" ? (
-        <PageBodyEditor value={draft.body} onChange={(body) => set("body", body)} />
+      {draft.kind === "note" ? (
+        <NoteEditor value={draft.body} onChange={(body) => set("body", body)} />
       ) : null}
 
       {draft.kind === "secret" ? (
@@ -381,12 +383,21 @@ export function HandbookEditor({
           <textarea value={draft.body} onChange={(event) => set("body", event.target.value)} rows={2} />
         </Field>
       ) : null}
-      {draft.kind === "page" ? (
+      {/* Below the main content: extra context, not what the entry is about. */}
+      <Field label="Comment (optional)" hint="Shown under the title, like “next to the bank” or “non-emergency”.">
+        <textarea className="handbook-comment-input" value={draft.comment} onChange={(event) => set("comment", event.target.value)} rows={1} />
+      </Field>
+      {(draft.kind === "value" || draft.kind === "secret") && hadOlderNotes ? (
+        <Field label="Older text" hint="Left from an earlier version. Move what you need into the comment (or a note), then clear this.">
+          <textarea value={draft.body} onChange={(event) => set("body", event.target.value)} rows={3} />
+        </Field>
+      ) : null}
+      {draft.kind === "note" ? (
         <label className="handbook-checkbox">
           <input type="checkbox" checked={draft.showInList} onChange={(event) => set("showInList", event.target.checked)} />
           <span>
-            Show the whole page in the sidepanel list
-            <span className="handbook-field-hint handbook-checkbox-hint">Best for short pages, so staff can read it without tapping in.</span>
+            Show the whole note in the sidepanel list
+            <span className="handbook-field-hint handbook-checkbox-hint">Best for short notes, so staff can read it without tapping in.</span>
           </span>
         </label>
       ) : null}
@@ -446,89 +457,6 @@ function AddressFields({ value, onChange }: { value: AddressParts; onChange: (va
         </Field>
       </div>
       <p className="handbook-field-hint">Saved as “{formatAddress(value) || "9058 Telegraph Rd, Taylor, MI 48180"}”.</p>
-    </div>
-  );
-}
-
-type Wrap = { before: string; after?: string; placeholder: string; line?: boolean };
-const TOOLS: Array<{ label: string; icon: ReactNode; wrap: Wrap }> = [
-  { label: "Heading", icon: <Heading2 />, wrap: { before: "## ", placeholder: "Heading", line: true } },
-  { label: "Bold", icon: <Bold />, wrap: { before: "**", after: "**", placeholder: "bold text" } },
-  // Asterisks, not underscores, so italicizing words like sku_code_123 works.
-  { label: "Italic", icon: <Italic />, wrap: { before: "*", after: "*", placeholder: "italic text" } },
-  { label: "Bulleted list", icon: <List />, wrap: { before: "- ", placeholder: "List item", line: true } },
-  { label: "Numbered list", icon: <ListOrdered />, wrap: { before: "1. ", placeholder: "First step", line: true } },
-  { label: "Checklist", icon: <ListChecks />, wrap: { before: "- [ ] ", placeholder: "To do", line: true } },
-  { label: "Link", icon: <Link2 />, wrap: { before: "[", after: "](https://)", placeholder: "link text" } },
-];
-
-/** A Markdown textarea with a formatting toolbar and a preview of how the page will look. */
-function PageBodyEditor({ value, onChange }: { value: string; onChange: (value: string) => void }) {
-  const [preview, setPreview] = useState(false);
-  const textarea = useRef<HTMLTextAreaElement>(null);
-
-  const apply = ({ before, after = "", placeholder, line }: Wrap) => {
-    const element = textarea.current;
-    let start = element?.selectionStart ?? value.length;
-    const end = element?.selectionEnd ?? value.length;
-    let next: string;
-    let selection: [number, number];
-    if (line && start !== end) {
-      // Line tools apply to every selected line: two lines become two checklist items.
-      start = value.lastIndexOf("\n", start - 1) + 1;
-      const lines = value.slice(start, end).split("\n").map((text) => (text.trim() ? `${before}${text}` : text));
-      const replaced = lines.join("\n");
-      next = `${value.slice(0, start)}${replaced}${value.slice(end)}`;
-      selection = [start, start + replaced.length];
-    } else {
-      const selected = value.slice(start, end) || placeholder;
-      // Line tools start on a fresh line.
-      const lead = line && start > 0 && value[start - 1] !== "\n" ? "\n" : "";
-      next = `${value.slice(0, start)}${lead}${before}${selected}${after}${value.slice(end)}`;
-      const selectFrom = start + lead.length + before.length;
-      selection = [selectFrom, selectFrom + selected.length];
-    }
-    onChange(next);
-    requestAnimationFrame(() => {
-      element?.focus();
-      element?.setSelectionRange(...selection);
-    });
-  };
-
-  return (
-    <div className="handbook-field">
-      <div className="handbook-page-editor-head">
-        <span className="handbook-field-label">Page</span>
-        <div className="handbook-segmented is-inline" role="tablist" aria-label="Page editor view">
-          <button type="button" role="tab" aria-selected={!preview} className={cn(!preview && "is-active")} onClick={() => setPreview(false)}>Write</button>
-          <button type="button" role="tab" aria-selected={preview} className={cn(preview && "is-active")} onClick={() => setPreview(true)}>Preview</button>
-        </div>
-      </div>
-      {preview ? (
-        <div className="mobile-scanner-card handbook-card handbook-page-preview">
-          {value.trim() ? <MarkdownView source={value} /> : <p className="handbook-field-hint">Nothing to preview yet.</p>}
-        </div>
-      ) : (
-        <>
-          <div className="handbook-md-toolbar" role="toolbar" aria-label="Formatting">
-            {TOOLS.map((tool) => (
-              <button key={tool.label} type="button" className="handbook-button is-icon" aria-label={tool.label} title={tool.label} onClick={() => apply(tool.wrap)}>
-                {tool.icon}
-              </button>
-            ))}
-          </div>
-          <textarea
-            ref={textarea}
-            className="handbook-page-textarea"
-            value={value}
-            onChange={(event) => onChange(event.target.value)}
-            rows={14}
-            placeholder={"## Before opening\n- [ ] Turn on the lights\n- [ ] Count the drawer\n\nCall the manager if anything is **missing**."}
-            required
-          />
-          <span className="handbook-field-hint">Use the buttons, or type ## for a heading, - for a list, - [ ] for a checklist, and **bold**.</span>
-        </>
-      )}
     </div>
   );
 }

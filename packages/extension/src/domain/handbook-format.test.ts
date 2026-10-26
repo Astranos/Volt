@@ -83,7 +83,7 @@ describe("addresses", () => {
   });
 });
 
-describe("page markdown", () => {
+describe("note markdown", () => {
   test("parses headings, lists, checklists, and inline styles", () => {
     expect(parseHandbookMarkdown("## Opening\n- [x] Lights on\n- [ ] Count drawer\n1. Unlock\n\nCall **Juan** at [store](tel:3136390861).")).toEqual([
       { type: "heading", level: 2, children: [{ type: "text", text: "Opening" }] },
@@ -147,7 +147,7 @@ describe("page markdown", () => {
     });
   });
 
-  test("parses pages full of unmatched markers quickly", () => {
+  test("parses notes full of unmatched markers quickly", () => {
     const started = performance.now();
     for (const marker of ["[", "*", "_", "`", "**"]) parseHandbookMarkdown(marker.repeat(15_000));
     expect(performance.now() - started).toBeLessThan(1_000);

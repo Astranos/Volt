@@ -595,7 +595,7 @@ export class CloudWorkspaceSubscriptions {
   }
 
   listHandbook(epoch: string) {
-    return this.asCurrentAccount(epoch, () => this.client.query(api.handbook.list, { includePages: true }));
+    return this.asCurrentAccount(epoch, () => this.client.query(api.handbook.entries, {}));
   }
 
   revealHandbookSecret(epoch: string, id: string) {

@@ -14,7 +14,7 @@ function entry(fields: Partial<HandbookEntry> & Pick<HandbookEntry, "kind" | "ti
   nextId += 1;
   return {
     _id: `entry${nextId}` as HandbookEntry["_id"],
-    note: undefined,
+    comment: undefined,
     value: undefined,
     valueFormat: undefined,
     showInList: undefined,
@@ -32,7 +32,7 @@ function entry(fields: Partial<HandbookEntry> & Pick<HandbookEntry, "kind" | "ti
 }
 
 const phone = entry({ kind: "value", title: "Store phone", category: "Store info", value: "555-0100" });
-const address = entry({ kind: "value", title: "Store address", category: "Store info", note: "Right off Main", value: "1 Main St", pinned: true });
+const address = entry({ kind: "value", title: "Store address", category: "Store info", comment: "Right off Main", value: "1 Main St", pinned: true });
 const login = entry({ kind: "secret", title: "Console login", category: "Logins", secretPreview: "user••• · ••••••" });
 const guide = entry({
   kind: "guide",
@@ -46,7 +46,7 @@ const guide = entry({
 const entries = [phone, address, login, guide];
 
 describe("handbook domain", () => {
-  test("searches titles, notes, values and guide steps", () => {
+  test("searches titles, comments, values and guide steps", () => {
     expect(filterHandbook(entries, "addr", { kind: "all" })).toEqual([address]);
     expect(filterHandbook(entries, "main", { kind: "all" })).toEqual([address]);
     expect(filterHandbook(entries, "bypassnro", { kind: "all" })).toEqual([guide]);
@@ -63,17 +63,21 @@ describe("handbook domain", () => {
     expect(filterHandbook(entries, "", { kind: "category", category: "Logins" })).toEqual([login]);
   });
 
-  test("groups by category with pinned entries first", () => {
-    expect(groupHandbook(entries).map((group) => [group.category, group.entries.map((item) => item.title)])).toEqual([
-      ["Store info", ["Store address", "Store phone"]],
+  test("puts pinned entries in their own group first, then groups the rest by category", () => {
+    expect(groupHandbook(entries).map((group) => [group.title, group.entries.map((item) => item.title)])).toEqual([
+      ["Pinned", ["Store address"]],
+      ["Store info", ["Store phone"]],
       ["Logins", ["Console login"]],
       ["Setup guides", ["Skip sign-in"]],
     ]);
+    // Unpinning returns an entry to its category, and an empty Pinned group disappears.
+    expect(groupHandbook(entries.map((item) => ({ ...item, pinned: false }))).map((group) => group.title))
+      .toEqual(["Store info", "Logins", "Setup guides"]);
   });
 
   test("follows the saved category order, with unlisted categories after in first-seen order", () => {
-    expect(groupHandbook(entries, ["Setup guides", "Retired category"]).map((group) => group.category))
-      .toEqual(["Setup guides", "Store info", "Logins"]);
+    expect(groupHandbook(entries, ["Setup guides", "Retired category"]).map((group) => group.title))
+      .toEqual(["Pinned", "Setup guides", "Store info", "Logins"]);
   });
 
   test("summarizes guides and formats metadata", () => {

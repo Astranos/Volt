@@ -1,12 +1,25 @@
 /**
  * The release these notes announce. The new tab opens "What's new" once for
- * anyone who last saw an older version. Bug-fix releases leave this alone so
- * they update quietly; to announce one, rewrite the notes and set this to the
- * version being shipped (or the next version after the current store version).
+ * anyone who last saw an older version. Leave this alone to update the notes
+ * quietly: the "What's new in Volt" link just gets an unread dot. To announce a
+ * release, set this to the version being shipped (or the next version after the
+ * current store version). New installs never get the popup.
  */
 export const RELEASE_NOTES_VERSION = "1.0.69";
 
 export const RELEASE_NOTES = [
+  {
+    title: "Write notes like a document",
+    description: "Handbook pages are now called notes, and you edit them as they'll look. Type / for headings, lists, and checklists, or select text to make it bold, italic, or a link. The line under an entry's title is now called a comment.",
+  },
+  {
+    title: "Pinned entries come first",
+    description: "Pinned handbook entries have their own section at the top of the handbook and the side panel. Unpin one and it goes back to its category.",
+  },
+  {
+    title: "Know when an update is ready",
+    description: "When Chrome has downloaded a new version of Volt, the new tab shows Update ready. Click it to restart Volt and get the update right away.",
+  },
   {
     title: "Clearer logins, and several values per entry",
     description: "Logins show the username and password on their own rows, each with Copy. Quick values can hold several things to copy, like a store's phone, address, and email.",
@@ -59,7 +72,16 @@ export const RELEASE_SETTINGS_LINKS = [
   { label: "Context menu", hash: "contextmenu" },
 ] as const;
 
-function compareVersions(a: string, b: string) {
+export const WHATS_NEW_SEEN_VERSION_KEY = "voltWhatsNewSeenVersion";
+export const WHATS_NEW_SEEN_NOTES_KEY = "voltWhatsNewSeenNotes";
+/** Changes whenever a note's title or description changes; drives the unread dot. */
+export function releaseNotesId(notes: readonly { title: string; description: string }[]) {
+  return JSON.stringify(notes.map((note) => [note.title, note.description]));
+}
+
+export const RELEASE_NOTES_ID = releaseNotesId(RELEASE_NOTES);
+
+export function compareVersions(a: string, b: string) {
   const left = a.split(".").map(Number);
   const right = b.split(".").map(Number);
   for (let i = 0; i < Math.max(left.length, right.length); i++) {
@@ -69,7 +91,12 @@ function compareVersions(a: string, b: string) {
   return 0;
 }
 
-/** First run, or the user hasn't seen the release these notes announce. */
+/** The user hasn't seen the release these notes announce. */
 export function shouldAnnounceRelease(seenVersion: unknown) {
   return typeof seenVersion !== "string" || compareVersions(seenVersion, RELEASE_NOTES_VERSION) < 0;
+}
+
+/** Stored on install so a brand-new user isn't shown notes for changes they never saw. */
+export function markReleaseNotesSeen(version: string) {
+  return chrome.storage.local.set({ [WHATS_NEW_SEEN_VERSION_KEY]: version, [WHATS_NEW_SEEN_NOTES_KEY]: RELEASE_NOTES_ID });
 }

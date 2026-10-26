@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Command } from "cmdk";
 import { BookOpen, Check, FileText, KeyRound, ListChecks, StickyNote } from "lucide-react";
-import { guideSummary, matchesHandbookQuery, opensAsDocument, pageSummary, type HandbookEntry } from "../../domain/handbook";
+import { guideSummary, matchesHandbookQuery, opensAsDocument, noteSummary, type HandbookEntry } from "../../domain/handbook";
 import { entryFields, fieldDisplayValue, hasFieldRows } from "../../domain/handbook-format";
 import { listHandbook, openHandbookInSidepanel, revealHandbookSecret } from "../../handbook/client";
 import { PROFILE_AUTH_EVENT_KEY } from "../../access/chrome-profile-auth";
@@ -58,7 +58,7 @@ export function wantsHandbookAction(query: string, matches: HandbookEntry[]) {
 
 export const handbookCommandValue = (entry: HandbookEntry) => `handbook-${entry._id}`;
 
-// Guides, pages, and quick values with several values open in the sidepanel: there's
+// Guides, notes, and quick values with several values open in the sidepanel: there's
 // no single thing for Enter to copy.
 const opensFromMenu = (entry: HandbookEntry) => opensAsDocument(entry) || (entry.kind === "value" && hasFieldRows(entry));
 
@@ -107,11 +107,11 @@ export function HandbookCommandGroup({
       {matches.length ? (
         <Command.Group heading="Handbook" className="cmdk-group">
           {matches.map((entry) => {
-            const Icon = entry.kind === "guide" ? ListChecks : entry.kind === "page" ? FileText : entry.kind === "secret" ? KeyRound : StickyNote;
+            const Icon = entry.kind === "guide" ? ListChecks : entry.kind === "note" ? FileText : entry.kind === "secret" ? KeyRound : StickyNote;
             const detail = entry.kind === "guide" ? guideSummary(entry)
-              : entry.kind === "page" ? pageSummary(entry)
-                : entry.kind === "secret" ? [entry.username ?? entry.secretPreview, entry.note].filter(Boolean).join(" · ")
-                  : [...entryFields(entry).map(fieldDisplayValue), entry.note].filter(Boolean).join(" · ");
+              : entry.kind === "note" ? noteSummary(entry)
+                : entry.kind === "secret" ? [entry.username ?? entry.secretPreview, entry.comment].filter(Boolean).join(" · ")
+                  : [...entryFields(entry).map(fieldDisplayValue), entry.comment].filter(Boolean).join(" · ");
             return (
               <Command.Item key={entry._id} value={handbookCommandValue(entry)} onSelect={() => void select(entry)} className={itemClassName}>
                 <div className="flex items-center gap-3 px-4 py-3 w-full">
