@@ -567,7 +567,7 @@ enum LiveTextIdentifierMatcher {
 
     private static func identifierTokenCandidates(in text: String) -> [(value: String, range: Range<String.Index>)] {
         text
-            .split(whereSeparator: { $0.isWhitespace || isOCRNoise($0) })
+            .split(whereSeparator: { $0.isWhitespace || $0 == ":" || isOCRNoise($0) })
             .compactMap { rawToken -> (value: String, range: Range<String.Index>)? in
                 let value = String(rawToken).trimmingCharacters(in: identifierTokenTrimCharacters)
                 guard !value.isEmpty,
