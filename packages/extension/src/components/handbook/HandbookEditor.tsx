@@ -19,6 +19,7 @@ import {
 } from "../../domain/handbook-format";
 import { cn } from "../../lib/utils";
 import { NoteEditor } from "./NoteEditor";
+import { convexErrorText } from "../../domain/convex-error";
 
 type Kind = HandbookEntry["kind"];
 type DraftStep = { text: string; keys: string; command: string; tip: string };
@@ -132,7 +133,7 @@ const RENAMED_ERRORS: Record<string, string> = {
 };
 
 function errorText(error: unknown) {
-  const message = error instanceof Error ? error.message : String(error);
+  const message = convexErrorText(error);
   const code = message.match(/HANDBOOK_[A-Z_]+/)?.[0];
   if (!code) return message;
   return RENAMED_ERRORS[code] ?? code.replace(/^HANDBOOK_/, "").replaceAll("_", " ").toLowerCase().replace(/^./, (letter) => letter.toUpperCase()) + ".";

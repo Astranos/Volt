@@ -11,6 +11,7 @@ import {
 import { CloudWorkspaceSubscriptions, backgroundClerkClient, getClerkToken, objectFrom } from "./cloud-workspace-subscriptions";
 import { createProfileClerkOffscreenController } from "./profile-clerk-controller";
 import { EXTENSION_SCANNER_SIGNAL_URL } from "../domain/mobile-scanner-signal-url";
+import { convexErrorText } from "../domain/convex-error";
 
 function serializeLogArg(arg: unknown) {
   if (arg instanceof Error) {
@@ -287,7 +288,7 @@ function sendWorkspaceOperation(
     .then((value) => sendResponse({ success: true, value }))
     .catch((error: unknown) => sendResponse({
       success: false,
-      error: error instanceof Error ? error.message : String(error),
+      error: convexErrorText(error),
     }));
   return true;
 }
@@ -421,7 +422,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         .then((envelope) => sendResponse({ success: true, ...envelope }))
         .catch((error: unknown) => sendResponse({
           success: false,
-          error: error instanceof Error ? error.message : String(error),
+          error: convexErrorText(error),
         }));
       return true;
     }
@@ -497,7 +498,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({
           success: false,
           token: null,
-          error: error instanceof Error ? error.message : String(error),
+          error: convexErrorText(error),
         }),
       );
     return true;
@@ -594,7 +595,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     } catch (error) {
       sendResponse({
         success: false,
-        error: error instanceof Error ? error.message : String(error),
+        error: convexErrorText(error),
       });
     }
     return false;
@@ -619,7 +620,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     } catch (error) {
       sendResponse({
         success: false,
-        error: error instanceof Error ? error.message : String(error),
+        error: convexErrorText(error),
       });
     }
     return false;
