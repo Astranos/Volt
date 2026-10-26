@@ -140,10 +140,10 @@ export function inlineFormat(text: string, selFrom: number, selTo: number, forma
     selection: { anchor: shift(result.edit.selection.anchor), head: shift(result.edit.selection.head) },
   };
   const next = applyChanges(text, edit.changes);
-  const [nextStart, nextEnd] = parseNoteLine(next)?.content ?? [0, next.length];
+  const [nextStart] = parseNoteLine(next)?.content ?? [0];
   const insertsPair = clamp(selFrom) === clamp(selTo) && !result.active;
   // An empty pair is for typing into, so only real formatting changes are checked.
-  const keeps = insertsPair || (lineKind(next) === lineKind(text) && inlineText(next.slice(nextStart, nextEnd)) === inlineText(content));
+  const keeps = insertsPair || (lineKind(next) === lineKind(text) && inlineText(next.slice(nextStart).trimEnd()) === inlineText(content.trimEnd()));
   return { active: result.active, edit: keeps ? edit : null };
 }
 
@@ -157,7 +157,7 @@ export function normalizeLinkHref(input: string) {
   const value = input.trim().replace(/[\s()]/g, (char) => (char === "(" ? "%28" : char === ")" ? "%29" : encodeURIComponent(char)));
   if (!value) return null;
   // A scheme, but not "host:port".
-  const href = /^(?:tel:|[a-z][a-z0-9+.-]*:(?!\d))/i.test(value) ? value : `https://${value}`;
+  const href = /^(?:tel:|mailto:|[a-z][a-z0-9+.-]*:(?!\d))/i.test(value) ? value : `https://${value}`;
   // The renderer reads at most 2,000 characters of a link target.
   return isSafeHandbookLink(href) && href.length <= 2_000 ? href : null;
 }

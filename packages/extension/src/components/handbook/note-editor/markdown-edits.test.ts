@@ -178,6 +178,17 @@ describe("inlineFormat", () => {
   });
 });
 
+describe("macroscope review cases", () => {
+  test("formatting works on a line with trailing spaces", () => {
+    expect(toggle("Write the «daily log»   ", "bold")).toBe("Write the **«daily log»**   ");
+  });
+
+  test("a mailto address that starts with a digit stays a mail link", () => {
+    expect(normalizeLinkHref("mailto:123@example.com")).toBe("mailto:123@example.com");
+    expect(normalizeLinkHref("example.com:8080/x")).toBe("https://example.com:8080/x");
+  });
+});
+
 describe("link limits", () => {
   test("text and targets stay within what the renderer reads as a link", () => {
     expect(canLinkText("a".repeat(300))).toBe(true);
