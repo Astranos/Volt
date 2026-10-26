@@ -116,7 +116,7 @@ function HandbookList({ entries, onOpen }: { entries: HandbookEntry[]; onOpen: (
   }, []);
 
   const categoryOrder = useHandbookCategoryOrder();
-  // No category chips: the sections below already list every category, in the saved order.
+  // No category chips: the sections below list pinned entries, then every category in the saved order.
   const groups = useMemo(() => groupHandbook(filterHandbook(entries, query, { kind: "all" }), categoryOrder), [entries, query, categoryOrder]);
 
   const addStarters = async () => {
@@ -160,8 +160,8 @@ function HandbookList({ entries, onOpen }: { entries: HandbookEntry[]; onOpen: (
 
 
         {groups.length ? groups.map((group) => (
-          <section key={group.category} className="handbook-section">
-            <h2 className="handbook-section-title">{group.category}</h2>
+          <section key={group.key} className="handbook-section">
+            <h2 className="handbook-section-title">{group.title}</h2>
             <div className="mobile-scanner-card handbook-card">
               {group.entries.map((entry) => (
                 <EntryRow key={entry._id} entry={entry} onOpen={onOpen} />

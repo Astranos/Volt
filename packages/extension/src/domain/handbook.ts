@@ -65,14 +65,20 @@ export function filterHandbook(entries: HandbookEntry[], query: string, filter: 
     && matchesHandbookQuery(entry, query));
 }
 
-/** Groups by category (in the saved category order), pinned entries first within each group. */
+/**
+ * Pinned entries lead in their own group, then the rest by category (in the saved
+ * category order). Keys are unique even if someone names a category "Pinned".
+ */
 export function groupHandbook(entries: HandbookEntry[], order: readonly string[] = []) {
-  return handbookCategories(entries, order).map((category) => ({
-    category,
-    entries: entries
-      .filter((entry) => entry.category === category)
-      .sort((a, b) => Number(b.pinned) - Number(a.pinned) || a.order - b.order),
+  const byOrder = (a: HandbookEntry, b: HandbookEntry) => a.order - b.order;
+  const pinned = entries.filter((entry) => entry.pinned).sort(byOrder);
+  const rest = entries.filter((entry) => !entry.pinned);
+  const groups = handbookCategories(rest, order).map((category) => ({
+    key: `category:${category}`,
+    title: category,
+    entries: rest.filter((entry) => entry.category === category).sort(byOrder),
   }));
+  return pinned.length ? [{ key: "pinned", title: "Pinned", entries: pinned }, ...groups] : groups;
 }
 
 export function guideSummary(entry: HandbookEntry) {

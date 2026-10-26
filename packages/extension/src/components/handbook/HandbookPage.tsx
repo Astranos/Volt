@@ -270,12 +270,11 @@ function EntryList({ entries, categoryOrder, query, onOpen }: {
   return (
     <div className="handbook-list">
       {groups.map((group) => (
-        <section key={group.category} className="handbook-section">
-          <h2 className="handbook-section-title">{group.category}</h2>
+        <section key={group.key} className="handbook-section">
+          <h2 className="handbook-section-title">{group.title}</h2>
           <div className="mobile-scanner-card handbook-card">
             {group.entries.map((entry, index) => {
-              // Pinned entries always lead their group, so only swap within the same pin state.
-              const canMove = (offset: number) => group.entries[index + offset]?.pinned === entry.pinned;
+              const canMove = (offset: number) => Boolean(group.entries[index + offset]);
               const moveBy = (offset: number) => {
                 const neighbor = group.entries[index + offset]._id;
                 void reorder({ ids: offset < 0 ? [entry._id, neighbor] : [neighbor, entry._id] });
