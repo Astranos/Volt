@@ -469,9 +469,29 @@ enum LiveTextIdentifierMatcher {
         let valueStart = text.index(text.startIndex, offsetBy: lowercased.distance(from: lowercased.startIndex, to: labelRange.upperBound))
         let suffix = String(text[valueStart...])
         let cleaned = firstIdentifierToken(in: suffix)
-        guard isPlausibleLabeledValue(cleaned, kind: kind) else { return nil }
-        guard let valueRange = text[valueStart...].range(of: cleaned) else { return nil }
-        return (cleaned, valueRange)
+        if isPlausibleLabeledValue(cleaned, kind: kind),
+           let valueRange = text[valueStart...].range(of: cleaned) {
+            return (cleaned, valueRange)
+        }
+
+        let labelStart = text.index(text.startIndex, offsetBy: lowercased.distance(from: lowercased.startIndex, to: labelRange.lowerBound))
+        return valueBeforeLabel(in: text, labelStart: labelStart, kind: kind)
+    }
+
+    /// Microsoft and some OEM labels print the value first: "250415443948 :Serial Number".
+    /// Only a colon-separated value counts so "Model A3058 Serial" never yields a serial of A3058.
+    private static func valueBeforeLabel(
+        in text: String,
+        labelStart: String.Index,
+        kind: LiveTextCandidateKind
+    ) -> (value: String, range: Range<String.Index>)? {
+        guard let candidate = identifierTokenCandidates(in: text).last(where: { $0.range.upperBound <= labelStart }) else { return nil }
+        let separator = text[candidate.range.upperBound..<labelStart]
+        guard separator.contains(":"),
+              separator.allSatisfy({ $0.isWhitespace || $0 == ":" }),
+              isPlausibleLabeledValue(candidate.value, kind: kind)
+        else { return nil }
+        return candidate
     }
 
     private static func labeledModelValue(in text: String) -> (value: String, range: Range<String.Index>)? {
@@ -547,7 +567,7 @@ enum LiveTextIdentifierMatcher {
 
     private static func identifierTokenCandidates(in text: String) -> [(value: String, range: Range<String.Index>)] {
         text
-            .split(whereSeparator: \.isWhitespace)
+            .split(whereSeparator: { $0.isWhitespace || isOCRNoise($0) })
             .compactMap { rawToken -> (value: String, range: Range<String.Index>)? in
                 let value = String(rawToken).trimmingCharacters(in: identifierTokenTrimCharacters)
                 guard !value.isEmpty,
@@ -557,7 +577,15 @@ enum LiveTextIdentifierMatcher {
             }
     }
 
-    private static let identifierTokenTrimCharacters = CharacterSet(charactersIn: " #:=-{}[](),.;|")
+    private static let identifierTokenTrimCharacters = CharacterSet(charactersIn: " #:=-{}[](),.;|*")
+
+    /// Identifiers are ASCII, so accented letters (e.g. "ŘŚ" read from label scratches) end a token.
+    /// Ø is kept because slashed-zero label fonts OCR as Ø.
+    private static func isOCRNoise(_ character: Character) -> Bool {
+        !character.isASCII && !slashedZeros.contains(character)
+    }
+
+    private static let slashedZeros: Set<Character> = ["Ø", "ø"]
 
     private static func modelTokenCandidate(in text: String) -> (value: String, range: Range<String.Index>)? {
         let candidates = identifierTokenCandidates(in: text)
@@ -648,12 +676,21 @@ enum LiveTextIdentifierMatcher {
 
     private static func isLikelySerialToken(_ value: String) -> Bool {
         guard value.count >= 10, value.count <= 24 else { return false }
-        let digitCount = value.filter { $0.isNumber || $0 == "O" || $0 == "o" }.count
+        let digitCount = value.filter { $0.isNumber || $0 == "O" || $0 == "o" || slashedZeros.contains($0) }.count
         let letterCount = value.filter(\.isLetter).count
-        guard digitCount >= 6, letterCount >= 1 else { return false }
-        return value.allSatisfy { character in
+        guard value.allSatisfy({ character in
             character.isLetter || character.isNumber || character == "-"
-        }
+        }) else { return false }
+        return (digitCount >= 6 && letterCount >= 1) || isLikelyRandomizedSerialToken(value)
+    }
+
+    /// Apple's 2021+ serials are 10 random uppercase characters (e.g. HJTYWGYQ90, C0WGWK95H4),
+    /// so they rarely carry six digits. Real digits are required so words like BLOOMINGTON stay prose.
+    private static func isLikelyRandomizedSerialToken(_ value: String) -> Bool {
+        guard (10...12).contains(value.count),
+              value.allSatisfy({ $0.isASCII && ($0.isUppercase || $0.isNumber) })
+        else { return false }
+        return value.filter(\.isNumber).count >= 2 && value.filter(\.isLetter).count >= 3
     }
 
     private static func isPlausibleLabeledValue(_ value: String, kind: LiveTextCandidateKind) -> Bool {
@@ -697,7 +734,7 @@ enum LiveTextIdentifierMatcher {
 
     private static func replacingAmbiguousZeros(in value: String) -> String {
         String(value.map { character in
-            character == "O" || character == "o" ? "0" : character
+            character == "O" || character == "o" || slashedZeros.contains(character) ? "0" : character
         })
     }
 

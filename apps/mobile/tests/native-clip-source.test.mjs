@@ -418,8 +418,8 @@ test("app clip scanner restricts capture barcodes to UPC/EAN and clears stale sc
 test("app clip OCR reuses the main async recognizer and identifier extractor", () => {
   assert.match(clipOCRServiceSwiftSource, /withCheckedThrowingContinuation/);
   assert.match(clipOCRServiceSwiftSource, /DispatchQueue\.global\(qos: \.userInitiated\)\.async/);
-  assert.match(clipOCRServiceSwiftSource, /LiveTextIdentifierMatcher\.match\(text\)/);
-  assert.match(clipOCRServiceSwiftSource, /candidate\.boundingBox\(for: match\.range\)/);
+  assert.match(clipOCRServiceSwiftSource, /TextRecognizer\.recognizeTextRegionsSynchronously\(in: cgImage, minimumTextHeight: 0\.018\)/);
+  assert.doesNotMatch(clipOCRServiceSwiftSource, /VNRecognizeTextRequest/);
   assert.match(clipOCRServiceSwiftSource, /DeviceIdentifierRegionExtractor\.reviewRegions\(from: recognizedRegions\)/);
 });
 
