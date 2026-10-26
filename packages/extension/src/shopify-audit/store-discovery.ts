@@ -1,5 +1,13 @@
 import { normalizeShopifyShopInput } from "../domain/shopify-audit.ts";
 
+/** A store someone typed: its admin URL, its myshopify domain, or the bare name from /store/<name>. */
+export function shopDomainFromTypedStore(value: string): string | null {
+  const trimmed = value.trim();
+  if (/^[a-z0-9-]+$/i.test(trimmed)) return normalizeShopifyShopInput(`${trimmed}.myshopify.com`);
+  const url = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  return shopDomainFromAdminUrl(url) ?? normalizeShopifyShopInput(trimmed);
+}
+
 export function shopDomainFromAdminUrl(value: string | undefined): string | null {
   if (!value) return null;
   try {

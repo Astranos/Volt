@@ -3,7 +3,7 @@ import { Eye, ExternalLink, RefreshCw } from "lucide-react";
 import { CLERK_SIGN_IN_URL } from "../../access/config";
 import { connectShopifyAudit, disconnectShopifyAudit, listHiddenShopifyProducts, setShopifyProductHidden, type ShopifyHiddenProduct } from "../../shopify-audit/client";
 import { useShopifyStores } from "../../shopify-audit/use-shopify-stores";
-import { findOpenShopifyAdminShops, shopDomainFromAdminUrl } from "../../shopify-audit/store-discovery";
+import { findOpenShopifyAdminShops, shopDomainFromAdminUrl, shopDomainFromTypedStore } from "../../shopify-audit/store-discovery";
 import { useShopifyAuditMode } from "../../shopify-audit/use-audit-mode";
 import { fetchKioskQueue, normalizeKioskStore } from "../../kiosk/kiosk-requests";
 import { useKioskStore } from "../../kiosk/use-kiosk";
@@ -64,6 +64,8 @@ export function ShopifyAuditSettings() {
   const activeShop = stores.connection?.shop ?? null;
   const [openShops, setOpenShops] = useState<string[]>([]);
   const [selectedShop, setSelectedShop] = useState("");
+  // Typed store name; Shopify has no store picker page, so this skips its switcher.
+  const [typedShop, setTypedShop] = useState("");
   const [discoveryTabId, setDiscoveryTabId] = useState<number | null>(null);
   // Shopify reopens the last-used store, which is often one that's already connected.
   const [skippedShop, setSkippedShop] = useState<string | null>(null);
@@ -155,6 +157,21 @@ export function ShopifyAuditSettings() {
   }, [discoveryTabId, shops, startOAuth]);
 
   const connect = async () => {
+    if (typedShop.trim()) {
+      const shop = shopDomainFromTypedStore(typedShop);
+      if (!shop) {
+        setError("Enter the store name from its Shopify admin address, like your-store-name.");
+        return;
+      }
+      if (shops.includes(shop)) {
+        setError(`${shop} is already connected.`);
+        return;
+      }
+      setDiscoveryTabId(null);
+      setTypedShop("");
+      await startOAuth(shop);
+      return;
+    }
     if (selectedShop) {
       await startOAuth(selectedShop);
       return;
@@ -250,14 +267,25 @@ export function ShopifyAuditSettings() {
                     </select>
                   </label>
                 ) : <p className="text-sm text-muted-foreground">Sign in to Shopify and choose {shops.length > 0 ? "the store to add" : "your store"}. Volt will detect it automatically.</p>}
+                <label className="block max-w-md space-y-1 text-sm font-medium">
+                  <span>{availableShops.length > 0 ? "Or type a different store" : "Or type the store"}</span>
+                  <input
+                    className="h-10 w-full rounded-md border border-input bg-background px-3 font-normal"
+                    onChange={(event) => setTypedShop(event.target.value)}
+                    onKeyDown={(event) => { if (event.key === "Enter") void connect(); }}
+                    placeholder="your-store-name"
+                    value={typedShop}
+                  />
+                  <span className="block text-xs font-normal text-muted-foreground">The name after /store/ in its Shopify admin address.</span>
+                </label>
                 <p className="text-xs text-muted-foreground">Shopify will ask you to approve read-only access to products.</p>
                 <div className="flex flex-wrap gap-2">
-                  <button className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50" disabled={working || discoveryTabId !== null} onClick={() => void connect()} type="button">{discoveryTabId !== null ? "Waiting for Shopify…" : pendingShop ? "Try connecting again" : "Connect Shopify"} <ExternalLink aria-hidden="true" className="ml-1 inline h-3.5 w-3.5" /></button>
+                  <button className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50" disabled={working || (discoveryTabId !== null && !typedShop.trim())} onClick={() => void connect()} type="button">{discoveryTabId !== null && !typedShop.trim() ? "Waiting for Shopify…" : pendingShop ? "Try connecting again" : "Connect Shopify"} <ExternalLink aria-hidden="true" className="ml-1 inline h-3.5 w-3.5" /></button>
                   <button aria-label="Refresh Shopify connection" className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted" onClick={() => void refresh().catch(() => undefined)} type="button"><RefreshCw aria-hidden="true" className="inline h-4 w-4" /> Check connection</button>
-                  {shops.length > 0 && <button className="rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted" onClick={() => { setAdding(false); setPendingShop(null); }} type="button">Cancel</button>}
+                  {shops.length > 0 && <button className="rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted" onClick={() => { setAdding(false); setPendingShop(null); setTypedShop(""); }} type="button">Cancel</button>}
                 </div>
                 {discoveryTabId !== null && <p className="text-sm text-muted-foreground">{skippedShop
-                  ? `Shopify opened ${skippedShop}, which is already connected. In that tab, switch to the store you want to add, or sign in with the Shopify account that owns it.`
+                  ? `Shopify opened ${skippedShop}, which is already connected. Type the store above, or in that tab click the store name at the top, choose View all, and pick the store to add.`
                   : "Choose your store in the Shopify tab. Volt will continue when its admin page opens."}</p>}
                 {pendingShop && <p className="text-sm text-muted-foreground">Finish the approval in the Shopify tab. This page will update when {pendingShop} connects.</p>}
               </div>
