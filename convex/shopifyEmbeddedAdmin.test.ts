@@ -101,8 +101,7 @@ test("verified uninstall removes only that shop's embedded credential", async ()
   await t.fetch(statusPath, adminRequest(idToken(shop)));
   await t.fetch(statusPath, adminRequest(idToken(otherShop)));
   await t.run(async (ctx) => {
-    await ctx.db.insert("shopifyConnections", { ownerTokenIdentifier: "legacy-owner", shop,
-      encryptedAccessToken: "encrypted", encryptedRefreshToken: "encrypted", expiresAt: 1, refreshExpiresAt: 1 });
+    await ctx.db.insert("shopifyConnections", { ownerTokenIdentifier: "legacy-owner", shop });
     await ctx.db.insert("shopifyOAuthStates", { ownerTokenIdentifier: "legacy-owner", shop, state: "legacy-state", expiresAt: 1 });
   });
   const path = "/api/shopify/webhooks/app/uninstalled";

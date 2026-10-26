@@ -38,6 +38,8 @@ export async function encryptToken(value: string, ownerAndShop: string): Promise
   const encrypted = await crypto.subtle.encrypt({ name: "AES-GCM", iv, additionalData: encoder.encode(ownerAndShop) }, await tokenKey(), encoder.encode(value));
   return `${hex(iv)}.${hex(new Uint8Array(encrypted))}`;
 }
+/** Encryption context for a store's shared token. */
+export const storeAad = (shop: string) => `store|${shop}`;
 export async function decryptToken(value: string, ownerAndShop: string): Promise<string> {
   const [iv, encrypted] = value.split(".");
   const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: unhex(iv), additionalData: encoder.encode(ownerAndShop) }, await tokenKey(), unhex(encrypted));
