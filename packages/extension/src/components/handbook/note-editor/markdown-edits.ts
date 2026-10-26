@@ -158,10 +158,14 @@ export function normalizeLinkHref(input: string) {
   if (!value) return null;
   // A scheme, but not "host:port".
   const href = /^(?:tel:|[a-z][a-z0-9+.-]*:(?!\d))/i.test(value) ? value : `https://${value}`;
-  return isSafeHandbookLink(href) ? href : null;
+  // The renderer reads at most 2,000 characters of a link target.
+  return isSafeHandbookLink(href) && href.length <= 2_000 ? href : null;
 }
 
-/** Link text can't hold brackets: the renderer would print "[item [1]](url)" as is. */
-export const canLinkText = (text: string) => Boolean(text.trim()) && !/[[\]\n]/.test(text);
+/**
+ * Link text can't hold brackets (the renderer would print "[item [1]](url)" as is) or run
+ * past the renderer's 300 characters.
+ */
+export const canLinkText = (text: string) => Boolean(text.trim()) && text.length <= 300 && !/[[\]\n]/.test(text);
 
 export const markdownLink = (text: string, href: string) => `[${text}](${href})`;

@@ -178,6 +178,15 @@ describe("inlineFormat", () => {
   });
 });
 
+describe("link limits", () => {
+  test("text and targets stay within what the renderer reads as a link", () => {
+    expect(canLinkText("a".repeat(300))).toBe(true);
+    expect(canLinkText("a".repeat(301))).toBe(false);
+    expect(normalizeLinkHref(`https://example.com/${"a".repeat(1_980)}`)).not.toBeNull();
+    expect(normalizeLinkHref(`https://example.com/${"a".repeat(2_000)}`)).toBeNull();
+  });
+});
+
 describe("canLinkText", () => {
   test("rejects text the link syntax can't hold", () => {
     expect(canLinkText("the policy")).toBe(true);
