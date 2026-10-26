@@ -1,5 +1,4 @@
 import CoreGraphics
-import CoreImage
 import Foundation
 #if canImport(UIKit)
 import UIKit
@@ -12,37 +11,7 @@ enum TextRecognizer {
         let leadingWhitespace: String
         let boundingBox: CGRect
         let quadrilateral: TextQuadrilateral
-
-        var centerY: CGFloat {
-            boundingBox.midY
-        }
     }
-
-    private struct LineAngle {
-        let radians: CGFloat
-        let weight: Int
-    }
-
-    private struct RecognitionPass {
-        let regions: [RecognizedTextRegion]
-        let lineAngles: [LineAngle]
-
-        var hasDeviceIdentifier: Bool {
-            regions.contains(where: \.isDeviceIdentifier)
-        }
-
-        var score: Int {
-            regions.reduce(0) { total, region in
-                let characters = region.text.filter { $0.isLetter || $0.isNumber }.count
-                return total + characters + (region.isDeviceIdentifier ? 1000 : 0)
-            }
-        }
-    }
-
-    /// Text tilted further than this is re-read from a straightened copy of the image.
-    private static let maximumUprightSkew: CGFloat = .pi / 15
-    /// Vision reads roughly ±25° of tilt, so these cover steep diagonal labels it misses entirely.
-    private static let fallbackRotations: [CGFloat] = [-.pi / 4, .pi / 4]
 
     #if canImport(UIKit)
     static func recognizeText(in image: UIImage) async throws -> String {
@@ -69,45 +38,9 @@ enum TextRecognizer {
         }
     }
 
-    /// Reads the image upright, then retries on rotated copies when no identifier was found.
-    /// Regions from rotated passes are mapped back to the original image.
+    /// Vision already returns rotated quads for tilted lines, so a single upright pass is enough.
+    /// Re-reading rotated copies drew 45° diamonds and could misread characters the upright pass got right.
     static func recognizeTextRegionsSynchronously(in cgImage: CGImage, minimumTextHeight: Float = 0) throws -> [RecognizedTextRegion] {
-        let upright = try recognitionPass(in: cgImage, rotation: 0, minimumTextHeight: minimumTextHeight)
-        // Upright quads already follow tilted text, and a rotated re-read can misread characters it
-        // got right (G as 6), so only retry when the upright pass found no identifier at all.
-        guard !upright.hasDeviceIdentifier else { return upright.regions.sorted(by: readingOrder) }
-
-        var rotations: [CGFloat] = []
-        if let skew = dominantAngle(in: upright.lineAngles), abs(skew) > maximumUprightSkew {
-            rotations.append(-skew)
-        }
-        rotations += fallbackRotations.filter { rotation in
-            rotations.allSatisfy { abs($0 - rotation) > maximumUprightSkew }
-        }
-
-        var best = upright
-        for rotation in rotations {
-            if best.hasDeviceIdentifier { break }
-            let pass = try recognitionPass(in: cgImage, rotation: rotation, minimumTextHeight: minimumTextHeight)
-            if pass.score > best.score {
-                best = pass
-            }
-        }
-        return best.regions.sorted(by: readingOrder)
-    }
-
-    private static func recognitionPass(in cgImage: CGImage, rotation: CGFloat, minimumTextHeight: Float) throws -> RecognitionPass {
-        guard rotation != 0, let rotated = rotatedImage(cgImage, by: rotation) else {
-            return try recognizedPass(in: cgImage, mapPoint: { $0 }, minimumTextHeight: minimumTextHeight)
-        }
-        return try recognizedPass(in: rotated.image, mapPoint: rotated.mapPoint, minimumTextHeight: minimumTextHeight)
-    }
-
-    private static func recognizedPass(
-        in cgImage: CGImage,
-        mapPoint: (CGPoint) -> CGPoint,
-        minimumTextHeight: Float
-    ) throws -> RecognitionPass {
         let request = VNRecognizeTextRequest()
         request.recognitionLevel = .accurate
         request.usesLanguageCorrection = false
@@ -116,77 +49,13 @@ enum TextRecognizer {
         try VNImageRequestHandler(cgImage: cgImage, orientation: .up).perform([request])
 
         let aspectRatio = CGFloat(cgImage.width) / CGFloat(max(cgImage.height, 1))
-        var regions: [RecognizedTextRegion] = []
-        var lineAngles: [LineAngle] = []
-        for observation in request.results ?? [] {
-            guard let candidate = observation.topCandidates(1).first else { continue }
-            let glyphs = recognizedGlyphs(in: candidate.string, candidate: candidate)
-            if let angle = lineAngle(of: glyphs, aspectRatio: aspectRatio) {
-                lineAngles.append(angle)
+        return (request.results ?? [])
+            .flatMap { observation -> [RecognizedTextRegion] in
+                guard let candidate = observation.topCandidates(1).first else { return [] }
+                let glyphs = recognizedGlyphs(in: candidate.string, candidate: candidate)
+                return splitRegions(for: candidate, glyphs: glyphs, fallbackObservation: observation, aspectRatio: aspectRatio)
             }
-            regions += splitRegions(for: candidate, glyphs: glyphs, fallbackObservation: observation, aspectRatio: aspectRatio)
-        }
-        return RecognitionPass(regions: regions.map { mapped($0, by: mapPoint) }, lineAngles: lineAngles)
-    }
-
-    private static func rotatedImage(_ cgImage: CGImage, by radians: CGFloat) -> (image: CGImage, mapPoint: (CGPoint) -> CGPoint)? {
-        let size = CGSize(width: cgImage.width, height: cgImage.height)
-        let transform = CGAffineTransform(translationX: size.width / 2, y: size.height / 2)
-            .rotated(by: radians)
-            .translatedBy(x: -size.width / 2, y: -size.height / 2)
-        let rotated = CIImage(cgImage: cgImage).transformed(by: transform)
-        let extent = rotated.extent.integral
-        let background = CIImage(color: CIColor(red: 1, green: 1, blue: 1)).cropped(to: extent)
-        guard let image = CIContext().createCGImage(rotated.composited(over: background), from: extent) else { return nil }
-
-        let inverse = transform.inverted()
-        return (image, { point in
-            let original = CGPoint(
-                x: extent.minX + point.x * extent.width,
-                y: extent.minY + point.y * extent.height
-            ).applying(inverse)
-            return CGPoint(x: original.x / size.width, y: original.y / size.height)
-        })
-    }
-
-    private static func mapped(_ region: RecognizedTextRegion, by mapPoint: (CGPoint) -> CGPoint) -> RecognizedTextRegion {
-        let quadrilateral = TextQuadrilateral(
-            topLeft: mapPoint(region.quadrilateral.topLeft),
-            topRight: mapPoint(region.quadrilateral.topRight),
-            bottomRight: mapPoint(region.quadrilateral.bottomRight),
-            bottomLeft: mapPoint(region.quadrilateral.bottomLeft)
-        )
-        return RecognizedTextRegion(
-            text: region.text,
-            boundingBox: boundingRect(of: quadrilateral.points),
-            quadrilateral: quadrilateral,
-            confidence: region.confidence,
-            isDeviceIdentifier: region.isDeviceIdentifier
-        )
-    }
-
-    /// Reading direction of one recognized line, measured in pixels so non-square images don't skew it.
-    private static func lineAngle(of glyphs: [RecognizedGlyph], aspectRatio: CGFloat) -> LineAngle? {
-        guard glyphs.count >= 3, let first = glyphs.first, let last = glyphs.last else { return nil }
-        let dx = (last.boundingBox.midX - first.boundingBox.midX) * aspectRatio
-        let dy = last.boundingBox.midY - first.boundingBox.midY
-        let glyphHeight = median(glyphs.map(\.boundingBox.height))
-        guard hypot(dx, dy) > glyphHeight * 2 else { return nil }
-        return LineAngle(radians: atan2(dy, dx), weight: glyphs.count)
-    }
-
-    private static func dominantAngle(in angles: [LineAngle]) -> CGFloat? {
-        let sorted = angles.sorted { $0.radians < $1.radians }
-        let totalWeight = sorted.reduce(0) { $0 + $1.weight }
-        guard totalWeight > 0 else { return nil }
-        var accumulated = 0
-        for angle in sorted {
-            accumulated += angle.weight
-            if accumulated * 2 >= totalWeight {
-                return angle.radians
-            }
-        }
-        return nil
+            .sorted(by: readingOrder)
     }
 
     private static func splitRegions(
@@ -209,14 +78,17 @@ enum TextRecognizer {
             ]
         }
 
-        let rowBreakThreshold = max(median(glyphs.map { $0.boundingBox.height }) * 0.72, 0.006)
+        let readingAxis = CGPoint(
+            x: (fallbackObservation.topRight.x - fallbackObservation.topLeft.x) * aspectRatio,
+            y: fallbackObservation.topRight.y - fallbackObservation.topLeft.y
+        )
         var regions: [RecognizedTextRegion] = []
         var currentText = ""
         var currentGlyphs: [RecognizedGlyph] = []
         var lastGlyph: RecognizedGlyph?
 
         for glyph in glyphs {
-            if let lastGlyph, shouldStartNewRow(after: lastGlyph, before: glyph, threshold: rowBreakThreshold) {
+            if let lastGlyph, shouldStartNewRow(after: lastGlyph, before: glyph, readingAxis: readingAxis, aspectRatio: aspectRatio) {
                 appendRegion(
                     text: currentText,
                     glyphs: currentGlyphs,
@@ -346,15 +218,31 @@ enum TextRecognizer {
         return CGRect(x: minX, y: minY, width: (xs.max() ?? 0) - minX, height: (ys.max() ?? 0) - minY)
     }
 
-    private static func shouldStartNewRow(after previous: RecognizedGlyph, before next: RecognizedGlyph, threshold: CGFloat) -> Bool {
-        guard !previous.character.isWhitespace, !next.character.isWhitespace else { return false }
+    /// Vision sometimes merges stacked label lines into one observation. A glyph starts a new row when it
+    /// sits off the line's reading axis by most of a glyph height; measuring along the axis (in pixels)
+    /// keeps tilted lines together instead of breaking them wherever their raw Y changes.
+    private static func shouldStartNewRow(
+        after previous: RecognizedGlyph,
+        before next: RecognizedGlyph,
+        readingAxis: CGPoint,
+        aspectRatio: CGFloat
+    ) -> Bool {
+        let axisLength = hypot(readingAxis.x, readingAxis.y)
+        guard axisLength > 0.0001 else { return false }
 
-        let verticalDelta = abs(previous.centerY - next.centerY)
-        guard verticalDelta > threshold else { return false }
-
-        let overlap = previous.boundingBox.intersection(next.boundingBox).height
-        let smallerHeight = max(min(previous.boundingBox.height, next.boundingBox.height), 0.0001)
-        return overlap / smallerHeight < 0.35
+        func distanceFromAxis(_ vector: CGPoint) -> CGFloat {
+            abs(vector.x * readingAxis.y - vector.y * readingAxis.x) / axisLength
+        }
+        let quad = previous.quadrilateral
+        let glyphHeight = max(
+            distanceFromAxis(CGPoint(x: (quad.topLeft.x - quad.bottomLeft.x) * aspectRatio, y: quad.topLeft.y - quad.bottomLeft.y)),
+            0.006
+        )
+        let offset = distanceFromAxis(CGPoint(
+            x: (next.boundingBox.midX - previous.boundingBox.midX) * aspectRatio,
+            y: next.boundingBox.midY - previous.boundingBox.midY
+        ))
+        return offset > glyphHeight * 0.72
     }
 
     private static func appendRegion(
@@ -507,16 +395,6 @@ enum TextRecognizer {
 
     private static func point(axisX: CGPoint, x: CGFloat, axisY: CGPoint, y: CGFloat) -> CGPoint {
         CGPoint(x: axisX.x * x + axisY.x * y, y: axisX.y * x + axisY.y * y)
-    }
-
-    private static func median(_ values: [CGFloat]) -> CGFloat {
-        let sorted = values.filter { $0 > 0 }.sorted()
-        guard !sorted.isEmpty else { return 0 }
-        let middle = sorted.count / 2
-        if sorted.count.isMultiple(of: 2) {
-            return (sorted[middle - 1] + sorted[middle]) / 2
-        }
-        return sorted[middle]
     }
 
     private static func readingOrder(_ lhs: RecognizedTextRegion, _ rhs: RecognizedTextRegion) -> Bool {

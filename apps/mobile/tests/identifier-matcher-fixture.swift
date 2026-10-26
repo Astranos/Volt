@@ -89,6 +89,21 @@ private enum IdentifierMatcherFixture {
             try require(LiveTextIdentifierMatcher.match(prose) == nil, "Matched prose as an identifier: \(prose)")
         }
 
+        // Cleanup of a tapped region: Apple serials contain Q (never O or I), and a long number
+        // must not be cut into a made-up IMEI unless IMEI is on screen.
+        let appleContext = "Model Number MXUT3LL/A\nSerial Number FCC9J3NQCQ\niPhone 16 Plus"
+        let cleanupCases: [(text: String, context: String, expected: String)] = [
+            ("FCC9J3NQCQ", appleContext, "FCC9J3NQCQ"),
+            ("Serial Number FCC9J3NQCQ", appleContext, "FCC9J3NQCQ"),
+            ("FCC9J3NOCI", appleContext, "FCC9J3N0C1"),
+            ("06406422057636134008 :Product Id", "Xbox 360", "06406422057636134008 :Product Id"),
+            ("IMEI 35 209900 176148 1", "", "352099001761481"),
+        ]
+        for testCase in cleanupCases {
+            let cleaned = OcrTextCleaner.deterministicCleanup(testCase.text, context: testCase.context)
+            try require(cleaned == testCase.expected, "Cleanup of \(testCase.text) gave \(cleaned), expected \(testCase.expected)")
+        }
+
         print("identifier matcher fixtures passed")
     }
 }
