@@ -161,8 +161,7 @@ async function withShopifyAccess<T>(ctx: ActionCtx, requestedShop: string | unde
   if (!row) throw new ConvexError(notConnected(requestedShop));
   if (row.expiresAt <= Date.now() + 60000) {
     const refreshNonce = nonce();
-    if (!await ctx.runMutation(lease, { storeId: row._id, nonce: refreshNonce })) throw new ConvexError("Shopify is refreshing access. Try again shortly.");
-    try {
+    if (await ctx.runMutation(lease, { storeId: row._id, nonce: refreshNonce })) try {
       if (row.refreshExpiresAt <= Date.now()) throw new ConvexError("Shopify authorization expired. Reconnect your store.");
       const aad = storeAad(row.shop);
       const tokens = await exchangeToken(row.shop, { grant_type: "refresh_token", refresh_token: await decryptToken(row.encryptedRefreshToken, aad) });
@@ -173,8 +172,10 @@ async function withShopifyAccess<T>(ctx: ActionCtx, requestedShop: string | unde
       await ctx.runMutation(finishRefresh, { storeId: row._id, nonce: refreshNonce, tokens: null }).catch(() => null);
       throw error;
     }
+    // Without the lease, another account may have just refreshed the shared token.
     row = await ctx.runQuery(read, { ...lookup, shop: row.shop });
     if (!row) throw new ConvexError("Store disconnected.");
+    if (row.expiresAt <= Date.now() + 60000) throw new ConvexError("Shopify is refreshing access. Try again shortly.");
   }
   const result = await load(row.shop, await decryptToken(row.encryptedAccessToken, storeAad(row.shop)), identity.tokenIdentifier);
   const current = await ctx.runQuery(read, { ...lookup, shop: row.shop });

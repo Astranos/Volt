@@ -13,7 +13,7 @@ const start = makeFunctionReference<"action", { shop: string }, { url: string; b
 const begin = makeFunctionReference<"mutation", { ownerTokenIdentifier: string; shop: string; state: string; browserNonceHash: string }, null>("shopifyStore:begin");
 const consume = makeFunctionReference<"mutation", { shop: string; state: string; browserNonceHash: string }, { id: Id<"shopifyOAuthStates">; ownerTokenIdentifier: string }>("shopifyStore:consume");
 type Tokens = Pick<Doc<"shopifyStores">, "encryptedAccessToken" | "encryptedRefreshToken" | "expiresAt" | "refreshExpiresAt">;
-const finish = makeFunctionReference<"mutation", { stateId: Id<"shopifyOAuthStates"> } & Tokens, null>("shopifyStore:finish");
+const finish = makeFunctionReference<"mutation", { stateId: Id<"shopifyOAuthStates">; shop: string } & Tokens, boolean>("shopifyStore:finish");
 const list = makeFunctionReference<"action", { startUtc: string; endUtc: string; date: string }, { shop: string; date: string; products: { id: string; title: string; status: string; url: string }[] }>("shopifyAudit:listYesterday");
 const search = makeFunctionReference<"action", { query: string; shop?: string }, { shop: string; products: { id: string; title: string; status: string; totalInventory: number; url: string; imageUrl: string | null; price: string | null; currencyCode: string | null; sku: string | null; condition: string | null }[] }>("shopifyAudit:searchProducts");
 const shop = "example-store.myshopify.com";
@@ -121,7 +121,7 @@ describe("Shopify authorization and account isolation", () => {
     const bob = t.withIdentity({ subject: "bob", tokenIdentifier: "clerk|bob" });
     await t.mutation(begin, { ownerTokenIdentifier: owner, shop, state, browserNonceHash });
     const consumed = await t.mutation(consume, { shop, state, browserNonceHash });
-    await t.mutation(finish, { stateId: consumed.id, ...tokens });
+    await t.mutation(finish, { stateId: consumed.id, shop, ...tokens });
     expect(await alice.query(get, {})).toEqual({ shop });
     expect(await bob.query(get, {})).toBeNull();
     await bob.mutation(disconnect, {});
@@ -129,7 +129,7 @@ describe("Shopify authorization and account isolation", () => {
     await t.mutation(begin, { ownerTokenIdentifier: owner, shop, state, browserNonceHash });
     const pending = await t.mutation(consume, { shop, state, browserNonceHash });
     await alice.mutation(disconnect, {});
-    await expect(t.mutation(finish, { stateId: pending.id, ...tokens })).rejects.toThrow("canceled");
+    expect(await t.mutation(finish, { stateId: pending.id, shop, ...tokens })).toBe(false);
     expect(await alice.query(get, {})).toBeNull();
   });
   test("connects several stores to one account and disconnects them one at a time", async () => {
@@ -140,7 +140,7 @@ describe("Shopify authorization and account isolation", () => {
     const connect = async (store: string, storeState: string) => {
       await t.mutation(begin, { ownerTokenIdentifier: owner, shop: store, state: storeState, browserNonceHash });
       const consumed = await t.mutation(consume, { shop: store, state: storeState, browserNonceHash });
-      await t.mutation(finish, { stateId: consumed.id, ...tokens });
+      await t.mutation(finish, { stateId: consumed.id, shop: store, ...tokens });
     };
     const stores = ["one", "two", "three", "four", "five"].map(name => `${name}.myshopify.com`);
     for (const [index, store] of stores.entries()) await connect(store, String(index).repeat(64));
@@ -181,7 +181,7 @@ describe("Shopify authorization and account isolation", () => {
       await t.mutation(begin, { ownerTokenIdentifier: account, shop, state: accountState, browserNonceHash });
       const consumed = await t.mutation(consume, { shop, state: accountState, browserNonceHash });
       const aad = storeAad(shop);
-      await t.mutation(finish, { stateId: consumed.id, ...tokens, encryptedAccessToken: await encryptToken(access, aad), encryptedRefreshToken: await encryptToken("refresh", aad) });
+      await t.mutation(finish, { stateId: consumed.id, shop, ...tokens, encryptedAccessToken: await encryptToken(access, aad), encryptedRefreshToken: await encryptToken("refresh", aad) });
     };
     await connect(owner, "alice-access", "1".repeat(64));
     await connect(bobOwner, "bob-access", "2".repeat(64));
@@ -191,6 +191,14 @@ describe("Shopify authorization and account isolation", () => {
     await alice.action(search, { query: "phone" });
     // Bob's newer token is the only one Shopify still honors, and Alice uses it too.
     expect(new Headers(mock.mock.calls[0][1]?.headers).get("X-Shopify-Access-Token")).toBe("bob-access");
+
+    // A connect that fails after Shopify issued a token still replaces the retired shared one.
+    await t.mutation(begin, { ownerTokenIdentifier: "clerk|carol", shop, state: "3".repeat(64), browserNonceHash });
+    const canceled = await t.mutation(consume, { shop, state: "3".repeat(64), browserNonceHash });
+    await t.run(ctx => ctx.db.delete(canceled.id));
+    expect(await t.mutation(finish, { stateId: canceled.id, shop, ...tokens, encryptedAccessToken: await encryptToken("carol-access", storeAad(shop)) })).toBe(false);
+    await alice.action(search, { query: "phone" });
+    expect(new Headers(mock.mock.calls[1][1]?.headers).get("X-Shopify-Access-Token")).toBe("carol-access");
 
     await bob.mutation(disconnectShop, { shop });
     expect((await alice.action(search, { query: "phone" })).shop).toBe(shop);

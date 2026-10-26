@@ -57,23 +57,25 @@ export const consume = internalMutation({
     return { id: row._id, ownerTokenIdentifier: row.ownerTokenIdentifier };
   },
 });
+/** Returns whether the account is now connected. `shop` comes from Shopify's signed callback. */
 export const finish = internalMutation({
-  args: { stateId: v.id("shopifyOAuthStates"), ...tokenFields }, returns: v.null(),
-  handler: async (ctx, { stateId, ...tokens }) => {
+  args: { stateId: v.id("shopifyOAuthStates"), shop: v.string(), ...tokenFields }, returns: v.boolean(),
+  handler: async (ctx, { stateId, shop, ...tokens }) => {
+    // Shopify retired the store's previous token when it issued this one, so the new token
+    // replaces the shared one for every connected account even if this account's connect fails.
+    const store = await storeFor(ctx, shop);
+    if (store) await ctx.db.patch(store._id, { ...tokens, refreshLease: undefined });
     const state = await ctx.db.get(stateId);
-    if (!state || state.consumedAt === undefined || state.expiresAt <= Date.now()) throw new ConvexError("Shopify connection was canceled. Start again.");
+    if (!state || state.shop !== shop || state.consumedAt === undefined || state.expiresAt <= Date.now()) return false;
     // Reconnecting keeps the account's existing row, so the first-connected store
     // (the default for clients that don't pass a shop) stays first. Other stores are kept.
-    if (!await connectionFor(ctx, state.ownerTokenIdentifier, state.shop)) {
-      if (await atStoreLimit(ctx, state.ownerTokenIdentifier, state.shop)) throw new ConvexError(storeLimitMessage);
-      await ctx.db.insert("shopifyConnections", { ownerTokenIdentifier: state.ownerTokenIdentifier, shop: state.shop });
+    if (!await connectionFor(ctx, state.ownerTokenIdentifier, shop)) {
+      if (await atStoreLimit(ctx, state.ownerTokenIdentifier, shop)) return false;
+      await ctx.db.insert("shopifyConnections", { ownerTokenIdentifier: state.ownerTokenIdentifier, shop });
     }
-    // The new token replaces the store's shared one for every connected account.
-    const store = await storeFor(ctx, state.shop);
-    if (store) await ctx.db.patch(store._id, { ...tokens, refreshLease: undefined });
-    else await ctx.db.insert("shopifyStores", { ...tokens, shop: state.shop });
+    if (!store) await ctx.db.insert("shopifyStores", { ...tokens, shop });
     await ctx.db.delete(stateId);
-    return null;
+    return true;
   },
 });
 /** The shared token of a store the account is connected to. */
