@@ -1,7 +1,7 @@
 // Text edits behind the note editor's menus. They work on plain strings (a line, or a
 // line plus offsets) so they can be tested without an editor.
 import { isSafeHandbookLink } from "../../../domain/handbook-markdown";
-import { inlineSpans, inlineText, type InlineSpan } from "./note-syntax";
+import { inlineSpans, inlineText, parseNoteLine, type InlineSpan } from "./note-syntax";
 
 // A heading, bullet, checklist, or numbered-list prefix, with its indentation.
 const LINE_PREFIX = /^\s*(?:#{1,6}\s+|[-*+]\s+(?:\[[ xX]\](?:\s+|$))?|\d+[.)]\s+)?/;
@@ -92,16 +92,8 @@ function wrap(text: string, from: number, to: number, format: InlineFormat, span
   return null;
 }
 
-/**
- * Bold, italic, or code for text[from, to) of one line. `active` when the selection is
- * already formatted that way; `edit` toggles it, or is null when the result wouldn't
- * render as intended (so the button is disabled).
- * - The selection is one span, with or without its markers, or sits inside one: that
- *   whole span loses the formatting.
- * - Otherwise the selection is wrapped (see `wrap`).
- * - An empty selection outside any span gets an empty pair to type into.
- */
-export function inlineFormat(text: string, selFrom: number, selTo: number, format: InlineFormat): { active: boolean; edit: InlineEdit | null } {
+// Bold, italic, or code within a line's content (no block prefix): see `inlineFormat`.
+function formatContent(text: string, selFrom: number, selTo: number, format: InlineFormat): { active: boolean; edit: InlineEdit | null } {
   const { from, to } = trimRange(text, selFrom, selTo);
   const spans = inlineSpans(text).filter((span) => span.type === format);
   const exact = spans.find((span) => (span.from === from && span.to === to) || (span.contentFrom === from && span.contentTo === to));
@@ -110,10 +102,49 @@ export function inlineFormat(text: string, selFrom: number, selTo: number, forma
     .sort((a, b) => a.to - a.from - (b.to - b.from))[0];
   if (around) return { active: true, edit: unwrap(around, from, to) };
   if (from === to) {
+    // An empty pair to type into; italics still have to sit at word edges.
+    if (format === "italic" && (/\w/.test(text[from - 1] ?? "") || /\w/.test(text[to] ?? ""))) return { active: false, edit: null };
     const [marker] = MARKERS[format];
     return { active: false, edit: { changes: [{ from, to, insert: marker + marker }], selection: { anchor: from + marker.length, head: from + marker.length } } };
   }
   return { active: false, edit: wrap(text, from, to, format, spans) };
+}
+
+const lineKind = (line: string) => {
+  const parsed = parseNoteLine(line);
+  return parsed?.kind === "heading" ? `heading ${parsed.level}` : parsed?.kind ?? "empty";
+};
+
+/**
+ * Bold, italic, or code for text[from, to) of one line. `active` when the selection is
+ * already formatted that way; `edit` toggles it, or is null when the result wouldn't
+ * render as intended (so the button is disabled).
+ * - Only the line's content is formatted, never its "# " or "- [ ] " prefix.
+ * - The selection is one span, with or without its markers, or sits inside one: that
+ *   whole span loses the formatting.
+ * - Otherwise the selection is wrapped (see `wrap`).
+ * - An empty selection outside any span gets an empty pair to type into.
+ * Any edit other than an empty pair must keep the line's kind and its visible text.
+ */
+export function inlineFormat(text: string, selFrom: number, selTo: number, format: InlineFormat): { active: boolean; edit: InlineEdit | null } {
+  // Content runs to the end of the line, so a caret after trailing spaces stays put.
+  const [start] = parseNoteLine(text)?.content ?? [0];
+  const end = text.length;
+  const clamp = (pos: number) => Math.min(Math.max(pos, start), end);
+  const content = text.slice(start, end);
+  const result = formatContent(content, clamp(selFrom) - start, clamp(selTo) - start, format);
+  if (!result.edit) return result;
+  const shift = (pos: number) => pos + start;
+  const edit: InlineEdit = {
+    changes: result.edit.changes.map((change) => ({ ...change, from: shift(change.from), to: shift(change.to) })),
+    selection: { anchor: shift(result.edit.selection.anchor), head: shift(result.edit.selection.head) },
+  };
+  const next = applyChanges(text, edit.changes);
+  const [nextStart, nextEnd] = parseNoteLine(next)?.content ?? [0, next.length];
+  const insertsPair = clamp(selFrom) === clamp(selTo) && !result.active;
+  // An empty pair is for typing into, so only real formatting changes are checked.
+  const keeps = insertsPair || (lineKind(next) === lineKind(text) && inlineText(next.slice(nextStart, nextEnd)) === inlineText(content));
+  return { active: result.active, edit: keeps ? edit : null };
 }
 
 /**

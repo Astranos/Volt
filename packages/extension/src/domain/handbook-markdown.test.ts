@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { parseHandbookMarkdown } from "./handbook-markdown";
+import { markdownPlainText, parseHandbookMarkdown } from "./handbook-markdown";
 
 describe("parseHandbookMarkdown", () => {
   test("an empty checklist item is a task, not literal text", () => {
@@ -19,5 +19,12 @@ describe("parseHandbookMarkdown", () => {
         ],
       },
     ]);
+  });
+});
+
+describe("markdownPlainText", () => {
+  test("leaves empty checklist items out of previews", () => {
+    expect(markdownPlainText("- a\n- [ ]\n- b")).toBe("a · b");
+    expect(markdownPlainText("- [ ]\n- b")).toBe("b");
   });
 });

@@ -123,8 +123,9 @@ export function markdownPlainText(source: string) {
   const inlineText = (nodes: Inline[]): string => nodes.map((node) =>
     node.type === "text" || node.type === "code" ? node.text : inlineText(node.children)).join("");
   // Headings and list items are separated so previews read "Sales floor · Lock the cases".
+  // Empty items (a bare "- [ ]") are left out rather than leaving "a ·  · b".
   return parseHandbookMarkdown(source).map((block) =>
     block.type === "heading" ? inlineText(block.children)
       : block.type === "paragraph" ? block.lines.map(inlineText).join(" ")
-        : block.items.map((item) => inlineText(item.children)).join(" · ")).join(" · ");
+        : block.items.map((item) => inlineText(item.children)).filter(Boolean).join(" · ")).filter(Boolean).join(" · ");
 }

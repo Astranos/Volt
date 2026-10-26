@@ -91,6 +91,25 @@ describe("toggleTaskMarker", () => {
 });
 
 describe("inlineFormat", () => {
+  test("formats a line's content, never its heading or list prefix", () => {
+    expect(toggle("«- foo»", "bold")).toBe("- **«foo»**");
+    expect(toggle("«# Title»", "italic")).toBe("# *«Title»*");
+    expect(toggle("«- [ ] task»", "bold")).toBe("- [ ] **«task»**");
+    expect(toggle("«1. step»", "code")).toBe("1. `«step»`");
+  });
+
+  test("won't unwrap when that changes the line's kind or its visible text", () => {
+    // "1. Intro" would become a numbered item; "x_a_b" would show its underscores.
+    expect(toggle("**«1. Intro»**", "bold")).toBeNull();
+    expect(toggle("x**_«a»_**b", "bold")).toBeNull();
+  });
+
+  test("an empty italic pair isn't offered inside a word", () => {
+    expect(toggle("foo«»bar", "italic")).toBeNull();
+    expect(toggle("foo «»bar", "italic")).toBeNull();
+    expect(toggle("foo «» bar", "italic")).toBe("foo *«»* bar");
+  });
+
   test("wraps the selection", () => {
     expect(toggle("Write it in the «daily log».", "bold")).toBe("Write it in the **«daily log»**.");
     expect(toggle("«Returns» note", "italic")).toBe("*«Returns»* note");
