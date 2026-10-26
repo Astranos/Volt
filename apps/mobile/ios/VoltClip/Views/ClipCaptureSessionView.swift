@@ -144,8 +144,8 @@ struct ClipCaptureSessionView: View {
                     onToggleRepresentation: {
                         isShowingRawText.toggle()
                     },
-                    onSend: {
-                        onSendRecognizedText(selectedTextValue)
+                    onSend: { outgoingText in
+                        onSendRecognizedText(outgoingText)
                         resetSelectedText()
                     },
                     onDismiss: {

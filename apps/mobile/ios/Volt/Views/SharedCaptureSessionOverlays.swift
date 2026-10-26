@@ -6,8 +6,20 @@ struct ExtractedTextActionCard: View {
     let isShowingRaw: Bool
     let isCleaning: Bool
     let onToggleRepresentation: () -> Void
-    let onSend: () -> Void
+    let onSend: (String) -> Void
     let onDismiss: () -> Void
+    @State private var draft = ""
+    @State private var isEditing = false
+    @FocusState private var isDraftFocused: Bool
+
+    /// Some sites reject characters OCR keeps, so the user can rewrite the value before it goes out.
+    private var outgoingText: String {
+        isEditing ? draft : text
+    }
+
+    private var canSend: Bool {
+        !outgoingText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -17,11 +29,26 @@ struct ExtractedTextActionCard: View {
                         .font(.title3.weight(.bold))
                         .foregroundStyle(.black)
 
-                    Text(text)
-                        .font(.title3)
-                        .foregroundStyle(.black.opacity(0.62))
-                        .lineLimit(3)
-                        .minimumScaleFactor(0.78)
+                    if isEditing {
+                        TextField("Text to send", text: $draft, axis: .vertical)
+                            .font(.title3)
+                            .foregroundStyle(.black)
+                            .lineLimit(1...4)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .submitLabel(.send)
+                            .focused($isDraftFocused)
+                            .onSubmit(send)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(.black.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    } else {
+                        Text(text)
+                            .font(.title3)
+                            .foregroundStyle(.black.opacity(0.62))
+                            .lineLimit(3)
+                            .minimumScaleFactor(0.78)
+                    }
 
                     if isCleaning {
                         Label("Cleaning…", systemImage: "wand.and.sparkles")
@@ -44,26 +71,40 @@ struct ExtractedTextActionCard: View {
             }
 
             VStack(spacing: 12) {
-                Button(action: onToggleRepresentation) {
-                    Label(isShowingRaw ? "Cleaned" : "Raw", systemImage: isShowingRaw ? "wand.and.sparkles" : "doc.text")
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(.black)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 64)
-                        .background(.black.opacity(0.12), in: Capsule())
-                }
-                .buttonStyle(.plain)
-                .disabled(isCleaning)
+                HStack(spacing: 12) {
+                    Button(action: toggleEditing) {
+                        Label(isEditing ? "Done" : "Edit", systemImage: isEditing ? "checkmark" : "pencil")
+                            .font(.headline)
+                            .foregroundStyle(.black)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 56)
+                            .background(.black.opacity(0.12), in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isCleaning)
 
-                Button(action: onSend) {
+                    Button(action: onToggleRepresentation) {
+                        Label(isShowingRaw ? "Cleaned" : "Raw", systemImage: isShowingRaw ? "wand.and.sparkles" : "doc.text")
+                            .font(.headline)
+                            .foregroundStyle(.black)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 56)
+                            .background(.black.opacity(0.12), in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isCleaning)
+                }
+
+                Button(action: send) {
                     Label("Send", systemImage: "paperplane.fill")
                         .font(.title3.weight(.bold))
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
                         .frame(height: 64)
-                        .background(Color.green, in: Capsule())
+                        .background(Color.green.opacity(canSend ? 1 : 0.4), in: Capsule())
                 }
                 .buttonStyle(.plain)
+                .disabled(!canSend)
             }
         }
         .padding(.horizontal, 24)
@@ -80,6 +121,25 @@ struct ExtractedTextActionCard: View {
         }
         .shadow(color: .black.opacity(0.22), radius: 28, y: 16)
         .accessibilityElement(children: .contain)
+        .onChange(of: text) { _, newText in
+            // Switching Raw/Cleaned while editing restarts the draft from the newly chosen text.
+            if isEditing {
+                draft = newText
+            }
+        }
+    }
+
+    private func toggleEditing() {
+        if !isEditing {
+            draft = text
+        }
+        isEditing.toggle()
+        isDraftFocused = isEditing
+    }
+
+    private func send() {
+        guard canSend else { return }
+        onSend(outgoingText)
     }
 }
 

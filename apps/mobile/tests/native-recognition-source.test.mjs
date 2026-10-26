@@ -185,11 +185,15 @@ test("native post-capture OCR extracts device identifiers from recognized rows",
 });
 
 test("native OCR target dialog defaults to cleaned text and can reveal raw text", () => {
-  assert.match(sharedCaptureSessionOverlaysSwiftSource, /Button\(action: onSend\) \{[\s\S]*Label\("Send", systemImage: "paperplane\.fill"\)/);
+  assert.match(sharedCaptureSessionOverlaysSwiftSource, /Button\(action: send\) \{[\s\S]*Label\("Send", systemImage: "paperplane\.fill"\)/);
+  assert.match(sharedCaptureSessionOverlaysSwiftSource, /let onSend: \(String\) -> Void/);
+  assert.match(sharedCaptureSessionOverlaysSwiftSource, /TextField\("Text to send", text: \$draft, axis: \.vertical\)/);
+  assert.match(sharedCaptureSessionOverlaysSwiftSource, /Label\(isEditing \? "Done" : "Edit"/);
+  assert.match(sharedCaptureSessionOverlaysSwiftSource, /onSend\(outgoingText\)/);
   assert.match(sharedCaptureSessionOverlaysSwiftSource, /let onToggleRepresentation: \(\) -> Void/);
   assert.match(sharedCaptureSessionOverlaysSwiftSource, /Label\(isShowingRaw \? "Cleaned" : "Raw"/);
   assert.match(sharedCaptureSessionOverlaysSwiftSource, /Label\("Cleaning…", systemImage: "wand\.and\.sparkles"\)/);
-  assert.match(captureSessionViewSwiftSource, /store\.sendRecognizedText\(selectedTextValue\)/);
+  assert.match(captureSessionViewSwiftSource, /onSend: \{ outgoingText in[\s\S]*store\.sendRecognizedText\(outgoingText\)/);
   assert.match(captureSessionViewSwiftSource, /selectTextRegion\(_ region: RecognizedTextRegion\) \{\s*resetSelectedText\(\)\s*selectedTextRegion = region\s*cleanupSelectedText\(region\)/);
   assert.match(captureSessionViewSwiftSource, /OcrTextCleaner\.clean\(text: region\.text, context: context\)/);
   assert.match(captureSessionViewSwiftSource, /guard cleanupRequestID == requestID,[\s\S]*selectedTextRegion\?\.id == region\.id/);
