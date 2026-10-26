@@ -1,6 +1,6 @@
 import { useRef, useState, type ReactNode } from "react";
 import { useMutation } from "convex/react";
-import { ArrowDown, ArrowUp, Bold, Heading2, Italic, Link2, List, ListChecks, ListOrdered, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
 import { api } from "../../../../../convex/_generated/api";
 import {
   DEFAULT_HANDBOOK_CATEGORIES,
@@ -18,7 +18,7 @@ import {
   type HandbookValueFormat,
 } from "../../domain/handbook-format";
 import { cn } from "../../lib/utils";
-import { MarkdownView } from "./handbook-parts";
+import { PageEditor } from "./PageEditor";
 
 type Kind = HandbookEntry["kind"];
 type DraftStep = { text: string; keys: string; command: string; tip: string };
@@ -217,6 +217,11 @@ export function HandbookEditor({
       className="handbook-editor"
       onSubmit={(event) => {
         event.preventDefault();
+        // The page editor isn't a form field, so it can't be `required`.
+        if (draft.kind === "page" && !draft.body.trim()) {
+          setError("Write something on the page before saving.");
+          return;
+        }
         void save();
       }}
     >
@@ -269,7 +274,7 @@ export function HandbookEditor({
       ) : null}
 
       {draft.kind === "page" ? (
-        <PageBodyEditor value={draft.body} onChange={(body) => set("body", body)} />
+        <PageEditor value={draft.body} onChange={(body) => set("body", body)} />
       ) : null}
 
       {draft.kind === "secret" ? (
@@ -446,89 +451,6 @@ function AddressFields({ value, onChange }: { value: AddressParts; onChange: (va
         </Field>
       </div>
       <p className="handbook-field-hint">Saved as “{formatAddress(value) || "9058 Telegraph Rd, Taylor, MI 48180"}”.</p>
-    </div>
-  );
-}
-
-type Wrap = { before: string; after?: string; placeholder: string; line?: boolean };
-const TOOLS: Array<{ label: string; icon: ReactNode; wrap: Wrap }> = [
-  { label: "Heading", icon: <Heading2 />, wrap: { before: "## ", placeholder: "Heading", line: true } },
-  { label: "Bold", icon: <Bold />, wrap: { before: "**", after: "**", placeholder: "bold text" } },
-  // Asterisks, not underscores, so italicizing words like sku_code_123 works.
-  { label: "Italic", icon: <Italic />, wrap: { before: "*", after: "*", placeholder: "italic text" } },
-  { label: "Bulleted list", icon: <List />, wrap: { before: "- ", placeholder: "List item", line: true } },
-  { label: "Numbered list", icon: <ListOrdered />, wrap: { before: "1. ", placeholder: "First step", line: true } },
-  { label: "Checklist", icon: <ListChecks />, wrap: { before: "- [ ] ", placeholder: "To do", line: true } },
-  { label: "Link", icon: <Link2 />, wrap: { before: "[", after: "](https://)", placeholder: "link text" } },
-];
-
-/** A Markdown textarea with a formatting toolbar and a preview of how the page will look. */
-function PageBodyEditor({ value, onChange }: { value: string; onChange: (value: string) => void }) {
-  const [preview, setPreview] = useState(false);
-  const textarea = useRef<HTMLTextAreaElement>(null);
-
-  const apply = ({ before, after = "", placeholder, line }: Wrap) => {
-    const element = textarea.current;
-    let start = element?.selectionStart ?? value.length;
-    const end = element?.selectionEnd ?? value.length;
-    let next: string;
-    let selection: [number, number];
-    if (line && start !== end) {
-      // Line tools apply to every selected line: two lines become two checklist items.
-      start = value.lastIndexOf("\n", start - 1) + 1;
-      const lines = value.slice(start, end).split("\n").map((text) => (text.trim() ? `${before}${text}` : text));
-      const replaced = lines.join("\n");
-      next = `${value.slice(0, start)}${replaced}${value.slice(end)}`;
-      selection = [start, start + replaced.length];
-    } else {
-      const selected = value.slice(start, end) || placeholder;
-      // Line tools start on a fresh line.
-      const lead = line && start > 0 && value[start - 1] !== "\n" ? "\n" : "";
-      next = `${value.slice(0, start)}${lead}${before}${selected}${after}${value.slice(end)}`;
-      const selectFrom = start + lead.length + before.length;
-      selection = [selectFrom, selectFrom + selected.length];
-    }
-    onChange(next);
-    requestAnimationFrame(() => {
-      element?.focus();
-      element?.setSelectionRange(...selection);
-    });
-  };
-
-  return (
-    <div className="handbook-field">
-      <div className="handbook-page-editor-head">
-        <span className="handbook-field-label">Page</span>
-        <div className="handbook-segmented is-inline" role="tablist" aria-label="Page editor view">
-          <button type="button" role="tab" aria-selected={!preview} className={cn(!preview && "is-active")} onClick={() => setPreview(false)}>Write</button>
-          <button type="button" role="tab" aria-selected={preview} className={cn(preview && "is-active")} onClick={() => setPreview(true)}>Preview</button>
-        </div>
-      </div>
-      {preview ? (
-        <div className="mobile-scanner-card handbook-card handbook-page-preview">
-          {value.trim() ? <MarkdownView source={value} /> : <p className="handbook-field-hint">Nothing to preview yet.</p>}
-        </div>
-      ) : (
-        <>
-          <div className="handbook-md-toolbar" role="toolbar" aria-label="Formatting">
-            {TOOLS.map((tool) => (
-              <button key={tool.label} type="button" className="handbook-button is-icon" aria-label={tool.label} title={tool.label} onClick={() => apply(tool.wrap)}>
-                {tool.icon}
-              </button>
-            ))}
-          </div>
-          <textarea
-            ref={textarea}
-            className="handbook-page-textarea"
-            value={value}
-            onChange={(event) => onChange(event.target.value)}
-            rows={14}
-            placeholder={"## Before opening\n- [ ] Turn on the lights\n- [ ] Count the drawer\n\nCall the manager if anything is **missing**."}
-            required
-          />
-          <span className="handbook-field-hint">Use the buttons, or type ## for a heading, - for a list, - [ ] for a checklist, and **bold**.</span>
-        </>
-      )}
     </div>
   );
 }

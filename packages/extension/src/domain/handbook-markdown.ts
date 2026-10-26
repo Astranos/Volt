@@ -15,6 +15,7 @@ export type Block =
 
 // A link needs a host (or an address/number) after the scheme; "https://" alone stays text.
 const SAFE_LINK = /^(?:https?:\/\/[^\s/?#]+|mailto:\S+|tel:\S+)/i;
+export const isSafeHandbookLink = (href: string) => SAFE_LINK.test(href);
 
 // Sticky patterns tried only where a marker character appears. Every span is bounded,
 // so a page full of unmatched markers parses in linear time.
