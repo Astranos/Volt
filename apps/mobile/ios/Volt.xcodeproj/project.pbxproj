@@ -57,6 +57,7 @@
 		B30000000000000000000013 /* SharedPairingSessionComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1000000000000000000000F /* SharedPairingSessionComponents.swift */; };
 		B30000000000000000000014 /* ClipAssets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C3000000000000000000000F /* ClipAssets.xcassets */; };
 		B30000000000000000000015 /* ScannerRecognitionModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000001E /* ScannerRecognitionModels.swift */; };
+		B30000000000000000000025 /* TextRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000007 /* TextRecognizer.swift */; };
 		B30000000000000000000016 /* BarcodeDetectionReticle.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000010 /* BarcodeDetectionReticle.swift */; };
 		B30000000000000000000017 /* CameraSessionControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000006 /* CameraSessionControls.swift */; };
 		B30000000000000000000018 /* CaptureGuideOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1000000000000000000000B /* CaptureGuideOverlay.swift */; };
@@ -758,6 +759,7 @@
 				B30000000000000000000012 /* SharedScannerTabComponents.swift in Sources */,
 				B30000000000000000000013 /* SharedPairingSessionComponents.swift in Sources */,
 				B30000000000000000000015 /* ScannerRecognitionModels.swift in Sources */,
+				B30000000000000000000025 /* TextRecognizer.swift in Sources */,
 				B30000000000000000000017 /* CameraSessionControls.swift in Sources */,
 				B30000000000000000000018 /* CaptureGuideOverlay.swift in Sources */,
 				B30000000000000000000019 /* OcrReviewLayer.swift in Sources */,

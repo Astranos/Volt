@@ -2,7 +2,6 @@ import CoreGraphics
 import CoreImage
 import Foundation
 import UIKit
-@preconcurrency import Vision
 
 struct ClipOCRResult: Equatable {
     let text: String
@@ -37,18 +36,7 @@ struct ClipOCRService {
     }
 
     private func recognizePreparedText(in cgImage: CGImage) throws -> ClipOCRResult {
-        let request = VNRecognizeTextRequest()
-        request.recognitionLevel = .accurate
-        request.usesLanguageCorrection = false
-        request.automaticallyDetectsLanguage = true
-        request.minimumTextHeight = 0.018
-
-        let handler = VNImageRequestHandler(cgImage: cgImage, orientation: .up)
-        try handler.perform([request])
-
-        let recognizedRegions = (request.results ?? [])
-            .compactMap(region)
-            .sorted(by: readingOrder)
+        let recognizedRegions = try TextRecognizer.recognizeTextRegionsSynchronously(in: cgImage, minimumTextHeight: 0.018)
         let regions = DeviceIdentifierRegionExtractor.reviewRegions(from: recognizedRegions)
         let lines = regions.map(\.text)
 
@@ -58,36 +46,6 @@ struct ClipOCRService {
             capturedAt: .now,
             observationCount: lines.count
         )
-    }
-
-    private func region(from observation: VNRecognizedTextObservation) -> RecognizedTextRegion? {
-        guard let candidate = observation.topCandidates(1).first else { return nil }
-        let text = candidate.string.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return nil }
-        if let match = LiveTextIdentifierMatcher.match(text),
-           let matchedBox = try? candidate.boundingBox(for: match.range) {
-            return RecognizedTextRegion(
-                text: match.value,
-                boundingBox: matchedBox.boundingBox,
-                quadrilateral: TextQuadrilateral(observation: matchedBox),
-                confidence: candidate.confidence,
-                isDeviceIdentifier: true
-            )
-        }
-        return RecognizedTextRegion(
-            text: text,
-            boundingBox: observation.boundingBox,
-            quadrilateral: TextQuadrilateral(observation: observation),
-            confidence: candidate.confidence
-        )
-    }
-
-    private func readingOrder(_ lhs: RecognizedTextRegion, _ rhs: RecognizedTextRegion) -> Bool {
-        let sameRowThreshold = max(lhs.boundingBox.height, rhs.boundingBox.height) * 0.6
-        if abs(lhs.boundingBox.midY - rhs.boundingBox.midY) <= sameRowThreshold {
-            return lhs.boundingBox.minX < rhs.boundingBox.minX
-        }
-        return lhs.boundingBox.midY > rhs.boundingBox.midY
     }
 }
 
