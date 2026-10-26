@@ -257,6 +257,51 @@ test("an empty field never borrows a neighboring field's value through a wrapper
   assert.match(messages[0].url, /q=Dell%20Latitude&/);
 });
 
+test("a field split into its own id'd label and input parts is still read", () => {
+  const { document, messages, poll } = mount();
+  const field = document.createElement("div");
+  field.id = "PRODUCT.metafields.custom.game_name-anchor";
+  field.innerHTML = '<div id="PRODUCT.metafields.custom.game_name-label"><label>Game name</label></div>'
+    + '<div id="PRODUCT.metafields.custom.game_name-input"><input value="Halo 3"></div>';
+  document.querySelector("main").appendChild(field);
+  poll();
+  document.getElementById("volt-tab-pc").onclick({ stopPropagation() {} });
+  assert.match(messages[0].url, /q=Halo%203&/);
+});
+
+test("an empty matching field doesn't hide a later filled one", () => {
+  const { document, messages, poll } = mount();
+  addMetafield(document, "game_name", "Game name", "Wii Sports Resort");
+  addMetafield(document, "platform", "Platform", "");
+  addMetafield(document, "console", "Console", "Wii U");
+  poll();
+  document.getElementById("volt-tab-pc").onclick({ stopPropagation() {} });
+  assert.match(messages[0].url, /q=Wii%20Sports%20Resort%20Wii%20U&/);
+});
+
+test("a wrapper whose bare label sits beside another field is never used", () => {
+  const { document, messages, poll } = mount();
+  const wrapper = document.createElement("div");
+  wrapper.id = "PRODUCT.metafields-section";
+  wrapper.innerHTML = '<div><label>Game name</label></div>'
+    + '<div id="PRODUCT.metafields.custom.condition-anchor"><label>Condition</label><input value="Sealed"></div>';
+  document.querySelector("main").appendChild(wrapper);
+  poll();
+  document.getElementById("volt-tab-pc").onclick({ stopPropagation() {} });
+  assert.match(messages[0].url, /q=Dell%20Latitude&/);
+});
+
+test("reads a multi-line game name field", () => {
+  const { document, messages, poll } = mount();
+  const field = document.createElement("div");
+  field.id = "PRODUCT.metafields.custom.game_name-anchor";
+  field.innerHTML = "<label>Game name</label><textarea>Halo 3</textarea>";
+  document.querySelector("main").appendChild(field);
+  poll();
+  document.getElementById("volt-tab-pc").onclick({ stopPropagation() {} });
+  assert.match(messages[0].url, /q=Halo%203&/);
+});
+
 test("a UPC still wins over the game name", () => {
   const { document, messages, poll } = mount();
   addMetafield(document, "game_name", "Game name", "Halo 3");

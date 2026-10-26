@@ -270,7 +270,7 @@ export default defineContentScript({
         return readField.textContent?.trim() || null;
       }
 
-      const input = container.querySelector("input");
+      const input = container.querySelector("input, textarea");
       if (input) return input.value;
 
       // Shopify's quick metafield keeps its value input inside an open shadow
@@ -312,18 +312,28 @@ export default defineContentScript({
     const hasMetafieldControl = (el) =>
       !!el.querySelector('input, textarea, s-internal-quick-text-field, [class*="_ReadField_"]');
 
+    // "PRODUCT.metafields.custom.game_name-anchor" and its "-label"/"-input" parts are one field.
+    const metafieldKey = (el) => el.id.replace(/-[a-z]+$/i, "");
+
     // Start at the innermost matching container (the label may sit in its own element), then
-    // step out to the first one with a control and read it, even if empty. Never step into a
-    // wrapper that also holds other fields, so another field's input can't answer.
+    // step out to the first one with a control. Never use or step into a container that also
+    // holds a different field, so another field's input can't answer. An empty field ends that
+    // field's search; a later matching field may still have the value.
     const findMetafieldValueByLabel = (pattern) => {
       const containers = Array.from(document.querySelectorAll('[id*="metafields"]'));
-      const matches = new Set(containers.filter((el) => pattern.test(metafieldLabel(el))));
+      const holdsOtherField = (el, key) =>
+        containers.some((other) => other !== el && el.contains(other) && metafieldKey(other) !== key);
+      const matches = containers.filter((el) => pattern.test(metafieldLabel(el)));
       for (const inner of matches) {
-        if ([...matches].some((other) => other !== inner && inner.contains(other))) continue;
+        const key = metafieldKey(inner);
+        if (matches.some((other) => other !== inner && inner.contains(other)) || holdsOtherField(inner, key)) continue;
         for (let el = inner; el; el = el.parentElement) {
-          if (el !== inner && containers.some((other) =>
-            el.contains(other) && !other.contains(inner) && !inner.contains(other))) break;
-          if (matches.has(el) && hasMetafieldControl(el)) return extractMetafieldValue(el)?.trim() || null;
+          if (el !== inner && holdsOtherField(el, key)) break;
+          if (matches.includes(el) && hasMetafieldControl(el)) {
+            const value = extractMetafieldValue(el)?.trim();
+            if (value) return value;
+            break;
+          }
         }
       }
       return null;
