@@ -7,7 +7,7 @@ import { defineScenario } from "../scenario";
 
 // ?view=guide opens the Windows guide with its first step done; ?open=<title> opens any entry;
 // ?reveal=1 reveals the first login; ?state=empty shows the starter prompt;
-// ?tool=top-offers|mobile-scanner opens another tab to compare margins.
+// ?tool=top-offers|mobile-scanner opens another tab to compare margins; ?width=<px> narrows the panel.
 const params = new URLSearchParams(location.search);
 const tool = params.get("tool");
 const openId = params.get("view") === "guide" ? handbookGuide._id : handbookEntryByTitle(params.get("open") ?? "")?._id;
@@ -24,7 +24,7 @@ export default defineScenario({
     },
   },
   render: (params) => (
-    <div id="volt-sidepanel-container" style={{ height: "100vh" }}>
+    <div id="volt-sidepanel-container" style={{ height: "100vh", width: params.get("width") ? `${Number(params.get("width"))}px` : undefined }}>
       <HandbookPreviewProvider entries={params.get("state") === "empty" ? [] : undefined}>
         <UnifiedSidepanel />
       </HandbookPreviewProvider>

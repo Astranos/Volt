@@ -591,15 +591,22 @@ a.handbook-button {
   background: rgba(255, 255, 255, 0.035);
   border-radius: 9px;
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   min-width: 0;
   padding: 6px 6px 6px 10px;
 }
 
+/* In a narrow panel the Copy button drops below instead of squeezing the value
+   into a column a few letters wide. */
+.handbook-field-item > .handbook-row-actions {
+  margin-left: auto;
+}
+
 /* The label sits above its value, so the value gets the full width. */
 .handbook-field-text {
   display: flex;
-  flex: 1;
+  flex: 1 1 9em;
   flex-direction: column;
   gap: 1px;
   min-width: 0;
