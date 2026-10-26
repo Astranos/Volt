@@ -5,7 +5,7 @@ import { waitFor } from "../dom";
 import { handbookEntryByTitle, handbookGuide, HandbookPreviewProvider } from "../fixtures/handbook";
 import { defineScenario } from "../scenario";
 
-// ?view=guide opens the Windows guide with its first step done; ?open=<title> opens any entry;
+// ?view=guide opens the Windows guide with its first step done (&variant=2 for its second method); ?open=<title> opens any entry;
 // ?reveal=1 reveals the first login; ?state=empty shows the starter prompt;
 // ?tool=top-offers|mobile-scanner opens another tab to compare margins; ?width=<px> narrows the panel.
 const params = new URLSearchParams(location.search);
@@ -34,6 +34,13 @@ export default defineScenario({
     if (params.get("tool")) {
       await waitFor(params.get("tool") === "top-offers" ? ".top-offers-input" : ".sidepanel-gutter");
     } else if (params.get("view") === "guide") {
+      // &variant=2 switches to the guide's second method first.
+      const variant = Number(params.get("variant") ?? 1);
+      if (variant > 1) {
+        (await waitFor(".handbook-segmented [role=tab]"));
+        document.querySelectorAll<HTMLButtonElement>(".handbook-segmented [role=tab]")[variant - 1]?.click();
+        await waitFor(`.handbook-segmented [role=tab]:nth-child(${variant})[aria-selected=true]`);
+      }
       (await waitFor<HTMLButtonElement>(".handbook-step-number.is-current")).click();
       await waitFor(".handbook-step-number.is-done");
     } else {
