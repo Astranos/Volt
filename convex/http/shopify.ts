@@ -1,10 +1,10 @@
 import { makeFunctionReference } from "convex/server";
 import { httpAction } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
-import { encryptToken, exchangeToken, nonceHash, verifyCallback } from "../shopifyHelpers";
+import { encryptToken, exchangeToken, nonceHash, storeAad, verifyCallback } from "../shopifyHelpers";
 
 const consume = makeFunctionReference<"mutation", { shop: string; state: string; browserNonceHash: string }, { id: Id<"shopifyOAuthStates">; ownerTokenIdentifier: string }>("shopifyStore:consume");
-const finish = makeFunctionReference<"mutation", { stateId: Id<"shopifyOAuthStates"> } & Pick<Doc<"shopifyConnections">, "encryptedAccessToken" | "encryptedRefreshToken" | "expiresAt" | "refreshExpiresAt">, null>("shopifyStore:finish");
+const finish = makeFunctionReference<"mutation", { stateId: Id<"shopifyOAuthStates"> } & Pick<Doc<"shopifyStores">, "shop" | "encryptedAccessToken" | "encryptedRefreshToken" | "expiresAt" | "refreshExpiresAt">, boolean>("shopifyStore:finish");
 
 export const shopifyCallback = httpAction(async (ctx, request) => {
   const headers = {
@@ -19,13 +19,14 @@ export const shopifyCallback = httpAction(async (ctx, request) => {
     const browserNonce = browserCookie[0].slice("volt_shopify_oauth=".length);
     const owner = await ctx.runMutation(consume, { shop, state, browserNonceHash: await nonceHash(browserNonce) });
     const tokens = await exchangeToken(shop, { code, expiring: "1" });
-    const aad = `${owner.ownerTokenIdentifier}|${shop}`;
-    await ctx.runMutation(finish, {
-      stateId: owner.id,
+    const aad = storeAad(shop);
+    const connected = await ctx.runMutation(finish, {
+      stateId: owner.id, shop,
       encryptedAccessToken: await encryptToken(tokens.access, aad),
       encryptedRefreshToken: await encryptToken(tokens.refresh, aad),
       expiresAt: tokens.expiresAt, refreshExpiresAt: tokens.refreshExpiresAt,
     });
+    if (!connected) throw new Error("Shopify connection was canceled.");
     return new Response("<!doctype html><html lang=\"en\"><meta charset=\"utf-8\"><title>Shopify connected</title><h1>Shopify connected</h1><p>You can close this tab and return to Volt.</p></html>", { headers });
   } catch {
     return new Response("<!doctype html><html lang=\"en\"><meta charset=\"utf-8\"><title>Shopify connection failed</title><h1>Shopify connection failed</h1><p>Return to Volt and connect your store again. Check that the app has product read access.</p></html>", { status: 400, headers });

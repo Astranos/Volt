@@ -20,8 +20,10 @@ export const redactShop = internalMutation({
       .take(BATCH_SIZE);
     const installation = await ctx.db.query("shopifyEmbeddedInstallations")
       .withIndex("by_shop", (q) => q.eq("shop", shop)).unique();
+    const store = await ctx.db.query("shopifyStores").withIndex("by_shop", (q) => q.eq("shop", shop)).unique();
     for (const row of [...connections, ...states, ...hiddenProducts]) await ctx.db.delete(row._id);
     if (installation) await ctx.db.delete(installation._id);
+    if (store) await ctx.db.delete(store._id);
     if (connections.length === BATCH_SIZE || states.length === BATCH_SIZE || hiddenProducts.length === BATCH_SIZE) {
       await ctx.scheduler.runAfter(0, redactShopReference, { shop });
     }

@@ -8,6 +8,7 @@ import {
   type PhotoMessage,
   type SessionTarget,
 } from "../domain/mobile-scanner-session";
+import { ConvexError } from "convex/values";
 import { CloudWorkspaceSubscriptions, backgroundClerkClient, getClerkToken, objectFrom } from "./cloud-workspace-subscriptions";
 import { createProfileClerkOffscreenController } from "./profile-clerk-controller";
 import { EXTENSION_SCANNER_SIGNAL_URL } from "../domain/mobile-scanner-signal-url";
@@ -287,7 +288,10 @@ function sendWorkspaceOperation(
     .then((value) => sendResponse({ success: true, value }))
     .catch((error: unknown) => sendResponse({
       success: false,
-      error: error instanceof Error ? error.message : String(error),
+      // Production Convex keeps a ConvexError's text in `data`; `message` is only "Server Error".
+      error: error instanceof ConvexError && typeof error.data === "string"
+        ? error.data
+        : error instanceof Error ? error.message : String(error),
     }));
   return true;
 }

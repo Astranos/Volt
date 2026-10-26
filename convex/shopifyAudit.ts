@@ -2,15 +2,15 @@ import { ConvexError, v } from "convex/values";
 import { makeFunctionReference } from "convex/server";
 import { action, mutation, query, type ActionCtx } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
-import { connectionFor, MAX_HIDDEN_PRODUCTS, MAX_SHOPIFY_STORES } from "./shopifyStore";
-import { auditRange, decryptToken, encryptToken, exchangeToken, fetchProductDetails, fetchSearchProducts, fetchYesterday, MAX_COMPARE_PRODUCTS, nonce, nonceHash, productSearchQuery, requiredEnv, shopDomain, type Product, type ProductDetails, type SearchProduct } from "./shopifyHelpers";
+import { connectionFor, MAX_HIDDEN_PRODUCTS, MAX_SHOPIFY_STORES, removeConnection } from "./shopifyStore";
+import { auditRange, decryptToken, encryptToken, exchangeToken, fetchProductDetails, fetchSearchProducts, fetchYesterday, MAX_COMPARE_PRODUCTS, nonce, nonceHash, productSearchQuery, requiredEnv, shopDomain, storeAad, type Product, type ProductDetails, type SearchProduct } from "./shopifyHelpers";
 
 const begin = makeFunctionReference<"mutation", { ownerTokenIdentifier: string; shop: string; state: string; browserNonceHash: string }, null>("shopifyStore:begin");
-const read = makeFunctionReference<"query", { ownerTokenIdentifier: string; shop?: string }, Doc<"shopifyConnections"> | null>("shopifyStore:read");
-const lease = makeFunctionReference<"mutation", { connectionId: Doc<"shopifyConnections">["_id"]; nonce: string }, boolean>("shopifyStore:leaseRefresh");
-type Tokens = Pick<Doc<"shopifyConnections">, "encryptedAccessToken" | "encryptedRefreshToken" | "expiresAt" | "refreshExpiresAt">;
+const read = makeFunctionReference<"query", { ownerTokenIdentifier: string; shop?: string }, Doc<"shopifyStores"> | null>("shopifyStore:read");
+const lease = makeFunctionReference<"mutation", { storeId: Doc<"shopifyStores">["_id"]; nonce: string }, boolean>("shopifyStore:leaseRefresh");
+type Tokens = Pick<Doc<"shopifyStores">, "encryptedAccessToken" | "encryptedRefreshToken" | "expiresAt" | "refreshExpiresAt">;
 const hiddenProductIds = makeFunctionReference<"query", { ownerTokenIdentifier: string; shop: string }, string[]>("shopifyStore:hiddenProductIds");
-const finishRefresh = makeFunctionReference<"mutation", { connectionId: Doc<"shopifyConnections">["_id"]; nonce: string; tokens: Tokens | null }, null>("shopifyStore:finishRefresh");
+const finishRefresh = makeFunctionReference<"mutation", { storeId: Doc<"shopifyStores">["_id"]; nonce: string; tokens: Tokens | null }, null>("shopifyStore:finishRefresh");
 
 export const startConnect = action({
   args: { shop: v.string() }, returns: v.object({ url: v.string(), browserCookie: v.object({ url: v.string(), name: v.string(), value: v.string() }) }),
@@ -62,7 +62,7 @@ export const disconnect = mutation({
       ? await ctx.db.query("shopifyConnections").withIndex("by_ownerTokenIdentifier", q => q.eq("ownerTokenIdentifier", identity.tokenIdentifier)).take(MAX_SHOPIFY_STORES + 1)
       : [await connectionFor(ctx, identity.tokenIdentifier, shop)];
     const state = await ctx.db.query("shopifyOAuthStates").withIndex("by_ownerTokenIdentifier", q => q.eq("ownerTokenIdentifier", identity.tokenIdentifier)).unique();
-    for (const row of rows) if (row) await ctx.db.delete(row._id);
+    for (const row of rows) if (row) await removeConnection(ctx, row);
     if (state && (shop === undefined || state.shop === shop)) await ctx.db.delete(state._id);
     return null;
   },
@@ -161,22 +161,23 @@ async function withShopifyAccess<T>(ctx: ActionCtx, requestedShop: string | unde
   if (!row) throw new ConvexError(notConnected(requestedShop));
   if (row.expiresAt <= Date.now() + 60000) {
     const refreshNonce = nonce();
-    if (!await ctx.runMutation(lease, { connectionId: row._id, nonce: refreshNonce })) throw new ConvexError("Shopify is refreshing access. Try again shortly.");
-    try {
+    if (await ctx.runMutation(lease, { storeId: row._id, nonce: refreshNonce })) try {
       if (row.refreshExpiresAt <= Date.now()) throw new ConvexError("Shopify authorization expired. Reconnect your store.");
-      const aad = `${identity.tokenIdentifier}|${row.shop}`;
+      const aad = storeAad(row.shop);
       const tokens = await exchangeToken(row.shop, { grant_type: "refresh_token", refresh_token: await decryptToken(row.encryptedRefreshToken, aad) });
-      await ctx.runMutation(finishRefresh, { connectionId: row._id, nonce: refreshNonce, tokens: {
+      await ctx.runMutation(finishRefresh, { storeId: row._id, nonce: refreshNonce, tokens: {
         encryptedAccessToken: await encryptToken(tokens.access, aad), encryptedRefreshToken: await encryptToken(tokens.refresh, aad), expiresAt: tokens.expiresAt, refreshExpiresAt: tokens.refreshExpiresAt,
       } });
     } catch (error) {
-      await ctx.runMutation(finishRefresh, { connectionId: row._id, nonce: refreshNonce, tokens: null }).catch(() => null);
+      await ctx.runMutation(finishRefresh, { storeId: row._id, nonce: refreshNonce, tokens: null }).catch(() => null);
       throw error;
     }
+    // Without the lease, another account may have just refreshed the shared token.
     row = await ctx.runQuery(read, { ...lookup, shop: row.shop });
     if (!row) throw new ConvexError("Store disconnected.");
+    if (row.expiresAt <= Date.now() + 60000) throw new ConvexError("Shopify is refreshing access. Try again shortly.");
   }
-  const result = await load(row.shop, await decryptToken(row.encryptedAccessToken, `${identity.tokenIdentifier}|${row.shop}`), identity.tokenIdentifier);
+  const result = await load(row.shop, await decryptToken(row.encryptedAccessToken, storeAad(row.shop)), identity.tokenIdentifier);
   const current = await ctx.runQuery(read, { ...lookup, shop: row.shop });
   if (current?._id !== row._id) throw new ConvexError("Shopify connection changed. Try again.");
   return result;
