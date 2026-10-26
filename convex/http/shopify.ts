@@ -1,10 +1,10 @@
 import { makeFunctionReference } from "convex/server";
 import { httpAction } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
-import { encryptToken, exchangeToken, nonceHash, verifyCallback } from "../shopifyHelpers";
+import { encryptToken, exchangeToken, nonceHash, storeAad, verifyCallback } from "../shopifyHelpers";
 
 const consume = makeFunctionReference<"mutation", { shop: string; state: string; browserNonceHash: string }, { id: Id<"shopifyOAuthStates">; ownerTokenIdentifier: string }>("shopifyStore:consume");
-const finish = makeFunctionReference<"mutation", { stateId: Id<"shopifyOAuthStates"> } & Pick<Doc<"shopifyConnections">, "encryptedAccessToken" | "encryptedRefreshToken" | "expiresAt" | "refreshExpiresAt">, null>("shopifyStore:finish");
+const finish = makeFunctionReference<"mutation", { stateId: Id<"shopifyOAuthStates"> } & Pick<Doc<"shopifyStores">, "encryptedAccessToken" | "encryptedRefreshToken" | "expiresAt" | "refreshExpiresAt">, null>("shopifyStore:finish");
 
 export const shopifyCallback = httpAction(async (ctx, request) => {
   const headers = {
@@ -19,7 +19,7 @@ export const shopifyCallback = httpAction(async (ctx, request) => {
     const browserNonce = browserCookie[0].slice("volt_shopify_oauth=".length);
     const owner = await ctx.runMutation(consume, { shop, state, browserNonceHash: await nonceHash(browserNonce) });
     const tokens = await exchangeToken(shop, { code, expiring: "1" });
-    const aad = `${owner.ownerTokenIdentifier}|${shop}`;
+    const aad = storeAad(shop);
     await ctx.runMutation(finish, {
       stateId: owner.id,
       encryptedAccessToken: await encryptToken(tokens.access, aad),

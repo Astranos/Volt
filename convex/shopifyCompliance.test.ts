@@ -45,18 +45,15 @@ test("shop redaction deletes every matching connection and pending OAuth state i
   const t = convexTest(schema, modules);
   await t.run(async (ctx) => {
     for (let i = 0; i < 215; i++) {
-      await ctx.db.insert("shopifyConnections", {
-        ownerTokenIdentifier: `owner-${i}`, shop, encryptedAccessToken: "encrypted",
-        encryptedRefreshToken: "encrypted", expiresAt: 1, refreshExpiresAt: 1,
-      });
+      await ctx.db.insert("shopifyConnections", { ownerTokenIdentifier: `owner-${i}`, shop });
       await ctx.db.insert("shopifyOAuthStates", {
         ownerTokenIdentifier: `owner-${i}`, shop, state: `state-${i}`, expiresAt: 1,
       });
     }
-    await ctx.db.insert("shopifyConnections", {
-      ownerTokenIdentifier: "unrelated", shop: otherShop, encryptedAccessToken: "encrypted",
-      encryptedRefreshToken: "encrypted", expiresAt: 1, refreshExpiresAt: 1,
-    });
+    await ctx.db.insert("shopifyConnections", { ownerTokenIdentifier: "unrelated", shop: otherShop });
+    for (const storeShop of [shop, otherShop]) {
+      await ctx.db.insert("shopifyStores", { shop: storeShop, encryptedAccessToken: "encrypted", encryptedRefreshToken: "encrypted", expiresAt: 1, refreshExpiresAt: 1 });
+    }
     await ctx.db.insert("shopifyOAuthStates", {
       ownerTokenIdentifier: "unrelated", shop: otherShop, state: "unrelated", expiresAt: 1,
     });
@@ -73,10 +70,12 @@ test("shop redaction deletes every matching connection and pending OAuth state i
   await t.finishAllScheduledFunctions(vi.runAllTimers);
   const remaining = await t.run(async (ctx) => ({
     connections: await ctx.db.query("shopifyConnections").collect(),
+    stores: await ctx.db.query("shopifyStores").collect(),
     states: await ctx.db.query("shopifyOAuthStates").collect(),
     hiddenProducts: await ctx.db.query("shopifyHiddenProducts").collect(),
   }));
   expect(remaining.connections.map((row) => row.shop)).toEqual([otherShop]);
+  expect(remaining.stores.map((row) => row.shop)).toEqual([otherShop]);
   expect(remaining.states.map((row) => row.shop)).toEqual([otherShop]);
   expect(remaining.hiddenProducts.map((row) => row.shop)).toEqual([otherShop]);
 });
@@ -86,10 +85,7 @@ test("app uninstall reads the Shop resource's myshopify domain and redacts that 
   const t = convexTest(schema, modules);
   await t.run(async (ctx) => {
     for (const owner of [shop, otherShop]) {
-      await ctx.db.insert("shopifyConnections", {
-        ownerTokenIdentifier: owner, shop: owner, encryptedAccessToken: "encrypted",
-        encryptedRefreshToken: "encrypted", expiresAt: 1, refreshExpiresAt: 1,
-      });
+      await ctx.db.insert("shopifyConnections", { ownerTokenIdentifier: owner, shop: owner });
     }
   });
   const path = "/api/shopify/webhooks/app/uninstalled";

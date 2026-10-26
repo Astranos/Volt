@@ -22,13 +22,25 @@ export default defineSchema({
     refreshExpiresAt: v.optional(v.number()),
     exchangeLease: v.optional(v.object({ nonce: v.string(), expiresAt: v.number() })),
   }).index("by_shop", ["shop"]),
-  shopifyConnections: defineTable({
-    ownerTokenIdentifier: v.string(),
+  // Shopify keeps one live offline token per app and store, so every Volt account connected
+  // to a store shares this row; minting a new token invalidates the previous refresh token.
+  shopifyStores: defineTable({
     shop: v.string(),
     encryptedAccessToken: v.string(),
     encryptedRefreshToken: v.string(),
     expiresAt: v.number(),
     refreshExpiresAt: v.number(),
+    refreshLease: v.optional(v.object({ nonce: v.string(), expiresAt: v.number() })),
+  }).index("by_shop", ["shop"]),
+  /** Which Volt accounts may use a store's shared token. */
+  shopifyConnections: defineTable({
+    ownerTokenIdentifier: v.string(),
+    shop: v.string(),
+    // Per-account tokens from before shopifyStores; shopifyStore:migrateSharedStores moves them.
+    encryptedAccessToken: v.optional(v.string()),
+    encryptedRefreshToken: v.optional(v.string()),
+    expiresAt: v.optional(v.number()),
+    refreshExpiresAt: v.optional(v.number()),
     refreshLease: v.optional(v.object({ nonce: v.string(), expiresAt: v.number() })),
   })
     .index("by_ownerTokenIdentifier", ["ownerTokenIdentifier"])
