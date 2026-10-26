@@ -1,7 +1,8 @@
-import { convexTest } from "convex-test";
+import { convexTest, type TestConvex } from "convex-test";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { makeFunctionReference } from "convex/server";
 import { api } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
 import schema from "./schema";
 import {
   modules,
@@ -165,17 +166,53 @@ test("paid persistence and free-to-paid upgrade preserve managed records", async
   ).toBe(true);
 });
 
+async function setStorageUsage(
+  t: TestConvex<typeof schema>,
+  workspaceId: Id<"workspaces">,
+  recordCount: number,
+  byteCount: number,
+) {
+  await t.run(async (ctx) => {
+    const row = await ctx.db
+      .query("workspaceStorageUsage")
+      .withIndex("by_workspaceId", (q) => q.eq("workspaceId", workspaceId))
+      .unique();
+    if (row) await ctx.db.patch(row._id, { recordCount, byteCount });
+    else await ctx.db.insert("workspaceStorageUsage", { workspaceId, recordCount, byteCount });
+  });
+}
+
+test("captures count storage without rewriting the workspace row", async () => {
+  const t = convexTest(schema, modules);
+  const { signedIn, credential, workspaceId } = await owner(t);
+  await grantFullAppAccess(t, "owner");
+  const before = await t.run((ctx) => ctx.db.get(workspaceId));
+  await capture(t, credential, "first");
+  await capture(t, credential, "second");
+  expect(await t.run((ctx) => ctx.db.get(workspaceId))).toEqual(before);
+  expect(await signedIn.query(usage, {})).toMatchObject({ recordsUsed: 2 });
+});
+
+test("workspaces without a usage row keep their legacy counters", async () => {
+  const t = convexTest(schema, modules);
+  const { signedIn, credential, workspaceId } = await owner(t);
+  await grantFullAppAccess(t, "owner");
+  await t.run((ctx) => ctx.db.patch(workspaceId, { managedRecordCount: 5, managedByteCount: 7 }));
+  expect(await signedIn.query(usage, {})).toMatchObject({ recordsUsed: 5, bytesUsed: 7 });
+  await capture(t, credential, "next");
+  const captured = await t.run((ctx) => ctx.db.query("scanResults").unique());
+  expect(await signedIn.query(usage, {})).toMatchObject({ recordsUsed: 6, bytesUsed: 7 + (captured?.byteCount ?? 0) });
+  // Once a usage row exists it wins, even at zero, over the stale legacy fields.
+  await setStorageUsage(t, workspaceId, 0, 0);
+  expect(await signedIn.query(usage, {})).toMatchObject({ recordsUsed: 0, bytesUsed: 0 });
+});
+
 test("record/byte caps, append, invalid photo sizes and restore are transactional", async () => {
   const t = convexTest(schema, modules);
   const { signedIn, credential, workspaceId } = await owner(t);
   const policy = await signedIn.query(usage, {});
   await capture(t, credential);
-  await t.run((ctx) =>
-    ctx.db.patch(workspaceId, {
-      managedRecordCount: policy.recordsLimit,
-      managedByteCount: 3,
-    }),
-  );
+  await setStorageUsage(t, workspaceId, policy.recordsLimit, 3);
   await expect(capture(t, credential, "extra")).rejects.toThrow(/record quota/);
   await expect(
     t.mutation(api.cloudWorkspace.putBatch, {
@@ -185,12 +222,7 @@ test("record/byte caps, append, invalid photo sizes and restore are transactiona
       results: [result("one"), result("appended")],
     }),
   ).rejects.toThrow(/record quota/);
-  await t.run((ctx) =>
-    ctx.db.patch(workspaceId, {
-      managedRecordCount: 1,
-      managedByteCount: policy.bytesLimit,
-    }),
-  );
+  await setStorageUsage(t, workspaceId, 1, policy.bytesLimit);
   await expect(capture(t, credential, "extra")).rejects.toThrow(
     /storage quota/,
   );
@@ -207,9 +239,7 @@ test("record/byte caps, append, invalid photo sizes and restore are transactiona
   await signedIn.mutation(api.cloudWorkspace.deleteWorkspaceResults, {
     resultIds: ["one"],
   });
-  await t.run((ctx) =>
-    ctx.db.patch(workspaceId, { managedRecordCount: policy.recordsLimit }),
-  );
+  await setStorageUsage(t, workspaceId, policy.recordsLimit, 0);
   await expect(
     signedIn.mutation(api.cloudWorkspace.restoreWorkspaceResults, {
       resultIds: ["one"],

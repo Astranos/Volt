@@ -298,6 +298,8 @@ export function createCloudWorkspaceController(options: ControllerOptions) {
       return ready;
     },
     handleMessage,
+    /** Changes whenever the signed-in account may have; requests tagged with an older one are stale. */
+    accountEpoch: () => account.epoch,
     // The offscreen document cannot watch chrome.storage for the mirrored
     // client JWT, so the account change has to be pushed to it from here.
     handleAccountSessionChanged: async () => {

@@ -11,8 +11,6 @@ import {
   DEFAULT_CUSTOM_RATES,
   DEFAULT_ENABLED_OFFER_TYPES,
   DEFAULT_STARTING_RATES,
-  percentageFromInputValue,
-  percentageToInputValue,
   removeCustomTopOfferRule,
   removeCustomTopOfferStartingRule,
   removeTopOfferRateRule,
@@ -41,8 +39,13 @@ import {
 } from "@/src/domain/top-offers";
 import type { SaveExtensionSettings } from "@/src/hooks/useExtensionSettings";
 import type { CmdkSettings, RateRule } from "@/src/types/settings";
+import type { ReactNode } from "react";
 import { Switch } from "@/src/components/ui/switch";
-import { RateRuleEditor } from "./TopOfferRuleEditor";
+import {
+  RateRuleEditor,
+  RateTableHeader,
+  RateTableRow,
+} from "./TopOfferRuleEditor";
 
 interface TopOffersSettingsProps {
   settings: CmdkSettings;
@@ -64,6 +67,29 @@ function OfferEnabledSwitch({
       aria-label={ariaLabel}
       onCheckedChange={onChange}
     />
+  );
+}
+
+// Colors match the callouts on the printed Max Offer Guide.
+const GUIDE_NOTE_TONES = {
+  green: "border-green-300 bg-green-50 text-green-950",
+  orange: "border-orange-300 bg-orange-50 text-orange-950",
+  blue: "border-sky-300 bg-sky-50 text-sky-950",
+};
+
+function GuideNote({
+  tone,
+  children,
+}: {
+  tone: keyof typeof GUIDE_NOTE_TONES;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      className={`mb-4 rounded-lg border px-4 py-2.5 text-sm ${GUIDE_NOTE_TONES[tone]}`}
+    >
+      {children}
+    </div>
   );
 }
 
@@ -143,6 +169,7 @@ export function TopOffersSettings({
     return (
       <RateRuleEditor
         title="Suggestion Rates"
+        valueLabel="Suggested % of sale"
         rules={rates.rules}
         defaultPercentage={rates.defaultPercentage}
         onRuleChange={(index, field, value) =>
@@ -199,7 +226,7 @@ export function TopOffersSettings({
         <div>
           <h2 className="text-2xl font-bold mb-2">Offer Calculator</h2>
           <p className="text-muted-foreground">
-            Configure settings for the Offer Calculator
+            Max cash offer as a % of the item's sales price
           </p>
         </div>
         <button
@@ -217,10 +244,16 @@ export function TopOffersSettings({
         </button>
       </div>
 
+      <GuideNote tone="blue">
+        <strong>Buyer notes:</strong> Remember to <u>tag</u> New Customers,
+        Premium &amp; Checkout. Deals under $100: use $5 to $10 in store credit
+        above cash to close.
+      </GuideNote>
+
       <div className="bg-card rounded-xl border border-border shadow-lg overflow-hidden">
         <div className="p-8 space-y-8">
           <div>
-            <div className="mb-4 flex items-center justify-between gap-4">
+            <div className="mb-1 flex items-center justify-between gap-4">
               <h3 className="font-semibold text-lg">Standard Rates</h3>
               <OfferEnabledSwitch
                 ariaLabel="Standard rates enabled"
@@ -230,6 +263,10 @@ export function TopOffersSettings({
                 }
               />
             </div>
+            <p className="mb-4 text-sm text-muted-foreground">
+              The Max Offer Guide for all customers. Premium, New Customer and
+              custom offers are compared against these rates.
+            </p>
             {renderStartToggle("standard")}
             {renderBuiltInStartEditor("standard")}
             {startingRates.standard ? (
@@ -241,7 +278,7 @@ export function TopOffersSettings({
                 customRates.standard.rules ||
                 DEFAULT_SETTINGS.topOffers!.customRates!.standard.rules
               }
-              defaultPercentage={customRates.standard.defaultPercentage ?? 0.65}
+              defaultPercentage={customRates.standard.defaultPercentage}
               onRuleChange={(index, field, value) =>
                 handleUpdateRateRule("standard", index, field, value)
               }
@@ -283,6 +320,12 @@ export function TopOffersSettings({
                 }
               />
             </div>
+            <GuideNote tone="green">
+              <strong>
+                <u>Premium items</u>
+              </strong>{" "}
+              over $200 in sales price can go 5–10% above the guide.
+            </GuideNote>
             {renderStartToggle("premium")}
             {renderBuiltInStartEditor("premium")}
             {startingRates.premium ? (
@@ -294,7 +337,8 @@ export function TopOffersSettings({
                 customRates.premium.rules ||
                 DEFAULT_SETTINGS.topOffers!.customRates!.premium.rules
               }
-              defaultPercentage={customRates.premium.defaultPercentage ?? 0.75}
+              guide={customRates.standard}
+              defaultPercentage={customRates.premium.defaultPercentage}
               onRuleChange={(index, field, value) =>
                 handleUpdateRateRule("premium", index, field, value)
               }
@@ -336,6 +380,12 @@ export function TopOffersSettings({
                 }
               />
             </div>
+            <GuideNote tone="green">
+              <strong>
+                <u>New customers</u>
+              </strong>{" "}
+              can go 5–10% above the guide. <em>Close deals and get reviews!</em>
+            </GuideNote>
             {renderStartToggle("newCustomer")}
             {renderBuiltInStartEditor("newCustomer")}
             {startingRates.newCustomer ? (
@@ -347,6 +397,7 @@ export function TopOffersSettings({
                 customRates.newCustomer?.rules ||
                 DEFAULT_SETTINGS.topOffers!.customRates!.newCustomer!.rules
               }
+              guide={customRates.standard}
               defaultPercentage={
                 customRates.newCustomer?.defaultPercentage ??
                 DEFAULT_SETTINGS.topOffers!.customRates!.newCustomer!
@@ -399,43 +450,27 @@ export function TopOffersSettings({
                 }
               />
             </div>
-            <p className="text-sm text-muted-foreground mb-4">
-              Set the percentage used for the "Checkout Offer" max calculation.
-              By default, the suggestion value uses the standard top-offer guide.
-            </p>
+            <GuideNote tone="orange">
+              <strong>Checkout Program</strong> up to 65–80% of the sales price
+              (maximize profit). The suggestion uses the standard guide unless
+              customized.
+            </GuideNote>
             {renderStartToggle("checkout")}
             {renderBuiltInStartEditor("checkout")}
             {startingRates.checkout ? <div className="my-6 border-t border-border" /> : null}
-            <div className="grid grid-cols-12 gap-4 items-center">
-              <div className="col-span-5 text-sm font-medium pl-2">
-                All amounts
-              </div>
-              <div className="col-span-5">
-                <input
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  max="100"
-                  inputMode="decimal"
-                  value={
-                    percentageToInputValue(
-                      customRates.checkout?.percentage ??
-                        DEFAULT_CUSTOM_RATES.checkout!.percentage
-                    )
-                  }
-                  onChange={(event) =>
-                    saveTopOffers(
-                      updateTopOfferCheckoutRate(
-                        settings.topOffers,
-                        percentageFromInputValue(parseFloat(event.target.value))
-                      )
-                    )
-                  }
-                  className="w-full px-3 py-2 border border-border rounded-lg bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
-                />
-              </div>
-              <div className="col-span-2"></div>
-            </div>
+            <h3 className="mb-3 font-semibold text-lg">Max Rate</h3>
+            <RateTableHeader />
+            <RateTableRow
+              label="All sales prices"
+              ariaLabel="Checkout max cash % of sale, all sales prices"
+              value={
+                customRates.checkout?.percentage ??
+                DEFAULT_CUSTOM_RATES.checkout!.percentage
+              }
+              onChange={(value) =>
+                saveTopOffers(updateTopOfferCheckoutRate(settings.topOffers, value))
+              }
+            />
           </div>
 
           <div className="border-t border-border" />
@@ -573,6 +608,7 @@ export function TopOffersSettings({
                       <>
                         <RateRuleEditor
                           title="Suggestion Rates"
+                          valueLabel="Suggested % of sale"
                           rules={offer.startingRules}
                           defaultPercentage={
                             offer.startingDefaultPercentage ??
@@ -630,6 +666,7 @@ export function TopOffersSettings({
 
                     <RateRuleEditor
                       title="Max Rates"
+                      guide={customRates.standard}
                       rules={offer.rules}
                       defaultPercentage={offer.defaultPercentage}
                       onRuleChange={(ruleIndex, field, value) =>

@@ -175,7 +175,7 @@ export function HomePage({ header }: { header: ReactNode }) {
         <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8 lg:py-12">
           <motion.div
             className="mx-auto max-w-5xl text-center"
-            initial="hidden"
+            initial={false}
             animate="visible"
             variants={staggerGroup}
           >
@@ -228,7 +228,7 @@ function HeroPanel() {
   return (
     <motion.div
       className="mx-auto mt-8 max-w-6xl lg:mt-10"
-      initial="hidden"
+      initial={false}
       animate="visible"
       variants={softScale}
       transition={{ delay: 0.18 }}
@@ -252,7 +252,7 @@ function ProductSurfaceSection() {
       <div className="mx-auto max-w-7xl px-4 pt-16 sm:px-6 lg:px-8 lg:pt-24">
         <motion.div
           className="grid gap-10 lg:grid-cols-[0.78fr_1.22fr]"
-          initial="hidden"
+          initial={false}
           whileInView="visible"
           viewport={viewportOnce}
           variants={staggerGroup}
@@ -394,7 +394,7 @@ function CaptureSection() {
       <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
         <motion.div
           className="flex flex-col justify-between gap-8 lg:flex-row lg:items-end"
-          initial="hidden"
+          initial={false}
           whileInView="visible"
           viewport={viewportOnce}
           variants={staggerGroup}
@@ -429,7 +429,7 @@ function ChromeExtensionShowcase() {
   return (
     <motion.div
       className="grid gap-5"
-      initial="hidden"
+      initial={false}
       whileInView="visible"
       viewport={viewportOnce}
       variants={staggerGroup}

@@ -2,7 +2,7 @@ import React from "react";
 import { Command } from "cmdk";
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, test, vi } from "vitest";
-import { ShopifyProductResults } from "./ShopifyProductResults";
+import { ShopifyCompareTray, ShopifyProductResults } from "./ShopifyProductResults";
 
 test("shows stock, price, condition, and SKU in Shopify result cards", () => {
   const html = renderToStaticMarkup(<Command shouldFilter={false}><Command.List>
@@ -13,6 +13,11 @@ test("shows stock, price, condition, and SKU in Shopify result cards", () => {
       ] } }}
       onOpenProduct={vi.fn()}
       onHideProduct={vi.fn()}
+      compareIds={new Set(["gid://shopify/Product/1"])}
+      compareFull={false}
+      compareMode
+      onToggleCompare={vi.fn()}
+      onToggleCompareMode={vi.fn()}
       onRetry={vi.fn()}
       onOpenSettings={vi.fn()}
     />
@@ -23,4 +28,149 @@ test("shows stock, price, condition, and SKU in Shopify result cards", () => {
   expect(html).toContain("3 in stock");
   expect(html).toContain("Used - Good");
   expect(html).toContain("Hide Canon EOS from results");
+  expect(html).toContain("Remove Canon EOS from compare");
+  expect(html).toContain('aria-pressed="true"');
+});
+
+test("compare tray needs at least two products", () => {
+  const product = { id: "gid://shopify/Product/1", title: "Canon EOS", status: "ACTIVE", totalInventory: 3, url: "https://admin.shopify.com/store/sample/products/1", imageUrl: null, price: null, currencyCode: null, sku: null, condition: null };
+  const one = renderToStaticMarkup(<ShopifyCompareTray products={[product]} onRemove={vi.fn()} onClear={vi.fn()} onCompare={vi.fn()} />);
+  expect(one).toMatch(/<button[^>]*disabled=""[^>]*>.*Compare 1/);
+  const two = renderToStaticMarkup(<ShopifyCompareTray products={[product, { ...product, id: "gid://shopify/Product/2", title: "Nikon Z" }]} onRemove={vi.fn()} onClear={vi.fn()} onCompare={vi.fn()} />);
+  expect(two).not.toContain('disabled=""');
+  expect(two).toContain("Nikon Z");
+});
+
+const camera = { id: "gid://shopify/Product/1", title: "Canon EOS", status: "ACTIVE", totalInventory: 3, url: "https://admin.shopify.com/store/sample/products/1", imageUrl: null, price: "299.99", currencyCode: "USD", sku: "CANON-1", condition: "Used - Good" };
+const nikon = { ...camera, id: "gid://shopify/Product/2", title: "Nikon Z", totalInventory: 0, condition: "New" };
+const render = (compareIds: string[], compareMode?: boolean) => renderToStaticMarkup(<Command shouldFilter={false}><Command.List>
+  <ShopifyProductResults
+    query="camera"
+    state={{ kind: "ready", query: "camera", result: { shop: "sample.myshopify.com", products: [camera, nikon] } }}
+    onOpenProduct={vi.fn()} onHideProduct={vi.fn()} compareIds={new Set(compareIds)} compareFull={false}
+    compareMode={compareMode ?? compareIds.length > 0} onToggleCompareMode={vi.fn()}
+    onToggleCompare={vi.fn()} onRetry={vi.fn()} onOpenSettings={vi.fn()}
+  />
+</Command.List></Command>);
+
+test("cards open Shopify until something is picked, then toggle compare with a separate open button", () => {
+  const browsing = render([]);
+  expect(browsing).toContain('aria-label="Open Canon EOS in Shopify"');
+  expect(browsing).not.toContain("Compare mode");
+  const comparing = render([camera.id]);
+  expect(comparing).toContain("Compare mode · click products to add or remove");
+  expect(comparing).toMatch(/aria-label="Remove Canon EOS from compare"[^>]*class="shopify-product-card is-comparing is-compare-mode"/);
+  expect(comparing).toContain('aria-label="Add Nikon Z to compare"');
+  expect(comparing).toContain('class="shopify-product-open-button" data-tooltip="Open in Shopify"');
+});
+
+test("card buttons carry styled tooltips and filters offer the conditions present", () => {
+  const html = render([]);
+  expect(html).toContain('data-tooltip="Add to compare"');
+  expect(html).toContain('data-tooltip="Hide from search results"');
+  expect(html).not.toMatch(/class="shopify-product-(compare|hide)"[^>]*title=/);
+  expect(html).toContain("<option value=\"Used\">Used</option>");
+  expect(html).toContain("<option value=\"New\">New</option>");
+  expect(html).toContain("Price: high to low");
+});
+
+test("when compare is full, unpicked cards are disabled for keyboard and screen readers", () => {
+  const html = renderToStaticMarkup(<Command shouldFilter={false}><Command.List>
+    <ShopifyProductResults
+      query="camera"
+      state={{ kind: "ready", query: "camera", result: { shop: "sample.myshopify.com", products: [camera, nikon] } }}
+      onOpenProduct={vi.fn()} onHideProduct={vi.fn()} compareIds={new Set([camera.id])} compareFull
+      compareMode onToggleCompareMode={vi.fn()}
+      onToggleCompare={vi.fn()} onRetry={vi.fn()} onOpenSettings={vi.fn()}
+    />
+  </Command.List></Command>);
+  expect(html).toMatch(/aria-disabled="true"[^>]*aria-label="Nikon Z \(compare is full\)"|aria-label="Nikon Z \(compare is full\)"[^>]*aria-disabled="true"/);
+  expect(html).toMatch(/aria-disabled="false"[^>]*aria-label="Remove Canon EOS from compare"|aria-label="Remove Canon EOS from compare"[^>]*aria-disabled="false"/);
+});
+
+test("the preselected first result isn't highlighted until arrow keys are used", () => {
+  const html = render([]);
+  expect(html).toContain('class="shopify-results"');
+  expect(html).not.toContain("is-keyboard-nav");
+});
+
+test("a Compare button turns on compare mode before anything is picked", () => {
+  const off = render([]);
+  expect(off).toMatch(/aria-pressed="false" class="shopify-filter-chip shopify-compare-chip"/);
+  const on = render([], true);
+  expect(on).toMatch(/aria-pressed="true" class="shopify-filter-chip shopify-compare-chip"/);
+  expect(on).toContain('aria-label="Add Canon EOS to compare"');
+  expect(on).toContain("Compare mode · click products to add or remove");
+});
+
+const kioskRequest = { id: "k1", productId: "12", variantId: "34", title: "PS5 Slim", variantTitle: "Default Title", sku: "MI01-1", imageUrl: null, priceCents: 45000, status: "waiting" as const, createdAt: Date.now() - 4 * 60_000, expiresAt: Date.now() + 3_000_000 };
+const kiosk = { store: "taylormi", shop: "paymore-taylor.myshopify.com", requests: [kioskRequest], clockOffset: 0, error: null, busy: new Set<string>(), onUpdate: vi.fn() };
+const renderKiosk = (query: string) => renderToStaticMarkup(<Command shouldFilter={false}><Command.List>
+  <ShopifyProductResults
+    query={query}
+    state={query ? { kind: "ready", query, result: { shop: "sample.myshopify.com", products: [camera] } } : { kind: "idle" }}
+    onOpenProduct={vi.fn()} onHideProduct={vi.fn()} compareIds={new Set()} compareFull={false} compareMode={false}
+    onToggleCompareMode={vi.fn()} onToggleCompare={vi.fn()} onRetry={vi.fn()} onOpenSettings={vi.fn()} kiosk={kiosk}
+  />
+</Command.List></Command>);
+
+test("an empty search shows waiting kiosk requests; the card opens Shopify and Clear closes it", () => {
+  const html = renderKiosk("");
+  expect(html).toContain("Kiosk requests");
+  expect(html).toContain("PS5 Slim");
+  expect(html).toContain("SKU MI01-1");
+  expect(html).toContain("4 min");
+  expect(html).toContain('aria-label="Open PS5 Slim in Shopify" class="kiosk-request-open"');
+  expect(html).toContain('aria-label="Clear request for PS5 Slim"');
+  expect(html).not.toContain(">Found<");
+  expect(html).not.toContain(">Shown<");
+  expect(html).not.toContain("Search your Shopify products</strong>");
+});
+
+test("while searching, kiosk requests collapse to one line above the results", () => {
+  const html = renderKiosk("camera");
+  expect(html).toContain("1 kiosk request waiting");
+  expect(html).toContain('aria-expanded="false"');
+  expect(html).not.toContain("SKU MI01-1");
+  expect(html).toContain("Canon EOS");
+});
+
+test("a request's Clear waits while it is being saved", () => {
+  const html = renderToStaticMarkup(<Command shouldFilter={false}><Command.List>
+    <ShopifyProductResults
+      query="" state={{ kind: "idle" }}
+      onOpenProduct={vi.fn()} onHideProduct={vi.fn()} compareIds={new Set()} compareFull={false} compareMode={false}
+      onToggleCompareMode={vi.fn()} onToggleCompare={vi.fn()} onRetry={vi.fn()} onOpenSettings={vi.fn()}
+      kiosk={{ ...kiosk, busy: new Set(["k1"]) }}
+    />
+  </Command.List></Command>);
+  expect(html.match(/disabled=""/g)?.length).toBe(1);
+});
+
+test("kiosk cards for variants of one product announce which variant, with the details attached", () => {
+  const blue = { ...kioskRequest, id: "k2", variantTitle: "Blue" };
+  const html = renderToStaticMarkup(<Command shouldFilter={false}><Command.List>
+    <ShopifyProductResults
+      query="" state={{ kind: "idle" }}
+      onOpenProduct={vi.fn()} onHideProduct={vi.fn()} compareIds={new Set()} compareFull={false} compareMode={false}
+      onToggleCompareMode={vi.fn()} onToggleCompare={vi.fn()} onRetry={vi.fn()} onOpenSettings={vi.fn()}
+      kiosk={{ ...kiosk, requests: [kioskRequest, blue] }}
+    />
+  </Command.List></Command>);
+  expect(html).toContain('aria-label="Open PS5 Slim in Shopify"');
+  expect(html).toContain('aria-label="Open PS5 Slim — Blue in Shopify"');
+  expect(html).toContain('aria-describedby="kiosk-request-k2-meta"');
+  expect(html).toContain('id="kiosk-request-k2-meta"');
+});
+
+test("while searching, an unreachable kiosk queue says so instead of disappearing", () => {
+  const html = renderToStaticMarkup(<Command shouldFilter={false}><Command.List>
+    <ShopifyProductResults
+      query="camera" state={{ kind: "ready", query: "camera", result: { shop: "sample.myshopify.com", products: [camera] } }}
+      onOpenProduct={vi.fn()} onHideProduct={vi.fn()} compareIds={new Set()} compareFull={false} compareMode={false}
+      onToggleCompareMode={vi.fn()} onToggleCompare={vi.fn()} onRetry={vi.fn()} onOpenSettings={vi.fn()}
+      kiosk={{ ...kiosk, requests: [], error: "Kiosk requests failed (503)." }}
+    />
+  </Command.List></Command>);
+  expect(html).toContain("Kiosk queue unavailable");
 });

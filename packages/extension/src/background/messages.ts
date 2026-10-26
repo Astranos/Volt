@@ -171,10 +171,12 @@ export function getMessageAction(value: unknown): string | null {
 
 const SHOPIFY_AUDIT_OFFSCREEN_ACTIONS = new Set([
   "shopifyAuditOffscreenStatus",
+  "shopifyAuditOffscreenStores",
   "shopifyAuditOffscreenConnect",
   "shopifyAuditOffscreenDisconnect",
   "shopifyAuditOffscreenListYesterday",
   "shopifyAuditOffscreenSearchProducts",
+  "shopifyAuditOffscreenProductDetails",
   "shopifyAuditOffscreenHiddenProducts",
   "shopifyAuditOffscreenSetProductHidden",
 ]);
@@ -182,6 +184,13 @@ const SHOPIFY_AUDIT_OFFSCREEN_ACTIONS = new Set([
 export function isShopifyAuditOffscreenRuntimeMessage(value: unknown): boolean {
   const action = getMessageAction(value);
   return action !== null && SHOPIFY_AUDIT_OFFSCREEN_ACTIONS.has(action);
+}
+
+const HANDBOOK_OFFSCREEN_ACTIONS = new Set(["handbookOffscreenList", "handbookOffscreenRevealSecret"]);
+
+export function isHandbookOffscreenRuntimeMessage(value: unknown): boolean {
+  const action = getMessageAction(value);
+  return action !== null && HANDBOOK_OFFSCREEN_ACTIONS.has(action);
 }
 
 export function parseMessageRecord(value: unknown): MessageRecord | null {

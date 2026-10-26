@@ -35,6 +35,8 @@ import type * as cloudWorkspace_photos from "../cloudWorkspace/photos.js";
 import type * as cloudWorkspace_snapshot from "../cloudWorkspace/snapshot.js";
 import type * as crons from "../crons.js";
 import type * as extensionSettings from "../extensionSettings.js";
+import type * as handbook from "../handbook.js";
+import type * as handbookValidators from "../handbookValidators.js";
 import type * as http from "../http.js";
 import type * as http_billing from "../http/billing.js";
 import type * as http_chromeProfileAuth from "../http/chromeProfileAuth.js";
@@ -115,6 +117,8 @@ declare const fullApi: ApiFromModules<{
   "cloudWorkspace/snapshot": typeof cloudWorkspace_snapshot;
   crons: typeof crons;
   extensionSettings: typeof extensionSettings;
+  handbook: typeof handbook;
+  handbookValidators: typeof handbookValidators;
   http: typeof http;
   "http/billing": typeof http_billing;
   "http/chromeProfileAuth": typeof http_chromeProfileAuth;

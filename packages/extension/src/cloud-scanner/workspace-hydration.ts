@@ -8,6 +8,7 @@ import {
 import type { CloudScannerResult, WorkspaceReplica } from "./workspace-types.ts";
 
 const CLOUD_ORIGINS_KEY = "volt.cloudScanner.resultOrigins.v1";
+const PHOTO_HYDRATION_CONCURRENCY = 6;
 
 type CloudOrigin = { workspaceId: string; batchId: string };
 type CloudOrigins = Record<string, CloudOrigin>;
@@ -67,6 +68,7 @@ type PhotoDownload = {
 type WorkspaceHydrationOptions = {
   getPhotoDownload?: (batchId: string, resultId: string) => Promise<PhotoDownload>;
   isCurrent?: () => boolean;
+  onProgress?: () => void;
 };
 
 async function defaultPhotoDownload(batchId: string, resultId: string) {
@@ -149,22 +151,26 @@ export async function hydrateWorkspaceReplica(
   if (plan.deletedIds.length > 0) await deleteMobileScannerResults(plan.deletedIds);
   if (!isCurrent()) return null;
   origins = removeAppliedTombstoneOrigins(origins, plan.deletedIds);
+  // Rows render while photos are still downloading, so a delete in that window
+  // must already know they live in the cloud.
+  await chrome.storage.local.set({ [CLOUD_ORIGINS_KEY]: origins });
+  if (!isCurrent()) return null;
   // One unreachable photo must not strand the results behind it, and it must
   // not pass for success either: the failures are counted and reported once
   // everything reachable has landed.
   let failedCount = 0;
-  for (const result of plan.available) {
-    if (!isCurrent()) return null;
+  const hydrate = async (result: CloudScannerResult) => {
+    if (!isCurrent()) return;
     try {
       if (result.kind === "photo") {
         const blob = await photoBlob(result, options);
-        if (!isCurrent()) return null;
+        if (!isCurrent()) return;
         if (!blob) {
           failedCount += 1;
-          continue;
+          return;
         }
         const dataUrl = await blobToDataUrl(blob);
-        if (!isCurrent()) return null;
+        if (!isCurrent()) return;
         await saveMobileScannerPhoto({
           id: result.id,
           kind: "photo",
@@ -176,7 +182,7 @@ export async function hydrateWorkspaceReplica(
           dataUrl,
         }, { batchId: result.batchId });
       } else {
-        if (!result.value) continue;
+        if (!result.value) return;
         await saveMobileScannerScan({
           id: result.id,
           barcode: result.value,
@@ -186,12 +192,25 @@ export async function hydrateWorkspaceReplica(
         }, { batchId: result.batchId, allowDictation: result.format === "dictation" });
       }
     } catch (_error) {
-      if (!isCurrent()) return null;
-      failedCount += 1;
-      continue;
+      if (isCurrent()) failedCount += 1;
+      return;
     }
     origins[result.id] = { workspaceId: replica.workspaceId, batchId: result.batchId };
+    if (isCurrent()) options.onProgress?.();
+  };
+  // Scans are local writes and land first so the timeline fills in at once.
+  // Photos each cost a signed-URL round trip plus a download, so they run a few
+  // at a time instead of one after another.
+  const photos = plan.available.filter((result) => result.kind === "photo");
+  for (const result of plan.available) {
+    if (result.kind !== "photo") await hydrate(result);
   }
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(PHOTO_HYDRATION_CONCURRENCY, photos.length) }, async () => {
+      while (isCurrent() && next < photos.length) await hydrate(photos[next++]);
+    }),
+  );
   if (!isCurrent()) return null;
   await chrome.storage.local.set({ [CLOUD_ORIGINS_KEY]: origins });
   if (failedCount > 0) {

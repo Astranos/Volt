@@ -1,11 +1,25 @@
 import { ConvexError, v } from "convex/values";
-import { internalMutation, internalQuery } from "./_generated/server";
+import { internalMutation, internalQuery, type QueryCtx } from "./_generated/server";
 
 const tokenFields = {
   encryptedAccessToken: v.string(), encryptedRefreshToken: v.string(),
   expiresAt: v.number(), refreshExpiresAt: v.number(),
 };
 export const MAX_HIDDEN_PRODUCTS = 500;
+/** A franchise can connect each of its stores to one Volt account. */
+export const MAX_SHOPIFY_STORES = 5;
+const storeLimitMessage = `You can connect up to ${MAX_SHOPIFY_STORES} Shopify stores. Disconnect one first.`;
+const connections = (ctx: QueryCtx, owner: string) =>
+  ctx.db.query("shopifyConnections").withIndex("by_ownerTokenIdentifier", q => q.eq("ownerTokenIdentifier", owner));
+/** The owner's connection to `shop`, or their first-connected store when no shop is named (older extensions). */
+export function connectionFor(ctx: QueryCtx, owner: string, shop?: string) {
+  return shop === undefined ? connections(ctx, owner).first()
+    : ctx.db.query("shopifyConnections").withIndex("by_ownerTokenIdentifier_and_shop", q => q.eq("ownerTokenIdentifier", owner).eq("shop", shop)).unique();
+}
+async function atStoreLimit(ctx: QueryCtx, owner: string, shop: string) {
+  const rows = await connections(ctx, owner).take(MAX_SHOPIFY_STORES + 1);
+  return rows.filter(row => row.shop !== shop).length >= MAX_SHOPIFY_STORES;
+}
 export const connectionValidator = v.object({
   _id: v.id("shopifyConnections"), _creationTime: v.number(), ownerTokenIdentifier: v.string(), shop: v.string(),
   ...tokenFields, refreshLease: v.optional(v.object({ nonce: v.string(), expiresAt: v.number() })),
@@ -13,6 +27,7 @@ export const connectionValidator = v.object({
 export const begin = internalMutation({
   args: { ownerTokenIdentifier: v.string(), shop: v.string(), state: v.string(), browserNonceHash: v.string() }, returns: v.null(),
   handler: async (ctx, args) => {
+    if (await atStoreLimit(ctx, args.ownerTokenIdentifier, args.shop)) throw new ConvexError(storeLimitMessage);
     const old = await ctx.db.query("shopifyOAuthStates").withIndex("by_ownerTokenIdentifier", q => q.eq("ownerTokenIdentifier", args.ownerTokenIdentifier)).unique();
     if (old) await ctx.db.delete(old._id);
     await ctx.db.insert("shopifyOAuthStates", { ...args, expiresAt: Date.now() + 10 * 60000 });
@@ -35,16 +50,19 @@ export const finish = internalMutation({
   handler: async (ctx, { stateId, ...tokens }) => {
     const state = await ctx.db.get(stateId);
     if (!state || state.consumedAt === undefined || state.expiresAt <= Date.now()) throw new ConvexError("Shopify connection was canceled. Start again.");
-    const old = await ctx.db.query("shopifyConnections").withIndex("by_ownerTokenIdentifier", q => q.eq("ownerTokenIdentifier", state.ownerTokenIdentifier)).unique();
-    if (old) await ctx.db.delete(old._id);
-    await ctx.db.insert("shopifyConnections", { ...tokens, ownerTokenIdentifier: state.ownerTokenIdentifier, shop: state.shop });
+    // Reconnecting a store replaces its tokens in place, so the first-connected store
+    // (the default for clients that don't pass a shop) stays first. Other stores are kept.
+    const old = await connectionFor(ctx, state.ownerTokenIdentifier, state.shop);
+    if (old) await ctx.db.patch(old._id, { ...tokens, refreshLease: undefined });
+    else if (await atStoreLimit(ctx, state.ownerTokenIdentifier, state.shop)) throw new ConvexError(storeLimitMessage);
+    else await ctx.db.insert("shopifyConnections", { ...tokens, ownerTokenIdentifier: state.ownerTokenIdentifier, shop: state.shop });
     await ctx.db.delete(stateId);
     return null;
   },
 });
 export const read = internalQuery({
-  args: { ownerTokenIdentifier: v.string() }, returns: v.union(connectionValidator, v.null()),
-  handler: (ctx, args) => ctx.db.query("shopifyConnections").withIndex("by_ownerTokenIdentifier", q => q.eq("ownerTokenIdentifier", args.ownerTokenIdentifier)).unique(),
+  args: { ownerTokenIdentifier: v.string(), shop: v.optional(v.string()) }, returns: v.union(connectionValidator, v.null()),
+  handler: (ctx, args) => connectionFor(ctx, args.ownerTokenIdentifier, args.shop),
 });
 export const leaseRefresh = internalMutation({
   args: { connectionId: v.id("shopifyConnections"), nonce: v.string() }, returns: v.boolean(),

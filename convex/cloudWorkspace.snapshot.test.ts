@@ -1,5 +1,5 @@
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { fetchWorkspaceSnapshot, type WorkspaceSnapshotPage } from "@volt/scanner-protocol";
 import { api } from "./_generated/api";
 import schema from "./schema";
@@ -62,6 +62,19 @@ describe("bounded complete workspace snapshots", () => {
     expect(snapshot?.batches.flatMap(batch => batch.results).every(result =>
       result.deliveryState === "deleted" ? result.value === undefined : result.value === text,
     )).toBe(true);
+  });
+
+  test("pages without storage-managed results never read the clock, so Convex can cache them", async () => {
+    const { user } = await seed(5);
+    await user.query(api.cloudWorkspace.workspaceSnapshotPage, { kind: "results", cursor: null });
+    const clock = vi.spyOn(Date, "now");
+    try {
+      const page = await user.query(api.cloudWorkspace.workspaceSnapshotPage, { kind: "results", cursor: null });
+      expect(page?.items).toHaveLength(5);
+      expect(clock).not.toHaveBeenCalled();
+    } finally {
+      clock.mockRestore();
+    }
   });
 
   test("rejects continuation cursors across accounts or streams", async () => {

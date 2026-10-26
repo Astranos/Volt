@@ -56,18 +56,18 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
   const signedIn = useSidepanelSignedIn();
   const { signInOpen, openSignIn } = useSidepanelSignIn();
   if (!cloudWorkspace.historyReady) {
-    // Mirrors the ScrollArea's px-4 pb-4 gutters so the signed-out state lines
-    // up with the rest of the timeline instead of hugging the panel edges.
-    return signedIn === false ? (
+    // Mirrors the ScrollArea's px-4 pb-4 gutters so these states line up with
+    // the rest of the timeline instead of hugging the panel edges.
+    return (
       <div className="min-h-0 flex-1 px-4 pb-4">
-        {signInOpen ? (
+        {signedIn !== false ? (
+          <LoadingHistory />
+        ) : signInOpen ? (
           <SidepanelSignInCard />
         ) : (
           <EmptyHistory signedOut onSignIn={openSignIn} />
         )}
       </div>
-    ) : (
-      <LoadingHistory />
     );
   }
   // Remounting also discards old previews, selections and undo state.

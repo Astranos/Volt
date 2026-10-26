@@ -24,6 +24,61 @@
   width: 100%;
 }
 
+.extension-profile-sign-in--compact .extension-profile-sign-in-details {
+  background: rgba(28, 25, 23, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  color: #d6d3d1;
+  padding: 8px 10px;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  width: 220px;
+  z-index: 20;
+}
+
+.extension-profile-sign-in--card {
+  display: flex;
+  width: 100%;
+}
+
+.extension-profile-sign-in--card > button.sidepanel-account-control {
+  background: #059669;
+  border: 0;
+  border-radius: 12px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  height: 42px;
+  padding: 0 16px;
+  width: 100%;
+}
+
+.extension-profile-sign-in--card > button.sidepanel-account-control:hover {
+  background: #10b981;
+}
+
+.extension-profile-sign-in--card > button.sidepanel-account-control span {
+  display: inline;
+}
+
+.extension-profile-sign-in--card .extension-profile-sign-in-details {
+  color: #a8a29e;
+  max-width: none;
+}
+
+@media (prefers-color-scheme: light) {
+  .extension-profile-sign-in--compact .extension-profile-sign-in-details {
+    background: rgba(255, 255, 255, 0.98);
+    border-color: rgba(15, 23, 42, 0.1);
+    color: #57534e;
+  }
+
+  .extension-profile-sign-in--card .extension-profile-sign-in-details {
+    color: #78716c;
+  }
+}
+
 .extension-profile-sign-in-error {
   font-size: 12px;
   line-height: 1.4;

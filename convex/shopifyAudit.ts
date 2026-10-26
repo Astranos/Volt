@@ -2,11 +2,11 @@ import { ConvexError, v } from "convex/values";
 import { makeFunctionReference } from "convex/server";
 import { action, mutation, query, type ActionCtx } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
-import { MAX_HIDDEN_PRODUCTS } from "./shopifyStore";
-import { auditRange, decryptToken, encryptToken, exchangeToken, fetchSearchProducts, fetchYesterday, nonce, nonceHash, productSearchQuery, requiredEnv, shopDomain, type Product, type SearchProduct } from "./shopifyHelpers";
+import { connectionFor, MAX_HIDDEN_PRODUCTS, MAX_SHOPIFY_STORES } from "./shopifyStore";
+import { auditRange, decryptToken, encryptToken, exchangeToken, fetchProductDetails, fetchSearchProducts, fetchYesterday, MAX_COMPARE_PRODUCTS, nonce, nonceHash, productSearchQuery, requiredEnv, shopDomain, type Product, type ProductDetails, type SearchProduct } from "./shopifyHelpers";
 
 const begin = makeFunctionReference<"mutation", { ownerTokenIdentifier: string; shop: string; state: string; browserNonceHash: string }, null>("shopifyStore:begin");
-const read = makeFunctionReference<"query", { ownerTokenIdentifier: string }, Doc<"shopifyConnections"> | null>("shopifyStore:read");
+const read = makeFunctionReference<"query", { ownerTokenIdentifier: string; shop?: string }, Doc<"shopifyConnections"> | null>("shopifyStore:read");
 const lease = makeFunctionReference<"mutation", { connectionId: Doc<"shopifyConnections">["_id"]; nonce: string }, boolean>("shopifyStore:leaseRefresh");
 type Tokens = Pick<Doc<"shopifyConnections">, "encryptedAccessToken" | "encryptedRefreshToken" | "expiresAt" | "refreshExpiresAt">;
 const hiddenProductIds = makeFunctionReference<"query", { ownerTokenIdentifier: string; shop: string }, string[]>("shopifyStore:hiddenProductIds");
@@ -31,37 +31,52 @@ export const startConnect = action({
     return { url: url.href, browserCookie: { url: callback, name: "volt_shopify_oauth", value: browserNonce } };
   },
 });
+/** The first-connected store; kept for extensions from before multiple stores. */
 export const getConnection = query({
   args: {}, returns: v.union(v.object({ shop: v.string() }), v.null()),
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new ConvexError("Sign in to view Shopify.");
-    const row = await ctx.db.query("shopifyConnections").withIndex("by_ownerTokenIdentifier", q => q.eq("ownerTokenIdentifier", identity.tokenIdentifier)).unique();
+    const row = await connectionFor(ctx, identity.tokenIdentifier);
     return row ? { shop: row.shop } : null;
   },
 });
-export const disconnect = mutation({
-  args: {}, returns: v.null(),
+/** Every store connected to this account, oldest first. */
+export const listConnections = query({
+  args: {}, returns: v.array(v.object({ shop: v.string() })),
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new ConvexError("Sign in to view Shopify.");
+    const rows = await ctx.db.query("shopifyConnections").withIndex("by_ownerTokenIdentifier", q => q.eq("ownerTokenIdentifier", identity.tokenIdentifier)).take(MAX_SHOPIFY_STORES);
+    return rows.map(row => ({ shop: row.shop }));
+  },
+});
+/** Disconnects one store, or every store when none is named. */
+export const disconnect = mutation({
+  args: { shop: v.optional(v.string()) }, returns: v.null(),
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new ConvexError("Sign in to disconnect Shopify.");
-    const connection = await ctx.db.query("shopifyConnections").withIndex("by_ownerTokenIdentifier", q => q.eq("ownerTokenIdentifier", identity.tokenIdentifier)).unique();
+    const shop = args.shop === undefined ? undefined : shopDomain(args.shop);
+    const rows = shop === undefined
+      ? await ctx.db.query("shopifyConnections").withIndex("by_ownerTokenIdentifier", q => q.eq("ownerTokenIdentifier", identity.tokenIdentifier)).take(MAX_SHOPIFY_STORES + 1)
+      : [await connectionFor(ctx, identity.tokenIdentifier, shop)];
     const state = await ctx.db.query("shopifyOAuthStates").withIndex("by_ownerTokenIdentifier", q => q.eq("ownerTokenIdentifier", identity.tokenIdentifier)).unique();
-    if (connection) await ctx.db.delete(connection._id);
-    if (state) await ctx.db.delete(state._id);
+    for (const row of rows) if (row) await ctx.db.delete(row._id);
+    if (state && (shop === undefined || state.shop === shop)) await ctx.db.delete(state._id);
     return null;
   },
 });
 export const listYesterday = action({
-  args: { startUtc: v.string(), endUtc: v.string(), date: v.string() },
+  args: { startUtc: v.string(), endUtc: v.string(), date: v.string(), shop: v.optional(v.string()) },
   returns: v.object({ shop: v.string(), date: v.string(), products: v.array(v.object({ id: v.string(), title: v.string(), status: v.string(), url: v.string() })) }),
   handler: async (ctx, args): Promise<{ shop: string; date: string; products: Product[] }> => {
     const range = auditRange(args.startUtc, args.endUtc, args.date);
-    return withShopifyAccess(ctx, (shop, access) => fetchYesterday(shop, access, range));
+    return withShopifyAccess(ctx, args.shop, (shop, access) => fetchYesterday(shop, access, range));
   },
 });
 export const searchProducts = action({
-  args: { query: v.string() },
+  args: { query: v.string(), shop: v.optional(v.string()) },
   returns: v.object({
     shop: v.string(),
     products: v.array(v.object({
@@ -72,18 +87,34 @@ export const searchProducts = action({
   }),
   handler: async (ctx, args): Promise<{ shop: string; products: SearchProduct[] }> => {
     productSearchQuery(args.query);
-    return withShopifyAccess(ctx, async (shop, access, owner) => {
+    return withShopifyAccess(ctx, args.shop, async (shop, access, owner) => {
       const hidden = new Set(await ctx.runQuery(hiddenProductIds, { ownerTokenIdentifier: owner, shop }));
       return fetchSearchProducts(shop, access, args.query, hidden);
     });
   },
 });
+export const productDetails = action({
+  args: { productIds: v.array(v.string()), shop: v.optional(v.string()) },
+  returns: v.object({
+    shop: v.string(),
+    products: v.array(v.object({
+      id: v.string(), title: v.string(), status: v.string(), totalInventory: v.number(), url: v.string(), images: v.array(v.string()),
+      currencyCode: v.union(v.string(), v.null()), minPrice: v.union(v.string(), v.null()), maxPrice: v.union(v.string(), v.null()),
+      condition: v.union(v.string(), v.null()), vendor: v.union(v.string(), v.null()), productType: v.union(v.string(), v.null()), descriptionHtml: v.string(),
+      variants: v.array(v.object({ id: v.string(), title: v.string(), sku: v.union(v.string(), v.null()), price: v.union(v.string(), v.null()) })),
+    })),
+  }),
+  handler: async (ctx, args): Promise<{ shop: string; products: ProductDetails[] }> => {
+    if (!args.productIds.length || args.productIds.length > MAX_COMPARE_PRODUCTS) throw new ConvexError(`Compare 1 to ${MAX_COMPARE_PRODUCTS} products.`);
+    return withShopifyAccess(ctx, args.shop, async (shop, access) => ({ shop, products: await fetchProductDetails(shop, access, args.productIds) }));
+  },
+});
 export const listHiddenProducts = query({
-  args: {}, returns: v.array(v.object({ id: v.string(), title: v.string() })),
-  handler: async (ctx) => {
+  args: { shop: v.optional(v.string()) }, returns: v.array(v.object({ id: v.string(), title: v.string() })),
+  handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new ConvexError("Sign in to view Shopify.");
-    const connection = await ctx.db.query("shopifyConnections").withIndex("by_ownerTokenIdentifier", q => q.eq("ownerTokenIdentifier", identity.tokenIdentifier)).unique();
+    const connection = await connectionFor(ctx, identity.tokenIdentifier, args.shop === undefined ? undefined : shopDomain(args.shop));
     if (!connection) return [];
     const rows = await ctx.db.query("shopifyHiddenProducts")
       .withIndex("by_ownerTokenIdentifier_and_shop_and_productId", q => q.eq("ownerTokenIdentifier", identity.tokenIdentifier).eq("shop", connection.shop))
@@ -92,15 +123,15 @@ export const listHiddenProducts = query({
   },
 });
 export const setProductHidden = mutation({
-  args: { productId: v.string(), title: v.string(), hidden: v.boolean() }, returns: v.null(),
+  args: { productId: v.string(), title: v.string(), hidden: v.boolean(), shop: v.optional(v.string()) }, returns: v.null(),
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new ConvexError("Sign in to update Shopify.");
     if (!/^gid:\/\/shopify\/Product\/\d+$/.test(args.productId)) throw new ConvexError("Invalid Shopify product.");
     const title = args.title.trim().slice(0, 255);
     if (!title) throw new ConvexError("Invalid Shopify product.");
-    const connection = await ctx.db.query("shopifyConnections").withIndex("by_ownerTokenIdentifier", q => q.eq("ownerTokenIdentifier", identity.tokenIdentifier)).unique();
-    if (!connection) throw new ConvexError("Connect your Shopify store first.");
+    const connection = await connectionFor(ctx, identity.tokenIdentifier, args.shop === undefined ? undefined : shopDomain(args.shop));
+    if (!connection) throw new ConvexError(notConnected(args.shop));
     const existing = await ctx.db.query("shopifyHiddenProducts")
       .withIndex("by_ownerTokenIdentifier_and_shop_and_productId", q => q.eq("ownerTokenIdentifier", identity.tokenIdentifier).eq("shop", connection.shop).eq("productId", args.productId))
       .unique();
@@ -120,11 +151,14 @@ export const setProductHidden = mutation({
   },
 });
 
-async function withShopifyAccess<T>(ctx: ActionCtx, load: (shop: string, access: string, owner: string) => Promise<T>): Promise<T> {
+const notConnected = (shop: string | undefined) => shop === undefined ? "Connect your Shopify store first." : `${shopDomain(shop)} isn't connected to Volt. Connect it in Volt settings.`;
+
+async function withShopifyAccess<T>(ctx: ActionCtx, requestedShop: string | undefined, load: (shop: string, access: string, owner: string) => Promise<T>): Promise<T> {
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) throw new ConvexError("Sign in to view Shopify.");
-  let row = await ctx.runQuery(read, { ownerTokenIdentifier: identity.tokenIdentifier });
-  if (!row) throw new ConvexError("Connect your Shopify store first.");
+  const lookup = { ownerTokenIdentifier: identity.tokenIdentifier, ...(requestedShop === undefined ? {} : { shop: shopDomain(requestedShop) }) };
+  let row = await ctx.runQuery(read, lookup);
+  if (!row) throw new ConvexError(notConnected(requestedShop));
   if (row.expiresAt <= Date.now() + 60000) {
     const refreshNonce = nonce();
     if (!await ctx.runMutation(lease, { connectionId: row._id, nonce: refreshNonce })) throw new ConvexError("Shopify is refreshing access. Try again shortly.");
@@ -139,11 +173,11 @@ async function withShopifyAccess<T>(ctx: ActionCtx, load: (shop: string, access:
       await ctx.runMutation(finishRefresh, { connectionId: row._id, nonce: refreshNonce, tokens: null }).catch(() => null);
       throw error;
     }
-    row = await ctx.runQuery(read, { ownerTokenIdentifier: identity.tokenIdentifier });
+    row = await ctx.runQuery(read, { ...lookup, shop: row.shop });
     if (!row) throw new ConvexError("Store disconnected.");
   }
   const result = await load(row.shop, await decryptToken(row.encryptedAccessToken, `${identity.tokenIdentifier}|${row.shop}`), identity.tokenIdentifier);
-  const current = await ctx.runQuery(read, { ownerTokenIdentifier: identity.tokenIdentifier });
+  const current = await ctx.runQuery(read, { ...lookup, shop: row.shop });
   if (current?._id !== row._id) throw new ConvexError("Shopify connection changed. Try again.");
   return result;
 }

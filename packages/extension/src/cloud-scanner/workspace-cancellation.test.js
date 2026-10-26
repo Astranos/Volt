@@ -77,3 +77,51 @@ test("store does not persist a merge invalidated while reading", async () => {
   expect(await merging).toBeNull();
   expect(storage.set).not.toHaveBeenCalled();
 });
+
+test("photos hydrate a few at a time after scans, reporting progress before the snapshot finishes", async () => {
+  const { saveMobileScannerScan } = await import("../domain/mobile-scanner-results.ts");
+  const chromeApi = {
+    storage: { local: {
+      get: vi.fn(async () => ({ "volt.cloudScanner.activeClerkSubject.v1": "account-a" })),
+      set: vi.fn(async () => {}),
+      remove: vi.fn(async () => {}),
+    } },
+    runtime: { sendMessage: vi.fn(async () => {}) },
+  };
+  vi.stubGlobal("chrome", chromeApi);
+  vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, blob: async () => new Blob(["photo"], { type: "image/jpeg" }) })));
+  let inFlight = 0;
+  let maxInFlight = 0;
+  const onProgress = vi.fn();
+  const sync = createWorkspaceSync({
+    chromeApi,
+    onProgress,
+    getPhotoDownload: async () => {
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await new Promise((done) => setTimeout(done, 5));
+      inFlight -= 1;
+      return { url: "https://example.test/photo", headers: {} };
+    },
+  });
+  const createdAt = "2026-07-12T12:00:00.000Z";
+  await sync.applySnapshot({
+    workspaceId: "account-a",
+    revision: 1,
+    batches: [{
+      id: "batch-a", deliveryState: "ready", createdAt, updatedAt: createdAt,
+      results: [
+        ...Array.from({ length: 10 }, (_, index) => ({ id: `photo-${index}`, type: "photo", createdAt })),
+        { id: "text-a", type: "text", value: "hello", createdAt },
+      ],
+    }],
+  }, { subject: "account-a" });
+  expect(maxInFlight).toBeGreaterThan(1);
+  expect(maxInFlight).toBeLessThanOrEqual(6);
+  expect(saveMobileScannerPhoto).toHaveBeenCalledTimes(10);
+  expect(vi.mocked(saveMobileScannerScan).mock.invocationCallOrder[0])
+    .toBeLessThan(vi.mocked(saveMobileScannerPhoto).mock.invocationCallOrder[0]);
+  expect(onProgress).toHaveBeenCalled();
+  expect(onProgress.mock.invocationCallOrder[0])
+    .toBeLessThan(vi.mocked(saveMobileScannerPhoto).mock.invocationCallOrder.at(-1));
+});

@@ -5,10 +5,12 @@ import { BookmarksColumn } from "../../src/components/newtab/BookmarksColumn";
 import { HeroBlock } from "../../src/components/newtab/HeroBlock";
 import type { SearchMode } from "../../src/components/newtab/NewTabHelp";
 import { ExtensionAccountControl } from "../../src/components/access/ExtensionAccess";
-import { Calculator, ClipboardCheck, ScanLine, Settings } from "lucide-react";
+import { BookOpen, Calculator, ClipboardCheck, ScanLine, Settings } from "lucide-react";
 import { AppClipQrIcon } from "../../src/components/icons/AppClipQrIcon";
 import { TabManager } from "../../src/utils/tab-manager";
 import { getShopifyAuditConnection, openShopifyAudit } from "../../src/shopify-audit/client";
+import { useShopifyAuditMode } from "../../src/shopify-audit/use-audit-mode";
+import { SHOPIFY_AUDIT_REVIEW_REQUEST_KEY, type ShopifyAuditReviewRequest } from "../../src/domain/shopify-audit";
 import { WhatsNewDialog } from "../../src/components/newtab/WhatsNewDialog";
 import {
   NEW_TAB_SEARCH_PROVIDERS,
@@ -21,9 +23,18 @@ import "../../src/components/newtab/closed-tabs-panel.css";
 import "../../src/components/newtab/newtab-layout.css";
 
 export default function NewTab() {
-  const [activeMode, setActiveMode] = useState<SearchMode>("closed-tabs");
+  const [activeMode, setActiveMode] = useState<SearchMode>("shopify");
   const [auditBusy, setAuditBusy] = useState(false);
   const [auditNotice, setAuditNotice] = useState<string | null>(null);
+  const [auditMode] = useShopifyAuditMode();
+  // Read up front: the side panel must open inside the click's user gesture,
+  // before anything is awaited.
+  const currentTab = useRef<{ id: number | null; windowId: number | null }>({ id: null, windowId: null });
+  useEffect(() => {
+    void chrome.tabs?.getCurrent().then((tab) => {
+      currentTab.current = { id: tab?.id ?? null, windowId: tab?.windowId ?? null };
+    }).catch(() => undefined);
+  }, []);
   const [whatsNewRequest, setWhatsNewRequest] = useState(0);
 
   // Randomize the aurora blobs' starting offset + animation phase on every
@@ -68,15 +79,6 @@ export default function NewTab() {
     };
   }, []);
 
-  const toggleSearchMode = (mode: SearchMode) => {
-    setActiveMode((current) => {
-      return current === mode ? "closed-tabs" : mode;
-    });
-  };
-
-  const setSearchMode = (mode: SearchMode) => {
-    setActiveMode(mode);
-  };
 
   const handleSearchSubmit = async (query: string) => {
     const trimmed = query.trim();
@@ -88,7 +90,7 @@ export default function NewTab() {
     if (!prefixedSearch.query) return;
 
     if (prefixedSearch.mode && prefixedSearch.mode !== activeMode) {
-      setSearchMode(prefixedSearch.mode);
+      setActiveMode(prefixedSearch.mode);
     }
     if (effectiveMode === "shopify") return;
     const intent = resolveNewTabSearchIntent(trimmed, {
@@ -101,7 +103,25 @@ export default function NewTab() {
     }
   };
 
+  const openAuditSidePanel = () => {
+    const { id, windowId } = currentTab.current;
+    setAuditNotice(null);
+    const request: ShopifyAuditReviewRequest = { at: Date.now(), tabId: id };
+    void chrome.storage.local.set({ sidePanelTool: "shopify-audit", sidePanelUrl: null, [SHOPIFY_AUDIT_REVIEW_REQUEST_KEY]: request });
+    const opened = windowId !== null ? chrome.sidePanel.open({ windowId }) : id !== null ? chrome.sidePanel.open({ tabId: id }) : Promise.reject(new Error("Could not find this window."));
+    void opened.then(() => {
+      // Keep the background's panel state in step, as the other panel openers do.
+      if (id !== null) chrome.runtime.sendMessage({ action: "sidePanelToggleResult", status: "opened", tabId: id, tool: "shopify-audit", source: "newtab-audit" }).catch(() => undefined);
+    }).catch((cause: unknown) => {
+      setAuditNotice(cause instanceof Error ? `Could not open the side panel: ${cause.message}` : "Could not open the side panel.");
+    });
+  };
+
   const handleShopifyAudit = async () => {
+    if (auditMode === "sidepanel") {
+      openAuditSidePanel();
+      return;
+    }
     if (auditBusy) return;
     setAuditBusy(true);
     setAuditNotice(null);
@@ -113,9 +133,14 @@ export default function NewTab() {
         return;
       }
       const result = await openShopifyAudit();
+      const waiting = result.count - result.opened;
       setAuditNotice(result.count === 0
         ? `No products were created on ${result.date}.`
-        : `Opened ${result.count} products from ${result.date} in a tab group.`);
+        : result.resumed
+          ? `The ${result.date} audit is already open. Close a reviewed tab to open the next product.`
+          : waiting > 0
+            ? `Opened ${result.opened} of ${result.count} products from ${result.date}. Close a reviewed tab to open the next one.`
+            : `Opened ${result.count} products from ${result.date} in a tab group.`);
     } catch (cause) {
       setAuditNotice(cause instanceof Error ? cause.message : "Could not open the Shopify audit.");
     } finally {
@@ -153,7 +178,7 @@ export default function NewTab() {
               onClick={() => void handleShopifyAudit()}
               disabled={auditBusy}
               aria-label="Audit Shopify products created yesterday"
-              title="Open yesterday's Shopify products for review"
+              data-tooltip="Review yesterday's listings"
             >
               <ClipboardCheck aria-hidden="true" />
               <span>{auditBusy ? "Opening…" : "Audit"}</span>
@@ -165,7 +190,7 @@ export default function NewTab() {
                 void chrome.runtime.sendMessage({ action: "openInSidebar", tool: "top-offers", mode: "open" })
               }
               aria-label="Open Offer Calculator in sidepanel"
-              title="Open Offer Calculator"
+              data-tooltip="Offer calculator"
             >
               <Calculator />
             </button>
@@ -176,9 +201,20 @@ export default function NewTab() {
                 void chrome.runtime.sendMessage({ action: "openInSidebar", tool: "mobile-scanner", mode: "open" })
               }
               aria-label="Open Scanner in sidepanel"
-              title="Open Scanner"
+              data-tooltip="Scanner"
             >
               <ScanLine />
+            </button>
+            <button
+              type="button"
+              className="newtab-settings-button"
+              onClick={() =>
+                void chrome.runtime.sendMessage({ action: "openInSidebar", tool: "handbook", mode: "open" })
+              }
+              aria-label="Open Handbook in sidepanel"
+              data-tooltip="Handbook"
+            >
+              <BookOpen />
             </button>
             <button
               type="button"
@@ -187,7 +223,7 @@ export default function NewTab() {
                 void chrome.runtime.sendMessage({ action: "openMobileCapturePopup" })
               }
               aria-label="Open Volt App Clip QR code"
-              title="Connect Volt App Clip"
+              data-tooltip="Connect Volt App Clip"
             >
               <AppClipQrIcon />
             </button>
@@ -196,7 +232,7 @@ export default function NewTab() {
               className="newtab-settings-button"
               onClick={() => void chrome.runtime.sendMessage({ action: "open-settings" })}
               aria-label="Open Volt settings"
-              title="Open Volt settings"
+              data-tooltip="Settings"
             >
               <Settings />
             </button>
@@ -219,7 +255,7 @@ export default function NewTab() {
             <ClosedTabsPanel
               onSearchSubmit={handleSearchSubmit}
               activeMode={activeMode}
-              onToggleSearchMode={toggleSearchMode}
+              onToggleSearchMode={setActiveMode}
             />
           </div>
 

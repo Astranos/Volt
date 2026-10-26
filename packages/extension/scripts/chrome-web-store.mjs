@@ -381,10 +381,8 @@ async function run() {
   const buildConfig = validateProductionBuildEnv(process.env);
 
   const submittedState = status.submittedItemRevisionStatus?.state;
-  if (submittedState === "PENDING_REVIEW" && options.replacePending) {
-    await cancelSubmission(name, token);
-    console.log("Canceled the pending Chrome Web Store submission");
-  } else if (["PENDING_REVIEW", "STAGED"].includes(submittedState)) {
+  const replacing = submittedState === "PENDING_REVIEW" && options.replacePending;
+  if (!replacing && ["PENDING_REVIEW", "STAGED"].includes(submittedState)) {
     throw new Error(
       `The store already has a ${submittedState} submission. Wait for it or use --replace-pending when appropriate.`,
     );
@@ -395,6 +393,12 @@ async function run() {
     await setPackageVersion(originalPackage, nextVersion);
     const artifactPath = createArtifact(nextVersion);
     await verifyArtifact(nextVersion, artifactPath, buildConfig);
+    // Cancel the pending review only once the replacement is built and verified, so a
+    // failed build never leaves the store with nothing in review.
+    if (replacing) {
+      await cancelSubmission(name, token);
+      console.log("Canceled the pending Chrome Web Store submission");
+    }
     const uploadResult = await upload(name, token, artifactPath);
     uploaded = true;
     console.log(`Uploaded ${uploadResult.crxVersion ?? nextVersion}: ${artifactPath}`);

@@ -2,6 +2,7 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { requestFields } from "./kioskRequestValidators";
 import { catalogProductValidator } from "./catalog/validators";
+import { handbookEntryFields } from "./handbookValidators";
 
 const pushSubscription = v.object({
   endpoint: v.string(),
@@ -31,6 +32,7 @@ export default defineSchema({
     refreshLease: v.optional(v.object({ nonce: v.string(), expiresAt: v.number() })),
   })
     .index("by_ownerTokenIdentifier", ["ownerTokenIdentifier"])
+    .index("by_ownerTokenIdentifier_and_shop", ["ownerTokenIdentifier", "shop"])
     .index("by_shop", ["shop"]),
   shopifyHiddenProducts: defineTable({
     ownerTokenIdentifier: v.string(),
@@ -58,12 +60,18 @@ export default defineSchema({
     .index("by_storeSlug_and_createdAt", ["storeSlug", "createdAt"]),
   workspaces: defineTable({
     ownerClerkUserId: v.string(),
+    // Legacy storage counters, superseded by workspaceStorageUsage.
     managedRecordCount: v.optional(v.number()),
     managedByteCount: v.optional(v.number()),
     name: v.string(),
     createdAt: v.number(),
     updatedAt: v.number(),
   }).index("by_ownerClerkUserId", ["ownerClerkUserId"]),
+  workspaceStorageUsage: defineTable({
+    workspaceId: v.id("workspaces"),
+    recordCount: v.number(),
+    byteCount: v.number(),
+  }).index("by_workspaceId", ["workspaceId"]),
 
   workspaceEnrollments: defineTable({
     workspaceId: v.id("workspaces"),
@@ -237,6 +245,31 @@ export default defineSchema({
     revision: v.number(),
     updatedAt: v.number(),
   }).index("by_ownerTokenIdentifier", ["ownerTokenIdentifier"]),
+
+  handbookEntries: defineTable({
+    workspaceId: v.id("workspaces"),
+    ...handbookEntryFields,
+    // Masked display text for secret entries; the values live in handbookSecrets.
+    secretPreview: v.optional(v.string()),
+    starterKey: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    updatedByName: v.string(),
+  })
+    .index("by_workspaceId_and_order", ["workspaceId", "order"])
+    .index("by_workspaceId_and_starterKey", ["workspaceId", "starterKey"]),
+  // The account's chosen order of handbook categories. Categories not listed follow, in first-seen order.
+  handbookCategoryOrders: defineTable({
+    workspaceId: v.id("workspaces"),
+    categories: v.array(v.string()),
+  }).index("by_workspaceId", ["workspaceId"]),
+  // Kept apart from handbookEntries so list and search reads never load a secret.
+  handbookSecrets: defineTable({
+    workspaceId: v.id("workspaces"),
+    entryId: v.id("handbookEntries"),
+    username: v.optional(v.string()),
+    secret: v.string(),
+  }).index("by_entryId", ["entryId"]),
 
   anonymousTrialGrants: defineTable({
     anonymousId: v.string(),

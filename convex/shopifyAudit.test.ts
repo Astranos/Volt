@@ -4,7 +4,7 @@ import { makeFunctionReference } from "convex/server";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import type { Doc, Id } from "./_generated/dataModel";
 import schema from "./schema";
-import { auditRange, decryptToken, encryptToken, fetchSearchProducts, fetchYesterday, nonceHash, productSearchQuery, shopDomain, verifyCallback } from "./shopifyHelpers";
+import { auditRange, decryptToken, encryptToken, fetchProductDetails, fetchSearchProducts, fetchYesterday, nonceHash, productSearchQuery, shopDomain, verifyCallback } from "./shopifyHelpers";
 
 const modules = import.meta.glob("./**/*.ts");
 const get = makeFunctionReference<"query", Record<string, never>, { shop: string } | null>("shopifyAudit:getConnection");
@@ -15,7 +15,7 @@ const consume = makeFunctionReference<"mutation", { shop: string; state: string;
 type Tokens = Pick<Doc<"shopifyConnections">, "encryptedAccessToken" | "encryptedRefreshToken" | "expiresAt" | "refreshExpiresAt">;
 const finish = makeFunctionReference<"mutation", { stateId: Id<"shopifyOAuthStates"> } & Tokens, null>("shopifyStore:finish");
 const list = makeFunctionReference<"action", { startUtc: string; endUtc: string; date: string }, { shop: string; date: string; products: { id: string; title: string; status: string; url: string }[] }>("shopifyAudit:listYesterday");
-const search = makeFunctionReference<"action", { query: string }, { shop: string; products: { id: string; title: string; status: string; totalInventory: number; url: string; imageUrl: string | null; price: string | null; currencyCode: string | null; sku: string | null; condition: string | null }[] }>("shopifyAudit:searchProducts");
+const search = makeFunctionReference<"action", { query: string; shop?: string }, { shop: string; products: { id: string; title: string; status: string; totalInventory: number; url: string; imageUrl: string | null; price: string | null; currencyCode: string | null; sku: string | null; condition: string | null }[] }>("shopifyAudit:searchProducts");
 const shop = "example-store.myshopify.com";
 const state = "a".repeat(64);
 const browserNonce = "b".repeat(64);
@@ -119,6 +119,51 @@ describe("Shopify authorization and account isolation", () => {
     await expect(t.mutation(finish, { stateId: pending.id, ...tokens })).rejects.toThrow("canceled");
     expect(await alice.query(get, {})).toBeNull();
   });
+  test("connects several stores to one account and disconnects them one at a time", async () => {
+    const t = convexTest(schema, modules);
+    const alice = t.withIdentity({ subject: "alice", tokenIdentifier: owner });
+    const listConnections = makeFunctionReference<"query", Record<string, never>, { shop: string }[]>("shopifyAudit:listConnections");
+    const disconnectShop = makeFunctionReference<"mutation", { shop?: string }, null>("shopifyAudit:disconnect");
+    const connect = async (store: string, storeState: string) => {
+      await t.mutation(begin, { ownerTokenIdentifier: owner, shop: store, state: storeState, browserNonceHash });
+      const consumed = await t.mutation(consume, { shop: store, state: storeState, browserNonceHash });
+      await t.mutation(finish, { stateId: consumed.id, ...tokens });
+    };
+    const stores = ["one", "two", "three", "four", "five"].map(name => `${name}.myshopify.com`);
+    for (const [index, store] of stores.entries()) await connect(store, String(index).repeat(64));
+    // Reconnecting a store replaces it in place instead of adding a duplicate, so
+    // the first-connected store stays the default for clients that omit a shop.
+    await connect(stores[1], "c".repeat(64));
+    await connect(stores[0], "e".repeat(64));
+    expect(await alice.query(listConnections, {})).toEqual(stores.map(store => ({ shop: store })));
+    expect(await alice.query(get, {})).toEqual({ shop: stores[0] });
+    await expect(t.mutation(begin, { ownerTokenIdentifier: owner, shop: "six.myshopify.com", state: "d".repeat(64), browserNonceHash })).rejects.toThrow("up to 5");
+
+    await alice.mutation(disconnectShop, { shop: stores[0] });
+    expect((await alice.query(listConnections, {})).map(row => row.shop)).not.toContain(stores[0]);
+    expect(await alice.query(get, {})).toEqual({ shop: stores[1] });
+    await expect(alice.action(search, { query: "phone", shop: stores[0] })).rejects.toThrow("isn't connected");
+    await alice.mutation(disconnectShop, {});
+    expect(await alice.query(listConnections, {})).toEqual([]);
+  });
+  test("searches the store that was asked for", async () => {
+    const t = convexTest(schema, modules);
+    const alice = t.withIdentity({ subject: "alice", tokenIdentifier: owner });
+    const second = "second-store.myshopify.com";
+    for (const store of [shop, second]) {
+      const aad = `${owner}|${store}`;
+      await t.run(async ctx => ctx.db.insert("shopifyConnections", {
+        ownerTokenIdentifier: owner, shop: store, encryptedAccessToken: await encryptToken(`access-${store}`, aad),
+        encryptedRefreshToken: await encryptToken("refresh", aad), expiresAt: Date.now() + 3600000, refreshExpiresAt: Date.now() + 86400000,
+      }));
+    }
+    const mock = vi.fn<typeof fetch>().mockImplementation(async () => new Response(JSON.stringify({ data: { inStock: { nodes: [] }, outOfStock: { nodes: [] } } })));
+    vi.stubGlobal("fetch", mock);
+    expect((await alice.action(search, { query: "phone" })).shop).toBe(shop);
+    expect((await alice.action(search, { query: "phone", shop: second })).shop).toBe(second);
+    expect(String(mock.mock.calls[1][0])).toContain(second);
+    expect(new Headers(mock.mock.calls[1][1]?.headers).get("X-Shopify-Access-Token")).toBe(`access-${second}`);
+  });
   test("encrypts secrets with randomized authenticated encryption bound to account and shop", async () => {
     const aad = `${owner}|${shop}`;
     const encrypted = await encryptToken("private-token", aad);
@@ -159,6 +204,24 @@ describe("Shopify previous calendar day", () => {
     expect(() => auditRange(args.endUtc, args.startUtc, args.date)).toThrow();
     expect(() => auditRange("not-a-date", args.endUtc, args.date)).toThrow();
     expect(() => auditRange("2020-01-01T00:00:00.000Z", "2020-01-02T00:00:00.000Z", "2020-01-01")).toThrow();
+  });
+  test("accepts the last 2 or 3 days ending yesterday, but nothing longer", () => {
+    const { endUtc } = yesterday();
+    const range = (days: number) => {
+      const start = new Date(Date.parse(endUtc) - days * 86400000).toISOString();
+      return () => auditRange(start, endUtc, start.slice(0, 10));
+    };
+    expect(range(2)().start).toBe(new Date(Date.parse(endUtc) - 2 * 86400000).toISOString());
+    expect(range(3)().date).toBe(new Date(Date.parse(endUtc) - 3 * 86400000).toISOString().slice(0, 10));
+    expect(range(4)).toThrow("Invalid audit date range.");
+    // Partial days don't count, even when they end yesterday or span about two days.
+    const partial = (hours: number) => () => {
+      const start = new Date(Date.parse(endUtc) - hours * 3600000).toISOString();
+      return auditRange(start, endUtc, start.slice(0, 10));
+    };
+    expect(partial(36)).toThrow("Invalid audit date range.");
+    expect(partial(60)).toThrow("Invalid audit date range.");
+    expect(partial(47)().start).toBeTruthy(); // a 2-day range across a daylight saving change
   });
   test("paginates every status and uses inclusive start / exclusive end creation dates", async () => {
     const mock = vi.fn<typeof fetch>().mockResolvedValueOnce(productPage(true, "1", "ARCHIVED")).mockResolvedValueOnce(productPage(false, "2", "UNLISTED"));
@@ -268,6 +331,25 @@ describe("Shopify live product search", () => {
       inStock: { nodes: [{ ...node("1", 1), id: "gid://shopify/Collection/1" }] }, outOfStock: { nodes: [] },
     } })));
     await expect(fetchSearchProducts(shop, "access", "phone")).rejects.toThrow("invalid product ID");
+  });
+  test("loads compare details in the picked order and skips deleted products", async () => {
+    const node = (id: string) => ({
+      id: `gid://shopify/Product/${id}`, legacyResourceId: id, title: `Product ${id}`, status: "ACTIVE", totalInventory: 2,
+      tags: [], vendor: "Apple", productType: "Phones", descriptionHtml: "<p>Unlocked</p>",
+      media: { nodes: [{ preview: { image: { url: "https://cdn.shopify.com/a.jpg" } } }, { preview: null }] },
+      priceRangeV2: { minVariantPrice: { amount: "199.00", currencyCode: "USD" }, maxVariantPrice: { amount: "249.00", currencyCode: "USD" } },
+      conditionMetafield: { value: "Used - Good" },
+      variants: { nodes: [{ id: "gid://shopify/ProductVariant/9", title: "128GB", sku: " IP-128 ", price: "199.00" }] },
+    });
+    const mock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ data: { nodes: [node("1"), null, node("2")] } })));
+    vi.stubGlobal("fetch", mock);
+    const ids = ["gid://shopify/Product/2", "gid://shopify/Product/3", "gid://shopify/Product/1"];
+    const products = await fetchProductDetails(shop, "access", ids);
+    expect(products.map(product => product.id)).toEqual(["gid://shopify/Product/2", "gid://shopify/Product/1"]);
+    expect(products[0]).toMatchObject({ images: ["https://cdn.shopify.com/a.jpg"], minPrice: "199.00", maxPrice: "249.00", currencyCode: "USD", condition: "Used - Good", vendor: "Apple", descriptionHtml: "<p>Unlocked</p>", variants: [{ title: "128GB", sku: "IP-128", price: "199.00" }] });
+    expect(JSON.parse(String(mock.mock.calls[0][1]?.body)).variables).toEqual({ ids });
+    await expect(fetchProductDetails(shop, "access", ["gid://shopify/Collection/1"])).rejects.toThrow("Compare 1 to 8");
+    await expect(fetchProductDetails(shop, "access", [])).rejects.toThrow("Compare 1 to 8");
   });
   test("requires the connected account and does not expose its token", async () => {
     const t = convexTest(schema, modules);

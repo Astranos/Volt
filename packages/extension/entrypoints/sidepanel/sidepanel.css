@@ -671,6 +671,15 @@ button.sidepanel-account-control {
       0 8px 24px rgba(15, 23, 42, 0.06);
   }
 
+  /* Scanner tiles sit inside overflow-hidden batch sections, which clip a drop
+     shadow into a faint band between tiles — keep only the top highlight. */
+  .mobile-scanner-card,
+  .mobile-scanner-action,
+  .mobile-scanner-icon,
+  .mobile-scanner-inset {
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  }
+
   .top-offers-value-button:hover,
   .top-offers-secondary-action:hover,
   .mobile-scanner-action:hover,
@@ -1215,4 +1224,23 @@ button {
   min-height: 0;
   background: hsl(var(--background));
   color: hsl(var(--foreground));
+}
+
+/* Shopify audit review. The global `button` reset above is unlayered, so it
+   beats Tailwind's background/border utilities on buttons; style them here. */
+.audit-icon-button { border-radius: 6px; }
+.audit-icon-button:hover:not(:disabled) { background: rgba(28, 25, 23, 0.06); }
+.audit-chip,
+.audit-button { border: 1px solid rgba(28, 25, 23, 0.15); border-radius: 999px; }
+.audit-button:hover:not(:disabled) { background: rgba(28, 25, 23, 0.05); }
+.audit-chip[aria-checked="true"] { background: #1c1917; border-color: #1c1917; color: #fff; }
+.audit-button-primary { background: #16a34a; border: 1px solid #16a34a; border-radius: 999px; color: #fff; }
+.audit-button-primary:hover:not(:disabled) { background: #15803d; border-color: #15803d; }
+
+@media (prefers-color-scheme: dark) {
+  .audit-icon-button:hover:not(:disabled) { background: rgba(255, 255, 255, 0.1); }
+  .audit-chip,
+  .audit-button { border-color: rgba(255, 255, 255, 0.15); }
+  .audit-button:hover:not(:disabled) { background: rgba(255, 255, 255, 0.08); }
+  .audit-chip[aria-checked="true"] { background: #fafaf9; border-color: #fafaf9; color: #1c1917; }
 }

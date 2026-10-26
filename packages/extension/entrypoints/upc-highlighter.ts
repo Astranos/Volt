@@ -9,7 +9,8 @@ import { defineContentScript } from "wxt/utils/define-content-script";
  *
  * This content script detects 12-digit UPC codes on web pages,
  * highlights them with a special style, and makes them clickable
- * to copy the UPC code to the clipboard.
+ * to copy the UPC code to the clipboard. Hovering one shows the selection
+ * pill (entrypoints/context-menu.tsx) with UPC actions.
  */
 export default defineContentScript({
   matches: ["<all_urls>"],
@@ -257,7 +258,6 @@ export default defineContentScript({
         upcElement.className = "volt-upc-highlight";
         upcElement.textContent = upcCode;
         upcElement.setAttribute("data-upc", upcCode);
-        upcElement.title = `Click to copy UPC: ${upcCode}`;
 
         // Add click event listener
         upcElement.addEventListener("click", (e) => {
@@ -268,12 +268,8 @@ export default defineContentScript({
           copyUPCToClipboard(upc, upcElement);
         });
 
-        // Add hover tooltip
-        upcElement.addEventListener("mouseenter", () => {
-          if (!upcElement.classList.contains("volt-upc-copied")) {
-            showTooltip(upcElement, "Click to copy UPC");
-          }
-        });
+        // Hovering shows the Copy UPC / eBay / PriceCharting pill, rendered by
+        // the context-menu content script.
 
         fragment.appendChild(upcElement);
         lastIndex = match.index + match[0].length;

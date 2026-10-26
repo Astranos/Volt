@@ -17,10 +17,6 @@
   font-weight: 600;
 }
 
-.shopify-results-stock-first {
-  color: var(--nt-accent-strong);
-  font-weight: 500;
-}
 
 .shopify-results-grid {
   display: grid;
@@ -45,7 +41,7 @@
 }
 
 .shopify-product-card:hover,
-.shopify-product-card[data-selected="true"] {
+.shopify-results.is-keyboard-nav .shopify-product-card[data-selected="true"] {
   background: var(--nt-surface-hover);
   border-color: var(--nt-accent);
   box-shadow: var(--nt-shadow-sm);
@@ -171,9 +167,14 @@
   flex-direction: column;
   align-items: center;
   align-self: stretch;
-  justify-content: space-between;
+  gap: 2px;
 }
 
+.shopify-product-actions .shopify-product-open {
+  margin-top: auto;
+}
+
+.shopify-product-compare,
 .shopify-product-hide {
   display: inline-flex;
   padding: 4px;
@@ -186,15 +187,163 @@
   transition: opacity 140ms ease, background 140ms ease, color 140ms ease;
 }
 
+.shopify-product-compare:hover:not(:disabled),
 .shopify-product-hide:hover {
   background: var(--nt-surface-hover);
   color: var(--nt-text);
 }
 
+.shopify-product-compare:disabled {
+  cursor: not-allowed;
+}
+
+.shopify-product-compare[aria-pressed="true"] {
+  background: var(--nt-accent);
+  color: white;
+  opacity: 1;
+}
+
+.shopify-product-compare[aria-pressed="true"]:hover {
+  background: var(--nt-accent-strong);
+  color: white;
+}
+
+.shopify-product-card.is-comparing {
+  border-color: var(--nt-accent);
+  box-shadow: 0 0 0 1px var(--nt-accent);
+}
+
+.shopify-search-intro-inline-icon {
+  display: inline;
+  vertical-align: -2px;
+}
+
+/* Compare tray — pinned under the results while products are picked. */
+.shopify-compare-tray {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--nt-border);
+  background: var(--nt-surface-strong);
+}
+
+.shopify-compare-tray-items {
+  display: flex;
+  flex: 1;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+  list-style: none;
+  scrollbar-width: none;
+}
+
+.shopify-compare-tray-items li {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  max-width: 190px;
+  padding: 3px 4px 3px 3px;
+  border: 1px solid var(--nt-border-strong);
+  border-radius: 999px;
+  background: var(--nt-surface);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.shopify-compare-tray-thumb {
+  position: relative;
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--nt-accent-soft);
+  color: var(--nt-accent-strong);
+}
+
+.shopify-compare-tray-thumb img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.shopify-compare-tray-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shopify-compare-tray-items button {
+  display: inline-flex;
+  flex: none;
+  padding: 3px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--nt-text-faint);
+  cursor: pointer;
+}
+
+.shopify-compare-tray-items button:hover {
+  background: var(--nt-border);
+  color: var(--nt-text);
+}
+
+.shopify-compare-tray-actions {
+  display: flex;
+  flex: none;
+  gap: 6px;
+}
+
+.shopify-compare-tray-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.shopify-compare-tray-clear {
+  border: 1px solid var(--nt-border-strong);
+  background: transparent;
+  color: var(--nt-text-muted);
+}
+
+.shopify-compare-tray-open {
+  border: 0;
+  background: var(--nt-accent);
+  color: white;
+}
+
+.shopify-compare-tray-open:hover:not(:disabled) {
+  background: var(--nt-accent-strong);
+}
+
+.shopify-compare-tray-open:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 .shopify-product-card:hover .shopify-product-open,
-.shopify-product-card[data-selected="true"] .shopify-product-open,
+.shopify-results.is-keyboard-nav .shopify-product-card[data-selected="true"] .shopify-product-open,
 .shopify-product-card:hover .shopify-product-hide,
-.shopify-product-card[data-selected="true"] .shopify-product-hide,
+.shopify-results.is-keyboard-nav .shopify-product-card[data-selected="true"] .shopify-product-hide,
+.shopify-product-card:hover .shopify-product-compare,
+.shopify-results.is-keyboard-nav .shopify-product-card[data-selected="true"] .shopify-product-compare,
+.shopify-product-compare:focus-visible,
 .shopify-product-hide:focus-visible {
   opacity: 1;
 }
@@ -311,4 +460,155 @@
 @media (prefers-reduced-motion: reduce) {
   .shopify-product-skeleton span { animation: none; }
   .shopify-product-card { transition: none; transform: none !important; }
+}
+
+.shopify-product-card .shopify-product-compare:disabled {
+  opacity: 0.35;
+}
+
+/* Filters and sort, beside the result count. */
+.shopify-results-filters {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.shopify-filter-chip,
+.shopify-filter-select {
+  height: 26px;
+  padding: 0 9px;
+  border: 1px solid var(--nt-border-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--nt-text-muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.shopify-filter-select {
+  padding-right: 4px;
+}
+
+.shopify-results-lead {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.shopify-store-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--nt-text-muted);
+}
+
+.shopify-filter-select option {
+  background: var(--nt-surface-strong);
+  color: var(--nt-text);
+}
+
+.shopify-filter-chip:hover,
+.shopify-filter-select:hover {
+  color: var(--nt-text);
+}
+
+.shopify-filter-chip[aria-pressed="true"] {
+  border-color: var(--nt-accent);
+  background: var(--nt-accent-soft);
+  color: var(--nt-accent);
+}
+
+/* Sits between the count and the filters so results don't shift down. */
+.shopify-compare-hint {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--nt-accent);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Compare mode: the whole card toggles it; a separate button still opens Shopify. */
+.shopify-product-card.is-compare-full {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.shopify-product-open-button {
+  display: inline-flex;
+  margin-top: auto;
+  padding: 4px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--nt-text-faint);
+  cursor: pointer;
+}
+
+.shopify-product-open-button:hover {
+  background: var(--nt-surface-hover);
+  color: var(--nt-text);
+}
+
+/* Styled, instant tooltips; to the left so the scrolling results list can't clip them. */
+.shopify-product-actions [data-tooltip] {
+  position: relative;
+}
+
+.shopify-product-actions [data-tooltip]::after {
+  position: absolute;
+  top: 50%;
+  right: calc(100% + 6px);
+  z-index: 5;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: rgba(10, 10, 10, 0.9);
+  color: #fafafa;
+  content: attr(data-tooltip);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(2px, -50%);
+  transition: opacity 120ms ease 150ms, transform 120ms ease 150ms;
+}
+
+.shopify-product-actions [data-tooltip]:hover::after,
+.shopify-product-actions [data-tooltip]:focus-visible::after {
+  opacity: 1;
+  transform: translate(0, -50%);
+}
+
+@media (prefers-color-scheme: dark) {
+  .shopify-product-actions [data-tooltip]::after {
+    background: rgba(250, 250, 250, 0.92);
+    color: #0a0a0a;
+  }
+}
+
+.shopify-compare-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.shopify-kiosk-hint {
+  margin: 4px 0 0;
+  color: var(--nt-text-faint);
+  font-size: 12px;
+  text-align: center;
+}
+
+.shopify-kiosk-none {
+  margin-top: 6px;
+  color: var(--nt-text-faint);
+  font-size: 12px;
 }

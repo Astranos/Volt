@@ -1,4 +1,6 @@
-import { normalizeShopifyShopInput, validShopifyAdminProductUrl } from "../domain/shopify-audit";
+import { normalizeShopifyShopInput, validShopifyAdminProductUrl, MAX_COMPARE_PRODUCTS, SHOPIFY_ACTIVE_SHOP_KEY, type ShopifyAuditDays, type ShopifyAuditResult, type ShopifyProductDetails } from "../domain/shopify-audit";
+
+export type { ShopifyProductDetails };
 
 export type ShopifySearchProduct = {
   id: string;
@@ -23,35 +25,94 @@ async function send(action: string, extra: Record<string, unknown> = {}): Promis
   return result.value;
 }
 
-export async function getShopifyAuditConnection(): Promise<{ shop: string } | null> {
+/** Without a shop, the background uses the active store. */
+const forShop = (shop: string | undefined) => (shop ? { shop } : {});
+
+/** `shop` is the active store; `shops` is every store connected to the account. */
+export type ShopifyConnection = { shop: string; shops: string[] };
+
+export async function getShopifyAuditConnection(): Promise<ShopifyConnection | null> {
   const value = await send("shopifyAuditStatus");
   if (value === null) return null;
   if (!value || typeof value !== "object") throw new Error("Shopify connection status was invalid.");
-  const shop = (value as { shop?: unknown }).shop;
-  if (typeof shop !== "string" || normalizeShopifyShopInput(shop) !== shop) throw new Error("Shopify connection status was invalid.");
-  return { shop };
+  const { shop, shops } = value as { shop?: unknown; shops?: unknown };
+  const valid = (item: unknown): item is string => typeof item === "string" && normalizeShopifyShopInput(item) === item;
+  if (!valid(shop) || !Array.isArray(shops) || !shops.every(valid) || !shops.includes(shop)) throw new Error("Shopify connection status was invalid.");
+  return { shop, shops };
+}
+
+/** Picks which connected store search, audits, and hidden products use on this computer. */
+export async function setActiveShopifyStore(shop: string): Promise<void> {
+  await chrome.storage.local.set({ [SHOPIFY_ACTIVE_SHOP_KEY]: shop });
 }
 
 export async function connectShopifyAudit(shop: string): Promise<void> {
   await send("shopifyAuditConnect", { shop });
 }
 
-export async function disconnectShopifyAudit(): Promise<void> {
-  await send("shopifyAuditDisconnect");
+export async function disconnectShopifyAudit(shop: string): Promise<void> {
+  await send("shopifyAuditDisconnect", { shop });
 }
 
-export async function openShopifyAudit(): Promise<{ shop: string; date: string; count: number }> {
+export type ShopifyAuditTabsResult = { shop: string; date: string; count: number; opened: number; resumed: boolean };
+
+export async function openShopifyAudit(): Promise<ShopifyAuditTabsResult> {
   const value = await send("shopifyAuditOpenYesterday");
   if (!value || typeof value !== "object") throw new Error("Shopify audit result was invalid.");
-  const result = value as { shop?: unknown; date?: unknown; count?: unknown };
-  if (typeof result.shop !== "string" || typeof result.date !== "string" || typeof result.count !== "number") {
+  const result = value as Partial<ShopifyAuditTabsResult>;
+  if (typeof result.shop !== "string" || typeof result.date !== "string" || typeof result.count !== "number"
+    || typeof result.opened !== "number" || typeof result.resumed !== "boolean") {
     throw new Error("Shopify audit result was invalid.");
   }
-  return { shop: result.shop, date: result.date, count: result.count };
+  return { shop: result.shop, date: result.date, count: result.count, opened: result.opened, resumed: result.resumed };
 }
 
-export async function searchShopifyProducts(query: string): Promise<ShopifySearchResult> {
-  const value = await send("shopifyAuditSearchProducts", { query });
+export async function listShopifyAuditYesterday(days: ShopifyAuditDays = 1, requestedShop?: string): Promise<ShopifyAuditResult> {
+  const value = await send("shopifyAuditListYesterday", { days, ...forShop(requestedShop) });
+  if (!value || typeof value !== "object") throw new Error("Shopify audit result was invalid.");
+  const result = value as Partial<ShopifyAuditResult>;
+  const shop = result.shop;
+  if (typeof shop !== "string" || normalizeShopifyShopInput(shop) !== shop || typeof result.date !== "string"
+    || !Array.isArray(result.products) || !result.products.every((product) => product && typeof product.id === "string"
+      && typeof product.title === "string" && typeof product.status === "string" && validShopifyAdminProductUrl(product.url, shop))) {
+    throw new Error("Shopify audit result was invalid.");
+  }
+  return { shop, date: result.date, products: result.products.map(({ id, title, status, url }) => ({ id, title, status, url })) };
+}
+
+const optionalText = (value: unknown, max: number) => value === null || (typeof value === "string" && value.length <= max);
+const optionalAmount = (value: unknown) => value === null || (typeof value === "string" && /^\d+(?:\.\d+)?$/.test(value));
+
+export async function getShopifyProductDetails(productIds: string[], requestedShop?: string): Promise<{ shop: string; products: ShopifyProductDetails[] }> {
+  const value = await send("shopifyAuditProductDetails", { productIds, ...forShop(requestedShop) });
+  if (!value || typeof value !== "object") throw new Error("Shopify returned invalid product details.");
+  const result = value as { shop?: unknown; products?: unknown };
+  if (typeof result.shop !== "string" || normalizeShopifyShopInput(result.shop) !== result.shop
+    || !Array.isArray(result.products) || result.products.length > MAX_COMPARE_PRODUCTS) {
+    throw new Error("Shopify returned invalid product details.");
+  }
+  const shop = result.shop;
+  const products = result.products.map((item: unknown): ShopifyProductDetails => {
+    const product = (item && typeof item === "object" ? item : {}) as Partial<ShopifyProductDetails>;
+    if (typeof product.id !== "string" || !productIds.includes(product.id) || typeof product.title !== "string"
+      || typeof product.status !== "string" || typeof product.totalInventory !== "number" || !Number.isInteger(product.totalInventory)
+      || typeof product.url !== "string" || !validShopifyAdminProductUrl(product.url, shop)
+      || !Array.isArray(product.images) || !product.images.every((url) => typeof url === "string" && validImageUrl(url))
+      || (product.currencyCode !== null && (typeof product.currencyCode !== "string" || !/^[A-Z]{3}$/.test(product.currencyCode)))
+      || !optionalAmount(product.minPrice) || !optionalAmount(product.maxPrice)
+      || !optionalText(product.condition, 200) || !optionalText(product.vendor, 255) || !optionalText(product.productType, 255)
+      || typeof product.descriptionHtml !== "string" || !Array.isArray(product.variants)
+      || !product.variants.every((variant) => variant && typeof variant.id === "string" && typeof variant.title === "string"
+        && optionalText(variant.sku, 255) && optionalAmount(variant.price))) {
+      throw new Error("Shopify returned an invalid product.");
+    }
+    return product as ShopifyProductDetails;
+  });
+  return { shop, products };
+}
+
+export async function searchShopifyProducts(query: string, shop?: string): Promise<ShopifySearchResult> {
+  const value = await send("shopifyAuditSearchProducts", { query, ...forShop(shop) });
   if (!value || typeof value !== "object") throw new Error("Shopify returned an invalid search result.");
   const result = value as { shop?: unknown; products?: unknown };
   if (typeof result.shop !== "string" || normalizeShopifyShopInput(result.shop) !== result.shop
@@ -89,8 +150,8 @@ function validImageUrl(value: string): boolean {
 
 export type ShopifyHiddenProduct = { id: string; title: string };
 
-export async function listHiddenShopifyProducts(): Promise<ShopifyHiddenProduct[]> {
-  const value = await send("shopifyAuditHiddenProducts");
+export async function listHiddenShopifyProducts(shop?: string): Promise<ShopifyHiddenProduct[]> {
+  const value = await send("shopifyAuditHiddenProducts", forShop(shop));
   if (!Array.isArray(value)) throw new Error("Shopify returned an invalid hidden product list.");
   return value.map((item: unknown) => {
     const product = (item ?? {}) as Partial<ShopifyHiddenProduct>;
@@ -99,6 +160,6 @@ export async function listHiddenShopifyProducts(): Promise<ShopifyHiddenProduct[
   });
 }
 
-export async function setShopifyProductHidden(product: ShopifyHiddenProduct, hidden: boolean): Promise<void> {
-  await send("shopifyAuditSetProductHidden", { productId: product.id, title: product.title, hidden });
+export async function setShopifyProductHidden(product: ShopifyHiddenProduct, hidden: boolean, shop?: string): Promise<void> {
+  await send("shopifyAuditSetProductHidden", { productId: product.id, title: product.title, hidden, ...forShop(shop) });
 }
