@@ -498,7 +498,13 @@ button.sidepanel-account-control {
 }
 
 .top-offers-content {
-  padding: 6px 16px 16px;
+  padding: 6px var(--sidepanel-gutter, 16px) 16px;
+}
+
+/* Side margin shared by every tool tab; narrows with the panel below. */
+.sidepanel-gutter {
+  padding-left: var(--sidepanel-gutter, 16px);
+  padding-right: var(--sidepanel-gutter, 16px);
 }
 
 .top-offers-content,
@@ -564,7 +570,7 @@ button.sidepanel-account-control {
   align-items: center;
   display: flex;
   min-height: 44px;
-  padding: 4px 16px 6px;
+  padding: 4px var(--sidepanel-gutter, 16px) 6px;
 }
 
 .sidepanel-results-header > div {
@@ -820,6 +826,10 @@ button.sidepanel-account-control {
 }
 
 @container (max-width: 430px) {
+  .sidepanel-content-frame {
+    --sidepanel-gutter: 14px;
+  }
+
   .sidepanel-tool-header {
     padding: 10px 10px 5px;
   }
@@ -889,7 +899,7 @@ button.sidepanel-account-control {
 
   .sidepanel-results-header {
     min-height: 40px;
-    padding: 3px 12px 5px;
+    padding: 3px var(--sidepanel-gutter, 14px) 5px;
   }
 
   .sidepanel-empty-history {
@@ -899,7 +909,7 @@ button.sidepanel-account-control {
 
   .top-offers-content {
     gap: 10px;
-    padding: 5px 14px 14px;
+    padding: 5px var(--sidepanel-gutter, 14px) 14px;
   }
 
   .top-offers-results-list {
@@ -926,6 +936,10 @@ button.sidepanel-account-control {
 }
 
 @container (max-width: 360px) {
+  .sidepanel-content-frame {
+    --sidepanel-gutter: 12px;
+  }
+
   .sidepanel-scanner-card > div:first-child {
     gap: 8px;
   }
@@ -946,11 +960,6 @@ button.sidepanel-account-control {
 
   .sidepanel-inline-tool-title span {
     font-size: 18px;
-  }
-
-  .top-offers-content {
-    padding-left: 12px;
-    padding-right: 12px;
   }
 
   .top-offers-value-button {

@@ -4,7 +4,8 @@ import { AppWindow, ExternalLink } from "lucide-react";
 export type OpenMode = "popup" | "tab";
 
 /**
- * Shared by the Shopify buttons, right-click menu, highlight pill, and settings.
+ * Shared by the right-click menu, highlight pill, and settings. The Shopify
+ * buttons always open a popup.
  * Kept in its own chrome.storage.sync key so writing it can never clobber a
  * concurrent cmdkSettings save.
  */

@@ -12,7 +12,7 @@
   flex-direction: column;
   gap: 12px;
   min-width: 0;
-  padding: 6px 16px 16px;
+  padding: 6px var(--sidepanel-gutter, 16px) 16px;
 }
 
 .handbook-editor .handbook-comment-input {

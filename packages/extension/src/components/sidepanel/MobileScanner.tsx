@@ -56,10 +56,10 @@ export default function MobileScanner({ onClose: _onClose }: MobileScannerProps)
   const signedIn = useSidepanelSignedIn();
   const { signInOpen, openSignIn } = useSidepanelSignIn();
   if (!cloudWorkspace.historyReady) {
-    // Mirrors the ScrollArea's px-4 pb-4 gutters so these states line up with
+    // Mirrors the ScrollArea's gutters so these states line up with
     // the rest of the timeline instead of hugging the panel edges.
     return (
-      <div className="min-h-0 flex-1 px-4 pb-4">
+      <div className="sidepanel-gutter min-h-0 flex-1 pb-4">
         {signedIn !== false ? (
           <LoadingHistory />
         ) : signInOpen ? (
@@ -291,7 +291,7 @@ function OwnedMobileScanner({ cloudWorkspace }: { cloudWorkspace: ReturnType<typ
         </div>
       ) : null}
 
-      <ScrollArea className="min-h-0 min-w-0 flex-1 px-4 pb-4 [&>div]:!overflow-x-hidden">
+      <ScrollArea className="sidepanel-gutter min-h-0 min-w-0 flex-1 pb-4 [&>div]:!overflow-x-hidden">
         <div className="min-w-0 space-y-3">
           {loadingResults || awaitingCloudResults ? (
             <LoadingHistory />

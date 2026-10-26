@@ -51,7 +51,6 @@ function mount({ modern = true, card = true, width = 720, settings = {}, stored 
   let checkFields;
   const messages = [];
   let onMessage;
-  let onStorageChanged;
   const context = vm.createContext({
     exports: {}, defineContentScript: (config) => config, document, window, location,
     history: { pushState() {}, replaceState() {} },
@@ -62,7 +61,6 @@ function mount({ modern = true, card = true, width = 720, settings = {}, stored 
       runtime: { getURL: (path) => path, onMessage: { addListener(callback) { onMessage = callback; } }, sendMessage: (message) => messages.push(message) },
       storage: {
         sync: { get: (_, callback) => callback({ cmdkSettings: settings, ...stored }) },
-        onChanged: { addListener(callback) { onStorageChanged = callback; } },
       },
     },
   });
@@ -75,8 +73,7 @@ function mount({ modern = true, card = true, width = 720, settings = {}, stored 
   context.exports.default.main();
   frame();
   return { document, window, host, container, location, messages, frame: () => frame(), resize: (width) => { availableWidth = width; frame(); }, settings: (enabled) => onMessage({ action: "shopify-buttons-settings-changed", enabled }),
-    poll: () => { checkFields(); frame(); },
-    storageChanged: (changes) => onStorageChanged(changes, "sync") };
+    poll: () => { checkFields(); frame(); } };
 }
 
 function addShadowUpc(document, value) {
@@ -128,9 +125,46 @@ test("PriceCharting rereads edited and cleared shadow UPCs instead of stale disp
   assert.match(messages[0].url, /q=0012345678905&/);
   input.value = "";
   poll();
-  assert.equal(button.disabled, true);
   button.onclick({ stopPropagation() {} });
-  assert.equal(messages.length, 1, "a cleared UPC must not launch the old displayed value");
+  assert.equal(messages[1].url, "https://www.pricecharting.com/search-products?q=Dell%20Latitude&type=videogames",
+    "a cleared UPC must not launch the old displayed value");
+});
+
+function addMetafield(document, key, label, value) {
+  const container = document.createElement("div");
+  container.id = `PRODUCT.metafields.custom.${key}-anchor`;
+  container.innerHTML = `<label>${label}</label><input value="${value}">`;
+  document.querySelector("main").appendChild(container);
+}
+
+test("PriceCharting without a UPC searches the game name plus platform", () => {
+  const { document, messages, poll } = mount();
+  addMetafield(document, "game_name", "Game name", "Halo 3");
+  addMetafield(document, "platform", "Platform", "Xbox 360");
+  poll();
+  const button = document.getElementById("volt-tab-pc");
+  assert.equal(button.disabled, false);
+  assert.match(button.getAttribute("data-tooltip"), /^Search PriceCharting by game name \+ platform: Halo 3 Xbox 360/);
+  button.onclick({ stopPropagation() {} });
+  assert.equal(messages[0].url, "https://www.pricecharting.com/search-products?q=Halo%203%20Xbox%20360&type=videogames");
+});
+
+test("PriceCharting falls back to the title and skips a platform it already names", () => {
+  const { document, messages, poll } = mount();
+  document.querySelector('[name="title"]').shadowRoot.querySelector("input").value = "Halo 3 Xbox 360";
+  addMetafield(document, "platform", "Console", "Xbox 360");
+  poll();
+  document.getElementById("volt-tab-pc").onclick({ stopPropagation() {} });
+  assert.match(messages[0].url, /q=Halo%203%20Xbox%20360&/);
+});
+
+test("a UPC still wins over the game name", () => {
+  const { document, messages, poll } = mount();
+  addMetafield(document, "game_name", "Game name", "Halo 3");
+  addShadowUpc(document, "012345678905");
+  poll();
+  document.getElementById("volt-tab-pc").onclick({ stopPropagation() {} });
+  assert.match(messages[0].url, /q=012345678905&/);
 });
 
 for (const html of ['<span class="_ReadField_abc">012345678905</span>', '<input value="012345678905">']) {
@@ -167,7 +201,7 @@ for (const options of [{}, { modern: false }, { width: 480 }, { modern: false, w
     assert.ok(!container.style.getPropertyValue("margin-inline-start"));
     assert.ok(!container.style.getPropertyValue("max-width"));
     assert.equal(document.querySelector("#volt-tab-ebay .volt-action-label"), null);
-    assert.equal(document.querySelector("#volt-tab-pc .volt-action-label").textContent, "UPC");
+    assert.equal(document.querySelector("#volt-tab-pc .volt-action-label").textContent, "PriceCharting");
     assert.equal(document.querySelector("#volt-tab-ebay img").getAttribute("src"), "assets/logos/ebay-wordmark.svg");
   });
 }
@@ -191,7 +225,7 @@ test("disabled actions fade their icon, not their tooltip", () => {
   const styles = document.getElementById("volt-quick-actions-styles").textContent;
   assert.doesNotMatch(styles, /\.volt-action-tab\.disabled \{[^}]*opacity/);
   assert.match(styles, /\.volt-action-tab\.disabled > \* \{\s*opacity: 0\.45;/);
-  assert.equal(document.getElementById("volt-tab-pc").getAttribute("data-tooltip"), "No UPC found");
+  assert.equal(document.getElementById("volt-tab-pc").getAttribute("data-tooltip"), "No UPC or product name found");
 });
 
 test("cleanup preserves newer Shopify inline style changes", () => {
@@ -209,8 +243,8 @@ test("research action reads Shopify's shadow title and still opens sold listings
   assert.match(messages[0].url, /_nkw=Dell%20Latitude.*LH_Sold=1/);
 });
 
-test("research actions open a new tab on modifier or middle click, or when preferred", () => {
-  const { document, messages, storageChanged, frame } = mount();
+test("research actions open a popup unless modifier or middle clicked, whatever the menus' setting", () => {
+  const { document, messages, frame } = mount({ stored: { openSearchResultsIn: "tab" } });
   const ebay = document.getElementById("volt-tab-ebay");
   const click = (event = {}) => ebay.onclick({ stopPropagation() {}, preventDefault() {}, button: 0, ...event });
   click();
@@ -220,25 +254,9 @@ test("research actions open a new tab on modifier or middle click, or when prefe
   ebay.onauxclick({ stopPropagation() {}, preventDefault() {}, button: 2 });
   assert.deepEqual(messages.map((message) => message.action),
     ["openPreviewPopup", "openUrl", "openUrl", "openUrl"]);
-  frame();
-  assert.match(ebay.getAttribute("data-tooltip"), /\nCtrl\+click to open in a new tab$/);
-
-  storageChanged({ cmdkSettings: { newValue: { shopifyButtons: { enabled: true } } } });
-  click();
-  assert.equal(messages.at(-1).action, "openPreviewPopup", "unrelated settings changes keep the mode");
-  storageChanged({ openSearchResultsIn: { newValue: "tab" } });
-  click();
-  assert.equal(messages.at(-1).action, "openUrl");
   assert.match(messages.at(-1).url, /_nkw=Dell%20Latitude.*LH_Sold=1/);
-});
-
-test("stored new-tab preference applies on load and drops the hint", () => {
-  const { document, messages, frame } = mount({ stored: { openSearchResultsIn: "tab" } });
-  document.getElementById("volt-tab-ebay").onclick({ stopPropagation() {}, button: 0 });
-  assert.equal(messages[0].action, "openUrl");
   frame();
-  const tooltip = document.getElementById("volt-tab-ebay").getAttribute("data-tooltip");
-  assert.equal(tooltip, "Search eBay sold prices: Dell Latitude");
+  assert.match(ebay.getAttribute("data-tooltip"), /\nCtrl\+click or middle-click to open in a new tab$/);
 });
 
 test("toolbar follows a replaced product section and leaves non-product pages", () => {

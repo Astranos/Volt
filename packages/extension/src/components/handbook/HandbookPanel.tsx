@@ -42,7 +42,7 @@ export default function HandbookPanel(_props: { onClose?: () => void }) {
   const { signInOpen, openSignIn } = useSidepanelSignIn();
   if (signedIn === false) {
     return signInOpen ? <SidepanelSignInCard /> : (
-      <div className="px-4 pb-4">
+      <div className="sidepanel-gutter pb-4">
         <HandbookNotice
           icon={<LogIn />}
           title="Sign in to see the handbook"
@@ -78,14 +78,14 @@ function HandbookReader() {
 
   if (entriesState.status === "error") {
     return (
-      <div className="px-4 pb-4">
+      <div className="sidepanel-gutter pb-4">
         <HandbookNotice icon={<BookOpen />} title="Couldn't load the handbook" copy={entriesState.error.message} />
       </div>
     );
   }
   if (entriesState.status === "pending") {
     return (
-      <div className="flex flex-col gap-3 px-4 pb-4" aria-busy="true">
+      <div className="sidepanel-gutter flex flex-col gap-3 pb-4" aria-busy="true">
         <div className="volt-skeleton h-10 rounded-xl" />
         <div className="volt-skeleton h-32 rounded-2xl" />
         <div className="volt-skeleton h-24 rounded-2xl" />
@@ -130,7 +130,7 @@ function HandbookList({ entries, onOpen }: { entries: HandbookEntry[]; onOpen: (
 
   if (!entries.length) {
     return (
-      <div className="px-4 pb-4">
+      <div className="sidepanel-gutter pb-4">
         <HandbookNotice
           icon={<BookOpen />}
           title="Your handbook is empty"
