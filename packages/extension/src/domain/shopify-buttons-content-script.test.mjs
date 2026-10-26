@@ -232,6 +232,18 @@ test("an empty <label> falls back to the quick field's accessibility label", () 
   assert.match(messages[0].url, /q=Halo%203%20Xbox%20360&/);
 });
 
+test("a label in its own metafield element still reads the field's input", () => {
+  const { document, messages, poll } = mount();
+  const field = document.createElement("div");
+  field.id = "PRODUCT.metafields.custom.game_name-anchor";
+  field.innerHTML = '<div id="PRODUCT.metafields.custom.game_name-label"><label>Game name *</label></div><input value="Halo 3">';
+  document.querySelector("main").appendChild(field);
+  addMetafield(document, "platform", "Platform:", "Xbox 360");
+  poll();
+  document.getElementById("volt-tab-pc").onclick({ stopPropagation() {} });
+  assert.match(messages[0].url, /q=Halo%203%20Xbox%20360&/);
+});
+
 test("a UPC still wins over the game name", () => {
   const { document, messages, poll } = mount();
   addMetafield(document, "game_name", "Game name", "Halo 3");

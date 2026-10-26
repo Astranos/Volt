@@ -295,13 +295,13 @@ export default defineContentScript({
       const upcContainer =
         document.querySelector('[id*="metafields.custom.upc"]') ||
         document.querySelector('[id*="metafields.custom.barcode"]') ||
-        document.querySelector('[id*="metafields.barcode"]') ||
-        findMetafieldByLabel(/UPC|Barcode/);
+        document.querySelector('[id*="metafields.barcode"]');
 
-      upcValue = extractMetafieldValue(upcContainer);
-      // Whole labels only, so "Game name notes" or "Console color" never feed the search.
-      gameName = extractMetafieldValue(findMetafieldByLabel(/^\s*(video\s*)?game\s*(name|title)\s*$/i))?.trim() || null;
-      platform = extractMetafieldValue(findMetafieldByLabel(/^\s*((video\s*)?game|gaming)?\s*(platform|console|system)\s*$/i))?.trim() || null;
+      upcValue = upcContainer ? extractMetafieldValue(upcContainer) : findMetafieldValueByLabel(/UPC|Barcode/);
+      // Whole labels only (trailing ":" or "*" allowed), so "Game name notes" or
+      // "Console color" never feed the search.
+      gameName = findMetafieldValueByLabel(/^\s*(video\s*)?game\s*(name|title)\s*[:*]?\s*$/i);
+      platform = findMetafieldValueByLabel(/^\s*((video\s*)?game|gaming)?\s*(platform|console|system)\s*[:*]?\s*$/i);
     };
 
     // A <label> in older markup; Shopify's quick fields carry an accessibilitylabel instead.
@@ -309,12 +309,21 @@ export default defineContentScript({
       el.querySelector("label")?.textContent?.trim() ||
       el.querySelector("[accessibilitylabel]")?.getAttribute("accessibilitylabel") || "";
 
-    // The innermost matching container, so a wrapper around several fields can't hand back
-    // another field's input.
-    const findMetafieldByLabel = (pattern) => {
-      const matches = Array.from(document.querySelectorAll('[id*="metafields"]'))
-        .filter((el) => pattern.test(metafieldLabel(el)));
-      return matches.find((el) => !matches.some((other) => other !== el && el.contains(other)));
+    // Start at the innermost matching container, so a wrapper around several fields can't
+    // hand back another field's input, then step out through matching containers until one
+    // has a value (the label may sit in its own element inside the field).
+    const findMetafieldValueByLabel = (pattern) => {
+      const matches = new Set(Array.from(document.querySelectorAll('[id*="metafields"]'))
+        .filter((el) => pattern.test(metafieldLabel(el))));
+      for (const inner of matches) {
+        if ([...matches].some((other) => other !== inner && inner.contains(other))) continue;
+        for (let el = inner; el; el = el.parentElement) {
+          if (!matches.has(el)) continue;
+          const value = extractMetafieldValue(el)?.trim();
+          if (value) return value;
+        }
+      }
+      return null;
     };
 
     const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
