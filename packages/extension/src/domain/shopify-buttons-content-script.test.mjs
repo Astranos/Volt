@@ -244,6 +244,19 @@ test("a label in its own metafield element still reads the field's input", () =>
   assert.match(messages[0].url, /q=Halo%203%20Xbox%20360&/);
 });
 
+test("an empty field never borrows a neighboring field's value through a wrapper", () => {
+  const { document, messages, poll } = mount();
+  const wrapper = document.createElement("div");
+  wrapper.id = "PRODUCT.metafields-section";
+  wrapper.innerHTML = '<div id="PRODUCT.metafields.custom.game_name-label"><label>Game name</label></div>'
+    + '<div id="PRODUCT.metafields.custom.condition-anchor"><label>Condition</label><input value="Sealed"></div>';
+  document.querySelector("main").appendChild(wrapper);
+  addQuickField(document, "platform", "Platform", "");
+  poll();
+  document.getElementById("volt-tab-pc").onclick({ stopPropagation() {} });
+  assert.match(messages[0].url, /q=Dell%20Latitude&/);
+});
+
 test("a UPC still wins over the game name", () => {
   const { document, messages, poll } = mount();
   addMetafield(document, "game_name", "Game name", "Halo 3");

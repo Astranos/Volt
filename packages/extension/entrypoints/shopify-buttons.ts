@@ -309,18 +309,21 @@ export default defineContentScript({
       el.querySelector("label")?.textContent?.trim() ||
       el.querySelector("[accessibilitylabel]")?.getAttribute("accessibilitylabel") || "";
 
-    // Start at the innermost matching container, so a wrapper around several fields can't
-    // hand back another field's input, then step out through matching containers until one
-    // has a value (the label may sit in its own element inside the field).
+    const hasMetafieldControl = (el) =>
+      !!el.querySelector('input, textarea, s-internal-quick-text-field, [class*="_ReadField_"]');
+
+    // Start at the innermost matching container (the label may sit in its own element), then
+    // step out to the first one with a control and read it, even if empty. Never step into a
+    // wrapper that also holds other fields, so another field's input can't answer.
     const findMetafieldValueByLabel = (pattern) => {
-      const matches = new Set(Array.from(document.querySelectorAll('[id*="metafields"]'))
-        .filter((el) => pattern.test(metafieldLabel(el))));
+      const containers = Array.from(document.querySelectorAll('[id*="metafields"]'));
+      const matches = new Set(containers.filter((el) => pattern.test(metafieldLabel(el))));
       for (const inner of matches) {
         if ([...matches].some((other) => other !== inner && inner.contains(other))) continue;
         for (let el = inner; el; el = el.parentElement) {
-          if (!matches.has(el)) continue;
-          const value = extractMetafieldValue(el)?.trim();
-          if (value) return value;
+          if (el !== inner && containers.some((other) =>
+            el.contains(other) && !other.contains(inner) && !inner.contains(other))) break;
+          if (matches.has(el) && hasMetafieldControl(el)) return extractMetafieldValue(el)?.trim() || null;
         }
       }
       return null;
