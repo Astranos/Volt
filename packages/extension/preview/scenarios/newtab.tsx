@@ -11,7 +11,7 @@ import { defineScenario } from "../scenario";
 
 // ?q=<text> types into the search box; "s iphone" searches the Shopify store.
 export default defineScenario({
-  description: "New tab page with closed tabs and bookmarks (?q= types a search, e.g. q=s+iphone; &compare=1 picks one; kiosk=1 shows kiosk requests; stores=1 hides the store picker; shopifyError=1 fails the search; handbook=1 waits for handbook results)",
+  description: "New tab page with closed tabs and bookmarks (?q= types a search, e.g. q=s+iphone; &compare=1 picks one; kiosk=1 shows kiosk requests; stores=1 hides the store picker; shopifyError=1 fails the search; handbook=1 waits for handbook results; whatsNew=1 opens What’s new)",
   viewport: { width: 1440, height: 900 },
   chrome: {
     storage: { local: { voltWhatsNewSeenVersion: RELEASE_NOTES_VERSION } },
@@ -30,6 +30,10 @@ export default defineScenario({
     return <NewTab />;
   },
   act: async (params) => {
+    if (params.get("whatsNew") === "1") {
+      (await waitFor<HTMLButtonElement>(".newtab-whats-new-link")).click();
+      await waitFor(".newtab-whats-new");
+    }
     const query = params.get("q");
     if (!query) return;
     await typeInto(".closed-tabs-search-input", query);
