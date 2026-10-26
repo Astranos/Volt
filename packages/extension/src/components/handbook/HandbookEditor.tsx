@@ -260,15 +260,6 @@ export function HandbookEditor({
           </datalist>
         </Field>
       </div>
-      <Field label="Short note" hint="Shown under the title, like “next to the bank” or “non-emergency”.">
-        <textarea value={draft.note} onChange={(event) => set("note", event.target.value)} rows={2} />
-      </Field>
-      {(draft.kind === "value" || draft.kind === "secret") && hadOlderNotes ? (
-        <Field label="Older notes" hint="Left from an earlier version. Move what you need into the short note (or a page), then clear this.">
-          <textarea value={draft.body} onChange={(event) => set("body", event.target.value)} rows={3} />
-        </Field>
-      ) : null}
-
       {draft.kind === "value" ? (
         <ValueFieldsEditor fields={draft.fields} onChange={(fields) => set("fields", fields)} />
       ) : null}
@@ -384,6 +375,15 @@ export function HandbookEditor({
       {draft.kind === "guide" ? (
         <Field label="Intro (optional)" hint="A line shown above the steps, like “For Windows: no password.”">
           <textarea value={draft.body} onChange={(event) => set("body", event.target.value)} rows={2} />
+        </Field>
+      ) : null}
+      {/* Below the main content: it's a one-line extra, not what the entry is about. */}
+      <Field label="Short note (optional)" hint="Shown under the title, like “next to the bank” or “non-emergency”.">
+        <input value={draft.note} onChange={(event) => set("note", event.target.value)} />
+      </Field>
+      {(draft.kind === "value" || draft.kind === "secret") && hadOlderNotes ? (
+        <Field label="Older notes" hint="Left from an earlier version. Move what you need into the short note (or a page), then clear this.">
+          <textarea value={draft.body} onChange={(event) => set("body", event.target.value)} rows={3} />
         </Field>
       ) : null}
       {draft.kind === "page" ? (
