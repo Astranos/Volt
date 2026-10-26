@@ -222,6 +222,16 @@ test("labels that only mention a console or game name are ignored", () => {
   assert.match(messages[0].url, /q=Halo%203&/);
 });
 
+test("an empty <label> falls back to the quick field's accessibility label", () => {
+  const { document, messages, poll } = mount();
+  addMetafield(document, "game_name", "Game name", "Halo 3");
+  addQuickField(document, "platform", "Platform", "Xbox 360");
+  document.getElementById("PRODUCT.metafields.custom.platform-anchor").prepend(document.createElement("label"));
+  poll();
+  document.getElementById("volt-tab-pc").onclick({ stopPropagation() {} });
+  assert.match(messages[0].url, /q=Halo%203%20Xbox%20360&/);
+});
+
 test("a UPC still wins over the game name", () => {
   const { document, messages, poll } = mount();
   addMetafield(document, "game_name", "Game name", "Halo 3");

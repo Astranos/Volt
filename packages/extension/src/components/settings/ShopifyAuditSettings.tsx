@@ -64,6 +64,8 @@ export function ShopifyAuditSettings() {
   // Read through a ref so a store switch or refresh doesn't restart the Shopify wait.
   const shopsRef = useRef(shops);
   shopsRef.current = shops;
+  // Bumped by Cancel, so a Shopify tab that finishes opening afterwards is ignored.
+  const discoveryAttempt = useRef(0);
   const activeShop = stores.connection?.shop ?? null;
   const [openShops, setOpenShops] = useState<string[]>([]);
   const [selectedShop, setSelectedShop] = useState("");
@@ -181,10 +183,11 @@ export function ShopifyAuditSettings() {
     }
     setWorking(true);
     setError(null);
+    const attempt = ++discoveryAttempt.current;
     try {
       const tab = await chrome.tabs.create({ url: "https://admin.shopify.com/", active: true });
       if (typeof tab.id !== "number") throw new Error("Could not open Shopify sign-in.");
-      setDiscoveryTabId(tab.id);
+      if (attempt === discoveryAttempt.current) setDiscoveryTabId(tab.id);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not open Shopify sign-in.");
     } finally {
@@ -285,7 +288,7 @@ export function ShopifyAuditSettings() {
                 <div className="flex flex-wrap gap-2">
                   <button className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50" disabled={working || (discoveryTabId !== null && !typedShop.trim())} onClick={() => void connect()} type="button">{discoveryTabId !== null && !typedShop.trim() ? "Waiting for Shopify…" : pendingShop ? "Try connecting again" : "Connect Shopify"} <ExternalLink aria-hidden="true" className="ml-1 inline h-3.5 w-3.5" /></button>
                   <button aria-label="Refresh Shopify connection" className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted" onClick={() => void refresh().catch(() => undefined)} type="button"><RefreshCw aria-hidden="true" className="inline h-4 w-4" /> Check connection</button>
-                  {shops.length > 0 && <button className="rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted" onClick={() => { setAdding(false); setPendingShop(null); setTypedShop(""); setDiscoveryTabId(null); }} type="button">Cancel</button>}
+                  {shops.length > 0 && <button className="rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted" onClick={() => { setAdding(false); setPendingShop(null); setTypedShop(""); setDiscoveryTabId(null); discoveryAttempt.current++; }} type="button">Cancel</button>}
                 </div>
                 {discoveryTabId !== null && <p className="text-sm text-muted-foreground">{skippedShop
                   ? `Shopify opened ${skippedShop}, which is already connected. Type the store above, or in that tab click the store name at the top, choose View all, and pick the store to add.`

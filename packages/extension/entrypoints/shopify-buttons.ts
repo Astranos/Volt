@@ -306,8 +306,8 @@ export default defineContentScript({
 
     // A <label> in older markup; Shopify's quick fields carry an accessibilitylabel instead.
     const metafieldLabel = (el) =>
-      el.querySelector("label")?.textContent ??
-      el.querySelector("[accessibilitylabel]")?.getAttribute("accessibilitylabel") ?? "";
+      el.querySelector("label")?.textContent?.trim() ||
+      el.querySelector("[accessibilitylabel]")?.getAttribute("accessibilitylabel") || "";
 
     // The innermost matching container, so a wrapper around several fields can't hand back
     // another field's input.
