@@ -57,6 +57,7 @@
 		B30000000000000000000013 /* SharedPairingSessionComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1000000000000000000000F /* SharedPairingSessionComponents.swift */; };
 		B30000000000000000000014 /* ClipAssets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C3000000000000000000000F /* ClipAssets.xcassets */; };
 		B30000000000000000000015 /* ScannerRecognitionModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000001E /* ScannerRecognitionModels.swift */; };
+		B30000000000000000000025 /* TextRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = C00000000000000000000007 /* TextRecognizer.swift */; };
 		B30000000000000000000016 /* BarcodeDetectionReticle.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000010 /* BarcodeDetectionReticle.swift */; };
 		B30000000000000000000017 /* CameraSessionControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000006 /* CameraSessionControls.swift */; };
 		B30000000000000000000018 /* CaptureGuideOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1000000000000000000000B /* CaptureGuideOverlay.swift */; };
@@ -758,6 +759,7 @@
 				B30000000000000000000012 /* SharedScannerTabComponents.swift in Sources */,
 				B30000000000000000000013 /* SharedPairingSessionComponents.swift in Sources */,
 				B30000000000000000000015 /* ScannerRecognitionModels.swift in Sources */,
+				B30000000000000000000025 /* TextRecognizer.swift in Sources */,
 				B30000000000000000000017 /* CameraSessionControls.swift in Sources */,
 				B30000000000000000000018 /* CaptureGuideOverlay.swift in Sources */,
 				B30000000000000000000019 /* OcrReviewLayer.swift in Sources */,
@@ -798,7 +800,7 @@
 				CODE_SIGN_ENTITLEMENTS = Volt/Volt.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 65;
+				CURRENT_PROJECT_VERSION = 66;
 				DEVELOPMENT_TEAM = GB5SPLUARQ;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Volt/Info.plist;
@@ -807,7 +809,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1.16;
+				MARKETING_VERSION = 0.1.17;
 				PRODUCT_BUNDLE_IDENTIFIER = com.volt.mobile;
 				PRODUCT_NAME = Volt;
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -832,7 +834,7 @@
 				CODE_SIGN_ENTITLEMENTS = Volt/Volt.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 65;
+				CURRENT_PROJECT_VERSION = 66;
 				DEVELOPMENT_TEAM = GB5SPLUARQ;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Volt/Info.plist;
@@ -841,7 +843,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1.16;
+				MARKETING_VERSION = 0.1.17;
 				PRODUCT_BUNDLE_IDENTIFIER = com.volt.mobile;
 				PRODUCT_NAME = Volt;
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -975,7 +977,7 @@
 			buildSettings = {
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 65;
+				CURRENT_PROJECT_VERSION = 66;
 				DEVELOPMENT_TEAM = GB5SPLUARQ;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = VoltScreenshots;
@@ -995,7 +997,7 @@
 			buildSettings = {
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 65;
+				CURRENT_PROJECT_VERSION = 66;
 				DEVELOPMENT_TEAM = GB5SPLUARQ;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = VoltScreenshots;
@@ -1017,7 +1019,7 @@
 				CODE_SIGN_ENTITLEMENTS = VoltClip/VoltClip.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 65;
+				CURRENT_PROJECT_VERSION = 66;
 				DEVELOPMENT_TEAM = GB5SPLUARQ;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = VoltClip/Info.plist;
@@ -1026,7 +1028,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1.16;
+				MARKETING_VERSION = 0.1.17;
 				PRODUCT_BUNDLE_IDENTIFIER = com.volt.mobile.Clip;
 				PRODUCT_NAME = VoltClip;
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -1046,7 +1048,7 @@
 				CODE_SIGN_ENTITLEMENTS = VoltClip/VoltClip.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 65;
+				CURRENT_PROJECT_VERSION = 66;
 				DEVELOPMENT_TEAM = GB5SPLUARQ;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = VoltClip/Info.plist;
@@ -1055,7 +1057,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1.16;
+				MARKETING_VERSION = 0.1.17;
 				PRODUCT_BUNDLE_IDENTIFIER = com.volt.mobile.Clip;
 				PRODUCT_NAME = VoltClip;
 				PROVISIONING_PROFILE_SPECIFIER = "";

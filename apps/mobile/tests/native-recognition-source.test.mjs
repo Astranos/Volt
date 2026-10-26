@@ -38,6 +38,9 @@ test("native OCR review renders Vision quadrilaterals for angled text", () => {
   assert.match(textRecognizerSwiftSource, /quadrilateral: TextQuadrilateral\(observation: observation\)/);
   assert.match(ocrReviewLayerSwiftSource, /OcrRegionShape\(points: points\)/);
   assert.match(ocrReviewLayerSwiftSource, /viewPoints\(for: region\.quadrilateral/);
+  assert.match(textRecognizerSwiftSource, /orientedQuadrilateral\(enclosing: glyphs, aspectRatio: aspectRatio\)/);
+  assert.match(textRecognizerSwiftSource, /if let skew = dominantAngle\(in: upright\.lineAngles\), abs\(skew\) > maximumUprightSkew/);
+  assert.match(textRecognizerSwiftSource, /recognizedPass\(in: rotated\.image, mapPoint: rotated\.mapPoint/);
 });
 
 test("native OCR review auto-cleans selected text while preserving a raw fallback", () => {

@@ -26,7 +26,7 @@ enum OcrTextCleaner {
             instructions: """
             You clean one selected OCR snippet for a mobile scanner.
             Use nearby OCR context only to identify what the selected snippet represents. If it contains a serial number, model number, SKU, code, URL, email, phone number, or identifier with OCR artifacts before or after it, return only the intended value.
-            If context identifies an Apple hardware serial, resolve an O or Q that is an obvious OCR rendering of 0, but do not make that substitution for generic identifiers.
+            If context identifies an Apple hardware serial, resolve an O or Q that is an obvious OCR rendering of 0 and an I that is an obvious OCR rendering of 1, but do not make those substitutions for generic identifiers.
             Preserve exact casing, punctuation, separators, and digits unless an OCR error is obvious.
             Do not return any nearby context. Do not expand abbreviations. Do not explain. Do not add labels or surrounding quotes.
             """
@@ -131,11 +131,14 @@ enum OcrTextCleaner {
             && serialTerms.contains(where: lowercased.contains)
     }
 
+    /// Apple serials never contain O or I, so those are always OCR misreads of 0 and 1.
     private static func repairAppleSerialCharacters(in value: String) -> String {
         String(value.map { character in
             switch character {
             case "O", "o", "Q", "q":
                 return "0"
+            case "I":
+                return "1"
             default:
                 return character
             }

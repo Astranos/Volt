@@ -70,6 +70,23 @@ private enum IdentifierMatcherFixture {
             "Arbitrary OCR text must not be normalized into an identifier"
         )
 
+        // Real label captures: Code 39 delimiters, slashed zeros, scratch diacritics,
+        // Microsoft value-before-label rows, and Apple's 10-character randomized serials.
+        try requireMatch("*G424M011000797*", kind: .serial, value: "G424M011000797", rangeText: "G424M011000797")
+        try requireMatch("*G424M011ØØØ797*", kind: .serial, value: "G424M011000797", rangeText: "G424M011ØØØ797")
+        try requireMatch("ME556428549ŘŚ", kind: .serial, value: "ME556428549", rangeText: "ME556428549")
+        try requireMatch("Serial ME556428549ŘŚ", kind: .serial, value: "ME556428549", rangeText: "ME556428549")
+        try requireMatch("250415443948 :Serial Numb", kind: .serial, value: "250415443948")
+        try requireMatch("057636134008 : Serial Nur", kind: .serial, value: "057636134008")
+        try requireMatch("Serial HJTYWGYQ90", kind: .serial, value: "HJTYWGYQ90")
+        try requireMatch("HJTYWGYQ90", kind: .serial, value: "HJTYWGYQ90")
+        try requireMatch("COWGWK95H4", kind: .serial, value: "C0WGWK95H4", rangeText: "COWGWK95H4")
+        try requireMatch("Model A3058 EMC 3585", kind: .model, value: "A3058")
+        try requireMatch("Model A3058 Serial", kind: .model, value: "A3058")
+        for prose in ["BLOOMINGTON", "TOMAHAWK MAX", "2014-09-25 :MFR Date", "Consumo de energia 180,0 WH"] {
+            try require(LiveTextIdentifierMatcher.match(prose) == nil, "Matched prose as an identifier: \(prose)")
+        }
+
         print("identifier matcher fixtures passed")
     }
 }
