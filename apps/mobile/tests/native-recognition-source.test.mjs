@@ -39,8 +39,9 @@ test("native OCR review renders Vision quadrilaterals for angled text", () => {
   assert.match(ocrReviewLayerSwiftSource, /OcrRegionShape\(points: points\)/);
   assert.match(ocrReviewLayerSwiftSource, /viewPoints\(for: region\.quadrilateral/);
   assert.match(textRecognizerSwiftSource, /orientedQuadrilateral\(enclosing: glyphs, aspectRatio: aspectRatio\)/);
-  assert.match(textRecognizerSwiftSource, /if let skew = dominantAngle\(in: upright\.lineAngles\), abs\(skew\) > maximumUprightSkew/);
-  assert.match(textRecognizerSwiftSource, /recognizedPass\(in: rotated\.image, mapPoint: rotated\.mapPoint/);
+  assert.match(textRecognizerSwiftSource, /subdividingSharedWordBoxes\(glyphs\)/);
+  assert.match(textRecognizerSwiftSource, /shouldStartNewRow\(after: lastGlyph, before: glyph, readingAxis: readingAxis, aspectRatio: aspectRatio\)/);
+  assert.doesNotMatch(textRecognizerSwiftSource, /rotatedImage|fallbackRotations/);
 });
 
 test("native OCR review auto-cleans selected text while preserving a raw fallback", () => {
@@ -53,7 +54,8 @@ test("native OCR review auto-cleans selected text while preserving a raw fallbac
   assert.match(ocrTextCleanerSwiftSource, /Nearby OCR context \(reference only; never return it\)/);
   assert.match(ocrTextCleanerSwiftSource, /let sanitizedText = sanitizeModelOutput\(response\.content, fallback: fallbackText, context: context\)[\s\S]*authoritativeCleanup\(sanitizedText, context: context\)/);
   assert.match(ocrTextCleanerSwiftSource, /private static func authoritativeCleanup\(_ text: String, context: String\)/);
-  assert.match(ocrTextCleanerSwiftSource, /private static func repairedIMEI\(in text: String\)/);
+  assert.match(ocrTextCleanerSwiftSource, /private static func repairedIMEI\(in text: String, context: String\)/);
+  assert.doesNotMatch(ocrTextCleanerSwiftSource, /case "O", "o", "Q", "q":/);
   assert.match(ocrTextCleanerSwiftSource, /private static func isAppleSerialContext\(_ context: String\)/);
   assert.match(scannerStoreCaptureActionsSwiftSource, /let recognizedRegions = try await TextRecognizer\.recognizeTextRegions\(in: preparedImage\)/);
   assert.match(scannerStoreCaptureActionsSwiftSource, /ocrTextRegions = DeviceIdentifierRegionExtractor\.reviewRegions\(from: recognizedRegions\)/);

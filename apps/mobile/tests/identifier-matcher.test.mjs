@@ -16,10 +16,13 @@ test("Swift identifier matcher handles real OCR ambiguity fixtures", {
   const productionSource = fileURLToPath(
     new URL("../ios/Volt/Models/ScannerRecognitionModels.swift", import.meta.url)
   );
+  const cleanerSource = fileURLToPath(
+    new URL("../ios/Volt/Services/OcrTextCleaner.swift", import.meta.url)
+  );
   const fixtureSource = fileURLToPath(new URL("./identifier-matcher-fixture.swift", import.meta.url));
 
   try {
-    execFileSync("xcrun", ["swiftc", productionSource, fixtureSource, "-o", executable], {
+    execFileSync("xcrun", ["swiftc", productionSource, cleanerSource, fixtureSource, "-o", executable], {
       encoding: "utf8",
       stdio: "pipe",
     });
