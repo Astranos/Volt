@@ -90,10 +90,6 @@ export default defineContentScript({
         object-fit: contain;
       }
 
-      .volt-tab-pricecharting img {
-        filter: brightness(0) saturate(100%) opacity(0.75);
-      }
-
       .volt-tab-ebay img {
         width: 34px;
         height: 14px;
@@ -203,6 +199,9 @@ export default defineContentScript({
     // State
     let productTitle = null;
     let upcValue = null;
+    // Used for PriceCharting when a product has no UPC.
+    let gameName = null;
+    let platform = null;
     let overlay = null;
     let activePopup = null;
     let activePopupOpenedAt = 0;
@@ -297,18 +296,29 @@ export default defineContentScript({
         document.querySelector('[id*="metafields.custom.upc"]') ||
         document.querySelector('[id*="metafields.custom.barcode"]') ||
         document.querySelector('[id*="metafields.barcode"]') ||
-        Array.from(document.querySelectorAll('[id*="metafields"]')).find(
-          (el) => {
-            const label = el.querySelector("label");
-            return (
-              label &&
-              (label.textContent.includes("UPC") ||
-                label.textContent.includes("Barcode"))
-            );
-          }
-        );
+        findMetafieldByLabel(/UPC|Barcode/);
 
       upcValue = extractMetafieldValue(upcContainer);
+      gameName = extractMetafieldValue(findMetafieldByLabel(/\bgame\s*(name|title)\b/i));
+      platform = extractMetafieldValue(findMetafieldByLabel(/\b(platform|console)\b/i));
+    };
+
+    const findMetafieldByLabel = (pattern) =>
+      Array.from(document.querySelectorAll('[id*="metafields"]')).find((el) => {
+        const label = el.querySelector("label");
+        return label && pattern.test(label.textContent);
+      });
+
+    // UPC first; otherwise the game name (or product title) plus its platform.
+    const getPriceChartingQuery = () => {
+      if (upcValue) return { query: upcValue, by: "UPC" };
+      const name = gameName || productTitle;
+      if (!name) return null;
+      const withPlatform = platform && !name.toLowerCase().includes(platform.toLowerCase());
+      return {
+        query: withPlatform ? `${name} ${platform}` : name,
+        by: gameName ? (withPlatform ? "game name + platform" : "game name") : (withPlatform ? "title + platform" : "title"),
+      };
     };
 
     // Open Popup Helper
@@ -377,8 +387,10 @@ export default defineContentScript({
       }
     };
 
-    const getPriceChartingUrl = () => upcValue &&
-      `https://www.pricecharting.com/search-products?q=${encodeURIComponent(upcValue)}&type=videogames`;
+    const getPriceChartingUrl = () => {
+      const search = getPriceChartingQuery();
+      return search && `https://www.pricecharting.com/search-products?q=${encodeURIComponent(search.query)}&type=videogames`;
+    };
     const getEbayUrl = () => productTitle &&
       `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(productTitle)}&LH_Sold=1&LH_Complete=1&_dmd=2&rt=nc`;
 
@@ -413,7 +425,7 @@ export default defineContentScript({
       // PriceCharting search
       const pcTab = document.createElement("button");
       pcTab.type = "button";
-      pcTab.setAttribute("aria-label", "Search PriceCharting by UPC");
+      pcTab.setAttribute("aria-label", "Search PriceCharting");
       pcTab.className = "volt-action-tab volt-tab-pricecharting";
       pcTab.id = "volt-tab-pc";
       const pcImg = document.createElement("img");
@@ -422,7 +434,7 @@ export default defineContentScript({
       pcTab.appendChild(pcImg);
       const pcLabel = document.createElement("span");
       pcLabel.className = "volt-action-label";
-      pcLabel.textContent = "UPC";
+      pcLabel.textContent = "PriceCharting";
       pcTab.appendChild(pcLabel);
       bindResearchAction(pcTab, getPriceChartingUrl);
 
@@ -514,17 +526,19 @@ export default defineContentScript({
       const tooltipHint = openIn === "tab" ? "" : `\n${NEW_TAB_HINT}`;
 
       if (pcTab) {
-        if (upcValue) {
+        const search = getPriceChartingQuery();
+        if (search) {
           pcTab.disabled = false;
           pcTab.classList.remove("disabled");
+          const query = search.query.length > 40 ? search.query.slice(0, 40) + "..." : search.query;
           pcTab.setAttribute(
             "data-tooltip",
-            `Search PriceCharting with UPC: ${upcValue}${tooltipHint}`
+            `Search PriceCharting by ${search.by}: ${query}${tooltipHint}`
           );
         } else {
           pcTab.disabled = true;
           pcTab.classList.add("disabled");
-          pcTab.setAttribute("data-tooltip", "No UPC found");
+          pcTab.setAttribute("data-tooltip", "No UPC or product name found");
         }
       }
 
@@ -558,6 +572,8 @@ export default defineContentScript({
     const resetState = () => {
       productTitle = null;
       upcValue = null;
+      gameName = null;
+      platform = null;
       log("State reset for new page navigation");
     };
 
