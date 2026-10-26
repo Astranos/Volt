@@ -7,7 +7,7 @@ import { createServer } from "vite";
 const webRoot = path.resolve(import.meta.dirname);
 
 describe("public UPC search SEO", () => {
-  it("renders shared landing content into HTML before JavaScript runs", async () => {
+  it("renders visible public content and excludes the empty app shell before JavaScript runs", async () => {
     const cacheDir = await mkdtemp(path.join(tmpdir(), "volt-upc-seo-test-"));
     const server = await createServer({
       cacheDir,
@@ -43,6 +43,7 @@ describe("public UPC search SEO", () => {
       expect(html).toContain('name="q"');
       expect(html).toContain('href="/sign-up"');
       expect(html).toContain('src="/src/main.tsx"');
+      expect(html).not.toContain('content="noindex');
       const home = await server.transformIndexHtml(
         "/index.html",
         await readFile(path.join(webRoot, "index.html"), "utf8"),
@@ -52,12 +53,22 @@ describe("public UPC search SEO", () => {
       expect(home).toContain("The fastest way to resell electronics.");
       expect(home).toContain('href="https://voltresale.app/"');
       expect(home).toContain('name="description"');
+      expect(home).not.toContain('content="noindex');
+      // Prerendered text must be visible even if animation scripts never run.
+      expect.soft(
+        home.match(/style="[^"]*\bopacity:\s*0(?:;|")/g) ?? [],
+      ).toEqual([]);
       const shell = await server.transformIndexHtml(
         "/app.html",
         await readFile(path.join(webRoot, "app.html"), "utf8"),
       );
       expect(shell).toContain('<div id="root"></div>');
       expect(shell).not.toContain('rel="canonical"');
+      // The shell also serves URLs exempted from the path-based robots header.
+      const shellRobots = shell.match(
+        /<meta name="robots" content="([^"]+)"\s*\/?>/,
+      )?.[1];
+      expect(shellRobots).toBe("noindex, follow");
     } finally {
       await server.close();
       await rm(cacheDir, { recursive: true, force: true });
