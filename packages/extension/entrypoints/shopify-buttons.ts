@@ -306,18 +306,28 @@ export default defineContentScript({
         findMetafieldByLabel(/\b(platform|console)\b/i))?.trim() || null;
     };
 
-    const findMetafieldByLabel = (pattern) =>
-      Array.from(document.querySelectorAll('[id*="metafields"]')).find((el) => {
-        const label = el.querySelector("label");
-        return label && pattern.test(label.textContent);
-      });
+    // A <label> in older markup; Shopify's quick fields carry an accessibilitylabel instead.
+    const metafieldLabel = (el) =>
+      el.querySelector("label")?.textContent ??
+      el.querySelector("[accessibilitylabel]")?.getAttribute("accessibilitylabel") ?? "";
+
+    // The innermost matching container, so a wrapper around several fields can't hand back
+    // another field's input.
+    const findMetafieldByLabel = (pattern) => {
+      const matches = Array.from(document.querySelectorAll('[id*="metafields"]'))
+        .filter((el) => pattern.test(metafieldLabel(el)));
+      return matches.find((el) => !matches.some((other) => other !== el && el.contains(other)));
+    };
+
+    const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
     // UPC first; otherwise the game name (or product title) plus its platform.
     const getPriceChartingQuery = () => {
       if (upcValue) return { query: upcValue, by: "UPC" };
       const name = gameName || productTitle;
       if (!name) return null;
-      const withPlatform = platform && !name.toLowerCase().includes(platform.toLowerCase());
+      // Whole words only: "DS" isn't already in "My Friends".
+      const withPlatform = platform && !new RegExp(`(^|[^\\p{L}\\p{N}])${escapeRegExp(platform)}($|[^\\p{L}\\p{N}])`, "iu").test(name);
       return {
         query: withPlatform ? `${name} ${platform}` : name,
         by: gameName ? (withPlatform ? "game name + platform" : "game name") : (withPlatform ? "title + platform" : "title"),

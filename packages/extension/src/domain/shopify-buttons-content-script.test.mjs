@@ -168,6 +168,50 @@ test("an exact Platform label beats an earlier label that only mentions a consol
   assert.match(messages[0].url, /q=Halo%203%20Xbox%20360&/);
 });
 
+function addQuickField(document, key, label, value) {
+  const container = document.createElement("div");
+  container.id = `PRODUCT.metafields.custom.${key}-anchor`;
+  const field = document.createElement("s-internal-quick-text-field");
+  field.setAttribute("accessibilitylabel", label);
+  const input = document.createElement("input");
+  input.value = value;
+  field.attachShadow({ mode: "open" }).appendChild(input);
+  container.appendChild(field);
+  document.querySelector("main").appendChild(container);
+}
+
+test("reads game name and platform from Shopify's quick fields", () => {
+  const { document, messages, poll } = mount();
+  addQuickField(document, "game_name", "Game name", "Halo 3");
+  addQuickField(document, "platform", "Platform", "Xbox 360");
+  poll();
+  document.getElementById("volt-tab-pc").onclick({ stopPropagation() {} });
+  assert.match(messages[0].url, /q=Halo%203%20Xbox%20360&/);
+});
+
+test("a platform is only skipped when the name already has it as a word", () => {
+  const { document, messages, poll } = mount();
+  addMetafield(document, "game_name", "Game name", "My Friends");
+  addMetafield(document, "platform", "Platform", "DS");
+  poll();
+  document.getElementById("volt-tab-pc").onclick({ stopPropagation() {} });
+  assert.match(messages[0].url, /q=My%20Friends%20DS&/);
+});
+
+test("a wrapper around several metafields never supplies another field's value", () => {
+  const { document, messages, poll } = mount();
+  const wrapper = document.createElement("div");
+  wrapper.id = "PRODUCT.metafields-section";
+  wrapper.innerHTML = '<div id="PRODUCT.metafields.custom.color-anchor"><label>Console color</label><input value="Black"></div>'
+    + '<div id="PRODUCT.metafields.custom.platform-anchor"><label>Console</label><input value="Wii"></div>';
+  document.querySelector("main").appendChild(wrapper);
+  addMetafield(document, "game_name", "Game name", "Wii Sports");
+  addMetafield(document, "condition", "Game name notes", "ignored");
+  poll();
+  document.getElementById("volt-tab-pc").onclick({ stopPropagation() {} });
+  assert.match(messages[0].url, /q=Wii%20Sports&/);
+});
+
 test("a UPC still wins over the game name", () => {
   const { document, messages, poll } = mount();
   addMetafield(document, "game_name", "Game name", "Halo 3");
