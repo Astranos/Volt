@@ -201,7 +201,6 @@ describe("Shopify authorization and account isolation", () => {
   test("migrates per-account tokens to one shared token per store, keeping the newest", async () => {
     const t = convexTest(schema, modules);
     const migrate = makeFunctionReference<"action", Record<string, never>, null>("shopifyStore:migrateSharedStores");
-    const broken = "broken-store.myshopify.com";
     const legacy = async (account: string, store: string, access: string, expiresAt: number) => {
       const aad = `${account}|${store}`;
       await t.run(async ctx => ctx.db.insert("shopifyConnections", {
@@ -211,16 +210,13 @@ describe("Shopify authorization and account isolation", () => {
     };
     await legacy(owner, shop, "older", Date.now() - 3600000);
     await legacy("clerk|bob", shop, "newer", Date.now() + 1800000);
-    await t.run(ctx => ctx.db.insert("shopifyConnections", {
-      ownerTokenIdentifier: owner, shop: broken, encryptedAccessToken: "00", encryptedRefreshToken: "00", expiresAt: 1, refreshExpiresAt: 1,
-    }));
     await t.action(migrate, {});
     const rows = await t.run(async ctx => ({ stores: await ctx.db.query("shopifyStores").collect(), connections: await ctx.db.query("shopifyConnections").collect() }));
     expect(rows.stores.map(row => row.shop)).toEqual([shop]);
     expect(await decryptToken(rows.stores[0].encryptedAccessToken, storeAad(shop))).toBe("newer");
     expect(await decryptToken(rows.stores[0].encryptedRefreshToken, storeAad(shop))).toBe("newer-refresh");
     expect(rows.connections.map(({ ownerTokenIdentifier, shop: store, encryptedAccessToken, expiresAt }) => ({ ownerTokenIdentifier, store, encryptedAccessToken, expiresAt })))
-      .toEqual([{ ownerTokenIdentifier: owner, store: shop }, { ownerTokenIdentifier: "clerk|bob", store: shop }, { ownerTokenIdentifier: owner, store: broken }]);
+      .toEqual([{ ownerTokenIdentifier: owner, store: shop }, { ownerTokenIdentifier: "clerk|bob", store: shop }]);
   });
   test("encrypts secrets with randomized authenticated encryption bound to account and shop", async () => {
     const aad = `${owner}|${shop}`;

@@ -115,7 +115,7 @@ export const hiddenProductIds = internalQuery({
 
 const legacyFields = { ownerTokenIdentifier: v.string(), shop: v.string(), ...tokenFields };
 const legacyConnectionsReference = makeFunctionReference<"query", Record<string, never>, Array<{ ownerTokenIdentifier: string; shop: string } & Tokens>>("shopifyStore:legacyConnections");
-const adoptStoreReference = makeFunctionReference<"mutation", { shop: string; tokens: Tokens | null }, null>("shopifyStore:adoptStore");
+const adoptStoreReference = makeFunctionReference<"mutation", { shop: string; tokens: Tokens }, null>("shopifyStore:adoptStore");
 type Tokens = Pick<Doc<"shopifyStores">, "encryptedAccessToken" | "encryptedRefreshToken" | "expiresAt" | "refreshExpiresAt">;
 export const legacyConnections = internalQuery({
   args: {}, returns: v.array(v.object(legacyFields)),
@@ -124,11 +124,12 @@ export const legacyConnections = internalQuery({
       : [{ ownerTokenIdentifier: row.ownerTokenIdentifier, shop: row.shop, encryptedAccessToken: row.encryptedAccessToken, encryptedRefreshToken: row.encryptedRefreshToken, expiresAt: row.expiresAt, refreshExpiresAt: row.refreshExpiresAt }]),
 });
 export const adoptStore = internalMutation({
-  args: { shop: v.string(), tokens: v.union(v.object(tokenFields), v.null()) }, returns: v.null(),
+  args: { shop: v.string(), tokens: v.object(tokenFields) }, returns: v.null(),
   handler: async (ctx, { shop, tokens }) => {
-    // A store connected since the deploy already has a newer token.
-    if (tokens && !await storeFor(ctx, shop)) await ctx.db.insert("shopifyStores", { shop, ...tokens });
-    for (const row of await ctx.db.query("shopifyConnections").withIndex("by_shop", q => q.eq("shop", shop)).take(1000)) {
+    const rows = await ctx.db.query("shopifyConnections").withIndex("by_shop", q => q.eq("shop", shop)).take(1000);
+    // Skip stores disconnected or redacted since the snapshot, and stores connected since the deploy (their token is newer).
+    if (rows.length && !await storeFor(ctx, shop)) await ctx.db.insert("shopifyStores", { shop, ...tokens });
+    for (const row of rows) {
       await ctx.db.patch(row._id, { encryptedAccessToken: undefined, encryptedRefreshToken: undefined, expiresAt: undefined, refreshExpiresAt: undefined, refreshLease: undefined });
     }
     return null;
@@ -145,13 +146,12 @@ export const migrateSharedStores = internalAction({
     }
     for (const row of newest.values()) {
       const from = `${row.ownerTokenIdentifier}|${row.shop}`;
-      const tokens = await Promise.all([decryptToken(row.encryptedAccessToken, from), decryptToken(row.encryptedRefreshToken, from)])
-        .then(async ([access, refresh]) => ({
-          encryptedAccessToken: await encryptToken(access, storeAad(row.shop)), encryptedRefreshToken: await encryptToken(refresh, storeAad(row.shop)),
-          expiresAt: row.expiresAt, refreshExpiresAt: row.refreshExpiresAt,
-        }))
-        .catch(() => null);
-      await ctx.runMutation(adoptStoreReference, { shop: row.shop, tokens });
+      // Throws on a decryption failure so a misconfigured key can't discard recoverable tokens.
+      const [access, refresh] = await Promise.all([decryptToken(row.encryptedAccessToken, from), decryptToken(row.encryptedRefreshToken, from)]);
+      await ctx.runMutation(adoptStoreReference, { shop: row.shop, tokens: {
+        encryptedAccessToken: await encryptToken(access, storeAad(row.shop)), encryptedRefreshToken: await encryptToken(refresh, storeAad(row.shop)),
+        expiresAt: row.expiresAt, refreshExpiresAt: row.refreshExpiresAt,
+      } });
     }
     return null;
   },
