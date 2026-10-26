@@ -1,0 +1,66 @@
+{
+  "canvaDesignId": "DAHZFPhxgqI",
+  "canvaEditUrl": "https://www.canva.com/d/CdOYe6EOyYUZohL",
+  "exportSettings": {
+    "fileType": "PNG",
+    "sizeMultiplier": 1,
+    "width": 1280,
+    "height": 800,
+    "transparentBackground": false,
+    "pages": "all"
+  },
+  "images": [
+    {
+      "file": "01-inventory.png",
+      "width": 1280,
+      "height": 800,
+      "channels": 3,
+      "source": "Canva PNG export",
+      "alphaRemoved": false
+    },
+    {
+      "file": "02-upc-research.png",
+      "width": 1280,
+      "height": 800,
+      "channels": 3,
+      "source": "Canva PNG export",
+      "alphaRemoved": false
+    },
+    {
+      "file": "03-quick-actions.png",
+      "width": 1280,
+      "height": 800,
+      "channels": 3,
+      "source": "Canva PNG export",
+      "alphaRemoved": false
+    },
+    {
+      "file": "04-offer-calculator.png",
+      "width": 1280,
+      "height": 800,
+      "channels": 3,
+      "source": "Canva PNG export",
+      "alphaRemoved": false
+    },
+    {
+      "file": "05-product-comparison.png",
+      "width": 1280,
+      "height": 800,
+      "channels": 3,
+      "source": "Canva PNG export",
+      "alphaRemoved": false
+    }
+  ],
+  "productImageDimensions": [
+    1024,
+    1024
+  ],
+  "typography": {
+    "family": "Inter",
+    "headingBold": false,
+    "headingSizePoints": 39.8,
+    "verifiedInCanvaEditor": true
+  },
+  "archiveMatchesScreenshots": true,
+  "captureDeviceScaleFactor": 2
+}

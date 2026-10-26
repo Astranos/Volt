@@ -1,0 +1,6 @@
+import {fileURLToPath} from 'node:url';
+import sharp from '../../node_modules/sharp/lib/index.js';
+const root=fileURLToPath(new URL('./sources/products',import.meta.url));const names=['iphone13','iphone13Pro','iphone13Mini','iphone13ProMax','iphone13Pink'];
+for(const n of names){const file=root+'/'+n+'.png';const {data,info}=await sharp(file).removeAlpha().raw().toBuffer({resolveWithObject:true});let minX=info.width,minY=info.height,maxX=0,maxY=0;for(let y=0;y<info.height;y++)for(let x=0;x<info.width;x++){const i=(y*info.width+x)*info.channels;if(Math.min(data[i],data[i+1],data[i+2])<220){minX=Math.min(minX,x);maxX=Math.max(maxX,x);minY=Math.min(minY,y);maxY=Math.max(maxY,y);}}
+const image=await sharp(file).extract({left:minX,top:minY,width:maxX-minX+1,height:maxY-minY+1}).resize(900,900,{fit:'contain',background:'#fff'}).extend({top:62,bottom:62,left:62,right:62,background:'#fff'}).png().toBuffer();await sharp(image).toFile(file);}
+await sharp({create:{width:1250,height:250,channels:3,background:'#eee'}}).composite(await Promise.all(names.map(async(n,i)=>({input:await sharp(root+'/'+n+'.png').resize(250,250).toBuffer(),left:i*250,top:0})))).png().toFile(root+'/../product-photo-proof.png');

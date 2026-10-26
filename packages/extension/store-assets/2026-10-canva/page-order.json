@@ -1,0 +1,22 @@
+[
+  {
+    "slug": "01-inventory",
+    "title": "Your inventory, one search away"
+  },
+  {
+    "slug": "02-upc-research",
+    "title": "Research prices from any page"
+  },
+  {
+    "slug": "03-quick-actions",
+    "title": "Quick actions, right where you work"
+  },
+  {
+    "slug": "04-offer-calculator",
+    "title": "Turn sale prices into offers"
+  },
+  {
+    "slug": "05-product-comparison",
+    "title": "Compare products side by side"
+  }
+]

@@ -1,5 +1,7 @@
 # Chrome Web Store screenshots
 
+Superseded by the [Canva revision](../2026-10-canva/README.md). Use that set for upload.
+
 Five upload-ready screenshots, ordered by filename, live in `screenshots/`.
 Each is a full-bleed 1280 × 800 RGB PNG with no alpha channel.
 

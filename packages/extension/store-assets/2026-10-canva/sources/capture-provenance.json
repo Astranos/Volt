@@ -1,0 +1,71 @@
+{
+  "captured": "2026-10-26",
+  "method": "Playwright",
+  "deviceScaleFactor": 2,
+  "extensionVersion": "1.0.80",
+  "demoSourceCommit": "b6c0cc8a",
+  "isolatedProfiles": true,
+  "productionCodeModified": false,
+  "canvaDesignId": "DAHZFPhxgqI",
+  "notes": [
+    "No generated UI",
+    "Inventory and comparison are sample data rendered by real components",
+    "Calculator capture is its actual document in an extension tab; Canva places it beside a separate research-page capture"
+  ],
+  "captures": [
+    {
+      "file": "upc-hover.png",
+      "pixelDimensions": {
+        "width": 2380,
+        "height": 1220
+      },
+      "source": "https://www.upcitemdb.com/upc/673419388658",
+      "action": "Actual v1.0.80 content script; hovered a detected UPC"
+    },
+    {
+      "file": "context-menu.png",
+      "pixelDimensions": {
+        "width": 2380,
+        "height": 1220
+      },
+      "source": "https://www.upcitemdb.com/upc/673419388658",
+      "action": "Actual v1.0.80 content script; selected product text and right-clicked"
+    },
+    {
+      "file": "calculator-full.png",
+      "pixelDimensions": {
+        "width": 960,
+        "height": 1800
+      },
+      "source": "chrome-extension://bmgghhmlflbhlnomgnoodpidekpaaifk/sidepanel.html",
+      "action": "Actual v1.0.80 extension document; entered 400 as projected sale"
+    },
+    {
+      "file": "product-page-full.png",
+      "pixelDimensions": {
+        "width": 2880,
+        "height": 2000
+      },
+      "source": "https://www.upcitemdb.com/upc/673419388658",
+      "action": "Actual public product page after Copy UPC action"
+    },
+    {
+      "file": "inventory.png",
+      "pixelDimensions": {
+        "width": 2352,
+        "height": 936
+      },
+      "source": "Volt preview: newtab?q=s+iphone&compare=1",
+      "action": "Real source UI with sample inventory and square product image data; selected two products"
+    },
+    {
+      "file": "compare.png",
+      "pixelDimensions": {
+        "width": 1800,
+        "height": 1300
+      },
+      "source": "Volt preview: shopify-compare&ids=101,102",
+      "action": "Real source UI with sample inventory and square product image data"
+    }
+  ]
+}
