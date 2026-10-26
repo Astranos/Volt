@@ -25,7 +25,8 @@ import { decryptToken, encryptToken } from "./shopifyHelpers";
 // Bounds what a full list read can return: MAX_ENTRIES * MAX_ENTRY_BYTES stays well
 // under Convex's per-function read limit.
 const MAX_ENTRIES = 300;
-// Budget for normalized content, including comments and formatted note bodies.
+// Budget for normalized content. 16,003, not 16,000: renaming `note` to `comment` added 3 bytes,
+// and entries that fit before still save. Don't round it down.
 const MAX_ENTRY_BYTES = 16_003;
 const LIMITS = {
   title: 120,
