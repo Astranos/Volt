@@ -64,3 +64,7 @@
   color: var(--nt-text-muted);
   text-decoration: underline;
 }
+
+.newtab-whats-new-link { display: inline-flex; align-items: center; gap: 6px; }
+.newtab-whats-new-unread { width: 6px; height: 6px; border-radius: 50%; background: var(--nt-accent); box-shadow: 0 0 0 3px var(--nt-accent-soft); }
+.newtab-whats-new-link:has(.newtab-whats-new-unread) { color: var(--nt-text-muted); }

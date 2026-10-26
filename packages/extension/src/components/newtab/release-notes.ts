@@ -1,8 +1,9 @@
 /**
  * The release these notes announce. The new tab opens "What's new" once for
- * anyone who last saw an older version. Bug-fix releases leave this alone so
- * they update quietly; to announce one, rewrite the notes and set this to the
- * version being shipped (or the next version after the current store version).
+ * anyone who last saw an older version. Leave this alone to update the notes
+ * quietly: the "What's new in Volt" link just gets an unread dot. To announce a
+ * release, set this to the version being shipped (or the next version after the
+ * current store version). New installs never get the popup.
  */
 export const RELEASE_NOTES_VERSION = "1.0.69";
 
@@ -59,7 +60,12 @@ export const RELEASE_SETTINGS_LINKS = [
   { label: "Context menu", hash: "contextmenu" },
 ] as const;
 
-function compareVersions(a: string, b: string) {
+export const WHATS_NEW_SEEN_VERSION_KEY = "voltWhatsNewSeenVersion";
+export const WHATS_NEW_SEEN_NOTES_KEY = "voltWhatsNewSeenNotes";
+/** Changes whenever a note is added or retitled; drives the unread dot. */
+export const RELEASE_NOTES_ID = RELEASE_NOTES.map((note) => note.title).join("\n");
+
+export function compareVersions(a: string, b: string) {
   const left = a.split(".").map(Number);
   const right = b.split(".").map(Number);
   for (let i = 0; i < Math.max(left.length, right.length); i++) {
@@ -69,7 +75,12 @@ function compareVersions(a: string, b: string) {
   return 0;
 }
 
-/** First run, or the user hasn't seen the release these notes announce. */
+/** The user hasn't seen the release these notes announce. */
 export function shouldAnnounceRelease(seenVersion: unknown) {
   return typeof seenVersion !== "string" || compareVersions(seenVersion, RELEASE_NOTES_VERSION) < 0;
+}
+
+/** Stored on install so a brand-new user isn't shown notes for changes they never saw. */
+export function markReleaseNotesSeen(version: string) {
+  return chrome.storage.local.set({ [WHATS_NEW_SEEN_VERSION_KEY]: version, [WHATS_NEW_SEEN_NOTES_KEY]: RELEASE_NOTES_ID });
 }

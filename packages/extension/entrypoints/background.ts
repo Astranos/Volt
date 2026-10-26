@@ -47,6 +47,8 @@ import {
   type RuntimeSendResponse,
 } from "../src/background/messages";
 import { EXTENSION_SCANNER_SIGNAL_URL } from "../src/domain/mobile-scanner-signal-url";
+import { REOPEN_NEW_TAB_AFTER_UPDATE_KEY, UPDATE_AVAILABLE_VERSION_KEY } from "../src/domain/extension-update";
+import { markReleaseNotesSeen } from "../src/components/newtab/release-notes";
 import { PROFILE_CLERK_OFFSCREEN_ACTION } from "../src/access/profile-clerk-client";
 
 type RuntimePath =
@@ -364,6 +366,13 @@ export default defineBackground({
         }
       });
 
+      // Chrome installs a downloaded update once Volt goes idle, which can wait
+      // until the browser restarts; the new tab offers to restart sooner.
+      chrome.runtime.onUpdateAvailable.addListener(({ version }) => {
+        log("onUpdateAvailable", version);
+        void chrome.storage.local.set({ [UPDATE_AVAILABLE_VERSION_KEY]: version });
+      });
+
       chrome.runtime.onInstalled.addListener((details) => {
         log("onInstalled", details);
         chrome.storage.local.set({
@@ -377,9 +386,17 @@ export default defineBackground({
 
         if (details.reason === "install") {
           log("First installation detected, opening Volt new tab");
-          chrome.tabs.create({
+          // A new user hasn't missed anything, so skip the What's new popup.
+          void markReleaseNotesSeen(chrome.runtime.getManifest().version).then(() => chrome.tabs.create({
             url: runtimeUrl("/newtab.html"),
             active: true,
+          }));
+        }
+        if (details.reason === "update") {
+          void chrome.storage.local.get(REOPEN_NEW_TAB_AFTER_UPDATE_KEY).then((stored) => {
+            if (!stored[REOPEN_NEW_TAB_AFTER_UPDATE_KEY]) return;
+            void chrome.storage.local.remove(REOPEN_NEW_TAB_AFTER_UPDATE_KEY);
+            void chrome.tabs.create({ url: runtimeUrl("/newtab.html"), active: true });
           });
         }
 

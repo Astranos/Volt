@@ -11,7 +11,8 @@ import { TabManager } from "../../src/utils/tab-manager";
 import { getShopifyAuditConnection, openShopifyAudit } from "../../src/shopify-audit/client";
 import { useShopifyAuditMode } from "../../src/shopify-audit/use-audit-mode";
 import { SHOPIFY_AUDIT_REVIEW_REQUEST_KEY, type ShopifyAuditReviewRequest } from "../../src/domain/shopify-audit";
-import { WhatsNewDialog } from "../../src/components/newtab/WhatsNewDialog";
+import { UpdateReadyButton } from "../../src/components/newtab/UpdateReadyButton";
+import { WhatsNewDialog, useWhatsNew } from "../../src/components/newtab/WhatsNewDialog";
 import {
   NEW_TAB_SEARCH_PROVIDERS,
   parseSearchPrefix,
@@ -35,7 +36,7 @@ export default function NewTab() {
       currentTab.current = { id: tab?.id ?? null, windowId: tab?.windowId ?? null };
     }).catch(() => undefined);
   }, []);
-  const [whatsNewRequest, setWhatsNewRequest] = useState(0);
+  const whatsNew = useWhatsNew();
 
   // Randomize the aurora blobs' starting offset + animation phase on every
   // new-tab load so the bg looks fresh each time.
@@ -172,6 +173,7 @@ export default function NewTab() {
             <h1 className="newtab-header-title">Volt</h1>
           </div>
           <div className="newtab-header-actions">
+            <UpdateReadyButton />
             <button
               type="button"
               className="newtab-settings-button newtab-audit-button"
@@ -267,10 +269,13 @@ export default function NewTab() {
           <BookmarksColumn id="tour-bookmarks" />
         </section>
         <footer className="newtab-footer">
-          <button className="newtab-whats-new-link" onClick={() => setWhatsNewRequest((value) => value + 1)} type="button">What’s new in Volt</button>
+          <button className="newtab-whats-new-link" onClick={whatsNew.show} type="button">
+            {whatsNew.unread && <span className="newtab-whats-new-unread" aria-label="Unread" />}
+            What’s new in Volt
+          </button>
         </footer>
       </div>
-      <WhatsNewDialog openRequest={whatsNewRequest} />
+      {whatsNew.open && <WhatsNewDialog onClose={whatsNew.close} version={whatsNew.version} />}
     </div>
   );
 }
