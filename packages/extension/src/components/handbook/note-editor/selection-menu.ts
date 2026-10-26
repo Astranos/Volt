@@ -3,7 +3,7 @@
 import { Prec, StateEffect, StateField } from "@codemirror/state";
 import { EditorView, keymap, showTooltip, type Tooltip } from "@codemirror/view";
 import { noteIcons } from "./icons";
-import { isInlineMarkerActive, markdownLink, normalizeLinkHref, toggleInlineMarker, type InlineMarker } from "./markdown-edits";
+import { canLinkText, inlineFormat, markdownLink, normalizeLinkHref, type InlineFormat } from "./markdown-edits";
 
 
 const setFocused = StateEffect.define<boolean>();
@@ -16,21 +16,31 @@ function lineSelection(view: EditorView) {
   return to <= line.to ? { line, from: from - line.from, to: to - line.from } : null;
 }
 
-const toggleMarker = (marker: InlineMarker) => (view: EditorView) => {
+function formatState(view: EditorView, format: InlineFormat) {
   const selection = lineSelection(view);
-  if (!selection) return true;
-  const { line } = selection;
-  const result = toggleInlineMarker(line.text, selection.from, selection.to, marker);
+  return selection ? inlineFormat(selection.line.text, selection.from, selection.to, format) : null;
+}
+
+// Does nothing (but still takes the key) when the result wouldn't render as formatting.
+const toggleFormat = (format: InlineFormat) => (view: EditorView) => {
+  const edit = formatState(view, format)?.edit;
+  const line = lineSelection(view)?.line;
+  if (!edit || !line) return true;
   view.dispatch({
-    changes: result.changes.map((change) => ({ ...change, from: line.from + change.from, to: line.from + change.to })),
-    selection: { anchor: line.from + result.selection.anchor, head: line.from + result.selection.head },
+    changes: edit.changes.map((change) => ({ ...change, from: line.from + change.from, to: line.from + change.to })),
+    selection: { anchor: line.from + edit.selection.anchor, head: line.from + edit.selection.head },
     userEvent: "input",
   });
   return true;
 };
 
+const canLink = (view: EditorView) => {
+  const { from, to, empty } = view.state.selection.main;
+  return !empty && lineSelection(view) !== null && canLinkText(view.state.sliceDoc(from, to));
+};
+
 const startLink = (view: EditorView) => {
-  if (view.state.selection.main.empty || !lineSelection(view)) return false;
+  if (!canLink(view)) return false;
   view.dispatch({ effects: setLinking.of(true) });
   return true;
 };
@@ -96,13 +106,13 @@ function menu(view: EditorView, linking: boolean) {
     dom.append(link.dom);
     return { dom, mount: link.focus };
   }
-  const selection = lineSelection(view);
-  const button = (label: string, name: string, active: boolean, run: () => void) => {
-    const node = element("button", active ? "is-active" : undefined);
+  const button = (label: string, name: string, state: { active: boolean; enabled: boolean }, run: () => void) => {
+    const node = element("button", state.active ? "is-active" : undefined);
     node.type = "button";
     node.title = label;
+    node.disabled = !state.enabled;
     node.setAttribute("aria-label", label);
-    node.setAttribute("aria-pressed", String(active));
+    node.setAttribute("aria-pressed", String(state.active));
     const glyph = icon(name);
     if (glyph) node.append(glyph);
     // Keep focus and the selection in the editor.
@@ -110,17 +120,15 @@ function menu(view: EditorView, linking: boolean) {
     node.addEventListener("click", run);
     return node;
   };
-  const markerButton = (label: string, name: string, marker: InlineMarker) => button(
-    label,
-    name,
-    Boolean(selection && isInlineMarkerActive(selection.line.text, selection.from, selection.to, marker)),
-    () => toggleMarker(marker)(view),
-  );
+  const formatButton = (label: string, name: string, format: InlineFormat) => {
+    const state = formatState(view, format);
+    return button(label, name, { active: Boolean(state?.active), enabled: Boolean(state?.edit) }, () => toggleFormat(format)(view));
+  };
   dom.append(
-    markerButton("Bold", "bold", "**"),
-    markerButton("Italic", "italic", "*"),
-    markerButton("Code", "code", "`"),
-    button("Link", "link", false, () => startLink(view)),
+    formatButton("Bold", "bold", "bold"),
+    formatButton("Italic", "italic", "italic"),
+    formatButton("Code", "code", "code"),
+    button("Link", "link", { active: false, enabled: canLink(view) }, () => startLink(view)),
   );
   return { dom };
 }
@@ -155,9 +163,10 @@ export const selectionMenu = [
   menuField,
   EditorView.focusChangeEffect.of((_state, focusing) => setFocused.of(focusing)),
   Prec.high(keymap.of([
-    { key: "Mod-b", run: toggleMarker("**") },
-    { key: "Mod-i", run: toggleMarker("*") },
-    { key: "Mod-e", run: toggleMarker("`") },
-    { key: "Mod-k", run: startLink },
+    { key: "Mod-b", run: toggleFormat("bold") },
+    { key: "Mod-i", run: toggleFormat("italic") },
+    { key: "Mod-e", run: toggleFormat("code") },
+    // Takes the key either way, so the browser's own shortcut doesn't run.
+    { key: "Mod-k", run: (view) => startLink(view) || true },
   ])),
 ];

@@ -1,25 +1,25 @@
 // Obsidian-style live preview: Markdown markers are hidden (or swapped for a bullet or a
-// checkbox) except in the construct the cursor is in, where they show faded so they can
-// be edited. The document text never changes; this is all decoration.
-import { HighlightStyle, syntaxHighlighting, syntaxTree } from "@codemirror/language";
-import type { EditorState, Range } from "@codemirror/state";
+// checkbox) except in the span the cursor is in, where they show faded so they can be
+// edited. The document text never changes; this is all decoration.
+//
+// What gets styled comes from the note renderer's own rules (see note-syntax.ts), line by
+// line, so the editor shows exactly what a saved note will. Every range is within one
+// line: a replace decoration from a plugin can't cross a line break.
+import type { EditorState, Line, Range } from "@codemirror/state";
 import { Decoration, type DecorationSet, EditorView, ViewPlugin, type ViewUpdate, WidgetType } from "@codemirror/view";
-import { tags } from "@lezer/highlight";
-import { isSafeHandbookLink } from "../../../domain/handbook-markdown";
 import { toggleTaskMarker } from "./markdown-edits";
-
-type SyntaxNode = ReturnType<typeof syntaxTree>["topNode"];
+import { inlineSpans, parseNoteLine, type InlineSpanType } from "./note-syntax";
 
 const hidden = Decoration.replace({});
 const faded = Decoration.mark({ class: "cm-md-mark" });
-const linkText = Decoration.mark({ class: "cm-md-link" });
 const doneText = Decoration.mark({ class: "cm-md-done" });
 const listNumber = Decoration.mark({ class: "cm-md-number" });
-// Notes store heading levels 1-3; "####" isn't a heading there, so it stays plain text.
-const headingLines: Record<string, Decoration> = {
-  ATXHeading1: Decoration.line({ class: "cm-md-h1" }),
-  ATXHeading2: Decoration.line({ class: "cm-md-h2" }),
-  ATXHeading3: Decoration.line({ class: "cm-md-h3" }),
+const headingLines = [1, 2, 3].map((level) => Decoration.line({ class: `cm-md-h${level}` }));
+const spanStyles: Record<InlineSpanType, Decoration> = {
+  bold: Decoration.mark({ class: "cm-md-strong" }),
+  italic: Decoration.mark({ class: "cm-md-em" }),
+  code: Decoration.mark({ class: "cm-md-code" }),
+  link: Decoration.mark({ class: "cm-md-link" }),
 };
 
 class BulletWidget extends WidgetType {
@@ -61,88 +61,70 @@ const checkboxes = [false, true].map((checked) => Decoration.replace({ widget: n
 const touches = (state: EditorState, from: number, to: number) =>
   state.selection.ranges.some((range) => range.from <= to && range.to >= from);
 
-function decorate(state: EditorState, node: SyntaxNode, out: Range<Decoration>[]) {
-  const markers = (from: number, to: number, active: boolean) => {
-    if (from < to) out.push((active ? faded : hidden).range(from, to));
+function decorateLine(state: EditorState, line: Line, out: Range<Decoration>[]) {
+  const parsed = parseNoteLine(line.text);
+  if (!parsed) return;
+  const at = (offset: number) => line.from + offset;
+  // The one guard against ranges that leave the line, for anything that replaces text.
+  const inLine = (from: number, to: number) => from >= line.from && to <= line.to && from < to;
+  const replace = (decoration: Decoration, from: number, to: number) => {
+    if (inLine(from, to)) out.push(decoration.range(from, to));
   };
-  const headingLine = headingLines[node.name];
-  if (headingLine) {
-    const line = state.doc.lineAt(node.from);
-    out.push(headingLine.range(line.from));
-    const mark = node.getChild("HeaderMark");
-    // "# " goes as a whole; closing "#"s stay, as notes render them as text.
-    if (mark) markers(mark.from, Math.min(mark.to + 1, node.to), touches(state, line.from, line.to));
-    return;
+  const mark = (decoration: Decoration, from: number, to: number) => {
+    if (from < to) out.push(decoration.range(from, to));
+  };
+  // Markers: hidden, or faded while the cursor is in what they format.
+  const markers = (from: number, to: number, active: boolean) => {
+    if (active) mark(faded, from, to);
+    else replace(hidden, from, to);
+  };
+  const onLine = touches(state, line.from, line.to);
+
+  if (parsed.kind === "heading") {
+    out.push(headingLines[parsed.level - 1].range(line.from));
+    markers(at(parsed.marker[0]), at(parsed.marker[1]), onLine);
+  } else if (parsed.kind === "numbered") {
+    mark(listNumber, at(parsed.marker[0]), at(parsed.marker[1]));
+  } else if (parsed.kind === "bullet" && parsed.task) {
+    const from = at(parsed.marker[0]);
+    const to = at(parsed.task.marker[1]);
+    if (touches(state, from, to)) mark(faded, from, to);
+    else replace(checkboxes[Number(parsed.task.checked)], from, to);
+    if (parsed.task.checked) mark(doneText, at(parsed.content[0]), at(parsed.content[1]));
+  } else if (parsed.kind === "bullet" && !onLine) {
+    replace(bullet, at(parsed.marker[0]), at(parsed.marker[1]));
   }
-  switch (node.name) {
-    case "Emphasis":
-    case "StrongEmphasis":
-    case "InlineCode": {
-      const active = touches(state, node.from, node.to);
-      for (const mark of node.getChildren(node.name === "InlineCode" ? "CodeMark" : "EmphasisMark")) markers(mark.from, mark.to, active);
-      return;
-    }
-    case "Link": {
-      // Only what notes render as a link: [text](safe-url), no title.
-      const [open, close] = node.getChildren("LinkMark");
-      const url = node.getChild("URL");
-      if (!open || !close || !url || node.getChild("LinkTitle") || open.to === close.from) return;
-      if (!isSafeHandbookLink(state.sliceDoc(url.from, url.to))) return;
-      const active = touches(state, node.from, node.to);
-      out.push(linkText.range(open.to, close.from));
-      markers(open.from, open.to, active);
-      markers(close.from, node.to, active);
-      return;
-    }
-    case "ListItem": {
-      const mark = node.getChild("ListMark");
-      if (!mark) return;
-      if (node.parent?.name === "OrderedList") {
-        out.push(listNumber.range(mark.from, mark.to));
-        return;
-      }
-      // Notes only treat "-" and "*" as bullets.
-      if (!/^[-*]$/.test(state.sliceDoc(mark.from, mark.to))) return;
-      const line = state.doc.lineAt(mark.from);
-      const task = node.getChild("Task");
-      const taskMarker = task?.getChild("TaskMarker");
-      if (task && taskMarker) {
-        const checked = state.sliceDoc(taskMarker.from, taskMarker.to).toLowerCase() === "[x]";
-        if (touches(state, mark.from, taskMarker.to)) out.push(faded.range(mark.from, taskMarker.to));
-        else out.push(checkboxes[Number(checked)].range(mark.from, taskMarker.to));
-        const textStart = taskMarker.to + /^\s*/.exec(state.sliceDoc(taskMarker.to, line.to))![0].length;
-        const textEnd = Math.min(task.to, line.to);
-        if (checked && textStart < textEnd) out.push(doneText.range(textStart, textEnd));
-      } else if (!touches(state, line.from, line.to)) {
-        out.push(bullet.range(mark.from, mark.to));
-      }
-    }
+
+  const [contentFrom, contentTo] = parsed.content;
+  for (const span of inlineSpans(line.text.slice(contentFrom, contentTo), at(contentFrom))) {
+    const active = touches(state, span.from, span.to);
+    mark(spanStyles[span.type], span.contentFrom, span.contentTo);
+    markers(span.from, span.contentFrom, active);
+    markers(span.contentTo, span.to, active);
   }
 }
 
-function buildDecorations(view: EditorView) {
+/** The live-preview decorations for the given ranges (the visible ones, in the editor). */
+export function buildDecorations(state: EditorState, ranges: readonly { from: number; to: number }[]): DecorationSet {
   const out: Range<Decoration>[] = [];
-  const tree = syntaxTree(view.state);
-  for (const { from, to } of view.visibleRanges) {
-    tree.iterate({ from, to, enter: (node) => decorate(view.state, node.node, out) });
+  let lastLine = 0;
+  for (const { from, to } of ranges) {
+    for (let pos = from; pos <= to;) {
+      const line = state.doc.lineAt(pos);
+      if (line.number > lastLine) decorateLine(state, line, out);
+      lastLine = line.number;
+      pos = line.to + 1;
+    }
   }
   return Decoration.set(out, true);
 }
 
-const livePreviewPlugin = ViewPlugin.fromClass(class {
+export const livePreview = ViewPlugin.fromClass(class {
   decorations: DecorationSet;
-  constructor(view: EditorView) { this.decorations = buildDecorations(view); }
+  constructor(view: EditorView) { this.decorations = buildDecorations(view.state, view.visibleRanges); }
   update(update: ViewUpdate) {
-    if (update.docChanged || update.selectionSet || update.viewportChanged || syntaxTree(update.startState) !== syntaxTree(update.state)) {
-      this.decorations = buildDecorations(update.view);
+    if (update.docChanged || update.selectionSet || update.viewportChanged) {
+      this.decorations = buildDecorations(update.state, update.view.visibleRanges);
     }
   }
 }, { decorations: (plugin) => plugin.decorations });
-
-const inlineStyles = HighlightStyle.define([
-  { tag: tags.strong, class: "cm-md-strong" },
-  { tag: tags.emphasis, class: "cm-md-em" },
-  { tag: tags.monospace, class: "cm-md-code" },
-]);
-
-export const livePreview = [livePreviewPlugin, syntaxHighlighting(inlineStyles)];

@@ -1,28 +1,38 @@
 import { describe, expect, test } from "vitest";
-import { parseHandbookMarkdown, parseInline } from "../../../domain/handbook-markdown";
+import { parseHandbookMarkdown } from "../../../domain/handbook-markdown";
 import {
-  isInlineMarkerActive,
+  canLinkText,
+  inlineFormat,
   markdownLink,
   normalizeLinkHref,
   numberedPrefix,
   replaceLinePrefix,
   slashQueryStart,
-  toggleInlineMarker,
   toggleTaskMarker,
-  type InlineMarker,
+  type InlineFormat,
 } from "./markdown-edits";
+import { inlineSpans } from "./note-syntax";
 
-// Applies toggleInlineMarker to `text`, where [ and ] mark the selection, and returns
-// the result with the new selection marked the same way.
-function toggle(marked: string, marker: InlineMarker) {
-  const from = marked.indexOf("[");
-  const to = marked.indexOf("]") - 1;
-  const text = marked.replace("[", "").replace("]", "");
-  const { changes, selection } = toggleInlineMarker(text, from, to, marker);
+// Runs inlineFormat on `marked`, where « and » mark the selection. Returns the result with
+// the new selection marked the same way, or null when the button would be disabled.
+function toggle(marked: string, format: InlineFormat) {
+  const from = marked.indexOf("«");
+  const to = marked.indexOf("»") - 1;
+  const text = marked.replace("«", "").replace("»", "");
+  const { edit } = inlineFormat(text, from, to, format);
+  if (!edit) return null;
   let result = text;
-  for (const change of [...changes].reverse()) result = result.slice(0, change.from) + change.insert + result.slice(change.to);
-  return `${result.slice(0, selection.anchor)}[${result.slice(selection.anchor, selection.head)}]${result.slice(selection.head)}`;
+  const changes = [...edit.changes].sort((a, b) => b.from - a.from || b.to - a.to);
+  for (const change of changes) result = result.slice(0, change.from) + change.insert + result.slice(change.to);
+  const { anchor, head } = edit.selection;
+  return `${result.slice(0, anchor)}«${result.slice(anchor, head)}»${result.slice(head)}`;
 }
+
+const active = (marked: string, format: InlineFormat) =>
+  inlineFormat(marked.replace("«", "").replace("»", ""), marked.indexOf("«"), marked.indexOf("»") - 1, format).active;
+
+// The formatting the renderer finds in a line, as "type:text".
+const formats = (text: string) => inlineSpans(text).map((span) => `${span.type}:${text.slice(span.contentFrom, span.contentTo)}`).sort();
 
 describe("replaceLinePrefix", () => {
   test("swaps any block prefix for the new one", () => {
@@ -36,6 +46,7 @@ describe("replaceLinePrefix", () => {
   test("Text removes the prefix", () => {
     expect(replaceLinePrefix("# Lock up", "")).toBe("Lock up");
     expect(replaceLinePrefix("- [ ] ", "")).toBe("");
+    expect(replaceLinePrefix("- [x]", "## ")).toBe("## ");
   });
 
   test("leaves text that only looks like a prefix", () => {
@@ -79,49 +90,81 @@ describe("toggleTaskMarker", () => {
   });
 });
 
-describe("toggleInlineMarker", () => {
+describe("inlineFormat", () => {
   test("wraps the selection", () => {
-    expect(toggle("Write it in the [daily log].", "**")).toBe("Write it in the **[daily log]**.");
-    expect(toggle("[Returns] note", "*")).toBe("*[Returns]* note");
-    expect(toggle("Use [SKU-12]", "`")).toBe("Use `[SKU-12]`");
+    expect(toggle("Write it in the «daily log».", "bold")).toBe("Write it in the **«daily log»**.");
+    expect(toggle("«Returns» note", "italic")).toBe("*«Returns»* note");
+    expect(toggle("Use «SKU-12»", "code")).toBe("Use `«SKU-12»`");
   });
 
   test("keeps markers next to the words, not the selected spaces", () => {
-    expect(toggle("Write it in the[ daily log ].", "**")).toBe("Write it in the **[daily log]** .");
+    expect(toggle("Write it in the« daily log ».", "bold")).toBe("Write it in the **«daily log»** .");
   });
 
-  test("unwraps markers just outside the selection", () => {
-    expect(toggle("the **[daily log]**.", "**")).toBe("the [daily log].");
-    expect(toggle("the _[Returns]_ note", "*")).toBe("the [Returns] note");
-    expect(toggle("the `[SKU]`", "`")).toBe("the [SKU]");
+  test("unwraps a span selected with or without its markers", () => {
+    expect(toggle("the **«daily log»**.", "bold")).toBe("the «daily log».");
+    expect(toggle("the «**daily log**».", "bold")).toBe("the «daily log».");
+    expect(toggle("the _«Returns»_ note", "italic")).toBe("the «Returns» note");
+    expect(toggle("the «*Returns*» note", "italic")).toBe("the «Returns» note");
+    expect(toggle("the `«SKU»`", "code")).toBe("the «SKU»");
   });
 
-  test("unwraps markers at the edges of the selection", () => {
-    expect(toggle("the [**daily log**].", "**")).toBe("the [daily log].");
-    expect(toggle("the [*Returns*] note", "*")).toBe("the [Returns] note");
+  test("a selection inside a span takes the formatting off the whole span", () => {
+    expect(toggle("**«foo» bar**", "bold")).toBe("«foo» bar");
+    expect(toggle("*foo «bar»*", "italic")).toBe("foo «bar»");
+    expect(toggle("`a «b» c`", "code")).toBe("a «b» c");
+  });
+
+  test("selecting across several spans merges them instead of breaking them", () => {
+    expect(toggle("«**a** and **b**»", "bold")).toBe("**«a and b»**");
+    expect(toggle("«*a* and *b*»", "italic")).toBe("*«a and b»*");
+    expect(toggle("«`a` and `b`»", "code")).toBe("`«a and b»`");
   });
 
   test("italic and bold combine instead of unwrapping each other", () => {
-    expect(toggle("**[log]**", "*")).toBe("***[log]***");
-    expect(toggle("***[log]***", "*")).toBe("**[log]**");
-    expect(toggle("***[log]***", "**")).toBe("*[log]*");
-    expect(toggle("*[log]*", "**")).toBe("***[log]***");
+    expect(toggle("**«log»**", "italic")).toBe("***«log»***");
+    expect(toggle("***«log»***", "italic")).toBe("**«log»**");
+    expect(toggle("***«log»***", "bold")).toBe("*«log»*");
+    expect(toggle("*«log»*", "bold")).toBe("***«log»***");
+    expect(formats("***log***")).toEqual(["bold:*log*", "italic:log"]);
+  });
+
+  test("italic around bold switches to underscores, which can hold it", () => {
+    expect(toggle("«a **b** c»", "italic")).toBe("_«a **b** c»_");
+    expect(formats("_a **b** c_")).toEqual(["bold:b", "italic:a **b** c"]);
+  });
+
+  test("italic needs whole words", () => {
+    expect(toggle("foo«bar»", "italic")).toBeNull();
+    expect(toggle("«foo»bar", "italic")).toBeNull();
+    expect(toggle("fo«ob»ar", "italic")).toBeNull();
+  });
+
+  test("does nothing when the result wouldn't render as that formatting", () => {
+    expect(toggle("«a`b»", "code")).toBeNull();
+    expect(toggle("«a_b*c»", "italic")).toBeNull();
+    expect(toggle("«2*3»", "italic")).toBe("_«2*3»_");
+    expect(toggle(`«${"x".repeat(301)}»`, "bold")).toBeNull();
   });
 
   test("an empty selection inserts a pair to type into", () => {
-    expect(toggle("Note []", "**")).toBe("Note **[]**");
+    expect(toggle("Note «»", "bold")).toBe("Note **«»**");
   });
 
-  test("the result parses as the formatting it shows", () => {
-    expect(parseInline("***log***")).toEqual([{ type: "bold", children: [{ type: "italic", children: [{ type: "text", text: "log" }] }] }]);
+  test("reports whether the selection is formatted", () => {
+    expect(active("the **«daily log»**.", "bold")).toBe(true);
+    expect(active("the **daily «log»**.", "bold")).toBe(true);
+    expect(active("the **«daily log»**.", "italic")).toBe(false);
+    expect(active("the «daily log».", "bold")).toBe(false);
   });
 });
 
-describe("isInlineMarkerActive", () => {
-  test("reports whether the selection is wrapped", () => {
-    expect(isInlineMarkerActive("the **daily log**.", 6, 15, "**")).toBe(true);
-    expect(isInlineMarkerActive("the **daily log**.", 6, 15, "*")).toBe(false);
-    expect(isInlineMarkerActive("the daily log.", 4, 13, "**")).toBe(false);
+describe("canLinkText", () => {
+  test("rejects text the link syntax can't hold", () => {
+    expect(canLinkText("the policy")).toBe(true);
+    expect(canLinkText("item [1]")).toBe(false);
+    expect(canLinkText("a]b")).toBe(false);
+    expect(canLinkText("  ")).toBe(false);
   });
 });
 
@@ -139,6 +182,10 @@ describe("normalizeLinkHref", () => {
 
   test("percent-encodes spaces and parentheses", () => {
     expect(normalizeLinkHref("https://example.com/Policy (retail) v2")).toBe("https://example.com/Policy%20%28retail%29%20v2");
+  });
+
+  test("encodes other whitespace as UTF-8 and keeps existing escapes", () => {
+    expect(normalizeLinkHref("example.com/a\u00a0b%20c")).toBe("https://example.com/a%C2%A0b%20c");
   });
 
   test("rejects links a note wouldn't render", () => {

@@ -623,7 +623,8 @@
   min-width: 28px;
 }
 .handbook-bubble-menu > button svg { height: 15px; width: 15px; }
-.handbook-bubble-menu > button:hover { background: rgba(255, 255, 255, 0.08); }
+.handbook-bubble-menu > button:hover:not(:disabled) { background: rgba(255, 255, 255, 0.08); }
+.handbook-bubble-menu > button:disabled { cursor: default; opacity: 0.35; }
 .handbook-bubble-menu > button.is-active { background: rgba(53, 213, 114, 0.16); color: #4ade80; }
 .handbook-bubble-link { align-items: center; display: flex; gap: 4px; }
 .handbook-editor .handbook-bubble-link input:not([type="checkbox"]) { font-size: 12.5px; padding: 4px 8px; width: 220px; }
@@ -753,7 +754,7 @@
   .handbook-page-rich-frame .cm-md-check { border-color: rgba(28, 25, 23, 0.35); }
   .handbook-page-rich-frame .cm-editor .cm-tooltip.handbook-bubble-menu,
   .handbook-page-rich-frame .cm-editor .cm-tooltip.handbook-slash-menu { background: #fff; border-color: rgba(15, 23, 42, 0.12); box-shadow: 0 12px 32px -8px rgba(15, 23, 42, 0.25); color: #1c1917; }
-  .handbook-bubble-menu > button:hover,
+  .handbook-bubble-menu > button:hover:not(:disabled),
   .handbook-page-rich-frame .cm-editor .handbook-slash-menu > ul > li[aria-selected] { background: rgba(15, 23, 42, 0.06); }
   .handbook-bubble-menu > button.is-active { background: #dcfce7; color: #15803d; }
   .handbook-bubble-link button { color: #15803d; }

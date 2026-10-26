@@ -274,12 +274,15 @@ function EntryList({ entries, categoryOrder, query, onOpen }: {
           <h2 className="handbook-section-title">{group.title}</h2>
           <div className="mobile-scanner-card handbook-card">
             {group.entries.map((entry, index) => {
-              const canMove = (offset: number) => {
-                const neighbor = group.entries[index + offset];
-                return Boolean(neighbor && (group.key !== "pinned" || neighbor.category === entry.category));
+              // `order` is shared across categories, so in the mixed Pinned group an arrow swaps
+              // with the nearest pinned entry of the same category; elsewhere, the next entry.
+              const neighborFor = (offset: number) => {
+                const candidates = offset < 0 ? group.entries.slice(0, index).reverse() : group.entries.slice(index + 1);
+                return group.key === "pinned" ? candidates.find((other) => other.category === entry.category) : candidates[0];
               };
+              const canMove = (offset: number) => Boolean(neighborFor(offset));
               const moveBy = (offset: number) => {
-                const neighbor = group.entries[index + offset]._id;
+                const neighbor = neighborFor(offset)!._id;
                 void reorder({ ids: offset < 0 ? [entry._id, neighbor] : [neighbor, entry._id] });
               };
               return (

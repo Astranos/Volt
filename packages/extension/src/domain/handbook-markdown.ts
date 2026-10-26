@@ -81,7 +81,7 @@ export function parseInline(text: string): Inline[] {
 }
 
 const HEADING = /^(#{1,3})\s+(.*)$/;
-const BULLET = /^[-*]\s+(?:\[( |x|X)\]\s+)?(.*)$/;
+const BULLET = /^[-*]\s+(?:\[( |x|X)\](?:\s+|$))?(.*)$/;
 const NUMBERED = /^\d+[.)]\s+(.*)$/;
 
 export function parseHandbookMarkdown(source: string): Block[] {

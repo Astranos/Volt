@@ -29,6 +29,15 @@ function entry(title: string, category: string, order: number, pinned = true): H
 
 beforeEach(() => { state.entries = []; });
 
+test("pinned arrows skip over entries from other categories", () => {
+  state.entries = [entry("Phone", "Store info", 0), entry("Login", "Logins", 1), entry("Address", "Store info", 2)];
+  const html = renderToStaticMarkup(<HandbookPage />);
+  expect(html).not.toMatch(/aria-label="Move Phone down" disabled=""/);
+  expect(html).not.toMatch(/aria-label="Move Address up" disabled=""/);
+  expect(html).toMatch(/aria-label="Move Login up" disabled=""/);
+  expect(html).toMatch(/aria-label="Move Login down" disabled=""/);
+});
+
 test("pinned arrows only allow adjacent entries in the same category", () => {
   state.entries = [entry("Phone", "Store info", 0), entry("Address", "Store info", 1), entry("Login", "Logins", 2)];
   const html = renderToStaticMarkup(<HandbookPage />);
