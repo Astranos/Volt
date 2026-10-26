@@ -151,7 +151,7 @@ export function EntryIcon({ entry }: { entry: HandbookEntry }) {
   const format = valueFormatOf(entry);
   const [Icon, tone] = entry.kind === "secret" ? [KeyRound, "violet"]
     : entry.kind === "guide" ? [ListChecks, "blue"]
-      : entry.kind === "page" ? [FileText, "amber"]
+      : entry.kind === "note" ? [FileText, "amber"]
         : /police|emergency/.test(title) ? [Siren, "red"]
           : format === "phone" || /phone|call|line/.test(title) ? [Phone, "green"]
             : format === "address" ? [MapPin, "sky"]
@@ -310,7 +310,7 @@ function InlineNodes({ nodes }: { nodes: Inline[] }) {
   );
 }
 
-/** Renders a page's formatted content. Only the parsed subset is rendered; never raw HTML. */
+/** Renders a note's formatted content. Only the parsed subset is rendered; never raw HTML. */
 export function MarkdownView({ source }: { source: string }) {
   return (
     <div className="handbook-md">

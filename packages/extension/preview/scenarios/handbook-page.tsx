@@ -11,7 +11,7 @@ const clickText = async (selector: string, text: string) => {
   target.click();
 };
 
-async function pageEditorMenu(menu: string | null) {
+async function noteEditorMenu(menu: string | null) {
   if (!menu) return;
   const editor = await waitFor<HTMLElement>(".handbook-page-rich");
   editor.focus();
@@ -35,13 +35,13 @@ async function pageEditorMenu(menu: string | null) {
 }
 
 // ?open=<title> opens an article (?view=guide is the Windows guide), &edit=1 opens it in the
-// editor (?view=edit), &reveal=1 reveals its login; ?new=value|secret|guide|page starts a new entry;
-// ?state=empty shows the starter prompt. In the page editor, &menu=slash opens the "/" block
+// editor (?view=edit), &reveal=1 reveals its login; ?new=value|secret|guide|note starts a new entry;
+// ?state=empty shows the starter prompt. In the note editor, &menu=slash opens the "/" block
 // menu on a new line and &menu=select selects a word to show the formatting menu.
-const NEW_KIND_LABELS: Record<string, string> = { value: "Quick value", secret: "Login", guide: "Guide", page: "Page" };
+const NEW_KIND_LABELS: Record<string, string> = { value: "Quick value", secret: "Login", guide: "Guide", note: "Note" };
 
 export default defineScenario({
-  description: "Full Handbook page (?open=<title>[&edit=1[&menu=slash|select]|&reveal=1], ?view=guide|edit, ?new=value|secret|guide|page, ?state=empty)",
+  description: "Full Handbook page (?open=<title>[&edit=1[&menu=slash|select]|&reveal=1], ?view=guide|edit, ?new=value|secret|guide|note, ?state=empty)",
   viewport: { width: 1280, height: 820 },
   render: (params) => (
     <HandbookPreviewProvider entries={params.get("state") === "empty" ? [] : undefined}>
@@ -73,7 +73,7 @@ export default defineScenario({
     if (params.get("edit") === "1" || view === "edit") {
       await clickText(".handbook-article-head .handbook-button", "Edit");
       await waitFor(".handbook-editor");
-      await pageEditorMenu(params.get("menu"));
+      await noteEditorMenu(params.get("menu"));
     }
   },
 });

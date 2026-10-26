@@ -18,7 +18,7 @@ import {
   type HandbookValueFormat,
 } from "../../domain/handbook-format";
 import { cn } from "../../lib/utils";
-import { PageEditor } from "./PageEditor";
+import { NoteEditor } from "./NoteEditor";
 
 type Kind = HandbookEntry["kind"];
 type DraftStep = { text: string; keys: string; command: string; tip: string };
@@ -28,7 +28,7 @@ export type HandbookDraft = {
   kind: Kind;
   title: string;
   category: string;
-  note: string;
+  comment: string;
   fields: DraftField[];
   body: string;
   showInList: boolean;
@@ -42,7 +42,7 @@ const KIND_OPTIONS: Array<{ kind: Kind; label: string }> = [
   { kind: "value", label: "Quick value" },
   { kind: "secret", label: "Login" },
   { kind: "guide", label: "Guide" },
-  { kind: "page", label: "Page" },
+  { kind: "note", label: "Note" },
 ];
 const FORMAT_OPTIONS: Array<{ format: HandbookValueFormat; label: string }> = [
   { format: "text", label: "Text" },
@@ -53,7 +53,7 @@ const PLACEHOLDERS: Record<Kind, { title: string; category: string }> = {
   value: { title: "Store phone", category: "Store info" },
   secret: { title: "PSN", category: "Logins" },
   guide: { title: "Skip Windows sign-in", category: "Setup guides" },
-  page: { title: "Opening checklist", category: "Procedures" },
+  note: { title: "Opening checklist", category: "Procedures" },
 };
 const emptyAddress = (): AddressParts => ({ street: "", city: "", state: "", zip: "" });
 export const emptyField = (format: HandbookValueFormat = "text"): DraftField => ({ label: "", format, value: "", address: emptyAddress() });
@@ -75,11 +75,11 @@ export function draftFor(entry: HandbookEntry | null, defaults: Partial<Handbook
     kind: entry?.kind ?? "value",
     title: entry?.title ?? "",
     category: entry?.category ?? "",
-    note: entry?.note ?? "",
+    comment: entry?.comment ?? "",
     fields,
-    // Guides (intro) and pages use this. Quick values and logins no longer have notes, but
+    // Guides (intro) and notes use this. Quick values and logins no longer have notes, but
     // any left from older versions are kept here and sent back, so the server can fold
-    // them into the short note instead of a save dropping them.
+    // them into the comment instead of a save dropping them.
     body: entry?.body ?? "",
     showInList: entry?.showInList ?? false,
     pinned: entry?.pinned ?? false,
@@ -100,12 +100,12 @@ export function draftFor(entry: HandbookEntry | null, defaults: Partial<Handbook
 }
 
 /**
- * Changes an entry's type. Turning a quick value into a page moves the value into
- * the page (above any notes) so it isn't silently dropped on save.
+ * Changes an entry's type. Turning a quick value into a note moves the value into
+ * the note (above any older notes) so it isn't silently dropped on save.
  */
 function switchKind(draft: HandbookDraft, kind: Kind): HandbookDraft {
-  if (draft.kind !== "value" || kind !== "page") return { ...draft, kind };
-  // Each value becomes a line ("Phone: 313-555-0100"), unless the page already has that exact line.
+  if (draft.kind !== "value" || kind !== "note") return { ...draft, kind };
+  // Each value becomes a line ("Phone: 313-555-0100"), unless the note already has that exact line.
   const lines = draft.fields
     .map((field) => [field.label.trim(), fieldValue(field).trim()])
     .filter(([, value]) => value)
@@ -124,12 +124,18 @@ function move<T>(items: T[], index: number, offset: number) {
   return next;
 }
 
+// Codes named before notes were called pages and short notes were called notes.
+const RENAMED_ERRORS: Record<string, string> = {
+  HANDBOOK_NOTE_TOO_LONG: "Comment too long.",
+  HANDBOOK_PAGE_REQUIRED: "Write something in the note before saving.",
+  HANDBOOK_PAGE_TOO_LONG: "Note too long.",
+};
+
 function errorText(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
   const code = message.match(/HANDBOOK_[A-Z_]+/)?.[0];
-  return code
-    ? code.replace(/^HANDBOOK_/, "").replaceAll("_", " ").toLowerCase().replace(/^./, (letter) => letter.toUpperCase()) + "."
-    : message;
+  if (!code) return message;
+  return RENAMED_ERRORS[code] ?? code.replace(/^HANDBOOK_/, "").replaceAll("_", " ").toLowerCase().replace(/^./, (letter) => letter.toUpperCase()) + ".";
 }
 
 export function HandbookEditor({
@@ -155,10 +161,10 @@ export function HandbookEditor({
   const setVariant = (index: number, variant: DraftVariant) =>
     set("variants", draft.variants.map((item, itemIndex) => (itemIndex === index ? variant : item)));
   const keepsLogin = entry?.kind === "secret" && draft.kind === "secret";
-  // Notes left on a saved quick value or login from an earlier version. A page's or guide's
+  // Notes left on a saved quick value or login from an earlier version. A note's or guide's
   // text never counts as that, even after switching the type here.
   const hadOlderNotes = (entry?.kind === "value" || entry?.kind === "secret") && Boolean(entry.body?.trim());
-  const keepsBody = draft.kind === "guide" || draft.kind === "page" || hadOlderNotes;
+  const keepsBody = draft.kind === "guide" || draft.kind === "note" || hadOlderNotes;
 
   const save = async () => {
     setSaving(true);
@@ -167,17 +173,17 @@ export function HandbookEditor({
       kind: draft.kind,
       title: draft.title,
       category: draft.category,
-      note: draft.note || undefined,
+      comment: draft.comment || undefined,
       // `value`/`valueFormat` mirror the first field for older extensions; `fields` is the source of truth.
       value: draft.kind === "value" ? fieldValue(draft.fields[0]) : undefined,
       valueFormat: draft.kind === "value" ? draft.fields[0].format : undefined,
       // An empty list for other kinds tells the server this editor already moved the values
-      // (into a page, say); its fallback for older extensions would otherwise add them again.
+      // (into a note, say); its fallback for older extensions would otherwise add them again.
       fields: draft.kind === "value"
         ? draft.fields.map((field) => ({ label: field.label.trim() || undefined, value: fieldValue(field), format: field.format }))
         : [],
       body: keepsBody && draft.body.trim() ? draft.body : undefined,
-      showInList: draft.kind === "page" ? draft.showInList : undefined,
+      showInList: draft.kind === "note" ? draft.showInList : undefined,
       pinned: draft.pinned,
       variants: draft.kind === "guide"
         ? draft.variants.map((variant) => ({
@@ -217,9 +223,9 @@ export function HandbookEditor({
       className="handbook-editor"
       onSubmit={(event) => {
         event.preventDefault();
-        // The page editor isn't a form field, so it can't be `required`.
-        if (draft.kind === "page" && !draft.body.trim()) {
-          setError("Write something on the page before saving.");
+        // The note editor isn't a form field, so it can't be `required`.
+        if (draft.kind === "note" && !draft.body.trim()) {
+          setError("Write something in the note before saving.");
           return;
         }
         void save();
@@ -264,8 +270,8 @@ export function HandbookEditor({
         <ValueFieldsEditor fields={draft.fields} onChange={(fields) => set("fields", fields)} />
       ) : null}
 
-      {draft.kind === "page" ? (
-        <PageEditor value={draft.body} onChange={(body) => set("body", body)} />
+      {draft.kind === "note" ? (
+        <NoteEditor value={draft.body} onChange={(body) => set("body", body)} />
       ) : null}
 
       {draft.kind === "secret" ? (
@@ -378,20 +384,20 @@ export function HandbookEditor({
         </Field>
       ) : null}
       {/* Below the main content: it's a one-line extra, not what the entry is about. */}
-      <Field label="Short note (optional)" hint="Shown under the title, like “next to the bank” or “non-emergency”.">
-        <input value={draft.note} onChange={(event) => set("note", event.target.value)} />
+      <Field label="Comment (optional)" hint="Shown under the title, like “next to the bank” or “non-emergency”.">
+        <input value={draft.comment} onChange={(event) => set("comment", event.target.value)} />
       </Field>
       {(draft.kind === "value" || draft.kind === "secret") && hadOlderNotes ? (
-        <Field label="Older notes" hint="Left from an earlier version. Move what you need into the short note (or a page), then clear this.">
+        <Field label="Older text" hint="Left from an earlier version. Move what you need into the comment (or a note), then clear this.">
           <textarea value={draft.body} onChange={(event) => set("body", event.target.value)} rows={3} />
         </Field>
       ) : null}
-      {draft.kind === "page" ? (
+      {draft.kind === "note" ? (
         <label className="handbook-checkbox">
           <input type="checkbox" checked={draft.showInList} onChange={(event) => set("showInList", event.target.checked)} />
           <span>
-            Show the whole page in the sidepanel list
-            <span className="handbook-field-hint handbook-checkbox-hint">Best for short pages, so staff can read it without tapping in.</span>
+            Show the whole note in the sidepanel list
+            <span className="handbook-field-hint handbook-checkbox-hint">Best for short notes, so staff can read it without tapping in.</span>
           </span>
         </label>
       ) : null}

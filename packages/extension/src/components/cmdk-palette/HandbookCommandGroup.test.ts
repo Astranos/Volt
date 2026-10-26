@@ -7,7 +7,7 @@ const entry = (index: number, title: string): HandbookEntry => ({
   kind: "value",
   title,
   category: "Store info",
-  note: undefined,
+  comment: undefined,
   valueFormat: undefined,
   showInList: undefined,
   fields: undefined,

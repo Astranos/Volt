@@ -7,7 +7,7 @@ const text = (value: string, ...marks: string[]): JSONContent => ({ type: "text"
 const doc = (...content: JSONContent[]): JSONContent => ({ type: "doc", content });
 const p = (...content: JSONContent[]): JSONContent => ({ type: "paragraph", content });
 
-describe("handbook page Markdown ↔ editor document", () => {
+describe("handbook note Markdown ↔ editor document", () => {
   test("round-trips every supported block", () => {
     const source = [
       "# Opening",
@@ -29,7 +29,7 @@ describe("handbook page Markdown ↔ editor document", () => {
     const parsed = markdownToDoc("- [ ] Check\n- Note\n- [x] Done");
     expect(parsed.content?.map((block) => block.type)).toEqual(["taskList", "bulletList", "taskList"]);
     expect(docToMarkdown(parsed)).toBe("- [ ] Check\n\n- Note\n\n- [x] Done");
-    // Blank lines don't split a Markdown list, so the page still renders one list.
+    // Blank lines don't split a Markdown list, so the note still renders one list.
     expect(roundTrip(docToMarkdown(parsed))).toBe(docToMarkdown(parsed));
   });
 
@@ -48,7 +48,7 @@ describe("handbook page Markdown ↔ editor document", () => {
     expect(docToMarkdown(nested)).toBe("- Parent\n- Child");
   });
 
-  test("an empty page is one empty paragraph", () => {
+  test("an empty note is one empty paragraph", () => {
     expect(markdownToDoc("")).toEqual({ type: "doc", content: [{ type: "paragraph" }] });
     expect(docToMarkdown(markdownToDoc(""))).toBe("");
   });

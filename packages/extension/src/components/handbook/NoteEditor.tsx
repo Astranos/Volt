@@ -74,7 +74,7 @@ function slashCommand(onChange: (menu: SlashMenu | null) => void) {
   });
 }
 
-// Pages store flat lists, so Tab doesn't indent inside a list (and still leaves the editor elsewhere).
+// Notes store flat lists, so Tab doesn't indent inside a list (and still leaves the editor elsewhere).
 const FlatLists = Extension.create({
   name: "flatLists",
   priority: 1000,
@@ -84,7 +84,7 @@ const FlatLists = Extension.create({
   },
 });
 
-/** "example.com" becomes "https://example.com"; anything the page renderer wouldn't link is rejected. */
+/** "example.com" becomes "https://example.com"; anything the note renderer wouldn't link is rejected. */
 function normalizeLink(input: string) {
   const value = input.trim();
   const href = /^[a-z][a-z0-9+.-]*:/i.test(value) ? value : `https://${value}`;
@@ -119,7 +119,7 @@ function SelectionMenu({ editor }: { editor: Editor }) {
   return (
     <BubbleMenu editor={editor} className="handbook-bubble-menu" options={{ placement: "top", offset: 8, onHide: () => setLinkDraft(null) }}>
       {linkDraft !== null ? (
-        // A div, not a nested <form>: the page editor is already inside one.
+        // A div, not a nested <form>: the note editor is already inside one.
         <div className="handbook-bubble-link" onKeyDown={(event) => {
           if (event.key === "Enter") applyLink(event);
           if (event.key === "Escape") setLinkDraft(null);
@@ -176,8 +176,8 @@ function SlashMenuList({ menu }: { menu: SlashMenu }) {
   );
 }
 
-/** Notion-style page editor: formatting shows as you type, saved as the handbook's Markdown subset. */
-export function PageEditor({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+/** Notion-style note editor: formatting shows as you type, saved as the handbook's Markdown subset. */
+export function NoteEditor({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   const [slashMenu, setSlashMenu] = useState<SlashMenu | null>(null);
   const emitted = useRef(value);
   const editor = useEditor({
@@ -198,14 +198,14 @@ export function PageEditor({ value, onChange }: { value: string; onChange: (valu
       slashCommand(setSlashMenu),
     ],
     content: markdownToDoc(value),
-    editorProps: { attributes: { class: "handbook-md handbook-page-rich", "aria-label": "Page", "aria-multiline": "true" } },
+    editorProps: { attributes: { class: "handbook-md handbook-page-rich", "aria-label": "Note", "aria-multiline": "true" } },
     onUpdate: ({ editor: current }) => {
       emitted.current = docToMarkdown(current.getJSON());
       onChange(emitted.current);
     },
   });
 
-  // The draft can change outside the editor (switching an entry to a page carries its values over).
+  // The draft can change outside the editor (switching an entry to a note carries its values over).
   useEffect(() => {
     if (editor && value !== emitted.current) {
       emitted.current = value;
@@ -215,7 +215,7 @@ export function PageEditor({ value, onChange }: { value: string; onChange: (valu
 
   return (
     <div className="handbook-field">
-      <span className="handbook-field-label">Page</span>
+      <span className="handbook-field-label">Note</span>
       <div className="handbook-page-rich-frame" onClick={(event) => event.target === event.currentTarget && editor?.commands.focus("end")}>
         <EditorContent editor={editor} />
         {editor ? <SelectionMenu editor={editor} /> : null}

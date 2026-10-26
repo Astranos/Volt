@@ -1,5 +1,5 @@
-// Converts handbook page Markdown to and from the rich editor's document. Parsing goes
-// through parseHandbookMarkdown, so the editor shows exactly what the page renders, and
+// Converts handbook note Markdown to and from the rich editor's document. Parsing goes
+// through parseHandbookMarkdown, so the editor shows exactly what the note renders, and
 // saving writes back the same small Markdown subset the side panel and search read.
 
 import type { JSONContent } from "@tiptap/core";

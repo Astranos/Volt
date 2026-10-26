@@ -9,7 +9,7 @@ import {
   guideSummary,
   HANDBOOK_OPEN_ENTRY_KEY,
   HANDBOOK_PAGE_PATH,
-  pageSummary,
+  noteSummary,
   type HandbookEntry,
   type HandbookEntryId,
 } from "../../domain/handbook";
@@ -182,8 +182,8 @@ function HandbookList({ entries, onOpen }: { entries: HandbookEntry[]; onOpen: (
 }
 
 function EntryRow({ entry, onOpen }: { entry: HandbookEntry; onOpen: (id: HandbookEntryId) => void }) {
-  // A page marked "show in list" is read right here; its title still opens it on its own.
-  if (entry.kind === "page" && entry.showInList) {
+  // A note marked "show in list" is read right here; its title still opens it on its own.
+  if (entry.kind === "note" && entry.showInList) {
     return (
       <div className="handbook-inline-page">
         <button type="button" className="handbook-row is-guide" onClick={() => onOpen(entry._id)}>
@@ -195,13 +195,13 @@ function EntryRow({ entry, onOpen }: { entry: HandbookEntry; onOpen: (id: Handbo
       </div>
     );
   }
-  if (entry.kind === "guide" || entry.kind === "page") {
+  if (entry.kind === "guide" || entry.kind === "note") {
     return (
       <button type="button" className="handbook-row is-guide" onClick={() => onOpen(entry._id)}>
         <EntryIcon entry={entry} />
         <span className="handbook-row-text">
           <span className="handbook-row-value">{entry.title}</span>
-          <span className="handbook-row-label">{entry.kind === "guide" ? guideSummary(entry) : pageSummary(entry)}</span>
+          <span className="handbook-row-label">{entry.kind === "guide" ? guideSummary(entry) : noteSummary(entry)}</span>
         </span>
         <ChevronRight className="handbook-row-chevron" aria-hidden="true" />
       </button>
@@ -225,9 +225,9 @@ function EntryRow({ entry, onOpen }: { entry: HandbookEntry; onOpen: (id: Handbo
       <span className="handbook-row-label-text">{entry.title}</span>
     </button>
   );
-  const note = entry.note ? <span className="handbook-row-note">{entry.note}</span> : null;
+  const comment = entry.comment ? <span className="handbook-row-note">{entry.comment}</span> : null;
 
-  // Logins and multi-value entries: the title and note, then one labeled row per value.
+  // Logins and multi-value entries: the title and comment, then one labeled row per value.
   if (hasFieldRows(entry)) {
     return (
       <div className="handbook-row is-fields">
@@ -235,7 +235,7 @@ function EntryRow({ entry, onOpen }: { entry: HandbookEntry; onOpen: (id: Handbo
           <EntryIcon entry={entry} />
           <span className="handbook-row-text">
             {title}
-            {note}
+            {comment}
             <EntryFields entry={entry} />
           </span>
         </div>
@@ -249,7 +249,7 @@ function EntryRow({ entry, onOpen }: { entry: HandbookEntry; onOpen: (id: Handbo
         <span className="handbook-row-text">
           {title}
           <span className="handbook-row-value is-wrapping"><ValueText entry={entry} /></span>
-          {note}
+          {comment}
         </span>
       </div>
       <span className="handbook-row-actions"><ValueActions entry={entry} /></span>
@@ -257,7 +257,7 @@ function EntryRow({ entry, onOpen }: { entry: HandbookEntry; onOpen: (id: Handbo
   );
 }
 
-/** One entry on its own: its values, short note, or a page's content. */
+/** One entry on its own: its values, comment, or a note's content. */
 function EntryView({ entry, onBack }: { entry: HandbookEntry; onBack: () => void }) {
   return (
     <SidepanelLayout className="handbook-scroll bg-transparent">
@@ -269,7 +269,7 @@ function EntryView({ entry, onBack }: { entry: HandbookEntry; onBack: () => void
         <div>
           <h2 className="handbook-guide-title">{entry.title}</h2>
           <p className="handbook-meta">{formatHandbookUpdated(entry)}</p>
-          {entry.note ? <p className="handbook-entry-note">{entry.note}</p> : null}
+          {entry.comment ? <p className="handbook-entry-note">{entry.comment}</p> : null}
         </div>
         {hasFieldRows(entry) ? (
           <div className="mobile-scanner-card handbook-card handbook-fields-card"><EntryFields entry={entry} /></div>
@@ -281,12 +281,12 @@ function EntryView({ entry, onBack }: { entry: HandbookEntry; onBack: () => void
             </div>
           </div>
         ) : null}
-        {entry.kind === "page" ? (
+        {entry.kind === "note" ? (
           <div className="mobile-scanner-card handbook-card handbook-page-body"><MarkdownView source={entry.body ?? ""} /></div>
         ) : entry.body ? (
-          // Notes left on a quick value or login that were too long to fold into its short note.
+          // Notes left on a quick value or login that were too long to fold into its comment.
           <section className="handbook-section">
-            <h3 className="handbook-section-title">Older notes</h3>
+            <h3 className="handbook-section-title">Older text</h3>
             <div className="mobile-scanner-card handbook-card handbook-notes">{entry.body}</div>
           </section>
         ) : null}

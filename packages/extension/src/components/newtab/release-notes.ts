@@ -9,6 +9,18 @@ export const RELEASE_NOTES_VERSION = "1.0.69";
 
 export const RELEASE_NOTES = [
   {
+    title: "Write notes like a document",
+    description: "Handbook pages are now called notes, and you edit them as they'll look. Type / for headings, lists, and checklists, or select text to make it bold, italic, or a link. The line under an entry's title is now called a comment.",
+  },
+  {
+    title: "Pinned entries come first",
+    description: "Pinned handbook entries have their own section at the top of the handbook and the side panel. Unpin one and it goes back to its category.",
+  },
+  {
+    title: "Know when an update is ready",
+    description: "When Chrome has downloaded a new version of Volt, the new tab shows Update ready. Click it to restart Volt and get the update right away.",
+  },
+  {
     title: "Clearer logins, and several values per entry",
     description: "Logins show the username and password on their own rows, each with Copy. Quick values can hold several things to copy, like a store's phone, address, and email.",
   },

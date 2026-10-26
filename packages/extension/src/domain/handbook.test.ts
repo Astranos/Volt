@@ -14,7 +14,7 @@ function entry(fields: Partial<HandbookEntry> & Pick<HandbookEntry, "kind" | "ti
   nextId += 1;
   return {
     _id: `entry${nextId}` as HandbookEntry["_id"],
-    note: undefined,
+    comment: undefined,
     value: undefined,
     valueFormat: undefined,
     showInList: undefined,
@@ -32,7 +32,7 @@ function entry(fields: Partial<HandbookEntry> & Pick<HandbookEntry, "kind" | "ti
 }
 
 const phone = entry({ kind: "value", title: "Store phone", category: "Store info", value: "555-0100" });
-const address = entry({ kind: "value", title: "Store address", category: "Store info", note: "Right off Main", value: "1 Main St", pinned: true });
+const address = entry({ kind: "value", title: "Store address", category: "Store info", comment: "Right off Main", value: "1 Main St", pinned: true });
 const login = entry({ kind: "secret", title: "Console login", category: "Logins", secretPreview: "user••• · ••••••" });
 const guide = entry({
   kind: "guide",
@@ -46,7 +46,7 @@ const guide = entry({
 const entries = [phone, address, login, guide];
 
 describe("handbook domain", () => {
-  test("searches titles, notes, values and guide steps", () => {
+  test("searches titles, comments, values and guide steps", () => {
     expect(filterHandbook(entries, "addr", { kind: "all" })).toEqual([address]);
     expect(filterHandbook(entries, "main", { kind: "all" })).toEqual([address]);
     expect(filterHandbook(entries, "bypassnro", { kind: "all" })).toEqual([guide]);
